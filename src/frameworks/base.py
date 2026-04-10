@@ -1,0 +1,58 @@
+"""
+base.py — Abstract base class for framework adapters.
+
+Framework adapters control how agent template content is adjusted for a
+specific target framework (VS Code Copilot, Copilot CLI, Claude).
+"""
+
+from __future__ import annotations
+
+from abc import ABC, abstractmethod
+from pathlib import Path
+from typing import Any
+
+
+class FrameworkAdapter(ABC):
+    """Abstract interface for per-framework agent file generation."""
+
+    @property
+    @abstractmethod
+    def framework_id(self) -> str:
+        """Short identifier for this framework (e.g., 'copilot-vscode')."""
+
+    @abstractmethod
+    def render_agent_file(self, content: str, agent_slug: str, manifest: dict[str, Any]) -> str:
+        """Post-process rendered agent content for this framework.
+
+        The base render.py already resolves placeholders. This method handles
+        any framework-specific structural adjustments (e.g., YAML stripping,
+        reformatting, etc.).
+        """
+
+    @abstractmethod
+    def render_instructions_file(self, content: str, manifest: dict[str, Any]) -> str:
+        """Post-process rendered copilot-instructions content."""
+
+    @abstractmethod
+    def get_file_extension(self, file_type: str) -> str:
+        """Return the file extension for a given file type.
+
+        file_type: 'agent', 'instructions', 'builder'
+        """
+
+    @abstractmethod
+    def supports_handoffs(self) -> bool:
+        """Whether this framework supports YAML handoff blocks in agent files."""
+
+    @abstractmethod
+    def get_agents_dir(self, project_path: Path) -> Path:
+        """Return the default agent file directory for a given project path."""
+
+    def finalize_output_path(self, rel_path: str) -> str:
+        """Adjust an output path's extension for this framework. Default: no-op."""
+        ext = self.get_file_extension("agent")
+        if rel_path.endswith(".agent.md"):
+            return rel_path
+        if rel_path.endswith(".md") and ext != ".md":
+            return rel_path[:-3] + ext
+        return rel_path

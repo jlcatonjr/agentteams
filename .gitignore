@@ -1,0 +1,22 @@
+__pycache__/
+*.pyc
+*.pyo
+.venv/
+dist/
+*.egg-info/
+.DS_Store
+.pytest_cache/
+htmlcov/
+*.swp
+*.swa
+*~
+
+# Generated agent team for this repo — excluded because the team's
+# knowledge of the module's internals could compromise the repository
+# if exposed as context to external users.
+.github/agents/
+.github/copilot-instructions.md
+
+# Build-time intake artifacts (written by the team-builder agent)
+_build-description.json
+_intake-notes.md

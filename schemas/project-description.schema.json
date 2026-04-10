@@ -1,0 +1,221 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "project-description.schema.json",
+  "title": "Project Description",
+  "description": "Input specification for the Agent Teams build_team pipeline. Describes the project, its deliverables, tools, and components to generate a complete agent team.",
+  "type": "object",
+  "required": ["project_goal"],
+  "properties": {
+    "project_name": {
+      "type": "string",
+      "description": "Short, slug-safe project name (e.g., 'MyResearchProject', 'DataPipelineV2'). If absent, inferred from the project directory name.",
+      "pattern": "^[A-Za-z0-9_\\-\\.]+$"
+    },
+    "project_goal": {
+      "type": "string",
+      "description": "1–3 sentence description of what the project produces and why. Used as {PROJECT_GOAL} throughout all agent files.",
+      "minLength": 10
+    },
+    "deliverables": {
+      "type": "array",
+      "description": "List of primary deliverable types this project produces.",
+      "items": {
+        "type": "string"
+      },
+      "examples": [
+        ["HTML chapter files", "LaTeX manuscript"],
+        ["Python modules", "documentation"],
+        ["CSV reports", "summary PDF"]
+      ]
+    },
+    "output_format": {
+      "type": "string",
+      "description": "The final output format for compiled deliverables (e.g., 'HTML5', 'PDF', 'Python 3.11 modules', 'LaTeX'). Used as {OUTPUT_FORMAT}.",
+      "examples": ["HTML5", "PDF", "Python 3.11", "LaTeX", "Markdown", "CSV"]
+    },
+    "primary_output_dir": {
+      "type": "string",
+      "description": "Directory where primary authored deliverables are written, relative to project root (e.g., 'src/', 'html/chapters/', 'docs/'). Used as {PRIMARY_OUTPUT_DIR}.",
+      "examples": ["src/", "html/chapters/", "docs/", "reports/"]
+    },
+    "build_output_dir": {
+      "type": "string",
+      "description": "Directory where compiled/converted output artifacts go (e.g., 'build/', 'dist/', 'manuscript/'). Used as {BUILD_OUTPUT_DIR}.",
+      "examples": ["build/", "dist/", "manuscript/", "output/"]
+    },
+    "figures_dir": {
+      "type": "string",
+      "description": "Directory for diagrams and figures. Used as {FIGURES_DIR}.",
+      "default": "figures/",
+      "examples": ["figures/", "assets/figures/", "docs/figures/"]
+    },
+    "existing_project_path": {
+      "type": "string",
+      "description": "Absolute path to an existing project directory on disk. If provided, the analyzer scans it for structure, tools, and potential authority sources."
+    },
+    "agents_output_dir": {
+      "type": "string",
+      "description": "Directory where generated agent files will be written. Defaults to '.github/agents/' within the project path.",
+      "default": ".github/agents/"
+    },
+    "authority_sources": {
+      "type": "array",
+      "description": "Files or directories that agents must treat as ground truth. Used to build {AUTHORITY_HIERARCHY} and {AUTHORITY_SOURCES_LIST}.",
+      "items": {
+        "type": "object",
+        "required": ["name", "path"],
+        "properties": {
+          "name": {
+            "type": "string",
+            "description": "Human-readable name of this authority source."
+          },
+          "path": {
+            "type": "string",
+            "description": "File or directory path, relative to project root or absolute."
+          },
+          "scope": {
+            "type": "string",
+            "description": "What types of claims this source is authoritative for.",
+            "examples": ["technical accuracy", "theoretical claims", "style and voice", "API signatures"]
+          },
+          "rank": {
+            "type": "integer",
+            "description": "Priority rank in the authority hierarchy (1 = highest).",
+            "minimum": 1
+          }
+        }
+      }
+    },
+    "style_reference": {
+      "type": ["string", "null"],
+      "description": "Path to the style guide, voice samples, or editorial conventions file. Used as {STYLE_REFERENCE_PATH}."
+    },
+    "reference_db_path": {
+      "type": ["string", "null"],
+      "description": "Path to the bibliography or reference database (BibTeX, CSV, JSON, Markdown). Used as {REFERENCE_DB_PATH}."
+    },
+    "reference_key_convention": {
+      "type": "string",
+      "description": "Citation key format convention. Used as {REFERENCE_KEY_CONVENTION}.",
+      "default": "AuthorYear",
+      "examples": ["AuthorYear", "AuthorTitleYear", "numeric", "custom"]
+    },
+    "tools": {
+      "type": "array",
+      "description": "Languages, frameworks, and tools the project uses.",
+      "items": {
+        "type": "object",
+        "required": ["name"],
+        "properties": {
+          "name": {
+            "type": "string",
+            "description": "Tool or language name (e.g., 'Python', 'LaTeX', 'React')."
+          },
+          "version": {
+            "type": "string",
+            "description": "Version string (e.g., '3.11', '2e', '18')."
+          },
+          "category": {
+            "type": "string",
+            "description": "Category of tool.",
+            "enum": ["language", "framework", "build-system", "database", "cli", "library", "other"]
+          },
+          "config_files": {
+            "type": "array",
+            "items": { "type": "string" },
+            "description": "Config files associated with this tool."
+          },
+          "needs_specialist_agent": {
+            "type": "boolean",
+            "description": "If true, generate a dedicated tool-specific agent for this tool.",
+            "default": false
+          }
+        }
+      }
+    },
+    "style_rules": {
+      "type": "array",
+      "description": "Project-specific style rules in plain English. Used in copilot-instructions.md.",
+      "items": {
+        "type": "string"
+      }
+    },
+    "selected_archetypes": {
+      "type": "array",
+      "description": "Override the auto-detected archetype selection. If absent, the analyzer selects archetypes from the project description.",
+      "items": {
+        "type": "string",
+        "enum": [
+          "primary-producer",
+          "quality-auditor",
+          "cohesion-repairer",
+          "style-guardian",
+          "technical-validator",
+          "format-converter",
+          "reference-manager",
+          "output-compiler",
+          "visual-designer",
+          "tool-specific"
+        ]
+      }
+    },
+    "components": {
+      "type": "array",
+      "description": "Workstream components. One workstream expert agent is generated per component.",
+      "items": {
+        "type": "object",
+        "required": ["slug", "name"],
+        "properties": {
+          "slug": {
+            "type": "string",
+            "description": "URL-safe identifier for this component (e.g., 'ch01-intro', 'auth-module', 'q3-report').",
+            "pattern": "^[a-z0-9\\-]+$"
+          },
+          "name": {
+            "type": "string",
+            "description": "Human-readable name of this component (e.g., 'Chapter 1: Introduction')."
+          },
+          "output_file": {
+            "type": "string",
+            "description": "Path to this component's primary output file, relative to primary_output_dir."
+          },
+          "description": {
+            "type": "string",
+            "description": "1–3 sentences describing what this component produces."
+          },
+          "sections": {
+            "type": "array",
+            "items": { "type": "string" },
+            "description": "List of sections, functions, or sub-units in this component."
+          },
+          "sources": {
+            "type": "array",
+            "items": { "type": "string" },
+            "description": "Known source references (citation keys or file paths) relevant to this component."
+          },
+          "cross_refs": {
+            "type": "array",
+            "items": { "type": "string" },
+            "description": "Other component slugs this component references."
+          },
+          "quality_criteria": {
+            "type": "array",
+            "items": { "type": "string" },
+            "description": "Pass/fail quality criteria the workstream expert will check against in reviews."
+          },
+          "number": {
+            "type": "integer",
+            "description": "Optional ordering number (e.g., chapter number).",
+            "minimum": 1
+          }
+        }
+      }
+    },
+    "conversion_pipeline": {
+      "type": "string",
+      "description": "Command or tool used to convert primary deliverables to output format. Used as {CONVERSION_PIPELINE} in format-converter agent.",
+      "examples": ["pandoc --from html --to latex", "pdflatex", "sphinx-build -b html"]
+    }
+  },
+  "additionalProperties": false
+}
