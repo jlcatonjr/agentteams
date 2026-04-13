@@ -4,11 +4,11 @@ audit.py — Post-generation audit for agent team files.
 Performs two types of checks after the emit phase:
   1. Static structural checks — conflict detection and presupposition
      validation without external calls. Always available.
-  2. AI-powered review — optional extended audit via GitHub Models API
-     (Claude Sonnet 4.6), invoked through the `gh` CLI for authentication.
+  2. AI-powered review — optional extended audit via the standalone `copilot`
+     CLI, invoked as a subprocess with no interactive prompts.
 
 Invoke via:
-    python build_team.py ... --post-audit        (static + AI, requires gh auth)
+    python build_team.py ... --post-audit        (static + AI, requires copilot CLI)
     audit.run_post_audit(output_dir, manifest)   (programmatic)
 """
 
@@ -16,9 +16,8 @@ from __future__ import annotations
 
 import json
 import re
+import shutil
 import subprocess
-import urllib.error
-import urllib.request
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
@@ -67,11 +66,8 @@ _SAFE_TOKENS: frozenset[str] = frozenset({
     "NAME", "PLACEHOLDER",
 })
 
-#: GitHub Models API endpoint for AI audit
-_GITHUB_MODELS_URL = "https://models.inference.ai.azure.com/chat/completions"
-
-#: Model to use for AI audit (Claude Sonnet 4.6 via GitHub Models)
-_AI_MODEL = "claude-sonnet-4-5"
+#: Model to use for AI audit via the standalone `copilot` CLI
+_AI_MODEL = "gpt-5.4"
 
 #: Approximate max characters of agent-file excerpts sent to AI
 _AI_CONTEXT_LIMIT = 12_000
@@ -141,8 +137,8 @@ def run_post_audit(
         manifest:       Team manifest from analyze.build_manifest().
         rendered_files: Optional in-memory list of (rel_path, content) from
                         render_all(). When provided, avoids re-reading from disk.
-        ai_audit:       If True, attempt an AI-powered audit via GitHub Models.
-                        Requires the `gh` CLI to be installed and authenticated.
+        ai_audit:       If True, attempt an AI-powered audit via the standalone
+                        `copilot` CLI. Requires `copilot` to be on PATH.
 
     Returns:
         AuditResult with all findings and the optional AI report.
@@ -177,10 +173,10 @@ def run_post_audit(
 
     # --- Optional AI audit ---
     if ai_audit:
-        token = _get_gh_token()
-        if token:
+        copilot_path = _get_copilot_path()
+        if copilot_path:
             result.ai_available = True
-            result.ai_report = _run_ai_audit(file_map, manifest, token)
+            result.ai_report = _run_ai_audit(file_map, manifest, copilot_path)
         else:
             result.ai_available = False
 
@@ -221,8 +217,8 @@ def print_audit_report(result: AuditResult) -> None:
         for line in result.ai_report.splitlines():
             print(f"     {line}")
     elif not result.ai_available:
-        print("\n  ·  AI audit skipped: `gh` CLI not available or not authenticated.")
-        print("     Run `gh auth login` then re-invoke with --post-audit to enable.")
+        print("\n  ·  AI audit skipped: standalone `copilot` CLI not found on PATH.")
+        print("     Install the GitHub Copilot CLI and ensure it is on PATH to enable.")
 
     if result.has_errors:
         print("\n  Audit result: ERRORS FOUND — review findings before using this team.")
@@ -792,94 +788,69 @@ def _check_ch20_duplicate_descriptions(
 
 
 # ---------------------------------------------------------------------------
-# AI audit (optional — requires `gh` CLI + authentication)
+# AI audit (optional — requires standalone `copilot` CLI on PATH)
 # ---------------------------------------------------------------------------
 
-def _get_gh_token() -> str | None:
-    """Retrieve the GitHub auth token via the `gh` CLI.
+def _get_copilot_path() -> str | None:
+    """Locate the standalone `copilot` CLI on PATH.
 
     Returns:
-        Token string, or None if `gh` is unavailable or unauthenticated.
+        Absolute path string to the `copilot` binary, or None if not found.
     """
-    try:
-        proc = subprocess.run(
-            ["gh", "auth", "token"],
-            capture_output=True,
-            text=True,
-            timeout=5,
-        )
-        token = proc.stdout.strip()
-        return token if token else None
-    except (FileNotFoundError, subprocess.TimeoutExpired):
-        return None
+    return shutil.which("copilot")
 
 
 def _run_ai_audit(
     file_map: dict[str, str],
     manifest: dict[str, Any],
-    token: str,
+    copilot_path: str,
 ) -> str | None:
-    """Invoke Claude Sonnet via GitHub Models API for an AI-powered audit.
+    """Invoke the standalone `copilot` CLI for an AI-powered audit.
 
     Sends a compact summary of the generated agent files and requests a
-    conflict + presupposition review.
+    conflict + presupposition review via copilot non-interactive mode.
 
     Args:
-        file_map: Rendered file content keyed by relative path.
-        manifest: Team manifest from analyze.build_manifest().
-        token:    GitHub auth token from `gh auth token`.
+        file_map:     Rendered file content keyed by relative path.
+        manifest:     Team manifest from analyze.build_manifest().
+        copilot_path: Absolute path to the `copilot` binary.
 
     Returns:
         AI-generated audit report as a string, or None on failure.
     """
     context = _build_ai_context(file_map, manifest)
 
-    system_prompt = (
+    prompt = (
         "You are performing a post-generation audit of a multi-agent AI team. "
         "Review the agent files for: (1) logical conflicts between agent responsibilities "
         "or authority boundaries, (2) hidden presuppositions or structural assumptions that "
         "could fail silently in use, (3) coverage gaps — scenarios that no agent handles, "
         "(4) over-claimed authority — two agents asserting ownership of the same scope. "
-        "Be concise. List concrete findings only. If the team is well-formed, say so briefly."
-    )
-
-    user_prompt = (
+        "Be concise. List concrete findings only. If the team is well-formed, say so briefly.\n\n"
         f"Audit the following generated agent team for project "
         f"'{manifest.get('project_name', 'unknown')}'.\n\n"
         f"{context}"
     )
 
-    payload = json.dumps({
-        "model": _AI_MODEL,
-        "messages": [
-            {"role": "system", "content": system_prompt},
-            {"role": "user", "content": user_prompt},
-        ],
-        "max_tokens": 1024,
-        "temperature": 0.1,
-    }).encode("utf-8")
-
-    req = urllib.request.Request(
-        _GITHUB_MODELS_URL,
-        data=payload,
-        headers={
-            "Authorization": f"Bearer {token}",
-            "Content-Type": "application/json",
-        },
-    )
+    command = [
+        copilot_path,
+        "-p", prompt,
+        "--no-ask-user",
+        "--no-custom-instructions",
+        "--model", _AI_MODEL,
+        "--silent",
+    ]
 
     try:
-        with urllib.request.urlopen(req, timeout=30) as resp:
-            data = json.loads(resp.read().decode("utf-8"))
-            return data["choices"][0]["message"]["content"]
-    except (
-        urllib.error.URLError,
-        urllib.error.HTTPError,
-        KeyError,
-        json.JSONDecodeError,
-        TimeoutError,
-        OSError,
-    ):
+        proc = subprocess.run(
+            command,
+            capture_output=True,
+            text=True,
+            timeout=120,
+        )
+        output = proc.stdout.strip()
+        return output if output else None
+    except (FileNotFoundError, subprocess.TimeoutExpired, OSError):
         return None
 
 

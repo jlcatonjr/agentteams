@@ -6,6 +6,9 @@ Usage:
     python build_team.py --description brief.md --project /path/to/project
     python build_team.py --description brief.json --framework copilot-cli --dry-run
     python build_team.py --description brief.json --output /custom/output/dir
+    python build_team.py --description brief.json --check
+    python build_team.py --description brief.json --update
+    python build_team.py --description brief.json --post-audit --auto-correct
 
 Options:
     --description  PATH   Project description file (.json or .md) [required]
@@ -16,6 +19,12 @@ Options:
     --overwrite           Overwrite existing agent files without prompting
     --yes                 Non-interactive: answer yes to all prompts
     --no-scan             Disable project directory scanning
+    --update              Re-render drifted files and emit new agents added to the taxonomy.
+                          Preserves manually-filled {MANUAL:*} values. Reports removed agents.
+    --prune               Used with --update: also delete agents removed from the taxonomy.
+    --check               Check for template drift and structural changes (exit code 1 if found)
+    --scan-security       Scan agent files for security issues
+    --auto-correct        After post-audit findings, invoke standalone `copilot` CLI to repair files
     --version             Print version and exit
 """
 
@@ -61,8 +70,9 @@ def _build_parser() -> argparse.ArgumentParser:
     parser.add_argument(
         "--description", "-d",
         metavar="PATH",
-        required=True,
-        help="Project description file (.json or .md)",
+        required=False,
+        default=None,
+        help="Project description file (.json or .md). Required unless --self is used.",
     )
     parser.add_argument(
         "--project", "-p",
@@ -104,6 +114,55 @@ def _build_parser() -> argparse.ArgumentParser:
         help="Disable project directory scanning",
     )
     parser.add_argument(
+        "--update",
+        action="store_true",
+        help="Re-render drifted files and emit new agents added to the taxonomy. "
+             "Preserves manually-filled {MANUAL:*} values from existing files. "
+             "Removed agents are reported but not deleted (use --prune to remove them).",
+    )
+    parser.add_argument(
+        "--prune",
+        action="store_true",
+        help="Used with --update: also delete agent files that are no longer part of the team.",
+    )
+    parser.add_argument(
+        "--check",
+        action="store_true",
+        help="Check for template drift and structural changes without writing any files "
+             "(exit code 1 if drift or structural changes are detected)",
+    )
+    parser.add_argument(
+        "--scan-security",
+        action="store_true",
+        help="Scan generated agent files for security issues (PII, credentials, unresolved placeholders)",
+    )
+    parser.add_argument(
+        "--self",
+        action="store_true",
+        dest="self_update",
+        help="Operate on the module's own agent team using .github/agents/_build-description.json",
+    )
+    parser.add_argument(
+        "--post-audit",
+        action="store_true",
+        dest="post_audit",
+        help=(
+            "Run a post-generation audit after emit. Performs static checks "
+            "(unresolved placeholders, YAML integrity, required-agent coverage) "
+            "and, if the standalone `copilot` CLI is on PATH, an AI-powered conflict and "
+            "presupposition review."
+        ),
+    )
+    parser.add_argument(
+        "--auto-correct",
+        action="store_true",
+        dest="auto_correct",
+        help=(
+            "After --post-audit finds issues, invoke the standalone `copilot` CLI "
+            "in non-interactive mode to repair generated team files, then rerun the audit."
+        ),
+    )
+    parser.add_argument(
         "--version",
         action="version",
         version=f"%(prog)s {__version__}",
@@ -118,6 +177,23 @@ def _build_parser() -> argparse.ArgumentParser:
 def main(argv: list[str] | None = None) -> int:
     parser = _build_parser()
     args = parser.parse_args(argv)
+
+    # -----------------------------------------------------------------------
+    # --self: redirect to the module's own build description
+    # -----------------------------------------------------------------------
+    if args.self_update:
+        self_desc = _SCRIPT_DIR / ".github" / "agents" / "_build-description.json"
+        if not self_desc.exists():
+            print(f"Error: Self-description not found at {self_desc}", file=sys.stderr)
+            return 1
+        args.description = str(self_desc)
+        args.project = str(_SCRIPT_DIR)
+        if not args.output:
+            args.output = str(_SCRIPT_DIR / ".github" / "agents")
+        print(f"Self-maintenance mode: using {self_desc.name}")
+
+    if not args.description:
+        parser.error("--description is required (or use --self for self-maintenance)")
 
     framework_id: str = args.framework
     adapter = FRAMEWORKS[framework_id]()
@@ -177,10 +253,47 @@ def main(argv: list[str] | None = None) -> int:
     print(f"  Output directory: {output_dir}")
 
     # -----------------------------------------------------------------------
+    # Step 4b: Handle --scan-security (no rendering needed)
+    # -----------------------------------------------------------------------
+    if args.scan_security:
+        from src import scan
+        report = scan.scan_directory(output_dir)
+        scan.print_scan_report(report)
+        return 1 if report.has_issues else 0
+
+    # -----------------------------------------------------------------------
+    # Step 4c: Handle --check (drift + structural changes, no write)
+    # -----------------------------------------------------------------------
+    if args.check:
+        from src import drift
+        # Content drift (template hash comparison)
+        try:
+            dreport = drift.detect_drift(output_dir, TEMPLATES_DIR)
+        except FileNotFoundError as exc:
+            print(f"Error: {exc}", file=sys.stderr)
+            return 1
+        drift.print_drift_report(dreport)
+        # Structural diff (team composition comparison)
+        sdreport = None
+        try:
+            old_log = drift.load_build_log(output_dir)
+            sdreport = drift.compute_structural_diff(old_log, manifest, TEMPLATES_DIR)
+            if sdreport.added_files or sdreport.removed_files:
+                print("\n  Structural changes:")
+                drift.print_structural_diff_report(sdreport)
+        except FileNotFoundError:
+            pass  # no build-log — structural diff not available
+        has_any = dreport.has_drift or (sdreport.has_changes if sdreport is not None else False)
+        return 1 if has_any else 0
+
+    # -----------------------------------------------------------------------
     # Step 5: Render
     # -----------------------------------------------------------------------
     print("Rendering templates...")
     rendered = render.render_all(manifest, templates_dir=TEMPLATES_DIR)
+
+    # Compute template hashes for drift detection
+    template_hashes = render.compute_template_hashes(manifest, templates_dir=TEMPLATES_DIR)
 
     # Apply framework-specific post-processing
     final_rendered: list[tuple[str, str]] = []
@@ -192,6 +305,102 @@ def main(argv: list[str] | None = None) -> int:
         elif file_type == "instructions":
             content = adapter.render_instructions_file(content, manifest)
         final_rendered.append((rel_path, content))
+
+    # -----------------------------------------------------------------------
+    # Step 5c: Generate team topology graph
+    # -----------------------------------------------------------------------
+    from src import graph as _graph
+    graph_content = _graph.generate_graph_document(
+        dict(final_rendered), project_name=project_name
+    )
+    final_rendered.append(("references/pipeline-graph.md", graph_content))
+
+    # -----------------------------------------------------------------------
+    # Step 5b: Handle --update (structural + content drift, manual preservation)
+    # -----------------------------------------------------------------------
+    if args.update:
+        from src import drift
+
+        # Load old build-log (may not exist for first-generation teams)
+        try:
+            old_log = drift.load_build_log(output_dir)
+        except FileNotFoundError:
+            old_log = {}
+
+        # Compute structural diff: additions, removals, drifted, unchanged
+        sdreport = drift.compute_structural_diff(old_log, manifest, TEMPLATES_DIR)
+
+        if not sdreport.has_changes and not sdreport.removed_files:
+            print("No structural or content changes detected. Nothing to update.")
+            return 0
+
+        print(f"\nStructural update for {project_name!r}:")
+        drift.print_structural_diff_report(sdreport)
+
+        # Build the update set from the structural diff
+        update_paths: set[str] = {f["path"] for f in sdreport.update_files}
+        update_rendered: list[tuple[str, str]] = []
+        for rel_path, content in final_rendered:
+            if rel_path not in update_paths:
+                continue
+            # Preserve {MANUAL:*} values from the existing file (if any)
+            existing_path = emit._resolve_path(output_dir, rel_path)
+            if existing_path.exists():
+                content = _preserve_manual_values(
+                    existing_path.read_text(encoding="utf-8"), content
+                )
+            update_rendered.append((rel_path, content))
+
+        if not update_rendered:
+            print("Changes detected but no matching rendered files — already up to date.")
+            return 0
+
+        # Always regenerate the team topology graph on every update
+        graph_rel_path = "references/pipeline-graph.md"
+        if not any(p == graph_rel_path for p, _ in update_rendered):
+            graph_update_content = _graph.generate_graph_document(
+                dict(final_rendered), project_name=project_name
+            )
+            update_rendered.append((graph_rel_path, graph_update_content))
+
+        # --prune: delete removed files (with confirmation unless --yes)
+        if args.prune and sdreport.removed_files:
+            rc = _prune_removed_files(sdreport.removed_files, output_dir, args.yes, args.dry_run)
+            if rc != 0:
+                return rc
+
+        print(f"\nWriting {len(update_rendered)} file(s)...")
+        result = emit.emit_all(
+            update_rendered,
+            output_dir=output_dir,
+            dry_run=args.dry_run,
+            overwrite=True,
+            yes=args.yes,
+        )
+        emit.print_summary(result, manifest)
+
+        # ------------------------------------------------------------------
+        # Post-generation audit (--update path)
+        # ------------------------------------------------------------------
+        if args.post_audit and result.success and not args.dry_run:
+            from src import audit as _audit
+            audit_result = _audit.run_post_audit(
+                output_dir, manifest,
+                ai_audit=True,
+            )
+            _audit.print_audit_report(audit_result)
+            if args.auto_correct and (audit_result.has_errors or audit_result.has_warnings):
+                audit_result = _attempt_auto_correct(
+                    output_dir=output_dir,
+                    manifest=manifest,
+                    audit_result=audit_result,
+                )
+            if audit_result.has_errors:
+                return 1
+
+        if not args.dry_run and result.success:
+            _write_run_log(manifest, result, output_dir, template_hashes)
+        return 0 if result.success else 1
 
     # -----------------------------------------------------------------------
     # Step 6: Validate cross-references
@@ -218,10 +427,30 @@ def main(argv: list[str] | None = None) -> int:
     emit.print_summary(result, manifest)
 
     # -----------------------------------------------------------------------
+    # Step 8.5: Post-generation audit (if --post-audit)
+    # -----------------------------------------------------------------------
+    if args.post_audit and result.success and not args.dry_run:
+        from src import audit as _audit
+        audit_result = _audit.run_post_audit(
+            output_dir, manifest,
+            rendered_files=final_rendered,
+            ai_audit=True,
+        )
+        _audit.print_audit_report(audit_result)
+        if args.auto_correct and (audit_result.has_errors or audit_result.has_warnings):
+            audit_result = _attempt_auto_correct(
+                output_dir=output_dir,
+                manifest=manifest,
+                audit_result=audit_result,
+            )
+        if audit_result.has_errors:
+            return 1
+
+    # -----------------------------------------------------------------------
     # Step 9: Write run log (skip in dry-run)
     # -----------------------------------------------------------------------
     if not args.dry_run and result.success:
-        _write_run_log(manifest, result, output_dir)
+        _write_run_log(manifest, result, output_dir, template_hashes)
 
     return 0 if result.success else 1
 
@@ -230,6 +459,95 @@ def main(argv: list[str] | None = None) -> int:
 # Helpers
 # ---------------------------------------------------------------------------
 
+def _prune_removed_files(
+    removed_files: list[dict],
+    output_dir: Path,
+    yes: bool,
+    dry_run: bool,
+) -> int:
+    """Delete agent files that the new manifest no longer includes.
+
+    Args:
+        removed_files: List of file-entry dicts from StructuralDiffReport.removed_files.
+        output_dir:    Root agents directory.
+        yes:           If True, skip interactive confirmation.
+        dry_run:       If True, report but do not delete.
+
+    Returns:
+        0 on success, 1 if user declined or an error occurred.
+    """
+    paths = [emit._resolve_path(output_dir, f["path"]) for f in removed_files]
+    existing = [p for p in paths if p.exists()]
+    if not existing:
+        return 0
+
+    print(f"\n  --prune: {len(existing)} file(s) to remove:")
+    for p in existing:
+        print(f"    {p.name}")
+
+    if dry_run:
+        print("  (dry-run: no files deleted)")
+        return 0
+
+    if not yes:
+        try:
+            answer = input("\n  Delete these files? [y/N] ").strip().lower()
+        except EOFError:
+            answer = "n"
+        if answer != "y":
+            print("  Prune cancelled.")
+            return 1
+
+    for p in existing:
+        try:
+            p.unlink()
+            print(f"  Deleted: {p.name}")
+        except OSError as exc:
+            print(f"  Error deleting {p.name}: {exc}", file=sys.stderr)
+            return 1
+
+    return 0
+
+
+def _attempt_auto_correct(
+    *,
+    output_dir: Path,
+    manifest: dict,
+    audit_result,
+):
+    """Invoke standalone Copilot CLI remediation and rerun the audit.
+
+    Args:
+        output_dir: Root agents directory for the generated team.
+        manifest: Team manifest from analyze.build_manifest().
+        audit_result: Initial audit result with findings to remediate.
+
+    Returns:
+        The rerun audit result if remediation succeeded, otherwise the original audit result.
+    """
+    from src import audit as _audit
+    from src import remediate as _remediate
+
+    remediation_result = _remediate.run_copilot_autocorrect(
+        output_dir=output_dir,
+        manifest=manifest,
+        audit_result=audit_result,
+    )
+    _remediate.print_remediation_summary(remediation_result)
+
+    if not remediation_result.succeeded:
+        return audit_result
+
+    rerun_result = _audit.run_post_audit(
+        output_dir,
+        manifest,
+        ai_audit=True,
+    )
+    print("\n  --- Post-Remediation Audit ---")
+    _audit.print_audit_report(rerun_result)
+    return rerun_result
+
+
 def _guess_file_type(rel_path: str) -> str:
     if "copilot-instructions" in rel_path:
         return "instructions"
@@ -237,20 +555,116 @@ def _guess_file_type(rel_path: str) -> str:
         return "setup-required"
     if "team-builder" in rel_path:
         return "builder"
+    if rel_path.startswith("references/") or "/references/" in rel_path:
+        return "reference"
     return "agent"
 
 
-def _write_run_log(manifest: dict, result: emit.EmitResult, output_dir: Path) -> None:
+import re
+
+_MANUAL_RE = re.compile(r"\{MANUAL:([A-Z][A-Z0-9_]*)\}")
+
+
+def _preserve_manual_values(existing_content: str, new_content: str) -> str:
+    """Carry forward manually-filled {MANUAL:*} values from existing files.
+
+    Scans the existing file for any {MANUAL:NAME} tokens that have been
+    replaced with actual values, and applies those same replacements to
+    the newly rendered content.
+
+    Args:
+        existing_content: Content of the currently-deployed agent file.
+        new_content:      Freshly rendered content (may have {MANUAL:*} tokens).
+
+    Returns:
+        New content with manual values preserved from the existing file.
+    """
+    # Find all {MANUAL:*} tokens in the new content
+    manual_tokens = set(_MANUAL_RE.findall(new_content))
+    if not manual_tokens:
+        return new_content
+
+    # For each token, check if the existing file has a non-placeholder value
+    # at the same location. We match by looking for the line context.
+    result = new_content
+    for token_name in manual_tokens:
+        placeholder = f"{{MANUAL:{token_name}}}"
+        # If the existing file still has the placeholder, nothing to preserve
+        if placeholder in existing_content:
+            continue
+        # The existing file had this token resolved — find what it was replaced with.
+        # Strategy: find lines in existing that would have contained this token,
+        # by looking for the surrounding text pattern in the template.
+        resolved_value = _extract_resolved_value(existing_content, new_content, placeholder)
+        if resolved_value is not None:
+            result = result.replace(placeholder, resolved_value)
+
+    return result
+
+
+def _extract_resolved_value(existing: str, new: str, placeholder: str) -> str | None:
+    """Extract the value that replaced a placeholder in an existing file.
+
+    Finds the line in new content containing the placeholder, builds a regex
+    from the surrounding text, and matches it against the existing content.
+
+    Args:
+        existing:    Content of the existing file.
+        new:         New template content with placeholder.
+        placeholder: The {MANUAL:*} token to look up.
+
+    Returns:
+        The resolved value string, or None if it cannot be determined.
+    """
+    for new_line in new.splitlines():
+        if placeholder not in new_line:
+            continue
+        # Build a pattern: escape everything except the placeholder
+        parts = new_line.split(placeholder)
+        if len(parts) != 2:
+            continue  # Multiple occurrences on same line — skip for safety
+        prefix = re.escape(parts[0].strip())
+        suffix = re.escape(parts[1].strip())
+        if not prefix and not suffix:
+            continue
+        pattern = prefix + r"(.+?)" + suffix if suffix else prefix + r"(.+)"
+        try:
+            match = re.search(pattern, existing)
+        except re.error:
+            continue
+        if match:
+            return match.group(1).strip()
+    return None
+
+
+def _write_run_log(manifest: dict, result: emit.EmitResult, output_dir: Path, template_hashes: dict[str, str] | None = None) -> None:
     """Write a minimal JSON run log to the output directory."""
+    from src import drift as _drift
+
+    # Convert absolute paths to project-relative paths for portability
+    project_root = output_dir.parent.parent  # output_dir is .github/agents/
+    files_written = []
+    for f in result.written:
+        try:
+            files_written.append(str(Path(f).relative_to(project_root)))
+        except ValueError:
+            files_written.append(f)
+
     log = {
-        "schema_version": "1.0",
+        "schema_version": "1.2",
         "project_name": manifest["project_name"],
         "framework": manifest["framework"],
         "project_type": manifest["project_type"],
         "archetypes": manifest["selected_archetypes"],
         "components": [c["slug"] for c in manifest["components"]],
-        "files_written": result.written,
+        "files_written": files_written,
         "manual_required": len(manifest.get("manual_required_placeholders", [])),
+        "template_hashes": template_hashes or {},
+        # v1.2 additions — structural fingerprint for compute_structural_diff()
+        "output_files_map": manifest.get("output_files", []),
+        "agent_slug_list": manifest.get("agent_slug_list", []),
+        "governance_agents": manifest.get("governance_agents", []),
+        "manifest_fingerprint": _drift.compute_manifest_fingerprint(manifest),
     }
     log_path = output_dir / "references" / "build-log.json"
     log_path.parent.mkdir(parents=True, exist_ok=True)
