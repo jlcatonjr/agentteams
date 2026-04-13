@@ -165,7 +165,7 @@ def run_post_audit(
     result.agent_refactor_findings.extend(_check_invariant_core_present(file_map))
     result.agent_refactor_findings.extend(_check_return_handoff_present(file_map))
     result.agent_refactor_findings.extend(_check_readonly_tool_declarations(file_map))
-    result.agent_refactor_findings.extend(_check_dangling_agent_slugs(file_map))
+    result.agent_refactor_findings.extend(_check_dangling_agent_slugs(file_map, output_dir))
 
     # --- Code-hygiene checks ---
     result.code_hygiene_findings.extend(_check_ch14_inline_data_blocks(file_map))
@@ -465,7 +465,7 @@ def _check_workstream_expert_coverage(
 # ---------------------------------------------------------------------------
 
 #: Regex matching a YAML 'agents:' list entry (slug in single or double quotes)
-_AGENTS_LIST_RE = re.compile(r"['\"]([a-z][a-z0-9-]+)['\"]")
+_AGENTS_LIST_RE = re.compile(r"['\"]([a-z][a-z0-9_-]+)['\"]")
 
 #: Pattern that identifies a self-declared read-only agent from its body text.
 #: Matches only explicit self-attributive declarations:
@@ -604,14 +604,20 @@ def _check_readonly_tool_declarations(
 
 def _check_dangling_agent_slugs(
     file_map: dict[str, str],
+    output_dir: Path | None = None,
 ) -> list[AuditFinding]:
     """Check that every slug in an agent's YAML 'agents:' list has a file.
 
     An agent that references @other-agent in its YAML handoffs requires that
     other-agent's file to exist. Dangling references break the handoff chain.
+    Also resolves slugs from .claude/agents/ in the repo root, which is
+    a valid location for domain-expert agents alongside .github/agents/.
 
     Args:
-        file_map: Rendered file content keyed by relative path.
+        file_map:   Rendered file content keyed by relative path.
+        output_dir: Optional absolute path to the agents output directory
+                    (.github/agents/). When provided, also loads slugs from
+                    the sibling .claude/agents/ directory.
 
     Returns:
         List of AuditFinding for each dangling agent slug reference.
@@ -621,6 +627,14 @@ def _check_dangling_agent_slugs(
         for p in file_map
         if p.endswith(".agent.md") and "references/" not in p
     }
+    # Also accept slugs from .claude/agents/ in the same repo root
+    if output_dir is not None:
+        # output_dir is repo/.github/agents/ → repo root is output_dir.parent.parent
+        claude_agents_dir = output_dir.parent.parent / ".claude" / "agents"
+        if claude_agents_dir.is_dir():
+            for p in claude_agents_dir.iterdir():
+                if p.suffix == ".md":
+                    generated_slugs.add(p.stem.replace(".agent", ""))
     findings: list[AuditFinding] = []
 
     for rel_path, content in file_map.items():
@@ -847,6 +861,7 @@ def _run_ai_audit(
             capture_output=True,
             text=True,
             timeout=120,
+            cwd=str(output_dir),  # ground file reads to the deployed agents dir
         )
         output = proc.stdout.strip()
         return output if output else None
