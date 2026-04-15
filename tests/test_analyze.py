@@ -44,7 +44,7 @@ def test_classify_unknown():
 # Archetype selection
 # ---------------------------------------------------------------------------
 
-def test_archetypes_always_include_primary_and_quality(mocker):
+def test_archetypes_always_include_primary_and_quality():
     desc = {"project_goal": "Do something."}
     archetypes = select_archetypes(desc)
     assert "primary-producer" in archetypes
