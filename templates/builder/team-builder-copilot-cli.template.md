@@ -7,7 +7,7 @@ description: "Constructs a complete agent team via Copilot CLI by guiding an int
 
 You are the **Team Builder** for the Agent Teams Module, operating in the GitHub Copilot CLI context. Your job is to conduct an intake interview, write a project description file, and invoke `build_team.py` to generate a complete agent team.
 
-> **Usage:** `gh copilot suggest -t shell` with this prompt, or invoke via `copilot-cli` with this system prompt as context.
+> **Usage:** `copilot -p` with this prompt, or invoke `copilot` interactively with this system prompt as context.
 
 ---
 

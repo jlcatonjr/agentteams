@@ -8,6 +8,7 @@ for the emit phase.
 
 from __future__ import annotations
 
+import hashlib
 import re
 from pathlib import Path
 from typing import Any
@@ -56,6 +57,10 @@ def render_all(
             continue
         else:
             full_template_path = templates_dir / template_path
+            # Fall back to generic template if category-specific does not exist
+            if not full_template_path.exists() and file_spec.get("fallback_template"):
+                template_path = file_spec["fallback_template"]
+                full_template_path = templates_dir / template_path
             if not full_template_path.exists():
                 # Skip missing templates (e.g., optional archetypes not in repo yet)
                 continue
@@ -68,6 +73,35 @@ def render_all(
         results.append((output_path, content))
 
     return results
+
+
+def compute_template_hashes(
+    manifest: dict[str, Any],
+    *,
+    templates_dir: Path,
+) -> dict[str, str]:
+    """Compute SHA-256 hashes of all templates used for a manifest.
+
+    Args:
+        manifest:      Team manifest from analyze.build_manifest().
+        templates_dir: Root directory of the templates/ folder.
+
+    Returns:
+        Dict mapping template relative path to hex digest (first 16 chars).
+    """
+    hashes: dict[str, str] = {}
+    for file_spec in manifest["output_files"]:
+        template_path: str = file_spec.get("template", "")
+        if not template_path:
+            continue
+        full_path = templates_dir / template_path
+        if not full_path.exists() and file_spec.get("fallback_template"):
+            template_path = file_spec["fallback_template"]
+            full_path = templates_dir / template_path
+        if full_path.exists():
+            digest = hashlib.sha256(full_path.read_bytes()).hexdigest()[:16]
+            hashes[template_path] = digest
+    return hashes
 
 
 # ---------------------------------------------------------------------------
@@ -114,11 +148,19 @@ def _build_placeholder_map_for_file(
             mapping.update(_component_placeholder_map(component, manifest))
 
     # Add tool-specific overrides for tool-specialist files
-    if file_spec.get("template", "").endswith("tool-specific.template.md"):
+    if file_spec.get("template", "").endswith("tool-specific.template.md") or \
+       "tool-" in file_spec.get("template", "").split("/")[-1]:
         tool_slug = file_spec["path"].replace(".agent.md", "")
         tool_agent = _find_tool_agent(manifest, tool_slug)
         if tool_agent:
             mapping.update(_tool_placeholder_map(tool_agent))
+
+    # Add tool reference overrides for reference files
+    if file_spec.get("type") == "reference":
+        ref_slug = file_spec["path"].replace("references/", "").replace("-reference.md", "")
+        ref_tool = _find_reference_tool(manifest, ref_slug)
+        if ref_tool:
+            mapping.update(_reference_tool_placeholder_map(ref_tool))
 
     return mapping
 
@@ -134,6 +176,13 @@ def _find_tool_agent(manifest: dict[str, Any], slug: str) -> dict[str, Any] | No
     for ta in manifest.get("tool_agents", []):
         if ta["slug"] == slug:
             return ta
+    return None
+
+
+def _find_reference_tool(manifest: dict[str, Any], slug: str) -> dict[str, Any] | None:
+    for rt in manifest.get("reference_tools", []):
+        if rt["slug"] == slug:
+            return rt
     return None
 
 
@@ -166,6 +215,24 @@ def _component_placeholder_map(component: dict[str, Any], manifest: dict[str, An
     if not output_file:
         output_file = f"{primary_output_dir}{component['slug']}/{component['name'].lower().replace(' ', '-')}"
 
+    # Build tool references for this component
+    comp_tools = component.get("tools", [])
+    if comp_tools:
+        # Map tool names to their agent/reference slugs from the manifest
+        tool_lines = []
+        tool_agent_names = {ta["tool_name"]: ta["slug"] for ta in manifest.get("tool_agents", [])}
+        ref_tool_names = {rt["tool_name"]: rt["slug"] for rt in manifest.get("reference_tools", [])}
+        for t in comp_tools:
+            if t in tool_agent_names:
+                tool_lines.append(f"- `@{tool_agent_names[t]}` (specialist agent)")
+            elif t in ref_tool_names:
+                tool_lines.append(f"- `references/{ref_tool_names[t]}-reference.md`")
+            else:
+                tool_lines.append(f"- {t}")
+        tools_formatted = "\n".join(tool_lines)
+    else:
+        tools_formatted = "No tool-specific dependencies."
+
     return {
         "COMPONENT_NUMBER": str(component.get("number", 1)),
         "COMPONENT_NAME": component["name"],
@@ -176,16 +243,23 @@ def _component_placeholder_map(component: dict[str, Any], manifest: dict[str, An
         "COMPONENT_SOURCES": sources_formatted,
         "COMPONENT_CROSS_REFS": cross_refs_formatted,
         "COMPONENT_QUALITY_CRITERIA": quality_formatted,
+        "COMPONENT_TOOLS": tools_formatted,
     }
 
 
 def _tool_placeholder_map(tool_agent: dict[str, Any]) -> dict[str, str]:
     """Build per-tool-agent placeholder values."""
-    config_files = ", ".join(tool_agent.get("config_files", [])) or "{MANUAL:TOOL_CONFIG_FILES}"
+    config_files = ", ".join(tool_agent.get("config_files", [])) or "N/A"
+    docs_url = tool_agent.get("docs_url", "") or "{MANUAL:TOOL_DOCS_URL}"
+    api_surface = tool_agent.get("api_surface", "") or "{MANUAL:TOOL_API_SURFACE}"
+    common_patterns = tool_agent.get("common_patterns", "") or "{MANUAL:TOOL_COMMON_PATTERNS}"
     return {
         "TOOL_NAME": tool_agent["tool_name"],
         "TOOL_VERSION": tool_agent.get("tool_version", ""),
         "TOOL_CONFIG_FILES": config_files,
+        "TOOL_DOCS_URL": docs_url,
+        "TOOL_API_SURFACE": api_surface,
+        "TOOL_COMMON_PATTERNS": common_patterns,
         "TOOL_INVOCATION_COMMAND": tool_agent.get("invocation_command", "{MANUAL:TOOL_INVOCATION_COMMAND}"),
         "TOOL_INVOCATION_TARGET": tool_agent.get("invocation_target", "{MANUAL:TOOL_INVOCATION_TARGET}"),
         "DIAGRAM_TOOLS": tool_agent["tool_name"],
@@ -201,6 +275,23 @@ def _guess_diagram_extension(tool_name: str) -> str:
         "draw.io": "drawio",
     }
     return mapping.get(tool_name.lower(), "txt")
+
+
+def _reference_tool_placeholder_map(ref_tool: dict[str, Any]) -> dict[str, str]:
+    """Build per-reference-tool placeholder values."""
+    config_files = ", ".join(ref_tool.get("config_files", [])) or "N/A"
+    docs_url = ref_tool.get("docs_url", "") or "{MANUAL:TOOL_DOCS_URL}"
+    api_surface = ref_tool.get("api_surface", "") or "{MANUAL:TOOL_API_SURFACE}"
+    common_patterns = ref_tool.get("common_patterns", "") or "{MANUAL:TOOL_COMMON_PATTERNS}"
+    return {
+        "TOOL_NAME": ref_tool["tool_name"],
+        "TOOL_VERSION": ref_tool.get("tool_version", ""),
+        "TOOL_CATEGORY": ref_tool.get("tool_category", "library"),
+        "TOOL_CONFIG_FILES": config_files,
+        "TOOL_DOCS_URL": docs_url,
+        "TOOL_API_SURFACE": api_surface,
+        "TOOL_COMMON_PATTERNS": common_patterns,
+    }
 
 
 # ---------------------------------------------------------------------------

@@ -1,5 +1,10 @@
 # Agent Teams Module
 
+[![PyPI version](https://img.shields.io/pypi/v/agentteams)](https://pypi.org/project/agentteams/)
+[![Python 3.11+](https://img.shields.io/badge/python-3.11%2B-blue)](https://www.python.org/)
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
+[![Docs](https://img.shields.io/badge/docs-github--pages-blue)](https://jlcatonjr.github.io/agentteams/)
+
 Generate a complete, coordinated AI agent team for any project — from a single project description file.
 
 ---
@@ -28,9 +33,14 @@ The generated team includes:
 ### 1. Install
 
 ```bash
-git clone https://github.com/jameslcaton/agentteams
+pip install agentteams
+```
+
+Or clone for local development (no external dependencies — stdlib Python 3.11+):
+
+```bash
+git clone https://github.com/jlcatonjr/agentteams
 cd agentteams
-# No external dependencies required — stdlib Python 3.11+
 ```
 
 ### 2. Write a project description
@@ -52,6 +62,15 @@ Create `brief.json` (or `brief.md`):
 ```
 
 ### 3. Generate your team
+
+```bash
+agentteams \
+  --description brief.json \
+  --project /path/to/your/project \
+  --framework copilot-vscode
+```
+
+Or with the script directly:
 
 ```bash
 python build_team.py \
@@ -88,7 +107,7 @@ After generation, a **Team Builder agent** is installed in your project. This is
 
 **For VS Code Copilot:** Invoke `@team-builder` in chat.  
 **For Claude:** Open a Project with the generated `CLAUDE.md` as the system prompt.  
-**For Copilot CLI:** Use `gh copilot` with the generated prompt file.
+**For Copilot CLI:** Use `copilot` with the generated prompt file.
 
 The builder ensures construction is always facilitated by the target framework itself, enabling the agent to elicit project-specific details interactively before generating files.
 
@@ -117,7 +136,7 @@ Markdown brief format is also accepted — see [examples/research-project/brief.
 Coordinates all workflows. Enforces security, consistency, and voice fidelity rules.
 
 ### Tier 2: Governance Agents (always generated)
-`navigator` · `security` · `adversarial` · `conflict-auditor` · `cleanup` · `agent-updater` · `agent-refactor`
+`navigator` · `security` · `code-hygiene` · `adversarial` · `conflict-auditor` · `conflict-resolution` · `cleanup` · `agent-updater` · `agent-refactor`
 
 ### Tier 3: Domain Agents (selected by archetype)
 | Archetype | Triggered by |
@@ -131,6 +150,8 @@ Coordinates all workflows. Enforces security, consistency, and voice fidelity ru
 | `reference-manager` | Projects with citation databases |
 | `output-compiler` | Multi-component assembly projects |
 | `visual-designer` | Projects with diagrams or figures |
+| `module-doc-author` | Projects with `pip_package_name` or PyPI distribution |
+| `module-doc-validator` | Projects with `pip_package_name` or PyPI distribution |
 | `tool-specific` | Tools with `needs_specialist_agent: true` |
 
 ### Tier 4: Workstream Experts
@@ -141,7 +162,7 @@ One generated per component. Prepares Component Briefs, reviews drafts, issues A
 ## CLI Reference
 
 ```
-python build_team.py --help
+agentteams --help
 
 Options:
   --description PATH   Project description (.json or .md) [required]
@@ -152,8 +173,74 @@ Options:
   --overwrite          Overwrite existing files without prompting
   --yes, -y            Non-interactive: skip all prompts
   --no-scan            Disable project directory scanning
+  --update             Re-render drifted files AND emit new agents added to the
+                       taxonomy since the last build; preserves manually-filled values
+  --prune              Used with --update: also delete agents removed from the taxonomy
+  --check              Check for template drift and structural changes (exit code 1 if found)
+  --scan-security      Scan generated agent files for security issues
+  --self               Operate on the module's own agent team
   --version            Print version
 ```
+
+---
+
+## Maintenance Commands
+
+Once a team has been generated, the module can detect and repair two kinds of drift:
+
+- **Content drift** — a template's text changed (re-renders affected files)
+- **Structural drift** — agents were added or removed from the taxonomy (emits new files, reports removed files)
+
+### Check for drift
+
+```bash
+agentteams --description brief.json --check
+# Exit code 0: no drift. Exit code 1: drift or structural changes detected.
+```
+
+### Update drifted files and new agents (preserve manual values)
+
+When the module is updated (e.g., a new governance agent is added), run `--update` to bring an existing team in sync. New agent files are emitted; changed files are re-rendered preserving any `{MANUAL:*}` values you filled in previously; removed agents are reported but not deleted:
+
+```bash
+agentteams --description brief.json --update
+```
+
+To also delete agents that are no longer part of the taxonomy:
+
+```bash
+agentteams --description brief.json --update --prune
+```
+
+### Security scan
+
+Scan deployed agent files for PII, credentials, and unresolved placeholders:
+
+```bash
+agentteams --description brief.json --scan-security
+```
+
+### Self-maintenance
+
+Regenerate the module's own meta-agent team:
+
+```bash
+agentteams --self
+```
+
+---
+
+## Tool Classification
+
+Tools declared in the brief are classified into three tiers:
+
+| Tier | When | Output |
+|------|------|--------|
+| **Specialist agent** | `needs_specialist_agent: true` or category = `database`, `deployment`, `pipeline`, `compiler` | Full `.agent.md` with category-specific template |
+| **Reference file** | Default for `framework`, `library`, `api`, `cli` | `references/ref-{tool}-reference.md` |
+| **Passive** | `language`, `other` | Listed in `copilot-instructions.md` only |
+
+The engine also parses dependency manifests (`requirements.txt`, `pyproject.toml`, `package.json`, `Cargo.toml`, `go.mod`) from the project directory to detect tools automatically.
 
 ---
 
@@ -169,6 +256,16 @@ Options:
 
 ```bash
 python -m pytest tests/ -v
+```
+
+---
+
+## Verify Your Install
+
+```bash
+agentteams --help             # all flags and usage
+man agentteams                # man-page (after system-prefix pip install)
+agentteams --version          # confirm installed version
 ```
 
 Tests require no external dependencies. Integration tests use the bundled examples.
@@ -192,10 +289,12 @@ agentteams/
 │       └── claude.py          # Claude adapter
 ├── templates/
 │   ├── universal/             # Governance agent templates (9)
-│   ├── domain/                # Domain archetype templates (10)
+│   ├── domain/                # Domain archetype templates (9 non-tool + 7 tool-specific + 2 doc = 18 total)
 │   ├── builder/               # Team Builder agent templates (3)
 │   ├── workstream-expert.template.md
-│   └── copilot-instructions.template.md
+│   ├── copilot-instructions.template.md
+│   ├── PLACEHOLDER-CONVENTIONS.md
+│   └── AUTHORING-GUIDE.md     # Template authoring guide
 ├── schemas/
 │   ├── project-description.schema.json
 │   └── team-manifest.schema.json
@@ -208,8 +307,20 @@ agentteams/
     ├── test_analyze.py
     ├── test_render.py
     ├── test_emit.py
+    ├── test_drift.py
+    ├── test_scan.py
     └── test_integration.py
 ```
+
+---
+
+## Documentation
+
+- [templates/AUTHORING-GUIDE.md](templates/AUTHORING-GUIDE.md) — How to write and register new agent templates
+- [docs/DESCRIPTION-FORMAT.md](docs/DESCRIPTION-FORMAT.md) — Full field-by-field description format reference
+- [.github/agents/references/agent-taxonomy.reference.md](.github/agents/references/agent-taxonomy.reference.md) — Four-tier agent taxonomy specification
+- [schemas/project-description.schema.json](schemas/project-description.schema.json) — JSON Schema for project descriptions
+- [schemas/team-manifest.schema.json](schemas/team-manifest.schema.json) — JSON Schema for the internal team manifest
 
 ---
 

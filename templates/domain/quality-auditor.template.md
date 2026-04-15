@@ -3,7 +3,7 @@ name: Quality Auditor — {PROJECT_NAME}
 description: "Read-only audit agent that inspects deliverables in {PROJECT_NAME} for structural defects, logical inconsistencies, and LLM-generated prose patterns; does not rewrite"
 user-invokable: false
 tools: ['read', 'search']
-agents: ['primary-producer', 'argument-weaver', 'style-guardian']
+agents: ['primary-producer', 'cohesion-repairer', 'style-guardian']
 model: ["Claude Sonnet 4.6 (copilot)"]
 handoffs:
   - label: Route Corrections to Primary Producer
@@ -11,7 +11,7 @@ handoffs:
     prompt: "Audit findings attached. Please correct flagged passages."
     send: false
   - label: Route Cohesion Failures
-    agent: argument-weaver
+    agent: cohesion-repairer
     prompt: "Cohesion failures flagged in audit. Please repair."
     send: false
   - label: Route Style Issues
@@ -59,7 +59,7 @@ Return a ranked findings list:
 [SEVERITY: HIGH|MEDIUM|LOW] [CODE] [Location]
 Finding: <description>
 Evidence: <quoted passage>
-Recommended action: <route to @primary-producer / @argument-weaver / @style-guardian>
+Recommended action: <route to @primary-producer / @cohesion-repairer / @style-guardian>
 ```
 
 Findings ranked by severity — HIGH first.

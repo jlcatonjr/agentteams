@@ -6,7 +6,7 @@ tools: ['read', 'search', 'agent']
 agents: ['primary-producer', 'adversarial', 'reference-manager']
 model: ["Claude Sonnet 4.6 (copilot)"]
 handoffs:
-  - label: Vett Brief Before Drafting
+  - label: Vet Brief Before Drafting
     agent: adversarial
     prompt: "Component Brief prepared. Review for hidden presuppositions before drafting begins."
     send: false
@@ -56,6 +56,10 @@ You are the domain expert for **{COMPONENT_NAME}** (component {COMPONENT_NUMBER}
 ## Cross-References
 
 {COMPONENT_CROSS_REFS}
+
+## Tool Dependencies
+
+{COMPONENT_TOOLS}
 
 ---
 

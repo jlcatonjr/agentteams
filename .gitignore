@@ -20,3 +20,6 @@ htmlcov/
 # Build-time intake artifacts (written by the team-builder agent)
 _build-description.json
 _intake-notes.md
+
+# Local planning docs — not for publication
+pypi-release-plan.md

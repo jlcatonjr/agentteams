@@ -56,12 +56,15 @@ You synchronize agent documentation after changes in {PROJECT_NAME}. When delive
 
 ## Workflow
 
-1. Identify changed files and determine scope of impact
-2. Apply the authority hierarchy to determine which file is ground truth
-3. Update all affected agent files to reflect current state
-4. Remove any stale content (dated snapshots, resolved issues, hardcoded volatile data)
-5. Hand off to `@agent-refactor` for extraction opportunities
-6. Hand off to `@conflict-auditor` to verify consistency
+1. **Detect drift:** Run `python build_team.py --description <brief> --check` to identify templates that have changed since the last build
+2. **Re-render drifted files:** Run `python build_team.py --description <brief> --update` to re-render only changed agent files while preserving any previously completed manual fields
+3. **Security scan:** Run `python build_team.py --description <brief> --scan-security` to check all agent files for PII, credentials, and unresolved placeholders
+4. Identify any additional changed files not covered by template drift and determine scope of impact
+5. Apply the authority hierarchy to determine which file is ground truth
+6. Update all affected agent files to reflect current state
+7. Remove any stale content (dated snapshots, resolved issues, hardcoded volatile data)
+8. Hand off to `@agent-refactor` for extraction opportunities
+9. Hand off to `@conflict-auditor` to verify consistency
 
 ## Living Document Rules
 

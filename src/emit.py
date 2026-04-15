@@ -150,11 +150,20 @@ def print_summary(result: EmitResult, manifest: dict[str, Any]) -> None:
 
     if not result.dry_run and result.success:
         print("\nNext steps:")
-        print("  1. Review SETUP-REQUIRED.md and fill in manual placeholders")
-        print("  2. Open VS Code in the project directory")
-        print("  3. Invoke @orchestrator to begin production")
+        step = 1
+        if manual_count > 0:
+            print("  1. Review SETUP-REQUIRED.md and fill in manual placeholders")
+            step += 1
+        print(f"  {step}. Open VS Code in the project directory")
+        print(f"  {step + 1}. Invoke @orchestrator to begin production")
         if framework == "copilot-vscode":
-            print("  4. Or invoke @team-builder to regenerate or expand the team")
+            print(f"  {step + 2}. Or invoke @team-builder to regenerate or expand the team")
+            final_step = step + 3
+        else:
+            final_step = step + 2
+        print(f"  {final_step}. Re-run with --post-audit to verify team consistency,")
+        print("     add --auto-correct to let standalone `copilot` repair findings,")
+        print("     or invoke @conflict-auditor and @adversarial in VS Code")
 
 
 # ---------------------------------------------------------------------------

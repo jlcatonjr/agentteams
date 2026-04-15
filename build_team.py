@@ -62,7 +62,7 @@ TEMPLATES_DIR = _SCRIPT_DIR / "templates"
 
 def _build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
-        prog="build_team",
+        prog="agentteams",
         description="Generate a complete agent team for any project.",
         formatter_class=argparse.RawDescriptionHelpFormatter,
         epilog=__doc__,
@@ -149,8 +149,8 @@ def _build_parser() -> argparse.ArgumentParser:
         help=(
             "Run a post-generation audit after emit. Performs static checks "
             "(unresolved placeholders, YAML integrity, required-agent coverage) "
-            "and, if the standalone `copilot` CLI is on PATH, an AI-powered conflict and "
-            "presupposition review."
+            "and, if the `gh` CLI is authenticated, an AI-powered conflict and "
+            "presupposition review via GitHub Models (Claude Sonnet 4.6)."
         ),
     )
     parser.add_argument(

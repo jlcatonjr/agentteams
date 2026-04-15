@@ -43,6 +43,29 @@ You are the **repository navigator** for {PROJECT_NAME}. You maintain the projec
 
 {WORKSTREAM_SOURCE_MAP}
 
+### Team Topology Graph
+
+The current agent team topology is maintained as a directed graph:
+
+`#file:.github/agents/references/pipeline-graph.md`
+
+The graph is **regenerated automatically** on every pipeline run. To refresh it manually:
+
+```bash
+python build_team.py --description <brief.json> --update --yes
+```
+
+The graph shows every agent node (governance, domain, workstream-expert, tool-specialist), all directed handoff edges, and `agents:` list references between agents. Use it to answer topology questions such as:
+- Which agents does `@orchestrator` hand off to?
+- Which agents are reachable from `@primary-producer`?
+- Which agents receive work but never initiate handoffs?
+
+To regenerate the graph without a full team update:
+
+```bash
+python -m src.graph .github/agents/ --output .github/agents/references/pipeline-graph.md
+```
+
 ---
 
 ## Invariant Rules

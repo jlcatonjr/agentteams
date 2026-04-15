@@ -1,0 +1,59 @@
+site_name: Agent Teams Module
+site_description: Generate a complete, coordinated AI agent team for any project from a single description file.
+site_url: https://jlcatonjr.github.io/agentteams/
+repo_url: https://github.com/jlcatonjr/agentteams
+repo_name: jlcatonjr/agentteams
+edit_uri: edit/main/docs/
+site_author: jlcatonjr
+copyright: "&copy; 2025 jlcatonjr"
+
+theme:
+  name: material
+  palette:
+    - scheme: default
+      primary: indigo
+      accent: indigo
+  features:
+    - navigation.tabs
+    - navigation.sections
+    - navigation.top
+    - search.suggest
+    - search.highlight
+    - content.code.copy
+
+nav:
+  - Home: index.md
+  - Getting Started: getting-started.md
+  - How It Works: how-it-works.md
+  - Examples: examples.md
+  - CLI Reference: cli-reference.md
+  - API Reference:
+      - Overview: api-reference/index.md
+      - ingest: api-reference/ingest.md
+      - analyze: api-reference/analyze.md
+      - render: api-reference/render.md
+      - emit: api-reference/emit.md
+      - drift: api-reference/drift.md
+      - scan: api-reference/scan.md
+      - audit: api-reference/audit.md
+      - remediate: api-reference/remediate.md
+      - graph: api-reference/graph.md
+      - frameworks: api-reference/frameworks.md
+      - man: api-reference/man.md
+  - Template Authoring: template-authoring.md
+  - Description Format: DESCRIPTION-FORMAT.md
+  - Contributing: contributing.md
+  - Changelog: changelog.md
+
+markdown_extensions:
+  - pymdownx.highlight:
+      anchor_linenums: true
+  - pymdownx.inlinehilite
+  - pymdownx.superfences
+  - pymdownx.snippets
+  - pymdownx.tabbed:
+      alternate_style: true
+  - admonition
+  - tables
+  - toc:
+      permalink: true

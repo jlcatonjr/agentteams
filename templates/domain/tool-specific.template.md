@@ -30,6 +30,26 @@ You are the domain expert for **{TOOL_NAME} {TOOL_VERSION}** in {PROJECT_NAME}. 
 
 ---
 
+## Official Documentation
+
+Consult the official {TOOL_NAME} documentation at: {TOOL_DOCS_URL}
+
+Always verify configuration options, API signatures, and version-specific behavior against this documentation before making changes.
+
+## Key API Surface
+
+{TOOL_API_SURFACE}
+
+<!-- Document the primary classes, functions, CLI commands, or configuration keys that this agent must understand to operate {TOOL_NAME} effectively. -->
+
+## Common Patterns & Pitfalls
+
+{TOOL_COMMON_PATTERNS}
+
+<!-- Document common usage patterns, anti-patterns, and version-specific gotchas for {TOOL_NAME} {TOOL_VERSION}. -->
+
+---
+
 ## Invariant Core
 
 > ⛔ **Do not modify or omit.**

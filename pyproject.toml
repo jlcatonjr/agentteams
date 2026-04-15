@@ -1,0 +1,39 @@
+[build-system]
+requires = ["setuptools>=68", "wheel"]
+build-backend = "setuptools.backends.legacy:build"
+
+[project]
+name = "agentteams"
+version = "0.1.0"
+description = "Generate a complete, coordinated AI agent team for any project from a single description file."
+readme = "README.md"
+license = { text = "MIT" }
+requires-python = ">=3.11"
+classifiers = [
+    "Development Status :: 4 - Beta",
+    "Intended Audience :: Developers",
+    "License :: OSI Approved :: MIT License",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Topic :: Software Development :: Code Generators",
+    "Topic :: Software Development :: Libraries :: Python Modules",
+]
+dependencies = []
+keywords = ["agent", "ai", "copilot", "code-generation", "github-copilot", "llm", "multi-agent"]
+
+[project.urls]
+Homepage = "https://github.com/jlcatonjr/agentteams"
+Repository = "https://github.com/jlcatonjr/agentteams"
+Issues = "https://github.com/jlcatonjr/agentteams/issues"
+Documentation = "https://jlcatonjr.github.io/agentteams/"
+
+[project.scripts]
+agentteams = "build_team:main"
+build-team = "build_team:main"   # deprecated alias; remove before the next major release
+
+[tool.setuptools.data-files]
+"share/man/man1" = ["agentteams.1"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]

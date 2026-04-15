@@ -1,0 +1,33 @@
+name: CI
+
+on:
+  push:
+    branches:
+      - main
+  pull_request:
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        python-version: ["3.11", "3.12"]
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python-version }}
+
+      - name: Install pytest
+        run: pip install pytest
+
+      - name: Run tests
+        run: pytest tests/
+
+      - name: Generate man-page for comparison
+        run: python -m src.man > /tmp/agentteams-check.1
+
+      - name: Check man-page is current
+        run: diff /tmp/agentteams-check.1 agentteams.1

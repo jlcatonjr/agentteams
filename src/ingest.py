@@ -258,6 +258,13 @@ def _supplement_from_directory(desc: dict[str, Any], project_path: Path) -> dict
     if "tools" not in desc:
         desc["tools"] = _detect_tools(project_path)
 
+    # Supplement tools with dependency manifest contents
+    existing_names = {t.get("name", "").lower() for t in desc.get("tools", [])}
+    for dep in parse_dependency_manifests(project_path):
+        if dep["name"].lower() not in existing_names:
+            desc.setdefault("tools", []).append(dep)
+            existing_names.add(dep["name"].lower())
+
     # Detect primary_output_dir from common patterns if not set
     if "primary_output_dir" not in desc:
         detected = _detect_primary_output_dir(project_path)
@@ -307,20 +314,56 @@ def _extract_readme_goal(readme_text: str) -> str:
 
 _TOOL_SIGNATURES: list[tuple[str, str, str]] = [
     # (filename_pattern, tool_name, category)
+    # --- Languages / runtimes ---
     ("requirements.txt", "Python", "language"),
     ("pyproject.toml", "Python", "language"),
     ("setup.py", "Python", "language"),
+    ("Pipfile", "Python", "language"),
     ("package.json", "Node.js", "language"),
     ("Cargo.toml", "Rust", "language"),
     ("go.mod", "Go", "language"),
+    ("tsconfig.json", "TypeScript", "language"),
+    ("deno.json", "Deno", "language"),
+    ("Gemfile", "Ruby", "language"),
+    ("composer.json", "PHP", "language"),
+    ("*.tex", "LaTeX", "language"),
+    ("*.bib", "BibTeX", "library"),
+    # --- Build systems ---
     ("pom.xml", "Java (Maven)", "build-system"),
     ("build.gradle", "Java (Gradle)", "build-system"),
     ("Makefile", "Make", "build-system"),
-    ("*.tex", "LaTeX", "language"),
-    ("*.bib", "BibTeX", "library"),
+    ("CMakeLists.txt", "CMake", "build-system"),
+    ("webpack.config.*", "Webpack", "build-system"),
+    ("vite.config.*", "Vite", "build-system"),
+    # --- Databases ---
+    ("*.sql", "SQL", "database"),
+    # --- CLI / infrastructure ---
     ("Dockerfile", "Docker", "cli"),
     ("docker-compose.yml", "Docker Compose", "cli"),
+    ("docker-compose.yaml", "Docker Compose", "cli"),
     (".github/workflows", "GitHub Actions", "cli"),
+    (".gitlab-ci.yml", "GitLab CI", "cli"),
+    ("Jenkinsfile", "Jenkins", "cli"),
+    (".circleci", "CircleCI", "cli"),
+    ("*.tf", "Terraform", "cli"),
+    (".terraform", "Terraform", "cli"),
+    ("k8s", "Kubernetes", "cli"),
+    ("kubernetes", "Kubernetes", "cli"),
+    ("serverless.yml", "Serverless", "cli"),
+    ("fly.toml", "Fly.io", "cli"),
+    ("vercel.json", "Vercel", "cli"),
+    ("Procfile", "Heroku", "cli"),
+    ("nginx.conf", "Nginx", "cli"),
+    # --- Frameworks (detected by config presence) ---
+    ("next.config.*", "Next.js", "framework"),
+    ("nuxt.config.*", "Nuxt.js", "framework"),
+    ("angular.json", "Angular", "framework"),
+    # --- Other ---
+    ("flake.nix", "Nix", "other"),
+    ("*.proto", "Protocol Buffers", "library"),
+    ("*.graphql", "GraphQL", "library"),
+    (".eslintrc*", "ESLint", "library"),
+    (".prettierrc*", "Prettier", "library"),
 ]
 
 
@@ -331,11 +374,19 @@ def _detect_tools(project_path: Path) -> list[dict[str, Any]]:
     for sig_pattern, tool_name, category in _TOOL_SIGNATURES:
         if tool_name in seen:
             continue
-        if "*" in sig_pattern:
-            # Glob pattern — walk up to depth 3
+        if sig_pattern.startswith("*."):
+            # Extension glob — walk up to depth 3
             ext = sig_pattern.lstrip("*")
             found = any(True for _ in _walk_depth(project_path, max_depth=3) if _.suffix == ext)
+        elif "*" in sig_pattern:
+            # Prefix glob like "webpack.config.*" or ".eslintrc*"
+            prefix = sig_pattern.split("*")[0]
+            found = any(
+                f.name.startswith(prefix)
+                for f in _walk_depth(project_path, max_depth=3)
+            )
         else:
+            # Exact path match (file or directory)
             found = (project_path / sig_pattern).exists()
 
         if found:
@@ -351,6 +402,148 @@ def _detect_primary_output_dir(project_path: Path) -> str | None:
         if (project_path / candidate).is_dir():
             return f"{candidate}/"
     return None
+
+
+# ---------------------------------------------------------------------------
+# Dependency manifest parsing
+# ---------------------------------------------------------------------------
+
+def parse_dependency_manifests(project_path: Path) -> list[dict[str, Any]]:
+    """Parse dependency manifests and return discovered library/framework tools.
+
+    Args:
+        project_path: Root of the project directory.
+
+    Returns:
+        List of tool dicts with name, version (if available), and category.
+    """
+    tools: list[dict[str, Any]] = []
+    seen: set[str] = set()
+
+    parsers: list[tuple[str, Any]] = [
+        ("requirements.txt", _parse_requirements_txt),
+        ("pyproject.toml", _parse_pyproject_toml),
+        ("package.json", _parse_package_json),
+        ("Cargo.toml", _parse_cargo_toml),
+        ("go.mod", _parse_go_mod),
+    ]
+
+    for filename, parser in parsers:
+        manifest_path = project_path / filename
+        if manifest_path.exists():
+            try:
+                text = manifest_path.read_text(encoding="utf-8", errors="replace")
+                for dep in parser(text):
+                    name_lower = dep["name"].lower()
+                    if name_lower not in seen:
+                        seen.add(name_lower)
+                        tools.append(dep)
+            except Exception:
+                continue  # Skip unparseable manifests
+
+    return tools
+
+
+def _parse_requirements_txt(text: str) -> list[dict[str, Any]]:
+    """Parse requirements.txt lines into tool dicts."""
+    deps: list[dict[str, Any]] = []
+    for line in text.splitlines():
+        line = line.strip()
+        if not line or line.startswith("#") or line.startswith("-"):
+            continue
+        # Handle version specifiers: package==1.0, package>=1.0, package~=1.0
+        match = re.match(r"^([A-Za-z0-9_\-\.]+)\s*([=<>~!]+\s*[\d\.\*]+)?", line)
+        if match:
+            name = match.group(1)
+            version = (match.group(2) or "").strip().lstrip("=<>~! ")
+            deps.append({"name": name, "version": version, "category": "library"})
+    return deps
+
+
+def _parse_pyproject_toml(text: str) -> list[dict[str, Any]]:
+    """Parse pyproject.toml dependencies (stdlib only, basic TOML parsing)."""
+    deps: list[dict[str, Any]] = []
+    in_deps = False
+    for line in text.splitlines():
+        stripped = line.strip()
+        # Detect [project.dependencies] or [tool.poetry.dependencies]
+        if re.match(r"^\[(project\.)?dependencies\]", stripped) or \
+           re.match(r"^\[tool\.poetry\.dependencies\]", stripped):
+            in_deps = True
+            continue
+        if stripped.startswith("[") and in_deps:
+            in_deps = False
+            continue
+        if in_deps:
+            # String item in a list: "package>=1.0"
+            list_match = re.match(r'^"([A-Za-z0-9_\-\.]+)\s*([=<>~!]+\s*[\d\.\*]+)?"', stripped)
+            if list_match:
+                name = list_match.group(1)
+                version = (list_match.group(2) or "").strip().lstrip("=<>~! ")
+                deps.append({"name": name, "version": version, "category": "library"})
+                continue
+            # Key-value: package = "^1.0" (poetry style)
+            kv_match = re.match(r'^([A-Za-z0-9_\-\.]+)\s*=', stripped)
+            if kv_match:
+                name = kv_match.group(1)
+                if name.lower() != "python":
+                    deps.append({"name": name, "version": "", "category": "library"})
+    return deps
+
+
+def _parse_package_json(text: str) -> list[dict[str, Any]]:
+    """Parse package.json dependencies."""
+    deps: list[dict[str, Any]] = []
+    try:
+        data = json.loads(text)
+    except (json.JSONDecodeError, ValueError):
+        return deps
+    for section in ("dependencies", "devDependencies"):
+        for name, version in data.get(section, {}).items():
+            version_clean = version.lstrip("^~>=<! ")
+            deps.append({"name": name, "version": version_clean, "category": "library"})
+    return deps
+
+
+def _parse_cargo_toml(text: str) -> list[dict[str, Any]]:
+    """Parse Cargo.toml [dependencies] section."""
+    deps: list[dict[str, Any]] = []
+    in_deps = False
+    for line in text.splitlines():
+        stripped = line.strip()
+        if stripped == "[dependencies]":
+            in_deps = True
+            continue
+        if stripped.startswith("[") and in_deps:
+            in_deps = False
+            continue
+        if in_deps:
+            match = re.match(r'^([A-Za-z0-9_\-]+)\s*=', stripped)
+            if match:
+                deps.append({"name": match.group(1), "version": "", "category": "library"})
+    return deps
+
+
+def _parse_go_mod(text: str) -> list[dict[str, Any]]:
+    """Parse go.mod require block."""
+    deps: list[dict[str, Any]] = []
+    in_require = False
+    for line in text.splitlines():
+        stripped = line.strip()
+        if stripped.startswith("require ("):
+            in_require = True
+            continue
+        if stripped == ")" and in_require:
+            in_require = False
+            continue
+        if in_require:
+            parts = stripped.split()
+            if len(parts) >= 2:
+                # Module path like "github.com/gin-gonic/gin" → last segment
+                module = parts[0].rstrip("/").split("/")[-1]
+                version = parts[1].lstrip("v")
+                deps.append({"name": module, "version": version, "category": "library"})
+    return deps
 
 
 def _walk_depth(path: Path, max_depth: int = 3) -> list[Path]:

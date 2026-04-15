@@ -18,7 +18,14 @@ These are filled automatically by the rendering engine from the project descript
 - `{WORKSTREAM_EXPERT_SLUGS}` — Comma-separated list of workstream expert slugs
 - `{AUTHORITY_HIERARCHY}` — Formatted authority hierarchy
 - `{DELIVERABLE_TYPE}` — Primary deliverable type (e.g., "code", "documents", "data")
-- `{STYLE_REFERENCE}` — Style/standards reference description
+- `{STYLE_REFERENCE_PATH}` — Path to the style guide or voice samples file (null if not provided)
+- `{DIAGRAM_TOOLS}` — Diagram tool(s) detected from the project description (e.g., "Mermaid or Graphviz/DOT")
+- `{DIAGRAM_EXTENSION}` — Default file extension for diagram source files (e.g., "mmd")
+- `{COMPONENT_SLUG}` — Generic `<component-slug>` pattern used in file naming conventions
+- `{TOOL_DOCS_URL}` — Official documentation URL for the tool (from brief.json `tools[].docs_url`)
+- `{TOOL_API_SURFACE}` — Key classes, functions, and APIs the agent must understand (from brief.json `tools[].api_surface`)
+- `{TOOL_COMMON_PATTERNS}` — Common usage patterns, anti-patterns, and version-specific gotchas (from brief.json `tools[].common_patterns`)
+- `{UNRESOLVED_TOOL_LIST}` — Markdown bullet list of tools missing `docs_url`, `api_surface`, or `common_patterns` after auto-enrichment (used in `tool-doc-researcher.template.md`)
 
 ## Manual-Required Placeholders
 
@@ -32,6 +39,9 @@ These cannot be inferred from the project description and require human completi
 - `{MANUAL:API_ENDPOINT_NAMES}` — Proprietary API endpoints
 - `{MANUAL:STYLE_EXEMPLARS}` — Specific style example documents
 - `{MANUAL:EXTERNAL_REPO_PATHS}` — Exact paths to external read-only repositories
+- `{MANUAL:TOOL_DOCS_URL}` — Documentation URL when not provided in `tools[].docs_url`
+- `{MANUAL:TOOL_API_SURFACE}` — Key API surface when not provided in `tools[].api_surface`
+- `{MANUAL:TOOL_COMMON_PATTERNS}` — Common patterns when not provided in `tools[].common_patterns`
 
 ## Rules
 

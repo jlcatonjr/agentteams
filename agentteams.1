@@ -1,0 +1,123 @@
+.TH AGENTTEAMS 1 "April 2026" "agentteams" "User Commands"
+.SH NAME
+agentteams \- Generate a complete agent team for any project.
+.SH SYNOPSIS
+.B agentteams [--description PATH] [--project PATH] [--framework NAME] [--output DIR] [--dry-run] [--overwrite] [--yes] [--no-scan] [--update] [--prune] [--check] [--scan-security] [--self] [--post-audit] [--auto-correct] [--version]
+.SH DESCRIPTION
+.PP
+Generate a complete agent team for any project.
+.PP
+Given a project description file (.json or .md), agentteams analyzes the project goal, selects the right 4\-tier agent team, renders all agent files from templates, and writes them to the target project's .github/agents/ directory.
+.PP
+The generated team includes an orchestrator, nine governance agents, domain agents appropriate for the deliverable type, and one workstream expert per project component.
+.SH OPTIONS
+.TP
+.B \-\-description, \-d PATH
+Project description file (.json or .md). Required unless \-\-self is used.
+.TP
+.B \-\-project, \-p PATH
+Project directory to scan and use as base (overrides existing_project_path in description)
+.TP
+.B \-\-framework, \-f NAME
+Target framework: copilot\-vscode, copilot\-cli, claude (default: copilot\-vscode)
+.TP
+.B \-\-output, \-o DIR
+Output directory for agent files. Default: <project>/.github/agents/
+.TP
+.B \-\-dry\-run
+Show what would be generated without writing files
+.TP
+.B \-\-overwrite
+Overwrite existing agent files without prompting
+.TP
+.B \-\-yes, \-y
+Non\-interactive: answer yes to all prompts
+.TP
+.B \-\-no\-scan
+Disable project directory scanning
+.TP
+.B \-\-update
+Re\-render drifted files and emit new agents added to the taxonomy. Preserves manually\-filled \\(lCMANUAL:*\\(rC values from existing files. Removed agents are reported but not deleted (use \-\-prune to remove them).
+.TP
+.B \-\-prune
+Used with \-\-update: also delete agent files that are no longer part of the team.
+.TP
+.B \-\-check
+Check for template drift and structural changes without writing any files (exit code 1 if drift or structural changes are detected)
+.TP
+.B \-\-scan\-security
+Scan generated agent files for security issues (PII, credentials, unresolved placeholders)
+.TP
+.B \-\-self
+Operate on the module's own agent team using .github/agents/_build\-description.json
+.TP
+.B \-\-post\-audit
+Run a post\-generation audit after emit. Performs static checks (unresolved placeholders, YAML integrity, required\-agent coverage) and, if the `gh` CLI is authenticated, an AI\-powered conflict and presupposition review via GitHub Models (Claude Sonnet 4.6).
+.TP
+.B \-\-auto\-correct
+After \-\-post\-audit finds issues, invoke the standalone `copilot` CLI in non\-interactive mode to repair generated team files, then rerun the audit.
+.TP
+.B \-\-version
+show program's version number and exit
+.SH EXIT STATUS
+.TP
+.B 0
+Success.
+.TP
+.B 1
+Error: validation failure, file not found, drift detected (with \fB--check\fR), or security issues (with \fB--scan-security\fR).
+.SH EXAMPLES
+.PP
+Generate a VS Code Copilot agent team:
+.PP
+.RS 4
+.nf
+agentteams \-\-description brief.json \-\-project /path/to/project
+.fi
+.RE
+.PP
+Generate for Copilot CLI without writing (dry run):
+.PP
+.RS 4
+.nf
+agentteams \-\-description brief.json \-\-framework copilot\-cli \-\-dry\-run
+.fi
+.RE
+.PP
+Re\-render drifted files after a template update:
+.PP
+.RS 4
+.nf
+agentteams \-\-description brief.json \-\-update
+.fi
+.RE
+.PP
+Check for drift in CI (exits 1 if stale):
+.PP
+.RS 4
+.nf
+agentteams \-\-description brief.json \-\-check
+.fi
+.RE
+.PP
+Scan generated files for security issues:
+.PP
+.RS 4
+.nf
+agentteams \-\-description brief.json \-\-scan\-security
+.fi
+.RE
+.PP
+Run post\-generation audit with AI review:
+.PP
+.RS 4
+.nf
+agentteams \-\-description brief.json \-\-post\-audit
+.fi
+.RE
+.SH SEE ALSO
+Full documentation: .UR https://jlcatonjr.github.io/agentteams/
+.UE
+.PP
+Source repository: .UR https://github.com/jlcatonjr/agentteams
+.UE

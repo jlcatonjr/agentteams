@@ -129,6 +129,19 @@
             "type": "boolean",
             "description": "If true, generate a dedicated tool-specific agent for this tool.",
             "default": false
+          },
+          "docs_url": {
+            "type": "string",
+            "format": "uri",
+            "description": "Official documentation URL for this tool (e.g., 'https://nodejs.org/docs/latest-v20.x/api/'). Used as {TOOL_DOCS_URL} in generated agent files."
+          },
+          "api_surface": {
+            "type": "string",
+            "description": "Key classes, functions, CLI commands, or APIs this tool exposes that agents need to understand. Multi-line Markdown is supported. Used as {TOOL_API_SURFACE} in generated agent files."
+          },
+          "common_patterns": {
+            "type": "string",
+            "description": "Common usage patterns, version-specific gotchas, and anti-patterns for this tool. Multi-line Markdown is supported. Used as {TOOL_COMMON_PATTERNS} in generated agent files."
           }
         }
       }
@@ -139,6 +152,17 @@
       "items": {
         "type": "string"
       }
+    },
+    "pip_package_name": {
+      "type": "string",
+      "description": "PyPI package name for pip distribution (e.g., 'agentteams'). When present, triggers module-doc-author and module-doc-validator archetypes and enables --doc-check / --doc-update flags.",
+      "pattern": "^[a-z0-9][a-z0-9._-]*[a-z0-9]$"
+    },
+    "doc_site_tool": {
+      "type": "string",
+      "description": "Documentation site generator. When set, module-doc-author produces the corresponding config file.",
+      "enum": ["mkdocs", "sphinx", "none"],
+      "default": "mkdocs"
     },
     "selected_archetypes": {
       "type": "array",
@@ -155,6 +179,8 @@
           "reference-manager",
           "output-compiler",
           "visual-designer",
+          "module-doc-author",
+          "module-doc-validator",
           "tool-specific"
         ]
       }
@@ -202,6 +228,11 @@
             "type": "array",
             "items": { "type": "string" },
             "description": "Pass/fail quality criteria the workstream expert will check against in reviews."
+          },
+          "tools": {
+            "type": "array",
+            "items": { "type": "string" },
+            "description": "Tool or agent slugs relevant to this component (e.g., 'PostgreSQL', 'Docker'). Used to link workstream experts to tool specialists/references."
           },
           "number": {
             "type": "integer",

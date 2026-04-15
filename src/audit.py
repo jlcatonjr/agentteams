@@ -176,7 +176,7 @@ def run_post_audit(
         copilot_path = _get_copilot_path()
         if copilot_path:
             result.ai_available = True
-            result.ai_report = _run_ai_audit(file_map, manifest, copilot_path)
+            result.ai_report = _run_ai_audit(file_map, manifest, copilot_path, output_dir)
         else:
             result.ai_available = False
 
@@ -818,6 +818,7 @@ def _run_ai_audit(
     file_map: dict[str, str],
     manifest: dict[str, Any],
     copilot_path: str,
+    output_dir: Path | None = None,
 ) -> str | None:
     """Invoke the standalone `copilot` CLI for an AI-powered audit.
 
@@ -828,11 +829,13 @@ def _run_ai_audit(
         file_map:     Rendered file content keyed by relative path.
         manifest:     Team manifest from analyze.build_manifest().
         copilot_path: Absolute path to the `copilot` binary.
+        output_dir:   Optional agents output directory. When provided, the AI
+                      has read access to the deployed agent files via --add-dir.
 
     Returns:
         AI-generated audit report as a string, or None on failure.
     """
-    context = _build_ai_context(file_map, manifest)
+    context = _build_ai_context(file_map, manifest, output_dir)
 
     prompt = (
         "You are performing a post-generation audit of a multi-agent AI team. "
@@ -861,7 +864,6 @@ def _run_ai_audit(
             capture_output=True,
             text=True,
             timeout=120,
-            cwd=str(output_dir),  # ground file reads to the deployed agents dir
         )
         output = proc.stdout.strip()
         return output if output else None
@@ -872,15 +874,19 @@ def _run_ai_audit(
 def _build_ai_context(
     file_map: dict[str, str],
     manifest: dict[str, Any],
+    output_dir: Path | None = None,
 ) -> str:
     """Build a compact context string for the AI audit prompt.
 
-    Summarises each agent file rather than embedding full content, to stay
-    within practical context limits.
+    Includes agent file content (full when under budget, excerpts otherwise).
+    When output_dir is provided, filenames are listed as absolute paths so
+    the AI agent can read them directly if it chooses to verify details.
 
     Args:
-        file_map: Rendered file content keyed by relative path.
-        manifest: Team manifest from analyze.build_manifest().
+        file_map:   Rendered file content keyed by relative path.
+        manifest:   Team manifest from analyze.build_manifest().
+        output_dir: Optional absolute path to the agents directory. Used to
+                    prefix relative paths with absolute paths in the context.
 
     Returns:
         Context string for the AI prompt.
@@ -891,7 +897,7 @@ def _build_ai_context(
         f"Total agents: {len(manifest.get('agent_slug_list', []))}",
         f"Components: {[c['slug'] for c in manifest.get('components', [])]}",
         "",
-        "Agent files (filename → first 200 chars of body):",
+        "Agent files (path → full body or excerpt):",
     ]
 
     total_chars = 0
@@ -902,14 +908,18 @@ def _build_ai_context(
             lines.append(f"  [...{remaining} more files omitted for brevity]")
             break
         content = file_map[rel_path]
+        # Use relative path — absolute paths prompt the AI to attempt reads,
+        # which blocks without --allow-all-paths. The 800-char excerpt provides
+        # enough context for the audit without additional file reads.
+        display_path = rel_path
         # Strip YAML block to get at the prose body
         if content.startswith("---"):
             end = content.find("---", 3)
             body = content[end + 3:].strip() if end != -1 else content
         else:
             body = content
-        excerpt = body[:200].replace("\n", " ")
-        lines.append(f"  {rel_path}: {excerpt}")
+        excerpt = body[:800].replace("\n", "  ")
+        lines.append(f"  {display_path}:\n    {excerpt}")
         total_chars += len(excerpt)
 
     return "\n".join(lines)

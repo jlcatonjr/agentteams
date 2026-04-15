@@ -45,23 +45,24 @@ These nine agents are included in every team regardless of project type. They ad
 |------|------|--------|
 | `navigator` | Project structure mapping, file location queries, dependency tracking | Read-only |
 | `security` | Highest-priority sentinel; clears destructive operations, credential exposure, external writes | Read-only |
+| `code-hygiene` | Read-only architecture auditor; file hygiene, script lifecycle, duplication, agent doc quality (CH-01–CH-20) | Read-only |
 | `adversarial` | Presupposition critic; challenges plans before execution; traces cascade dependencies | Read-only |
 | `conflict-auditor` | Detects logical inconsistencies across all output files; logs findings | Read + log |
 | `conflict-resolution` | Makes ACCEPT/REJECT/REVISE decisions on flagged conflicts | Read + edit |
 | `cleanup` | Removes stale artifacts; requires security clearance; applies four safety checks before deletion | Edit |
 | `agent-updater` | Synchronizes agent documentation when project structure or content changes | Edit |
 | `agent-refactor` | Extracts shared data to reference files; enforces spec compliance | Edit |
-| `source-gatherer` *(optional)* | Retrieves and stages external source materials for domain agents | Execute |
 
 **Constitutional rules for governance agents:**
 - `@security` must be invoked before ANY file deletion, bulk edit (≥3 files), external repo write, or credential-adjacent content
+- `@code-hygiene` must be invoked before merging any code changes that add files, modify shared utilities, or touch agent documentation
 - `@conflict-auditor` must be invoked after every multi-file change session
 - `@adversarial` must be invoked before executing any plan that involves irreversible or cross-cutting changes
 - Governance agents never perform domain-specific content work
 
 ### Tier 3 — Domain Agents (Project-Adapted)
 
-Domain agents perform the project's actual work. The set is determined by the project type and the deliverable/process profile extracted from the project description. Each domain agent maps to one of these seven archetypes:
+Domain agents perform the project's actual work. The set is determined by the project type and the deliverable/process profile extracted from the project description. Each domain agent maps to one of these nine archetypes:
 
 | Archetype | Book Equivalent | General Role |
 |-----------|----------------|--------------|
@@ -69,7 +70,7 @@ Domain agents perform the project's actual work. The set is determined by the pr
 | **Quality Auditor** | `expert-critic` | Read-only; identifies structural weaknesses, quality defects, pattern violations |
 | **Cohesion Repairer** | `argument-weaver` | Repairs structural/flow problems in primary deliverable outputs |
 | **Style/Standards Guardian** | `voice-style` | Enforces project-specific style, naming, or coding conventions |
-| **Technical Validator** | `code-hygiene` | Verifies technical accuracy of claims, code, or specifications |
+| **Technical Validator** | `technical-validator` | Verifies technical accuracy of claims, code, or specifications |
 | **Format/Output Converter** | `html-document-builder` | Transforms primary output to secondary distribution formats |
 | **Reference/Dependency Manager** | `bibliography-manager` | Manages the project's reference database, dependency tracking, or citation integrity |
 | **Output Compiler** | `latex-specialist` | Assembles and compiles the final deliverable |
@@ -167,7 +168,12 @@ handoffs:
 │   │   ├── format-converter.template.md
 │   │   ├── reference-manager.template.md
 │   │   ├── output-compiler.template.md
-│   │   └── visual-designer.template.md
+│   │   ├── visual-designer.template.md
+│   │   ├── tool-specific.template.md        # Tool agent — generic fallback
+│   │   ├── tool-build-system.template.md    # Tool agent — build systems
+│   │   ├── tool-database.template.md        # Tool agent — databases
+│   │   ├── tool-cli.template.md             # Tool agent — CLI/deployment tools
+│   │   └── tool-reference.template.md       # Reference-tier lightweight reference files
 │   ├── workstream-expert.template.md   # Instantiated once per project component
 │   └── copilot-instructions.template.md
 ├── schemas/
@@ -175,8 +181,7 @@ handoffs:
 │   └── team-manifest.schema.json        # Internal representation of a generated team
 ├── src/
 │   ├── ingest.py                  # Parse and normalize project description input
-│   ├── analyze.py                 # Classify project, extract domains/workstreams/tools
-│   ├── select.py                  # Select domain agent archetypes for the project profile
+│   ├── analyze.py                 # Classify project, select archetypes, build team manifest
 │   ├── render.py                  # Populate templates with analyzed project data
 │   ├── emit.py                    # Write rendered files to target directory
 │   └── frameworks/
@@ -248,10 +253,8 @@ Input (description file or existing project)
 [analyze.py]
     Classify project type → one of: software, content, research, data-pipeline, mixed
     Identify workstreams → list of {name, description, primary_sources, quality_criteria}
-    Identify tool dependencies → list of {tool_name, category, config_files}
+    Identify tool dependencies → list of {tool_name, category, config_files, docs_url, api_surface, common_patterns}
     Build authority hierarchy → ranked list of truth sources
-    ↓
-[select.py]
     Select domain agent archetypes from profile
     Determine which workstreams need dedicated expert agents
     Generate team manifest (JSON) → team-manifest.schema.json
@@ -300,7 +303,7 @@ Establish the module repository structure, CI configuration, and development env
 
 ### Phase 1 — Template Library
 Build the complete template set for all four tiers:
-- 9 universal governance agent templates (fully portable — same across all projects)
+- 10 universal governance agent templates (fully portable — same across all projects)
 - 9 domain archetype templates (parameterized — adapted per project)
 - 1 workstream expert template (instantiated N times per project)
 - 1 orchestrator template (highest complexity)
@@ -387,7 +390,7 @@ The following rules are embedded in every generated orchestrator and are not con
 Templates guarantee structural correctness (invariant cores, YAML syntax, handoff blocks) even without LLM involvement. The module must work reliably without an API key. LLM assist is a quality enhancement, not a dependency.
 
 ### Why keep governance agents identical across projects?
-The governance agents (navigator, security, adversarial, conflict-auditor, conflict-resolution, cleanup, agent-updater, agent-refactor) address concerns that are structurally invariant: every project needs security review, consistency checking, and documentation synchronization. Making them project-specific would introduce per-project drift and reduce the constitutional guarantees the framework is designed to provide.
+The governance agents (navigator, security, code-hygiene, adversarial, conflict-auditor, conflict-resolution, cleanup, agent-updater, agent-refactor) address concerns that are structurally invariant: every project needs security review, consistency checking, and documentation synchronization. Making them project-specific would introduce per-project drift and reduce the constitutional guarantees the framework is designed to provide.
 
 ### Why separate workstream experts from domain agents?
 Domain agents own *how work is done* (writing, auditing, converting). Workstream experts own *what is being established* in a specific component. This separation allows the same domain agent (e.g., the Primary Producer) to serve many workstreams without encoding workstream-specific logic into a generic agent, and it allows subject expertise to scale independently of writing/coding capability.

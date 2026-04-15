@@ -96,8 +96,39 @@
             "type": "array",
             "items": { "type": "string" }
           },
+          "tool_category": {
+            "type": "string",
+            "enum": ["language", "framework", "build-system", "database", "cli", "library", "other"]
+          },
           "invocation_command": { "type": "string" },
-          "invocation_target": { "type": "string" }
+          "invocation_target": { "type": "string" },
+          "docs_url": { "type": "string", "description": "Official documentation URL carried through from the project description." },
+          "api_surface": { "type": "string", "description": "Key API surface text carried through from the project description." },
+          "common_patterns": { "type": "string", "description": "Common patterns and pitfalls text carried through from the project description." }
+        }
+      }
+    },
+    "reference_tools": {
+      "type": "array",
+      "description": "List of reference-tier tools that generate lightweight reference files (not full agents).",
+      "items": {
+        "type": "object",
+        "required": ["slug", "tool_name"],
+        "properties": {
+          "slug": { "type": "string" },
+          "tool_name": { "type": "string" },
+          "tool_version": { "type": "string" },
+          "tool_category": {
+            "type": "string",
+            "enum": ["language", "framework", "build-system", "database", "cli", "library", "other"]
+          },
+          "config_files": {
+            "type": "array",
+            "items": { "type": "string" }
+          },
+          "docs_url": { "type": "string", "description": "Official documentation URL carried through from the project description." },
+          "api_surface": { "type": "string", "description": "Key API surface text carried through from the project description." },
+          "common_patterns": { "type": "string", "description": "Common patterns and pitfalls text carried through from the project description." }
         }
       }
     },
@@ -128,6 +159,11 @@
           "quality_criteria": {
             "type": "array",
             "items": { "type": "string" }
+          },
+          "tools": {
+            "type": "array",
+            "items": { "type": "string" },
+            "description": "Tool names relevant to this component, linking workstream experts to tool specialists/references."
           }
         }
       }
@@ -201,7 +237,11 @@
           },
           "type": {
             "type": "string",
-            "enum": ["agent", "instructions", "reference", "setup-required", "builder"]
+            "enum": ["agent", "instructions", "reference", "setup-required", "builder", "graph"]
+          },
+          "fallback_template": {
+            "type": "string",
+            "description": "Fallback template path if the primary template does not exist (e.g., category-specific template not yet created)."
           },
           "component_slug": {
             "type": ["string", "null"],

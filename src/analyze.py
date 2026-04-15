@@ -38,14 +38,20 @@ _ARCHETYPE_TRIGGERS: list[tuple[list[str], str]] = [
     (["chapter", "module", "component", "part", "section", "assemble", "compile", "build", "bundle"], "output-compiler"),
     # visual-designer: projects with figures, diagrams, or visual output
     (["figure", "diagram", "chart", "graph", "visualization", "image", "illustration", "dot", "graphviz"], "visual-designer"),
+    # module-doc-author: projects distributing a pip package or producing API documentation
+    (["pip", "pypi", "package", "distribution", "install", "api reference", "changelog", "mkdocs", "sphinx", "readthedocs"], "module-doc-author"),
+    # module-doc-validator: always paired with module-doc-author
+    (["pip", "pypi", "package", "distribution", "install", "api reference", "changelog", "mkdocs", "sphinx", "readthedocs"], "module-doc-validator"),
 ]
 
 #: Always-included governance agent slugs (tier 2)
 GOVERNANCE_AGENTS = [
     "navigator",
     "security",
+    "code-hygiene",
     "adversarial",
     "conflict-auditor",
+    "conflict-resolution",
     "cleanup",
     "agent-updater",
     "agent-refactor",
@@ -89,11 +95,20 @@ def build_manifest(description: dict[str, Any], *, framework: str = "copilot-vsc
     # Tool agents
     tool_agents = detect_tool_agents(description.get("tools", []))
 
+    # Reference-tier tools
+    reference_tools = detect_reference_tools(description.get("tools", []))
+
+    # Auto-include tool-doc-researcher when any tool has missing metadata
+    if _has_unknown_tool_metadata(tool_agents, reference_tools):
+        if "tool-doc-researcher" not in archetypes:
+            archetypes = list(archetypes) + ["tool-doc-researcher"]
+
     # Components
     components = _normalize_components(description.get("components", []))
 
     # Authority hierarchy
     authority_hierarchy = build_authority_hierarchy(description)
+    components = _enrich_component_sources(components, authority_hierarchy)
 
     # Workstream expert slugs
     workstream_expert_slugs = [f"{c['slug']}-expert" for c in components]
@@ -113,6 +128,7 @@ def build_manifest(description: dict[str, Any], *, framework: str = "copilot-vsc
     )
 
     # Auto-resolved placeholder map
+    diagram_tools, diagram_extension = _derive_diagram_tools(description.get("tools", []))
     auto_resolved = _build_placeholder_map(
         project_name=project_name,
         project_goal=project_goal,
@@ -135,13 +151,40 @@ def build_manifest(description: dict[str, Any], *, framework: str = "copilot-vsc
         style_rules_summary=_format_style_rules(description.get("style_rules", [])),
         domain_agent_list=_format_domain_agent_list(archetypes),
         workstream_expert_list=_format_workstream_expert_list(components),
+        diagram_tools=diagram_tools,
+        diagram_extension=diagram_extension,
+        component_slug="<component-slug>",
+        unresolved_tool_list=_format_unresolved_tool_list(tool_agents, reference_tools),
     )
 
     # Manual-required placeholders (unfilled MANUAL tokens)
     manual_required = _collect_manual_required(auto_resolved)
 
+    # Also flag MANUAL tokens embedded in structured authority source paths
+    # (these won't be in auto_resolved as top-level keys, so fullmatch won't catch them)
+    _seen_manual = {item["placeholder"] for item in manual_required}
+    for src in authority_hierarchy:
+        path = src.get("path", "")
+        m = _MANUAL_TOKEN_FULLMATCH_RE.fullmatch(path.strip())
+        if m:
+            token = m.group(1)
+            if token not in _seen_manual:
+                _seen_manual.add(token)
+                manual_required.append({
+                    "placeholder": token,
+                    "agent_file": "multiple",
+                    "context": (
+                        f"Authority source '{src['name']}' has an unresolved path. "
+                        f"Replace {{{{MANUAL:{token}}}}} with the actual path."
+                    ),
+                    "suggestion": f"Provide the path to '{src['name']}'.",
+                })
+
+    manual_required.extend(_collect_tool_metadata_manual_required(tool_agents, reference_tools))
+    manual_required.extend(_collect_component_manual_required(components))
+
     # Output file plan
-    output_files = _plan_output_files(archetypes, tool_agents, components, framework)
+    output_files = _plan_output_files(archetypes, tool_agents, reference_tools, components, framework)
 
     return {
         "schema_version": "1.0",
@@ -159,11 +202,13 @@ def build_manifest(description: dict[str, Any], *, framework: str = "copilot-vsc
         "conversion_pipeline": conversion_pipeline,
         "selected_archetypes": archetypes,
         "tool_agents": tool_agents,
+        "reference_tools": reference_tools,
         "components": components,
         "authority_hierarchy": authority_hierarchy,
         "agent_slug_list": all_slugs,
         "domain_agent_slugs": domain_agent_slugs,
         "workstream_expert_slugs": workstream_expert_slugs,
+        "governance_agents": GOVERNANCE_AGENTS,
         "auto_resolved_placeholders": auto_resolved,
         "manual_required_placeholders": manual_required,
         "output_files": output_files,
@@ -231,26 +276,191 @@ def select_archetypes(description: dict[str, Any]) -> list[str]:
 
 
 # ---------------------------------------------------------------------------
+# Tool importance classification
+# ---------------------------------------------------------------------------
+
+#: Categories that automatically qualify for a specialist agent
+_SPECIALIST_CATEGORIES: set[str] = {"database", "cli", "build-system"}
+
+#: Tool names (lowercased) that always qualify as specialist-tier
+_SPECIALIST_TOOLS: set[str] = {
+    "postgresql", "postgres", "mysql", "mariadb", "mongodb", "redis",
+    "elasticsearch", "cassandra", "sqlite",
+    "docker", "docker compose", "kubernetes", "k8s", "terraform",
+    "ansible", "pulumi",
+    "github actions", "jenkins", "circleci", "gitlab ci",
+    "nginx", "apache", "caddy",
+}
+
+#: Categories that qualify for a reference file (lightweight docs)
+_REFERENCE_CATEGORIES: set[str] = {"framework", "library"}
+
+#: Tool names (lowercased) that always qualify as reference-tier
+_REFERENCE_TOOLS: set[str] = {
+    "fastapi", "django", "flask", "express", "react", "vue", "angular",
+    "sqlalchemy", "pandas", "numpy", "scipy", "matplotlib",
+    "spring", "rails", "laravel", "nextjs", "next.js",
+    "pytest", "jest", "mocha", "junit",
+    "graphql", "grpc", "protobuf",
+}
+
+_KNOWN_TOOL_METADATA: dict[str, dict[str, str]] = {
+    "jupyter": {
+        "docs_url": "https://docs.jupyter.org/en/latest/",
+        "api_surface": "Notebook and Lab workflows, kernels, markdown cells, magics, nbconvert",
+        "common_patterns": "Keep notebooks reproducible: restart and run all, move reusable logic into modules, and avoid hidden state between cells.",
+    },
+    "pandas": {
+        "docs_url": "https://pandas.pydata.org/docs/",
+        "api_surface": "DataFrame, Series, read_csv, merge, groupby, pivot_table",
+        "common_patterns": "Prefer vectorized operations, explicit dtypes, and merge or groupby pipelines over row-wise apply when possible.",
+    },
+    "numpy": {
+        "docs_url": "https://numpy.org/doc/stable/",
+        "api_surface": "ndarray, array, arange, where, concatenate, linalg",
+        "common_patterns": "Use array operations and broadcasting instead of Python loops where possible, and make shape assumptions explicit.",
+    },
+    "matplotlib": {
+        "docs_url": "https://matplotlib.org/stable/contents.html",
+        "api_surface": "pyplot.figure, pyplot.subplots, Axes.plot, Axes.bar, savefig",
+        "common_patterns": "Create figures and axes explicitly, label every chart, and save deterministic output paths for reproducibility.",
+    },
+    "plotly": {
+        "docs_url": "https://plotly.com/python/",
+        "api_surface": "plotly.express, graph_objects.Figure, update_layout, write_html",
+        "common_patterns": "Prefer self-contained HTML exports, centralize layout styling, and validate hover labels and axis formatting before publication.",
+    },
+    "pandasdatareader": {
+        "docs_url": "https://pydata.github.io/pandas-datareader/",
+        "api_surface": "data.DataReader, fred.FredReader, wb.download",
+        "common_patterns": "Cache downloaded data for reproducibility, document provider-specific limits, and normalize index frequency immediately after fetch.",
+    },
+    "linearmodels": {
+        "docs_url": "https://bashtage.github.io/linearmodels/",
+        "api_surface": "PanelOLS, PooledOLS, RandomEffects, fit",
+        "common_patterns": "Make panel indexes explicit, state fixed-effects choices clearly, and inspect fit summaries before exporting results.",
+    },
+    "sqlite": {
+        "docs_url": "https://www.sqlite.org/docs.html",
+        "api_surface": "sqlite3 CLI, CREATE TABLE, CREATE INDEX, PRAGMA, EXPLAIN QUERY PLAN",
+        "common_patterns": "Use parameterized queries, explicit transactions, and indexes validated with EXPLAIN QUERY PLAN.",
+    },
+}
+
+
+def classify_tool_importance(tool: dict[str, Any]) -> str:
+    """Classify a tool into an importance tier.
+
+    Args:
+        tool: Tool dict with at least 'name', optionally 'category' and
+              'needs_specialist_agent'.
+
+    Returns:
+        One of 'specialist', 'reference', or 'passive'.
+    """
+    # Explicit override always wins
+    if tool.get("needs_specialist_agent") is True:
+        return "specialist"
+    if tool.get("needs_specialist_agent") is False:
+        return _classify_without_override(tool)
+
+    return _classify_without_override(tool)
+
+
+def _classify_without_override(tool: dict[str, Any]) -> str:
+    """Classify a tool by its category and name when no explicit override."""
+    name_lower = tool.get("name", "").lower()
+    category = tool.get("category", "other")
+
+    # Specialist tier: databases, infra, CI, build-systems
+    if category in _SPECIALIST_CATEGORIES or name_lower in _SPECIALIST_TOOLS:
+        return "specialist"
+
+    # Reference tier: frameworks, libraries
+    if category in _REFERENCE_CATEGORIES or name_lower in _REFERENCE_TOOLS:
+        return "reference"
+
+    return "passive"
+
+
+def _normalize_tool_key(name: str) -> str:
+    """Normalize a tool name into a lookup key for built-in metadata."""
+    return re.sub(r"[^a-z0-9]+", "", name.lower())
+
+
+def _merge_known_tool_metadata(tool: dict[str, Any]) -> dict[str, Any]:
+    """Overlay built-in tool metadata when the brief omits it."""
+    merged = dict(tool)
+    defaults = _KNOWN_TOOL_METADATA.get(_normalize_tool_key(tool.get("name", "")), {})
+    for field in ("docs_url", "api_surface", "common_patterns"):
+        if not merged.get(field) and defaults.get(field):
+            merged[field] = defaults[field]
+    return merged
+
+
+# ---------------------------------------------------------------------------
 # Tool agent detection
 # ---------------------------------------------------------------------------
 
 def detect_tool_agents(tools: list[dict[str, Any]]) -> list[dict[str, Any]]:
-    """Return tool agent specs for tools that need dedicated agents."""
+    """Return tool agent specs for tools classified as specialist-tier.
+
+    Args:
+        tools: List of tool dicts from the project description.
+
+    Returns:
+        List of tool agent spec dicts for specialist-tier tools.
+    """
     agents = []
     for tool in tools:
-        if not tool.get("needs_specialist_agent", False):
+        tool = _merge_known_tool_metadata(tool)
+        tier = classify_tool_importance(tool)
+        if tier != "specialist":
             continue
         name = tool["name"]
         slug = f"tool-{_slugify(name)}"
+        category = tool.get("category", "other")
         agents.append({
             "slug": slug,
             "tool_name": name,
             "tool_version": tool.get("version", ""),
+            "tool_category": category,
             "config_files": tool.get("config_files", []),
             "invocation_command": "",
             "invocation_target": "",
+            "docs_url": tool.get("docs_url", ""),
+            "api_surface": tool.get("api_surface", ""),
+            "common_patterns": tool.get("common_patterns", ""),
         })
     return agents
+
+
+def detect_reference_tools(tools: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    """Return tool specs for tools classified as reference-tier.
+
+    Args:
+        tools: List of tool dicts from the project description.
+
+    Returns:
+        List of tool dicts for reference-tier tools.
+    """
+    refs = []
+    for tool in tools:
+        tool = _merge_known_tool_metadata(tool)
+        tier = classify_tool_importance(tool)
+        if tier != "reference":
+            continue
+        refs.append({
+            "slug": f"ref-{_slugify(tool['name'])}",
+            "tool_name": tool["name"],
+            "tool_version": tool.get("version", ""),
+            "tool_category": tool.get("category", "other"),
+            "config_files": tool.get("config_files", []),
+            "docs_url": tool.get("docs_url", ""),
+            "api_surface": tool.get("api_surface", ""),
+            "common_patterns": tool.get("common_patterns", ""),
+        })
+    return refs
 
 
 # ---------------------------------------------------------------------------
@@ -293,8 +503,85 @@ def _normalize_components(components: list[dict[str, Any]]) -> list[dict[str, An
             "sources": comp.get("sources", []),
             "cross_refs": comp.get("cross_refs", []),
             "quality_criteria": comp.get("quality_criteria", []),
+            "tools": comp.get("tools", []),
         })
     return normalized
+
+
+def _enrich_component_sources(
+    components: list[dict[str, Any]],
+    authority_hierarchy: list[dict[str, Any]],
+) -> list[dict[str, Any]]:
+    """Backfill component source lists from component outputs and authority paths."""
+    enriched: list[dict[str, Any]] = []
+    for component in components:
+        updated = dict(component)
+        if not updated.get("sources"):
+            updated["sources"] = _infer_component_sources(updated, authority_hierarchy)
+        enriched.append(updated)
+    return enriched
+
+
+def _infer_component_sources(
+    component: dict[str, Any],
+    authority_hierarchy: list[dict[str, Any]],
+) -> list[str]:
+    """Infer a reasonable source list for a component when the brief omits one."""
+    sources: list[str] = []
+    output_file = (component.get("output_file") or "").strip()
+    if output_file:
+        sources.append(output_file)
+
+    component_keys = {
+        _normalize_match_key(component.get("slug", "")),
+        _normalize_match_key(component.get("name", "")),
+        _normalize_match_key(output_file),
+        _normalize_match_key(output_file.split("/", 1)[0] if output_file else ""),
+    }
+    component_keys.discard("")
+
+    for source in authority_hierarchy:
+        path = (source.get("path") or "").strip()
+        if not path:
+            continue
+        path_root = path.split("/", 1)[0]
+        path_keys = {
+            _normalize_match_key(path),
+            _normalize_match_key(path_root),
+            _normalize_match_key(source.get("name", "")),
+        }
+        path_keys.discard("")
+        if output_file and (path == output_file or path.startswith(output_file.rstrip("/") + "/")):
+            sources.append(path)
+            continue
+        if path_root and output_file.startswith(path_root):
+            sources.append(path)
+            continue
+        if component_keys and any(
+            comp_key in path_key or path_key in comp_key
+            for comp_key in component_keys
+            for path_key in path_keys
+        ):
+            sources.append(path)
+
+    return _dedupe_preserve_order(sources)
+
+
+def _normalize_match_key(text: str) -> str:
+    """Normalize text for loose path/name matching."""
+    return re.sub(r"[^a-z0-9]+", "", text.lower())
+
+
+def _dedupe_preserve_order(values: list[str]) -> list[str]:
+    """Return values in first-seen order with duplicates removed."""
+    seen: set[str] = set()
+    ordered: list[str] = []
+    for value in values:
+        if not value or value in seen:
+            continue
+        seen.add(value)
+        ordered.append(value)
+    return ordered
 
 
 def _resolve_project_name(description: dict[str, Any]) -> str:
@@ -388,6 +675,35 @@ def _format_style_rules(rules: list[str]) -> str:
     return "\n".join(f"- {r}" for r in rules)
 
 
+_DIAGRAM_TOOL_MAP: dict[str, tuple[str, str]] = {
+    # tool-name-lower → (display-name, file-extension)
+    "mermaid": ("Mermaid", "mmd"),
+    "graphviz": ("Graphviz/DOT", "dot"),
+    "dot": ("Graphviz/DOT", "dot"),
+    "plantuml": ("PlantUML", "puml"),
+    "d2": ("D2", "d2"),
+    "drawio": ("Draw.io", "drawio"),
+}
+
+
+def _derive_diagram_tools(tools: list[dict[str, Any]]) -> tuple[str, str]:
+    """Return (diagram_tools_display, diagram_extension) from the tools list.
+
+    Args:
+        tools: List of tool dicts from the project description.
+
+    Returns:
+        Tuple of (display name string, file extension string).
+    """
+    for tool in tools:
+        name_lower = tool.get("name", "").lower()
+        if name_lower in _DIAGRAM_TOOL_MAP:
+            display, ext = _DIAGRAM_TOOL_MAP[name_lower]
+            return display, ext
+    # Default when no diagram tool is explicitly listed
+    return "Mermaid or Graphviz/DOT", "mmd"
+
+
 def _format_domain_agent_list(archetypes: list[str]) -> str:
     lines = []
     descriptions = {
@@ -414,11 +730,19 @@ def _format_workstream_expert_list(components: list[dict[str, Any]]) -> str:
     return "\n".join(lines) if lines else "No workstream experts defined."
 
 
+_MANUAL_TOKEN_FULLMATCH_RE = re.compile(r"\{MANUAL:([A-Z][A-Z0-9_]*)\}")
+
+
 def _collect_manual_required(placeholder_map: dict[str, str]) -> list[dict[str, str]]:
-    """Identify any placeholders that resolved to a {MANUAL:...} token."""
+    """Identify placeholders whose resolved value is itself a {MANUAL:...} token.
+
+    Uses fullmatch to avoid false positives from composed values (e.g.
+    authority hierarchy entries) whose text happens to contain MANUAL tokens
+    as embedded documentation or path references.
+    """
     manual = []
     for placeholder, value in placeholder_map.items():
-        if "{MANUAL:" in value:
+        if _MANUAL_TOKEN_FULLMATCH_RE.fullmatch(value.strip()):
             manual.append({
                 "placeholder": placeholder,
                 "agent_file": "multiple",
@@ -428,9 +752,81 @@ def _collect_manual_required(placeholder_map: dict[str, str]) -> list[dict[str, 
     return manual
 
 
+def _collect_tool_metadata_manual_required(
+    tool_agents: list[dict[str, Any]],
+    reference_tools: list[dict[str, Any]],
+) -> list[dict[str, str]]:
+    """Return setup items for tool metadata fields still missing after enrichment."""
+    manual: list[dict[str, str]] = []
+    seen: set[tuple[str, str]] = set()
+    field_specs = (
+        ("docs_url", "TOOL_DOCS_URL", "official documentation URL"),
+        ("api_surface", "TOOL_API_SURFACE", "project-relevant API surface summary"),
+        ("common_patterns", "TOOL_COMMON_PATTERNS", "tool-specific usage patterns and pitfalls"),
+    )
+
+    def add_items(specs: list[dict[str, Any]], *, reference: bool) -> None:
+        for spec in specs:
+            if reference:
+                rel_path = f"references/{spec['slug']}-reference.md"
+                doc_label = "reference file"
+            else:
+                rel_path = f"{spec['slug']}.agent.md"
+                doc_label = "specialist agent"
+
+            for field_name, placeholder, description in field_specs:
+                if spec.get(field_name):
+                    continue
+                dedupe_key = (rel_path, placeholder)
+                if dedupe_key in seen:
+                    continue
+                seen.add(dedupe_key)
+                manual.append({
+                    "placeholder": placeholder,
+                    "agent_file": rel_path,
+                    "context": (
+                        f"The {doc_label} for '{spec['tool_name']}' is missing a {description}. "
+                        "Add it to the tools[] entry in the project brief or extend the built-in tool metadata catalog."
+                    ),
+                    "suggestion": "",
+                })
+
+    add_items(tool_agents, reference=False)
+    add_items(reference_tools, reference=True)
+    return manual
+
+
+def _collect_component_manual_required(components: list[dict[str, Any]]) -> list[dict[str, str]]:
+    """Return setup items for unresolved per-component placeholders."""
+    manual: list[dict[str, str]] = []
+    for component in components:
+        rel_path = f"{component['slug']}-expert.agent.md"
+        field_specs = (
+            ("description", "COMPONENT_SPEC", "component specification"),
+            ("sections", "COMPONENT_SECTIONS", "section outline"),
+            ("sources", "COMPONENT_SOURCES", "source list"),
+            ("quality_criteria", "COMPONENT_QUALITY_CRITERIA", "quality criteria list"),
+        )
+        for field_name, placeholder, label in field_specs:
+            value = component.get(field_name)
+            if value:
+                continue
+            manual.append({
+                "placeholder": placeholder,
+                "agent_file": rel_path,
+                "context": (
+                    f"Component '{component['name']}' is missing its {label}. "
+                    "Add the field to the component entry in the project brief so the expert brief renders completely."
+                ),
+                "suggestion": "",
+            })
+    return manual
+
+
 def _plan_output_files(
     archetypes: list[str],
     tool_agents: list[dict[str, Any]],
+    reference_tools: list[dict[str, Any]],
     components: list[dict[str, Any]],
     framework: str,
 ) -> list[dict[str, Any]]:
@@ -457,14 +853,35 @@ def _plan_output_files(
             "component_slug": None,
         })
 
-    # Tool-specific agents
+    # Tool-specific agents (specialist tier) — use category template if available
     for ta in tool_agents:
+        category = ta.get("tool_category", "other")
+        category_template = f"{domain_dir}tool-{category}.template.md"
+        fallback_template = f"{domain_dir}tool-specific.template.md"
         files.append({
             "path": f"{ta['slug']}.agent.md",
-            "template": f"{domain_dir}tool-specific.template.md",
+            "template": category_template,
+            "fallback_template": fallback_template,
             "type": "agent",
             "component_slug": None,
         })
+
+    # Reference files (reference tier)
+    for rt in reference_tools:
+        files.append({
+            "path": f"references/{rt['slug']}-reference.md",
+            "template": f"{domain_dir}tool-reference.template.md",
+            "type": "reference",
+            "component_slug": None,
+        })
+
+    # Code-hygiene companion reference file (always)
+    files.append({
+        "path": "references/code-hygiene-rules.reference.md",
+        "template": f"{domain_dir}code-hygiene-rules-reference.template.md",
+        "type": "reference",
+        "component_slug": None,
+    })
 
     # Workstream experts
     for comp in components:
@@ -505,6 +922,14 @@ def _plan_output_files(
         "component_slug": None,
     })
 
+    # Team topology graph — generated post-render in build_team.py
+    files.append({
+        "path": "references/pipeline-graph.md",
+        "template": "",
+        "type": "graph",
+        "component_slug": None,
+    })
+
     return files
 
 
@@ -520,8 +945,12 @@ def _description_text(description: dict[str, Any]) -> str:
         description.get("output_format", ""),
         " ".join(description.get("deliverables", [])),
         " ".join(c.get("description", "") for c in description.get("components", [])),
-        " ".join(t.get("name", "") for t in description.get("tools", [])),
     ]
+    # Include tool names, categories, and versions for richer keyword matching
+    for t in description.get("tools", []):
+        parts.append(t.get("name", ""))
+        parts.append(t.get("category", ""))
+        parts.append(t.get("version", ""))
     return " ".join(parts)
 
 
@@ -529,3 +958,61 @@ def _slugify(text: str) -> str:
     slug = re.sub(r"[^a-zA-Z0-9\s\-]", "", text)
     slug = re.sub(r"\s+", "-", slug.strip())
     return slug.lower()
+
+
+def _has_unknown_tool_metadata(
+    tool_agents: list[dict[str, Any]],
+    reference_tools: list[dict[str, Any]],
+) -> bool:
+    """Return True if any tool is missing docs_url, api_surface, or common_patterns.
+
+    Args:
+        tool_agents:    Specialist-tier tool agent specs from detect_tool_agents().
+        reference_tools: Reference-tier tool specs from detect_reference_tools().
+
+    Returns:
+        True when at least one tool has an incomplete metadata set.
+    """
+    fields = ("docs_url", "api_surface", "common_patterns")
+    for spec in list(tool_agents) + list(reference_tools):
+        if any(not spec.get(f) for f in fields):
+            return True
+    return False
+
+
+def _format_unresolved_tool_list(
+    tool_agents: list[dict[str, Any]],
+    reference_tools: list[dict[str, Any]],
+) -> str:
+    """Format a Markdown bullet list of tools with missing documentation metadata.
+
+    Args:
+        tool_agents:    Specialist-tier tool agent specs from detect_tool_agents().
+        reference_tools: Reference-tier tool specs from detect_reference_tools().
+
+    Returns:
+        Markdown string listing each tool with its missing fields, or a 'none'
+        message when all tools are fully resolved.
+    """
+    fields_checked = (("docs_url", "docs URL"), ("api_surface", "API surface"), ("common_patterns", "usage patterns"))
+    lines: list[str] = []
+
+    for spec in tool_agents:
+        gaps = [label for field, label in fields_checked if not spec.get(field)]
+        if gaps:
+            slug = spec["slug"]
+            lines.append(
+                f"- **{spec['tool_name']}** (specialist agent `{slug}.agent.md`) "
+                f"— missing: {', '.join(gaps)}"
+            )
+
+    for spec in reference_tools:
+        gaps = [label for field, label in fields_checked if not spec.get(field)]
+        if gaps:
+            ref_path = f"references/{spec['slug']}-reference.md"
+            lines.append(
+                f"- **{spec['tool_name']}** (reference file `{ref_path}`) "
+                f"— missing: {', '.join(gaps)}"
+            )
+
+    return "\n".join(lines) if lines else "No tools with missing metadata."
