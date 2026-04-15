@@ -1,6 +1,5 @@
 # Agent Teams Module
 
-[![PyPI version](https://img.shields.io/pypi/v/agentteams)](https://pypi.org/project/agentteams/)
 [![Python 3.11+](https://img.shields.io/badge/python-3.11%2B-blue)](https://www.python.org/)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 [![Docs](https://img.shields.io/badge/docs-github--pages-blue)](https://jlcatonjr.github.io/agentteams/)
@@ -32,15 +31,12 @@ The generated team includes:
 
 ### 1. Install
 
-```bash
-pip install agentteams
-```
-
-Or clone for local development (no external dependencies — stdlib Python 3.11+):
+Clone the repository (no external dependencies — stdlib Python 3.11+):
 
 ```bash
 git clone https://github.com/jlcatonjr/agentteams
 cd agentteams
+pip install -e .
 ```
 
 ### 2. Write a project description
