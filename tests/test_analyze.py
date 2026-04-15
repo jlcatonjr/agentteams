@@ -498,6 +498,206 @@ def test_detect_reference_tools_includes_docs_url():
     assert result[0]["docs_url"] == "https://pandas.pydata.org/docs/"
 
 
+# ---------------------------------------------------------------------------
+# _has_unknown_tool_metadata
+# ---------------------------------------------------------------------------
+
+def test_has_unknown_tool_metadata_all_filled():
+    tool_agents = [
+        {
+            "slug": "tool-postgresql", "tool_name": "PostgreSQL",
+            "docs_url": "https://postgresql.org/docs/",
+            "api_surface": "SELECT, INSERT",
+            "common_patterns": "Connection pooling.",
+        }
+    ]
+    reference_tools = [
+        {
+            "slug": "ref-fastapi", "tool_name": "FastAPI",
+            "docs_url": "https://fastapi.tiangolo.com/",
+            "api_surface": "FastAPI, APIRouter, Depends",
+            "common_patterns": "Use dependency injection.",
+        }
+    ]
+    assert _has_unknown_tool_metadata(tool_agents, reference_tools) is False
+
+
+def test_has_unknown_tool_metadata_missing_docs_url():
+    tool_agents = [
+        {
+            "slug": "tool-customdb", "tool_name": "CustomDB",
+            "docs_url": "",
+            "api_surface": "SELECT, INSERT",
+            "common_patterns": "Use indexes.",
+        }
+    ]
+    assert _has_unknown_tool_metadata(tool_agents, []) is True
+
+
+def test_has_unknown_tool_metadata_missing_api_surface():
+    reference_tools = [
+        {
+            "slug": "ref-somelib", "tool_name": "SomeLib",
+            "docs_url": "https://somelib.example.com/",
+            "api_surface": "",
+            "common_patterns": "Some patterns.",
+        }
+    ]
+    assert _has_unknown_tool_metadata([], reference_tools) is True
+
+
+def test_has_unknown_tool_metadata_missing_common_patterns():
+    tool_agents = [
+        {
+            "slug": "tool-customdb", "tool_name": "CustomDB",
+            "docs_url": "https://example.com/",
+            "api_surface": "SELECT",
+            "common_patterns": "",
+        }
+    ]
+    assert _has_unknown_tool_metadata(tool_agents, []) is True
+
+
+def test_has_unknown_tool_metadata_empty_lists():
+    assert _has_unknown_tool_metadata([], []) is False
+
+
+# ---------------------------------------------------------------------------
+# _format_unresolved_tool_list
+# ---------------------------------------------------------------------------
+
+def test_format_unresolved_tool_list_no_tools():
+    result = _format_unresolved_tool_list([], [])
+    assert result == "No tools with missing metadata."
+
+
+def test_format_unresolved_tool_list_all_filled():
+    tool_agents = [
+        {
+            "slug": "tool-postgresql", "tool_name": "PostgreSQL",
+            "docs_url": "https://postgresql.org/docs/",
+            "api_surface": "SELECT, INSERT",
+            "common_patterns": "Use connection pooling.",
+        }
+    ]
+    result = _format_unresolved_tool_list(tool_agents, [])
+    assert result == "No tools with missing metadata."
+
+
+def test_format_unresolved_tool_list_specialist_missing_docs():
+    tool_agents = [
+        {
+            "slug": "tool-customdb", "tool_name": "CustomDB",
+            "docs_url": "",
+            "api_surface": "SELECT",
+            "common_patterns": "Use indexes.",
+        }
+    ]
+    result = _format_unresolved_tool_list(tool_agents, [])
+    assert "CustomDB" in result
+    assert "tool-customdb.agent.md" in result
+    assert "docs URL" in result
+
+
+def test_format_unresolved_tool_list_reference_missing_api_surface():
+    reference_tools = [
+        {
+            "slug": "ref-somelib", "tool_name": "SomeLib",
+            "docs_url": "https://example.com/",
+            "api_surface": "",
+            "common_patterns": "Some patterns.",
+        }
+    ]
+    result = _format_unresolved_tool_list([], reference_tools)
+    assert "SomeLib" in result
+    assert "references/ref-somelib-reference.md" in result
+    assert "API surface" in result
+
+
+def test_format_unresolved_tool_list_multiple_entries():
+    tool_agents = [
+        {
+            "slug": "tool-customdb", "tool_name": "CustomDB",
+            "docs_url": "", "api_surface": "", "common_patterns": "",
+        }
+    ]
+    reference_tools = [
+        {
+            "slug": "ref-somelib", "tool_name": "SomeLib",
+            "docs_url": "", "api_surface": "", "common_patterns": "",
+        }
+    ]
+    result = _format_unresolved_tool_list(tool_agents, reference_tools)
+    lines = result.splitlines()
+    assert len(lines) == 2
+
+
+# ---------------------------------------------------------------------------
+# select_archetypes — pip/pypi trigger (module-doc agents)
+# ---------------------------------------------------------------------------
+
+def test_select_archetypes_pip_includes_module_doc_author():
+    desc = {"project_goal": "Distribute a pip package to PyPI."}
+    archetypes = select_archetypes(desc)
+    assert "module-doc-author" in archetypes
+
+
+def test_select_archetypes_pip_includes_module_doc_validator():
+    desc = {"project_goal": "Distribute a pip package to PyPI."}
+    archetypes = select_archetypes(desc)
+    assert "module-doc-validator" in archetypes
+
+
+def test_select_archetypes_pypi_keyword_triggers_module_doc():
+    desc = {"project_goal": "Publish a pypi package with changelog and readthedocs."}
+    archetypes = select_archetypes(desc)
+    assert "module-doc-author" in archetypes
+    assert "module-doc-validator" in archetypes
+
+
+def test_select_archetypes_module_doc_not_included_for_generic_project():
+    # Avoid "pipeline" (contains "pip"), "install", or "package"
+    desc = {"project_goal": "Build a simple ETL workflow for CSV data."}
+    archetypes = select_archetypes(desc)
+    assert "module-doc-author" not in archetypes
+    assert "module-doc-validator" not in archetypes
+
+
+# ---------------------------------------------------------------------------
+# build_manifest — tool-doc-researcher auto-include
+# ---------------------------------------------------------------------------
+
+def test_build_manifest_tool_doc_researcher_when_tool_missing_metadata():
+    """A specialist-tier tool with no docs_url/api_surface/common_patterns triggers tool-doc-researcher."""
+    desc = {
+        "project_goal": "Build a project with a custom internal database.",
+        "tools": [
+            # database category → specialist tier; not in _KNOWN_TOOL_METADATA
+            {"name": "InternalDB", "category": "database"},
+        ],
+    }
+    manifest = build_manifest(desc, framework="copilot-vscode")
+    assert "tool-doc-researcher" in manifest["selected_archetypes"]
+
+
+def test_build_manifest_no_tool_doc_researcher_when_metadata_complete():
+    """A tool with all metadata fields filled does NOT trigger tool-doc-researcher."""
+    desc = {
+        "project_goal": "Build a project with a well-documented tool.",
+        "tools": [
+            {
+                "name": "WellDocumentedTool",
+                "category": "other",
+                "docs_url": "https://example.com/docs/",
+                "api_surface": "api_call(), run()",
+                "common_patterns": "Always use context managers.",
+            }
+        ],
+    }
+    manifest = build_manifest(desc, framework="copilot-vscode")
+    assert "tool-doc-researcher" not in manifest["selected_archetypes"]
+
+
 def test_detect_reference_tools_enrich_known_tool_metadata():
     """Known reference tools inherit metadata when the brief omits it."""
     tools = [{"name": "plotly", "category": "library"}]

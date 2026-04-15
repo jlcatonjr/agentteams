@@ -48,7 +48,9 @@ Cannot be auto-resolved. Collected into `SETUP-REQUIRED.md` for the user to fill
 
 Every agent template must include the following sections, in this order:
 
-### YAML Front Matter (required)
+### YAML Front Matter (required in templates)
+
+Templates are always authored with VS Code Copilot YAML front matter. Framework adapters transform this into the target format at render time — see §6 for the per-framework output format.
 
 ```yaml
 ---
@@ -144,9 +146,17 @@ Reference-tier tools generate a lightweight reference file (no YAML front matter
 
 ---
 
-## 6. YAML Front Matter Requirements (VS Code Copilot)
+## 6. Per-Framework Agent File Format
 
-For the `copilot-vscode` framework, the adapter (`src/frameworks/copilot_vscode.py`) validates and supplements front matter. Required fields and their expected types:
+Templates are always authored with VS Code Copilot YAML front matter. The framework adapter post-processes template output into the format the target runtime expects. **Never write framework-specific output directly into a template.**
+
+---
+
+### `copilot-vscode` — `.agent.md` with VS Code YAML front matter
+
+Source: [VS Code Copilot agent customization docs](https://code.visualstudio.com/docs/copilot/copilot-customization#_agent-mode-instructions)
+
+The adapter (`agentteams/frameworks/copilot_vscode.py`) validates and supplements front matter. Required fields:
 
 | Field | Type | Notes |
 |-------|------|-------|
@@ -160,6 +170,61 @@ Optional fields:
 - `agents:` — block sequence of agent slugs this agent can invoke
 - `handoffs:` — list of handoff objects with `label`, `agent`, `prompt`, `send`
 
+If a template has no front matter, or is missing required keys, the adapter injects defaults automatically.
+
+---
+
+### `copilot-cli` — Plain Markdown system prompt
+
+Source: [GitHub Copilot in the CLI docs](https://docs.github.com/en/copilot/github-copilot-in-the-cli/about-github-copilot-in-the-cli)
+
+The adapter (`agentteams/frameworks/copilot_cli.py`) strips all YAML front matter and handoff sections. The output is pure Markdown prose, written to `.github/copilot/<slug>.md`.
+
+| What is stripped | What is preserved |
+|-----------------|------------------|
+| All YAML front matter (`---` block) | All prose body sections |
+| `## Handoff …` heading blocks | All non-handoff headings and content |
+| `user-invokable`, `tools`, `model`, `agents` keys | N/A — entire YAML block is removed |
+
+No metadata header of any kind is added. The file is the system prompt verbatim.
+
+---
+
+### `claude` — Claude Code sub-agent format
+
+Source: [Claude Code sub-agents docs](https://docs.anthropic.com/en/docs/claude-code/sub-agents)
+
+The adapter (`agentteams/frameworks/claude.py`) replaces the VS Code YAML block with Claude Code-compatible front matter and writes files to `.claude/agents/<slug>.md`.
+
+Transformation steps applied by the adapter:
+1. Extract `name` and `description` from the VS Code YAML before stripping it.
+2. Strip the VS Code YAML block entirely (keys are incompatible with Claude Code).
+3. Strip `## Handoff …` sections (not supported).
+4. Inject a Claude Code front matter block.
+
+Claude Code front matter keys written by the adapter:
+
+| Field | Source | Notes |
+|-------|--------|-------|
+| `name` | Extracted from VS Code `name:` key | Falls back to slug-derived name |
+| `description` | Extracted from VS Code `description:` key | Omitted if blank |
+| `allowed-tools` | Fixed default | `Bash, Read, Write, Edit` |
+
+VS Code keys **not** passed through: `user-invokable`, `tools`, `agents`, `model`, `handoffs`.
+
+Example Claude Code output:
+```yaml
+---
+name: Navigator — MyProject
+description: "Navigate the project structure and locate files."
+allowed-tools: Bash, Read, Write, Edit
+---
+
+# Navigator
+
+...body...
+```
+
 ---
 
 ## 7. Validation
@@ -169,4 +234,12 @@ Before submitting a new template:
 1. Run `python build_team.py --description examples/software-project/brief.json --dry-run` and verify the template is rendered without errors.
 2. Run `python -m pytest tests/test_integration.py -v` and verify all snapshot tests pass. If the template changes output, regenerate snapshots with `--overwrite`.
 3. Check `SETUP-REQUIRED.md` in the output — no `{MANUAL:}` tokens should appear unexpectedly.
-4. Verify YAML front matter is valid: `python -c "import yaml; yaml.safe_load(open('.github/agents/your-agent.agent.md').read().split('---')[1])"`
+4. **VS Code Copilot only** — Verify YAML front matter is valid:
+   ```bash
+   python -c "import yaml; yaml.safe_load(open('.github/agents/your-agent.agent.md').read().split('---')[1])"
+   ```
+   For `copilot-cli` framework output, no YAML front matter is present and this check does not apply.
+   For `claude` framework output, YAML front matter is present but uses Claude Code keys (`allowed-tools`) that differ from VS Code format — validate with:
+   ```bash
+   python -c "import yaml; yaml.safe_load(open('.claude/agents/your-agent.md').read().split('---', 2)[1])"
+   ```

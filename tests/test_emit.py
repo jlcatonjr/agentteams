@@ -107,3 +107,62 @@ def test_emit_content_preserved(tmp_path):
 
     written_content = (tmp_path / "test.agent.md").read_text(encoding="utf-8")
     assert written_content == content
+
+
+# ---------------------------------------------------------------------------
+# EmitResult properties
+# ---------------------------------------------------------------------------
+
+def test_emit_result_success_when_no_errors():
+    result = EmitResult()
+    assert result.success is True
+
+
+def test_emit_result_failure_when_errors_present():
+    result = EmitResult(errors=["Something went wrong"])
+    assert result.success is False
+
+
+def test_emit_result_default_written_empty():
+    result = EmitResult()
+    assert result.written == []
+
+
+def test_emit_result_default_skipped_empty():
+    result = EmitResult()
+    assert result.skipped == []
+
+
+def test_emit_result_dry_run_default_false():
+    result = EmitResult()
+    assert result.dry_run is False
+
+
+# ---------------------------------------------------------------------------
+# Empty rendered list
+# ---------------------------------------------------------------------------
+
+def test_emit_empty_rendered_list_succeeds(tmp_path):
+    result = emit_all([], output_dir=tmp_path, dry_run=False, overwrite=False, yes=True)
+    assert result.success is True
+    assert result.written == []
+
+
+# ---------------------------------------------------------------------------
+# Skipped tracking
+# ---------------------------------------------------------------------------
+
+def test_emit_skipped_list_populated_when_file_exists(tmp_path):
+    """When a file exists and overwrite=False, yes=True: the pre-check promotes
+    overwrite to True and all files are written (none skipped, none errored)."""
+    existing_file = tmp_path / "navigator.agent.md"
+    existing_file.write_text("ORIGINAL", encoding="utf-8")
+
+    rendered = [("navigator.agent.md", "NEW CONTENT")]
+    result = emit_all(rendered, output_dir=tmp_path, dry_run=False, overwrite=False, yes=True)
+
+    # yes=True promotes overwrite → file is written, not skipped or errored
+    assert result.success is True
+    assert len(result.written) == 1
+    assert existing_file.read_text(encoding="utf-8") == "NEW CONTENT"
+

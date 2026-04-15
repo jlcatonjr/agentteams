@@ -93,7 +93,7 @@ Fill in any placeholders that couldn't be auto-resolved. Then open VS Code, invo
 |-----------|--------|----------|---------------|
 | `copilot-vscode` | `.agent.md` with YAML front matter | ✅ | VS Code Copilot `.agent.md` |
 | `copilot-cli` | Plain `.md` system prompts | ❌ | CLI prompt `.md` |
-| `claude` | Plain `.md` | ❌ | `CLAUDE.md` system prompt |
+| `claude` | Claude Code front matter `.md` | ❌ | Claude Code system prompt |
 
 ---
 
@@ -244,7 +244,176 @@ The engine also parses dependency manifests (`requirements.txt`, `pyproject.toml
 
 ---
 
-## Examples
+## Usage Examples
+
+### 1. New project — no existing codebase
+
+Write a `brief.json`, then generate. The engine has no project directory to scan, so it works entirely from the description.
+
+```bash
+agentteams \
+  --description brief.json \
+  --framework copilot-vscode
+# Output: .github/agents/ in the current directory
+```
+
+---
+
+### 2. New project — existing codebase to scan
+
+Pass `--project` to point at an existing directory. The engine scans `requirements.txt`, `pyproject.toml`, `package.json`, `Cargo.toml`, and `go.mod` to detect tools automatically, and supplements any fields missing from the brief.
+
+```bash
+agentteams \
+  --description brief.json \
+  --project ~/code/myproject \
+  --framework copilot-vscode
+# Output: ~/code/myproject/.github/agents/
+```
+
+To disable scanning (use the brief as-is):
+
+```bash
+agentteams --description brief.json --project ~/code/myproject --no-scan
+```
+
+---
+
+### 3. Preview before writing (dry run)
+
+Always a safe first step. Prints every file that would be written or overwritten without touching the filesystem.
+
+```bash
+agentteams --description brief.json --project ~/code/myproject --dry-run
+```
+
+The output lists each file as `[DRY RUN] WRITE` (new) or `[DRY RUN] OVERWRITE` (would replace existing).
+
+---
+
+### 4. Generate for Claude Code or Copilot CLI
+
+Use `--framework` to target a different runtime. All three produce the same agent team from the same brief.
+
+```bash
+# Claude Code sub-agents (.claude/agents/*.md with Claude front matter)
+agentteams --description brief.json --project ~/code/myproject --framework claude
+
+# GitHub Copilot CLI (plain Markdown system prompts)
+agentteams --description brief.json --project ~/code/myproject --framework copilot-cli
+```
+
+See [Framework Support](#framework-support) for output format differences.
+
+---
+
+### 5. Custom output directory
+
+Override where agent files are written. Useful for monorepos or when the default `.github/agents/` location isn't appropriate.
+
+```bash
+agentteams \
+  --description brief.json \
+  --output ~/code/myproject/agents
+```
+
+---
+
+### 6. Non-interactive / CI mode
+
+Skip all confirmation prompts. Use in scripts, CI pipelines, or `Makefile` targets.
+
+```bash
+agentteams --description brief.json --project ~/code/myproject --yes
+# or, to overwrite existing files without prompting:
+agentteams --description brief.json --project ~/code/myproject --overwrite --yes
+```
+
+---
+
+### 7. Post-generation audit
+
+Run static checks (unresolved placeholders, YAML integrity, required-agent coverage) immediately after generation. If the `gh` CLI is authenticated, also runs an AI-powered conflict and presupposition review via GitHub Models.
+
+```bash
+agentteams --description brief.json --project ~/code/myproject --post-audit
+```
+
+To automatically repair any findings using the standalone `copilot` CLI:
+
+```bash
+agentteams --description brief.json --project ~/code/myproject --post-audit --auto-correct
+```
+
+---
+
+### 8. Update an existing team after a module upgrade
+
+When `agentteams` is updated, templates may change and new agent types may be added to the taxonomy. Run `--update` to bring an existing team in sync:
+
+- Files whose templates changed are re-rendered, preserving any `{MANUAL:*}` values you filled in.
+- New agent types introduced since the last build are emitted as new files.
+- Agents removed from the taxonomy are **reported** but not deleted.
+
+```bash
+pip install --upgrade agentteams
+agentteams --description brief.json --update
+```
+
+---
+
+### 9. Update and remove retired agents
+
+If agents were removed from the taxonomy in a module update and you want to clean them up:
+
+```bash
+agentteams --description brief.json --update --prune
+```
+
+`--prune` only takes effect alongside `--update`. It will delete files for agents that no longer exist in the taxonomy and were not manually created.
+
+---
+
+### 10. Check for drift without writing (CI gate)
+
+Use `--check` as a non-destructive lint step in CI. Exits with code `1` if any template has changed or if the team composition differs from the last build; exits `0` if everything is in sync.
+
+```bash
+agentteams --description brief.json --check
+```
+
+Example CI step (GitHub Actions):
+
+```yaml
+- name: Check agent team is up to date
+  run: agentteams --description brief.json --check
+```
+
+---
+
+### 11. Security scan on a deployed team
+
+Scan existing agent files for PII paths, hardcoded credentials, bearer tokens, and unresolved `{MANUAL:*}` placeholders:
+
+```bash
+agentteams --description brief.json --scan-security
+```
+
+Exits with code `1` if any findings are reported. Suitable as a pre-commit or CI gate.
+
+---
+
+### 12. Self-maintenance (regenerate the module's own team)
+
+Regenerate the agent team that governs this module itself, using the stored `_build-description.json`:
+
+```bash
+agentteams --self
+```
+
+---
+
+## Example Project Briefs
 
 - [Research project](examples/research-project/brief.json) — academic paper with chapters, LaTeX output, and bibliography
 - [Software project](examples/software-project/brief.json) — FastAPI backend with authentication and task API
