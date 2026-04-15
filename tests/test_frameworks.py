@@ -157,9 +157,85 @@ class TestCopilotVSCodeAdapter:
         result = self.adapter.render_agent_file(CONTENT_WITH_HANDOFFS, "orchestrator", MINIMAL_MANIFEST)
         assert "Handoff" in result
 
+    # --- Bug 3: agents: list filtering based on team manifest ---
 
-# ===========================================================================
-# CopilotCLIAdapter
+    def test_render_agent_file_filters_absent_agents_from_yaml_list(self):
+        """Agents not in manifest output_files are removed from the agents: YAML list."""
+        content = (
+            "---\n"
+            "name: Expert — TestProject\n"
+            "description: 'Expert'\n"
+            "user-invokable: false\n"
+            "tools: ['read', 'search']\n"
+            "model: [\"Claude Sonnet 4.6 (copilot)\"]\n"
+            "agents: ['primary-producer', 'reference-manager', 'adversarial']\n"
+            "---\n\n# Body\n"
+        )
+        manifest = {
+            "project_name": "TestProject",
+            "output_files": [
+                {"path": "primary-producer.agent.md", "type": "agent"},
+                {"path": "adversarial.agent.md", "type": "agent"},
+                # reference-manager is intentionally absent
+            ],
+        }
+        result = self.adapter.render_agent_file(content, "expert", manifest)
+        assert "'primary-producer'" in result
+        assert "'adversarial'" in result
+        assert "'reference-manager'" not in result
+
+    def test_render_agent_file_filters_absent_agents_from_handoffs(self):
+        """Handoff entries for agents not in the team are removed from the YAML front matter."""
+        content = (
+            "---\n"
+            "name: Expert — TestProject\n"
+            "description: 'Expert'\n"
+            "user-invokable: false\n"
+            "tools: ['read', 'search']\n"
+            "model: [\"Claude Sonnet 4.6 (copilot)\"]\n"
+            "handoffs:\n"
+            "  - label: Invoke Producer\n"
+            "    agent: primary-producer\n"
+            "    prompt: \"Draft the component.\"\n"
+            "    send: false\n"
+            "  - label: Verify Citations\n"
+            "    agent: reference-manager\n"
+            "    prompt: \"Verify citation keys.\"\n"
+            "    send: false\n"
+            "---\n\n# Body\n"
+        )
+        manifest = {
+            "project_name": "TestProject",
+            "output_files": [
+                {"path": "primary-producer.agent.md", "type": "agent"},
+                # reference-manager is intentionally absent
+            ],
+        }
+        result = self.adapter.render_agent_file(content, "expert", manifest)
+        assert "primary-producer" in result
+        assert "Invoke Producer" in result
+        assert "reference-manager" not in result
+        assert "Verify Citations" not in result
+
+    def test_render_agent_file_orchestrator_always_kept_in_handoffs(self):
+        """@orchestrator is always retained in handoffs even when absent from output_files."""
+        content = (
+            "---\n"
+            "name: Expert — TestProject\n"
+            "description: 'Expert'\n"
+            "user-invokable: false\n"
+            "tools: ['read', 'search']\n"
+            "model: [\"Claude Sonnet 4.6 (copilot)\"]\n"
+            "handoffs:\n"
+            "  - label: Return to Orchestrator\n"
+            "    agent: orchestrator\n"
+            "    prompt: \"Done.\"\n"
+            "    send: false\n"
+            "---\n\n# Body\n"
+        )
+        manifest = {"project_name": "TestProject", "output_files": []}
+        result = self.adapter.render_agent_file(content, "expert", manifest)
+        assert "orchestrator" in result
 # ===========================================================================
 
 class TestCopilotCLIAdapter:

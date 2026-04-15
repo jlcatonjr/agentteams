@@ -54,7 +54,7 @@ You create, revise, and version diagrams and visual figures for {PROJECT_NAME}.
 2. Draft figure source file in `{DIAGRAM_TOOLS}` format in `{FIGURES_DIR}`
 3. Render to output format
 4. Verify reference in deliverable points to the correct filename
-5. Hand off to `@format-converter` if figure must be embedded in a converted output
+5. *(If `@format-converter` in team)* Hand off to `@format-converter` if figure must be embedded in a converted output
 6. Hand off to `@quality-auditor` if figure content requires accuracy review
 
 ## Rules

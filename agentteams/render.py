@@ -342,7 +342,13 @@ def _render_setup_required(manifest: dict[str, Any]) -> str:
 # ---------------------------------------------------------------------------
 
 def validate_cross_refs(rendered_files: list[tuple[str, str]]) -> list[str]:
-    """Return warnings for agent references that don't resolve to a generated file."""
+    """Return warnings for agent references that don't resolve to a generated file.
+
+    Skips:
+    - References inside ``*(If `@slug` in team)*`` conditional markers (these are
+      intentionally guarded and valid even when the agent is absent).
+    - Duplicate (file, slug) pairs — one warning per file per missing slug is enough.
+    """
     all_paths = {path for path, _ in rendered_files}
     # Handle both 'slug.agent.md' and 'slug.md' filenames
     all_slugs: set[str] = set()
@@ -354,13 +360,21 @@ def validate_cross_refs(rendered_files: list[tuple[str, str]]) -> list[str]:
 
     warnings: list[str] = []
     agent_ref_re = re.compile(r"`@([a-z0-9\-]+)`")
+    # Lines whose content qualifies a reference as conditional / optional
+    conditional_re = re.compile(r"\*\(If\b|\bIf `@[a-z0-9\-]+` in team\b|\| `@")
 
     for output_path, content in rendered_files:
-        for match in agent_ref_re.finditer(content):
-            slug = match.group(1)
-            if slug not in all_slugs and slug != "orchestrator":
-                warnings.append(
-                    f"{output_path}: references `@{slug}` but no corresponding agent file was generated"
-                )
+        seen: set[str] = set()  # deduplicate per (file, slug)
+        for line in content.splitlines():
+            # Skip routing table rows and conditional workflow markers
+            if conditional_re.search(line):
+                continue
+            for match in agent_ref_re.finditer(line):
+                slug = match.group(1)
+                if slug not in all_slugs and slug != "orchestrator" and slug not in seen:
+                    seen.add(slug)
+                    warnings.append(
+                        f"{output_path}: references `@{slug}` but no corresponding agent file was generated"
+                    )
 
     return warnings

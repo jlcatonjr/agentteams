@@ -51,8 +51,8 @@ You detect logical inconsistencies across deliverables, agent documentation, ref
 | `CLAIM_CONFLICT` | CC | Contradictory factual claims between deliverables |
 | `ATTRIBUTION_ERROR` | AE | Claim attributed to wrong source |
 | `SOURCE_DRIFT` | SD | Deliverable description doesn't match current source file on disk |
-| `REFERENCE_MISSING` | RM | Reference in deliverable has no database entry; forward to `@reference-manager` |
-| `REFERENCE_MISMATCH` | RX | Reference details don't match database; forward to `@reference-manager` |
+| `REFERENCE_MISSING` | RM | *(If `@reference-manager` in team)* Reference in deliverable has no database entry; forward to `@reference-manager` |
+| `REFERENCE_MISMATCH` | RX | *(If `@reference-manager` in team)* Reference details don't match database; forward to `@reference-manager` |
 | `COUNT_MISMATCH` | CN | Stated count doesn't match actual count |
 | `HIERARCHY_CONFLICT` | HC | Authority hierarchy stated differently in different locations |
 | `STALE_REFERENCE` | SR | Reference to removed or renamed file |
@@ -86,7 +86,7 @@ Append to `.github/agents/references/conflict-log.csv` with columns:
 ## Rules
 
 1. Log every finding — do not silently accept or resolve
-2. Route `REFERENCE_MISSING` and `REFERENCE_MISMATCH` to `@reference-manager`
+2. *(If `@reference-manager` in team)* Route `REFERENCE_MISSING` and `REFERENCE_MISMATCH` to `@reference-manager`
 3. Route `SOURCE_DRIFT` to `@technical-validator` for verification
 4. Call `@conflict-resolution` for decisions on all other conflicts
 5. A clean audit (no findings) must still produce an entry in the log

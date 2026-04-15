@@ -75,9 +75,9 @@ Before `@primary-producer` drafts, you prepare a **Component Brief** containing:
 
 **Before sending to `@primary-producer`:**
 1. Send brief to `@adversarial` for presupposition review
-2. Send citation keys to `@reference-manager` for verification
+2. *(If `@reference-manager` in team)* Send citation keys to `@reference-manager` for verification
 3. Route any challenged assumptions back through `@adversarial`
-4. Brief is ready only when both `@adversarial` and `@reference-manager` return clear
+4. Brief is ready only when `@adversarial` returns clear *(If `@reference-manager` in team: and `@reference-manager` returns clear)*
 
 ## Review Protocol
 

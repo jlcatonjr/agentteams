@@ -126,6 +126,34 @@ def test_validate_cross_refs_orchestrator_not_flagged():
     assert warnings == []
 
 
+def test_validate_cross_refs_skips_conditional_lines():
+    # Bug 2 regression: lines with *(If @slug in team)* should not trigger warnings
+    rendered = [
+        ("primary-producer.agent.md", "*(If `@reference-manager` in team)* Send to `@reference-manager`."),
+    ]
+    warnings = validate_cross_refs(rendered)
+    assert warnings == []
+
+
+def test_validate_cross_refs_skips_routing_table_rows():
+    # Bug 2 regression: routing table rows (| `@slug` | ...) should not trigger warnings
+    rendered = [
+        ("orchestrator.agent.md", "| References | `@reference-manager` | Database queries |"),
+    ]
+    warnings = validate_cross_refs(rendered)
+    assert warnings == []
+
+
+def test_validate_cross_refs_deduplicates_per_file():
+    # Bug 2 regression: same (file, slug) pair must produce exactly one warning
+    rendered = [
+        ("primary-producer.agent.md",
+         "Invoke `@nonexistent` here.\nAlso invoke `@nonexistent` there."),
+    ]
+    warnings = validate_cross_refs(rendered)
+    assert len(warnings) == 1
+
+
 # ---------------------------------------------------------------------------
 # compute_template_hashes
 # ---------------------------------------------------------------------------

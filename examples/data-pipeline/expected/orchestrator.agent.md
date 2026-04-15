@@ -43,10 +43,6 @@ handoffs:
     agent: cohesion-repairer
     prompt: "A deliverable section has structural cohesion failures. Provide the file and section."
     send: false
-  - label: Enforce Style / Standards
-    agent: style-guardian
-    prompt: "A deliverable is ready for style audit. Provide the file path."
-    send: false
   - label: Validate Technical Accuracy
     agent: technical-validator
     prompt: "Audit technical accuracy of claims, code, or specifications in a deliverable. Provide the file path."
@@ -54,10 +50,6 @@ handoffs:
   - label: Convert / Transform Output
     agent: format-converter
     prompt: "Convert a primary deliverable to its secondary format. Provide the source file."
-    send: false
-  - label: Manage References / Dependencies
-    agent: reference-manager
-    prompt: "Perform a reference operation: add, verify, deduplicate, or retire. Describe the operation."
     send: false
   - label: Compile Final Output
     agent: output-compiler
@@ -104,7 +96,6 @@ handoffs:
     prompt: "Check agent docs for reference extraction opportunities and spec compliance."
     send: false
 ---
-
 # Orchestrator — SalesDataPipeline
 
 ## Purpose
@@ -167,7 +158,7 @@ You coordinate all agent operations for **SalesDataPipeline**. You route work to
 
 **Trigger:** "Produce [component]" / "Work on [workstream]"
 
-1. Invoke the relevant `@*-expert` for the target workstream → read sources, prepare Component Brief, verify references with `@reference-manager`
+1. Invoke the relevant `@*-expert` for the target workstream → read sources, prepare Component Brief *(If `@reference-manager` in team: verify references with `@reference-manager`)*
 2. Invoke `@adversarial` → review Component Brief for hidden presuppositions; route challenges back to workstream expert
 3. Invoke `@primary-producer` → produce `src/` deliverable from the Component Brief
 4. Return to the workstream expert → review draft against brief checklist; iterate with `@primary-producer` until ACCEPT
@@ -187,7 +178,7 @@ You coordinate all agent operations for **SalesDataPipeline**. You route work to
 4. *(If `@cohesion-repairer` in team)* Invoke `@cohesion-repairer` → repair cohesion failures introduced by revision
 5. *(If `@style-guardian` in team)* Invoke `@style-guardian` → audit style consistency
 6. Invoke `@conflict-auditor` → verify no new contradictions introduced
-7. Invoke `@reference-manager` → verify all references still resolve
+7. *(If `@reference-manager` in team)* Invoke `@reference-manager` → verify all references still resolve
 
 ### Workflow 3: Technical Accuracy Audit
 
@@ -203,8 +194,8 @@ You coordinate all agent operations for **SalesDataPipeline**. You route work to
 
 **Trigger:** "Compile output" / "Build final deliverable"
 
-1. Invoke `@format-converter` → transform primary deliverables to secondary format
-2. Invoke `@reference-manager` → verify all references are complete
+1. *(If `@format-converter` in team)* Invoke `@format-converter` → transform primary deliverables to secondary format
+2. *(If `@reference-manager` in team)* Invoke `@reference-manager` → verify all references are complete
 3. Invoke `@output-compiler` → assemble and compile final output
 4. Invoke `@cleanup` → remove intermediate build artifacts
 
@@ -214,7 +205,7 @@ You coordinate all agent operations for **SalesDataPipeline**. You route work to
 
 1. Invoke `@conflict-auditor` → detect contradictions across all deliverable files
 2. Invoke `@technical-validator` → verify technical claims match source on disk
-3. Invoke `@reference-manager` → verify every reference resolves
+3. *(If `@reference-manager` in team)* Invoke `@reference-manager` → verify every reference resolves
 4. Invoke `@style-guardian` → style audit
 5. Consolidate findings → present to user
 

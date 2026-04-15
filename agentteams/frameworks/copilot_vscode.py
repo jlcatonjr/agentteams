@@ -58,6 +58,46 @@ _YAML_DEFAULTS = {
     "model": '["Claude Sonnet 4.6 (copilot)"]',
 }
 
+# Patterns for team-ref filtering
+_AGENTS_FLOW_RE = re.compile(r"^(agents: )\[([^\]]*)\]", re.MULTILINE)
+_HANDOFF_ENTRY_RE = re.compile(
+    r"  - label: [^\n]+\n    agent: ([^\n]+)\n    prompt: [^\n]+\n    send: [^\n]+\n?",
+)
+
+
+def _get_team_slugs(manifest: dict[str, Any]) -> frozenset[str]:
+    """Return the set of agent slugs generated for this project.
+
+    Always includes ``orchestrator`` as a valid cross-reference target even
+    when it is not listed as a discrete output file.
+    """
+    slugs: set[str] = {"orchestrator"}
+    for f in manifest.get("output_files", []):
+        name = Path(f.get("path", "")).name
+        if name.endswith(".agent.md"):
+            slugs.add(name[: -len(".agent.md")])
+    return frozenset(slugs)
+
+
+def _filter_yaml_team_refs(yaml_body: str, team_slugs: frozenset[str]) -> str:
+    """Remove agent slugs from ``agents:`` and ``handoffs:`` that are absent from the team."""
+
+    def _filter_agents(m: re.Match) -> str:
+        slugs = re.findall(r"'([^']+)'", m.group(2))
+        keep = [s for s in slugs if s in team_slugs]
+        if not keep:
+            return f"{m.group(1)}[]"
+        return f"{m.group(1)}[{', '.join(repr(s) for s in keep)}]"
+
+    yaml_body = _AGENTS_FLOW_RE.sub(_filter_agents, yaml_body)
+
+    def _keep_handoff(m: re.Match) -> str:
+        slug = m.group(1).strip().strip("'\"")
+        return m.group(0) if slug in team_slugs else ""
+
+    yaml_body = _HANDOFF_ENTRY_RE.sub(_keep_handoff, yaml_body)
+    return yaml_body
+
 
 def _ensure_yaml_front_matter(content: str, agent_slug: str, manifest: dict[str, Any]) -> str:
     """Verify YAML front matter is present and has required keys; add defaults if not."""
@@ -78,6 +118,15 @@ def _ensure_yaml_front_matter(content: str, agent_slug: str, manifest: dict[str,
         return front_matter + content
 
     yaml_body = match.group(1)
+    body_text = content[match.end():]
+    changed = False
+
+    # Filter agents: list and handoffs: entries to only include generated team members
+    team_slugs = _get_team_slugs(manifest)
+    filtered = _filter_yaml_team_refs(yaml_body, team_slugs)
+    if filtered != yaml_body:
+        yaml_body = filtered
+        changed = True
 
     # Check for missing required keys and append defaults
     missing_lines: list[str] = []
@@ -87,10 +136,11 @@ def _ensure_yaml_front_matter(content: str, agent_slug: str, manifest: dict[str,
                 missing_lines.append(f"{key}: {_YAML_DEFAULTS[key]}")
 
     if missing_lines:
-        # Insert missing keys before closing ---
-        new_yaml = yaml_body + "\n" + "\n".join(missing_lines)
-        content = content[: match.start(1)] + new_yaml + content[match.end(1):]
+        yaml_body = yaml_body + "\n" + "\n".join(missing_lines)
+        changed = True
 
+    if changed:
+        return f"---\n{yaml_body}\n---\n{body_text}"
     return content
 
 

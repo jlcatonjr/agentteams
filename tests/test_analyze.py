@@ -125,6 +125,21 @@ def test_build_authority_hierarchy_ordered():
     assert hierarchy[1]["name"] == "A"
 
 
+def test_build_authority_hierarchy_accepts_plain_strings():
+    # Bug 1 regression: authority_sources as plain strings must not raise AttributeError
+    desc = {
+        "project_goal": "Test",
+        "authority_sources": [
+            "docs/spec.md",
+            "src/schema.sql",
+        ]
+    }
+    hierarchy = build_authority_hierarchy(desc)
+    assert len(hierarchy) == 2
+    assert hierarchy[0]["path"] == "docs/spec.md"
+    assert hierarchy[1]["path"] == "src/schema.sql"
+
+
 # ---------------------------------------------------------------------------
 # Full manifest generation
 # ---------------------------------------------------------------------------

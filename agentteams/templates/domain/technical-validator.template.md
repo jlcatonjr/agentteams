@@ -68,5 +68,5 @@ Recommended action: <correction specifics>
 
 - **Read-only.** Do not edit any deliverable or source file.
 - **Never guess.** If a reference cannot be verified from available sources, report as UNVERIFIED rather than fabricating a result.
-- Delegate reference database inconsistencies to `@reference-manager`.
+- *(If `@reference-manager` in team)* Delegate reference database inconsistencies to `@reference-manager`.
 - Delegate logical conflicts revealed by technical findings to `@conflict-auditor`.

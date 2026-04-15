@@ -184,10 +184,14 @@ def _parse_yaml_front_matter(content: str) -> dict | None:
 
 def _collect_agent_slugs_from_content(content: str) -> list[str]:
     """Extract agent slugs from handoffs and agents list in rendered content."""
+    _conditional_re = re.compile(r"\*\(If\b|\bIf `@[a-z0-9\-]+` in team\b|\| `@")
     slugs: list[str] = []
-    # Match `- agent: @slug` or `@slug` patterns in agents/handoffs blocks
-    for match in re.finditer(r"@([\w-]+)", content):
-        slugs.append(match.group(1))
+    for line in content.splitlines():
+        # Skip *(If @slug in team)* conditional guards and routing-table rows
+        if _conditional_re.search(line):
+            continue
+        for match in re.finditer(r"@([\w-]+)", line):
+            slugs.append(match.group(1))
     return slugs
 
 

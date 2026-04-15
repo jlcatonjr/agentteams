@@ -35,7 +35,7 @@ You assemble all converted components into the final deliverable package for Web
 
 ## Assembly Procedure
 
-1. **Dependency check:** Verify all expected components exist in converted form in `dist/`; list any missing and hand off to `@format-converter`
+1. **Dependency check:** Verify all expected components exist in converted form in `dist/`; list any missing *(If `@format-converter` in team: hand off to `@format-converter`)*
 2. **Ordering:** Assemble components in the order specified by the project manifest or table of contents
 3. **Cross-reference resolution:** Verify all internal cross-references resolve after assembly (links, citations, figures)
 4. **Build manifest:** Write a `BUILD-MANIFEST.md` in `dist/` listing each component, its source, its size, and its hash
@@ -65,6 +65,6 @@ Final output: <path to assembled deliverable>
 
 ## Rules
 
-- Never include components that have not been converted by `@format-converter`
+- *(If `@format-converter` in team)* Never include components that have not been converted by `@format-converter`
 - Never silently skip missing components — always report and wait
 - Do not modify source files in `src/` during assembly

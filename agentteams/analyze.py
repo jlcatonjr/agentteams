@@ -474,6 +474,9 @@ def build_authority_hierarchy(description: dict[str, Any]) -> list[dict[str, Any
     # Normalize ranks
     hierarchy: list[dict[str, Any]] = []
     for i, src in enumerate(sources, start=1):
+        # Accept both plain strings and dicts
+        if isinstance(src, str):
+            src = {"path": src, "name": src}
         hierarchy.append({
             "rank": src.get("rank", i),
             "name": src.get("name", f"Source {i}"),

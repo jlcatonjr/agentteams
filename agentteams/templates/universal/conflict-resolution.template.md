@@ -44,7 +44,7 @@ For each conflict in `{CONFLICT_LOG_PATH}` with status `open`:
 | `CN` (Count Mismatch) | Verify actual count on disk; REVISE the incorrect stated count |
 | `HC` (Hierarchy Conflict) | Use `copilot-instructions.md` as ground truth; REVISE diverging files |
 | `SR` (Stale Reference) | REJECT the stale reference; REVISE the deliverable to remove or update it |
-| `PE` (Phantom Entry) | REJECT the entry; flag for `@reference-manager` investigation |
+| `PE` (Phantom Entry) | REJECT the entry; *(If `@reference-manager` in team)* flag for `@reference-manager` investigation |
 
 ### Step 3: Apply Decision
 

@@ -141,7 +141,7 @@ You coordinate all agent operations for **{PROJECT_NAME}**. You route work to do
 
 **Trigger:** "Produce [component]" / "Work on [workstream]"
 
-1. Invoke the relevant `@*-expert` for the target workstream → read sources, prepare Component Brief, verify references with `@reference-manager`
+1. Invoke the relevant `@*-expert` for the target workstream → read sources, prepare Component Brief *(If `@reference-manager` in team: verify references with `@reference-manager`)*
 2. Invoke `@adversarial` → review Component Brief for hidden presuppositions; route challenges back to workstream expert
 3. Invoke `@primary-producer` → produce `{PRIMARY_OUTPUT_DIR}` deliverable from the Component Brief
 4. Return to the workstream expert → review draft against brief checklist; iterate with `@primary-producer` until ACCEPT
@@ -161,7 +161,7 @@ You coordinate all agent operations for **{PROJECT_NAME}**. You route work to do
 4. *(If `@cohesion-repairer` in team)* Invoke `@cohesion-repairer` → repair cohesion failures introduced by revision
 5. *(If `@style-guardian` in team)* Invoke `@style-guardian` → audit style consistency
 6. Invoke `@conflict-auditor` → verify no new contradictions introduced
-7. Invoke `@reference-manager` → verify all references still resolve
+7. *(If `@reference-manager` in team)* Invoke `@reference-manager` → verify all references still resolve
 
 ### Workflow 3: Technical Accuracy Audit
 
@@ -177,8 +177,8 @@ You coordinate all agent operations for **{PROJECT_NAME}**. You route work to do
 
 **Trigger:** "Compile output" / "Build final deliverable"
 
-1. Invoke `@format-converter` → transform primary deliverables to secondary format
-2. Invoke `@reference-manager` → verify all references are complete
+1. *(If `@format-converter` in team)* Invoke `@format-converter` → transform primary deliverables to secondary format
+2. *(If `@reference-manager` in team)* Invoke `@reference-manager` → verify all references are complete
 3. Invoke `@output-compiler` → assemble and compile final output
 4. Invoke `@cleanup` → remove intermediate build artifacts
 
@@ -188,7 +188,7 @@ You coordinate all agent operations for **{PROJECT_NAME}**. You route work to do
 
 1. Invoke `@conflict-auditor` → detect contradictions across all deliverable files
 2. Invoke `@technical-validator` → verify technical claims match source on disk
-3. Invoke `@reference-manager` → verify every reference resolves
+3. *(If `@reference-manager` in team)* Invoke `@reference-manager` → verify every reference resolves
 4. Invoke `@style-guardian` → style audit
 5. Consolidate findings → present to user
 
