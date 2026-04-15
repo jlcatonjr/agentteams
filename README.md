@@ -174,6 +174,9 @@ Options:
   --prune              Used with --update: also delete agents removed from the taxonomy
   --check              Check for template drift and structural changes (exit code 1 if found)
   --scan-security      Scan generated agent files for security issues
+  --post-audit         Run static + optional AI-powered audit after generation
+  --auto-correct       After --post-audit findings, invoke standalone copilot CLI to repair
+                       files (requires copilot CLI installed and authenticated separately)
   --self               Operate on the module's own agent team
   --version            Print version
 ```
@@ -332,13 +335,13 @@ agentteams --description brief.json --project ~/code/myproject --overwrite --yes
 Run static checks (unresolved placeholders, YAML integrity, required-agent coverage) immediately after generation. If the `gh` CLI is authenticated, also runs an AI-powered conflict and presupposition review via GitHub Models.
 
 ```bash
-agentteams --description brief.json --project ~/code/myproject --post-audit
+agentteams --description brief.json --project ~/code/myproject --post-audit --yes
 ```
 
-To automatically repair any findings using the standalone `copilot` CLI:
+To automatically repair any findings, pass `--auto-correct`. This requires the [standalone `copilot` CLI](https://docs.github.com/en/copilot/github-copilot-in-the-cli/about-github-copilot-in-the-cli) to be installed and authenticated separately:
 
 ```bash
-agentteams --description brief.json --project ~/code/myproject --post-audit --auto-correct
+agentteams --description brief.json --project ~/code/myproject --post-audit --auto-correct --yes
 ```
 
 ---
@@ -352,7 +355,9 @@ When `agentteams` is updated, templates may change and new agent types may be ad
 - Agents removed from the taxonomy are **reported** but not deleted.
 
 ```bash
-pip install --upgrade agentteams
+cd agentteams
+git pull
+pip install -e .
 agentteams --description brief.json --update
 ```
 
@@ -429,8 +434,8 @@ python -m pytest tests/ -v
 
 ```bash
 agentteams --help             # all flags and usage
-man agentteams                # man-page (after system-prefix pip install)
 agentteams --version          # confirm installed version
+python -m pytest tests/ -v   # run the full test suite
 ```
 
 Tests require no external dependencies. Integration tests use the bundled examples.
@@ -442,24 +447,29 @@ Tests require no external dependencies. Integration tests use the bundled exampl
 ```
 agentteams/
 ├── build_team.py              # CLI entry point
-├── src/
+├── agentteams/
 │   ├── ingest.py              # Parse project descriptions
 │   ├── analyze.py             # Build team manifest
 │   ├── render.py              # Render templates
 │   ├── emit.py                # Write files to disk
+│   ├── drift.py               # Drift detection
+│   ├── scan.py                # Security scan
+│   ├── audit.py               # Post-generation audit
+│   ├── remediate.py           # Auto-correction
+│   ├── graph.py               # Agent topology graph
+│   ├── templates/             # All agent templates (shipped with package)
+│   │   ├── universal/         # Governance agent templates (9)
+│   │   ├── domain/            # Domain archetype templates
+│   │   ├── builder/           # Team Builder agent templates (3)
+│   │   ├── workstream-expert.template.md
+│   │   ├── copilot-instructions.template.md
+│   │   ├── PLACEHOLDER-CONVENTIONS.md
+│   │   └── AUTHORING-GUIDE.md
 │   └── frameworks/
 │       ├── base.py            # Abstract adapter
 │       ├── copilot_vscode.py  # VS Code Copilot adapter
 │       ├── copilot_cli.py     # Copilot CLI adapter
-│       └── claude.py          # Claude adapter
-├── templates/
-│   ├── universal/             # Governance agent templates (9)
-│   ├── domain/                # Domain archetype templates (9 non-tool + 7 tool-specific + 2 doc = 18 total)
-│   ├── builder/               # Team Builder agent templates (3)
-│   ├── workstream-expert.template.md
-│   ├── copilot-instructions.template.md
-│   ├── PLACEHOLDER-CONVENTIONS.md
-│   └── AUTHORING-GUIDE.md     # Template authoring guide
+│       └── claude.py          # Claude Code adapter
 ├── schemas/
 │   ├── project-description.schema.json
 │   └── team-manifest.schema.json
@@ -474,6 +484,8 @@ agentteams/
     ├── test_emit.py
     ├── test_drift.py
     ├── test_scan.py
+    ├── test_audit.py
+    ├── test_frameworks.py
     └── test_integration.py
 ```
 
@@ -481,7 +493,7 @@ agentteams/
 
 ## Documentation
 
-- [templates/AUTHORING-GUIDE.md](templates/AUTHORING-GUIDE.md) — How to write and register new agent templates
+- [agentteams/templates/AUTHORING-GUIDE.md](agentteams/templates/AUTHORING-GUIDE.md) — How to write and register new agent templates
 - [docs/DESCRIPTION-FORMAT.md](docs/DESCRIPTION-FORMAT.md) — Full field-by-field description format reference
 - [.github/agents/references/agent-taxonomy.reference.md](.github/agents/references/agent-taxonomy.reference.md) — Four-tier agent taxonomy specification
 - [schemas/project-description.schema.json](schemas/project-description.schema.json) — JSON Schema for project descriptions
