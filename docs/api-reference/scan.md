@@ -4,7 +4,7 @@ Proactive security scanner for generated agent files.
 
 Scans `.agent.md` and related files for: absolute paths containing usernames (PII exposure), credential patterns (API keys, tokens, passwords), unresolved auto-placeholders (`{UPPER_SNAKE_CASE}`), and unresolved manual placeholders (`{MANUAL:*}`).
 
-> *Source: `src/scan.py`*
+> *Source: `agentteams/scan.py`*
 
 ---
 
@@ -12,7 +12,7 @@ Scans `.agent.md` and related files for: absolute paths containing usernames (PI
 
 ### `ScanFinding`
 
-> *Source: `src/scan.py`*
+> *Source: `agentteams/scan.py`*
 
 A single security finding.
 
@@ -29,7 +29,7 @@ A single security finding.
 
 ### `ScanReport`
 
-> *Source: `src/scan.py`*
+> *Source: `agentteams/scan.py`*
 
 Results of a security scan.
 
@@ -51,7 +51,7 @@ Results of a security scan.
 
 ### `scan_directory(agents_dir)`
 
-> *Source: `src/scan.py`*
+> *Source: `agentteams/scan.py`*
 
 Scan all `.agent.md` and `.md` files in `agents_dir` for security issues.
 
@@ -65,7 +65,7 @@ Scan all `.agent.md` and `.md` files in `agents_dir` for security issues.
 
 ### `scan_content(content, filename='<string>')`
 
-> *Source: `src/scan.py`*
+> *Source: `agentteams/scan.py`*
 
 Scan a string of content for security issues.
 
@@ -80,7 +80,7 @@ Scan a string of content for security issues.
 
 ### `print_scan_report(report)`
 
-> *Source: `src/scan.py`*
+> *Source: `agentteams/scan.py`*
 
 Print a human-readable scan report to stdout.
 

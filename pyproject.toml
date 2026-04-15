@@ -1,6 +1,6 @@
 [build-system]
 requires = ["setuptools>=68", "wheel"]
-build-backend = "setuptools.backends.legacy:build"
+build-backend = "setuptools.build_meta"
 
 [project]
 name = "agentteams"
@@ -31,6 +31,15 @@ Documentation = "https://jlcatonjr.github.io/agentteams/"
 [project.scripts]
 agentteams = "build_team:main"
 build-team = "build_team:main"   # deprecated alias; remove before the next major release
+
+[tool.setuptools]
+py-modules = ["build_team"]
+
+[tool.setuptools.packages.find]
+exclude = ["tests*"]
+
+[tool.setuptools.package-data]
+"agentteams" = ["templates/**"]
 
 [tool.setuptools.data-files]
 "share/man/man1" = ["agentteams.1"]

@@ -6,7 +6,7 @@ import json
 import textwrap
 import pytest
 from pathlib import Path
-from src.ingest import (
+from agentteams.ingest import (
     load,
     validate,
     _slugify,

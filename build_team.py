@@ -35,15 +35,15 @@ import json
 import sys
 from pathlib import Path
 
-# Ensure the src/ package is importable regardless of install mode
+# Ensure the agentteams/ package is importable in dev mode (direct script invocation)
 _SCRIPT_DIR = Path(__file__).parent
-if str(_SCRIPT_DIR / "src") not in sys.path:
+if str(_SCRIPT_DIR) not in sys.path:
     sys.path.insert(0, str(_SCRIPT_DIR))
 
-from src import ingest, analyze, render, emit
-from src.frameworks.copilot_vscode import CopilotVSCodeAdapter
-from src.frameworks.copilot_cli import CopilotCLIAdapter
-from src.frameworks.claude import ClaudeAdapter
+from agentteams import ingest, analyze, render, emit
+from agentteams.frameworks.copilot_vscode import CopilotVSCodeAdapter
+from agentteams.frameworks.copilot_cli import CopilotCLIAdapter
+from agentteams.frameworks.claude import ClaudeAdapter
 
 __version__ = "0.1.0"
 
@@ -53,7 +53,7 @@ FRAMEWORKS = {
     "claude": ClaudeAdapter,
 }
 
-TEMPLATES_DIR = _SCRIPT_DIR / "templates"
+TEMPLATES_DIR = _SCRIPT_DIR / "agentteams" / "templates"
 
 
 # ---------------------------------------------------------------------------
@@ -256,7 +256,7 @@ def main(argv: list[str] | None = None) -> int:
     # Step 4b: Handle --scan-security (no rendering needed)
     # -----------------------------------------------------------------------
     if args.scan_security:
-        from src import scan
+        from agentteams import scan
         report = scan.scan_directory(output_dir)
         scan.print_scan_report(report)
         return 1 if report.has_issues else 0
@@ -265,7 +265,7 @@ def main(argv: list[str] | None = None) -> int:
     # Step 4c: Handle --check (drift + structural changes, no write)
     # -----------------------------------------------------------------------
     if args.check:
-        from src import drift
+        from agentteams import drift
         # Content drift (template hash comparison)
         try:
             dreport = drift.detect_drift(output_dir, TEMPLATES_DIR)
@@ -309,7 +309,7 @@ def main(argv: list[str] | None = None) -> int:
     # -----------------------------------------------------------------------
     # Step 5c: Generate team topology graph
     # -----------------------------------------------------------------------
-    from src import graph as _graph
+    from agentteams import graph as _graph
     graph_content = _graph.generate_graph_document(
         dict(final_rendered), project_name=project_name
     )
@@ -319,7 +319,7 @@ def main(argv: list[str] | None = None) -> int:
     # Step 5b: Handle --update (structural + content drift, manual preservation)
     # -----------------------------------------------------------------------
     if args.update:
-        from src import drift
+        from agentteams import drift
 
         # Load old build-log (may not exist for first-generation teams)
         try:
@@ -383,7 +383,7 @@ def main(argv: list[str] | None = None) -> int:
         # Post-generation audit (--update path)
         # ------------------------------------------------------------------
         if args.post_audit and result.success and not args.dry_run:
-            from src import audit as _audit
+            from agentteams import audit as _audit
             audit_result = _audit.run_post_audit(
                 output_dir, manifest,
                 ai_audit=True,
@@ -430,7 +430,7 @@ def main(argv: list[str] | None = None) -> int:
     # Step 8.5: Post-generation audit (if --post-audit)
     # -----------------------------------------------------------------------
     if args.post_audit and result.success and not args.dry_run:
-        from src import audit as _audit
+        from agentteams import audit as _audit
         audit_result = _audit.run_post_audit(
             output_dir, manifest,
             rendered_files=final_rendered,
@@ -525,8 +525,8 @@ def _attempt_auto_correct(
     Returns:
         The rerun audit result if remediation succeeded, otherwise the original audit result.
     """
-    from src import audit as _audit
-    from src import remediate as _remediate
+    from agentteams import audit as _audit
+    from agentteams import remediate as _remediate
 
     remediation_result = _remediate.run_copilot_autocorrect(
         output_dir=output_dir,
@@ -639,7 +639,7 @@ def _extract_resolved_value(existing: str, new: str, placeholder: str) -> str | 
 
 def _write_run_log(manifest: dict, result: emit.EmitResult, output_dir: Path, template_hashes: dict[str, str] | None = None) -> None:
     """Write a minimal JSON run log to the output directory."""
-    from src import drift as _drift
+    from agentteams import drift as _drift
 
     # Convert absolute paths to project-relative paths for portability
     project_root = output_dir.parent.parent  # output_dir is .github/agents/

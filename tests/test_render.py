@@ -4,7 +4,7 @@ Tests for src/render.py
 
 import pytest
 from pathlib import Path
-from src.render import (
+from agentteams.render import (
     resolve_placeholders,
     collect_unresolved_manual,
     validate_cross_refs,
@@ -378,7 +378,7 @@ def test_reference_tool_placeholder_map_common_patterns_resolves():
 def test_tool_reference_template_has_no_yaml_frontmatter():
     """tool-reference.template.md must not begin with YAML front matter (--- block)."""
     import os
-    templates_dir = Path(__file__).parent.parent / "templates"
+    templates_dir = Path(__file__).parent.parent / "agentteams" / "templates"
     ref_template = templates_dir / "domain" / "tool-reference.template.md"
     assert ref_template.exists(), "tool-reference.template.md not found"
     content = ref_template.read_text(encoding="utf-8")
@@ -389,7 +389,7 @@ def test_tool_reference_template_has_no_yaml_frontmatter():
 
 def test_tool_cli_template_uses_auto_resolved_api_surface():
     """tool-cli.template.md must use {TOOL_API_SURFACE} not {MANUAL:TOOL_API_SURFACE}."""
-    templates_dir = Path(__file__).parent.parent / "templates"
+    templates_dir = Path(__file__).parent.parent / "agentteams" / "templates"
     cli_template = templates_dir / "domain" / "tool-cli.template.md"
     assert cli_template.exists(), "tool-cli.template.md not found"
     content = cli_template.read_text(encoding="utf-8")

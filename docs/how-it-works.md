@@ -30,11 +30,11 @@ brief.json / brief.md
    └──────┘
 ```
 
-### Stage 1 — Ingest (`src/ingest.py`)
+### Stage 1 — Ingest (`agentteams/ingest.py`)
 
 Reads your project description from a `.json` or `.md` file and validates it against `schemas/project-description.schema.json`. Returns a normalized Python dict.
 
-### Stage 2 — Analyze (`src/analyze.py`)
+### Stage 2 — Analyze (`agentteams/analyze.py`)
 
 Builds the **team manifest** from the description dict. Key decisions made in this stage:
 
@@ -44,11 +44,11 @@ Builds the **team manifest** from the description dict. Key decisions made in th
 - **Authority hierarchy construction** — orders sources by rank for the agents to cite
 - **Placeholder resolution** — auto-fills all `{UPPER_SNAKE_CASE}` tokens; flags `{MANUAL:*}` tokens for human review
 
-### Stage 3 — Render (`src/render.py`)
+### Stage 3 — Render (`agentteams/render.py`)
 
 Loads each template from `templates/` and substitutes every `{PLACEHOLDER}` with its resolved value from the manifest. Returns a list of `(relative_path, content)` pairs.
 
-### Stage 4 — Emit (`src/emit.py`)
+### Stage 4 — Emit (`agentteams/emit.py`)
 
 Writes all rendered files to the target project's `.github/agents/` directory (or equivalent). Generates `SETUP-REQUIRED.md` for any unresolved manual placeholders, and runs the post-generation audit and security scan.
 
@@ -120,7 +120,7 @@ See [Template Authoring](template-authoring.md) for placeholder conventions and 
 
 ## Framework Adapters
 
-The same template library targets three frameworks via adapters in `src/frameworks/`:
+The same template library targets three frameworks via adapters in `agentteams/frameworks/`:
 
 | Framework | Agent Format | Entry Point |
 |-----------|-------------|-------------|
@@ -128,4 +128,4 @@ The same template library targets three frameworks via adapters in `src/framewor
 | `copilot-cli` | Plain `.md` system prompts | `gh copilot` CLI |
 | `claude` | Plain `.md` + `CLAUDE.md` | Claude Projects |
 
-Each adapter in `src/frameworks/` knows the file naming conventions, front-matter schema, and handoff syntax for its target framework.
+Each adapter in `agentteams/frameworks/` knows the file naming conventions, front-matter schema, and handoff syntax for its target framework.

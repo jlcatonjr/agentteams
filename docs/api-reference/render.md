@@ -4,7 +4,7 @@ Render agent files from templates by resolving placeholders.
 
 Takes a team manifest (from `analyze.py`) and a template directory, and produces a list of `(output_path, rendered_content)` pairs ready for the emit phase.
 
-> *Source: `src/render.py`*
+> *Source: `agentteams/render.py`*
 
 ---
 
@@ -12,7 +12,7 @@ Takes a team manifest (from `analyze.py`) and a template directory, and produces
 
 ### `render_all(manifest, *, templates_dir)`
 
-> *Source: `src/render.py`*
+> *Source: `agentteams/render.py`*
 
 Render all output files described in the manifest.
 
@@ -27,7 +27,7 @@ Render all output files described in the manifest.
 
 ### `compute_template_hashes(manifest, *, templates_dir)`
 
-> *Source: `src/render.py`*
+> *Source: `agentteams/render.py`*
 
 Compute SHA-256 hashes of all templates used by the manifest.
 
@@ -42,7 +42,7 @@ Compute SHA-256 hashes of all templates used by the manifest.
 
 ### `resolve_placeholders(template_text, placeholder_map)`
 
-> *Source: `src/render.py`*
+> *Source: `agentteams/render.py`*
 
 Replace all `{PLACEHOLDER}` tokens in `template_text` using `placeholder_map`.
 
@@ -57,7 +57,7 @@ Replace all `{PLACEHOLDER}` tokens in `template_text` using `placeholder_map`.
 
 ### `collect_unresolved_manual(rendered_text)`
 
-> *Source: `src/render.py`*
+> *Source: `agentteams/render.py`*
 
 Return a list of all unresolved `{MANUAL:*}` token names remaining in rendered text.
 
@@ -71,7 +71,7 @@ Return a list of all unresolved `{MANUAL:*}` token names remaining in rendered t
 
 ### `validate_cross_refs(rendered_files)`
 
-> *Source: `src/render.py`*
+> *Source: `agentteams/render.py`*
 
 Validate that every agent slug referenced in `agents:` YAML blocks resolves to a file in the rendered set.
 

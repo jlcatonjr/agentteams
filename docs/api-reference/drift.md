@@ -4,7 +4,7 @@ Detect template-to-instance drift in generated agent teams.
 
 Compares current template hashes against those recorded in `build-log.json` at generation time, and reports which agent files need re-rendering. Drift has two independent dimensions: **content drift** (template text changed) and **structural drift** (team composition changed).
 
-> *Source: `src/drift.py`*
+> *Source: `agentteams/drift.py`*
 
 ---
 
@@ -12,7 +12,7 @@ Compares current template hashes against those recorded in `build-log.json` at g
 
 ### `DriftReport`
 
-> *Source: `src/drift.py`*
+> *Source: `agentteams/drift.py`*
 
 Results of a content-drift detection run.
 
@@ -32,7 +32,7 @@ Results of a content-drift detection run.
 
 ### `StructuralDiffReport`
 
-> *Source: `src/drift.py`*
+> *Source: `agentteams/drift.py`*
 
 Results of a structural diff between a build-log and a current manifest.
 
@@ -56,7 +56,7 @@ Results of a structural diff between a build-log and a current manifest.
 
 ### `load_build_log(agents_dir)`
 
-> *Source: `src/drift.py`*
+> *Source: `agentteams/drift.py`*
 
 Load `build-log.json` from an agents directory.
 
@@ -72,7 +72,7 @@ Load `build-log.json` from an agents directory.
 
 ### `detect_drift(agents_dir, templates_dir)`
 
-> *Source: `src/drift.py`*
+> *Source: `agentteams/drift.py`*
 
 Detect content drift by comparing current template hashes against the build-log.
 
@@ -89,7 +89,7 @@ Detect content drift by comparing current template hashes against the build-log.
 
 ### `print_drift_report(report)`
 
-> *Source: `src/drift.py`*
+> *Source: `agentteams/drift.py`*
 
 Print a human-readable drift report to stdout.
 
@@ -101,7 +101,7 @@ Print a human-readable drift report to stdout.
 
 ### `compute_structural_diff(old_log, manifest, templates_dir)`
 
-> *Source: `src/drift.py`*
+> *Source: `agentteams/drift.py`*
 
 Compute a structural diff between a stored build-log and a new manifest.
 
@@ -117,7 +117,7 @@ Compute a structural diff between a stored build-log and a new manifest.
 
 ### `print_structural_diff_report(report)`
 
-> *Source: `src/drift.py`*
+> *Source: `agentteams/drift.py`*
 
 Print a human-readable structural diff report to stdout.
 
@@ -129,7 +129,7 @@ Print a human-readable structural diff report to stdout.
 
 ### `compute_manifest_fingerprint(manifest)`
 
-> *Source: `src/drift.py`*
+> *Source: `agentteams/drift.py`*
 
 Compute a stable hash fingerprint of a team manifest for change detection.
 

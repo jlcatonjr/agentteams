@@ -6,7 +6,7 @@ from __future__ import annotations
 
 import pytest
 from pathlib import Path
-from src.audit import (
+from agentteams.audit import (
     AuditFinding,
     AuditResult,
     run_post_audit,
@@ -359,7 +359,7 @@ def test_print_audit_report_ai_unavailable_shows_hint(capsys):
     result = AuditResult(ai_available=False)
     print_audit_report(result)
     captured = capsys.readouterr()
-    assert "gh" in captured.out
+    assert "copilot" in captured.out
 
 
 # ---------------------------------------------------------------------------

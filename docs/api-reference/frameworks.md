@@ -2,13 +2,13 @@
 
 Per-framework adapter classes that control how rendered agent content is adjusted for a specific target framework.
 
-> *Source: `src/frameworks/`*
+> *Source: `agentteams/frameworks/`*
 
 ---
 
 ## `FrameworkAdapter` (Abstract Base Class)
 
-> *Source: `src/frameworks/base.py`*
+> *Source: `agentteams/frameworks/base.py`*
 
 Abstract interface for per-framework agent file generation. All concrete adapters inherit from this class.
 
@@ -97,7 +97,7 @@ Adjust an output path's extension for this framework. Default implementation: no
 
 ## `CopilotVSCodeAdapter`
 
-> *Source: `src/frameworks/copilot_vscode.py`*
+> *Source: `agentteams/frameworks/copilot_vscode.py`*
 
 Adapter for GitHub Copilot in VS Code.
 
@@ -112,7 +112,7 @@ Validates and normalizes YAML front matter; preserves all fields defined in the 
 
 ## `CopilotCLIAdapter`
 
-> *Source: `src/frameworks/copilot_cli.py`*
+> *Source: `agentteams/frameworks/copilot_cli.py`*
 
 Adapter for Copilot CLI.
 
@@ -127,7 +127,7 @@ Strips YAML front matter and handoff blocks to produce plain Markdown system pro
 
 ## `ClaudeAdapter`
 
-> *Source: `src/frameworks/claude.py`*
+> *Source: `agentteams/frameworks/claude.py`*
 
 Adapter for Claude Projects.
 

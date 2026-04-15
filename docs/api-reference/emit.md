@@ -4,7 +4,7 @@ Write rendered agent files to disk.
 
 Takes the list of `(output_path, content)` pairs from `render.py` and writes them to the target output directory with dry-run support and overwrite protection.
 
-> *Source: `src/emit.py`*
+> *Source: `agentteams/emit.py`*
 
 ---
 
@@ -12,7 +12,7 @@ Takes the list of `(output_path, content)` pairs from `render.py` and writes the
 
 ### `EmitResult`
 
-> *Source: `src/emit.py`*
+> *Source: `agentteams/emit.py`*
 
 Results of an emit operation.
 
@@ -33,7 +33,7 @@ Results of an emit operation.
 
 ### `emit_all(rendered_files, *, output_dir, dry_run=False, overwrite=False, yes=False)`
 
-> *Source: `src/emit.py`*
+> *Source: `agentteams/emit.py`*
 
 Write rendered files to `output_dir`.
 
@@ -51,7 +51,7 @@ Write rendered files to `output_dir`.
 
 ### `print_summary(result, manifest)`
 
-> *Source: `src/emit.py`*
+> *Source: `agentteams/emit.py`*
 
 Print a human-readable summary of an emit operation to stdout.
 
@@ -64,7 +64,7 @@ Print a human-readable summary of an emit operation to stdout.
 
 ### `file_hash(path)`
 
-> *Source: `src/emit.py`*
+> *Source: `agentteams/emit.py`*
 
 Return the SHA-256 hex digest of a file's contents.
 

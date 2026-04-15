@@ -59,6 +59,9 @@
 - `@format-converter` — converts deliverables to final output format
 - `@output-compiler` — assembles components into the final deliverable package
 - `@visual-designer` — creates and revises diagrams and figures
+- `@module-doc-author` — specialized domain agent
+- `@module-doc-validator` — specialized domain agent
+- `@tool-doc-researcher` — specialized domain agent
 
 ### Workstream Experts
 - `@ingest-expert` — Ingest Module

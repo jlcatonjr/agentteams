@@ -6,7 +6,7 @@ The generated man-page source is committed to the repository root as
 
 Usage (regenerate the committed man-page)::
 
-    python -m src.man > agentteams.1
+    python -m agentteams.man > agentteams.1
 
 Preview locally::
 

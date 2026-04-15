@@ -23,3 +23,11 @@ _intake-notes.md
 
 # Local planning docs — not for publication
 pypi-release-plan.md
+
+# Planning and step CSVs
+build-team-steps.csv
+tool-enrichment-steps.csv
+
+# Structural or audit plan docs committed during development
+docs/structural-update-plan.md
+python

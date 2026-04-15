@@ -7,8 +7,8 @@ import json
 
 
 def test_run_copilot_autocorrect_uses_standalone_copilot(tmp_path, monkeypatch):
-    from src.audit import AuditFinding, AuditResult
-    from src import remediate
+    from agentteams.audit import AuditFinding, AuditResult
+    from agentteams import remediate
 
     output_dir = tmp_path / ".github" / "agents"
     output_dir.mkdir(parents=True)
@@ -63,10 +63,10 @@ def test_run_copilot_autocorrect_uses_standalone_copilot(tmp_path, monkeypatch):
 
 def test_build_main_auto_correct_reruns_audit(tmp_path, monkeypatch):
     import build_team
-    import src.audit as audit_module
-    import src.remediate as remediate_module
-    from src.audit import AuditFinding, AuditResult
-    from src.remediate import RemediationResult
+    import agentteams.audit as audit_module
+    import agentteams.remediate as remediate_module
+    from agentteams.audit import AuditFinding, AuditResult
+    from agentteams.remediate import RemediationResult
 
     first_audit = AuditResult(
         static_findings=[
@@ -120,7 +120,7 @@ def test_build_main_auto_correct_reruns_audit(tmp_path, monkeypatch):
 
 def test_build_main_update_audits_emitted_files_from_disk(tmp_path, monkeypatch):
     import build_team
-    import src.audit as audit_module
+    import agentteams.audit as audit_module
 
     brief = Path(__file__).parent.parent / "examples" / "software-project" / "brief.json"
     output_dir = tmp_path / ".github" / "agents"

@@ -3,7 +3,7 @@ Tests for src/analyze.py
 """
 
 import pytest
-from src.analyze import (
+from agentteams.analyze import (
     build_manifest,
     classify_project_type,
     select_archetypes,

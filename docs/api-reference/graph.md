@@ -6,7 +6,7 @@ Parses generated agent files (from in-memory rendered content or disk) to build 
 
 Outputs Mermaid flowchart, DOT (Graphviz) source, JSON adjacency list, and human-readable Markdown document. The graph document is regenerated automatically on every `build_team.py` run and written to `references/pipeline-graph.md`.
 
-> *Source: `src/graph.py`*
+> *Source: `agentteams/graph.py`*
 
 ---
 
@@ -14,7 +14,7 @@ Outputs Mermaid flowchart, DOT (Graphviz) source, JSON adjacency list, and human
 
 ### `AgentNode`
 
-> *Source: `src/graph.py`*
+> *Source: `agentteams/graph.py`*
 
 Metadata for a single agent node in the team graph.
 
@@ -30,7 +30,7 @@ Metadata for a single agent node in the team graph.
 
 ### `GraphEdge`
 
-> *Source: `src/graph.py`*
+> *Source: `agentteams/graph.py`*
 
 A directed edge between two agent nodes.
 
@@ -45,7 +45,7 @@ A directed edge between two agent nodes.
 
 ### `TeamGraph`
 
-> *Source: `src/graph.py`*
+> *Source: `agentteams/graph.py`*
 
 Complete directed graph of the agent team.
 
@@ -99,7 +99,7 @@ Render a full Markdown document containing the Mermaid graph, a legend, and agen
 
 ### `build_graph(rendered_files, project_name)`
 
-> *Source: `src/graph.py`*
+> *Source: `agentteams/graph.py`*
 
 Build a `TeamGraph` from in-memory rendered agent file content.
 
@@ -114,7 +114,7 @@ Build a `TeamGraph` from in-memory rendered agent file content.
 
 ### `generate_graph_document(rendered_files, project_name)`
 
-> *Source: `src/graph.py`*
+> *Source: `agentteams/graph.py`*
 
 Generate the full Markdown graph document combining Mermaid, DOT, and JSON representations.
 
@@ -129,7 +129,7 @@ Generate the full Markdown graph document combining Mermaid, DOT, and JSON repre
 
 ### `main(argv=None)`
 
-> *Source: `src/graph.py`*
+> *Source: `agentteams/graph.py`*
 
 CLI entry point for standalone graph generation.
 

@@ -4,7 +4,7 @@ Auto-correction support via standalone Copilot CLI.
 
 Provides an optional remediation pass that runs after post-audit finds issues in generated agent team files. Uses the standalone `copilot` CLI in non-interactive mode, scopes file access to the generated team directory, then returns control to the main pipeline for a verification rerun.
 
-> *Source: `src/remediate.py`*
+> *Source: `agentteams/remediate.py`*
 
 ---
 
@@ -12,7 +12,7 @@ Provides an optional remediation pass that runs after post-audit finds issues in
 
 ### `RemediationResult`
 
-> *Source: `src/remediate.py`*
+> *Source: `agentteams/remediate.py`*
 
 Outcome of a Copilot CLI remediation attempt.
 
@@ -31,7 +31,7 @@ Outcome of a Copilot CLI remediation attempt.
 
 ### `run_copilot_autocorrect(*, output_dir, manifest, audit_result)`
 
-> *Source: `src/remediate.py`*
+> *Source: `agentteams/remediate.py`*
 
 Invoke the standalone Copilot CLI to repair generated team files.
 
@@ -49,7 +49,7 @@ Invoke the standalone Copilot CLI to repair generated team files.
 
 ### `print_remediation_summary(result)`
 
-> *Source: `src/remediate.py`*
+> *Source: `agentteams/remediate.py`*
 
 Print a human-readable remediation summary to stdout.
 

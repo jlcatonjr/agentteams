@@ -68,7 +68,7 @@ Every template must have:
    - `domain/` — domain archetypes
    - `builder/` — per-framework builder agents
    - Root level — orchestrator and copilot-instructions
-2. Add the archetype trigger rule to `src/analyze.py`'s `_ARCHETYPE_TRIGGERS` list
+2. Add the archetype trigger rule to `agentteams/analyze.py`'s `_ARCHETYPE_TRIGGERS` list
 3. Add the new placeholder to `templates/PLACEHOLDER-CONVENTIONS.md` if introducing a new placeholder
 4. Add the archetype to the `selected_archetypes` enum in `schemas/project-description.schema.json`
 5. Update `template-library-expert.agent.md` sections count
@@ -78,6 +78,6 @@ Every template must have:
 ## Placeholder Rules
 
 1. Placeholder names must be `UPPER_SNAKE_CASE`
-2. Every auto-resolved placeholder must map to a key in `_build_placeholder_map()` in `src/analyze.py`
+2. Every auto-resolved placeholder must map to a key in `_build_placeholder_map()` in `agentteams/analyze.py`
 3. Never use `{UPPER_SNAKE_CASE}` for a value that cannot be auto-resolved — use `{MANUAL:}` instead
-4. Do not introduce new auto-resolved placeholders without adding them to `PLACEHOLDER-CONVENTIONS.md` and `src/analyze.py`
+4. Do not introduce new auto-resolved placeholders without adding them to `PLACEHOLDER-CONVENTIONS.md` and `agentteams/analyze.py`

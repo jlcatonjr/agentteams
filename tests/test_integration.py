@@ -8,14 +8,14 @@ import pytest
 from pathlib import Path
 
 EXAMPLES_DIR = Path(__file__).parent.parent / "examples"
-TEMPLATES_DIR = Path(__file__).parent.parent / "templates"
+TEMPLATES_DIR = Path(__file__).parent.parent / "agentteams" / "templates"
 
 
 def _run_pipeline(brief_path: Path, tmp_path: Path, framework: str = "copilot-vscode") -> dict:
-    from src import ingest, analyze, render, emit
-    from src.frameworks.copilot_vscode import CopilotVSCodeAdapter
-    from src.frameworks.copilot_cli import CopilotCLIAdapter
-    from src.frameworks.claude import ClaudeAdapter
+    from agentteams import ingest, analyze, render, emit
+    from agentteams.frameworks.copilot_vscode import CopilotVSCodeAdapter
+    from agentteams.frameworks.copilot_cli import CopilotCLIAdapter
+    from agentteams.frameworks.claude import ClaudeAdapter
 
     _adapters = {
         "copilot-vscode": CopilotVSCodeAdapter,
@@ -52,7 +52,7 @@ def _run_pipeline(brief_path: Path, tmp_path: Path, framework: str = "copilot-vs
         final_rendered.append((rel_path, content))
 
     # Generate team topology graph (mirrors build_team.py step 5c)
-    from src import graph as _graph
+    from agentteams import graph as _graph
     graph_content = _graph.generate_graph_document(
         dict(final_rendered), project_name=manifest.get("project_name", "")
     )
@@ -218,8 +218,10 @@ def test_generated_files_parse_correctly(tmp_path, example):
             assert fm[field], f"{agent_file.name}: YAML front matter '{field}' is empty"
 
         # 3. No unresolved auto-placeholder tokens in auto-resolved fields
-        #    (MANUAL: tokens are allowed to remain)
-        auto_unresolved = _UNRESOLVED_AUTO_RE.findall(content)
+        #    (MANUAL: tokens are allowed to remain; tokens inside backtick spans
+        #     are instructional text examples, not unresolved placeholders)
+        content_no_code = re.sub(r"`[^`\n]+`", "", content)
+        auto_unresolved = _UNRESOLVED_AUTO_RE.findall(content_no_code)
         assert not auto_unresolved, (
             f"{agent_file.name}: found unresolved auto-placeholder(s): {auto_unresolved}"
         )
@@ -283,13 +285,13 @@ def test_snapshot_comparison(tmp_path, example):
 
 def _run_pipeline_to_dir(brief_path: Path, output_dir: Path, framework: str = "copilot-vscode") -> dict:
     """Run the full pipeline and emit to output_dir, returning manifest + build-log path."""
-    from src import ingest, analyze, render, emit
-    from src.frameworks.copilot_vscode import CopilotVSCodeAdapter
+    from agentteams import ingest, analyze, render, emit
+    from agentteams.frameworks.copilot_vscode import CopilotVSCodeAdapter
     from pathlib import Path as _Path
     import json
 
     adapter = CopilotVSCodeAdapter()
-    TEMPLATES = _Path(__file__).parent.parent / "templates"
+    TEMPLATES = _Path(__file__).parent.parent / "agentteams" / "templates"
 
     description = ingest.load(brief_path, scan_project=False)
     manifest = analyze.build_manifest(description, framework=framework)
@@ -317,10 +319,10 @@ def _run_pipeline_to_dir(brief_path: Path, output_dir: Path, framework: str = "c
 
 def test_update_adds_new_agents(tmp_path):
     """--update emits files for agents that are new since the last build."""
-    from src import drift, analyze
+    from agentteams import drift, analyze
     from pathlib import Path as _Path
 
-    TEMPLATES = _Path(__file__).parent.parent / "templates"
+    TEMPLATES = _Path(__file__).parent.parent / "agentteams" / "templates"
     brief = _Path(__file__).parent.parent / "examples" / "software-project" / "brief.json"
     if not brief.exists():
         pytest.skip("software-project brief not found")
@@ -382,9 +384,9 @@ def test_update_preserves_unresolved_manual_token(tmp_path):
 
 def test_update_reports_removed_files(tmp_path):
     """--update classifies deprecated files as removed (not deleted)."""
-    from src import drift
+    from agentteams import drift
 
-    TEMPLATES = Path(__file__).parent.parent / "templates"
+    TEMPLATES = Path(__file__).parent.parent / "agentteams" / "templates"
     old_files = [
         {"path": "orchestrator.agent.md", "template": "universal/orchestrator.template.md", "type": "agent"},
         {"path": "deprecated-agent.agent.md", "template": "universal/deprecated.template.md", "type": "agent"},
@@ -417,7 +419,7 @@ def test_build_log_schema_v12(tmp_path):
     """Build-log written by _write_run_log includes structural and manifest fingerprints."""
     import json
     from build_team import _write_run_log
-    from src.emit import EmitResult
+    from agentteams.emit import EmitResult
 
     manifest = {
         "project_name": "TestProject",

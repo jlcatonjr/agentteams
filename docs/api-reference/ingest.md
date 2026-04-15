@@ -4,7 +4,7 @@ Parse project descriptions into a normalized dict.
 
 Accepts JSON files matching `project-description.schema.json`, Markdown briefs with section headings, and plain Markdown fallback (unstructured). When `existing_project_path` is set, scans the directory tree to supplement missing fields.
 
-> *Source: `src/ingest.py`*
+> *Source: `agentteams/ingest.py`*
 
 ---
 
@@ -12,7 +12,7 @@ Accepts JSON files matching `project-description.schema.json`, Markdown briefs w
 
 ### `load(source, *, scan_project=True)`
 
-> *Source: `src/ingest.py`*
+> *Source: `agentteams/ingest.py`*
 
 Load and return a normalized project description dict.
 
@@ -32,7 +32,7 @@ Load and return a normalized project description dict.
 
 ### `parse_dependency_manifests(project_path)`
 
-> *Source: `src/ingest.py`*
+> *Source: `agentteams/ingest.py`*
 
 Parse all dependency manifest files found in a project directory.
 
@@ -48,7 +48,7 @@ Recognizes: `requirements.txt`, `pyproject.toml`, `package.json`, `Cargo.toml`, 
 
 ### `validate(description)`
 
-> *Source: `src/ingest.py`*
+> *Source: `agentteams/ingest.py`*
 
 Validate a project description dict and return a list of error strings.
 

@@ -4,7 +4,7 @@ Tests for src/scan.py — security scanner for generated agent files.
 
 import pytest
 from pathlib import Path
-from src.scan import scan_directory, scan_content, ScanReport, ScanFinding
+from agentteams.scan import scan_directory, scan_content, ScanReport, ScanFinding
 
 
 # ---------------------------------------------------------------------------

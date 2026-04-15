@@ -57,7 +57,7 @@ You synchronize agent documentation after changes in SalesDataPipeline. When del
 ## Workflow
 
 1. **Detect drift:** Run `python build_team.py --description <brief> --check` to identify templates that have changed since the last build
-2. **Re-render drifted files:** Run `python build_team.py --description <brief> --update` to re-render only changed agent files while preserving manually-filled `{MANUAL:*}` values
+2. **Re-render drifted files:** Run `python build_team.py --description <brief> --update` to re-render only changed agent files while preserving any previously completed manual fields
 3. **Security scan:** Run `python build_team.py --description <brief> --scan-security` to check all agent files for PII, credentials, and unresolved placeholders
 4. Identify any additional changed files not covered by template drift and determine scope of impact
 5. Apply the authority hierarchy to determine which file is ground truth

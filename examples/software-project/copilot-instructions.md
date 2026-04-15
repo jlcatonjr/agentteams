@@ -58,6 +58,7 @@
 - `@technical-validator` — verifies technical accuracy against authority sources
 - `@format-converter` — converts deliverables to final output format
 - `@output-compiler` — assembles components into the final deliverable package
+- `@tool-doc-researcher` — specialized domain agent
 
 ### Workstream Experts
 - `@auth-module-expert` — Authentication Module

@@ -4,7 +4,7 @@ Post-generation audit for agent team files.
 
 Performs two types of checks after the emit phase: static structural checks (conflict detection and presupposition validation, always available) and AI-powered review via the standalone `copilot` CLI (optional, requires authentication).
 
-> *Source: `src/audit.py`*
+> *Source: `agentteams/audit.py`*
 
 ---
 
@@ -12,7 +12,7 @@ Performs two types of checks after the emit phase: static structural checks (con
 
 ### `AuditFinding`
 
-> *Source: `src/audit.py`*
+> *Source: `agentteams/audit.py`*
 
 A single audit finding.
 
@@ -28,7 +28,7 @@ A single audit finding.
 
 ### `AuditResult`
 
-> *Source: `src/audit.py`*
+> *Source: `agentteams/audit.py`*
 
 Aggregated result of a post-generation audit.
 
@@ -52,7 +52,7 @@ Aggregated result of a post-generation audit.
 
 ### `run_post_audit(output_dir, manifest, *, run_ai=True)`
 
-> *Source: `src/audit.py`*
+> *Source: `agentteams/audit.py`*
 
 Run a post-generation audit on the agent files in `output_dir`.
 
@@ -68,7 +68,7 @@ Run a post-generation audit on the agent files in `output_dir`.
 
 ### `print_audit_report(result)`
 
-> *Source: `src/audit.py`*
+> *Source: `agentteams/audit.py`*
 
 Print a human-readable audit report to stdout.
 

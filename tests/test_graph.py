@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import json
 import pytest
-from src.graph import (
+from agentteams.graph import (
     AgentNode,
     GraphEdge,
     TeamGraph,

@@ -4,7 +4,7 @@ Tests for src/emit.py
 
 import pytest
 from pathlib import Path
-from src.emit import emit_all, EmitResult
+from agentteams.emit import emit_all, EmitResult
 
 
 # ---------------------------------------------------------------------------

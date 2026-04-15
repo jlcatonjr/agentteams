@@ -23,6 +23,8 @@ agents:
   - reference-manager
   - output-compiler
   - visual-designer
+  - module-doc-author
+  - module-doc-validator
   - tool-doc-researcher
   - tool-pandoc
   - ch01-introduction-expert

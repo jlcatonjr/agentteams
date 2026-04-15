@@ -16,7 +16,7 @@ Preview locally:
 man ./agentteams.1
 ```
 
-> *Source: `src/man.py`*
+> *Source: `agentteams/man.py`*
 
 ---
 
@@ -24,7 +24,7 @@ man ./agentteams.1
 
 ### `generate_man_page(parser)`
 
-> *Source: `src/man.py`*
+> *Source: `agentteams/man.py`*
 
 Generate a groff man-page source document from an argparse parser.
 

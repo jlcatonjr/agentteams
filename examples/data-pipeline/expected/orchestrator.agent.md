@@ -21,6 +21,8 @@ agents:
   - format-converter
   - output-compiler
   - visual-designer
+  - module-doc-author
+  - module-doc-validator
   - tool-doc-researcher
   - tool-postgresql
   - ingest-expert

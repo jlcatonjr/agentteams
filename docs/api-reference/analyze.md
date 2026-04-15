@@ -4,7 +4,7 @@ Analyze a project description to produce a team manifest.
 
 Takes the normalized description dict from `ingest.load()` and produces a team manifest dict conforming to `schemas/team-manifest.schema.json`.
 
-> *Source: `src/analyze.py`*
+> *Source: `agentteams/analyze.py`*
 
 ---
 
@@ -12,7 +12,7 @@ Takes the normalized description dict from `ingest.load()` and produces a team m
 
 ### `build_manifest(description, *, framework='copilot-vscode')`
 
-> *Source: `src/analyze.py`*
+> *Source: `agentteams/analyze.py`*
 
 Build and return a team manifest from a normalized project description.
 
@@ -27,7 +27,7 @@ Build and return a team manifest from a normalized project description.
 
 ### `classify_project_type(description)`
 
-> *Source: `src/analyze.py`*
+> *Source: `agentteams/analyze.py`*
 
 Return a project type string based on keyword analysis of the description.
 
@@ -41,7 +41,7 @@ Return a project type string based on keyword analysis of the description.
 
 ### `select_archetypes(description)`
 
-> *Source: `src/analyze.py`*
+> *Source: `agentteams/analyze.py`*
 
 Select and return the list of domain agent archetype slugs appropriate for the project.
 
@@ -55,7 +55,7 @@ Select and return the list of domain agent archetype slugs appropriate for the p
 
 ### `classify_tool_importance(tool)`
 
-> *Source: `src/analyze.py`*
+> *Source: `agentteams/analyze.py`*
 
 Classify a single tool dict as `'specialist'`, `'reference'`, or `'passive'`.
 
@@ -69,7 +69,7 @@ Classify a single tool dict as `'specialist'`, `'reference'`, or `'passive'`.
 
 ### `detect_tool_agents(tools)`
 
-> *Source: `src/analyze.py`*
+> *Source: `agentteams/analyze.py`*
 
 Return tool dicts classified as requiring a dedicated tool-specialist agent.
 
@@ -83,7 +83,7 @@ Return tool dicts classified as requiring a dedicated tool-specialist agent.
 
 ### `detect_reference_tools(tools)`
 
-> *Source: `src/analyze.py`*
+> *Source: `agentteams/analyze.py`*
 
 Return tool dicts classified as reference-tier (informational, no dedicated agent).
 
@@ -97,7 +97,7 @@ Return tool dicts classified as reference-tier (informational, no dedicated agen
 
 ### `build_authority_hierarchy(description)`
 
-> *Source: `src/analyze.py`*
+> *Source: `agentteams/analyze.py`*
 
 Build the authority hierarchy list from the project description's `authority_sources` field.
 

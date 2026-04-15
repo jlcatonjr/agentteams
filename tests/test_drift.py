@@ -6,7 +6,7 @@ import json
 import hashlib
 import pytest
 from pathlib import Path
-from src.drift import (
+from agentteams.drift import (
     detect_drift,
     load_build_log,
     DriftReport,

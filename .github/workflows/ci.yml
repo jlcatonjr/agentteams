@@ -27,7 +27,7 @@ jobs:
         run: pytest tests/
 
       - name: Generate man-page for comparison
-        run: python -m src.man > /tmp/agentteams-check.1
+        run: python -m agentteams.man > /tmp/agentteams-check.1
 
       - name: Check man-page is current
         run: diff /tmp/agentteams-check.1 agentteams.1
