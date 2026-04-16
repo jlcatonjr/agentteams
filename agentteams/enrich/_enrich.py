@@ -178,11 +178,14 @@ def auto_enrich(
             if actual_output_file and actual_output_file in content:
                 pass  # Already correct
             elif actual_output_file:
-                # Replace the slug-based fallback path
-                primary_dir = (manifest.get("primary_output_dir") or "").rstrip("/")
+                # Replace the slug-based fallback path — replicate render.py construction exactly
+                render_primary_dir = manifest.get("auto_resolved_placeholders", {}).get(
+                    "PRIMARY_OUTPUT_DIR",
+                    (manifest.get("primary_output_dir") or "src/"),
+                )
                 comp = comp_by_slug.get(comp_slug, {})
                 comp_name_slug = comp.get("name", "").lower().replace(" ", "-")
-                fallback = f"{primary_dir}/{comp_slug}/{comp_name_slug}"
+                fallback = f"{render_primary_dir}{comp_slug}/{comp_name_slug}"
                 if fallback in content:
                     content = content.replace(fallback, actual_output_file)
                     modified = True
@@ -207,10 +210,16 @@ def auto_enrich(
         if not actual_output_file:
             continue
         content = enriched[rel_path]
-        primary_dir = (manifest.get("primary_output_dir") or "").rstrip("/")
+        # Replicate the exact fallback the renderer produces (render.py line 216):
+        # output_file = f"{primary_output_dir}{component['slug']}/{component['name']...}"
+        # primary_output_dir is NOT stripped of trailing slash here — match renderer exactly.
+        render_primary_dir = manifest.get("auto_resolved_placeholders", {}).get(
+            "PRIMARY_OUTPUT_DIR",
+            (manifest.get("primary_output_dir") or "src/"),
+        )
         comp_obj = comp_by_slug.get(comp_slug, {})
         comp_name_slug = comp_obj.get("name", "").lower().replace(" ", "-")
-        fallback = f"{primary_dir}/{comp_slug}/{comp_name_slug}"
+        fallback = f"{render_primary_dir}{comp_slug}/{comp_name_slug}"
         if fallback in content:
             enriched[rel_path] = content.replace(fallback, actual_output_file)
 

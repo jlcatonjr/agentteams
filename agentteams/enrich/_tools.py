@@ -40,6 +40,9 @@ _IMPORT_TO_PACKAGE: dict[str, str] = {
     "xgboost": "xgboost",
     "lightgbm": "lightgbm",
     "helipad": "helipad",
+    "ipywidgets": "ipywidgets", "widgets": "ipywidgets",
+    "pandas_datareader": "pandas-datareader", "pdr": "pandas-datareader",
+    "voila": "voila",
     "flask": "flask",
     "fastapi": "fastapi",
     "sqlalchemy": "SQLAlchemy",
@@ -68,6 +71,9 @@ _CANONICAL_DOCS: dict[str, str] = {
     "spacy": "https://spacy.io/api",
     "transformers": "https://huggingface.co/docs/transformers/index",
     "helipad": "https://helipad.dev/apidocs/",
+    "ipywidgets": "https://ipywidgets.readthedocs.io/en/stable/",
+    "pandas-datareader": "https://pandas-datareader.readthedocs.io/en/latest/",
+    "voila": "https://voila.readthedocs.io/en/stable/",
     "requests": "https://requests.readthedocs.io/en/latest/api/",
     "flask": "https://flask.palletsprojects.com/en/latest/api/",
     "fastapi": "https://fastapi.tiangolo.com/reference/",
@@ -266,6 +272,71 @@ _TOOL_CATALOG: dict[str, dict[str, str]] = {
             "Collect time-series data via model.addPlot() and model.addSeries(). "
             "Pitfall: helipad's interactive GUI requires a Tkinter event loop — "
             "in Jupyter use model.start() rather than model.launchGUI()."
+        ),
+    },
+    "ipywidgets": {
+        "docs_url": "https://ipywidgets.readthedocs.io/en/stable/",
+        "api_surface": (
+            "widgets.IntSlider / FloatSlider(value, min, max, step) — numeric sliders; "
+            "widgets.Dropdown(options, value) — dropdown selector; "
+            "widgets.Checkbox(value) — boolean toggle; "
+            "widgets.Output() — capture display output; "
+            "widgets.HBox / VBox(*children) — layout containers; "
+            "interact(fn, **kwargs) / interactive(fn, **kwargs) — auto-generate UI from function signature; "
+            "widgets.observe(handler, names) — react to value changes; "
+            "display(widget) — render widget in notebook"
+        ),
+        "common_patterns": (
+            "Use interact() or @interact decorator for quick exploratory UIs — "
+            "pass slider ranges as (min, max) or (min, max, step) tuples. "
+            "For more control use interactive() and display its .widget attribute. "
+            "Combine multiple widgets with HBox/VBox for layout. "
+            "Use widgets.Output() context manager to capture prints/plots inside callbacks. "
+            "Pitfall: widgets only render in a live Jupyter kernel — "
+            "use Voilà to serve them as standalone apps or nbconvert --to html for static export. "
+            "Pitfall: observe callbacks fire on every keystroke for Text widgets — "
+            "debounce with a submit Button or use continuous_update=False on sliders."
+        ),
+    },
+    "pandas-datareader": {
+        "docs_url": "https://pandas-datareader.readthedocs.io/en/latest/",
+        "api_surface": (
+            "pdr.DataReader(name, data_source, start, end) — fetch time-series data; "
+            "data_source options: 'fred' (FRED), 'yahoo' (Yahoo Finance), "
+            "'famafrench' (Fama-French), 'wb' (World Bank), 'oecd', 'eurostat'; "
+            "pdr.fred.FredReader(symbols, start, end).read() — direct FRED access; "
+            "pdr.wb.download(indicator, country, start, end) — World Bank data; "
+            "Returns pandas DataFrame indexed by date"
+        ),
+        "common_patterns": (
+            "Use pdr.DataReader('SERIES_ID', 'fred', start='2000-01-01') to fetch FRED series — "
+            "SERIES_ID examples: 'GDP', 'CPIAUCSL', 'FEDFUNDS', 'UNRATE', 'M2SL'. "
+            "Chain with .pct_change() or .diff() for growth rates. "
+            "Pitfall: Yahoo Finance reader is unreliable — prefer yfinance for equity data. "
+            "Pitfall: some data sources require an API key set as environment variable "
+            "(e.g. FRED requires FRED_API_KEY for bulk requests). "
+            "Wrap reads in try/except RemoteDataError for network resilience in notebooks."
+        ),
+    },
+    "voila": {
+        "docs_url": "https://voila.readthedocs.io/en/stable/",
+        "api_surface": (
+            "CLI: voila notebook.ipynb — serve notebook as web app; "
+            "voila --port=8866 --no-browser notebook.ipynb — specify port; "
+            "voila --template=material notebook.ipynb — apply theme; "
+            "voila --strip_sources=True — hide source cells in output; "
+            "binder integration via postBuild + voila server extension; "
+            "Python API: VoilaConfiguration for programmatic config"
+        ),
+        "common_patterns": (
+            "Convert any ipywidgets notebook to a dashboard with `voila notebook.ipynb`. "
+            "For Binder deployment add `voila` to requirements.txt and set URL path to "
+            "`/voila/render/notebook.ipynb` in the Binder badge URL. "
+            "Use --strip_sources=True for student-facing dashboards to hide code cells. "
+            "Pitfall: Voilà re-executes the entire notebook on each page load — "
+            "cache expensive computations or use @lru_cache on data-loading functions. "
+            "Pitfall: widgets that depend on display() must use widgets.Output() — "
+            "bare matplotlib plt.show() calls may not render correctly under Voilà."
         ),
     },
 }
