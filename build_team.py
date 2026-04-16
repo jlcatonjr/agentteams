@@ -209,6 +209,11 @@ def main(argv: list[str] | None = None) -> int:
     framework_id: str = args.framework
     adapter = FRAMEWORKS[framework_id]()
 
+    # --post-audit implies --enrich: auditing un-enriched files gives false positives.
+    # Automatically enable enrichment so the audit sees the fully filled output.
+    if args.post_audit and not args.enrich:
+        args.enrich = True
+
     # -----------------------------------------------------------------------
     # Step 1: Ingest
     # -----------------------------------------------------------------------

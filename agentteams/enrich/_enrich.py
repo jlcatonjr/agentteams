@@ -162,40 +162,18 @@ def auto_enrich(
                     finding.status = "auto_filled"
                     modified = True
 
-        # --- Fix COMPONENT_OUTPUT_FILE to use actual notebook path ---
-        # The renderer emits a slug-based fallback path; replace it if we know the real notebook.
-        agent_slug = Path(rel_path).stem.replace(".agent", "")
-        if agent_slug.endswith("-expert"):
-            comp_slug = agent_slug[: -len("-expert")]
-            if comp_slug not in comp_fills_cache:
-                comp = comp_by_slug.get(comp_slug)
-                if comp:
-                    comp_fills_cache[comp_slug] = _build_component_fills(
-                        comp, project_path, manifest
-                    )
-            comp_fills = comp_fills_cache.get(comp_slug, {})
-            actual_output_file = comp_fills.get("COMPONENT_OUTPUT_FILE", "")
-            if actual_output_file and actual_output_file in content:
-                pass  # Already correct
-            elif actual_output_file:
-                # Replace the slug-based fallback path — replicate render.py construction exactly
-                render_primary_dir = manifest.get("auto_resolved_placeholders", {}).get(
-                    "PRIMARY_OUTPUT_DIR",
-                    (manifest.get("primary_output_dir") or "src/"),
-                )
-                comp = comp_by_slug.get(comp_slug, {})
-                comp_name_slug = comp.get("name", "").lower().replace(" ", "-")
-                fallback = f"{render_primary_dir}{comp_slug}/{comp_name_slug}"
-                if fallback in content:
-                    content = content.replace(fallback, actual_output_file)
-                    modified = True
-
         if modified:
             _comment_re = re.compile(r"\n<!-- .+? -->\n", re.DOTALL)
             content = _comment_re.sub("\n", content)
             enriched[rel_path] = content
 
-    # --- Pass 2: Fix COMPONENT_OUTPUT_FILE for ALL expert files (not just those with findings) ---
+    # --- Pass 2: Fix COMPONENT_OUTPUT_FILE and enrich cross-refs/tool-deps for ALL expert files ---
+    # render.py fills COMPONENT_CROSS_REFS and COMPONENT_TOOLS with default sentinel strings
+    # ("None specified." / "No tool-specific dependencies.") when the brief has no explicit data.
+    # The enricher now replaces those sentinels with values computed from notebook scanning.
+    _CROSS_REF_SENTINEL = "None specified."
+    _TOOLS_SENTINEL = "No tool-specific dependencies."
+
     for rel_path in list(enriched):
         agent_slug = Path(rel_path).stem.replace(".agent", "")
         if not agent_slug.endswith("-expert"):
@@ -206,22 +184,45 @@ def auto_enrich(
             if comp:
                 comp_fills_cache[comp_slug] = _build_component_fills(comp, project_path, manifest)
         comp_fills = comp_fills_cache.get(comp_slug, {})
-        actual_output_file = comp_fills.get("COMPONENT_OUTPUT_FILE", "")
-        if not actual_output_file:
-            continue
         content = enriched[rel_path]
-        # Replicate the exact fallback the renderer produces (render.py line 216):
-        # output_file = f"{primary_output_dir}{component['slug']}/{component['name']...}"
-        # primary_output_dir is NOT stripped of trailing slash here — match renderer exactly.
-        render_primary_dir = manifest.get("auto_resolved_placeholders", {}).get(
-            "PRIMARY_OUTPUT_DIR",
-            (manifest.get("primary_output_dir") or "src/"),
-        )
-        comp_obj = comp_by_slug.get(comp_slug, {})
-        comp_name_slug = comp_obj.get("name", "").lower().replace(" ", "-")
-        fallback = f"{render_primary_dir}{comp_slug}/{comp_name_slug}"
-        if fallback in content:
-            enriched[rel_path] = content.replace(fallback, actual_output_file)
+        changed = False
+
+        # Fix COMPONENT_OUTPUT_FILE fallback path
+        actual_output_file = comp_fills.get("COMPONENT_OUTPUT_FILE", "")
+        if actual_output_file:
+            render_primary_dir = manifest.get("auto_resolved_placeholders", {}).get(
+                "PRIMARY_OUTPUT_DIR",
+                (manifest.get("primary_output_dir") or "src/"),
+            )
+            comp_obj = comp_by_slug.get(comp_slug, {})
+            comp_name_slug = comp_obj.get("name", "").lower().replace(" ", "-")
+            fallback = f"{render_primary_dir}{comp_slug}/{comp_name_slug}"
+            if fallback in content:
+                content = content.replace(fallback, actual_output_file)
+                changed = True
+
+        # Replace cross-ref sentinel with inferred prev/next component references
+        inferred_cross_refs = comp_fills.get("COMPONENT_CROSS_REFS", "")
+        if (
+            inferred_cross_refs
+            and inferred_cross_refs != _CROSS_REF_SENTINEL
+            and _CROSS_REF_SENTINEL in content
+        ):
+            content = content.replace(_CROSS_REF_SENTINEL, inferred_cross_refs, 1)
+            changed = True
+
+        # Replace tool-deps sentinel with imports scanned from notebook
+        inferred_tools = comp_fills.get("COMPONENT_TOOLS", "")
+        if (
+            inferred_tools
+            and inferred_tools != _TOOLS_SENTINEL
+            and _TOOLS_SENTINEL in content
+        ):
+            content = content.replace(_TOOLS_SENTINEL, inferred_tools, 1)
+            changed = True
+
+        if changed:
+            enriched[rel_path] = content
 
     # --- Generate stub reference files for MISSING_TOOL_REF findings ---
     missing_ref_findings = [
