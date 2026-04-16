@@ -2,7 +2,7 @@
 .SH NAME
 agentteams \- Generate a complete agent team for any project.
 .SH SYNOPSIS
-.B agentteams [--description PATH] [--project PATH] [--framework NAME] [--output DIR] [--dry-run] [--overwrite] [--yes] [--no-scan] [--update] [--prune] [--check] [--scan-security] [--self] [--post-audit] [--auto-correct] [--version]
+.B agentteams [--description PATH] [--project PATH] [--framework NAME] [--output DIR] [--dry-run] [--overwrite] [--yes] [--no-scan] [--update] [--prune] [--check] [--scan-security] [--self] [--post-audit] [--auto-correct] [--enrich] [--version]
 .SH DESCRIPTION
 .PP
 Generate a complete agent team for any project.
@@ -56,6 +56,9 @@ Run a post\-generation audit after emit. Performs static checks (unresolved plac
 .TP
 .B \-\-auto\-correct
 After \-\-post\-audit finds issues, invoke the standalone `copilot` CLI in non\-interactive mode to repair generated team files, then rerun the audit.
+.TP
+.B \-\-enrich
+After generating the team, scan for default template elements (unresolved \\(lCMANUAL:*\\(rC placeholders, underdeveloped sections, incomplete tool metadata) and attempt context\-aware auto\-enrichment. Exports a defaults\-audit.csv to the references/ directory. Combine with \-\-post\-audit to also run AI\-powered enrichment.
 .TP
 .B \-\-version
 show program's version number and exit
