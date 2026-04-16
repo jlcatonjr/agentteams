@@ -25,6 +25,11 @@ Options:
     --check               Check for template drift and structural changes (exit code 1 if found)
     --scan-security       Scan agent files for security issues
     --auto-correct        After post-audit findings, invoke standalone `copilot` CLI to repair files
+    --migrate             One-step legacy fencing migration: tag the current state as
+                          pre-fencing-snapshot, overwrite all agent files with fenced templates,
+                          and print a quality-audit checklist. Use --revert-migration to undo.
+    --revert-migration    Undo a --migrate run: git reset --hard pre-fencing-snapshot and delete
+                          the tag. Requires the project directory to be a git repository.
     --version             Print version and exit
 """
 
@@ -206,6 +211,26 @@ def _build_parser() -> argparse.ArgumentParser:
         ),
     )
     parser.add_argument(
+        "--migrate",
+        action="store_true",
+        help=(
+            "One-step legacy fencing migration. Tags the current git state as "
+            "'pre-fencing-snapshot', then runs --overwrite to regenerate all agent files "
+            "with fenced templates. Prints a quality-audit checklist on completion. "
+            "Use --revert-migration to undo."
+        ),
+    )
+    parser.add_argument(
+        "--revert-migration",
+        action="store_true",
+        dest="revert_migration",
+        help=(
+            "Undo a previous --migrate run. Runs 'git reset --hard pre-fencing-snapshot' "
+            "in the project directory and deletes the 'pre-fencing-snapshot' tag. "
+            "Requires the project directory to be a git repository with that tag present."
+        ),
+    )
+    parser.add_argument(
         "--version",
         action="version",
         version=f"%(prog)s {__version__}",
@@ -234,6 +259,22 @@ def main(argv: list[str] | None = None) -> int:
         if not args.output:
             args.output = str(_SCRIPT_DIR / ".github" / "agents")
         print(f"Self-maintenance mode: using {self_desc.name}")
+
+    # -----------------------------------------------------------------------
+    # --revert-migration: undo a previous --migrate run
+    # -----------------------------------------------------------------------
+    if args.revert_migration:
+        project_dir = Path(args.project).resolve() if args.project else Path.cwd()
+        return _run_revert_migration(project_dir)
+
+    # -----------------------------------------------------------------------
+    # --migrate: tag + overwrite (delegates back into main with --overwrite)
+    # -----------------------------------------------------------------------
+    if args.migrate:
+        if not args.description:
+            parser.error("--description is required with --migrate")
+        project_dir = Path(args.project).resolve() if args.project else Path.cwd()
+        return _run_migrate(project_dir, argv or sys.argv[1:])
 
     if not args.description:
         parser.error("--description is required (or use --self for self-maintenance)")
@@ -847,6 +888,159 @@ def _write_run_log(manifest: dict, result: emit.EmitResult, output_dir: Path, te
     log_path = output_dir / "references" / "build-log.json"
     log_path.parent.mkdir(parents=True, exist_ok=True)
     log_path.write_text(json.dumps(log, indent=2), encoding="utf-8")
+
+
+# ---------------------------------------------------------------------------
+# Migration helpers
+# ---------------------------------------------------------------------------
+
+import subprocess as _subprocess
+
+
+def _git(args: list[str], cwd: Path) -> tuple[int, str, str]:
+    """Run a git command in cwd and return (returncode, stdout, stderr)."""
+    result = _subprocess.run(
+        ["git"] + args,
+        cwd=str(cwd),
+        capture_output=True,
+        text=True,
+    )
+    return result.returncode, result.stdout.strip(), result.stderr.strip()
+
+
+_MIGRATION_TAG = "pre-fencing-snapshot"
+
+
+def _run_migrate(project_dir: Path, original_argv: list[str]) -> int:
+    """Create the pre-fencing snapshot tag, then run --overwrite.
+
+    Args:
+        project_dir:   The project directory (must be a git repository).
+        original_argv: The original sys.argv[1:] so we can delegate to --overwrite.
+
+    Returns:
+        0 on success, 1 on failure.
+    """
+    # Confirm git repo
+    rc, _, err = _git(["rev-parse", "--git-dir"], project_dir)
+    if rc != 0:
+        print(
+            f"Error: {project_dir} is not a git repository. "
+            "--migrate requires a git repository to create the safety snapshot.",
+            file=sys.stderr,
+        )
+        return 1
+
+    # Check for uncommitted changes (warn only; don't block)
+    rc2, status_out, _ = _git(["status", "--porcelain"], project_dir)
+    if rc2 == 0 and status_out:
+        print(
+            "  ⚠  Uncommitted changes detected. The snapshot tag will capture the "
+            "current HEAD commit, not the working-tree state. Consider committing first."
+        )
+
+    # Create snapshot tag (fail if it already exists)
+    rc3, _, tag_err = _git(["tag", _MIGRATION_TAG], project_dir)
+    if rc3 != 0:
+        if "already exists" in tag_err or "already a tag" in tag_err.lower():
+            print(
+                f"Error: tag '{_MIGRATION_TAG}' already exists in {project_dir}. "
+                "Delete it first with: git tag -d pre-fencing-snapshot",
+                file=sys.stderr,
+            )
+        else:
+            print(f"Error creating snapshot tag: {tag_err}", file=sys.stderr)
+        return 1
+
+    print(f"  ✓  Snapshot tag '{_MIGRATION_TAG}' created at HEAD.")
+
+    # Re-invoke main() with --overwrite replacing --migrate; force --yes
+    new_argv = [a for a in original_argv if a not in ("--migrate", "--revert-migration")]
+    if "--overwrite" not in new_argv:
+        new_argv.append("--overwrite")
+    if "--yes" not in new_argv and "-y" not in new_argv:
+        new_argv.append("--yes")
+
+    print("  Running --overwrite migration...\n")
+    rc_emit = main(new_argv)
+
+    if rc_emit != 0:
+        print(
+            f"\n  ⚠  Overwrite failed. Snapshot tag '{_MIGRATION_TAG}' preserved for rollback.",
+            file=sys.stderr,
+        )
+        return rc_emit
+
+    # Post-migration guidance
+    print(
+        f"\n{'='*70}\n"
+        "MIGRATION COMPLETE — Quality Audit Checklist\n"
+        f"{'='*70}\n"
+        "1. Review lost project-specific content:\n"
+        f"   git diff {_MIGRATION_TAG} HEAD -- .github/agents/orchestrator.agent.md\n"
+        "\n"
+        "2. Restore any project-specific rules inside the USER-EDITABLE zone:\n"
+        "   Add a '### <Project> Project Rules' subsection under '### Rules'\n"
+        "   in orchestrator.agent.md — this section survives all future --merge runs.\n"
+        "\n"
+        "3. Once satisfied, commit the migrated files:\n"
+        "   git add .github/agents/ && git commit -m 'chore: fence-migrate agent team'\n"
+        "\n"
+        "4. Future updates use --merge (non-destructive):\n"
+        "   agentteams --description .github/agents/_build-description.json \\\n"
+        "              --framework copilot-vscode --project . --merge --yes\n"
+        "\n"
+        "To roll back at any time (before committing):\n"
+        f"   agentteams --revert-migration --project {project_dir}\n"
+        f"{'='*70}"
+    )
+    return 0
+
+
+def _run_revert_migration(project_dir: Path) -> int:
+    """Undo a --migrate run: git reset --hard pre-fencing-snapshot and delete the tag.
+
+    Args:
+        project_dir: The project directory (must be a git repository with the tag).
+
+    Returns:
+        0 on success, 1 on failure.
+    """
+    rc, _, _ = _git(["rev-parse", "--git-dir"], project_dir)
+    if rc != 0:
+        print(
+            f"Error: {project_dir} is not a git repository.",
+            file=sys.stderr,
+        )
+        return 1
+
+    # Verify the tag exists
+    rc2, tag_sha, _ = _git(["rev-parse", "--verify", _MIGRATION_TAG], project_dir)
+    if rc2 != 0:
+        print(
+            f"Error: tag '{_MIGRATION_TAG}' not found in {project_dir}. "
+            "Nothing to revert.",
+            file=sys.stderr,
+        )
+        return 1
+
+    print(f"  Reverting to snapshot tag '{_MIGRATION_TAG}' ({tag_sha[:12]})...")
+
+    rc3, _, reset_err = _git(["reset", "--hard", _MIGRATION_TAG], project_dir)
+    if rc3 != 0:
+        print(f"Error: git reset --hard failed: {reset_err}", file=sys.stderr)
+        return 1
+
+    print(f"  ✓  Working tree restored to {_MIGRATION_TAG}.")
+
+    rc4, _, del_err = _git(["tag", "-d", _MIGRATION_TAG], project_dir)
+    if rc4 != 0:
+        print(f"  ⚠  Could not delete tag: {del_err}", file=sys.stderr)
+    else:
+        print(f"  ✓  Tag '{_MIGRATION_TAG}' deleted.")
+
+    print("\n  Revert complete. Agent files are back to their pre-migration state.")
+    return 0
 
 
 # ---------------------------------------------------------------------------

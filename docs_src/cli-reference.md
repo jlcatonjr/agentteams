@@ -8,9 +8,10 @@ All flags for the `agentteams` command (entry point: `build_team.py`).
 
 ```
 agentteams [--description PATH] [--project PATH] [--framework NAME]
-           [--output DIR] [--dry-run] [--overwrite] [--yes]
+           [--output DIR] [--dry-run] [--overwrite] [--merge] [--yes]
            [--no-scan] [--update] [--prune] [--check]
            [--scan-security] [--self] [--post-audit] [--auto-correct]
+           [--migrate] [--revert-migration]
            [--version]
 ```
 
@@ -83,6 +84,50 @@ Run a post-generation audit after emit. Performs static checks (unresolved place
 ### `--auto-correct`
 
 Used with `--post-audit`: after audit finds issues, invoke the standalone `copilot` CLI in non-interactive mode to repair generated team files, then rerun the audit to confirm.
+
+---
+
+## Legacy Fencing Migration
+
+### `--migrate`
+
+One-step migration for repositories that have legacy (unfenced) agent files. Performs two operations atomically:
+
+1. Creates a git tag `pre-fencing-snapshot` at the current HEAD commit — this is the safety rollback point.
+2. Runs `--overwrite --yes` to regenerate all agent files with fenced templates.
+
+After completion, prints a **quality-audit checklist** guiding you to:
+
+- Review `git diff pre-fencing-snapshot HEAD` for lost project-specific content
+- Restore any custom rules to the `USER-EDITABLE` zone in `orchestrator.agent.md`
+- Commit the migrated files
+- Switch to `--merge` for all future updates
+
+Requires `--description`. The project directory must be a git repository.
+
+```bash
+agentteams \
+  --description .github/agents/_build-description.json \
+  --framework copilot-vscode \
+  --project /path/to/project \
+  --migrate
+```
+
+### `--revert-migration`
+
+Undoes a previous `--migrate` run. Runs `git reset --hard pre-fencing-snapshot` in the project directory and deletes the `pre-fencing-snapshot` tag. All overwritten agent files are restored to their pre-migration state.
+
+Requires the project directory to be a git repository with the `pre-fencing-snapshot` tag present. Use `--project` to specify a different directory than `cwd`.
+
+```bash
+agentteams --revert-migration --project /path/to/project
+```
+
+> **Note:** `--revert-migration` only resets the working tree and index. If you have already pushed the migrated commit to a remote, a force-push is required. That step is intentionally left to the user.
+
+---
+
+## Other Options
 
 ### `--version`
 

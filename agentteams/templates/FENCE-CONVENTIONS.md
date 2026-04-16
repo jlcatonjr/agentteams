@@ -102,7 +102,7 @@ Given a newly-rendered file and an existing on-disk file:
 
 | Situation | Behavior |
 |---|---|
-| Legacy file (no fence markers) | `--merge` emits `MergeResult.parse_errors` entry; file is skipped. User must run `--overwrite` or manually add fences. |
+| Legacy file (no fence markers) | `--merge` emits `MergeResult.parse_errors` entry; file is skipped. Use `--migrate` for a one-step safe migration: it tags the current state as `pre-fencing-snapshot`, then runs `--overwrite`. Use `--revert-migration` to undo. |
 | Duplicate `section_id` in a single file | Parse error; merge is aborted for that file. Record in `MergeResult.parse_errors`. |
 | Unclosed fence (BEGIN with no matching END) | Parse error; merge is aborted for that file. Record in `MergeResult.parse_errors`. |
 | Mismatched `section_id` on END marker | Parse error; merge is aborted for that file. |
