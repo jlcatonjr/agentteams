@@ -10,7 +10,8 @@ All flags for the `agentteams` command (entry point: `build_team.py`).
 agentteams [--description PATH] [--project PATH] [--framework NAME]
            [--output DIR] [--dry-run] [--overwrite] [--merge] [--yes]
            [--no-scan] [--update] [--prune] [--check]
-           [--scan-security] [--self] [--post-audit] [--auto-correct]
+           [--scan-security] [--self] [--post-audit] [--auto-correct] [--enrich]
+           [--security-offline] [--security-max-items N] [--security-no-nvd]
            [--migrate] [--revert-migration]
            [--version]
 ```
@@ -49,6 +50,10 @@ Show what would be generated without writing any files. Useful for previewing ou
 
 Overwrite existing agent files without prompting. Default behavior: prompt for each existing file.
 
+### `--merge`
+
+Update only template-fenced regions in existing agent files, preserving all user-authored content outside fence markers. Skips legacy files (no fence markers) with a warning. Use this instead of `--overwrite` for all routine updates once a team has been migrated with `--migrate`.
+
 ### `--yes` / `-y`
 
 Non-interactive mode: answer yes to all prompts automatically.
@@ -84,6 +89,28 @@ Run a post-generation audit after emit. Performs static checks (unresolved place
 ### `--auto-correct`
 
 Used with `--post-audit`: after audit finds issues, invoke the standalone `copilot` CLI in non-interactive mode to repair generated team files, then rerun the audit to confirm.
+
+### `--enrich`
+
+Run AI enrichment after generation. Uses the `copilot` CLI (if available) to review and improve generated agent files. Automatically enabled when `--post-audit` is used.
+
+---
+
+## Security Intelligence Options
+
+These flags control the live vulnerability feed used when rendering security-reference agent files.
+
+### `--security-offline`
+
+Use the cached security vulnerability snapshot only — no network fetch. Useful in CI environments or when working without internet access.
+
+### `--security-max-items N`
+
+Maximum number of current vulnerabilities to include in generated security references. Default: `15`.
+
+### `--security-no-nvd`
+
+Skip NVD CVSS enrichment. Avoids approximately 7 seconds of per-CVE rate-limit sleep. CISA KEV and EPSS data are still fetched.
 
 ---
 

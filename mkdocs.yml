@@ -42,6 +42,7 @@ nav:
       - scan: api-reference/scan.md
       - audit: api-reference/audit.md
       - remediate: api-reference/remediate.md
+      - enrich: api-reference/enrich.md
       - graph: api-reference/graph.md
       - frameworks: api-reference/frameworks.md
       - man: api-reference/man.md
