@@ -129,3 +129,11 @@ The same template library targets three frameworks via adapters in `agentteams/f
 | `claude` | Plain `.md` + `CLAUDE.md` | Claude Projects |
 
 Each adapter in `agentteams/frameworks/` knows the file naming conventions, front-matter schema, and handoff syntax for its target framework.
+
+---
+
+## Using a Coding Agent to Run the Pipeline
+
+The four-stage pipeline can be driven entirely by a coding agent. Instead of running CLI commands manually, you describe what you want in plain language and the agent drafts the brief, generates the team, resolves placeholders, and audits the result.
+
+See [Agent-Assisted Setup](agent-assisted-setup.md) for the full workflow and ready-to-use prompt templates.
