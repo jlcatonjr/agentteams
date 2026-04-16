@@ -54,6 +54,8 @@ flowchart LR
     class quality_auditor domain
     reference_manager["Reference Manager"]
     class reference_manager domain
+    repo_liaison["Repo Liaison"]
+    class repo_liaison unknown
     security["Security"]
     class security governance
     style_guardian["Style Guardian"]
@@ -86,6 +88,7 @@ flowchart LR
     orchestrator -->|"Clean Up Artifacts"| cleanup
     orchestrator -->|"Update Agent Docs"| agent_updater
     orchestrator -->|"Refactor Agent Docs"| agent_refactor
+    orchestrator -->|"Cross-Repository Liaison"| repo_liaison
     navigator -->|"Return to Orchestrator"| orchestrator
     security -->|"Return to Orchestrator"| orchestrator
     code_hygiene -->|"Security Clearance (for Deletions)"| security
@@ -113,6 +116,9 @@ flowchart LR
     agent_refactor -->|"Run Conflict Audit"| conflict_auditor
     agent_refactor -->|"Return to Orchestrator"| orchestrator
     agent_refactor -.-> conflict_auditor
+    repo_liaison -->|"Return to Orchestrator"| orchestrator
+    repo_liaison -->|"Security Review for Cross-Repo Write"| security
+    repo_liaison -->|"Conflict Audit After Cross-Repo Change"| conflict_auditor
     primary_producer -->|"Style Audit"| style_guardian
     primary_producer -->|"Cohesion Audit"| cohesion_repairer
     primary_producer -->|"Quality Audit"| quality_auditor
@@ -236,6 +242,7 @@ flowchart LR
 | `primary-producer` | domain | No | read, edit, search |
 | `quality-auditor` | domain | No | read, search |
 | `reference-manager` | domain | No | read, edit, search |
+| `repo-liaison` | unknown | No | read, edit, search, execute, agent |
 | `security` | governance | No | read, search |
 | `style-guardian` | domain | No | read, edit, search |
 | `team-builder` | governance | Yes | read, edit, search, execute, todo |
@@ -258,19 +265,20 @@ flowchart LR
 | `cleanup` | `code-hygiene`, `orchestrator` | `orchestrator` |
 | `code-hygiene` | `orchestrator` | `agent-refactor`, `cleanup`, `conflict-auditor`, `orchestrator`, `security` |
 | `cohesion-repairer` | `orchestrator`, `primary-producer`, `quality-auditor` | `orchestrator`, `quality-auditor`, `style-guardian` |
-| `conflict-auditor` | `adversarial`, `agent-refactor`, `agent-updater`, `code-hygiene`, `module-doc-author`, `module-doc-validator`, `orchestrator`, `primary-producer`, `reference-manager`, `technical-validator` | `agent-updater`, `conflict-resolution`, `orchestrator`, `technical-validator` |
+| `conflict-auditor` | `adversarial`, `agent-refactor`, `agent-updater`, `code-hygiene`, `module-doc-author`, `module-doc-validator`, `orchestrator`, `primary-producer`, `reference-manager`, `repo-liaison`, `technical-validator` | `agent-updater`, `conflict-resolution`, `orchestrator`, `technical-validator` |
 | `conflict-resolution` | `conflict-auditor`, `orchestrator` | `agent-updater`, `orchestrator` |
 | `content-enricher` | — | `orchestrator`, `primary-producer`, `technical-validator` |
 | `format-converter` | `orchestrator`, `output-compiler`, `visual-designer` | `orchestrator`, `output-compiler`, `quality-auditor` |
 | `module-doc-author` | `module-doc-validator` | `conflict-auditor`, `module-doc-validator`, `orchestrator` |
 | `module-doc-validator` | `module-doc-author` | `conflict-auditor`, `module-doc-author`, `orchestrator` |
 | `navigator` | `orchestrator` | `orchestrator` |
-| `orchestrator` | `adversarial`, `agent-refactor`, `agent-updater`, `ch01-introduction-expert`, `ch02-literature-expert`, `cleanup`, `code-hygiene`, `cohesion-repairer`, `conflict-auditor`, `conflict-resolution`, `content-enricher`, `format-converter`, `module-doc-author`, `module-doc-validator`, `navigator`, `output-compiler`, `primary-producer`, `quality-auditor`, `reference-manager`, `security`, `style-guardian`, `technical-validator`, `tool-doc-researcher`, `tool-pandoc`, `visual-designer` | `adversarial`, `agent-refactor`, `agent-updater`, `cleanup`, `code-hygiene`, `cohesion-repairer`, `conflict-auditor`, `conflict-resolution`, `format-converter`, `navigator`, `output-compiler`, `primary-producer`, `quality-auditor`, `reference-manager`, `security`, `style-guardian`, `technical-validator`, `visual-designer` |
+| `orchestrator` | `adversarial`, `agent-refactor`, `agent-updater`, `ch01-introduction-expert`, `ch02-literature-expert`, `cleanup`, `code-hygiene`, `cohesion-repairer`, `conflict-auditor`, `conflict-resolution`, `content-enricher`, `format-converter`, `module-doc-author`, `module-doc-validator`, `navigator`, `output-compiler`, `primary-producer`, `quality-auditor`, `reference-manager`, `repo-liaison`, `security`, `style-guardian`, `technical-validator`, `tool-doc-researcher`, `tool-pandoc`, `visual-designer` | `adversarial`, `agent-refactor`, `agent-updater`, `cleanup`, `code-hygiene`, `cohesion-repairer`, `conflict-auditor`, `conflict-resolution`, `format-converter`, `navigator`, `output-compiler`, `primary-producer`, `quality-auditor`, `reference-manager`, `repo-liaison`, `security`, `style-guardian`, `technical-validator`, `visual-designer` |
 | `output-compiler` | `format-converter`, `orchestrator` | `format-converter`, `orchestrator`, `technical-validator` |
 | `primary-producer` | `ch01-introduction-expert`, `ch02-literature-expert`, `content-enricher`, `orchestrator`, `quality-auditor`, `style-guardian`, `technical-validator` | `cohesion-repairer`, `conflict-auditor`, `orchestrator`, `quality-auditor`, `style-guardian` |
 | `quality-auditor` | `cohesion-repairer`, `format-converter`, `orchestrator`, `primary-producer`, `visual-designer` | `cohesion-repairer`, `orchestrator`, `primary-producer`, `style-guardian` |
 | `reference-manager` | `ch01-introduction-expert`, `ch02-literature-expert`, `orchestrator`, `technical-validator` | `conflict-auditor`, `orchestrator` |
-| `security` | `code-hygiene`, `orchestrator`, `tool-pandoc` | `orchestrator` |
+| `repo-liaison` | `orchestrator` | `conflict-auditor`, `orchestrator`, `security` |
+| `security` | `code-hygiene`, `orchestrator`, `repo-liaison`, `tool-pandoc` | `orchestrator` |
 | `style-guardian` | `cohesion-repairer`, `orchestrator`, `primary-producer`, `quality-auditor` | `orchestrator`, `primary-producer` |
 | `team-builder` | — | — |
 | `technical-validator` | `conflict-auditor`, `content-enricher`, `orchestrator`, `output-compiler`, `tool-pandoc` | `conflict-auditor`, `orchestrator`, `primary-producer`, `reference-manager` |
@@ -310,6 +318,7 @@ digraph "ResearchPaperProject Agent Team" {
     "primary-producer" [label="Primary Producer", fillcolor="#e8ffe8"];
     "quality-auditor" [label="Quality Auditor", fillcolor="#e8ffe8"];
     "reference-manager" [label="Reference Manager", fillcolor="#e8ffe8"];
+    "repo-liaison" [label="Repo Liaison", fillcolor="#f5f5f5"];
     "security" [label="Security", fillcolor="#e8e8ff"];
     "style-guardian" [label="Style Guardian", fillcolor="#e8ffe8"];
     "team-builder" [label="Team Builder", fillcolor="#e8e8ff"];
@@ -335,6 +344,7 @@ digraph "ResearchPaperProject Agent Team" {
     "orchestrator" -> "cleanup" [style=solid, label="Clean Up Artifacts"];
     "orchestrator" -> "agent-updater" [style=solid, label="Update Agent Docs"];
     "orchestrator" -> "agent-refactor" [style=solid, label="Refactor Agent Docs"];
+    "orchestrator" -> "repo-liaison" [style=solid, label="Cross-Repository Liaison"];
     "navigator" -> "orchestrator" [style=solid, label="Return to Orchestrator"];
     "security" -> "orchestrator" [style=solid, label="Return to Orchestrator"];
     "code-hygiene" -> "security" [style=solid, label="Security Clearance (for Deletions)"];
@@ -356,6 +366,9 @@ digraph "ResearchPaperProject Agent Team" {
     "agent-updater" -> "orchestrator" [style=solid, label="Return to Orchestrator"];
     "agent-refactor" -> "conflict-auditor" [style=solid, label="Run Conflict Audit"];
     "agent-refactor" -> "orchestrator" [style=solid, label="Return to Orchestrator"];
+    "repo-liaison" -> "orchestrator" [style=solid, label="Return to Orchestrator"];
+    "repo-liaison" -> "security" [style=solid, label="Security Review for Cross-Repo Write"];
+    "repo-liaison" -> "conflict-auditor" [style=solid, label="Conflict Audit After Cross-Repo Change"];
     "primary-producer" -> "style-guardian" [style=solid, label="Style Audit"];
     "primary-producer" -> "cohesion-repairer" [style=solid, label="Cohesion Audit"];
     "primary-producer" -> "quality-auditor" [style=solid, label="Quality Audit"];
@@ -618,6 +631,18 @@ digraph "ResearchPaperProject Agent Team" {
         "search"
       ]
     },
+    "repo-liaison": {
+      "display_name": "Repo Liaison",
+      "agent_type": "unknown",
+      "user_invokable": false,
+      "tools": [
+        "read",
+        "edit",
+        "search",
+        "execute",
+        "agent"
+      ]
+    },
     "security": {
       "display_name": "Security",
       "agent_type": "governance",
@@ -800,6 +825,12 @@ digraph "ResearchPaperProject Agent Team" {
       "label": "Refactor Agent Docs"
     },
     {
+      "source": "orchestrator",
+      "target": "repo-liaison",
+      "edge_type": "handoff",
+      "label": "Cross-Repository Liaison"
+    },
+    {
       "source": "navigator",
       "target": "orchestrator",
       "edge_type": "handoff",
@@ -960,6 +991,24 @@ digraph "ResearchPaperProject Agent Team" {
       "target": "conflict-auditor",
       "edge_type": "agents-list",
       "label": null
+    },
+    {
+      "source": "repo-liaison",
+      "target": "orchestrator",
+      "edge_type": "handoff",
+      "label": "Return to Orchestrator"
+    },
+    {
+      "source": "repo-liaison",
+      "target": "security",
+      "edge_type": "handoff",
+      "label": "Security Review for Cross-Repo Write"
+    },
+    {
+      "source": "repo-liaison",
+      "target": "conflict-auditor",
+      "edge_type": "handoff",
+      "label": "Conflict Audit After Cross-Repo Change"
     },
     {
       "source": "primary-producer",
@@ -1482,6 +1531,7 @@ digraph "ResearchPaperProject Agent Team" {
       "primary-producer",
       "quality-auditor",
       "reference-manager",
+      "repo-liaison",
       "security",
       "style-guardian",
       "technical-validator",
@@ -1525,6 +1575,11 @@ digraph "ResearchPaperProject Agent Team" {
     "agent-refactor": [
       "conflict-auditor",
       "orchestrator"
+    ],
+    "repo-liaison": [
+      "conflict-auditor",
+      "orchestrator",
+      "security"
     ],
     "primary-producer": [
       "cohesion-repairer",

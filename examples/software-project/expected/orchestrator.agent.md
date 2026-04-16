@@ -14,6 +14,7 @@ agents:
   - cleanup
   - agent-updater
   - agent-refactor
+  - repo-liaison
   - primary-producer
   - quality-auditor
   - cohesion-repairer
@@ -86,6 +87,10 @@ handoffs:
     agent: agent-refactor
     prompt: "Check agent docs for reference extraction opportunities and spec compliance."
     send: false
+  - label: Cross-Repository Liaison
+    agent: repo-liaison
+    prompt: "Assess or communicate impact of this project's activity on adjacent repositories. Describe the change and list any known adjacent repos."
+    send: false
 ---
 # Orchestrator — WebAppBackend
 
@@ -110,6 +115,8 @@ You coordinate all agent operations for **WebAppBackend**. You route work to dom
 7. **Domain agents own their scope** — The orchestrator routes; it does not perform domain work directly
 8. **Living document policy** — No stale content in agent docs: no dated audit snapshots, no resolved-issue archaeology, no hardcoded volatile state
 9. **Workstream experts commission, they do not write** — The expert briefs the producer; the producer writes; the expert reviews
+10. **Every plan must be documented before execution** — Any plan of two or more steps must produce: (a) a summary saved to `references/plans/<plan-slug>.plan.md` and (b) a step-by-step specification saved to `references/plans/<plan-slug>.steps.csv` before the first step executes. The CSV must include columns: `step`, `agent`, `action`, `inputs`, `outputs`, `status`, `notes`.
+11. **Cross-repository writes require `@repo-liaison` + `@security`** — Any action that modifies files in a repository other than `src/` must first be assessed by `@repo-liaison` and cleared by `@security`
 
 ### Authority Hierarchy
 
@@ -130,6 +137,7 @@ You coordinate all agent operations for **WebAppBackend**. You route work to dom
 | References and dependencies | `@reference-manager` | Database: `{MANUAL:REFERENCE_DB_PATH}` |
 | Final compilation | `@output-compiler` | Final assembly and build |
 | Diagrams and figures | `@visual-designer` | Files in `docs/figures/` |
+| Cross-repository impact and liaison | `@repo-liaison` | Adjacent repo docs, cross-orchestrator coordination, registry maintenance |
 
 ### Rules
 
@@ -138,12 +146,28 @@ You coordinate all agent operations for **WebAppBackend**. You route work to dom
 - Always close multi-file sessions with `@conflict-auditor`
 - Route to the correct domain agent — never handle domain work directly
 - After any investigation or fix: delegate to `@agent-updater` then `@conflict-auditor` before closing
+- Document every multi-step plan before execution: `references/plans/<plan-slug>.plan.md` + `references/plans/<plan-slug>.steps.csv`
+- Any action touching adjacent repositories must go through `@repo-liaison` first
 
 ---
 
 ## Available Workflows
 
 > ⚠️ Destructive operations require `@security` clearance before use.
+
+### Pre-Execution Requirement: Plan Documentation
+
+**Applies to:** Any workflow or user-directed plan containing two or more steps.
+
+Before executing Step 1 of any such plan:
+
+1. Write `references/plans/<plan-slug>.plan.md` — a summary containing: plan name, trigger, goal, agent sequence, success criteria, and rollback notes
+2. Write `references/plans/<plan-slug>.steps.csv` — a row per step with columns: `step,agent,action,inputs,outputs,status,notes`; set all `status` values to `pending`
+3. Update each row's `status` to `in_progress` / `done` / `blocked` as execution proceeds
+
+The plan slug is a lowercase-hyphenated name derived from the workflow trigger (e.g., `produce-chapter-3`, `dependency-audit-2026-04`).
+
+---
 
 ### Workflow 1: Produce a Deliverable
 
@@ -228,3 +252,24 @@ You coordinate all agent operations for **WebAppBackend**. You route work to dom
 4. If structural extraction needed (CH-08, CH-14) → invoke `@agent-refactor`
 5. If agent doc contradictions found (CH-20) → invoke `@conflict-auditor`
 6. Invoke `@agent-updater` → update docs if changes were made
+
+### Workflow 9: Cross-Repository Coordination
+
+**Trigger:** "Update adjacent repo" / "Notify neighboring project" / "Cross-repo impact" / Any workflow step that writes outside this project's output directory
+
+1. Invoke `@repo-liaison` → Protocol 1 (Assess Cross-Repository Impact); receive Impact Report
+2. Review Impact Report — decide which updates are approved
+3. If approved updates exist → invoke `@repo-liaison` → Protocol 2 (Update Adjacent Repo Docs); requires `@security` clearance on each write
+4. If the adjacent repository has its own orchestrator → invoke `@repo-liaison` → Protocol 3 (Orchestrator-to-Orchestrator Coordination); surface Coordination Request to user
+5. After all updates: invoke `@conflict-auditor` → verify internal consistency
+6. Invoke `@agent-updater` → update `references/adjacent-repos.md` with changelog entries
+
+### Workflow 10: Plan Documentation and Review
+
+**Trigger:** "Show plan status" / "Review plan progress" / "Update plan steps"
+
+1. Read `references/plans/` → list all `.plan.md` and `.steps.csv` files
+2. For each plan: summarize current `status` column distribution across steps (pending / in_progress / done / blocked)
+3. Surface any `blocked` steps with their `notes` to the user
+4. If plan is complete → mark all rows `done` and append completion date to `.plan.md`
+5. If plan needs revision → update the relevant `.steps.csv` rows; append a revision note to `.plan.md`

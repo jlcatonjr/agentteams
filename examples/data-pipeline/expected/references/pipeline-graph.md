@@ -52,6 +52,8 @@ flowchart LR
     class primary_producer domain
     quality_auditor["Quality Auditor"]
     class quality_auditor domain
+    repo_liaison["Repo Liaison"]
+    class repo_liaison unknown
     security["Security"]
     class security governance
     team_builder["Team Builder"]
@@ -84,6 +86,7 @@ flowchart LR
     orchestrator -->|"Clean Up Artifacts"| cleanup
     orchestrator -->|"Update Agent Docs"| agent_updater
     orchestrator -->|"Refactor Agent Docs"| agent_refactor
+    orchestrator -->|"Cross-Repository Liaison"| repo_liaison
     navigator -->|"Return to Orchestrator"| orchestrator
     security -->|"Return to Orchestrator"| orchestrator
     code_hygiene -->|"Security Clearance (for Deletions)"| security
@@ -111,6 +114,9 @@ flowchart LR
     agent_refactor -->|"Run Conflict Audit"| conflict_auditor
     agent_refactor -->|"Return to Orchestrator"| orchestrator
     agent_refactor -.-> conflict_auditor
+    repo_liaison -->|"Return to Orchestrator"| orchestrator
+    repo_liaison -->|"Security Review for Cross-Repo Write"| security
+    repo_liaison -->|"Conflict Audit After Cross-Repo Change"| conflict_auditor
     primary_producer -->|"Cohesion Audit"| cohesion_repairer
     primary_producer -->|"Quality Audit"| quality_auditor
     primary_producer -->|"Conflict Audit"| conflict_auditor
@@ -225,6 +231,7 @@ flowchart LR
 | `output-compiler` | domain | No | read, edit, execute |
 | `primary-producer` | domain | No | read, edit, search |
 | `quality-auditor` | domain | No | read, search |
+| `repo-liaison` | unknown | No | read, edit, search, execute, agent |
 | `security` | governance | No | read, search |
 | `team-builder` | governance | Yes | read, edit, search, execute, todo |
 | `technical-validator` | domain | No | read, search |
@@ -246,7 +253,7 @@ flowchart LR
 | `cleanup` | `code-hygiene`, `orchestrator` | `orchestrator` |
 | `code-hygiene` | `orchestrator` | `agent-refactor`, `cleanup`, `conflict-auditor`, `orchestrator`, `security` |
 | `cohesion-repairer` | `orchestrator`, `primary-producer`, `quality-auditor` | `orchestrator`, `quality-auditor` |
-| `conflict-auditor` | `adversarial`, `agent-refactor`, `agent-updater`, `code-hygiene`, `module-doc-author`, `module-doc-validator`, `orchestrator`, `primary-producer`, `technical-validator` | `agent-updater`, `conflict-resolution`, `orchestrator`, `technical-validator` |
+| `conflict-auditor` | `adversarial`, `agent-refactor`, `agent-updater`, `code-hygiene`, `module-doc-author`, `module-doc-validator`, `orchestrator`, `primary-producer`, `repo-liaison`, `technical-validator` | `agent-updater`, `conflict-resolution`, `orchestrator`, `technical-validator` |
 | `conflict-resolution` | `conflict-auditor`, `orchestrator` | `agent-updater`, `orchestrator` |
 | `content-enricher` | — | `orchestrator`, `primary-producer`, `technical-validator` |
 | `format-converter` | `orchestrator`, `output-compiler`, `visual-designer` | `orchestrator`, `output-compiler`, `quality-auditor` |
@@ -255,11 +262,12 @@ flowchart LR
 | `module-doc-author` | `module-doc-validator` | `conflict-auditor`, `module-doc-validator`, `orchestrator` |
 | `module-doc-validator` | `module-doc-author` | `conflict-auditor`, `module-doc-author`, `orchestrator` |
 | `navigator` | `orchestrator` | `orchestrator` |
-| `orchestrator` | `adversarial`, `agent-refactor`, `agent-updater`, `cleanup`, `code-hygiene`, `cohesion-repairer`, `conflict-auditor`, `conflict-resolution`, `content-enricher`, `format-converter`, `ingest-expert`, `load-expert`, `module-doc-author`, `module-doc-validator`, `navigator`, `output-compiler`, `primary-producer`, `quality-auditor`, `security`, `technical-validator`, `tool-doc-researcher`, `tool-postgresql`, `transform-expert`, `visual-designer`, `weekly-report-expert` | `adversarial`, `agent-refactor`, `agent-updater`, `cleanup`, `code-hygiene`, `cohesion-repairer`, `conflict-auditor`, `conflict-resolution`, `format-converter`, `navigator`, `output-compiler`, `primary-producer`, `quality-auditor`, `security`, `technical-validator`, `visual-designer` |
+| `orchestrator` | `adversarial`, `agent-refactor`, `agent-updater`, `cleanup`, `code-hygiene`, `cohesion-repairer`, `conflict-auditor`, `conflict-resolution`, `content-enricher`, `format-converter`, `ingest-expert`, `load-expert`, `module-doc-author`, `module-doc-validator`, `navigator`, `output-compiler`, `primary-producer`, `quality-auditor`, `repo-liaison`, `security`, `technical-validator`, `tool-doc-researcher`, `tool-postgresql`, `transform-expert`, `visual-designer`, `weekly-report-expert` | `adversarial`, `agent-refactor`, `agent-updater`, `cleanup`, `code-hygiene`, `cohesion-repairer`, `conflict-auditor`, `conflict-resolution`, `format-converter`, `navigator`, `output-compiler`, `primary-producer`, `quality-auditor`, `repo-liaison`, `security`, `technical-validator`, `visual-designer` |
 | `output-compiler` | `format-converter`, `orchestrator` | `format-converter`, `orchestrator`, `technical-validator` |
 | `primary-producer` | `content-enricher`, `ingest-expert`, `load-expert`, `orchestrator`, `quality-auditor`, `technical-validator`, `transform-expert`, `weekly-report-expert` | `cohesion-repairer`, `conflict-auditor`, `orchestrator`, `quality-auditor` |
 | `quality-auditor` | `cohesion-repairer`, `format-converter`, `orchestrator`, `primary-producer`, `visual-designer` | `cohesion-repairer`, `orchestrator`, `primary-producer` |
-| `security` | `code-hygiene`, `orchestrator`, `tool-postgresql` | `orchestrator` |
+| `repo-liaison` | `orchestrator` | `conflict-auditor`, `orchestrator`, `security` |
+| `security` | `code-hygiene`, `orchestrator`, `repo-liaison`, `tool-postgresql` | `orchestrator` |
 | `team-builder` | — | — |
 | `technical-validator` | `conflict-auditor`, `content-enricher`, `orchestrator`, `output-compiler`, `tool-postgresql` | `conflict-auditor`, `orchestrator`, `primary-producer` |
 | `tool-doc-researcher` | — | `agent-updater`, `orchestrator` |
@@ -299,6 +307,7 @@ digraph "SalesDataPipeline Agent Team" {
     "output-compiler" [label="Output Compiler", fillcolor="#e8ffe8"];
     "primary-producer" [label="Primary Producer", fillcolor="#e8ffe8"];
     "quality-auditor" [label="Quality Auditor", fillcolor="#e8ffe8"];
+    "repo-liaison" [label="Repo Liaison", fillcolor="#f5f5f5"];
     "security" [label="Security", fillcolor="#e8e8ff"];
     "team-builder" [label="Team Builder", fillcolor="#e8e8ff"];
     "technical-validator" [label="Technical Validator", fillcolor="#e8ffe8"];
@@ -323,6 +332,7 @@ digraph "SalesDataPipeline Agent Team" {
     "orchestrator" -> "cleanup" [style=solid, label="Clean Up Artifacts"];
     "orchestrator" -> "agent-updater" [style=solid, label="Update Agent Docs"];
     "orchestrator" -> "agent-refactor" [style=solid, label="Refactor Agent Docs"];
+    "orchestrator" -> "repo-liaison" [style=solid, label="Cross-Repository Liaison"];
     "navigator" -> "orchestrator" [style=solid, label="Return to Orchestrator"];
     "security" -> "orchestrator" [style=solid, label="Return to Orchestrator"];
     "code-hygiene" -> "security" [style=solid, label="Security Clearance (for Deletions)"];
@@ -344,6 +354,9 @@ digraph "SalesDataPipeline Agent Team" {
     "agent-updater" -> "orchestrator" [style=solid, label="Return to Orchestrator"];
     "agent-refactor" -> "conflict-auditor" [style=solid, label="Run Conflict Audit"];
     "agent-refactor" -> "orchestrator" [style=solid, label="Return to Orchestrator"];
+    "repo-liaison" -> "orchestrator" [style=solid, label="Return to Orchestrator"];
+    "repo-liaison" -> "security" [style=solid, label="Security Review for Cross-Repo Write"];
+    "repo-liaison" -> "conflict-auditor" [style=solid, label="Conflict Audit After Cross-Repo Change"];
     "primary-producer" -> "cohesion-repairer" [style=solid, label="Cohesion Audit"];
     "primary-producer" -> "quality-auditor" [style=solid, label="Quality Audit"];
     "primary-producer" -> "conflict-auditor" [style=solid, label="Conflict Audit"];
@@ -592,6 +605,18 @@ digraph "SalesDataPipeline Agent Team" {
         "search"
       ]
     },
+    "repo-liaison": {
+      "display_name": "Repo Liaison",
+      "agent_type": "unknown",
+      "user_invokable": false,
+      "tools": [
+        "read",
+        "edit",
+        "search",
+        "execute",
+        "agent"
+      ]
+    },
     "security": {
       "display_name": "Security",
       "agent_type": "governance",
@@ -772,6 +797,12 @@ digraph "SalesDataPipeline Agent Team" {
       "label": "Refactor Agent Docs"
     },
     {
+      "source": "orchestrator",
+      "target": "repo-liaison",
+      "edge_type": "handoff",
+      "label": "Cross-Repository Liaison"
+    },
+    {
       "source": "navigator",
       "target": "orchestrator",
       "edge_type": "handoff",
@@ -932,6 +963,24 @@ digraph "SalesDataPipeline Agent Team" {
       "target": "conflict-auditor",
       "edge_type": "agents-list",
       "label": null
+    },
+    {
+      "source": "repo-liaison",
+      "target": "orchestrator",
+      "edge_type": "handoff",
+      "label": "Return to Orchestrator"
+    },
+    {
+      "source": "repo-liaison",
+      "target": "security",
+      "edge_type": "handoff",
+      "label": "Security Review for Cross-Repo Write"
+    },
+    {
+      "source": "repo-liaison",
+      "target": "conflict-auditor",
+      "edge_type": "handoff",
+      "label": "Conflict Audit After Cross-Repo Change"
     },
     {
       "source": "primary-producer",
@@ -1405,6 +1454,7 @@ digraph "SalesDataPipeline Agent Team" {
       "output-compiler",
       "primary-producer",
       "quality-auditor",
+      "repo-liaison",
       "security",
       "technical-validator",
       "visual-designer"
@@ -1447,6 +1497,11 @@ digraph "SalesDataPipeline Agent Team" {
     "agent-refactor": [
       "conflict-auditor",
       "orchestrator"
+    ],
+    "repo-liaison": [
+      "conflict-auditor",
+      "orchestrator",
+      "security"
     ],
     "primary-producer": [
       "cohesion-repairer",

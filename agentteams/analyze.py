@@ -55,6 +55,7 @@ GOVERNANCE_AGENTS = [
     "cleanup",
     "agent-updater",
     "agent-refactor",
+    "repo-liaison",
 ]
 
 
@@ -945,6 +946,14 @@ def _plan_output_files(
     files.append({
         "path": "references/security-vulnerability-watch.json",
         "template": f"{agents_dir}security-vulnerability-watch.json.template",
+        "type": "artifact",
+        "component_slug": None,
+    })
+
+    # Adjacent repository registry (always — repo-liaison reference)
+    files.append({
+        "path": "references/adjacent-repos.md",
+        "template": f"{agents_dir}adjacent-repos.reference.template.md",
         "type": "artifact",
         "component_slug": None,
     })
