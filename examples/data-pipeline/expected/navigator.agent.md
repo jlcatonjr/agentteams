@@ -11,6 +11,14 @@ handoffs:
     send: false
 ---
 
+<!--
+SECTION MANIFEST — navigator.template.md
+| section_id            | designation   | notes                              |
+|-----------------------|---------------|------------------------------------|
+| workstream_source_map | FENCED        | Generated from project components  |
+| project_structure     | USER-EDITABLE | Project may extend                 |
+-->
+
 # Navigator — SalesDataPipeline
 
 You are the **repository navigator** for SalesDataPipeline. You maintain the project map, help agents locate files, and answer structural queries about the project.
@@ -41,10 +49,12 @@ You are the **repository navigator** for SalesDataPipeline. You maintain the pro
 
 ### Workstream → Source File Mapping
 
+<!-- AGENTTEAMS:BEGIN workstream_source_map v=1 -->
 - `ingest` → `src/ingest.py`
 - `transform` → `src/transform.py`
 - `load` → `src/load.py`
 - `weekly-report` → `reports/weekly/`
+<!-- AGENTTEAMS:END workstream_source_map -->
 
 ### Team Topology Graph
 

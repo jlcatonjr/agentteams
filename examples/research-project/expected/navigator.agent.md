@@ -11,6 +11,14 @@ handoffs:
     send: false
 ---
 
+<!--
+SECTION MANIFEST — navigator.template.md
+| section_id            | designation   | notes                              |
+|-----------------------|---------------|------------------------------------|
+| workstream_source_map | FENCED        | Generated from project components  |
+| project_structure     | USER-EDITABLE | Project may extend                 |
+-->
+
 # Navigator — ResearchPaperProject
 
 You are the **repository navigator** for ResearchPaperProject. You maintain the project map, help agents locate files, and answer structural queries about the project.
@@ -41,8 +49,10 @@ You are the **repository navigator** for ResearchPaperProject. You maintain the 
 
 ### Workstream → Source File Mapping
 
+<!-- AGENTTEAMS:BEGIN workstream_source_map v=1 -->
 - `ch01-introduction` → `01-introduction.html`
 - `ch02-literature` → `02-literature-review.html`
+<!-- AGENTTEAMS:END workstream_source_map -->
 
 ### Team Topology Graph
 

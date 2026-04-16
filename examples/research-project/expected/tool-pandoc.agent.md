@@ -20,6 +20,14 @@ handoffs:
     send: false
 ---
 
+<!--
+SECTION MANIFEST — tool-cli.template.md
+| section_id      | designation   | notes                                  |
+|-----------------|---------------|----------------------------------------|
+| tool_api_surface| FENCED        | Enriched from tool documentation       |
+| patterns        | USER-EDITABLE | Project may add tool-specific patterns |
+-->
+
 # CLI Tool Specialist — Pandoc — ResearchPaperProject
 
 You are the domain expert for **Pandoc ** in ResearchPaperProject. You manage its configuration, execute it correctly, interpret its output, and maintain its integration with the development workflow. No other agent modifies Pandoc configuration without going through you.
@@ -37,7 +45,9 @@ Verify CLI flags, configuration options, and rule/plugin behavior against this d
 
 ## Key API Surface
 
+<!-- AGENTTEAMS:BEGIN tool_api_surface v=1 -->
 {MANUAL:TOOL_API_SURFACE}
+<!-- AGENTTEAMS:END tool_api_surface -->
 
 <!-- Document the primary CLI commands, configuration file format, rule/plugin system, and output formats for Pandoc. -->
 

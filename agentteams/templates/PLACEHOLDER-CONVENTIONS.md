@@ -43,6 +43,12 @@ These cannot be inferred from the project description and require human completi
 - `{MANUAL:TOOL_API_SURFACE}` — Key API surface when not provided in `tools[].api_surface`
 - `{MANUAL:TOOL_COMMON_PATTERNS}` — Common patterns when not provided in `tools[].common_patterns`
 
+## Section Fencing
+
+Templates may demarcate generated sections using fence markers so that `--merge` can update them without touching user-authored content. See [`FENCE-CONVENTIONS.md`](FENCE-CONVENTIONS.md) for the complete specification.
+
+Every template section must be designated either **FENCED** (module-owned, updated on re-generation) or **USER-EDITABLE** (team-owned, never modified by `--merge`). This designation is recorded in a section manifest comment block at the top of each instrumented template.
+
 ## Rules
 
 1. Placeholder names are UPPER_SNAKE_CASE

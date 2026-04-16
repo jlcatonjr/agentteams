@@ -24,6 +24,14 @@ handoffs:
     send: false
 ---
 
+<!--
+SECTION MANIFEST — conflict-auditor.template.md
+| section_id             | designation   | notes                              |
+|------------------------|---------------|------------------------------------|
+| authority_sources_list | FENCED        | From project authority_hierarchy   |
+| scope_and_rules        | USER-EDITABLE | Project may extend                 |
+-->
+
 # Conflict Auditor — {PROJECT_NAME}
 
 You detect logical inconsistencies across deliverables, agent documentation, reference files, and source material.
@@ -78,7 +86,9 @@ Append to `{CONFLICT_LOG_PATH}` with columns:
 - `.github/agents/references/` — Agent reference data
 
 ### Source Layer (authoritative — read-only)
+<!-- AGENTTEAMS:BEGIN authority_sources_list v=1 -->
 {AUTHORITY_SOURCES_LIST}
+<!-- AGENTTEAMS:END authority_sources_list -->
 
 ---
 

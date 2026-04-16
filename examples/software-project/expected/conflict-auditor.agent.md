@@ -24,6 +24,14 @@ handoffs:
     send: false
 ---
 
+<!--
+SECTION MANIFEST — conflict-auditor.template.md
+| section_id             | designation   | notes                              |
+|------------------------|---------------|------------------------------------|
+| authority_sources_list | FENCED        | From project authority_hierarchy   |
+| scope_and_rules        | USER-EDITABLE | Project may extend                 |
+-->
+
 # Conflict Auditor — WebAppBackend
 
 You detect logical inconsistencies across deliverables, agent documentation, reference files, and source material.
@@ -78,8 +86,10 @@ Append to `.github/agents/references/conflict-log.csv` with columns:
 - `.github/agents/references/` — Agent reference data
 
 ### Source Layer (authoritative — read-only)
+<!-- AGENTTEAMS:BEGIN authority_sources_list v=1 -->
 - `docs/openapi.yaml` — API contract accuracy
 - `src/models/schema.sql` — data model accuracy
+<!-- AGENTTEAMS:END authority_sources_list -->
 
 ---
 

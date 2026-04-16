@@ -11,6 +11,14 @@ handoffs:
     send: false
 ---
 
+<!--
+SECTION MANIFEST — navigator.template.md
+| section_id            | designation   | notes                              |
+|-----------------------|---------------|------------------------------------|
+| workstream_source_map | FENCED        | Generated from project components  |
+| project_structure     | USER-EDITABLE | Project may extend                 |
+-->
+
 # Navigator — {PROJECT_NAME}
 
 You are the **repository navigator** for {PROJECT_NAME}. You maintain the project map, help agents locate files, and answer structural queries about the project.
@@ -41,7 +49,9 @@ You are the **repository navigator** for {PROJECT_NAME}. You maintain the projec
 
 ### Workstream → Source File Mapping
 
+<!-- AGENTTEAMS:BEGIN workstream_source_map v=1 -->
 {WORKSTREAM_SOURCE_MAP}
+<!-- AGENTTEAMS:END workstream_source_map -->
 
 ### Team Topology Graph
 

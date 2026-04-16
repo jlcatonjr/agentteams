@@ -44,6 +44,45 @@ Cannot be auto-resolved. Collected into `SETUP-REQUIRED.md` for the user to fill
 
 ---
 
+## 1a. Section Fencing (Merge Safety)
+
+Templates that contain **multi-line generated sections** (i.e., placeholders that expand to multiple lines) must use fence markers to delimit those sections. This enables `agentteams --merge` to update generated content on re-generation while preserving all user-authored content outside the fenced regions.
+
+**Full specification:** [`FENCE-CONVENTIONS.md`](FENCE-CONVENTIONS.md)
+
+### Quick Reference
+
+```markdown
+<!-- AGENTTEAMS:BEGIN section_id v=1 -->
+...generated content...
+<!-- AGENTTEAMS:END section_id -->
+```
+
+### Section Manifest (required when fence markers are used)
+
+Every template that uses fence markers must declare a section manifest immediately after the YAML front matter closing `---`:
+
+```markdown
+<!--
+SECTION MANIFEST — template-name.template.md
+| section_id          | designation   | notes                      |
+|---------------------|---------------|----------------------------|
+| generated_section   | FENCED        | Rendered from manifest     |
+| user_section        | USER-EDITABLE | Team may modify freely     |
+-->
+```
+
+- **FENCED** — module-owned; updated by `--merge` on re-generation
+- **USER-EDITABLE** — team-owned; never modified by `--merge`
+
+### When to fence
+
+- **Yes:** Any `{PLACEHOLDER}` that expands to multiple lines (e.g., `{AUTHORITY_SOURCES_LIST}`, `{WORKSTREAM_SOURCE_MAP}`, `{TOOL_API_SURFACE}`, security data sections)
+- **No:** Inline single-value substitutions (e.g., `{PROJECT_NAME}`, `{PRIMARY_OUTPUT_DIR}`)
+- **No:** Fixed prose written directly in the template (no placeholder substitution)
+
+---
+
 ## 2. Required Sections Per Agent Tier
 
 Every agent template must include the following sections, in this order:

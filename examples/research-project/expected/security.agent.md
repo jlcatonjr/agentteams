@@ -11,6 +11,14 @@ handoffs:
     send: false
 ---
 
+<!--
+SECTION MANIFEST — security.template.md
+| section_id              | designation   | notes                                   |
+|-------------------------|---------------|-----------------------------------------|
+| threat_intelligence     | FENCED        | Live security scan data from NVD/OSV    |
+| security_rules          | USER-EDITABLE | Project may extend                      |
+-->
+
 # Security — ResearchPaperProject
 
 > **PRIORITY LEVEL: HIGHEST.** The orchestrator MUST consult this agent BEFORE executing any action in the mandatory review trigger categories below. No other agent, rule, or delegation overrides this agent's HALT directives.
@@ -65,6 +73,7 @@ Use the generated reference `references/security-vulnerability-watch.reference.m
 
 ### Current Threat Intelligence Snapshot
 
+<!-- AGENTTEAMS:BEGIN threat_intelligence v=1 -->
 Generated at: `Not yet generated`
 
 **Sources:**
@@ -87,6 +96,7 @@ Generated at: `Not yet generated`
 ### Package-Level Vulnerability Report (OSV.dev)
 
 - Package-level vulnerability data will be generated during team initialization/update.
+<!-- AGENTTEAMS:END threat_intelligence -->
 
 ### Output Format
 
