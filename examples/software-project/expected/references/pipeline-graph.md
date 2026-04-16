@@ -32,6 +32,8 @@ flowchart LR
     class conflict_auditor governance
     conflict_resolution["Conflict Resolution"]
     class conflict_resolution governance
+    content_enricher["Content Enricher"]
+    class content_enricher unknown
     format_converter["Format Converter"]
     class format_converter domain
     navigator["Navigator"]
@@ -145,6 +147,10 @@ flowchart LR
     tasks_api_expert -->|"Return to Orchestrator"| orchestrator
     tasks_api_expert -.-> primary_producer
     tasks_api_expert -.-> adversarial
+    content_enricher -->|"Validate Enriched Content"| technical_validator
+    content_enricher -->|"Return to Orchestrator"| orchestrator
+    content_enricher -.-> primary_producer
+    content_enricher -.-> technical_validator
 ```
 
 ---
@@ -173,6 +179,7 @@ flowchart LR
 | `cohesion-repairer` | domain | No | read, edit |
 | `conflict-auditor` | governance | No | read, edit, search, execute |
 | `conflict-resolution` | governance | No | edit, search, read |
+| `content-enricher` | unknown | Yes | read, edit, search |
 | `format-converter` | domain | No | read, edit, execute |
 | `navigator` | governance | No | read, search, execute |
 | `orchestrator` | governance | Yes | read, edit, search, execute, todo, agent |
@@ -201,16 +208,17 @@ flowchart LR
 | `cohesion-repairer` | `orchestrator`, `primary-producer`, `quality-auditor` | `orchestrator`, `quality-auditor` |
 | `conflict-auditor` | `adversarial`, `agent-refactor`, `agent-updater`, `code-hygiene`, `orchestrator`, `primary-producer`, `technical-validator` | `agent-updater`, `conflict-resolution`, `orchestrator`, `technical-validator` |
 | `conflict-resolution` | `conflict-auditor`, `orchestrator` | `agent-updater`, `orchestrator` |
+| `content-enricher` | — | `orchestrator`, `primary-producer`, `technical-validator` |
 | `format-converter` | `orchestrator`, `output-compiler` | `orchestrator`, `output-compiler`, `quality-auditor` |
 | `navigator` | `orchestrator` | `orchestrator` |
-| `orchestrator` | `adversarial`, `agent-refactor`, `agent-updater`, `auth-module-expert`, `cleanup`, `code-hygiene`, `cohesion-repairer`, `conflict-auditor`, `conflict-resolution`, `format-converter`, `navigator`, `output-compiler`, `primary-producer`, `quality-auditor`, `security`, `tasks-api-expert`, `technical-validator`, `tool-doc-researcher`, `tool-postgresql` | `adversarial`, `agent-refactor`, `agent-updater`, `cleanup`, `code-hygiene`, `cohesion-repairer`, `conflict-auditor`, `conflict-resolution`, `format-converter`, `navigator`, `output-compiler`, `primary-producer`, `quality-auditor`, `security`, `technical-validator` |
+| `orchestrator` | `adversarial`, `agent-refactor`, `agent-updater`, `auth-module-expert`, `cleanup`, `code-hygiene`, `cohesion-repairer`, `conflict-auditor`, `conflict-resolution`, `content-enricher`, `format-converter`, `navigator`, `output-compiler`, `primary-producer`, `quality-auditor`, `security`, `tasks-api-expert`, `technical-validator`, `tool-doc-researcher`, `tool-postgresql` | `adversarial`, `agent-refactor`, `agent-updater`, `cleanup`, `code-hygiene`, `cohesion-repairer`, `conflict-auditor`, `conflict-resolution`, `format-converter`, `navigator`, `output-compiler`, `primary-producer`, `quality-auditor`, `security`, `technical-validator` |
 | `output-compiler` | `format-converter`, `orchestrator` | `format-converter`, `orchestrator`, `technical-validator` |
-| `primary-producer` | `auth-module-expert`, `orchestrator`, `quality-auditor`, `tasks-api-expert`, `technical-validator` | `cohesion-repairer`, `conflict-auditor`, `orchestrator`, `quality-auditor` |
+| `primary-producer` | `auth-module-expert`, `content-enricher`, `orchestrator`, `quality-auditor`, `tasks-api-expert`, `technical-validator` | `cohesion-repairer`, `conflict-auditor`, `orchestrator`, `quality-auditor` |
 | `quality-auditor` | `cohesion-repairer`, `format-converter`, `orchestrator`, `primary-producer` | `cohesion-repairer`, `orchestrator`, `primary-producer` |
 | `security` | `code-hygiene`, `orchestrator`, `tool-postgresql` | `orchestrator` |
 | `tasks-api-expert` | — | `adversarial`, `orchestrator`, `primary-producer` |
 | `team-builder` | — | — |
-| `technical-validator` | `conflict-auditor`, `orchestrator`, `output-compiler`, `tool-postgresql` | `conflict-auditor`, `orchestrator`, `primary-producer` |
+| `technical-validator` | `conflict-auditor`, `content-enricher`, `orchestrator`, `output-compiler`, `tool-postgresql` | `conflict-auditor`, `orchestrator`, `primary-producer` |
 | `tool-doc-researcher` | — | `agent-updater`, `orchestrator` |
 | `tool-postgresql` | — | `orchestrator`, `security`, `technical-validator` |
 
@@ -235,6 +243,7 @@ digraph "WebAppBackend Agent Team" {
     "cohesion-repairer" [label="Cohesion Repairer", fillcolor="#e8ffe8"];
     "conflict-auditor" [label="Conflict Auditor", fillcolor="#e8e8ff"];
     "conflict-resolution" [label="Conflict Resolution", fillcolor="#e8e8ff"];
+    "content-enricher" [label="Content Enricher", fillcolor="#f5f5f5"];
     "format-converter" [label="Format Converter", fillcolor="#e8ffe8"];
     "navigator" [label="Navigator", fillcolor="#e8e8ff"];
     "orchestrator" [label="Orchestrator", fillcolor="#e8e8ff"];
@@ -312,6 +321,9 @@ digraph "WebAppBackend Agent Team" {
     "tasks-api-expert" -> "adversarial" [style=solid, label="Vet Brief Before Drafting"];
     "tasks-api-expert" -> "primary-producer" [style=solid, label="Send to Primary Producer"];
     "tasks-api-expert" -> "orchestrator" [style=solid, label="Return to Orchestrator"];
+    "content-enricher" -> "technical-validator" [style=solid, label="Validate Enriched Content"];
+    "content-enricher" -> "orchestrator" [style=solid, label="Return to Orchestrator"];
+    "content-enricher" -> "primary-producer" [style=dashed];
 }
 ```
 
@@ -410,6 +422,16 @@ digraph "WebAppBackend Agent Team" {
         "edit",
         "search",
         "read"
+      ]
+    },
+    "content-enricher": {
+      "display_name": "Content Enricher",
+      "agent_type": "unknown",
+      "user_invokable": true,
+      "tools": [
+        "read",
+        "edit",
+        "search"
       ]
     },
     "format-converter": {
@@ -1069,6 +1091,30 @@ digraph "WebAppBackend Agent Team" {
       "target": "adversarial",
       "edge_type": "agents-list",
       "label": null
+    },
+    {
+      "source": "content-enricher",
+      "target": "technical-validator",
+      "edge_type": "handoff",
+      "label": "Validate Enriched Content"
+    },
+    {
+      "source": "content-enricher",
+      "target": "orchestrator",
+      "edge_type": "handoff",
+      "label": "Return to Orchestrator"
+    },
+    {
+      "source": "content-enricher",
+      "target": "primary-producer",
+      "edge_type": "agents-list",
+      "label": null
+    },
+    {
+      "source": "content-enricher",
+      "target": "technical-validator",
+      "edge_type": "agents-list",
+      "label": null
     }
   ],
   "adjacency": {
@@ -1177,7 +1223,12 @@ digraph "WebAppBackend Agent Team" {
       "orchestrator",
       "primary-producer"
     ],
-    "team-builder": []
+    "team-builder": [],
+    "content-enricher": [
+      "orchestrator",
+      "primary-producer",
+      "technical-validator"
+    ]
   }
 }
 ```

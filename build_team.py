@@ -163,6 +163,17 @@ def _build_parser() -> argparse.ArgumentParser:
         ),
     )
     parser.add_argument(
+        "--enrich",
+        action="store_true",
+        help=(
+            "After generating the team, scan for default template elements "
+            "(unresolved {MANUAL:*} placeholders, underdeveloped sections, "
+            "incomplete tool metadata) and attempt context-aware auto-enrichment. "
+            "Exports a defaults-audit.csv to the references/ directory. "
+            "Combine with --post-audit to also run AI-powered enrichment."
+        ),
+    )
+    parser.add_argument(
         "--version",
         action="version",
         version=f"%(prog)s {__version__}",
@@ -401,6 +412,58 @@ def main(argv: list[str] | None = None) -> int:
         if not args.dry_run and result.success:
             _write_run_log(manifest, result, output_dir, template_hashes)
         return 0 if result.success else 1
+
+    # -----------------------------------------------------------------------
+    # Step 5d: Defaults audit + auto-enrichment (--enrich)
+    # -----------------------------------------------------------------------
+    if args.enrich:
+        from agentteams import enrich as _enrich
+
+        project_path_for_enrich: Path | None = None
+        if description.get("existing_project_path"):
+            project_path_for_enrich = Path(description["existing_project_path"])
+
+        print("Scanning for default template elements...")
+        # Attach manifest fields needed by enrich module
+        manifest["project_goal"] = description.get("project_goal", "")
+        manifest["output_format"] = description.get("output_format") or manifest.get("output_format", "")
+        manifest["tools"] = description.get("tools", [])
+        manifest["description"] = description
+
+        # Build file_map from final_rendered for scanning
+        enrich_file_map = dict(final_rendered)
+        findings = _enrich.scan_defaults(enrich_file_map, manifest, project_path=project_path_for_enrich)
+        print(f"  Found {len(findings)} default finding(s)")
+
+        # Auto-enrich (rule-based + notebook scanning + tool catalog)
+        enriched_file_map, findings = _enrich.auto_enrich(
+            findings, enrich_file_map, manifest, project_path=project_path_for_enrich
+        )
+
+        # Optionally follow up with AI enrichment if copilot CLI is available
+        if args.post_audit:
+            copilot_exe = _enrich.shutil.which("copilot")
+            if copilot_exe:
+                print("  Running AI enrichment via copilot CLI...")
+                enriched_file_map, findings = _enrich.ai_enrich(
+                    findings, enriched_file_map, manifest,
+                    project_path=project_path_for_enrich,
+                    copilot_path=copilot_exe,
+                )
+
+        # Export CSV
+        csv_rel_path = "references/defaults-audit.csv"
+        _enrich.export_csv(findings, output_dir / csv_rel_path)
+        print(f"  Defaults audit CSV written to {csv_rel_path}")
+
+        # Replace final_rendered with enriched content + CSV entry
+        final_rendered = list(enriched_file_map.items())
+        # Add CSV to the rendered set so it gets emitted
+        csv_content = (output_dir / csv_rel_path).read_text(encoding="utf-8")
+        if not any(p == csv_rel_path for p, _ in final_rendered):
+            final_rendered.append((csv_rel_path, csv_content))
+
+        _enrich.print_enrich_summary(findings)
 
     # -----------------------------------------------------------------------
     # Step 6: Validate cross-references

@@ -474,9 +474,6 @@ def build_authority_hierarchy(description: dict[str, Any]) -> list[dict[str, Any
     # Normalize ranks
     hierarchy: list[dict[str, Any]] = []
     for i, src in enumerate(sources, start=1):
-        # Accept both plain strings and dicts
-        if isinstance(src, str):
-            src = {"path": src, "name": src}
         hierarchy.append({
             "rank": src.get("rank", i),
             "name": src.get("name", f"Source {i}"),
@@ -930,14 +927,6 @@ def _plan_output_files(
         "path": "references/pipeline-graph.md",
         "template": "",
         "type": "graph",
-        "component_slug": None,
-    })
-
-    # Content enricher — user-invokable agent for filling MANUAL placeholders
-    files.append({
-        "path": "content-enricher.agent.md",
-        "template": "domain/content-enricher.template.md",
-        "type": "agent",
         "component_slug": None,
     })
 
