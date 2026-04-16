@@ -81,6 +81,21 @@ SECTION MANIFEST — template-name.template.md
 - **No:** Inline single-value substitutions (e.g., `{PROJECT_NAME}`, `{PRIMARY_OUTPUT_DIR}`)
 - **No:** Fixed prose written directly in the template (no placeholder substitution)
 
+### Migrating legacy repositories
+
+Repositories with agent files that pre-date fencing have no `AGENTTEAMS:BEGIN/END` markers. The `--merge` command will skip these files with an advisory warning. To migrate them:
+
+```bash
+# One command to implement (safe, reversible):
+agentteams --description .github/agents/_build-description.json \
+           --framework copilot-vscode --project /path/to/repo --migrate
+
+# One command to revert (before or after pushing):
+agentteams --revert-migration --project /path/to/repo
+```
+
+`--migrate` creates a `pre-fencing-snapshot` git tag, then runs `--overwrite`. After migration, review `git diff pre-fencing-snapshot HEAD` to restore any project-specific content to the `USER-EDITABLE` zone, then switch to `--merge` for all future updates.
+
 ---
 
 ## 2. Required Sections Per Agent Tier

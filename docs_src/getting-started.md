@@ -104,3 +104,61 @@ agentteams --description brief.json --project /path/to/project --post-audit
 ```
 
 This runs static checks (unresolved placeholders, YAML integrity, required-agent coverage). If the `copilot` CLI is available and authenticated, it also runs an AI-powered conflict and presupposition review.
+
+---
+
+## Migrating a Legacy Agent Team to Fenced Templates
+
+If your repository has existing agent files generated before fencing was introduced, use `--migrate` to upgrade them in a single, reversible step.
+
+### What `--migrate` does
+
+1. Creates a git tag `pre-fencing-snapshot` at the current HEAD — your safety rollback point.
+2. Runs `--overwrite` to regenerate all agent files with fenced templates.
+3. Prints a quality-audit checklist with `git diff` commands to review any lost project-specific content.
+
+```bash
+agentteams \
+  --description .github/agents/_build-description.json \
+  --framework copilot-vscode \
+  --project /path/to/project \
+  --migrate
+```
+
+### After migration: restore project-specific rules
+
+Review the diff for content that was in the old files but is not auto-generated:
+
+```bash
+git diff pre-fencing-snapshot HEAD -- .github/agents/orchestrator.agent.md
+```
+
+Add any project-specific rules to the `### Rules` → `### <Project> Project Rules` subsection in `orchestrator.agent.md`. This is the `USER-EDITABLE` zone — it survives all future `--merge` runs permanently.
+
+Then commit:
+
+```bash
+git add .github/agents/ && git commit -m "chore: fence-migrate agent team"
+```
+
+### All future updates use `--merge`
+
+Once migrated, never use `--overwrite` again. Use `--merge` instead:
+
+```bash
+agentteams \
+  --description .github/agents/_build-description.json \
+  --framework copilot-vscode \
+  --project /path/to/project \
+  --merge --yes
+```
+
+`--merge` updates only the template-fenced regions in each file and leaves all user-authored content untouched.
+
+### Reverting if something goes wrong
+
+```bash
+agentteams --revert-migration --project /path/to/project
+```
+
+This runs `git reset --hard pre-fencing-snapshot` and deletes the tag, restoring all agent files to their pre-migration state. If you have already pushed the migrated commit to a remote, a manual force-push is required after the revert.
