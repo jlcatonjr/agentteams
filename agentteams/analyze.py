@@ -86,6 +86,8 @@ def build_manifest(description: dict[str, Any], *, framework: str = "copilot-vsc
     deliverable_type = _format_deliverable_type(description.get("deliverables", []), project_type)
     output_format = description.get("output_format") or _default_output_format(project_type)
     conversion_pipeline = description.get("conversion_pipeline")
+    pip_package_name = description.get("pip_package_name")
+    doc_site_config_file = description.get("doc_site_config_file")
 
     # Archetype selection
     if "selected_archetypes" in description:
@@ -141,6 +143,8 @@ def build_manifest(description: dict[str, Any], *, framework: str = "copilot-vsc
         deliverable_type=deliverable_type,
         output_format=output_format,
         conversion_pipeline=conversion_pipeline or "{MANUAL:CONVERSION_PIPELINE}",
+        pip_package_name=pip_package_name or "{MANUAL:PIP_PACKAGE_NAME}",
+        doc_site_config_file=doc_site_config_file or "{MANUAL:DOC_SITE_CONFIG_FILE}",
         authority_hierarchy=_format_authority_hierarchy(authority_hierarchy),
         authority_sources_list=_format_authority_sources_list(authority_hierarchy),
         reference_key_convention=description.get("reference_key_convention", "AuthorYear"),

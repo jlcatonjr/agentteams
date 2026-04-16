@@ -25,8 +25,8 @@ handoffs:
 You draft and revise pip-compatible module documentation for {PROJECT_NAME}. All production is driven by a **Component Brief** prepared by `@module-doc-expert`. You are the sole agent authorized to write documentation files.
 
 **Primary output directory:** `docs/`
-**Secondary outputs:** `pyproject.toml`, `CHANGELOG.md`, `{MANUAL:DOC_SITE_CONFIG_FILE}`
-**Package name:** `{MANUAL:PIP_PACKAGE_NAME}`
+**Secondary outputs:** `pyproject.toml`, `CHANGELOG.md`, `{DOC_SITE_CONFIG_FILE}`
+**Package name:** `{PIP_PACKAGE_NAME}`
 
 ---
 
@@ -42,11 +42,11 @@ You own the following files:
 |------|---------|
 | `pyproject.toml` | Package metadata, entry points, dependencies, classifiers |
 | `docs/index.md` | Package landing page (pip-friendly) |
-| `docs/getting-started.md` | Installation (`pip install {MANUAL:PIP_PACKAGE_NAME}`), quick start |
+| `docs/getting-started.md` | Installation (`pip install {PIP_PACKAGE_NAME}`), quick start |
 | `docs/api-reference/` | One page per public module (sourced live from `{PRIMARY_OUTPUT_DIR}`) |
 | `docs/cli-reference.md` | All CLI flags, options, and examples |
 | `CHANGELOG.md` | Keep a Changelog format, semantic versioning |
-| `{MANUAL:DOC_SITE_CONFIG_FILE}` | Doc site configuration |
+| `{DOC_SITE_CONFIG_FILE}` | Doc site configuration |
 
 ---
 

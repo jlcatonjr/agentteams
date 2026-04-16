@@ -1,6 +1,6 @@
 # SETUP-REQUIRED.md
 
-The following **15 placeholder(s)** could not be automatically resolved
+The following **17 placeholder(s)** could not be automatically resolved
 for project **WebAppBackend** and require manual attention.
 
 ---
@@ -35,7 +35,27 @@ agent files and replace with the correct value.
 
 ---
 
-## 4. `{TOOL_DOCS_URL}`
+## 4. `{PIP_PACKAGE_NAME}`
+
+**Found in:** `multiple`
+**Context:** The placeholder {PIP_PACKAGE_NAME} could not be auto-resolved.
+
+**Action required:** Search for `{MANUAL:PIP_PACKAGE_NAME}` across all generated
+agent files and replace with the correct value.
+
+---
+
+## 5. `{DOC_SITE_CONFIG_FILE}`
+
+**Found in:** `multiple`
+**Context:** The placeholder {DOC_SITE_CONFIG_FILE} could not be auto-resolved.
+
+**Action required:** Search for `{MANUAL:DOC_SITE_CONFIG_FILE}` across all generated
+agent files and replace with the correct value.
+
+---
+
+## 6. `{TOOL_DOCS_URL}`
 
 **Found in:** `tool-postgresql.agent.md`
 **Context:** The specialist agent for 'PostgreSQL' is missing a official documentation URL. Add it to the tools[] entry in the project brief or extend the built-in tool metadata catalog.
@@ -45,7 +65,7 @@ agent files and replace with the correct value.
 
 ---
 
-## 5. `{TOOL_API_SURFACE}`
+## 7. `{TOOL_API_SURFACE}`
 
 **Found in:** `tool-postgresql.agent.md`
 **Context:** The specialist agent for 'PostgreSQL' is missing a project-relevant API surface summary. Add it to the tools[] entry in the project brief or extend the built-in tool metadata catalog.
@@ -55,7 +75,7 @@ agent files and replace with the correct value.
 
 ---
 
-## 6. `{TOOL_COMMON_PATTERNS}`
+## 8. `{TOOL_COMMON_PATTERNS}`
 
 **Found in:** `tool-postgresql.agent.md`
 **Context:** The specialist agent for 'PostgreSQL' is missing a tool-specific usage patterns and pitfalls. Add it to the tools[] entry in the project brief or extend the built-in tool metadata catalog.
@@ -65,7 +85,7 @@ agent files and replace with the correct value.
 
 ---
 
-## 7. `{TOOL_DOCS_URL}`
+## 9. `{TOOL_DOCS_URL}`
 
 **Found in:** `references/ref-fastapi-reference.md`
 **Context:** The reference file for 'FastAPI' is missing a official documentation URL. Add it to the tools[] entry in the project brief or extend the built-in tool metadata catalog.
@@ -75,7 +95,7 @@ agent files and replace with the correct value.
 
 ---
 
-## 8. `{TOOL_API_SURFACE}`
+## 10. `{TOOL_API_SURFACE}`
 
 **Found in:** `references/ref-fastapi-reference.md`
 **Context:** The reference file for 'FastAPI' is missing a project-relevant API surface summary. Add it to the tools[] entry in the project brief or extend the built-in tool metadata catalog.
@@ -85,7 +105,7 @@ agent files and replace with the correct value.
 
 ---
 
-## 9. `{TOOL_COMMON_PATTERNS}`
+## 11. `{TOOL_COMMON_PATTERNS}`
 
 **Found in:** `references/ref-fastapi-reference.md`
 **Context:** The reference file for 'FastAPI' is missing a tool-specific usage patterns and pitfalls. Add it to the tools[] entry in the project brief or extend the built-in tool metadata catalog.
@@ -95,7 +115,7 @@ agent files and replace with the correct value.
 
 ---
 
-## 10. `{TOOL_DOCS_URL}`
+## 12. `{TOOL_DOCS_URL}`
 
 **Found in:** `references/ref-sqlalchemy-reference.md`
 **Context:** The reference file for 'SQLAlchemy' is missing a official documentation URL. Add it to the tools[] entry in the project brief or extend the built-in tool metadata catalog.
@@ -105,7 +125,7 @@ agent files and replace with the correct value.
 
 ---
 
-## 11. `{TOOL_API_SURFACE}`
+## 13. `{TOOL_API_SURFACE}`
 
 **Found in:** `references/ref-sqlalchemy-reference.md`
 **Context:** The reference file for 'SQLAlchemy' is missing a project-relevant API surface summary. Add it to the tools[] entry in the project brief or extend the built-in tool metadata catalog.
@@ -115,7 +135,7 @@ agent files and replace with the correct value.
 
 ---
 
-## 12. `{TOOL_COMMON_PATTERNS}`
+## 14. `{TOOL_COMMON_PATTERNS}`
 
 **Found in:** `references/ref-sqlalchemy-reference.md`
 **Context:** The reference file for 'SQLAlchemy' is missing a tool-specific usage patterns and pitfalls. Add it to the tools[] entry in the project brief or extend the built-in tool metadata catalog.
@@ -125,7 +145,7 @@ agent files and replace with the correct value.
 
 ---
 
-## 13. `{TOOL_DOCS_URL}`
+## 15. `{TOOL_DOCS_URL}`
 
 **Found in:** `references/ref-pytest-reference.md`
 **Context:** The reference file for 'pytest' is missing a official documentation URL. Add it to the tools[] entry in the project brief or extend the built-in tool metadata catalog.
@@ -135,7 +155,7 @@ agent files and replace with the correct value.
 
 ---
 
-## 14. `{TOOL_API_SURFACE}`
+## 16. `{TOOL_API_SURFACE}`
 
 **Found in:** `references/ref-pytest-reference.md`
 **Context:** The reference file for 'pytest' is missing a project-relevant API surface summary. Add it to the tools[] entry in the project brief or extend the built-in tool metadata catalog.
@@ -145,7 +165,7 @@ agent files and replace with the correct value.
 
 ---
 
-## 15. `{TOOL_COMMON_PATTERNS}`
+## 17. `{TOOL_COMMON_PATTERNS}`
 
 **Found in:** `references/ref-pytest-reference.md`
 **Context:** The reference file for 'pytest' is missing a tool-specific usage patterns and pitfalls. Add it to the tools[] entry in the project brief or extend the built-in tool metadata catalog.
