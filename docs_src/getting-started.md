@@ -18,6 +18,12 @@ pip install -e .
 
 ---
 
+## Prefer a conversational setup?
+
+If you'd rather describe your project in plain language and have a coding agent draft the brief and run the commands for you, see [Agent-Assisted Setup](agent-assisted-setup.md). That page documents the prompts to use with GitHub Copilot, Claude, or any capable chat model.
+
+---
+
 ## Write a Project Description
 
 Create `brief.json`:

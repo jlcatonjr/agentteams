@@ -50,4 +50,4 @@ Requires Python 3.11+. No external runtime dependencies (stdlib only).
 agentteams --description brief.json --project /path/to/project --framework copilot-vscode
 ```
 
-See [Getting Started](getting-started.md) for a full walkthrough, or [CLI Reference](cli-reference.md) for all flags.
+See [Getting Started](getting-started.md) for a full walkthrough, [Agent-Assisted Setup](agent-assisted-setup.md) to use a coding agent to create your team interactively, or [CLI Reference](cli-reference.md) for all flags.
