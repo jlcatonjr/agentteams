@@ -2,12 +2,12 @@
 
 Generate a POSIX groff man-page from the `agentteams` argparse parser.
 
-The generated man-page source is committed to the repository root as `agentteams.1` and installed to `share/man/man1/` on pip install.
+The generated man-page source is committed to the repository root as `agentteams.1`. To view it, use `man ./agentteams.1`.
 
 Regenerate after any CLI flag change:
 
 ```bash
-python -m src.man > agentteams.1
+python -m agentteams.man > agentteams.1
 ```
 
 Preview locally:
@@ -40,10 +40,10 @@ Produces sections: `NAME`, `SYNOPSIS`, `DESCRIPTION`, `OPTIONS`, `EXIT STATUS`, 
 
 ## Module Entry Point
 
-When run as a module (`python -m src.man`), imports `_build_parser` from `build_team` and writes the generated man-page to stdout. Used by the CI staleness gate:
+When run as a module (`python -m agentteams.man`), imports `_build_parser` from `build_team` and writes the generated man-page to stdout. Used by the CI staleness gate:
 
 ```bash
-python -m src.man | diff - agentteams.1
+python -m agentteams.man | diff - agentteams.1
 ```
 
 Exit code is non-zero if the committed `agentteams.1` is stale.
