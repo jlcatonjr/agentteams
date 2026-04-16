@@ -65,6 +65,7 @@ def test_build_main_auto_correct_reruns_audit(tmp_path, monkeypatch):
     import build_team
     import agentteams.audit as audit_module
     import agentteams.remediate as remediate_module
+    import agentteams.enrich as enrich_module
     from agentteams.audit import AuditFinding, AuditResult
     from agentteams.remediate import RemediationResult
 
@@ -98,6 +99,8 @@ def test_build_main_auto_correct_reruns_audit(tmp_path, monkeypatch):
 
     monkeypatch.setattr(audit_module, "run_post_audit", fake_run_post_audit)
     monkeypatch.setattr(remediate_module, "run_copilot_autocorrect", fake_run_copilot_autocorrect)
+    # Prevent AI enrichment from invoking the real copilot CLI
+    monkeypatch.setattr(enrich_module.shutil, "which", lambda name: None)
 
     brief = Path(__file__).parent.parent / "examples" / "software-project" / "brief.json"
     output_dir = tmp_path / ".github" / "agents"
@@ -111,6 +114,7 @@ def test_build_main_auto_correct_reruns_audit(tmp_path, monkeypatch):
         "--yes",
         "--post-audit",
         "--auto-correct",
+        "--security-offline",
     ])
 
     assert rc == 0
@@ -132,6 +136,8 @@ def test_build_main_update_audits_emitted_files_from_disk(tmp_path, monkeypatch)
         str(output_dir),
         "--overwrite",
         "--yes",
+        "--security-offline",
+        "--no-scan",
     ])
     assert first_rc == 0
 
@@ -156,6 +162,8 @@ def test_build_main_update_audits_emitted_files_from_disk(tmp_path, monkeypatch)
         "--update",
         "--yes",
         "--post-audit",
+        "--security-offline",
+        "--no-scan",
     ])
 
     assert update_rc == 0
