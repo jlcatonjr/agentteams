@@ -85,7 +85,7 @@
 3. **Authority hierarchy is ground truth** — no agent may contradict a higher-authority source
 4. **Primary deliverables are the canonical output** — build artifacts are derived, never primary
 5. **No fabricated references** — every citation must be verifiable in `references/bibliography.bib`
-6. **Voice fidelity** — `@style-guardian` is the sole arbiter of voice deviation rulings
+6. **Voice fidelity** — style governance rulings are authoritative when a style-governance agent is present
 7. **Living documentation** — agent docs must not accumulate stale content
 8. **Always close with `@conflict-auditor`** — required after any multi-file change session
 

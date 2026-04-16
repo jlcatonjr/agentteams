@@ -79,6 +79,15 @@ Generated at: `Not yet generated`
 
 - Patch KEV-listed CVEs first based on active exploitation evidence.\n- Prioritize high EPSS vulnerabilities for rapid mitigation.\n- Validate compensating controls when patching is delayed.
 
+### LLM and AI-Specific Threat Intelligence
+
+- LLM threat intelligence will be generated during team initialization/update.
+  Reference: https://owasp.org/www-project-top-10-for-large-language-model-applications/
+
+### Package-Level Vulnerability Report (OSV.dev)
+
+- Package-level vulnerability data will be generated during team initialization/update.
+
 ### Output Format
 
 ```

@@ -189,6 +189,14 @@ def _build_parser() -> argparse.ArgumentParser:
         help="Maximum number of current vulnerabilities to include in generated security references (default: 15)",
     )
     parser.add_argument(
+        "--security-no-nvd",
+        action="store_true",
+        help=(
+            "Skip NVD CVSS enrichment (avoids ~7 s per CVE rate-limit sleep). "
+            "CISA KEV + EPSS data are still fetched."
+        ),
+    )
+    parser.add_argument(
         "--version",
         action="version",
         version=f"%(prog)s {__version__}",
@@ -297,10 +305,13 @@ def main(argv: list[str] | None = None) -> int:
     # -----------------------------------------------------------------------
     from agentteams import security_refs as _security_refs
 
+    _project_tools: list[str] = manifest.get("tools", []) or []
     security_placeholders = _security_refs.build_security_placeholders(
         output_dir=output_dir,
         offline=args.security_offline,
         max_items=max(1, int(args.security_max_items)),
+        tools=_project_tools if _project_tools else None,
+        skip_nvd=args.security_no_nvd,
     )
     manifest["auto_resolved_placeholders"].update(security_placeholders)
 

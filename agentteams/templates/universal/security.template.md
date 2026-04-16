@@ -79,6 +79,14 @@ Generated at: `{SECURITY_DATA_GENERATED_AT}`
 
 {SECURITY_PREVENTION_PLAYBOOK}
 
+### LLM and AI-Specific Threat Intelligence
+
+{SECURITY_LLM_THREATS_SUMMARY}
+
+### Package-Level Vulnerability Report (OSV.dev)
+
+{SECURITY_OSV_PACKAGES_SUMMARY}
+
 ### Output Format
 
 ```

@@ -172,6 +172,13 @@ def build_manifest(description: dict[str, Any], *, framework: str = "copilot-vsc
         security_vulnerability_watch_json=(
             '{"generated_at":"","sources":[],"vulnerabilities":[],"notes":"Generated during initialization/update."}'
         ),
+        security_llm_threats_summary=(
+            "- LLM threat intelligence will be generated during team initialization/update.\n"
+            "  Reference: https://owasp.org/www-project-top-10-for-large-language-model-applications/"
+        ),
+        security_osv_packages_summary=(
+            "- Package-level vulnerability data will be generated during team initialization/update."
+        ),
     )
 
     # Manual-required placeholders (unfilled MANUAL tokens)
