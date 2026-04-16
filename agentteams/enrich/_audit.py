@@ -82,8 +82,14 @@ def scan_defaults(
             section_at_line.append(current_section)
 
         seen_in_file: set[str] = set()
+        in_fence = False
         for i, line in enumerate(lines):
-            for m in _MANUAL_RE.finditer(line):
+            if line.strip().startswith("```"):
+                in_fence = not in_fence
+            if in_fence:
+                continue
+            line_no_code = re.sub(r"`[^`\n]+`", "", line)
+            for m in _MANUAL_RE.finditer(line_no_code):
                 token = m.group(1)
                 key = (rel_path, token)
                 if key in seen_in_file:

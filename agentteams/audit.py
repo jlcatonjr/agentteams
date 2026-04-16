@@ -267,13 +267,22 @@ def _check_unresolved_placeholders(
 def _check_unresolved_manual_placeholders(
     file_map: dict[str, str],
 ) -> list[AuditFinding]:
-    """Flag unresolved {MANUAL:*} tokens remaining in generated files."""
+    """Flag unresolved {MANUAL:*} tokens remaining in generated files.
+
+    Tokens inside backtick spans (inline code) and fenced code blocks are
+    treated as instructional text rather than unresolved placeholders, and
+    are skipped.
+    """
     findings: list[AuditFinding] = []
     for rel_path, content in file_map.items():
         if "SETUP-REQUIRED" in rel_path:
             continue
+        # Strip inline code spans and fenced code blocks before scanning so
+        # instructional examples like `{MANUAL:FOO}` are not flagged.
+        content_no_code = re.sub(r"```.*?```", "", content, flags=re.DOTALL)
+        content_no_code = re.sub(r"`[^`\n]+`", "", content_no_code)
         seen_in_file: set[str] = set()
-        for match in _UNRESOLVED_MANUAL_RE.finditer(content):
+        for match in _UNRESOLVED_MANUAL_RE.finditer(content_no_code):
             token = match.group(1)
             if token in seen_in_file:
                 continue
