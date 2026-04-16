@@ -23,16 +23,5 @@ jobs:
       - name: Install MkDocs dependencies
         run: pip install mkdocs-material pymdown-extensions
 
-      - name: Build docs
-        run: mkdocs build
-
-      - name: Ensure .nojekyll (prevents GitHub Pages from running Jekyll)
-        run: touch docs/.nojekyll
-
-      - name: Commit built docs to main
-        run: |
-          git config user.name "github-actions[bot]"
-          git config user.email "github-actions[bot]@users.noreply.github.com"
-          git add docs/
-          git diff --cached --quiet || git commit -m "docs: rebuild site [skip ci]"
-          git push
+      - name: Deploy to GitHub Pages
+        run: mkdocs gh-deploy --force
