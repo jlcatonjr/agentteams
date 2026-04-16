@@ -19,7 +19,7 @@ Invoke via:
 import shutil  # re-exported so build_team.py can use _enrich.shutil.which(...)
 
 from ._audit import scan_defaults
-from ._enrich import ai_enrich, auto_enrich, export_csv, load_csv, print_enrich_summary
+from ._enrich import ai_enrich, auto_enrich, export_csv, generate_setup_required, load_csv, print_enrich_summary
 from ._models import DefaultFinding
 from ._tools import (
     _IMPORT_TO_PACKAGE,
@@ -36,6 +36,7 @@ __all__ = [
     "export_csv",
     "load_csv",
     "print_enrich_summary",
+    "generate_setup_required",
     "scan_project_imports",
     "build_tool_catalog",
     "_IMPORT_TO_PACKAGE",

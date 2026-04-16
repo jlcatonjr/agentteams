@@ -463,6 +463,20 @@ def main(argv: list[str] | None = None) -> int:
         if not any(p == csv_rel_path for p, _ in final_rendered):
             final_rendered.append((csv_rel_path, csv_content))
 
+        # Regenerate SETUP-REQUIRED.md based only on genuinely pending findings
+        setup_req_content = _enrich.generate_setup_required(findings, manifest)
+        final_rendered = [
+            (p, setup_req_content if "SETUP-REQUIRED" in p else c)
+            for p, c in final_rendered
+        ]
+        # Count pending for emit summary
+        pending_count = sum(1 for f in findings if f.status == "pending")
+        manifest["manual_required_placeholders"] = [
+            {"placeholder": f.token, "agent_file": f.file,
+             "context": f.context_snippet, "suggestion": f.auto_suggestion}
+            for f in findings if f.status == "pending"
+        ]
+
         _enrich.print_enrich_summary(findings)
 
     # -----------------------------------------------------------------------

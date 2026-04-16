@@ -162,10 +162,57 @@ def auto_enrich(
                     finding.status = "auto_filled"
                     modified = True
 
+        # --- Fix COMPONENT_OUTPUT_FILE to use actual notebook path ---
+        # The renderer emits a slug-based fallback path; replace it if we know the real notebook.
+        agent_slug = Path(rel_path).stem.replace(".agent", "")
+        if agent_slug.endswith("-expert"):
+            comp_slug = agent_slug[: -len("-expert")]
+            if comp_slug not in comp_fills_cache:
+                comp = comp_by_slug.get(comp_slug)
+                if comp:
+                    comp_fills_cache[comp_slug] = _build_component_fills(
+                        comp, project_path, manifest
+                    )
+            comp_fills = comp_fills_cache.get(comp_slug, {})
+            actual_output_file = comp_fills.get("COMPONENT_OUTPUT_FILE", "")
+            if actual_output_file and actual_output_file in content:
+                pass  # Already correct
+            elif actual_output_file:
+                # Replace the slug-based fallback path
+                primary_dir = (manifest.get("primary_output_dir") or "").rstrip("/")
+                comp = comp_by_slug.get(comp_slug, {})
+                comp_name_slug = comp.get("name", "").lower().replace(" ", "-")
+                fallback = f"{primary_dir}/{comp_slug}/{comp_name_slug}"
+                if fallback in content:
+                    content = content.replace(fallback, actual_output_file)
+                    modified = True
+
         if modified:
             _comment_re = re.compile(r"\n<!-- .+? -->\n", re.DOTALL)
             content = _comment_re.sub("\n", content)
             enriched[rel_path] = content
+
+    # --- Pass 2: Fix COMPONENT_OUTPUT_FILE for ALL expert files (not just those with findings) ---
+    for rel_path in list(enriched):
+        agent_slug = Path(rel_path).stem.replace(".agent", "")
+        if not agent_slug.endswith("-expert"):
+            continue
+        comp_slug = agent_slug[: -len("-expert")]
+        if comp_slug not in comp_fills_cache:
+            comp = comp_by_slug.get(comp_slug)
+            if comp:
+                comp_fills_cache[comp_slug] = _build_component_fills(comp, project_path, manifest)
+        comp_fills = comp_fills_cache.get(comp_slug, {})
+        actual_output_file = comp_fills.get("COMPONENT_OUTPUT_FILE", "")
+        if not actual_output_file:
+            continue
+        content = enriched[rel_path]
+        primary_dir = (manifest.get("primary_output_dir") or "").rstrip("/")
+        comp_obj = comp_by_slug.get(comp_slug, {})
+        comp_name_slug = comp_obj.get("name", "").lower().replace(" ", "-")
+        fallback = f"{primary_dir}/{comp_slug}/{comp_name_slug}"
+        if fallback in content:
+            enriched[rel_path] = content.replace(fallback, actual_output_file)
 
     # --- Generate stub reference files for MISSING_TOOL_REF findings ---
     missing_ref_findings = [
@@ -205,6 +252,66 @@ def auto_enrich(
             finding.status = "auto_filled"
 
     return enriched, findings
+
+
+def generate_setup_required(
+    findings: list[DefaultFinding],
+    manifest: dict[str, Any],
+) -> str:
+    """Generate SETUP-REQUIRED.md listing only genuinely pending findings.
+
+    Called after auto_enrich so that already-resolved tokens are excluded.
+
+    Args:
+        findings: List of findings with updated statuses after auto_enrich.
+        manifest: Team manifest.
+
+    Returns:
+        Markdown string suitable for writing to SETUP-REQUIRED.md.
+    """
+    project_name = manifest.get("project_name", "Project")
+    pending = [f for f in findings if f.status == "pending"]
+
+    if not pending:
+        return (
+            "# SETUP-REQUIRED.md\n\n"
+            "All placeholders were automatically resolved. No manual setup required.\n\n"
+            f"Agent team successfully generated for **{project_name}**.\n"
+        )
+
+    lines = [
+        "# SETUP-REQUIRED.md",
+        "",
+        f"The following **{len(pending)} placeholder(s)** could not be automatically resolved",
+        f"for project **{project_name}** and require manual attention.",
+        "",
+        "---",
+        "",
+    ]
+    for i, f in enumerate(pending, start=1):
+        lines += [
+            f"## {i}. `{{MANUAL:{f.token}}}`",
+            "",
+            f"**Found in:** `{f.file}`",
+            f"**Section:** {f.section or '(top-level)'}",
+            f"**Context:** {f.context_snippet}",
+        ]
+        if f.auto_suggestion:
+            lines.append(f"**Suggested value:** {f.auto_suggestion}")
+        lines += [
+            "",
+            f"**Action required:** Search for `{{MANUAL:{f.token}}}` across all generated",
+            "agent files and replace with the correct value.",
+            "",
+            "---",
+            "",
+        ]
+
+    lines += [
+        "",
+        "Once all items above are resolved, invoke `@conflict-auditor` to verify consistency.",
+    ]
+    return "\n".join(lines)
 
 
 # ---------------------------------------------------------------------------

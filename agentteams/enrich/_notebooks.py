@@ -115,6 +115,7 @@ def _build_component_fills(
     primary_dir = manifest.get("primary_output_dir", "Textbook/").rstrip("/")
     if matched_nb_path is not None:
         fills["COMPONENT_SOURCES"] = f"- {primary_dir}/{matched_nb_path.name}"
+        fills["COMPONENT_OUTPUT_FILE"] = f"{primary_dir}/{matched_nb_path.name}"
     else:
         fills["COMPONENT_SOURCES"] = f"- {primary_dir}/ (see chapter {number} notebook)"
 

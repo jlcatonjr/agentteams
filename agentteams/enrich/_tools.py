@@ -178,7 +178,146 @@ _TOOL_CATALOG: dict[str, dict[str, str]] = {
             "Pitfall: hidden state from out-of-order execution causes hard-to-reproduce bugs."
         ),
     },
+    "seaborn": {
+        "docs_url": "https://seaborn.pydata.org/api.html",
+        "api_surface": (
+            "Figure-level functions (sns.relplot, sns.displot, sns.catplot, sns.lmplot); "
+            "axes-level functions (sns.scatterplot, sns.lineplot, sns.histplot, sns.kdeplot, "
+            "sns.boxplot, sns.violinplot, sns.barplot, sns.heatmap, sns.pairplot); "
+            "theming (sns.set_theme, sns.set_palette, sns.set_style); "
+            "FacetGrid for multi-panel layout"
+        ),
+        "common_patterns": (
+            "Call sns.set_theme() at the top of a notebook for consistent aesthetics. "
+            "Pass tidy DataFrames via data=df with x='col', y='col' keyword arguments. "
+            "Use hue= for colour-encoding a grouping variable. "
+            "Seaborn is built on Matplotlib — use plt.tight_layout() and plt.savefig() as usual. "
+            "Pitfall: seaborn expects long/tidy data — reshape wide DataFrames with pd.melt() first."
+        ),
+    },
+    "plotly": {
+        "docs_url": "https://plotly.com/python-api-reference/",
+        "api_surface": (
+            "Plotly Express (px) — high-level: px.scatter, px.line, px.bar, px.histogram, "
+            "px.box, px.heatmap, px.choropleth; "
+            "Graph Objects (go) — low-level: go.Figure, go.Scatter, go.Bar, go.Heatmap, "
+            "fig.add_trace(), fig.update_layout(), fig.update_xaxes(); "
+            "Export: fig.show(), fig.write_html(), fig.write_image()"
+        ),
+        "common_patterns": (
+            "Use px for quick interactive charts; switch to go.Figure for fine-grained control. "
+            "fig.show() renders inline in Jupyter — set pio.renderers.default='notebook' if blank. "
+            "fig.update_layout(title=, xaxis_title=, yaxis_title=) for clean labelling. "
+            "Export interactive charts with fig.write_html('chart.html'). "
+            "Pitfall: Plotly figures are JSON-serialisable — very large datasets slow the browser."
+        ),
+    },
+    "networkx": {
+        "docs_url": "https://networkx.org/documentation/stable/reference/",
+        "api_surface": (
+            "Graph creation: nx.Graph(), nx.DiGraph(), nx.MultiGraph(); "
+            "graph manipulation: G.add_node(), G.add_edge(), G.add_nodes_from(), G.add_edges_from(); "
+            "algorithms: nx.shortest_path(), nx.degree_centrality(), nx.betweenness_centrality(), "
+            "nx.pagerank(), nx.connected_components(), nx.is_connected(); "
+            "drawing: nx.draw(), nx.draw_networkx(), nx.spring_layout()"
+        ),
+        "common_patterns": (
+            "Create graphs with G = nx.Graph(); G.add_edges_from(edge_list). "
+            "Store node attributes: G.nodes[n]['weight'] = val. "
+            "Visualise with nx.draw(G, pos=nx.spring_layout(G), with_labels=True). "
+            "For weighted shortest paths pass weight='weight' to the algorithm. "
+            "Pitfall: NetworkX stores graphs in memory — for >100k nodes use GraphTool or igraph."
+        ),
+    },
+    "scikit-learn": {
+        "docs_url": "https://scikit-learn.org/stable/api/index.html",
+        "api_surface": (
+            "Estimator API: .fit(X, y), .predict(X), .transform(X), .fit_transform(X); "
+            "linear models: LinearRegression, Ridge, Lasso, LogisticRegression; "
+            "preprocessing: StandardScaler, MinMaxScaler, OneHotEncoder, LabelEncoder; "
+            "model selection: train_test_split, cross_val_score, GridSearchCV, KFold; "
+            "metrics: mean_squared_error, r2_score, accuracy_score, classification_report; "
+            "pipeline: Pipeline, make_pipeline"
+        ),
+        "common_patterns": (
+            "Always split train/test before fitting: X_train, X_test, y_train, y_test = "
+            "train_test_split(X, y, test_size=0.2, random_state=42). "
+            "Use Pipeline to chain preprocessing + model: Pipeline([('scaler', StandardScaler()), ('model', LinearRegression())]). "
+            "cross_val_score(model, X, y, cv=5) for robust generalisation estimates. "
+            "Pitfall: fit the scaler on training data only, then transform both train and test — "
+            "never call .fit_transform() on the test set."
+        ),
+    },
+    "helipad": {
+        "docs_url": "https://helipad.dev/apidocs/",
+        "api_surface": (
+            "Model class — main simulation container; "
+            "model.addPrimitive(name, cls) — register agent type; "
+            "model.addParam(name, title, type, dflt) — add adjustable parameter; "
+            "model.addPlot(name, title) / model.addSeries() — define visualisation; "
+            "model.start() / model.launchGUI() — run simulation; "
+            "Agent base class with step() method; "
+            "match() function for pairwise agent interactions"
+        ),
+        "common_patterns": (
+            "Define agent behaviour by subclassing Agent and overriding step(). "
+            "Use model.addPrimitive() to register each agent class before calling start(). "
+            "Parameters added with addParam() appear as GUI sliders — set dflt for the default value. "
+            "Collect time-series data via model.addPlot() and model.addSeries(). "
+            "Pitfall: helipad's interactive GUI requires a Tkinter event loop — "
+            "in Jupyter use model.start() rather than model.launchGUI()."
+        ),
+    },
 }
+
+
+def _fetch_pypi_metadata(package_name: str) -> dict[str, str]:
+    """Query the PyPI JSON API and return docs_url + a brief summary.
+
+    Returns a dict with keys: docs_url, api_surface, common_patterns.
+    Values are empty strings on any network/parse error.
+    """
+    url = f"https://pypi.org/pypi/{package_name}/json"
+    result = {"docs_url": "", "api_surface": "", "common_patterns": ""}
+    try:
+        req = urllib.request.Request(url, headers={"User-Agent": "agentteams-enrich/1.0"})
+        with urllib.request.urlopen(req, timeout=6) as resp:
+            data = json.loads(resp.read().decode())
+        info = data.get("info", {})
+
+        # -- docs_url --
+        project_urls: dict = info.get("project_urls") or {}
+        for key in ("Documentation", "Docs", "Doc", "API Reference", "API"):
+            val = project_urls.get(key, "")
+            if val and val.startswith("http"):
+                result["docs_url"] = val
+                break
+        if not result["docs_url"]:
+            for key in ("Homepage", "Source", "Repository"):
+                val = project_urls.get(key, "")
+                if val and val.startswith("http"):
+                    result["docs_url"] = val
+                    break
+        if not result["docs_url"]:
+            result["docs_url"] = info.get("docs_url") or info.get("home_page") or ""
+
+        # -- api_surface from summary + first line of description --
+        summary = (info.get("summary") or "").strip()
+        description = (info.get("description") or "")
+        # Extract first non-empty non-badge line from description as extra context
+        desc_lines = [ln.strip() for ln in description.splitlines()
+                      if ln.strip() and not ln.strip().startswith(("![", "#", "=", "-", "```", "|"))]
+        first_desc = desc_lines[0][:200] if desc_lines else ""
+        if summary:
+            result["api_surface"] = summary
+            if first_desc and first_desc.lower() != summary.lower():
+                result["api_surface"] += f". {first_desc}"
+        elif first_desc:
+            result["api_surface"] = first_desc
+
+    except (urllib.error.URLError, urllib.error.HTTPError, json.JSONDecodeError, OSError):
+        pass
+    return result
 
 
 def _fetch_pypi_docs_url(package_name: str) -> str:
@@ -186,23 +325,7 @@ def _fetch_pypi_docs_url(package_name: str) -> str:
 
     Returns the URL string, or empty string on any error.
     """
-    url = f"https://pypi.org/pypi/{package_name}/json"
-    try:
-        req = urllib.request.Request(url, headers={"User-Agent": "agentteams-enrich/1.0"})
-        with urllib.request.urlopen(req, timeout=6) as resp:
-            data = json.loads(resp.read().decode())
-        info = data.get("info", {})
-        project_urls: dict = info.get("project_urls") or {}
-        for key in ("Documentation", "Docs", "Homepage"):
-            val = project_urls.get(key, "")
-            if val and val.startswith("http"):
-                return val
-        docs = info.get("docs_url") or ""
-        if docs:
-            return docs
-    except (urllib.error.URLError, urllib.error.HTTPError, json.JSONDecodeError, OSError):
-        pass
-    return ""
+    return _fetch_pypi_metadata(package_name)["docs_url"]
 
 
 def _get_docs_url(package_name: str) -> str:
@@ -286,8 +409,16 @@ def build_tool_catalog(
         if pkg in _TOOL_CATALOG:
             catalog[pkg] = _TOOL_CATALOG[pkg]
         else:
-            docs_url = _CANONICAL_DOCS.get(pkg.lower(), "")
-            if not docs_url and fetch_pypi:
-                docs_url = _fetch_pypi_docs_url(pkg)
-            catalog[pkg] = {"docs_url": docs_url, "api_surface": "", "common_patterns": ""}
+            canonical_url = _CANONICAL_DOCS.get(pkg.lower(), "")
+            if canonical_url:
+                catalog[pkg] = {
+                    "docs_url": canonical_url,
+                    "api_surface": "",
+                    "common_patterns": "",
+                }
+            elif fetch_pypi:
+                meta = _fetch_pypi_metadata(pkg)
+                catalog[pkg] = meta
+            else:
+                catalog[pkg] = {"docs_url": "", "api_surface": "", "common_patterns": ""}
     return catalog
