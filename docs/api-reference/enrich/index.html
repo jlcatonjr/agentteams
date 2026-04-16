@@ -12,13 +12,13 @@
         <meta name="author" content="jlcatonjr">
       
       
-        <link rel="canonical" href="https://jlcatonjr.github.io/agentteams/api-reference/graph/">
+        <link rel="canonical" href="https://jlcatonjr.github.io/agentteams/api-reference/enrich/">
       
       
-        <link rel="prev" href="../enrich/">
+        <link rel="prev" href="../remediate/">
       
       
-        <link rel="next" href="../frameworks/">
+        <link rel="next" href="../graph/">
       
       
         
@@ -29,7 +29,7 @@
     
     
       
-        <title>graph - Agent Teams Module</title>
+        <title>enrich - Agent Teams Module</title>
       
     
     
@@ -80,7 +80,7 @@
     <div data-md-component="skip">
       
         
-        <a href="#graph-agentteamsmodule" class="md-skip">
+        <a href="#enrich-agentteamsmodule" class="md-skip">
           Skip to content
         </a>
       
@@ -114,7 +114,7 @@
         <div class="md-header__topic" data-md-component="header-topic">
           <span class="md-ellipsis">
             
-              graph
+              enrich
             
           </span>
         </div>
@@ -893,34 +893,6 @@
                 
   
   
-  
-  
-    <li class="md-nav__item">
-      <a href="../enrich/" class="md-nav__link">
-        
-  
-  
-  <span class="md-ellipsis">
-    
-  
-    enrich
-  
-
-    
-  </span>
-  
-  
-
-      </a>
-    </li>
-  
-
-              
-            
-              
-                
-  
-  
     
   
   
@@ -940,7 +912,7 @@
   <span class="md-ellipsis">
     
   
-    graph
+    enrich
   
 
     
@@ -958,7 +930,7 @@
   <span class="md-ellipsis">
     
   
-    graph
+    enrich
   
 
     
@@ -996,107 +968,13 @@
       <ul class="md-nav__list">
         
           <li class="md-nav__item">
-  <a href="#agentnode" class="md-nav__link">
+  <a href="#defaultfinding" class="md-nav__link">
     <span class="md-ellipsis">
       
-        AgentNode
+        DefaultFinding
       
     </span>
   </a>
-  
-</li>
-        
-          <li class="md-nav__item">
-  <a href="#graphedge" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        GraphEdge
-      
-    </span>
-  </a>
-  
-</li>
-        
-          <li class="md-nav__item">
-  <a href="#teamgraph" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        TeamGraph
-      
-    </span>
-  </a>
-  
-    <nav class="md-nav" aria-label="TeamGraph">
-      <ul class="md-nav__list">
-        
-          <li class="md-nav__item">
-  <a href="#adjacency" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        adjacency()
-      
-    </span>
-  </a>
-  
-</li>
-        
-          <li class="md-nav__item">
-  <a href="#reverse_adjacency" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        reverse_adjacency()
-      
-    </span>
-  </a>
-  
-</li>
-        
-          <li class="md-nav__item">
-  <a href="#to_json" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        to_json()
-      
-    </span>
-  </a>
-  
-</li>
-        
-          <li class="md-nav__item">
-  <a href="#to_mermaid" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        to_mermaid()
-      
-    </span>
-  </a>
-  
-</li>
-        
-          <li class="md-nav__item">
-  <a href="#to_dot" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        to_dot()
-      
-    </span>
-  </a>
-  
-</li>
-        
-          <li class="md-nav__item">
-  <a href="#to_markdown_document" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        to_markdown_document()
-      
-    </span>
-  </a>
-  
-</li>
-        
-      </ul>
-    </nav>
   
 </li>
         
@@ -1118,10 +996,10 @@
       <ul class="md-nav__list">
         
           <li class="md-nav__item">
-  <a href="#build_graphrendered_files-project_name" class="md-nav__link">
+  <a href="#scan_defaultsfile_map-manifest-project_pathnone" class="md-nav__link">
     <span class="md-ellipsis">
       
-        build_graph(rendered_files, project_name)
+        scan_defaults(file_map, manifest, project_path=None)
       
     </span>
   </a>
@@ -1129,10 +1007,10 @@
 </li>
         
           <li class="md-nav__item">
-  <a href="#generate_graph_documentrendered_files-project_name" class="md-nav__link">
+  <a href="#auto_enrichfindings-file_map-manifest-project_pathnone" class="md-nav__link">
     <span class="md-ellipsis">
       
-        generate_graph_document(rendered_files, project_name)
+        auto_enrich(findings, file_map, manifest, project_path=None)
       
     </span>
   </a>
@@ -1140,10 +1018,76 @@
 </li>
         
           <li class="md-nav__item">
-  <a href="#mainargvnone" class="md-nav__link">
+  <a href="#ai_enrichfindings-file_map-manifest-copilot_exe" class="md-nav__link">
     <span class="md-ellipsis">
       
-        main(argv=None)
+        ai_enrich(findings, file_map, manifest, *, copilot_exe)
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#generate_setup_requiredfindings-manifest" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        generate_setup_required(findings, manifest)
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#export_csvfindings-csv_path" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        export_csv(findings, csv_path)
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#load_csvcsv_path" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        load_csv(csv_path)
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#print_enrich_summaryfindings-verbosefalse" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        print_enrich_summary(findings, *, verbose=False)
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#scan_project_importsproject_path" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        scan_project_imports(project_path)
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#build_tool_catalogpackages-fetch_pypitrue" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        build_tool_catalog(packages, *, fetch_pypi=True)
       
     </span>
   </a>
@@ -1159,6 +1103,34 @@
   
 </nav>
       
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../graph/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    graph
+  
+
+    
+  </span>
+  
+  
+
+      </a>
     </li>
   
 
@@ -1374,107 +1346,13 @@
       <ul class="md-nav__list">
         
           <li class="md-nav__item">
-  <a href="#agentnode" class="md-nav__link">
+  <a href="#defaultfinding" class="md-nav__link">
     <span class="md-ellipsis">
       
-        AgentNode
+        DefaultFinding
       
     </span>
   </a>
-  
-</li>
-        
-          <li class="md-nav__item">
-  <a href="#graphedge" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        GraphEdge
-      
-    </span>
-  </a>
-  
-</li>
-        
-          <li class="md-nav__item">
-  <a href="#teamgraph" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        TeamGraph
-      
-    </span>
-  </a>
-  
-    <nav class="md-nav" aria-label="TeamGraph">
-      <ul class="md-nav__list">
-        
-          <li class="md-nav__item">
-  <a href="#adjacency" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        adjacency()
-      
-    </span>
-  </a>
-  
-</li>
-        
-          <li class="md-nav__item">
-  <a href="#reverse_adjacency" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        reverse_adjacency()
-      
-    </span>
-  </a>
-  
-</li>
-        
-          <li class="md-nav__item">
-  <a href="#to_json" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        to_json()
-      
-    </span>
-  </a>
-  
-</li>
-        
-          <li class="md-nav__item">
-  <a href="#to_mermaid" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        to_mermaid()
-      
-    </span>
-  </a>
-  
-</li>
-        
-          <li class="md-nav__item">
-  <a href="#to_dot" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        to_dot()
-      
-    </span>
-  </a>
-  
-</li>
-        
-          <li class="md-nav__item">
-  <a href="#to_markdown_document" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        to_markdown_document()
-      
-    </span>
-  </a>
-  
-</li>
-        
-      </ul>
-    </nav>
   
 </li>
         
@@ -1496,10 +1374,10 @@
       <ul class="md-nav__list">
         
           <li class="md-nav__item">
-  <a href="#build_graphrendered_files-project_name" class="md-nav__link">
+  <a href="#scan_defaultsfile_map-manifest-project_pathnone" class="md-nav__link">
     <span class="md-ellipsis">
       
-        build_graph(rendered_files, project_name)
+        scan_defaults(file_map, manifest, project_path=None)
       
     </span>
   </a>
@@ -1507,10 +1385,10 @@
 </li>
         
           <li class="md-nav__item">
-  <a href="#generate_graph_documentrendered_files-project_name" class="md-nav__link">
+  <a href="#auto_enrichfindings-file_map-manifest-project_pathnone" class="md-nav__link">
     <span class="md-ellipsis">
       
-        generate_graph_document(rendered_files, project_name)
+        auto_enrich(findings, file_map, manifest, project_path=None)
       
     </span>
   </a>
@@ -1518,10 +1396,76 @@
 </li>
         
           <li class="md-nav__item">
-  <a href="#mainargvnone" class="md-nav__link">
+  <a href="#ai_enrichfindings-file_map-manifest-copilot_exe" class="md-nav__link">
     <span class="md-ellipsis">
       
-        main(argv=None)
+        ai_enrich(findings, file_map, manifest, *, copilot_exe)
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#generate_setup_requiredfindings-manifest" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        generate_setup_required(findings, manifest)
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#export_csvfindings-csv_path" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        export_csv(findings, csv_path)
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#load_csvcsv_path" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        load_csv(csv_path)
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#print_enrich_summaryfindings-verbosefalse" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        print_enrich_summary(findings, *, verbose=False)
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#scan_project_importsproject_path" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        scan_project_imports(project_path)
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#build_tool_catalogpackages-fetch_pypitrue" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        build_tool_catalog(packages, *, fetch_pypi=True)
       
     </span>
   </a>
@@ -1553,113 +1497,144 @@
   
 
 
-<h1 id="graph-agentteamsmodule"><code>graph</code> — AgentTeamsModule<a class="headerlink" href="#graph-agentteamsmodule" title="Permanent link">&para;</a></h1>
-<p>Directed graph inference for agent team topology.</p>
-<p>Parses generated agent files (from in-memory rendered content or disk) to build a directed graph of the agent team. Each node is an agent; each edge is a declared connection via YAML <code>handoffs:</code> or <code>agents:</code> list entries.</p>
-<p>Outputs Mermaid flowchart, DOT (Graphviz) source, JSON adjacency list, and human-readable Markdown document. The graph document is regenerated automatically on every <code>build_team.py</code> run and written to <code>references/pipeline-graph.md</code>.</p>
+<h1 id="enrich-agentteamsmodule"><code>enrich</code> — AgentTeamsModule<a class="headerlink" href="#enrich-agentteamsmodule" title="Permanent link">&para;</a></h1>
+<p>Default-value audit and context-aware enrichment for generated agent teams.</p>
+<p>After build, scans agent files for unresolved <code>{MANUAL:*}</code> placeholders and underdeveloped template sections, exports an audit CSV, then attempts auto-enrichment using rule-based fills, project source scanning, and a built-in tool metadata catalog. An optional AI pass via the <code>copilot</code> CLI can fill anything that rule-based logic cannot resolve.</p>
 <blockquote>
-<p><em>Source: <code>agentteams/graph.py</code></em></p>
+<p><em>Source: <code>agentteams/enrich/</code></em></p>
 </blockquote>
 <hr />
 <h2 id="classes">Classes<a class="headerlink" href="#classes" title="Permanent link">&para;</a></h2>
-<h3 id="agentnode"><code>AgentNode</code><a class="headerlink" href="#agentnode" title="Permanent link">&para;</a></h3>
+<h3 id="defaultfinding"><code>DefaultFinding</code><a class="headerlink" href="#defaultfinding" title="Permanent link">&para;</a></h3>
 <blockquote>
-<p><em>Source: <code>agentteams/graph.py</code></em></p>
+<p><em>Source: <code>agentteams/enrich/_models.py</code></em></p>
 </blockquote>
-<p>Metadata for a single agent node in the team graph.</p>
+<p>A single default-value (underdeveloped template) finding.</p>
 <p><strong>Attributes:</strong></p>
 <ul>
-<li><code>slug</code> (<code>str</code>) — Machine-readable identifier derived from filename.</li>
-<li><code>display_name</code> (<code>str</code>) — Human-readable name from YAML <code>name:</code> field.</li>
-<li><code>agent_type</code> (<code>str</code>) — Categorical type: <code>'governance'</code>, <code>'domain'</code>, <code>'workstream-expert'</code>, <code>'tool-specialist'</code>, or <code>'unknown'</code>.</li>
-<li><code>user_invokable</code> (<code>bool</code>) — <code>True</code> if the agent can be invoked directly by a user.</li>
-<li><code>tools</code> (<code>list[str]</code>) — Declared tool list from YAML.</li>
+<li><code>file</code> (<code>str</code>) — Relative path to the agent file.</li>
+<li><code>category</code> (<code>str</code>) — <code>'MANUAL_PLACEHOLDER'</code>, <code>'GENERIC_SECTION'</code>, <code>'TOOL_METADATA'</code>, or <code>'MISSING_TOOL_REF'</code>.</li>
+<li><code>token</code> (<code>str</code>) — The placeholder name or section label, e.g. <code>COMPONENT_SPEC</code> or <code>STYLE_REFERENCE_PATH</code>.</li>
+<li><code>line_no</code> (<code>int</code>) — 1-based line number of the finding in the agent file.</li>
+<li><code>section</code> (<code>str</code>) — Nearest <code>##</code> section heading above the finding, or <code>''</code> if in front matter.</li>
+<li><code>context_snippet</code> (<code>str</code>) — 1–2 lines of surrounding context.</li>
+<li><code>status</code> (<code>str</code>) — <code>'pending'</code>, <code>'auto_filled'</code>, or <code>'ai_filled'</code> (set by <code>auto_enrich</code> or <code>ai_enrich</code>).</li>
+<li><code>auto_suggestion</code> (<code>str | None</code>) — Suggested replacement value, if one was computed.</li>
 </ul>
-<hr />
-<h3 id="graphedge"><code>GraphEdge</code><a class="headerlink" href="#graphedge" title="Permanent link">&para;</a></h3>
-<blockquote>
-<p><em>Source: <code>agentteams/graph.py</code></em></p>
-</blockquote>
-<p>A directed edge between two agent nodes.</p>
-<p><strong>Attributes:</strong></p>
-<ul>
-<li><code>source</code> (<code>str</code>) — Slug of the originating agent.</li>
-<li><code>target</code> (<code>str</code>) — Slug of the target agent.</li>
-<li><code>edge_type</code> (<code>str</code>) — <code>'handoff'</code> (from <code>handoffs:</code> YAML block) or <code>'agents-list'</code> (from <code>agents:</code> YAML list).</li>
-<li><code>label</code> (<code>str | None</code>) — Optional human-readable label from handoff <code>label:</code> key.</li>
-</ul>
-<hr />
-<h3 id="teamgraph"><code>TeamGraph</code><a class="headerlink" href="#teamgraph" title="Permanent link">&para;</a></h3>
-<blockquote>
-<p><em>Source: <code>agentteams/graph.py</code></em></p>
-</blockquote>
-<p>Complete directed graph of the agent team.</p>
-<p><strong>Attributes:</strong></p>
-<ul>
-<li><code>project_name</code> (<code>str</code>) — Name of the project this graph belongs to.</li>
-<li><code>nodes</code> (<code>dict[str, AgentNode]</code>) — Dict mapping slug → <code>AgentNode</code>.</li>
-<li><code>edges</code> (<code>list[GraphEdge]</code>) — List of directed <code>GraphEdge</code> instances.</li>
-</ul>
-<p><strong>Methods:</strong></p>
-<h4 id="adjacency"><code>adjacency()</code><a class="headerlink" href="#adjacency" title="Permanent link">&para;</a></h4>
-<p>Return a dict mapping each slug to its list of direct successors.</p>
-<p><strong>Returns:</strong> <code>dict[str, list[str]]</code> — Adjacency dict; values are sorted lists of target slugs.</p>
-<h4 id="reverse_adjacency"><code>reverse_adjacency()</code><a class="headerlink" href="#reverse_adjacency" title="Permanent link">&para;</a></h4>
-<p>Return a dict mapping each slug to its list of direct predecessors.</p>
-<p><strong>Returns:</strong> <code>dict[str, list[str]]</code> — Reverse adjacency dict; values are sorted lists of source slugs.</p>
-<h4 id="to_json"><code>to_json()</code><a class="headerlink" href="#to_json" title="Permanent link">&para;</a></h4>
-<p>Serialise the graph to a JSON adjacency list.</p>
-<p><strong>Returns:</strong> <code>str</code> — JSON string with keys: <code>project_name</code>, <code>nodes</code>, <code>edges</code>, <code>adjacency</code>.</p>
-<h4 id="to_mermaid"><code>to_mermaid()</code><a class="headerlink" href="#to_mermaid" title="Permanent link">&para;</a></h4>
-<p>Render the graph as a Mermaid <code>flowchart LR</code>. Nodes are colour-coded by agent type. Handoff edges are solid arrows; agents-list edges are dashed.</p>
-<p><strong>Returns:</strong> <code>str</code> — Mermaid <code>flowchart LR</code> block (no surrounding code fences).</p>
-<h4 id="to_dot"><code>to_dot()</code><a class="headerlink" href="#to_dot" title="Permanent link">&para;</a></h4>
-<p>Render the graph as a Graphviz DOT source file.</p>
-<p><strong>Returns:</strong> <code>str</code> — DOT digraph source as a plain string.</p>
-<h4 id="to_markdown_document"><code>to_markdown_document()</code><a class="headerlink" href="#to_markdown_document" title="Permanent link">&para;</a></h4>
-<p>Render a full Markdown document containing the Mermaid graph, a legend, and agent tables. Written to <code>references/pipeline-graph.md</code> on every <code>build_team.py</code> run.</p>
-<p><strong>Returns:</strong> <code>str</code> — Complete Markdown document as a string.</p>
 <hr />
 <h2 id="functions">Functions<a class="headerlink" href="#functions" title="Permanent link">&para;</a></h2>
-<h3 id="build_graphrendered_files-project_name"><code>build_graph(rendered_files, project_name)</code><a class="headerlink" href="#build_graphrendered_files-project_name" title="Permanent link">&para;</a></h3>
+<h3 id="scan_defaultsfile_map-manifest-project_pathnone"><code>scan_defaults(file_map, manifest, project_path=None)</code><a class="headerlink" href="#scan_defaultsfile_map-manifest-project_pathnone" title="Permanent link">&para;</a></h3>
 <blockquote>
-<p><em>Source: <code>agentteams/graph.py</code></em></p>
+<p><em>Source: <code>agentteams/enrich/_audit.py</code></em></p>
 </blockquote>
-<p>Build a <code>TeamGraph</code> from in-memory rendered agent file content.</p>
+<p>Scan generated agent files for unresolved default template elements.</p>
+<p>Detects: <code>{MANUAL:TOKEN}</code> placeholders, tool reference files with incomplete metadata, underdeveloped sections (comment-only bodies, generic boilerplate), and packages imported in project source with no reference file.</p>
 <p><strong>Args:</strong></p>
 <ul>
-<li><code>rendered_files</code> (<code>dict[str, str]</code>) — Dict mapping relative path → rendered content.</li>
-<li><code>project_name</code> (<code>str</code>) — Display name for the project.</li>
+<li><code>file_map</code> (<code>dict[str, str]</code>) — Rendered file content keyed by relative path.</li>
+<li><code>manifest</code> (<code>dict[str, Any]</code>) — Team manifest from <code>analyze.build_manifest()</code>.</li>
+<li><code>project_path</code> (<code>Path | None</code>) — Project root; enables import scanning for coverage gaps.</li>
 </ul>
-<p><strong>Returns:</strong> <code>TeamGraph</code></p>
+<p><strong>Returns:</strong> <code>list[DefaultFinding]</code></p>
 <hr />
-<h3 id="generate_graph_documentrendered_files-project_name"><code>generate_graph_document(rendered_files, project_name)</code><a class="headerlink" href="#generate_graph_documentrendered_files-project_name" title="Permanent link">&para;</a></h3>
+<h3 id="auto_enrichfindings-file_map-manifest-project_pathnone"><code>auto_enrich(findings, file_map, manifest, project_path=None)</code><a class="headerlink" href="#auto_enrichfindings-file_map-manifest-project_pathnone" title="Permanent link">&para;</a></h3>
 <blockquote>
-<p><em>Source: <code>agentteams/graph.py</code></em></p>
+<p><em>Source: <code>agentteams/enrich/_enrich.py</code></em></p>
 </blockquote>
-<p>Generate the full Markdown graph document combining Mermaid, DOT, and JSON representations.</p>
+<p>Apply all resolvable fills to <code>file_map</code>, returning an enriched copy.</p>
+<p>Applies three fill strategies in order: rule-based fills for known token patterns, notebook-header scanning for component specs, and the built-in tool metadata catalog for <code>TOOL_DOCS_URL</code>, <code>TOOL_API_SURFACE</code>, and <code>TOOL_COMMON_PATTERNS</code> tokens.</p>
 <p><strong>Args:</strong></p>
 <ul>
-<li><code>rendered_files</code> (<code>dict[str, str]</code>) — Dict mapping relative path → rendered content.</li>
-<li><code>project_name</code> (<code>str</code>) — Project display name for the document header.</li>
+<li><code>findings</code> (<code>list[DefaultFinding]</code>) — Findings from <code>scan_defaults()</code>.</li>
+<li><code>file_map</code> (<code>dict[str, str]</code>) — Rendered file content keyed by relative path.</li>
+<li><code>manifest</code> (<code>dict[str, Any]</code>) — Team manifest from <code>analyze.build_manifest()</code>.</li>
+<li><code>project_path</code> (<code>Path | None</code>) — Absolute path to the project repo root (enables notebook scanning).</li>
 </ul>
-<p><strong>Returns:</strong> <code>str</code> — Full Markdown document content.</p>
+<p><strong>Returns:</strong> <code>tuple[dict[str, str], list[DefaultFinding]]</code> — <code>(enriched_file_map, updated_findings)</code></p>
 <hr />
-<h3 id="mainargvnone"><code>main(argv=None)</code><a class="headerlink" href="#mainargvnone" title="Permanent link">&para;</a></h3>
+<h3 id="ai_enrichfindings-file_map-manifest-copilot_exe"><code>ai_enrich(findings, file_map, manifest, *, copilot_exe)</code><a class="headerlink" href="#ai_enrichfindings-file_map-manifest-copilot_exe" title="Permanent link">&para;</a></h3>
 <blockquote>
-<p><em>Source: <code>agentteams/graph.py</code></em></p>
+<p><em>Source: <code>agentteams/enrich/_enrich.py</code></em></p>
 </blockquote>
-<p>CLI entry point for standalone graph generation.</p>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a>python<span class="w"> </span>-m<span class="w"> </span>src.graph<span class="w"> </span>/path/to/.github/agents/
-<a id="__codelineno-0-2" name="__codelineno-0-2" href="#__codelineno-0-2"></a>python<span class="w"> </span>-m<span class="w"> </span>src.graph<span class="w"> </span>/path/to/.github/agents/<span class="w"> </span>--format<span class="w"> </span>mermaid
-<a id="__codelineno-0-3" name="__codelineno-0-3" href="#__codelineno-0-3"></a>python<span class="w"> </span>-m<span class="w"> </span>src.graph<span class="w"> </span>/path/to/.github/agents/<span class="w"> </span>--format<span class="w"> </span>dot
-<a id="__codelineno-0-4" name="__codelineno-0-4" href="#__codelineno-0-4"></a>python<span class="w"> </span>-m<span class="w"> </span>src.graph<span class="w"> </span>/path/to/.github/agents/<span class="w"> </span>--format<span class="w"> </span>json
-</code></pre></div>
+<p>Fill remaining pending findings using the <code>copilot</code> CLI.</p>
+<p>Called after <code>auto_enrich</code> to handle tokens that rule-based logic could not resolve. Invokes the standalone <code>copilot</code> CLI in non-interactive mode with the project context and list of pending findings.</p>
 <p><strong>Args:</strong></p>
 <ul>
-<li><code>argv</code> (<code>list[str] | None</code>) — Argument list. If <code>None</code>, uses <code>sys.argv[1:]</code>.</li>
+<li><code>findings</code> (<code>list[DefaultFinding]</code>) — Findings list (pending items will be targeted).</li>
+<li><code>file_map</code> (<code>dict[str, str]</code>) — Current rendered file map (will be updated in place).</li>
+<li><code>manifest</code> (<code>dict[str, Any]</code>) — Team manifest.</li>
+<li><code>copilot_exe</code> (<code>str</code>, keyword-only) — Absolute path to the <code>copilot</code> executable (from <code>shutil.which</code>).</li>
 </ul>
-<p><strong>Returns:</strong> <code>int</code> — Exit code (0 = success, 1 = error).</p>
+<p><strong>Returns:</strong> <code>tuple[dict[str, str], list[DefaultFinding]]</code> — <code>(enriched_file_map, updated_findings)</code></p>
+<hr />
+<h3 id="generate_setup_requiredfindings-manifest"><code>generate_setup_required(findings, manifest)</code><a class="headerlink" href="#generate_setup_requiredfindings-manifest" title="Permanent link">&para;</a></h3>
+<blockquote>
+<p><em>Source: <code>agentteams/enrich/_enrich.py</code></em></p>
+</blockquote>
+<p>Generate <code>SETUP-REQUIRED.md</code> listing only genuinely pending findings.</p>
+<p>Called after <code>auto_enrich</code> so that already-resolved tokens are excluded.</p>
+<p><strong>Args:</strong></p>
+<ul>
+<li><code>findings</code> (<code>list[DefaultFinding]</code>) — Findings list with updated statuses after <code>auto_enrich</code>.</li>
+<li><code>manifest</code> (<code>dict[str, Any]</code>) — Team manifest.</li>
+</ul>
+<p><strong>Returns:</strong> <code>str</code> — Markdown string suitable for writing to <code>SETUP-REQUIRED.md</code>.</p>
+<hr />
+<h3 id="export_csvfindings-csv_path"><code>export_csv(findings, csv_path)</code><a class="headerlink" href="#export_csvfindings-csv_path" title="Permanent link">&para;</a></h3>
+<blockquote>
+<p><em>Source: <code>agentteams/enrich/_enrich.py</code></em></p>
+</blockquote>
+<p>Write findings to a CSV file.</p>
+<p><strong>Args:</strong></p>
+<ul>
+<li><code>findings</code> (<code>list[DefaultFinding]</code>) — Findings to export.</li>
+<li><code>csv_path</code> (<code>Path</code>) — Destination path for the CSV file.</li>
+</ul>
+<hr />
+<h3 id="load_csvcsv_path"><code>load_csv(csv_path)</code><a class="headerlink" href="#load_csvcsv_path" title="Permanent link">&para;</a></h3>
+<blockquote>
+<p><em>Source: <code>agentteams/enrich/_enrich.py</code></em></p>
+</blockquote>
+<p>Load findings from a previously exported CSV file.</p>
+<p><strong>Args:</strong></p>
+<ul>
+<li><code>csv_path</code> (<code>Path</code>) — Path to a CSV file written by <code>export_csv()</code>.</li>
+</ul>
+<p><strong>Returns:</strong> <code>list[DefaultFinding]</code></p>
+<hr />
+<h3 id="print_enrich_summaryfindings-verbosefalse"><code>print_enrich_summary(findings, *, verbose=False)</code><a class="headerlink" href="#print_enrich_summaryfindings-verbosefalse" title="Permanent link">&para;</a></h3>
+<blockquote>
+<p><em>Source: <code>agentteams/enrich/_enrich.py</code></em></p>
+</blockquote>
+<p>Print a human-readable enrichment summary to stdout.</p>
+<p><strong>Args:</strong></p>
+<ul>
+<li><code>findings</code> (<code>list[DefaultFinding]</code>) — Findings list after <code>auto_enrich</code> has set statuses.</li>
+<li><code>verbose</code> (<code>bool</code>, keyword-only) — If <code>True</code>, list all pending findings individually. Default: <code>False</code>.</li>
+</ul>
+<hr />
+<h3 id="scan_project_importsproject_path"><code>scan_project_imports(project_path)</code><a class="headerlink" href="#scan_project_importsproject_path" title="Permanent link">&para;</a></h3>
+<blockquote>
+<p><em>Source: <code>agentteams/enrich/_tools.py</code></em></p>
+</blockquote>
+<p>Scan Python source files in <code>project_path</code> for import statements and return a mapping of imported package names to their canonical PyPI names.</p>
+<p><strong>Args:</strong></p>
+<ul>
+<li><code>project_path</code> (<code>Path</code>) — Root directory to scan (walks recursively).</li>
+</ul>
+<p><strong>Returns:</strong> <code>dict[str, str]</code> — <code>{import_name: pypi_package_name}</code></p>
+<hr />
+<h3 id="build_tool_catalogpackages-fetch_pypitrue"><code>build_tool_catalog(packages, *, fetch_pypi=True)</code><a class="headerlink" href="#build_tool_catalogpackages-fetch_pypitrue" title="Permanent link">&para;</a></h3>
+<blockquote>
+<p><em>Source: <code>agentteams/enrich/_tools.py</code></em></p>
+</blockquote>
+<p>Build a metadata catalog for a list of packages, combining the built-in static catalog with optional live PyPI lookups.</p>
+<p><strong>Args:</strong></p>
+<ul>
+<li><code>packages</code> (<code>list[str]</code>) — PyPI package names to look up.</li>
+<li><code>fetch_pypi</code> (<code>bool</code>, keyword-only) — If <code>True</code>, fetch live metadata from PyPI for packages not in the static catalog. Default: <code>True</code>.</li>
+</ul>
+<p><strong>Returns:</strong> <code>dict[str, dict[str, str]]</code> — Keyed by normalized package name; values contain <code>docs_url</code>, <code>api_surface</code>, and <code>common_patterns</code>.</p>
 
 
 

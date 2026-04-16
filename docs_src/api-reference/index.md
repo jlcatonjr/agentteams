@@ -21,6 +21,7 @@ Public API for the `agentteams` package. Each module corresponds to a stage in t
 | [`scan`](scan.md) | Proactive security scan for generated agent files |
 | [`audit`](audit.md) | Post-generation static and AI-powered audit |
 | [`remediate`](remediate.md) | Auto-correct audit findings via standalone Copilot CLI |
+| [`enrich`](enrich.md) | Default-value audit and context-aware placeholder enrichment |
 | [`graph`](graph.md) | Directed graph inference for agent team topology |
 | [`frameworks`](frameworks.md) | Per-framework adapter classes |
 

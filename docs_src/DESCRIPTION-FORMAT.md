@@ -1,6 +1,6 @@
 # Project Description Format
 
-This guide documents every field in the project description format used by the Agent Teams Module. For the full JSON Schema, see [schemas/project-description.schema.json](../schemas/project-description.schema.json).
+This guide documents every field in the project description format used by the Agent Teams Module. For the full JSON Schema, see [schemas/project-description.schema.json](https://github.com/jlcatonjr/agentteams/blob/main/schemas/project-description.schema.json).
 
 ---
 
