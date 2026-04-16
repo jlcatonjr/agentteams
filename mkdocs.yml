@@ -3,7 +3,9 @@ site_description: Generate a complete, coordinated AI agent team for any project
 site_url: https://jlcatonjr.github.io/agentteams/
 repo_url: https://github.com/jlcatonjr/agentteams
 repo_name: jlcatonjr/agentteams
-edit_uri: edit/main/docs/
+edit_uri: edit/main/docs_src/
+docs_dir: docs_src
+site_dir: docs
 site_author: jlcatonjr
 copyright: "&copy; 2025 jlcatonjr"
 

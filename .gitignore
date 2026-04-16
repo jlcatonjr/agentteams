@@ -29,7 +29,7 @@ build-team-steps.csv
 tool-enrichment-steps.csv
 
 # Structural or audit plan docs committed during development
-docs/structural-update-plan.md
+docs_src/structural-update-plan.md
 python
 
 # Stale root-level templates/ — canonical copy is agentteams/templates/
