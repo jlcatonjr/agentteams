@@ -26,6 +26,9 @@ jobs:
       - name: Build docs
         run: mkdocs build
 
+      - name: Ensure .nojekyll (prevents GitHub Pages from running Jekyll)
+        run: touch docs/.nojekyll
+
       - name: Commit built docs to main
         run: |
           git config user.name "github-actions[bot]"

@@ -6,7 +6,10 @@ repo_name: jlcatonjr/agentteams
 edit_uri: edit/main/docs_src/
 docs_dir: docs_src
 site_dir: docs
+use_directory_urls: true
 site_author: jlcatonjr
+extra:
+  generator: false
 copyright: "&copy; 2025 jlcatonjr"
 
 theme:

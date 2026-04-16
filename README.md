@@ -6,6 +6,8 @@
 
 Generate a complete, coordinated AI agent team for any project — from a single project description file.
 
+**Documentation:** https://jlcatonjr.github.io/agentteams/
+
 ---
 
 ## What It Does
