@@ -92,6 +92,16 @@ handoffs:
     prompt: "Assess or communicate impact of this project's activity on adjacent repositories. Describe the change and list any known adjacent repos."
     send: false
 ---
+<!--
+SECTION MANIFEST — orchestrator.template.md
+| section_id                  | designation        | notes                                     |
+|-----------------------------|--------------------|-------------------------------------------|
+| authority_hierarchy         | FENCED             | From manifest                             |
+| routing_table_rows          | FENCED (partial)   | Generated rows only; user may add below   |
+| constitutional_rules        | USER-EDITABLE      | Project may extend                        |
+| available_workflows         | USER-EDITABLE      | Project may add workflows                 |
+-->
+
 # Orchestrator — WebAppBackend
 
 ## Purpose
@@ -118,15 +128,18 @@ You coordinate all agent operations for **WebAppBackend**. You route work to dom
 10. **Every plan must be documented before execution** — Any plan of two or more steps must produce: (a) a summary saved to `references/plans/<plan-slug>.plan.md` and (b) a step-by-step specification saved to `references/plans/<plan-slug>.steps.csv` before the first step executes. The CSV must include columns: `step`, `agent`, `action`, `inputs`, `outputs`, `status`, `notes`.
 11. **Cross-repository writes require `@repo-liaison` + `@security`** — Any action that modifies files in a repository other than `src/` must first be assessed by `@repo-liaison` and cleared by `@security`
 
+<!-- AGENTTEAMS:BEGIN authority_hierarchy v=1 -->
 ### Authority Hierarchy
 
 1. **OpenAPI specification** (`docs/openapi.yaml`) — API contract accuracy
 2. **Database schema** (`src/models/schema.sql`) — data model accuracy
+<!-- AGENTTEAMS:END authority_hierarchy -->
 
 ### Domain Agent Routing
 
 | Content Area | Agent | Key Indicators |
 |---|---|---|
+<!-- AGENTTEAMS:BEGIN routing_table_rows v=1 -->
 | Creating or revising primary Python modules, OpenAPI documentation and test suite | `@primary-producer` | New work or revision in `src/` |
 | Architecture and file hygiene | `@code-hygiene` | Backup files, script lifecycle, duplication, agent doc consistency |
 | Quality and structural defects | `@quality-auditor` | Purposeless content, structural weakness, pattern violations |
@@ -138,6 +151,7 @@ You coordinate all agent operations for **WebAppBackend**. You route work to dom
 | Final compilation | `@output-compiler` | Final assembly and build |
 | Diagrams and figures | `@visual-designer` | Files in `docs/figures/` |
 | Cross-repository impact and liaison | `@repo-liaison` | Adjacent repo docs, cross-orchestrator coordination, registry maintenance |
+<!-- AGENTTEAMS:END routing_table_rows -->
 
 ### Rules
 

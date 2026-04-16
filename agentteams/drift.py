@@ -457,3 +457,55 @@ def _discover_used_templates(build_log: dict[str, Any], templates_dir: Path) -> 
 def _iter_template_files(templates_dir: Path) -> list[Path]:
     """Return all .template.md files in the templates directory."""
     return sorted(templates_dir.rglob("*.template.md"))
+
+
+def detect_user_customizations(
+    agents_dir: Path,
+    *,
+    build_log: dict[str, Any] | None = None,
+) -> list[dict[str, str]]:
+    """Detect generated agent files that have been edited since last build.
+
+    Compares the SHA-256 hash of each on-disk file against the hash recorded
+    in ``build-log.json`` at the time of last generation.  A hash mismatch
+    indicates the file has been modified since generation -- either by the user
+    or by an automated agent (e.g. ``@agent-updater``).
+
+    This result is **advisory**.  It surfaces for human review before the user
+    commits to ``--merge`` or ``--overwrite``; it is not a hard block.
+
+    Args:
+        agents_dir: Path to the ``.github/agents/`` directory.
+        build_log:  Pre-loaded build-log dict.  If ``None``, loaded from
+                    ``agents_dir``.
+
+    Returns:
+        List of dicts, each with keys ``path`` (absolute path string) and
+        ``reason`` (always ``"modified since last build"``).  Empty list if
+        no customizations are detected or if ``build-log.json`` is absent.
+    """
+    try:
+        if build_log is None:
+            build_log = load_build_log(agents_dir)
+    except (FileNotFoundError, ValueError):
+        return []
+
+    file_hashes: dict[str, str] = build_log.get("file_hashes", {})
+    if not file_hashes:
+        return []
+
+    customized: list[dict[str, str]] = []
+    for rel_path, recorded_hash in file_hashes.items():
+        # rel_path may start with '../' (e.g. '../copilot-instructions.md')
+        abs_path = (agents_dir / Path(rel_path)).resolve()
+        if not abs_path.exists():
+            continue
+        current_hash = hashlib.sha256(abs_path.read_bytes()).hexdigest()[:16]
+        if current_hash != recorded_hash:
+            customized.append({
+                "path": str(abs_path),
+                "rel_path": rel_path,
+                "reason": "modified since last build",
+            })
+
+    return customized

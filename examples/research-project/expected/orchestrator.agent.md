@@ -110,6 +110,16 @@ handoffs:
     send: false
 ---
 
+<!--
+SECTION MANIFEST — orchestrator.template.md
+| section_id                  | designation        | notes                                     |
+|-----------------------------|--------------------|-------------------------------------------|
+| authority_hierarchy         | FENCED             | From manifest                             |
+| routing_table_rows          | FENCED (partial)   | Generated rows only; user may add below   |
+| constitutional_rules        | USER-EDITABLE      | Project may extend                        |
+| available_workflows         | USER-EDITABLE      | Project may add workflows                 |
+-->
+
 # Orchestrator — ResearchPaperProject
 
 ## Purpose
@@ -136,15 +146,18 @@ You coordinate all agent operations for **ResearchPaperProject**. You route work
 10. **Every plan must be documented before execution** — Any plan of two or more steps must produce: (a) a summary saved to `references/plans/<plan-slug>.plan.md` and (b) a step-by-step specification saved to `references/plans/<plan-slug>.steps.csv` before the first step executes. The CSV must include columns: `step`, `agent`, `action`, `inputs`, `outputs`, `status`, `notes`.
 11. **Cross-repository writes require `@repo-liaison` + `@security`** — Any action that modifies files in a repository other than `html/chapters/` must first be assessed by `@repo-liaison` and cleared by `@security`
 
+<!-- AGENTTEAMS:BEGIN authority_hierarchy v=1 -->
 ### Authority Hierarchy
 
 1. **Published papers by James Caton** (`sources/papers/`) — theoretical claims
 2. **Agent source files** (`.github/agents/`) — agent documentation accuracy
+<!-- AGENTTEAMS:END authority_hierarchy -->
 
 ### Domain Agent Routing
 
 | Content Area | Agent | Key Indicators |
 |---|---|---|
+<!-- AGENTTEAMS:BEGIN routing_table_rows v=1 -->
 | Creating or revising primary HTML chapter drafts, LaTeX manuscript and BibTeX bibliography | `@primary-producer` | New work or revision in `html/chapters/` |
 | Architecture and file hygiene | `@code-hygiene` | Backup files, script lifecycle, duplication, agent doc consistency |
 | Quality and structural defects | `@quality-auditor` | Purposeless content, structural weakness, pattern violations |
@@ -156,6 +169,7 @@ You coordinate all agent operations for **ResearchPaperProject**. You route work
 | Final compilation | `@output-compiler` | Final assembly and build |
 | Diagrams and figures | `@visual-designer` | Files in `figures/` |
 | Cross-repository impact and liaison | `@repo-liaison` | Adjacent repo docs, cross-orchestrator coordination, registry maintenance |
+<!-- AGENTTEAMS:END routing_table_rows -->
 
 ### Rules
 

@@ -1,18 +1,35 @@
+<!--
+SECTION MANIFEST — copilot-instructions.template.md
+| section_id            | designation   | notes                                    |
+|-----------------------|---------------|------------------------------------------|
+| project_overview      | FENCED        | Name, goal, deliverable type, output fmt |
+| directory_structure   | FENCED        | Path/purpose table                       |
+| output_conventions    | FENCED        | Authoring and build conventions          |
+| agent_team            | FENCED        | Full agent team list                     |
+| authority_hierarchy   | FENCED        | Source hierarchy list                    |
+| source_repositories   | FENCED        | Authority source entries                 |
+| constitutional_rules  | USER-EDITABLE | Project may extend or customise          |
+| style_rules           | USER-EDITABLE | Project may extend or customise          |
+-->
+
 # {PROJECT_NAME} — Copilot Instructions
 
 > This file defines the conventions, authority hierarchy, and agent team structure for all GitHub Copilot agents in {PROJECT_NAME}.
 
 ---
 
+<!-- AGENTTEAMS:BEGIN project_overview v=1 -->
 ## Project Overview
 
 **Name:** {PROJECT_NAME}
 **Goal:** {PROJECT_GOAL}
 **Deliverable type:** {DELIVERABLE_TYPE}
 **Output format:** {OUTPUT_FORMAT}
+<!-- AGENTTEAMS:END project_overview -->
 
 ---
 
+<!-- AGENTTEAMS:BEGIN directory_structure v=1 -->
 ## Directory Structure
 
 | Path | Purpose |
@@ -23,18 +40,22 @@
 | `{REFERENCE_DB_PATH}` | Reference/bibliography database |
 | `.github/agents/` | Agent definition files |
 | `.github/agents/references/` | Shared reference data |
+<!-- AGENTTEAMS:END directory_structure -->
 
 ---
 
+<!-- AGENTTEAMS:BEGIN output_conventions v=1 -->
 ## Output Conventions
 
 - All primary deliverables are authored in `{PRIMARY_OUTPUT_DIR}` as `{DELIVERABLE_TYPE}`
 - Compiled output lives in `{BUILD_OUTPUT_DIR}` and is **never edited directly**
 - Figures are generated from source files in `{FIGURES_DIR}` — source files are authoritative
 - Every deliverable must correspond to a Component Spec defined by a workstream expert
+<!-- AGENTTEAMS:END output_conventions -->
 
 ---
 
+<!-- AGENTTEAMS:BEGIN agent_team v=1 -->
 ## Agent Team
 
 ### Orchestrator
@@ -56,12 +77,15 @@
 
 ### Workstream Experts
 {WORKSTREAM_EXPERT_LIST}
+<!-- AGENTTEAMS:END agent_team -->
 
 ---
 
+<!-- AGENTTEAMS:BEGIN authority_hierarchy v=1 -->
 ## Authority Hierarchy
 
 {AUTHORITY_HIERARCHY}
+<!-- AGENTTEAMS:END authority_hierarchy -->
 
 ---
 
@@ -78,9 +102,11 @@
 
 ---
 
+<!-- AGENTTEAMS:BEGIN source_repositories v=1 -->
 ## Source Repositories
 
 {AUTHORITY_SOURCES_LIST}
+<!-- AGENTTEAMS:END source_repositories -->
 
 ---
 

@@ -98,10 +98,19 @@ def _build_parser() -> argparse.ArgumentParser:
         action="store_true",
         help="Show what would be generated without writing files",
     )
-    parser.add_argument(
+    overwrite_group = parser.add_mutually_exclusive_group()
+    overwrite_group.add_argument(
         "--overwrite",
         action="store_true",
-        help="Overwrite existing agent files without prompting",
+        help="Overwrite existing agent files unconditionally (full-file replacement). "
+             "Use --merge instead to preserve user-authored content in fenced files.",
+    )
+    overwrite_group.add_argument(
+        "--merge",
+        action="store_true",
+        help="Update only template-fenced regions in existing agent files, "
+             "preserving all user-authored content outside fence markers. "
+             "Skips legacy files (no fence markers) with a warning.",
     )
     parser.add_argument(
         "--yes", "-y",
@@ -541,11 +550,25 @@ def main(argv: list[str] | None = None) -> int:
     # -----------------------------------------------------------------------
     # Step 7: Emit
     # -----------------------------------------------------------------------
+    # Surface user-customization warnings before a merge so users can review
+    if args.merge and not args.dry_run:
+        from agentteams import drift as _drift_mod
+        customized = _drift_mod.detect_user_customizations(output_dir)
+        if customized:
+            print(f"\n  ℹ  {len(customized)} file(s) have been edited since last build (advisory):")
+            for entry in customized[:10]:
+                print(f"     ~ {entry['rel_path']}  ({entry['reason']})")
+            if len(customized) > 10:
+                print(f"     ... and {len(customized) - 10} more")
+            print("     These files will have their fenced sections updated; "
+                  "user-authored content outside fences is preserved.")
+
     result = emit.emit_all(
         final_rendered,
         output_dir=output_dir,
         dry_run=args.dry_run,
         overwrite=args.overwrite,
+        merge=args.merge,
         yes=args.yes,
     )
 
@@ -765,6 +788,31 @@ def _extract_resolved_value(existing: str, new: str, placeholder: str) -> str | 
     return None
 
 
+def _compute_file_hashes(written_abs_paths: list[str], output_dir: Path) -> dict[str, str]:
+    """Return a mapping of relative path → 16-char SHA-256 hex for written files.
+
+    Paths are stored relative to output_dir so the build-log is portable.
+    """
+    import hashlib
+    hashes: dict[str, str] = {}
+    for abs_path_str in written_abs_paths:
+        abs_path = Path(abs_path_str)
+        if not abs_path.exists():
+            continue
+        try:
+            rel = str(abs_path.relative_to(output_dir))
+        except ValueError:
+            # File is outside output_dir (e.g. ../copilot-instructions.md)
+            try:
+                rel = str(abs_path.relative_to(output_dir.parent))
+                rel = "../" + rel
+            except ValueError:
+                rel = abs_path_str
+        digest = hashlib.sha256(abs_path.read_bytes()).hexdigest()[:16]
+        hashes[rel] = digest
+    return hashes
+
+
 def _write_run_log(manifest: dict, result: emit.EmitResult, output_dir: Path, template_hashes: dict[str, str] | None = None) -> None:
     """Write a minimal JSON run log to the output directory."""
     from agentteams import drift as _drift
@@ -793,6 +841,8 @@ def _write_run_log(manifest: dict, result: emit.EmitResult, output_dir: Path, te
         "agent_slug_list": manifest.get("agent_slug_list", []),
         "governance_agents": manifest.get("governance_agents", []),
         "manifest_fingerprint": _drift.compute_manifest_fingerprint(manifest),
+        # v1.3 addition — per-file hashes for user-customization detection
+        "file_hashes": _compute_file_hashes(result.written + result.merged, output_dir),
     }
     log_path = output_dir / "references" / "build-log.json"
     log_path.parent.mkdir(parents=True, exist_ok=True)

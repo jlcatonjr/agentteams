@@ -2,7 +2,7 @@
 .SH NAME
 agentteams \- Generate a complete agent team for any project.
 .SH SYNOPSIS
-.B agentteams [--description PATH] [--project PATH] [--framework NAME] [--output DIR] [--dry-run] [--overwrite] [--yes] [--no-scan] [--update] [--prune] [--check] [--scan-security] [--self] [--post-audit] [--auto-correct] [--enrich] [--security-offline] [--security-max-items N] [--security-no-nvd] [--version]
+.B agentteams [--description PATH] [--project PATH] [--framework NAME] [--output DIR] [--dry-run] [--overwrite] [--merge] [--yes] [--no-scan] [--update] [--prune] [--check] [--scan-security] [--self] [--post-audit] [--auto-correct] [--enrich] [--security-offline] [--security-max-items N] [--security-no-nvd] [--version]
 .SH DESCRIPTION
 .PP
 Generate a complete agent team for any project.
@@ -28,7 +28,10 @@ Output directory for agent files. Default: <project>/.github/agents/
 Show what would be generated without writing files
 .TP
 .B \-\-overwrite
-Overwrite existing agent files without prompting
+Overwrite existing agent files unconditionally (full\-file replacement). Use \-\-merge instead to preserve user\-authored content in fenced files. Mutually exclusive with \-\-merge.
+.TP
+.B \-\-merge
+Update only template\-fenced regions in existing agent files, preserving all user\-authored content outside fence markers. Files without fence markers (legacy files) are skipped with a warning. Mutually exclusive with \-\-overwrite.
 .TP
 .B \-\-yes, \-y
 Non\-interactive: answer yes to all prompts
