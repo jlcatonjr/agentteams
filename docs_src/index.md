@@ -36,8 +36,18 @@ The generated team includes:
 
 ## Install
 
+AgentTeams is not yet published to PyPI. Install directly from the GitHub repository:
+
 ```bash
-pip install agentteams
+pip install git+https://github.com/jlcatonjr/agentteams.git
+```
+
+Or clone and install in editable mode for development:
+
+```bash
+git clone https://github.com/jlcatonjr/agentteams
+cd agentteams
+pip install -e .
 ```
 
 Requires Python 3.11+. No external runtime dependencies (stdlib only).

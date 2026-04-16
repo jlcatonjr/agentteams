@@ -2,13 +2,15 @@
 
 ## Installation
 
+AgentTeams is not yet published to PyPI. Install directly from GitHub:
+
 ```bash
-pip install agentteams
+pip install git+https://github.com/jlcatonjr/agentteams.git
 ```
 
 Requires **Python 3.11 or later**. No external runtime dependencies — the module uses only the Python standard library.
 
-To install from source:
+For local development, clone and install in editable mode:
 
 ```bash
 git clone https://github.com/jlcatonjr/agentteams

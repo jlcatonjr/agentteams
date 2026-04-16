@@ -11,7 +11,7 @@ No external runtime dependencies are required — Agent Teams Module uses only t
 ```bash
 git clone https://github.com/jlcatonjr/agentteams
 cd agentteams
-pip install pytest
+pip install -e . pytest
 ```
 
 ---
