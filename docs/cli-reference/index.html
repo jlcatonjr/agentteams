@@ -807,6 +807,62 @@
   
 </li>
         
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#legacy-fencing-migration" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Legacy Fencing Migration
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Legacy Fencing Migration">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#-migrate" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        --migrate
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#-revert-migration" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        --revert-migration
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#other-options" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Other Options
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Other Options">
+      <ul class="md-nav__list">
+        
           <li class="md-nav__item">
   <a href="#-version" class="md-nav__link">
     <span class="md-ellipsis">
@@ -1559,6 +1615,62 @@
   
 </li>
         
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#legacy-fencing-migration" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Legacy Fencing Migration
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Legacy Fencing Migration">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#-migrate" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        --migrate
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#-revert-migration" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        --revert-migration
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#other-options" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Other Options
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Other Options">
+      <ul class="md-nav__list">
+        
           <li class="md-nav__item">
   <a href="#-version" class="md-nav__link">
     <span class="md-ellipsis">
@@ -1611,10 +1723,11 @@
 <hr />
 <h2 id="synopsis">Synopsis<a class="headerlink" href="#synopsis" title="Permanent link">&para;</a></h2>
 <div class="highlight"><pre><span></span><code><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a>agentteams [--description PATH] [--project PATH] [--framework NAME]
-<a id="__codelineno-0-2" name="__codelineno-0-2" href="#__codelineno-0-2"></a>           [--output DIR] [--dry-run] [--overwrite] [--yes]
+<a id="__codelineno-0-2" name="__codelineno-0-2" href="#__codelineno-0-2"></a>           [--output DIR] [--dry-run] [--overwrite] [--merge] [--yes]
 <a id="__codelineno-0-3" name="__codelineno-0-3" href="#__codelineno-0-3"></a>           [--no-scan] [--update] [--prune] [--check]
 <a id="__codelineno-0-4" name="__codelineno-0-4" href="#__codelineno-0-4"></a>           [--scan-security] [--self] [--post-audit] [--auto-correct]
-<a id="__codelineno-0-5" name="__codelineno-0-5" href="#__codelineno-0-5"></a>           [--version]
+<a id="__codelineno-0-5" name="__codelineno-0-5" href="#__codelineno-0-5"></a>           [--migrate] [--revert-migration]
+<a id="__codelineno-0-6" name="__codelineno-0-6" href="#__codelineno-0-6"></a>           [--version]
 </code></pre></div>
 <hr />
 <h2 id="options">Options<a class="headerlink" href="#options" title="Permanent link">&para;</a></h2>
@@ -1674,6 +1787,38 @@
 <p>Run a post-generation audit after emit. Performs static checks (unresolved placeholders, YAML integrity, required-agent coverage) and, if the <code>copilot</code> CLI is authenticated, an AI-powered conflict and presupposition review via GitHub Models.</p>
 <h3 id="-auto-correct"><code>--auto-correct</code><a class="headerlink" href="#-auto-correct" title="Permanent link">&para;</a></h3>
 <p>Used with <code>--post-audit</code>: after audit finds issues, invoke the standalone <code>copilot</code> CLI in non-interactive mode to repair generated team files, then rerun the audit to confirm.</p>
+<hr />
+<h2 id="legacy-fencing-migration">Legacy Fencing Migration<a class="headerlink" href="#legacy-fencing-migration" title="Permanent link">&para;</a></h2>
+<h3 id="-migrate"><code>--migrate</code><a class="headerlink" href="#-migrate" title="Permanent link">&para;</a></h3>
+<p>One-step migration for repositories that have legacy (unfenced) agent files. Performs two operations atomically:</p>
+<ol>
+<li>Creates a git tag <code>pre-fencing-snapshot</code> at the current HEAD commit — this is the safety rollback point.</li>
+<li>Runs <code>--overwrite --yes</code> to regenerate all agent files with fenced templates.</li>
+</ol>
+<p>After completion, prints a <strong>quality-audit checklist</strong> guiding you to:</p>
+<ul>
+<li>Review <code>git diff pre-fencing-snapshot HEAD</code> for lost project-specific content</li>
+<li>Restore any custom rules to the <code>USER-EDITABLE</code> zone in <code>orchestrator.agent.md</code></li>
+<li>Commit the migrated files</li>
+<li>Switch to <code>--merge</code> for all future updates</li>
+</ul>
+<p>Requires <code>--description</code>. The project directory must be a git repository.</p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-1-1" name="__codelineno-1-1" href="#__codelineno-1-1"></a>agentteams<span class="w"> </span><span class="se">\</span>
+<a id="__codelineno-1-2" name="__codelineno-1-2" href="#__codelineno-1-2"></a><span class="w">  </span>--description<span class="w"> </span>.github/agents/_build-description.json<span class="w"> </span><span class="se">\</span>
+<a id="__codelineno-1-3" name="__codelineno-1-3" href="#__codelineno-1-3"></a><span class="w">  </span>--framework<span class="w"> </span>copilot-vscode<span class="w"> </span><span class="se">\</span>
+<a id="__codelineno-1-4" name="__codelineno-1-4" href="#__codelineno-1-4"></a><span class="w">  </span>--project<span class="w"> </span>/path/to/project<span class="w"> </span><span class="se">\</span>
+<a id="__codelineno-1-5" name="__codelineno-1-5" href="#__codelineno-1-5"></a><span class="w">  </span>--migrate
+</code></pre></div>
+<h3 id="-revert-migration"><code>--revert-migration</code><a class="headerlink" href="#-revert-migration" title="Permanent link">&para;</a></h3>
+<p>Undoes a previous <code>--migrate</code> run. Runs <code>git reset --hard pre-fencing-snapshot</code> in the project directory and deletes the <code>pre-fencing-snapshot</code> tag. All overwritten agent files are restored to their pre-migration state.</p>
+<p>Requires the project directory to be a git repository with the <code>pre-fencing-snapshot</code> tag present. Use <code>--project</code> to specify a different directory than <code>cwd</code>.</p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-2-1" name="__codelineno-2-1" href="#__codelineno-2-1"></a>agentteams<span class="w"> </span>--revert-migration<span class="w"> </span>--project<span class="w"> </span>/path/to/project
+</code></pre></div>
+<blockquote>
+<p><strong>Note:</strong> <code>--revert-migration</code> only resets the working tree and index. If you have already pushed the migrated commit to a remote, a force-push is required. That step is intentionally left to the user.</p>
+</blockquote>
+<hr />
+<h2 id="other-options">Other Options<a class="headerlink" href="#other-options" title="Permanent link">&para;</a></h2>
 <h3 id="-version"><code>--version</code><a class="headerlink" href="#-version" title="Permanent link">&para;</a></h3>
 <p>Print the version and exit.</p>
 <hr />
