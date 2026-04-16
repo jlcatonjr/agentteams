@@ -155,6 +155,23 @@ def build_manifest(description: dict[str, Any], *, framework: str = "copilot-vsc
         diagram_extension=diagram_extension,
         component_slug="<component-slug>",
         unresolved_tool_list=_format_unresolved_tool_list(tool_agents, reference_tools),
+        security_data_generated_at="Not yet generated",
+        security_source_registry=(
+            "- CISA KEV (https://www.cisa.gov/known-exploited-vulnerabilities-catalog)\\n"
+            "- MITRE CVE (https://cve.org/)\\n"
+            "- FIRST EPSS (https://www.first.org/epss/)"
+        ),
+        security_current_threats_summary=(
+            "- Live vulnerability snapshot will be generated during team initialization/update."
+        ),
+        security_prevention_playbook=(
+            "- Patch KEV-listed CVEs first based on active exploitation evidence.\\n"
+            "- Prioritize high EPSS vulnerabilities for rapid mitigation.\\n"
+            "- Validate compensating controls when patching is delayed."
+        ),
+        security_vulnerability_watch_json=(
+            '{"generated_at":"","sources":[],"vulnerabilities":[],"notes":"Generated during initialization/update."}'
+        ),
     )
 
     # Manual-required placeholders (unfilled MANUAL tokens)
@@ -908,6 +925,20 @@ def _plan_output_files(
         "path": "references/code-hygiene-rules.reference.md",
         "template": f"{domain_dir}code-hygiene-rules-reference.template.md",
         "type": "reference",
+        "component_slug": None,
+    })
+
+    # Security vulnerability watch references (always)
+    files.append({
+        "path": "references/security-vulnerability-watch.reference.md",
+        "template": f"{agents_dir}security-vulnerability-watch.reference.template.md",
+        "type": "artifact",
+        "component_slug": None,
+    })
+    files.append({
+        "path": "references/security-vulnerability-watch.json",
+        "template": f"{agents_dir}security-vulnerability-watch.json.template",
+        "type": "artifact",
         "component_slug": None,
     })
 

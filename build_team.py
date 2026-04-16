@@ -174,6 +174,21 @@ def _build_parser() -> argparse.ArgumentParser:
         ),
     )
     parser.add_argument(
+        "--security-offline",
+        action="store_true",
+        help=(
+            "Use cached security vulnerability snapshot only (no network fetch) "
+            "when rendering security intelligence references."
+        ),
+    )
+    parser.add_argument(
+        "--security-max-items",
+        type=int,
+        default=15,
+        metavar="N",
+        help="Maximum number of current vulnerabilities to include in generated security references (default: 15)",
+    )
+    parser.add_argument(
         "--version",
         action="version",
         version=f"%(prog)s {__version__}",
@@ -278,6 +293,18 @@ def main(argv: list[str] | None = None) -> int:
         return 1 if report.has_issues else 0
 
     # -----------------------------------------------------------------------
+    # Step 4d: Build live security intelligence placeholders
+    # -----------------------------------------------------------------------
+    from agentteams import security_refs as _security_refs
+
+    security_placeholders = _security_refs.build_security_placeholders(
+        output_dir=output_dir,
+        offline=args.security_offline,
+        max_items=max(1, int(args.security_max_items)),
+    )
+    manifest["auto_resolved_placeholders"].update(security_placeholders)
+
+    # -----------------------------------------------------------------------
     # Step 4c: Handle --check (drift + structural changes, no write)
     # -----------------------------------------------------------------------
     if args.check:
@@ -346,15 +373,23 @@ def main(argv: list[str] | None = None) -> int:
         # Compute structural diff: additions, removals, drifted, unchanged
         sdreport = drift.compute_structural_diff(old_log, manifest, TEMPLATES_DIR)
 
+        # Always refresh security intelligence references during --update,
+        # even when template/content drift is otherwise empty.
+        security_refresh_paths = {
+            "references/security-vulnerability-watch.reference.md",
+            "references/security-vulnerability-watch.json",
+        }
+
         if not sdreport.has_changes and not sdreport.removed_files:
-            print("No structural or content changes detected. Nothing to update.")
-            return 0
+            print("No structural or content changes detected; refreshing security intelligence references.")
+        else:
+            print(f"\nStructural update for {project_name!r}:")
+            drift.print_structural_diff_report(sdreport)
 
-        print(f"\nStructural update for {project_name!r}:")
-        drift.print_structural_diff_report(sdreport)
-
-        # Build the update set from the structural diff
+        # Build the update set from the structural diff + security refresh files
         update_paths: set[str] = {f["path"] for f in sdreport.update_files}
+        update_paths.update(security_refresh_paths)
+
         update_rendered: list[tuple[str, str]] = []
         for rel_path, content in final_rendered:
             if rel_path not in update_paths:
