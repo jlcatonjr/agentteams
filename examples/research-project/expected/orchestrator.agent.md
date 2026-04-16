@@ -215,7 +215,7 @@ You coordinate all agent operations for **ResearchPaperProject**. You route work
 1. Invoke `@conflict-auditor` → detect contradictions across all deliverable files
 2. Invoke `@technical-validator` → verify technical claims match source on disk
 3. *(If `@reference-manager` in team)* Invoke `@reference-manager` → verify every reference resolves
-4. Invoke `@style-guardian` → style audit
+4. *(If `@style-guardian` in team)* Invoke `@style-guardian` → style audit
 5. Consolidate findings → present to user
 
 ### Workflow 6: Documentation Maintenance

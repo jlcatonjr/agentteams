@@ -43,6 +43,8 @@ _IMPORT_TO_PACKAGE: dict[str, str] = {
     "ipywidgets": "ipywidgets", "widgets": "ipywidgets",
     "pandas_datareader": "pandas-datareader", "pdr": "pandas-datareader",
     "voila": "voila",
+    "paramiko": "paramiko",
+    "d3": "D3.js", "d3js": "D3.js",
     "flask": "flask",
     "fastapi": "fastapi",
     "sqlalchemy": "SQLAlchemy",
@@ -74,6 +76,11 @@ _CANONICAL_DOCS: dict[str, str] = {
     "ipywidgets": "https://ipywidgets.readthedocs.io/en/stable/",
     "pandas-datareader": "https://pandas-datareader.readthedocs.io/en/latest/",
     "voila": "https://voila.readthedocs.io/en/stable/",
+    "paramiko": "https://docs.paramiko.org/en/stable/api/",
+    "D3.js": "https://d3js.org/api",
+    "nmap": "https://nmap.org/book/man.html",
+    "arp-scan": "https://github.com/royhills/arp-scan/wiki",
+    "ssh": "https://www.openssh.com/manual.html",
     "requests": "https://requests.readthedocs.io/en/latest/api/",
     "flask": "https://flask.palletsprojects.com/en/latest/api/",
     "fastapi": "https://fastapi.tiangolo.com/reference/",
@@ -339,6 +346,105 @@ _TOOL_CATALOG: dict[str, dict[str, str]] = {
             "bare matplotlib plt.show() calls may not render correctly under Voilà."
         ),
     },
+    "paramiko": {
+        "docs_url": "https://docs.paramiko.org/en/stable/api/",
+        "api_surface": (
+            "SSHClient — connect(), exec_command(), invoke_shell(), open_sftp(); "
+            "Transport — request_port_forward(), open_channel(); "
+            "SFTPClient — get(), put(), listdir(), stat(); "
+            "RSAKey / Ed25519Key — from_private_key_file(); "
+            "AuthenticationException, SSHException for error handling"
+        ),
+        "common_patterns": (
+            "Use SSHClient with AutoAddPolicy only in trusted environments; "
+            "prefer RejectPolicy and known_hosts in production. "
+            "Always close connections with client.close() or use context manager. "
+            "For port forwarding, use transport.request_port_forward() and handle "
+            "incoming channels in a thread. "
+            "Pitfall: exec_command() stdout is blocking — read stdout before stderr "
+            "to avoid deadlocks. "
+            "Pitfall: set timeout= on connect() to avoid hanging on unreachable hosts."
+        ),
+    },
+    "D3.js": {
+        "docs_url": "https://d3js.org/api",
+        "api_surface": (
+            "d3.select() / d3.selectAll() — DOM selection and chaining; "
+            "selection.data() + .enter() + .exit() — data join pattern; "
+            "d3.scaleLinear(), d3.scaleBand(), d3.scaleTime() — scales; "
+            "d3.axisBottom(), d3.axisLeft() — axes; "
+            "d3.line(), d3.area(), d3.arc() — path generators; "
+            "d3.json(), d3.csv() — async data loading; "
+            "d3.zoom(), d3.drag() — interaction; "
+            "d3.transition() — animated updates"
+        ),
+        "common_patterns": (
+            "Always use the update-enter-exit (or join()) pattern for dynamic data. "
+            "Use d3.select('#chart').append('svg').attr('viewBox', ...) for responsive sizing. "
+            "For real-time updates, store the selection and call .data(newData).join() on each tick. "
+            "Pitfall: D3 v6+ uses event parameter in callbacks — d3.event is removed. "
+            "Pitfall: axes must be appended inside a <g> and called with .call(axis)."
+        ),
+    },
+    "nmap": {
+        "docs_url": "https://nmap.org/book/man.html",
+        "api_surface": (
+            "nmap -sn <range> — ping scan (host discovery, no port scan); "
+            "nmap -sV <host> — service/version detection; "
+            "nmap -O <host> — OS detection (requires root); "
+            "nmap -p <ports> <host> — specific port scan; "
+            "nmap --script <script> <host> — NSE script execution; "
+            "nmap -oX output.xml — XML output for parsing; "
+            "nmap -oG - — greppable output"
+        ),
+        "common_patterns": (
+            "Use -sn for fast host discovery without port scanning. "
+            "Combine with --open to only show hosts with open ports. "
+            "Parse XML output with python-nmap library for programmatic use. "
+            "Pitfall: OS detection (-O) and SYN scan (-sS) require root/sudo. "
+            "Pitfall: aggressive scans (-A) can trigger IDS/firewall alerts on monitored networks. "
+            "Use --host-timeout to prevent hangs on unresponsive hosts."
+        ),
+    },
+    "arp-scan": {
+        "docs_url": "https://github.com/royhills/arp-scan/wiki",
+        "api_surface": (
+            "arp-scan --localnet — scan all hosts on local subnet; "
+            "arp-scan --interface=<iface> <range> — scan on specific interface; "
+            "arp-scan --retry=<n> — retry count for ARP probes; "
+            "arp-scan --timeout=<ms> — per-probe timeout in milliseconds; "
+            "Output: IP, MAC, vendor (from OUI database)"
+        ),
+        "common_patterns": (
+            "Always run with sudo — ARP scanning requires raw socket access. "
+            "Use --localnet flag to automatically scan the local subnet. "
+            "Parse output with awk/grep: `arp-scan --localnet | grep -v 'DUP\\|starting\\|packets'`. "
+            "Combine with MAC vendor lookup files for device classification. "
+            "Pitfall: may not detect devices with ARP filtering or strict firewalls. "
+            "Pitfall: duplicate ARP responses may indicate ARP spoofing — check for DUP lines."
+        ),
+    },
+    "ssh": {
+        "docs_url": "https://www.openssh.com/manual.html",
+        "api_surface": (
+            "ssh user@host — basic connection; "
+            "ssh -L local_port:remote_host:remote_port user@host — local port forward; "
+            "ssh -R remote_port:local_host:local_port user@host — remote port forward; "
+            "ssh -N -f — background non-interactive tunnel; "
+            "ssh -o StrictHostKeyChecking=no -o BatchMode=yes — scripting options; "
+            "ssh-keygen -t ed25519 -C comment — key generation; "
+            "ssh-copy-id user@host — install public key; "
+            "scp / sftp — secure file transfer"
+        ),
+        "common_patterns": (
+            "For persistent tunnels use autossh or ssh with -o ServerAliveInterval=60. "
+            "Use -N -f for background tunnels that only forward ports (no shell). "
+            "Check tunnel is alive: nc -z localhost <local_port> or check /proc/<pid>. "
+            "Use ~/.ssh/config to define host aliases, port, IdentityFile, and tunnels. "
+            "Pitfall: -o StrictHostKeyChecking=no is unsafe in production — manage known_hosts. "
+            "Pitfall: tunnels drop silently on network changes — always monitor and reconnect."
+        ),
+    },
 }
 
 
@@ -348,7 +454,11 @@ def _fetch_pypi_metadata(package_name: str) -> dict[str, str]:
     Returns a dict with keys: docs_url, api_surface, common_patterns.
     Values are empty strings on any network/parse error.
     """
-    url = f"https://pypi.org/pypi/{package_name}/json"
+    # PyPI package names must not contain spaces; skip lookup for multi-word names
+    safe_name = package_name.strip()
+    if " " in safe_name:
+        return {"docs_url": "", "api_surface": "", "common_patterns": ""}
+    url = f"https://pypi.org/pypi/{safe_name}/json"
     result = {"docs_url": "", "api_surface": "", "common_patterns": ""}
     try:
         req = urllib.request.Request(url, headers={"User-Agent": "agentteams-enrich/1.0"})

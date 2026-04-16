@@ -345,6 +345,31 @@ _KNOWN_TOOL_METADATA: dict[str, dict[str, str]] = {
         "api_surface": "sqlite3 CLI, CREATE TABLE, CREATE INDEX, PRAGMA, EXPLAIN QUERY PLAN",
         "common_patterns": "Use parameterized queries, explicit transactions, and indexes validated with EXPLAIN QUERY PLAN.",
     },
+    "nmap": {
+        "docs_url": "https://nmap.org/book/man.html",
+        "api_surface": "nmap -sn (ping scan), -sV (version detection), -O (OS detection), -p (port range), --script (NSE), -oX (XML output), -oG (greppable output)",
+        "common_patterns": "Use -sn for fast host discovery, parse XML output programmatically, and always run -O and -sS with sudo. Use --host-timeout to avoid hangs on unreachable hosts.",
+    },
+    "arpscan": {
+        "docs_url": "https://github.com/royhills/arp-scan/wiki",
+        "api_surface": "arp-scan --localnet, --interface=<iface>, --retry=<n>, --timeout=<ms>; output: IP, MAC, vendor",
+        "common_patterns": "Always run with sudo. Combine with vendor OUI lookup for device classification. Check for DUP lines which may indicate ARP spoofing.",
+    },
+    "ssh": {
+        "docs_url": "https://www.openssh.com/manual.html",
+        "api_surface": "ssh user@host, -L (local forward), -R (remote forward), -N -f (background), -o options, ssh-keygen, ssh-copy-id, scp, sftp",
+        "common_patterns": "Use autossh or ServerAliveInterval for persistent tunnels. Use -N -f for background port-only tunnels. Manage known_hosts explicitly in production.",
+    },
+    "d3js": {
+        "docs_url": "https://d3js.org/api",
+        "api_surface": "d3.select/selectAll, selection.data().enter().exit(), scales (scaleLinear/scaleBand/scaleTime), axes, line/area/arc generators, d3.zoom/drag, d3.transition",
+        "common_patterns": "Use the update-enter-exit (or join()) pattern for dynamic data. Use viewBox for responsive sizing. Note: D3 v6+ uses event parameter in callbacks — d3.event is removed.",
+    },
+    "paramiko": {
+        "docs_url": "https://docs.paramiko.org/en/stable/api/",
+        "api_surface": "SSHClient.connect/exec_command/invoke_shell/open_sftp, Transport.request_port_forward, SFTPClient.get/put, RSAKey/Ed25519Key.from_private_key_file",
+        "common_patterns": "Use AutoAddPolicy only in trusted environments; prefer RejectPolicy in production. Always close connections. Set timeout= on connect() to avoid hangs on unreachable hosts.",
+    },
 }
 
 

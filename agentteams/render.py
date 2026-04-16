@@ -347,6 +347,8 @@ def validate_cross_refs(rendered_files: list[tuple[str, str]]) -> list[str]:
     Skips:
     - References inside ``*(If `@slug` in team)*`` conditional markers (these are
       intentionally guarded and valid even when the agent is absent).
+    - References inside fenced code blocks (output format examples, etc.).
+    - Lines that describe routing recommendations rather than hard invocations.
     - Duplicate (file, slug) pairs — one warning per file per missing slug is enough.
     """
     all_paths = {path for path, _ in rendered_files}
@@ -360,12 +362,33 @@ def validate_cross_refs(rendered_files: list[tuple[str, str]]) -> list[str]:
 
     warnings: list[str] = []
     agent_ref_re = re.compile(r"`@([a-z0-9\-]+)`")
-    # Lines whose content qualifies a reference as conditional / optional
-    conditional_re = re.compile(r"\*\(If\b|\bIf `@[a-z0-9\-]+` in team\b|\| `@")
+    # Lines whose content qualifies a reference as conditional / optional.
+    # Patterns handled:
+    #   *(If `@slug` in team)* ...  — guarded workflow step
+    #   | `@slug` | ...             — routing table row
+    #   ... `@slug` if in team      — inline "if in team" suffix (any case)
+    #   route to `@slug`            — routing recommendation text
+    #   `@a` / `@b`                 — slash-separated agent list (routing guidance)
+    conditional_re = re.compile(
+        r"\*\(If\b"                        # *(If ...) guarded steps
+        r"|\bIf `@[a-z0-9\-]+` in team\b"  # explicit "If @slug in team"
+        r"|\| `@"                           # routing-table pipe rows
+        r"|if in team"                      # inline "if in team" suffix
+        r"|route to"                        # "route to @slug" guidance lines
+        r"|`@[a-z0-9\-]+` / `@",           # slash-separated agent lists
+        re.IGNORECASE,
+    )
 
     for output_path, content in rendered_files:
         seen: set[str] = set()  # deduplicate per (file, slug)
+        in_code_block = False
         for line in content.splitlines():
+            # Track fenced code block state — refs inside code blocks are examples, not invocations
+            if line.strip().startswith("```"):
+                in_code_block = not in_code_block
+                continue
+            if in_code_block:
+                continue
             # Skip routing table rows and conditional workflow markers
             if conditional_re.search(line):
                 continue
