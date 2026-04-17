@@ -7,9 +7,21 @@ specific target framework (VS Code Copilot, Copilot CLI, Claude).
 
 from __future__ import annotations
 
+import re
 from abc import ABC, abstractmethod
 from pathlib import Path
 from typing import Any
+
+# ---------------------------------------------------------------------------
+# Shared stripping helpers (used by CLI and Claude adapters)
+# ---------------------------------------------------------------------------
+
+_YAML_FRONT_MATTER_RE = re.compile(r"^---\s*\n.*?\n---\s*\n", re.DOTALL)
+
+_HANDOFFS_HEADING_RE = re.compile(
+    r"^#{1,3}\s+Handoff.*?(?=^#{1,3}\s|\Z)",
+    re.MULTILINE | re.DOTALL,
+)
 
 
 class FrameworkAdapter(ABC):
@@ -56,3 +68,22 @@ class FrameworkAdapter(ABC):
         if rel_path.endswith(".md") and ext != ".md":
             return rel_path[:-3] + ext
         return rel_path
+
+    # ------------------------------------------------------------------
+    # Protected helpers shared by non-handoff adapters (CLI, Claude)
+    # ------------------------------------------------------------------
+
+    @staticmethod
+    def _slug_to_name(slug: str) -> str:
+        """Convert 'my-agent-slug' to 'My Agent Slug'."""
+        return " ".join(word.capitalize() for word in slug.replace("_", "-").split("-"))
+
+    @staticmethod
+    def _strip_yaml_front_matter(content: str) -> str:
+        """Remove YAML front matter block from agent content."""
+        return _YAML_FRONT_MATTER_RE.sub("", content, count=1)
+
+    @staticmethod
+    def _strip_handoffs_section(content: str) -> str:
+        """Remove handoff heading blocks from body prose."""
+        return _HANDOFFS_HEADING_RE.sub("", content)

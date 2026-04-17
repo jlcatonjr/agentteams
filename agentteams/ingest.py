@@ -18,6 +18,8 @@ import re
 from pathlib import Path
 from typing import Any
 
+from agentteams._utils import _slugify
+
 
 # ---------------------------------------------------------------------------
 # Public entry point
@@ -587,8 +589,4 @@ def _validate_required_fields(description: dict[str, Any]) -> None:
 # Utilities
 # ---------------------------------------------------------------------------
 
-def _slugify(text: str) -> str:
-    """Convert a string to a lowercase hyphen-separated slug."""
-    slug = re.sub(r"[^a-zA-Z0-9\s\-]", "", text)
-    slug = re.sub(r"\s+", "-", slug.strip())
-    return slug.lower()
+# _slugify is imported from agentteams._utils

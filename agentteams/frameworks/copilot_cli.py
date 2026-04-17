@@ -23,7 +23,6 @@ Body Markdown                   → preserved verbatim
 
 from __future__ import annotations
 
-import re
 from pathlib import Path
 from typing import Any
 
@@ -43,8 +42,8 @@ class CopilotCLIAdapter(FrameworkAdapter):
         Both are stripped; the prose body is preserved verbatim and the output
         is normalised to a single trailing newline.
         """
-        content = _strip_yaml_front_matter(content)
-        content = _strip_handoffs_section(content)
+        content = self._strip_yaml_front_matter(content)
+        content = self._strip_handoffs_section(content)
         return content.strip() + "\n"
 
     def render_instructions_file(self, content: str, manifest: dict[str, Any]) -> str:
@@ -60,28 +59,3 @@ class CopilotCLIAdapter(FrameworkAdapter):
         return project_path / ".github" / "copilot"
 
 
-# ---------------------------------------------------------------------------
-# Stripping helpers
-# ---------------------------------------------------------------------------
-
-_YAML_FRONT_MATTER_RE = re.compile(r"^---\s*\n.*?\n---\s*\n", re.DOTALL)
-
-_HANDOFFS_SECTION_RE = re.compile(
-    r"^handoffs\s*:\s*\n(?:[ \t]+-.*\n)*",
-    re.MULTILINE,
-)
-
-_HANDOFFS_HEADING_RE = re.compile(
-    r"^#{1,3}\s+Handoff.*?(?=^#{1,3}\s|\Z)",
-    re.MULTILINE | re.DOTALL,
-)
-
-
-def _strip_yaml_front_matter(content: str) -> str:
-    return _YAML_FRONT_MATTER_RE.sub("", content, count=1)
-
-
-def _strip_handoffs_section(content: str) -> str:
-    """Remove handoffs blocks from body prose (CLI doesn't support them)."""
-    content = _HANDOFFS_HEADING_RE.sub("", content)
-    return content
