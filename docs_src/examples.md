@@ -22,7 +22,7 @@ A FastAPI backend with authentication and a task management API.
 
 **What gets generated:**
 
-- Orchestrator + 9 governance agents
+- Orchestrator + 10 governance agents
 - Domain agents: `@primary-producer`, `@quality-auditor`, `@technical-validator`, `@format-converter`
 - Workstream experts: one per component (e.g. `@auth-module-expert`, `@tasks-api-expert`)
 - Specialist agents for FastAPI and PostgreSQL

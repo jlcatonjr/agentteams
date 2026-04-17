@@ -460,7 +460,7 @@ agentteams/
 │   ├── remediate.py           # Auto-correction
 │   ├── graph.py               # Agent topology graph
 │   ├── templates/             # All agent templates (shipped with package)
-│   │   ├── universal/         # Governance agent templates (9)
+│   │   ├── universal/         # Governance agent templates (10)
 │   │   ├── domain/            # Domain archetype templates
 │   │   ├── builder/           # Team Builder agent templates (3)
 │   │   ├── workstream-expert.template.md

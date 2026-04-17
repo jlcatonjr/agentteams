@@ -66,7 +66,7 @@ Tier 1: Orchestrator
 Tier 2: Governance Agents
    └── Navigator, Security, Code-Hygiene, Adversarial,
        Conflict-Auditor, Conflict-Resolution, Cleanup,
-       Agent-Updater, Agent-Refactor
+       Agent-Updater, Agent-Refactor, Repo-Liaison
        Each owns a cross-cutting concern (structure, safety,
        consistency, documentation) rather than a deliverable
 
@@ -109,7 +109,7 @@ Templates in `templates/` are Markdown files with `{PLACEHOLDER}` tokens. The li
 | Tier | Templates |
 |------|-----------|
 | Orchestrator | `universal/orchestrator.template.md` |
-| Governance | `universal/` (9 templates) |
+| Governance | `universal/` (10 templates) |
 | Domain | `domain/` (9 archetype templates + 6 tool templates) |
 | Workstream Expert | `workstream-expert.template.md` (one template, rendered per component) |
 | Builder | `builder/` (3 framework-specific team-builder templates) |
