@@ -58,7 +58,7 @@ Build a FastAPI backend with authentication and a task management API.
 - OpenAPI docs
 ```
 
-See [DESCRIPTION-FORMAT.md](https://github.com/jlcatonjr/agentteams/blob/main/docs/DESCRIPTION-FORMAT.md) for all supported fields.
+See [DESCRIPTION-FORMAT.md](DESCRIPTION-FORMAT.md) for all supported fields.
 
 ---
 
