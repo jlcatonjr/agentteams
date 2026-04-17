@@ -15,6 +15,10 @@
         <link rel="canonical" href="https://jlcatonjr.github.io/agentteams/structural-update-plan/">
       
       
+        <link rel="prev" href="../DESCRIPTION-FORMAT/">
+      
+      
+        <link rel="next" href="../contributing/">
       
       
         
@@ -25,7 +29,7 @@
     
     
       
-        <title>Structural Update Plan — Programmatic Integration of Module Updates to Existing Teams - Agent Teams Module</title>
+        <title>Structural Update Plan - Agent Teams Module</title>
       
     
     
@@ -110,7 +114,7 @@
         <div class="md-header__topic" data-md-component="header-topic">
           <span class="md-ellipsis">
             
-              Structural Update Plan — Programmatic Integration of Module Updates to Existing Teams
+              Structural Update Plan
             
           </span>
         </div>
@@ -369,6 +373,27 @@
     
   
   Description Format
+
+      </a>
+    </li>
+  
+
+      
+        
+  
+  
+  
+    
+  
+  
+    <li class="md-tabs__item md-tabs__item--active">
+      <a href="./" class="md-tabs__link">
+        
+  
+  
+    
+  
+  Structural Update Plan
 
       </a>
     </li>
@@ -1093,6 +1118,229 @@
   
 
       </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+    
+  
+  
+  
+    <li class="md-nav__item md-nav__item--active">
+      
+      <input class="md-nav__toggle md-toggle" type="checkbox" id="__toc">
+      
+      
+        
+      
+      
+        <label class="md-nav__link md-nav__link--active" for="__toc">
+          
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Structural Update Plan
+  
+
+    
+  </span>
+  
+  
+
+          <span class="md-nav__icon md-icon"></span>
+        </label>
+      
+      <a href="./" class="md-nav__link md-nav__link--active">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Structural Update Plan
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+      
+        
+
+<nav class="md-nav md-nav--secondary" aria-label="Table of contents">
+  
+  
+  
+    
+  
+  
+    <label class="md-nav__title" for="__toc">
+      <span class="md-nav__icon md-icon"></span>
+      Table of contents
+    </label>
+    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
+      
+        <li class="md-nav__item">
+  <a href="#problem-statement" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Problem Statement
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#design-goal" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Design Goal
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#implementation-plan" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Implementation Plan
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Implementation Plan">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#phase-1-enrich-build-logjson-schema-v12" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Phase 1: Enrich build-log.json → schema v1.2
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#phase-2-implement-structural-diff-in-srcdriftpy" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Phase 2: Implement structural diff in src/drift.py
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#phase-3-extend-update-to-handle-structural-changes" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Phase 3: Extend --update to handle structural changes
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#phase-4-add-prune-flag" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Phase 4: Add --prune flag
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#phase-5-handle-edge-cases" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Phase 5: Handle edge cases
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#phase-6-tests" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Phase 6: Tests
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#phase-7-documentation" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Phase 7: Documentation
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#execution-order" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Execution Order
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#files-modified" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Files Modified
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#files-not-modified" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Files NOT Modified
+      
+    </span>
+  </a>
+  
+</li>
+      
+    </ul>
+  
+</nav>
+      
     </li>
   
 

@@ -49,6 +49,7 @@ nav:
       - man: api-reference/man.md
   - Template Authoring: template-authoring.md
   - Description Format: DESCRIPTION-FORMAT.md
+  - Structural Update Plan: structural-update-plan.md
   - Contributing: contributing.md
   - Changelog: changelog.md
 
