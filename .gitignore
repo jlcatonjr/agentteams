@@ -28,8 +28,6 @@ pypi-release-plan.md
 build-team-steps.csv
 tool-enrichment-steps.csv
 
-# Structural or audit plan docs committed during development
-docs_src/structural-update-plan.md
 python
 
 # Stale root-level templates/ — canonical copy is agentteams/templates/
