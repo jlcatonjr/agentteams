@@ -100,6 +100,18 @@ Governance Agents (audits, reviews, clearances)
 
 The orchestrator **routes without producing**. Domain agents **produce without scoping**. Workstream experts **scope without producing**. Governance agents **audit without producing**.
 
+### Agent Knowledge Updates
+
+Generated agent teams are designed to keep their documentation current automatically as projects evolve. Two mechanisms work together:
+
+**Automatic update triggers** — `@agent-updater` is invoked at the close of every knowledge-mutating workflow step. Specifically, it runs after Workflow 2 (Revise), Workflow 3 (when corrections were made), Workflow 5 (when issues were found), Workflow 6, Workflow 7, Workflow 8, Workflow 9, and Workflow 11. Drift detected by `--check` is also an explicit trigger.
+
+**Periodic Knowledge Re-verification** — Before any plan step executes (Workflow 10), `@technical-validator` verifies the factual claims stated in that step's inputs, outputs, and notes against current on-disk state. Steps with unverified claims are held until the user confirms. If `--check` reports template drift, `@agent-updater` re-renders affected files and calls `@technical-validator` before the next workflow step proceeds.
+
+**Epistemic guard on audit workflows** — `@adversarial` runs at the start of Workflow 5 (Consistency Review) before any audit conclusions are surfaced, and before any deletion plan in Workflow 8 (Code Hygiene Audit). This prevents agents from auditing on the basis of unchallenged assumptions about project state.
+
+These three mechanisms together ensure that agents do not assert stale beliefs as facts and that documentation lag — the primary cause of agent errors in long-lived teams — is detected and resolved automatically.
+
 ---
 
 ## Template Library
