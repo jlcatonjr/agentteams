@@ -1335,9 +1335,9 @@
 
 <h1 id="man-agentteamsmodule"><code>man</code> — AgentTeamsModule<a class="headerlink" href="#man-agentteamsmodule" title="Permanent link">&para;</a></h1>
 <p>Generate a POSIX groff man-page from the <code>agentteams</code> argparse parser.</p>
-<p>The generated man-page source is committed to the repository root as <code>agentteams.1</code> and installed to <code>share/man/man1/</code> on pip install.</p>
+<p>The generated man-page source is committed to the repository root as <code>agentteams.1</code>. To view it, use <code>man ./agentteams.1</code>.</p>
 <p>Regenerate after any CLI flag change:</p>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a>python<span class="w"> </span>-m<span class="w"> </span>src.man<span class="w"> </span>&gt;<span class="w"> </span>agentteams.1
+<div class="highlight"><pre><span></span><code><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a>python<span class="w"> </span>-m<span class="w"> </span>agentteams.man<span class="w"> </span>&gt;<span class="w"> </span>agentteams.1
 </code></pre></div>
 <p>Preview locally:</p>
 <div class="highlight"><pre><span></span><code><a id="__codelineno-1-1" name="__codelineno-1-1" href="#__codelineno-1-1"></a>man<span class="w"> </span>./agentteams.1
@@ -1360,8 +1360,8 @@
 <p><strong>Returns:</strong> <code>str</code> — Complete groff man-page source. Write to <code>&lt;name&gt;.N</code> (e.g., <code>agentteams.1</code>).</p>
 <hr />
 <h2 id="module-entry-point">Module Entry Point<a class="headerlink" href="#module-entry-point" title="Permanent link">&para;</a></h2>
-<p>When run as a module (<code>python -m src.man</code>), imports <code>_build_parser</code> from <code>build_team</code> and writes the generated man-page to stdout. Used by the CI staleness gate:</p>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-2-1" name="__codelineno-2-1" href="#__codelineno-2-1"></a>python<span class="w"> </span>-m<span class="w"> </span>src.man<span class="w"> </span><span class="p">|</span><span class="w"> </span>diff<span class="w"> </span>-<span class="w"> </span>agentteams.1
+<p>When run as a module (<code>python -m agentteams.man</code>), imports <code>_build_parser</code> from <code>build_team</code> and writes the generated man-page to stdout. Used by the CI staleness gate:</p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-2-1" name="__codelineno-2-1" href="#__codelineno-2-1"></a>python<span class="w"> </span>-m<span class="w"> </span>agentteams.man<span class="w"> </span><span class="p">|</span><span class="w"> </span>diff<span class="w"> </span>-<span class="w"> </span>agentteams.1
 </code></pre></div>
 <p>Exit code is non-zero if the committed <code>agentteams.1</code> is stale.</p>
 
