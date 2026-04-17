@@ -714,6 +714,17 @@
   
 </li>
         
+          <li class="md-nav__item">
+  <a href="#agent-knowledge-updates" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Agent Knowledge Updates
+      
+    </span>
+  </a>
+  
+</li>
+        
       </ul>
     </nav>
   
@@ -1482,6 +1493,17 @@
   
 </li>
         
+          <li class="md-nav__item">
+  <a href="#agent-knowledge-updates" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Agent Knowledge Updates
+      
+    </span>
+  </a>
+  
+</li>
+        
       </ul>
     </nav>
   
@@ -1620,6 +1642,12 @@
 <a id="__codelineno-2-10" name="__codelineno-2-10" href="#__codelineno-2-10"></a>Governance Agents (audits, reviews, clearances)
 </code></pre></div>
 <p>The orchestrator <strong>routes without producing</strong>. Domain agents <strong>produce without scoping</strong>. Workstream experts <strong>scope without producing</strong>. Governance agents <strong>audit without producing</strong>.</p>
+<h3 id="agent-knowledge-updates">Agent Knowledge Updates<a class="headerlink" href="#agent-knowledge-updates" title="Permanent link">&para;</a></h3>
+<p>Generated agent teams are designed to keep their documentation current automatically as projects evolve. Two mechanisms work together:</p>
+<p><strong>Automatic update triggers</strong> — <code>@agent-updater</code> is invoked at the close of every knowledge-mutating workflow step. Specifically, it runs after Workflow 2 (Revise), Workflow 3 (when corrections were made), Workflow 5 (when issues were found), Workflow 6, Workflow 7, Workflow 8, Workflow 9, and Workflow 11. Drift detected by <code>--check</code> is also an explicit trigger.</p>
+<p><strong>Periodic Knowledge Re-verification</strong> — Before any plan step executes (Workflow 10), <code>@technical-validator</code> verifies the factual claims stated in that step's inputs, outputs, and notes against current on-disk state. Steps with unverified claims are held until the user confirms. If <code>--check</code> reports template drift, <code>@agent-updater</code> re-renders affected files and calls <code>@technical-validator</code> before the next workflow step proceeds.</p>
+<p><strong>Epistemic guard on audit workflows</strong> — <code>@adversarial</code> runs at the start of Workflow 5 (Consistency Review) before any audit conclusions are surfaced, and before any deletion plan in Workflow 8 (Code Hygiene Audit). This prevents agents from auditing on the basis of unchallenged assumptions about project state.</p>
+<p>These three mechanisms together ensure that agents do not assert stale beliefs as facts and that documentation lag — the primary cause of agent errors in long-lived teams — is detected and resolved automatically.</p>
 <hr />
 <h2 id="template-library">Template Library<a class="headerlink" href="#template-library" title="Permanent link">&para;</a></h2>
 <p>Templates in <code>templates/</code> are Markdown files with <code>{PLACEHOLDER}</code> tokens. The library provides:</p>
