@@ -85,6 +85,16 @@ Fill in any placeholders that couldn't be auto-resolved. Then open VS Code, invo
 
 ---
 
+## Agent-Assisted Setup
+
+Not ready to write a `brief.json` by hand? The **Team Builder agent** can conduct an intake interview from within your AI framework and generate the brief for you.
+
+After installation, invoke `@team-builder` in VS Code Copilot chat (or open the builder prompt in Claude / Copilot CLI). It will ask you questions about your project and emit a ready-to-use agent team without any manual JSON editing.
+
+See the [Agent-Assisted Setup guide](https://jlcatonjr.github.io/agentteams/agent-assisted-setup/) for step-by-step instructions.
+
+---
+
 ## Framework Support
 
 | Framework | Format | Handoffs | Builder Agent |
@@ -168,7 +178,9 @@ Options:
   --framework   NAME   copilot-vscode (default) | copilot-cli | claude
   --output      DIR    Output directory (default: <project>/.github/agents/)
   --dry-run            Show what would be generated without writing
-  --overwrite          Overwrite existing files without prompting
+  --overwrite          Overwrite existing agent files unconditionally (full replacement)
+  --merge              Update only template-fenced regions; preserve user-authored content
+                       outside fence markers (see Section Fencing below)
   --yes, -y            Non-interactive: skip all prompts
   --no-scan            Disable project directory scanning
   --update             Re-render drifted files AND emit new agents added to the
@@ -179,6 +191,16 @@ Options:
   --post-audit         Run static + optional AI-powered audit after generation
   --auto-correct       After --post-audit findings, invoke standalone copilot CLI to repair
                        files (requires copilot CLI installed and authenticated separately)
+  --enrich             Scan for unresolved placeholders, underdeveloped sections, and
+                       incomplete tool metadata; apply context-aware auto-enrichment;
+                       exports references/defaults-audit.csv
+  --security-offline   Use cached vulnerability snapshot only (no network fetch)
+  --security-max-items N  Max CVEs to include in security references (default: 15)
+  --security-no-nvd    Skip NVD CVSS enrichment; CISA KEV + EPSS data still fetched
+  --migrate            One-step legacy fencing migration: tag current state as
+                       pre-fencing-snapshot, regenerate all files with fence markers,
+                       print quality-audit checklist
+  --revert-migration   Undo a --migrate run: git reset --hard pre-fencing-snapshot
   --self               Operate on the module's own agent team
   --version            Print version
 ```
@@ -191,6 +213,7 @@ Once a team has been generated, the module can detect and repair two kinds of dr
 
 - **Content drift** — a template's text changed (re-renders affected files)
 - **Structural drift** — agents were added or removed from the taxonomy (emits new files, reports removed files)
+- **Knowledge drift** — agents are operating on stale facts after silent project evolution (see [Agent Knowledge Updates](#agent-knowledge-updates) below)
 
 ### Check for drift
 
@@ -228,6 +251,47 @@ Regenerate the module's own meta-agent team:
 ```bash
 agentteams --self
 ```
+
+---
+
+## Section Fencing
+
+Templates ship with `AGENTTEAMS:BEGIN/END` fence markers around every template-owned section. This enables surgical updates without clobbering your customizations:
+
+```markdown
+<!-- AGENTTEAMS:BEGIN routing_table_rows v=1 -->
+| ... generated content ... |
+<!-- AGENTTEAMS:END routing_table_rows -->
+```
+
+| Mode | Behaviour |
+|------|-----------|
+| `--overwrite` | Full-file replacement — best for first-time generation |
+| `--merge` | Updates fenced sections only; preserves everything outside markers |
+| `--update` | Re-render drifted files + emit new agents (uses merge semantics for existing files) |
+| `--migrate` | Retrofits fence markers onto a legacy team in one step |
+
+See [templates/FENCE-CONVENTIONS.md](agentteams/templates/FENCE-CONVENTIONS.md) for the full specification.
+
+---
+
+## Agent Knowledge Updates
+
+Generated agent teams stay current through three automatic mechanisms:
+
+### 1. Drift detection (`--check` / `--update`)
+Run `--check` at any time to detect template content drift or taxonomy structural changes. Use `--update` to apply them while preserving manually-filled values.
+
+### 2. Drift-as-trigger in `@agent-updater`
+The `@agent-updater` governance agent includes a **Drift detected by `--check`** trigger: whenever drift is detected, agents must re-render and re-verify before the next workflow executes.
+
+### 3. Periodic Knowledge Re-verification
+The `@agent-updater` includes a `Periodic Knowledge Re-verification` protocol that kicks in when:
+- A plan step references specific file paths, agent slugs, or counts
+- Any multi-file session ran without invoking `@agent-updater`
+- `@adversarial` flags a **Temporal (T)** presupposition in a plan review
+
+The protocol: run `--check` → re-render if drift found → invoke `@technical-validator` to verify plan facts against disk state → surface any unverified claims before execution proceeds.
 
 ---
 
@@ -406,7 +470,48 @@ Exits with code `1` if any findings are reported. Suitable as a pre-commit or CI
 
 ---
 
-### 12. Self-maintenance (regenerate the module's own team)
+### 12. Merge — update fenced regions only (preserve your customizations)
+
+If you have manually customized sections of your agent files, use `--merge` instead of `--overwrite`. It updates only the `AGENTTEAMS:BEGIN/END`-fenced sections that originated from templates and leaves everything else untouched:
+
+```bash
+agentteams --description brief.json --merge
+```
+
+Files without fence markers are skipped with an advisory warning. See [Section Fencing](#section-fencing) below.
+
+---
+
+### 13. Enrich — auto-fill defaults and underdeveloped sections
+
+After generation, scan for default template elements and apply context-aware enrichment. Rule-based fills are applied first; if `--post-audit` is also set, AI-powered enrichment runs on remaining gaps:
+
+```bash
+agentteams --description brief.json --enrich
+agentteams --description brief.json --enrich --post-audit  # AI enrichment pass
+```
+
+Outputs `references/defaults-audit.csv` listing every element evaluated.
+
+---
+
+### 14. Migration — add section fencing to an existing team
+
+If you have an existing agent team generated before section fencing was introduced:
+
+```bash
+agentteams --description brief.json --project ~/code/myproject --migrate
+```
+
+This creates a `pre-fencing-snapshot` git tag at the current HEAD, regenerates all files with `AGENTTEAMS:BEGIN/END` markers, and prints a quality-audit checklist. To undo:
+
+```bash
+agentteams --description brief.json --project ~/code/myproject --revert-migration
+```
+
+---
+
+### 15. Self-maintenance (regenerate the module's own team)
 
 Regenerate the agent team that governs this module itself, using the stored `_build-description.json`:
 
@@ -495,8 +600,25 @@ agentteams/
 
 ## Documentation
 
+**Online:** https://jlcatonjr.github.io/agentteams/
+
+| Page | Description |
+|------|-------------|
+| [Getting Started](https://jlcatonjr.github.io/agentteams/getting-started/) | Install, write a brief, generate your first team |
+| [Agent-Assisted Setup](https://jlcatonjr.github.io/agentteams/agent-assisted-setup/) | Use `@team-builder` to build the brief interactively |
+| [How It Works](https://jlcatonjr.github.io/agentteams/how-it-works/) | Pipeline stages, agent taxonomy, knowledge updates |
+| [CLI Reference](https://jlcatonjr.github.io/agentteams/cli-reference/) | All flags with descriptions and examples |
+| [Description Format](https://jlcatonjr.github.io/agentteams/DESCRIPTION-FORMAT/) | Full field-by-field brief format reference |
+| [Template Authoring](https://jlcatonjr.github.io/agentteams/template-authoring/) | Write and register new agent templates |
+| [API Reference](https://jlcatonjr.github.io/agentteams/api-reference/) | Python module API (`ingest`, `analyze`, `render`, `emit`, …) |
+| [Structural Update Plan](https://jlcatonjr.github.io/agentteams/structural-update-plan/) | Roadmap for programmatic team update propagation |
+| [Changelog](https://jlcatonjr.github.io/agentteams/changelog/) | Release notes |
+
+**In-repo references:**
+
 - [agentteams/templates/AUTHORING-GUIDE.md](agentteams/templates/AUTHORING-GUIDE.md) — How to write and register new agent templates
-- [docs/DESCRIPTION-FORMAT.md](docs/DESCRIPTION-FORMAT.md) — Full field-by-field description format reference
+- [agentteams/templates/FENCE-CONVENTIONS.md](agentteams/templates/FENCE-CONVENTIONS.md) — Section fencing specification
+- [agentteams/templates/PLACEHOLDER-CONVENTIONS.md](agentteams/templates/PLACEHOLDER-CONVENTIONS.md) — Placeholder syntax rules
 - [.github/agents/references/agent-taxonomy.reference.md](.github/agents/references/agent-taxonomy.reference.md) — Four-tier agent taxonomy specification
 - [schemas/project-description.schema.json](schemas/project-description.schema.json) — JSON Schema for project descriptions
 - [schemas/team-manifest.schema.json](schemas/team-manifest.schema.json) — JSON Schema for the internal team manifest
