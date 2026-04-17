@@ -11,6 +11,8 @@ import re
 from pathlib import Path
 from typing import Any
 
+from agentteams._utils import _slugify
+
 
 # ---------------------------------------------------------------------------
 # Archetype selection rules
@@ -1039,12 +1041,6 @@ def _description_text(description: dict[str, Any]) -> str:
         parts.append(t.get("category", ""))
         parts.append(t.get("version", ""))
     return " ".join(parts)
-
-
-def _slugify(text: str) -> str:
-    slug = re.sub(r"[^a-zA-Z0-9\s\-]", "", text)
-    slug = re.sub(r"\s+", "-", slug.strip())
-    return slug.lower()
 
 
 def _has_unknown_tool_metadata(

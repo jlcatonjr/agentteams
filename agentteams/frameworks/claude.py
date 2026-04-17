@@ -59,8 +59,8 @@ class ClaudeAdapter(FrameworkAdapter):
         4. Prepend a Claude Code-compatible front matter block.
         """
         name, description = _extract_name_description(content, agent_slug, manifest)
-        content = _strip_yaml_front_matter(content)
-        content = _strip_handoffs_section(content)
+        content = self._strip_yaml_front_matter(content)
+        content = self._strip_handoffs_section(content)
         content = _inject_claude_front_matter(content, name, description)
         return content.strip() + "\n"
 
@@ -114,7 +114,7 @@ def _extract_name_description(
 
     if not name:
         project_name = manifest.get("project_name", "")
-        agent_name = _slug_to_name(agent_slug)
+        agent_name = FrameworkAdapter._slug_to_name(agent_slug)
         name = f"{agent_name} — {project_name}" if project_name else agent_name
 
     return name, description
@@ -131,26 +131,3 @@ def _inject_claude_front_matter(content: str, name: str, description: str) -> st
     return "\n".join(lines) + content
 
 
-def _slug_to_name(slug: str) -> str:
-    """Convert 'my-agent-slug' to 'My Agent Slug'."""
-    return " ".join(word.capitalize() for word in slug.replace("_", "-").split("-"))
-
-
-# ---------------------------------------------------------------------------
-# Stripping helpers
-# ---------------------------------------------------------------------------
-
-_YAML_FRONT_MATTER_STRIP_RE = re.compile(r"^---\s*\n.*?\n---\s*\n", re.DOTALL)
-
-_HANDOFFS_HEADING_RE = re.compile(
-    r"^#{1,3}\s+Handoff.*?(?=^#{1,3}\s|\Z)",
-    re.MULTILINE | re.DOTALL,
-)
-
-
-def _strip_yaml_front_matter(content: str) -> str:
-    return _YAML_FRONT_MATTER_STRIP_RE.sub("", content, count=1)
-
-
-def _strip_handoffs_section(content: str) -> str:
-    return _HANDOFFS_HEADING_RE.sub("", content)

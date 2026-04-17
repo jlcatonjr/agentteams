@@ -105,7 +105,7 @@ def _ensure_yaml_front_matter(content: str, agent_slug: str, manifest: dict[str,
     if not match:
         # No front matter — prepend minimal YAML
         project_name = manifest.get("project_name", "Project")
-        agent_name = _slug_to_name(agent_slug)
+        agent_name = FrameworkAdapter._slug_to_name(agent_slug)
         front_matter = (
             f"---\n"
             f"name: {agent_name} — {project_name}\n"
@@ -144,6 +144,3 @@ def _ensure_yaml_front_matter(content: str, agent_slug: str, manifest: dict[str,
     return content
 
 
-def _slug_to_name(slug: str) -> str:
-    """Convert 'my-agent-slug' to 'My Agent Slug'."""
-    return " ".join(word.capitalize() for word in slug.replace("_", "-").split("-"))
