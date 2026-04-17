@@ -143,13 +143,13 @@ You coordinate all agent operations for **WebAppBackend**. You route work to dom
 | Creating or revising primary Python modules, OpenAPI documentation and test suite | `@primary-producer` | New work or revision in `src/` |
 | Architecture and file hygiene | `@code-hygiene` | Backup files, script lifecycle, duplication, agent doc consistency |
 | Quality and structural defects | `@quality-auditor` | Purposeless content, structural weakness, pattern violations |
-| Within-section cohesion | `@cohesion-repairer` | Disjointed paragraphs, broken argument flow, orphaned evidence |
-| Style and standards | `@style-guardian` | Style reference: {MANUAL:STYLE_REFERENCE_PATH} |
+| Within-section cohesion | `@cohesion-repairer` *(if in team)* | Disjointed paragraphs, broken argument flow, orphaned evidence |
+| Style and standards | `@style-guardian` *(if in team)* | Style reference: {MANUAL:STYLE_REFERENCE_PATH} |
 | Technical accuracy | `@technical-validator` | Code, paths, counts, claims against source files |
 | Format conversion | `@format-converter` | Source format → output format `Python 3.11 modules` |
 | References and dependencies | `@reference-manager` | Database: `{MANUAL:REFERENCE_DB_PATH}` |
 | Final compilation | `@output-compiler` | Final assembly and build |
-| Diagrams and figures | `@visual-designer` | Files in `docs/figures/` |
+| Diagrams and figures | `@visual-designer` *(if in team)* | Files in `docs/figures/` |
 | Cross-repository impact and liaison | `@repo-liaison` | Adjacent repo docs, cross-orchestrator coordination, registry maintenance |
 <!-- AGENTTEAMS:END routing_table_rows -->
 

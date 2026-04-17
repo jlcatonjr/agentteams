@@ -161,13 +161,13 @@ You coordinate all agent operations for **ResearchPaperProject**. You route work
 | Creating or revising primary HTML chapter drafts, LaTeX manuscript and BibTeX bibliography | `@primary-producer` | New work or revision in `html/chapters/` |
 | Architecture and file hygiene | `@code-hygiene` | Backup files, script lifecycle, duplication, agent doc consistency |
 | Quality and structural defects | `@quality-auditor` | Purposeless content, structural weakness, pattern violations |
-| Within-section cohesion | `@cohesion-repairer` | Disjointed paragraphs, broken argument flow, orphaned evidence |
-| Style and standards | `@style-guardian` | Style reference: references/voice-samples/ |
+| Within-section cohesion | `@cohesion-repairer` *(if in team)* | Disjointed paragraphs, broken argument flow, orphaned evidence |
+| Style and standards | `@style-guardian` *(if in team)* | Style reference: references/voice-samples/ |
 | Technical accuracy | `@technical-validator` | Code, paths, counts, claims against source files |
 | Format conversion | `@format-converter` | Source format → output format `PDF via LaTeX` |
 | References and dependencies | `@reference-manager` | Database: `references/bibliography.bib` |
 | Final compilation | `@output-compiler` | Final assembly and build |
-| Diagrams and figures | `@visual-designer` | Files in `figures/` |
+| Diagrams and figures | `@visual-designer` *(if in team)* | Files in `figures/` |
 | Cross-repository impact and liaison | `@repo-liaison` | Adjacent repo docs, cross-orchestrator coordination, registry maintenance |
 <!-- AGENTTEAMS:END routing_table_rows -->
 
