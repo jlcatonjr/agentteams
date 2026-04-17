@@ -1435,7 +1435,7 @@
 <p>No external runtime dependencies are required — Agent Teams Module uses only the Python 3.11+ stdlib. The only dev dependency is <code>pytest</code>.</p>
 <div class="highlight"><pre><span></span><code><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a>git<span class="w"> </span>clone<span class="w"> </span>https://github.com/jlcatonjr/agentteams
 <a id="__codelineno-0-2" name="__codelineno-0-2" href="#__codelineno-0-2"></a><span class="nb">cd</span><span class="w"> </span>agentteams
-<a id="__codelineno-0-3" name="__codelineno-0-3" href="#__codelineno-0-3"></a>pip<span class="w"> </span>install<span class="w"> </span>pytest
+<a id="__codelineno-0-3" name="__codelineno-0-3" href="#__codelineno-0-3"></a>pip<span class="w"> </span>install<span class="w"> </span>-e<span class="w"> </span>.<span class="w"> </span>pytest
 </code></pre></div>
 <hr />
 <h2 id="running-the-test-suite">Running the Test Suite<a class="headerlink" href="#running-the-test-suite" title="Permanent link">&para;</a></h2>
@@ -1495,7 +1495,7 @@
 </table>
 <hr />
 <h2 id="authoring-templates">Authoring Templates<a class="headerlink" href="#authoring-templates" title="Permanent link">&para;</a></h2>
-<p>Templates live in <code>templates/</code> and follow the placeholder conventions defined in <a href="https://github.com/jlcatonjr/agentteams/blob/main/templates/PLACEHOLDER-CONVENTIONS.md"><code>templates/PLACEHOLDER-CONVENTIONS.md</code></a>.</p>
+<p>Templates live in <code>templates/</code> and follow the placeholder conventions defined in <a href="https://github.com/jlcatonjr/agentteams/blob/main/agentteams/templates/PLACEHOLDER-CONVENTIONS.md"><code>templates/PLACEHOLDER-CONVENTIONS.md</code></a>.</p>
 <p>See the <a href="../template-authoring/">Template Authoring Guide</a> for full instructions.</p>
 <p><strong>Key rules for new templates:</strong></p>
 <ol>

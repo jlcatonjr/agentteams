@@ -1,8 +1,12 @@
+<!-- AGENTTEAMS:BEGIN registry_header v=1 -->
 # Adjacent Repository Registry — SalesDataPipeline
 
 This file is the authoritative registry of repositories adjacent to **SalesDataPipeline** whose agent infrastructure may be affected by — or may affect — activity in this project.
 
 Maintained by `@repo-liaison`. Every cross-repository update must be recorded here.
+
+> **Merge-safe:** This file uses AGENTTEAMS fencing on the header only. All content below the header (Active Entries, Coordination Log, Retired Entries) is user-authored and is preserved automatically on `--merge` runs.
+<!-- AGENTTEAMS:END registry_header -->
 
 ---
 
