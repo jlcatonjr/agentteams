@@ -246,9 +246,7 @@ def main(argv: list[str] | None = None) -> int:
     parser = _build_parser()
     args = parser.parse_args(argv)
 
-    # -----------------------------------------------------------------------
     # --self: redirect to the module's own build description
-    # -----------------------------------------------------------------------
     if args.self_update:
         self_desc = _SCRIPT_DIR / ".github" / "agents" / "_build-description.json"
         if not self_desc.exists():
@@ -260,16 +258,10 @@ def main(argv: list[str] | None = None) -> int:
             args.output = str(_SCRIPT_DIR / ".github" / "agents")
         print(f"Self-maintenance mode: using {self_desc.name}")
 
-    # -----------------------------------------------------------------------
-    # --revert-migration: undo a previous --migrate run
-    # -----------------------------------------------------------------------
     if args.revert_migration:
         project_dir = Path(args.project).resolve() if args.project else Path.cwd()
         return _run_revert_migration(project_dir)
 
-    # -----------------------------------------------------------------------
-    # --migrate: tag + overwrite (delegates back into main with --overwrite)
-    # -----------------------------------------------------------------------
     if args.migrate:
         if not args.description:
             parser.error("--description is required with --migrate")
@@ -282,22 +274,79 @@ def main(argv: list[str] | None = None) -> int:
     framework_id: str = args.framework
     adapter = FRAMEWORKS[framework_id]()
 
-    # --post-audit implies --enrich: auditing un-enriched files gives false positives.
-    # Automatically enable enrichment so the audit sees the fully filled output.
+    # --post-audit implies --enrich so the audit sees fully-filled output
     if args.post_audit and not args.enrich:
         args.enrich = True
 
-    # -----------------------------------------------------------------------
-    # Step 1: Ingest
-    # -----------------------------------------------------------------------
+    # Steps 1–2: Ingest + validate
+    rc, description = _step_ingest_and_validate(args)
+    if rc != 0:
+        return rc
+
+    # Step 3: Analyze → manifest
+    print(f"Analyzing project for {framework_id!r} framework...")
+    manifest = analyze.build_manifest(description, framework=framework_id)
+    project_name = manifest["project_name"]
+    print(f"  Project: {project_name!r}  |  Type: {manifest['project_type']}  |  Framework: {framework_id}")
+    print(f"  Archetypes: {', '.join(manifest['selected_archetypes'])}")
+    print(f"  Components: {len(manifest['components'])}")
+    print(f"  Total agents: {len(manifest['agent_slug_list'])}")
+
+    # Step 4: Resolve output directory
+    if args.output:
+        output_dir = Path(args.output).resolve()
+    elif description.get("existing_project_path"):
+        output_dir = adapter.get_agents_dir(Path(description["existing_project_path"]))
+    else:
+        output_dir = Path.cwd() / ".github" / "agents"
+    print(f"  Output directory: {output_dir}")
+
+    # Step 4b: --scan-security (no rendering needed)
+    if args.scan_security:
+        from agentteams import scan
+        report = scan.scan_directory(output_dir)
+        scan.print_scan_report(report)
+        return 1 if report.has_issues else 0
+
+    # Step 4d: Build live security intelligence placeholders
+    _inject_security_placeholders(args, manifest, output_dir)
+
+    # Step 4c: --check (drift + structural changes, no write)
+    if args.check:
+        return _step_check_drift(manifest, output_dir)
+
+    # Steps 5–5c: Render templates + framework post-processing + graph
+    final_rendered, template_hashes = _step_render(manifest, adapter, project_name)
+
+    # Step 5b: --update (structural + content drift, manual preservation)
+    if args.update:
+        return _step_update(args, manifest, final_rendered, template_hashes, output_dir, project_name)
+
+    # Step 5d: --enrich (defaults audit + auto-enrichment)
+    if args.enrich:
+        final_rendered = _step_enrich(args, description, manifest, final_rendered, output_dir)
+
+    # Steps 6–9: cross-ref validation, emit, audit, run log
+    return _step_emit_and_audit(args, manifest, final_rendered, template_hashes, output_dir)
+
+
+# ---------------------------------------------------------------------------
+# Pipeline step functions
+# ---------------------------------------------------------------------------
+
+def _step_ingest_and_validate(args) -> tuple[int, dict]:
+    """Steps 1–2: load and validate the project description.
+
+    Returns:
+        (0, description) on success; (1, {}) on error.
+    """
     print(f"Loading description from {args.description!r}...")
     try:
         description = ingest.load(args.description, scan_project=not args.no_scan)
     except (FileNotFoundError, ValueError) as exc:
         print(f"Error loading description: {exc}", file=sys.stderr)
-        return 1
+        return 1, {}
 
-    # Override project path from CLI if provided
     if args.project:
         description["existing_project_path"] = str(Path(args.project).resolve())
         if not args.no_scan:
@@ -305,293 +354,255 @@ def main(argv: list[str] | None = None) -> int:
                 description, Path(description["existing_project_path"])
             )
 
-    # -----------------------------------------------------------------------
-    # Step 2: Validate
-    # -----------------------------------------------------------------------
     errors = ingest.validate(description)
     if errors:
         print("Validation errors:", file=sys.stderr)
         for err in errors:
             print(f"  {err}", file=sys.stderr)
-        return 1
+        return 1, {}
 
-    # -----------------------------------------------------------------------
-    # Step 3: Analyze → manifest
-    # -----------------------------------------------------------------------
-    print(f"Analyzing project for {framework_id!r} framework...")
-    manifest = analyze.build_manifest(description, framework=framework_id)
+    return 0, description
 
-    project_name = manifest["project_name"]
-    project_type = manifest["project_type"]
-    print(f"  Project: {project_name!r}  |  Type: {project_type}  |  Framework: {framework_id}")
-    print(f"  Archetypes: {', '.join(manifest['selected_archetypes'])}")
-    print(f"  Components: {len(manifest['components'])}")
-    print(f"  Total agents: {len(manifest['agent_slug_list'])}")
 
-    # -----------------------------------------------------------------------
-    # Step 4: Resolve output directory
-    # -----------------------------------------------------------------------
-    if args.output:
-        output_dir = Path(args.output).resolve()
-    elif description.get("existing_project_path"):
-        project_path = Path(description["existing_project_path"])
-        output_dir = adapter.get_agents_dir(project_path)
-    else:
-        output_dir = Path.cwd() / ".github" / "agents"
-
-    print(f"  Output directory: {output_dir}")
-
-    # -----------------------------------------------------------------------
-    # Step 4b: Handle --scan-security (no rendering needed)
-    # -----------------------------------------------------------------------
-    if args.scan_security:
-        from agentteams import scan
-        report = scan.scan_directory(output_dir)
-        scan.print_scan_report(report)
-        return 1 if report.has_issues else 0
-
-    # -----------------------------------------------------------------------
-    # Step 4d: Build live security intelligence placeholders
-    # -----------------------------------------------------------------------
+def _inject_security_placeholders(args, manifest: dict, output_dir: Path) -> None:
+    """Step 4d: fetch live CVE/KEV intelligence and inject into manifest placeholders."""
     from agentteams import security_refs as _security_refs
-
     _project_tools: list[str] = manifest.get("tools", []) or []
-    security_placeholders = _security_refs.build_security_placeholders(
+    placeholders = _security_refs.build_security_placeholders(
         output_dir=output_dir,
         offline=args.security_offline,
         max_items=max(1, int(args.security_max_items)),
         tools=_project_tools if _project_tools else None,
         skip_nvd=args.security_no_nvd,
     )
-    manifest["auto_resolved_placeholders"].update(security_placeholders)
+    manifest["auto_resolved_placeholders"].update(placeholders)
 
-    # -----------------------------------------------------------------------
-    # Step 4c: Handle --check (drift + structural changes, no write)
-    # -----------------------------------------------------------------------
-    if args.check:
-        from agentteams import drift
-        # Content drift (template hash comparison)
-        try:
-            dreport = drift.detect_drift(output_dir, TEMPLATES_DIR)
-        except FileNotFoundError as exc:
-            print(f"Error: {exc}", file=sys.stderr)
-            return 1
-        drift.print_drift_report(dreport)
-        # Structural diff (team composition comparison)
-        sdreport = None
-        try:
-            old_log = drift.load_build_log(output_dir)
-            sdreport = drift.compute_structural_diff(old_log, manifest, TEMPLATES_DIR)
-            if sdreport.added_files or sdreport.removed_files:
-                print("\n  Structural changes:")
-                drift.print_structural_diff_report(sdreport)
-        except FileNotFoundError:
-            pass  # no build-log — structural diff not available
-        has_any = dreport.has_drift or (sdreport.has_changes if sdreport is not None else False)
-        return 1 if has_any else 0
 
-    # -----------------------------------------------------------------------
-    # Step 5: Render
-    # -----------------------------------------------------------------------
+def _step_check_drift(manifest: dict, output_dir: Path) -> int:
+    """Step 4c: report content and structural drift without writing any files.
+
+    Returns:
+        0 if no drift, 1 if drift or structural changes detected (or on error).
+    """
+    from agentteams import drift
+    try:
+        dreport = drift.detect_drift(output_dir, TEMPLATES_DIR)
+    except FileNotFoundError as exc:
+        print(f"Error: {exc}", file=sys.stderr)
+        return 1
+    drift.print_drift_report(dreport)
+
+    sdreport = None
+    try:
+        old_log = drift.load_build_log(output_dir)
+        sdreport = drift.compute_structural_diff(old_log, manifest, TEMPLATES_DIR)
+        if sdreport.added_files or sdreport.removed_files:
+            print("\n  Structural changes:")
+            drift.print_structural_diff_report(sdreport)
+    except FileNotFoundError:
+        pass  # no build-log — structural diff not available
+
+    has_any = dreport.has_drift or (sdreport.has_changes if sdreport is not None else False)
+    return 1 if has_any else 0
+
+
+def _step_render(
+    manifest: dict,
+    adapter,
+    project_name: str,
+) -> tuple[list[tuple[str, str]], dict[str, str]]:
+    """Steps 5–5c: render templates, apply framework adapter, generate topology graph.
+
+    Returns:
+        (final_rendered, template_hashes)
+    """
+    from agentteams import graph as _graph
+
     print("Rendering templates...")
     rendered = render.render_all(manifest, templates_dir=TEMPLATES_DIR)
-
-    # Compute template hashes for drift detection
     template_hashes = render.compute_template_hashes(manifest, templates_dir=TEMPLATES_DIR)
 
-    # Apply framework-specific post-processing
     final_rendered: list[tuple[str, str]] = []
     for rel_path, content in rendered:
         file_type = _guess_file_type(rel_path)
         if file_type == "agent":
-            slug = Path(rel_path).stem.replace(".agent", "")
-            content = adapter.render_agent_file(content, slug, manifest)
+            content = adapter.render_agent_file(
+                content, Path(rel_path).stem.replace(".agent", ""), manifest
+            )
         elif file_type == "instructions":
             content = adapter.render_instructions_file(content, manifest)
         final_rendered.append((rel_path, content))
 
-    # -----------------------------------------------------------------------
-    # Step 5c: Generate team topology graph
-    # -----------------------------------------------------------------------
-    from agentteams import graph as _graph
-    graph_content = _graph.generate_graph_document(
-        dict(final_rendered), project_name=project_name
-    )
+    graph_content = _graph.generate_graph_document(dict(final_rendered), project_name=project_name)
     final_rendered.append(("references/pipeline-graph.md", graph_content))
 
-    # -----------------------------------------------------------------------
-    # Step 5b: Handle --update (structural + content drift, manual preservation)
-    # -----------------------------------------------------------------------
-    if args.update:
-        from agentteams import drift
+    return final_rendered, template_hashes
 
-        # Load old build-log (may not exist for first-generation teams)
-        try:
-            old_log = drift.load_build_log(output_dir)
-        except FileNotFoundError:
-            old_log = {}
 
-        # Compute structural diff: additions, removals, drifted, unchanged
-        sdreport = drift.compute_structural_diff(old_log, manifest, TEMPLATES_DIR)
+def _step_update(
+    args,
+    manifest: dict,
+    final_rendered: list[tuple[str, str]],
+    template_hashes: dict[str, str],
+    output_dir: Path,
+    project_name: str,
+) -> int:
+    """Step 5b: incremental update — re-render drifted files, emit new agents.
 
-        # Always refresh security intelligence references during --update,
-        # even when template/content drift is otherwise empty.
-        security_refresh_paths = {
-            "references/security-vulnerability-watch.reference.md",
-            "references/security-vulnerability-watch.json",
-        }
+    Returns:
+        0 on success, 1 on error.
+    """
+    from agentteams import drift, graph as _graph
 
-        if not sdreport.has_changes and not sdreport.removed_files:
-            print("No structural or content changes detected; refreshing security intelligence references.")
-        else:
-            print(f"\nStructural update for {project_name!r}:")
-            drift.print_structural_diff_report(sdreport)
+    try:
+        old_log = drift.load_build_log(output_dir)
+    except FileNotFoundError:
+        old_log = {}
 
-        # Build the update set from the structural diff + security refresh files
-        update_paths: set[str] = {f["path"] for f in sdreport.update_files}
-        update_paths.update(security_refresh_paths)
+    sdreport = drift.compute_structural_diff(old_log, manifest, TEMPLATES_DIR)
 
-        update_rendered: list[tuple[str, str]] = []
-        for rel_path, content in final_rendered:
-            if rel_path not in update_paths:
-                continue
-            # Preserve {MANUAL:*} values from the existing file (if any)
-            existing_path = emit._resolve_path(output_dir, rel_path)
-            if existing_path.exists():
-                content = _preserve_manual_values(
-                    existing_path.read_text(encoding="utf-8"), content
-                )
-            update_rendered.append((rel_path, content))
+    # Security intelligence references are always refreshed on --update
+    security_refresh_paths = {
+        "references/security-vulnerability-watch.reference.md",
+        "references/security-vulnerability-watch.json",
+    }
 
-        if not update_rendered:
-            print("Changes detected but no matching rendered files — already up to date.")
-            return 0
+    if not sdreport.has_changes and not sdreport.removed_files:
+        print("No structural or content changes detected; refreshing security intelligence references.")
+    else:
+        print(f"\nStructural update for {project_name!r}:")
+        drift.print_structural_diff_report(sdreport)
 
-        # Always regenerate the team topology graph on every update
-        graph_rel_path = "references/pipeline-graph.md"
-        if not any(p == graph_rel_path for p, _ in update_rendered):
-            graph_update_content = _graph.generate_graph_document(
-                dict(final_rendered), project_name=project_name
+    update_paths: set[str] = {f["path"] for f in sdreport.update_files} | security_refresh_paths
+    update_rendered: list[tuple[str, str]] = []
+    for rel_path, content in final_rendered:
+        if rel_path not in update_paths:
+            continue
+        existing_path = emit._resolve_path(output_dir, rel_path)
+        if existing_path.exists():
+            content = _preserve_manual_values(existing_path.read_text(encoding="utf-8"), content)
+        update_rendered.append((rel_path, content))
+
+    if not update_rendered:
+        print("Changes detected but no matching rendered files — already up to date.")
+        return 0
+
+    # Always regenerate the topology graph on every update
+    graph_rel_path = "references/pipeline-graph.md"
+    if not any(p == graph_rel_path for p, _ in update_rendered):
+        update_rendered.append((
+            graph_rel_path,
+            _graph.generate_graph_document(dict(final_rendered), project_name=project_name),
+        ))
+
+    if args.prune and sdreport.removed_files:
+        rc = _prune_removed_files(sdreport.removed_files, output_dir, args.yes, args.dry_run)
+        if rc != 0:
+            return rc
+
+    print(f"\nWriting {len(update_rendered)} file(s)...")
+    result = emit.emit_all(update_rendered, output_dir=output_dir,
+                           dry_run=args.dry_run, overwrite=True, yes=args.yes)
+    emit.print_summary(result, manifest)
+
+    if args.post_audit and result.success and not args.dry_run:
+        rc = _run_post_audit_step(args, manifest, output_dir)
+        if rc != 0:
+            return rc
+
+    if not args.dry_run and result.success:
+        _write_run_log(manifest, result, output_dir, template_hashes)
+    return 0 if result.success else 1
+
+
+def _step_enrich(
+    args,
+    description: dict,
+    manifest: dict,
+    final_rendered: list[tuple[str, str]],
+    output_dir: Path,
+) -> list[tuple[str, str]]:
+    """Step 5d: scan for default template elements and apply auto-enrichment.
+
+    Returns:
+        Updated final_rendered list with enriched content.
+    """
+    from agentteams import enrich as _enrich
+
+    project_path: Path | None = (
+        Path(description["existing_project_path"])
+        if description.get("existing_project_path") else None
+    )
+
+    print("Scanning for default template elements...")
+    manifest.update({
+        "project_goal": description.get("project_goal", ""),
+        "output_format": description.get("output_format") or manifest.get("output_format", ""),
+        "tools": description.get("tools", []),
+        "description": description,
+    })
+
+    enrich_file_map = dict(final_rendered)
+    findings = _enrich.scan_defaults(enrich_file_map, manifest, project_path=project_path)
+    print(f"  Found {len(findings)} default finding(s)")
+
+    enriched_file_map, findings = _enrich.auto_enrich(
+        findings, enrich_file_map, manifest, project_path=project_path
+    )
+
+    if args.post_audit:
+        copilot_exe = _enrich.shutil.which("copilot")
+        if copilot_exe:
+            print("  Running AI enrichment via copilot CLI...")
+            enriched_file_map, findings = _enrich.ai_enrich(
+                findings, enriched_file_map, manifest,
+                project_path=project_path, copilot_path=copilot_exe,
             )
-            update_rendered.append((graph_rel_path, graph_update_content))
 
-        # --prune: delete removed files (with confirmation unless --yes)
-        if args.prune and sdreport.removed_files:
-            rc = _prune_removed_files(sdreport.removed_files, output_dir, args.yes, args.dry_run)
-            if rc != 0:
-                return rc
+    csv_rel_path = "references/defaults-audit.csv"
+    _enrich.export_csv(findings, output_dir / csv_rel_path)
+    print(f"  Defaults audit CSV written to {csv_rel_path}")
 
-        print(f"\nWriting {len(update_rendered)} file(s)...")
-        result = emit.emit_all(
-            update_rendered,
-            output_dir=output_dir,
-            dry_run=args.dry_run,
-            overwrite=True,
-            yes=args.yes,
-        )
-        emit.print_summary(result, manifest)
+    final_rendered = list(enriched_file_map.items())
+    csv_content = (output_dir / csv_rel_path).read_text(encoding="utf-8")
+    if not any(p == csv_rel_path for p, _ in final_rendered):
+        final_rendered.append((csv_rel_path, csv_content))
 
-        # ------------------------------------------------------------------
-        # Post-generation audit (--update path)
-        # ------------------------------------------------------------------
-        if args.post_audit and result.success and not args.dry_run:
-            from agentteams import audit as _audit
-            audit_result = _audit.run_post_audit(
-                output_dir, manifest,
-                ai_audit=True,
-            )
-            _audit.print_audit_report(audit_result)
-            if args.auto_correct and (audit_result.has_errors or audit_result.has_warnings):
-                audit_result = _attempt_auto_correct(
-                    output_dir=output_dir,
-                    manifest=manifest,
-                    audit_result=audit_result,
-                )
-            if audit_result.has_errors:
-                return 1
+    setup_req_content = _enrich.generate_setup_required(findings, manifest)
+    final_rendered = [
+        (p, setup_req_content if "SETUP-REQUIRED" in p else c)
+        for p, c in final_rendered
+    ]
 
-        if not args.dry_run and result.success:
-            _write_run_log(manifest, result, output_dir, template_hashes)
-        return 0 if result.success else 1
+    manifest["manual_required_placeholders"] = [
+        {"placeholder": f.token, "agent_file": f.file,
+         "context": f.context_snippet, "suggestion": f.auto_suggestion}
+        for f in findings if f.status == "pending"
+    ]
+    _enrich.print_enrich_summary(findings)
 
-    # -----------------------------------------------------------------------
-    # Step 5d: Defaults audit + auto-enrichment (--enrich)
-    # -----------------------------------------------------------------------
-    if args.enrich:
-        from agentteams import enrich as _enrich
+    return final_rendered
 
-        project_path_for_enrich: Path | None = None
-        if description.get("existing_project_path"):
-            project_path_for_enrich = Path(description["existing_project_path"])
 
-        print("Scanning for default template elements...")
-        # Attach manifest fields needed by enrich module
-        manifest["project_goal"] = description.get("project_goal", "")
-        manifest["output_format"] = description.get("output_format") or manifest.get("output_format", "")
-        manifest["tools"] = description.get("tools", [])
-        manifest["description"] = description
+def _step_emit_and_audit(
+    args,
+    manifest: dict,
+    final_rendered: list[tuple[str, str]],
+    template_hashes: dict[str, str],
+    output_dir: Path,
+) -> int:
+    """Steps 6–9: cross-ref validation, emit, post-audit, run log.
 
-        # Build file_map from final_rendered for scanning
-        enrich_file_map = dict(final_rendered)
-        findings = _enrich.scan_defaults(enrich_file_map, manifest, project_path=project_path_for_enrich)
-        print(f"  Found {len(findings)} default finding(s)")
-
-        # Auto-enrich (rule-based + notebook scanning + tool catalog)
-        enriched_file_map, findings = _enrich.auto_enrich(
-            findings, enrich_file_map, manifest, project_path=project_path_for_enrich
-        )
-
-        # Optionally follow up with AI enrichment if copilot CLI is available
-        if args.post_audit:
-            copilot_exe = _enrich.shutil.which("copilot")
-            if copilot_exe:
-                print("  Running AI enrichment via copilot CLI...")
-                enriched_file_map, findings = _enrich.ai_enrich(
-                    findings, enriched_file_map, manifest,
-                    project_path=project_path_for_enrich,
-                    copilot_path=copilot_exe,
-                )
-
-        # Export CSV
-        csv_rel_path = "references/defaults-audit.csv"
-        _enrich.export_csv(findings, output_dir / csv_rel_path)
-        print(f"  Defaults audit CSV written to {csv_rel_path}")
-
-        # Replace final_rendered with enriched content + CSV entry
-        final_rendered = list(enriched_file_map.items())
-        # Add CSV to the rendered set so it gets emitted
-        csv_content = (output_dir / csv_rel_path).read_text(encoding="utf-8")
-        if not any(p == csv_rel_path for p, _ in final_rendered):
-            final_rendered.append((csv_rel_path, csv_content))
-
-        # Regenerate SETUP-REQUIRED.md based only on genuinely pending findings
-        setup_req_content = _enrich.generate_setup_required(findings, manifest)
-        final_rendered = [
-            (p, setup_req_content if "SETUP-REQUIRED" in p else c)
-            for p, c in final_rendered
-        ]
-        # Count pending for emit summary
-        pending_count = sum(1 for f in findings if f.status == "pending")
-        manifest["manual_required_placeholders"] = [
-            {"placeholder": f.token, "agent_file": f.file,
-             "context": f.context_snippet, "suggestion": f.auto_suggestion}
-            for f in findings if f.status == "pending"
-        ]
-
-        _enrich.print_enrich_summary(findings)
-
-    # -----------------------------------------------------------------------
-    # Step 6: Validate cross-references
-    # -----------------------------------------------------------------------
+    Returns:
+        0 on success, 1 on error.
+    """
+    # Step 6: cross-reference validation
     warnings = render.validate_cross_refs(final_rendered)
     if warnings:
         manifest["_cross_ref_warnings"] = warnings
         print(f"  ⚠  {len(warnings)} cross-reference warning(s)")
 
-    # -----------------------------------------------------------------------
-    # Step 7: Emit
-    # -----------------------------------------------------------------------
-    # Surface user-customization warnings before a merge so users can review
+    # Step 7: advisory merge warnings
     if args.merge and not args.dry_run:
         from agentteams import drift as _drift_mod
         customized = _drift_mod.detect_user_customizations(output_dir)
@@ -605,46 +616,49 @@ def main(argv: list[str] | None = None) -> int:
                   "user-authored content outside fences is preserved.")
 
     result = emit.emit_all(
-        final_rendered,
-        output_dir=output_dir,
-        dry_run=args.dry_run,
-        overwrite=args.overwrite,
-        merge=args.merge,
-        yes=args.yes,
+        final_rendered, output_dir=output_dir,
+        dry_run=args.dry_run, overwrite=args.overwrite,
+        merge=args.merge, yes=args.yes,
     )
 
-    # -----------------------------------------------------------------------
-    # Step 8: Print summary
-    # -----------------------------------------------------------------------
+    # Step 8: summary
     emit.print_summary(result, manifest)
 
-    # -----------------------------------------------------------------------
-    # Step 8.5: Post-generation audit (if --post-audit)
-    # -----------------------------------------------------------------------
+    # Step 8.5: post-audit
     if args.post_audit and result.success and not args.dry_run:
-        from agentteams import audit as _audit
-        audit_result = _audit.run_post_audit(
-            output_dir, manifest,
-            rendered_files=final_rendered,
-            ai_audit=True,
-        )
-        _audit.print_audit_report(audit_result)
-        if args.auto_correct and (audit_result.has_errors or audit_result.has_warnings):
-            audit_result = _attempt_auto_correct(
-                output_dir=output_dir,
-                manifest=manifest,
-                audit_result=audit_result,
-            )
-        if audit_result.has_errors:
-            return 1
+        rc = _run_post_audit_step(args, manifest, output_dir, rendered_files=final_rendered)
+        if rc != 0:
+            return rc
 
-    # -----------------------------------------------------------------------
-    # Step 9: Write run log (skip in dry-run)
-    # -----------------------------------------------------------------------
+    # Step 9: run log
     if not args.dry_run and result.success:
         _write_run_log(manifest, result, output_dir, template_hashes)
 
     return 0 if result.success else 1
+
+
+def _run_post_audit_step(
+    args,
+    manifest: dict,
+    output_dir: Path,
+    rendered_files: list[tuple[str, str]] | None = None,
+) -> int:
+    """Run the post-generation audit and optionally auto-correct findings.
+
+    Returns:
+        0 if no blocking errors, 1 if audit errors remain after any correction.
+    """
+    from agentteams import audit as _audit
+    audit_result = _audit.run_post_audit(
+        output_dir, manifest,
+        rendered_files=rendered_files,
+        ai_audit=True,
+    )
+    _audit.print_audit_report(audit_result)
+    if args.auto_correct and (audit_result.has_errors or audit_result.has_warnings):
+        audit_result = _attempt_auto_correct(output_dir=output_dir, manifest=manifest,
+                                             audit_result=audit_result)
+    return 1 if audit_result.has_errors else 0
 
 
 # ---------------------------------------------------------------------------
