@@ -43,7 +43,7 @@ All tests live in `tests/`. The suite runs in under 5 seconds with no network ac
 
 ## Authoring Templates
 
-Templates live in `templates/` and follow the placeholder conventions defined in [`templates/PLACEHOLDER-CONVENTIONS.md`](https://github.com/jlcatonjr/agentteams/blob/main/templates/PLACEHOLDER-CONVENTIONS.md).
+Templates live in `templates/` and follow the placeholder conventions defined in [`templates/PLACEHOLDER-CONVENTIONS.md`](https://github.com/jlcatonjr/agentteams/blob/main/agentteams/templates/PLACEHOLDER-CONVENTIONS.md).
 
 See the [Template Authoring Guide](template-authoring.md) for full instructions.
 

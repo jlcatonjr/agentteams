@@ -1,12 +1,12 @@
 # Template Authoring Guide
 
-This guide covers how to write and register templates for the Agent Teams Module. The canonical source is [`templates/AUTHORING-GUIDE.md`](https://github.com/jlcatonjr/agentteams/blob/main/templates/AUTHORING-GUIDE.md) in the repository.
+This guide covers how to write and register templates for the Agent Teams Module. The canonical source is [`templates/AUTHORING-GUIDE.md`](https://github.com/jlcatonjr/agentteams/blob/main/agentteams/templates/AUTHORING-GUIDE.md) in the repository.
 
 ---
 
 ## Placeholder Syntax
 
-Two placeholder syntaxes are used. For full details, see [`templates/PLACEHOLDER-CONVENTIONS.md`](https://github.com/jlcatonjr/agentteams/blob/main/templates/PLACEHOLDER-CONVENTIONS.md).
+Two placeholder syntaxes are used. For full details, see [`templates/PLACEHOLDER-CONVENTIONS.md`](https://github.com/jlcatonjr/agentteams/blob/main/agentteams/templates/PLACEHOLDER-CONVENTIONS.md).
 
 ### Auto-Resolved: `{UPPER_SNAKE_CASE}`
 
