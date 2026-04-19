@@ -1,0 +1,88 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Chapter 21: Drift, Contradiction, and Self-Repair</title>
+</head>
+<body>
+  <article id="ch:drift-contradiction">
+    <h1>Chapter 21: Drift, Contradiction, and Self-Repair</h1>
+    <p class="part-label">Part V: Automated Governance</p>
+
+    <section id="sec:drift-contradiction-register">
+      <h2>1. The Contradiction Register</h2>
+
+      <p>Configuration drift is a familiar problem in infrastructure engineering. A system's declared configuration gradually diverges from its actual state. Servers that were provisioned identically accumulate differences over time: patches applied to some but not others, environment variables set manually and forgotten, dependency versions pinned at different points. The declared state says the systems are identical. The actual state says they are not. Infrastructure-as-code tools exist to detect and correct this divergence.</p>
+
+      <p>Documentation drift is the agent-team equivalent and arguably more insidious. When documentation drifts from the state it purports to describe, agents can no longer distinguish reliable instructions from stale artifacts. The governance mechanism degrades from within. No single stale entry is catastrophic. But the accumulated effect, which includes instructions that no longer correspond to reality, cross-references that no longer resolve, and constraints that no longer bind, undermines the system's capacity for coordination.</p>
+
+      <p>Chapter 17 discussed template drift: the divergence of a repository's invariant core from the abstract template held elsewhere. The drift examined here is more fundamental. Reality drift is the gradual loss of correspondence between documentation and the actual state of the system it describes. A repository can drift from its template without being factually wrong (if the template itself is outdated), and documentation can drift from reality without diverging from any template (if no template covers that content). Both types erode coordination capacity, but they require different detection and remediation mechanisms.</p>
+
+      <p>The contradiction register (contradiction-register.json), maintained by the contradiction-auditor at Stage 6 of the daily pipeline, is a persistent record of logical inconsistencies across the documentation ecosystem. Each entry carries a stable identifier (CONT-###) that survives pipeline runs, a status (open, resolved, or deferred), dates of detection and resolution, and a description of the contradiction and its scope. The register accumulates defect history: not just the current state of contradictions but the trajectory of detection and resolution over time. The pipeline-orchestrator (Stage 9) reads the register to calculate health metrics: the count of open contradictions, the rate of resolution, the age of unresolved entries. These metrics are the system's vital signs, and their significance lies in the trend rather than in any single reading.</p>
+
+      <p>A typical entry: CONT-042. A cleanup agent in a managed repository references @infrastructure for deployment concerns, but that repository has no infrastructure.agent.md. The deployment concern is handled by a domain agent (deploy-specialist.agent.md). Status: open. Until resolved, agents that follow the cleanup agent's instructions will attempt to invoke a nonexistent agent, a broken reference that produces a runtime failure. The documentation points to a resource that does not exist, and the system context that would make this reference meaningful has changed. The plan that organized that repository's agent team now assigns that responsibility elsewhere.</p>
+
+    </section>
+
+    <section id="sec:drift-auditing">
+      <h2>2. Contradiction Auditing as Consistency Checking</h2>
+
+      <p>The conflict-auditor follows a structured workflow across four phases. Detection: scan documentation for logical inconsistencies: cross-references that do not resolve, agent files that reference nonexistent resources, claims that contradict source code. Classification: assign severity and scope. Is the issue local (one file) or systemic (multiple repositories)? Is it critical (blocks agent operation) or cosmetic (misleading but non-blocking)? Resolution: fix the contradiction directly if within the auditor's authority, or generate a remediation instruction for the appropriate agent. Verification: after remediation, re-check that the contradiction is resolved and that the fix has not introduced new inconsistencies.</p>
+
+      <p>The four-phase workflow imposes architectural constraints that prevent the auditor from exceeding its authority. The auditor has read-only access and reporting authority but not direct modification authority for other agents' files. All contradictions must be recorded in the register, which must be readable by the pipeline-orchestrator. Unresolved contradictions accumulate, degrading the health metric and triggering escalation when thresholds are exceeded. These constraints follow the same authority-separation patterns described in Chapter 4: each agent's boundaries are defined by what it is permitted to read, write, and invoke.</p>
+
+      <p>A working agent team's conflict log illustrates this mechanism in miniature. Entries typed under a consistent taxonomy, each tracking a specific inconsistency between files, are detected by the auditor, classified by severity, resolved by the appropriate agent, and verified. A typical entry might record a conflict between a project plan's stated agent count for a repository's team and an inventory file that listed the agents. The auditor detects the discrepancy, classifies it as a documentation inconsistency, and resolves it by verifying the count against the source directory. The resolution is verified by re-reading the corrected file.</p>
+    </section>
+
+    <section id="sec:drift-living-document">
+      <h2>3. The Living Document Policy</h2>
+
+      <p>I imposed the living document policy as a set of constitutional constraints that apply to all agents:</p>
+      <ul>
+        <li>No dated audit snapshots: counts and past results belong in data files, not agent prose.</li>
+        <li>No resolved issue archaeology: once fixed, remove from agent docs immediately.</li>
+        <li>No dated fix logs: remove after verification, preserve only reusable procedures.</li>
+        <li>Hardcoded state belongs in reference files, not embedded in agent prose.</li>
+      </ul>
+      <p>These rules prevent the accumulation of stale content in the files that agents read every time they are invoked.</p>
+
+      <p>The policy enforces a distinction between declarative and historical configuration. Declarative configuration describes the system's intended state: what each agent does, what it may access, what constraints it must observe. Historical configuration describes what has happened: past audit results, resolved contradictions, dated counts. The living document policy requires agent files to be declarative. Historical data is stored in reference files and data files, where it can be queried when relevant and ignored when not. Agent files that mix the two modes accumulate noise, and agents that read them waste context window processing information that describes past states rather than current instructions.</p>
+
+      <p>The distinction has a practical consequence for system maintenance. A declarative agent file can be validated against the current state of the system: does the cleanup agent's jurisdiction list match the directories that actually exist? Does the security agent's authority specification match its configured tool access? A historical agent file cannot be validated in the same way, because it contains statements about past states that are true by virtue of having occurred but irrelevant to current operation. The living document policy eliminates the class of statements that are true but useless, keeping agent files in a state where every assertion is both current and actionable.</p>
+
+
+
+    </section>
+
+    <section id="sec:drift-technical-debt">
+      <h2>4. Documentation Drift as Technical Debt</h2>
+
+      <p>Ward Cunningham introduced the metaphor of technical debt to describe the cost of implementing quick solutions that work now but create future maintenance burdens. Documentation drift is a form of technical debt, but with a distinctive compounding dynamic. A single stale instruction creates a small risk. An agent might follow it and produce an incorrect result. Two stale instructions create a larger risk. But twenty stale instructions across five agent files do not create merely twenty times the risk of one. They create a qualitatively different condition: a system where agents cannot reliably distinguish current instructions from stale ones, where the cost of verifying any single instruction against reality approaches the cost of rewriting it from scratch.</p>
+
+      <p>The compounding happens because documentation forms a network of cross-references. An orchestrator's routing table references agent files. Agent files reference directory structures. Directory structures reference configuration files. If the routing table is stale, the orchestrator routes tasks to the wrong agent. If the agent file is also stale, the wrong agent follows wrong instructions. The errors multiply rather than add. <cite class="citation" data-key="mitchell2006"><a href="../bibliography.html#mitchell2006">Mitchell (2006)</a></cite>, analyzing complex systems, observed that the behavior of such systems cannot be understood by examining individual components in isolation. The impact of documentation drift is a system-level property that emerges from the interactions among individually small inaccuracies.</p>
+
+      <p>There is a more fundamental reason drift is irreducible that the compounding dynamic alone does not capture. Any documentation system describes a reality at one logical remove from that reality. Agent files describe the team's procedures. They are not themselves those procedures. Every time the underlying system changes, documentation must be updated as a separate act, and each such act is a translation from one level of abstraction to another. Translation introduces error, delay, and incompleteness even when all agents follow their specifications correctly. A team in which all agents behave exactly as documented is not a team free of drift — it is a team in which documentation is still lagging behind the consequences of that very behavior. This is why the living document policy must function as a constitutional constraint rather than a best practice: best practices can be deferred when pressure to produce output is high. Constitutional constraints cannot be. Vallier's analysis of trust in constitutional orders supplies the deeper rationale: a constitutional order requires active maintenance of the conditions that make it reliable, not merely the absence of overt violation — and the living document policy is precisely such a maintenance mandate <cite class="citation" data-key="vallier2021"><a href="../bibliography.html#vallier2021">(Vallier 2021)</a></cite>.</p>
+
+      <p>The agent-team equivalent of a system drowning in technical debt is one where documentation is extensive but unreliable. Agents have instructions everywhere, but the instructions do not correspond to reality. The system is rich in documentation and poor in coordination. I have seen this condition. It is what motivates the living document policy's stringency.</p>
+
+    </section>
+
+    <section id="sec:drift-self-repair">
+      <h2>5. Self-Repair and System Integrity</h2>
+
+      <p>Documentation drift has concrete and measurable costs. If a cleanup agent references a nonexistent directory, it will fail, wasting an API call and requiring human investigation. If a security agent's jurisdiction list is stale, it may clear an operation that should have been blocked, or block one that should have been cleared. If an orchestrator's routing table is outdated, it will route tasks to the wrong agent, producing output that fails the quality standard of the correct agent. These are not hypothetical risks but observed failure modes.</p>
+
+      <p>The contradiction auditor, the living document policy, and the investigation-remediation cycle from Chapter 20 together constitute a self-repair mechanism: a set of automated processes that detect drift, classify it, and correct it. The self-repair is not perfect. It operates on a daily cadence, so drift can accumulate between cycles. It depends on the investigation protocol, which may miss some forms of drift. But it is systematically better than manual maintenance, which depends on human attention (a scarce resource) and suffers from the same deferral incentives that motivate the living document policy.</p>
+
+      <p>The self-repair mechanism operates at multiple scales. At the file level, the living document policy prevents stale content from accumulating. At the repository level, the local orchestrator coordinates remediation of findings from the workspace-level investigation. At the ecosystem level, the daily pipeline drives the investigation-remediation cycle that scans all repositories. Each scale addresses a different class of drift: the file level catches content that should have been removed, the repository level catches discrepancies between documentation and local reality, and the ecosystem level catches inconsistencies between repositories.</p>
+
+      <p>The agentteams module introduces a finer unit of self-repair than the file: the named section. Within files generated or managed by the module, section fencing — delimited by AGENTTEAMS:BEGIN and AGENTTEAMS:END markers with section names and version identifiers — creates independently trackable sub-file regions. Drift detection at this granularity operates section by section: the module reads deployed agent files, identifies fenced sections, and reports divergence from current templates without writing. The self-repair operation that follows can update only the sections whose content has drifted, leaving user-authored content outside the fences intact.</p>
+
+      <p>The section-level granularity addresses a limitation that file-level drift detection shares with all coarser-grained mechanisms: it cannot distinguish between intentional local modification and unwanted template divergence within the same file. A deployed agent file may contain both a user-authored extension (intentional) and an inadvertently modified invariant core (drift). File-level replacement would overwrite both. Section-level detection targets only the fenced template blocks, making the user's extensions invisible to the repair mechanism. The section fence is simultaneously an integrity boundary and a preservation boundary: it defines the scope of automated governance while protecting the scope of human customization.</p>
+
+      <p>The agent-auditor cycle and the section-level mechanism address complementary classes of drift. The contradiction auditor detects semantic drift: logical inconsistencies between agent claims and actual system state, cross-references that no longer resolve, jurisdiction boundaries that no longer match real directory structures. Section fencing detects configuration drift: divergence of generated content from the canonical template in a designated repository of architectural patterns. The former requires interpretive judgment — a contradiction must be read and classified. The latter requires structural comparison. Both are necessary. A team may maintain perfect semantic consistency across its agent prose while its generated sections silently accumulate template divergence that no auditor reading the prose would detect.</p>
+    </section>
+
+  </article>
+</body>
+</html>

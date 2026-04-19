@@ -1,0 +1,79 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Chapter 6: The Navigator</title>
+</head>
+<body>
+  <article id="ch:the-navigator">
+    <h1>Chapter 6: The Navigator</h1>
+    <p class="part-label">Part III: The Agents at Work</p>
+
+    <blockquote class="agent-description">
+      <p><strong>Purpose</strong>: You are the repository navigator for the book project. You maintain a project map, help agents locate files, and answer structural queries about the project and its source material.</p>
+    </blockquote>
+
+    <section id="sec:navigator-structural-knowledge">
+      <h2>1. The Directory Tree as Knowledge Structure</h2>
+
+      <p>Every agent that operates on a project needs to know where things are. Which directory holds the chapter sources? Where is the bibliography? Which file contains the chapter outlines? In a project with dozens of files distributed across multiple directories, answering these questions from the file system each time wastes context. The navigator agent exists to compress structural knowledge into a form that other agents can query without loading the full directory tree into their own context windows.</p>
+
+      <p>The navigator's primary artifact is a project map: a maintained document that describes the directory structure, file types, chapter status, and agent inventory. The map is maintained actively: regenerated after structural changes (file additions, renames, directory reorganizations) and consulted by other agents before they attempt file operations. The navigator's constitutional constraint is that it never answers a structural query from memory. It reads the project map or navigates the file system directly. This constraint prevents the navigator from serving stale information cached from a previous session, a failure mode that would propagate incorrect file paths to every agent that consults it.</p>
+
+      <p>The project map includes the full directory tree: chapter sources, working drafts, bibliography and reference materials, agent documentation, and generated output. It also includes paths to external source repositories, all of which are read-only from the book project's perspective. The navigator knows where everything is, but it does not know what everything means. That distinction, structural knowledge versus substantive knowledge, defines its role in the team's division of labor.</p>
+
+      <div class="project-illustration">
+        <p>In this project, the map covers chapter sources in <code>html/chapters/</code>, working drafts in <code>drafts/</code>, bibliography and voice samples in <code>references/</code>, agent documentation in <code>.github/agents/</code>, reference data in <code>.github/agents/references/</code>, and generated output in <code>manuscript/</code>. External source paths include the workspace-level abstract layer, the pipeline host repository, the representative repository-level team, and the daily pipeline script.</p>
+      </div>
+    </section>
+
+    <section id="sec:navigator-dependency-matrix">
+      <h2>2. The Chapter Dependency Table</h2>
+
+      <p>The navigator maintains a chapter-to-source-file dependency matrix that maps each chapter to its primary architectural and theoretical sources, covering source files and key theoretical references across the full manuscript. The dependency table enables two operations. First, when a source file changes, the navigator can identify which chapters are potentially affected. If the daily pipeline script is modified, the navigator reports that Chapters 17 and 18 should be checked for consistency. Second, when a new chapter is being drafted, the navigator provides the drafting agent with the authoritative list of sources to consult. The drafting agent does not need to determine which source files are relevant. The navigator has already resolved that mapping.</p>
+
+      <p>The table is a form of traceability documentation applied to the book's architecture. In software engineering, requirements traceability matrices map requirements to the code that implements them, enabling impact analysis when requirements change. The navigator's chapter dependency table maps theoretical and architectural claims to the source files that ground them, enabling the same kind of impact analysis: when the ground truth changes, the affected claims can be identified and verified.</p>
+    </section>
+
+    <section id="sec:navigator-context-economization">
+      <h2>3. Context Economization Through Structural Indirection</h2>
+
+      <p>The context window is a scarce resource (Chapter 2). Every byte loaded into an agent's context displaces something else. If a drafting agent must navigate the file system to locate source files, it spends context on directory listings, false starts, and path resolution: context that could otherwise hold chapter content, theoretical sources, or voice samples. The navigator absorbs this cost. Other agents query the navigator for a path, receive a precise answer, and load only the target file.</p>
+
+      <p>This is structural indirection: a layer of abstraction between agents and the file system. Rather than each agent maintaining its own model of the project's structure (duplicating knowledge across context windows), the navigator maintains a single model that others query on demand. The indirection reduces redundancy. It also reduces inconsistency. If a file is renamed, the navigator updates its map once, and all subsequent queries return the new path. Without the indirection layer, each agent that cached the old path independently would need to discover and correct the stale reference on its own.</p>
+
+      <p>The navigator also provides a controlled abstraction layer between chapter prose and operational file paths. Chapters refer to source systems by generic descriptions rather than concrete locations. The navigator knows the actual paths behind these descriptions. When a drafting agent needs to read a source file to verify a claim, the navigator resolves the generic label to the concrete file system path. This two-layer design, generic descriptions in prose, concrete paths in the navigator's map, means only one agent must maintain the mapping between labels and locations.</p>
+
+      <div class="project-illustration">
+        <p>In this project, the generic labels ("the workspace-level abstract layer," "the pipeline host repository," "a representative repository-level team") are formalized in the generalization policy described in the project instructions. The navigator resolves these labels to concrete file system paths on demand.</p>
+      </div>
+
+      <p>The architectural logic of structural indirection extends beyond context management. Miller and Drexler describe a related principle in their analysis of computational ecologies: that productive interaction between computational agents depends on access through clean interfaces rather than through direct state exposure <cite class="citation" data-key="miller1988a"><a href="../bibliography.html#miller1988a">(Miller and Drexler 1988a)</a></cite>. The navigator instantiates this principle. Every agent that needs to locate a file interacts with the project's structure through the navigator's interface rather than through the file system directly. The interface is narrow: a query goes in, a path comes out. What lies behind the interface — the project's actual directory organization, the external repository paths, the chapter-to-source mapping — is available on demand without being loaded into every agent's context. This modularity is not merely an implementation convenience. It is what makes the team's division of structural knowledge from substantive knowledge coherent and maintainable across sessions.</p>
+    </section>
+
+    <section id="sec:navigator-read-only">
+      <h2>4. Read-Only Orientation and the Separation of Knowing from Acting</h2>
+
+      <p>The navigator is read-oriented in practice. It navigates, queries, and reports. It does not create files or modify content. Its tools include reading files, listing directories, searching for patterns, and executing terminal commands for inspection, but its workflows do not authorize it to alter project state. This constraint is not incidental. It reflects a deliberate separation of the function that knows where things are from the functions that act on what they find.</p>
+
+      <p>The separation prevents a class of failure in which an agent responsible for locating files also modifies them, creating a feedback loop between its structural model and the structure it models. If the navigator could rename files, its project map would need to be updated mid-operation, and the map it is currently serving to other agents could become inconsistent with the file system during the transition. Read-only access eliminates this hazard. The navigator's model is always a passive reflection of the file system, never an active participant in changing it.</p>
+
+      <p>Other agents that need to modify the project structure, which includes a documentation-maintenance agent updating specification files, a deletion agent removing artifacts, a format-conversion agent producing output in alternate formats, consult the navigator to locate targets but perform the modifications themselves. The navigator tells them where to act. They decide what to do and whether to proceed. The information asymmetry is productive: the navigator's structural knowledge is available to every agent that needs it, but the authority to modify files remains with the agents whose workflows authorize those modifications and whose constitutional constraints govern them.</p>
+    </section>
+
+    <section id="sec:navigator-external-sources">
+      <h2>5. External Source Navigation</h2>
+
+      <p>A navigator maintains paths to external source repositories that are read-only from the book project's perspective, along with knowledge of each repository's internal structure: which agent files exist, how many agents each team contains, where the pipeline script runs, and which pipeline stages correspond to which chapters. This external navigation supports a technical accuracy auditor (Chapter 8), which verifies that every technical claim in a chapter draft matches what exists on disk, and a drafting agent (Chapter 15), which reads source files to ground architectural descriptions in actual implementations.</p>
+
+      <div class="project-illustration">
+        <p>This project draws on three external source repositories and a daily pipeline script. The technical accuracy auditor is the code-hygiene agent. The function of this agent is modified in terms of the object of scrutiny. Likewise, the book project's security agent scrutinizes modification of files in the source repository (a common feature for security agents), but also plays a role in confirming citations. The drafting agent is the book-content-expert.</p>
+      </div>
+
+      <p>The external source paths are operational infrastructure, not chapter content. Chapter prose never reveals the actual repository names or file system locations. The navigator mediates between the two layers: it provides operational agents with precise paths while a project-level naming convention ensures that those paths never surface in the book's prose. This two-layer design, concrete paths for operational use, generic descriptions for published content, requires only one agent to maintain the mapping. The navigator is that agent.</p>
+
+    </section>
+
+  </article>
+</body>
+</html>
