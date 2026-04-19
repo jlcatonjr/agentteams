@@ -15,7 +15,7 @@ This working manuscript develops the theoretical foundations of multi-agent AI s
 
 | Chapter | Title |
 |---------|-------|
-| 1 | The Coding Agent — What It Is and What It Isn't |
+| 1 | The Coding Agent: What It Is and What It Isn't |
 | 2 | The Problem of Context |
 | 3 | Organizations, Capital, and the Division of Labor |
 | 4 | Constitutional Constraints and Authority Hierarchies |
@@ -25,18 +25,18 @@ This working manuscript develops the theoretical foundations of multi-agent AI s
 | 8 | The Code-Hygiene Agent |
 | 9 | The Conflict Auditor |
 | 10 | Conflict Resolution |
-| 11 | The Cleanup Agent |
+| 11 | The Adversarial Agent |
 | 12 | The Agent Updater |
-| 13 | The Expert Critic |
-| 14 | The Argument Weaver |
+| 13 | The Agent Refactorer |
+| 14 | The Cleanup Agent |
 | 15 | The Domain Agents |
-| 16 | The Repo Liaison |
-| 17 | The Bibliography Manager |
-| 18 | The LaTeX Specialist |
-| 19 | The HTML Document Builder |
-| 20 | The Graphviz Expert |
-| 21 | The Voice-Style Agent |
-| 22 | Conclusion |
+| 16 | The Repo Liaison: Cross-Repository Governance |
+| 17 | The Abstract Agent |
+| 18 | The Agent Investigator |
+| 19 | The Daily Pipeline |
+| 20 | Investigation and Remediation |
+| 21 | Drift, Contradiction, and Self-Repair |
+| 22 | Agent Teams as Spontaneous Orders |
 
 ---
 
