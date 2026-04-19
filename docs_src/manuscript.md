@@ -2,6 +2,9 @@
 
 *James L. Caton*
 
+!!! warning "Early Draft — Experimental"
+    This is an early draft of a working manuscript. Content is incomplete and subject to substantial revision. This manuscript is an experiment in AI-assisted academic authorship: it was written in active cooperation with a [agent team](../), with the author directing the research agenda, theoretical arguments, and editorial decisions while agents assisted with drafting, revision, and consistency auditing.
+
 This working manuscript develops the theoretical foundations of multi-agent AI systems, grounding the design of agent teams in Austrian capital theory, transaction cost economics, and constitutional constraints. Drawing on Hayek, Coase, Lachmann, and Nonaka, it analyzes how specialized agents coordinate under an authority hierarchy, how knowledge is generated and propagated, and how constitutional rules prevent scope creep.
 
 **[Open the manuscript reader →](book/index.html)**
