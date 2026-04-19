@@ -1,0 +1,94 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Chapter 7: The Security Agent</title>
+</head>
+<body>
+  <article id="ch:the-security-agent">
+    <h1>Chapter 7: The Security Agent</h1>
+    <p class="part-label">Part III: The Agents at Work</p>
+
+    <blockquote class="agent-description">
+      <p><strong>Purpose</strong>: You are the security sentinel for the book project. You protect against credential leakage into the manuscript, unauthorized modification of external repositories, destructive file operations, and citation fabrication. You are read-only: you do not write code, modify files, or run terminal commands. You assess, report, and when necessary, HALT the requesting agent.</p>
+    </blockquote>
+
+    <section id="sec:security-priority">
+      <h2>1. Security as First Priority</h2>
+
+      <p>The team's constitutional rules establish a priority ordering among objectives, and security stands first. Not first among equals — first in absolute precedence. A chapter draft that perfectly captures the author's voice and accurately maps theory to architecture is worthless if it leaks a private SSH key into a public repository.</p>
+
+      <div class="project-illustration">
+        <p>In this project, the orchestrator's constitution defines the full priority ordering as: security, theoretical accuracy, voice fidelity, technical accuracy, internal consistency.</p>
+      </div>
+
+      <p>The security agent operationalizes this priority. It is the only agent in the team with veto power: the authority to halt any workflow, initiated by any agent, at any point in execution. When the security agent issues a HALT directive, the requesting agent stops. The orchestrator stops. No downstream workflow steps execute. The halt persists until the human principal reviews the finding and clears it. No agent, including the orchestrator, can override or bypass a security halt.</p>
+
+      <p>The veto power is part of the security agent's invariant core, which means it cannot be modified by any agent under routine operations. Changing the security agent's veto authority requires the human principal to directly edit the agent file: the same level of authority required to change the team's constitutional rules. This entrenchment is deliberate. A security mechanism that can be softened by the agents it constrains offers no real protection. The security agent's authority must be immune to the pressures of the production workflow it interrupts.</p>
+
+      <p>The entrenchment logic reflects what Buchanan and Tullock identify as the purpose of constitutional-level constraints: to bind agents in advance against actions that, under production pressure, they would otherwise be tempted to take for immediate convenience at long-term collective cost <cite class="citation" data-key="buchanan1962"><a href="../bibliography.html#buchanan1962">(Buchanan and Tullock 1962)</a></cite>. A security mechanism that can be relaxed when a workflow demands speed is not a constitutional guarantee; it is an advisory recommendation subject to override by the very pressures it was designed to resist. The security agent's entrenchment converts the advisory into a genuine constraint. Whatever the current workflow happens to need, it cannot weaken what the human principal established at the constitutional stage of configuration. The past decision binds all future operations, which is precisely the function constitutional pre-commitment is designed to serve.</p>
+    </section>
+
+    <section id="sec:security-triggers">
+      <h2>2. Trigger-Based Activation</h2>
+
+      <p>The security agent activates via event-driven triggers rather than on a schedule or as a routine step in every workflow. The orchestrator recognizes specific event categories and routes them to the security agent before permitting execution. These categories span destructive operations, credential exposure, external writes, content integrity violations, and bulk changes.</p>
+
+      <div class="project-illustration">
+        <p>In this project, eight mandatory review triggers are defined. File deletion triggers a security review. Modification of agent documentation triggers a security review. Any write to an external source repository triggers a security review. Exposure of credentials (API keys, SSH keys, tokens, passwords) triggers a security review. Exposure of personally identifiable information triggers a security review. Inclusion of unverified citations triggers a security review. Bulk edits affecting more than a threshold number of files trigger a security review. External URL references in LaTeX source trigger a security review.</p>
+      </div>
+
+      <p>The trigger-based architecture makes the security agent an interrupt-driven mechanism. It does not continuously scan the project for violations. It activates when a potentially dangerous operation is about to be performed, evaluates the operation against its rule set, and returns either PROCEED or HALT. The number of triggers is relatively small and ranked in order to assure that 1) they are not missed and 2) the most important triggers are systematically caught.</p> 
+      
+      <p>Between triggers, it is dormant. This design economizes on the system's processing budget: security checks consume context and time, and performing them only when specific risk indicators are present avoids the overhead of continuous surveillance.</p>
+      
+      <p> The triggers are themselves environmental signals: they arise from the shared project state, which includes the files being modified, the operations being requested, the external systems being accessed, and communicate back to the security agent that the environment has entered a condition requiring constitutional review. The relationship is bidirectional: the agent team’s actions generate the triggers that in turn constrain what the team may do next.</p>
+      <p>The triggers are defined in the orchestrator's constitution, which means they cannot be modified by any agent under routine operations. Changing the trigger definitions requires the human principal to directly edit the constitution: the same level of authority required to change the security agent's veto power.</p>
+    </section>
+
+    <section id="sec:security-halt">
+      <h2>3. The HALT Mechanism</h2>
+
+      <p>When the security agent evaluates a trigger and finds a violation, it issues a structured HALT directive. The directive includes the rule violated, the specific file and line where the violation was detected, a description of the risk, and a recommended remediation. The requesting agent receives the HALT and ceases its current operation. The orchestrator receives the HALT and suspends the workflow. No further workflow steps execute until the human principal reviews the finding.</p>
+
+      <p>The human-only clearance requirement distinguishes the security halt from other forms of inter-agent feedback. When an auditing agent detects a terminology mismatch, it logs the finding and a resolution agent can resolve it autonomously. When a hygiene agent finds a stale file path, a content agent can correct it without human intervention. But when the security agent halts a workflow, only the human principal can clear it. The elevation to human authority is the mechanism's force: it guarantees that security findings cannot be rationalized away by agents optimizing for production throughput.</p>
+
+      <p>The HALT mechanism also creates a decision record. Every halt is logged with its trigger, rule, file, and outcome. Over time, the log reveals patterns: which types of operations most frequently trigger security reviews, which rules are most often violated, and which agents are most likely to initiate operations that require security clearance. The log is memory. It persists across sessions and provides the human principal with visibility into the security posture of the agent team's operations.</p>
+    </section>
+
+    <section id="sec:security-read-only">
+      <h2>4. Read-Only Enforcement</h2>
+
+      <p>The security agent has no write capabilities. It cannot create files, modify content, run terminal commands, or execute code. Its tool set is limited to reading files and issuing HALT or PROCEED directives. The architectural reasoning for this constraint is that it prevents the security agent from becoming a vector for the risks it is designed to detect.</p>
+
+      <p>A security agent with write access could, in principle, correct the violations it finds: deleting a leaked credential, redacting a path, removing an unverified citation. But write access would also enable the security agent to introduce the kinds of changes it is meant to prevent. A read-only security agent cannot accidentally delete a file it was evaluating. It cannot inadvertently modify a source file in an external repository. It cannot introduce a path that leaks information. By constraining its capabilities to observation and reporting, the architecture ensures that the agent tasked with detecting dangerous operations cannot itself perform dangerous operations.</p>
+
+      <p>The constraint also preserves the separation of detection from remediation that runs through the team's design. The security agent detects and reports. Other agents, operating under their own constitutional constraints and subject to the orchestrator's workflow sequencing, perform the remediation. The separation ensures that the finder and the fixer are different agents with different authorities, different tool sets, and different preference orderings defined by their respective agent files (Chapter 1, §1.5), thereby reducing the risk that a single point of failure compromises both detection and response.</p>
+
+      <div class="project-illustration">
+        <p>In this book, Chapter 8 applies the same detection-remediation separation to code-hygiene: the code-hygiene agent detects and reports; the book-content-expert performs prose corrections, and the bibliography-manager resolves citation gaps. Chapter 9 applies it to the conflict-auditor: the conflict-auditor detects and logs; the conflict-resolution agent makes the ACCEPT/REJECT/REVISE decisions and edits the affected files.</p>
+      </div>
+    </section>
+
+    <section id="sec:security-scope">
+      <h2>5. Dual-Domain Coverage</h2>
+
+      <p>A security agent's rules span two domains that share a common structure. Infrastructure protection rules guard against credential leakage, unsanitized paths, unauthorized external writes, and destructive operations. Content integrity rules guard against the inclusion of unverified references. The two domains share a common logic: both involve artifacts that, once compromised, undermine the credibility of the entire project.</p>
+
+      <div class="project-illustration">
+        <p>In this project, six security rules formalize the dual coverage. S-1 (credential scanning) and S-5 (path sanitization) protect operational infrastructure: no private keys in committed files, no absolute file system paths that reveal the author's machine configuration. S-2 (external repository read-only enforcement) and S-4 (destructive operation gating) protect the broader development environment: no unintended writes to source repositories, no file deletions without explicit clearance. S-3 (citation integrity) protects the book's scholarly credibility: no reference enters the bibliography without verification against the two-tier system maintained by the bibliography-manager (Chapter 15). S-6 (local credential file handling) governs the location and treatment of credential files that must exist on disk but must never enter version control.</p>
+      </div>
+
+      <p>Content integrity violations can be severe enough to warrant reclassification as security concerns. A fabricated citation in an academic work is a form of fraud, and preventing it warrants the same priority as preventing credential leakage. When a content violation carries reputational or legal risk comparable to an infrastructure breach, the security agent's rule set should formalize that equivalence. The security checkpoint does not replace a content agent's verification workflow. It adds an independent layer, ensuring that content integrity is enforced even if downstream workflows are bypassed or incomplete.</p>
+
+      <div class="project-illustration">
+        <p>In this project, the reclassification emerged from practice rather than from theory. Early in development, citation integrity was handled solely by the bibliography-manager. But fabricated citations appeared during production: citations that looked plausible but matched no entry in the author's published bibliographies and could not be verified through external databases. The risk was reclassified from a content-quality concern to a security concern, and the security agent's S-3 rule formalizes that reclassification alongside the bibliography-manager's verification workflow.</p>
+      </div>
+
+      <p>The breadth of the security agent's scope (spanning infrastructure protection and content integrity) makes it the single agent whose concerns cut across functional and domain boundaries. Its triggers fire on functional operations (file deletions, bulk edits) and domain operations (citation verification, content review) alike. The security function is a constraint on all roles, implemented as a constitutional enforcement mechanism with authority that no other agent can override.</p>
+
+    </section>
+
+  </article>
+</body>
+</html>

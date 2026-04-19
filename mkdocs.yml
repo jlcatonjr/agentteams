@@ -28,6 +28,7 @@ theme:
 
 nav:
   - Home: index.md
+  - Manuscript: manuscript.md
   - Getting Started: getting-started.md
   - Agent-Assisted Setup: agent-assisted-setup.md
   - How It Works: how-it-works.md

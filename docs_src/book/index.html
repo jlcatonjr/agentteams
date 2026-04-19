@@ -1,0 +1,836 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0">
+  <title>Agent Teams: A Theoretically Grounded Approach — James L. Caton</title>
+  <script src="https://unpkg.com/vue@3/dist/vue.global.prod.js"></script>
+  <style>
+    /* ── Reset & Base ─────────────────────────────────────────── */
+    *, *::before, *::after { box-sizing: border-box; }
+    html, body { height: 100%; padding: 0; margin: 0; }
+    body {
+      display: flex;
+      font-family: sans-serif;
+      font-size: 22px;
+      background: #fff;
+      color: #111;
+    }
+    #app { width: 100%; }
+
+    /* ── Sidebar ──────────────────────────────────────────────── */
+    .sidebar {
+      position: fixed;
+      top: 0; bottom: 0; left: 0;
+      width: 62px;
+      overflow: hidden;
+      background: #f7f7f7;
+      border-right: 1px solid #ddd;
+      padding: 10px 0;
+      transition: width 0.3s ease;
+      z-index: 1000;
+      display: flex;
+      flex-direction: column;
+    }
+    .sidebar.expanded { width: 270px; overflow-y: auto; }
+
+    /* title strip */
+    .sidebar-book-title {
+      display: flex;
+      align-items: center;
+      padding: 8px 10px 12px 10px;
+      border-bottom: 1px solid #ccc;
+      white-space: nowrap;
+      overflow: hidden;
+    }
+    .sidebar-book-title .icon { font-size: 1.2em; flex-shrink: 0; }
+    .sidebar-book-title .book-name {
+      margin-left: 8px;
+      font-size: 0.72em;
+      font-weight: 700;
+      line-height: 1.2;
+      color: #222;
+      opacity: 0;
+      transition: opacity 0.15s ease;
+      word-break: break-word;
+      white-space: normal;
+      width: 190px;
+    }
+    .sidebar.expanded .book-name { opacity: 1; }
+
+    /* nav list */
+    .sidebar-nav { padding: 8px 0 0 0; flex: 1; }
+
+    /* part section */
+    .sidebar-part { margin-bottom: 2px; }
+    .part-header {
+      display: flex;
+      align-items: center;
+      padding: 5px 10px;
+      cursor: pointer;
+      user-select: none;
+      white-space: nowrap;
+      overflow: hidden;
+    }
+    .part-header:hover { background: #eaeaea; }
+    .part-toggle {
+      font-size: 0.65em;
+      flex-shrink: 0;
+      color: #555;
+      width: 12px;
+      text-align: center;
+    }
+    .part-label-text {
+      margin-left: 5px;
+      font-size: 0.7em;
+      font-weight: 700;
+      color: #444;
+      opacity: 0;
+      transition: opacity 0.15s ease;
+      white-space: normal;
+      word-break: break-word;
+      width: 210px;
+    }
+    .sidebar.expanded .part-label-text { opacity: 1; }
+
+    /* chapter list */
+    .chapter-list {
+      list-style: none;
+      margin: 0;
+      padding: 0;
+      overflow: hidden;
+    }
+    .chapter-list li { margin: 0; }
+    .chapter-link {
+      display: flex;
+      align-items: baseline;
+      padding: 4px 10px 4px 24px;
+      text-decoration: none;
+      color: #333;
+      cursor: pointer;
+      white-space: nowrap;
+      overflow: hidden;
+    }
+    .chapter-link:hover { background: #e2e8f0; color: #0044aa; }
+    .chapter-link.active { background: #dce8f8; color: #003399; font-weight: 600; }
+    .ch-num {
+      font-size: 0.7em;
+      font-weight: 700;
+      color: #777;
+      flex-shrink: 0;
+      width: 22px;
+      text-align: right;
+      margin-right: 6px;
+    }
+    .chapter-link.active .ch-num { color: #003399; }
+    .ch-title-text {
+      font-size: 0.68em;
+      line-height: 1.25;
+      white-space: normal;
+      word-break: break-word;
+      opacity: 0;
+      transition: opacity 0.15s ease;
+      width: 190px;
+    }
+    .sidebar.expanded .ch-title-text { opacity: 1; }
+
+    /* hide nav chrome when collapsed — only book icon remains */
+    .part-toggle, .ch-num, .bib-icon { transition: opacity 0.15s ease; }
+    .sidebar:not(.expanded) .part-toggle,
+    .sidebar:not(.expanded) .ch-num,
+    .sidebar:not(.expanded) .bib-icon { opacity: 0; }
+    .sidebar:not(.expanded) .bib-nav-link { border-color: transparent; }
+
+    /* When collapsed, suppress nav-item backgrounds so the progress-bar gradient
+       on the <aside> is not painted over by active/hover highlight colours. */
+    .sidebar:not(.expanded) .chapter-link,
+    .sidebar:not(.expanded) .chapter-link:hover,
+    .sidebar:not(.expanded) .chapter-link.active,
+    .sidebar:not(.expanded) .part-header,
+    .sidebar:not(.expanded) .part-header:hover,
+    .sidebar:not(.expanded) .bib-nav-link,
+    .sidebar:not(.expanded) .bib-nav-link:hover,
+    .sidebar:not(.expanded) .bib-nav-link.active { background: transparent !important; }
+
+    /* ── Chapter section TOC (inside sidebar) ────────────────── */
+    .chapter-toc { list-style: none; margin: 0; padding: 2px 0 4px 0; }
+    .chapter-toc li { margin: 0; }
+    .toc-link {
+      display: block;
+      padding: 2px 10px 2px 34px;
+      text-decoration: none;
+      color: #555;
+      cursor: pointer;
+      font-size: 0.58em;
+      line-height: 1.35;
+      white-space: normal;
+      word-break: break-word;
+    }
+    .toc-link:hover { background: #e8edf4; color: #003399; }
+    .toc-link.toc-h3 { padding-left: 46px; color: #777; }
+    .sidebar:not(.expanded) .chapter-toc { display: none; }
+
+    /* bibliography link */
+    .bib-nav-link {
+      display: flex;
+      align-items: center;
+      padding: 6px 10px;
+      text-decoration: none;
+      color: #333;
+      cursor: pointer;
+      border-top: 1px solid #ddd;
+      margin-top: 6px;
+      white-space: nowrap;
+      overflow: hidden;
+    }
+    .bib-nav-link:hover { background: #e2e8f0; color: #0044aa; }
+    .bib-nav-link.active { background: #dce8f8; color: #003399; font-weight: 600; }
+    .bib-icon { font-size: 1em; flex-shrink: 0; }
+    .bib-label {
+      font-size: 0.7em;
+      font-weight: 700;
+      margin-left: 10px;
+      opacity: 0;
+      transition: opacity 0.15s ease;
+    }
+    .sidebar.expanded .bib-label { opacity: 1; }
+
+    /* ── Main Content ─────────────────────────────────────────── */
+    .main-content {
+      margin-left: 72px;
+      margin-right: 2.5%;
+      padding: 20px;
+      max-width: calc(100% - 72px - 2.5%);
+      transition: margin-left 0.3s ease;
+      overflow-y: auto;
+      min-height: 100vh;
+      padding-bottom: 60px;
+    }
+
+    /* ── Loading state ────────────────────────────────────────── */
+    .loading-state {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      height: 60vh;
+      font-size: 1em;
+      color: #777;
+      font-style: italic;
+    }
+
+    /* ── Welcome page ─────────────────────────────────────────── */
+    .welcome {
+      max-width: 820px;
+      margin: 5% auto;
+    }
+    .welcome-title {
+      text-align: center;
+      font-size: 1.5em;
+      font-weight: bold;
+      line-height: 1.2;
+      padding-right: 50px;
+      margin-bottom: 0.3em;
+    }
+    .welcome-author {
+      text-align: right;
+      font-weight: bold;
+      line-height: 1;
+      padding-right: 50px;
+      margin-top: 0.5em;
+    }
+    .welcome-abstract-head {
+      margin-top: 2em;
+      font-size: 1.1em;
+      font-weight: bold;
+    }
+    .welcome-abstract {
+      line-height: 1.8;
+      color: #222;
+      margin-top: 0.5em;
+    }
+    .welcome-nav-hint {
+      margin-top: 2em;
+      color: #666;
+      font-size: 0.8em;
+      border-top: 1px solid #ddd;
+      padding-top: 1em;
+    }
+    .welcome-divider {
+      border: none;
+      border-top: 1px solid #ddd;
+      margin: 2em 50px 2em 0;
+    }
+
+    /* ── Content area (chapter/bibliography body) ─────────────── */
+    .content-body h1 {
+      font-size: 1.35em;
+      font-weight: bold;
+      line-height: 1.2;
+      margin: 0.6em 0 0.4em 0;
+      padding-right: 40px;
+    }
+    .content-body h2 {
+      font-size: 1.1em;
+      font-weight: bold;
+      line-height: 1.2;
+      margin: 1.4em 0 0.4em 0;
+      padding-right: 40px;
+    }
+    .content-body h3 {
+      font-size: 0.95em;
+      font-weight: bold;
+      line-height: 1.2;
+      margin: 1.2em 0 0.3em 0;
+      padding-right: 40px;
+    }
+    .content-body h4 {
+      font-size: 0.9em;
+      font-weight: bold;
+      line-height: 1.2;
+      margin: 1em 0 0.3em 0;
+    }
+    .content-body p {
+      font-size: 1em;
+      line-height: 2;
+      margin: 0.6em 0 0.5em 0;
+    }
+    .content-body blockquote {
+      margin: 0.8em 2.5em;
+      line-height: 1.6;
+      font-size: 0.92em;
+      color: #333;
+    }
+    .content-body blockquote.agent-description p {
+      line-height: 1.15;
+      margin: 0;
+    }
+    .content-body section { margin-bottom: 1.5em; }
+    .content-body .part-label {
+      text-align: center;
+      font-style: italic;
+      color: #666;
+      font-size: 0.85em;
+      margin: 0.3em 0 1em 0;
+    }
+    /* citation links */
+    .content-body cite.citation { font-style: normal; }
+    .content-body cite.citation a {
+      color: #0044bb;
+      text-decoration: none;
+    }
+    .content-body cite.citation a:hover {
+      text-decoration: underline;
+      color: #002277;
+    }
+    /* bibliography entries (when bib is loaded into content area) */
+    .content-body .bib-entry {
+      font-size: 0.85em;
+      line-height: 1.6;
+      margin-bottom: 0.8em;
+    }
+    .content-body .bib-entry .bib-authors { font-weight: 600; }
+    .content-body .bib-entry a {
+      color: #0044bb;
+      font-size: 0.9em;
+    }
+    .content-body .letter-heading {
+      font-size: 1.15em;
+      font-weight: bold;
+      margin-top: 2em;
+      border-bottom: 2px solid #ccc;
+      padding-bottom: 2px;
+      color: #222;
+    }
+    /* ── Project illustration popout aside ─────────────────── */
+    .content-body .project-illustration {
+      margin: 1.6em 0 1.6em 2.4em;
+      padding: 1em 1.4em 1em 1.4em;
+      border-left: 4px solid #8b6914;
+      background: #faf6ec;
+      border-radius: 0 6px 6px 0;
+      font-size: 0.92em;
+      line-height: 1.7;
+      color: #3a3a3a;
+      position: relative;
+    }
+    .content-body .project-illustration::before {
+      content: "Project Illustration";
+      display: block;
+      font-size: 0.78em;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 0.08em;
+      color: #8b6914;
+      margin-bottom: 0.4em;
+    }
+    .content-body .project-illustration p {
+      margin: 0.4em 0;
+      line-height: 1.7;
+    }
+    .content-body .project-illustration p:first-of-type {
+      margin-top: 0;
+    }
+    .content-body .project-illustration p:last-of-type {
+      margin-bottom: 0;
+    }
+    .content-body .project-illustration figure {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      width: fit-content;
+      margin: 0.8em auto;
+    }
+    .content-body .project-illustration figure img {
+      max-width: 100%;
+    }
+    .content-body .project-illustration figure figcaption {
+      width: 100%;
+      font-size: calc(1em - 2pt);
+      line-height: 1.5;
+      color: #444;
+      margin-top: 0.4em;
+    }
+
+    /* override the bib page's own sidebar/layout when loaded into content area */
+    .content-body .sidebar { display: none !important; }
+    .content-body .main-content {
+      margin-left: 0 !important;
+      max-width: 100% !important;
+      padding: 0 !important;
+    }
+    /* external anchor links (doi) */
+    .content-body a[target="_blank"] {
+      color: #0044bb;
+      font-size: 0.85em;
+    }
+
+    /* ── Chapter navigation (prev / next) ───────────────────── */
+    .chapter-nav {
+      position: fixed;
+      bottom: 0;
+      left: 72px;
+      right: 0;
+      z-index: 900;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      gap: 1em;
+      padding: 0.5em 1.2em;
+      background: #f7f7f7;
+      border-top: 1px solid #ddd;
+      box-shadow: 0 -1px 4px rgba(0,0,0,0.06);
+      transition: left 0.3s ease;
+    }
+    .chapter-nav-btn {
+      display: inline-flex;
+      align-items: center;
+      gap: 0.4em;
+      padding: 0.45em 0.8em;
+      border: 1px solid #ccc;
+      border-radius: 4px;
+      background: #fff;
+      color: #333;
+      text-decoration: none;
+      font-size: 0.85em;
+      line-height: 1.3;
+      max-width: 45%;
+      transition: background 0.15s, border-color 0.15s;
+    }
+    .chapter-nav-btn:hover {
+      background: #f0ebe0;
+      border-color: #8b6914;
+    }
+    .chapter-nav-btn.next {
+      margin-left: auto;
+      text-align: right;
+    }
+    .nav-arrow {
+      font-size: 1.15em;
+      flex-shrink: 0;
+    }
+    .nav-label {
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+
+    /* ── Small phone ──────────────────────────────────────────── */
+    @media screen and (max-width: 480px) {
+      body { font-size: 14px; }
+      .sidebar { width: 32px !important; }
+      .sidebar.expanded { width: 200px !important; }
+      .main-content {
+        margin-left: 42px !important;
+        margin-right: 5px !important;
+        padding: 10px !important;
+        max-width: calc(100% - 42px - 5px) !important;
+      }
+      .welcome-title { font-size: 1.1em; padding-right: 10px; }
+      .welcome-author { padding-right: 10px; }
+      .content-body h1 { padding-right: 10px; }
+      .content-body h2 { padding-right: 10px; }
+      .chapter-nav { left: 42px; padding: 0.4em 0.6em; gap: 0.5em; }
+      .chapter-nav-btn { max-width: 48%; font-size: 0.78em; padding: 0.35em 0.5em; }
+      .nav-label { display: none; }
+    }
+
+    /* slide transition for chapter lists */
+    .slide-enter-active, .slide-leave-active { transition: max-height 0.25s ease, opacity 0.2s ease; overflow: hidden; }
+    .slide-enter-from, .slide-leave-to { max-height: 0; opacity: 0; }
+    .slide-enter-to, .slide-leave-from { max-height: 900px; opacity: 1; }
+  </style>
+</head>
+<body>
+  <div id="app">
+
+    <!-- ── Sidebar ──────────────────────────────────────────────── -->
+    <aside class="sidebar" :class="{ expanded: sidebarOpen }"
+           :style="{ background: progressBackground }"
+           @mouseenter="sidebarOpen = true" @mouseleave="sidebarOpen = false">
+
+      <div class="sidebar-book-title">
+        <span class="icon">📖</span>
+        <span class="book-name">Agent Teams:<br>A Theoretically<br>Grounded Approach</span>
+      </div>
+
+      <nav class="sidebar-nav">
+        <div v-for="part in BOOK" :key="part.id" class="sidebar-part">
+
+          <div class="part-header" @click="togglePart(part.id)">
+            <span class="part-toggle">{{ openParts.has(part.id) ? '▾' : '▸' }}</span>
+            <span class="part-label-text">{{ part.title }}</span>
+          </div>
+
+          <transition name="slide">
+            <ul v-show="openParts.has(part.id)" class="chapter-list">
+              <li v-for="ch in part.chapters" :key="ch.file">
+                <a class="chapter-link"
+                   :class="{ active: current === ch.file }"
+                   href="#"
+                   @click.prevent="loadChapter(ch.file)">
+                  <span class="ch-num">{{ ch.num }}</span>
+                  <span class="ch-title-text">{{ ch.title }}</span>
+                </a>
+                <ul v-if="current === ch.file && chapterToc.length" class="chapter-toc">
+                  <li v-for="h in chapterToc" :key="h.id">
+                    <a class="toc-link" :class="{ 'toc-h3': h.level === 3 }"
+                       href="#" @click.prevent="scrollToHeading(h.id)">{{ h.text }}</a>
+                  </li>
+                </ul>
+              </li>
+            </ul>
+          </transition>
+
+        </div>
+
+        <!-- Bibliography -->
+        <a class="bib-nav-link"
+           :class="{ active: current === 'bibliography.html' }"
+           href="#"
+           @click.prevent="loadChapter('bibliography.html')">
+          <span class="bib-icon">📚</span>
+          <span class="bib-label">Bibliography</span>
+        </a>
+      </nav>
+    </aside>
+
+    <!-- ── Main content ─────────────────────────────────────────── -->
+    <main class="main-content" ref="mainEl" @click.capture="handleClick">
+
+      <!-- Welcome page -->
+      <div v-if="!current && !loading" class="welcome">
+        <p class="welcome-title">Agent Teams: A Theoretically Grounded Approach</p>
+        <p class="welcome-author">James L. Caton</p>
+        <hr class="welcome-divider">
+        <p class="welcome-abstract-head">Abstract</p>
+        <p class="welcome-abstract">
+          What <em>is</em> a coding agent? We can define the coding agent as the bundle of a large language model with infrastructure to efficaciously guide that models activity toward productive ends. But to understand how to use the agent, we must borrow from theories of economics, entrepreneurship, and organization. Coase (1937) and Williamson (1985) found characteristic of the firm: a defined authority structure, a division of labor, and a governance regime that coordinates activity. An agent or agent team is best understood, on this account, as an <em>organization</em> whose members exercise means-ends rationality when allocated judgment, ranking outcomes and evaluating means within an environment that responds to their actions. The rationality is functional rather than phenomenological; Mises (1949) would recognize the pattern as purposeful behavior in his sense. What distinguishes a productive team from an unproductive one is less a matter of raw model capability than of infrastructure quality: the specification files, authority hierarchies, and governance procedures that shape the preference ordering within which judgment operates.
+        </p>
+        <p class="welcome-abstract">
+          Drawing on Hayek, Mises, Menger, Kirzner, and Lachmann for the analysis of dispersed knowledge and spontaneous order; on Coase, Williamson, and Foss and Klein for the theory of the firm; on North and Ostrom for institutional analysis; and on Nonaka for the dynamics of organizational knowledge creation, the book develops this argument from the elementary architecture of a single coding agent through the constitutional constraints and division of labor that that comprise well-functioning, multi-agent teams, to the individual agents that instantiate specialized roles and the mechanisms through which team and infrastructure maintain quality and co-evolve.
+        </p>
+        <p class="welcome-nav-hint">
+          Use the sidebar on the left to navigate chapters. Hover to expand it. Click any chapter to load.
+          Citations within chapters link to the <a href="#" @click.prevent="loadChapter('bibliography.html')">Bibliography</a>.
+        </p>
+      </div>
+
+      <!-- Loading -->
+      <div v-else-if="loading" class="loading-state">Loading&hellip;</div>
+
+      <!-- Chapter / bibliography content -->
+      <div v-else class="content-body" v-html="content"></div>
+
+    </main>
+
+    <!-- Fixed footer: Prev / Next chapter navigation -->
+    <nav v-if="current && !loading" class="chapter-nav" @click.capture="handleClick">
+      <a v-if="prevChapter" href="#" class="chapter-nav-btn prev"
+         @click.prevent="loadChapter(prevChapter.file)">
+        <span class="nav-arrow">&larr;</span>
+        <span class="nav-label">{{ prevChapter.title }}</span>
+      </a>
+      <span v-else></span>
+      <a v-if="nextChapter" href="#" class="chapter-nav-btn next"
+         @click.prevent="loadChapter(nextChapter.file)">
+        <span class="nav-label">{{ nextChapter.title }}</span>
+        <span class="nav-arrow">&rarr;</span>
+      </a>
+    </nav>
+  </div>
+
+  <script>
+    const { createApp, ref, reactive, nextTick, onMounted, onUnmounted, computed } = Vue;
+
+    const BOOK = [
+      {
+        id: 'p1',
+        title: 'Part I: Foundations',
+        chapters: [
+          { num: 1,  file: 'chapters/01-the-coding-agent.html',                        title: 'The Coding Agent \u2014 What It Is and What It Isn\u2019t' },
+          { num: 2,  file: 'chapters/02-the-problem-of-context.html',                  title: 'The Problem of Context' },
+        ]
+      },
+      {
+        id: 'p2',
+        title: 'Part II: The Agent Team',
+        chapters: [
+          { num: 3,  file: 'chapters/03-organizations-capital-division-of-labor.html', title: 'Organizations, Capital, and the Division of Labor' },
+          { num: 4,  file: 'chapters/04-constitutional-constraints.html',              title: 'Constitutional Constraints and Authority Hierarchies' },
+        ]
+      },
+      {
+        id: 'p3',
+        title: 'Part III: The Agents at Work',
+        chapters: [
+          { num: 5,  file: 'chapters/05-the-orchestrator.html',                        title: 'The Orchestrator' },
+          { num: 6,  file: 'chapters/06-the-navigator.html',                           title: 'The Navigator' },
+          { num: 7,  file: 'chapters/07-the-security-agent.html',                      title: 'The Security Agent' },
+          { num: 8,  file: 'chapters/08-the-code-hygiene-agent.html',                  title: 'The Code-Hygiene Agent' },
+          { num: 9,  file: 'chapters/09-the-conflict-auditor.html',                    title: 'The Conflict Auditor' },
+          { num: 10, file: 'chapters/10-conflict-resolution.html',                     title: 'Conflict Resolution' },
+          { num: 11, file: 'chapters/11-the-adversarial-agent.html',                   title: 'The Adversarial Agent' },
+          { num: 12, file: 'chapters/12-the-agent-updater.html',                       title: 'The Agent Updater' },
+          { num: 13, file: 'chapters/13-the-agent-refactorer.html',                    title: 'The Agent Refactorer' },
+          { num: 14, file: 'chapters/14-the-cleanup-agent.html',                       title: 'The Cleanup Agent' },
+          { num: 15, file: 'chapters/15-the-domain-agents.html',                       title: 'The Domain Agents' },
+          { num: 16, file: 'chapters/16-the-repo-liaison.html',                        title: 'The Repo Liaison: Cross-Repository Governance' },
+        ]
+      },
+      {
+        id: 'p4',
+        title: 'Part IV: Emergence and Abstraction',
+        chapters: [
+          { num: 17, file: 'chapters/17-the-abstract-agent.html',                      title: 'The Abstract Agent' },
+          { num: 18, file: 'chapters/18-the-agent-investigator.html',                  title: 'The Agent Investigator' },
+        ]
+      },
+      {
+        id: 'p5',
+        title: 'Part V: Automated Governance',
+        chapters: [
+          { num: 19, file: 'chapters/19-the-daily-pipeline.html',                      title: 'The Daily Pipeline' },
+          { num: 20, file: 'chapters/20-investigation-remediation.html',               title: 'Investigation and Remediation' },
+          { num: 21, file: 'chapters/21-drift-contradiction-self-repair.html',         title: 'Drift, Contradiction, and Self-Repair' },
+        ]
+      },
+      {
+        id: 'p6',
+        title: 'Part VI: Synthesis',
+        chapters: [
+          { num: 22, file: 'chapters/22-agent-teams-as-spontaneous-orders.html',       title: 'Agent Teams as Spontaneous Orders' },
+        ]
+      },
+    ];
+
+    createApp({
+      setup() {
+        const sidebarOpen    = ref(false);
+        const openParts      = reactive(new Set(['p1']));
+        const current        = ref('');
+        const content        = ref('');
+        const loading        = ref(false);
+        const mainEl         = ref(null);
+        const chapterToc     = ref([]);
+        const scrollProgress = ref(0);
+
+        // Collapsed sidebar background doubles as a reading-progress indicator.
+        // Light (read) above the thumb, dark steel-gray (unread) below.
+        const progressBackground = computed(() => {
+          if (sidebarOpen.value || !current.value) return '#f7f7f7';
+          const p = (scrollProgress.value * 100).toFixed(1);
+          return `linear-gradient(to bottom, #f7f7f7 ${p}%, #7e8d9c ${p}%)`;
+        });
+
+        function updateScrollProgress() {
+          const scrollable = document.documentElement.scrollHeight - window.innerHeight;
+          scrollProgress.value = scrollable > 0 ? window.scrollY / scrollable : 0;
+        }
+
+        onMounted(() => {
+          window.addEventListener('scroll', updateScrollProgress, { passive: true });
+        });
+
+        onUnmounted(() => {
+          window.removeEventListener('scroll', updateScrollProgress);
+        });
+
+        function togglePart(id) {
+          if (openParts.has(id)) openParts.delete(id);
+          else openParts.add(id);
+        }
+
+        async function loadChapter(filePath) {
+          if (loading.value) return;
+          loading.value = true;
+          current.value = filePath;
+          content.value = '';
+          scrollProgress.value = 0;
+
+          try {
+            const resp = await fetch(filePath + '?v=' + Date.now());
+            if (!resp.ok) throw new Error(resp.status);
+            const html = await resp.text();
+            const doc  = new DOMParser().parseFromString(html, 'text/html');
+
+            // chapters wrap content in <article>; bibliography wraps in .main-content
+            const el = doc.querySelector('article')
+                    || doc.querySelector('.main-content')
+                    || doc.body;
+
+            content.value = el ? el.innerHTML : html;
+          } catch (err) {
+            content.value = `<p style="color:#c00">Could not load <code>${filePath}</code>: ${err.message}</p>`;
+          }
+
+          loading.value = false;
+          await nextTick();
+          buildChapterToc();
+          window.scrollTo(0, 0);
+          scrollProgress.value = 0;
+        }
+
+        async function navigateToBib(hash) {
+          if (current.value !== 'bibliography.html') {
+            await loadChapter('bibliography.html');
+          }
+          if (hash) {
+            await nextTick();
+            const el = (mainEl.value || document).querySelector('#' + CSS.escape(hash))
+                    || document.getElementById(hash);
+            if (el) el.scrollIntoView({ behavior: 'smooth', block: 'start' });
+          }
+        }
+
+        function buildChapterToc() {
+          chapterToc.value = [];
+          if (!current.value || current.value === 'bibliography.html') return;
+          const container = document.querySelector('.content-body');
+          if (!container) return;
+          const headings = container.querySelectorAll('h2, h3');
+          const toc = [];
+          headings.forEach((h, i) => {
+            let id;
+            if (h.tagName === 'H2') {
+              const sec = h.closest('section[id]');
+              if (sec) id = sec.id;
+            }
+            if (!id) { id = 'toc-h-' + i; h.id = id; }
+            toc.push({ level: h.tagName === 'H2' ? 2 : 3, text: h.textContent.trim(), id });
+          });
+          chapterToc.value = toc;
+        }
+
+        function scrollToHeading(id) {
+          const target = document.getElementById(id);
+          if (target) target.scrollIntoView({ behavior: 'smooth', block: 'start' });
+        }
+
+        function handleClick(event) {
+          const link = event.target.closest('a[href]');
+          if (!link) return;
+          const href = link.getAttribute('href') || '';
+
+          // Intercept in-page anchor links (#id) — scroll within loaded content
+          if (href.startsWith('#') && href.length > 1) {
+            event.preventDefault();
+            const id = href.slice(1);
+            const target = document.getElementById(id);
+            if (target) target.scrollIntoView({ behavior: 'smooth', block: 'start' });
+            return;
+          }
+
+          // Intercept cross-chapter links (chapters/XX.html#anchor)
+          if (href.startsWith('chapters/') && href.includes('#')) {
+            event.preventDefault();
+            const [file, anchor] = href.split('#');
+            loadChapter(file).then(() => {
+              nextTick().then(() => {
+                const el = document.getElementById(anchor);
+                if (el) el.scrollIntoView({ behavior: 'smooth', block: 'start' });
+              });
+            });
+            return;
+          }
+
+          // Intercept bibliography anchor links (../bibliography.html#key)
+          if (href.includes('bibliography.html')) {
+            event.preventDefault();
+            const hash = href.includes('#') ? href.split('#').pop() : '';
+            navigateToBib(hash);
+            return;
+          }
+
+          // Open external http/https links in a new tab
+          if (/^https?:\/\//.test(href) && !link.getAttribute('target')) {
+            event.preventDefault();
+            window.open(href, '_blank', 'noopener,noreferrer');
+          }
+        }
+
+        // Flat list of all navigable files for prev/next navigation
+        const allFiles = computed(() => {
+          const files = [];
+          for (const part of BOOK) {
+            for (const ch of part.chapters) files.push(ch);
+          }
+          files.push({ num: null, file: 'bibliography.html', title: 'Bibliography' });
+          return files;
+        });
+
+        const currentIndex = computed(() =>
+          allFiles.value.findIndex(ch => ch.file === current.value)
+        );
+
+        const prevChapter = computed(() =>
+          currentIndex.value > 0 ? allFiles.value[currentIndex.value - 1] : null
+        );
+
+        const nextChapter = computed(() =>
+          currentIndex.value >= 0 && currentIndex.value < allFiles.value.length - 1
+            ? allFiles.value[currentIndex.value + 1] : null
+        );
+
+        return {
+          BOOK,
+          sidebarOpen,
+          openParts,
+          current,
+          content,
+          loading,
+          mainEl,
+          chapterToc,
+          scrollProgress,
+          progressBackground,
+          togglePart,
+          loadChapter,
+          scrollToHeading,
+          handleClick,
+          prevChapter,
+          nextChapter,
+        };
+      }
+    }).mount('#app');
+  </script>
+</body>
+</html>

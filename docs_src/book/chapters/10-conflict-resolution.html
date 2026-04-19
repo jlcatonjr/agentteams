@@ -1,0 +1,75 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Chapter 10: Conflict Resolution</title>
+</head>
+<body>
+  <article id="ch:conflict-resolution">
+    <h1>Chapter 10: Conflict Resolution</h1>
+    <p class="part-label">Part III: The Agents at Work</p>
+
+    <blockquote class="agent-description">
+      <p><strong>Purpose</strong>: You make binding resolution decisions on conflicts identified by the conflict-auditor. For each unresolved entry in the conflict log, you determine whether the documented value should be ACCEPTED, REJECTED, or REVISED.</p>
+    </blockquote>
+
+    <section id="sec:resolution-dispositions">
+      <h2>1. The Disposition Framework</h2>
+
+      <p>The conflict-resolution agent issues one of three dispositions for every open entry in the conflict log: ACCEPT, REJECT, or REVISE. ACCEPT means the second file's version, typically the chapter draft, is correct, and the first file should be updated to match. REJECT means the first file's version, typically the infrastructure source, is correct, and the second file should be updated. REVISE means neither version is fully correct: both require modification to resolve the inconsistency. Every disposition must include a written justification that references the authority hierarchy and explains why the chosen resolution is correct.</p>
+
+      <p>I constrained the disposition framework deliberately. A richer system might allow dispositions like DEFER (postpone resolution), MERGE (combine both versions), or IGNORE (acknowledge conflict but take no action). The conflict-resolution agent offers none of these. Every open conflict must receive one of three dispositions, each committing to a specific corrective action.</p>
+
+      <p>The mandatory justification requirement checks the resolution agent's reasoning. A disposition without justification would be an opaque decree. The correcting agent would know what to change but not why. The justification anchors the disposition in the authority hierarchy: “The agent file on disk defines four security rules (authority tier 1), but the chapter claims five (authority tier 5). REJECT: the chapter must be corrected to match the agent file.” The justification is recorded alongside the disposition in the conflict log, creating a reasoning trace that the human principal can review.</p>
+    </section>
+
+    <section id="sec:resolution-authority-hierarchy">
+      <h2>2. The Authority Hierarchy as Decision Rule</h2>
+
+      <p>Every disposition requires a reference to the authority hierarchy. The conflict-resolution agent cannot resolve a conflict by appeal to plausibility, editorial preference, or narrative flow. It must determine which source in the conflict occupies a higher tier in the hierarchy, and absent compelling countervailing evidence, defer to that source. The hierarchy narrows the domain within which the agent exercises judgment, converting a broad evaluative task into one where means-ends reasoning operates on a well-defined criterion.</p>
+
+      <div class="project-illustration">
+      <p>This project's six-tier hierarchy orders its sources as follows. Tier 1 (source code and agent files on disk) outranks Tier 5 (chapter sources). When a chapter's description of an agent's behavior conflicts with the agent file's specification of that behavior, the agent file prevails. Tier 2 (published papers) outranks Tier 4 (agent documentation). When an agent's reference file characterizes a theoretical position differently than the published paper it cites, the published paper prevails. Tier 3 (project conventions in <code>copilot-instructions.md</code>) outranks Tier 4 (agent documentation). When an agent's documentation contradicts a project convention, the convention prevails.</p>
+      </div>
+
+      <p>Conflicts within the same tier are more difficult. When two sources of equal rank make incompatible claims, the authority hierarchy alone does not determine which is correct. Both occupy the same position. In these cases, the resolution agent must reason about which source's claim is better supported by higher-tier sources. The intra-tier conflict is resolved by appeal to a higher tier, maintaining the hierarchy's role as the ultimate decision procedure.</p>
+
+      <div class="project-illustration">
+      <p>Suppose two chapter drafts (both Tier 5) disagree: one chapter says the orchestrator manages eleven workflows and another says ten. The resolution agent opens the orchestrator's agent file (Tier 1), counts the workflows, and issues its disposition based on which chapter matches ground truth.</p>
+      </div>
+
+      <p>The authority hierarchy instantiates what Hayek identifies as the nomos/thesis distinction: the difference between rules that have evolved and become entrenched constraints and commands issued to achieve particular ends <cite class="citation" data-key="hayek1973"><a href="../bibliography.html#hayek1973">(Hayek 1973)</a></cite>. Source files on disk are nomos in this sense — they represent settled practice, the accumulated result of design decisions and testing — while chapter prose is thesis: deliberate composition aimed at describing that practice, but produced after the fact and therefore vulnerable to the inaccuracies that attend retrospective representation. The asymmetric default toward rejection follows from this structure. When a chapter's description conflicts with what an agent file specifies, the default presumption is that the description is wrong, not that the specification should change to match it. This is not a rule against revising specifications; it is a rule about which direction revision flows: the thesis yields to the nomos, and departures from that ordering require affirmative justification.</p>
+    </section>
+
+    <section id="sec:resolution-asymmetric-default">
+      <h2>3. Asymmetric Default Toward Rejection</h2>
+
+      <p>When evidence is ambiguous, the conflict-resolution agent defaults to REJECT: meaning it presumes the second source (typically the chapter draft) is wrong and the first source (typically the infrastructure file) is correct. The asymmetric default operationalizes the authority hierarchy. Source code and agent files on disk outrank chapter prose. When a chapter's description conflicts with what an agent file actually specifies, the default assumption is that the chapter is inaccurate, not that the agent file is misconfigured.</p>
+
+      <p>The asymmetric default shapes the resolution agent's burden-of-proof structure. To issue an ACCEPT disposition (declaring that the chapter is correct and the infrastructure file should change) the resolution agent must provide affirmative evidence. Perhaps the agent file contains a known documentation error that has been flagged in prior audits. Perhaps the chapter's version reflects a recently approved change that has not yet propagated to the agent file. These cases require specific justification. The default does not require justification of equal specificity: the conflict-resolution agent can reject a chapter claim by pointing to the agent file's content and citing the authority hierarchy. The asymmetry makes it harder to override ground truth than to defer to it.</p>
+
+      <p>The default also protects against narrative drift: the gradual erosion of specification accuracy as small inaccuracies accumulate across production cycles. The asymmetric default presumes that deviations from spec are errors in the chapter, not discoveries about the spec, preventing the specification from gradually conforming to narrative rather than to the system's actual design. This protection has the structure of a constitutional pre-commitment in Buchanan and Tullock's analysis: the rule is set in advance precisely because agents operating under production pressure will, if unconstrained, have incentives to resolve ambiguity in the chapter's favor rather than the specification's <cite class="citation" data-key="buchanan1962"><a href="../bibliography.html#buchanan1962">(Buchanan and Tullock 1962)</a></cite>. A rule adopted at the constitutional stage resists those pressures because it was designed to function when they are present.</p>
+    </section>
+
+    <section id="sec:resolution-detection-adjudication-separation">
+      <h2>4. Separation of Detection and Adjudication</h2>
+
+      <p>The separation of detection from adjudication follows the same logic of comparative advantage that governs the security agent (Chapter 7) and the code-hygiene agent (Chapter 8). Here the analogy is judicial: the investigator who gathers evidence does not render the verdict, and the judge who renders the verdict does not conduct the investigation.</p>
+
+      <p>The separation addresses a conflict of interest that would arise if a single agent both detected and resolved inconsistencies. An agent that must find conflicts has an incentive to detect thoroughly: to flag borderline cases, report minor discrepancies, cast a wide net. An agent that must resolve conflicts has an incentive toward parsimony: to reduce the volume of open issues, to classify borderline cases as acceptable variation, to narrow the scope of what counts as a conflict. Combining both incentives in one agent would produce either an over-cautious system (detecting everything, resolving conservatively, generating excessive correction work) or an under-cautious one (detecting selectively, resolving liberally, allowing inconsistencies to persist). The separation lets each agent optimize for its own function.</p>
+
+      <p>The two agents communicate through the structured conflict log (Chapter 9, §3), with the resolution agent updating open entries with dispositions and justifications. The indirection through the log means the resolution agent does not need to be invoked in the same workflow session as the detection agent: it can evaluate a batch of conflicts accumulated across multiple audit runs.</p>
+
+    </section>
+
+    <section id="sec:resolution-judicial-function">
+      <h2>5. The Judicial Function in Agent Teams</h2>
+
+      <p>The detection-adjudication pair formed by a detection agent and a resolution agent implements what legal theorists would recognize as a separation of the investigative and judicial functions, complete with mandatory justification, a defined rule of decision (the authority hierarchy), a finite set of dispositions, and a permanent record. The investigator (auditor) presents findings. The judge (resolution agent) evaluates them, applies the decision rule, and issues a binding disposition. The parties affected (the chapter drafts and the agents whose behavior is described) are represented by their contents. No agent argues for its own version of events. The evidence is documentary, drawn from the files themselves. The asymmetric default toward REJECT functions like a legal presumption: a starting assumption that can be overcome by sufficient evidence but shapes the outcome when evidence is ambiguous.</p>
+
+      <p>The judicial function also reveals why the resolution agent is a separate agent rather than a mode of the detection agent. Judicial independence requires institutional separation, not just functional separation. An auditor that could resolve its own conflicts would face no external review of its resolutions. A resolution agent that evaluates the auditor's findings provides a second perspective: one specifically tasked with applying the authority hierarchy rather than with detecting patterns of inconsistency. The two-agent structure makes the quality-assurance process adversarial in a constructive sense: the auditor's findings must survive the resolution agent's evaluation, and the resolution agent's dispositions must be justified against the authority hierarchy's explicit criteria. Chapter 11 institutionalizes the adversarial principle as a dedicated governance function, extending it from the detection-resolution pair to the full team's planning and production workflows.</p>
+    </section>
+
+  </article>
+</body>
+</html>
