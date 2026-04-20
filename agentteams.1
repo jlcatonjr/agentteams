@@ -2,7 +2,7 @@
 .SH NAME
 agentteams \- Generate a complete agent team for any project.
 .SH SYNOPSIS
-.B agentteams [--description PATH] [--project PATH] [--framework NAME] [--output DIR] [--dry-run] [--overwrite] [--merge] [--yes] [--no-scan] [--update] [--prune] [--check] [--scan-security] [--self] [--post-audit] [--auto-correct] [--enrich] [--security-offline] [--security-max-items N] [--security-no-nvd] [--migrate] [--revert-migration] [--version]
+.B agentteams [--description PATH] [--project PATH] [--framework NAME] [--output DIR] [--dry-run] [--overwrite] [--merge] [--yes] [--no-scan] [--update] [--prune] [--check] [--scan-security] [--self] [--post-audit] [--auto-correct] [--enrich] [--security-offline] [--security-max-items N] [--security-no-nvd] [--migrate] [--revert-migration] [--version] [--no-backup] [--list-backups] [--restore-backup TIMESTAMP]
 .SH DESCRIPTION
 .PP
 Generate a complete agent team for any project.
@@ -80,6 +80,15 @@ Undo a previous \-\-migrate run. Runs 'git reset \-\-hard pre\-fencing\-snapshot
 .TP
 .B \-\-version
 show program's version number and exit
+.TP
+.B \-\-no\-backup
+Skip automatic backup of existing agent files before any write operation. Not recommended for interactive use; intended for CI/scripted pipelines where an external snapshot mechanism is already in place.
+.TP
+.B \-\-list\-backups
+List available backups for the target output directory and exit.
+.TP
+.B \-\-restore\-backup TIMESTAMP
+Restore a previously created backup into the output directory. Pass the timestamp label shown by \-\-list\-backups, or 'latest' to restore the most recent backup.
 .SH EXIT STATUS
 .TP
 .B 0
