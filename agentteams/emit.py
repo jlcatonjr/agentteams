@@ -15,8 +15,10 @@ from __future__ import annotations
 
 import hashlib
 import re
+import shutil
 import sys
 from dataclasses import dataclass, field
+from datetime import datetime
 from pathlib import Path
 from typing import Any
 
@@ -217,6 +219,157 @@ def _merge_fenced_content(new_rendered: str, existing_on_disk: str) -> MergeResu
 
     result.merged_content = merged
     return result
+
+
+# ---------------------------------------------------------------------------
+# Backup / restore
+# ---------------------------------------------------------------------------
+
+_BACKUP_DIR_NAME = ".agentteams-backups"
+
+
+@dataclass
+class BackupResult:
+    """Result of a backup operation.
+
+    Attributes:
+        backup_path:  Absolute path to the timestamped backup directory, or None
+                      if no backup was taken (e.g. output_dir did not exist).
+        files_backed_up: Number of files copied into the backup.
+        skipped:         True if backup was suppressed (--no-backup or dry_run).
+    """
+    backup_path: Path | None = None
+    files_backed_up: int = 0
+    skipped: bool = False
+
+
+def backup_output_dir(
+    output_dir: Path,
+    *,
+    files_to_backup: list[str] | None = None,
+    dry_run: bool = False,
+) -> BackupResult:
+    """Copy existing agent files to a timestamped backup directory before a write.
+
+    The backup is placed at ``<output_dir>/<_BACKUP_DIR_NAME>/YYYYMMDD-HHMMSS/``.
+    If *files_to_backup* is given, only those paths (relative to *output_dir*)
+    are backed up; otherwise every file in *output_dir* is copied (excluding the
+    backup directory itself and ``references/build-log.json``).
+
+    Args:
+        output_dir:       Absolute path to the agents output directory.
+        files_to_backup:  Optional list of relative paths (from render output) to
+                          selectively back up.  Pass ``None`` to back up everything.
+        dry_run:          If True, report what would be backed up without writing.
+
+    Returns:
+        BackupResult describing what was done.
+    """
+    result = BackupResult()
+
+    if not output_dir.exists():
+        result.skipped = True
+        return result
+
+    ts = datetime.now().strftime("%Y%m%d-%H%M%S")
+    backup_path = output_dir / _BACKUP_DIR_NAME / ts
+    # Ensure uniqueness if two backups happen within the same second
+    if backup_path.exists():
+        counter = 1
+        while backup_path.exists():
+            backup_path = output_dir / _BACKUP_DIR_NAME / f"{ts}-{counter}"
+            counter += 1
+
+    if dry_run:
+        result.skipped = True
+        print(f"[DRY RUN] BACKUP {output_dir} → {backup_path}")
+        return result
+
+    if files_to_backup is not None:
+        # Selective backup: only files that are about to be overwritten
+        paths: list[Path] = []
+        for rel in files_to_backup:
+            target = _resolve_path(output_dir, rel)
+            if target.exists():
+                paths.append(target)
+    else:
+        # Full backup of everything in output_dir (excluding backup dir itself)
+        backup_root = output_dir / _BACKUP_DIR_NAME
+        paths = [
+            p for p in output_dir.rglob("*")
+            if p.is_file() and not p.is_relative_to(backup_root)
+        ]
+
+    if not paths:
+        result.skipped = True
+        return result
+
+    backup_path.mkdir(parents=True, exist_ok=True)
+
+    for src in paths:
+        try:
+            rel = src.relative_to(output_dir)
+        except ValueError:
+            # File is outside output_dir (e.g. ../copilot-instructions.md) —
+            # store with a safe flattened name
+            rel = Path(src.name)
+        dest = backup_path / rel
+        dest.parent.mkdir(parents=True, exist_ok=True)
+        shutil.copy2(src, dest)
+        result.files_backed_up += 1
+
+    result.backup_path = backup_path
+    print(f"  ✓  Backup created: {backup_path} ({result.files_backed_up} file(s))")
+    return result
+
+
+def list_backups(output_dir: Path) -> list[tuple[str, Path, int]]:
+    """Return all available backups for *output_dir*, newest first.
+
+    Args:
+        output_dir: Absolute path to the agents output directory.
+
+    Returns:
+        List of ``(timestamp_str, backup_path, file_count)`` tuples, sorted
+        newest-first.  Empty list if no backups exist.
+    """
+    backup_root = output_dir / _BACKUP_DIR_NAME
+    if not backup_root.exists():
+        return []
+    entries = []
+    for child in sorted(backup_root.iterdir(), reverse=True):
+        if child.is_dir():
+            count = sum(1 for p in child.rglob("*") if p.is_file())
+            entries.append((child.name, child, count))
+    return entries
+
+
+def restore_backup(backup_path: Path, output_dir: Path) -> int:
+    """Restore files from a backup directory into *output_dir*.
+
+    Copies every file from *backup_path* back to its original location under
+    *output_dir*, overwriting current content.
+
+    Args:
+        backup_path: Absolute path to the timestamped backup directory.
+        output_dir:  Absolute path to the agents output directory to restore into.
+
+    Returns:
+        Number of files restored.
+    """
+    if not backup_path.exists():
+        raise FileNotFoundError(f"Backup not found: {backup_path}")
+
+    count = 0
+    for src in backup_path.rglob("*"):
+        if not src.is_file():
+            continue
+        rel = src.relative_to(backup_path)
+        dest = output_dir / rel
+        dest.parent.mkdir(parents=True, exist_ok=True)
+        shutil.copy2(src, dest)
+        count += 1
+    return count
 
 
 # ---------------------------------------------------------------------------

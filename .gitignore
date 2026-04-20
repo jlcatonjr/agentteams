@@ -28,6 +28,11 @@ pypi-release-plan.md
 build-team-steps.csv
 tool-enrichment-steps.csv
 
+# Automatic pre-write backups created by build_team.py
+.agentteams-backups/
+
+# Structural or audit plan docs committed during development
+docs_src/structural-update-plan.md
 python
 
 # Stale root-level templates/ — canonical copy is agentteams/templates/
