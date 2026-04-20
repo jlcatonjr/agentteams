@@ -4,7 +4,13 @@ Tests for src/emit.py
 
 import pytest
 from pathlib import Path
-from agentteams.emit import emit_all, EmitResult
+from agentteams.emit import (
+    emit_all,
+    EmitResult,
+    backup_output_dir,
+    list_backups,
+    restore_backup,
+)
 
 
 # ---------------------------------------------------------------------------
@@ -165,4 +171,141 @@ def test_emit_skipped_list_populated_when_file_exists(tmp_path):
     assert result.success is True
     assert len(result.written) == 1
     assert existing_file.read_text(encoding="utf-8") == "NEW CONTENT"
+
+
+# ---------------------------------------------------------------------------
+# Backup: backup_output_dir
+# ---------------------------------------------------------------------------
+
+def test_backup_creates_timestamped_dir(tmp_path):
+    (tmp_path / "orchestrator.agent.md").write_text("CONTENT", encoding="utf-8")
+    result = backup_output_dir(tmp_path)
+    assert result.backup_path is not None
+    assert result.backup_path.exists()
+    assert result.files_backed_up == 1
+    assert not result.skipped
+
+
+def test_backup_copies_file_contents(tmp_path):
+    (tmp_path / "agent.agent.md").write_text("ORIGINAL", encoding="utf-8")
+    result = backup_output_dir(tmp_path)
+    backed_up = result.backup_path / "agent.agent.md"
+    assert backed_up.exists()
+    assert backed_up.read_text(encoding="utf-8") == "ORIGINAL"
+
+
+def test_backup_selective_only_backs_up_listed_files(tmp_path):
+    (tmp_path / "a.agent.md").write_text("A", encoding="utf-8")
+    (tmp_path / "b.agent.md").write_text("B", encoding="utf-8")
+    result = backup_output_dir(tmp_path, files_to_backup=["a.agent.md"])
+    assert result.files_backed_up == 1
+    assert (result.backup_path / "a.agent.md").exists()
+    assert not (result.backup_path / "b.agent.md").exists()
+
+
+def test_backup_skipped_when_output_dir_missing(tmp_path):
+    missing = tmp_path / "does_not_exist"
+    result = backup_output_dir(missing)
+    assert result.skipped is True
+    assert result.backup_path is None
+
+
+def test_backup_skipped_when_no_matching_files(tmp_path):
+    # selective backup with files not present on disk → no backup created
+    result = backup_output_dir(tmp_path, files_to_backup=["nonexistent.agent.md"])
+    assert result.skipped is True
+
+
+def test_backup_dry_run(tmp_path, capsys):
+    (tmp_path / "agent.agent.md").write_text("X", encoding="utf-8")
+    result = backup_output_dir(tmp_path, dry_run=True)
+    assert result.skipped is True
+    captured = capsys.readouterr()
+    assert "DRY RUN" in captured.out
+    # Backup dir should not have been created
+    backup_root = tmp_path / ".agentteams-backups"
+    assert not backup_root.exists()
+
+
+def test_backup_does_not_back_up_backup_dir_itself(tmp_path):
+    (tmp_path / "agent.agent.md").write_text("X", encoding="utf-8")
+    # Create a pre-existing backup
+    first = backup_output_dir(tmp_path)
+    first_count = first.files_backed_up
+    # Second backup should still only back up the real agent file
+    second = backup_output_dir(tmp_path)
+    assert second.files_backed_up == first_count
+
+
+# ---------------------------------------------------------------------------
+# Backup: list_backups and restore_backup
+# ---------------------------------------------------------------------------
+
+def test_list_backups_empty_when_no_backups(tmp_path):
+    assert list_backups(tmp_path) == []
+
+
+def test_list_backups_returns_entries_newest_first(tmp_path):
+    (tmp_path / "agent.agent.md").write_text("V1", encoding="utf-8")
+    backup_output_dir(tmp_path)
+    (tmp_path / "agent.agent.md").write_text("V2", encoding="utf-8")
+    backup_output_dir(tmp_path)
+    backups = list_backups(tmp_path)
+    assert len(backups) == 2
+    # newest first
+    assert backups[0][0] >= backups[1][0]
+
+
+def test_restore_backup_round_trip(tmp_path):
+    original = "ORIGINAL CONTENT"
+    agent_file = tmp_path / "agent.agent.md"
+    agent_file.write_text(original, encoding="utf-8")
+    br = backup_output_dir(tmp_path)
+    # Overwrite the file
+    agent_file.write_text("CHANGED CONTENT", encoding="utf-8")
+    # Restore
+    count = restore_backup(br.backup_path, tmp_path)
+    assert count >= 1
+    assert agent_file.read_text(encoding="utf-8") == original
+
+
+def test_restore_backup_nonexistent_raises(tmp_path):
+    with pytest.raises(FileNotFoundError):
+        restore_backup(tmp_path / "nonexistent", tmp_path)
+
+
+# ---------------------------------------------------------------------------
+# Regression: --update --merge must not overwrite user content below fences
+# ---------------------------------------------------------------------------
+
+def test_merge_preserves_user_content_below_fence(tmp_path):
+    existing = (
+        "<!-- AGENTTEAMS:BEGIN header v=1 -->\n"
+        "# Header — OLD\n"
+        "<!-- AGENTTEAMS:END header -->\n"
+        "\n"
+        "## User Section\n"
+        "This is user-authored content below the fence.\n"
+    )
+    new_rendered = (
+        "<!-- AGENTTEAMS:BEGIN header v=1 -->\n"
+        "# Header — NEW\n"
+        "<!-- AGENTTEAMS:END header -->\n"
+        "\n"
+        "## User Section\n"
+        "This is user-authored content below the fence.\n"
+    )
+    target = tmp_path / "agent.agent.md"
+    target.write_text(existing, encoding="utf-8")
+
+    result = emit_all(
+        [("agent.agent.md", new_rendered)],
+        output_dir=tmp_path,
+        merge=True,
+    )
+
+    assert result.success
+    content = target.read_text(encoding="utf-8")
+    assert "# Header — NEW" in content
+    assert "user-authored content below the fence" in content
 
