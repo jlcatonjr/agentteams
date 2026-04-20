@@ -11,6 +11,7 @@ agentteams [--description PATH] [--project PATH] [--framework NAME]
            [--output DIR] [--dry-run] [--overwrite] [--merge] [--yes]
            [--no-scan] [--update] [--prune] [--check]
            [--scan-security] [--self] [--post-audit] [--auto-correct] [--enrich]
+           [--no-backup] [--list-backups] [--restore-backup TIMESTAMP]
            [--security-offline] [--security-max-items N] [--security-no-nvd]
            [--migrate] [--revert-migration]
            [--version]
@@ -66,6 +67,8 @@ Disable project directory scanning even when `existing_project_path` or `--proje
 
 Re-render drifted agent files and emit newly added agents without touching unchanged files. Preserves manually filled `{MANUAL:*}` values from existing files. Agents removed from the taxonomy are reported but not deleted (use `--prune` to also remove them).
 
+A backup of the output directory is created automatically before any writes. Pair with `--merge` to also preserve user-authored content in fenced regions (the `--merge` flag is fully honoured with `--update`). Use `--no-backup` to suppress the backup.
+
 ### `--prune`
 
 Used with `--update`: also delete agent files that are no longer part of the team taxonomy.
@@ -92,7 +95,25 @@ Used with `--post-audit`: after audit finds issues, invoke the standalone `copil
 
 ### `--enrich`
 
-Run AI enrichment after generation. Uses the `copilot` CLI (if available) to review and improve generated agent files. Automatically enabled when `--post-audit` is used.
+After generating the team, scan for default template elements (unresolved `{MANUAL:*}` placeholders, underdeveloped sections, incomplete tool metadata) and attempt context-aware auto-enrichment. Exports a `defaults-audit.csv` to the `references/` directory. Combine with `--post-audit` to also run AI-powered enrichment.
+
+---
+
+## Backup Options
+
+By default, `--overwrite`, `--merge`, and `--update` all take an automatic backup of the output directory before writing. Backups are stored at `<output_dir>/.agentteams-backups/YYYYMMDD-HHMMSS/`.
+
+### `--no-backup`
+
+Skip the automatic backup. The write proceeds without creating a backup.
+
+### `--list-backups`
+
+List all available backups for the output directory (newest first) and exit. Prints timestamp, path, and file count for each backup.
+
+### `--restore-backup TIMESTAMP`
+
+Restore a specific backup into the output directory. `TIMESTAMP` is the directory name shown by `--list-backups` (e.g. `20250601-143022`). Use `latest` to restore the most recent backup.
 
 ---
 
