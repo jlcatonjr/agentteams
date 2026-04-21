@@ -1,0 +1,78 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Chapter 20: Investigation and Remediation</title>
+</head>
+<body>
+  <article id="ch:investigation-remediation">
+    <h1>Chapter 20: Investigation and Remediation</h1>
+    <p class="part-label">Part V: Automated Governance</p>
+
+    <section id="sec:remediation-investigation">
+      <h2>1. Stage 10: Workspace-Level Investigation</h2>
+
+      <p>Every self-maintaining system faces a diagnostic question: how does it know when something has gone wrong? In systems with human operators, the answer is monitoring and alerting: dashboards, log aggregation, threshold-based notifications. In the agent-team ecosystem, the answer is Stage 10 of the daily pipeline: an automated workspace-level investigation that scans all managed repositories for problems the system should correct.</p>
+
+      <p>Stage 10 operates above any individual repository. The abstract orchestrator from Chapter 17 coordinates the agent-investigator from Chapter 18 to perform a cross-repository audit. The investigation crawls all managed repositories, scanning for the three finding classes defined in Chapter 18: emergent patterns not yet in the abstract layer (Class 1), structural placement inconsistencies across repositories (Class 2), and scope creep in agent files (Class 3). The classified findings are the cycle's raw material.</p>
+
+      <p>Class 2 findings function as structural error signals. They indicate that the same features or content have been placed in different organizational locations across repositories: in different agent files, in reference documents versus inline, in the orchestrator versus the responsible specialist. Agents encountering inconsistent structural placement across repositories face a coordination problem: the organizational pattern they learned in one context does not hold in the next. Class 1 findings function differently. They indicate that repositories have independently developed valuable patterns that the abstract layer has not yet codified, opportunities for the platform to grow. The two classes require different responses: error correction for Class 2, evaluation for abstraction for Class 1.</p>
+
+      <p>In a single Stage 10 run, the investigator processes a dozen repositories, reading over a hundred agent files. The output is a classified report: seven repositories show emergent error-handling patterns, four carry stale directory references, and two include orchestrators that have absorbed security responsibilities outside their defined role. <cite class="citation" data-key="butosmcquade2005"><a href="../bibliography.html#butosmcquade2005">Butos and McQuade (2005)</a></cite>, analyzing adaptive classifying systems, distinguished between passive classification (sorting inputs into fixed categories) and active classification (revising categories in response to what the system encounters). Stage 10 is active. The three-class framework is stable, but Class 1 findings feed back into the abstract layer, potentially generating new patterns that reshape the classification landscape for future runs.</p>
+
+    </section>
+
+    <section id="sec:remediation-updater">
+      <h2>2. Source-Change Conditioning</h2>
+
+      <p>Between investigation and remediation, an intermediate stage (10.5) updates agent documentation, but only for repositories where source code has changed since the last run. The agent-updater is skipped for unchanged repositories, and the pipeline moves on.</p>
+
+      <p>This is a structural feature that prevents the system from doing work that the situation does not require. Context window capacity, API token budgets, and processing time are all finite resources. A system that re-processes unchanged repositories wastes these resources on maintenance work that produces no informational gain. The SHA comparison is a sufficient signal. Changed? Update. Unchanged? Skip. The gate is cheap to evaluate and reliable: SHA equality guarantees byte-level identity, so a pass through the gate means no source-level changes exist to document.</p>
+
+      <p>Stage 10.5 is explicitly best-effort. Failures do not contribute to the pipeline's aggregate failure count. If the updater fails for a repository, that repository's documentation may be slightly stale, but the next day's remediation cycle will catch the discrepancy. The tolerance for partial failure follows the eventual consistency model from Chapter 19. The system guarantees that documentation will converge toward accuracy over successive cycles, not that every cycle achieves perfect synchronization. This prevents the system from halting over non-critical maintenance.</p>
+    </section>
+
+    <section id="sec:remediation-per-repo">
+      <h2>3. Per-Repo Remediation</h2>
+
+      <p>Stage 11 distributes remediation to each repository's local orchestrator. The investigation report from Stage 10 is delivered, and the repository's own orchestrator reads its findings and applies fixes locally. Remediation executes in parallel across repositories (with configurable batch sizes), each repository processing its own findings independently.</p>
+
+      <p>I designed the architecture to separate centralized detection from decentralized repair. The workspace-level investigator has broad visibility but shallow context. It can identify that a repository's cleanup agent references a nonexistent directory, but it cannot know why the directory is missing. The local orchestrator has narrow visibility but deep context. It knows that the directory was renamed during a recent refactoring and that the fix is a one-line path correction. The investigator provides the diagnosis. The local orchestrator provides the treatment. This separation exploits the distribution of knowledge across the system, a theme from Chapter 2, by routing each decision to the agent with the most relevant context.</p>
+
+      <p>Local orchestrators select the appropriate remediation workflow based on the finding's class and severity. Documentation synchronization goes to a documentation-maintenance agent. Contradiction resolution goes to a conflict-resolution agent. Artifact removal goes to cleanup, gated by security clearance. The workflow selection involves context-dependent routing. The orchestrator must assess which remediation approach is appropriate for each finding, a decision that depends on the repository's configuration, its active development priorities, and the interaction effects between findings. Two Class 2 findings in the same file may require a single coordinated edit rather than two independent corrections. This kind of context-sensitivity is why remediation is distributed to local orchestrators rather than executed centrally.</p>
+
+    </section>
+
+    <section id="sec:remediation-resilience">
+      <h2>4. Fault Tolerance and Graceful Degradation</h2>
+
+      <p>The pipeline includes explicit resilience mechanisms. Failed stages are retried before being marked as failures. Stages that exceed their time budget are terminated gracefully. Stages that fail after retry produce a failure stub (its first line is "# STAGE FAILURE") that signals downstream stages to use fallback data. Unchanged repositories are skipped entirely via SHA caching.</p>
+
+      <p>If Stage 6 (the contradiction-auditor) fails due to a timeout, Stage 7 (strategy-refactorer) is unaffected. It scans agent profiles directly and has no dependency on Stage 6's output. Stage 8 (cross-repo-propagator) is similarly unaffected, since its prompt references only Stage 2's best-practices report and the configuration reference documents, not Stage 6's contradiction audit. Stage 9 records Stage 6 as failed and notes the downstream impact. The next morning, Stage 6 retries from scratch. The system's knowledge is one day stale on contradiction detection. It is not paralyzed.</p>
+
+      <p>This is graceful degradation: the system continues operating at reduced capability rather than halting entirely. The design principle is familiar from distributed systems engineering. A microservice architecture that crashes when any single service is unavailable is poorly designed. The pipeline-orchestrator (Stage 9) assesses the damage after each run, reading all stage reports and classifying each as productive, low-yield, failed, or skipped. This classification accumulates over time into a health dashboard. Persistent failures in one stage surface as patterns in the dashboard data, enabling the human operator to intervene where the automated cycle cannot self-correct.</p>
+
+      <p>The resilience mechanisms also interact with the investigation-remediation cycle. If Stage 10 itself fails, remediation cannot execute, and drift accumulates for one additional day. If it fails two days running, the accumulated drift may be substantial enough that the third day's remediation faces a larger-than-normal workload. The system handles this through the same parallel-batch architecture. More findings simply means more parallel remediation tasks.</p>
+    </section>
+
+    <section id="sec:remediation-full-cycle">
+      <h2>5. The Full Cycle as Closed-Loop Feedback</h2>
+
+      <p>The cycle is a closed feedback loop. The output of one day's remediation affects the input to the next day's investigation. If remediation introduces a new inconsistency (a side effect of fixing one problem), the next investigation will detect it. If investigation fails to catch something, the progressive accumulation of drift will eventually make it large enough to trigger a finding. The feedback is not instant. It operates on the daily cadence discussed in Chapter 19. But it is persistent and cumulative, and it operates without any agent holding a complete model of the system's state.</p>
+
+      <p>The cycle's components exhibit properties of a feedback control system: sensors (the investigation protocol), classifiers (three finding classes with severity rankings), actuators (remediation workflows routed by context-dependent selection), and verification (post-remediation audit). What distinguishes this from a simple cron script that updates files is the layered decision-making. A script executes a fixed sequence. The investigation-remediation cycle classifies inputs, routes them to appropriate handlers, tolerates partial failure, and adjusts its behavior based on the results of prior cycles. The abstract layer evolves as Class 1 findings are incorporated, which changes the investigation criteria for future runs.</p>
+    </section>
+
+    <section id="sec:remediation-architecture">
+      <h2>6. Multi-Level System Architecture</h2>
+
+      <p>No single agent in the investigation-remediation chain holds a global view of the system's state. Each holds the knowledge relevant to its role and acts on local signals: investigation findings, remediation instructions, SHA comparisons. Yet the aggregate result is systemic coherence: documentation across a dozen repositories is maintained, inconsistencies are detected and corrected, novel patterns are identified and synthesized.</p>
+
+      <p><cite class="citation" data-key="miller1988a"><a href="../bibliography.html#miller1988a">Miller and Drexler (1988)</a></cite> described computational ecologies as systems where independently operating computational processes interact through defined interfaces, producing aggregate behaviors that no individual process was designed to produce. The investigation-remediation cycle fits this description. The investigator classifies findings. Sustaining systemic coherence was never part of its assignment. The local orchestrator fixes problems in its own repository. Ecosystem-wide documentation accuracy lies outside its mandate. Systemic coherence is an emergent property of the interactions among agents that operate on local information within a shared architectural framework.</p>
+
+      <p>The designed rules, which includes the pipeline stages, the finding classes, the remediation workflows, and the SHA gating, create the conditions under which this emergence occurs. Remove the classification system and investigation produces undifferentiated noise. Remove the local orchestrators and remediation becomes centralized, losing the context-sensitivity that makes it effective. Remove the daily cadence and drift accumulates without bound. The architecture is designed. The coherence it produces is partly emergent.</p>
+    </section>
+
+  </article>
+</body>
+</html>

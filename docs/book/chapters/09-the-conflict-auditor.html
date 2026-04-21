@@ -1,0 +1,101 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Chapter 9: The Conflict Auditor</title>
+</head>
+<body>
+  <article id="ch:the-conflict-auditor">
+    <h1>Chapter 9: The Conflict Auditor</h1>
+    <p class="part-label">Part III: The Agents at Work</p>
+
+    <blockquote class="agent-description">
+      <p><strong>Purpose</strong>: You detect logical inconsistencies across chapter drafts, agent documentation, reference files, and source material.</p>
+    </blockquote>
+
+    <section id="sec:auditor-conflict-categories">
+      <h2>1. Ten Conflict Categories</h2>
+
+      <p>A consistency auditor classifies every inconsistency it detects into a set of typed categories. Terminology conflicts occur when the same concept appears under different names in different chapters: "workflow routing" in one chapter, "task dispatch" in another, referring to the same mechanism. Claim conflicts occur when two chapters make mutually incompatible assertions about the same entity: one claiming an agent has five rules, another claiming six. Attribution errors occur when a theoretical claim is assigned to the wrong author or work: a passage crediting Hayek for an argument that originates in Menger, or citing the wrong year for a multi-edition work.</p>
+
+      <div class="project-illustration">
+        <p>In this project's conflict taxonomy, each detected conflict is classified under one of ten two-letter category codes. The three primary detection codes are: TM (Terminology Mismatch: same concept described with different terminology across chapters), CC (Claim Conflict: contradictory factual claims between chapters), and AE (Attribution Error: theoretical claim attributed to wrong author or work). Detected conflict instances receive sequential BK-xxx identifiers in the log (BK-001, BK-002, etc.): the instance ID is separate from the category code.</p>
+      </div>
+
+      <p>Source-drift conflicts flag passages where a chapter's description no longer matches the current state of the file on disk. The agent file has been revised, but the chapter still describes the previous version. Citation-missing entries flag references that appear in a chapter but have no corresponding entry in the bibliography database. Citation-mismatch entries flag cases where a citation's details, which includes author names, year, and title, diverge from the bibliography record they reference. Count conflicts flag numerical inconsistencies. One chapter says the orchestrator has eight workflows, another says ten. Hierarchy conflicts flag passages where a chapter's claim contradicts the priority ordering established in the orchestrator's constitutional rules: for example, a chapter that treats agent documentation as authoritative when it conflicts with what is on disk. Stale-reference conflicts flag references to files or chapters that have been removed or renamed. Phantom entries flag items that appear in a reference file but have no corresponding source: an entry in a tracking document for an agent that no longer exists.</p>
+
+      <div class="project-illustration">
+        <p>The remaining seven category codes are: SD (Source Drift: chapter description doesn't match current source file on disk), CM (Citation Missing: citation in chapter has no bibliography entry), CX (Citation Mismatch: citation details don't match bibliography), CN (Count Mismatch: stated count doesn't match actual count), HC (Hierarchy Conflict: authority hierarchy stated differently in different locations), SR (Stale Reference: reference to a removed or renamed file or chapter), and PE (Phantom Entry: entry in a reference file with no corresponding source).</p>
+      </div>
+
+      <p>The categories emerged inductively over the course of production. Some were present from the initial design: terminology mismatches, claim conflicts, and stale references are common in any multi-file documentation project. I added attribution errors, source drift, and citation-tracking categories as the relationship between chapter prose and its source material grew more complex and new forms of inconsistency became apparent. Count and hierarchy categories were introduced as the chapter set expanded and numerical and structural drift became detectable. A final category was introduced during an intensive architectural rewrite phase, when reorganized reference files began generating entries for agents or files that no longer existed.</p>
+
+      <p>The taxonomy of conflict categories has an institutional-theoretic parallel. Crawford and Ostrom develop a grammar of institutions in which rules are classified by the normative situation they create: whether an action is required, prohibited, permitted, or incentivized <cite class="citation" data-key="crawfordostrom1995"><a href="../bibliography.html#crawfordostrom1995">(Crawford and Ostrom 1995)</a></cite>. The conflict-auditor's ten categories serve an analogous function. They classify inconsistencies not merely by their surface form but by the type of normative violation each represents: a terminology mismatch violates a shared vocabulary norm, a hierarchy conflict violates a priority ordering rule, a citation-missing entry violates a verification requirement. Typed conflict categories are, in this sense, a grammar for the project's documentation: a structured vocabulary that specifies which deviations count as violations, what kind of evidence distinguishes each type, and what kind of resolution each disposition requires.</p>
+
+    </section>
+
+    <section id="sec:auditor-four-layer-scope">
+      <h2>2. Four-Layer Audit Scope</h2>
+
+      <p>The conflict-auditor reads multiple heterogeneous layers of the project when performing a full consistency audit: chapter prose, reference data, agent documentation, and authoritative source material.</p>
+
+      <div class="project-illustration">
+        <p>In this project, the audit covers four layers:</p>
+        <ol>
+          <li>A Chapter Layer comprising all HTML chapter files in <code>html/chapters/</code>.</li>
+          <li>A Reference Layer comprising the bibliography database, the theory-to-architecture mapping, and the voice-sample files.</li>
+          <li>An Agent Documentation Layer comprising all agent files in <code>.github/agents/</code> and their reference data.</li>
+          <li>A Source Material Layer comprising the authoritative external repositories that the project reads but does not modify.</li>
+        </ol>
+      </div>
+
+      <p>The multi-layer scope is why the conflict-auditor is the mandatory closer in the orchestrator's workflow logic: it is the only quality-assurance agent that reads the entire project, not just the chapter drafts.</p>
+
+      <div class="project-illustration">
+        <p>Two representative examples from this project: if a chapter describes the agent-updater's workflow as having four steps and the agent-updater's own agent file describes three, that is a CC (Claim Conflict) spanning layers one and two. If a reference file lists twelve chapters and the actual chapter files number twenty, that is a CN (Count Mismatch) spanning layers one and three.</p>
+      </div>
+
+      <p>The four-layer architecture also determines the order of the auditor's scans. It reads infrastructure files first (layers two through four) to build an internal model of the project's current state: how many agents exist, what their specifications contain, what the bibliography includes, what the external source material provides. It then reads the chapter files (layer one) and compares their claims against this model. The infrastructure-first ordering means the auditor uses the project's actual state as the baseline for comparison, consistent with the authority hierarchy that ranks source code and agent files above chapter drafts.</p>
+    </section>
+
+    <section id="sec:auditor-csv-log">
+      <h2>3. The Append-Only Conflict Log</h2>
+
+      <p>Every conflict the auditor detects is recorded in a structured, append-only log. New entries are added at the end, but existing entries are never deleted. When a conflict is resolved, its status entry changes from <code>open</code> to <code>resolved</code>, but the row remains. The log is a permanent record of every inconsistency the auditor has ever detected.</p>
+
+      <div class="project-illustration">
+        <p>In this project, the conflict log is a CSV file with the following schema: conflict_id (BK-xxx sequential instance identifier), date_identified (ISO 8601), category (two-letter code: TM, CC, AE, SD, CM, CX, CN, HC, SR, or PE), file_a (primary authoritative file), file_b (secondary derived file), exact_text_a (verbatim excerpt from file_a), exact_text_b (verbatim excerpt from file_b), conflict_description, recommended_resolution, resolution_status (unresolved or resolved), resolution_date, and resolution_notes.</p>
+      </div>
+
+      <p>The append-only constraint serves the same function in the conflict log that immutability serves in an audit ledger. If entries could be deleted, an agent that introduced a conflict and was subsequently asked to fix it could, in principle, delete the log entry rather than fixing the underlying issue. Append-only logging prevents this: the conflict is recorded, and its resolution (or lack thereof) is visible to any agent or human who inspects the log. The constraint is enforced at the agent level: the detection agent's instructions specify append-only discipline, and the orchestrator's workflow invocations expect the log to grow monotonically.</p>
+
+      <p>The log also serves as input to the conflict-resolution agent (Chapter 10). When the conflict-auditor detects a conflict between two chapters, it logs the entry but does not resolve it. The resolution requires a judgment about which chapter's claim is correct, and that judgment falls outside the auditor's detection mandate. The conflict-resolution agent reads the log, evaluates the open entries, and issues ACCEPT, REJECT, or REVISE dispositions. The two agents, one detecting, one resolving, communicate through the structured log rather than through direct inter-agent messaging. A BK-002 claim conflict, where two chapters make incompatible assertions about the same entity, is the canonical illustration: the auditor detects the discrepancy, records it, and hands off. The log is a shared data structure that mediates the handoff between detection and adjudication, persisting across sessions so that the resolution agent can act on findings it did not itself produce.</p>
+
+
+    </section>
+
+    <section id="sec:auditor-detection-not-resolution">
+      <h2>4. Detection Without Resolution</h2>
+
+      <p>The conflict-auditor detects inconsistencies but does not resolve them. The logic of this separation is established in Chapter 8 (§2) and applies here with a domain-specific inflection. Resolving a conflict requires a judgment about which of two inconsistent claims is correct, a judgment that depends on the authority hierarchy, the domain context, and sometimes the author's theoretical intent. The conflict-auditor has expertise in detecting patterns of inconsistency across files, not in determining which version of a contested claim should prevail.</p>
+
+      <p>The separation also enables a detection-only auditor to be invoked repeatedly without side effects. An auditor that both detected and resolved conflicts would change the project state each time it ran, potentially introducing new conflicts a subsequent run would need to catch. A detection-only auditor produces a report. Running it twice on the same state produces the same report. This idempotency makes it safe to invoke as a mandatory closer.</p>
+    </section>
+
+    <section id="sec:auditor-mandatory-closer">
+      <h2>5. The Mandatory Closer Pattern</h2>
+
+      <p>The mandatory-closer rule entrenches a consistency auditor as a required consistency-check step in every content-creating or content-modifying workflow. Workflows governed by deletion economics (those that remove files and synchronize documentation) are separately governed by their own authorization sequence (Chapter 14).</p>
+
+      <div class="project-illustration">
+        <p>In this project, the orchestrator's constitutional rules specify: "Always close with @conflict-auditor — after any multi-file change session." Eight workflows include a mandatory conflict-auditing step: <a href="chapters/05-the-orchestrator.html#fig-workflow-03">Workflow 3 (Chapter Drafting)</a>, <a href="chapters/05-the-orchestrator.html#fig-workflow-04">Workflow 4 (Chapter Revision)</a>, <a href="chapters/08-the-code-hygiene-agent.html#fig-workflow-06">Workflow 6 (Review Cycle)</a>, <a href="chapters/05-the-orchestrator.html#fig-workflow-01">Workflow 1 (Chapter Outline Development)</a>, <a href="chapters/08-the-code-hygiene-agent.html#fig-workflow-05">Workflow 5 (Code Hygiene Audit)</a>, <a href="chapters/12-the-agent-updater.html#fig-workflow-07">Workflow 7 (Documentation Maintenance)</a>, <a href="chapters/05-the-orchestrator.html#fig-workflow-02">Workflow 2 (Chapter Expert Instantiation)</a>, and <a href="chapters/16-the-repo-liaison.html#fig-workflow-11">Workflow 11 (Cross-Repository Coordination)</a>. <a href="chapters/15-the-domain-agents.html#fig-workflow-10">Workflow 10 (Bibliography Operations)</a> includes a conditional conflict-audit when citations change. In Workflows 1, 5, 7, and 11, the conflict-auditor occupies the terminal position. In Workflows 2, 3, and 4, it precedes a final documentation step, agent-updater or bibliography-manager, before the workflow closes. In <a href="chapters/08-the-code-hygiene-agent.html#fig-workflow-06">Workflow 6 (Review Cycle)</a>, it occupies the opening position: scanning for contradictions as the starting condition the other review agents build upon.</p>
+      </div>
+
+      <p>The mandatory closer pattern ensures that no multi-file change enters the project without a consistency check. The pattern addresses a risk inherent in distributed production: when multiple agents modify different files within the same workflow, the individual modifications may each be correct in isolation but inconsistent with each other. Agent A updates a chapter to reflect a new workflow count. Agent B updates the agent file to add the new workflow. If the chapter and the agent file now disagree about the workflow's name, the inconsistency is invisible to either agent operating alone. The conflict-auditor, reading both files at the close of the workflow, detects the discrepancy. Detecting a conflict immediately after it is introduced is far cheaper than discovering it after subsequent chapters have been built on the inconsistent foundation.</p>
+
+      <p>The mandatory opener pattern is the proactive complement of the mandatory closer, and it is developed fully in Chapter 11. Where the closer reviews changes after they are made, the opener reviews the presuppositions of a plan before execution begins. Together, the two patterns bracket every content-producing or content-modifying workflow: the opener tests what has been assumed, the closer verifies what has been introduced.</p>
+    </section>
+
+  </article>
+</body>
+</html>
