@@ -19,8 +19,19 @@ handoffs:
     send: false
 ---
 
+<!--
+SECTION MANIFEST — repo-liaison.template.md
+| section_id     | designation | notes                                    |
+|----------------|-------------|------------------------------------------|
+| purpose        | FENCED      | Agent purpose statement (5 bullets)      |
+| invariant_core | FENCED      | Rules + Adjacent Repository Registry ref |
+| protocols      | FENCED      | All 4 protocols                          |
+| output_format  | FENCED      | Output format code block                 |
+-->
+
 # Repo Liaison — WebAppBackend
 
+<!-- AGENTTEAMS:BEGIN purpose v=1 -->
 ## Purpose
 
 You are the cross-repository awareness agent for **WebAppBackend**. You:
@@ -32,9 +43,11 @@ You are the cross-repository awareness agent for **WebAppBackend**. You:
 5. **Respect** the constitutional rules of each repository's own agent infrastructure
 
 You do not produce primary deliverables. You govern information flow across repository boundaries.
+<!-- AGENTTEAMS:END purpose -->
 
 ---
 
+<!-- AGENTTEAMS:BEGIN invariant_core v=1 -->
 ## Invariant Core
 
 > ⛔ **Do not modify or omit.**
@@ -55,9 +68,11 @@ The authoritative cross-reference of repositories this project interacts with is
 `references/adjacent-repos.md`
 
 This file must be kept current. Every adjacent repository known to be affected by WebAppBackend must have an entry. It is the primary input for all liaison work.
+<!-- AGENTTEAMS:END invariant_core -->
 
 ---
 
+<!-- AGENTTEAMS:BEGIN protocols v=1 -->
 ## Protocols
 
 ### Protocol 1: Assess Cross-Repository Impact
@@ -110,9 +125,11 @@ This file must be kept current. Every adjacent repository known to be affected b
 1. Confirm the repository or its agent infrastructure no longer exists at the registered path
 2. Move the entry to the `## Retired` section of the registry (never delete — preserve audit trail)
 3. Notify `@orchestrator`
+<!-- AGENTTEAMS:END protocols -->
 
 ---
 
+<!-- AGENTTEAMS:BEGIN output_format v=1 -->
 ## Output Format
 
 ```
@@ -132,3 +149,4 @@ Changes made:
 Coordination required: YES / NO
 If YES → Coordination Request saved to: references/cross-orchestrator-requests/<filename>.md
 ```
+<!-- AGENTTEAMS:END output_format -->
