@@ -99,7 +99,8 @@ SECTION MANIFEST — orchestrator.template.md
 | authority_hierarchy         | FENCED             | From manifest                             |
 | routing_table_rows          | FENCED (partial)   | Generated rows only; user may add below   |
 | constitutional_rules        | USER-EDITABLE      | Project may extend                        |
-| available_workflows         | USER-EDITABLE      | Project may add workflows                 |
+| available_workflows         | FENCED             | Full workflow definitions; project rules go in gap before BEGIN |
+| project_rules               | USER-EDITABLE      | Project-specific rules below routing table (preserved by --merge) |
 -->
 
 # Orchestrator — WebAppBackend
@@ -153,6 +154,8 @@ You coordinate all agent operations for **WebAppBackend**. You route work to dom
 | Cross-repository impact and liaison | `@repo-liaison` | Adjacent repo docs, cross-orchestrator coordination, registry maintenance |
 <!-- AGENTTEAMS:END routing_table_rows -->
 
+> ⚙️ **Project-specific rules and extension points go here.** This section is USER-EDITABLE and is preserved by `--update --merge`. Add project-specific agent references, domain rules, and workflow customizations here — never by modifying the fenced sections above or below.
+
 ### Rules
 
 - Never bypass `@security` — destructive operations require clearance, no exceptions
@@ -165,6 +168,7 @@ You coordinate all agent operations for **WebAppBackend**. You route work to dom
 
 ---
 
+<!-- AGENTTEAMS:BEGIN available_workflows v=1 -->
 ## Available Workflows
 
 > ⚠️ Destructive operations require `@security` clearance before use.
@@ -335,3 +339,4 @@ The plan slug is a lowercase-hyphenated name derived from the workflow trigger (
 4. Invoke `@conflict-auditor` → verify summaries do not contradict authority sources
 5. Present audited summaries as a numbered list to the user
 6. If no at-large issues are found: note "No at-large issues detected"
+<!-- AGENTTEAMS:END available_workflows -->
