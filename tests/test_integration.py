@@ -253,6 +253,7 @@ def test_generated_files_parse_correctly(tmp_path, example):
 @pytest.mark.parametrize("example", ["software-project", "research-project", "data-pipeline"])
 def test_snapshot_comparison(tmp_path, example):
     """Compare pipeline output against committed expected/ snapshots (normalize whitespace)."""
+    import re
     brief = EXAMPLES_DIR / example / "brief.json"
     expected_dir = EXAMPLES_DIR / example / "expected"
 
@@ -266,6 +267,9 @@ def test_snapshot_comparison(tmp_path, example):
     expected_files = sorted(f for f in expected_dir.rglob("*.md") if "build-log" not in f.name)
     assert expected_files, f"No .md files found in {expected_dir}"
 
+    # Strip non-deterministic timestamp lines before comparison (e.g. "Generated at: `...`")
+    _ts_pat = re.compile(r"Generated at: `[^`]+`")
+
     mismatches: list[str] = []
     for expected_file in expected_files:
         rel = expected_file.relative_to(expected_dir)
@@ -273,8 +277,10 @@ def test_snapshot_comparison(tmp_path, example):
         if not actual_file.exists():
             mismatches.append(f"MISSING: {rel}")
             continue
-        expected_text = " ".join(expected_file.read_text(encoding="utf-8").split())
-        actual_text = " ".join(actual_file.read_text(encoding="utf-8").split())
+        expected_text = _ts_pat.sub("", expected_file.read_text(encoding="utf-8"))
+        actual_text = _ts_pat.sub("", actual_file.read_text(encoding="utf-8"))
+        expected_text = " ".join(expected_text.split())
+        actual_text = " ".join(actual_text.split())
         if expected_text != actual_text:
             mismatches.append(f"DIFF: {rel}")
 

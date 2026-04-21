@@ -216,6 +216,7 @@ The plan slug is a lowercase-hyphenated name derived from the workflow trigger (
 7. *(If `@style-guardian` in team)* Invoke `@style-guardian` → three-priority style audit
 8. Invoke `@conflict-auditor` → verify consistency with existing deliverables
 9. Invoke `@agent-updater` → update progress tracking if needed
+10. → **Invoke Workflow 11: Final Check** (always; after all conditional branches above complete)
 
 ### Workflow 2: Revise a Deliverable
 
@@ -229,6 +230,7 @@ The plan slug is a lowercase-hyphenated name derived from the workflow trigger (
 6. Invoke `@conflict-auditor` → verify no new contradictions introduced
 7. *(If `@reference-manager` in team)* Invoke `@reference-manager` → verify all references still resolve
 8. Invoke `@agent-updater` → sync agent documentation to reflect revised deliverable state
+9. → **Invoke Workflow 11: Final Check** (always; after all conditional branches above complete)
 
 ### Workflow 3: Technical Accuracy Audit
 
@@ -240,6 +242,7 @@ The plan slug is a lowercase-hyphenated name derived from the workflow trigger (
 4. If deliverable edited → invoke `@quality-auditor`; also `@cohesion-repairer`, `@style-guardian` if in team
 5. Invoke `@conflict-auditor` → verify consistency
 6. If any corrections were made → invoke `@agent-updater` → sync agent documentation to reflect corrected state
+7. → **Invoke Workflow 11: Final Check** (always; after all conditional branches above complete)
 
 ### Workflow 4: Compile Final Output
 
@@ -249,6 +252,7 @@ The plan slug is a lowercase-hyphenated name derived from the workflow trigger (
 2. *(If `@reference-manager` in team)* Invoke `@reference-manager` → verify all references are complete
 3. Invoke `@output-compiler` → assemble and compile final output
 4. Invoke `@cleanup` → remove intermediate build artifacts
+5. → **Invoke Workflow 11: Final Check** (always; after all conditional branches above complete)
 
 ### Workflow 5: Consistency Review
 
@@ -261,6 +265,7 @@ The plan slug is a lowercase-hyphenated name derived from the workflow trigger (
 5. *(If `@style-guardian` in team)* Invoke `@style-guardian` → style audit
 6. Consolidate findings → present to user
 7. If any issues found → invoke `@agent-updater` → sync agent documentation to reflect corrected state
+8. → **Invoke Workflow 11: Final Check** (always; after all conditional branches above complete)
 
 ### Workflow 6: Documentation Maintenance
 
@@ -269,6 +274,7 @@ The plan slug is a lowercase-hyphenated name derived from the workflow trigger (
 1. Invoke `@agent-updater` → sync docs with changes
 2. Invoke `@agent-refactor` → check for extraction opportunities and spec compliance
 3. Invoke `@conflict-auditor` → verify consistency
+4. → **Invoke Workflow 11: Final Check** (always; after all conditional branches above complete)
 
 ### Workflow 7: Cleanup
 
@@ -279,6 +285,7 @@ The plan slug is a lowercase-hyphenated name derived from the workflow trigger (
 3. Invoke `@security` for clearance
 4. Invoke `@cleanup` → remove approved files
 5. Invoke `@agent-updater` → update docs
+6. → **Invoke Workflow 11: Final Check** (always; after all conditional branches above complete)
 
 ### Workflow 8: Code Hygiene Audit
 
@@ -291,6 +298,7 @@ The plan slug is a lowercase-hyphenated name derived from the workflow trigger (
 5. If structural extraction needed (CH-08, CH-14) → invoke `@agent-refactor`
 6. If agent doc contradictions found (CH-20) → invoke `@conflict-auditor`
 7. Invoke `@agent-updater` → update docs if changes were made
+8. → **Invoke Workflow 11: Final Check** (always; after all conditional branches above complete)
 
 ### Workflow 9: Cross-Repository Coordination
 
@@ -302,6 +310,7 @@ The plan slug is a lowercase-hyphenated name derived from the workflow trigger (
 4. If the adjacent repository has its own orchestrator → invoke `@repo-liaison` → Protocol 3 (Orchestrator-to-Orchestrator Coordination); surface Coordination Request to user
 5. After all updates: invoke `@conflict-auditor` → verify internal consistency
 6. Invoke `@agent-updater` → update `references/adjacent-repos.md` with changelog entries
+7. → **Invoke Workflow 11: Final Check** (always; after all conditional branches above complete)
 
 ### Workflow 10: Plan Documentation and Review
 
@@ -313,3 +322,34 @@ The plan slug is a lowercase-hyphenated name derived from the workflow trigger (
 4. Surface any `blocked` steps with their `notes` to the user
 5. If plan is complete → mark all rows `done` and append completion date to `.plan.md`
 6. If plan needs revision → update the relevant `.steps.csv` rows; append a revision note to `.plan.md`
+7. → **Invoke Workflow 11: Final Check** (always; after all conditional branches above complete)
+
+### Workflow 11: Final Check
+
+**Trigger:** Terminal step of Workflows 1–10. Do not invoke Workflow 11 from within Workflow 11 (no recursion — identify this workflow by name: "Final Check").
+
+#### Part A — Within-Plan Issues
+*(Skip Part A if no plan was active for the current session.)*
+
+1. Read `tmp/<current-plan-slug>.steps.csv` → list all rows where `status` is `pending` or `blocked`
+2. For each open item:
+   a. Investigate: read relevant files, verify facts on disk
+   b. If no sub-plan exists for the issue: create `tmp/<issue-slug>.plan.md` + `tmp/<issue-slug>.steps.csv` per the Pre-Execution Requirement above
+   c. Invoke `@adversarial` → audit the sub-plan for hidden presuppositions
+   d. Invoke `@conflict-auditor` → verify sub-plan is consistent with existing files
+   e. Surface plan + audit results to the user
+3. If any sub-plan files were created: invoke `@conflict-auditor` → verify the new plans are consistent with existing files (satisfies Constitutional Rule 3 for files created in this step)
+4. If all plan steps are `done` and no new issues were found: note "Plan complete — no unresolved in-plan issues"
+
+#### Part B — Repo At-Large Issues
+*(Always execute Part B.)*
+
+1. Scan issue sources:
+   - `CHANGELOG.md` → any heading matching `Known Issues` (regex)
+   - `tmp/` → any `.steps.csv` files with `pending` or `blocked` rows (excluding the current plan)
+   - `git status --short` in the current repo → untracked files in `tmp/` or modified files outside the current plan's known output set; present as repo-relative paths only (never absolute filesystem paths)
+2. For each at-large issue found: write a one-paragraph summary — what it is, why it matters, which files or commits are involved
+3. Invoke `@adversarial` → audit the summaries for false assumptions (e.g., "this is truly unresolved", "this git status entry is not legitimately in-progress work")
+4. Invoke `@conflict-auditor` → verify summaries do not contradict authority sources
+5. Present audited summaries as a numbered list to the user
+6. If no at-large issues are found: note "No at-large issues detected"

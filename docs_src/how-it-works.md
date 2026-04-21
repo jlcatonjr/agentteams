@@ -104,7 +104,7 @@ The orchestrator **routes without producing**. Domain agents **produce without s
 
 Generated agent teams are designed to keep their documentation current automatically as projects evolve. Two mechanisms work together:
 
-**Automatic update triggers** — `@agent-updater` is invoked at the close of every knowledge-mutating workflow step. Specifically, it runs after Workflow 2 (Revise), Workflow 3 (when corrections were made), Workflow 5 (when issues were found), Workflow 6, Workflow 7, Workflow 8, Workflow 9, and Workflow 11. Drift detected by `--check` is also an explicit trigger.
+**Automatic update triggers** — `@agent-updater` is invoked at the close of every knowledge-mutating workflow step. Specifically, it runs after Workflow 2 (Revise), Workflow 3 (when corrections were made), Workflow 5 (when issues were found), Workflow 6, Workflow 7, Workflow 8, Workflow 9, and Workflow 11 (Module Documentation Update). Drift detected by `--check` is also an explicit trigger.
 
 **Periodic Knowledge Re-verification** — Before any plan step executes (Workflow 10), `@technical-validator` verifies the factual claims stated in that step's inputs, outputs, and notes against current on-disk state. Steps with unverified claims are held until the user confirms. If `--check` reports template drift, `@agent-updater` re-renders affected files and calls `@technical-validator` before the next workflow step proceeds.
 
