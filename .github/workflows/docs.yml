@@ -30,10 +30,15 @@ jobs:
           python-version: "3.11"
 
       - name: Install MkDocs dependencies
-        run: pip install mkdocs-material pymdown-extensions
+        run: pip install "mkdocs==1.6.1" "mkdocs-material==9.7.6" pymdown-extensions
 
       - name: Build docs
         run: mkdocs build --site-dir _site
+
+      - name: Ensure book SPA assets are deployed
+        run: |
+          mkdir -p _site/book
+          cp -rn docs_src/book/. _site/book/
 
       - name: Upload Pages artifact
         uses: actions/upload-pages-artifact@v3
