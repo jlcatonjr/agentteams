@@ -2,6 +2,8 @@
 
 Public API for the `agentteams` package. Each module corresponds to a stage in the pipeline or a support capability.
 
+This reference defines the **supported public API contract**. Modules and symbols not documented here are considered internal and may change without notice.
+
 ---
 
 ## Pipeline Modules
@@ -24,6 +26,7 @@ Public API for the `agentteams` package. Each module corresponds to a stage in t
 | [`enrich`](enrich.md) | Default-value audit and context-aware placeholder enrichment |
 | [`graph`](graph.md) | Directed graph inference for agent team topology |
 | [`frameworks`](frameworks.md) | Per-framework adapter classes |
+| [`man`](man.md) | Generate and validate the project man-page source |
 
 ---
 

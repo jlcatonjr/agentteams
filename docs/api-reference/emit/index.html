@@ -950,6 +950,34 @@
 </li>
         
           <li class="md-nav__item">
+  <a href="#mergeresult" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        MergeResult
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#-" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        ---
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="---">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
   <a href="#backupresult" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -999,6 +1027,23 @@
   
 </li>
         
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#-_1" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        ---
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="---">
+      <ul class="md-nav__list">
+        
           <li class="md-nav__item">
   <a href="#backup_output_diroutput_dir-files_to_backupnone-dry_runfalse" class="md-nav__link">
     <span class="md-ellipsis">
@@ -1022,10 +1067,10 @@
 </li>
         
           <li class="md-nav__item">
-  <a href="#restore_backupbackup_path-output_dir" class="md-nav__link">
+  <a href="#restore_backupbackup_path-output_dir-remove_extrafalse" class="md-nav__link">
     <span class="md-ellipsis">
       
-        restore_backup(backup_path, output_dir)
+        restore_backup(backup_path, output_dir, *, remove_extra=False)
       
     </span>
   </a>
@@ -1473,6 +1518,34 @@
 </li>
         
           <li class="md-nav__item">
+  <a href="#mergeresult" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        MergeResult
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#-" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        ---
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="---">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
   <a href="#backupresult" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -1522,6 +1595,23 @@
   
 </li>
         
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#-_1" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        ---
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="---">
+      <ul class="md-nav__list">
+        
           <li class="md-nav__item">
   <a href="#backup_output_diroutput_dir-files_to_backupnone-dry_runfalse" class="md-nav__link">
     <span class="md-ellipsis">
@@ -1545,10 +1635,10 @@
 </li>
         
           <li class="md-nav__item">
-  <a href="#restore_backupbackup_path-output_dir" class="md-nav__link">
+  <a href="#restore_backupbackup_path-output_dir-remove_extrafalse" class="md-nav__link">
     <span class="md-ellipsis">
       
-        restore_backup(backup_path, output_dir)
+        restore_backup(backup_path, output_dir, *, remove_extra=False)
       
     </span>
   </a>
@@ -1593,7 +1683,8 @@
 
 <h1 id="emit-agentteamsmodule"><code>emit</code> — AgentTeamsModule<a class="headerlink" href="#emit-agentteamsmodule" title="Permanent link">&para;</a></h1>
 <p>Write rendered agent files to disk.</p>
-<p>Takes the list of <code>(output_path, content)</code> pairs from <code>render.py</code> and writes them to the target output directory with dry-run support, overwrite protection, and automatic backup before destructive writes.</p>
+<p>Takes the list of <code>(output_path, content)</code> pairs from <code>render.py</code> and writes them to the target output directory with dry-run support and overwrite protections.</p>
+<p>Backup behavior is provided by <code>backup_output_dir()</code> and by CLI orchestration flows that call it before destructive writes; <code>emit_all()</code> does not automatically trigger backup on its own.</p>
 <blockquote>
 <p><em>Source: <code>agentteams/emit.py</code></em></p>
 </blockquote>
@@ -1617,7 +1708,29 @@
 <li><code>success</code> (<code>bool</code>) — <code>True</code> if <code>errors</code> is empty.</li>
 </ul>
 <hr />
-<hr />
+<h3 id="mergeresult"><code>MergeResult</code><a class="headerlink" href="#mergeresult" title="Permanent link">&para;</a></h3>
+<blockquote>
+<p><em>Source: <code>agentteams/emit.py</code></em></p>
+</blockquote>
+<p>Result for a single fenced-content merge operation.</p>
+<blockquote>
+<p><strong>Boundary note:</strong> <code>MergeResult</code> is part of the documented API surface for merge diagnostics. Most callers should still use <code>emit_all()</code> and rely on <code>EmitResult</code> for operation-level outcomes.</p>
+</blockquote>
+<p><strong>Attributes:</strong></p>
+<ul>
+<li><code>sections_replaced</code> (<code>list[str]</code>) — Section IDs whose content was replaced from the newly rendered file.</li>
+<li><code>sections_added</code> (<code>list[str]</code>) — Section IDs present in the new render but absent in the existing file.</li>
+<li><code>sections_orphaned</code> (<code>list[str]</code>) — Section IDs present in existing file but absent in new render.</li>
+<li><code>parse_errors</code> (<code>list[str]</code>) — Parse-related error messages from fenced-region extraction/validation.</li>
+<li><code>unchanged</code> (<code>list[str]</code>) — Section IDs that were identical in both files.</li>
+<li><code>merged_content</code> (<code>str</code>) — Final merged file content. Empty string when parse fails.</li>
+</ul>
+<p><strong>Properties:</strong></p>
+<ul>
+<li><code>has_errors</code> (<code>bool</code>) — <code>True</code> when parse errors are present.</li>
+<li><code>content_changed</code> (<code>bool</code>) — <code>True</code> when at least one section was replaced or added.</li>
+</ul>
+<h2 id="-">---<a class="headerlink" href="#-" title="Permanent link">&para;</a></h2>
 <h3 id="backupresult"><code>BackupResult</code><a class="headerlink" href="#backupresult" title="Permanent link">&para;</a></h3>
 <blockquote>
 <p><em>Source: <code>agentteams/emit.py</code></em></p>
@@ -1627,6 +1740,7 @@
 <ul>
 <li><code>backup_path</code> (<code>Path | None</code>) — Absolute path to the timestamped backup directory, or <code>None</code> if no backup was taken (e.g. output directory did not exist).</li>
 <li><code>files_backed_up</code> (<code>int</code>) — Number of files copied into the backup.</li>
+<li><code>extra_files_removed</code> (<code>int</code>) — Number of output files removed during restore when <code>remove_extra=True</code>.</li>
 <li><code>skipped</code> (<code>bool</code>) — <code>True</code> if the backup was suppressed (<code>--no-backup</code> or <code>dry_run=True</code>).</li>
 </ul>
 <hr />
@@ -1657,14 +1771,13 @@
 <li><code>result</code> (<code>EmitResult</code>) — Result from <code>emit_all()</code>.</li>
 <li><code>manifest</code> (<code>dict[str, Any]</code>) — Team manifest from <code>analyze.build_manifest()</code>.</li>
 </ul>
-<hr />
-<hr />
+<h2 id="-_1">---<a class="headerlink" href="#-_1" title="Permanent link">&para;</a></h2>
 <h3 id="backup_output_diroutput_dir-files_to_backupnone-dry_runfalse"><code>backup_output_dir(output_dir, *, files_to_backup=None, dry_run=False)</code><a class="headerlink" href="#backup_output_diroutput_dir-files_to_backupnone-dry_runfalse" title="Permanent link">&para;</a></h3>
 <blockquote>
 <p><em>Source: <code>agentteams/emit.py</code></em></p>
 </blockquote>
 <p>Copy existing agent files to a timestamped backup directory before a write.</p>
-<p>The backup is placed at <code>&lt;output_dir&gt;/.agentteams-backups/YYYYMMDD-HHMMSS/</code>. If <code>files_to_backup</code> is given, only those relative paths are backed up; otherwise every file in <code>output_dir</code> is copied (excluding the backup directory itself).</p>
+<p>The backup is placed at <code>&lt;output_dir&gt;/.agentteams-backups/YYYYMMDD-HHMMSS/</code>. If <code>files_to_backup</code> is given, only those relative paths are backed up (plus liaison/security CSV logs when present). If <code>files_to_backup</code> is <code>None</code>, every file in <code>output_dir</code> is copied except backup storage and <code>references/build-log.json</code>.</p>
 <p><strong>Args:</strong></p>
 <ul>
 <li><code>output_dir</code> (<code>Path</code>) — Absolute path to the agents output directory.</li>
@@ -1684,7 +1797,7 @@
 </ul>
 <p><strong>Returns:</strong> <code>list[tuple[str, Path, int]]</code> — List of <code>(timestamp_str, backup_path, file_count)</code> tuples sorted newest-first. Empty list if no backups exist.</p>
 <hr />
-<h3 id="restore_backupbackup_path-output_dir"><code>restore_backup(backup_path, output_dir)</code><a class="headerlink" href="#restore_backupbackup_path-output_dir" title="Permanent link">&para;</a></h3>
+<h3 id="restore_backupbackup_path-output_dir-remove_extrafalse"><code>restore_backup(backup_path, output_dir, *, remove_extra=False)</code><a class="headerlink" href="#restore_backupbackup_path-output_dir-remove_extrafalse" title="Permanent link">&para;</a></h3>
 <blockquote>
 <p><em>Source: <code>agentteams/emit.py</code></em></p>
 </blockquote>
@@ -1693,6 +1806,7 @@
 <ul>
 <li><code>backup_path</code> (<code>Path</code>) — Absolute path to the timestamped backup directory.</li>
 <li><code>output_dir</code> (<code>Path</code>) — Absolute path to the agents output directory to restore into.</li>
+<li><code>remove_extra</code> (<code>bool</code>, keyword-only) — If <code>True</code>, remove files in <code>output_dir</code> that are not present in the selected backup. Default: <code>False</code>.</li>
 </ul>
 <p><strong>Returns:</strong> <code>int</code> — Number of files restored.</p>
 <p><strong>Raises:</strong> <code>FileNotFoundError</code> — If <code>backup_path</code> does not exist.</p>

@@ -67,6 +67,38 @@
 
     </section>
 
+    <section id="sec:pipeline-governance-triggers">
+      <h2>6. Governance Triggers and Feedback Loops</h2>
+
+      <p>The daily pipeline is not only a sequence of production stages. It is also a trigger-conditioned governance system. Certain state changes in the documentation estate automatically route work to governance agents: contradiction signals route to auditing, drift signals route to re-verification, and knowledge-mutating updates route to documentation synchronization. In each case, the trigger serves as a local signal that activates the specialist best positioned to process that state transition.</p>
+
+      <p>This trigger model matters because it reduces governance latency without requiring continuous global supervision. A centralized reviewer would need to poll all repositories and all workflow outputs to detect when governance intervention is needed. Triggered invocation reverses the burden. The system marks a condition when it arises and invokes the relevant specialist at the point of occurrence. Governance therefore scales with change events rather than with total system size.</p>
+
+      <p>Three trigger families are now structurally significant. First, updater triggers close knowledge-mutating workflows by forcing synchronization of agent documentation with post-change reality. Second, adversarial triggers open selected audit-sensitive workflows by requiring presupposition challenge before execution proceeds. Third, drift triggers force stale-knowledge re-verification before further propagation. Together they form a feedback architecture: update, challenge, verify, then update again. The cycle is recursive rather than linear, and this recursion is what keeps long-run drift bounded.</p>
+
+      <p>The trigger map is explicit: updater-close trigger; pipeline location: post-change closure stage; responsible role: documentation maintenance authority; required artifact: synchronized agent-state record; blocking condition: closure remains open until synchronization passes.</p>
+
+      <p>Adversarial opener trigger; pipeline location: pre-execution gate on assumption-sensitive workflows; responsible role: presupposition-critique authority; required artifact: challenged-and-resolved brief status; blocking condition: unresolved presupposition challenge.</p>
+
+      <p>This blocking condition does not create an adversarial veto. The adversarial role remains advisory: it surfaces instability and required revisions, while the orchestrator enforces the gate condition under the constitutional hierarchy and routes the plan for correction before execution continues.</p>
+
+      <p>Drift trigger; pipeline location: pre-propagation verification gate; responsible role: state-coherence auditor; required artifact: stale-knowledge recheck result; blocking condition: unresolved drift marker.</p>
+
+      <p>In Hayekian terms, these triggers are institutional devices for economizing on dispersed knowledge. No agent needs total system visibility. Each agent receives a compressed, typed event indicating what has changed and what governance response is now required. The event stream is thus a constitutional communication layer embedded inside the pipeline's production flow, maintaining coherence while preserving local specialization.</p>
+    </section>
+
+    <section id="sec:pipeline-content-fencing">
+      <h2>7. Content Fencing as Boundary Governance</h2>
+
+      <p>Cross-repository propagation introduces a structural risk: architectural updates can overwrite local, user-authored content if every target file is treated as homogeneous text. Content fencing addresses this risk by declaring protected and updatable regions explicitly. A fenced update operation can then propagate institutional improvements while preserving local adaptations that should remain under repository-level control.</p>
+
+      <p>The economic function of fencing is a reduction in coordination cost. Without fences, each propagation event requires full-file human review at every target site to prevent accidental erasure of local knowledge. With fences, the update mechanism can operate on declared regions and preserve declared exclusions automatically. Human review shifts from exhaustive diff inspection to exception handling, which is substantially cheaper and more reliable at scale.</p>
+
+      <p>Fencing also changes how drift is managed. It prevents one form of artificial drift, which includes update-induced loss of local context, while preserving visibility into genuine drift, where local structures deviate from shared architectural rules. Because update boundaries are explicit, post-propagation audits can distinguish "difference by design" from "difference by defect." That distinction is essential to Chapter 21's self-repair logic: correction requires knowing whether a variation is an error or a protected local adaptation.</p>
+
+      <p>In organizational terms, fence-governed merge updates are a boundary institution for heterogeneous repositories. They permit common governance evolution without imposing uniformity where local conditions legitimately differ. The pipeline thereby maintains a coherent architectural core while allowing controlled periphery variation, a pattern that recurs across durable multi-unit governance systems.</p>
+    </section>
+
   </article>
 </body>
 </html>
