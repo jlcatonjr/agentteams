@@ -80,7 +80,7 @@ This file must be kept current. Every adjacent repository known to be affected b
    a. Read the current target file in full
    b. Apply the minimal change that resolves the staleness
    c. Verify the updated file is internally consistent
-3. Record every change in `references/adjacent-repos.md` under the affected repo's changelog section
+3. Record every change by appending a row to `references/adjacent-repos-changelog.csv` (columns: `date,repo_name,action,files_changed,summary`). Do **not** write inline tables to `adjacent-repos.md` — the CSV is the authoritative changelog store.
 4. Invoke `@conflict-auditor` → verify no contradictions were introduced in this project's docs
 
 ### Protocol 3: Orchestrator-to-Orchestrator Coordination
