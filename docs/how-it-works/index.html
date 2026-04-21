@@ -232,6 +232,25 @@
   
   
     <li class="md-tabs__item">
+      <a href="../manuscript/" class="md-tabs__link">
+        
+  
+  
+    
+  
+  Manuscript
+
+      </a>
+    </li>
+  
+
+      
+        
+  
+  
+  
+  
+    <li class="md-tabs__item">
       <a href="../getting-started/" class="md-tabs__link">
         
   
@@ -498,6 +517,33 @@
     
   
     Home
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../manuscript/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Manuscript
   
 
     
@@ -845,10 +891,10 @@
       
         
         
-        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_7" >
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_8" >
         
           
-          <label class="md-nav__link" for="__nav_7" id="__nav_7_label" tabindex="0">
+          <label class="md-nav__link" for="__nav_8" id="__nav_8_label" tabindex="0">
             
   
   
@@ -866,8 +912,8 @@
             <span class="md-nav__icon md-icon"></span>
           </label>
         
-        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_7_label" aria-expanded="false">
-          <label class="md-nav__title" for="__nav_7">
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_8_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_8">
             <span class="md-nav__icon md-icon"></span>
             
   
@@ -1644,7 +1690,7 @@
 <p>The orchestrator <strong>routes without producing</strong>. Domain agents <strong>produce without scoping</strong>. Workstream experts <strong>scope without producing</strong>. Governance agents <strong>audit without producing</strong>.</p>
 <h3 id="agent-knowledge-updates">Agent Knowledge Updates<a class="headerlink" href="#agent-knowledge-updates" title="Permanent link">&para;</a></h3>
 <p>Generated agent teams are designed to keep their documentation current automatically as projects evolve. Two mechanisms work together:</p>
-<p><strong>Automatic update triggers</strong> — <code>@agent-updater</code> is invoked at the close of every knowledge-mutating workflow step. Specifically, it runs after Workflow 2 (Revise), Workflow 3 (when corrections were made), Workflow 5 (when issues were found), Workflow 6, Workflow 7, Workflow 8, Workflow 9, and Workflow 11. Drift detected by <code>--check</code> is also an explicit trigger.</p>
+<p><strong>Automatic update triggers</strong> — <code>@agent-updater</code> is invoked at the close of every knowledge-mutating workflow step. Specifically, it runs after Workflow 2 (Revise), Workflow 3 (when corrections were made), Workflow 5 (when issues were found), Workflow 6, Workflow 7, Workflow 8, Workflow 9, and Workflow 11 (Module Documentation Update). Drift detected by <code>--check</code> is also an explicit trigger.</p>
 <p><strong>Periodic Knowledge Re-verification</strong> — Before any plan step executes (Workflow 10), <code>@technical-validator</code> verifies the factual claims stated in that step's inputs, outputs, and notes against current on-disk state. Steps with unverified claims are held until the user confirms. If <code>--check</code> reports template drift, <code>@agent-updater</code> re-renders affected files and calls <code>@technical-validator</code> before the next workflow step proceeds.</p>
 <p><strong>Epistemic guard on audit workflows</strong> — <code>@adversarial</code> runs at the start of Workflow 5 (Consistency Review) before any audit conclusions are surfaced, and before any deletion plan in Workflow 8 (Code Hygiene Audit). This prevents agents from auditing on the basis of unchallenged assumptions about project state.</p>
 <p>These three mechanisms together ensure that agents do not assert stale beliefs as facts and that documentation lag — the primary cause of agent errors in long-lived teams — is detected and resolved automatically.</p>
@@ -1751,7 +1797,7 @@
       <div class="md-copyright">
   
     <div class="md-copyright__highlight">
-      &copy; 2025 jlcatonjr
+      &copy; <span id='copyright-year'></span> jlcatonjr
     </div>
   
   
@@ -1774,6 +1820,8 @@
     
     
       <script src="../assets/javascripts/bundle.79ae519e.min.js"></script>
+      
+        <script src="../javascripts/current-year.js"></script>
       
     
   </body>

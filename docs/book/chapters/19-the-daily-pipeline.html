@@ -1,0 +1,72 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Chapter 19: The Daily Pipeline</title>
+</head>
+<body>
+  <article id="ch:daily-pipeline">
+    <h1>Chapter 19: The Daily Pipeline</h1>
+    <p class="part-label">Part V: Automated Governance</p>
+
+    <section id="sec:pipeline-overview">
+      <h2>1. The Documentation-Enrichment Pipeline</h2>
+
+      <p>Distributed systems that process information without global state face a coordination problem that centralized systems avoid entirely. A centralized processor can hold the full state of the world and act on it. A distributed processor cannot. Each node sees only local inputs, produces only local outputs, and must trust that the system as a whole produces coherent results from the concatenation of partial contributions. The daily enrichment pipeline is a distributed processor of this kind.</p>
+
+      <p>The pipeline runs on a daily schedule, executing stages sequentially. Nine core stages form the enrichment phase, each assigned to a dedicated agent in the pipeline's host repository, producing date-stamped report files that accumulate into a rolling knowledge base. Its productive purpose is maintained documentation: agent profiles, curated references, contradiction registers, and propagation reports that keep the agent ecosystem current. Without it, documentation would drift from reality as features change, agent patterns evolve, and repositories accumulate undiscovered inconsistencies. In Chapter 3's terms, the pipeline is a maintenance process that preserves the productive capacity of the documentation stock by keeping the configuration embedded in each file aligned with the current state of the system.</p>
+
+      <p>When GitHub releases a new Copilot feature, Stage 1 (docs-researcher) detects the change and reports it. Stage 2 (best-practices-analyst) evaluates the change against five quality dimensions. Stage 3 (implementation-advisor) generates adoption guidance. Stage 4 (report-compiler) synthesizes all three into a daily summary.</p>
+
+      <p>At no point does any stage hold the complete picture. The pipeline operates as a discovery procedure in <cite class="citation" data-key="hayek1968"><a href="../bibliography.html#hayek1968">Hayek's (1968)</a></cite> sense: its sequential processing generates findings that no single stage possessed before the process began, producing knowledge as a byproduct of distributed coordination rather than centralized analysis.</p>
+    </section>
+
+    <section id="sec:pipeline-architecture">
+      <h2>2. Stage Architecture: Parallel Research, Serial Synthesis</h2>
+
+      <p>Stages 1 through 3 execute in parallel because each performs independent research that does not depend on the others' output. Stages 4 through 9 execute serially, each reading the cumulative output of prior stages. The boundary between parallel and serial execution reflects the dependency graph of the knowledge production process.</p>
+
+      <p>If a parallel stage fails, the pipeline falls back to the most recent prior-day report. The alternative, halting all downstream stages because one upstream stage failed, would be worse. The fallback is an availability tradeoff: the system accepts slightly stale data in exchange for continued processing. This is the same tradeoff that eventually consistent distributed databases make. Perfect freshness at every node is expensive and often unnecessary.</p>
+
+      <p>Stages 4 through 9 form an information cascade in which each stage takes as input the refined output of its predecessor. Stage 4, the report compiler, assembles the three parallel research streams into a coherent daily summary that serves as the consolidation baseline for all subsequent serial stages. Stage 5, the documentation updater, reads the compiled summary and writes changes back to agent profile files, integrating newly identified best practices rather than merely reporting them. Stage 6, the contradiction detector, scans the current state of all agent documentation against a grammar of consistency rules and populates the contradiction register with any inconsistencies the daily research cycle has exposed or that recent propagation may have introduced. Stage 7, the refactoring recommender, reviews the files flagged by Stage 6 for structural defects — extraction-threshold violations, missing required sections, broken cross-references — and generates a prioritized list of remediation recommendations for the human principal to act on. Stage 8, the cross-repo propagator, applies approved architectural improvements to target repositories and runs post-propagation audits on each affected repository, as described in §3. Stage 9, the health monitor, evaluates the pipeline's own execution: which stages completed normally, which invoked fallbacks, which repositories were processed versus skipped, and whether the run as a whole reduced or increased the documentation estate's deviation from consistency.</p>
+    </section>
+
+    <section id="sec:pipeline-propagation">
+      <h2>3. Cross-Repo Propagation and Change Detection</h2>
+
+      <p>Stage 8, the cross-repo-propagator, applies architectural improvements discovered in Stages 1 through 7 to target repositories across the workspace. It operates in two phases. First, it applies improvements: new patterns, updated conventions, corrected inconsistencies. Second, it runs a post-propagation contradiction audit on each changed repository, verifying that the improvements did not introduce new conflicts.</p>
+
+      <p>Before processing a repository, Stage 8 compares the most recent commit SHA for <code>.github/agents/</code> against the last recorded SHA. If the SHA is unchanged, meaning no commits since the last propagation, the repository is skipped. The SHA comparison takes milliseconds. The propagation it gates takes minutes. This is content-addressable change detection: the system identifies what has changed without inspecting the content of the change. Git's hash-based object model makes this trivial, but the architectural consequence is significant.</p>
+
+      <p>The pipeline monitors all managed repositories in the workspace. On a typical day, a small fraction have commits since the last run. Stage 8 processes only those, skipping the unchanged remainder.</p>
+
+      <p>A frontmatter manifest system extends the principle further. Pre-parsed JSON frontmatter for each agent file makes the agent's capabilities locally readable without parsing the full Markdown. The manifest is a compressed index, a knowledge proxy in Chapter 2's sense that lets downstream processors access what they need without loading what they do not.</p>
+    </section>
+
+    <section id="sec:pipeline-distributed-processing">
+      <h2>4. Distributed Processing Without Global State</h2>
+
+      <p>No single stage possesses or requires a global view of the documentation ecosystem. Stage 1 knows about documentation sources but not about contradiction registers. Stage 6 knows about contradiction detection but not about cross-repo propagation. Stage 9 knows about pipeline health metrics but not about the content of any individual stage's domain. Each stage is a specialist processor. The pipeline as a whole is a communication architecture in the sense of Chapter 2. It transmits knowledge from stage to stage in compressed form, so that the aggregate output achieves a level of coordination no single stage could produce alone.</p>
+
+      <p><cite class="citation" data-key="miller1988b"><a href="../bibliography.html#miller1988b">Miller and Drexler (1988b)</a></cite> analyzed incentive engineering for computational resource management, showing how systems of interacting computational agents can allocate resources efficiently without any agent possessing a global resource map. Their insight was that local signals, properly structured, can coordinate behavior across a distributed system. The pipeline implements this insight through sequential reports: each stage's output is the local signal that the next stage responds to. Sequential report files are the structuring medium, playing the coordinating role that prices play in Miller and Drexler's agoric systems. The coordination principle is the same: partial knowledge, locally acted upon, producing system-level coherence.</p>
+
+      <p>The discovery character of the pipeline is most legible in what the contradiction register becomes over time. No stage is assigned the task of producing a contradiction register. Stage 6 is assigned only the task of comparing the current state of agent documentation against a consistency grammar and logging deviations. But the register that accumulates across daily runs, across repositories, across architectural generations is knowledge that no prior stage possessed before the process ran. It is genuinely discovered through the process, not compiled from antecedent information. This is the feature Hayek identifies as distinctive about competition as a discovery procedure: it is not merely a mechanism for allocating what is already known but a process that generates knowledge which could not have existed without the process itself <cite class="citation" data-key="hayek1968"><a href="../bibliography.html#hayek1968">(Hayek 1968)</a></cite>. The pipeline is a managed analogue. Its nine-stage cycle, repeated daily, produces an auditable record of the documentation estate's trajectory — a coherence condition that no supervisor could have maintained by direct inspection of the same information, because the information only exists as a result of the process that produces it.</p>
+
+
+    </section>
+
+    <section id="sec:pipeline-information-cascade">
+      <h2>5. Information Cascade and Attention Economization</h2>
+
+      <p>The pipeline's primary function is attention economization. Without it, I would need to check for documentation changes daily, evaluate them against best practices, update agent profiles, audit for contradictions, propagate improvements across repositories, and assess pipeline health, all manually. The pipeline automates this workflow, converting human attention from a bottleneck into a supervisory role.</p>
+
+      <p>Information flows through the pipeline in an additive cascade. Each stage enriches what the previous stage produced: raw findings gain evaluation, then implementation guidance, then synthesis, then documentation updates, contradiction detection, refactoring recommendations, cross-repo propagation, and finally a health assessment. At each stage, the information becomes more refined and more actionable. The serial cascade enacts what <cite class="citation" data-key="nonaka1994"><a href="../bibliography.html#nonaka1994">Nonaka (1994)</a></cite> calls <em>combination</em> and <em>internalization</em>: distributed findings synthesized into a daily summary perform the <em>combination</em> move; writing that summary back into the documentation governing subsequent agent action performs <em>internalization</em> — the pipeline runs the knowledge spiral automatically across the documentation estate.</p>
+
+      <p>I chose a daily cadence as a design choice about the optimal frequency of coordination. More frequent runs would be wasteful. Documentation does not change hourly, and the overhead of investigation would exceed the benefit. Less frequent runs would allow drift to accumulate between cycles, the problem examined in Chapter 21. The daily rhythm is the equilibrium between maintenance cost and drift risk.</p>
+
+
+    </section>
+
+  </article>
+</body>
+</html>

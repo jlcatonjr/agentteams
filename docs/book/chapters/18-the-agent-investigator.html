@@ -1,0 +1,82 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Chapter 18: The Agent Investigator</title>
+</head>
+<body>
+  <article id="ch:agent-investigator">
+    <h1>Chapter 18: The Agent Investigator</h1>
+    <p class="part-label">Part IV: Emergence and Abstraction</p>
+
+    <blockquote class="agent-description">
+      <p><strong>Purpose</strong>: You perform bottom-up audits of agent documentation across all collector repositories: reading what agents actually say, detecting patterns that have emerged organically, flagging documentation that has drifted from its assigned scope, and identifying structural inconsistencies that have accumulated across repositories. You produce three classes of findings — emergent common features not yet captured in the abstract layer, structural placement inconsistencies across repositories, and scope creep in individual agent files — and deliver actionable remediation instructions to each repository's orchestrator.</p>
+    </blockquote>
+
+    <section id="sec:investigator-top-down-bottom-up">
+      <h2>1. Top-Down Versus Bottom-Up</h2>
+
+      <p>Code analysis divides into two modes, and the distinction matters here more than it usually does. Top-down analysis starts with a known rule set and checks code against it. Linters work this way. So does the abstraction reviewer from Chapter 17: it begins with the abstract template and measures deviations from it, sorting differences into three classes. The reviewer can find what the rules cover. It cannot find what the rules do not mention.</p>
+
+      <p>Bottom-up analysis starts without a rule set. It reads code, looks for recurring patterns, flags anomalies, and produces findings that the analyst must interpret. The agent investigator operates in this mode. It scans across repositories without a compliance template, looking for patterns that have not yet been named, inconsistencies that no rule covers, and structural features that no one anticipated.</p>
+
+      <p>Both modes are necessary. Top-down governance without bottom-up discovery becomes rigid. The system can enforce only what it already knows. Bottom-up discovery without top-down governance becomes chaotic. Findings are generated but never systematized. Their complementarity is itself an organizational achievement, one that the team structure of Chapters 4 and 5 was designed to support.</p>
+
+      <p>The bottom-up discovery mode instantiates what <cite class="citation" data-key="kirzner1973"><a href="../bibliography.html#kirzner1973">Kirzner (1973)</a></cite> called entrepreneurial alertness: the capacity to notice what others have overlooked, not because the discoverer possesses superior information, but because the discoverer attends to the right signals under the right conditions.</p>
+
+      <p><cite class="citation" data-key="keyhani2019"><a href="../bibliography.html#keyhani2019">Keyhani (2019)</a></cite>, in a computational model of entrepreneurship grounded in the distinction between optimization within a known solution space and discovery of novel solutions outside it, showed that the most productive systems are those that combine both modes. The abstraction reviewer optimizes within the known space of the three-class framework. The investigator discovers what lies outside it.</p>
+    </section>
+
+    <section id="sec:investigator-finding-classes">
+      <h2>2. Three Classes of Findings</h2>
+
+      <p>The investigator's output is organized into three finding classes. Class 1 findings are emergent common features: patterns that have independently appeared in multiple repositories but are not yet represented in the abstract layer. In Chapter 17's terms, these are convergent designs whose common structure the platform has not yet codified. Class 2 findings are structural placement inconsistencies: features or content that appear across multiple repositories but are placed in different organizational locations: in different agent files, in reference documents versus inline, in the orchestrator versus the responsible specialist. In Chapter 2's terms, these are cases where the knowledge proxies have degraded to the point where they mislead rather than inform. Class 3 findings are scope creep: agent files that have absorbed responsibilities outside their defined role.</p>
+
+      <p>The classification determines what actions follow. Class 1 findings trigger evaluation for abstraction: should this convergent pattern join the platform? Class 2 findings trigger remediation: the structural placement needs harmonization. Class 3 findings trigger refactoring: the agent's responsibilities need reassignment.</p>
+
+      <p>Findings are not self-executing. Each investigation report is delivered to the relevant repository's orchestrator with specific remediation instructions. The handoff from investigator to orchestrator is itself a coordination problem of the kind analyzed in Chapter 3. The investigator's discovery must be encoded in a form the orchestrator can act on. The per-repo investigation report is the mechanism for this encoding: a structured format that preserves the investigator's discovery while making it operationally useful.</p>
+    </section>
+
+    <section id="sec:investigator-reports">
+      <h2>3. Per-Repo Investigation Reports</h2>
+
+      <p>Each investigation run produces a report addressed to each repository's orchestrator. The report contains classified findings with severity rankings, specific remediation instructions, and cross-references to related findings in other repositories. The report is the investigator's primary output, its productive contribution to the system.</p>
+
+      <p>Reports compress complex cross-referencing operations into actionable signals. A Class 2 finding stating that a maintenance agent's file references a directory called <code>strategies/</code> when the actual directory is <code>references/strategies/</code> is the end product of a complicated scan across file contents, directory structures, and cross-references. The orchestrator that receives it needs only the signal and the remediation instruction. It need not understand how the investigator arrived at the finding. The report is a sufficient statistic for action, a compressed representation that preserves the information necessary for correction while discarding the details of the discovery process.</p>
+
+      <p>The ecosystem-level investigator scans a dozen managed repositories in a single daily run. It might produce fifteen Class 1 findings, eight Class 2 findings, and three Class 3 findings across the full workspace. Each repository's orchestrator receives only the findings relevant to its own scope, along with instructions specific to its situation.</p>
+
+      <p>Over time, investigation reports accumulate into a record of the system's discovered patterns. The daily pipeline archives these reports, building institutional memory of what patterns have been found, which have been remediated, and which persist.</p>
+    </section>
+
+    <section id="sec:investigator-structured-attention">
+      <h2>4. Structured Attention and Discovery</h2>
+
+      <p>The investigator does not possess information that other agents lack. Every agent can read every file. Its distinctive contribution is structured attention. It systematically examines cross-repository patterns that no other agent is tasked with examining. In the terms of the cognitive-institutional nexus (§1.6), the investigation protocol defines the interpretive frame within which the investigator reads the codebase. The frame determines what counts as a finding. Without the frame, the investigator would see only text. With it, text becomes evidence of convergence, inconsistency, or drift.</p>
+
+      <p>In <cite class="citation" data-key="caton2017"><a href="../bibliography.html#caton2017">Caton (2017)</a></cite>, working with agent-based computational models, I demonstrated that agents operating under search costs and bounded rationality can exhibit discovery behavior that qualifies as ecologically rational. The agents in those models developed heuristics adapted to the structure of their environment rather than to abstract optimization criteria. The agent investigator instantiates this insight. It operates under real constraints (context window limits, time budgets, the evolving structure of the codebase) and applies investigation protocols adapted to the system it examines. Discovery is a property of the agent-environment interaction, not of the agent’s inner architecture. </p>
+
+      <p><cite class="citation" data-key="caton2019"><a href="../bibliography.html#caton2019">Caton (2019)</a></cite> extended this analysis to creativity: the capacity to generate novel combinations, beyond noticing existing discrepancies. Class 1 findings exemplify this. When the investigator identifies a pattern that no one has yet named (a feature common across multiple repositories that could be codified into the abstract layer) it identifies something that does not yet exist in the system's vocabulary. This goes beyond pattern-matching against a template. It is the identification of a category that the system's designers did not anticipate.</p>
+
+      <p>The investigator is a computational system that exhibits the discovery function those models describe, under the ecological conditions those models analyze: not merely a metaphor for it.</p>
+    </section>
+
+    <section id="sec:investigator-discovery-automated">
+      <h2>5. Discovery in Automated Systems</h2>
+
+      <p>A skeptic will object: how can an automated, scheduled process exhibit discovery? A script running on a daily cron schedule executes its instructions and produces its output. Calling this "discovery" seems like a category error.</p>
+
+      <p>The objection is worth taking seriously. The investigator does not experience the felt surprise of human discovery. It does not undergo the phenomenological shift that accompanies a human researcher's recognition of a novel pattern. These are features of human cognition that have no computational analogue, and the reader should not be asked to pretend otherwise.</p>
+
+      <p>But the objection misidentifies where discovery resides. <cite class="citation" data-key="vriend2002"><a href="../bibliography.html#vriend2002">Vriend (2002)</a></cite>, examining whether agent-based computational economics models can exhibit novel emergent dynamics, argued that what matters is not the internal experience of individual agents but the system-level property of generating outcomes that could not have been predicted from the initial configuration. The question is not whether the investigator feels surprise, but whether the system produces findings that its designers did not anticipate.</p>
+
+      <p>And it does. When the investigator discovered that independent repositories had each developed nearly identical error-handling patterns in their orchestrator files, patterns not prescribed by any abstract template, that was a Class 1 finding. No one had designed this convergence. No one had anticipated it. The investigator's protocol, scanning across repositories without a template for error-handling, detected it.</p>
+
+      <p><cite class="citation" data-key="mitchell2006"><a href="../bibliography.html#mitchell2006">Mitchell (2006)</a></cite> argued that complex systems produce emergent behaviors that are not deducible from the behavior of individual components. The investigation-discovery dynamic is an instance. The investigator follows a fixed protocol. The repositories evolve through independent development. The interaction of fixed protocol and evolving repositories generates findings that neither the protocol nor the repositories contain on their own. Discovery is the emergent product of their interaction.</p>
+
+      <p>The investigator discovers what the system did not know it was looking for. But the investigator does not operate in isolation. It is one stage of an automated pipeline that processes information daily, from research to remediation. The pipeline as a whole is the subject of Chapter 19.</p>
+    </section>
+
+  </article>
+</body>
+</html>

@@ -10,7 +10,9 @@ use_directory_urls: true
 site_author: jlcatonjr
 extra:
   generator: false
-copyright: "&copy; 2025 jlcatonjr"
+copyright: "&copy; <span id='copyright-year'></span> jlcatonjr"
+extra_javascript:
+  - javascripts/current-year.js
 
 theme:
   name: material

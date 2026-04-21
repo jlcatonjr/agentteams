@@ -1,0 +1,82 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Chapter 13: The Agent Refactorer</title>
+</head>
+<body>
+  <article id="ch:the-agent-refactorer">
+    <h1>Chapter 13: The Agent Refactorer</h1>
+    <p class="part-label">Part III: The Agents at Work</p>
+
+    <blockquote class="agent-description">
+      <p><strong>Purpose</strong>: You perform two functions: (1) extract shared or volatile data from agent prose into reference files, and (2) enforce structural compliance of all agent files against the project spec.</p>
+    </blockquote>
+
+    <section id="sec:refactor-dry-enforcement">
+      <h2>1. DRY Enforcement Across Agent Files</h2>
+
+      <p>A structural auditor's primary function is detecting duplicated content across agent files and extracting it into shared reference files. The extraction criteria are precise: a block of content is a candidate for extraction when it exceeds ten lines, appears in more than one agent file, contains volatile information (content that changes when the project evolves), and states factual rather than procedural content. All four conditions must hold. A five-line block shared across three agents is too short. A twenty-line procedural section unique to one agent has no duplication to eliminate. A stable boilerplate header shared across agents does not change and therefore does not create a maintenance risk. A factual paragraph about the project's chapter structure that appears in two agent files and will change whenever chapters are added meets all four criteria and should be extracted to a reference file.</p>
+
+      <p>I set the four-condition test to prevent over-extraction. Not all duplication is harmful. Two agents that each describe the authority hierarchy in their own sections may be clearer than two agents that both reference a shared authority-hierarchy file, if the descriptions are stable and the agents use them in different contexts. The volatile-content condition is the key discriminator: extraction pays for itself only when the shared content changes frequently enough that maintaining multiple copies creates a real risk of inconsistency. Stable content can be duplicated without danger. Volatile content cannot.</p>
+
+      <p>When extraction criteria are met, the structural auditor creates or updates a reference file in a centralized references directory and replaces the duplicated blocks in the source agent files with references to the shared file. The reference files serve the same function as shared libraries in software: they centralize volatile content so that a change in one place propagates to all consumers. </p>
+
+      <div class="project-illustration">
+        <p>In this project, the references directory is <code>.github/agents/references/</code>. The chapter-outlines reference file, the voice-samples collection, and the chapter-writing-process document all originated from this extraction pattern: content that initially lived inside individual agent files, duplicated and gradually diverging, was consolidated into shared references.</p>
+      </div>
+    </section>
+
+    <section id="sec:refactor-spec-compliance">
+      <h2>2. Specification Compliance</h2>
+
+      <p>Every agent file must conform to a defined structural specification, covering both required metadata fields and required body elements. This specification is formalized in <code>AUTHORING-GUIDE.md</code>, the module's structural compliance document, which defines required YAML fields, required body sections, and per-tier content rules, including the abstract template structure that the structural auditor checks invariant cores against — a divergence logged as an AR-06 violation. A structural auditor checks agent files against this specification and reports violations using typed codes, each identifying a specific category of structural defect: missing fields, malformed syntax, absent sections, orphaned or unused references, duplication beyond the extraction threshold, inconsistent cross-references, and style deviations.</p>
+
+      <div class="project-illustration">
+        <p>In this project, the specification requires six YAML frontmatter fields (name, description, user-invocable, tools, model, handoffs) and three body elements (an H1 title matching the name field, a purpose section, and an invariant core section). The agent-refactorer reports violations using ten typed codes, designated AR-01 through AR-10: missing required frontmatter field (AR-01), H1 title does not match the name field (AR-02), inline data block exceeds extraction threshold: over ten lines, shared, volatile, and factual (AR-03), #file: reference points to a non-existent file (AR-04), agent file exceeds 200 lines without justified extraction (AR-05), invariant core section has been modified from the abstract template (AR-06), handoff references an agent not listed in the orchestrator's agents array (AR-07), missing purpose section (AR-08), duplicate content found across two or more agent files (AR-09), agent file has no handoff back to the orchestrator (AR-10).</p>
+      </div>
+
+      <p>The specification compliance audit ensures that agent files are not only correct in content but uniform in structure. A well-written agent whose file lacks a constraints section is harder for the orchestrator to parse. The orchestrator expects to find constraints in a predictable location within each agent file. A purpose statement that appears in one agent file's third paragraph and another's first paragraph creates ambiguity about where to look. The structural specification standardizes the layout so that any agent (including the orchestrator) can navigate any agent file using the same structural expectations.</p>
+
+      <p>The refactorer's violation codes may overlap partially with the code-hygiene agent's audit rules (Chapter 8), but the overlap is deliberate rather than redundant. Both may flag the same agent file: the code-hygiene agent because a draft misquotes the file, the refactorer because the file's internal structure is malformed. The overlapping detection from different angles increases the probability that structural defects are caught.</p>
+    </section>
+
+    <section id="sec:refactor-reference-file-management">
+      <h2>3. Reference File Management</h2>
+
+      <p>A structural auditor manages the integrity of shared reference files. It checks for orphaned references (files in the references directory that no agent file cites) and for missing references: citations in agent files that point to reference files that do not exist. Dedicated violation codes flag each condition, distinguishing between references that exist but are uncited and citations that point to files that do not exist.</p>
+
+      <div class="project-illustration">
+        <p>In this project, the <code>.github/agents/references/</code> directory is the extraction target for agent-file reference data. AR-04 (dead #file: reference) fires when an agent file contains a <code>#file:</code> reference pointing to a path that does not exist on disk. AR-09 (duplicate content) fires when the same volatile content block appears in two or more agent files and should instead be extracted to a shared reference file.</p>
+      </div>
+
+      <p>Reference file management is the housekeeping complement to DRY extraction. Extraction creates reference files. Production workflows modify agent files. Over time, the coupling between agent files and reference files can degrade. An agent file is revised to remove a section that cited a reference file, but the reference file itself is not removed. Or a reference file is renamed, but the agent files that cite it are not updated. The refactorer's reference-file audit catches these discrepancies, ensuring that the references directory contains exactly the files that the agent files require: no more and no fewer.</p>
+
+      <p>The distinction between used and orphaned reference files is not always obvious. A reference file might not be cited by any agent file but might be cited by a chapter draft, a configuration file, or the orchestrator's instructions. The refactorer's scope is limited to agent-file citations: it checks whether each reference file is referenced by at least one agent file. If a reference file is used only by chapter drafts, the refactorer flags it as orphaned from the agent perspective, and the orchestrator can determine whether to relocate it or to add an agent-file reference. The scope limitation keeps the refactorer focused on its domain, agent-file structural integrity, rather than expanding into a general-purpose file-usage tracker.</p>
+    </section>
+
+    <section id="sec:refactor-updater-relationship">
+      <h2>4. Relationship with the Agent Updater</h2>
+
+      <p>The updater and the refactorer operate in the propagation chain described in Chapter 12: the updater runs first, then the refactorer, then the conflict-auditor. This ordering means the refactorer always sees agent files in their post-update state, evaluating the updater's output rather than the pre-update baseline.</p>
+
+      <p>The sequencing prevents a specific failure mode. If the refactorer ran before the updater, it might extract content that the updater was about to modify, locking the outdated version into a reference file. If the refactorer ran concurrently with the updater, both might modify the same agent file, creating a write conflict. By running after the updater, the refactorer operates on stable input. The agent files have already been updated to reflect the current project state, and the refactorer's structural audit evaluates that current state rather than a transitional one.</p>
+
+      <p>The relationship illustrates a broader pattern: the updater handles content maintenance (ensuring that what agent files say is correct), while the refactorer handles structural maintenance (ensuring that how they are organized is correct). An agent file can be structurally compliant but factually stale, or factually current but structurally non-compliant. The concerns are independent.</p>
+    </section>
+
+    <section id="sec:refactor-extraction-economics">
+      <h2>5. The Economics of Extraction</h2>
+
+      <p>Not every instance of shared content should be extracted. The four-condition test (length, duplication, volatility, factual content) is a cost-benefit filter. Extraction creates a reference file that must be maintained. It replaces inline content, immediately visible when reading the agent file, with a reference that requires navigating to another file. It introduces a dependency: the agent file is no longer self-contained but requires the reference file to be complete. These costs are justified only when the duplication being eliminated would, if left in place, create a greater maintenance burden through inconsistent updates.</p>
+
+      <p>The volatility condition is the most important of the four. A twenty-line passage shared across five agent files that describes the project's fixed directory structure (stable, rarely changed) imposes almost no maintenance cost when duplicated: changing the directory structure is rare, and when it does change, a documentation-maintenance agent propagates the update. The same twenty-line passage shared across five agent files that enumerates the project's chapter titles (volatile, changing whenever chapters are added, renamed, or renumbered) imposes significant maintenance cost when duplicated: every enumeration change requires updating five files, and omitting one creates an inconsistency that a consistency auditor will eventually flag.</p>
+
+      <p>The extraction threshold of ten lines is a heuristic, not a theorem. Shorter shared blocks, a three-line authority hierarchy summary, a five-line list of file paths, are common across agent files but rarely cause maintenance problems when duplicated, because their brevity makes them easy to update and visually scan for consistency. Longer shared blocks are more fragile. A fifteen-line workflow description that differs in one detail between two agent files is harder to spot than a three-line path list that differs in one entry. The ten-line threshold approximates the point at which duplication maintenance costs begin to exceed extraction maintenance costs for the average content block.</p>
+
+      <p>The extraction decision is a governance problem in the sense Williamson identifies: the choice between organizing an activity internally and externalizing it depends on the relative transaction costs of each arrangement <cite class="citation" data-key="williamson1985"><a href="../bibliography.html#williamson1985">(Williamson 1985)</a></cite>. Keeping content inline minimizes navigation costs: the agent file is self-contained, and any agent reading it has all the information it needs without navigating to a reference file. But inline duplication imposes governance costs: every copy of volatile content must be updated in tandem, and this coordination fails silently when one copy is missed. Extraction externalizes the content, adding a navigation step but eliminating the coordination problem. The four-condition test approximates the crossover point at which governance costs from synchronized duplication begin to exceed the transaction costs of maintaining the reference interface. Extraction is warranted when the governance problem is real; retaining inline content is warranted when it is not.</p>
+    </section>
+
+  </article>
+</body>
+</html>

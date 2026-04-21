@@ -1,0 +1,143 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Chapter 5: The Orchestrator</title>
+</head>
+<body>
+  <article id="ch:the-orchestrator">
+    <h1>Chapter 5: The Orchestrator</h1>
+    <p class="part-label">Part III: The Agents at Work</p>
+
+    <blockquote class="agent-description">
+      <p><strong>Purpose</strong>: You are the orchestrator for the "Agent Teams: A Theoretically Grounded Approach" book project. You coordinate all agent operations: chapter drafting, review cycles, bibliography management, LaTeX production, and documentation maintenance.</p>
+    </blockquote>
+
+    <section id="sec:orchestrator-routing">
+      <h2>1. Workflow Routing as Coordination Architecture</h2>
+
+      <p>An agent team with a dozen or more agents and multiple concurrent objectives requires a coordination mechanism. In the systems examined in this book, that mechanism is the orchestrator: an agent whose sole function is to receive tasks, classify them, and route them to the appropriate specialist. The orchestrator knows which agent to invoke for which specific tasks, in which sequence, and under what conditions.</p>
+
+      <p>The orchestrator's routing function is implemented as a numbered workflow catalog. Each catalog entry specifies a fixed sequence of agent invocations for a category of task. The orchestrator selects the appropriate entry based on the task description, then manages the execution sequence. It does not design the invocation sequence on the fly.</p>
+
+      <div class="project-illustration">
+        <p>The book project's orchestrator defines eleven workflows. The simplest production workflow, <a href="#fig-workflow-01">Workflow 1 (Chapter Outline Development)</a>, illustrates the routing pattern: the book-content-expert researches theoretical and architectural sources, updates the chapter-outlines reference file, and the conflict-auditor verifies consistency with existing chapters. Each step routes to a designated specialist in a fixed sequence. More complex workflows chain more agents: <a href="chapters/08-the-code-hygiene-agent.html#fig-workflow-06">Workflow 6 (Review Cycle)</a> invokes four agents for contradictions, technical accuracy, citation verification, and voice fidelity. <a href="#fig-workflow-03">Workflow 3 (Chapter Drafting)</a> routes through nine agents in sequence (§6). The production pipeline follows a dependency chain, which includes outline (<a href="#fig-workflow-01">Workflow 1</a>), expert instantiation (<a href="#fig-workflow-02">Workflow 2</a>, §5), drafting (<a href="#fig-workflow-03">Workflow 3</a>, §6), revision (<a href="#fig-workflow-04">Workflow 4</a>, §6), each presupposing the output of its predecessor.</p>
+
+        <figure id="fig-workflow-01">
+          <img src="../figures/workflow-01-chapter-outline.svg" alt="Workflow 1: Chapter Outline Development" />
+          <figcaption>Workflow 1 — Chapter Outline Development. The book-content expert researches the chapter's theoretical and architectural sources, updates the chapter-outlines reference file, and the conflict-auditor verifies outline consistency with existing chapters.</figcaption>
+        </figure>
+      </div>
+
+      <p>The catalog structure makes routing quasi-deterministic. A request of a given type will reliably trigger the same predefined sequence. The orchestrator does not reason about which agents to invoke from first principles each time. It pattern-matches the request against the catalog and executes the predetermined sequence. Predictable routing reduces the computational burden required to generate the frame for each decision, minimizing variation that arises when a general-purpose agent decides ad hoc which specialists to consult.</p>
+
+      <p>Each workflow also defines mandatory closing steps. Every multi-file change session must close with a consistency check and, when applicable, a structural propagation step. These mandatory closers are constitutional requirements. The orchestrator cannot skip them without violating its own invariant core. Of course, it is also good practice for the user also to regularly call routines that check for quality.</p>
+
+      <p>By structuring agent interpretation (frontloading it, really), we provide the scaffolding that makes agent behavior predictable. The orchestrator must classify an incoming task as belonging to a particular workflow category. A request may involve multiple workflows, require an agent not yet instantiated, or arrive with an ambiguous description that does not map cleanly onto any catalog entry. In each such case the orchestrator exercises allocated judgment (Chapter 1, §1.5) that is guided by available architecture. The orchestrator interprets the assigned task in light of the routes provided in its documentation. Well-designed routing catalogs reduce uncertainty involved in classification tasks by providing discrete categories and examples with minimal context.</p>
+    </section>
+
+    <section id="sec:orchestrator-domain-routing">
+      <h2>2. The Domain Agent Routing Table</h2>
+
+      <p>In addition to numbered workflows, the orchestrator maintains a domain agent routing table: a lookup that maps content areas to the agent responsible for handling them. Each content area is assigned to exactly one domain agent, making the routing table a structural enforcement mechanism for the division of labor. The orchestrator consults this table whenever a task implicates a specific content domain.</p>
+
+      <div class="project-illustration">
+        <p>The book project's routing table distinguishes ten content areas. Chapter argument organization, thesis-support analysis, and draft review route to the chapter expert for each chapter. Chapter text, theory-to-architecture mapping, and cross-reference implementation route to the book-content-expert. Voice calibration, style audits, and voice sample management route to the voice-style agent. Prose quality auditing, which includes structural weakness identification, LLM-pattern detection, and logical inconsistency analysis, routes to the expert-critic agent. Within-section cohesion repair, which includes flat juxtaposition correction, given-new chain reconstruction, and argumentative spine restoration, routes to the argument-weaver. HTML template concerns, structure validation, and format conversion route to the html-document-builder. Figure generation, which builds agent-team structure diagrams, workflow visualizations, and architectural graphs, routes to the graphviz-expert. LaTeX compilation and bibliography formatting route to the latex-specialist. Citation verification and anti-fabrication checks route to the bibliography-manager. Presupposition critique, assumption challenge, and cascade analysis route to the adversarial agent. In practice, chapter prose tasks route to the book-content-expert, and voice deviation findings route to the voice-style agent, whose exclusive constitutional domain is voice auditing.</p>
+      </div>
+
+      <p>The routing table reflects the division of labor and knowledge. When a task arrives that involves a specific content domain, the orchestrator does not attempt to handle it or resolve it through a functional agent. It routes to the domain agent with exclusive responsibility for that area, because domain-specific knowledge is constitutionally assigned to designated specialists. Governance knowledge is called upon from functional agents, productive knowledge stays with domain agents, and the orchestrator's routing table is the mechanism that keeps them separated.</p>
+
+      <p>The table also encodes an important asymmetry. The orchestrator can invoke any agent in the team. No other agent can invoke the orchestrator. This is consistent with the principle of least authority. Information flows outward from the orchestrator to specialists and returns inward as completed work products. This hub-and-spoke topology means the orchestrator is the single point through which all inter-agent coordination passes. It is a designed bottleneck intended to maintain order.</p>
+    </section>
+
+    <section id="sec:orchestrator-authority">
+      <h2>3. Authority Hierarchy Enforcement</h2>
+
+      <p>The orchestrator carries the team's authority hierarchy and enforces it in every routing decision. The hierarchy is priority-ordered. When a conflict arises between sources at different tiers, the higher tier prevails. The orchestrator draws upon the conflict-resolution agent to ensure that every workflow respects the hierarchy by routing disputes to agents equipped to apply it.</p>
+
+      <div class="project-illustration">
+        <p>In the book project, the hierarchy has six tiers: source code and agent files on disk (tier 1), published papers by the author (tier 2), project conventions (tier 3), agent documentation (tier 4), HTML chapter sources (tier 5), and generated artifacts (tier 6). Seven constitutional rules apply as limits on routing decisions:</p>
+        <ol>
+          <li>No fabricated citations. Citations must be externally verifiable.</li>
+          <li>No modification of source files in external repositories.</li>
+          <li>HTML chapters are the only directly authored output.</li>
+          <li>Describe the daily pipeline and abstract agent infrastructure as they exist: do not propose modifications.</li>
+          <li>Never bypass the security agent.</li>
+          <li>Always close multi-file changes with the conflict-auditor.</li>
+          <li>Voice auditing is the exclusive domain of the voice-style agent.</li>
+        </ol>
+      </div>
+
+      <p>The authority hierarchy is part of the orchestrator's invariant core. It cannot be modified by any agent, including the orchestrator itself acting under routine instructions. Changing the hierarchy requires the human principal to edit the orchestrator's agent file directly. This is constitutional entrenchment applied to a coordination document. The rules that govern how the team resolves conflicts are themselves protected from modification by the team's ordinary processes. The entrenchment prevents a failure mode in which an agent, reasoning locally, adjusts the authority hierarchy to resolve a specific conflict in a way that creates systemic inconsistency elsewhere.</p>
+
+      <p>A set of hard-constraint constitutional rules complements the hierarchy. These rules function as absolute limits on the orchestrator's routing decisions. A workflow step that would violate any of them is rejected before execution, regardless of which agent requested it.</p>
+    </section>
+
+    <section id="sec:orchestrator-knowledge-limits">
+      <h2>4. Coordinative Knowledge Without Domain Knowledge</h2>
+
+      <p>The orchestrator knows which agent handles which type of work. It does not know how that work is done. It cannot evaluate the quality of a chapter draft, the accuracy of a citation, the fidelity of a voice sample, or the correctness of a LaTeX compilation. Its knowledge is coordinative: workflow sequences, agent capabilities, the authority hierarchy, and the constitutional rules. It does not hold the productive knowledge that domain agents carry.</p>
+
+      <p>This asymmetry is a design constraint that makes the coordination function tractable. An orchestrator that also held domain knowledge would need to fit the content of every specialist's expertise into its context window (Chapter 2). The orchestrator economizes on context by carrying only the routing information it needs: workflow catalogs, agent routing tables, and constitutional rules. Everything else is delegated to agents whose context windows are loaded with the relevant domain knowledge.</p>
+
+      <p>The orchestrator's ignorance of domain content supports a separation-of-concerns. Because the orchestrator evaluates routing decisions based on task categories, not on the content of agent outputs, it does not second-guess the specialists. A deviation flagged by one specialist is forwarded to another for revision. The orchestrator does not review the deviation to decide whether it is valid. It trusts the specialist and routes accordingly. This trust is constitutionally structured. Each specialist holds exclusive authority over its designated domain, and the orchestrator's routing logic defers to that authority.</p>
+
+      <div class="project-illustration">
+        <p>In the book project, a voice deviation flagged by the voice-style agent is forwarded to the book-content-expert for revision. The voice-style agent has exclusive authority over voice rulings (Constitutional Rule 7), and the orchestrator's routing defers to that authority.</p>
+      </div>
+    </section>
+
+    <section id="sec:orchestrator-dynamic-instantiation">
+      <h2>5. Dynamic Agent Instantiation</h2>
+
+      <p>Some orchestrators define a workflow that introduces a capability the others do not: the creation of new agents at runtime. Such a workflow reads a template file and a task-specific configuration, populates the template's placeholder fields, and writes the result as a new agent file. Any task requiring a specialist who does not yet exist triggers this instantiation step.</p>
+
+      <div class="project-illustration">
+        <p>In the book project, <a href="#fig-workflow-02">Workflow 2 (Chapter Expert Instantiation)</a> reads <code>chapter-expert.template.md</code> — the book project's instantiation of the module's abstract <code>workstream-expert.template.md</code> component-expert template — and the chapter outline reference file, populates the template's placeholder fields with chapter-specific data, and produces a new chapter expert agent. The template carries four manual-required placeholders: a component specification, a section schema, a source list, and quality criteria. The chapter outline provides all four — binding those values statically rather than through the module's automated intake path. In a fully automated team setup, a team-builder agent in the module's <code>builder/</code> tier would conduct an intake interview (asking the operator for each <code>{MANUAL:}</code> binding through a structured prompt sequence) before Workflow 2 executes. The chapter outline reference file substitutes for this intake interview in the book project, encoding the values Workflow 2 needs in a form the orchestrator can read directly. Before drafting any chapter, Workflow 2 must be executed: it creates the chapter-expert specialist that prepares the Chapter Brief and reviews the draft against the outline's specifications.</p>
+
+        <figure id="fig-workflow-02">
+          <img src="../figures/workflow-02-chapter-expert-instantiation.svg" alt="Workflow 2: Chapter Expert Instantiation" />
+          <figcaption>Workflow 2 — Chapter Expert Instantiation. The orchestrator reads a template and chapter outline, populates the template with chapter-specific data, verifies cross-references, and registers the new agent in project documentation.</figcaption>
+        </figure>
+        <p>The book project begins with eighteen agents. As chapters are scheduled for drafting, <a href="#fig-workflow-02">Workflow 2</a> adds chapter experts carrying chapter-specific knowledge, which includes thesis, sections, sources, and cross-references, that no existing agent holds. The schema is populated with data drawn from the chapter outline reference file.</p>
+      </div>
+
+      <p>This dynamic instantiation means the agent team's size is determined at runtime, not at design time. Each instantiation event adds a new agent to the team: the template defines the invariant structure (responsibilities, workflow steps, collaboration constraints), and the task configuration provides the variable content for that instance. The instantiated agent inherits the template's governance constraints while carrying task-specific knowledge that no other agent holds. That variable content enters through two categories of placeholder token. Auto-resolved placeholders bind values the rendering engine derives from the project manifest. Manual-required placeholders bind values only the operator can supply — in this project, the chapter outline supplies them. Chapter 17 names this two-category structure formally: auto-resolved tokens are the abstract layer's fixed interface; manual-required placeholder values are the extension points.</p>
+    </section>
+
+    <section id="sec:orchestrator-twin-tasks">
+      <h2>6. Managing the Twin-Task Structure</h2>
+
+      <p>Chapter 3 identified the twin-task structure as a persistent feature of agent teams. Every team must both produce output and maintain itself. The orchestrator manages both tasks through its workflow catalog, which partitions naturally into production workflows, maintenance workflows, and workflows that serve both functions simultaneously.</p>
+
+      <div class="project-illustration">
+        <p>In the book project, <a href="#fig-workflow-01">Workflow 1</a> (§1), <a href="#fig-workflow-02">Workflow 2</a> (§5), <a href="#fig-workflow-03">Workflow 3</a>, <a href="#fig-workflow-04">Workflow 4</a>, and <a href="chapters/15-the-domain-agents.html#fig-workflow-09">Workflow 9</a> form the production pipeline: outlining, instantiating the chapter expert, drafting, revising, and manuscript compilation. <a href="chapters/08-the-code-hygiene-agent.html#fig-workflow-05">Workflow 5</a>, <a href="chapters/12-the-agent-updater.html#fig-workflow-07">Workflow 7</a>, and <a href="chapters/14-the-cleanup-agent.html#fig-workflow-08">Workflow 8</a> address maintenance: auditing technical accuracy, updating documentation, and removing stale artifacts. <a href="chapters/08-the-code-hygiene-agent.html#fig-workflow-06">Workflow 6</a> and <a href="chapters/15-the-domain-agents.html#fig-workflow-10">Workflow 10</a> serve both functions: the review cycle verifies production quality, and bibliography operations feed both content creation and system integrity. <a href="chapters/16-the-repo-liaison.html#fig-workflow-11">Workflow 11</a> governs cross-repository coordination: when a production or maintenance workflow modifies an architectural artifact that adjacent repositories depend on, the repo liaison assesses impact and executes approved updates with security clearance.</p>
+
+        <figure id="fig-workflow-11">
+          <img src="../figures/workflow-11-cross-repository-coordination.svg" alt="Workflow 11: Cross-Repository Coordination" />
+          <figcaption>Workflow 11 — Cross-Repository Coordination. The orchestrator triggers the repo liaison, which reads the adjacent-repository registry and assesses impact. Approved updates proceed with security clearance; repositories with their own orchestrator receive a Coordination Request instead of a direct write. The conflict-auditor closes the workflow.</figcaption>
+        </figure>
+
+        <figure id="fig-workflow-03">
+          <img src="../figures/workflow-03-chapter-drafting.svg" alt="Workflow 3: Chapter Drafting" />
+          <figcaption>Workflow 3 — Chapter Drafting. The orchestrator routes through navigator, chapter expert, adversarial agent, book-content expert, expert-critic, argument-weaver, voice-style auditor, HTML-document builder, conflict-auditor, and agent-updater in sequence, with review loops between the chapter expert and book-content expert, and between the expert-critic and book-content expert.</figcaption>
+        </figure>
+
+        <figure id="fig-workflow-04">
+          <img src="../figures/workflow-04-chapter-revision.svg" alt="Workflow 4: Chapter Revision" />
+          <figcaption>Workflow 4 — Chapter Revision. After the book-content expert revises the draft, the adversarial agent reviews the revision plan for hidden presuppositions. The expert-critic audits for structural weaknesses and prose defects (routing flagged passages back for correction), the argument-weaver repairs within-section cohesion, and the voice-style agent runs a three-pass audit. The conflict-auditor then verifies no new contradictions, and the bibliography-manager confirms all citations resolve.</figcaption>
+        </figure>
+      </div>
+
+      <p>The twin-task structure (Chapter 3) creates a scheduling problem. Maintenance workflows consume the same agent context windows and processing time as production workflows. An agent team that neglects maintenance accumulates documentation drift. An agent team that over-invests in maintenance produces a pristine but empty project. The orchestrator manages this tradeoff implicitly through the mandatory closer pattern. Every production workflow includes maintenance steps (conflict-auditing, documentation updating) as non-optional components, ensuring that maintenance is woven into the production cycle itself.</p>
+
+      <p>The mandatory closer pattern has a second function. It prevents the accumulation of inter-session inconsistencies. If a production step introduces a new reference, a closing check verifies that it exists in the appropriate index. If a structural change renames a resource, a propagation step updates all referring documents. These checks happen within the same workflow as the production step that triggered them, not in a separate maintenance pass that might be postponed or forgotten.</p>
+
+      <div class="project-illustration">
+        <p>In the book project, if a chapter draft introduces a new citation, the conflict-auditor verifies that the citation key exists in the bibliography. If a structural change renames a file, the agent-updater propagates the new name into all referring documents.</p>
+      </div>
+    </section>
+
+  </article>
+</body>
+</html>
