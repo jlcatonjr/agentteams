@@ -73,6 +73,22 @@
       <p>The designed rules, which includes the pipeline stages, the finding classes, the remediation workflows, and the SHA gating, create the conditions under which this emergence occurs. Remove the classification system and investigation produces undifferentiated noise. Remove the local orchestrators and remediation becomes centralized, losing the context-sensitivity that makes it effective. Remove the daily cadence and drift accumulates without bound. The architecture is designed. The coherence it produces is partly emergent.</p>
     </section>
 
+    <section id="sec:remediation-update-deployment-protocol">
+      <h2>7. Update Deployment Protocol as Remediation Governance</h2>
+
+      <p>When remediation changes the governing files that coordinate agent behavior, the correction itself becomes a governance event. The system therefore needs a deployment protocol that treats updates as controlled interventions rather than routine file writes. In this framework, an update is successful only if it both introduces the intended architectural improvement and preserves the integrity of the local knowledge embedded in the target repository.</p>
+
+      <p>The protocol is structured in three phases. Pre-update, the system verifies rollback capacity, runs a dry scope check, and tests whether expected changes correspond to observed drift. During update, it constrains write behavior to merge-safe pathways that preserve protected local regions while applying shared architectural revisions. Post-update, it audits the resulting state against explicit classification criteria: no outside-boundary deletions (OK), review-required deletion anomalies (WARN), or execution failure requiring restoration (ERROR). This classification is not bookkeeping. It is triage logic that determines whether the run can close, must pause for review, or must revert.</p>
+
+      <p>The triage criteria are deterministic rather than discretionary. OK requires full boundary compliance and expected-scope deltas only. WARN is issued when changes remain executable but include bounded anomalies requiring human sign-off before closure, such as deletions touching declared protected regions or unexplained scope expansion beyond the approved diff class. ERROR is issued when execution integrity is broken, which includes partial write failure, rollback-path failure, or uncontrolled boundary violation. The mapping to governance verdicts is fixed: OK maps to PROCEED, WARN maps to PROCEED WITH VERIFICATION, and ERROR maps to HALT.</p>
+
+      <p>The significance of the protocol is institutional. It formalizes the difference between corrective propagation and destructive overwrite. In a heterogeneous repository ecosystem, these outcomes can appear identical at write-time because both produce large diffs. They differ only when evaluated against declared boundaries and expected scope. The protocol supplies that evaluative frame, allowing the orchestrator to distinguish productive transformation from governance regression.</p>
+
+      <p>Batch operations make this architecture more valuable, not less. As repository count increases, manual confidence in update correctness declines while the cost of exhaustive review rises. A protocolized deployment process restores confidence by requiring comparable evidence for each target: scoped intent before update, classified evidence after update, and a retained rollback path throughout. This is fault-tolerance in governance form. The system does not assume every update will be perfect; it assumes imperfect updates will occur and designs a controlled recovery path in advance.</p>
+
+      <p>Placed in the investigation-remediation cycle, the update deployment protocol functions as a convergence mechanism. Investigation identifies deviations, remediation proposes corrections, and the deployment protocol governs correction execution. Post-update classification determines whether the correction can be accepted into system memory. The next cycle then evaluates the new state. In this way, remediation quality is not inferred from intention but tested by auditable outcomes, preserving the closed-loop architecture developed in this chapter.</p>
+    </section>
+
   </article>
 </body>
 </html>

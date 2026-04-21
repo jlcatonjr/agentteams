@@ -42,6 +42,7 @@ Results of a structural diff between a build-log and a current manifest.
 - `removed_files` (`list[dict[str, Any]]`) — Files in the old log absent from the new manifest.
 - `drifted_files` (`list[dict[str, Any]]`) — Files present in both but whose template hash changed.
 - `unchanged_files` (`list[dict[str, Any]]`) — Files present in both with the same template hash.
+- `manifest_changed` (`bool`) — `True` when the new manifest fingerprint differs from the one recorded in the prior build log.
 - `team_membership_changed` (`bool`) — `True` when `agent_slug_list` differs between old and new.
 - `legacy_log` (`bool`) — `True` when build-log predates schema v1.2 (no `output_files_map`).
 
@@ -70,7 +71,7 @@ Load `build-log.json` from an agents directory.
 
 ---
 
-### `detect_drift(agents_dir, templates_dir)`
+### `detect_drift(agents_dir, templates_dir, *, build_log=None)`
 
 > *Source: `agentteams/drift.py`*
 
@@ -80,10 +81,14 @@ Detect content drift by comparing current template hashes against the build-log.
 
 - `agents_dir` (`Path`) — Path to the `.github/agents/` directory containing `build-log.json`.
 - `templates_dir` (`Path`) — Path to the templates root directory.
+- `build_log` (`dict[str, Any] | None`, keyword-only) — Optional pre-loaded build-log dict. If `None`, `build-log.json` is loaded from `agents_dir`.
 
 **Returns:** `DriftReport`
 
-**Raises:** `FileNotFoundError` — If `build-log.json` is not found.
+**Raises:**
+
+- `FileNotFoundError` — If `build-log.json` is not found.
+- `ValueError` — If `build-log.json` exists but is malformed JSON.
 
 ---
 
@@ -138,3 +143,30 @@ Compute a stable hash fingerprint of a team manifest for change detection.
 - `manifest` (`dict[str, Any]`) — Team manifest from `analyze.build_manifest()`.
 
 **Returns:** `str` — First 16 hex characters of the SHA-256 digest of the canonicalized manifest (stable short fingerprint).
+
+---
+
+### `detect_user_customizations(agents_dir, *, build_log=None)`
+
+> *Source: `agentteams/drift.py`*
+
+Detect generated files whose on-disk hash differs from the hash recorded at generation time.
+
+This is a best-effort advisory pre-write signal used by update workflows. A detected customization does not block execution by itself.
+
+The check reports modified files that still exist on disk; missing files are skipped.
+
+**Args:**
+
+- `agents_dir` (`Path`) — Path to the `.github/agents/` directory.
+- `build_log` (`dict[str, Any] | None`, keyword-only) — Optional pre-loaded build-log dict. If `None`, `build-log.json` is loaded from `agents_dir`.
+
+**Returns:** `list[dict[str, str]]` — A list of customization records. Each record includes:
+
+- `path` — Absolute path string for the customized file.
+- `rel_path` — Relative path as stored in the build log.
+- `reason` — `modified since last build`.
+
+Returns an empty list when the build log is missing, invalid, or has no recorded file hashes.
+
+Read-path OS errors while hashing existing files are not suppressed and may propagate to callers.

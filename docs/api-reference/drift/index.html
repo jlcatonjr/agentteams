@@ -1017,10 +1017,10 @@
 </li>
         
           <li class="md-nav__item">
-  <a href="#detect_driftagents_dir-templates_dir" class="md-nav__link">
+  <a href="#detect_driftagents_dir-templates_dir-build_lognone" class="md-nav__link">
     <span class="md-ellipsis">
       
-        detect_drift(agents_dir, templates_dir)
+        detect_drift(agents_dir, templates_dir, *, build_log=None)
       
     </span>
   </a>
@@ -1065,6 +1065,17 @@
     <span class="md-ellipsis">
       
         compute_manifest_fingerprint(manifest)
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#detect_user_customizationsagents_dir-build_lognone" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        detect_user_customizations(agents_dir, *, build_log=None)
       
     </span>
   </a>
@@ -1512,10 +1523,10 @@
 </li>
         
           <li class="md-nav__item">
-  <a href="#detect_driftagents_dir-templates_dir" class="md-nav__link">
+  <a href="#detect_driftagents_dir-templates_dir-build_lognone" class="md-nav__link">
     <span class="md-ellipsis">
       
-        detect_drift(agents_dir, templates_dir)
+        detect_drift(agents_dir, templates_dir, *, build_log=None)
       
     </span>
   </a>
@@ -1560,6 +1571,17 @@
     <span class="md-ellipsis">
       
         compute_manifest_fingerprint(manifest)
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#detect_user_customizationsagents_dir-build_lognone" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        detect_user_customizations(agents_dir, *, build_log=None)
       
     </span>
   </a>
@@ -1628,6 +1650,7 @@
 <li><code>removed_files</code> (<code>list[dict[str, Any]]</code>) — Files in the old log absent from the new manifest.</li>
 <li><code>drifted_files</code> (<code>list[dict[str, Any]]</code>) — Files present in both but whose template hash changed.</li>
 <li><code>unchanged_files</code> (<code>list[dict[str, Any]]</code>) — Files present in both with the same template hash.</li>
+<li><code>manifest_changed</code> (<code>bool</code>) — <code>True</code> when the new manifest fingerprint differs from the one recorded in the prior build log.</li>
 <li><code>team_membership_changed</code> (<code>bool</code>) — <code>True</code> when <code>agent_slug_list</code> differs between old and new.</li>
 <li><code>legacy_log</code> (<code>bool</code>) — <code>True</code> when build-log predates schema v1.2 (no <code>output_files_map</code>).</li>
 </ul>
@@ -1650,7 +1673,7 @@
 <p><strong>Returns:</strong> <code>dict[str, Any]</code> — Parsed build-log.json dict.</p>
 <p><strong>Raises:</strong> <code>FileNotFoundError</code> — If <code>build-log.json</code> does not exist in <code>agents_dir</code>.</p>
 <hr />
-<h3 id="detect_driftagents_dir-templates_dir"><code>detect_drift(agents_dir, templates_dir)</code><a class="headerlink" href="#detect_driftagents_dir-templates_dir" title="Permanent link">&para;</a></h3>
+<h3 id="detect_driftagents_dir-templates_dir-build_lognone"><code>detect_drift(agents_dir, templates_dir, *, build_log=None)</code><a class="headerlink" href="#detect_driftagents_dir-templates_dir-build_lognone" title="Permanent link">&para;</a></h3>
 <blockquote>
 <p><em>Source: <code>agentteams/drift.py</code></em></p>
 </blockquote>
@@ -1659,9 +1682,14 @@
 <ul>
 <li><code>agents_dir</code> (<code>Path</code>) — Path to the <code>.github/agents/</code> directory containing <code>build-log.json</code>.</li>
 <li><code>templates_dir</code> (<code>Path</code>) — Path to the templates root directory.</li>
+<li><code>build_log</code> (<code>dict[str, Any] | None</code>, keyword-only) — Optional pre-loaded build-log dict. If <code>None</code>, <code>build-log.json</code> is loaded from <code>agents_dir</code>.</li>
 </ul>
 <p><strong>Returns:</strong> <code>DriftReport</code></p>
-<p><strong>Raises:</strong> <code>FileNotFoundError</code> — If <code>build-log.json</code> is not found.</p>
+<p><strong>Raises:</strong></p>
+<ul>
+<li><code>FileNotFoundError</code> — If <code>build-log.json</code> is not found.</li>
+<li><code>ValueError</code> — If <code>build-log.json</code> exists but is malformed JSON.</li>
+</ul>
 <hr />
 <h3 id="print_drift_reportreport"><code>print_drift_report(report)</code><a class="headerlink" href="#print_drift_reportreport" title="Permanent link">&para;</a></h3>
 <blockquote>
@@ -1706,6 +1734,27 @@
 <li><code>manifest</code> (<code>dict[str, Any]</code>) — Team manifest from <code>analyze.build_manifest()</code>.</li>
 </ul>
 <p><strong>Returns:</strong> <code>str</code> — First 16 hex characters of the SHA-256 digest of the canonicalized manifest (stable short fingerprint).</p>
+<hr />
+<h3 id="detect_user_customizationsagents_dir-build_lognone"><code>detect_user_customizations(agents_dir, *, build_log=None)</code><a class="headerlink" href="#detect_user_customizationsagents_dir-build_lognone" title="Permanent link">&para;</a></h3>
+<blockquote>
+<p><em>Source: <code>agentteams/drift.py</code></em></p>
+</blockquote>
+<p>Detect generated files whose on-disk hash differs from the hash recorded at generation time.</p>
+<p>This is a best-effort advisory pre-write signal used by update workflows. A detected customization does not block execution by itself.</p>
+<p>The check reports modified files that still exist on disk; missing files are skipped.</p>
+<p><strong>Args:</strong></p>
+<ul>
+<li><code>agents_dir</code> (<code>Path</code>) — Path to the <code>.github/agents/</code> directory.</li>
+<li><code>build_log</code> (<code>dict[str, Any] | None</code>, keyword-only) — Optional pre-loaded build-log dict. If <code>None</code>, <code>build-log.json</code> is loaded from <code>agents_dir</code>.</li>
+</ul>
+<p><strong>Returns:</strong> <code>list[dict[str, str]]</code> — A list of customization records. Each record includes:</p>
+<ul>
+<li><code>path</code> — Absolute path string for the customized file.</li>
+<li><code>rel_path</code> — Relative path as stored in the build log.</li>
+<li><code>reason</code> — <code>modified since last build</code>.</li>
+</ul>
+<p>Returns an empty list when the build log is missing, invalid, or has no recorded file hashes.</p>
+<p>Read-path OS errors while hashing existing files are not suppressed and may propagate to callers.</p>
 
 
 

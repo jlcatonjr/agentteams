@@ -63,7 +63,7 @@ To register a new template for use in the rendering pipeline, add it to the appr
 1. Fork the repository and create a feature branch
 2. Make your changes — keep each PR focused on a single concern
 3. Run `pytest tests/` and confirm all tests pass
-4. If you changed public API signatures, update the corresponding page in `docs/api-reference/`
+4. If you changed public API signatures, update the corresponding page in `docs_src/api-reference/`
 5. If you added or changed CLI flags, update `docs/cli-reference.md`
 6. Open a PR against `main`; the CI workflow will run `pytest` automatically
 
@@ -73,6 +73,16 @@ To register a new template for use in the rendering pipeline, add it to the appr
 - Placeholder conventions compliance for new templates
 - Agent doc consistency (no stale counts, no phantom agent references)
 - No external dependencies introduced
+
+### API Documentation Boundary Policy
+
+AgentTeamsModule uses a **curated public API** policy.
+
+- The supported API surface is the set of modules and symbols documented under `docs_src/api-reference/`.
+- Symbols not documented in API reference pages are treated as internal implementation details and may change without notice.
+- Package and subpackage API pages (for example framework adapters) are allowed when the import surface is intentionally package-level.
+
+The canonical module list is maintained in `docs_src/api-reference/index.md`. Any PR that promotes an internal symbol/module to public API must update that index and add complete API docs for the newly public surface.
 
 ---
 

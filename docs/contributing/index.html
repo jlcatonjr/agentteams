@@ -1334,6 +1334,17 @@
   
 </li>
         
+          <li class="md-nav__item">
+  <a href="#api-documentation-boundary-policy" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        API Documentation Boundary Policy
+      
+    </span>
+  </a>
+  
+</li>
+        
       </ul>
     </nav>
   
@@ -1484,6 +1495,17 @@
   
 </li>
         
+          <li class="md-nav__item">
+  <a href="#api-documentation-boundary-policy" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        API Documentation Boundary Policy
+      
+    </span>
+  </a>
+  
+</li>
+        
       </ul>
     </nav>
   
@@ -1603,7 +1625,7 @@
 <li>Fork the repository and create a feature branch</li>
 <li>Make your changes — keep each PR focused on a single concern</li>
 <li>Run <code>pytest tests/</code> and confirm all tests pass</li>
-<li>If you changed public API signatures, update the corresponding page in <code>docs/api-reference/</code></li>
+<li>If you changed public API signatures, update the corresponding page in <code>docs_src/api-reference/</code></li>
 <li>If you added or changed CLI flags, update <code>docs/cli-reference.md</code></li>
 <li>Open a PR against <code>main</code>; the CI workflow will run <code>pytest</code> automatically</li>
 </ol>
@@ -1614,6 +1636,14 @@
 <li>Agent doc consistency (no stale counts, no phantom agent references)</li>
 <li>No external dependencies introduced</li>
 </ul>
+<h3 id="api-documentation-boundary-policy">API Documentation Boundary Policy<a class="headerlink" href="#api-documentation-boundary-policy" title="Permanent link">&para;</a></h3>
+<p>AgentTeamsModule uses a <strong>curated public API</strong> policy.</p>
+<ul>
+<li>The supported API surface is the set of modules and symbols documented under <code>docs_src/api-reference/</code>.</li>
+<li>Symbols not documented in API reference pages are treated as internal implementation details and may change without notice.</li>
+<li>Package and subpackage API pages (for example framework adapters) are allowed when the import surface is intentionally package-level.</li>
+</ul>
+<p>The canonical module list is maintained in <code>docs_src/api-reference/index.md</code>. Any PR that promotes an internal symbol/module to public API must update that index and add complete API docs for the newly public surface.</p>
 <hr />
 <h2 id="reporting-issues">Reporting Issues<a class="headerlink" href="#reporting-issues" title="Permanent link">&para;</a></h2>
 <p>Open an issue at <a href="https://github.com/jlcatonjr/agentteams/issues">https://github.com/jlcatonjr/agentteams/issues</a>. Include:</p>
