@@ -86,6 +86,45 @@ Agent knowledge can drift silently when project structure evolves without a trig
 
 **Escalation rule:** If drift is detected in an agent file that is currently mid-workflow (i.e., its step is `in_progress`), immediately surface to the orchestrator — do not silently re-render while a workflow is executing.
 
+## Update Deployment Protocol
+
+Any run of `--update` or `--update --merge` against a deployed agent team must follow this protocol. The protocol applies to single-repo and batch operations alike.
+
+### Pre-Update
+
+1. **Backup** — Confirm that `emit.backup_output_dir()` will be called before any write. For scripted batch runs, verify that `--update --merge --yes` is used (not bare `--update`), which calls `emit.backup_output_dir()` automatically. For non-git repos, this is the only rollback path; confirm the backup directory exists after the run.
+2. **Dry-run** — Run `--update --dry-run` first to see which files would be written. Review the list for unexpected targets.
+3. **Drift check** — Run `--check` to confirm which templates have changed since the last build. This establishes the expected scope of changes.
+
+### During Update
+
+- **Always use `--update --merge`** (never bare `--update`) when running against repos that may contain user-authored content in any section. Bare `--update` overwrites entire files including USER-EDITABLE content.
+- For git repos: capture `git diff -- .github/agents/` **before** the run and store it as a baseline.
+- For non-git repos: note that no pre-update diff is available; the auto-backup is the only pre-update snapshot. Document this in the run notes.
+
+### Post-Update
+
+1. **Capture diff** — For git repos, capture `git diff -- .github/agents/` after the run. For non-git repos, run `diff -r <backup_path> <agents_dir>` to compare backup vs current.
+2. **Analyse for outside-fence deletions** — Any removed line (`-` prefix in diff) that is NOT inside an `AGENTTEAMS:BEGIN/END` block is an outside-fence deletion. Classify the result:
+   - **OK** — No outside-fence deletions; diff contains only fenced-region changes
+   - **WARN** — One or more outside-fence deletions detected; requires human review of the specific lines before commit
+   - **ERROR** — `--update --merge` exited non-zero; write may be partial; restore from backup before proceeding
+3. **WARN handling** — Do not commit a WARN repo without reviewing the specific deleted lines. Confirm each deletion is intentional (e.g., a placeholder that was properly resolved). Record sign-off in the run log.
+4. **Non-git backup verification** — After the run, confirm `find <agents_dir>/.agentteams-backups -maxdepth 1 -type d` shows a timestamped directory with a non-zero file count.
+5. **Results log** — Record repo, status (OK/WARN/ERROR), file count, lines added, lines deleted, outside-fence deletions, and backup path in a results CSV. Archive the previous CSV before overwriting.
+
+### Batch Operation
+
+For batch runs across multiple repos, use `batch_update.py` (or an equivalent script). The script must:
+- Iterate over repos sequentially (not in parallel) to preserve legible logs
+- Capture pre/post diffs as above for each repo
+- Write per-repo `.diff` files to `tmp/diffs/`
+- Write a summary CSV with all fields above
+- **Non-git repos** (`git: False` in REPOS list): pre-diff column is blank; backup path is recorded; diff is backup-vs-current only
+- Print the results CSV path on completion so the operator can inspect before committing
+
+**No batch commit until the operator has reviewed the results CSV and all WARN entries.**
+
 ## Living Document Rules
 
 - **No dated audit snapshots** in agent docs — record counts belong in data files
