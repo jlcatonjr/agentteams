@@ -30,6 +30,34 @@ _NVD_CVE_URL = "https://services.nvd.nist.gov/rest/json/cves/2.0"
 _OSV_QUERYBATCH_URL = "https://api.osv.dev/v1/querybatch"
 
 # ---------------------------------------------------------------------------
+# Supply chain integrity controls
+# Domain suffix allowlist — checked against the *effective* URL after redirects.
+# Uses registered-domain suffixes so legitimate CDN/path changes don't break the
+# allowlist while still blocking unexpected third-party domains.
+# ---------------------------------------------------------------------------
+_ALLOWED_DOMAIN_SUFFIXES: frozenset[str] = frozenset([
+    "cisa.gov",
+    "first.org",
+    "mitre.org",
+    "cveawg.mitre.org",
+    "nvd.nist.gov",
+    "nist.gov",
+    "osv.dev",
+    "api.osv.dev",
+])
+
+#: Sanity bounds for raw response bodies (bytes).  Responses outside these
+#: bounds are likely truncated, empty, or unexpectedly large (possible attack).
+_MIN_RESPONSE_BYTES: int = 10
+_MAX_RESPONSE_BYTES: int = 50 * 1024 * 1024  # 50 MB
+
+#: Marker prepended to threat summaries when stale cached data is used.
+_STALE_DATA_WARNING: str = (
+    "> ⚠️ **STALE DATA** — live fetch failed; content below is from a previous run "
+    "and may not reflect current threat status. Treat as indicative only.\n\n"
+)
+
+# ---------------------------------------------------------------------------
 # OWASP LLM Top 10 – 2025 edition  (static; updated in source on major releases)
 # Reference: https://owasp.org/www-project-top-10-for-large-language-model-applications/
 # ---------------------------------------------------------------------------
@@ -151,8 +179,28 @@ def _utc_now_iso() -> str:
     return datetime.now(UTC).replace(microsecond=0).isoformat().replace("+00:00", "Z")
 
 
+def _check_response_domain(effective_url: str) -> None:
+    """Raise OSError if the effective URL's host is not in the allowed domain suffix list.
+
+    Args:
+        effective_url: The URL actually used (after redirects).
+
+    Raises:
+        OSError: Domain is not in the allowlist.
+    """
+    try:
+        host = urllib.parse.urlparse(effective_url).netloc.lower().split(":")[0]
+    except Exception:
+        raise OSError(f"Cannot parse domain from URL: {effective_url!r}")
+    if not any(host == suffix or host.endswith("." + suffix) for suffix in _ALLOWED_DOMAIN_SUFFIXES):
+        raise OSError(
+            f"Supply chain integrity: response domain {host!r} is not in the allowlist. "
+            "Rejecting response."
+        )
+
+
 def _fetch_json(url: str, timeout: int = 12) -> dict:
-    """Fetch and decode JSON from a URL.
+    """Fetch and decode JSON from a URL with domain and size integrity checks.
 
     Args:
         url: HTTPS endpoint returning JSON.
@@ -162,12 +210,25 @@ def _fetch_json(url: str, timeout: int = 12) -> dict:
         Decoded JSON object.
 
     Raises:
-        OSError: Network or JSON decoding failures.
+        OSError: Network, JSON decoding, domain allowlist, or size bound failures.
     """
     req = urllib.request.Request(url, headers={"User-Agent": "agentteams-security-refs/1.0"})
     with urllib.request.urlopen(req, timeout=timeout) as resp:
-        body = resp.read().decode("utf-8", errors="replace")
-    return json.loads(body)
+        effective_url = resp.geturl()
+        _check_response_domain(effective_url)
+        body = resp.read()
+
+    if len(body) < _MIN_RESPONSE_BYTES:
+        raise OSError(
+            f"Supply chain integrity: response from {url!r} is suspiciously small "
+            f"({len(body)} bytes < {_MIN_RESPONSE_BYTES} minimum)."
+        )
+    if len(body) > _MAX_RESPONSE_BYTES:
+        raise OSError(
+            f"Supply chain integrity: response from {url!r} exceeds size limit "
+            f"({len(body)} bytes > {_MAX_RESPONSE_BYTES} maximum)."
+        )
+    return json.loads(body.decode("utf-8", errors="replace"))
 
 
 def _fetch_kev(max_items: int) -> tuple[list[dict], dict]:
@@ -466,6 +527,7 @@ def build_security_placeholders(
     epss_map: dict[str, dict[str, str]] = {}
     nvd_map: dict[str, dict] = {}
     osv_findings: list[dict] = []
+    _used_stale_cache: bool = False
 
     if offline:
         if cache_json.exists():
@@ -501,6 +563,7 @@ def build_security_placeholders(
                     vulnerabilities = cached.get("vulnerabilities", [])[:max_items]
                     generated_at = cached.get("generated_at", generated_at)
                     osv_findings = cached.get("osv_packages", [])
+                    _used_stale_cache = True
                     # Preserve previous source status context when available
                     cached_sources = cached.get("sources", [])
                     if cached_sources:
@@ -523,6 +586,10 @@ def build_security_placeholders(
     prevention = _format_prevention_playbook(vulnerabilities)
     llm_threats = _format_llm_threats(include_references=True)
     osv_summary = _format_osv_summary(osv_findings)
+
+    if _used_stale_cache:
+        threat_summary = _STALE_DATA_WARNING + threat_summary
+        prevention = _STALE_DATA_WARNING + prevention
 
     # Build per-vuln entries for JSON payload including CVSS when available
     vuln_records: list[dict[str, Any]] = []

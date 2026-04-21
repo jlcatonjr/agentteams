@@ -189,6 +189,21 @@ The plan slug is a lowercase-hyphenated name derived from the workflow trigger (
 
 ---
 
+### Pre-Execution Security Check
+
+**Applies to:** Any step that was cleared with `CONDITIONAL PASS` status by `@security`.
+
+Before executing any such step:
+
+1. Read `references/security-decisions.log.csv` — locate the row for the relevant clearance
+2. Verify every condition in the `conditions` column has been addressed — each mitigation must have confirmable evidence
+3. If any condition is unverified (`conditions_verified = pending`): treat as HALT and surface to the user; do not proceed
+4. If all conditions are verified: update `conditions_verified` to `verified` in the log and proceed
+
+> This check is not optional. An unverified CONDITIONAL PASS blocks the operation as if HALT had been issued.
+
+---
+
 ### Workflow 1: Produce a Deliverable
 
 **Trigger:** "Produce [component]" / "Work on [workstream]"
