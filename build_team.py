@@ -543,6 +543,13 @@ def main(argv: list[str] | None = None) -> int:
 
         print(f"\nWriting {len(update_rendered)} file(s)...")
 
+        # Back up BEFORE migration so the backup captures pre-migration state
+        if not args.dry_run and not args.no_backup:
+            emit.backup_output_dir(
+                output_dir,
+                files_to_backup=[rel for rel, _ in update_rendered],
+            )
+
         # Migrate any inline log tables to CSV before writing
         if not args.dry_run:
             adjacent_repos_md = emit._resolve_path(output_dir, "references/adjacent-repos.md")
@@ -552,12 +559,6 @@ def main(argv: list[str] | None = None) -> int:
                     f"  ✓  Migrated {mresult.changelog_rows_moved} changelog row(s) and "
                     f"{mresult.coord_log_rows_moved} coordination row(s) to CSV files."
                 )
-
-        if not args.dry_run and not args.no_backup:
-            emit.backup_output_dir(
-                output_dir,
-                files_to_backup=[rel for rel, _ in update_rendered],
-            )
 
         result = emit.emit_all(
             update_rendered,
