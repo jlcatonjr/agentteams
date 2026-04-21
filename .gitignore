@@ -43,3 +43,8 @@ python
 
 # Stale root-level templates/ — canonical copy is agentteams/templates/
 /templates/
+
+# SVG build artifacts — regenerated on demand via graph module
+# Regenerate with: python -m agentteams.graph .github/agents/ --format svg
+docs/book/figures/*.svg
+docs_src/book/figures/*.svg
