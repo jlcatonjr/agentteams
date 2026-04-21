@@ -402,11 +402,28 @@ def _ensure_csv(path: Path, headers: list[str]) -> None:
 
 
 def _append_csv_rows(path: Path, headers: list[str], rows: list[list[str]]) -> None:
-    """Append data rows to a CSV file, creating it with headers first if absent."""
+    """Append data rows to a CSV file, creating it with headers first if absent.
+
+    Rows that already exist in the file (exact match on all columns) are skipped
+    to prevent duplicates when a pre-migration backup is restored and migration
+    is re-run.
+    """
     _ensure_csv(path, headers)
+
+    # Read existing rows for deduplication
+    existing: set[tuple[str, ...]] = set()
+    with path.open("r", newline="", encoding="utf-8") as fh:
+        reader = csv.reader(fh)
+        next(reader, None)  # skip header
+        for existing_row in reader:
+            existing.add(tuple(existing_row))
+
     with path.open("a", newline="", encoding="utf-8") as fh:
         writer = csv.writer(fh)
         for row in rows:
             # Pad/trim to match expected column count
             padded = (list(row) + [""] * len(headers))[: len(headers)]
-            writer.writerow(padded)
+            key = tuple(padded)
+            if key not in existing:
+                writer.writerow(padded)
+                existing.add(key)  # guard against duplicates within the same batch

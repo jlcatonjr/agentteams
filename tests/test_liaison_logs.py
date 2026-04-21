@@ -276,3 +276,91 @@ def test_migrate_result_success_no_errors():
 def test_migrate_result_failure_with_errors():
     r = MigrateResult(errors=["something went wrong"])
     assert r.success is False
+
+
+# ---------------------------------------------------------------------------
+# _append_csv_rows — deduplication
+# ---------------------------------------------------------------------------
+
+from agentteams.liaison_logs import _append_csv_rows, CHANGELOG_HEADERS
+
+
+def test_append_csv_rows_dedup_skips_exact_duplicate(tmp_path):
+    """Appending the same row twice results in only one data row."""
+    csv_path = tmp_path / "test.csv"
+    row = ["2026-01-01", "myrepo", "init", "f.md", "setup"]
+    _append_csv_rows(csv_path, CHANGELOG_HEADERS, [row])
+    _append_csv_rows(csv_path, CHANGELOG_HEADERS, [row])
+
+    import csv as csv_mod
+    with csv_path.open(newline="", encoding="utf-8") as fh:
+        rows = list(csv_mod.reader(fh))
+    # 1 header + 1 data row
+    assert len(rows) == 2, f"Expected 1 data row, got {len(rows) - 1}: {rows}"
+
+
+def test_append_csv_rows_dedup_allows_distinct_rows(tmp_path):
+    """Distinct rows are all written."""
+    csv_path = tmp_path / "test.csv"
+    row_a = ["2026-01-01", "repoA", "init", "f.md", "setup"]
+    row_b = ["2026-01-02", "repoB", "update", "g.md", "change"]
+    _append_csv_rows(csv_path, CHANGELOG_HEADERS, [row_a])
+    _append_csv_rows(csv_path, CHANGELOG_HEADERS, [row_b])
+
+    import csv as csv_mod
+    with csv_path.open(newline="", encoding="utf-8") as fh:
+        rows = list(csv_mod.reader(fh))
+    assert len(rows) == 3  # header + 2 data
+
+
+def test_append_csv_rows_dedup_within_single_batch(tmp_path):
+    """Duplicate rows within a single batch call are also deduplicated."""
+    csv_path = tmp_path / "test.csv"
+    row = ["2026-01-01", "myrepo", "init", "f.md", "setup"]
+    _append_csv_rows(csv_path, CHANGELOG_HEADERS, [row, row, row])
+
+    import csv as csv_mod
+    with csv_path.open(newline="", encoding="utf-8") as fh:
+        rows = list(csv_mod.reader(fh))
+    assert len(rows) == 2  # header + 1
+
+
+def test_migrate_inline_logs_dedup_on_rerun(tmp_path):
+    """migrate_inline_logs called twice on restored inline tables does not duplicate CSV rows."""
+    refs = tmp_path / "references"
+    refs.mkdir()
+    md_content = """\
+# Registry
+
+### myrepo
+
+| Field | Value |
+|-------|-------|
+| **Local path** | `/path/to/myrepo` |
+
+#### Changelog
+
+| Date | Action | Files changed | Summary |
+|------|--------|---------------|---------|
+| 2026-01-01 | init | f.md | setup |
+
+"""
+    md_file = refs / "adjacent-repos.md"
+    md_file.write_text(md_content, encoding="utf-8")
+
+    from agentteams.liaison_logs import migrate_inline_logs
+    # First migration
+    r1 = migrate_inline_logs(md_file, refs)
+    assert r1.changelog_rows_moved == 1
+
+    # Simulate: restore pre-migration backup (write inline tables back)
+    md_file.write_text(md_content, encoding="utf-8")
+
+    # Second migration
+    r2 = migrate_inline_logs(md_file, refs)
+    assert r2.changelog_rows_moved == 1  # row detected and "moved" but not duplicated
+
+    import csv as csv_mod
+    with (refs / "adjacent-repos-changelog.csv").open(newline="", encoding="utf-8") as fh:
+        rows = list(csv_mod.reader(fh))
+    assert len(rows) == 2, f"Expected 1 data row, got {len(rows) - 1}"

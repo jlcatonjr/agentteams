@@ -397,7 +397,7 @@ def main(argv: list[str] | None = None) -> int:
                 print(f"Available: {', '.join(ts for ts, _, _ in backups)}")
                 return 1
             _, backup_path, _ = matched[0]
-        count = emit.restore_backup(backup_path, output_dir)
+        count = emit.restore_backup(backup_path, output_dir, remove_extra=True)
         print(f"  ✓  Restored {count} file(s) from {backup_path}")
         return 0
 

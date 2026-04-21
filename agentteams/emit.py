@@ -237,10 +237,13 @@ class BackupResult:
                       if no backup was taken (e.g. output_dir did not exist).
         files_backed_up: Number of files copied into the backup.
         skipped:         True if backup was suppressed (--no-backup or dry_run).
+        extra_files_removed: Number of files deleted from output_dir during a
+                             restore because they were absent from the backup.
     """
     backup_path: Path | None = None
     files_backed_up: int = 0
     skipped: bool = False
+    extra_files_removed: int = 0
 
 
 def backup_output_dir(
@@ -286,12 +289,23 @@ def backup_output_dir(
         return result
 
     if files_to_backup is not None:
-        # Selective backup: only files that are about to be overwritten
+        # Selective backup: only files that are about to be overwritten.
+        # Always include the CSV log files from references/ — they are not
+        # template-rendered so they never appear in files_to_backup, but
+        # they MUST be captured so that restore_backup can roll them back
+        # to their pre-emit state (preventing duplicate rows on re-migration).
+        from agentteams.liaison_logs import CHANGELOG_CSV, COORD_LOG_CSV
+        _csv_extras = [
+            Path("references") / CHANGELOG_CSV,
+            Path("references") / COORD_LOG_CSV,
+        ]
         paths: list[Path] = []
-        for rel in files_to_backup:
+        seen: set[Path] = set()
+        for rel in list(files_to_backup) + [str(p) for p in _csv_extras]:
             target = _resolve_path(output_dir, rel)
-            if target.exists():
+            if target.exists() and target not in seen:
                 paths.append(target)
+                seen.add(target)
     else:
         # Full backup of everything in output_dir (excluding backup dir itself)
         backup_root = output_dir / _BACKUP_DIR_NAME
@@ -344,31 +358,73 @@ def list_backups(output_dir: Path) -> list[tuple[str, Path, int]]:
     return entries
 
 
-def restore_backup(backup_path: Path, output_dir: Path) -> int:
+def restore_backup(
+    backup_path: Path,
+    output_dir: Path,
+    *,
+    remove_extra: bool = False,
+) -> int:
     """Restore files from a backup directory into *output_dir*.
 
     Copies every file from *backup_path* back to its original location under
     *output_dir*, overwriting current content.
 
+    When *remove_extra* is ``True``, files that exist in *output_dir* but
+    were absent from the backup are deleted after the restore.  This produces
+    a snapshot-complete rollback — the output directory matches exactly what
+    was backed up.  The backup directory itself and ``references/build-log.json``
+    are excluded from the deletion scan.
+
     Args:
-        backup_path: Absolute path to the timestamped backup directory.
-        output_dir:  Absolute path to the agents output directory to restore into.
+        backup_path:  Absolute path to the timestamped backup directory.
+        output_dir:   Absolute path to the agents output directory to restore into.
+        remove_extra: If True, remove files in output_dir that were not in the backup.
 
     Returns:
-        Number of files restored.
+        Number of files restored (does not include files removed).
+
+    Raises:
+        FileNotFoundError: If *backup_path* does not exist.
     """
     if not backup_path.exists():
         raise FileNotFoundError(f"Backup not found: {backup_path}")
 
-    count = 0
+    # Collect the set of relative paths present in the backup
+    backup_rels: set[Path] = set()
     for src in backup_path.rglob("*"):
         if not src.is_file():
             continue
-        rel = src.relative_to(backup_path)
+        backup_rels.add(src.relative_to(backup_path))
+
+    # Restore all backed-up files
+    count = 0
+    for rel in backup_rels:
+        src = backup_path / rel
         dest = output_dir / rel
         dest.parent.mkdir(parents=True, exist_ok=True)
         shutil.copy2(src, dest)
         count += 1
+
+    # Remove files that exist in output_dir but were absent from the backup
+    if remove_extra:
+        backup_root = output_dir / _BACKUP_DIR_NAME
+        _skip_rel = Path("references") / "build-log.json"
+        for candidate in list(output_dir.rglob("*")):
+            if not candidate.is_file():
+                continue
+            # Never touch the backup archive itself
+            if candidate.is_relative_to(backup_root):
+                continue
+            try:
+                rel = candidate.relative_to(output_dir)
+            except ValueError:
+                continue
+            # Preserve build-log.json — it records run history, not agent content
+            if rel == _skip_rel:
+                continue
+            if rel not in backup_rels:
+                candidate.unlink()
+
     return count
 
 
