@@ -38,7 +38,7 @@
         <p>In this project, eight mandatory review triggers are defined. File deletion triggers a security review. Modification of agent documentation triggers a security review. Any write to an external source repository triggers a security review. Exposure of credentials (API keys, SSH keys, tokens, passwords) triggers a security review. Exposure of personally identifiable information triggers a security review. Inclusion of unverified citations triggers a security review. Bulk edits affecting more than a threshold number of files trigger a security review. External URL references in LaTeX source trigger a security review.</p>
       </div>
 
-      <p>The trigger-based architecture makes the security agent an interrupt-driven mechanism. It does not continuously scan the project for violations. It activates when a potentially dangerous operation is about to be performed, evaluates the operation against its rule set, and returns either PROCEED or HALT. The number of triggers is relatively small and ranked in order to assure that 1) they are not missed and 2) the most important triggers are systematically caught.</p> 
+      <p>The trigger-based architecture makes the security agent an interrupt-driven mechanism. It does not continuously scan the project for violations. It activates when a potentially dangerous operation is about to be performed, evaluates the operation against its rule set, and returns PROCEED, PROCEED WITH VERIFICATION, or HALT according to the escalation criteria in force. The number of triggers is relatively small and ranked in order to assure that 1) they are not missed and 2) the most important triggers are systematically caught.</p> 
       
       <p>Between triggers, it is dormant. This design economizes on the system's processing budget: security checks consume context and time, and performing them only when specific risk indicators are present avoids the overhead of continuous surveillance.</p>
       
@@ -87,6 +87,22 @@
 
       <p>The breadth of the security agent's scope (spanning infrastructure protection and content integrity) makes it the single agent whose concerns cut across functional and domain boundaries. Its triggers fire on functional operations (file deletions, bulk edits) and domain operations (citation verification, content review) alike. The security function is a constraint on all roles, implemented as a constitutional enforcement mechanism with authority that no other agent can override.</p>
 
+    </section>
+
+    <section id="sec:security-governance-layer">
+      <h2>6. Governance-Layer Security and Escalation Verdicts</h2>
+
+      <p>The security architecture developed so far protects infrastructure and content integrity at the repository boundary. As the team matures, a second layer becomes necessary: protection of governance content itself. Agent constitutions, workflow definitions, and policy references are productive assets whose corruption can redirect the behavior of every downstream agent. Security at this layer is not about leaked credentials; it is about maintaining reliable control over the rules by which the team governs itself.</p>
+
+      <p>S-5 and S-6 remain infrastructure controls unchanged; S-5', S-6', and S-7 are governance-layer controls over policy content, propagation, and scope. S-5' guards against governance-content injection: no unvalidated policy payload, workflow fragment, or configuration instruction enters a controlling file through an untrusted source. S-6' imposes reviewed-content isolation: when governance files are modified by agents, those changes require explicit human review before cross-repository propagation. S-7 enforces scope limitation: each agent's write authority is constrained to designated paths so that no agent can silently rewrite the constitutional layer while performing ordinary production tasks.</p>
+
+      <p>The governance-layer rules convert a diffuse risk into auditable checkpoints. Without such checkpoints, policy drift can arise through apparently local edits that alter authority boundaries, routing logic, or workflow ordering. With checkpoints, those same edits become observable governance events. The security function then operates as institutional memory as well as veto authority, because each governed change is classified and logged before it can be normalized into routine practice.</p>
+
+      <p>The verdict framework at this layer is triadic: PROCEED, PROCEED WITH VERIFICATION, or HALT. PROCEED means the request clears security constraints under current evidence. PROCEED WITH VERIFICATION means execution may continue only with a specified follow-through check, typically a targeted post-change audit on the affected governance surface. HALT remains the constitutional veto: execution stops until human clearance is granted. This triad is conceptually aligned with Chapter 11's adversarial recommendation ladder, while preserving a crucial distinction: the adversarial verdict is advisory, whereas a security HALT is binding.</p>
+
+      <p>Where downstream remediation uses operational triage labels, the mapping is fixed: OK maps to PROCEED, WARN maps to PROCEED WITH VERIFICATION, and ERROR maps to HALT. The governance verdict remains the controlling layer; triage labels classify post-change evidence but do not supersede constitutional authority boundaries.</p>
+
+      <p>The decision log therefore broadens from halt-only memory to full-verdict memory. Recording criteria, verdict, and remediation path for all three outcomes provides an auditable history of why governance changes were allowed, conditionally allowed, or blocked. Over repeated cycles, this record supports two forms of learning. First, it reveals recurrent risk patterns the constitutional rules should address more directly. Second, it disciplines discretionary judgment by forcing every exception pathway to leave a trace that can be reviewed against the authority hierarchy established in Chapter 4.</p>
     </section>
 
   </article>
