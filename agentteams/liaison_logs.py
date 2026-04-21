@@ -315,7 +315,6 @@ def _rewrite_inline_tables(
                     )
                     coord_moved += len(data_rows)
                 out.append(
-                    "\n"
                     f"Full log: [`{COORD_LOG_CSV}`]({COORD_LOG_CSV})."
                     " Append one row per coordination:"
                     " `date,adjacent_repo,direction,outcome`\n"
