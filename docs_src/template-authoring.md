@@ -4,6 +4,16 @@ This guide covers how to write and register templates for the Agent Teams Module
 
 ---
 
+## Versioning Standards
+
+The canonical version-numbering rule for template-library, template-authoring, and agent-documentation standards lives in the template authoring guide. It does not define Python package release versioning. In short:
+
+- Major versions are for breaking standards changes that make existing compliant templates require migration.
+- Minor versions are for backward-compatible additions that add new decision criteria or recommended practice.
+- Patch versions are for clarifications, added or repaired examples that only illustrate existing intent, and other non-semantic corrections that do not add new decision criteria.
+
+When a release mixes change types, use the highest-impact bump.
+
 ## Placeholder Syntax
 
 Two placeholder syntaxes are used. For full details, see [`templates/PLACEHOLDER-CONVENTIONS.md`](https://github.com/jlcatonjr/agentteams/blob/main/agentteams/templates/PLACEHOLDER-CONVENTIONS.md).

@@ -142,6 +142,30 @@ For agents with downstream workflow steps, list handoffs as a numbered procedure
 
 ---
 
+## Versioning Standards for Agent-Documentation Rules
+
+This versioning standard applies to changes in the template library, template-authoring rules, and agent-documentation standards. It does not define the release version of the Python package itself.
+
+Use semantic versioning for standards changes:
+
+- **Major version** (`MAJOR.0.0`) for breaking standards changes that require teams to rewrite existing agent docs, migrate fenced sections, change placeholder meaning, or adopt a new incompatible required structure.
+- **Minor version** (`MAJOR.MINOR.0`) for backward-compatible additions such as new optional sections, new recommended checks, new non-breaking placeholders, or new guidance that adds decision criteria or recommended practice without forcing rework.
+- **Patch version** (`MAJOR.MINOR.PATCH`) for non-semantic clarifications such as wording fixes, typo corrections, tighter explanations, added or repaired examples that only illustrate existing intent, formatting cleanup, or guidance edits that only clarify existing intent without adding new decision criteria.
+
+Choose the version bump by the highest-impact change in the release:
+
+1. If an existing compliant template could become non-compliant without edits, bump major.
+2. If existing compliant templates remain valid and the change only adds capability or guidance, bump minor.
+3. If the change only clarifies or corrects the standard without changing compliance expectations, bump patch.
+
+Examples:
+
+- Changing fence marker syntax or required section order is a major change.
+- Adding a new optional template section or a new backward-compatible placeholder is a minor change.
+- Adding or correcting authoring examples is a patch change unless the example introduces a new decision rule or recommended practice.
+
+---
+
 ## 3. Required Sections by Tier
 
 | Tier | Required Sections |
