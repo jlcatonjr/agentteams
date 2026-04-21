@@ -264,7 +264,12 @@ def test_snapshot_comparison(tmp_path, example):
 
     _run_pipeline(brief, tmp_path)
 
-    expected_files = sorted(f for f in expected_dir.rglob("*.md") if "build-log" not in f.name)
+    # Exclude files that contain live network data (threat intel, CVE feeds) — non-deterministic
+    _live_data_files = {"security-vulnerability-watch.reference.md", "security.agent.md"}
+    expected_files = sorted(
+        f for f in expected_dir.rglob("*.md")
+        if "build-log" not in f.name and f.name not in _live_data_files
+    )
     assert expected_files, f"No .md files found in {expected_dir}"
 
     # Strip non-deterministic timestamp lines before comparison (e.g. "Generated at: `...`")
