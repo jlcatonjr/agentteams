@@ -1,4 +1,10 @@
 <!DOCTYPE html>
+<!-- NOTE: This file intentionally diverges from the working-project copy at
+     workingpapers/agentTeams.ATheoreticallyGroundedApproach/html/index.html.
+     Divergence: loadChapter() includes a regex rewrite of src="../figures/" → src="figures/"
+     required because this SPA is served from book/ (base = agentteams/book/), while the
+     working-project copy serves from html/ where ../figures/ correctly resolves to the
+     project-root figures/ directory. DO NOT blindly overwrite this file with the working copy. -->
 <html lang="en">
 <head>
   <meta charset="UTF-8">
@@ -700,6 +706,10 @@
             const el = doc.querySelector('article')
                     || doc.querySelector('.main-content')
                     || doc.body;
+
+            // Rewrite ../figures/ → figures/ so image paths resolve correctly
+            // when chapter HTML is injected into the SPA (page base = book/).
+            if (el) el.innerHTML = el.innerHTML.replace(/src="\.\.\/figures\//g, 'src="figures/');
 
             content.value = el ? el.innerHTML : html;
           } catch (err) {
