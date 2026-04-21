@@ -123,6 +123,8 @@ For batch runs across multiple repos, use `batch_update.py` (or an equivalent sc
 - **Non-git repos** (`git: False` in REPOS list): pre-diff column is blank; backup path is recorded; diff is backup-vs-current only
 - Print the results CSV path on completion so the operator can inspect before committing
 
+**Pre-run security assertion** — Before executing any batch run, assert in the run log or script output: (a) backup will be created for each target, (b) `--update --merge` (not bare `--update`) will be used, (c) operator has reviewed the dry-run output. This satisfies the Rule S-2 Infrastructure Exception Pathway conditions required by `@security`.
+
 **No batch commit until the operator has reviewed the results CSV and all WARN entries.**
 
 ## Living Document Rules

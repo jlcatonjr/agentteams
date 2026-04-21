@@ -31,6 +31,12 @@ tool-enrichment-steps.csv
 # Automatic pre-write backups created by build_team.py
 .agentteams-backups/
 
+# Batch update result artifacts — may contain absolute home-directory paths (Rule S-1 OPSEC)
+# Commit only after sanitizing paths; or use tmp/*-results-sanitized.csv for committed summaries
+tmp/*-results*.csv
+tmp/diffs/
+tmp/diffs-prev/
+
 # Structural or audit plan docs committed during development
 docs_src/structural-update-plan.md
 python
