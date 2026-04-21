@@ -309,3 +309,126 @@ def test_merge_preserves_user_content_below_fence(tmp_path):
     assert "# Header — NEW" in content
     assert "user-authored content below the fence" in content
 
+
+# ---------------------------------------------------------------------------
+# restore_backup — remove_extra (snapshot-complete restore)
+# ---------------------------------------------------------------------------
+
+def test_restore_backup_remove_extra_deletes_orphaned_files(tmp_path):
+    """Files absent from backup are deleted when remove_extra=True."""
+    agent_file = tmp_path / "agent.agent.md"
+    agent_file.write_text("ORIGINAL", encoding="utf-8")
+    br = backup_output_dir(tmp_path)
+
+    # Add a new file AFTER the backup (simulates post-migration CSV)
+    extra = tmp_path / "references" / "adjacent-repos-changelog.csv"
+    extra.parent.mkdir(parents=True, exist_ok=True)
+    extra.write_text("date,repo_name,action,files_changed,summary\n2026-01-01,myrepo,init,f.md,setup\n")
+
+    restore_backup(br.backup_path, tmp_path, remove_extra=True)
+
+    assert agent_file.read_text(encoding="utf-8") == "ORIGINAL"
+    assert not extra.exists(), "orphaned CSV should be removed"
+
+
+def test_restore_backup_remove_extra_false_leaves_orphaned_files(tmp_path):
+    """Default (remove_extra=False) leaves extra files untouched."""
+    agent_file = tmp_path / "agent.agent.md"
+    agent_file.write_text("ORIGINAL", encoding="utf-8")
+    br = backup_output_dir(tmp_path)
+
+    extra = tmp_path / "references" / "adjacent-repos-changelog.csv"
+    extra.parent.mkdir(parents=True, exist_ok=True)
+    extra.write_text("date,repo_name,action,files_changed,summary\n")
+
+    restore_backup(br.backup_path, tmp_path)  # remove_extra defaults to False
+
+    assert extra.exists(), "extra file must not be deleted when remove_extra=False"
+
+
+def test_restore_backup_remove_extra_preserves_backup_dir(tmp_path):
+    """The .agentteams-backups directory is never deleted during remove_extra."""
+    agent_file = tmp_path / "agent.agent.md"
+    agent_file.write_text("ORIGINAL", encoding="utf-8")
+    br = backup_output_dir(tmp_path)
+
+    restore_backup(br.backup_path, tmp_path, remove_extra=True)
+
+    # Backup directory must still exist
+    assert br.backup_path.exists()
+
+
+def test_restore_backup_remove_extra_preserves_build_log(tmp_path):
+    """references/build-log.json is excluded from removal even if absent from backup."""
+    agent_file = tmp_path / "agent.agent.md"
+    agent_file.write_text("CONTENT", encoding="utf-8")
+    br = backup_output_dir(tmp_path)
+
+    build_log = tmp_path / "references" / "build-log.json"
+    build_log.parent.mkdir(parents=True, exist_ok=True)
+    build_log.write_text("{}", encoding="utf-8")
+
+    restore_backup(br.backup_path, tmp_path, remove_extra=True)
+
+    assert build_log.exists(), "build-log.json must be preserved"
+
+
+def test_restore_backup_remove_extra_count_matches_restored(tmp_path):
+    """Return value is restored file count, not including removed files."""
+    (tmp_path / "a.md").write_text("A")
+    (tmp_path / "b.md").write_text("B")
+    br = backup_output_dir(tmp_path)
+
+    extra = tmp_path / "c.md"
+    extra.write_text("EXTRA")
+
+    count = restore_backup(br.backup_path, tmp_path, remove_extra=True)
+    assert count == 2
+    assert not extra.exists()
+
+
+# ---------------------------------------------------------------------------
+# backup_output_dir — CSV log files always included in selective backup
+# ---------------------------------------------------------------------------
+
+def test_backup_selective_always_includes_csv_logs(tmp_path):
+    """CSV log files are included in selective backup even if not in files_to_backup."""
+    agent_file = tmp_path / "agent.agent.md"
+    agent_file.write_text("AGENT")
+
+    refs = tmp_path / "references"
+    refs.mkdir()
+    changelog = refs / "adjacent-repos-changelog.csv"
+    coord_log = refs / "adjacent-repos-coordination-log.csv"
+    changelog.write_text("date,repo_name,action,files_changed,summary\n2026-01-01,r,init,f.md,s\n")
+    coord_log.write_text("date,adjacent_repo,direction,outcome\n")
+
+    br = backup_output_dir(tmp_path, files_to_backup=["agent.agent.md"])
+
+    assert br.backup_path is not None
+    assert (br.backup_path / "references" / "adjacent-repos-changelog.csv").exists()
+    assert (br.backup_path / "references" / "adjacent-repos-coordination-log.csv").exists()
+
+
+def test_backup_selective_csv_not_duplicated_if_already_in_list(tmp_path):
+    """CSV files in files_to_backup are not backed up twice."""
+    refs = tmp_path / "references"
+    refs.mkdir()
+    changelog = refs / "adjacent-repos-changelog.csv"
+    changelog.write_text("date,repo_name,action,files_changed,summary\n")
+
+    br = backup_output_dir(
+        tmp_path,
+        files_to_backup=["references/adjacent-repos-changelog.csv"],
+    )
+    assert br.files_backed_up == 1
+
+
+def test_backup_selective_csv_not_backed_up_if_absent(tmp_path):
+    """If CSV files don't exist yet, they are silently skipped in selective backup."""
+    agent_file = tmp_path / "agent.agent.md"
+    agent_file.write_text("CONTENT")
+
+    br = backup_output_dir(tmp_path, files_to_backup=["agent.agent.md"])
+    assert br.files_backed_up == 1  # only the agent file, no CSVs
+
