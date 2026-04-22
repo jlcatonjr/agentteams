@@ -34,13 +34,13 @@ The generated team includes:
 
 Short reads (about five paragraphs each) explaining how core module components fit together:
 
-1. [Introduction](https://jlcatonjr.github.io/InCognito/post.html?post=04-22-2026-AgentTeams%20Introduction.html)
-2. [Adaptive Workflows with Step-by-Step Auditing and Revision](https://jlcatonjr.github.io/InCognito/post.html?post=04-22-2026-AgentTeams%20Adaptive%20Workflows%20with%20Step-by-Step%20Auditing%20and%20Revision.html)
-3. [Team Builder and Workstream Expert Agents](https://jlcatonjr.github.io/InCognito/post.html?post=04-22-2026-AgentTeams%20Team%20Builder%20and%20Workstream%20Expert%20Agents.html)
-4. [Orchestrator Agent](https://jlcatonjr.github.io/InCognito/post.html?post=04-22-2026-AgentTeams%20Orchestrator%20Agent.html)
-5. [Functional Agents](https://jlcatonjr.github.io/InCognito/post.html?post=04-22-2026-AgentTeams%20Functional%20Agents.html)
-6. [Domain Agents](https://jlcatonjr.github.io/InCognito/post.html?post=04-22-2026-AgentTeams%20Domain%20Agents.html)
-7. [Tools and References](https://jlcatonjr.github.io/InCognito/post.html?post=04-22-2026-AgentTeams%20Tools%20and%20References.html)
+1. [Introduction](https://jameslcaton.com/InCognito/post.html?post=04-22-2026-AgentTeams%20Introduction.html)
+2. [Adaptive Workflows with Step-by-Step Auditing and Revision](https://jameslcaton.com/InCognito/post.html?post=04-22-2026-AgentTeams%20Adaptive%20Workflows%20with%20Step-by-Step%20Auditing%20and%20Revision.html)
+3. [Team Builder and Workstream Expert Agents](https://jameslcaton.com/InCognito/post.html?post=04-22-2026-AgentTeams%20Team%20Builder%20and%20Workstream%20Expert%20Agents.html)
+4. [Orchestrator Agent](https://jameslcaton.com/InCognito/post.html?post=04-22-2026-AgentTeams%20Orchestrator%20Agent.html)
+5. [Functional Agents](https://jameslcaton.com/InCognito/post.html?post=04-22-2026-AgentTeams%20Functional%20Agents.html)
+6. [Domain Agents](https://jameslcaton.com/InCognito/post.html?post=04-22-2026-AgentTeams%20Domain%20Agents.html)
+7. [Tools and References](https://jameslcaton.com/InCognito/post.html?post=04-22-2026-AgentTeams%20Tools%20and%20References.html)
 
 ---
 
