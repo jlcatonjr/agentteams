@@ -26,6 +26,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Governance: drift-as-trigger** — a new trigger row in `agent-updater` trigger tables: "Drift detected by `--check`" — agents operating on stale knowledge of file structure, agent slugs, or counts must re-render and re-verify before the next workflow executes
 - **Infrastructure: Workflow 9 (Cross-Repository Coordination)** added to `orchestrator-workflows.reference.md`; previously documented only in the orchestrator agent file
 - **Infrastructure: snapshot archive** — pre-update snapshots of all patched agent files saved to `references/plans/snapshots-2026-04-17/` for reversible rollback
+- **Docs publishing hardening (GitHub Pages workflow)** — documentation deployment now writes `.nojekyll` and adds explicit artifact validation checks so published docs assets are verified before release.
 
 ### Changed
 
@@ -49,6 +50,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `drift` module additions: `detect_user_customizations()` advisory surface for `--merge`; structural diff (`compute_structural_diff()`) for `--update`
 - `man` module: auto-generated man page from CLI flags (`agentteams.1`)
 - 9 additional tests in `tests/test_migrate.py` covering `--migrate`/`--revert-migration` round-trips, failure modes, argv rewriting, and tag lifecycle
+- **AgentTeams blog-series documentation links normalized** — README and docs home links were migrated and aligned to working `jameslcaton.com` routes (including SPA hash-route targets), and the series navigation was reordered to place the introduction first.
+- **Book figure rendering repairs in docs SPA flow** — embedded chapter figure assets were restored and SPA image-path rewrite handling was corrected for injected chapter content so chapter figures render consistently in docs pages.
+- **Workflow diagram/docs presentation refresh** — workflow SVG integration and related docs messaging were updated to keep workflow references aligned with current published documentation structure.
 
 ## [0.1.0] - 2026-04-15
 
