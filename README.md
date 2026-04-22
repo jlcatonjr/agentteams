@@ -40,13 +40,13 @@ From Chapter 5 of [Agent Teams: A Theoretically Grounded Approach](https://jlcat
 
 Short reads (about five paragraphs each) explaining how core module components fit together:
 
-1. [Introduction](https://jameslcaton.com/InCognito/post.html?post=04-22-2026-AgentTeams%20Introduction.html)
-2. [Adaptive Workflows with Step-by-Step Auditing and Revision](https://jameslcaton.com/InCognito/post.html?post=04-22-2026-AgentTeams%20Adaptive%20Workflows%20with%20Step-by-Step%20Auditing%20and%20Revision.html)
-3. [Team Builder and Workstream Expert Agents](https://jameslcaton.com/InCognito/post.html?post=04-22-2026-AgentTeams%20Team%20Builder%20and%20Workstream%20Expert%20Agents.html)
-4. [Orchestrator Agent](https://jameslcaton.com/InCognito/post.html?post=04-22-2026-AgentTeams%20Orchestrator%20Agent.html)
-5. [Functional Agents](https://jameslcaton.com/InCognito/post.html?post=04-22-2026-AgentTeams%20Functional%20Agents.html)
-6. [Domain Agents](https://jameslcaton.com/InCognito/post.html?post=04-22-2026-AgentTeams%20Domain%20Agents.html)
-7. [Tools and References](https://jameslcaton.com/InCognito/post.html?post=04-22-2026-AgentTeams%20Tools%20and%20References.html)
+1. [Introduction](https://jameslcaton.com/#/blog/04-22-2026-AgentTeams%20Introduction.html)
+2. [Adaptive Workflows with Step-by-Step Auditing and Revision](https://jameslcaton.com/#/blog/04-22-2026-AgentTeams%20Adaptive%20Workflows%20with%20Step-by-Step%20Auditing%20and%20Revision.html)
+3. [Team Builder and Workstream Expert Agents](https://jameslcaton.com/#/blog/04-22-2026-AgentTeams%20Team%20Builder%20and%20Workstream%20Expert%20Agents.html)
+4. [Orchestrator Agent](https://jameslcaton.com/#/blog/04-22-2026-AgentTeams%20Orchestrator%20Agent.html)
+5. [Functional Agents](https://jameslcaton.com/#/blog/04-22-2026-AgentTeams%20Functional%20Agents.html)
+6. [Domain Agents](https://jameslcaton.com/#/blog/04-22-2026-AgentTeams%20Domain%20Agents.html)
+7. [Tools and References](https://jameslcaton.com/#/blog/04-22-2026-AgentTeams%20Tools%20and%20References.html)
 
 ---
 
@@ -272,6 +272,25 @@ Regenerate the module's own meta-agent team:
 ```bash
 agentteams --self
 ```
+
+### Daily security maintenance (agentteams only)
+
+This repository includes a scheduled workflow at `.github/workflows/security-maintenance.yml` that runs daily for `agentteams` only.
+
+The workflow executes `scripts/run_daily_security_maintenance.sh`, which:
+
+1. Enforces repository scope (refuses to run outside the `agentteams` repo root).
+2. Runs non-destructive self update (`--self --update --merge --yes`).
+3. Runs security scan for generated team files.
+4. Runs security-focused regression tests.
+5. Runs drift check for visibility.
+
+Copilot execution policy for this maintenance path:
+
+1. Use best judgement to complete the full sequence in one run.
+2. Continue on non-critical warnings (warn-and-continue behavior).
+3. Do not bypass destructive-risk protections.
+4. Keep operations non-destructive by default for routine maintenance.
 
 ---
 
