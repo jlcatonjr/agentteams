@@ -40,6 +40,17 @@ jobs:
           mkdir -p _site/book
           cp -rn docs_src/book/. _site/book/
 
+      - name: Mark Pages artifact as static (no Jekyll)
+        run: |
+          touch _site/.nojekyll
+
+      - name: Validate Pages artifact contents
+        run: |
+          test -s _site/index.html
+          test -f _site/.nojekyll
+          file_count=$(find _site -type f | wc -l | tr -d ' ')
+          test "$file_count" -gt 10
+
       - name: Upload Pages artifact
         uses: actions/upload-pages-artifact@v3
         with:

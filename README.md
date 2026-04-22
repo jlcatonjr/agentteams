@@ -4,7 +4,7 @@
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 [![Docs](https://img.shields.io/badge/docs-github--pages-blue)](https://jlcatonjr.github.io/agentteams/)
 
-Generate a complete, coordinated AI agent team for any project — from a single project description file.
+Generate a complete, coordinated AI agent team for any project — from a single project description file. All workflows are automatically adaptive and self-revising.
 
 **Documentation:** https://jlcatonjr.github.io/agentteams/
 
@@ -27,6 +27,13 @@ The generated team includes:
 - 1 **Team Builder agent** — framework-native agent that can regenerate or expand the team from within your framework
 - `copilot-instructions.md` — project conventions and routing rules
 
+---
+
+## Workflow
+
+![Adaptive Plan Execution Workflow](docs_src/assets/images/workflow-12-adaptive-plan-execution.svg)
+
+From Chapter 5 of [Agent Teams: A Theoretically Grounded Approach](https://jlcatonjr.github.io/agentteams/manuscript/)  
 ---
 
 ## Quick Start

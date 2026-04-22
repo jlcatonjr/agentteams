@@ -24,6 +24,12 @@ The generated team includes:
 
 ---
 
+## Workflow
+
+![Adaptive Plan Execution Workflow](assets/images/workflow-12-adaptive-plan-execution.svg)
+
+---
+
 ## Framework Support
 
 | Framework | Format | Handoffs | Builder Agent |
