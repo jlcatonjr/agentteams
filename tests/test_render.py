@@ -71,6 +71,53 @@ def test_resolve_multiline():
     assert "Output: src/" in result
 
 
+def test_resolve_escapes_yaml_front_matter_values():
+    template = (
+        "---\n"
+        "name: {PROJECT_NAME}\n"
+        "description: {PROJECT_GOAL}\n"
+        "---\n"
+        "Body\n"
+    )
+    mapping = {
+        "PROJECT_NAME": "Alpha:One",
+        "PROJECT_GOAL": "Line 1\nLine 2",
+    }
+    result = resolve_placeholders(template, mapping)
+    assert 'name: "Alpha:One"' in result
+    assert 'description: "Line 1\\nLine 2"' in result
+
+
+def test_resolve_does_not_force_escape_outside_front_matter():
+    template = "Summary: {PROJECT_GOAL}\n"
+    mapping = {"PROJECT_GOAL": "A: B"}
+    result = resolve_placeholders(template, mapping)
+    assert result == "Summary: A: B\n"
+
+
+def test_resolve_escapes_yaml_leading_indicators():
+    template = (
+        "---\n"
+        "name: {PROJECT_NAME}\n"
+        "---\n"
+    )
+    mapping = {"PROJECT_NAME": "- risky"}
+    result = resolve_placeholders(template, mapping)
+    assert 'name: "- risky"' in result
+
+
+def test_resolve_preserves_yaml_list_fragments_in_front_matter():
+    template = (
+        "---\n"
+        "agents:\n"
+        "{AGENT_LIST}\n"
+        "---\n"
+    )
+    mapping = {"AGENT_LIST": "  - orchestrator\n  - security"}
+    result = resolve_placeholders(template, mapping)
+    assert "agents:\n  - orchestrator\n  - security" in result
+
+
 # ---------------------------------------------------------------------------
 # collect_unresolved_manual
 # ---------------------------------------------------------------------------

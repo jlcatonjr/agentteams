@@ -114,12 +114,80 @@ def resolve_placeholders(template_text: str, placeholder_map: dict[str, str]) ->
     Manual tokens ({MANUAL:NAME}) are left as-is if they have no mapping,
     so SETUP-REQUIRED.md can catalogue them.
     """
+    yaml_ranges = _yaml_front_matter_ranges(template_text)
+
     def replace_auto(match: re.Match) -> str:
         key = match.group(1)
-        return placeholder_map.get(key, match.group(0))  # leave unresolved tokens intact
+        value = placeholder_map.get(key, match.group(0))
+        if key in placeholder_map and _index_in_ranges(match.start(), yaml_ranges):
+            return _escape_yaml_scalar(value)
+        return value  # leave unresolved tokens intact
 
     result = _AUTO_PLACEHOLDER_RE.sub(replace_auto, template_text)
     return result
+
+
+def _yaml_front_matter_ranges(text: str) -> list[tuple[int, int]]:
+    """Return [start, end) index ranges for leading YAML front matter blocks."""
+    if not text.startswith("---"):
+        return []
+    lines = text.splitlines(keepends=True)
+    if not lines:
+        return []
+
+    # Require the first line to be a YAML fence and locate the closing fence.
+    if lines[0].strip() != "---":
+        return []
+
+    offset = len(lines[0])
+    for line in lines[1:]:
+        if line.strip() == "---":
+            end = offset
+            return [(len(lines[0]), end)]
+        offset += len(line)
+    return []
+
+
+def _index_in_ranges(index: int, ranges: list[tuple[int, int]]) -> bool:
+    for start, end in ranges:
+        if start <= index < end:
+            return True
+    return False
+
+
+def _escape_yaml_scalar(value: str) -> str:
+    """Return a YAML-safe scalar using minimal quoting for risky values."""
+    if not isinstance(value, str):
+        return str(value)
+
+    if _looks_like_yaml_fragment(value):
+        return value
+
+    if value == "":
+        return '""'
+
+    needs_quotes = (
+        value.strip() != value
+        or "\n" in value
+        or value[:1] in {"-", "?", ":"}
+        or any(ch in value for ch in [":", "#", "{", "}", "[", "]", ",", "&", "*", "!", "|"])
+        or value.lower() in {"true", "false", "null", "~", "yes", "no", "on", "off"}
+    )
+    if not needs_quotes:
+        return value
+
+    escaped = value.replace("\\", "\\\\").replace('"', '\\"').replace("\n", "\\n")
+    return f'"{escaped}"'
+
+
+def _looks_like_yaml_fragment(value: str) -> bool:
+    """Return True if value appears to be preformatted YAML list/map content."""
+    if "\n" not in value:
+        return False
+    lines = [ln for ln in value.splitlines() if ln.strip()]
+    if not lines:
+        return False
+    return all(ln.lstrip().startswith("-") for ln in lines)
 
 
 def collect_unresolved_manual(rendered_text: str) -> list[str]:

@@ -1,0 +1,27 @@
+name: Daily AgentTeams Security Maintenance
+
+on:
+  schedule:
+    - cron: "23 5 * * *"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  daily-security-maintenance:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install package and test dependencies
+        run: pip install -e . pytest
+
+      - name: Run daily agentteams security maintenance (autonomous)
+        run: bash scripts/run_daily_security_maintenance.sh
