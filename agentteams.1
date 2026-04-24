@@ -2,7 +2,7 @@
 .SH NAME
 agentteams \- Generate a complete agent team for any project.
 .SH SYNOPSIS
-.B agentteams [--description PATH] [--project PATH] [--framework NAME] [--output DIR] [--dry-run] [--overwrite] [--merge] [--yes] [--no-scan] [--update] [--prune] [--check] [--scan-security] [--self] [--post-audit] [--auto-correct] [--enrich] [--security-offline] [--security-max-items N] [--security-no-nvd] [--migrate] [--revert-migration] [--version] [--no-backup] [--list-backups] [--restore-backup TIMESTAMP]
+.B agentteams [--description PATH] [--project PATH] [--framework NAME] [--output DIR] [--dry-run] [--overwrite] [--merge] [--yes] [--no-scan] [--update] [--prune] [--check] [--scan-security] [--self] [--post-audit] [--auto-correct] [--enrich] [--security-offline] [--security-max-items N] [--security-no-nvd] [--migrate] [--convert-from DIR] [--interop-from DIR] [--interop-source-framework INTEROP_SOURCE_FRAMEWORK] [--interop-mode INTEROP_MODE] [--bridge-from DIR] [--bridge-source-framework BRIDGE_SOURCE_FRAMEWORK] [--bridge-check] [--bridge-refresh] [--revert-migration] [--version] [--no-backup] [--list-backups] [--restore-backup TIMESTAMP]
 .SH DESCRIPTION
 .PP
 Generate a complete agent team for any project.
@@ -22,7 +22,7 @@ Project directory to scan and use as base (overrides existing_project_path in de
 Target framework: copilot\-vscode, copilot\-cli, claude (default: copilot\-vscode)
 .TP
 .B \-\-output, \-o DIR
-Output directory for agent files. Default: <project>/.github/agents/
+Output directory for agent files. Default: <project>/.github/agents/ (copilot\-vscode), <project>/.github/copilot/ (copilot\-cli), <project>/.claude/agents/ (claude).
 .TP
 .B \-\-dry\-run
 Show what would be generated without writing files
@@ -74,6 +74,30 @@ Skip NVD CVSS enrichment (avoids ~7 s per CVE rate\-limit sleep). CISA KEV + EPS
 .TP
 .B \-\-migrate
 One\-step legacy fencing migration. Tags the current git state as 'pre\-fencing\-snapshot', then runs \-\-overwrite to regenerate all agent files with fenced templates. Prints a quality\-audit checklist on completion. Use \-\-revert\-migration to undo.
+.TP
+.B \-\-convert\-from DIR
+Convert an existing agent team from DIR to the target \-\-framework. Reads each agent file, preserves its prose body, and re\-wraps it with the target framework's front matter. Does not require \-\-description. Use \-\-output to specify the destination agents directory.
+.TP
+.B \-\-interop\-from DIR
+Run cross\-framework interop pipeline from an existing team directory. Uses Canonical Agent Interface (CAI) normalization before writing target output.
+.TP
+.B \-\-interop\-source\-framework {copilot\-vscode,copilot\-cli,claude}
+Optional source framework override for \-\-interop\-from (auto\-detected when omitted).
+.TP
+.B \-\-interop\-mode {direct,bundle}
+Interop mode: direct conversion only, or bundle (conversion + interop artifacts).
+.TP
+.B \-\-bridge\-from DIR
+Generate a lightweight interface bridge from an existing source team directory without regenerating source agent documentation.
+.TP
+.B \-\-bridge\-source\-framework {copilot\-vscode,copilot\-cli,claude}
+Optional source framework override for \-\-bridge\-from (auto\-detected when omitted).
+.TP
+.B \-\-bridge\-check
+Check bridge freshness against source files without regenerating bridge artifacts.
+.TP
+.B \-\-bridge\-refresh
+Refresh bridge artifacts even if they already exist.
 .TP
 .B \-\-revert\-migration
 Undo a previous \-\-migrate run. Runs 'git reset \-\-hard pre\-fencing\-snapshot' in the project directory and deletes the 'pre\-fencing\-snapshot' tag. Requires the project directory to be a git repository with that tag present.
