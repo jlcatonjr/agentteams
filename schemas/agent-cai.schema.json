@@ -1,0 +1,88 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://jlcatonjr.github.io/agentteams/schemas/agent-cai.schema.json",
+  "title": "Agent Canonical Interface",
+  "type": "object",
+  "required": [
+    "schema_version",
+    "created_at",
+    "source_framework",
+    "agents",
+    "instructions_binding"
+  ],
+  "properties": {
+    "schema_version": {
+      "type": "string"
+    },
+    "created_at": {
+      "type": "string"
+    },
+    "source_framework": {
+      "type": "string",
+      "enum": [
+        "copilot-vscode",
+        "copilot-cli",
+        "claude"
+      ]
+    },
+    "source_dir": {
+      "type": "string"
+    },
+    "instructions_binding": {
+      "type": "object",
+      "required": [
+        "source_name",
+        "content"
+      ],
+      "properties": {
+        "source_name": {
+          "type": "string"
+        },
+        "content": {
+          "type": "string"
+        }
+      },
+      "additionalProperties": false
+    },
+    "agents": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": [
+          "slug",
+          "name",
+          "body_markdown",
+          "source_path"
+        ],
+        "properties": {
+          "slug": {
+            "type": "string"
+          },
+          "name": {
+            "type": "string"
+          },
+          "description": {
+            "type": "string"
+          },
+          "body_markdown": {
+            "type": "string"
+          },
+          "capabilities": {
+            "type": "object"
+          },
+          "handoffs": {
+            "type": "array",
+            "items": {
+              "type": "object"
+            }
+          },
+          "source_path": {
+            "type": "string"
+          }
+        },
+        "additionalProperties": true
+      }
+    }
+  },
+  "additionalProperties": true
+}

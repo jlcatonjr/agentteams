@@ -83,13 +83,14 @@ Return the default agent file directory for a given project path.
 
 ### Concrete Method
 
-#### `finalize_output_path(rel_path)`
+#### `finalize_output_path(rel_path, file_type)`
 
 Adjust an output path's extension for this framework. Default implementation: no-op.
 
 **Args:**
 
 - `rel_path` (`str`) — Relative output path.
+- `file_type` (`str`) — Logical file type (`agent`, `builder`, `instructions`, etc.).
 
 **Returns:** `str` — Path with adjusted extension.
 
@@ -119,7 +120,7 @@ Adapter for Copilot CLI.
 - **framework_id:** `'copilot-cli'`
 - **Output format:** Plain `.md` system prompts
 - **Handoffs:** Not supported (YAML and handoff blocks stripped)
-- **Agents dir:** `<project>/.github/agents/`
+- **Agents dir:** `<project>/.github/copilot/`
 
 Strips YAML front matter and handoff blocks to produce plain Markdown system prompts compatible with the Copilot CLI.
 
@@ -132,8 +133,8 @@ Strips YAML front matter and handoff blocks to produce plain Markdown system pro
 Adapter for Claude Projects.
 
 - **framework_id:** `'claude'`
-- **Output format:** Plain `.md` (`CLAUDE.md`-compatible)
+- **Output format:** Claude front matter `.md` (`CLAUDE.md`-compatible)
 - **Handoffs:** Not supported
-- **Agents dir:** `<project>/.github/agents/`
+- **Agents dir:** `<project>/.claude/agents/`
 
-Strips YAML and handoff blocks; produces plain Markdown suitable for use as Claude system prompts.
+Strips VS Code YAML and handoff blocks, then injects Claude-compatible front matter and preserves Markdown body content.

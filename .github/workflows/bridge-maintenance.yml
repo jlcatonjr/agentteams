@@ -1,0 +1,35 @@
+name: Daily AgentTeams Bridge Maintenance
+
+on:
+  schedule:
+    - cron: "41 5 * * *"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  daily-bridge-maintenance:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install package
+        run: pip install -e .
+
+      - name: Run daily bridge maintenance (autonomous)
+        run: bash scripts/run_daily_bridge_maintenance.sh
+
+      - name: Upload bridge maintenance summary
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: bridge-maintenance-summary
+          path: tmp/bridge-maintenance/
+          if-no-files-found: warn

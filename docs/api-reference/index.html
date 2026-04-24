@@ -327,6 +327,25 @@
   
   
     <li class="md-tabs__item">
+      <a href="../interoperability/" class="md-tabs__link">
+        
+  
+  
+    
+  
+  Interoperability
+
+      </a>
+    </li>
+  
+
+      
+        
+  
+  
+  
+  
+    <li class="md-tabs__item">
       <a href="../cli-reference/" class="md-tabs__link">
         
   
@@ -671,6 +690,33 @@
   
   
     <li class="md-nav__item">
+      <a href="../interoperability/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Interoperability
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
       <a href="../cli-reference/" class="md-nav__link">
         
   
@@ -716,10 +762,10 @@
       
         
         
-        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_8" checked>
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_9" checked>
         
           
-          <label class="md-nav__link" for="__nav_8" id="__nav_8_label" tabindex="">
+          <label class="md-nav__link" for="__nav_9" id="__nav_9_label" tabindex="">
             
   
   
@@ -737,8 +783,8 @@
             <span class="md-nav__icon md-icon"></span>
           </label>
         
-        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_8_label" aria-expanded="true">
-          <label class="md-nav__title" for="__nav_8">
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_9_label" aria-expanded="true">
+          <label class="md-nav__title" for="__nav_9">
             <span class="md-nav__icon md-icon"></span>
             
   
@@ -841,6 +887,17 @@
     <span class="md-ellipsis">
       
         Typical Pipeline Usage
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#interoperability-api-family" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Interoperability API Family
       
     </span>
   </a>
@@ -955,6 +1012,90 @@
     
   
     emit
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="convert/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    convert
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="interop/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    interop
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="bridge/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    bridge
   
 
     
@@ -1393,6 +1534,17 @@
   
 </li>
       
+        <li class="md-nav__item">
+  <a href="#interoperability-api-family" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Interoperability API Family
+      
+    </span>
+  </a>
+  
+</li>
+      
     </ul>
   
 </nav>
@@ -1454,6 +1606,18 @@
 </thead>
 <tbody>
 <tr>
+<td><a href="convert/"><code>convert</code></a></td>
+<td>Direct format migration between framework outputs</td>
+</tr>
+<tr>
+<td><a href="interop/"><code>interop</code></a></td>
+<td>Canonical Agent Interface (CAI) interop pipeline</td>
+</tr>
+<tr>
+<td><a href="bridge/"><code>bridge</code></a></td>
+<td>Lightweight runtime compatibility bridge artifacts</td>
+</tr>
+<tr>
 <td><a href="drift/"><code>drift</code></a></td>
 <td>Detect template-to-instance drift for incremental updates</td>
 </tr>
@@ -1504,6 +1668,15 @@
 <a id="__codelineno-0-13" name="__codelineno-0-13" href="#__codelineno-0-13"></a><span class="n">result</span> <span class="o">=</span> <span class="n">emit</span><span class="o">.</span><span class="n">emit_all</span><span class="p">(</span><span class="n">final</span><span class="p">,</span> <span class="n">output_dir</span><span class="o">=</span><span class="n">Path</span><span class="p">(</span><span class="s2">&quot;.github/agents&quot;</span><span class="p">),</span> <span class="n">dry_run</span><span class="o">=</span><span class="kc">False</span><span class="p">)</span>
 <a id="__codelineno-0-14" name="__codelineno-0-14" href="#__codelineno-0-14"></a><span class="n">emit</span><span class="o">.</span><span class="n">print_summary</span><span class="p">(</span><span class="n">result</span><span class="p">,</span> <span class="n">manifest</span><span class="p">)</span>
 </code></pre></div>
+<hr />
+<h2 id="interoperability-api-family">Interoperability API Family<a class="headerlink" href="#interoperability-api-family" title="Permanent link">&para;</a></h2>
+<p>The interoperability feature family has three dedicated modules:</p>
+<ol>
+<li><a href="convert/"><code>convert</code></a> for format migration.</li>
+<li><a href="interop/"><code>interop</code></a> for CAI normalization and transfer.</li>
+<li><a href="bridge/"><code>bridge</code></a> for lightweight source-canonical runtime bridging.</li>
+</ol>
+<p>For workflow-level usage and mode selection, see the <a href="../interoperability/">Interoperability</a> page.</p>
 
 
 

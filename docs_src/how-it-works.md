@@ -26,7 +26,7 @@ brief.json / brief.md
         │ (output_path, rendered_content) pairs
         ▼
    ┌──────┐
-   │ emit  │  Write agent files to .github/agents/
+    │ emit  │  Write agent files to framework-specific target directories
    └──────┘
 ```
 
@@ -50,7 +50,18 @@ Loads each template from `templates/` and substitutes every `{PLACEHOLDER}` with
 
 ### Stage 4 — Emit (`agentteams/emit.py`)
 
-Writes all rendered files to the target project's `.github/agents/` directory (or equivalent). Generates `SETUP-REQUIRED.md` for any unresolved manual placeholders, and runs the post-generation audit and security scan.
+Writes all rendered files to the target framework directory:
+
+- `copilot-vscode` -> `.github/agents/`
+- `copilot-cli` -> `.github/copilot/`
+- `claude` -> `.claude/agents/`
+
+Also writes framework instructions at the parent level (`copilot-instructions.md` or `CLAUDE.md`), generates `SETUP-REQUIRED.md` for unresolved manual placeholders, and runs post-generation audit/security scan when requested.
+
+### Path B: Convert Existing Teams
+
+In addition to fresh generation, the module supports format migration with `--convert-from`.
+This path reads existing agent files, preserves body prose, and rewrites framework wrappers/front matter for the target framework.
 
 ---
 
@@ -138,7 +149,7 @@ The same template library targets three frameworks via adapters in `agentteams/f
 |-----------|-------------|-------------|
 | `copilot-vscode` | `.agent.md` with YAML front matter | VS Code Copilot agent panel |
 | `copilot-cli` | Plain `.md` system prompts | `gh copilot` CLI |
-| `claude` | Plain `.md` + `CLAUDE.md` | Claude Projects |
+| `claude` | Claude front matter `.md` + `CLAUDE.md` | Claude Projects |
 
 Each adapter in `agentteams/frameworks/` knows the file naming conventions, front-matter schema, and handoff syntax for its target framework.
 

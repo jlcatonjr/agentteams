@@ -60,13 +60,22 @@ class FrameworkAdapter(ABC):
     def get_agents_dir(self, project_path: Path) -> Path:
         """Return the default agent file directory for a given project path."""
 
-    def finalize_output_path(self, rel_path: str) -> str:
-        """Adjust an output path's extension for this framework. Default: no-op."""
-        ext = self.get_file_extension("agent")
-        if rel_path.endswith(".agent.md"):
-            return rel_path
-        if rel_path.endswith(".md") and ext != ".md":
-            return rel_path[:-3] + ext
+    def finalize_output_path(self, rel_path: str, file_type: str) -> str:
+        """Adjust an output path for this framework.
+
+        Args:
+            rel_path: Planned output path from manifest/output planning.
+            file_type: Logical file type (agent, builder, instructions, etc.).
+
+        Returns:
+            Framework-adjusted relative output path.
+        """
+        if file_type in {"agent", "builder"}:
+            ext = self.get_file_extension(file_type)
+            if rel_path.endswith(".agent.md") and ext != ".agent.md":
+                return rel_path[: -len(".agent.md")] + ext
+            if rel_path.endswith(".md") and ext not in {".md", ".agent.md"}:
+                return rel_path[:-3] + ext
         return rel_path
 
     # ------------------------------------------------------------------

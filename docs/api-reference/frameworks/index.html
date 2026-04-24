@@ -327,6 +327,25 @@
   
   
     <li class="md-tabs__item">
+      <a href="../../interoperability/" class="md-tabs__link">
+        
+  
+  
+    
+  
+  Interoperability
+
+      </a>
+    </li>
+  
+
+      
+        
+  
+  
+  
+  
+    <li class="md-tabs__item">
       <a href="../../cli-reference/" class="md-tabs__link">
         
   
@@ -671,6 +690,33 @@
   
   
     <li class="md-nav__item">
+      <a href="../../interoperability/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Interoperability
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
       <a href="../../cli-reference/" class="md-nav__link">
         
   
@@ -716,10 +762,10 @@
       
         
         
-        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_8" checked>
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_9" checked>
         
           
-          <label class="md-nav__link" for="__nav_8" id="__nav_8_label" tabindex="">
+          <label class="md-nav__link" for="__nav_9" id="__nav_9_label" tabindex="">
             
   
   
@@ -737,8 +783,8 @@
             <span class="md-nav__icon md-icon"></span>
           </label>
         
-        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_8_label" aria-expanded="true">
-          <label class="md-nav__title" for="__nav_8">
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_9_label" aria-expanded="true">
+          <label class="md-nav__title" for="__nav_9">
             <span class="md-nav__icon md-icon"></span>
             
   
@@ -875,6 +921,90 @@
     
   
     emit
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../convert/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    convert
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../interop/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    interop
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../bridge/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    bridge
   
 
     
@@ -1247,10 +1377,10 @@
       <ul class="md-nav__list">
         
           <li class="md-nav__item">
-  <a href="#finalize_output_pathrel_path" class="md-nav__link">
+  <a href="#finalize_output_pathrel_path-file_type" class="md-nav__link">
     <span class="md-ellipsis">
       
-        finalize_output_path(rel_path)
+        finalize_output_path(rel_path, file_type)
       
     </span>
   </a>
@@ -1630,10 +1760,10 @@
       <ul class="md-nav__list">
         
           <li class="md-nav__item">
-  <a href="#finalize_output_pathrel_path" class="md-nav__link">
+  <a href="#finalize_output_pathrel_path-file_type" class="md-nav__link">
     <span class="md-ellipsis">
       
-        finalize_output_path(rel_path)
+        finalize_output_path(rel_path, file_type)
       
     </span>
   </a>
@@ -1759,11 +1889,12 @@
 <p><strong>Returns:</strong> <code>Path</code></p>
 <hr />
 <h3 id="concrete-method">Concrete Method<a class="headerlink" href="#concrete-method" title="Permanent link">&para;</a></h3>
-<h4 id="finalize_output_pathrel_path"><code>finalize_output_path(rel_path)</code><a class="headerlink" href="#finalize_output_pathrel_path" title="Permanent link">&para;</a></h4>
+<h4 id="finalize_output_pathrel_path-file_type"><code>finalize_output_path(rel_path, file_type)</code><a class="headerlink" href="#finalize_output_pathrel_path-file_type" title="Permanent link">&para;</a></h4>
 <p>Adjust an output path's extension for this framework. Default implementation: no-op.</p>
 <p><strong>Args:</strong></p>
 <ul>
 <li><code>rel_path</code> (<code>str</code>) — Relative output path.</li>
+<li><code>file_type</code> (<code>str</code>) — Logical file type (<code>agent</code>, <code>builder</code>, <code>instructions</code>, etc.).</li>
 </ul>
 <p><strong>Returns:</strong> <code>str</code> — Path with adjusted extension.</p>
 <hr />
@@ -1789,7 +1920,7 @@
 <li><strong>framework_id:</strong> <code>'copilot-cli'</code></li>
 <li><strong>Output format:</strong> Plain <code>.md</code> system prompts</li>
 <li><strong>Handoffs:</strong> Not supported (YAML and handoff blocks stripped)</li>
-<li><strong>Agents dir:</strong> <code>&lt;project&gt;/.github/agents/</code></li>
+<li><strong>Agents dir:</strong> <code>&lt;project&gt;/.github/copilot/</code></li>
 </ul>
 <p>Strips YAML front matter and handoff blocks to produce plain Markdown system prompts compatible with the Copilot CLI.</p>
 <hr />
@@ -1800,11 +1931,11 @@
 <p>Adapter for Claude Projects.</p>
 <ul>
 <li><strong>framework_id:</strong> <code>'claude'</code></li>
-<li><strong>Output format:</strong> Plain <code>.md</code> (<code>CLAUDE.md</code>-compatible)</li>
+<li><strong>Output format:</strong> Claude front matter <code>.md</code> (<code>CLAUDE.md</code>-compatible)</li>
 <li><strong>Handoffs:</strong> Not supported</li>
-<li><strong>Agents dir:</strong> <code>&lt;project&gt;/.github/agents/</code></li>
+<li><strong>Agents dir:</strong> <code>&lt;project&gt;/.claude/agents/</code></li>
 </ul>
-<p>Strips YAML and handoff blocks; produces plain Markdown suitable for use as Claude system prompts.</p>
+<p>Strips VS Code YAML and handoff blocks, then injects Claude-compatible front matter and preserves Markdown body content.</p>
 
 
 

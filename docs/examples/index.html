@@ -18,7 +18,7 @@
         <link rel="prev" href="../how-it-works/">
       
       
-        <link rel="next" href="../cli-reference/">
+        <link rel="next" href="../interoperability/">
       
       
         
@@ -317,6 +317,25 @@
     
   
   Examples
+
+      </a>
+    </li>
+  
+
+      
+        
+  
+  
+  
+  
+    <li class="md-tabs__item">
+      <a href="../interoperability/" class="md-tabs__link">
+        
+  
+  
+    
+  
+  Interoperability
 
       </a>
     </li>
@@ -747,10 +766,48 @@
   
 </li>
       
+        <li class="md-nav__item">
+  <a href="#format-migration-example" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Format Migration Example
+      
+    </span>
+  </a>
+  
+</li>
+      
     </ul>
   
 </nav>
       
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../interoperability/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Interoperability
+  
+
+    
+  </span>
+  
+  
+
+      </a>
     </li>
   
 
@@ -802,10 +859,10 @@
       
         
         
-        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_8" >
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_9" >
         
           
-          <label class="md-nav__link" for="__nav_8" id="__nav_8_label" tabindex="0">
+          <label class="md-nav__link" for="__nav_9" id="__nav_9_label" tabindex="0">
             
   
   
@@ -823,8 +880,8 @@
             <span class="md-nav__icon md-icon"></span>
           </label>
         
-        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_8_label" aria-expanded="false">
-          <label class="md-nav__title" for="__nav_8">
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_9_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_9">
             <span class="md-nav__icon md-icon"></span>
             
   
@@ -961,6 +1018,90 @@
     
   
     emit
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../api-reference/convert/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    convert
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../api-reference/interop/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    interop
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../api-reference/bridge/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    bridge
   
 
     
@@ -1410,6 +1551,17 @@
   
 </li>
       
+        <li class="md-nav__item">
+  <a href="#format-migration-example" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Format Migration Example
+      
+    </span>
+  </a>
+  
+</li>
+      
     </ul>
   
 </nav>
@@ -1450,7 +1602,7 @@
 <li>Domain agents: <code>@primary-producer</code>, <code>@quality-auditor</code>, <code>@technical-validator</code>, <code>@format-converter</code></li>
 <li>Workstream experts: one per component (e.g. <code>@auth-module-expert</code>, <code>@tasks-api-expert</code>)</li>
 <li>Specialist agents for FastAPI and PostgreSQL</li>
-<li><code>copilot-instructions.md</code> wired to the full team</li>
+<li>Framework instructions file wired to the full team (<code>copilot-instructions.md</code> or <code>CLAUDE.md</code>)</li>
 </ul>
 <p><strong>To run this example:</strong></p>
 <div class="highlight"><pre><span></span><code><a id="__codelineno-1-1" name="__codelineno-1-1" href="#__codelineno-1-1"></a>agentteams<span class="w"> </span><span class="se">\</span>
@@ -1501,7 +1653,7 @@
 <li>Domain agents include <code>@reference-manager</code>, <code>@format-converter</code>, and <code>@quality-auditor</code></li>
 <li>Authority hierarchy sourced from academic papers and agent documentation</li>
 <li>Workstream experts per chapter / manuscript section</li>
-<li><code>copilot-instructions.md</code> tuned for academic writing conventions</li>
+<li>Framework instructions file tuned for academic writing conventions</li>
 </ul>
 <p><strong>To run this example:</strong></p>
 <div class="highlight"><pre><span></span><code><a id="__codelineno-5-1" name="__codelineno-5-1" href="#__codelineno-5-1"></a>agentteams<span class="w"> </span><span class="se">\</span>
@@ -1520,6 +1672,15 @@
 <a id="__codelineno-6-5" name="__codelineno-6-5" href="#__codelineno-6-5"></a><span class="p">}</span>
 </code></pre></div>
 <p>All other fields are auto-inferred or prompted via <code>SETUP-REQUIRED.md</code> after generation.</p>
+<hr />
+<h2 id="format-migration-example">Format Migration Example<a class="headerlink" href="#format-migration-example" title="Permanent link">&para;</a></h2>
+<p>If a team already exists and you want to retarget to another runtime without re-rendering from templates:</p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-7-1" name="__codelineno-7-1" href="#__codelineno-7-1"></a>agentteams<span class="w"> </span><span class="se">\</span>
+<a id="__codelineno-7-2" name="__codelineno-7-2" href="#__codelineno-7-2"></a><span class="w">  </span>--convert-from<span class="w"> </span>/tmp/webappbackend/.github/agents<span class="w"> </span><span class="se">\</span>
+<a id="__codelineno-7-3" name="__codelineno-7-3" href="#__codelineno-7-3"></a><span class="w">  </span>--framework<span class="w"> </span>copilot-cli<span class="w"> </span><span class="se">\</span>
+<a id="__codelineno-7-4" name="__codelineno-7-4" href="#__codelineno-7-4"></a><span class="w">  </span>--output<span class="w"> </span>/tmp/webappbackend/.github/copilot
+</code></pre></div>
+<p>This migration path preserves body prose and rewrites only framework wrappers/front matter.</p>
 
 
 

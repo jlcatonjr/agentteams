@@ -19,6 +19,9 @@ This reference defines the **supported public API contract**. Modules and symbol
 
 | Module | Role |
 |--------|------|
+| [`convert`](convert.md) | Direct format migration between framework outputs |
+| [`interop`](interop.md) | Canonical Agent Interface (CAI) interop pipeline |
+| [`bridge`](bridge.md) | Lightweight runtime compatibility bridge artifacts |
 | [`drift`](drift.md) | Detect template-to-instance drift for incremental updates |
 | [`scan`](scan.md) | Proactive security scan for generated agent files |
 | [`audit`](audit.md) | Post-generation static and AI-powered audit |
@@ -48,3 +51,15 @@ final = [(p, adapter.render_agent_file(c, Path(p).stem, manifest))
 result = emit.emit_all(final, output_dir=Path(".github/agents"), dry_run=False)
 emit.print_summary(result, manifest)
 ```
+
+---
+
+## Interoperability API Family
+
+The interoperability feature family has three dedicated modules:
+
+1. [`convert`](convert.md) for format migration.
+2. [`interop`](interop.md) for CAI normalization and transfer.
+3. [`bridge`](bridge.md) for lightweight source-canonical runtime bridging.
+
+For workflow-level usage and mode selection, see the [Interoperability](../interoperability.md) page.

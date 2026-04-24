@@ -14,7 +14,9 @@ Options:
     --description  PATH   Project description file (.json or .md) [required]
     --project      PATH   Existing project directory to scan (overrides existing_project_path in description)
     --framework    NAME   Target framework: copilot-vscode (default), copilot-cli, claude
-    --output       DIR    Output directory for agent files (default: <project>/.github/agents/)
+    --output       DIR    Output directory for agent files (default: framework-specific agents
+                          directory under <project>: .github/agents/ for copilot-vscode,
+                          .github/copilot/ for copilot-cli, .claude/agents/ for claude)
     --dry-run             Show what would be generated without writing files
     --overwrite           Overwrite existing agent files without prompting
     --yes                 Non-interactive: answer yes to all prompts
@@ -30,6 +32,10 @@ Options:
                           and print a quality-audit checklist. Use --revert-migration to undo.
     --revert-migration    Undo a --migrate run: git reset --hard pre-fencing-snapshot and delete
                           the tag. Requires the project directory to be a git repository.
+    --convert-from DIR    Convert an existing agent team from DIR to the target --framework.
+                          Reads existing agent files, preserves prose body, replaces front
+                          matter with the target framework's conventions. Does not require
+                          --description. Use --output to specify the destination directory.
     --version             Print version and exit
 """
 
@@ -99,7 +105,12 @@ def _build_parser() -> argparse.ArgumentParser:
         "--output", "-o",
         metavar="DIR",
         default=None,
-        help="Output directory for agent files. Default: <project>/.github/agents/",
+        help=(
+            "Output directory for agent files. "
+            "Default: <project>/.github/agents/ (copilot-vscode), "
+            "<project>/.github/copilot/ (copilot-cli), "
+            "<project>/.claude/agents/ (claude)."
+        ),
     )
     parser.add_argument(
         "--dry-run",
@@ -224,6 +235,71 @@ def _build_parser() -> argparse.ArgumentParser:
         ),
     )
     parser.add_argument(
+        "--convert-from",
+        metavar="DIR",
+        dest="convert_from",
+        default=None,
+        help=(
+            "Convert an existing agent team from DIR to the target --framework. "
+            "Reads each agent file, preserves its prose body, and re-wraps it with "
+            "the target framework's front matter. Does not require --description. "
+            "Use --output to specify the destination agents directory."
+        ),
+    )
+    parser.add_argument(
+        "--interop-from",
+        metavar="DIR",
+        dest="interop_from",
+        default=None,
+        help=(
+            "Run cross-framework interop pipeline from an existing team directory. "
+            "Uses Canonical Agent Interface (CAI) normalization before writing target output."
+        ),
+    )
+    parser.add_argument(
+        "--interop-source-framework",
+        dest="interop_source_framework",
+        choices=list(FRAMEWORKS.keys()),
+        default=None,
+        help="Optional source framework override for --interop-from (auto-detected when omitted).",
+    )
+    parser.add_argument(
+        "--interop-mode",
+        dest="interop_mode",
+        choices=["direct", "bundle"],
+        default="direct",
+        help="Interop mode: direct conversion only, or bundle (conversion + interop artifacts).",
+    )
+    parser.add_argument(
+        "--bridge-from",
+        metavar="DIR",
+        dest="bridge_from",
+        default=None,
+        help=(
+            "Generate a lightweight interface bridge from an existing source team directory "
+            "without regenerating source agent documentation."
+        ),
+    )
+    parser.add_argument(
+        "--bridge-source-framework",
+        dest="bridge_source_framework",
+        choices=list(FRAMEWORKS.keys()),
+        default=None,
+        help="Optional source framework override for --bridge-from (auto-detected when omitted).",
+    )
+    parser.add_argument(
+        "--bridge-check",
+        action="store_true",
+        dest="bridge_check",
+        help="Check bridge freshness against source files without regenerating bridge artifacts.",
+    )
+    parser.add_argument(
+        "--bridge-refresh",
+        action="store_true",
+        dest="bridge_refresh",
+        help="Refresh bridge artifacts even if they already exist.",
+    )
+    parser.add_argument(
         "--revert-migration",
         action="store_true",
         dest="revert_migration",
@@ -275,6 +351,7 @@ def _build_parser() -> argparse.ArgumentParser:
 def main(argv: list[str] | None = None) -> int:
     parser = _build_parser()
     args = parser.parse_args(argv)
+    _validate_option_combinations(parser, args)
 
     # -----------------------------------------------------------------------
     # --self: redirect to the module's own build description
@@ -305,6 +382,46 @@ def main(argv: list[str] | None = None) -> int:
             parser.error("--description is required with --migrate")
         project_dir = Path(args.project).resolve() if args.project else Path.cwd()
         return _run_migrate(project_dir, argv or sys.argv[1:])
+
+    # -----------------------------------------------------------------------
+    # --convert-from: format migration (no --description needed)
+    # -----------------------------------------------------------------------
+    if args.convert_from:
+        return _run_convert(
+            source_dir=Path(args.convert_from).resolve(),
+            target_framework=args.framework,
+            output=Path(args.output).resolve() if args.output else None,
+            dry_run=args.dry_run,
+            overwrite=args.overwrite,
+        )
+
+    # -----------------------------------------------------------------------
+    # --interop-from: CAI-based cross-framework interop pipeline
+    # -----------------------------------------------------------------------
+    if args.interop_from:
+        return _run_interop(
+            source_dir=Path(args.interop_from).resolve(),
+            source_framework=args.interop_source_framework,
+            target_framework=args.framework,
+            output=Path(args.output).resolve() if args.output else None,
+            mode=args.interop_mode,
+            dry_run=args.dry_run,
+            overwrite=args.overwrite,
+        )
+
+    # -----------------------------------------------------------------------
+    # --bridge-from: lightweight bridge interface generation/check
+    # -----------------------------------------------------------------------
+    if args.bridge_from:
+        return _run_bridge(
+            source_dir=Path(args.bridge_from).resolve(),
+            source_framework=args.bridge_source_framework,
+            target_framework=args.framework,
+            output=Path(args.output).resolve() if args.output else None,
+            dry_run=args.dry_run,
+            overwrite=(args.overwrite or args.bridge_refresh),
+            check_only=args.bridge_check,
+        )
 
     if not args.description:
         parser.error("--description is required (or use --self for self-maintenance)")
@@ -367,7 +484,7 @@ def main(argv: list[str] | None = None) -> int:
         project_path = Path(description["existing_project_path"])
         output_dir = adapter.get_agents_dir(project_path)
     else:
-        output_dir = Path.cwd() / ".github" / "agents"
+        output_dir = adapter.get_agents_dir(Path.cwd())
 
     print(f"  Output directory: {output_dir}")
 
@@ -477,7 +594,8 @@ def main(argv: list[str] | None = None) -> int:
             content = adapter.render_agent_file(content, slug, manifest)
         elif file_type == "instructions":
             content = adapter.render_instructions_file(content, manifest)
-        final_rendered.append((rel_path, content))
+        final_path = adapter.finalize_output_path(rel_path, file_type)
+        final_rendered.append((final_path, content))
 
     # -----------------------------------------------------------------------
     # Step 5c: Generate team topology graph
@@ -773,6 +891,333 @@ def main(argv: list[str] | None = None) -> int:
 # Helpers
 # ---------------------------------------------------------------------------
 
+def _run_convert(
+    source_dir: Path,
+    target_framework: str,
+    output: Path | None,
+    dry_run: bool,
+    overwrite: bool,
+) -> int:
+    """Execute the --convert-from path: convert an existing team to a new framework format.
+
+    Args:
+        source_dir: Directory containing the source agent files.
+        target_framework: Target framework identifier.
+        output: Explicit output directory, or None to auto-derive from source.
+        dry_run: When True, report actions without writing files.
+        overwrite: When True, overwrite existing target files.
+
+    Returns:
+        0 on success, 1 on error.
+    """
+    from agentteams.convert import convert_team
+
+    if output is not None:
+        target_dir = output
+    else:
+        # Auto-derive: use source parent as project root, place agents under framework dir
+        project_root = source_dir.parent.parent  # e.g. /repo from /repo/.github/agents
+        adapter_cls = FRAMEWORKS[target_framework]
+        target_dir = adapter_cls().get_agents_dir(project_root)
+
+    dry_label = " (dry-run)" if dry_run else ""
+    print(
+        f"Converting{dry_label} agent team:\n"
+        f"  source:  {source_dir}\n"
+        f"  target:  {target_dir}\n"
+        f"  framework: {target_framework}"
+    )
+
+    # Read project_name from build-log.json if present (best-effort)
+    build_log_path = source_dir / "references" / "build-log.json"
+    project_manifest: dict = {}
+    if build_log_path.exists():
+        try:
+            import json as _json
+            with build_log_path.open("r", encoding="utf-8") as fh:
+                log = _json.load(fh)
+            if isinstance(log.get("project_name"), str):
+                project_manifest["project_name"] = log["project_name"]
+        except Exception:  # noqa: BLE001
+            pass
+
+    try:
+        result = convert_team(
+            source_dir=source_dir,
+            target_dir=target_dir,
+            target_framework=target_framework,
+            project_manifest=project_manifest,
+            dry_run=dry_run,
+            overwrite=overwrite,
+        )
+    except (ValueError, FileNotFoundError) as exc:
+        print(f"Error: {exc}", file=sys.stderr)
+        return 1
+
+    if result.errors:
+        print(f"\n  ✗  {len(result.errors)} error(s):")
+        for err in result.errors:
+            print(f"    {err}")
+
+    verb = "Would convert" if dry_run else "Converted"
+    print(
+        f"\n  {verb} {len(result.converted)} file(s)"
+        + (f", skipped {len(result.skipped)}" if result.skipped else "")
+        + "."
+    )
+    if dry_run and result.converted:
+        print("  Files that would be written:")
+        for path in result.converted:
+            print(f"    {path}")
+
+    return 0 if result.success else 1
+
+
+def _run_interop(
+    source_dir: Path,
+    source_framework: str | None,
+    target_framework: str,
+    output: Path | None,
+    mode: str,
+    dry_run: bool,
+    overwrite: bool,
+) -> int:
+    """Execute the --interop-from path via CAI normalization pipeline."""
+    from agentteams.interop import detect_framework, run_interop
+
+    detected = source_framework or detect_framework(source_dir)
+    if output is not None:
+        target_dir = output
+    else:
+        project_root = source_dir.parent.parent
+        target_dir = FRAMEWORKS[target_framework]().get_agents_dir(project_root)
+
+    dry_label = " (dry-run)" if dry_run else ""
+    print(
+        f"Running interop{dry_label}:\n"
+        f"  source:  {source_dir}\n"
+        f"  source framework: {detected}\n"
+        f"  target:  {target_dir}\n"
+        f"  target framework: {target_framework}\n"
+        f"  mode: {mode}"
+    )
+
+    try:
+        result = run_interop(
+            source_dir=source_dir,
+            source_framework=detected,
+            target_framework=target_framework,
+            target_dir=target_dir,
+            mode=mode,
+            dry_run=dry_run,
+            overwrite=overwrite,
+        )
+    except (ValueError, FileNotFoundError) as exc:
+        print(f"Error: {exc}", file=sys.stderr)
+        return 1
+
+    if result.errors:
+        print(f"\n  ✗  {len(result.errors)} error(s):")
+        for err in result.errors:
+            print(f"    {err}")
+
+    verb = "Would interop-convert" if dry_run else "Interop-converted"
+    print(
+        f"\n  {verb} {len(result.converted)} file(s)"
+        + (f", skipped {len(result.skipped)}" if result.skipped else "")
+        + "."
+    )
+    if result.bundle_files:
+        bundle_verb = "Would write" if dry_run else "Wrote"
+        print(f"  {bundle_verb} {len(result.bundle_files)} interop bundle file(s).")
+
+    return 0 if result.success else 1
+
+
+def _run_bridge(
+    source_dir: Path,
+    source_framework: str | None,
+    target_framework: str,
+    output: Path | None,
+    dry_run: bool,
+    overwrite: bool,
+    check_only: bool,
+) -> int:
+    """Execute the --bridge-from path via lightweight compatibility artifacts."""
+    from agentteams.bridge import run_bridge
+    from agentteams.interop import detect_framework
+
+    detected = source_framework or detect_framework(source_dir)
+    if output is not None:
+        output_root = output
+    else:
+        project_root = source_dir.parent.parent
+        output_root = project_root
+
+    dry_label = " (dry-run)" if dry_run else ""
+    print(
+        f"Running bridge{dry_label}:\n"
+        f"  source:  {source_dir}\n"
+        f"  source framework: {detected}\n"
+        f"  target framework: {target_framework}\n"
+        f"  output root: {output_root}\n"
+        f"  mode: {'check' if check_only else 'generate'}"
+    )
+
+    try:
+        result = run_bridge(
+            source_dir=source_dir,
+            source_framework=detected,
+            target_framework=target_framework,
+            output_root=output_root,
+            dry_run=dry_run,
+            overwrite=overwrite,
+            check_only=check_only,
+        )
+    except (ValueError, FileNotFoundError) as exc:
+        print(f"Error: {exc}", file=sys.stderr)
+        return 1
+
+    if result.errors:
+        print(f"\n  ✗  {len(result.errors)} error(s):")
+        for err in result.errors:
+            print(f"    {err}")
+
+    if check_only:
+        print(f"\n  Bridge check: {'PASS' if result.check_ok else 'FAIL'}")
+        if result.check_report_path:
+            print(f"  Report: {result.check_report_path}")
+    else:
+        verb = "Would write" if dry_run else "Wrote"
+        print(
+            f"\n  {verb} {len(result.written)} bridge file(s)"
+            + (f", skipped {len(result.skipped)}" if result.skipped else "")
+            + "."
+        )
+
+    return 0 if result.success else 1
+
+
+def _validate_option_combinations(parser: argparse.ArgumentParser, args: argparse.Namespace) -> None:
+    """Validate explicit incompatible option pairs and mode-specific constraints."""
+    if args.auto_correct and not args.post_audit:
+        parser.error("--auto-correct requires --post-audit")
+
+    if args.prune and not args.update:
+        parser.error("--prune can only be used with --update")
+
+    if args.convert_from and args.interop_from:
+        parser.error("--convert-from and --interop-from are mutually exclusive")
+
+    if args.bridge_from and args.convert_from:
+        parser.error("--bridge-from and --convert-from are mutually exclusive")
+
+    if args.bridge_from and args.interop_from:
+        parser.error("--bridge-from and --interop-from are mutually exclusive")
+
+    if args.bridge_check and args.bridge_refresh:
+        parser.error("--bridge-check cannot be combined with --bridge-refresh")
+
+    if args.bridge_check and not args.bridge_from:
+        parser.error("--bridge-check requires --bridge-from")
+
+    if args.bridge_refresh and not args.bridge_from:
+        parser.error("--bridge-refresh requires --bridge-from")
+
+    convert_incompatible = [
+        ("description", "--description"),
+        ("project", "--project"),
+        ("self_update", "--self"),
+        ("no_scan", "--no-scan"),
+        ("update", "--update"),
+        ("prune", "--prune"),
+        ("check", "--check"),
+        ("scan_security", "--scan-security"),
+        ("post_audit", "--post-audit"),
+        ("auto_correct", "--auto-correct"),
+        ("enrich", "--enrich"),
+        ("merge", "--merge"),
+        ("migrate", "--migrate"),
+        ("revert_migration", "--revert-migration"),
+        ("list_backups", "--list-backups"),
+        ("restore_backup", "--restore-backup"),
+    ]
+
+    interop_incompatible = [
+        ("description", "--description"),
+        ("project", "--project"),
+        ("self_update", "--self"),
+        ("no_scan", "--no-scan"),
+        ("update", "--update"),
+        ("prune", "--prune"),
+        ("check", "--check"),
+        ("scan_security", "--scan-security"),
+        ("post_audit", "--post-audit"),
+        ("auto_correct", "--auto-correct"),
+        ("enrich", "--enrich"),
+        ("merge", "--merge"),
+        ("migrate", "--migrate"),
+        ("revert_migration", "--revert-migration"),
+        ("list_backups", "--list-backups"),
+        ("restore_backup", "--restore-backup"),
+    ]
+
+    bridge_incompatible = [
+        ("description", "--description"),
+        ("project", "--project"),
+        ("self_update", "--self"),
+        ("no_scan", "--no-scan"),
+        ("update", "--update"),
+        ("prune", "--prune"),
+        ("check", "--check"),
+        ("scan_security", "--scan-security"),
+        ("post_audit", "--post-audit"),
+        ("auto_correct", "--auto-correct"),
+        ("enrich", "--enrich"),
+        ("merge", "--merge"),
+        ("migrate", "--migrate"),
+        ("revert_migration", "--revert-migration"),
+        ("list_backups", "--list-backups"),
+        ("restore_backup", "--restore-backup"),
+    ]
+
+    if args.convert_from:
+        for attr, flag in convert_incompatible:
+            val = getattr(args, attr)
+            if attr == "description":
+                if val is not None:
+                    parser.error(f"{flag} cannot be used with --convert-from")
+            elif attr == "restore_backup":
+                if val is not None:
+                    parser.error(f"{flag} cannot be used with --convert-from")
+            elif val:
+                parser.error(f"{flag} cannot be used with --convert-from")
+
+    if args.interop_from:
+        for attr, flag in interop_incompatible:
+            val = getattr(args, attr)
+            if attr == "description":
+                if val is not None:
+                    parser.error(f"{flag} cannot be used with --interop-from")
+            elif attr == "restore_backup":
+                if val is not None:
+                    parser.error(f"{flag} cannot be used with --interop-from")
+            elif val:
+                parser.error(f"{flag} cannot be used with --interop-from")
+
+    if args.bridge_from:
+        for attr, flag in bridge_incompatible:
+            val = getattr(args, attr)
+            if attr == "description":
+                if val is not None:
+                    parser.error(f"{flag} cannot be used with --bridge-from")
+            elif attr == "restore_backup":
+                if val is not None:
+                    parser.error(f"{flag} cannot be used with --bridge-from")
+            elif val:
+                parser.error(f"{flag} cannot be used with --bridge-from")
+
+
 def _prune_removed_files(
     removed_files: list[dict],
     output_dir: Path,
@@ -963,7 +1408,8 @@ def _attempt_auto_correct(
 
 
 def _guess_file_type(rel_path: str) -> str:
-    if "copilot-instructions" in rel_path:
+    lower = rel_path.lower()
+    if "copilot-instructions" in lower or rel_path.endswith("/CLAUDE.md") or rel_path == "../CLAUDE.md":
         return "instructions"
     if "SETUP-REQUIRED" in rel_path:
         return "setup-required"

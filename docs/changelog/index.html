@@ -325,6 +325,25 @@
   
   
     <li class="md-tabs__item">
+      <a href="../interoperability/" class="md-tabs__link">
+        
+  
+  
+    
+  
+  Interoperability
+
+      </a>
+    </li>
+  
+
+      
+        
+  
+  
+  
+  
+    <li class="md-tabs__item">
       <a href="../cli-reference/" class="md-tabs__link">
         
   
@@ -669,6 +688,33 @@
   
   
     <li class="md-nav__item">
+      <a href="../interoperability/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Interoperability
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
       <a href="../cli-reference/" class="md-nav__link">
         
   
@@ -709,10 +755,10 @@
       
         
         
-        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_8" >
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_9" >
         
           
-          <label class="md-nav__link" for="__nav_8" id="__nav_8_label" tabindex="0">
+          <label class="md-nav__link" for="__nav_9" id="__nav_9_label" tabindex="0">
             
   
   
@@ -730,8 +776,8 @@
             <span class="md-nav__icon md-icon"></span>
           </label>
         
-        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_8_label" aria-expanded="false">
-          <label class="md-nav__title" for="__nav_8">
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_9_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_9">
             <span class="md-nav__icon md-icon"></span>
             
   
@@ -868,6 +914,90 @@
     
   
     emit
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../api-reference/convert/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    convert
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../api-reference/interop/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    interop
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../api-reference/bridge/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    bridge
   
 
     
@@ -1507,7 +1637,12 @@ and this project adheres to <a href="https://semver.org/spec/v2.0.0.html">Semant
 </ul>
 <h3 id="added">Added<a class="headerlink" href="#added" title="Permanent link">&para;</a></h3>
 <ul>
-<li><strong>Safety: automatic backup before writes</strong> — <code>build_team.py</code> now creates a timestamped backup of all agent files that will be overwritten before any <code>--overwrite</code>, <code>--merge</code>, or <code>--update</code> run. Backups are stored at <code>&lt;output_dir&gt;/.agentteams-backups/YYYYMMDD-HHMMSS/</code> (excluded from git via <code>.gitignore</code>). New flags: <code>--no-backup</code> (suppress for CI), <code>--list-backups</code> (enumerate available backups), <code>--restore-backup [TIMESTAMP|latest]</code> (restore a backup). New public API: <code>emit.backup_output_dir()</code>, <code>emit.list_backups()</code>, <code>emit.restore_backup()</code>.</li>
+<li>
+<p><strong>Bridge automation procedures</strong> — added <code>scripts/run_daily_bridge_maintenance.sh</code> for non-critical warn-and-continue bridge refresh/check operations, plus <code>.github/workflows/bridge-maintenance.yml</code> (daily maintenance) and <code>.github/workflows/bridge-watchdog.yml</code> (staleness monitoring with deduplicated issue creation).</p>
+</li>
+<li>
+<p><strong>Safety: automatic backup before writes</strong> — <code>build_team.py</code> now creates a timestamped backup of all agent files that will be overwritten before any <code>--overwrite</code>, <code>--merge</code>, or <code>--update</code> run. Backups are stored at <code>&lt;output_dir&gt;/.agentteams-backups/YYYYMMDD-HHMMSS/</code> (excluded from git via <code>.gitignore</code>). New flags: <code>--no-backup</code> (suppress for CI), <code>--list-backups</code> (enumerate available backups), <code>--restore-backup [TIMESTAMP|latest]</code> (restore a backup). New public API: <code>emit.backup_output_dir()</code>, <code>emit.list_backups()</code>, <code>emit.restore_backup()</code>.</p>
+</li>
 <li><strong>Bug fix: <code>--update --merge</code> now honours the <code>--merge</code> flag</strong> — previously the <code>--update</code> code path hardcoded <code>overwrite=True</code> in <code>emit.emit_all()</code>, ignoring <code>--merge</code> entirely and silently destroying user-authored content below AGENTTEAMS fence markers (e.g. <code>adjacent-repos.md</code> Active Entries). The fix forwards <code>merge=args.merge</code> and sets <code>overwrite=not args.merge</code>.</li>
 <li><strong>Tests: 12 new tests in <code>tests/test_emit.py</code></strong> — covers <code>backup_output_dir</code> (empty dir, populated dir, selective, dry-run, no-backup-dir recursion), <code>list_backups</code> (empty, newest-first ordering), <code>restore_backup</code> (round-trip, missing-path error), and a regression test confirming <code>--merge</code> preserves user content below fences.</li>
 <li><strong>Governance: automatic <code>@agent-updater</code> triggers</strong> — <code>@agent-updater</code> is now invoked at the close of Workflows 2 (Revise), 3 (Technical Accuracy Audit, when corrections were made), and 5 (Consistency Review, when issues found); ensures agent documentation is synchronized after every knowledge-mutating operation</li>

@@ -329,6 +329,25 @@
   
   
     <li class="md-tabs__item">
+      <a href="../interoperability/" class="md-tabs__link">
+        
+  
+  
+    
+  
+  Interoperability
+
+      </a>
+    </li>
+  
+
+      
+        
+  
+  
+  
+  
+    <li class="md-tabs__item">
       <a href="../cli-reference/" class="md-tabs__link">
         
   
@@ -667,6 +686,17 @@
 </li>
       
         <li class="md-nav__item">
+  <a href="#convert-an-existing-team-to-another-framework" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Convert an Existing Team to Another Framework
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
   <a href="#review-setup-requiredmd" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -867,6 +897,33 @@
   
   
     <li class="md-nav__item">
+      <a href="../interoperability/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Interoperability
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
       <a href="../cli-reference/" class="md-nav__link">
         
   
@@ -907,10 +964,10 @@
       
         
         
-        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_8" >
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_9" >
         
           
-          <label class="md-nav__link" for="__nav_8" id="__nav_8_label" tabindex="0">
+          <label class="md-nav__link" for="__nav_9" id="__nav_9_label" tabindex="0">
             
   
   
@@ -928,8 +985,8 @@
             <span class="md-nav__icon md-icon"></span>
           </label>
         
-        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_8_label" aria-expanded="false">
-          <label class="md-nav__title" for="__nav_8">
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_9_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_9">
             <span class="md-nav__icon md-icon"></span>
             
   
@@ -1066,6 +1123,90 @@
     
   
     emit
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../api-reference/convert/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    convert
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../api-reference/interop/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    interop
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../api-reference/bridge/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    bridge
   
 
     
@@ -1516,6 +1657,17 @@
 </li>
       
         <li class="md-nav__item">
+  <a href="#convert-an-existing-team-to-another-framework" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Convert an Existing Team to Another Framework
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
   <a href="#review-setup-requiredmd" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -1689,6 +1841,26 @@
 <a id="__codelineno-4-4" name="__codelineno-4-4" href="#__codelineno-4-4"></a><span class="w">  </span>--framework<span class="w"> </span>copilot-vscode
 </code></pre></div>
 <p>Output is written to <code>/path/to/your/project/.github/agents/</code>.</p>
+<p>Framework-specific defaults:</p>
+<ul>
+<li><code>copilot-vscode</code> -&gt; <code>/path/to/your/project/.github/agents/</code></li>
+<li><code>copilot-cli</code> -&gt; <code>/path/to/your/project/.github/copilot/</code></li>
+<li><code>claude</code> -&gt; <code>/path/to/your/project/.claude/agents/</code></li>
+</ul>
+<p>Instructions file defaults:</p>
+<ul>
+<li><code>copilot-vscode</code> and <code>copilot-cli</code> -&gt; <code>copilot-instructions.md</code></li>
+<li><code>claude</code> -&gt; <code>CLAUDE.md</code></li>
+</ul>
+<hr />
+<h2 id="convert-an-existing-team-to-another-framework">Convert an Existing Team to Another Framework<a class="headerlink" href="#convert-an-existing-team-to-another-framework" title="Permanent link">&para;</a></h2>
+<p>Use <code>--convert-from</code> when you already have an agent team and want to migrate formats while preserving body prose:</p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-5-1" name="__codelineno-5-1" href="#__codelineno-5-1"></a>agentteams<span class="w"> </span><span class="se">\</span>
+<a id="__codelineno-5-2" name="__codelineno-5-2" href="#__codelineno-5-2"></a><span class="w">  </span>--convert-from<span class="w"> </span>/path/to/source/agents<span class="w"> </span><span class="se">\</span>
+<a id="__codelineno-5-3" name="__codelineno-5-3" href="#__codelineno-5-3"></a><span class="w">  </span>--framework<span class="w"> </span>claude<span class="w"> </span><span class="se">\</span>
+<a id="__codelineno-5-4" name="__codelineno-5-4" href="#__codelineno-5-4"></a><span class="w">  </span>--output<span class="w"> </span>/path/to/project/.claude/agents
+</code></pre></div>
+<p>Supported conversion directions include all six combinations across <code>copilot-vscode</code>, <code>copilot-cli</code>, and <code>claude</code>.</p>
 <hr />
 <h2 id="review-setup-requiredmd">Review SETUP-REQUIRED.md<a class="headerlink" href="#review-setup-requiredmd" title="Permanent link">&para;</a></h2>
 <p>Open the generated <code>SETUP-REQUIRED.md</code>. Any <code>{MANUAL:*}</code> placeholders that could not be auto-resolved are listed there with instructions. Fill them in before activating your team.</p>
@@ -1698,15 +1870,15 @@
 <hr />
 <h2 id="keeping-your-team-up-to-date">Keeping Your Team Up to Date<a class="headerlink" href="#keeping-your-team-up-to-date" title="Permanent link">&para;</a></h2>
 <p>When project structure or templates change, update your team without losing manual edits:</p>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-5-1" name="__codelineno-5-1" href="#__codelineno-5-1"></a>agentteams<span class="w"> </span>--description<span class="w"> </span>brief.json<span class="w"> </span>--project<span class="w"> </span>/path/to/project<span class="w"> </span>--update
+<div class="highlight"><pre><span></span><code><a id="__codelineno-6-1" name="__codelineno-6-1" href="#__codelineno-6-1"></a>agentteams<span class="w"> </span>--description<span class="w"> </span>brief.json<span class="w"> </span>--project<span class="w"> </span>/path/to/project<span class="w"> </span>--update
 </code></pre></div>
 <p>Use <code>--prune</code> to also remove agents that are no longer part of the taxonomy.</p>
 <p>Check for drift without writing:</p>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-6-1" name="__codelineno-6-1" href="#__codelineno-6-1"></a>agentteams<span class="w"> </span>--description<span class="w"> </span>brief.json<span class="w"> </span>--project<span class="w"> </span>/path/to/project<span class="w"> </span>--check
+<div class="highlight"><pre><span></span><code><a id="__codelineno-7-1" name="__codelineno-7-1" href="#__codelineno-7-1"></a>agentteams<span class="w"> </span>--description<span class="w"> </span>brief.json<span class="w"> </span>--project<span class="w"> </span>/path/to/project<span class="w"> </span>--check
 </code></pre></div>
 <hr />
 <h2 id="running-a-post-generation-audit">Running a Post-Generation Audit<a class="headerlink" href="#running-a-post-generation-audit" title="Permanent link">&para;</a></h2>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-7-1" name="__codelineno-7-1" href="#__codelineno-7-1"></a>agentteams<span class="w"> </span>--description<span class="w"> </span>brief.json<span class="w"> </span>--project<span class="w"> </span>/path/to/project<span class="w"> </span>--post-audit
+<div class="highlight"><pre><span></span><code><a id="__codelineno-8-1" name="__codelineno-8-1" href="#__codelineno-8-1"></a>agentteams<span class="w"> </span>--description<span class="w"> </span>brief.json<span class="w"> </span>--project<span class="w"> </span>/path/to/project<span class="w"> </span>--post-audit
 </code></pre></div>
 <p>This runs static checks (unresolved placeholders, YAML integrity, required-agent coverage). If the <code>copilot</code> CLI is available and authenticated, it also runs an AI-powered conflict and presupposition review.</p>
 <hr />
@@ -1718,31 +1890,31 @@
 <li>Runs <code>--overwrite</code> to regenerate all agent files with fenced templates.</li>
 <li>Prints a quality-audit checklist with <code>git diff</code> commands to review any lost project-specific content.</li>
 </ol>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-8-1" name="__codelineno-8-1" href="#__codelineno-8-1"></a>agentteams<span class="w"> </span><span class="se">\</span>
-<a id="__codelineno-8-2" name="__codelineno-8-2" href="#__codelineno-8-2"></a><span class="w">  </span>--description<span class="w"> </span>.github/agents/_build-description.json<span class="w"> </span><span class="se">\</span>
-<a id="__codelineno-8-3" name="__codelineno-8-3" href="#__codelineno-8-3"></a><span class="w">  </span>--framework<span class="w"> </span>copilot-vscode<span class="w"> </span><span class="se">\</span>
-<a id="__codelineno-8-4" name="__codelineno-8-4" href="#__codelineno-8-4"></a><span class="w">  </span>--project<span class="w"> </span>/path/to/project<span class="w"> </span><span class="se">\</span>
-<a id="__codelineno-8-5" name="__codelineno-8-5" href="#__codelineno-8-5"></a><span class="w">  </span>--migrate
+<div class="highlight"><pre><span></span><code><a id="__codelineno-9-1" name="__codelineno-9-1" href="#__codelineno-9-1"></a>agentteams<span class="w"> </span><span class="se">\</span>
+<a id="__codelineno-9-2" name="__codelineno-9-2" href="#__codelineno-9-2"></a><span class="w">  </span>--description<span class="w"> </span>.github/agents/_build-description.json<span class="w"> </span><span class="se">\</span>
+<a id="__codelineno-9-3" name="__codelineno-9-3" href="#__codelineno-9-3"></a><span class="w">  </span>--framework<span class="w"> </span>copilot-vscode<span class="w"> </span><span class="se">\</span>
+<a id="__codelineno-9-4" name="__codelineno-9-4" href="#__codelineno-9-4"></a><span class="w">  </span>--project<span class="w"> </span>/path/to/project<span class="w"> </span><span class="se">\</span>
+<a id="__codelineno-9-5" name="__codelineno-9-5" href="#__codelineno-9-5"></a><span class="w">  </span>--migrate
 </code></pre></div>
 <h3 id="after-migration-restore-project-specific-rules">After migration: restore project-specific rules<a class="headerlink" href="#after-migration-restore-project-specific-rules" title="Permanent link">&para;</a></h3>
 <p>Review the diff for content that was in the old files but is not auto-generated:</p>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-9-1" name="__codelineno-9-1" href="#__codelineno-9-1"></a>git<span class="w"> </span>diff<span class="w"> </span>pre-fencing-snapshot<span class="w"> </span>HEAD<span class="w"> </span>--<span class="w"> </span>.github/agents/orchestrator.agent.md
+<div class="highlight"><pre><span></span><code><a id="__codelineno-10-1" name="__codelineno-10-1" href="#__codelineno-10-1"></a>git<span class="w"> </span>diff<span class="w"> </span>pre-fencing-snapshot<span class="w"> </span>HEAD<span class="w"> </span>--<span class="w"> </span>.github/agents/orchestrator.agent.md
 </code></pre></div>
 <p>Add any project-specific rules to the <code>### Rules</code> → <code>### &lt;Project&gt; Project Rules</code> subsection in <code>orchestrator.agent.md</code>. This is the <code>USER-EDITABLE</code> zone — it survives all future <code>--merge</code> runs permanently.</p>
 <p>Then commit:</p>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-10-1" name="__codelineno-10-1" href="#__codelineno-10-1"></a>git<span class="w"> </span>add<span class="w"> </span>.github/agents/<span class="w"> </span><span class="o">&amp;&amp;</span><span class="w"> </span>git<span class="w"> </span>commit<span class="w"> </span>-m<span class="w"> </span><span class="s2">&quot;chore: fence-migrate agent team&quot;</span>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-11-1" name="__codelineno-11-1" href="#__codelineno-11-1"></a>git<span class="w"> </span>add<span class="w"> </span>.github/agents/<span class="w"> </span><span class="o">&amp;&amp;</span><span class="w"> </span>git<span class="w"> </span>commit<span class="w"> </span>-m<span class="w"> </span><span class="s2">&quot;chore: fence-migrate agent team&quot;</span>
 </code></pre></div>
 <h3 id="all-future-updates-use-merge">All future updates use <code>--merge</code><a class="headerlink" href="#all-future-updates-use-merge" title="Permanent link">&para;</a></h3>
 <p>Once migrated, never use <code>--overwrite</code> again. Use <code>--merge</code> instead:</p>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-11-1" name="__codelineno-11-1" href="#__codelineno-11-1"></a>agentteams<span class="w"> </span><span class="se">\</span>
-<a id="__codelineno-11-2" name="__codelineno-11-2" href="#__codelineno-11-2"></a><span class="w">  </span>--description<span class="w"> </span>.github/agents/_build-description.json<span class="w"> </span><span class="se">\</span>
-<a id="__codelineno-11-3" name="__codelineno-11-3" href="#__codelineno-11-3"></a><span class="w">  </span>--framework<span class="w"> </span>copilot-vscode<span class="w"> </span><span class="se">\</span>
-<a id="__codelineno-11-4" name="__codelineno-11-4" href="#__codelineno-11-4"></a><span class="w">  </span>--project<span class="w"> </span>/path/to/project<span class="w"> </span><span class="se">\</span>
-<a id="__codelineno-11-5" name="__codelineno-11-5" href="#__codelineno-11-5"></a><span class="w">  </span>--merge<span class="w"> </span>--yes
+<div class="highlight"><pre><span></span><code><a id="__codelineno-12-1" name="__codelineno-12-1" href="#__codelineno-12-1"></a>agentteams<span class="w"> </span><span class="se">\</span>
+<a id="__codelineno-12-2" name="__codelineno-12-2" href="#__codelineno-12-2"></a><span class="w">  </span>--description<span class="w"> </span>.github/agents/_build-description.json<span class="w"> </span><span class="se">\</span>
+<a id="__codelineno-12-3" name="__codelineno-12-3" href="#__codelineno-12-3"></a><span class="w">  </span>--framework<span class="w"> </span>copilot-vscode<span class="w"> </span><span class="se">\</span>
+<a id="__codelineno-12-4" name="__codelineno-12-4" href="#__codelineno-12-4"></a><span class="w">  </span>--project<span class="w"> </span>/path/to/project<span class="w"> </span><span class="se">\</span>
+<a id="__codelineno-12-5" name="__codelineno-12-5" href="#__codelineno-12-5"></a><span class="w">  </span>--merge<span class="w"> </span>--yes
 </code></pre></div>
 <p><code>--merge</code> updates only the template-fenced regions in each file and leaves all user-authored content untouched.</p>
 <h3 id="reverting-if-something-goes-wrong">Reverting if something goes wrong<a class="headerlink" href="#reverting-if-something-goes-wrong" title="Permanent link">&para;</a></h3>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-12-1" name="__codelineno-12-1" href="#__codelineno-12-1"></a>agentteams<span class="w"> </span>--revert-migration<span class="w"> </span>--project<span class="w"> </span>/path/to/project
+<div class="highlight"><pre><span></span><code><a id="__codelineno-13-1" name="__codelineno-13-1" href="#__codelineno-13-1"></a>agentteams<span class="w"> </span>--revert-migration<span class="w"> </span>--project<span class="w"> </span>/path/to/project
 </code></pre></div>
 <p>This runs <code>git reset --hard pre-fencing-snapshot</code> and deletes the tag, restoring all agent files to their pre-migration state. If you have already pushed the migrated commit to a remote, a manual force-push is required after the revert.</p>
 

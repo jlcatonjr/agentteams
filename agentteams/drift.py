@@ -312,7 +312,8 @@ def compute_structural_diff(
     if sorted(old_slugs) != sorted(new_slugs):
         report.team_membership_changed = True
         # Move copilot-instructions from unchanged → drifted
-        instructions_path = "../copilot-instructions.md"
+        framework = new_manifest.get("framework", "copilot-vscode")
+        instructions_path = "../CLAUDE.md" if framework == "claude" else "../copilot-instructions.md"
         report.unchanged_files = [
             f for f in report.unchanged_files if f["path"] != instructions_path
         ]

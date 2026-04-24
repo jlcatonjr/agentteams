@@ -8,7 +8,11 @@ All flags for the `agentteams` command (entry point: `build_team.py`).
 
 ```
 agentteams [--description PATH] [--project PATH] [--framework NAME]
-           [--output DIR] [--dry-run] [--overwrite] [--merge] [--yes]
+           [--output DIR] [--convert-from DIR] [--interop-from DIR]
+           [--interop-source-framework NAME] [--interop-mode MODE]
+           [--bridge-from DIR] [--bridge-source-framework NAME]
+           [--bridge-check] [--bridge-refresh]
+           [--dry-run] [--overwrite] [--merge] [--yes]
            [--no-scan] [--update] [--prune] [--check]
            [--scan-security] [--self] [--post-audit] [--auto-correct] [--enrich]
            [--no-backup] [--list-backups] [--restore-backup TIMESTAMP]
@@ -37,11 +41,115 @@ Target agent framework. Choices: `copilot-vscode` (default), `copilot-cli`, `cla
 |-------|--------|-------------|
 | `copilot-vscode` | `.agent.md` with YAML front matter | VS Code Copilot agents with full handoff support |
 | `copilot-cli` | Plain `.md` | Copilot CLI system prompts; YAML and handoff blocks stripped |
-| `claude` | Plain `.md` | Claude Projects; output is `CLAUDE.md`-compatible |
+| `claude` | Claude front matter `.md` | Claude Projects; output includes `CLAUDE.md` instructions |
 
 ### `--output DIR` / `-o DIR`
 
-Output directory for generated agent files. Default: `<project>/.github/agents/`.
+Output directory for generated agent files. Defaults by framework:
+
+- `copilot-vscode`: `<project>/.github/agents/`
+- `copilot-cli`: `<project>/.github/copilot/`
+- `claude`: `<project>/.claude/agents/`
+
+### `--convert-from DIR`
+
+Convert an existing team from `DIR` into the target `--framework` instead of rendering from a brief.
+
+- Preserves agent body prose.
+- Replaces front matter and framework wrappers.
+- Converts instructions naming (`copilot-instructions.md` <-> `CLAUDE.md`) based on target.
+- Supports all six directional combinations between `copilot-vscode`, `copilot-cli`, and `claude`.
+
+### `--interop-from DIR`
+
+Run the CAI-based interop pipeline from an existing source team.
+
+- `direct` mode writes target framework files.
+- `bundle` mode writes target files and compatibility artifacts under `references/interop/<source>-to-<target>/`.
+
+### `--interop-source-framework NAME`
+
+Optional source framework override for interop runs. When omitted, source framework is auto-detected.
+
+### `--interop-mode MODE`
+
+Interop mode selector:
+
+- `direct` (default)
+- `bundle`
+
+Bundle artifacts:
+- `team-manifest.cai.json`
+- `interop-manifest.json`
+- `routing-map.json`
+- `instructions-map.json`
+- `compatibility-report.md`
+
+### `--bridge-from DIR`
+
+Generate lightweight target-framework bridge artifacts that reference source canonical agents without regenerating source agent documentation.
+
+Bridge artifacts are written under:
+
+- `references/bridges/<source>-to-<target>/`
+
+Bridge supports all six directional combinations between `copilot-vscode`, `copilot-cli`, and `claude`.
+
+### `--bridge-source-framework NAME`
+
+Optional source framework override for bridge mode. If omitted, source framework is auto-detected.
+
+### `--bridge-check`
+
+Validate bridge freshness against source files by comparing source-file checksums with the bridge manifest.
+
+### `--bridge-refresh`
+
+Refresh bridge artifacts by overwriting existing bridge outputs.
+
+---
+
+## How These Three Options Differ
+
+If you are deciding between the interoperability options:
+
+1. `--convert-from` performs direct format migration between framework outputs.
+2. `--interop-from` performs Canonical Agent Interface (CAI) normalization and re-emission.
+3. `--bridge-from` creates a lightweight runtime bridge that preserves source canonical agent docs.
+
+Choose by intent:
+
+1. Use `--convert-from` for straightforward target-format rewriting.
+2. Use `--interop-from` when you need canonical transport and optional compatibility bundle artifacts.
+3. Use `--bridge-from` when you need target-runtime access without replacing source documentation.
+
+---
+
+## Bridge Automation Procedures
+
+This repository includes automated bridge upkeep:
+
+1. `.github/workflows/bridge-maintenance.yml` (daily + manual) runs `scripts/run_daily_bridge_maintenance.sh`.
+2. The script performs `--bridge-refresh` then `--bridge-check` for maintained pairs and writes run summaries to `tmp/bridge-maintenance/`.
+3. `.github/workflows/bridge-watchdog.yml` opens a deduplicated issue if the latest successful bridge maintenance run is stale.
+
+For mode comparison and architecture-level guidance, see [Interoperability](interoperability.md).
+
+---
+
+## Explicitly Excluded Option Pairs
+
+The CLI rejects incompatible pairs explicitly.
+
+Global exclusions:
+- `--convert-from` and `--interop-from` cannot be used together.
+- `--bridge-from` cannot be used with `--convert-from` or `--interop-from`.
+- `--auto-correct` requires `--post-audit`.
+- `--prune` requires `--update`.
+- `--bridge-check` cannot be combined with `--bridge-refresh`.
+
+Excluded with `--convert-from`, `--interop-from`, or `--bridge-from`:
+- `--description`, `--project`, `--self`, `--no-scan`, `--update`, `--prune`, `--check`, `--scan-security`, `--post-audit`, `--auto-correct`, `--enrich`, `--merge`, `--migrate`, `--revert-migration`, `--list-backups`, `--restore-backup`
 
 ### `--dry-run`
 
