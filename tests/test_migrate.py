@@ -48,6 +48,17 @@ def _init_git_repo(path: Path) -> None:
     _git(["commit", "-m", "init"], path)
 
 
+def _write_pass_security_decision(output_dir: Path, action: str) -> None:
+    """Seed a PASS decision row so destructive action gates allow test execution."""
+    refs = output_dir / "references"
+    refs.mkdir(parents=True, exist_ok=True)
+    (refs / "security-decisions.log.csv").write_text(
+        "timestamp,requesting_agent,action_reviewed,verdict,conditions,conditions_verified\n"
+        f"2026-04-24T00:00:00Z,test,{action}-001,PASS,,verified\n",
+        encoding="utf-8",
+    )
+
+
 # ---------------------------------------------------------------------------
 # _run_revert_migration
 # ---------------------------------------------------------------------------
@@ -67,6 +78,7 @@ class TestRevertMigration:
     def test_revert_restores_files_and_deletes_tag(self, tmp_path):
         """After a migrate run, revert restores the pre-migration state."""
         _init_git_repo(tmp_path)
+        _write_pass_security_decision(tmp_path / ".github" / "agents", "revert-migration")
 
         # Write a sentinel file and commit it so the snapshot captures it
         sentinel = tmp_path / ".github" / "agents" / "sentinel.agent.md"
@@ -192,6 +204,7 @@ class TestMigrateRevertRoundTrip:
     def test_round_trip(self, tmp_path, monkeypatch):
         """migrate creates tag; revert restores state and deletes tag."""
         _init_git_repo(tmp_path)
+        _write_pass_security_decision(tmp_path / ".github" / "agents", "revert-migration")
 
         import build_team as _bt
         monkeypatch.setattr(_bt, "main", lambda argv: 0)
