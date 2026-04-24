@@ -1806,7 +1806,12 @@
 <li><code>copilot-cli</code> -&gt; <code>.github/copilot/</code></li>
 <li><code>claude</code> -&gt; <code>.claude/agents/</code></li>
 </ul>
-<p>Also writes framework instructions at the parent level (<code>copilot-instructions.md</code> or <code>CLAUDE.md</code>), generates <code>SETUP-REQUIRED.md</code> for unresolved manual placeholders, and runs post-generation audit/security scan when requested.</p>
+<p>Also writes framework instructions at the parent of the framework agents directory:</p>
+<ul>
+<li><code>copilot-vscode</code> and <code>copilot-cli</code> -&gt; <code>.github/copilot-instructions.md</code></li>
+<li><code>claude</code> -&gt; <code>.claude/CLAUDE.md</code></li>
+</ul>
+<p>It also generates <code>SETUP-REQUIRED.md</code> for unresolved manual placeholders, and runs post-generation audit/security scan when requested.</p>
 <h3 id="path-b-convert-existing-teams">Path B: Convert Existing Teams<a class="headerlink" href="#path-b-convert-existing-teams" title="Permanent link">&para;</a></h3>
 <p>In addition to fresh generation, the module supports format migration with <code>--convert-from</code>.
 This path reads existing agent files, preserves body prose, and rewrites framework wrappers/front matter for the target framework.</p>

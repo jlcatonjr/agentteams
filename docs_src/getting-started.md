@@ -81,8 +81,8 @@ Framework-specific defaults:
 
 Instructions file defaults:
 
-- `copilot-vscode` and `copilot-cli` -> `copilot-instructions.md`
-- `claude` -> `CLAUDE.md`
+- `copilot-vscode` and `copilot-cli` -> `.github/copilot-instructions.md`
+- `claude` -> `.claude/CLAUDE.md`
 
 ---
 
