@@ -1,9 +1,10 @@
 """liaison_logs.py — Manage external CSV log files for the Repo Liaison agent.
 
-The Repo Liaison agent tracks two kinds of log data that grow unboundedly:
+The Repo Liaison and security workflows track three kinds of log data:
 
   * Per-repo changelogs — one row per cross-repository file change
   * Cross-orchestrator coordination log — one row per orchestrator exchange
+    * Security decisions log — one row per PASS/HALT/CONDITIONAL PASS verdict
 
 These are stored as CSV files in the ``references/`` directory rather than
 inline markdown tables, so they stay machine-readable and do not bloat the
@@ -12,7 +13,7 @@ agent file over time.
 Public API
 ----------
 init_csv_stubs(refs_dir)
-    Create the two CSV files (header row only) if they do not yet exist.
+    Create the CSV stub files (header row only) if they do not yet exist.
     Safe to call on every generation run — never overwrites existing data.
 
 migrate_inline_logs(adjacent_repos_md, refs_dir)
@@ -39,9 +40,20 @@ CHANGELOG_CSV = "adjacent-repos-changelog.csv"
 #: File name for the cross-orchestrator coordination log CSV
 COORD_LOG_CSV = "adjacent-repos-coordination-log.csv"
 
+#: File name for the security decisions log CSV
+SECURITY_DECISIONS_CSV = "security-decisions.log.csv"
+
 #: Column headers for each CSV
 CHANGELOG_HEADERS: list[str] = ["date", "repo_name", "action", "files_changed", "summary"]
 COORD_LOG_HEADERS: list[str] = ["date", "adjacent_repo", "direction", "outcome"]
+SECURITY_DECISIONS_HEADERS: list[str] = [
+    "timestamp",
+    "requesting_agent",
+    "action_reviewed",
+    "verdict",
+    "conditions",
+    "conditions_verified",
+]
 
 # ---------------------------------------------------------------------------
 # Result dataclass
@@ -128,6 +140,7 @@ def init_csv_stubs(refs_dir: Path) -> list[str]:
     for fname, headers in (
         (CHANGELOG_CSV, CHANGELOG_HEADERS),
         (COORD_LOG_CSV, COORD_LOG_HEADERS),
+        (SECURITY_DECISIONS_CSV, SECURITY_DECISIONS_HEADERS),
     ):
         target = refs_dir / fname
         if not target.exists():

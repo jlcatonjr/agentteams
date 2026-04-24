@@ -36,7 +36,9 @@ Options:
 from __future__ import annotations
 
 import argparse
+import csv
 import json
+import re
 import sys
 from pathlib import Path
 
@@ -397,6 +399,13 @@ def main(argv: list[str] | None = None) -> int:
                 print(f"Available: {', '.join(ts for ts, _, _ in backups)}")
                 return 1
             _, backup_path, _ = matched[0]
+
+        try:
+            _assert_destructive_action_allowed(output_dir, action="restore-backup")
+        except RuntimeError as exc:
+            print(f"Security gate blocked restore-backup: {exc}", file=sys.stderr)
+            return 1
+
         count = emit.restore_backup(backup_path, output_dir, remove_extra=True)
         print(f"  ✓  Restored {count} file(s) from {backup_path}")
         return 0
@@ -560,6 +569,13 @@ def main(argv: list[str] | None = None) -> int:
                     f"{mresult.coord_log_rows_moved} coordination row(s) to CSV files."
                 )
 
+        if not args.dry_run and not args.merge:
+            try:
+                _assert_destructive_action_allowed(output_dir, action="overwrite")
+            except RuntimeError as exc:
+                print(f"Security gate blocked overwrite update: {exc}", file=sys.stderr)
+                return 1
+
         result = emit.emit_all(
             update_rendered,
             output_dir=output_dir,
@@ -702,6 +718,13 @@ def main(argv: list[str] | None = None) -> int:
                 f"{mresult.coord_log_rows_moved} coordination row(s) to CSV files."
             )
 
+    if not args.dry_run and args.overwrite:
+        try:
+            _assert_destructive_action_allowed(output_dir, action="overwrite")
+        except RuntimeError as exc:
+            print(f"Security gate blocked overwrite: {exc}", file=sys.stderr)
+            return 1
+
     result = emit.emit_all(
         final_rendered,
         output_dir=output_dir,
@@ -780,6 +803,12 @@ def _prune_removed_files(
         print("  (dry-run: no files deleted)")
         return 0
 
+    try:
+        _assert_destructive_action_allowed(output_dir, action="prune")
+    except RuntimeError as exc:
+        print(f"  Security gate blocked prune: {exc}", file=sys.stderr)
+        return 1
+
     if not yes:
         try:
             answer = input("\n  Delete these files? [y/N] ").strip().lower()
@@ -798,6 +827,100 @@ def _prune_removed_files(
             return 1
 
     return 0
+
+
+def _assert_destructive_action_allowed(output_dir: Path, *, action: str) -> None:
+    """Raise RuntimeError if security decisions do not allow destructive action.
+
+    The check follows documented security protocol semantics:
+    - HALT blocks execution
+    - CONDITIONAL PASS requires conditions_verified=verified
+    - PASS allows execution
+    - No matching decision blocks execution
+    """
+    decision = _latest_security_decision(output_dir, action=action)
+    if decision is None:
+        raise RuntimeError(
+            "no matching PASS decision found in references/security-decisions.log.csv"
+        )
+
+    verdict = decision.get("verdict", "").strip().upper()
+    cond_verified = decision.get("conditions_verified", "").strip().lower()
+    action_reviewed = decision.get("action_reviewed", "").strip()
+
+    if verdict == "HALT":
+        raise RuntimeError(
+            f"latest decision for action '{action_reviewed or action}' is HALT"
+        )
+
+    if verdict == "CONDITIONAL PASS" and cond_verified != "verified":
+        raise RuntimeError(
+            "latest CONDITIONAL PASS has unverified conditions "
+            f"(conditions_verified={cond_verified or 'pending'})"
+        )
+
+    if verdict not in {"PASS", "CONDITIONAL PASS"}:
+        raise RuntimeError(
+            f"latest decision has unsupported verdict '{verdict or 'UNKNOWN'}'"
+        )
+
+
+def _latest_security_decision(output_dir: Path, *, action: str) -> dict[str, str] | None:
+    """Return the latest security decision row matching an action keyword."""
+    log_path = output_dir / "references" / "security-decisions.log.csv"
+    if not log_path.exists():
+        return None
+
+    try:
+        with log_path.open("r", encoding="utf-8", newline="") as fh:
+            reader = csv.DictReader(fh)
+            expected_columns = [
+                "timestamp",
+                "requesting_agent",
+                "action_reviewed",
+                "verdict",
+                "conditions",
+                "conditions_verified",
+            ]
+            actual_columns = [c.strip() for c in (reader.fieldnames or [])]
+            if actual_columns != expected_columns:
+                raise RuntimeError(
+                    "security decisions log is malformed: expected exact header "
+                    "timestamp,requesting_agent,action_reviewed,verdict,conditions,conditions_verified"
+                )
+            rows = list(reader)
+    except (OSError, csv.Error) as exc:
+        raise RuntimeError(f"unable to read security decisions log: {exc}") from exc
+
+    if not rows:
+        return None
+
+    for row in reversed(rows):
+        reviewed = (row.get("action_reviewed") or "").lower()
+        if _action_matches(reviewed, action):
+            return {k: (v or "") for k, v in row.items()}
+    return None
+
+
+def _action_matches(action_reviewed: str, action: str) -> bool:
+    """Return True for strict action-id style matches.
+
+    Accepted patterns:
+    - <action>
+    - <action>-<suffix>
+    - <action>_<suffix>
+    - <action>.<suffix>
+    - <action>:<suffix>
+    """
+    action_norm = action.strip().lower()
+    reviewed_norm = action_reviewed.strip().lower()
+    if not action_norm:
+        return False
+    if reviewed_norm == action_norm:
+        return True
+    return reviewed_norm.startswith(
+        (f"{action_norm}-", f"{action_norm}_", f"{action_norm}.", f"{action_norm}:")
+    )
 
 
 def _attempt_auto_correct(
@@ -850,8 +973,6 @@ def _guess_file_type(rel_path: str) -> str:
         return "reference"
     return "agent"
 
-
-import re
 
 _MANUAL_RE = re.compile(r"\{MANUAL:([A-Z][A-Z0-9_]*)\}")
 
@@ -1121,6 +1242,15 @@ def _run_revert_migration(project_dir: Path) -> int:
             "Nothing to revert.",
             file=sys.stderr,
         )
+        return 1
+
+    try:
+        _assert_destructive_action_allowed(
+            project_dir / ".github" / "agents",
+            action="revert-migration",
+        )
+    except RuntimeError as exc:
+        print(f"Security gate blocked revert-migration: {exc}", file=sys.stderr)
         return 1
 
     print(f"  Reverting to snapshot tag '{_MIGRATION_TAG}' ({tag_sha[:12]})...")

@@ -15,8 +15,10 @@ class _FakeResponse:
         self._body = json.dumps(payload).encode("utf-8")
         self._url = url
 
-    def read(self) -> bytes:
-        return self._body
+    def read(self, size: int = -1) -> bytes:
+        if size is None or size < 0:
+            return self._body
+        return self._body[:size]
 
     def geturl(self) -> str:
         return self._url
@@ -270,7 +272,7 @@ def test_fetch_json_rejects_empty_response(monkeypatch) -> None:
     """_fetch_json must raise OSError when response body is below minimum size."""
 
     class _TinyResponse:
-        def read(self):
+        def read(self, size: int = -1):
             return b"{}"  # 2 bytes — below _MIN_RESPONSE_BYTES of 10
 
         def geturl(self):
@@ -296,7 +298,7 @@ def test_fetch_json_rejects_disallowed_domain(monkeypatch) -> None:
     payload = json.dumps({"vulnerabilities": []}).encode("utf-8")
 
     class _RedirectResponse:
-        def read(self):
+        def read(self, size: int = -1):
             return payload
 
         def geturl(self):
@@ -315,6 +317,91 @@ def test_fetch_json_rejects_disallowed_domain(monkeypatch) -> None:
     )
     with pytest.raises(OSError, match="allowlist"):
         security_refs._fetch_json("https://www.cisa.gov/fake")
+
+
+def test_fetch_json_rejects_non_https_effective_url(monkeypatch) -> None:
+    """_fetch_json must reject non-HTTPS effective response URLs."""
+    payload = json.dumps({"vulnerabilities": []}).encode("utf-8")
+
+    class _DowngradeResponse:
+        def read(self, size: int = -1):
+            if size is None or size < 0:
+                return payload
+            return payload[:size]
+
+        def geturl(self):
+            return "http://www.cisa.gov/downgraded"
+
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *_):
+            return False
+
+    monkeypatch.setattr(
+        security_refs.urllib.request,
+        "urlopen",
+        lambda req, timeout=12: _DowngradeResponse(),
+    )
+    with pytest.raises(OSError, match="HTTPS"):
+        security_refs._fetch_json("https://www.cisa.gov/fake")
+
+
+def test_fetch_json_rejects_oversized_response(monkeypatch) -> None:
+    """_fetch_json must reject responses above host-specific max bounds."""
+    max_bytes = security_refs._HOST_RESPONSE_SIZE_BOUNDS["www.cisa.gov"][1]
+    payload = b"x" * (max_bytes + 1)
+
+    class _HugeResponse:
+        def read(self, size: int = -1):
+            if size is None or size < 0:
+                return payload
+            return payload[:size]
+
+        def geturl(self):
+            return "https://www.cisa.gov/huge"
+
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *_):
+            return False
+
+    monkeypatch.setattr(
+        security_refs.urllib.request,
+        "urlopen",
+        lambda req, timeout=12: _HugeResponse(),
+    )
+    with pytest.raises(OSError, match="exceeds size limit"):
+        security_refs._fetch_json("https://www.cisa.gov/fake")
+
+
+def test_fetch_osv_packages_rejects_disallowed_redirect_domain(monkeypatch) -> None:
+    """OSV POST path must apply same domain allowlist checks as GET path."""
+    payload = json.dumps({"results": []}).encode("utf-8")
+
+    class _RedirectResponse:
+        def read(self, size: int = -1):
+            if size is None or size < 0:
+                return payload
+            return payload[:size]
+
+        def geturl(self):
+            return "https://evil.example.com/redirected"
+
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *_):
+            return False
+
+    monkeypatch.setattr(
+        security_refs.urllib.request,
+        "urlopen",
+        lambda req, timeout=15: _RedirectResponse(),
+    )
+    with pytest.raises(OSError, match="allowlist"):
+        security_refs._fetch_osv_packages(["requests"])
 
 
 def test_stale_cache_warning_applied_on_kev_failure(monkeypatch, tmp_path: Path) -> None:

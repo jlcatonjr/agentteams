@@ -10,6 +10,8 @@ from agentteams.liaison_logs import (
     CHANGELOG_HEADERS,
     COORD_LOG_CSV,
     COORD_LOG_HEADERS,
+    SECURITY_DECISIONS_CSV,
+    SECURITY_DECISIONS_HEADERS,
     MigrateResult,
     init_csv_stubs,
     migrate_inline_logs,
@@ -23,9 +25,10 @@ from agentteams.liaison_logs import (
 def test_init_csv_stubs_creates_both_files(tmp_path):
     refs = tmp_path / "references"
     created = init_csv_stubs(refs)
-    assert set(created) == {CHANGELOG_CSV, COORD_LOG_CSV}
+    assert set(created) == {CHANGELOG_CSV, COORD_LOG_CSV, SECURITY_DECISIONS_CSV}
     assert (refs / CHANGELOG_CSV).exists()
     assert (refs / COORD_LOG_CSV).exists()
+    assert (refs / SECURITY_DECISIONS_CSV).exists()
 
 
 def test_init_csv_stubs_writes_correct_headers(tmp_path):
@@ -40,6 +43,10 @@ def test_init_csv_stubs_writes_correct_headers(tmp_path):
         row = next(csv.reader(fh))
     assert row == COORD_LOG_HEADERS
 
+    with (refs / SECURITY_DECISIONS_CSV).open(newline="", encoding="utf-8") as fh:
+        row = next(csv.reader(fh))
+    assert row == SECURITY_DECISIONS_HEADERS
+
 
 def test_init_csv_stubs_does_not_overwrite_existing(tmp_path):
     refs = tmp_path / "references"
@@ -48,9 +55,10 @@ def test_init_csv_stubs_does_not_overwrite_existing(tmp_path):
     existing.write_text("sentinel content\n", encoding="utf-8")
 
     created = init_csv_stubs(refs)
-    # Only the coordination log should be created
+    # Coordination and security decision logs should be created
     assert CHANGELOG_CSV not in created
     assert COORD_LOG_CSV in created
+    assert SECURITY_DECISIONS_CSV in created
     # Existing file must be untouched
     assert existing.read_text(encoding="utf-8") == "sentinel content\n"
 
