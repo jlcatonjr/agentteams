@@ -1923,7 +1923,7 @@ This path reads existing agent files, preserves body prose, and rewrites framewo
 </tr>
 </tbody>
 </table>
-<p>Each adapter in <code>agentteams/frameworks/</code> knows the file naming conventions, front-matter schema, and handoff syntax for its target framework.</p>
+<p>Each adapter in <code>agentteams/frameworks/</code> knows the file naming conventions, front-matter schema, and handoff delivery mode for its target framework. VS Code Copilot keeps handoffs inline; frameworks that do not support the VS Code syntax can instead receive a sidecar <code>references/runtime-handoffs.json</code> manifest when extracted handoffs are present.</p>
 <hr />
 <h2 id="using-a-coding-agent-to-run-the-pipeline">Using a Coding Agent to Run the Pipeline<a class="headerlink" href="#using-a-coding-agent-to-run-the-pipeline" title="Permanent link">&para;</a></h2>
 <p>The four-stage pipeline can be driven entirely by a coding agent. Instead of running CLI commands manually, you describe what you want in plain language and the agent drafts the brief, generates the team, resolves placeholders, and audits the result.</p>

@@ -1676,23 +1676,24 @@
 <tr>
 <td><code>copilot-vscode</code></td>
 <td><code>.agent.md</code> with YAML front matter</td>
-<td>✅</td>
+<td>Native inline YAML</td>
 <td>VS Code Copilot <code>.agent.md</code></td>
 </tr>
 <tr>
 <td><code>copilot-cli</code></td>
 <td>Plain <code>.md</code> system prompts</td>
-<td>❌</td>
+<td>Runtime manifest when handoffs are present (<code>references/runtime-handoffs.json</code>)</td>
 <td>CLI prompt <code>.md</code></td>
 </tr>
 <tr>
 <td><code>claude</code></td>
 <td>Claude front matter <code>.md</code> + <code>CLAUDE.md</code> instructions</td>
-<td>❌</td>
+<td>Runtime manifest when handoffs are present (<code>references/runtime-handoffs.json</code>)</td>
 <td><code>CLAUDE.md</code> system prompt</td>
 </tr>
 </tbody>
 </table>
+<p>For <code>copilot-cli</code> and <code>claude</code>, AgentTeams strips inline handoff sections from the visible prompt files but emits <code>references/runtime-handoffs.json</code> when handoffs are extracted, so routing metadata remains available to bridge layers and other runtime tooling.</p>
 <p>Default framework locations:
 - <code>copilot-vscode</code>: <code>.github/agents/</code>
 - <code>copilot-cli</code>: <code>.github/copilot/</code>

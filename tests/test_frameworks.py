@@ -59,6 +59,29 @@ Main body.
 Always close with auditor.
 """
 
+CONTENT_WITH_YAML_HANDOFFS = """\
+---
+name: Orchestrator — TestProject
+description: "Coordinate all agents"
+user-invokable: true
+tools: ['read', 'edit', 'search']
+model: ["Claude Sonnet 4.6 (copilot)"]
+handoffs:
+    - label: File lookup
+        agent: navigator
+        prompt: "Inspect the relevant files."
+        send: false
+    - label: Security review
+        agent: security
+        prompt: "Review the destructive operation."
+        send: true
+---
+
+# Orchestrator
+
+Main body.
+"""
+
 
 # ===========================================================================
 # CopilotVSCodeAdapter
@@ -255,6 +278,9 @@ class TestCopilotCLIAdapter:
     def test_supports_handoffs(self):
         assert self.adapter.supports_handoffs() is False
 
+    def test_handoff_delivery_mode(self):
+        assert self.adapter.handoff_delivery_mode() == "manifest"
+
     def test_get_file_extension(self):
         assert self.adapter.get_file_extension("agent") == ".md"
 
@@ -289,6 +315,16 @@ class TestCopilotCLIAdapter:
         result = self.adapter.render_agent_file(CONTENT_WITH_HANDOFFS, "orchestrator", MINIMAL_MANIFEST)
         assert "## Rules" in result
         assert "Always close with auditor." in result
+
+    def test_extract_handoffs_reads_yaml_handoff_entries(self):
+        result = self.adapter.extract_handoffs(CONTENT_WITH_HANDOFFS)
+        assert [entry["agent"] for entry in result] == ["navigator", "security"]
+        assert result[0]["label"]
+
+    def test_extract_handoffs_reads_yaml_front_matter_entries(self):
+        result = self.adapter.extract_handoffs(CONTENT_WITH_YAML_HANDOFFS)
+        assert [entry["agent"] for entry in result] == ["navigator", "security"]
+        assert result[1]["send"] is True
 
     # --- render_agent_file: no YAML/handoffs → body preserved as-is ---
 
@@ -326,6 +362,9 @@ class TestClaudeAdapter:
 
     def test_supports_handoffs(self):
         assert self.adapter.supports_handoffs() is False
+
+    def test_handoff_delivery_mode(self):
+        assert self.adapter.handoff_delivery_mode() == "manifest"
 
     def test_get_file_extension(self):
         assert self.adapter.get_file_extension("agent") == ".md"

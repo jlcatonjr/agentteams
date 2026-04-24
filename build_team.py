@@ -587,15 +587,34 @@ def main(argv: list[str] | None = None) -> int:
 
     # Apply framework-specific post-processing
     final_rendered: list[tuple[str, str]] = []
+    runtime_handoff_agents: list[dict[str, object]] = []
     for rel_path, content in rendered:
         file_type = _guess_file_type(rel_path)
         if file_type == "agent":
             slug = Path(rel_path).stem.replace(".agent", "")
+            if adapter.handoff_delivery_mode() == "manifest":
+                handoffs = adapter.extract_handoffs(content)
+                if handoffs:
+                    runtime_handoff_agents.append({
+                        "agent": slug,
+                        "handoffs": handoffs,
+                    })
             content = adapter.render_agent_file(content, slug, manifest)
         elif file_type == "instructions":
             content = adapter.render_instructions_file(content, manifest)
         final_path = adapter.finalize_output_path(rel_path, file_type)
         final_rendered.append((final_path, content))
+
+    if runtime_handoff_agents:
+        runtime_handoff_manifest = {
+            "schema_version": "1.0",
+            "framework": adapter.framework_id,
+            "project_name": project_name,
+            "agents": runtime_handoff_agents,
+        }
+        final_rendered.append(
+            ("references/runtime-handoffs.json", json.dumps(runtime_handoff_manifest, indent=2) + "\n")
+        )
 
     # -----------------------------------------------------------------------
     # Step 5c: Generate team topology graph
@@ -627,6 +646,8 @@ def main(argv: list[str] | None = None) -> int:
             "references/security-vulnerability-watch.reference.md",
             "references/security-vulnerability-watch.json",
         }
+        if adapter.handoff_delivery_mode() == "manifest":
+            security_refresh_paths.add("references/runtime-handoffs.json")
 
         if not sdreport.has_changes and not sdreport.removed_files:
             print("No structural or content changes detected; refreshing security intelligence references.")

@@ -4,7 +4,8 @@ copilot_cli.py — Framework adapter for GitHub Copilot CLI.
 Agent files:  .github/copilot/<slug>.md  (plain Markdown system prompt)
 Instructions: copilot-instructions.md
 Format:       Plain Markdown — no YAML front matter, no metadata headers
-Handoffs:     Not supported (removed from output)
+Handoffs:     Inline handoffs removed from output; extracted handoffs can be
+              preserved in references/runtime-handoffs.json by the build pipeline
 
 GitHub Copilot CLI system prompt specification
 ----------------------------------------------
@@ -17,7 +18,8 @@ agents:, handoffs:) must be stripped before delivery; only the prose body
 is passed to the model.
 
 VS Code Copilot YAML keys       → stripped (incompatible)
-Handoff sections (## Handoff…)  → stripped (not supported)
+Handoff sections (## Handoff…)  → stripped from prompt body
+Runtime handoff manifest        → emitted by build pipeline when handoffs exist
 Body Markdown                   → preserved verbatim
 """
 
@@ -54,6 +56,9 @@ class CopilotCLIAdapter(FrameworkAdapter):
 
     def supports_handoffs(self) -> bool:
         return False
+
+    def handoff_delivery_mode(self) -> str:
+        return "manifest"
 
     def get_agents_dir(self, project_path: Path) -> Path:
         return project_path / ".github" / "copilot"

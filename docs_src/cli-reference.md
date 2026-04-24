@@ -40,8 +40,10 @@ Target agent framework. Choices: `copilot-vscode` (default), `copilot-cli`, `cla
 | Value | Format | Description |
 |-------|--------|-------------|
 | `copilot-vscode` | `.agent.md` with YAML front matter | VS Code Copilot agents with full handoff support |
-| `copilot-cli` | Plain `.md` | Copilot CLI system prompts; YAML and handoff blocks stripped |
-| `claude` | Claude front matter `.md` | Claude Projects; output includes `CLAUDE.md` instructions |
+| `copilot-cli` | Plain `.md` | Copilot CLI system prompts; inline YAML and handoff sections stripped, with handoffs preserved in `references/runtime-handoffs.json` when present |
+| `claude` | Claude front matter `.md` | Claude Projects; output includes `CLAUDE.md` instructions and preserves handoffs in `references/runtime-handoffs.json` when present |
+
+`references/runtime-handoffs.json` is a framework-neutral sidecar manifest emitted when extracted handoffs exist for frameworks that do not keep inline VS Code handoff syntax in the final agent file.
 
 ### `--output DIR` / `-o DIR`
 

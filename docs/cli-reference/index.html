@@ -2554,15 +2554,16 @@
 <tr>
 <td><code>copilot-cli</code></td>
 <td>Plain <code>.md</code></td>
-<td>Copilot CLI system prompts; YAML and handoff blocks stripped</td>
+<td>Copilot CLI system prompts; inline YAML and handoff sections stripped, with handoffs preserved in <code>references/runtime-handoffs.json</code> when present</td>
 </tr>
 <tr>
 <td><code>claude</code></td>
 <td>Claude front matter <code>.md</code></td>
-<td>Claude Projects; output includes <code>CLAUDE.md</code> instructions</td>
+<td>Claude Projects; output includes <code>CLAUDE.md</code> instructions and preserves handoffs in <code>references/runtime-handoffs.json</code> when present</td>
 </tr>
 </tbody>
 </table>
+<p><code>references/runtime-handoffs.json</code> is a framework-neutral sidecar manifest emitted when extracted handoffs exist for frameworks that do not keep inline VS Code handoff syntax in the final agent file.</p>
 <h3 id="-output-dir-o-dir"><code>--output DIR</code> / <code>-o DIR</code><a class="headerlink" href="#-output-dir-o-dir" title="Permanent link">&para;</a></h3>
 <p>Output directory for generated agent files. Defaults by framework:</p>
 <ul>

@@ -1349,6 +1349,28 @@
 </li>
         
           <li class="md-nav__item">
+  <a href="#handoff_delivery_mode" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        handoff_delivery_mode()
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#extract_handoffscontent" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        extract_handoffs(content)
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
   <a href="#get_agents_dirproject_path" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -1732,6 +1754,28 @@
 </li>
         
           <li class="md-nav__item">
+  <a href="#handoff_delivery_mode" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        handoff_delivery_mode()
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#extract_handoffscontent" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        extract_handoffs(content)
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
   <a href="#get_agents_dirproject_path" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -1880,6 +1924,24 @@
 <p>Whether this framework supports YAML handoff blocks in agent files.</p>
 <p><strong>Returns:</strong> <code>bool</code></p>
 <hr />
+<h4 id="handoff_delivery_mode"><code>handoff_delivery_mode()</code><a class="headerlink" href="#handoff_delivery_mode" title="Permanent link">&para;</a></h4>
+<p>Describe how the framework receives handoff semantics.</p>
+<ul>
+<li><code>native</code> keeps handoffs inline in the emitted agent file.</li>
+<li><code>manifest</code> strips inline handoff syntax from the visible prompt and, when extracted handoffs exist, preserves routing metadata in <code>references/runtime-handoffs.json</code>.</li>
+<li><code>none</code> means no handoff delivery mechanism is emitted.</li>
+</ul>
+<p><strong>Returns:</strong> <code>str</code></p>
+<hr />
+<h4 id="extract_handoffscontent"><code>extract_handoffs(content)</code><a class="headerlink" href="#extract_handoffscontent" title="Permanent link">&para;</a></h4>
+<p>Extract handoff metadata from rendered agent content before adapter-specific stripping occurs.</p>
+<p>For the built-in adapters, this reads YAML <code>handoffs:</code> entries and the conventional <code>## Handoff Instructions</code> body section.</p>
+<p><strong>Args:</strong></p>
+<ul>
+<li><code>content</code> (<code>str</code>) — Rendered agent file content before framework stripping.</li>
+</ul>
+<p><strong>Returns:</strong> <code>list[dict[str, Any]]</code></p>
+<hr />
 <h4 id="get_agents_dirproject_path"><code>get_agents_dir(project_path)</code><a class="headerlink" href="#get_agents_dirproject_path" title="Permanent link">&para;</a></h4>
 <p>Return the default agent file directory for a given project path.</p>
 <p><strong>Args:</strong></p>
@@ -1906,7 +1968,7 @@
 <ul>
 <li><strong>framework_id:</strong> <code>'copilot-vscode'</code></li>
 <li><strong>Output format:</strong> <code>.agent.md</code> with YAML front matter</li>
-<li><strong>Handoffs:</strong> Supported</li>
+<li><strong>Handoffs:</strong> Native inline YAML</li>
 <li><strong>Agents dir:</strong> <code>&lt;project&gt;/.github/agents/</code></li>
 </ul>
 <p>Validates and normalizes YAML front matter; preserves all fields defined in the template.</p>
@@ -1919,10 +1981,10 @@
 <ul>
 <li><strong>framework_id:</strong> <code>'copilot-cli'</code></li>
 <li><strong>Output format:</strong> Plain <code>.md</code> system prompts</li>
-<li><strong>Handoffs:</strong> Not supported (YAML and handoff blocks stripped)</li>
+<li><strong>Handoffs:</strong> Runtime manifest when handoffs are present (<code>references/runtime-handoffs.json</code>)</li>
 <li><strong>Agents dir:</strong> <code>&lt;project&gt;/.github/copilot/</code></li>
 </ul>
-<p>Strips YAML front matter and handoff blocks to produce plain Markdown system prompts compatible with the Copilot CLI.</p>
+<p>Strips YAML front matter and inline handoff blocks to produce plain Markdown system prompts compatible with the Copilot CLI, while preserving extracted handoff metadata in <code>references/runtime-handoffs.json</code> when any handoffs are present.</p>
 <hr />
 <h2 id="claudeadapter"><code>ClaudeAdapter</code><a class="headerlink" href="#claudeadapter" title="Permanent link">&para;</a></h2>
 <blockquote>
@@ -1932,10 +1994,10 @@
 <ul>
 <li><strong>framework_id:</strong> <code>'claude'</code></li>
 <li><strong>Output format:</strong> Claude front matter <code>.md</code> (<code>CLAUDE.md</code>-compatible)</li>
-<li><strong>Handoffs:</strong> Not supported</li>
+<li><strong>Handoffs:</strong> Runtime manifest when handoffs are present (<code>references/runtime-handoffs.json</code>)</li>
 <li><strong>Agents dir:</strong> <code>&lt;project&gt;/.claude/agents/</code></li>
 </ul>
-<p>Strips VS Code YAML and handoff blocks, then injects Claude-compatible front matter and preserves Markdown body content.</p>
+<p>Strips VS Code YAML and inline handoff blocks, then injects Claude-compatible front matter and preserves Markdown body content. Extracted handoff metadata is emitted separately in <code>references/runtime-handoffs.json</code> when any handoffs are present.</p>
 
 
 

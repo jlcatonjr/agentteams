@@ -37,6 +37,7 @@ def _run_pipeline(brief_path: Path, tmp_path: Path, framework: str = "copilot-vs
 
     # Apply framework adapter post-processing (mirrors build_team.py step 5)
     final_rendered: list[tuple[str, str]] = []
+    runtime_handoff_agents: list[dict[str, object]] = []
     for rel_path, content in rendered:
         lower = rel_path.lower()
         file_type = "agent"
@@ -52,10 +53,28 @@ def _run_pipeline(brief_path: Path, tmp_path: Path, framework: str = "copilot-vs
         else:
             from pathlib import Path as _Path
             slug = _Path(rel_path).stem.replace(".agent", "")
+            if adapter.handoff_delivery_mode() == "manifest":
+                handoffs = adapter.extract_handoffs(content)
+                if handoffs:
+                    runtime_handoff_agents.append({"agent": slug, "handoffs": handoffs})
             content = adapter.render_agent_file(content, slug, manifest)
 
         final_path = adapter.finalize_output_path(rel_path, file_type)
         final_rendered.append((final_path, content))
+
+    if runtime_handoff_agents:
+        final_rendered.append((
+            "references/runtime-handoffs.json",
+            json.dumps(
+                {
+                    "schema_version": "1.0",
+                    "framework": adapter.framework_id,
+                    "project_name": manifest["project_name"],
+                    "agents": runtime_handoff_agents,
+                },
+                indent=2,
+            ) + "\n",
+        ))
 
     # Generate team topology graph (mirrors build_team.py step 5c)
     from agentteams import graph as _graph
@@ -158,6 +177,34 @@ def test_all_frameworks(tmp_path, framework):
     # Builder agent should exist for all frameworks
     builder_files = [f for f in manifest["output_files"] if f["type"] == "builder"]
     assert len(builder_files) == 1
+
+
+@pytest.mark.parametrize("framework", ["copilot-cli", "claude"])
+def test_non_vscode_frameworks_emit_runtime_handoff_manifest(tmp_path, framework):
+    brief = EXAMPLES_DIR / "software-project" / "brief.json"
+    if not brief.exists():
+        pytest.skip("Software project example not found")
+
+    _run_pipeline(brief, tmp_path, framework=framework)
+
+    manifest_file = tmp_path / "references" / "runtime-handoffs.json"
+    assert manifest_file.exists()
+
+    payload = json.loads(manifest_file.read_text(encoding="utf-8"))
+    assert payload["framework"] == framework
+    assert payload["project_name"]
+    assert "orchestrator" in {entry["agent"] for entry in payload["agents"]}
+    assert any(entry["handoffs"] for entry in payload["agents"])
+
+
+def test_vscode_framework_does_not_emit_runtime_handoff_manifest(tmp_path):
+    brief = EXAMPLES_DIR / "software-project" / "brief.json"
+    if not brief.exists():
+        pytest.skip("Software project example not found")
+
+    _run_pipeline(brief, tmp_path, framework="copilot-vscode")
+
+    assert not (tmp_path / "references" / "runtime-handoffs.json").exists()
 
 
 # ---------------------------------------------------------------------------

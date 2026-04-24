@@ -156,7 +156,7 @@ The same template library targets three frameworks via adapters in `agentteams/f
 | `copilot-cli` | Plain `.md` system prompts | `gh copilot` CLI |
 | `claude` | Claude front matter `.md` + `CLAUDE.md` | Claude Projects |
 
-Each adapter in `agentteams/frameworks/` knows the file naming conventions, front-matter schema, and handoff syntax for its target framework.
+Each adapter in `agentteams/frameworks/` knows the file naming conventions, front-matter schema, and handoff delivery mode for its target framework. VS Code Copilot keeps handoffs inline; frameworks that do not support the VS Code syntax can instead receive a sidecar `references/runtime-handoffs.json` manifest when extracted handoffs are present.
 
 ---
 

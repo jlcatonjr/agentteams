@@ -50,9 +50,11 @@ Short reads (about five paragraphs each) explaining how core module components f
 
 | Framework | Format | Handoffs | Builder Agent |
 |-----------|--------|----------|---------------|
-| `copilot-vscode` | `.agent.md` with YAML front matter | ✅ | VS Code Copilot `.agent.md` |
-| `copilot-cli` | Plain `.md` system prompts | ❌ | CLI prompt `.md` |
-| `claude` | Claude front matter `.md` + `CLAUDE.md` instructions | ❌ | `CLAUDE.md` system prompt |
+| `copilot-vscode` | `.agent.md` with YAML front matter | Native inline YAML | VS Code Copilot `.agent.md` |
+| `copilot-cli` | Plain `.md` system prompts | Runtime manifest when handoffs are present (`references/runtime-handoffs.json`) | CLI prompt `.md` |
+| `claude` | Claude front matter `.md` + `CLAUDE.md` instructions | Runtime manifest when handoffs are present (`references/runtime-handoffs.json`) | `CLAUDE.md` system prompt |
+
+For `copilot-cli` and `claude`, AgentTeams strips inline handoff sections from the visible prompt files but emits `references/runtime-handoffs.json` when handoffs are extracted, so routing metadata remains available to bridge layers and other runtime tooling.
 
 Default framework locations:
 - `copilot-vscode`: `.github/agents/`
