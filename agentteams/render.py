@@ -120,6 +120,9 @@ def resolve_placeholders(template_text: str, placeholder_map: dict[str, str]) ->
         key = match.group(1)
         value = placeholder_map.get(key, match.group(0))
         if key in placeholder_map and _index_in_ranges(match.start(), yaml_ranges):
+            if _inside_yaml_quoted_string(template_text, match.start()):
+                # Already inside "...": only escape inner backslashes and quotes
+                return value.replace("\\", "\\\\").replace('"', '\\"')
             return _escape_yaml_scalar(value)
         return value  # leave unresolved tokens intact
 
@@ -153,6 +156,27 @@ def _index_in_ranges(index: int, ranges: list[tuple[int, int]]) -> bool:
         if start <= index < end:
             return True
     return False
+
+
+def _inside_yaml_quoted_string(text: str, pos: int) -> bool:
+    """Return True if position *pos* in *text* is inside a YAML double-quoted string.
+
+    Counts unescaped ``"`` characters between the start of the current line and
+    *pos*. An odd count means we're inside an open ``"..."`` string.
+    """
+    line_start = text.rfind("\n", 0, pos) + 1
+    before = text[line_start:pos]
+    # Count unescaped double-quote characters
+    count = 0
+    i = 0
+    while i < len(before):
+        if before[i] == "\\" and i + 1 < len(before):
+            i += 2  # skip escaped character
+            continue
+        if before[i] == '"':
+            count += 1
+        i += 1
+    return count % 2 == 1
 
 
 def _escape_yaml_scalar(value: str) -> str:
