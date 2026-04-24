@@ -973,9 +973,13 @@ def _plan_output_files(
             "component_slug": comp["slug"],
         })
 
-    # copilot-instructions.md
+    # Framework instructions file in repository root
+    instructions_path = "../copilot-instructions.md"
+    if framework == "claude":
+        instructions_path = "../CLAUDE.md"
+
     files.append({
-        "path": "../copilot-instructions.md",
+        "path": instructions_path,
         "template": "copilot-instructions.template.md",
         "type": "instructions",
         "component_slug": None,

@@ -73,6 +73,32 @@ agentteams \
 
 Output is written to `/path/to/your/project/.github/agents/`.
 
+Framework-specific defaults:
+
+- `copilot-vscode` -> `/path/to/your/project/.github/agents/`
+- `copilot-cli` -> `/path/to/your/project/.github/copilot/`
+- `claude` -> `/path/to/your/project/.claude/agents/`
+
+Instructions file defaults:
+
+- `copilot-vscode` and `copilot-cli` -> `copilot-instructions.md`
+- `claude` -> `CLAUDE.md`
+
+---
+
+## Convert an Existing Team to Another Framework
+
+Use `--convert-from` when you already have an agent team and want to migrate formats while preserving body prose:
+
+```bash
+agentteams \
+  --convert-from /path/to/source/agents \
+  --framework claude \
+  --output /path/to/project/.claude/agents
+```
+
+Supported conversion directions include all six combinations across `copilot-vscode`, `copilot-cli`, and `claude`.
+
 ---
 
 ## Review SETUP-REQUIRED.md

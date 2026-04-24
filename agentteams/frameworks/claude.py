@@ -76,6 +76,12 @@ class ClaudeAdapter(FrameworkAdapter):
     def get_agents_dir(self, project_path: Path) -> Path:
         return project_path / ".claude" / "agents"
 
+    def finalize_output_path(self, rel_path: str, file_type: str) -> str:
+        """Map generic planned paths to Claude-native file names/locations."""
+        if file_type == "instructions" and rel_path.endswith("copilot-instructions.md"):
+            return "../CLAUDE.md"
+        return super().finalize_output_path(rel_path, file_type)
+
 
 # ---------------------------------------------------------------------------
 # Claude Code front matter helpers

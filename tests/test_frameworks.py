@@ -87,6 +87,10 @@ class TestCopilotVSCodeAdapter:
         result = self.adapter.get_agents_dir(Path("/project"))
         assert result == Path("/project/.github/agents")
 
+    def test_finalize_output_path_keeps_vscode_agent_extension(self):
+        result = self.adapter.finalize_output_path("orchestrator.agent.md", "agent")
+        assert result == "orchestrator.agent.md"
+
     # --- render_instructions_file (pass-through) ---
 
     def test_render_instructions_file_passthrough(self):
@@ -258,6 +262,10 @@ class TestCopilotCLIAdapter:
         result = self.adapter.get_agents_dir(Path("/project"))
         assert result == Path("/project/.github/copilot")
 
+    def test_finalize_output_path_maps_agent_to_plain_markdown(self):
+        result = self.adapter.finalize_output_path("orchestrator.agent.md", "agent")
+        assert result == "orchestrator.md"
+
     # --- render_agent_file: YAML stripped ---
 
     def test_render_agent_file_strips_yaml_front_matter(self):
@@ -325,6 +333,14 @@ class TestClaudeAdapter:
     def test_get_agents_dir(self):
         result = self.adapter.get_agents_dir(Path("/project"))
         assert result == Path("/project/.claude/agents")
+
+    def test_finalize_output_path_maps_agent_to_plain_markdown(self):
+        result = self.adapter.finalize_output_path("orchestrator.agent.md", "agent")
+        assert result == "orchestrator.md"
+
+    def test_finalize_output_path_maps_instructions_to_claude_md(self):
+        result = self.adapter.finalize_output_path("../copilot-instructions.md", "instructions")
+        assert result == "../CLAUDE.md"
 
     # --- render_agent_file: VS Code YAML replaced by Claude front matter ---
 

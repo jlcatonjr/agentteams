@@ -25,7 +25,7 @@ The generated team includes:
 - 2–9 **Domain agents** — appropriate archetypes for your deliverable type
 - 1 **Workstream Expert** per project component — deep, component-specific knowledge
 - 1 **Team Builder agent** — framework-native agent that can regenerate or expand the team from within your framework
-- `copilot-instructions.md` — project conventions and routing rules
+- A framework instructions file — `copilot-instructions.md` (Copilot VS Code / Copilot CLI) or `CLAUDE.md` (Claude)
 
 ---
 
@@ -47,6 +47,8 @@ Short reads (about five paragraphs each) explaining how core module components f
 5. [Functional Agents](https://jameslcaton.com/#/blog/04-22-2026-AgentTeams%20Functional%20Agents.html)
 6. [Domain Agents](https://jameslcaton.com/#/blog/04-22-2026-AgentTeams%20Domain%20Agents.html)
 7. [Tools and References](https://jameslcaton.com/#/blog/04-22-2026-AgentTeams%20Tools%20and%20References.html)
+8. [Security Agent](https://jameslcaton.com/#/blog/04-22-2026-AgentTeams%20Security%20Agent.html)
+9. [Audit Protocols and Security](https://jameslcaton.com/#/blog/04-22-2026-AgentTeams%20Audit%20Protocols%20and%20Security.html)
 
 ---
 
@@ -100,6 +102,11 @@ python build_team.py \
 
 Output: agent files in `/path/to/your/project/.github/agents/`
 
+Framework-specific default output directories:
+- `copilot-vscode` → `<project>/.github/agents/`
+- `copilot-cli` → `<project>/.github/copilot/`
+- `claude` → `<project>/.claude/agents/`
+
 ### 4. Review SETUP-REQUIRED.md
 
 Fill in any placeholders that couldn't be auto-resolved. Then open VS Code, invoke `@orchestrator`, and start working.
@@ -122,7 +129,94 @@ See the [Agent-Assisted Setup guide](https://jlcatonjr.github.io/agentteams/agen
 |-----------|--------|----------|---------------|
 | `copilot-vscode` | `.agent.md` with YAML front matter | ✅ | VS Code Copilot `.agent.md` |
 | `copilot-cli` | Plain `.md` system prompts | ❌ | CLI prompt `.md` |
-| `claude` | Claude Code front matter `.md` | ❌ | Claude Code system prompt |
+| `claude` | Claude Code front matter `.md` + `CLAUDE.md` instructions | ❌ | Claude Code system prompt |
+
+Default framework locations:
+- `copilot-vscode`: agents in `.github/agents/`, instructions in `copilot-instructions.md`
+- `copilot-cli`: agents in `.github/copilot/`, instructions in `copilot-instructions.md`
+- `claude`: agents in `.claude/agents/`, instructions in `CLAUDE.md`
+
+## Three Build Paths
+
+You can build or integrate teams in three different ways.
+
+### Path A: Fresh Generation
+
+Run the full `ingest -> analyze -> render -> emit` pipeline from a project brief.
+
+```bash
+agentteams --description brief.json --project /path/to/project --framework copilot-vscode
+```
+
+### Path B: Format Migration (`--convert-from`)
+
+Convert an existing agent team to a different framework format while preserving body prose and replacing only framework wrappers/front matter.
+
+```bash
+agentteams \
+  --convert-from /path/to/source/agents \
+  --framework claude \
+  --output /path/to/project/.claude/agents
+```
+
+Supported conversion directions (all six):
+- `copilot-vscode -> copilot-cli`
+- `copilot-vscode -> claude`
+- `copilot-cli -> copilot-vscode`
+- `copilot-cli -> claude`
+- `claude -> copilot-vscode`
+- `claude -> copilot-cli`
+
+### Path C: Lightweight Interface Bridge (`--bridge-from`)
+
+Generate target-framework interface artifacts that reference source canonical agents without regenerating source agent documentation.
+
+```bash
+agentteams \
+  --bridge-from /path/to/source/agents \
+  --framework claude \
+  --output /path/to/project
+```
+
+This creates lightweight bridge artifacts and target entrypoint files (for example `CLAUDE.md` or `.github/copilot-instructions.md`) while keeping source files unchanged.
+
+Bridge supports all six directional combinations:
+- `copilot-vscode -> copilot-cli`
+- `copilot-vscode -> claude`
+- `copilot-cli -> copilot-vscode`
+- `copilot-cli -> claude`
+- `claude -> copilot-vscode`
+- `claude -> copilot-cli`
+
+Bridge freshness validation:
+
+```bash
+agentteams \
+  --bridge-from /path/to/source/agents \
+  --framework claude \
+  --output /path/to/project \
+  --bridge-check
+```
+
+## Interoperability Feature Family
+
+AgentTeams supports a complete interoperability family for cross-framework operation:
+
+1. `--convert-from`: direct format migration between framework outputs.
+2. `--interop-from`: Canonical Agent Interface (CAI) normalization and re-emission.
+3. `--bridge-from`: lightweight runtime bridge that preserves source canonical agent docs.
+
+Use this family when you need one of the following:
+
+1. preserve authored source prose while changing runtime framework,
+2. transport agent infrastructure through a canonical representation, or
+3. expose source-canonical teams in another runtime without full regeneration.
+
+Documentation links:
+
+1. Interoperability guide: https://jlcatonjr.github.io/agentteams/interoperability/
+2. CLI reference: https://jlcatonjr.github.io/agentteams/cli-reference/
+3. API overview: https://jlcatonjr.github.io/agentteams/api-reference/
 
 ---
 
@@ -197,7 +291,15 @@ Options:
   --description PATH   Project description (.json or .md) [required]
   --project     PATH   Project directory to scan
   --framework   NAME   copilot-vscode (default) | copilot-cli | claude
-  --output      DIR    Output directory (default: <project>/.github/agents/)
+  --output      DIR    Output directory (default: framework-specific agents dir under <project>)
+  --convert-from DIR   Convert an existing team directory into the target --framework
+  --interop-from DIR   Run CAI-based interop pipeline from an existing team directory
+  --interop-source-framework NAME  Optional source override: copilot-vscode|copilot-cli|claude
+  --interop-mode MODE  direct (default) | bundle
+  --bridge-from DIR    Generate lightweight interface bridge artifacts from source team
+  --bridge-source-framework NAME  Optional source override for bridge mode
+  --bridge-check       Validate bridge freshness against source files
+  --bridge-refresh     Refresh bridge artifacts (overwrite existing bridge files)
   --dry-run            Show what would be generated without writing
   --overwrite          Overwrite existing agent files unconditionally (full replacement)
   --merge              Update only template-fenced regions; preserve user-authored content
@@ -292,6 +394,24 @@ Copilot execution policy for this maintenance path:
 3. Do not bypass destructive-risk protections.
 4. Keep operations non-destructive by default for routine maintenance.
 
+### Daily bridge maintenance (agentteams only)
+
+This repository includes a scheduled workflow at `.github/workflows/bridge-maintenance.yml`.
+
+The workflow executes `scripts/run_daily_bridge_maintenance.sh`, which:
+
+1. Enforces repository scope (refuses to run outside the `agentteams` repo root).
+2. Runs bridge refresh for maintained pairs:
+  - `copilot-vscode -> copilot-cli`
+  - `copilot-vscode -> claude`
+3. Runs bridge freshness checks for the same maintained pairs.
+4. Continues on non-critical failures (warn-and-continue) and emits summary artifacts under `tmp/bridge-maintenance/`.
+
+Bridge watchdog coverage:
+
+1. `.github/workflows/bridge-watchdog.yml` checks the recency of successful `bridge-maintenance.yml` runs.
+2. If stale beyond threshold (48h), it opens a deduplicated issue labeled `bridge-watchdog`.
+
 ---
 
 ## Section Fencing
@@ -345,6 +465,8 @@ Tools declared in the brief are classified into three tiers:
 | **Reference file** | Default for `framework`, `library`, `api`, `cli` | `references/ref-{tool}-reference.md` |
 | **Passive** | `language`, `other` | Listed in `copilot-instructions.md` only |
 
+For Claude targets, passive tool context is listed in `CLAUDE.md`.
+
 The engine also parses dependency manifests (`requirements.txt`, `pyproject.toml`, `package.json`, `Cargo.toml`, `go.mod`) from the project directory to detect tools automatically.
 
 ---
@@ -360,6 +482,16 @@ agentteams \
   --description brief.json \
   --framework copilot-vscode
 # Output: .github/agents/ in the current directory
+
+agentteams \
+  --description brief.json \
+  --framework copilot-cli
+# Output: .github/copilot/ in the current directory
+
+agentteams \
+  --description brief.json \
+  --framework claude
+# Output: .claude/agents/ in the current directory
 ```
 
 ---
@@ -410,11 +542,71 @@ agentteams --description brief.json --project ~/code/myproject --framework copil
 
 See [Framework Support](#framework-support) for output format differences.
 
+### 4b. Interop mode (CAI pipeline)
+
+Use the interop pipeline when you want a normalized compatibility bundle and target output in one run:
+
+```bash
+agentteams \
+  --interop-from /path/to/source/agents \
+  --framework claude \
+  --interop-mode bundle \
+  --output /path/to/project/.claude/agents
+```
+
+`--interop-mode` values:
+- `direct`: write only target framework files
+- `bundle`: write target files plus compatibility artifacts under `references/interop/<source>-to-<target>/`
+
+Bundle artifacts include:
+- `team-manifest.cai.json`
+- `interop-manifest.json`
+- `routing-map.json`
+- `instructions-map.json`
+- `compatibility-report.md`
+
+### 4c. Lightweight bridge mode
+
+Use bridge mode when you want target-runtime access to source canonical agents without converting every agent file:
+
+```bash
+agentteams \
+  --bridge-from /path/to/source/agents \
+  --framework copilot-cli \
+  --output /path/to/project
+```
+
+Bridge artifacts are written under:
+- `references/bridges/<source>-to-<target>/`
+
+Core bridge artifacts:
+- `bridge-manifest.json`
+- `agent-inventory.md`
+- `quickstart-snippet.md`
+- `entrypoint.md`
+
+### Option Pair Exclusions
+
+The CLI now explicitly rejects incompatible option pairs so pipelines remain deterministic.
+
+Excluded with `--convert-from`:
+- `--description`, `--project`, `--self`, `--no-scan`, `--update`, `--prune`, `--check`, `--scan-security`, `--post-audit`, `--auto-correct`, `--enrich`, `--merge`, `--migrate`, `--revert-migration`, `--list-backups`, `--restore-backup`
+
+Excluded with `--interop-from`:
+- `--description`, `--project`, `--self`, `--no-scan`, `--update`, `--prune`, `--check`, `--scan-security`, `--post-audit`, `--auto-correct`, `--enrich`, `--merge`, `--migrate`, `--revert-migration`, `--list-backups`, `--restore-backup`
+
+Global pair constraints:
+- `--convert-from` and `--interop-from` are mutually exclusive
+- `--bridge-from` is mutually exclusive with `--convert-from` and `--interop-from`
+- `--auto-correct` requires `--post-audit`
+- `--prune` requires `--update`
+- `--bridge-check` cannot be combined with `--bridge-refresh`
+
 ---
 
 ### 5. Custom output directory
 
-Override where agent files are written. Useful for monorepos or when the default `.github/agents/` location isn't appropriate.
+Override where agent files are written. Useful for monorepos or when a non-default location is required.
 
 ```bash
 agentteams \

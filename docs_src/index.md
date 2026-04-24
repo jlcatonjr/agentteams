@@ -20,7 +20,7 @@ The generated team includes:
 - 2–9 **Domain agents** — appropriate archetypes for your deliverable type
 - 1 **Workstream Expert** per project component — deep, component-specific knowledge
 - 1 **Team Builder agent** — framework-native agent that can regenerate or expand the team
-- `copilot-instructions.md` — project conventions and routing rules
+- A framework instructions file — `copilot-instructions.md` (Copilot VS Code / Copilot CLI) or `CLAUDE.md` (Claude)
 
 ---
 
@@ -41,6 +41,8 @@ Short reads (about five paragraphs each) explaining how core module components f
 5. [Functional Agents](https://jameslcaton.com/#/blog/04-22-2026-AgentTeams%20Functional%20Agents.html)
 6. [Domain Agents](https://jameslcaton.com/#/blog/04-22-2026-AgentTeams%20Domain%20Agents.html)
 7. [Tools and References](https://jameslcaton.com/#/blog/04-22-2026-AgentTeams%20Tools%20and%20References.html)
+8. [Security Agent](https://jameslcaton.com/#/blog/04-22-2026-AgentTeams%20Security%20Agent.html)
+9. [Audit Protocols and Security](https://jameslcaton.com/#/blog/04-22-2026-AgentTeams%20Audit%20Protocols%20and%20Security.html)
 
 ---
 
@@ -50,7 +52,29 @@ Short reads (about five paragraphs each) explaining how core module components f
 |-----------|--------|----------|---------------|
 | `copilot-vscode` | `.agent.md` with YAML front matter | ✅ | VS Code Copilot `.agent.md` |
 | `copilot-cli` | Plain `.md` system prompts | ❌ | CLI prompt `.md` |
-| `claude` | Plain `.md` | ❌ | `CLAUDE.md` system prompt |
+| `claude` | Claude front matter `.md` + `CLAUDE.md` instructions | ❌ | `CLAUDE.md` system prompt |
+
+Default framework locations:
+- `copilot-vscode`: `.github/agents/`
+- `copilot-cli`: `.github/copilot/`
+- `claude`: `.claude/agents/`
+
+Three build paths:
+- Path A: fresh generation from a brief (`--description`)
+- Path B: format migration of an existing team (`--convert-from`)
+- Path C: lightweight interface bridge to source canonical agents (`--bridge-from`)
+
+---
+
+## Interoperability Feature Family
+
+Interoperability is now a first-class capability in AgentTeams with three explicit modes:
+
+1. **Format migration** (`--convert-from`) for wrapper/front matter translation while preserving body prose.
+2. **CAI interop pipeline** (`--interop-from`) for canonical normalization and optional compatibility bundles.
+3. **Lightweight bridge** (`--bridge-from`) for source-canonical runtime integration without regenerating all source docs.
+
+Open the dedicated [Interoperability](interoperability.md) tab for mode-by-mode guidance and API links.
 
 ---
 

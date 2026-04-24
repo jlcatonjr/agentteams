@@ -184,6 +184,24 @@ def test_build_manifest_includes_builder_agent():
         assert len(builder_files) == 1, f"Expected 1 builder file for {fw}"
 
 
+def test_build_manifest_uses_framework_specific_instructions_path():
+    desc = {"project_goal": "Test project"}
+
+    manifest_vscode = build_manifest(desc, framework="copilot-vscode")
+    manifest_cli = build_manifest(desc, framework="copilot-cli")
+    manifest_claude = build_manifest(desc, framework="claude")
+
+    def _instructions_path(manifest: dict) -> str:
+        for file_spec in manifest["output_files"]:
+            if file_spec["type"] == "instructions":
+                return file_spec["path"]
+        raise AssertionError("instructions file not planned")
+
+    assert _instructions_path(manifest_vscode) == "../copilot-instructions.md"
+    assert _instructions_path(manifest_cli) == "../copilot-instructions.md"
+    assert _instructions_path(manifest_claude) == "../CLAUDE.md"
+
+
 def test_build_manifest_manual_required_when_no_reference_db():
     desc = {
         "project_goal": "Academic paper with citations and bibliography.",

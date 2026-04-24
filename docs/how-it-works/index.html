@@ -329,6 +329,25 @@
   
   
     <li class="md-tabs__item">
+      <a href="../interoperability/" class="md-tabs__link">
+        
+  
+  
+    
+  
+  Interoperability
+
+      </a>
+    </li>
+  
+
+      
+        
+  
+  
+  
+  
+    <li class="md-tabs__item">
       <a href="../cli-reference/" class="md-tabs__link">
         
   
@@ -732,6 +751,17 @@
   
 </li>
         
+          <li class="md-nav__item">
+  <a href="#path-b-convert-existing-teams" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Path B: Convert Existing Teams
+      
+    </span>
+  </a>
+  
+</li>
+        
       </ul>
     </nav>
   
@@ -851,6 +881,33 @@
   
   
     <li class="md-nav__item">
+      <a href="../interoperability/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Interoperability
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
       <a href="../cli-reference/" class="md-nav__link">
         
   
@@ -891,10 +948,10 @@
       
         
         
-        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_8" >
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_9" >
         
           
-          <label class="md-nav__link" for="__nav_8" id="__nav_8_label" tabindex="0">
+          <label class="md-nav__link" for="__nav_9" id="__nav_9_label" tabindex="0">
             
   
   
@@ -912,8 +969,8 @@
             <span class="md-nav__icon md-icon"></span>
           </label>
         
-        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_8_label" aria-expanded="false">
-          <label class="md-nav__title" for="__nav_8">
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_9_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_9">
             <span class="md-nav__icon md-icon"></span>
             
   
@@ -1050,6 +1107,90 @@
     
   
     emit
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../api-reference/convert/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    convert
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../api-reference/interop/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    interop
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../api-reference/bridge/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    bridge
   
 
     
@@ -1511,6 +1652,17 @@
   
 </li>
         
+          <li class="md-nav__item">
+  <a href="#path-b-convert-existing-teams" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Path B: Convert Existing Teams
+      
+    </span>
+  </a>
+  
+</li>
+        
       </ul>
     </nav>
   
@@ -1631,7 +1783,7 @@
 <a id="__codelineno-0-17" name="__codelineno-0-17" href="#__codelineno-0-17"></a>        │ (output_path, rendered_content) pairs
 <a id="__codelineno-0-18" name="__codelineno-0-18" href="#__codelineno-0-18"></a>        ▼
 <a id="__codelineno-0-19" name="__codelineno-0-19" href="#__codelineno-0-19"></a>   ┌──────┐
-<a id="__codelineno-0-20" name="__codelineno-0-20" href="#__codelineno-0-20"></a>   │ emit  │  Write agent files to .github/agents/
+<a id="__codelineno-0-20" name="__codelineno-0-20" href="#__codelineno-0-20"></a>    │ emit  │  Write agent files to framework-specific target directories
 <a id="__codelineno-0-21" name="__codelineno-0-21" href="#__codelineno-0-21"></a>   └──────┘
 </code></pre></div>
 <h3 id="stage-1-ingest-agentteamsingestpy">Stage 1 — Ingest (<code>agentteams/ingest.py</code>)<a class="headerlink" href="#stage-1-ingest-agentteamsingestpy" title="Permanent link">&para;</a></h3>
@@ -1648,7 +1800,16 @@
 <h3 id="stage-3-render-agentteamsrenderpy">Stage 3 — Render (<code>agentteams/render.py</code>)<a class="headerlink" href="#stage-3-render-agentteamsrenderpy" title="Permanent link">&para;</a></h3>
 <p>Loads each template from <code>templates/</code> and substitutes every <code>{PLACEHOLDER}</code> with its resolved value from the manifest. Returns a list of <code>(relative_path, content)</code> pairs.</p>
 <h3 id="stage-4-emit-agentteamsemitpy">Stage 4 — Emit (<code>agentteams/emit.py</code>)<a class="headerlink" href="#stage-4-emit-agentteamsemitpy" title="Permanent link">&para;</a></h3>
-<p>Writes all rendered files to the target project's <code>.github/agents/</code> directory (or equivalent). Generates <code>SETUP-REQUIRED.md</code> for any unresolved manual placeholders, and runs the post-generation audit and security scan.</p>
+<p>Writes all rendered files to the target framework directory:</p>
+<ul>
+<li><code>copilot-vscode</code> -&gt; <code>.github/agents/</code></li>
+<li><code>copilot-cli</code> -&gt; <code>.github/copilot/</code></li>
+<li><code>claude</code> -&gt; <code>.claude/agents/</code></li>
+</ul>
+<p>Also writes framework instructions at the parent level (<code>copilot-instructions.md</code> or <code>CLAUDE.md</code>), generates <code>SETUP-REQUIRED.md</code> for unresolved manual placeholders, and runs post-generation audit/security scan when requested.</p>
+<h3 id="path-b-convert-existing-teams">Path B: Convert Existing Teams<a class="headerlink" href="#path-b-convert-existing-teams" title="Permanent link">&para;</a></h3>
+<p>In addition to fresh generation, the module supports format migration with <code>--convert-from</code>.
+This path reads existing agent files, preserves body prose, and rewrites framework wrappers/front matter for the target framework.</p>
 <hr />
 <h2 id="4-tier-agent-taxonomy">4-Tier Agent Taxonomy<a class="headerlink" href="#4-tier-agent-taxonomy" title="Permanent link">&para;</a></h2>
 <p>Every generated team contains agents from four hierarchical tiers.</p>
@@ -1752,7 +1913,7 @@
 </tr>
 <tr>
 <td><code>claude</code></td>
-<td>Plain <code>.md</code> + <code>CLAUDE.md</code></td>
+<td>Claude front matter <code>.md</code> + <code>CLAUDE.md</code></td>
 <td>Claude Projects</td>
 </tr>
 </tbody>

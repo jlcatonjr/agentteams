@@ -38,18 +38,24 @@ def _run_pipeline(brief_path: Path, tmp_path: Path, framework: str = "copilot-vs
     # Apply framework adapter post-processing (mirrors build_team.py step 5)
     final_rendered: list[tuple[str, str]] = []
     for rel_path, content in rendered:
-        if "copilot-instructions" in rel_path:
+        lower = rel_path.lower()
+        file_type = "agent"
+        if "copilot-instructions" in lower or rel_path.endswith("/CLAUDE.md") or rel_path == "../CLAUDE.md":
+            file_type = "instructions"
             content = adapter.render_instructions_file(content, manifest)
-        elif (
-            "SETUP-REQUIRED" not in rel_path
-            and "team-builder" not in rel_path
-            and not rel_path.startswith("references/")
-            and "/references/" not in rel_path
-        ):
+        elif "SETUP-REQUIRED" in rel_path:
+            file_type = "setup-required"
+        elif "team-builder" in rel_path:
+            file_type = "builder"
+        elif rel_path.startswith("references/") or "/references/" in rel_path:
+            file_type = "reference"
+        else:
             from pathlib import Path as _Path
             slug = _Path(rel_path).stem.replace(".agent", "")
             content = adapter.render_agent_file(content, slug, manifest)
-        final_rendered.append((rel_path, content))
+
+        final_path = adapter.finalize_output_path(rel_path, file_type)
+        final_rendered.append((final_path, content))
 
     # Generate team topology graph (mirrors build_team.py step 5c)
     from agentteams import graph as _graph

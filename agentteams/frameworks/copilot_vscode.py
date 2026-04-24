@@ -31,7 +31,7 @@ class CopilotVSCodeAdapter(FrameworkAdapter):
         return content  # instructions format is plain Markdown; no adjustments needed
 
     def get_file_extension(self, file_type: str) -> str:
-        if file_type == "agent":
+        if file_type in {"agent", "builder"}:
             return ".agent.md"
         return ".md"
 

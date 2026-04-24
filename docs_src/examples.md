@@ -26,7 +26,7 @@ A FastAPI backend with authentication and a task management API.
 - Domain agents: `@primary-producer`, `@quality-auditor`, `@technical-validator`, `@format-converter`
 - Workstream experts: one per component (e.g. `@auth-module-expert`, `@tasks-api-expert`)
 - Specialist agents for FastAPI and PostgreSQL
-- `copilot-instructions.md` wired to the full team
+- Framework instructions file wired to the full team (`copilot-instructions.md` or `CLAUDE.md`)
 
 **To run this example:**
 
@@ -96,7 +96,7 @@ A peer-reviewed academic paper on multi-agent coordination theory, progressing f
 - Domain agents include `@reference-manager`, `@format-converter`, and `@quality-auditor`
 - Authority hierarchy sourced from academic papers and agent documentation
 - Workstream experts per chapter / manuscript section
-- `copilot-instructions.md` tuned for academic writing conventions
+- Framework instructions file tuned for academic writing conventions
 
 **To run this example:**
 
@@ -124,3 +124,18 @@ The minimum viable brief requires only three fields:
 ```
 
 All other fields are auto-inferred or prompted via `SETUP-REQUIRED.md` after generation.
+
+---
+
+## Format Migration Example
+
+If a team already exists and you want to retarget to another runtime without re-rendering from templates:
+
+```bash
+agentteams \
+  --convert-from /tmp/webappbackend/.github/agents \
+  --framework copilot-cli \
+  --output /tmp/webappbackend/.github/copilot
+```
+
+This migration path preserves body prose and rewrites only framework wrappers/front matter.
