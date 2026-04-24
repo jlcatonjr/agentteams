@@ -1757,8 +1757,13 @@
 <li>Run <code>pytest tests/</code> and confirm all tests pass</li>
 <li>If you changed public API signatures, update the corresponding page in <code>docs_src/api-reference/</code></li>
 <li>If you added or changed CLI flags, update <code>docs/cli-reference.md</code></li>
-<li>Open a PR against <code>main</code>; the CI workflow will run <code>pytest</code> automatically</li>
+<li>If you added or changed CLI flags/help text, regenerate <code>agentteams.1</code> before opening the PR:</li>
 </ol>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-2-1" name="__codelineno-2-1" href="#__codelineno-2-1"></a>python<span class="w"> </span>-m<span class="w"> </span>agentteams.man<span class="w"> </span>&gt;<span class="w"> </span>agentteams.1
+<a id="__codelineno-2-2" name="__codelineno-2-2" href="#__codelineno-2-2"></a>python<span class="w"> </span>-m<span class="w"> </span>agentteams.man<span class="w"> </span>&gt;<span class="w"> </span>/tmp/agentteams-check.1<span class="w"> </span><span class="o">&amp;&amp;</span><span class="w"> </span>diff<span class="w"> </span>/tmp/agentteams-check.1<span class="w"> </span>agentteams.1
+</code></pre></div>
+<p>Stale <code>agentteams.1</code> is a common source of failed CI/deploy checks (<code>Check man-page is current</code>).
+7. Open a PR against <code>main</code>; the CI workflow will run <code>pytest</code> automatically</p>
 <h3 id="what-gets-reviewed">What gets reviewed<a class="headerlink" href="#what-gets-reviewed" title="Permanent link">&para;</a></h3>
 <ul>
 <li>Test coverage for any new public functions</li>

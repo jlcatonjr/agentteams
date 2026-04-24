@@ -4,7 +4,8 @@ claude.py — Framework adapter for Claude Code sub-agents.
 Agent files:  .claude/agents/<slug>.md  (Claude Code sub-agent format)
 Instructions: CLAUDE.md (merged with agents for smaller teams)
 Format:       Claude Code front matter (name, description, allowed-tools) + Markdown body
-Handoffs:     Not supported
+Handoffs:     Inline handoffs removed from prompt body; extracted handoffs can
+              be preserved in references/runtime-handoffs.json by the build pipeline
 
 Claude Code sub-agent front matter specification
 -------------------------------------------------
@@ -72,6 +73,9 @@ class ClaudeAdapter(FrameworkAdapter):
 
     def supports_handoffs(self) -> bool:
         return False
+
+    def handoff_delivery_mode(self) -> str:
+        return "manifest"
 
     def get_agents_dir(self, project_path: Path) -> Path:
         return project_path / ".claude" / "agents"

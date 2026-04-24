@@ -69,6 +69,32 @@ Whether this framework supports YAML handoff blocks in agent files.
 
 ---
 
+#### `handoff_delivery_mode()`
+
+Describe how the framework receives handoff semantics.
+
+- `native` keeps handoffs inline in the emitted agent file.
+- `manifest` strips inline handoff syntax from the visible prompt and, when extracted handoffs exist, preserves routing metadata in `references/runtime-handoffs.json`.
+- `none` means no handoff delivery mechanism is emitted.
+
+**Returns:** `str`
+
+---
+
+#### `extract_handoffs(content)`
+
+Extract handoff metadata from rendered agent content before adapter-specific stripping occurs.
+
+For the built-in adapters, this reads YAML `handoffs:` entries and the conventional `## Handoff Instructions` body section.
+
+**Args:**
+
+- `content` (`str`) — Rendered agent file content before framework stripping.
+
+**Returns:** `list[dict[str, Any]]`
+
+---
+
 #### `get_agents_dir(project_path)`
 
 Return the default agent file directory for a given project path.
@@ -104,7 +130,7 @@ Adapter for GitHub Copilot in VS Code.
 
 - **framework_id:** `'copilot-vscode'`
 - **Output format:** `.agent.md` with YAML front matter
-- **Handoffs:** Supported
+- **Handoffs:** Native inline YAML
 - **Agents dir:** `<project>/.github/agents/`
 
 Validates and normalizes YAML front matter; preserves all fields defined in the template.
@@ -119,10 +145,10 @@ Adapter for Copilot CLI.
 
 - **framework_id:** `'copilot-cli'`
 - **Output format:** Plain `.md` system prompts
-- **Handoffs:** Not supported (YAML and handoff blocks stripped)
+- **Handoffs:** Runtime manifest when handoffs are present (`references/runtime-handoffs.json`)
 - **Agents dir:** `<project>/.github/copilot/`
 
-Strips YAML front matter and handoff blocks to produce plain Markdown system prompts compatible with the Copilot CLI.
+Strips YAML front matter and inline handoff blocks to produce plain Markdown system prompts compatible with the Copilot CLI, while preserving extracted handoff metadata in `references/runtime-handoffs.json` when any handoffs are present.
 
 ---
 
@@ -134,7 +160,7 @@ Adapter for Claude Projects.
 
 - **framework_id:** `'claude'`
 - **Output format:** Claude front matter `.md` (`CLAUDE.md`-compatible)
-- **Handoffs:** Not supported
+- **Handoffs:** Runtime manifest when handoffs are present (`references/runtime-handoffs.json`)
 - **Agents dir:** `<project>/.claude/agents/`
 
-Strips VS Code YAML and handoff blocks, then injects Claude-compatible front matter and preserves Markdown body content.
+Strips VS Code YAML and inline handoff blocks, then injects Claude-compatible front matter and preserves Markdown body content. Extracted handoff metadata is emitted separately in `references/runtime-handoffs.json` when any handoffs are present.

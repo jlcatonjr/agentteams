@@ -65,7 +65,15 @@ To register a new template for use in the rendering pipeline, add it to the appr
 3. Run `pytest tests/` and confirm all tests pass
 4. If you changed public API signatures, update the corresponding page in `docs_src/api-reference/`
 5. If you added or changed CLI flags, update `docs/cli-reference.md`
-6. Open a PR against `main`; the CI workflow will run `pytest` automatically
+6. If you added or changed CLI flags/help text, regenerate `agentteams.1` before opening the PR:
+
+```bash
+python -m agentteams.man > agentteams.1
+python -m agentteams.man > /tmp/agentteams-check.1 && diff /tmp/agentteams-check.1 agentteams.1
+```
+
+Stale `agentteams.1` is a common source of failed CI/deploy checks (`Check man-page is current`).
+7. Open a PR against `main`; the CI workflow will run `pytest` automatically
 
 ### What gets reviewed
 

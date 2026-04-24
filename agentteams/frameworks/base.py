@@ -17,6 +17,11 @@ from typing import Any
 # ---------------------------------------------------------------------------
 
 _YAML_FRONT_MATTER_RE = re.compile(r"^---\s*\n.*?\n---\s*\n", re.DOTALL)
+_YAML_FRONT_MATTER_CAPTURE_RE = re.compile(r"^---\s*\n(.*?)\n---\s*\n", re.DOTALL)
+_BODY_HANDOFFS_SECTION_RE = re.compile(
+    r"^## Handoff Instructions\s*$\n(?P<body>.*?)(?=^##\s+|\Z)",
+    re.MULTILINE | re.DOTALL,
+)
 
 _HANDOFFS_HEADING_RE = re.compile(
     r"^#{1,3}\s+Handoff.*?(?=^#{1,3}\s|\Z)",
@@ -59,6 +64,94 @@ class FrameworkAdapter(ABC):
     @abstractmethod
     def get_agents_dir(self, project_path: Path) -> Path:
         """Return the default agent file directory for a given project path."""
+
+    def handoff_delivery_mode(self) -> str:
+        """Return how this framework receives handoff semantics.
+
+        Returns:
+            `native` when handoffs are preserved inline in agent files,
+            `manifest` when handoffs are delivered via a sidecar manifest,
+            or `none` when no handoff delivery is supported.
+        """
+        return "native" if self.supports_handoffs() else "none"
+
+    def extract_handoffs(self, content: str) -> list[dict[str, Any]]:
+        """Extract YAML handoff entries from rendered agent content.
+
+        The parser is intentionally narrow and only supports the handoff block
+        format emitted by AgentTeams templates.
+        """
+        handoffs: list[dict[str, Any]] = []
+        match = _YAML_FRONT_MATTER_CAPTURE_RE.match(content)
+        if match:
+            yaml_body = match.group(1)
+            lines = yaml_body.splitlines()
+            idx = 0
+            while idx < len(lines):
+                if lines[idx].strip() != "handoffs:":
+                    idx += 1
+                    continue
+
+                idx += 1
+                current: dict[str, Any] | None = None
+                while idx < len(lines):
+                    line = lines[idx]
+                    if line and not line.startswith("  "):
+                        break
+
+                    stripped = line.strip()
+                    if not stripped:
+                        idx += 1
+                        continue
+
+                    if stripped.startswith("- label:"):
+                        if current and current.get("agent"):
+                            handoffs.append(current)
+                        current = {
+                            "label": stripped.split(":", 1)[1].strip().strip('"\''),
+                            "agent": "",
+                            "prompt": "",
+                            "send": False,
+                        }
+                    elif current is not None and ":" in stripped:
+                        key, value = stripped.split(":", 1)
+                        key = key.strip()
+                        value = value.strip().strip('"\'')
+                        if key in {"agent", "prompt", "label"}:
+                            current[key] = value
+                        elif key == "send":
+                            current[key] = value.lower() == "true"
+                    idx += 1
+
+                if current and current.get("agent"):
+                    handoffs.append(current)
+
+        body_match = _BODY_HANDOFFS_SECTION_RE.search(content)
+        if body_match:
+            for line in body_match.group("body").splitlines():
+                stripped = line.strip()
+                if not stripped.startswith("-"):
+                    continue
+                agent_match = re.search(r"@([a-z0-9-]+)", stripped, re.IGNORECASE)
+                if not agent_match:
+                    continue
+                handoffs.append({
+                    "label": stripped[1:].strip(),
+                    "agent": agent_match.group(1),
+                    "prompt": stripped[1:].strip(),
+                    "send": False,
+                })
+
+        deduped: list[dict[str, Any]] = []
+        seen: set[tuple[str, str]] = set()
+        for handoff in handoffs:
+            key = (str(handoff.get("agent", "")), str(handoff.get("prompt", "")))
+            if not key[0] or key in seen:
+                continue
+            seen.add(key)
+            deduped.append(handoff)
+
+        return deduped
 
     def finalize_output_path(self, rel_path: str, file_type: str) -> str:
         """Adjust an output path for this framework.

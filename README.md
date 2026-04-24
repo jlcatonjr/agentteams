@@ -127,9 +127,11 @@ See the [Agent-Assisted Setup guide](https://jlcatonjr.github.io/agentteams/agen
 
 | Framework | Format | Handoffs | Builder Agent |
 |-----------|--------|----------|---------------|
-| `copilot-vscode` | `.agent.md` with YAML front matter | ✅ | VS Code Copilot `.agent.md` |
-| `copilot-cli` | Plain `.md` system prompts | ❌ | CLI prompt `.md` |
-| `claude` | Claude Code front matter `.md` + `CLAUDE.md` instructions | ❌ | Claude Code system prompt |
+| `copilot-vscode` | `.agent.md` with YAML front matter | Native inline YAML | VS Code Copilot `.agent.md` |
+| `copilot-cli` | Plain `.md` system prompts | Runtime manifest when handoffs are present (`references/runtime-handoffs.json`) | CLI prompt `.md` |
+| `claude` | Claude Code front matter `.md` + `CLAUDE.md` instructions | Runtime manifest when handoffs are present (`references/runtime-handoffs.json`) | Claude Code system prompt |
+
+For `copilot-cli` and `claude`, inline handoff sections are still stripped from the emitted agent prompts. When AgentTeams extracts handoffs from the rendered source content, it preserves that routing metadata in `references/runtime-handoffs.json` so bridge layers or external tooling can consume the handoff contract without relying on VS Code-specific YAML.
 
 Default framework locations:
 - `copilot-vscode`: agents in `.github/agents/`, instructions in `.github/copilot-instructions.md`
@@ -686,6 +688,16 @@ Example CI step (GitHub Actions):
 ```yaml
 - name: Check agent team is up to date
   run: agentteams --description brief.json --check
+```
+
+Common CI/deploy failure source:
+
+- A stale `agentteams.1` file is a common cause of failed CI runs (especially the `Check man-page is current` step).
+- If CLI flags/help text changed, regenerate before commit:
+
+```bash
+python -m agentteams.man > agentteams.1
+python -m agentteams.man > /tmp/agentteams-check.1 && diff /tmp/agentteams-check.1 agentteams.1
 ```
 
 ---
