@@ -6,6 +6,17 @@ from pathlib import Path
 import json
 
 
+def _write_pass_security_decision(output_dir: Path, action: str = "overwrite") -> None:
+    """Seed a PASS decision row so overwrite/update security gates allow test execution."""
+    refs = output_dir / "references"
+    refs.mkdir(parents=True, exist_ok=True)
+    (refs / "security-decisions.log.csv").write_text(
+        "timestamp,requesting_agent,action_reviewed,verdict,conditions,conditions_verified\n"
+        f"2026-04-24T00:00:00Z,test,{action}-001,PASS,,verified\n",
+        encoding="utf-8",
+    )
+
+
 def test_run_copilot_autocorrect_uses_standalone_copilot(tmp_path, monkeypatch):
     from agentteams.audit import AuditFinding, AuditResult
     from agentteams import remediate
@@ -104,6 +115,7 @@ def test_build_main_auto_correct_reruns_audit(tmp_path, monkeypatch):
 
     brief = Path(__file__).parent.parent / "examples" / "software-project" / "brief.json"
     output_dir = tmp_path / ".github" / "agents"
+    _write_pass_security_decision(output_dir)
 
     rc = build_team.main([
         "--description",
@@ -128,6 +140,7 @@ def test_build_main_update_audits_emitted_files_from_disk(tmp_path, monkeypatch)
 
     brief = Path(__file__).parent.parent / "examples" / "software-project" / "brief.json"
     output_dir = tmp_path / ".github" / "agents"
+    _write_pass_security_decision(output_dir)
 
     first_rc = build_team.main([
         "--description",
