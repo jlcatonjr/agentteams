@@ -9,7 +9,7 @@ When the agentteams module evolves (e.g., adding `@code-hygiene` as a governance
 | **New agents** added to the governance tier | `code-hygiene` added to `GOVERNANCE_AGENTS` |
 | **New companion files** added to the pipeline | `references/code-hygiene-rules.reference.md` |
 | **Removed agents** deprecated from the taxonomy | A governance agent retired in a future version |
-| **Team membership changes** in `copilot-instructions.md` | New agent listings, new constitutional rules |
+| **Team membership changes** in framework instructions (`.github/copilot-instructions.md` or `.claude/CLAUDE.md`) | New agent listings, new constitutional rules |
 | **Structural data missing from build-log** | No `output_files_map` or `agent_slug_list` recorded |
 
 Today, the only way to integrate structural changes is full regeneration (`--overwrite`), which discards manually-filled `{MANUAL:*}` values and requires re-resolution.
@@ -82,7 +82,7 @@ class StructuralDiffReport:
    - `removed = [f for path, f in old_files.items() if path not in new_files]`
    - `common = {path for path in new_files if path in old_files}`
    - For each common path: compare template hashes → drifted or unchanged
-5. Always mark `copilot-instructions.md` as drifted if `agent_slug_list` changed (team membership change forces re-render even if template hash is the same).
+5. Always mark the framework instructions file as drifted if `agent_slug_list` changed (team membership change forces re-render even if template hash is the same).
 
 **Effort:** Medium — new dataclass + ~60-line function in `drift.py`.
 
@@ -103,7 +103,7 @@ Replace the current drift-only filter with:
    b. DRIFTED:    changed files → render, preserve MANUAL values from existing, emit
    c. REMOVED:    report to user (do NOT delete without --prune flag)
    d. UNCHANGED:  skip
-5. Re-render copilot-instructions.md if team membership changed
+5. Re-render the framework instructions file if team membership changed
 6. Emit the update set
 7. Write updated build-log (schema v1.2)
 ```
@@ -117,7 +117,7 @@ Replace the current drift-only filter with:
 ```
 Structural update for 'MusicMaker':
   Added:    2 file(s) — code-hygiene.agent.md, references/code-hygiene-rules.reference.md
-  Updated:  3 file(s) — orchestrator.agent.md, copilot-instructions.md, ...
+  Updated:  3 file(s) — orchestrator.agent.md, .github/copilot-instructions.md, ...
   Removed:  0 file(s)
   Unchanged: 35 file(s)
   MANUAL values preserved: 16

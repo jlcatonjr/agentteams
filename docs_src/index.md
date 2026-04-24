@@ -20,7 +20,7 @@ The generated team includes:
 - 2–9 **Domain agents** — appropriate archetypes for your deliverable type
 - 1 **Workstream Expert** per project component — deep, component-specific knowledge
 - 1 **Team Builder agent** — framework-native agent that can regenerate or expand the team
-- A framework instructions file — `copilot-instructions.md` (Copilot VS Code / Copilot CLI) or `CLAUDE.md` (Claude)
+- A framework instructions file — `.github/copilot-instructions.md` (Copilot VS Code / Copilot CLI) or `.claude/CLAUDE.md` (Claude)
 
 ---
 
@@ -58,6 +58,11 @@ Default framework locations:
 - `copilot-vscode`: `.github/agents/`
 - `copilot-cli`: `.github/copilot/`
 - `claude`: `.claude/agents/`
+
+Framework instructions locations:
+- `copilot-vscode`: `.github/copilot-instructions.md`
+- `copilot-cli`: `.github/copilot-instructions.md`
+- `claude`: `.claude/CLAUDE.md`
 
 Three build paths:
 - Path A: fresh generation from a brief (`--description`)

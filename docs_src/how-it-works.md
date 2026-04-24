@@ -56,7 +56,12 @@ Writes all rendered files to the target framework directory:
 - `copilot-cli` -> `.github/copilot/`
 - `claude` -> `.claude/agents/`
 
-Also writes framework instructions at the parent level (`copilot-instructions.md` or `CLAUDE.md`), generates `SETUP-REQUIRED.md` for unresolved manual placeholders, and runs post-generation audit/security scan when requested.
+Also writes framework instructions at the parent of the framework agents directory:
+
+- `copilot-vscode` and `copilot-cli` -> `.github/copilot-instructions.md`
+- `claude` -> `.claude/CLAUDE.md`
+
+It also generates `SETUP-REQUIRED.md` for unresolved manual placeholders, and runs post-generation audit/security scan when requested.
 
 ### Path B: Convert Existing Teams
 

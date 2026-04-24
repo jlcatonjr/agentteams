@@ -1642,7 +1642,7 @@
 <li>2–9 <strong>Domain agents</strong> — appropriate archetypes for your deliverable type</li>
 <li>1 <strong>Workstream Expert</strong> per project component — deep, component-specific knowledge</li>
 <li>1 <strong>Team Builder agent</strong> — framework-native agent that can regenerate or expand the team</li>
-<li>A framework instructions file — <code>copilot-instructions.md</code> (Copilot VS Code / Copilot CLI) or <code>CLAUDE.md</code> (Claude)</li>
+<li>A framework instructions file — <code>.github/copilot-instructions.md</code> (Copilot VS Code / Copilot CLI) or <code>.claude/CLAUDE.md</code> (Claude)</li>
 </ul>
 <hr />
 <h2 id="workflow">Workflow<a class="headerlink" href="#workflow" title="Permanent link">&para;</a></h2>
@@ -1697,6 +1697,10 @@
 - <code>copilot-vscode</code>: <code>.github/agents/</code>
 - <code>copilot-cli</code>: <code>.github/copilot/</code>
 - <code>claude</code>: <code>.claude/agents/</code></p>
+<p>Framework instructions locations:
+- <code>copilot-vscode</code>: <code>.github/copilot-instructions.md</code>
+- <code>copilot-cli</code>: <code>.github/copilot-instructions.md</code>
+- <code>claude</code>: <code>.claude/CLAUDE.md</code></p>
 <p>Three build paths:
 - Path A: fresh generation from a brief (<code>--description</code>)
 - Path B: format migration of an existing team (<code>--convert-from</code>)

@@ -1794,7 +1794,7 @@
 <td>A governance agent retired in a future version</td>
 </tr>
 <tr>
-<td><strong>Team membership changes</strong> in <code>copilot-instructions.md</code></td>
+<td><strong>Team membership changes</strong> in framework instructions (<code>.github/copilot-instructions.md</code> or <code>.claude/CLAUDE.md</code>)</td>
 <td>New agent listings, new constitutional rules</td>
 </tr>
 <tr>
@@ -1857,7 +1857,7 @@
 <li><code>removed = [f for path, f in old_files.items() if path not in new_files]</code></li>
 <li><code>common = {path for path in new_files if path in old_files}</code></li>
 <li>For each common path: compare template hashes → drifted or unchanged</li>
-<li>Always mark <code>copilot-instructions.md</code> as drifted if <code>agent_slug_list</code> changed (team membership change forces re-render even if template hash is the same).</li>
+<li>Always mark the framework instructions file as drifted if <code>agent_slug_list</code> changed (team membership change forces re-render even if template hash is the same).</li>
 </ol>
 <p><strong>Effort:</strong> Medium — new dataclass + ~60-line function in <code>drift.py</code>.</p>
 <hr />
@@ -1872,7 +1872,7 @@
 <a id="__codelineno-2-6" name="__codelineno-2-6" href="#__codelineno-2-6"></a>   b. DRIFTED:    changed files → render, preserve MANUAL values from existing, emit
 <a id="__codelineno-2-7" name="__codelineno-2-7" href="#__codelineno-2-7"></a>   c. REMOVED:    report to user (do NOT delete without --prune flag)
 <a id="__codelineno-2-8" name="__codelineno-2-8" href="#__codelineno-2-8"></a>   d. UNCHANGED:  skip
-<a id="__codelineno-2-9" name="__codelineno-2-9" href="#__codelineno-2-9"></a>5. Re-render copilot-instructions.md if team membership changed
+<a id="__codelineno-2-9" name="__codelineno-2-9" href="#__codelineno-2-9"></a>5. Re-render the framework instructions file if team membership changed
 <a id="__codelineno-2-10" name="__codelineno-2-10" href="#__codelineno-2-10"></a>6. Emit the update set
 <a id="__codelineno-2-11" name="__codelineno-2-11" href="#__codelineno-2-11"></a>7. Write updated build-log (schema v1.2)
 </code></pre></div>
@@ -1882,7 +1882,7 @@
 <p><strong>Console output:</strong></p>
 <div class="highlight"><pre><span></span><code><a id="__codelineno-3-1" name="__codelineno-3-1" href="#__codelineno-3-1"></a>Structural update for &#39;MusicMaker&#39;:
 <a id="__codelineno-3-2" name="__codelineno-3-2" href="#__codelineno-3-2"></a>  Added:    2 file(s) — code-hygiene.agent.md, references/code-hygiene-rules.reference.md
-<a id="__codelineno-3-3" name="__codelineno-3-3" href="#__codelineno-3-3"></a>  Updated:  3 file(s) — orchestrator.agent.md, copilot-instructions.md, ...
+<a id="__codelineno-3-3" name="__codelineno-3-3" href="#__codelineno-3-3"></a>  Updated:  3 file(s) — orchestrator.agent.md, .github/copilot-instructions.md, ...
 <a id="__codelineno-3-4" name="__codelineno-3-4" href="#__codelineno-3-4"></a>  Removed:  0 file(s)
 <a id="__codelineno-3-5" name="__codelineno-3-5" href="#__codelineno-3-5"></a>  Unchanged: 35 file(s)
 <a id="__codelineno-3-6" name="__codelineno-3-6" href="#__codelineno-3-6"></a>  MANUAL values preserved: 16
