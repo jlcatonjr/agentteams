@@ -31,11 +31,12 @@ tool-enrichment-steps.csv
 # Automatic pre-write backups created by build_team.py
 .agentteams-backups/
 
-# Batch update result artifacts — may contain absolute home-directory paths (Rule S-1 OPSEC)
-# Commit only after sanitizing paths; or use tmp/*-results-sanitized.csv for committed summaries
-tmp/*-results*.csv
-tmp/diffs/
-tmp/diffs-prev/
+# Operational scratch space — contains absolute machine paths and private repo names (OPSEC S-1)
+# Nothing in tmp/ should ever be committed; sanitize before moving anything to a permanent location
+tmp/
+
+# Local cross-repo operation plans and snapshots — contain machine-specific paths and org/repo names
+references/plans/
 
 # Structural or audit plan docs committed during development
 docs_src/structural-update-plan.md
