@@ -12,6 +12,8 @@ def test_daily_bridge_maintenance_script_contains_required_phases():
     assert "targets=(\"copilot-cli\" \"claude\")" in text
     assert "--bridge-refresh" in text
     assert "--bridge-check" in text
+    assert "Primary source bridge directory missing; using fallback" in text
+    assert "examples/project-repositories/expected" in text
     assert "tmp/bridge-maintenance" in text
     assert "non-critical warning" in text
 
@@ -40,4 +42,7 @@ def test_bridge_watchdog_workflow_checks_staleness_and_dedupes_issue():
     assert 'workflow_id: workflowId' in text
     assert 'const staleHours = 48;' in text
     assert 'const label = "bridge-watchdog";' in text
+    assert 'const existingIssues = openIssues.data.filter' in text
+    assert 'state: "closed"' in text
+    assert 'Closing this stale alert issue.' in text
     assert 'title: "Bridge Maintenance Stale"' in text

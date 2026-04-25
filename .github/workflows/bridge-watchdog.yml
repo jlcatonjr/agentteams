@@ -60,7 +60,8 @@ jobs:
               labels: label,
               per_page: 100,
             });
-            const existing = openIssues.data.find((issue) => issue.title.includes("Bridge Maintenance Stale"));
+            const existingIssues = openIssues.data.filter((issue) => issue.title.includes("Bridge Maintenance Stale"));
+            const existing = existingIssues[0];
 
             if (isStale && !existing) {
               const body = [
@@ -85,13 +86,21 @@ jobs:
             } else if (isStale && existing) {
               core.notice(`Stale condition detected, existing issue already open. ${detail}`);
             } else if (!isStale && existing) {
-              await github.rest.issues.createComment({
-                owner,
-                repo,
-                issue_number: existing.number,
-                body: `Watchdog check passed: ${detail}`,
-              });
-              core.notice(`Fresh condition detected; noted status on existing issue #${existing.number}.`);
+              for (const issue of existingIssues) {
+                await github.rest.issues.createComment({
+                  owner,
+                  repo,
+                  issue_number: issue.number,
+                  body: `Watchdog check passed: ${detail} Closing this stale alert issue.`,
+                });
+                await github.rest.issues.update({
+                  owner,
+                  repo,
+                  issue_number: issue.number,
+                  state: "closed",
+                });
+              }
+              core.notice(`Fresh condition detected; closed ${existingIssues.length} stale issue(s).`);
             } else {
               core.notice(detail);
             }

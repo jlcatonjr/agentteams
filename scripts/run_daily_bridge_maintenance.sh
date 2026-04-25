@@ -39,10 +39,22 @@ run_noncritical() {
 echo "[INFO] Daily agentteams bridge maintenance started at ${run_started_at}"
 
 SOURCE_DIR="$ROOT_DIR/.github/agents"
+FALLBACK_SOURCE_DIR="$ROOT_DIR/examples/project-repositories/expected"
 OUTPUT_ROOT="$ROOT_DIR"
 
 if [[ ! -d "$SOURCE_DIR" ]]; then
-  echo "[CRITICAL] Source bridge directory not found: $SOURCE_DIR" >&2
+  if [[ -d "$FALLBACK_SOURCE_DIR" ]]; then
+    echo "[WARN] Primary source bridge directory missing; using fallback: $FALLBACK_SOURCE_DIR" >&2
+    SOURCE_DIR="$FALLBACK_SOURCE_DIR"
+  else
+    echo "[CRITICAL] Source bridge directory not found: $SOURCE_DIR" >&2
+    echo "[CRITICAL] Fallback source bridge directory not found: $FALLBACK_SOURCE_DIR" >&2
+    exit 2
+  fi
+fi
+
+if ! compgen -G "$SOURCE_DIR/*.agent.md" >/dev/null; then
+  echo "[CRITICAL] Source bridge directory has no .agent.md files: $SOURCE_DIR" >&2
   exit 2
 fi
 
