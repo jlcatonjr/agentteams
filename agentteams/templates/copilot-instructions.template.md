@@ -71,6 +71,8 @@ SECTION MANIFEST — copilot-instructions.template.md
 - `@cleanup` — artifact removal
 - `@agent-updater` — documentation synchronization
 - `@agent-refactor` — spec compliance and reference extraction
+- `@repo-liaison` — cross-repository impact tracking and coordination
+- `@git-operations` — git/github operations and merge strategy workflow
 
 ### Domain Agents
 {DOMAIN_AGENT_LIST}

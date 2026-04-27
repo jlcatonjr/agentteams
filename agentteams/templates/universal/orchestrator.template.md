@@ -82,6 +82,10 @@ handoffs:
     agent: repo-liaison
     prompt: "Assess or communicate impact of this project's activity on adjacent repositories. Describe the change and list any known adjacent repos."
     send: false
+  - label: Git Operations
+    agent: git-operations
+    prompt: "Run a git operation: commit and push, pull/merge/rebase, resolve conflicts, or recover a file. Describe the operation needed."
+    send: false
 ---
 
 <!--
@@ -143,6 +147,7 @@ You coordinate all agent operations for **{PROJECT_NAME}**. You route work to do
 | Final compilation | `@output-compiler` | Final assembly and build |
 | Diagrams and figures | `@visual-designer` *(if in team)* | Files in `{FIGURES_DIR}` |
 | Cross-repository impact and liaison | `@repo-liaison` | Adjacent repo docs, cross-orchestrator coordination, registry maintenance |
+| Commit and push, pull/merge/rebase from main, conflict resolution, file recovery (git diff, revert, restore) | `@git-operations` | "Commit", "push", "pull main", "merge", "rebase", "recover file", "revert", "what changed", "restore old version" |
 <!-- AGENTTEAMS:END routing_table_rows -->
 
 > ⚙️ **Project-specific rules and extension points go here.** This section is USER-EDITABLE and is preserved by `--update --merge`. Add project-specific agent references, domain rules, and workflow customizations here — never by modifying the fenced sections above or below.
@@ -154,6 +159,7 @@ You coordinate all agent operations for **{PROJECT_NAME}**. You route work to do
 - Always close multi-file sessions with `@conflict-auditor`
 - Route to the correct domain agent — never handle domain work directly
 - After any investigation or fix: delegate to `@agent-updater` then `@conflict-auditor` before closing
+- Any git operation (commit/push/pull/merge/rebase/revert/restore) must route through `@git-operations` and follow `references/github-workflows-merge.reference.md`
 - Document every multi-step implementation plan before execution: `tmp/<plan-slug>.plan.md` + `tmp/<plan-slug>.steps.csv`; create `tmp/` if absent; initial `status` = `pending`; after each step, audit remaining steps via `@adversarial` + `@conflict-auditor` before proceeding
 - Any action touching adjacent repositories must go through `@repo-liaison` first
 
@@ -261,9 +267,9 @@ Before executing any such step:
 
 ### Workflow 6: Documentation Maintenance
 
-**Trigger:** "Update agent docs" / "Project structure changed"
+**Trigger:** "Update agent docs" / "Project structure changed" / "Repository updated"
 
-1. Invoke `@agent-updater` → sync docs with changes
+1. Invoke `@agent-updater` → sync docs with changes, run repository change census, and evaluate docs/API impact
 2. Invoke `@agent-refactor` → check for extraction opportunities and spec compliance
 3. Invoke `@conflict-auditor` → verify consistency
 4. → **Invoke Workflow 11: Final Check** (always; after all conditional branches above complete)

@@ -157,6 +157,29 @@ def test_build_manifest_minimal():
     assert len(manifest["output_files"]) > 0
 
 
+def test_build_manifest_includes_git_operations_governance_agent():
+    desc = {"project_goal": "Build a software project with normal git workflows."}
+    manifest = build_manifest(desc, framework="copilot-vscode")
+
+    assert "git-operations" in manifest["governance_agents"]
+    assert "git-operations" in manifest["agent_slug_list"]
+
+
+def test_build_manifest_plans_github_merge_reference_artifact():
+    desc = {"project_goal": "Build a project with auditable merge workflows."}
+    manifest = build_manifest(desc, framework="copilot-vscode")
+
+    planned_paths = {f["path"] for f in manifest["output_files"]}
+    assert "references/github-workflows-merge.reference.md" in planned_paths
+
+    reference_specs = [
+        f for f in manifest["output_files"]
+        if f["path"] == "references/github-workflows-merge.reference.md"
+    ]
+    assert len(reference_specs) == 1
+    assert reference_specs[0]["template"] == "universal/github-workflows-merge.reference.template.md"
+
+
 def test_build_manifest_with_components():
     desc = {
         "project_name": "TestProject",

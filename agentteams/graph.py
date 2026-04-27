@@ -42,7 +42,7 @@ AGENT_TYPES = {
     # Governance
     "orchestrator", "navigator", "security", "code-hygiene", "adversarial",
     "conflict-auditor", "conflict-resolution", "cleanup", "agent-updater",
-    "agent-refactor", "team-builder",
+    "agent-refactor", "repo-liaison", "git-operations", "team-builder",
     # Domain (archetype names)
     "primary-producer", "quality-auditor", "style-guardian", "technical-validator",
     "format-converter", "output-compiler", "reference-manager", "visual-designer",
@@ -581,7 +581,7 @@ def _classify_agent_type(slug: str) -> str:
     _GOVERNANCE_SLUGS = frozenset({
         "orchestrator", "navigator", "security", "code-hygiene", "adversarial",
         "conflict-auditor", "conflict-resolution", "cleanup", "agent-updater",
-        "agent-refactor", "team-builder",
+        "agent-refactor", "repo-liaison", "git-operations", "team-builder",
     })
     _DOMAIN_SLUGS = frozenset({
         "primary-producer", "quality-auditor", "style-guardian", "technical-validator",

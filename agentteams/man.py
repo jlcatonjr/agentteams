@@ -181,7 +181,7 @@ def _get_epilog_description(parser: argparse.ArgumentParser) -> list[str]:
             ".github/agents/ directory."
         ),
         (
-            "The generated team includes an orchestrator, nine governance agents, "
+            "The generated team includes an orchestrator, ten governance agents, "
             "domain agents appropriate for the deliverable type, and one workstream "
             "expert per project component."
         ),
