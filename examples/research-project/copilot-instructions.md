@@ -1,18 +1,35 @@
+<!--
+SECTION MANIFEST — copilot-instructions.template.md
+| section_id            | designation   | notes                                    |
+|-----------------------|---------------|------------------------------------------|
+| project_overview      | FENCED        | Name, goal, deliverable type, output fmt |
+| directory_structure   | FENCED        | Path/purpose table                       |
+| output_conventions    | FENCED        | Authoring and build conventions          |
+| agent_team            | FENCED        | Full agent team list                     |
+| authority_hierarchy   | FENCED        | Source hierarchy list                    |
+| source_repositories   | FENCED        | Authority source entries                 |
+| constitutional_rules  | USER-EDITABLE | Project may extend or customise          |
+| style_rules           | USER-EDITABLE | Project may extend or customise          |
+-->
+
 # ResearchPaperProject — Copilot Instructions
 
 > This file defines the conventions, authority hierarchy, and agent team structure for all GitHub Copilot agents in ResearchPaperProject.
 
 ---
 
+<!-- AGENTTEAMS:BEGIN project_overview v=1 -->
 ## Project Overview
 
 **Name:** ResearchPaperProject
 **Goal:** Produce a peer-reviewed academic paper on multi-agent coordination theory, progressing from an outline through final LaTeX manuscript.
 **Deliverable type:** HTML chapter drafts, LaTeX manuscript and BibTeX bibliography
 **Output format:** PDF via LaTeX
+<!-- AGENTTEAMS:END project_overview -->
 
 ---
 
+<!-- AGENTTEAMS:BEGIN directory_structure v=1 -->
 ## Directory Structure
 
 | Path | Purpose |
@@ -23,18 +40,22 @@
 | `references/bibliography.bib` | Reference/bibliography database |
 | `.github/agents/` | Agent definition files |
 | `.github/agents/references/` | Shared reference data |
+<!-- AGENTTEAMS:END directory_structure -->
 
 ---
 
+<!-- AGENTTEAMS:BEGIN output_conventions v=1 -->
 ## Output Conventions
 
 - All primary deliverables are authored in `html/chapters/` as `HTML chapter drafts, LaTeX manuscript and BibTeX bibliography`
 - Compiled output lives in `manuscript/` and is **never edited directly**
 - Figures are generated from source files in `figures/` — source files are authoritative
 - Every deliverable must correspond to a Component Spec defined by a workstream expert
+<!-- AGENTTEAMS:END output_conventions -->
 
 ---
 
+<!-- AGENTTEAMS:BEGIN agent_team v=1 -->
 ## Agent Team
 
 ### Orchestrator
@@ -50,6 +71,8 @@
 - `@cleanup` — artifact removal
 - `@agent-updater` — documentation synchronization
 - `@agent-refactor` — spec compliance and reference extraction
+- `@repo-liaison` — cross-repository impact tracking and coordination
+- `@git-operations` — git/github operations and merge strategy workflow
 
 ### Domain Agents
 - `@primary-producer` — drafts and revises primary deliverables
@@ -68,13 +91,16 @@
 ### Workstream Experts
 - `@ch01-introduction-expert` — Chapter 1: Introduction
 - `@ch02-literature-expert` — Chapter 2: Literature Review
+<!-- AGENTTEAMS:END agent_team -->
 
 ---
 
+<!-- AGENTTEAMS:BEGIN authority_hierarchy v=1 -->
 ## Authority Hierarchy
 
 1. **Published papers by James Caton** (`sources/papers/`) — theoretical claims
 2. **Agent source files** (`.github/agents/`) — agent documentation accuracy
+<!-- AGENTTEAMS:END authority_hierarchy -->
 
 ---
 
@@ -92,10 +118,12 @@
 
 ---
 
+<!-- AGENTTEAMS:BEGIN source_repositories v=1 -->
 ## Source Repositories
 
 - `sources/papers/` — theoretical claims
 - `.github/agents/` — agent documentation accuracy
+<!-- AGENTTEAMS:END source_repositories -->
 
 ---
 

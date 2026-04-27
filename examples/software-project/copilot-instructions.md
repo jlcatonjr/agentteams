@@ -1,18 +1,35 @@
+<!--
+SECTION MANIFEST — copilot-instructions.template.md
+| section_id            | designation   | notes                                    |
+|-----------------------|---------------|------------------------------------------|
+| project_overview      | FENCED        | Name, goal, deliverable type, output fmt |
+| directory_structure   | FENCED        | Path/purpose table                       |
+| output_conventions    | FENCED        | Authoring and build conventions          |
+| agent_team            | FENCED        | Full agent team list                     |
+| authority_hierarchy   | FENCED        | Source hierarchy list                    |
+| source_repositories   | FENCED        | Authority source entries                 |
+| constitutional_rules  | USER-EDITABLE | Project may extend or customise          |
+| style_rules           | USER-EDITABLE | Project may extend or customise          |
+-->
+
 # WebAppBackend — Copilot Instructions
 
 > This file defines the conventions, authority hierarchy, and agent team structure for all GitHub Copilot agents in WebAppBackend.
 
 ---
 
+<!-- AGENTTEAMS:BEGIN project_overview v=1 -->
 ## Project Overview
 
 **Name:** WebAppBackend
 **Goal:** Build a Python FastAPI backend for a task management web application, including REST API endpoints, database models, authentication, and automated tests.
 **Deliverable type:** Python modules, OpenAPI documentation and test suite
 **Output format:** Python 3.11 modules
+<!-- AGENTTEAMS:END project_overview -->
 
 ---
 
+<!-- AGENTTEAMS:BEGIN directory_structure v=1 -->
 ## Directory Structure
 
 | Path | Purpose |
@@ -23,18 +40,22 @@
 | `{MANUAL:REFERENCE_DB_PATH}` | Reference/bibliography database |
 | `.github/agents/` | Agent definition files |
 | `.github/agents/references/` | Shared reference data |
+<!-- AGENTTEAMS:END directory_structure -->
 
 ---
 
+<!-- AGENTTEAMS:BEGIN output_conventions v=1 -->
 ## Output Conventions
 
 - All primary deliverables are authored in `src/` as `Python modules, OpenAPI documentation and test suite`
 - Compiled output lives in `dist/` and is **never edited directly**
 - Figures are generated from source files in `docs/figures/` — source files are authoritative
 - Every deliverable must correspond to a Component Spec defined by a workstream expert
+<!-- AGENTTEAMS:END output_conventions -->
 
 ---
 
+<!-- AGENTTEAMS:BEGIN agent_team v=1 -->
 ## Agent Team
 
 ### Orchestrator
@@ -50,6 +71,8 @@
 - `@cleanup` — artifact removal
 - `@agent-updater` — documentation synchronization
 - `@agent-refactor` — spec compliance and reference extraction
+- `@repo-liaison` — cross-repository impact tracking and coordination
+- `@git-operations` — git/github operations and merge strategy workflow
 
 ### Domain Agents
 - `@primary-producer` — drafts and revises primary deliverables
@@ -63,13 +86,16 @@
 ### Workstream Experts
 - `@auth-module-expert` — Authentication Module
 - `@tasks-api-expert` — Tasks API
+<!-- AGENTTEAMS:END agent_team -->
 
 ---
 
+<!-- AGENTTEAMS:BEGIN authority_hierarchy v=1 -->
 ## Authority Hierarchy
 
 1. **OpenAPI specification** (`docs/openapi.yaml`) — API contract accuracy
 2. **Database schema** (`src/models/schema.sql`) — data model accuracy
+<!-- AGENTTEAMS:END authority_hierarchy -->
 
 ---
 
@@ -87,10 +113,12 @@
 
 ---
 
+<!-- AGENTTEAMS:BEGIN source_repositories v=1 -->
 ## Source Repositories
 
 - `docs/openapi.yaml` — API contract accuracy
 - `src/models/schema.sql` — data model accuracy
+<!-- AGENTTEAMS:END source_repositories -->
 
 ---
 
