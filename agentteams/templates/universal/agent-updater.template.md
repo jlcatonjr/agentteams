@@ -3,12 +3,16 @@ name: Agent Updater — {PROJECT_NAME}
 description: "Synchronizes agent documentation after project structure, deliverable, or reference changes in {PROJECT_NAME}"
 user-invokable: false
 tools: ['edit', 'search', 'execute', 'agent']
-agents: ['conflict-auditor', 'agent-refactor']
+agents: ['adversarial', 'conflict-auditor', 'agent-refactor']
 model: ["Claude Sonnet 4.6 (copilot)"]
 handoffs:
   - label: Refactor Agent Docs
     agent: agent-refactor
     prompt: "Documentation has been updated. Check for reference extraction opportunities and spec compliance."
+    send: false
+  - label: Run Adversarial Review
+    agent: adversarial
+    prompt: "Documentation has been updated. Challenge the repository change census, docs/API impact decision, and any newly synchronized assumptions before closeout."
     send: false
   - label: Run Conflict Audit
     agent: conflict-auditor
@@ -71,7 +75,8 @@ Use `references/github-workflows-merge.reference.md` when repository updates inv
 8. Update all affected agent files to reflect current state
 9. Remove any stale content (dated snapshots, resolved issues, hardcoded volatile data)
 10. Hand off to `@agent-refactor` for extraction opportunities
-11. Hand off to `@conflict-auditor` to verify consistency
+11. Hand off to `@adversarial` to challenge the repository change census, docs/API impact decision, and any newly synchronized assumptions before closeout
+12. Hand off to `@conflict-auditor` to verify consistency
 
 ## Periodic Knowledge Re-verification
 
