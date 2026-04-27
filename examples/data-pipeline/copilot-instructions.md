@@ -1,18 +1,35 @@
+<!--
+SECTION MANIFEST — copilot-instructions.template.md
+| section_id            | designation   | notes                                    |
+|-----------------------|---------------|------------------------------------------|
+| project_overview      | FENCED        | Name, goal, deliverable type, output fmt |
+| directory_structure   | FENCED        | Path/purpose table                       |
+| output_conventions    | FENCED        | Authoring and build conventions          |
+| agent_team            | FENCED        | Full agent team list                     |
+| authority_hierarchy   | FENCED        | Source hierarchy list                    |
+| source_repositories   | FENCED        | Authority source entries                 |
+| constitutional_rules  | USER-EDITABLE | Project may extend or customise          |
+| style_rules           | USER-EDITABLE | Project may extend or customise          |
+-->
+
 # SalesDataPipeline — Copilot Instructions
 
 > This file defines the conventions, authority hierarchy, and agent team structure for all GitHub Copilot agents in SalesDataPipeline.
 
 ---
 
+<!-- AGENTTEAMS:BEGIN project_overview v=1 -->
 ## Project Overview
 
 **Name:** SalesDataPipeline
 **Goal:** Build an ETL pipeline that ingests daily sales CSV exports, validates and transforms them, loads them into a PostgreSQL warehouse, and produces weekly summary reports.
 **Deliverable type:** Python ETL modules, SQL transformation scripts and weekly PDF reports
 **Output format:** Python 3.11 modules and PDF reports
+<!-- AGENTTEAMS:END project_overview -->
 
 ---
 
+<!-- AGENTTEAMS:BEGIN directory_structure v=1 -->
 ## Directory Structure
 
 | Path | Purpose |
@@ -23,18 +40,22 @@
 | `{MANUAL:REFERENCE_DB_PATH}` | Reference/bibliography database |
 | `.github/agents/` | Agent definition files |
 | `.github/agents/references/` | Shared reference data |
+<!-- AGENTTEAMS:END directory_structure -->
 
 ---
 
+<!-- AGENTTEAMS:BEGIN output_conventions v=1 -->
 ## Output Conventions
 
 - All primary deliverables are authored in `src/` as `Python ETL modules, SQL transformation scripts and weekly PDF reports`
 - Compiled output lives in `reports/` and is **never edited directly**
 - Figures are generated from source files in `reports/figures/` — source files are authoritative
 - Every deliverable must correspond to a Component Spec defined by a workstream expert
+<!-- AGENTTEAMS:END output_conventions -->
 
 ---
 
+<!-- AGENTTEAMS:BEGIN agent_team v=1 -->
 ## Agent Team
 
 ### Orchestrator
@@ -50,6 +71,8 @@
 - `@cleanup` — artifact removal
 - `@agent-updater` — documentation synchronization
 - `@agent-refactor` — spec compliance and reference extraction
+- `@repo-liaison` — cross-repository impact tracking and coordination
+- `@git-operations` — git/github operations and merge strategy workflow
 
 ### Domain Agents
 - `@primary-producer` — drafts and revises primary deliverables
@@ -68,13 +91,16 @@
 - `@transform-expert` — Transform Module
 - `@load-expert` — Load Module
 - `@weekly-report-expert` — Weekly Summary Report
+<!-- AGENTTEAMS:END agent_team -->
 
 ---
 
+<!-- AGENTTEAMS:BEGIN authority_hierarchy v=1 -->
 ## Authority Hierarchy
 
 1. **Source CSV schema** (`docs/source-schema.md`) — field names and types in raw data
 2. **Warehouse schema** (`sql/warehouse-schema.sql`) — target table structure
+<!-- AGENTTEAMS:END authority_hierarchy -->
 
 ---
 
@@ -92,10 +118,12 @@
 
 ---
 
+<!-- AGENTTEAMS:BEGIN source_repositories v=1 -->
 ## Source Repositories
 
 - `docs/source-schema.md` — field names and types in raw data
 - `sql/warehouse-schema.sql` — target table structure
+<!-- AGENTTEAMS:END source_repositories -->
 
 ---
 

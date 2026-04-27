@@ -1,18 +1,35 @@
+<!--
+SECTION MANIFEST — copilot-instructions.template.md
+| section_id            | designation   | notes                                    |
+|-----------------------|---------------|------------------------------------------|
+| project_overview      | FENCED        | Name, goal, deliverable type, output fmt |
+| directory_structure   | FENCED        | Path/purpose table                       |
+| output_conventions    | FENCED        | Authoring and build conventions          |
+| agent_team            | FENCED        | Full agent team list                     |
+| authority_hierarchy   | FENCED        | Source hierarchy list                    |
+| source_repositories   | FENCED        | Authority source entries                 |
+| constitutional_rules  | USER-EDITABLE | Project may extend or customise          |
+| style_rules           | USER-EDITABLE | Project may extend or customise          |
+-->
+
 # ProjectRepositories — Copilot Instructions
 
 > This file defines the conventions, authority hierarchy, and agent team structure for all GitHub Copilot agents in ProjectRepositories.
 
 ---
 
+<!-- AGENTTEAMS:BEGIN project_overview v=1 -->
 ## Project Overview
 
 **Name:** ProjectRepositories
 **Goal:** A collection of empirical economics and data science research projects analyzing monetary policy, fiscal dynamics, agent-based economic models, and energy policy using Python, Jupyter notebooks, statistical modeling, and interactive visualization. Each sub-project produces research-grade analysis paired with interactive HTML charts or data-driven whitepapers.
 **Deliverable type:** Jupyter notebooks, interactive HTML visualizations, Python analysis modules and research whitepapers
 **Output format:** Jupyter notebooks and HTML reports
+<!-- AGENTTEAMS:END project_overview -->
 
 ---
 
+<!-- AGENTTEAMS:BEGIN directory_structure v=1 -->
 ## Directory Structure
 
 | Path | Purpose |
@@ -23,18 +40,22 @@
 | `.github/agents/references/project-references.bib` | Reference/bibliography database |
 | `.github/agents/` | Agent definition files |
 | `.github/agents/references/` | Shared reference data |
+<!-- AGENTTEAMS:END directory_structure -->
 
 ---
 
+<!-- AGENTTEAMS:BEGIN output_conventions v=1 -->
 ## Output Conventions
 
 - All primary deliverables are authored in `*/outputs/` as `Jupyter notebooks, interactive HTML visualizations, Python analysis modules and research whitepapers`
 - Compiled output lives in `*/Whitepaper/` and is **never edited directly**
 - Figures are generated from source files in `*/outputs/` — source files are authoritative
 - Every deliverable must correspond to a Component Spec defined by a workstream expert
+<!-- AGENTTEAMS:END output_conventions -->
 
 ---
 
+<!-- AGENTTEAMS:BEGIN agent_team v=1 -->
 ## Agent Team
 
 ### Orchestrator
@@ -50,6 +71,8 @@
 - `@cleanup` — artifact removal
 - `@agent-updater` — documentation synchronization
 - `@agent-refactor` — spec compliance and reference extraction
+- `@repo-liaison` — cross-repository impact tracking and coordination
+- `@git-operations` — git/github operations and merge strategy workflow
 
 ### Domain Agents
 - `@primary-producer` — drafts and revises primary deliverables
@@ -68,9 +91,11 @@
 - `@prairie-prosperity-expert` — More Prairie Prosperity — Fiscal and Economic Policy in North Dakota
 - `@sugarscape-expert` — Sugarscape Agent-Based Model
 - `@visualize-energy-data-expert` — Visualize Energy Data
+<!-- AGENTTEAMS:END agent_team -->
 
 ---
 
+<!-- AGENTTEAMS:BEGIN authority_hierarchy v=1 -->
 ## Authority Hierarchy
 
 1. **FRED / Federal Reserve Economic Data** (`MappingTheFederalReserve'sResponseFunctionWithDirectedAcyclicGraphs/datlib/FRED.py`) — Federal Reserve monetary data fetch conventions and series codes
@@ -78,6 +103,7 @@
 3. **homebrewedFunctions library** (`MorePrairieProsperity/homebrewedFunctions/`) — Shared helper functions for the Prairie Prosperity fiscal analysis
 4. **Crisis and Credit Allocation notebook** (`Crisis and Credit Allocation/Crisis and Credit Allocation Data.ipynb`) — Canonical analysis script for crisis-era banking and credit data
 5. **Sugarscape model source** (`Sugarscape/`) — Agent-based model implementation — Agent.py, Model.py, Patch.py are the authoritative model definitions
+<!-- AGENTTEAMS:END authority_hierarchy -->
 
 ---
 
@@ -95,6 +121,7 @@
 
 ---
 
+<!-- AGENTTEAMS:BEGIN source_repositories v=1 -->
 ## Source Repositories
 
 - `MappingTheFederalReserve'sResponseFunctionWithDirectedAcyclicGraphs/datlib/FRED.py` — Federal Reserve monetary data fetch conventions and series codes
@@ -102,6 +129,7 @@
 - `MorePrairieProsperity/homebrewedFunctions/` — Shared helper functions for the Prairie Prosperity fiscal analysis
 - `Crisis and Credit Allocation/Crisis and Credit Allocation Data.ipynb` — Canonical analysis script for crisis-era banking and credit data
 - `Sugarscape/` — Agent-based model implementation — Agent.py, Model.py, Patch.py are the authoritative model definitions
+<!-- AGENTTEAMS:END source_repositories -->
 
 ---
 
