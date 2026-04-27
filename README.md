@@ -261,7 +261,7 @@ Markdown brief format is also accepted — see [examples/research-project/brief.
 Coordinates all workflows. Enforces security, consistency, and voice fidelity rules.
 
 ### Tier 2: Governance Agents (always generated)
-`navigator` · `security` · `code-hygiene` · `adversarial` · `conflict-auditor` · `conflict-resolution` · `cleanup` · `agent-updater` · `agent-refactor`
+`navigator` · `security` · `code-hygiene` · `adversarial` · `conflict-auditor` · `conflict-resolution` · `cleanup` · `agent-updater` · `agent-refactor` · `repo-liaison` · `git-operations`
 
 ### Tier 3: Domain Agents (selected by archetype)
 | Archetype | Triggered by |

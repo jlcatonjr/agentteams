@@ -24,6 +24,8 @@ handoffs:
 
 You synchronize agent documentation after changes in {PROJECT_NAME}. When deliverables are added, references change, the project structure evolves, or style rules are updated, you update all affected agent files.
 
+Use `references/github-workflows-merge.reference.md` when repository updates involve pull requests, merges, branch protections, rulesets, or merge conflict workflows.
+
 **Core principle:** Agent documentation must always match the project it describes. Documentation lag causes agent errors.
 
 ---
@@ -43,6 +45,7 @@ You synchronize agent documentation after changes in {PROJECT_NAME}. When delive
 | Project structure changed | `@navigator` needs project map regeneration |
 | New agent file created | Orchestrator routing table needs updating |
 | Workstream added | All agents need awareness of new scope |
+| Repository content changed (tracked files added, modified, deleted, merged, reverted, or restored) | Requires repository change census and docs/API impact decision before closeout |
 | **Drift detected by `--check`** | Agents may be operating on outdated knowledge of file structure, agent slugs, placeholder values, or workflow counts — re-render and re-verify before next workflow execution |
 
 ## Change-to-Agent Mapping
@@ -53,6 +56,7 @@ You synchronize agent documentation after changes in {PROJECT_NAME}. When delive
 | `{REFERENCE_DB_PATH}` | `@reference-manager`, `@output-compiler` |
 | `{STYLE_REFERENCE_PATH}` | `@style-guardian`, `@primary-producer` |
 | `.github/agents/references/*` | All agents that reference that file |
+| `.github/workflows/*` | `@technical-validator`, `@orchestrator` (release/process docs impact) |
 | `copilot-instructions.md` | All agents |
 
 ## Workflow
@@ -60,12 +64,14 @@ You synchronize agent documentation after changes in {PROJECT_NAME}. When delive
 1. **Detect drift:** Run `python build_team.py --description <brief> --check` to identify templates that have changed since the last build
 2. **Re-render drifted files:** Run `python build_team.py --description <brief> --update` to re-render only changed agent files while preserving any previously completed manual fields
 3. **Security scan:** Run `python build_team.py --description <brief> --scan-security` to check all agent files for PII, credentials, and unresolved placeholders
-4. Identify any additional changed files not covered by template drift and determine scope of impact
-5. Apply the authority hierarchy to determine which file is ground truth
-6. Update all affected agent files to reflect current state
-7. Remove any stale content (dated snapshots, resolved issues, hardcoded volatile data)
-8. Hand off to `@agent-refactor` for extraction opportunities
-9. Hand off to `@conflict-auditor` to verify consistency
+4. Run a repository change census across tracked additions/modifications/deletions/merges/reverts/restores
+5. Evaluate whether the census implies updates to published docs or API docs (`REQUIRED`, `REVIEW`, or `NONE`) and document rationale
+6. Identify any additional changed files not covered by template drift and determine scope of impact
+7. Apply the authority hierarchy to determine which file is ground truth
+8. Update all affected agent files to reflect current state
+9. Remove any stale content (dated snapshots, resolved issues, hardcoded volatile data)
+10. Hand off to `@agent-refactor` for extraction opportunities
+11. Hand off to `@conflict-auditor` to verify consistency
 
 ## Periodic Knowledge Re-verification
 

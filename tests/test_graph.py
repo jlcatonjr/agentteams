@@ -190,7 +190,7 @@ class TestExtractTools:
 
 class TestClassifyAgentType:
     def test_governance_slugs(self):
-        for slug in ["orchestrator", "navigator", "security", "code-hygiene"]:
+        for slug in ["orchestrator", "navigator", "security", "code-hygiene", "repo-liaison", "git-operations"]:
             assert _classify_agent_type(slug) == "governance", slug
 
     def test_domain_slugs(self):

@@ -58,6 +58,7 @@ GOVERNANCE_AGENTS = [
     "agent-updater",
     "agent-refactor",
     "repo-liaison",
+    "git-operations",
 ]
 
 
@@ -960,6 +961,14 @@ def _plan_output_files(
     files.append({
         "path": "references/adjacent-repos.md",
         "template": f"{agents_dir}adjacent-repos.reference.template.md",
+        "type": "artifact",
+        "component_slug": None,
+    })
+
+    # GitHub operations and merge-strategy reference (always)
+    files.append({
+        "path": "references/github-workflows-merge.reference.md",
+        "template": f"{agents_dir}github-workflows-merge.reference.template.md",
         "type": "artifact",
         "component_slug": None,
     })
