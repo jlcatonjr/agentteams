@@ -1,0 +1,2479 @@
+
+<!doctype html>
+<html lang="en" class="no-js">
+  <head>
+    
+      <meta charset="utf-8">
+      <meta name="viewport" content="width=device-width,initial-scale=1">
+      
+        <meta name="description" content="Comprehensive enumeration of all AgentTeams capabilities, organized by category">
+      
+      
+        <meta name="author" content="jlcatonjr">
+      
+      
+        <link rel="canonical" href="https://jlcatonjr.github.io/agentteams/api-reference/feature-inventory/">
+      
+      
+        <link rel="prev" href="../">
+      
+      
+        <link rel="next" href="../ingest/">
+      
+      
+        
+      
+      
+      <link rel="icon" href="../../assets/images/favicon.png">
+      <meta name="generator" content="mkdocs-1.6.1, mkdocs-material-9.7.6">
+    
+    
+      
+        <title>Feature Inventory - Agent Teams Module</title>
+      
+    
+    
+      <link rel="stylesheet" href="../../assets/stylesheets/main.484c7ddc.min.css">
+      
+        
+        <link rel="stylesheet" href="../../assets/stylesheets/palette.ab4e12ef.min.css">
+      
+      
+
+
+    
+    
+      
+    
+    
+      
+        
+        
+        <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+        <link rel="stylesheet" href="https://fonts.googleapis.com/css?family=Roboto:300,300i,400,400i,700,700i%7CRoboto+Mono:400,400i,700,700i&display=fallback">
+        <style>:root{--md-text-font:"Roboto";--md-code-font:"Roboto Mono"}</style>
+      
+    
+    
+    <script>__md_scope=new URL("../..",location),__md_hash=e=>[...e].reduce(((e,_)=>(e<<5)-e+_.charCodeAt(0)),0),__md_get=(e,_=localStorage,t=__md_scope)=>JSON.parse(_.getItem(t.pathname+"."+e)),__md_set=(e,_,t=localStorage,a=__md_scope)=>{try{t.setItem(a.pathname+"."+e,JSON.stringify(_))}catch(e){}}</script>
+    
+      
+
+    
+    
+  </head>
+  
+  
+    
+    
+      
+    
+    
+    
+    
+    <body dir="ltr" data-md-color-scheme="default" data-md-color-primary="indigo" data-md-color-accent="indigo">
+  
+    
+    <input class="md-toggle" data-md-toggle="drawer" type="checkbox" id="__drawer" autocomplete="off">
+    <input class="md-toggle" data-md-toggle="search" type="checkbox" id="__search" autocomplete="off">
+    <label class="md-overlay" for="__drawer"></label>
+    <div data-md-component="skip">
+      
+        
+        <a href="#agentteams-feature-inventory" class="md-skip">
+          Skip to content
+        </a>
+      
+    </div>
+    <div data-md-component="announce">
+      
+    </div>
+    
+    
+      
+
+<header class="md-header" data-md-component="header">
+  <nav class="md-header__inner md-grid" aria-label="Header">
+    <a href="../.." title="Agent Teams Module" class="md-header__button md-logo" aria-label="Agent Teams Module" data-md-component="logo">
+      
+  
+  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 8a3 3 0 0 0 3-3 3 3 0 0 0-3-3 3 3 0 0 0-3 3 3 3 0 0 0 3 3m0 3.54C9.64 9.35 6.5 8 3 8v11c3.5 0 6.64 1.35 9 3.54 2.36-2.19 5.5-3.54 9-3.54V8c-3.5 0-6.64 1.35-9 3.54"/></svg>
+
+    </a>
+    <label class="md-header__button md-icon" for="__drawer">
+      
+      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M3 6h18v2H3zm0 5h18v2H3zm0 5h18v2H3z"/></svg>
+    </label>
+    <div class="md-header__title" data-md-component="header-title">
+      <div class="md-header__ellipsis">
+        <div class="md-header__topic">
+          <span class="md-ellipsis">
+            Agent Teams Module
+          </span>
+        </div>
+        <div class="md-header__topic" data-md-component="header-topic">
+          <span class="md-ellipsis">
+            
+              Feature Inventory
+            
+          </span>
+        </div>
+      </div>
+    </div>
+    
+      
+        <form class="md-header__option" data-md-component="palette">
+  
+    
+    
+    
+    <input class="md-option" data-md-color-media="" data-md-color-scheme="default" data-md-color-primary="indigo" data-md-color-accent="indigo"  aria-hidden="true"  type="radio" name="__palette" id="__palette_0">
+    
+  
+</form>
+      
+    
+    
+      <script>var palette=__md_get("__palette");if(palette&&palette.color){if("(prefers-color-scheme)"===palette.color.media){var media=matchMedia("(prefers-color-scheme: light)"),input=document.querySelector(media.matches?"[data-md-color-media='(prefers-color-scheme: light)']":"[data-md-color-media='(prefers-color-scheme: dark)']");palette.color.media=input.getAttribute("data-md-color-media"),palette.color.scheme=input.getAttribute("data-md-color-scheme"),palette.color.primary=input.getAttribute("data-md-color-primary"),palette.color.accent=input.getAttribute("data-md-color-accent")}for(var[key,value]of Object.entries(palette.color))document.body.setAttribute("data-md-color-"+key,value)}</script>
+    
+    
+    
+      
+      
+        <label class="md-header__button md-icon" for="__search">
+          
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M9.5 3A6.5 6.5 0 0 1 16 9.5c0 1.61-.59 3.09-1.56 4.23l.27.27h.79l5 5-1.5 1.5-5-5v-.79l-.27-.27A6.52 6.52 0 0 1 9.5 16 6.5 6.5 0 0 1 3 9.5 6.5 6.5 0 0 1 9.5 3m0 2C7 5 5 7 5 9.5S7 14 9.5 14 14 12 14 9.5 12 5 9.5 5"/></svg>
+        </label>
+        <div class="md-search" data-md-component="search" role="dialog">
+  <label class="md-search__overlay" for="__search"></label>
+  <div class="md-search__inner" role="search">
+    <form class="md-search__form" name="search">
+      <input type="text" class="md-search__input" name="query" aria-label="Search" placeholder="Search" autocapitalize="off" autocorrect="off" autocomplete="off" spellcheck="false" data-md-component="search-query" required>
+      <label class="md-search__icon md-icon" for="__search">
+        
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M9.5 3A6.5 6.5 0 0 1 16 9.5c0 1.61-.59 3.09-1.56 4.23l.27.27h.79l5 5-1.5 1.5-5-5v-.79l-.27-.27A6.52 6.52 0 0 1 9.5 16 6.5 6.5 0 0 1 3 9.5 6.5 6.5 0 0 1 9.5 3m0 2C7 5 5 7 5 9.5S7 14 9.5 14 14 12 14 9.5 12 5 9.5 5"/></svg>
+        
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M20 11v2H8l5.5 5.5-1.42 1.42L4.16 12l7.92-7.92L13.5 5.5 8 11z"/></svg>
+      </label>
+      <nav class="md-search__options" aria-label="Search">
+        
+        <button type="reset" class="md-search__icon md-icon" title="Clear" aria-label="Clear" tabindex="-1">
+          
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M19 6.41 17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z"/></svg>
+        </button>
+      </nav>
+      
+        <div class="md-search__suggest" data-md-component="search-suggest"></div>
+      
+    </form>
+    <div class="md-search__output">
+      <div class="md-search__scrollwrap" tabindex="0" data-md-scrollfix>
+        <div class="md-search-result" data-md-component="search-result">
+          <div class="md-search-result__meta">
+            Initializing search
+          </div>
+          <ol class="md-search-result__list" role="presentation"></ol>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+      
+    
+    
+      <div class="md-header__source">
+        <a href="https://github.com/jlcatonjr/agentteams" title="Go to repository" class="md-source" data-md-component="source">
+  <div class="md-source__icon md-icon">
+    
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 448 512"><!--! Font Awesome Free 7.1.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2025 Fonticons, Inc.--><path d="M439.6 236.1 244 40.5c-5.4-5.5-12.8-8.5-20.4-8.5s-15 3-20.4 8.4L162.5 81l51.5 51.5c27.1-9.1 52.7 16.8 43.4 43.7l49.7 49.7c34.2-11.8 61.2 31 35.5 56.7-26.5 26.5-70.2-2.9-56-37.3L240.3 199v121.9c25.3 12.5 22.3 41.8 9.1 55-6.4 6.4-15.2 10.1-24.3 10.1s-17.8-3.6-24.3-10.1c-17.6-17.6-11.1-46.9 11.2-56v-123c-20.8-8.5-24.6-30.7-18.6-45L142.6 101 8.5 235.1C3 240.6 0 247.9 0 255.5s3 15 8.5 20.4l195.6 195.7c5.4 5.4 12.7 8.4 20.4 8.4s15-3 20.4-8.4l194.7-194.7c5.4-5.4 8.4-12.8 8.4-20.4s-3-15-8.4-20.4"/></svg>
+  </div>
+  <div class="md-source__repository">
+    jlcatonjr/agentteams
+  </div>
+</a>
+      </div>
+    
+  </nav>
+  
+</header>
+    
+    <div class="md-container" data-md-component="container">
+      
+      
+        
+          
+            
+<nav class="md-tabs" aria-label="Tabs" data-md-component="tabs">
+  <div class="md-grid">
+    <ul class="md-tabs__list">
+      
+        
+  
+  
+  
+  
+    <li class="md-tabs__item">
+      <a href="../.." class="md-tabs__link">
+        
+  
+  
+    
+  
+  Home
+
+      </a>
+    </li>
+  
+
+      
+        
+  
+  
+  
+  
+    <li class="md-tabs__item">
+      <a href="../../manuscript/" class="md-tabs__link">
+        
+  
+  
+    
+  
+  Manuscript
+
+      </a>
+    </li>
+  
+
+      
+        
+  
+  
+  
+  
+    <li class="md-tabs__item">
+      <a href="../../getting-started/" class="md-tabs__link">
+        
+  
+  
+    
+  
+  Getting Started
+
+      </a>
+    </li>
+  
+
+      
+        
+  
+  
+  
+  
+    <li class="md-tabs__item">
+      <a href="../../agent-assisted-setup/" class="md-tabs__link">
+        
+  
+  
+    
+  
+  Agent-Assisted Setup
+
+      </a>
+    </li>
+  
+
+      
+        
+  
+  
+  
+  
+    <li class="md-tabs__item">
+      <a href="../../how-it-works/" class="md-tabs__link">
+        
+  
+  
+    
+  
+  How It Works
+
+      </a>
+    </li>
+  
+
+      
+        
+  
+  
+  
+  
+    <li class="md-tabs__item">
+      <a href="../../examples/" class="md-tabs__link">
+        
+  
+  
+    
+  
+  Examples
+
+      </a>
+    </li>
+  
+
+      
+        
+  
+  
+  
+  
+    <li class="md-tabs__item">
+      <a href="../../interoperability/" class="md-tabs__link">
+        
+  
+  
+    
+  
+  Interoperability
+
+      </a>
+    </li>
+  
+
+      
+        
+  
+  
+  
+  
+    <li class="md-tabs__item">
+      <a href="../../cli-reference/" class="md-tabs__link">
+        
+  
+  
+    
+  
+  CLI Reference
+
+      </a>
+    </li>
+  
+
+      
+        
+  
+  
+  
+    
+  
+  
+    
+    
+      <li class="md-tabs__item md-tabs__item--active">
+        <a href="../" class="md-tabs__link">
+          
+  
+  
+  API Reference
+
+        </a>
+      </li>
+    
+  
+
+      
+        
+  
+  
+  
+  
+    <li class="md-tabs__item">
+      <a href="../../template-authoring/" class="md-tabs__link">
+        
+  
+  
+    
+  
+  Template Authoring
+
+      </a>
+    </li>
+  
+
+      
+        
+  
+  
+  
+  
+    <li class="md-tabs__item">
+      <a href="../../DESCRIPTION-FORMAT/" class="md-tabs__link">
+        
+  
+  
+    
+  
+  Description Format
+
+      </a>
+    </li>
+  
+
+      
+        
+  
+  
+  
+  
+    <li class="md-tabs__item">
+      <a href="../../structural-update-plan/" class="md-tabs__link">
+        
+  
+  
+    
+  
+  Structural Update Plan
+
+      </a>
+    </li>
+  
+
+      
+        
+  
+  
+  
+  
+    <li class="md-tabs__item">
+      <a href="../../contributing/" class="md-tabs__link">
+        
+  
+  
+    
+  
+  Contributing
+
+      </a>
+    </li>
+  
+
+      
+        
+  
+  
+  
+  
+    <li class="md-tabs__item">
+      <a href="../../changelog/" class="md-tabs__link">
+        
+  
+  
+    
+  
+  Changelog
+
+      </a>
+    </li>
+  
+
+      
+    </ul>
+  </div>
+</nav>
+          
+        
+      
+      <main class="md-main" data-md-component="main">
+        <div class="md-main__inner md-grid">
+          
+            
+              
+              <div class="md-sidebar md-sidebar--primary" data-md-component="sidebar" data-md-type="navigation" >
+                <div class="md-sidebar__scrollwrap">
+                  <div class="md-sidebar__inner">
+                    
+
+
+  
+
+
+<nav class="md-nav md-nav--primary md-nav--lifted" aria-label="Navigation" data-md-level="0">
+  <label class="md-nav__title" for="__drawer">
+    <a href="../.." title="Agent Teams Module" class="md-nav__button md-logo" aria-label="Agent Teams Module" data-md-component="logo">
+      
+  
+  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 8a3 3 0 0 0 3-3 3 3 0 0 0-3-3 3 3 0 0 0-3 3 3 3 0 0 0 3 3m0 3.54C9.64 9.35 6.5 8 3 8v11c3.5 0 6.64 1.35 9 3.54 2.36-2.19 5.5-3.54 9-3.54V8c-3.5 0-6.64 1.35-9 3.54"/></svg>
+
+    </a>
+    Agent Teams Module
+  </label>
+  
+    <div class="md-nav__source">
+      <a href="https://github.com/jlcatonjr/agentteams" title="Go to repository" class="md-source" data-md-component="source">
+  <div class="md-source__icon md-icon">
+    
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 448 512"><!--! Font Awesome Free 7.1.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2025 Fonticons, Inc.--><path d="M439.6 236.1 244 40.5c-5.4-5.5-12.8-8.5-20.4-8.5s-15 3-20.4 8.4L162.5 81l51.5 51.5c27.1-9.1 52.7 16.8 43.4 43.7l49.7 49.7c34.2-11.8 61.2 31 35.5 56.7-26.5 26.5-70.2-2.9-56-37.3L240.3 199v121.9c25.3 12.5 22.3 41.8 9.1 55-6.4 6.4-15.2 10.1-24.3 10.1s-17.8-3.6-24.3-10.1c-17.6-17.6-11.1-46.9 11.2-56v-123c-20.8-8.5-24.6-30.7-18.6-45L142.6 101 8.5 235.1C3 240.6 0 247.9 0 255.5s3 15 8.5 20.4l195.6 195.7c5.4 5.4 12.7 8.4 20.4 8.4s15-3 20.4-8.4l194.7-194.7c5.4-5.4 8.4-12.8 8.4-20.4s-3-15-8.4-20.4"/></svg>
+  </div>
+  <div class="md-source__repository">
+    jlcatonjr/agentteams
+  </div>
+</a>
+    </div>
+  
+  <ul class="md-nav__list" data-md-scrollfix>
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../.." class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Home
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../manuscript/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Manuscript
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../getting-started/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Getting Started
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../agent-assisted-setup/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Agent-Assisted Setup
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../how-it-works/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    How It Works
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../examples/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Examples
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../interoperability/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Interoperability
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../cli-reference/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    CLI Reference
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+    
+  
+  
+  
+    
+    
+    
+    
+      
+        
+        
+      
+      
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--active md-nav__item--section md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_9" checked>
+        
+          
+          <label class="md-nav__link" for="__nav_9" id="__nav_9_label" tabindex="">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    API Reference
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_9_label" aria-expanded="true">
+          <label class="md-nav__title" for="__nav_9">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    API Reference
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Overview
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+    
+  
+  
+  
+    <li class="md-nav__item md-nav__item--active">
+      
+      <input class="md-nav__toggle md-toggle" type="checkbox" id="__toc">
+      
+      
+        
+      
+      
+        <label class="md-nav__link md-nav__link--active" for="__toc">
+          
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Feature Inventory
+  
+
+    
+  </span>
+  
+  
+
+          <span class="md-nav__icon md-icon"></span>
+        </label>
+      
+      <a href="./" class="md-nav__link md-nav__link--active">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Feature Inventory
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+      
+        
+
+<nav class="md-nav md-nav--secondary" aria-label="Table of contents">
+  
+  
+  
+    
+  
+  
+    <label class="md-nav__title" for="__toc">
+      <span class="md-nav__icon md-icon"></span>
+      Table of contents
+    </label>
+    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
+      
+        <li class="md-nav__item">
+  <a href="#summary" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Summary
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#core-pipeline" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Core Pipeline
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Core Pipeline">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#team-generation" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Team Generation
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#core-pipeline-modules" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Core Pipeline Modules
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#visualization-graph" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Visualization &amp; Graph
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#framework-adapters" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Framework Adapters
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#cli" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        CLI
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#templates-schemas" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Templates &amp; Schemas
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#enrichment" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Enrichment
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#section-fencing-safe-merges" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Section Fencing &amp; Safe Merges
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#security-intelligence" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Security Intelligence
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#migration-update" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Migration &amp; Update
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#safety-backups" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Safety &amp; Backups
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#governance-agents" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Governance Agents
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#workflows" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Workflows
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#governance-infrastructure" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Governance Infrastructure
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#interoperability" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Interoperability
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#bridge-automation" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Bridge Automation
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#cross-repository-support" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Cross-Repository Support
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#getting-started" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Getting Started
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Getting Started">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#essential-features" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Essential Features
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#advanced-features" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Advanced Features
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#governance-invocations" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Governance Invocations
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+    </ul>
+  
+</nav>
+      
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../ingest/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    ingest
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../analyze/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    analyze
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../render/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    render
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../emit/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    emit
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../convert/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    convert
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../interop/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    interop
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../bridge/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    bridge
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../drift/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    drift
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../scan/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    scan
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../audit/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    audit
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../remediate/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    remediate
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../enrich/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    enrich
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../graph/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    graph
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../frameworks/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    frameworks
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../man/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    man
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../template-authoring/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Template Authoring
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../DESCRIPTION-FORMAT/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Description Format
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../structural-update-plan/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Structural Update Plan
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../contributing/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Contributing
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../changelog/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Changelog
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+  </ul>
+</nav>
+                  </div>
+                </div>
+              </div>
+            
+            
+              
+              <div class="md-sidebar md-sidebar--secondary" data-md-component="sidebar" data-md-type="toc" >
+                <div class="md-sidebar__scrollwrap">
+                  <div class="md-sidebar__inner">
+                    
+
+<nav class="md-nav md-nav--secondary" aria-label="Table of contents">
+  
+  
+  
+    
+  
+  
+    <label class="md-nav__title" for="__toc">
+      <span class="md-nav__icon md-icon"></span>
+      Table of contents
+    </label>
+    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
+      
+        <li class="md-nav__item">
+  <a href="#summary" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Summary
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#core-pipeline" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Core Pipeline
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Core Pipeline">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#team-generation" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Team Generation
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#core-pipeline-modules" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Core Pipeline Modules
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#visualization-graph" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Visualization &amp; Graph
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#framework-adapters" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Framework Adapters
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#cli" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        CLI
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#templates-schemas" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Templates &amp; Schemas
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#enrichment" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Enrichment
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#section-fencing-safe-merges" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Section Fencing &amp; Safe Merges
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#security-intelligence" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Security Intelligence
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#migration-update" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Migration &amp; Update
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#safety-backups" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Safety &amp; Backups
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#governance-agents" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Governance Agents
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#workflows" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Workflows
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#governance-infrastructure" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Governance Infrastructure
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#interoperability" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Interoperability
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#bridge-automation" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Bridge Automation
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#cross-repository-support" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Cross-Repository Support
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#getting-started" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Getting Started
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Getting Started">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#essential-features" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Essential Features
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#advanced-features" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Advanced Features
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#governance-invocations" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Governance Invocations
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+    </ul>
+  
+</nav>
+                  </div>
+                </div>
+              </div>
+            
+          
+          
+            <div class="md-content" data-md-component="content">
+              
+              <article class="md-content__inner md-typeset">
+                
+                  
+
+
+  
+  
+
+
+<h1 id="agentteams-feature-inventory">AgentTeams — Feature Inventory<a class="headerlink" href="#agentteams-feature-inventory" title="Permanent link">&para;</a></h1>
+<p><strong>Version:</strong> 0.1.0 (Unreleased)</p>
+<p>Features below are grouped by capability area. Items described here have been implemented and are
+available on the <code>main</code> branch. The last formal versioned release is <strong>0.1.0 (2026-04-15)</strong>;
+everything listed reflects the current development state.</p>
+<hr />
+<h2 id="summary">Summary<a class="headerlink" href="#summary" title="Permanent link">&para;</a></h2>
+<table>
+<thead>
+<tr>
+<th>Category</th>
+<th>Features</th>
+<th>Description</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><strong>Core Pipeline</strong></td>
+<td>37</td>
+<td>Project ingestion, team generation, framework adapters, CLI, templates, schemas</td>
+</tr>
+<tr>
+<td><strong>Enrichment</strong></td>
+<td>11</td>
+<td>Auto-enrichment, notebook scanning, tool catalog, live PyPI metadata</td>
+</tr>
+<tr>
+<td><strong>Section Fencing &amp; Safe Merges</strong></td>
+<td>5</td>
+<td><code>AGENTTEAMS:BEGIN/END</code> markers, non-destructive merge mode</td>
+</tr>
+<tr>
+<td><strong>Security Intelligence</strong></td>
+<td>4</td>
+<td>Live CVE/CISA-KEV/EPSS data, credential scanning, security reference files</td>
+</tr>
+<tr>
+<td><strong>Migration &amp; Update</strong></td>
+<td>8</td>
+<td><code>--migrate</code>, <code>--revert-migration</code>, <code>--enrich</code>, <code>--auto-correct</code>, <code>--scan-security</code>, security flags</td>
+</tr>
+<tr>
+<td><strong>Safety &amp; Backups</strong></td>
+<td>6</td>
+<td>Automatic backups, restore capability, <code>--no-backup</code>, <code>--list-backups</code>, public backup API</td>
+</tr>
+<tr>
+<td><strong>Governance Agents</strong></td>
+<td>9</td>
+<td>navigator, security, code-hygiene, adversarial, conflict-auditor, conflict-resolution, cleanup, agent-updater, agent-refactor</td>
+</tr>
+<tr>
+<td><strong>Workflows</strong></td>
+<td>12</td>
+<td>Workflows 1–12 with constitutional rules, guards, and final-check termination</td>
+</tr>
+<tr>
+<td><strong>Governance Infrastructure</strong></td>
+<td>7</td>
+<td><code>@agent-updater</code> auto-triggers, <code>@adversarial</code> guards, truth check, drift-as-trigger, deployment protocol</td>
+</tr>
+<tr>
+<td><strong>Interoperability</strong></td>
+<td>8</td>
+<td><code>convert</code>, <code>interop</code>, <code>bridge</code> modules; handoff manifest; CI flags</td>
+</tr>
+<tr>
+<td><strong>Bridge Automation</strong></td>
+<td>7</td>
+<td>Daily maintenance script, CI workflows, staleness watchdog, deduplication</td>
+</tr>
+<tr>
+<td><strong>Cross-Repository</strong></td>
+<td>8</td>
+<td><code>@repo-liaison</code> agent, adjacent-repo tracking, impact/update/coordination protocols</td>
+</tr>
+</tbody>
+</table>
+<p><strong>Total:</strong> ~122 documented features across 12 capability areas.</p>
+<hr />
+<h2 id="core-pipeline">Core Pipeline<a class="headerlink" href="#core-pipeline" title="Permanent link">&para;</a></h2>
+<h3 id="team-generation">Team Generation<a class="headerlink" href="#team-generation" title="Permanent link">&para;</a></h3>
+<ol>
+<li><strong>Agent Teams Module</strong> — Generate a complete, coordinated AI agent team from a single project description file</li>
+<li><strong>Four-Tier Agent Architecture</strong> — Orchestrator → Governance Agents → Domain Agents → Workstream Experts</li>
+<li><strong>Project Description Ingestion</strong> — Load project briefs from <code>.json</code> or <code>.md</code> format</li>
+<li><strong>Project Directory Scanning</strong> — Scan an existing project directory to supplement missing brief fields</li>
+<li><strong>Project Type Classification</strong> — Infer the deliverable type from the project goal</li>
+<li><strong>Agent Archetype Selection</strong> — Select the appropriate archetype set from the 9-archetype library</li>
+<li><strong>Team Manifest Generation</strong> — Build complete team composition metadata</li>
+<li><strong>Template Placeholder Resolution</strong> — Resolve <code>{AUTO:token}</code> and <code>{MANUAL:token}</code> placeholders</li>
+</ol>
+<h3 id="core-pipeline-modules">Core Pipeline Modules<a class="headerlink" href="#core-pipeline-modules" title="Permanent link">&para;</a></h3>
+<ol>
+<li><strong><code>ingest</code> Module</strong> — Load and normalize project descriptions; parse JSON/Markdown; scan directories</li>
+<li><strong><code>analyze</code> Module</strong> — Classify project type; select archetypes; detect tool agents; build manifest</li>
+<li><strong><code>render</code> Module</strong> — Resolve placeholders in templates; compute template hashes for drift detection</li>
+<li><strong><code>emit</code> Module</strong> — Write rendered files to disk with dry-run and overwrite-protection</li>
+<li><strong><code>drift</code> Module</strong> — Detect content drift (template hash comparison) and structural drift (team composition)</li>
+<li><strong><code>scan</code> Module</strong> — Proactive security scan for PII paths, credentials, unresolved placeholders</li>
+<li><strong><code>audit</code> Module</strong> — Static post-generation audit; optional AI-powered review via Copilot CLI</li>
+<li><strong><code>remediate</code> Module</strong> — Auto-correction support via Copilot CLI after audit findings</li>
+</ol>
+<h3 id="visualization-graph">Visualization &amp; Graph<a class="headerlink" href="#visualization-graph" title="Permanent link">&para;</a></h3>
+<ol>
+<li><strong><code>graph</code> Module</strong> — Directed graph inference for team topology</li>
+<li><strong>Mermaid Output</strong> — Team topology diagram in Mermaid format</li>
+<li><strong>DOT Output</strong> — GraphViz format for advanced visualization</li>
+<li><strong>JSON Output</strong> — Machine-readable team topology</li>
+<li><strong>Markdown Output</strong> — Human-readable topology; auto-generated in <code>references/pipeline-graph.md</code></li>
+</ol>
+<h3 id="framework-adapters">Framework Adapters<a class="headerlink" href="#framework-adapters" title="Permanent link">&para;</a></h3>
+<ol>
+<li><strong><code>copilot-vscode</code> Adapter</strong> — <code>.agent.md</code> files with YAML front matter; outputs to <code>.github/agents/</code></li>
+<li><strong><code>copilot-cli</code> Adapter</strong> — Plain <code>.md</code> system prompts; outputs to <code>.github/copilot/</code></li>
+<li><strong><code>claude</code> Adapter</strong> — Claude Code front matter <code>.md</code> + <code>CLAUDE.md</code>; outputs to <code>.claude/agents/</code></li>
+<li><strong>Framework-Agnostic Interface</strong> — Extensible adapter base class for adding new frameworks</li>
+</ol>
+<h3 id="cli">CLI<a class="headerlink" href="#cli" title="Permanent link">&para;</a></h3>
+<ol>
+<li><strong><code>agentteams</code> / <code>build_team.py</code> CLI</strong> — Command-line interface wiring all pipeline stages</li>
+<li><strong><code>--description</code></strong> — Path to project brief (<code>.json</code> or <code>.md</code>)</li>
+<li><strong><code>--project</code></strong> — Target project directory</li>
+<li><strong><code>--framework</code></strong> — Output framework: <code>copilot-vscode</code>, <code>copilot-cli</code>, or <code>claude</code></li>
+<li><strong><code>--dry-run</code></strong> — Preview output without writing files</li>
+<li><strong><code>--overwrite</code></strong> — Allow overwriting existing agent files</li>
+<li><strong><code>--self</code></strong> — Self-maintenance: regenerate the module's own agent team</li>
+<li><strong><code>--post-audit</code></strong> — Run static + AI-powered conflict and presupposition review</li>
+</ol>
+<h3 id="templates-schemas">Templates &amp; Schemas<a class="headerlink" href="#templates-schemas" title="Permanent link">&para;</a></h3>
+<ol>
+<li><strong>9 Universal Governance Templates</strong> — One template per governance agent archetype</li>
+<li><strong>9+ Domain Archetype Templates</strong> — Project-type-specific agent patterns</li>
+<li><strong>3 Builder Templates</strong> — Team Builder agent variants</li>
+<li><strong>6 Workstream Expert Templates</strong> — Component-scoped expertise patterns</li>
+<li><strong><code>project-description.schema.json</code></strong> — JSON Schema for brief validation</li>
+<li><strong><code>team-manifest.schema.json</code></strong> — JSON Schema for team manifest validation</li>
+</ol>
+<hr />
+<h2 id="enrichment">Enrichment<a class="headerlink" href="#enrichment" title="Permanent link">&para;</a></h2>
+<ol>
+<li><strong><code>enrich</code> Package</strong> — Context-aware auto-enrichment pipeline</li>
+<li><strong>Rule-Based Fill Generation</strong> — Pattern-matched placeholder completion</li>
+<li><strong>Jupyter Notebook Scanning</strong> — Extract evidence and examples from <code>.ipynb</code> sources</li>
+<li><strong>Tool Catalog Integration</strong> — Reference available tools and frameworks for auto-fill</li>
+<li><strong>LLM Model Detection</strong> — Identify referenced models and optimize prompts</li>
+<li><strong>Enrichment Coverage Audit</strong> — Enumerate unresolved defaults; export <code>references/defaults-audit.csv</code></li>
+<li><strong>Dynamic Tool Detection</strong> — Automatic framework/tool identification from project structure</li>
+<li><strong>Auto-PyPI Metadata Fetch</strong> — Fetch package metadata for tool catalog enrichment</li>
+<li><strong>Agent Integration Audit</strong> — Verify all agents have required integration details</li>
+<li><strong>Agent Knowledge Updates</strong> — Incorporate discovered tool knowledge into agent content</li>
+<li><strong><code>--enrich</code> Flag</strong> — Run enrichment pass after generation</li>
+</ol>
+<hr />
+<h2 id="section-fencing-safe-merges">Section Fencing &amp; Safe Merges<a class="headerlink" href="#section-fencing-safe-merges" title="Permanent link">&para;</a></h2>
+<ol>
+<li><strong><code>AGENTTEAMS:BEGIN/END</code> Fence Markers</strong> — Delineate managed regions in agent files</li>
+<li><strong><code>FENCE-CONVENTIONS.md</code></strong> — Specification for fence marker usage and authoring rules</li>
+<li><strong>Non-Destructive Merge Mode (<code>--merge</code>)</strong> — Update fenced regions only; preserve all user content outside fences</li>
+<li><strong><code>--update --merge</code> Safety Fix</strong> — <code>--update</code> now honors <code>--merge</code>; no longer silently overwrites user content</li>
+<li><strong>11 Instrumented Templates</strong> — All governance and domain templates ship with fence markers</li>
+</ol>
+<hr />
+<h2 id="security-intelligence">Security Intelligence<a class="headerlink" href="#security-intelligence" title="Permanent link">&para;</a></h2>
+<ol>
+<li><strong><code>security_refs</code> Module</strong> — Render live threat intelligence into generated security reference files</li>
+<li><strong>Live CVE/CISA-KEV/EPSS Data</strong> — Pull current threat data on every pipeline run</li>
+<li><strong><code>--security-offline</code> Flag</strong> — Disable live intelligence fetching for air-gapped or offline runs</li>
+<li><strong><code>--security-max-items</code> Flag</strong> — Cap the number of live threat items rendered</li>
+<li><strong><code>--security-no-nvd</code> Flag</strong> — Skip NVD fetching while retaining CISA-KEV and EPSS data</li>
+<li><strong>Non-Deterministic Snapshot Exclusion</strong> — <code>test_snapshot_comparison</code> skips live-data files</li>
+</ol>
+<hr />
+<h2 id="migration-update">Migration &amp; Update<a class="headerlink" href="#migration-update" title="Permanent link">&para;</a></h2>
+<ol>
+<li><strong><code>--migrate</code> Flag</strong> — One-step fencing migration: tags HEAD as <code>pre-fencing-snapshot</code>, then regenerates all files with fenced templates</li>
+<li><strong><code>--revert-migration</code> Flag</strong> — Undo a migration by resetting to <code>pre-fencing-snapshot</code> git tag</li>
+<li><strong><code>--update</code> Mode</strong> — Incremental re-render; preserves manual placeholder values</li>
+<li><strong><code>--prune</code> Mode</strong> — Remove stale agent components from an existing team</li>
+<li><strong><code>--auto-correct</code> Flag</strong> — Invoke Copilot CLI to repair post-audit findings; reruns audit to confirm</li>
+<li><strong><code>--scan-security</code> Flag</strong> — Proactive scan for PII paths, credential patterns, unresolved placeholders</li>
+<li><strong><code>available_workflows</code> Fenced Section</strong> — Workflow documentation fenced so <code>--update --merge</code> propagates future changes while preserving project-specific rules</li>
+<li><strong>Update Deployment Protocol</strong> — Documented multi-step update procedure: dry-run, backup verify, git diff capture, outside-fence analysis (OK/WARN/ERROR), WARN review gate</li>
+</ol>
+<hr />
+<h2 id="safety-backups">Safety &amp; Backups<a class="headerlink" href="#safety-backups" title="Permanent link">&para;</a></h2>
+<ol>
+<li><strong>Automatic Backup Before Writes</strong> — Timestamped backup of all agent files before any <code>--overwrite</code>, <code>--merge</code>, or <code>--update</code> run</li>
+<li><strong>Backup Storage</strong> — <code>.agentteams-backups/YYYYMMDD-HHMMSS/</code> (excluded from git)</li>
+<li><strong><code>--no-backup</code> Flag</strong> — Suppress backup creation for CI environments</li>
+<li><strong><code>--list-backups</code> Flag</strong> — List available backup timestamps</li>
+<li><strong><code>--restore-backup [TIMESTAMP|latest]</code> Flag</strong> — Restore a specific backup</li>
+<li><strong><code>emit.backup_output_dir()</code> / <code>emit.list_backups()</code> / <code>emit.restore_backup()</code></strong> — Public backup API</li>
+</ol>
+<hr />
+<h2 id="governance-agents">Governance Agents<a class="headerlink" href="#governance-agents" title="Permanent link">&para;</a></h2>
+<p>The following nine agents are included in every generated team, regardless of project type.</p>
+<ol>
+<li><strong><code>@navigator</code></strong> — Project structure mapping, file location queries, dependency tracking (read-only)</li>
+<li><strong><code>@security</code></strong> — Highest-priority sentinel; clears destructive operations, credential exposure, and external writes (read-only)</li>
+<li><strong><code>@code-hygiene</code></strong> — Architecture auditor; file hygiene, duplication, script lifecycle, agent doc quality — CH-01 through CH-20+ (read-only)</li>
+<li><strong><code>@adversarial</code></strong> — Presupposition critic; challenges plans and hidden assumptions before execution (read-only)</li>
+<li><strong><code>@conflict-auditor</code></strong> — Detects logical inconsistencies across all output files; logs findings (read + log)</li>
+<li><strong><code>@conflict-resolution</code></strong> — Makes ACCEPT/REJECT/REVISE decisions on flagged conflicts (read + edit)</li>
+<li><strong><code>@cleanup</code></strong> — Removes stale artifacts; requires <code>@security</code> clearance; applies four safety checks before deletion (edit)</li>
+<li><strong><code>@agent-updater</code></strong> — Synchronizes agent documentation when project structure or content changes (edit)</li>
+<li><strong><code>@agent-refactor</code></strong> — Extracts shared data to reference files; enforces spec compliance (edit)</li>
+</ol>
+<hr />
+<h2 id="workflows">Workflows<a class="headerlink" href="#workflows" title="Permanent link">&para;</a></h2>
+<p>Workflows are step sequences embedded in the generated Orchestrator agent. Every workflow terminates with an unconditional call to Workflow 11 (Final Check).</p>
+<ol>
+<li><strong>Workflow 1 — Produce Deliverable</strong> — Source review → Component Brief → production → quality audit → style audit → consistency check</li>
+<li><strong>Workflow 2 — Revise Deliverable</strong> — Revision → adversarial review → quality audit → consistency check → <code>@agent-updater</code> sync</li>
+<li><strong>Workflow 3 — Technical Accuracy Audit</strong> — Validate claims against source files; conditionally correct and re-audit</li>
+<li><strong>Workflow 4 — Compile Final Output</strong> — Format conversion → reference verification → final assembly → cleanup</li>
+<li><strong>Workflow 5 — Consistency Review</strong> — <code>@adversarial</code> challenge → cross-file consistency audit → technical validation → <code>@agent-updater</code></li>
+<li><strong>Workflow 6 — Documentation Maintenance</strong> — Sync agent docs → refactor check → consistency audit</li>
+<li><strong>Workflow 7 — Cleanup</strong> — Identify stale artifacts → <code>@adversarial</code> review → <code>@security</code> clearance → delete → update docs</li>
+<li><strong>Workflow 8 — Code Hygiene Audit</strong> — CH-01–CH-20 audit → <code>@adversarial</code> guard before deletion plan → conditional cleanup/refactor</li>
+<li><strong>Workflow 9 — Cross-Repository Coordination</strong> — Impact assessment → approved updates → adjacent-repo writes (security-cleared) → consistency audit</li>
+<li><strong>Workflow 10 — Plan Documentation &amp; Review</strong> — Plan status scan → pre-execution truth check via <code>@technical-validator</code> → surface blocked steps</li>
+<li><strong>Workflow 11 — Final Check (Part A)</strong> — Scan current plan's <code>steps.csv</code> for <code>pending</code>/<code>blocked</code> rows; create audited sub-plans for each</li>
+<li><strong>Workflow 11 — Final Check (Part B)</strong> — Scan <code>CHANGELOG.md</code> Known Issues, <code>tmp/</code> CSVs, and <code>git status</code> for at-large open issues; subject summaries to <code>@adversarial</code> + <code>@conflict-auditor</code></li>
+</ol>
+<hr />
+<h2 id="governance-infrastructure">Governance Infrastructure<a class="headerlink" href="#governance-infrastructure" title="Permanent link">&para;</a></h2>
+<ol>
+<li><strong>Constitutional Rules</strong> — Immutable rules encoded in the Orchestrator template: security clearance gates, code-hygiene before merge, conflict audit after multi-file sessions, adversarial review before irreversible changes</li>
+<li><strong>Authority Hierarchy</strong> — Explicit precedence ordering encoded in every generated Orchestrator (template library → schemas → pipeline source → placeholder conventions → implementation plan)</li>
+<li><strong>Automatic <code>@agent-updater</code> Triggers</strong> — Invoked at the close of Workflows 2, 3, and 5 after any knowledge-mutating operation</li>
+<li><strong><code>@adversarial</code> Guards in Audit Workflows</strong> — <code>@adversarial</code> runs as step 1 of Workflow 5 and step 2 of Workflow 8 to prevent stale-assumption conclusions</li>
+<li><strong>Pre-Execution Truth Check</strong> — <code>@technical-validator</code> must verify factual claims in each plan step before it is marked <code>in_progress</code></li>
+<li><strong>Drift-as-Trigger</strong> — An explicit trigger in <code>@agent-updater</code> trigger tables: drift detected by <code>--check</code> requires re-render and re-verify before the next workflow</li>
+<li><strong>Cross-Repository Security Rule</strong> — Any write to a repository other than <code>src/</code> must be assessed by <code>@repo-liaison</code> and cleared by <code>@security</code></li>
+</ol>
+<hr />
+<h2 id="interoperability">Interoperability<a class="headerlink" href="#interoperability" title="Permanent link">&para;</a></h2>
+<ol>
+<li><strong><code>convert</code> Module</strong> — Direct format migration between framework outputs (<code>copilot-vscode</code> ↔ <code>copilot-cli</code> ↔ <code>claude</code>)</li>
+<li><strong><code>--convert-from</code> Flag</strong> — Convert an existing agent team to a different framework format</li>
+<li><strong>File Classification</strong> — Auto-detect file role (agent, instruction, reference) for correct translation</li>
+<li><strong><code>interop</code> Module</strong> — Canonical Agent Interface (CAI) normalization and compatibility pipeline</li>
+<li><strong><code>--interop-from</code> Flag</strong> — Run the CAI interop pipeline against an existing team</li>
+<li><strong><code>bridge</code> Module</strong> — Lightweight runtime compatibility bridge; generate bridge artifacts without regenerating sources</li>
+<li><strong><code>--bridge-from</code> Flag</strong> — Generate bridge artifacts from a source canonical team</li>
+<li><strong>Runtime Handoff Manifest</strong> — <code>references/runtime-handoffs.json</code>; emitted when handoffs are extracted from non-VS Code adapters, consumed by bridge layers and external tooling</li>
+</ol>
+<hr />
+<h2 id="bridge-automation">Bridge Automation<a class="headerlink" href="#bridge-automation" title="Permanent link">&para;</a></h2>
+<ol>
+<li><strong><code>run_daily_bridge_maintenance.sh</code></strong> — Daily warn-and-continue bridge refresh script for non-critical operations</li>
+<li><strong><code>bridge-maintenance.yml</code> CI Workflow</strong> — GitHub Actions workflow for daily automated bridge maintenance</li>
+<li><strong><code>bridge-watchdog.yml</code> CI Workflow</strong> — Staleness monitoring; creates deduplicated GitHub issues when drift is detected</li>
+<li><strong>Bridge Staleness Detection</strong> — Compare bridge artifacts against source team; surface divergence</li>
+<li><strong>Deduplicated Issue Creation</strong> — Watchdog suppresses duplicate GitHub issues for the same staleness event</li>
+<li><strong>CI Fallback Mechanism</strong> — Maintenance workflow continues with warnings on non-critical failures rather than aborting</li>
+<li><strong>Snapshot Archive</strong> — Pre-update snapshots stored in <code>references/plans/snapshots-*/</code> for reversible rollback</li>
+</ol>
+<hr />
+<h2 id="cross-repository-support">Cross-Repository Support<a class="headerlink" href="#cross-repository-support" title="Permanent link">&para;</a></h2>
+<ol>
+<li><strong><code>@repo-liaison</code> Agent</strong> — Manages cross-repository impact assessment, updates, and orchestrator coordination</li>
+<li><strong><code>references/adjacent-repos.md</code></strong> — Living record of adjacent repositories with changelog entries</li>
+<li><strong>Protocol 1 — Impact Assessment</strong> — Evaluate which adjacent repos are affected by a proposed change; produce an Impact Report</li>
+<li><strong>Protocol 2 — Adjacent Updates</strong> — Apply approved updates to neighboring project repos (requires <code>@security</code> clearance on each write)</li>
+<li><strong>Protocol 3 — Orchestrator Coordination</strong> — Formal coordination request between independent orchestrators managing different repositories</li>
+<li><strong><code>@repo-liaison</code> in Constitutional Rules</strong> — Any write outside <code>src/</code> must be assessed by <code>@repo-liaison</code> before <code>@security</code> clearance can be granted</li>
+<li><strong><code>orchestrator-workflows.reference.md</code></strong> — Reference guide documenting all 12 workflows; kept in sync by <code>@agent-updater</code></li>
+</ol>
+<hr />
+<h2 id="getting-started">Getting Started<a class="headerlink" href="#getting-started" title="Permanent link">&para;</a></h2>
+<h3 id="essential-features">Essential Features<a class="headerlink" href="#essential-features" title="Permanent link">&para;</a></h3>
+<table>
+<thead>
+<tr>
+<th>Step</th>
+<th>Feature</th>
+<th>CLI / Entry Point</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>1</td>
+<td>Create a project brief</td>
+<td>Write <code>brief.json</code> or <code>brief.md</code></td>
+</tr>
+<tr>
+<td>2</td>
+<td>Generate your team</td>
+<td><code>agentteams --description brief.json --project /path --framework copilot-vscode</code></td>
+</tr>
+<tr>
+<td>3</td>
+<td>Review manual fills</td>
+<td>Read the generated <code>SETUP-REQUIRED.md</code></td>
+</tr>
+<tr>
+<td>4</td>
+<td>Enrich defaults</td>
+<td><code>agentteams --enrich</code></td>
+</tr>
+<tr>
+<td>5</td>
+<td>Audit output</td>
+<td><code>agentteams --post-audit</code></td>
+</tr>
+</tbody>
+</table>
+<h3 id="advanced-features">Advanced Features<a class="headerlink" href="#advanced-features" title="Permanent link">&para;</a></h3>
+<table>
+<thead>
+<tr>
+<th>Feature</th>
+<th>When to Use</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>--migrate</code></td>
+<td>Upgrading a pre-fencing team to use <code>AGENTTEAMS:BEGIN/END</code> markers</td>
+</tr>
+<tr>
+<td><code>--update --merge</code></td>
+<td>Re-rendering a team after template updates without losing user edits</td>
+</tr>
+<tr>
+<td><code>--convert-from</code></td>
+<td>Migrating a team to a different AI framework</td>
+</tr>
+<tr>
+<td><code>--bridge-from</code></td>
+<td>Creating lightweight runtime compatibility artifacts without regenerating sources</td>
+</tr>
+<tr>
+<td><code>--check</code> (drift)</td>
+<td>Detecting whether template or team-composition changes require re-render</td>
+</tr>
+<tr>
+<td><code>--scan-security</code></td>
+<td>Auditing generated files for credentials, PII, and unresolved placeholders</td>
+</tr>
+</tbody>
+</table>
+<h3 id="governance-invocations">Governance Invocations<a class="headerlink" href="#governance-invocations" title="Permanent link">&para;</a></h3>
+<table>
+<thead>
+<tr>
+<th>Need</th>
+<th>Invoke</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Destructive operation (file delete, bulk edit, external write)</td>
+<td><code>@security</code></td>
+</tr>
+<tr>
+<td>Code change touching shared utilities or agent docs</td>
+<td><code>@code-hygiene</code></td>
+</tr>
+<tr>
+<td>Multi-file session closing</td>
+<td><code>@conflict-auditor</code></td>
+</tr>
+<tr>
+<td>Plan with irreversible steps</td>
+<td><code>@adversarial</code></td>
+</tr>
+<tr>
+<td>Cross-repository write</td>
+<td><code>@repo-liaison</code> → <code>@security</code></td>
+</tr>
+</tbody>
+</table>
+
+
+
+
+
+
+
+  
+  
+
+
+
+
+
+
+                
+              </article>
+            </div>
+          
+          
+<script>var target=document.getElementById(location.hash.slice(1));target&&target.name&&(target.checked=target.name.startsWith("__tabbed_"))</script>
+        </div>
+        
+          <button type="button" class="md-top md-icon" data-md-component="top" hidden>
+  
+  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M13 20h-2V8l-5.5 5.5-1.42-1.42L12 4.16l7.92 7.92-1.42 1.42L13 8z"/></svg>
+  Back to top
+</button>
+        
+      </main>
+      
+        <footer class="md-footer">
+  
+  <div class="md-footer-meta md-typeset">
+    <div class="md-footer-meta__inner md-grid">
+      <div class="md-copyright">
+  
+    <div class="md-copyright__highlight">
+      &copy; <span id='copyright-year'></span> jlcatonjr
+    </div>
+  
+  
+</div>
+      
+    </div>
+  </div>
+</footer>
+      
+    </div>
+    <div class="md-dialog" data-md-component="dialog">
+      <div class="md-dialog__inner md-typeset"></div>
+    </div>
+    
+    
+    
+      
+      
+      <script id="__config" type="application/json">{"annotate": null, "base": "../..", "features": ["navigation.tabs", "navigation.sections", "navigation.top", "search.suggest", "search.highlight", "content.code.copy"], "search": "../../assets/javascripts/workers/search.2c215733.min.js", "tags": null, "translations": {"clipboard.copied": "Copied to clipboard", "clipboard.copy": "Copy to clipboard", "search.result.more.one": "1 more on this page", "search.result.more.other": "# more on this page", "search.result.none": "No matching documents", "search.result.one": "1 matching document", "search.result.other": "# matching documents", "search.result.placeholder": "Type to start searching", "search.result.term.missing": "Missing", "select.version": "Select version"}, "version": null}</script>
+    
+    
+      <script src="../../assets/javascripts/bundle.79ae519e.min.js"></script>
+      
+        <script src="../../javascripts/current-year.js"></script>
+      
+    
+  </body>
+</html>

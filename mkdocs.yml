@@ -39,6 +39,7 @@ nav:
   - CLI Reference: cli-reference.md
   - API Reference:
       - Overview: api-reference/index.md
+      - Feature Inventory: api-reference/feature-inventory.md
       - ingest: api-reference/ingest.md
       - analyze: api-reference/analyze.md
       - render: api-reference/render.md

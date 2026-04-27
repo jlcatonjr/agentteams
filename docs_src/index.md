@@ -46,6 +46,14 @@ Short reads (about five paragraphs each) explaining how core module components f
 
 ---
 
+## 📋 Feature Inventory
+
+--8<-- "docs_src/assets/feature-summary-table.md"
+
+**Full details:** [Feature Inventory](api-reference/feature-inventory.md)
+
+---
+
 ## Framework Support
 
 | Framework | Format | Handoffs | Builder Agent |
