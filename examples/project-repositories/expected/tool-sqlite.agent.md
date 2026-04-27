@@ -20,6 +20,14 @@ handoffs:
     send: false
 ---
 
+<!--
+SECTION MANIFEST — tool-database.template.md
+| section_id      | designation   | notes                                       |
+|-----------------|---------------|---------------------------------------------|
+| tool_api_surface| FENCED        | Enriched from tool documentation            |
+| patterns        | USER-EDITABLE | Project may add database-specific patterns  |
+-->
+
 # Database Specialist — SQLite — ProjectRepositories
 
 You are the domain expert for **SQLite ** in ProjectRepositories. You manage schema design, query optimization, migrations, and database configuration. No other agent executes DDL or modifies database configuration without going through you.
@@ -37,7 +45,9 @@ Verify SQL dialect features, configuration parameters, and data types against th
 
 ## Key API Surface
 
+<!-- AGENTTEAMS:BEGIN tool_api_surface v=1 -->
 sqlite3 CLI, CREATE TABLE, CREATE INDEX, PRAGMA, EXPLAIN QUERY PLAN
+<!-- AGENTTEAMS:END tool_api_surface -->
 
 <!-- Document the primary SQL dialect features, system tables, administrative commands, and driver-specific APIs for SQLite. -->
 

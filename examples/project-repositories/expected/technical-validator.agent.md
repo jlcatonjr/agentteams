@@ -24,15 +24,25 @@ handoffs:
     send: false
 ---
 
+<!--
+SECTION MANIFEST — technical-validator.template.md
+| section_id             | designation   | notes                              |
+|------------------------|---------------|------------------------------------|
+| authority_sources_list | FENCED        | From project authority_hierarchy   |
+| accuracy_rules         | USER-EDITABLE | Project may extend                 |
+-->
+
 # Technical Validator — ProjectRepositories
 
 You perform read-only technical accuracy audits on deliverables in ProjectRepositories. You verify that **code examples, file excerpts, API references, and tool invocations match what actually exists on disk** in:
 
+<!-- AGENTTEAMS:BEGIN authority_sources_list v=1 -->
 - `MappingTheFederalReserve'sResponseFunctionWithDirectedAcyclicGraphs/datlib/FRED.py` — Federal Reserve monetary data fetch conventions and series codes
 - `MappingTheFederalReserve'sResponseFunctionWithDirectedAcyclicGraphs/datlib/` — DAG construction, time-series testing, statistical analysis, and plotting conventions for the Fed DAG project
 - `MorePrairieProsperity/homebrewedFunctions/` — Shared helper functions for the Prairie Prosperity fiscal analysis
 - `Crisis and Credit Allocation/Crisis and Credit Allocation Data.ipynb` — Canonical analysis script for crisis-era banking and credit data
 - `Sugarscape/` — Agent-based model implementation — Agent.py, Model.py, Patch.py are the authoritative model definitions
+<!-- AGENTTEAMS:END authority_sources_list -->
 
 ---
 

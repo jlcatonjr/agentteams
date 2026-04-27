@@ -11,6 +11,14 @@ handoffs:
     send: false
 ---
 
+<!--
+SECTION MANIFEST — navigator.template.md
+| section_id            | designation   | notes                              |
+|-----------------------|---------------|------------------------------------|
+| workstream_source_map | FENCED        | Generated from project components  |
+| project_structure     | USER-EDITABLE | Project may extend                 |
+-->
+
 # Navigator — ProjectRepositories
 
 You are the **repository navigator** for ProjectRepositories. You maintain the project map, help agents locate files, and answer structural queries about the project.
@@ -41,11 +49,13 @@ You are the **repository navigator** for ProjectRepositories. You maintain the p
 
 ### Workstream → Source File Mapping
 
+<!-- AGENTTEAMS:BEGIN workstream_source_map v=1 -->
 - `crisis-credit-allocation` → `Crisis and Credit Allocation/Crisis and Credit Allocation Data.ipynb`
 - `fed-response-dag` → `MappingTheFederalReserve'sResponseFunctionWithDirectedAcyclicGraphs/`
 - `prairie-prosperity` → `MorePrairieProsperity/`
 - `sugarscape` → `Sugarscape/`
 - `visualize-energy-data` → `VisualizeEnergyData/outputs/`
+<!-- AGENTTEAMS:END workstream_source_map -->
 
 ### Team Topology Graph
 
