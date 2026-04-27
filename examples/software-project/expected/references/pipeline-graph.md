@@ -36,6 +36,8 @@ flowchart LR
     class content_enricher unknown
     format_converter["Format Converter"]
     class format_converter domain
+    git_operations["Git Operations"]
+    class git_operations governance
     navigator["Navigator"]
     class navigator governance
     orchestrator["Orchestrator"]
@@ -47,7 +49,7 @@ flowchart LR
     quality_auditor["Quality Auditor"]
     class quality_auditor domain
     repo_liaison["Repo Liaison"]
-    class repo_liaison unknown
+    class repo_liaison governance
     security["Security"]
     class security governance
     tasks_api_expert["Tasks API Expert"]
@@ -76,6 +78,7 @@ flowchart LR
     orchestrator -->|"Update Agent Docs"| agent_updater
     orchestrator -->|"Refactor Agent Docs"| agent_refactor
     orchestrator -->|"Cross-Repository Liaison"| repo_liaison
+    orchestrator -->|"Git Operations"| git_operations
     navigator -->|"Return to Orchestrator"| orchestrator
     security -->|"Return to Orchestrator"| orchestrator
     code_hygiene -->|"Security Clearance (for Deletions)"| security
@@ -96,8 +99,10 @@ flowchart LR
     conflict_resolution -->|"Update Agent Docs"| agent_updater
     cleanup -->|"Return to Orchestrator"| orchestrator
     agent_updater -->|"Refactor Agent Docs"| agent_refactor
+    agent_updater -->|"Run Adversarial Review"| adversarial
     agent_updater -->|"Run Conflict Audit"| conflict_auditor
     agent_updater -->|"Return to Orchestrator"| orchestrator
+    agent_updater -.-> adversarial
     agent_updater -.-> conflict_auditor
     agent_updater -.-> agent_refactor
     agent_refactor -->|"Run Conflict Audit"| conflict_auditor
@@ -106,6 +111,10 @@ flowchart LR
     repo_liaison -->|"Return to Orchestrator"| orchestrator
     repo_liaison -->|"Security Review for Cross-Repo Write"| security
     repo_liaison -->|"Conflict Audit After Cross-Repo Change"| conflict_auditor
+    git_operations -->|"Return to Orchestrator"| orchestrator
+    git_operations -->|"Security Review"| security
+    git_operations -->|"Conflict Resolution"| conflict_resolution
+    git_operations -->|"Update Agent Docs"| agent_updater
     primary_producer -->|"Cohesion Audit"| cohesion_repairer
     primary_producer -->|"Quality Audit"| quality_auditor
     primary_producer -->|"Conflict Audit"| conflict_auditor
@@ -187,12 +196,13 @@ flowchart LR
 | `conflict-resolution` | governance | No | edit, search, read |
 | `content-enricher` | unknown | Yes | read, edit, search |
 | `format-converter` | domain | No | read, edit, execute |
+| `git-operations` | governance | Yes | read, execute, search |
 | `navigator` | governance | No | read, search, execute |
 | `orchestrator` | governance | Yes | read, edit, search, execute, todo, agent |
 | `output-compiler` | domain | No | read, edit, execute |
 | `primary-producer` | domain | No | read, edit, search |
 | `quality-auditor` | domain | No | read, search |
-| `repo-liaison` | unknown | No | read, edit, search, execute, agent |
+| `repo-liaison` | governance | No | read, edit, search, execute, agent |
 | `security` | governance | No | read, search |
 | `tasks-api-expert` | workstream_expert | No | read, search, agent |
 | `team-builder` | governance | Yes | read, edit, search, execute, todo |
@@ -206,24 +216,25 @@ flowchart LR
 
 | Agent | Receives from | Hands off to |
 | --- | --- | --- |
-| `adversarial` | `auth-module-expert`, `orchestrator`, `tasks-api-expert` | `conflict-auditor`, `orchestrator` |
+| `adversarial` | `agent-updater`, `auth-module-expert`, `orchestrator`, `tasks-api-expert` | `conflict-auditor`, `orchestrator` |
 | `agent-refactor` | `agent-updater`, `code-hygiene`, `orchestrator` | `conflict-auditor`, `orchestrator` |
-| `agent-updater` | `conflict-auditor`, `conflict-resolution`, `orchestrator`, `tool-doc-researcher` | `agent-refactor`, `conflict-auditor`, `orchestrator` |
+| `agent-updater` | `conflict-auditor`, `conflict-resolution`, `git-operations`, `orchestrator`, `tool-doc-researcher` | `adversarial`, `agent-refactor`, `conflict-auditor`, `orchestrator` |
 | `auth-module-expert` | — | `adversarial`, `orchestrator`, `primary-producer` |
 | `cleanup` | `code-hygiene`, `orchestrator` | `orchestrator` |
 | `code-hygiene` | `orchestrator` | `agent-refactor`, `cleanup`, `conflict-auditor`, `orchestrator`, `security` |
 | `cohesion-repairer` | `orchestrator`, `primary-producer`, `quality-auditor` | `orchestrator`, `quality-auditor` |
 | `conflict-auditor` | `adversarial`, `agent-refactor`, `agent-updater`, `code-hygiene`, `orchestrator`, `primary-producer`, `repo-liaison`, `technical-validator` | `agent-updater`, `conflict-resolution`, `orchestrator`, `technical-validator` |
-| `conflict-resolution` | `conflict-auditor`, `orchestrator` | `agent-updater`, `orchestrator` |
+| `conflict-resolution` | `conflict-auditor`, `git-operations`, `orchestrator` | `agent-updater`, `orchestrator` |
 | `content-enricher` | — | `orchestrator`, `primary-producer`, `technical-validator` |
 | `format-converter` | `orchestrator`, `output-compiler` | `orchestrator`, `output-compiler`, `quality-auditor` |
+| `git-operations` | `orchestrator` | `agent-updater`, `conflict-resolution`, `orchestrator`, `security` |
 | `navigator` | `orchestrator` | `orchestrator` |
-| `orchestrator` | `adversarial`, `agent-refactor`, `agent-updater`, `auth-module-expert`, `cleanup`, `code-hygiene`, `cohesion-repairer`, `conflict-auditor`, `conflict-resolution`, `content-enricher`, `format-converter`, `navigator`, `output-compiler`, `primary-producer`, `quality-auditor`, `repo-liaison`, `security`, `tasks-api-expert`, `technical-validator`, `tool-doc-researcher`, `tool-postgresql` | `adversarial`, `agent-refactor`, `agent-updater`, `cleanup`, `code-hygiene`, `cohesion-repairer`, `conflict-auditor`, `conflict-resolution`, `format-converter`, `navigator`, `output-compiler`, `primary-producer`, `quality-auditor`, `repo-liaison`, `security`, `technical-validator` |
+| `orchestrator` | `adversarial`, `agent-refactor`, `agent-updater`, `auth-module-expert`, `cleanup`, `code-hygiene`, `cohesion-repairer`, `conflict-auditor`, `conflict-resolution`, `content-enricher`, `format-converter`, `git-operations`, `navigator`, `output-compiler`, `primary-producer`, `quality-auditor`, `repo-liaison`, `security`, `tasks-api-expert`, `technical-validator`, `tool-doc-researcher`, `tool-postgresql` | `adversarial`, `agent-refactor`, `agent-updater`, `cleanup`, `code-hygiene`, `cohesion-repairer`, `conflict-auditor`, `conflict-resolution`, `format-converter`, `git-operations`, `navigator`, `output-compiler`, `primary-producer`, `quality-auditor`, `repo-liaison`, `security`, `technical-validator` |
 | `output-compiler` | `format-converter`, `orchestrator` | `format-converter`, `orchestrator`, `technical-validator` |
 | `primary-producer` | `auth-module-expert`, `content-enricher`, `orchestrator`, `quality-auditor`, `tasks-api-expert`, `technical-validator` | `cohesion-repairer`, `conflict-auditor`, `orchestrator`, `quality-auditor` |
 | `quality-auditor` | `cohesion-repairer`, `format-converter`, `orchestrator`, `primary-producer` | `cohesion-repairer`, `orchestrator`, `primary-producer` |
 | `repo-liaison` | `orchestrator` | `conflict-auditor`, `orchestrator`, `security` |
-| `security` | `code-hygiene`, `orchestrator`, `repo-liaison`, `tool-postgresql` | `orchestrator` |
+| `security` | `code-hygiene`, `git-operations`, `orchestrator`, `repo-liaison`, `tool-postgresql` | `orchestrator` |
 | `tasks-api-expert` | — | `adversarial`, `orchestrator`, `primary-producer` |
 | `team-builder` | — | — |
 | `technical-validator` | `conflict-auditor`, `content-enricher`, `orchestrator`, `output-compiler`, `tool-postgresql` | `conflict-auditor`, `orchestrator`, `primary-producer` |
@@ -253,12 +264,13 @@ digraph "WebAppBackend Agent Team" {
     "conflict-resolution" [label="Conflict Resolution", fillcolor="#e8e8ff"];
     "content-enricher" [label="Content Enricher", fillcolor="#f5f5f5"];
     "format-converter" [label="Format Converter", fillcolor="#e8ffe8"];
+    "git-operations" [label="Git Operations", fillcolor="#e8e8ff"];
     "navigator" [label="Navigator", fillcolor="#e8e8ff"];
     "orchestrator" [label="Orchestrator", fillcolor="#e8e8ff"];
     "output-compiler" [label="Output Compiler", fillcolor="#e8ffe8"];
     "primary-producer" [label="Primary Producer", fillcolor="#e8ffe8"];
     "quality-auditor" [label="Quality Auditor", fillcolor="#e8ffe8"];
-    "repo-liaison" [label="Repo Liaison", fillcolor="#f5f5f5"];
+    "repo-liaison" [label="Repo Liaison", fillcolor="#e8e8ff"];
     "security" [label="Security", fillcolor="#e8e8ff"];
     "tasks-api-expert" [label="Tasks API Expert", fillcolor="#fff8e8"];
     "team-builder" [label="Team Builder", fillcolor="#e8e8ff"];
@@ -281,6 +293,7 @@ digraph "WebAppBackend Agent Team" {
     "orchestrator" -> "agent-updater" [style=solid, label="Update Agent Docs"];
     "orchestrator" -> "agent-refactor" [style=solid, label="Refactor Agent Docs"];
     "orchestrator" -> "repo-liaison" [style=solid, label="Cross-Repository Liaison"];
+    "orchestrator" -> "git-operations" [style=solid, label="Git Operations"];
     "navigator" -> "orchestrator" [style=solid, label="Return to Orchestrator"];
     "security" -> "orchestrator" [style=solid, label="Return to Orchestrator"];
     "code-hygiene" -> "security" [style=solid, label="Security Clearance (for Deletions)"];
@@ -298,6 +311,7 @@ digraph "WebAppBackend Agent Team" {
     "conflict-resolution" -> "agent-updater" [style=solid, label="Update Agent Docs"];
     "cleanup" -> "orchestrator" [style=solid, label="Return to Orchestrator"];
     "agent-updater" -> "agent-refactor" [style=solid, label="Refactor Agent Docs"];
+    "agent-updater" -> "adversarial" [style=solid, label="Run Adversarial Review"];
     "agent-updater" -> "conflict-auditor" [style=solid, label="Run Conflict Audit"];
     "agent-updater" -> "orchestrator" [style=solid, label="Return to Orchestrator"];
     "agent-refactor" -> "conflict-auditor" [style=solid, label="Run Conflict Audit"];
@@ -305,6 +319,10 @@ digraph "WebAppBackend Agent Team" {
     "repo-liaison" -> "orchestrator" [style=solid, label="Return to Orchestrator"];
     "repo-liaison" -> "security" [style=solid, label="Security Review for Cross-Repo Write"];
     "repo-liaison" -> "conflict-auditor" [style=solid, label="Conflict Audit After Cross-Repo Change"];
+    "git-operations" -> "orchestrator" [style=solid, label="Return to Orchestrator"];
+    "git-operations" -> "security" [style=solid, label="Security Review"];
+    "git-operations" -> "conflict-resolution" [style=solid, label="Conflict Resolution"];
+    "git-operations" -> "agent-updater" [style=solid, label="Update Agent Docs"];
     "primary-producer" -> "cohesion-repairer" [style=solid, label="Cohesion Audit"];
     "primary-producer" -> "quality-auditor" [style=solid, label="Quality Audit"];
     "primary-producer" -> "conflict-auditor" [style=solid, label="Conflict Audit"];
@@ -457,6 +475,16 @@ digraph "WebAppBackend Agent Team" {
         "execute"
       ]
     },
+    "git-operations": {
+      "display_name": "Git Operations",
+      "agent_type": "governance",
+      "user_invokable": true,
+      "tools": [
+        "read",
+        "execute",
+        "search"
+      ]
+    },
     "navigator": {
       "display_name": "Navigator",
       "agent_type": "governance",
@@ -511,7 +539,7 @@ digraph "WebAppBackend Agent Team" {
     },
     "repo-liaison": {
       "display_name": "Repo Liaison",
-      "agent_type": "unknown",
+      "agent_type": "governance",
       "user_invokable": false,
       "tools": [
         "read",
@@ -680,6 +708,12 @@ digraph "WebAppBackend Agent Team" {
       "label": "Cross-Repository Liaison"
     },
     {
+      "source": "orchestrator",
+      "target": "git-operations",
+      "edge_type": "handoff",
+      "label": "Git Operations"
+    },
+    {
       "source": "navigator",
       "target": "orchestrator",
       "edge_type": "handoff",
@@ -801,6 +835,12 @@ digraph "WebAppBackend Agent Team" {
     },
     {
       "source": "agent-updater",
+      "target": "adversarial",
+      "edge_type": "handoff",
+      "label": "Run Adversarial Review"
+    },
+    {
+      "source": "agent-updater",
       "target": "conflict-auditor",
       "edge_type": "handoff",
       "label": "Run Conflict Audit"
@@ -810,6 +850,12 @@ digraph "WebAppBackend Agent Team" {
       "target": "orchestrator",
       "edge_type": "handoff",
       "label": "Return to Orchestrator"
+    },
+    {
+      "source": "agent-updater",
+      "target": "adversarial",
+      "edge_type": "agents-list",
+      "label": null
     },
     {
       "source": "agent-updater",
@@ -858,6 +904,30 @@ digraph "WebAppBackend Agent Team" {
       "target": "conflict-auditor",
       "edge_type": "handoff",
       "label": "Conflict Audit After Cross-Repo Change"
+    },
+    {
+      "source": "git-operations",
+      "target": "orchestrator",
+      "edge_type": "handoff",
+      "label": "Return to Orchestrator"
+    },
+    {
+      "source": "git-operations",
+      "target": "security",
+      "edge_type": "handoff",
+      "label": "Security Review"
+    },
+    {
+      "source": "git-operations",
+      "target": "conflict-resolution",
+      "edge_type": "handoff",
+      "label": "Conflict Resolution"
+    },
+    {
+      "source": "git-operations",
+      "target": "agent-updater",
+      "edge_type": "handoff",
+      "label": "Update Agent Docs"
     },
     {
       "source": "primary-producer",
@@ -1177,6 +1247,7 @@ digraph "WebAppBackend Agent Team" {
       "conflict-auditor",
       "conflict-resolution",
       "format-converter",
+      "git-operations",
       "navigator",
       "output-compiler",
       "primary-producer",
@@ -1216,6 +1287,7 @@ digraph "WebAppBackend Agent Team" {
       "orchestrator"
     ],
     "agent-updater": [
+      "adversarial",
       "agent-refactor",
       "conflict-auditor",
       "orchestrator"
@@ -1226,6 +1298,12 @@ digraph "WebAppBackend Agent Team" {
     ],
     "repo-liaison": [
       "conflict-auditor",
+      "orchestrator",
+      "security"
+    ],
+    "git-operations": [
+      "agent-updater",
+      "conflict-resolution",
       "orchestrator",
       "security"
     ],

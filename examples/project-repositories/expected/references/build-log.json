@@ -1,0 +1,461 @@
+{
+  "schema_version": "1.2",
+  "project_name": "ProjectRepositories",
+  "framework": "copilot-vscode",
+  "project_type": "mixed",
+  "archetypes": [
+    "primary-producer",
+    "quality-auditor",
+    "cohesion-repairer",
+    "style-guardian",
+    "technical-validator",
+    "format-converter",
+    "reference-manager",
+    "output-compiler",
+    "visual-designer"
+  ],
+  "components": [
+    "crisis-credit-allocation",
+    "fed-response-dag",
+    "prairie-prosperity",
+    "sugarscape",
+    "visualize-energy-data"
+  ],
+  "files_written": [
+    "project-repositories/expected/orchestrator.agent.md",
+    "project-repositories/expected/navigator.agent.md",
+    "project-repositories/expected/security.agent.md",
+    "project-repositories/expected/code-hygiene.agent.md",
+    "project-repositories/expected/adversarial.agent.md",
+    "project-repositories/expected/conflict-auditor.agent.md",
+    "project-repositories/expected/conflict-resolution.agent.md",
+    "project-repositories/expected/cleanup.agent.md",
+    "project-repositories/expected/agent-updater.agent.md",
+    "project-repositories/expected/agent-refactor.agent.md",
+    "project-repositories/expected/repo-liaison.agent.md",
+    "project-repositories/expected/git-operations.agent.md",
+    "project-repositories/expected/primary-producer.agent.md",
+    "project-repositories/expected/quality-auditor.agent.md",
+    "project-repositories/expected/cohesion-repairer.agent.md",
+    "project-repositories/expected/style-guardian.agent.md",
+    "project-repositories/expected/technical-validator.agent.md",
+    "project-repositories/expected/format-converter.agent.md",
+    "project-repositories/expected/reference-manager.agent.md",
+    "project-repositories/expected/output-compiler.agent.md",
+    "project-repositories/expected/visual-designer.agent.md",
+    "project-repositories/expected/tool-sqlite.agent.md",
+    "project-repositories/expected/references/ref-jupyter-reference.md",
+    "project-repositories/expected/references/ref-pandas-reference.md",
+    "project-repositories/expected/references/ref-numpy-reference.md",
+    "project-repositories/expected/references/ref-matplotlib-reference.md",
+    "project-repositories/expected/references/ref-plotly-reference.md",
+    "project-repositories/expected/references/ref-pandas-datareader-reference.md",
+    "project-repositories/expected/references/ref-linearmodels-reference.md",
+    "project-repositories/expected/references/code-hygiene-rules.reference.md",
+    "project-repositories/expected/references/security-vulnerability-watch.reference.md",
+    "project-repositories/expected/references/security-vulnerability-watch.json",
+    "project-repositories/expected/references/adjacent-repos.md",
+    "project-repositories/expected/references/github-workflows-merge.reference.md",
+    "project-repositories/expected/crisis-credit-allocation-expert.agent.md",
+    "project-repositories/expected/fed-response-dag-expert.agent.md",
+    "project-repositories/expected/prairie-prosperity-expert.agent.md",
+    "project-repositories/expected/sugarscape-expert.agent.md",
+    "project-repositories/expected/visualize-energy-data-expert.agent.md",
+    "project-repositories/copilot-instructions.md",
+    "project-repositories/expected/team-builder.agent.md",
+    "project-repositories/expected/SETUP-REQUIRED.md",
+    "project-repositories/expected/content-enricher.agent.md",
+    "project-repositories/expected/references/pipeline-graph.md"
+  ],
+  "manual_required": 2,
+  "template_hashes": {
+    "universal/orchestrator.template.md": "d15889eb9861cb21",
+    "universal/navigator.template.md": "9db306df5d5700c2",
+    "universal/security.template.md": "721275ff2afdcc12",
+    "universal/code-hygiene.template.md": "df4e5770cbe4e525",
+    "universal/adversarial.template.md": "78de0d3f3735c1f8",
+    "universal/conflict-auditor.template.md": "7aed52f8a607d1a3",
+    "universal/conflict-resolution.template.md": "a30ff077e5a03ce9",
+    "universal/cleanup.template.md": "0c005812c2b52dd8",
+    "universal/agent-updater.template.md": "3cc2c782e142f0b4",
+    "universal/agent-refactor.template.md": "a9717cc56c35f4ac",
+    "universal/repo-liaison.template.md": "f3ab2dffbbbb29ff",
+    "universal/git-operations.template.md": "b09209faaf14b17c",
+    "domain/primary-producer.template.md": "c128e8f2fb52885f",
+    "domain/quality-auditor.template.md": "5adfc79b00290c06",
+    "domain/cohesion-repairer.template.md": "795b8c18b94827fc",
+    "domain/style-guardian.template.md": "919e2e8d6cd90721",
+    "domain/technical-validator.template.md": "47a48583cf212303",
+    "domain/format-converter.template.md": "ecf8c801f1d66dab",
+    "domain/reference-manager.template.md": "f7538df16abbbba8",
+    "domain/output-compiler.template.md": "fd90f3a13765386a",
+    "domain/visual-designer.template.md": "cae39ee7b6d167f4",
+    "domain/tool-database.template.md": "7016d9a333e41305",
+    "domain/tool-reference.template.md": "cf44c4bf906ba8b8",
+    "domain/code-hygiene-rules-reference.template.md": "d8591cae76d9bbad",
+    "universal/security-vulnerability-watch.reference.template.md": "12a588ab75ae5139",
+    "universal/security-vulnerability-watch.json.template": "ebcec1b04ad46caa",
+    "universal/adjacent-repos.reference.template.md": "72e5d6b6b18924b7",
+    "universal/github-workflows-merge.reference.template.md": "9a85c14fca008010",
+    "workstream-expert.template.md": "a03699e3caabb58c",
+    "copilot-instructions.template.md": "4c7f29eeafd673e2",
+    "builder/team-builder-copilot-vscode.template.md": "6a0e998c5ce278f2",
+    "domain/content-enricher.template.md": "2dc5e25c4606657b"
+  },
+  "output_files_map": [
+    {
+      "path": "orchestrator.agent.md",
+      "template": "universal/orchestrator.template.md",
+      "type": "agent",
+      "component_slug": null
+    },
+    {
+      "path": "navigator.agent.md",
+      "template": "universal/navigator.template.md",
+      "type": "agent",
+      "component_slug": null
+    },
+    {
+      "path": "security.agent.md",
+      "template": "universal/security.template.md",
+      "type": "agent",
+      "component_slug": null
+    },
+    {
+      "path": "code-hygiene.agent.md",
+      "template": "universal/code-hygiene.template.md",
+      "type": "agent",
+      "component_slug": null
+    },
+    {
+      "path": "adversarial.agent.md",
+      "template": "universal/adversarial.template.md",
+      "type": "agent",
+      "component_slug": null
+    },
+    {
+      "path": "conflict-auditor.agent.md",
+      "template": "universal/conflict-auditor.template.md",
+      "type": "agent",
+      "component_slug": null
+    },
+    {
+      "path": "conflict-resolution.agent.md",
+      "template": "universal/conflict-resolution.template.md",
+      "type": "agent",
+      "component_slug": null
+    },
+    {
+      "path": "cleanup.agent.md",
+      "template": "universal/cleanup.template.md",
+      "type": "agent",
+      "component_slug": null
+    },
+    {
+      "path": "agent-updater.agent.md",
+      "template": "universal/agent-updater.template.md",
+      "type": "agent",
+      "component_slug": null
+    },
+    {
+      "path": "agent-refactor.agent.md",
+      "template": "universal/agent-refactor.template.md",
+      "type": "agent",
+      "component_slug": null
+    },
+    {
+      "path": "repo-liaison.agent.md",
+      "template": "universal/repo-liaison.template.md",
+      "type": "agent",
+      "component_slug": null
+    },
+    {
+      "path": "git-operations.agent.md",
+      "template": "universal/git-operations.template.md",
+      "type": "agent",
+      "component_slug": null
+    },
+    {
+      "path": "primary-producer.agent.md",
+      "template": "domain/primary-producer.template.md",
+      "type": "agent",
+      "component_slug": null
+    },
+    {
+      "path": "quality-auditor.agent.md",
+      "template": "domain/quality-auditor.template.md",
+      "type": "agent",
+      "component_slug": null
+    },
+    {
+      "path": "cohesion-repairer.agent.md",
+      "template": "domain/cohesion-repairer.template.md",
+      "type": "agent",
+      "component_slug": null
+    },
+    {
+      "path": "style-guardian.agent.md",
+      "template": "domain/style-guardian.template.md",
+      "type": "agent",
+      "component_slug": null
+    },
+    {
+      "path": "technical-validator.agent.md",
+      "template": "domain/technical-validator.template.md",
+      "type": "agent",
+      "component_slug": null
+    },
+    {
+      "path": "format-converter.agent.md",
+      "template": "domain/format-converter.template.md",
+      "type": "agent",
+      "component_slug": null
+    },
+    {
+      "path": "reference-manager.agent.md",
+      "template": "domain/reference-manager.template.md",
+      "type": "agent",
+      "component_slug": null
+    },
+    {
+      "path": "output-compiler.agent.md",
+      "template": "domain/output-compiler.template.md",
+      "type": "agent",
+      "component_slug": null
+    },
+    {
+      "path": "visual-designer.agent.md",
+      "template": "domain/visual-designer.template.md",
+      "type": "agent",
+      "component_slug": null
+    },
+    {
+      "path": "tool-sqlite.agent.md",
+      "template": "domain/tool-database.template.md",
+      "fallback_template": "domain/tool-specific.template.md",
+      "type": "agent",
+      "component_slug": null
+    },
+    {
+      "path": "references/ref-jupyter-reference.md",
+      "template": "domain/tool-reference.template.md",
+      "type": "reference",
+      "component_slug": null
+    },
+    {
+      "path": "references/ref-pandas-reference.md",
+      "template": "domain/tool-reference.template.md",
+      "type": "reference",
+      "component_slug": null
+    },
+    {
+      "path": "references/ref-numpy-reference.md",
+      "template": "domain/tool-reference.template.md",
+      "type": "reference",
+      "component_slug": null
+    },
+    {
+      "path": "references/ref-matplotlib-reference.md",
+      "template": "domain/tool-reference.template.md",
+      "type": "reference",
+      "component_slug": null
+    },
+    {
+      "path": "references/ref-plotly-reference.md",
+      "template": "domain/tool-reference.template.md",
+      "type": "reference",
+      "component_slug": null
+    },
+    {
+      "path": "references/ref-pandas-datareader-reference.md",
+      "template": "domain/tool-reference.template.md",
+      "type": "reference",
+      "component_slug": null
+    },
+    {
+      "path": "references/ref-linearmodels-reference.md",
+      "template": "domain/tool-reference.template.md",
+      "type": "reference",
+      "component_slug": null
+    },
+    {
+      "path": "references/code-hygiene-rules.reference.md",
+      "template": "domain/code-hygiene-rules-reference.template.md",
+      "type": "reference",
+      "component_slug": null
+    },
+    {
+      "path": "references/security-vulnerability-watch.reference.md",
+      "template": "universal/security-vulnerability-watch.reference.template.md",
+      "type": "artifact",
+      "component_slug": null
+    },
+    {
+      "path": "references/security-vulnerability-watch.json",
+      "template": "universal/security-vulnerability-watch.json.template",
+      "type": "artifact",
+      "component_slug": null
+    },
+    {
+      "path": "references/adjacent-repos.md",
+      "template": "universal/adjacent-repos.reference.template.md",
+      "type": "artifact",
+      "component_slug": null
+    },
+    {
+      "path": "references/github-workflows-merge.reference.md",
+      "template": "universal/github-workflows-merge.reference.template.md",
+      "type": "artifact",
+      "component_slug": null
+    },
+    {
+      "path": "crisis-credit-allocation-expert.agent.md",
+      "template": "workstream-expert.template.md",
+      "type": "agent",
+      "component_slug": "crisis-credit-allocation"
+    },
+    {
+      "path": "fed-response-dag-expert.agent.md",
+      "template": "workstream-expert.template.md",
+      "type": "agent",
+      "component_slug": "fed-response-dag"
+    },
+    {
+      "path": "prairie-prosperity-expert.agent.md",
+      "template": "workstream-expert.template.md",
+      "type": "agent",
+      "component_slug": "prairie-prosperity"
+    },
+    {
+      "path": "sugarscape-expert.agent.md",
+      "template": "workstream-expert.template.md",
+      "type": "agent",
+      "component_slug": "sugarscape"
+    },
+    {
+      "path": "visualize-energy-data-expert.agent.md",
+      "template": "workstream-expert.template.md",
+      "type": "agent",
+      "component_slug": "visualize-energy-data"
+    },
+    {
+      "path": "../copilot-instructions.md",
+      "template": "copilot-instructions.template.md",
+      "type": "instructions",
+      "component_slug": null
+    },
+    {
+      "path": "team-builder.agent.md",
+      "template": "builder/team-builder-copilot-vscode.template.md",
+      "type": "builder",
+      "component_slug": null
+    },
+    {
+      "path": "SETUP-REQUIRED.md",
+      "template": "",
+      "type": "setup-required",
+      "component_slug": null
+    },
+    {
+      "path": "references/pipeline-graph.md",
+      "template": "",
+      "type": "graph",
+      "component_slug": null
+    },
+    {
+      "path": "content-enricher.agent.md",
+      "template": "domain/content-enricher.template.md",
+      "type": "agent",
+      "component_slug": null
+    }
+  ],
+  "agent_slug_list": [
+    "orchestrator",
+    "navigator",
+    "security",
+    "code-hygiene",
+    "adversarial",
+    "conflict-auditor",
+    "conflict-resolution",
+    "cleanup",
+    "agent-updater",
+    "agent-refactor",
+    "repo-liaison",
+    "git-operations",
+    "primary-producer",
+    "quality-auditor",
+    "cohesion-repairer",
+    "style-guardian",
+    "technical-validator",
+    "format-converter",
+    "reference-manager",
+    "output-compiler",
+    "visual-designer",
+    "tool-sqlite",
+    "crisis-credit-allocation-expert",
+    "fed-response-dag-expert",
+    "prairie-prosperity-expert",
+    "sugarscape-expert",
+    "visualize-energy-data-expert"
+  ],
+  "governance_agents": [
+    "navigator",
+    "security",
+    "code-hygiene",
+    "adversarial",
+    "conflict-auditor",
+    "conflict-resolution",
+    "cleanup",
+    "agent-updater",
+    "agent-refactor",
+    "repo-liaison",
+    "git-operations"
+  ],
+  "manifest_fingerprint": "a4ac8e8dacdda002",
+  "file_hashes": {
+    "orchestrator.agent.md": "6876adeb1c9e4922",
+    "navigator.agent.md": "b13afc146998deb8",
+    "security.agent.md": "dd1925fdb07fc430",
+    "code-hygiene.agent.md": "37f6dce5d4a3d7a0",
+    "adversarial.agent.md": "4af7824030ce3a28",
+    "conflict-auditor.agent.md": "49596600105a505b",
+    "conflict-resolution.agent.md": "3733bea7a1d92d42",
+    "cleanup.agent.md": "f8a91a01bafc573b",
+    "agent-updater.agent.md": "1f5b575fb985c5de",
+    "agent-refactor.agent.md": "9811b5d1310fca91",
+    "repo-liaison.agent.md": "c23090036caff8e4",
+    "git-operations.agent.md": "8b293d907452134a",
+    "primary-producer.agent.md": "338c248959c8a970",
+    "quality-auditor.agent.md": "9eb96c5da21ad1f8",
+    "cohesion-repairer.agent.md": "942f5b679afb71b6",
+    "style-guardian.agent.md": "336221e350663a9a",
+    "technical-validator.agent.md": "a01630355335b188",
+    "format-converter.agent.md": "58fc07af6ed55541",
+    "reference-manager.agent.md": "49f7794e6c4be0d2",
+    "output-compiler.agent.md": "71e30c0cd3a28475",
+    "visual-designer.agent.md": "d95f6f952c6f23a0",
+    "tool-sqlite.agent.md": "2e0d42b76926c4dc",
+    "references/ref-jupyter-reference.md": "67a16c046bbf9e98",
+    "references/ref-pandas-reference.md": "44e72604ea24414b",
+    "references/ref-numpy-reference.md": "d7c92712f0e04a6b",
+    "references/ref-matplotlib-reference.md": "f48a8906fbc70b59",
+    "references/ref-plotly-reference.md": "462b4dc80baf241d",
+    "references/ref-pandas-datareader-reference.md": "8ee56a3868559d32",
+    "references/ref-linearmodels-reference.md": "94700a20f7d59149",
+    "references/code-hygiene-rules.reference.md": "bac9bc08a85cf09a",
+    "references/security-vulnerability-watch.reference.md": "ad8f4629a1672ba9",
+    "references/security-vulnerability-watch.json": "dff9322b3c56e1d0",
+    "references/adjacent-repos.md": "2403e186160d7cc8",
+    "references/github-workflows-merge.reference.md": "75f603ddb4402ef1",
+    "crisis-credit-allocation-expert.agent.md": "cbf58eea341fe8eb",
+    "fed-response-dag-expert.agent.md": "fda5544cadee6807",
+    "prairie-prosperity-expert.agent.md": "8c246bed87db72c9",
+    "sugarscape-expert.agent.md": "9c3453c7c078f591",
+    "visualize-energy-data-expert.agent.md": "ebd92baa04eb54db",
+    "../copilot-instructions.md": "b94dd6ffc952bcf6",
+    "team-builder.agent.md": "6a0e998c5ce278f2",
+    "SETUP-REQUIRED.md": "67136a4c5134a627",
+    "content-enricher.agent.md": "e79f98638371c4b2",
+    "references/pipeline-graph.md": "4ad827f91c5327cb"
+  }
+}

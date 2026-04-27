@@ -1,127 +1,135 @@
 {
   "schema_version": "1.0",
-  "generated_at": "2026-04-25T14:15:23.607379+00:00",
+  "generated_at": "2026-04-27T20:45:17.826782+00:00",
   "source_framework": "copilot-vscode",
   "target_framework": "claude",
-  "source_dir": "/Users/jamescaton/githubrepositories/agentteams/examples/project-repositories/expected",
+  "source_dir": "/Users/jamescaton/githubrepositories/agentteams/.github/agents",
   "source_hashes": [
     {
-      "path": "expected/adversarial.agent.md",
-      "sha256": "4af7824030ce3a289666c16812dcf8e9e49cdb79743a6c0b2c64b177f8d67a13"
+      "path": "agents/_build-description.json",
+      "sha256": "86161560ae2444017f4a697985ed3fc347f5d9683b0dee1540e51fdfe759bea3"
     },
     {
-      "path": "expected/agent-refactor.agent.md",
-      "sha256": "9811b5d1310fca91b18afa6467ab0aee69b0a3de5063998a3ed5d5d3c32d2071"
+      "path": "agents/adversarial.agent.md",
+      "sha256": "6111762862225e6ecdb67aa1f4e04b8e4bb75f3be0862fc300a872b2c8b73f99"
     },
     {
-      "path": "expected/agent-updater.agent.md",
-      "sha256": "4cd0ca7395044a8d06f7ae64ff8a4d6807eabaef1ac40c1640146cc96fd7a756"
+      "path": "agents/agent-refactor.agent.md",
+      "sha256": "834aec7230b5d9222806c4592f85947349e8a14f0af2b9d4d0613286b25e3d81"
     },
     {
-      "path": "expected/cleanup.agent.md",
-      "sha256": "f8a91a01bafc573bdedfd8c641aefbd47cce92cae509bf4f91483ec84a1adb55"
+      "path": "agents/agent-updater.agent.md",
+      "sha256": "1b6d43fd25581d484d4e9c37034ad2d788fa85e3682ebed67f1c112e118b01ec"
     },
     {
-      "path": "expected/code-hygiene.agent.md",
-      "sha256": "37f6dce5d4a3d7a0eb72be1398572d24c42643665eb9ea47b95a56bc80d6dc64"
+      "path": "agents/cleanup.agent.md",
+      "sha256": "40ec2bf446d2157d81721487ac8dc3b91f7c4a3ac426913eaba000dd947d4781"
     },
     {
-      "path": "expected/cohesion-repairer.agent.md",
-      "sha256": "942f5b679afb71b63f74bd9a845122d94c7fffc2aed2bfaf89ee2c5af8892354"
+      "path": "agents/cli-and-examples-expert.agent.md",
+      "sha256": "e6ac7f7bd7db94fc393879bb54176ba760377a426053410a1d52833f26a05fc6"
     },
     {
-      "path": "expected/conflict-auditor.agent.md",
-      "sha256": "94c33a7f24e84e0301648f7f406465c7a98e35b5d62b0f7a21fe143af9cafd6e"
+      "path": "agents/code-hygiene.agent.md",
+      "sha256": "5657f6a95d3051060940e09a1278a5a87fcc7fc6d4a9bb0480564c15c4ae9f2a"
     },
     {
-      "path": "expected/conflict-resolution.agent.md",
-      "sha256": "3733bea7a1d92d42f9e0132fa10f2c9f8ff784134dd091c4b556d142edb59bdf"
+      "path": "agents/conflict-auditor.agent.md",
+      "sha256": "459edb6d0b3813be9acca18a1555a94d0933afc27ff15e3b8c716a77d867806b"
     },
     {
-      "path": "expected/content-enricher.agent.md",
-      "sha256": "e79f98638371c4b2edf808de6a1d87bedb57f7c53ba9579ec45a503a3ed75718"
+      "path": "agents/conflict-resolution.agent.md",
+      "sha256": "65253f0edb73cdd72f3573d36fbf91bce5619f2996433ffe92adca57425f08c3"
     },
     {
-      "path": "expected/crisis-credit-allocation-expert.agent.md",
-      "sha256": "485b5c5857eccebef31012c4dfb1ed31581becca51a67ad2a94453d30165f123"
+      "path": "agents/content-enricher.agent.md",
+      "sha256": "7fe5d1ad77e13d114adc5f1e5be993e059ea2cafa10b01cb2a48f3036a9342eb"
     },
     {
-      "path": "expected/fed-response-dag-expert.agent.md",
-      "sha256": "6a2190e9f0b542c8110def214bb89da98c744208cd3b84488208d38671b09b7d"
+      "path": "agents/format-converter.agent.md",
+      "sha256": "bcd64b5361f89fa8de270c8f2a85236546ad01d67166cf03743e31911d8be697"
     },
     {
-      "path": "expected/format-converter.agent.md",
-      "sha256": "58fc07af6ed55541ec91409ffae71da85dd1253e959cf0853ff945434548f7c4"
+      "path": "agents/framework-adapters-expert.agent.md",
+      "sha256": "a31801a3748c95a6782fbbb7436875c59c8fb83092fee98bd2589ab7c8ed400d"
     },
     {
-      "path": "expected/navigator.agent.md",
-      "sha256": "6ba2f4be27e54e4c4679d7273c8c9d11331c85edc54e98ce28db321bd874899f"
+      "path": "agents/git-operations.agent.md",
+      "sha256": "bc03339f808f5236c836b4c303f7995482708425e3cf63e8da6f19616894f099"
     },
     {
-      "path": "expected/orchestrator.agent.md",
-      "sha256": "9b2427eae1935fa12610cd9adda379b03513c9a083e23b6c065bf9c3a401a072"
+      "path": "agents/module-doc-author.agent.md",
+      "sha256": "552db71f8ee8e2ce821523970a6bf3dd4bd9e1cd463622db17ca691872bb2176"
     },
     {
-      "path": "expected/output-compiler.agent.md",
-      "sha256": "71e30c0cd3a2847573fcaccd9bc6f0336cf14b22a2495558ab52f29ee37b72f9"
+      "path": "agents/module-doc-expert.agent.md",
+      "sha256": "0e314e03de5e61af26fd272731588fce66f554b0c03f9cb5bd5700b667134ade"
     },
     {
-      "path": "expected/prairie-prosperity-expert.agent.md",
-      "sha256": "360a04aa5db211be1dff9098a3498011da0869ca277d65b708c7b3711d11717f"
+      "path": "agents/module-doc-validator.agent.md",
+      "sha256": "8b12f85457c59c8020dfdaf57e3c3d9f7567ba1e8d5fe675d905241bf3d3d273"
     },
     {
-      "path": "expected/primary-producer.agent.md",
-      "sha256": "338c248959c8a970025a18d1c41a37a9cbfd6569299114a45c742df7068004a0"
+      "path": "agents/navigator.agent.md",
+      "sha256": "9d1c6545b8f0f458c301aed86baa8912b4b2fbc5fbaeae808eebeca3fbac14b2"
     },
     {
-      "path": "expected/quality-auditor.agent.md",
-      "sha256": "9eb96c5da21ad1f8fed7092ab8e036101085ad5e648cb7a5478947a67293b94d"
+      "path": "agents/orchestrator.agent.md",
+      "sha256": "31ec94e1b75fa5a9f165c60050dab7fef6a5ef5945e44e2a9003134dc9fbe728"
     },
     {
-      "path": "expected/reference-manager.agent.md",
-      "sha256": "49f7794e6c4be0d28983631e7e9e84f3da70a6026594064c26256f9067e5b2a2"
+      "path": "agents/output-compiler.agent.md",
+      "sha256": "c0b10c6d7d290a2eb67c44b1f6dd0ace021bebe565341f24192e6698df6ee50c"
     },
     {
-      "path": "expected/repo-liaison.agent.md",
-      "sha256": "f326ab20876c8f89a97752e9589d12bf2d4473e1670dbf2f4f75ae3864c92e70"
+      "path": "agents/pipeline-core-expert.agent.md",
+      "sha256": "bbfa77e37e82b4382c8fd599267d178bcc0cc665efee3c2bb65f56da47d44d64"
     },
     {
-      "path": "expected/security.agent.md",
-      "sha256": "a7da4a7fb66b4cbbafc2c4dbe6765128b3e917c6335d7efa919f24fd6c68340e"
+      "path": "agents/primary-producer.agent.md",
+      "sha256": "31121ae8a9c8b26bc7aafd039e2cba23f18dca1c20914c83f470954c23063419"
     },
     {
-      "path": "expected/style-guardian.agent.md",
-      "sha256": "336221e350663a9a8ef3ffc6f0ffc9720c3eacacfe23dc975c72e39742f90218"
+      "path": "agents/quality-auditor.agent.md",
+      "sha256": "5bd125b39f558100ac8893a05d1897faec4cb06d67a68126a795013af17ab44d"
     },
     {
-      "path": "expected/sugarscape-expert.agent.md",
-      "sha256": "dcdf6ce0a75ce271eeac0fbe3115466be0678223849a3642b1c545d5bab7e9e6"
+      "path": "agents/reference-manager.agent.md",
+      "sha256": "4cb48bbcc262fdfc1cdaa19c3dcfc5934d1743ededc15bca2232b0e87d730c08"
     },
     {
-      "path": "expected/team-builder.agent.md",
+      "path": "agents/repo-liaison.agent.md",
+      "sha256": "441a6f9b507f54fa9e4b422be0e42a686179e55eecde61568bb6f7bd3750baf1"
+    },
+    {
+      "path": "agents/schemas-expert.agent.md",
+      "sha256": "7bbd0c79d2296347371ef07aa039010f659df5e847fe9e90e0434aade7ac3eb0"
+    },
+    {
+      "path": "agents/security.agent.md",
+      "sha256": "1669b32a971f8206ec66055f9e2969b0e5985c9d77a76d86d1f5b977a0753081"
+    },
+    {
+      "path": "agents/team-builder.agent.md",
       "sha256": "6a0e998c5ce278f2623ba7d50b9f889e7dd286436b61bc51778b608b058c5268"
     },
     {
-      "path": "expected/technical-validator.agent.md",
-      "sha256": "4e9fc324f4d407392b748c6b4fc55aa8e9df4a03bd1d73e68885f71bfffaa71e"
+      "path": "agents/technical-validator.agent.md",
+      "sha256": "b8cc6c717dad5f90734ba232e3c510dc5e57004fb147506d103c0e9500809244"
     },
     {
-      "path": "expected/tool-sqlite.agent.md",
-      "sha256": "7318f54156941bfebca04c0341fd09f997726f884f6339ba494003973c998fc4"
+      "path": "agents/template-library-expert.agent.md",
+      "sha256": "4dc69f7d0c304ac7c68a9a63ad6f836b1ccbd15b5d026188093404d353e87ad1"
     },
     {
-      "path": "expected/visual-designer.agent.md",
-      "sha256": "d95f6f952c6f23a0b7134c37c1efe033c2f215263f3674a9fa212b98f1ca7d26"
-    },
-    {
-      "path": "expected/visualize-energy-data-expert.agent.md",
-      "sha256": "0fbf2a5a7353d45410b94685ca321d70aeb8570070fa211a9a3a222a1cc97edb"
+      "path": "agents/test-suite-expert.agent.md",
+      "sha256": "df98af1aec2143d03bfb76a5c39e3fc6e7918afb2dac01530ae9a6b9636bd4df"
     },
     {
       "path": "copilot-instructions.md",
-      "sha256": "d1131d3f40ed4ef873365daceb99059797ad1ba00a2537014e63b66fa8b14e8c"
+      "sha256": "3975dce79ad3cdf577d5952c0804d48337fb3e1dbd12ab3cc7688c106d85e675"
     }
   ],
-  "inventory_count": 28,
+  "inventory_count": 29,
   "bridge_version": "1"
 }

@@ -1,0 +1,416 @@
+{
+  "schema_version": "1.2",
+  "project_name": "ResearchPaperProject",
+  "framework": "copilot-vscode",
+  "project_type": "mixed",
+  "archetypes": [
+    "primary-producer",
+    "quality-auditor",
+    "cohesion-repairer",
+    "style-guardian",
+    "technical-validator",
+    "format-converter",
+    "reference-manager",
+    "output-compiler",
+    "visual-designer",
+    "module-doc-author",
+    "module-doc-validator",
+    "tool-doc-researcher"
+  ],
+  "components": [
+    "ch01-introduction",
+    "ch02-literature"
+  ],
+  "files_written": [
+    "research-project/expected/orchestrator.agent.md",
+    "research-project/expected/navigator.agent.md",
+    "research-project/expected/security.agent.md",
+    "research-project/expected/code-hygiene.agent.md",
+    "research-project/expected/adversarial.agent.md",
+    "research-project/expected/conflict-auditor.agent.md",
+    "research-project/expected/conflict-resolution.agent.md",
+    "research-project/expected/cleanup.agent.md",
+    "research-project/expected/agent-updater.agent.md",
+    "research-project/expected/agent-refactor.agent.md",
+    "research-project/expected/repo-liaison.agent.md",
+    "research-project/expected/git-operations.agent.md",
+    "research-project/expected/primary-producer.agent.md",
+    "research-project/expected/quality-auditor.agent.md",
+    "research-project/expected/cohesion-repairer.agent.md",
+    "research-project/expected/style-guardian.agent.md",
+    "research-project/expected/technical-validator.agent.md",
+    "research-project/expected/format-converter.agent.md",
+    "research-project/expected/reference-manager.agent.md",
+    "research-project/expected/output-compiler.agent.md",
+    "research-project/expected/visual-designer.agent.md",
+    "research-project/expected/module-doc-author.agent.md",
+    "research-project/expected/module-doc-validator.agent.md",
+    "research-project/expected/tool-doc-researcher.agent.md",
+    "research-project/expected/tool-pandoc.agent.md",
+    "research-project/expected/references/ref-bibtex-reference.md",
+    "research-project/expected/references/code-hygiene-rules.reference.md",
+    "research-project/expected/references/security-vulnerability-watch.reference.md",
+    "research-project/expected/references/security-vulnerability-watch.json",
+    "research-project/expected/references/adjacent-repos.md",
+    "research-project/expected/references/github-workflows-merge.reference.md",
+    "research-project/expected/ch01-introduction-expert.agent.md",
+    "research-project/expected/ch02-literature-expert.agent.md",
+    "research-project/copilot-instructions.md",
+    "research-project/expected/team-builder.agent.md",
+    "research-project/expected/SETUP-REQUIRED.md",
+    "research-project/expected/content-enricher.agent.md",
+    "research-project/expected/references/pipeline-graph.md"
+  ],
+  "manual_required": 8,
+  "template_hashes": {
+    "universal/orchestrator.template.md": "d15889eb9861cb21",
+    "universal/navigator.template.md": "9db306df5d5700c2",
+    "universal/security.template.md": "721275ff2afdcc12",
+    "universal/code-hygiene.template.md": "df4e5770cbe4e525",
+    "universal/adversarial.template.md": "78de0d3f3735c1f8",
+    "universal/conflict-auditor.template.md": "7aed52f8a607d1a3",
+    "universal/conflict-resolution.template.md": "a30ff077e5a03ce9",
+    "universal/cleanup.template.md": "0c005812c2b52dd8",
+    "universal/agent-updater.template.md": "3cc2c782e142f0b4",
+    "universal/agent-refactor.template.md": "a9717cc56c35f4ac",
+    "universal/repo-liaison.template.md": "f3ab2dffbbbb29ff",
+    "universal/git-operations.template.md": "b09209faaf14b17c",
+    "domain/primary-producer.template.md": "c128e8f2fb52885f",
+    "domain/quality-auditor.template.md": "5adfc79b00290c06",
+    "domain/cohesion-repairer.template.md": "795b8c18b94827fc",
+    "domain/style-guardian.template.md": "919e2e8d6cd90721",
+    "domain/technical-validator.template.md": "47a48583cf212303",
+    "domain/format-converter.template.md": "ecf8c801f1d66dab",
+    "domain/reference-manager.template.md": "f7538df16abbbba8",
+    "domain/output-compiler.template.md": "fd90f3a13765386a",
+    "domain/visual-designer.template.md": "cae39ee7b6d167f4",
+    "domain/module-doc-author.template.md": "47df524eebb91e3b",
+    "domain/module-doc-validator.template.md": "1c0a4b65b200562f",
+    "domain/tool-doc-researcher.template.md": "ed54707800500bed",
+    "domain/tool-cli.template.md": "49dc4c644d8696e1",
+    "domain/tool-reference.template.md": "cf44c4bf906ba8b8",
+    "domain/code-hygiene-rules-reference.template.md": "d8591cae76d9bbad",
+    "universal/security-vulnerability-watch.reference.template.md": "12a588ab75ae5139",
+    "universal/security-vulnerability-watch.json.template": "ebcec1b04ad46caa",
+    "universal/adjacent-repos.reference.template.md": "72e5d6b6b18924b7",
+    "universal/github-workflows-merge.reference.template.md": "9a85c14fca008010",
+    "workstream-expert.template.md": "a03699e3caabb58c",
+    "copilot-instructions.template.md": "4c7f29eeafd673e2",
+    "builder/team-builder-copilot-vscode.template.md": "6a0e998c5ce278f2",
+    "domain/content-enricher.template.md": "2dc5e25c4606657b"
+  },
+  "output_files_map": [
+    {
+      "path": "orchestrator.agent.md",
+      "template": "universal/orchestrator.template.md",
+      "type": "agent",
+      "component_slug": null
+    },
+    {
+      "path": "navigator.agent.md",
+      "template": "universal/navigator.template.md",
+      "type": "agent",
+      "component_slug": null
+    },
+    {
+      "path": "security.agent.md",
+      "template": "universal/security.template.md",
+      "type": "agent",
+      "component_slug": null
+    },
+    {
+      "path": "code-hygiene.agent.md",
+      "template": "universal/code-hygiene.template.md",
+      "type": "agent",
+      "component_slug": null
+    },
+    {
+      "path": "adversarial.agent.md",
+      "template": "universal/adversarial.template.md",
+      "type": "agent",
+      "component_slug": null
+    },
+    {
+      "path": "conflict-auditor.agent.md",
+      "template": "universal/conflict-auditor.template.md",
+      "type": "agent",
+      "component_slug": null
+    },
+    {
+      "path": "conflict-resolution.agent.md",
+      "template": "universal/conflict-resolution.template.md",
+      "type": "agent",
+      "component_slug": null
+    },
+    {
+      "path": "cleanup.agent.md",
+      "template": "universal/cleanup.template.md",
+      "type": "agent",
+      "component_slug": null
+    },
+    {
+      "path": "agent-updater.agent.md",
+      "template": "universal/agent-updater.template.md",
+      "type": "agent",
+      "component_slug": null
+    },
+    {
+      "path": "agent-refactor.agent.md",
+      "template": "universal/agent-refactor.template.md",
+      "type": "agent",
+      "component_slug": null
+    },
+    {
+      "path": "repo-liaison.agent.md",
+      "template": "universal/repo-liaison.template.md",
+      "type": "agent",
+      "component_slug": null
+    },
+    {
+      "path": "git-operations.agent.md",
+      "template": "universal/git-operations.template.md",
+      "type": "agent",
+      "component_slug": null
+    },
+    {
+      "path": "primary-producer.agent.md",
+      "template": "domain/primary-producer.template.md",
+      "type": "agent",
+      "component_slug": null
+    },
+    {
+      "path": "quality-auditor.agent.md",
+      "template": "domain/quality-auditor.template.md",
+      "type": "agent",
+      "component_slug": null
+    },
+    {
+      "path": "cohesion-repairer.agent.md",
+      "template": "domain/cohesion-repairer.template.md",
+      "type": "agent",
+      "component_slug": null
+    },
+    {
+      "path": "style-guardian.agent.md",
+      "template": "domain/style-guardian.template.md",
+      "type": "agent",
+      "component_slug": null
+    },
+    {
+      "path": "technical-validator.agent.md",
+      "template": "domain/technical-validator.template.md",
+      "type": "agent",
+      "component_slug": null
+    },
+    {
+      "path": "format-converter.agent.md",
+      "template": "domain/format-converter.template.md",
+      "type": "agent",
+      "component_slug": null
+    },
+    {
+      "path": "reference-manager.agent.md",
+      "template": "domain/reference-manager.template.md",
+      "type": "agent",
+      "component_slug": null
+    },
+    {
+      "path": "output-compiler.agent.md",
+      "template": "domain/output-compiler.template.md",
+      "type": "agent",
+      "component_slug": null
+    },
+    {
+      "path": "visual-designer.agent.md",
+      "template": "domain/visual-designer.template.md",
+      "type": "agent",
+      "component_slug": null
+    },
+    {
+      "path": "module-doc-author.agent.md",
+      "template": "domain/module-doc-author.template.md",
+      "type": "agent",
+      "component_slug": null
+    },
+    {
+      "path": "module-doc-validator.agent.md",
+      "template": "domain/module-doc-validator.template.md",
+      "type": "agent",
+      "component_slug": null
+    },
+    {
+      "path": "tool-doc-researcher.agent.md",
+      "template": "domain/tool-doc-researcher.template.md",
+      "type": "agent",
+      "component_slug": null
+    },
+    {
+      "path": "tool-pandoc.agent.md",
+      "template": "domain/tool-cli.template.md",
+      "fallback_template": "domain/tool-specific.template.md",
+      "type": "agent",
+      "component_slug": null
+    },
+    {
+      "path": "references/ref-bibtex-reference.md",
+      "template": "domain/tool-reference.template.md",
+      "type": "reference",
+      "component_slug": null
+    },
+    {
+      "path": "references/code-hygiene-rules.reference.md",
+      "template": "domain/code-hygiene-rules-reference.template.md",
+      "type": "reference",
+      "component_slug": null
+    },
+    {
+      "path": "references/security-vulnerability-watch.reference.md",
+      "template": "universal/security-vulnerability-watch.reference.template.md",
+      "type": "artifact",
+      "component_slug": null
+    },
+    {
+      "path": "references/security-vulnerability-watch.json",
+      "template": "universal/security-vulnerability-watch.json.template",
+      "type": "artifact",
+      "component_slug": null
+    },
+    {
+      "path": "references/adjacent-repos.md",
+      "template": "universal/adjacent-repos.reference.template.md",
+      "type": "artifact",
+      "component_slug": null
+    },
+    {
+      "path": "references/github-workflows-merge.reference.md",
+      "template": "universal/github-workflows-merge.reference.template.md",
+      "type": "artifact",
+      "component_slug": null
+    },
+    {
+      "path": "ch01-introduction-expert.agent.md",
+      "template": "workstream-expert.template.md",
+      "type": "agent",
+      "component_slug": "ch01-introduction"
+    },
+    {
+      "path": "ch02-literature-expert.agent.md",
+      "template": "workstream-expert.template.md",
+      "type": "agent",
+      "component_slug": "ch02-literature"
+    },
+    {
+      "path": "../copilot-instructions.md",
+      "template": "copilot-instructions.template.md",
+      "type": "instructions",
+      "component_slug": null
+    },
+    {
+      "path": "team-builder.agent.md",
+      "template": "builder/team-builder-copilot-vscode.template.md",
+      "type": "builder",
+      "component_slug": null
+    },
+    {
+      "path": "SETUP-REQUIRED.md",
+      "template": "",
+      "type": "setup-required",
+      "component_slug": null
+    },
+    {
+      "path": "references/pipeline-graph.md",
+      "template": "",
+      "type": "graph",
+      "component_slug": null
+    },
+    {
+      "path": "content-enricher.agent.md",
+      "template": "domain/content-enricher.template.md",
+      "type": "agent",
+      "component_slug": null
+    }
+  ],
+  "agent_slug_list": [
+    "orchestrator",
+    "navigator",
+    "security",
+    "code-hygiene",
+    "adversarial",
+    "conflict-auditor",
+    "conflict-resolution",
+    "cleanup",
+    "agent-updater",
+    "agent-refactor",
+    "repo-liaison",
+    "git-operations",
+    "primary-producer",
+    "quality-auditor",
+    "cohesion-repairer",
+    "style-guardian",
+    "technical-validator",
+    "format-converter",
+    "reference-manager",
+    "output-compiler",
+    "visual-designer",
+    "module-doc-author",
+    "module-doc-validator",
+    "tool-doc-researcher",
+    "tool-pandoc",
+    "ch01-introduction-expert",
+    "ch02-literature-expert"
+  ],
+  "governance_agents": [
+    "navigator",
+    "security",
+    "code-hygiene",
+    "adversarial",
+    "conflict-auditor",
+    "conflict-resolution",
+    "cleanup",
+    "agent-updater",
+    "agent-refactor",
+    "repo-liaison",
+    "git-operations"
+  ],
+  "manifest_fingerprint": "01c728c8f3a1ee74",
+  "file_hashes": {
+    "orchestrator.agent.md": "00dc1f61d1803052",
+    "navigator.agent.md": "e2a5f38f270281dc",
+    "security.agent.md": "c2c84cac5f406c52",
+    "code-hygiene.agent.md": "9cac833ab886e822",
+    "adversarial.agent.md": "65e2c99f61819bac",
+    "conflict-auditor.agent.md": "ba18d96e6acff589",
+    "conflict-resolution.agent.md": "fd1e0e88105e2138",
+    "cleanup.agent.md": "6d047e4477d0d555",
+    "agent-updater.agent.md": "13ff5419942856c0",
+    "agent-refactor.agent.md": "ce9eb48ccd5b75e8",
+    "repo-liaison.agent.md": "97fa886befb318f2",
+    "git-operations.agent.md": "d6684cd48ea25c4e",
+    "primary-producer.agent.md": "ce9c3075294d667c",
+    "quality-auditor.agent.md": "f2478e28f7a9b33e",
+    "cohesion-repairer.agent.md": "ac07a4df33b69569",
+    "style-guardian.agent.md": "c7a535b022b066f6",
+    "technical-validator.agent.md": "33538d3e29e9b125",
+    "format-converter.agent.md": "fa7a52acdb8c9358",
+    "reference-manager.agent.md": "6749501f5e39eec0",
+    "output-compiler.agent.md": "d1a082462000f692",
+    "visual-designer.agent.md": "1d59cfd10e134a1f",
+    "module-doc-author.agent.md": "37604ed4402a829f",
+    "module-doc-validator.agent.md": "28f776f6c8628c27",
+    "tool-doc-researcher.agent.md": "a34a3115e130f67d",
+    "tool-pandoc.agent.md": "eefe3609f9025376",
+    "references/ref-bibtex-reference.md": "a411d3d560c5b6af",
+    "references/code-hygiene-rules.reference.md": "cc8d34d600d293c4",
+    "references/security-vulnerability-watch.reference.md": "81a2eaa68600039d",
+    "references/security-vulnerability-watch.json": "fcfddd95a160d089",
+    "references/adjacent-repos.md": "76c9e8e427b5cccc",
+    "references/github-workflows-merge.reference.md": "c710930284ddeeb2",
+    "ch01-introduction-expert.agent.md": "cb1b2793975e9517",
+    "ch02-literature-expert.agent.md": "8137dea7bccaddb0",
+    "../copilot-instructions.md": "5aa5ed8d69d125f4",
+    "team-builder.agent.md": "6a0e998c5ce278f2",
+    "SETUP-REQUIRED.md": "f438d9d9e86d7562",
+    "content-enricher.agent.md": "3dabbf87dfd249d3",
+    "references/pipeline-graph.md": "e3d7ab8e708df0a2"
+  }
+}

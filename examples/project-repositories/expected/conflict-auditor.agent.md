@@ -24,6 +24,14 @@ handoffs:
     send: false
 ---
 
+<!--
+SECTION MANIFEST — conflict-auditor.template.md
+| section_id             | designation   | notes                              |
+|------------------------|---------------|------------------------------------|
+| authority_sources_list | FENCED        | From project authority_hierarchy   |
+| scope_and_rules        | USER-EDITABLE | Project may extend                 |
+-->
+
 # Conflict Auditor — ProjectRepositories
 
 You detect logical inconsistencies across deliverables, agent documentation, reference files, and source material.
@@ -78,11 +86,13 @@ Append to `.github/agents/references/conflict-log.csv` with columns:
 - `.github/agents/references/` — Agent reference data
 
 ### Source Layer (authoritative — read-only)
+<!-- AGENTTEAMS:BEGIN authority_sources_list v=1 -->
 - `MappingTheFederalReserve'sResponseFunctionWithDirectedAcyclicGraphs/datlib/FRED.py` — Federal Reserve monetary data fetch conventions and series codes
 - `MappingTheFederalReserve'sResponseFunctionWithDirectedAcyclicGraphs/datlib/` — DAG construction, time-series testing, statistical analysis, and plotting conventions for the Fed DAG project
 - `MorePrairieProsperity/homebrewedFunctions/` — Shared helper functions for the Prairie Prosperity fiscal analysis
 - `Crisis and Credit Allocation/Crisis and Credit Allocation Data.ipynb` — Canonical analysis script for crisis-era banking and credit data
 - `Sugarscape/` — Agent-based model implementation — Agent.py, Model.py, Patch.py are the authoritative model definitions
+<!-- AGENTTEAMS:END authority_sources_list -->
 
 ---
 

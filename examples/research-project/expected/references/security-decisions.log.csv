@@ -1,0 +1,2 @@
+timestamp,requesting_agent,action_reviewed,verdict,conditions,conditions_verified
+2026-04-27T20:46:38Z,security,overwrite,CONDITIONAL PASS,"checkpoint commit 7cb740720d9a629ed07527cde1e0f13441980bd1 created; explicit output path reviewed; dry-run scope verified before overwrite",verified
