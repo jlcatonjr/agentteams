@@ -2,118 +2,126 @@
 <urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
     <url>
          <loc>https://jlcatonjr.github.io/agentteams/</loc>
-         <lastmod>2026-04-24</lastmod>
+         <lastmod>2026-04-27</lastmod>
     </url>
     <url>
          <loc>https://jlcatonjr.github.io/agentteams/DESCRIPTION-FORMAT/</loc>
-         <lastmod>2026-04-24</lastmod>
+         <lastmod>2026-04-27</lastmod>
     </url>
     <url>
          <loc>https://jlcatonjr.github.io/agentteams/agent-assisted-setup/</loc>
-         <lastmod>2026-04-24</lastmod>
+         <lastmod>2026-04-27</lastmod>
     </url>
     <url>
          <loc>https://jlcatonjr.github.io/agentteams/changelog/</loc>
-         <lastmod>2026-04-24</lastmod>
+         <lastmod>2026-04-27</lastmod>
     </url>
     <url>
          <loc>https://jlcatonjr.github.io/agentteams/cli-reference/</loc>
-         <lastmod>2026-04-24</lastmod>
+         <lastmod>2026-04-27</lastmod>
     </url>
     <url>
          <loc>https://jlcatonjr.github.io/agentteams/contributing/</loc>
-         <lastmod>2026-04-24</lastmod>
+         <lastmod>2026-04-27</lastmod>
     </url>
     <url>
          <loc>https://jlcatonjr.github.io/agentteams/examples/</loc>
-         <lastmod>2026-04-24</lastmod>
+         <lastmod>2026-04-27</lastmod>
     </url>
     <url>
          <loc>https://jlcatonjr.github.io/agentteams/getting-started/</loc>
-         <lastmod>2026-04-24</lastmod>
+         <lastmod>2026-04-27</lastmod>
     </url>
     <url>
          <loc>https://jlcatonjr.github.io/agentteams/how-it-works/</loc>
-         <lastmod>2026-04-24</lastmod>
+         <lastmod>2026-04-27</lastmod>
     </url>
     <url>
          <loc>https://jlcatonjr.github.io/agentteams/interoperability/</loc>
-         <lastmod>2026-04-24</lastmod>
+         <lastmod>2026-04-27</lastmod>
     </url>
     <url>
          <loc>https://jlcatonjr.github.io/agentteams/manuscript/</loc>
-         <lastmod>2026-04-24</lastmod>
+         <lastmod>2026-04-27</lastmod>
     </url>
     <url>
          <loc>https://jlcatonjr.github.io/agentteams/structural-update-plan/</loc>
-         <lastmod>2026-04-24</lastmod>
+         <lastmod>2026-04-27</lastmod>
     </url>
     <url>
          <loc>https://jlcatonjr.github.io/agentteams/template-authoring/</loc>
-         <lastmod>2026-04-24</lastmod>
+         <lastmod>2026-04-27</lastmod>
     </url>
     <url>
          <loc>https://jlcatonjr.github.io/agentteams/api-reference/</loc>
-         <lastmod>2026-04-24</lastmod>
+         <lastmod>2026-04-27</lastmod>
     </url>
     <url>
          <loc>https://jlcatonjr.github.io/agentteams/api-reference/analyze/</loc>
-         <lastmod>2026-04-24</lastmod>
+         <lastmod>2026-04-27</lastmod>
     </url>
     <url>
          <loc>https://jlcatonjr.github.io/agentteams/api-reference/audit/</loc>
-         <lastmod>2026-04-24</lastmod>
+         <lastmod>2026-04-27</lastmod>
     </url>
     <url>
          <loc>https://jlcatonjr.github.io/agentteams/api-reference/bridge/</loc>
-         <lastmod>2026-04-24</lastmod>
+         <lastmod>2026-04-27</lastmod>
     </url>
     <url>
          <loc>https://jlcatonjr.github.io/agentteams/api-reference/convert/</loc>
-         <lastmod>2026-04-24</lastmod>
+         <lastmod>2026-04-27</lastmod>
     </url>
     <url>
          <loc>https://jlcatonjr.github.io/agentteams/api-reference/drift/</loc>
-         <lastmod>2026-04-24</lastmod>
+         <lastmod>2026-04-27</lastmod>
     </url>
     <url>
          <loc>https://jlcatonjr.github.io/agentteams/api-reference/emit/</loc>
-         <lastmod>2026-04-24</lastmod>
+         <lastmod>2026-04-27</lastmod>
     </url>
     <url>
          <loc>https://jlcatonjr.github.io/agentteams/api-reference/enrich/</loc>
-         <lastmod>2026-04-24</lastmod>
+         <lastmod>2026-04-27</lastmod>
+    </url>
+    <url>
+         <loc>https://jlcatonjr.github.io/agentteams/api-reference/feature-inventory/</loc>
+         <lastmod>2026-04-27</lastmod>
     </url>
     <url>
          <loc>https://jlcatonjr.github.io/agentteams/api-reference/frameworks/</loc>
-         <lastmod>2026-04-24</lastmod>
+         <lastmod>2026-04-27</lastmod>
     </url>
     <url>
          <loc>https://jlcatonjr.github.io/agentteams/api-reference/graph/</loc>
-         <lastmod>2026-04-24</lastmod>
+         <lastmod>2026-04-27</lastmod>
     </url>
     <url>
          <loc>https://jlcatonjr.github.io/agentteams/api-reference/ingest/</loc>
-         <lastmod>2026-04-24</lastmod>
+         <lastmod>2026-04-27</lastmod>
     </url>
     <url>
          <loc>https://jlcatonjr.github.io/agentteams/api-reference/interop/</loc>
-         <lastmod>2026-04-24</lastmod>
+         <lastmod>2026-04-27</lastmod>
     </url>
     <url>
          <loc>https://jlcatonjr.github.io/agentteams/api-reference/man/</loc>
-         <lastmod>2026-04-24</lastmod>
+         <lastmod>2026-04-27</lastmod>
     </url>
     <url>
          <loc>https://jlcatonjr.github.io/agentteams/api-reference/remediate/</loc>
-         <lastmod>2026-04-24</lastmod>
+         <lastmod>2026-04-27</lastmod>
     </url>
     <url>
          <loc>https://jlcatonjr.github.io/agentteams/api-reference/render/</loc>
-         <lastmod>2026-04-24</lastmod>
+         <lastmod>2026-04-27</lastmod>
     </url>
     <url>
          <loc>https://jlcatonjr.github.io/agentteams/api-reference/scan/</loc>
-         <lastmod>2026-04-24</lastmod>
+         <lastmod>2026-04-27</lastmod>
+    </url>
+    <url>
+         <loc>https://jlcatonjr.github.io/agentteams/assets/feature-summary-table/</loc>
+         <lastmod>2026-04-27</lastmod>
     </url>
 </urlset>
