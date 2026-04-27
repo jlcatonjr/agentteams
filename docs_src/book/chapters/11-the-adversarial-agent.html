@@ -97,6 +97,8 @@
 
       <p>The bracket also reflects the temporal asymmetry between proactive and reactive governance. The adversarial agent's findings can be acted upon at zero cost. If challenge reveals a presupposition that does not hold, the plan can be revised before any files are modified. The conflict auditor's findings require remediation after the fact. The inconsistency has been introduced, and correcting it requires modifying files that are already in the project. The mandatory opener trades a small up-front analytical cost for a potentially large reduction in remediation cost. The mandatory closer catches what the opener missed or what arose from the execution itself, completing the coverage.</p>
 
+      <p>The bracket, as described, covers the outer boundaries of execution: the opener reviews the plan before the first step; the closer audits the project after the last. Between those two endpoints, the same two agents participate in a finer-grained review. After each step of a multi-step plan completes, the adversarial agent and conflict-auditor review the remaining pending rows before the next step begins (<a href="chapters/05-the-orchestrator.html#fig-workflow-12">Workflow 12</a>; Chapter 5, §7). The completed step may have surfaced information that invalidates an assumption the next step rests on, or it may have introduced an inconsistency the next step would otherwise propagate. The post-step gate is the bracket's interior structure: the opener and closer are its outer walls, and the per-step check is the seam between each row.</p>
+
     </section>
 
     <section id="sec:adversarial-read-only">
