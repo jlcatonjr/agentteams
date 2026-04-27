@@ -51,3 +51,5 @@ docs/book/figures/*.svg
 docs_src/book/figures/*.svg
 !docs/book/figures/agent-team-structure.svg
 !docs_src/book/figures/agent-team-structure.svg
+!docs/book/figures/workflow-12-adaptive-plan-execution.svg
+!docs_src/book/figures/workflow-12-adaptive-plan-execution.svg
