@@ -194,7 +194,7 @@ class TestClassifyAgentType:
             assert _classify_agent_type(slug) == "governance", slug
 
     def test_domain_slugs(self):
-        for slug in ["primary-producer", "quality-auditor", "style-guardian"]:
+        for slug in ["primary-producer", "quality-auditor", "style-guardian", "work-summarizer"]:
             assert _classify_agent_type(slug) == "domain", slug
 
     def test_workstream_expert(self):

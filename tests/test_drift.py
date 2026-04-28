@@ -128,7 +128,7 @@ def test_drift_missing_template(setup_dirs):
 # detect_drift — new template
 # ---------------------------------------------------------------------------
 
-def test_new_template_detected(setup_dirs):
+def test_repo_global_new_template_not_reported_for_unselected_team(setup_dirs):
     agents_dir, templates_dir = setup_dirs
 
     # Add a new template
@@ -137,7 +137,54 @@ def test_new_template_detected(setup_dirs):
 
     report = detect_drift(agents_dir, templates_dir)
     assert not report.has_drift  # new templates alone aren't "drift"
-    assert len(report.new_templates) == 1
+    assert report.new_templates == []
+
+
+def test_new_referenced_template_detected_via_output_files_map(tmp_path):
+    agents_dir = tmp_path / ".github" / "agents"
+    refs_dir = agents_dir / "references"
+    refs_dir.mkdir(parents=True)
+    templates_dir = tmp_path / "templates" / "universal"
+    templates_dir.mkdir(parents=True)
+
+    orchestrator_tpl = templates_dir / "orchestrator.template.md"
+    orchestrator_tpl.write_text("# Orchestrator\n", encoding="utf-8")
+    navigator_tpl = templates_dir / "navigator.template.md"
+    navigator_tpl.write_text("# Navigator\n", encoding="utf-8")
+
+    orchestrator_hash = hashlib.sha256(orchestrator_tpl.read_bytes()).hexdigest()[:16]
+
+    build_log = {
+        "schema_version": "1.2",
+        "project_name": "TestProject",
+        "framework": "copilot-vscode",
+        "project_type": "software",
+        "archetypes": ["primary-producer"],
+        "components": [],
+        "files_written": [".github/agents/orchestrator.agent.md"],
+        "manual_required": 0,
+        "template_hashes": {
+            "universal/orchestrator.template.md": orchestrator_hash,
+        },
+        "output_files_map": [
+            {
+                "path": "orchestrator.agent.md",
+                "template": "universal/orchestrator.template.md",
+                "type": "agent",
+            },
+            {
+                "path": "navigator.agent.md",
+                "template": "universal/navigator.template.md",
+                "type": "agent",
+            },
+        ],
+    }
+    (refs_dir / "build-log.json").write_text(json.dumps(build_log), encoding="utf-8")
+
+    report = detect_drift(agents_dir, tmp_path / "templates")
+
+    assert not report.has_drift
+    assert report.new_templates == ["universal/navigator.template.md"]
 
 
 # ---------------------------------------------------------------------------
@@ -361,6 +408,30 @@ def test_structural_diff_missing_manifest_fingerprint_promotes_files(tmp_path):
     assert report.manifest_changed
     assert len(report.drifted_files) == 1
     assert report.drifted_files[0]["_reason"] == "manifest fingerprint unavailable"
+
+
+def test_manifest_fingerprint_ignores_volatile_security_placeholders():
+    files = [{"path": "orchestrator.agent.md", "template": "universal/orchestrator.template.md", "type": "agent"}]
+    manifest_a = _make_manifest(
+        files,
+        ["orchestrator"],
+        auto_resolved_placeholders={
+            "SECURITY_DATA_GENERATED_AT": "2026-04-28T10:00:00Z",
+            "SECURITY_VULNERABILITY_WATCH_JSON": '{"generated_at":"2026-04-28T10:00:00Z"}',
+            "PROJECT_NAME": "TestProject",
+        },
+    )
+    manifest_b = _make_manifest(
+        files,
+        ["orchestrator"],
+        auto_resolved_placeholders={
+            "SECURITY_DATA_GENERATED_AT": "2026-04-28T11:00:00Z",
+            "SECURITY_VULNERABILITY_WATCH_JSON": '{"generated_at":"2026-04-28T11:00:00Z"}',
+            "PROJECT_NAME": "TestProject",
+        },
+    )
+
+    assert compute_manifest_fingerprint(manifest_a) == compute_manifest_fingerprint(manifest_b)
 
 
 # ---------------------------------------------------------------------------

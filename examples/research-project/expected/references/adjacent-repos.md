@@ -26,7 +26,7 @@ Maintained by `@repo-liaison`. Every cross-repository update must be recorded he
 
 #### Changelog
 
-> Log entries are stored in [`adjacent-repos-changelog.csv`](adjacent-repos-changelog.csv).
+> Log entries may be stored in `adjacent-repos-changelog.csv` once the registry is in active use.
 > Append one row per update: `date,repo_name,action,files_changed,summary`
 
 -->
@@ -39,7 +39,7 @@ Maintained by `@repo-liaison`. Every cross-repository update must be recorded he
 
 Coordination requests exchanged with adjacent orchestrators are saved as individual artifacts in `references/cross-orchestrator-requests/`.
 
-Full log: [`adjacent-repos-coordination-log.csv`](adjacent-repos-coordination-log.csv).
+If you maintain a tabular log, store it in `adjacent-repos-coordination-log.csv`.
 Append one row per coordination: `date,adjacent_repo,direction,outcome`
 
 ---

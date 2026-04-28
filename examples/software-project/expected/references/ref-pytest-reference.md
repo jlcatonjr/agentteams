@@ -1,3 +1,4 @@
+<!-- AGENTTEAMS:BEGIN content v=1 -->
 # pytest Reference — WebAppBackend
 
 > Quick-reference for **pytest ** (library) in WebAppBackend.
@@ -39,3 +40,4 @@
 
 - `@technical-validator` — verify technical accuracy of pytest usage
 - `@primary-producer` — implements code that depends on pytest
+<!-- AGENTTEAMS:END content -->

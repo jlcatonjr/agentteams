@@ -1,3 +1,4 @@
+<!-- AGENTTEAMS:BEGIN content v=1 -->
 # numpy Reference — ProjectRepositories
 
 > Quick-reference for **numpy ** (library) in ProjectRepositories.
@@ -39,3 +40,4 @@ Use array operations and broadcasting instead of Python loops where possible, an
 
 - `@technical-validator` — verify technical accuracy of numpy usage
 - `@primary-producer` — implements code that depends on numpy
+<!-- AGENTTEAMS:END content -->

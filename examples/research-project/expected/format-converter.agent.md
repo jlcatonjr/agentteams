@@ -19,6 +19,7 @@ handoffs:
     prompt: "Format conversion complete."
     send: false
 ---
+<!-- AGENTTEAMS:BEGIN content v=1 -->
 
 # Format Converter — ResearchPaperProject
 
@@ -71,3 +72,4 @@ Resolution: <specific action required>
 ## Protected Files
 
 Never overwrite source files in `html/chapters/`. Output goes only to `manuscript/`.
+<!-- AGENTTEAMS:END content -->

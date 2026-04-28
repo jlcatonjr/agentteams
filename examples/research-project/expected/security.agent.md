@@ -141,73 +141,28 @@ Use this table to determine the verdict. **Criteria are deterministic** — mode
 ### Current Threat Intelligence Snapshot
 
 <!-- AGENTTEAMS:BEGIN threat_intelligence v=1 -->
-Generated at: `2026-04-27T20:47:44Z`
+Generated at: `Not yet generated`
 
 **Sources:**
 
-- CISA KEV: ok (catalog 2026.04.24, items 1583) — https://www.cisa.gov/sites/default/files/feeds/known_exploited_vulnerabilities.json
-- MITRE CVE: metadata_only — https://cveawg.mitre.org/api/cve/
-- FIRST EPSS: ok (items 15) — https://api.first.org/data/v1/epss
-- NVD (NIST): ok (items 5) — https://services.nvd.nist.gov/rest/json/cves/2.0
-- OSV.dev: skipped — https://api.osv.dev/v1/querybatch
-- OWASP LLM Top 10: static — https://owasp.org/www-project-top-10-for-large-language-model-applications/
-- MITRE ATLAS: static — https://atlas.mitre.org/
+- CISA KEV (https://www.cisa.gov/known-exploited-vulnerabilities-catalog)\n- MITRE CVE (https://cve.org/)\n- FIRST EPSS (https://www.first.org/epss/)
 
 **Current major vulnerabilities:**
 
-- `CVE-2025-29635` | D-Link DIR-823X | D-Link DIR-823X Command Injection Vulnerability | added 2026-04-24 | EPSS 0.589390000, percentile 0.982340000 | CVSS 7.2 HIGH
-- `CVE-2024-7399` | Samsung MagicINFO 9 Server | Samsung MagicINFO 9 Server Path Traversal Vulnerability | added 2026-04-24 | EPSS 0.822630000, percentile 0.992280000 | CVSS 8.8 HIGH
-- `CVE-2024-57728` | SimpleHelp  SimpleHelp | SimpleHelp Path Traversal Vulnerability | added 2026-04-24 | EPSS 0.505870000, percentile 0.978590000 | CVSS 7.2 HIGH
-- `CVE-2024-57726` | SimpleHelp  SimpleHelp | SimpleHelp Missing Authorization Vulnerability | added 2026-04-24 | EPSS 0.490970000, percentile 0.977860000 | CVSS 9.9 CRITICAL
-- `CVE-2026-39987` | Marimo Marimo | Marimo Remote Code Execution Vulnerability | added 2026-04-23 | EPSS 0.552090000, percentile 0.980700000 | CVSS 9.8 CRITICAL
-- `CVE-2026-33825` | Microsoft Defender | Microsoft Defender Insufficient Granularity of Access Control Vulnerability | added 2026-04-22 | EPSS 0.032990000, percentile 0.872640000
-- `CVE-2026-20122` | Cisco Catalyst SD-WAN Manger | Cisco Catalyst SD-WAN Manager Incorrect Use of Privileged APIs Vulnerability | added 2026-04-20 | EPSS 0.009660000, percentile 0.766350000
-- `CVE-2026-20133` | Cisco Catalyst SD-WAN Manager | Cisco Catalyst SD-WAN Manager Exposure of Sensitive Information to an Unauthorized Actor Vulnerability | added 2026-04-20 | EPSS 0.011950000, percentile 0.789290000
-- `CVE-2025-2749` | Kentico Kentico Xperience | Kentico Xperience Path Traversal Vulnerability | added 2026-04-20 | EPSS 0.050510000, percentile 0.897960000
-- `CVE-2023-27351` | PaperCut NG/MF | PaperCut NG/MF Improper Authentication Vulnerability | added 2026-04-20 | EPSS 0.861040000, percentile 0.994010000
-- `CVE-2025-48700` | Synacor Zimbra Collaboration Suite (ZCS) | Synacor Zimbra Collaboration Suite (ZCS) Cross-site Scripting Vulnerability | added 2026-04-20 | EPSS 0.187570000, percentile 0.953090000
-- `CVE-2026-20128` | Cisco Catalyst SD-WAN Manager | Cisco Catalyst SD-WAN Manager Storing Passwords in a Recoverable Format Vulnerability | added 2026-04-20 | EPSS 0.000450000, percentile 0.138780000
-- `CVE-2025-32975` | Quest KACE Systems Management Appliance (SMA) | Quest KACE Systems Management Appliance (SMA) Improper Authentication Vulnerability | added 2026-04-20 | EPSS 0.465020000, percentile 0.976680000
-- `CVE-2024-27199` | JetBrains TeamCity | JetBrains TeamCity Relative Path Traversal Vulnerability | added 2026-04-20 | EPSS 0.905410000, percentile 0.996160000
-- `CVE-2026-34197` | Apache ActiveMQ | Apache ActiveMQ Improper Input Validation Vulnerability | added 2026-04-16 | EPSS 0.650690000, percentile 0.984880000
+- Live vulnerability snapshot will be generated during team initialization/update.
 
 **Prevention and mitigation playbook:**
 
-- Prioritize remediation for KEV-listed CVEs as actively exploited threats.
-- Triage by exploitability (EPSS) and internet exposure before lower-risk backlog items.
-- Enforce patch windows with owner, SLA, and verification evidence for each critical CVE.
-- When patching is blocked, define compensating controls (WAF rules, ACL tightening, feature disablement).
-- Add detections for exploitation attempts and verify telemetry coverage for affected assets.
-- Vendor/CISA required actions:
-  - Apply mitigations per vendor instructions, follow applicable BOD 22-01 guidance for cloud services, or discontinue use of the product if mitigations are unavailable.
-  - Please adhere to CISA’s guidelines to assess exposure and mitigate risks associated with Cisco SD-WAN devices as outlines in CISA’s Emergency Directive 26-03 (URL listed below in Notes) and CISA’s “Hunt & Hardening Guidance for Cisco SD-WAN Devices (URL listed below in Notes). Adhere to the applicable BOD 22-01 guidance for cloud services or discontinue use of the product if mitigations are not available.
+- Patch KEV-listed CVEs first based on active exploitation evidence.\n- Prioritize high EPSS vulnerabilities for rapid mitigation.\n- Validate compensating controls when patching is delayed.
 
 ### LLM and AI-Specific Threat Intelligence
 
-**OWASP LLM Top 10 (2025)** — risks applicable to any AI-integrated system:
-
-- **LLM01:2025 — Prompt Injection**: Attacker-controlled input overrides or hijacks LLM instructions, causing unintended actions including data exfiltration and privilege escalation.
-- **LLM02:2025 — Sensitive Information Disclosure**: LLM inadvertently reveals PII, credentials, or proprietary data from training or context when prompted directly or through side-channel extraction.
-- **LLM03:2025 — Supply Chain Vulnerabilities**: Compromised models, datasets, plugins, or integrations introduce malicious behaviour that bypasses standard code review and testing pipelines.
-- **LLM04:2025 — Data and Model Poisoning**: Adversarial manipulation of training or fine-tuning data degrades model integrity, introduces backdoors, or embeds biased responses.
-- **LLM05:2025 — Improper Output Handling**: LLM-generated content passed unsanitised to downstream systems causes XSS, SSRF, code injection, or command execution.
-- **LLM06:2025 — Excessive Agency**: An LLM agent operates with overly broad permissions or autonomy, amplifying the blast radius of prompt injection or logic errors to destructive real-world actions.
-- **LLM07:2025 — System Prompt Leakage**: The system prompt (including confidential instructions and secrets) is extracted through adversarial queries, revealing business logic or credentials.
-- **LLM08:2025 — Vector and Embedding Weaknesses**: Poisoned embeddings or RAG data stores cause the model to retrieve and act on attacker-controlled content, enabling indirect prompt injection at scale.
-- **LLM09:2025 — Misinformation**: Hallucinated or factually incorrect LLM outputs are acted upon without verification, leading to flawed decisions, compliance violations, or reputational harm.
-- **LLM10:2025 — Unbounded Consumption**: Uncontrolled LLM inference requests exhaust computational resources, enabling denial-of-service or cost-exhaustion attacks.
-
-**Authoritative AI/LLM Security References:**
-
-- [OWASP LLM Top 10 (2025)](https://owasp.org/www-project-top-10-for-large-language-model-applications/): Canonical taxonomy of the ten most critical LLM application security risks.
-- [MITRE ATLAS](https://atlas.mitre.org/): Adversarial Threat Landscape for AI Systems — ML-specific attack techniques and mitigations.
-- [Claude Security (Anthropic)](https://code.claude.com/docs/en/security): Anthropic-published security controls and guidance for Claude deployments.
-- [NIST AI Risk Management Framework](https://airc.nist.gov/): NIST AI RMF — governance framework for trustworthy and responsible AI systems.
-- [ENISA Multilayer Framework for Good Cybersecurity Practices for AI](https://www.enisa.europa.eu/publications/multilayer-framework-for-good-cybersecurity-practices-for-ai): EU guidance on securing AI systems across design, development, and deployment.
+- LLM threat intelligence will be generated during team initialization/update.
+  Reference: https://owasp.org/www-project-top-10-for-large-language-model-applications/
 
 ### Package-Level Vulnerability Report (OSV.dev)
 
-- No package-level vulnerabilities found in OSV.dev for the declared project dependencies.
+- Package-level vulnerability data will be generated during team initialization/update.
 <!-- AGENTTEAMS:END threat_intelligence -->
 
 ### Output Format

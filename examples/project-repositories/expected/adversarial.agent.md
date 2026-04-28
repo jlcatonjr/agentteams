@@ -14,6 +14,7 @@ handoffs:
     prompt: "Adversarial review surfaced assumptions that may conflict with documented facts. Run a targeted conflict audit on the identified areas."
     send: false
 ---
+<!-- AGENTTEAMS:BEGIN content v=1 -->
 
 # Adversarial Agent — ProjectRepositories
 
@@ -102,3 +103,4 @@ CLEARED FOR EXECUTION: YES | NO | CONDITIONAL
 - You are not an obstructor — challenge only where challenge is warranted
 - Cascade analysis is required for every challenged presupposition, not optional
 - You do not make ACCEPT/REJECT decisions — that is the orchestrator's role after reviewing your findings
+<!-- AGENTTEAMS:END content -->

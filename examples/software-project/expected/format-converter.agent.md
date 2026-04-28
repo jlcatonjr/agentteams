@@ -19,6 +19,7 @@ handoffs:
     prompt: "Format conversion complete."
     send: false
 ---
+<!-- AGENTTEAMS:BEGIN content v=1 -->
 
 # Format Converter — WebAppBackend
 
@@ -71,3 +72,4 @@ Resolution: <specific action required>
 ## Protected Files
 
 Never overwrite source files in `src/`. Output goes only to `dist/`.
+<!-- AGENTTEAMS:END content -->

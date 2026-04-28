@@ -171,9 +171,10 @@ def detect_drift(
         else:
             report.unchanged.append(template_rel)
 
-    # Check for new templates that weren't in the build log
-    for template_file in _iter_template_files(templates_dir):
-        rel = str(template_file.relative_to(templates_dir))
+    # Check for newly referenced templates that weren't in the build log.
+    # Repo-global template additions are not drift for an existing team unless
+    # this team's build log or output map indicates that the team should use them.
+    for rel in _discover_used_templates(build_log, templates_dir):
         if rel not in recorded_hashes:
             report.new_templates.append(rel)
 
@@ -391,6 +392,16 @@ def print_structural_diff_report(report: StructuralDiffReport) -> None:
 # Helpers
 # ---------------------------------------------------------------------------
 
+_VOLATILE_AUTO_RESOLVED_PLACEHOLDERS: frozenset[str] = frozenset([
+    "SECURITY_DATA_GENERATED_AT",
+    "SECURITY_SOURCE_REGISTRY",
+    "SECURITY_CURRENT_THREATS_SUMMARY",
+    "SECURITY_PREVENTION_PLAYBOOK",
+    "SECURITY_OSV_PACKAGES_SUMMARY",
+    "SECURITY_VULNERABILITY_WATCH_JSON",
+])
+
+
 def _build_template_output_map(build_log: dict[str, Any]) -> dict[str, str]:
     """Reconstruct template→output_file mapping from build log data."""
     mapping: dict[str, str] = {}
@@ -432,11 +443,19 @@ def compute_manifest_fingerprint(manifest: dict[str, Any]) -> str:
 
     def _sanitize(value: Any) -> Any:
         if isinstance(value, dict):
-            return {
-                key: _sanitize(val)
-                for key, val in value.items()
-                if not str(key).startswith("_")
-            }
+            cleaned: dict[str, Any] = {}
+            for key, val in value.items():
+                if str(key).startswith("_"):
+                    continue
+                if key == "auto_resolved_placeholders" and isinstance(val, dict):
+                    cleaned[key] = {
+                        placeholder: _sanitize(placeholder_value)
+                        for placeholder, placeholder_value in val.items()
+                        if placeholder not in _VOLATILE_AUTO_RESOLVED_PLACEHOLDERS
+                    }
+                    continue
+                cleaned[key] = _sanitize(val)
+            return cleaned
         if isinstance(value, list):
             return [_sanitize(item) for item in value]
         return value
@@ -448,6 +467,21 @@ def compute_manifest_fingerprint(manifest: dict[str, Any]) -> str:
 
 def _discover_used_templates(build_log: dict[str, Any], templates_dir: Path) -> list[str]:
     """Infer which templates were used from a legacy build log (no hashes)."""
+    output_files = build_log.get("output_files_map", [])
+    referenced = {
+        entry.get("template", "")
+        for entry in output_files
+        if entry.get("template")
+    }
+
+    template_hashes = build_log.get("template_hashes", {})
+    if template_hashes:
+        referenced.update(template_hashes)
+        return sorted(referenced)
+
+    if referenced:
+        return sorted(referenced)
+
     templates: list[str] = []
     for tpl_file in _iter_template_files(templates_dir):
         rel = str(tpl_file.relative_to(templates_dir))

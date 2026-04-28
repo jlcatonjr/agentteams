@@ -1,3 +1,4 @@
+<!-- AGENTTEAMS:BEGIN content v=1 -->
 # GitHub Workflows and Merge Strategy Reference
 
 This reference defines safe GitHub interaction and merge procedures for SalesDataPipeline.
@@ -48,3 +49,4 @@ For each merge or rebase event, record:
 - Resulting commit hash(es)
 
 These records support ex-post audit and incident reconstruction.
+<!-- AGENTTEAMS:END content -->

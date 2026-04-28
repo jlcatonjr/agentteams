@@ -23,6 +23,7 @@ handoffs:
     prompt: "Deliverable production is complete."
     send: false
 ---
+<!-- AGENTTEAMS:BEGIN content v=1 -->
 # Primary Producer — SalesDataPipeline
 
 You draft and revise the primary deliverables for SalesDataPipeline. All production is driven by a **Component Brief** prepared by the workstream expert for the component you are producing.
@@ -63,3 +64,4 @@ Every deliverable must meet these floors before leaving this agent:
 
 1. **Source CSV schema** (`docs/source-schema.md`) — field names and types in raw data
 2. **Warehouse schema** (`sql/warehouse-schema.sql`) — target table structure
+<!-- AGENTTEAMS:END content -->

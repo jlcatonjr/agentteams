@@ -22,6 +22,7 @@ handoffs:
     prompt: "Tracked repository content changed. Run repository change census and docs/API impact evaluation before closeout."
     send: false
 ---
+<!-- AGENTTEAMS:BEGIN content v=1 -->
 
 # Git Operations — WebAppBackend
 
@@ -55,3 +56,4 @@ After each operation, report:
 - Conflict status
 - Post-operation repository status
 - Docs/API evaluation status (`REQUIRED`, `REVIEW`, `NONE`, or `pending @agent-updater`)
+<!-- AGENTTEAMS:END content -->

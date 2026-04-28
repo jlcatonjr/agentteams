@@ -23,6 +23,7 @@ handoffs:
     prompt: "Quality audit complete. See findings."
     send: false
 ---
+<!-- AGENTTEAMS:BEGIN content v=1 -->
 
 # Quality Auditor — ResearchPaperProject
 
@@ -69,3 +70,4 @@ Findings ranked by severity — HIGH first.
 - **Read-only.** Do not edit any deliverable file.
 - **Route, don't fix.** Every finding must route to the correct correction agent.
 - **No aesthetic judgments.** Raise structural, logical, or pattern defects only. Style deviations route to `@style-guardian`.
+<!-- AGENTTEAMS:END content -->

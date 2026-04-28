@@ -1,3 +1,4 @@
+<!-- AGENTTEAMS:BEGIN content v=1 -->
 # linearmodels Reference — ProjectRepositories
 
 > Quick-reference for **linearmodels ** (library) in ProjectRepositories.
@@ -39,3 +40,4 @@ Make panel indexes explicit, state fixed-effects choices clearly, and inspect fi
 
 - `@technical-validator` — verify technical accuracy of linearmodels usage
 - `@primary-producer` — implements code that depends on linearmodels
+<!-- AGENTTEAMS:END content -->

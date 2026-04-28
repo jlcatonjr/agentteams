@@ -14,6 +14,7 @@ handoffs:
     prompt: "Conflict resolutions may require agent documentation updates."
     send: false
 ---
+<!-- AGENTTEAMS:BEGIN content v=1 -->
 
 # Conflict Resolution — SalesDataPipeline
 
@@ -67,3 +68,4 @@ Update `.github/agents/references/conflict-log.csv`: change `status` to `resolve
 2. Authority hierarchy (from `copilot-instructions.md`) is the tiebreaker — always
 3. ESCALATE only when genuinely unresolvable by the hierarchy
 4. Update the conflict log for every decision, including ACCEPT
+<!-- AGENTTEAMS:END content -->

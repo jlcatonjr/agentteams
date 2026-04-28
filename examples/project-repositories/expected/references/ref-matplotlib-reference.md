@@ -1,3 +1,4 @@
+<!-- AGENTTEAMS:BEGIN content v=1 -->
 # matplotlib Reference — ProjectRepositories
 
 > Quick-reference for **matplotlib ** (library) in ProjectRepositories.
@@ -39,3 +40,4 @@ Create figures and axes explicitly, label every chart, and save deterministic ou
 
 - `@technical-validator` — verify technical accuracy of matplotlib usage
 - `@primary-producer` — implements code that depends on matplotlib
+<!-- AGENTTEAMS:END content -->

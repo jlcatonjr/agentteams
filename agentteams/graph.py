@@ -46,7 +46,7 @@ AGENT_TYPES = {
     # Domain (archetype names)
     "primary-producer", "quality-auditor", "style-guardian", "technical-validator",
     "format-converter", "output-compiler", "reference-manager", "visual-designer",
-    "cohesion-repairer",
+    "cohesion-repairer", "work-summarizer",
 }
 
 
@@ -586,7 +586,7 @@ def _classify_agent_type(slug: str) -> str:
     _DOMAIN_SLUGS = frozenset({
         "primary-producer", "quality-auditor", "style-guardian", "technical-validator",
         "format-converter", "output-compiler", "reference-manager", "visual-designer",
-        "cohesion-repairer",
+        "cohesion-repairer", "work-summarizer",
     })
     if slug in _GOVERNANCE_SLUGS:
         return "governance"

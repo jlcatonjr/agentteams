@@ -67,7 +67,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `graph` module: directed graph inference for agent team topology; outputs Mermaid, DOT, JSON, and Markdown
 - `frameworks` package: `copilot-vscode`, `copilot-cli`, and `claude` framework adapters
 - `build_team.py` CLI: 16-flag command-line interface wiring all pipeline stages
-- Template library: 9 universal governance templates, 9+ domain archetype templates, 3 builder templates, 6 workstream expert-pattern templates
+- Template library at the 0.1.0 release: 9 universal governance templates, 9+ domain archetype templates, 3 builder templates, 6 workstream expert-pattern templates
 - JSON schemas: `project-description.schema.json` and `team-manifest.schema.json`
 - Example project briefs: research, software, and data-pipeline projects
 - `--self` mode: self-maintenance of the module's own agent team

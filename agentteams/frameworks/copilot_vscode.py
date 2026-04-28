@@ -2,7 +2,7 @@
 copilot_vscode.py — Framework adapter for GitHub Copilot in VS Code.
 
 Agent files:  .github/agents/<slug>.agent.md
-Instructions: copilot-instructions.md (at project root)
+Instructions: .github/copilot-instructions.md
 Format:       YAML front matter + Markdown body
 Handoffs:     Supported
 """

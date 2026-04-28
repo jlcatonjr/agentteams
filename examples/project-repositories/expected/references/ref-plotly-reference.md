@@ -1,3 +1,4 @@
+<!-- AGENTTEAMS:BEGIN content v=1 -->
 # plotly Reference — ProjectRepositories
 
 > Quick-reference for **plotly ** (library) in ProjectRepositories.
@@ -39,3 +40,4 @@ Prefer self-contained HTML exports, centralize layout styling, and validate hove
 
 - `@technical-validator` — verify technical accuracy of plotly usage
 - `@primary-producer` — implements code that depends on plotly
+<!-- AGENTTEAMS:END content -->

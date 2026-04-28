@@ -1,3 +1,4 @@
+<!-- AGENTTEAMS:BEGIN content v=1 -->
 # pandas Reference — ProjectRepositories
 
 > Quick-reference for **pandas ** (library) in ProjectRepositories.
@@ -39,3 +40,4 @@ Prefer vectorized operations, explicit dtypes, and merge or groupby pipelines ov
 
 - `@technical-validator` — verify technical accuracy of pandas usage
 - `@primary-producer` — implements code that depends on pandas
+<!-- AGENTTEAMS:END content -->

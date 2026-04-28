@@ -5,7 +5,7 @@ description: Comprehensive enumeration of all AgentTeams capabilities, organized
 
 # AgentTeams — Feature Inventory
 
-**Version:** 0.1.0 (Unreleased)
+**Version:** 0.1.0 (Released 2026-04-15)
 
 Features below are grouped by capability area. Items described here have been implemented and are
 available on the `main` branch. The last formal versioned release is **0.1.0 (2026-04-15)**;
@@ -71,12 +71,14 @@ everything listed reflects the current development state.
 
 ### Templates & Schemas
 
-34. **9 Universal Governance Templates** — One template per governance agent archetype
-35. **9+ Domain Archetype Templates** — Project-type-specific agent patterns
+34. **10 Universal Governance Templates** — One tier-2 template per governance agent archetype
+35. **19 Domain Templates** — 13 project-type archetype templates plus 6 tool templates
 36. **3 Builder Templates** — Team Builder agent variants
 37. **6 Workstream Expert Templates** — Component-scoped expertise patterns
 38. **`project-description.schema.json`** — JSON Schema for brief validation
 39. **`team-manifest.schema.json`** — JSON Schema for team manifest validation
+
+The `universal/` template library also includes the tier-1 Orchestrator template and the `git-operations` specialist template in addition to the 10 always-included tier-2 governance templates.
 
 ---
 
@@ -143,7 +145,7 @@ everything listed reflects the current development state.
 
 ## Governance Agents
 
-The following nine agents are included in every generated team, regardless of project type.
+The following eleven agents are included in every generated team, regardless of project type.
 
 76. **`@navigator`** — Project structure mapping, file location queries, dependency tracking (read-only)
 77. **`@security`** — Highest-priority sentinel; clears destructive operations, credential exposure, and external writes (read-only)
@@ -154,6 +156,8 @@ The following nine agents are included in every generated team, regardless of pr
 82. **`@cleanup`** — Removes stale artifacts; requires `@security` clearance; applies four safety checks before deletion (edit)
 83. **`@agent-updater`** — Synchronizes agent documentation when project structure or content changes (edit)
 84. **`@agent-refactor`** — Extracts shared data to reference files; enforces spec compliance (edit)
+85. **`@repo-liaison`** — Manages cross-repository impact assessment, adjacent-repo updates, and orchestrator coordination (edit)
+86. **`@git-operations`** — Handles commit/push, pull/merge/rebase, recovery, and conflict-resolution git workflows (edit)
 
 ---
 
@@ -161,67 +165,68 @@ The following nine agents are included in every generated team, regardless of pr
 
 Workflows are step sequences embedded in the generated Orchestrator agent. Every workflow terminates with an unconditional call to Workflow 11 (Final Check).
 
-85. **Workflow 1 — Produce Deliverable** — Source review → Component Brief → production → quality audit → style audit → consistency check
-86. **Workflow 2 — Revise Deliverable** — Revision → adversarial review → quality audit → consistency check → `@agent-updater` sync
-87. **Workflow 3 — Technical Accuracy Audit** — Validate claims against source files; conditionally correct and re-audit
-88. **Workflow 4 — Compile Final Output** — Format conversion → reference verification → final assembly → cleanup
-89. **Workflow 5 — Consistency Review** — `@adversarial` challenge → cross-file consistency audit → technical validation → `@agent-updater`
-90. **Workflow 6 — Documentation Maintenance** — Sync agent docs → refactor check → consistency audit
-91. **Workflow 7 — Cleanup** — Identify stale artifacts → `@adversarial` review → `@security` clearance → delete → update docs
-92. **Workflow 8 — Code Hygiene Audit** — CH-01–CH-20 audit → `@adversarial` guard before deletion plan → conditional cleanup/refactor
-93. **Workflow 9 — Cross-Repository Coordination** — Impact assessment → approved updates → adjacent-repo writes (security-cleared) → consistency audit
-94. **Workflow 10 — Plan Documentation & Review** — Plan status scan → pre-execution truth check via `@technical-validator` → surface blocked steps
-95. **Workflow 11 — Final Check (Part A)** — Scan current plan's `steps.csv` for `pending`/`blocked` rows; create audited sub-plans for each
-96. **Workflow 11 — Final Check (Part B)** — Scan `CHANGELOG.md` Known Issues, `tmp/` CSVs, and `git status` for at-large open issues; subject summaries to `@adversarial` + `@conflict-auditor`
+87. **Workflow 1 — Produce Deliverable** — Source review → Component Brief → production → quality audit → style audit → consistency check
+88. **Workflow 2 — Revise Deliverable** — Revision → adversarial review → quality audit → consistency check → `@agent-updater` sync
+89. **Workflow 3 — Technical Accuracy Audit** — Validate claims against source files; conditionally correct and re-audit
+90. **Workflow 4 — Compile Final Output** — Format conversion → reference verification → final assembly → cleanup
+91. **Workflow 5 — Consistency Review** — `@adversarial` challenge → cross-file consistency audit → technical validation → `@agent-updater`
+92. **Workflow 6 — Documentation Maintenance** — Sync agent docs → refactor check → consistency audit
+93. **Workflow 7 — Cleanup** — Identify stale artifacts → `@adversarial` review → `@security` clearance → delete → update docs
+94. **Workflow 8 — Code Hygiene Audit** — CH-01–CH-20 audit → `@adversarial` guard before deletion plan → conditional cleanup/refactor
+95. **Workflow 9 — Cross-Repository Coordination** — Impact assessment → approved updates → adjacent-repo writes (security-cleared) → consistency audit
+96. **Workflow 10 — Plan Documentation & Review** — Plan status scan → pre-execution truth check via `@technical-validator` → surface blocked steps
+97. **Workflow 10B — Work Summary Reporting** — Generate daily/weekly/monthly summaries from plan artifacts and git history, then audit them
+98. **Workflow 11 — Final Check (Part A)** — Scan current plan's `steps.csv` for `pending`/`blocked` rows; create audited sub-plans for each
+99. **Workflow 11 — Final Check (Part B)** — Scan `CHANGELOG.md` Known Issues, `tmp/` CSVs, and `git status` for at-large open issues; subject summaries to `@adversarial` + `@conflict-auditor`
 
 ---
 
 ## Governance Infrastructure
 
-97. **Constitutional Rules** — Immutable rules encoded in the Orchestrator template: security clearance gates, code-hygiene before merge, conflict audit after multi-file sessions, adversarial review before irreversible changes
-98. **Authority Hierarchy** — Explicit precedence ordering encoded in every generated Orchestrator (template library → schemas → pipeline source → placeholder conventions → implementation plan)
-99. **Automatic `@agent-updater` Triggers** — Invoked at the close of Workflows 2, 3, and 5 after any knowledge-mutating operation
-100. **`@adversarial` Guards in Audit Workflows** — `@adversarial` runs as step 1 of Workflow 5 and step 2 of Workflow 8 to prevent stale-assumption conclusions
-101. **Pre-Execution Truth Check** — `@technical-validator` must verify factual claims in each plan step before it is marked `in_progress`
-102. **Drift-as-Trigger** — An explicit trigger in `@agent-updater` trigger tables: drift detected by `--check` requires re-render and re-verify before the next workflow
-103. **Cross-Repository Security Rule** — Any write to a repository other than `src/` must be assessed by `@repo-liaison` and cleared by `@security`
+100. **Constitutional Rules** — Immutable rules encoded in the Orchestrator template: security clearance gates, code-hygiene before merge, conflict audit after multi-file sessions, adversarial review before irreversible changes
+101. **Authority Hierarchy** — Explicit precedence ordering encoded in every generated Orchestrator (template library → schemas → pipeline source → placeholder conventions → implementation plan)
+102. **Automatic `@agent-updater` Triggers** — Invoked at the close of Workflows 2, 3, and 5 after any knowledge-mutating operation
+103. **`@adversarial` Guards in Audit Workflows** — `@adversarial` runs as step 1 of Workflow 5 and step 2 of Workflow 8 to prevent stale-assumption conclusions
+104. **Pre-Execution Truth Check** — `@technical-validator` must verify factual claims in each plan step before it is marked `in_progress`
+105. **Drift-as-Trigger** — An explicit trigger in `@agent-updater` trigger tables: drift detected by `--check` requires re-render and re-verify before the next workflow
+106. **Cross-Repository Security Rule** — Any write to a repository other than `src/` must be assessed by `@repo-liaison` and cleared by `@security`
 
 ---
 
 ## Interoperability
 
-104. **`convert` Module** — Direct format migration between framework outputs (`copilot-vscode` ↔ `copilot-cli` ↔ `claude`)
-105. **`--convert-from` Flag** — Convert an existing agent team to a different framework format
-106. **File Classification** — Auto-detect file role (agent, instruction, reference) for correct translation
-107. **`interop` Module** — Canonical Agent Interface (CAI) normalization and compatibility pipeline
-108. **`--interop-from` Flag** — Run the CAI interop pipeline against an existing team
-109. **`bridge` Module** — Lightweight runtime compatibility bridge; generate bridge artifacts without regenerating sources
-110. **`--bridge-from` Flag** — Generate bridge artifacts from a source canonical team
-111. **Runtime Handoff Manifest** — `references/runtime-handoffs.json`; emitted when handoffs are extracted from non-VS Code adapters, consumed by bridge layers and external tooling
+107. **`convert` Module** — Direct format migration between framework outputs (`copilot-vscode` ↔ `copilot-cli` ↔ `claude`)
+108. **`--convert-from` Flag** — Convert an existing agent team to a different framework format
+109. **File Classification** — Auto-detect file role (agent, instruction, reference) for correct translation
+110. **`interop` Module** — Canonical Agent Interface (CAI) normalization and compatibility pipeline
+111. **`--interop-from` Flag** — Run the CAI interop pipeline against an existing team
+112. **`bridge` Module** — Lightweight runtime compatibility bridge; generate bridge artifacts without regenerating sources
+113. **`--bridge-from` Flag** — Generate bridge artifacts from a source canonical team
+114. **Runtime Handoff Manifest** — `references/runtime-handoffs.json`; emitted when handoffs are extracted from non-VS Code adapters, consumed by bridge layers and external tooling
 
 ---
 
 ## Bridge Automation
 
-112. **`run_daily_bridge_maintenance.sh`** — Daily warn-and-continue bridge refresh script for non-critical operations
-113. **`bridge-maintenance.yml` CI Workflow** — GitHub Actions workflow for daily automated bridge maintenance
-114. **`bridge-watchdog.yml` CI Workflow** — Staleness monitoring; creates deduplicated GitHub issues when drift is detected
-115. **Bridge Staleness Detection** — Compare bridge artifacts against source team; surface divergence
-116. **Deduplicated Issue Creation** — Watchdog suppresses duplicate GitHub issues for the same staleness event
-117. **CI Fallback Mechanism** — Maintenance workflow continues with warnings on non-critical failures rather than aborting
-118. **Snapshot Archive** — Pre-update snapshots stored in `references/plans/snapshots-*/` for reversible rollback
+115. **`run_daily_bridge_maintenance.sh`** — Daily warn-and-continue bridge refresh script for non-critical operations
+116. **`bridge-maintenance.yml` CI Workflow** — GitHub Actions workflow for daily automated bridge maintenance
+117. **`bridge-watchdog.yml` CI Workflow** — Staleness monitoring; creates deduplicated GitHub issues when drift is detected
+118. **Bridge Staleness Detection** — Compare bridge artifacts against source team; surface divergence
+119. **Deduplicated Issue Creation** — Watchdog suppresses duplicate GitHub issues for the same staleness event
+120. **CI Fallback Mechanism** — Maintenance workflow continues with warnings on non-critical failures rather than aborting
+121. **Snapshot Archive** — Pre-update snapshots stored in `references/plans/snapshots-*/` for reversible rollback
 
 ---
 
 ## Cross-Repository Support
 
-119. **`@repo-liaison` Agent** — Manages cross-repository impact assessment, updates, and orchestrator coordination
-120. **`references/adjacent-repos.md`** — Living record of adjacent repositories with changelog entries
-121. **Protocol 1 — Impact Assessment** — Evaluate which adjacent repos are affected by a proposed change; produce an Impact Report
-122. **Protocol 2 — Adjacent Updates** — Apply approved updates to neighboring project repos (requires `@security` clearance on each write)
-123. **Protocol 3 — Orchestrator Coordination** — Formal coordination request between independent orchestrators managing different repositories
-124. **`@repo-liaison` in Constitutional Rules** — Any write outside `src/` must be assessed by `@repo-liaison` before `@security` clearance can be granted
-125. **`orchestrator-workflows.reference.md`** — Reference guide documenting all 12 workflows; kept in sync by `@agent-updater`
+122. **`@repo-liaison` Agent** — Manages cross-repository impact assessment, updates, and orchestrator coordination
+123. **`references/adjacent-repos.md`** — Living record of adjacent repositories with changelog entries
+124. **Protocol 1 — Impact Assessment** — Evaluate which adjacent repos are affected by a proposed change; produce an Impact Report
+125. **Protocol 2 — Adjacent Updates** — Apply approved updates to neighboring project repos (requires `@security` clearance on each write)
+126. **Protocol 3 — Orchestrator Coordination** — Formal coordination request between independent orchestrators managing different repositories
+127. **`@repo-liaison` in Constitutional Rules** — Any write outside `src/` must be assessed by `@repo-liaison` before `@security` clearance can be granted
+128. **`orchestrator-workflows.reference.md`** — Reference guide documenting all 12 workflows; kept in sync by `@agent-updater`
 
 ---
 

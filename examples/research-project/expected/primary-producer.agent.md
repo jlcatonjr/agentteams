@@ -27,6 +27,7 @@ handoffs:
     prompt: "Deliverable production is complete."
     send: false
 ---
+<!-- AGENTTEAMS:BEGIN content v=1 -->
 
 # Primary Producer — ResearchPaperProject
 
@@ -68,3 +69,4 @@ Every deliverable must meet these floors before leaving this agent:
 
 1. **Published papers by James Caton** (`sources/papers/`) — theoretical claims
 2. **Agent source files** (`.github/agents/`) — agent documentation accuracy
+<!-- AGENTTEAMS:END content -->

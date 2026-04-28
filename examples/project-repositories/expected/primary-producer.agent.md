@@ -27,6 +27,7 @@ handoffs:
     prompt: "Deliverable production is complete."
     send: false
 ---
+<!-- AGENTTEAMS:BEGIN content v=1 -->
 
 # Primary Producer — ProjectRepositories
 
@@ -71,3 +72,4 @@ Every deliverable must meet these floors before leaving this agent:
 3. **homebrewedFunctions library** (`MorePrairieProsperity/homebrewedFunctions/`) — Shared helper functions for the Prairie Prosperity fiscal analysis
 4. **Crisis and Credit Allocation notebook** (`Crisis and Credit Allocation/Crisis and Credit Allocation Data.ipynb`) — Canonical analysis script for crisis-era banking and credit data
 5. **Sugarscape model source** (`Sugarscape/`) — Agent-based model implementation — Agent.py, Model.py, Patch.py are the authoritative model definitions
+<!-- AGENTTEAMS:END content -->

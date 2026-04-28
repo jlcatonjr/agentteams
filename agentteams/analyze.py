@@ -61,6 +61,11 @@ GOVERNANCE_AGENTS = [
     "git-operations",
 ]
 
+#: Always-included operational domain agents (generated for every project)
+ALWAYS_INCLUDED_DOMAIN_AGENTS = [
+    "work-summarizer",
+]
+
 
 # ---------------------------------------------------------------------------
 # Public entry point
@@ -122,8 +127,10 @@ def build_manifest(description: dict[str, Any], *, framework: str = "copilot-vsc
     # Tool-specific agent slugs
     tool_agent_slugs = [ta["slug"] for ta in tool_agents]
 
-    # All domain agent slugs (archetypes + tool-specific)
-    domain_agent_slugs = list(archetypes) + tool_agent_slugs
+    # All domain agent slugs (always-included + archetypes + tool-specific)
+    domain_agent_slugs = _dedupe_keep_order(
+        ALWAYS_INCLUDED_DOMAIN_AGENTS + list(archetypes) + tool_agent_slugs
+    )
 
     # Full slug list for orchestrator
     all_slugs = (
@@ -157,7 +164,7 @@ def build_manifest(description: dict[str, Any], *, framework: str = "copilot-vsc
         conflict_log_path=".github/agents/references/conflict-log.csv",
         workstream_source_map=_format_workstream_source_map(components),
         style_rules_summary=_format_style_rules(description.get("style_rules", [])),
-        domain_agent_list=_format_domain_agent_list(archetypes),
+        domain_agent_list=_format_domain_agent_list(ALWAYS_INCLUDED_DOMAIN_AGENTS + list(archetypes)),
         workstream_expert_list=_format_workstream_expert_list(components),
         diagram_tools=diagram_tools,
         diagram_extension=diagram_extension,
@@ -764,9 +771,10 @@ def _derive_diagram_tools(tools: list[dict[str, Any]]) -> tuple[str, str]:
     return "Mermaid or Graphviz/DOT", "mmd"
 
 
-def _format_domain_agent_list(archetypes: list[str]) -> str:
+def _format_domain_agent_list(agent_slugs: list[str]) -> str:
     lines = []
     descriptions = {
+        "work-summarizer": "synthesizes daily/weekly/monthly work summaries from plan artifacts and git history",
         "primary-producer": "drafts and revises primary deliverables",
         "quality-auditor": "read-only structural and prose quality audit",
         "cohesion-repairer": "repairs within-section cohesion failures",
@@ -777,10 +785,21 @@ def _format_domain_agent_list(archetypes: list[str]) -> str:
         "output-compiler": "assembles components into the final deliverable package",
         "visual-designer": "creates and revises diagrams and figures",
     }
-    for slug in archetypes:
+    for slug in _dedupe_keep_order(agent_slugs):
         desc = descriptions.get(slug, "specialized domain agent")
         lines.append(f"- `@{slug}` — {desc}")
     return "\n".join(lines) if lines else "No domain agents selected."
+
+
+def _dedupe_keep_order(items: list[str]) -> list[str]:
+    seen: set[str] = set()
+    out: list[str] = []
+    for item in items:
+        if item in seen:
+            continue
+        seen.add(item)
+        out.append(item)
+    return out
 
 
 def _format_workstream_expert_list(components: list[dict[str, Any]]) -> str:
@@ -904,8 +923,8 @@ def _plan_output_files(
             "component_slug": None,
         })
 
-    # Domain agents
-    for slug in archetypes:
+    # Domain agents (always-included operational + selected archetypes)
+    for slug in _dedupe_keep_order(ALWAYS_INCLUDED_DOMAIN_AGENTS + list(archetypes)):
         files.append({
             "path": f"{slug}.agent.md",
             "template": f"{domain_dir}{slug}.template.md",
@@ -965,11 +984,25 @@ def _plan_output_files(
         "component_slug": None,
     })
 
-    # GitHub operations and merge-strategy reference (always)
+    # Git operations merge workflow reference (always)
     files.append({
         "path": "references/github-workflows-merge.reference.md",
         "template": f"{agents_dir}github-workflows-merge.reference.template.md",
-        "type": "artifact",
+        "type": "reference",
+        "component_slug": None,
+    })
+
+    # Work summary references (always — work-summarizer support)
+    files.append({
+        "path": "references/work-summary-spec.reference.md",
+        "template": f"{agents_dir}work-summary-spec.reference.template.md",
+        "type": "reference",
+        "component_slug": None,
+    })
+    files.append({
+        "path": "references/work-summary-tooling.reference.md",
+        "template": f"{agents_dir}work-summary-tooling.reference.template.md",
+        "type": "reference",
         "component_slug": None,
     })
 
