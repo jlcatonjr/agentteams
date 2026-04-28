@@ -321,7 +321,9 @@ def test_snapshot_comparison(tmp_path, example):
     _live_data_files = {"security-vulnerability-watch.reference.md", "security.agent.md"}
     expected_files = sorted(
         f for f in expected_dir.rglob("*.md")
-        if "build-log" not in f.name and f.name not in _live_data_files
+        if "build-log" not in f.name
+        and f.name not in _live_data_files
+        and ".agentteams-backups" not in f.parts
     )
     assert expected_files, f"No .md files found in {expected_dir}"
 
