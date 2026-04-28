@@ -1,4 +1,11 @@
+import pytest
 from pathlib import Path
+
+_ACTIVE_AGENTS_DIR = Path(".github/agents")
+_SKIP_IF_NO_ACTIVE_AGENTS = pytest.mark.skipif(
+    not (_ACTIVE_AGENTS_DIR / "orchestrator.agent.md").exists(),
+    reason=".github/agents/ is gitignored; active-agent tests only run locally against generated output",
+)
 
 
 def _assert_in_order(text: str, parts: list[str]) -> None:
@@ -25,6 +32,7 @@ def test_orchestrator_template_routes_post_update_chain() -> None:
     )
 
 
+@_SKIP_IF_NO_ACTIVE_AGENTS
 def test_active_orchestrator_routes_post_update_chain() -> None:
     text = Path(".github/agents/orchestrator.agent.md").read_text(encoding="utf-8")
 
@@ -57,6 +65,7 @@ def test_agent_updater_template_hands_off_to_adversarial_then_conflict() -> None
     )
 
 
+@_SKIP_IF_NO_ACTIVE_AGENTS
 def test_active_agent_updater_hands_off_to_adversarial_then_conflict() -> None:
     text = Path(".github/agents/agent-updater.agent.md").read_text(encoding="utf-8")
 
