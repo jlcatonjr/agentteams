@@ -19,6 +19,7 @@ handoffs:
     prompt: "Final output assembly complete."
     send: false
 ---
+<!-- AGENTTEAMS:BEGIN content v=1 -->
 
 # Output Compiler — SalesDataPipeline
 
@@ -68,3 +69,4 @@ Final output: <path to assembled deliverable>
 - *(If `@format-converter` in team)* Never include components that have not been converted by `@format-converter`
 - Never silently skip missing components — always report and wait
 - Do not modify source files in `src/` during assembly
+<!-- AGENTTEAMS:END content -->

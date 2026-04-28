@@ -15,6 +15,7 @@ handoffs:
     prompt: "Agent refactoring is complete. Review the changes."
     send: false
 ---
+<!-- AGENTTEAMS:BEGIN content v=1 -->
 
 # Agent Refactor — ProjectRepositories
 
@@ -62,3 +63,4 @@ Check every agent file for:
 | Agent slugs | All agent slug references must resolve within the team |
 
 Report all violations to the orchestrator. Do not auto-fix violations that would change an agent's scope or access level.
+<!-- AGENTTEAMS:END content -->

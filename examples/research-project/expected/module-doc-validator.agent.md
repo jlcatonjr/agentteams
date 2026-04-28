@@ -19,6 +19,7 @@ handoffs:
     prompt: "Module documentation validation complete. See findings."
     send: false
 ---
+<!-- AGENTTEAMS:BEGIN content v=1 -->
 
 # Module Doc Validator — ResearchPaperProject
 
@@ -101,3 +102,4 @@ Affected pages: <list>
 - **Never guess.** Report UNVERIFIED if a source file cannot be read rather than fabricating a result.
 - **Log cross-document conflicts** to `@conflict-auditor`.
 - **Do not validate narrative prose** — only structural parity, coverage, signatures, and version consistency.
+<!-- AGENTTEAMS:END content -->

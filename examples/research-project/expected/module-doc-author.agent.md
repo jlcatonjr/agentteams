@@ -19,6 +19,7 @@ handoffs:
     prompt: "Module documentation production is complete."
     send: false
 ---
+<!-- AGENTTEAMS:BEGIN content v=1 -->
 
 # Module Doc Author — ResearchPaperProject
 
@@ -122,3 +123,4 @@ Before returning any draft:
 
 1. **Published papers by James Caton** (`sources/papers/`) — theoretical claims
 2. **Agent source files** (`.github/agents/`) — agent documentation accuracy
+<!-- AGENTTEAMS:END content -->

@@ -19,6 +19,7 @@ handoffs:
     prompt: "Module documentation production is complete."
     send: false
 ---
+<!-- AGENTTEAMS:BEGIN content v=1 -->
 
 # Module Doc Author — SalesDataPipeline
 
@@ -122,3 +123,4 @@ Before returning any draft:
 
 1. **Source CSV schema** (`docs/source-schema.md`) — field names and types in raw data
 2. **Warehouse schema** (`sql/warehouse-schema.sql`) — target table structure
+<!-- AGENTTEAMS:END content -->

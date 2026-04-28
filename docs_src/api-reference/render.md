@@ -4,6 +4,8 @@ Render agent files from templates by resolving placeholders.
 
 Takes a team manifest (from `analyze.py`) and a template directory, and produces a list of `(output_path, rendered_content)` pairs ready for the emit phase.
 
+The returned content is framework-agnostic. To produce the final emitted file format, pass each rendered body through the target framework adapter's `render_agent_file()` method before calling `emit.emit_all()`.
+
 > *Source: `agentteams/render.py`*
 
 ---

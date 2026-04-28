@@ -1,3 +1,4 @@
+<!-- AGENTTEAMS:BEGIN content v=1 -->
 # FastAPI Reference — WebAppBackend
 
 > Quick-reference for **FastAPI ** (framework) in WebAppBackend.
@@ -39,3 +40,4 @@
 
 - `@technical-validator` — verify technical accuracy of FastAPI usage
 - `@primary-producer` — implements code that depends on FastAPI
+<!-- AGENTTEAMS:END content -->

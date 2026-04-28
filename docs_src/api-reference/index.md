@@ -44,6 +44,8 @@ description = ingest.load("brief.json")
 manifest = analyze.build_manifest(description, framework="copilot-vscode")
 rendered = render.render_all(manifest, templates_dir=Path("templates"))
 
+# render_all() returns framework-agnostic content; adapters add framework-specific
+# wrappers and metadata before emit.
 adapter = CopilotVSCodeAdapter()
 final = [(p, adapter.render_agent_file(c, Path(p).stem, manifest))
          for p, c in rendered]
@@ -51,6 +53,8 @@ final = [(p, adapter.render_agent_file(c, Path(p).stem, manifest))
 result = emit.emit_all(final, output_dir=Path(".github/agents"), dry_run=False)
 emit.print_summary(result, manifest)
 ```
+
+`render.render_all()` does not apply framework-specific post-processing on its own. Use the appropriate adapter from `agentteams.frameworks` to convert rendered content into the final framework format before passing it to `emit.emit_all()`.
 
 ---
 

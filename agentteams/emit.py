@@ -31,6 +31,7 @@ from typing import Any
 class EmitResult:
     written: list[str] = field(default_factory=list)
     merged: list[str] = field(default_factory=list)
+    unchanged: list[str] = field(default_factory=list)
     skipped: list[str] = field(default_factory=list)
     errors: list[str] = field(default_factory=list)
     dry_run: bool = False
@@ -78,6 +79,51 @@ _FENCE_BEGIN_RE = re.compile(
 _FENCE_END_RE = re.compile(
     r"<!-- AGENTTEAMS:END (?P<sid>[a-z][a-z0-9_]*) -->",
 )
+_YAML_FM_RE = re.compile(r"^(---\n.+?\n---\n)", re.DOTALL)
+
+_MACHINE_MANAGED_MERGE_OVERWRITE_PATHS: frozenset[str] = frozenset([
+    "references/security-vulnerability-watch.json",
+])
+
+
+def _normalize_generated_content(rel_path: str, content: str) -> str:
+    """Return emitted content normalized for merge-safe markdown generation.
+
+    Markdown outputs participate in section-fencing merge mode. When a rendered
+    markdown file has no AGENTTEAMS fences at all, wrap the full file in a
+    default fence block so future ``--merge`` runs can update it safely.
+
+    Args:
+        rel_path: Relative output path for the generated file.
+        content: Rendered file body.
+
+    Returns:
+        Content ready for write/merge.
+    """
+    if not rel_path.endswith(".md"):
+        return content
+
+    existing_regions = _extract_fenced_regions(content)
+    if isinstance(existing_regions, dict) and existing_regions:
+        return content
+
+    # If content has YAML front matter, wrap only the body so the front matter
+    # stays at the top of the file (as required by all framework parsers).
+    fm_match = _YAML_FM_RE.match(content)
+    if fm_match:
+        front_matter = fm_match.group(1)
+        body = content[len(front_matter):]
+        normalized = front_matter + "<!-- AGENTTEAMS:BEGIN content v=1 -->\n" + body
+        if not normalized.endswith("\n"):
+            normalized += "\n"
+        normalized += "<!-- AGENTTEAMS:END content -->\n"
+        return normalized
+
+    normalized = "<!-- AGENTTEAMS:BEGIN content v=1 -->\n" + content
+    if not normalized.endswith("\n"):
+        normalized += "\n"
+    normalized += "<!-- AGENTTEAMS:END content -->\n"
+    return normalized
 
 
 def _extract_fenced_regions(content: str) -> dict[str, str] | str:
@@ -122,6 +168,11 @@ def _extract_fenced_regions(content: str) -> dict[str, str] | str:
         else:
             i += 1
     return regions
+
+
+def _is_machine_managed_merge_overwrite_path(rel_path: str) -> bool:
+    """Return True when merge mode may safely full-replace a machine-managed file."""
+    return rel_path in _MACHINE_MANAGED_MERGE_OVERWRITE_PATHS
 
 
 def _merge_fenced_content(new_rendered: str, existing_on_disk: str) -> MergeResult:
@@ -496,6 +547,7 @@ def emit_all(
     # Write files
     for rel_path, content in rendered_files:
         target = _resolve_path(output_dir, rel_path)
+        normalized_content = _normalize_generated_content(rel_path, content)
 
         if dry_run:
             if merge and target.exists():
@@ -509,13 +561,26 @@ def emit_all(
         # Merge path
         if merge and target.exists():
             existing_text = target.read_text(encoding="utf-8")
-            merge_result = _merge_fenced_content(content, existing_text)
+            merge_result = _merge_fenced_content(normalized_content, existing_text)
             if merge_result.has_errors:
-                for err in merge_result.parse_errors:
-                    print(f"  ⚠  Merge skipped ({target.name}): {err}", file=sys.stderr)
-                result.skipped.append(str(target))
+                legacy_no_fence = all(
+                    "No fence markers detected" in err for err in merge_result.parse_errors
+                )
+                if legacy_no_fence and _is_machine_managed_merge_overwrite_path(rel_path):
+                    if existing_text == normalized_content:
+                        result.unchanged.append(str(target))
+                    else:
+                        try:
+                            target.write_text(normalized_content, encoding="utf-8")
+                            result.merged.append(str(target))
+                        except OSError as exc:
+                            result.errors.append(f"Failed to write {target}: {exc}")
+                else:
+                    for err in merge_result.parse_errors:
+                        print(f"  ⚠  Merge skipped ({target.name}): {err}", file=sys.stderr)
+                    result.skipped.append(str(target))
             elif not merge_result.content_changed and not merge_result.sections_added:
-                result.skipped.append(str(target))
+                result.unchanged.append(str(target))
             else:
                 try:
                     target.write_text(merge_result.merged_content, encoding="utf-8")
@@ -537,7 +602,7 @@ def emit_all(
 
         try:
             target.parent.mkdir(parents=True, exist_ok=True)
-            target.write_text(content, encoding="utf-8")
+            target.write_text(normalized_content, encoding="utf-8")
             result.written.append(str(target))
         except OSError as exc:
             result.errors.append(f"Failed to write {target}: {exc}")
@@ -561,6 +626,8 @@ def print_summary(result: EmitResult, manifest: dict[str, Any]) -> None:
         print(f"  Written:  {len(result.written)} file(s)")
         if result.merged:
             print(f"  Merged:   {len(result.merged)} file(s) (template regions updated, user content preserved)")
+        if result.unchanged:
+            print(f"  Unchanged:{len(result.unchanged):>4} file(s) already matched rendered fenced content")
         if result.skipped:
             print(f"  Skipped:  {len(result.skipped)} (use --overwrite to replace, or --merge for fenced files)")
         if result.errors:

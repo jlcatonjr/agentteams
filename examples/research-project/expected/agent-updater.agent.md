@@ -23,6 +23,7 @@ handoffs:
     prompt: "Agent documentation has been synchronized with project changes."
     send: false
 ---
+<!-- AGENTTEAMS:BEGIN content v=1 -->
 
 # Agent Updater — ResearchPaperProject
 
@@ -144,3 +145,4 @@ For batch runs across multiple repos, use `batch_update.py` (or an equivalent sc
 - **No resolved-issue archaeology** — once fixed, remove from docs
 - **No dated fix logs** — remove after verification
 - **Hardcoded volatile state belongs in reference files** — not embedded in agent prose
+<!-- AGENTTEAMS:END content -->

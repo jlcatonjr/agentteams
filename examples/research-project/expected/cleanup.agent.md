@@ -10,6 +10,7 @@ handoffs:
     prompt: "Cleanup is complete. Review the removal report."
     send: false
 ---
+<!-- AGENTTEAMS:BEGIN content v=1 -->
 
 # Cleanup — ResearchPaperProject
 
@@ -85,3 +86,4 @@ Skipped ({count}):
 Flagged for user review ({count}):
 - [path] — [unique content description]
 ```
+<!-- AGENTTEAMS:END content -->

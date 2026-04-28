@@ -82,13 +82,13 @@ Tier 1: Orchestrator
 Tier 2: Governance Agents
    └── Navigator, Security, Code-Hygiene, Adversarial,
        Conflict-Auditor, Conflict-Resolution, Cleanup,
-    Agent-Updater, Agent-Refactor, Repo-Liaison,
-    Git-Operations
+    Agent-Updater, Agent-Refactor, Repo-Liaison, Git-Operations
        Each owns a cross-cutting concern (structure, safety,
        consistency, documentation) rather than a deliverable
 
 Tier 3: Domain Agents
-   └── Primary-Producer, Quality-Auditor, Technical-Validator,
+   └── Work-Summarizer (always included), Primary-Producer,
+       Quality-Auditor, Technical-Validator,
        Format-Converter, Reference-Manager, Output-Compiler, ...
        Each owns a production workflow (drafting, auditing,
        converting, compiling)
@@ -138,10 +138,12 @@ Templates in `templates/` are Markdown files with `{PLACEHOLDER}` tokens. The li
 | Tier | Templates |
 |------|-----------|
 | Orchestrator | `universal/orchestrator.template.md` |
-| Governance | `universal/` (11 templates) |
-| Domain | `domain/` (9 archetype templates + 6 tool templates) |
+| Governance | `universal/` (10 tier-2 governance agent templates) |
+| Domain | `domain/` (13 archetype templates + 6 tool templates) |
 | Workstream Expert | `workstream-expert.template.md` (one template, rendered per component) |
 | Builder | `builder/` (3 framework-specific team-builder templates) |
+
+In addition to the 10 always-included tier-2 governance templates, `universal/` also contains the tier-1 Orchestrator template and the `git-operations` specialist template.
 
 See [Template Authoring](template-authoring.md) for placeholder conventions and authoring rules.
 

@@ -16,8 +16,8 @@ Given a project description (a `.json` or `.md` brief), the module:
 The generated team includes:
 
 - 1 **Orchestrator** agent — coordinates all workflows
-- 9 **Governance agents** — navigation, security, consistency, cleanup, documentation
-- 2–9 **Domain agents** — appropriate archetypes for your deliverable type
+- 11 **Governance agents** — navigation, security, consistency, cleanup, documentation, cross-repository coordination, and git operations
+- 3–10 **Domain agents** — `@work-summarizer` plus project-appropriate archetypes
 - 1 **Workstream Expert** per project component — deep, component-specific knowledge
 - 1 **Team Builder agent** — framework-native agent that can regenerate or expand the team
 - A framework instructions file — `.github/copilot-instructions.md` (Copilot VS Code / Copilot CLI) or `.claude/CLAUDE.md` (Claude)
@@ -43,14 +43,6 @@ Short reads (about five paragraphs each) explaining how core module components f
 7. [Tools and References](https://jameslcaton.com/#/blog/04-22-2026-AgentTeams%20Tools%20and%20References.html)
 8. [Security Agent](https://jameslcaton.com/#/blog/04-22-2026-AgentTeams%20Security%20Agent.html)
 9. [Audit Protocols and Security](https://jameslcaton.com/#/blog/04-22-2026-AgentTeams%20Audit%20Protocols%20and%20Security.html)
-
----
-
-## 📋 Feature Inventory
-
---8<-- "docs_src/assets/feature-summary-table.md"
-
-**Full details:** [Feature Inventory](api-reference/feature-inventory.md)
 
 ---
 

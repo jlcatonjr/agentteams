@@ -1,3 +1,4 @@
+<!-- AGENTTEAMS:BEGIN content v=1 -->
 # BibTeX Reference — ResearchPaperProject
 
 > Quick-reference for **BibTeX ** (library) in ResearchPaperProject.
@@ -39,3 +40,4 @@
 
 - `@technical-validator` — verify technical accuracy of BibTeX usage
 - `@primary-producer` — implements code that depends on BibTeX
+<!-- AGENTTEAMS:END content -->

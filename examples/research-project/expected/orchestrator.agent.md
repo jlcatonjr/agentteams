@@ -16,6 +16,7 @@ agents:
   - agent-refactor
   - repo-liaison
   - git-operations
+  - work-summarizer
   - primary-producer
   - quality-auditor
   - cohesion-repairer
@@ -109,6 +110,10 @@ handoffs:
     agent: repo-liaison
     prompt: "Assess or communicate impact of this project's activity on adjacent repositories. Describe the change and list any known adjacent repos."
     send: false
+  - label: Summarize Work Period
+    agent: work-summarizer
+    prompt: "Create daily, weekly, or monthly work summaries from planning artifacts and git diffs for the requested period."
+    send: false
   - label: Git Operations
     agent: git-operations
     prompt: "Run a git operation: commit and push, pull/merge/rebase, resolve conflicts, or recover a file. Describe the operation needed."
@@ -149,8 +154,9 @@ You coordinate all agent operations for **ResearchPaperProject**. You route work
 7. **Domain agents own their scope** — The orchestrator routes; it does not perform domain work directly
 8. **Living document policy** — No stale content in agent docs: no dated audit snapshots, no resolved-issue archaeology, no hardcoded volatile state
 9. **Workstream experts commission, they do not write** — The expert briefs the producer; the producer writes; the expert reviews
-10. **Every request must generate a plan** — Any request involving two or more implementation steps (steps that write, create, rename, delete, or make agent decisions) must produce: (a) a summary saved to `tmp/<plan-slug>.plan.md` and (b) a step-by-step specification saved to `tmp/<plan-slug>.steps.csv` before the first step executes. The CSV must include columns: `step`, `agent`, `action`, `inputs`, `outputs`, `status`, `notes`; initial `status` for all rows is `pending`. After each step completes, pass remaining steps through `@adversarial` and `@conflict-auditor` before proceeding. Create `tmp/` if it does not exist.
+10. **Every request must generate a plan** — Any request involving two or more implementation steps (steps that write, create, rename, delete, or make agent decisions) must produce: (a) a summary saved to `tmp/by-week/YYYY-Www/<plan-slug>.plan.md` and (b) a step-by-step specification saved to `tmp/by-week/YYYY-Www/<plan-slug>.steps.csv` before the first step executes. The CSV must include columns: `step`, `agent`, `action`, `inputs`, `outputs`, `status`, `notes`; initial `status` for all rows is `pending`. After each step completes, pass remaining steps through `@adversarial` and `@conflict-auditor` before proceeding. Create the week folder if it does not exist; read legacy undated plans from `tmp/` when canonical week-organized storage is absent.
 11. **Cross-repository writes require `@repo-liaison` + `@security`** — Any action that modifies files in a repository other than `html/chapters/` must first be assessed by `@repo-liaison` and cleared by `@security`
+12. **Completed plans must be captured in a daily work summary** — When a plan reaches all `done` during a session, invoke `@work-summarizer` to append/update `workSummaries/daily/YYYY-MM-DD.md` before closeout
 
 <!-- AGENTTEAMS:BEGIN authority_hierarchy v=1 -->
 ### Authority Hierarchy
@@ -175,6 +181,7 @@ You coordinate all agent operations for **ResearchPaperProject**. You route work
 | Final compilation | `@output-compiler` | Final assembly and build |
 | Diagrams and figures | `@visual-designer` *(if in team)* | Files in `figures/` |
 | Cross-repository impact and liaison | `@repo-liaison` | Adjacent repo docs, cross-orchestrator coordination, registry maintenance |
+| Daily/weekly/monthly work summary reporting | `@work-summarizer` | Synthesize `tmp/by-week/` plan artifacts, legacy `tmp/` fallbacks, and git history into `workSummaries/` |
 | Commit and push, pull/merge/rebase from main, conflict resolution, file recovery (git diff, revert, restore) | `@git-operations` | "Commit", "push", "pull main", "merge", "rebase", "recover file", "revert", "what changed", "restore old version" |
 <!-- AGENTTEAMS:END routing_table_rows -->
 
@@ -188,8 +195,9 @@ You coordinate all agent operations for **ResearchPaperProject**. You route work
 - Route to the correct domain agent — never handle domain work directly
 - After any investigation or fix: delegate to `@agent-updater`, then `@adversarial`, then `@conflict-auditor` before closing
 - Any git operation (commit/push/pull/merge/rebase/revert/restore) must route through `@git-operations` and follow `references/github-workflows-merge.reference.md`
-- Document every multi-step implementation plan before execution: `tmp/<plan-slug>.plan.md` + `tmp/<plan-slug>.steps.csv`; create `tmp/` if absent; initial `status` = `pending`; after each step, audit remaining steps via `@adversarial` + `@conflict-auditor` before proceeding
+- Document every multi-step implementation plan before execution: `tmp/by-week/YYYY-Www/<plan-slug>.plan.md` + `tmp/by-week/YYYY-Www/<plan-slug>.steps.csv`; create the week folder if absent; read legacy undated plans from `tmp/` when canonical week-organized storage is unavailable; initial `status` = `pending`; after each step, audit remaining steps via `@adversarial` + `@conflict-auditor` before proceeding
 - Any action touching adjacent repositories must go through `@repo-liaison` first
+- When a plan is completed in-session, capture it in `workSummaries/daily/YYYY-MM-DD.md` via `@work-summarizer` before closeout
 
 ---
 
@@ -204,13 +212,13 @@ You coordinate all agent operations for **ResearchPaperProject**. You route work
 
 Before executing Step 1 of any such plan:
 
-1. Create `tmp/` if it does not already exist
-2. Write `tmp/<plan-slug>.plan.md` — a summary containing: plan name, trigger, goal, agent sequence, success criteria, and rollback notes
-3. Write `tmp/<plan-slug>.steps.csv` — a row per step with columns: `step,agent,action,inputs,outputs,status,notes`; set all `status` values to `pending`
+1. Determine the target ISO week (`YYYY-Www`) and create `tmp/by-week/YYYY-Www/` if it does not already exist
+2. Write `tmp/by-week/YYYY-Www/<plan-slug>.plan.md` — a summary containing: plan name, trigger, goal, agent sequence, success criteria, and rollback notes
+3. Write `tmp/by-week/YYYY-Www/<plan-slug>.steps.csv` — a row per step with columns: `step,agent,action,inputs,outputs,status,notes`; set all `status` values to `pending`
 4. As each step completes: mark its `status` `done`, then pass the remaining `pending` steps through `@adversarial` and `@conflict-auditor` in light of any learning from the completed step; revise affected rows before proceeding to the next step
 5. Mark steps `blocked` with a note if they cannot proceed; surface blocked steps to the user
 
-The plan slug is a lowercase-hyphenated name derived from the workflow trigger (e.g., `produce-chapter-3`, `dependency-audit-2026-04`).
+The plan slug is a lowercase-hyphenated name derived from the workflow trigger (e.g., `produce-chapter-3`, `dependency-audit-2026-04`). Legacy undated plans already present in `tmp/` remain readable and should be considered fallback inputs during review and summary workflows.
 
 ---
 
@@ -356,13 +364,24 @@ Before executing any such step:
 
 **Trigger:** "Show plan status" / "Review plan progress" / "Update plan steps"
 
-1. Read `tmp/` → list all `.plan.md` and `.steps.csv` files
+1. Read `tmp/by-week/` and legacy `tmp/` → list all `.plan.md` and `.steps.csv` files
 2. For each plan: summarize current `status` column distribution across steps (pending / in_progress / done / blocked)
 3. **Pre-execution truth check** — before marking any step `in_progress`, invoke `@technical-validator` to verify the factual claims stated in that step's `inputs`, `outputs`, and `notes` fields against current on-disk state; flag any UNVERIFIED facts to the user before proceeding
 4. Surface any `blocked` steps with their `notes` to the user
 5. If plan is complete → mark all rows `done` and append completion date to `.plan.md`
 6. If plan needs revision → update the relevant `.steps.csv` rows; append a revision note to `.plan.md`
 7. → **Invoke Workflow 11: Final Check** (always; after all conditional branches above complete)
+
+### Workflow 10B: Work Summary Reporting
+
+**Trigger:** "Summarize today's work" / "Daily summary for YYYY-MM-DD" / "Weekly summary for YYYY-Www" / "Monthly summary for YYYY-MM"
+
+1. Invoke `@work-summarizer` → generate the requested summary from `tmp/by-week/` plan artifacts, legacy `tmp/` fallbacks, and git history/diffs
+2. Invoke `@technical-validator` → verify cited commit hashes, paths, and counts resolve on disk
+3. Invoke `@adversarial` → run a presupposition audit on the generated summary
+4. Invoke `@conflict-auditor` → run a consistency audit on the generated summary
+5. If a weekly summary was produced → run aggregate weekly audits: `@adversarial`, then `@conflict-auditor`
+6. → **Invoke Workflow 11: Final Check** (always; after all conditional branches above complete)
 
 ### Workflow 11: Final Check
 
@@ -371,10 +390,10 @@ Before executing any such step:
 #### Part A — Within-Plan Issues
 *(Skip Part A if no plan was active for the current session.)*
 
-1. Read `tmp/<current-plan-slug>.steps.csv` → list all rows where `status` is `pending` or `blocked`
+1. Read the current plan steps file from `tmp/by-week/YYYY-Www/<current-plan-slug>.steps.csv` when present, otherwise from legacy `tmp/<current-plan-slug>.steps.csv` → list all rows where `status` is `pending` or `blocked`
 2. For each open item:
    a. Investigate: read relevant files, verify facts on disk
-   b. If no sub-plan exists for the issue: create `tmp/<issue-slug>.plan.md` + `tmp/<issue-slug>.steps.csv` per the Pre-Execution Requirement above
+  b. If no sub-plan exists for the issue: create `tmp/by-week/YYYY-Www/<issue-slug>.plan.md` + `tmp/by-week/YYYY-Www/<issue-slug>.steps.csv` per the Pre-Execution Requirement above
    c. Invoke `@adversarial` → audit the sub-plan for hidden presuppositions
    d. Invoke `@conflict-auditor` → verify sub-plan is consistent with existing files
    e. Surface plan + audit results to the user
@@ -386,11 +405,12 @@ Before executing any such step:
 
 1. Scan issue sources:
    - `CHANGELOG.md` → any heading matching `Known Issues` (regex)
-   - `tmp/` → any `.steps.csv` files with `pending` or `blocked` rows (excluding the current plan)
+  - `tmp/by-week/` and legacy `tmp/` → any `.steps.csv` files with `pending` or `blocked` rows (excluding the current plan)
    - `git status --short` in the current repo → untracked files in `tmp/` or modified files outside the current plan's known output set; present as repo-relative paths only (never absolute filesystem paths)
 2. For each at-large issue found: write a one-paragraph summary — what it is, why it matters, which files or commits are involved
 3. Invoke `@adversarial` → audit the summaries for false assumptions (e.g., "this is truly unresolved", "this git status entry is not legitimately in-progress work")
 4. Invoke `@conflict-auditor` → verify summaries do not contradict authority sources
 5. Present audited summaries as a numbered list to the user
 6. If no at-large issues are found: note "No at-large issues detected"
+7. If a plan reached all `done` during this session: invoke `@work-summarizer` to append/update `workSummaries/daily/YYYY-MM-DD.md` before closeout
 <!-- AGENTTEAMS:END available_workflows -->

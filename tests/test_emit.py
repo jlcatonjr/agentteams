@@ -82,7 +82,9 @@ def test_emit_overwrite_existing(tmp_path):
     result = emit_all(rendered, output_dir=tmp_path, dry_run=False, overwrite=True, yes=True)
 
     assert result.success
-    assert existing_file.read_text(encoding="utf-8") == "NEW CONTENT"
+    written = existing_file.read_text(encoding="utf-8")
+    assert "NEW CONTENT" in written
+    assert written.startswith("<!-- AGENTTEAMS:BEGIN content v=1 -->\n")
 
 
 # ---------------------------------------------------------------------------
@@ -107,12 +109,35 @@ def test_emit_parent_relative_path(tmp_path):
 # ---------------------------------------------------------------------------
 
 def test_emit_content_preserved(tmp_path):
-    content = "# Header\n\nSome content with **bold** and `code`.\n"
-    rendered = [("test.agent.md", content)]
+    content = "type,file,description\n"
+    rendered = [("references/conflict-log.csv", content)]
     emit_all(rendered, output_dir=tmp_path, dry_run=False, overwrite=True, yes=True)
 
-    written_content = (tmp_path / "test.agent.md").read_text(encoding="utf-8")
+    written_content = (tmp_path / "references" / "conflict-log.csv").read_text(encoding="utf-8")
     assert written_content == content
+
+
+def test_emit_autofences_markdown_outputs(tmp_path):
+    content = "# Header\n\nSome content with **bold** and `code`.\n"
+    emit_all([("test.agent.md", content)], output_dir=tmp_path, dry_run=False, overwrite=True, yes=True)
+
+    written_content = (tmp_path / "test.agent.md").read_text(encoding="utf-8")
+    assert written_content.startswith("<!-- AGENTTEAMS:BEGIN content v=1 -->\n")
+    assert "# Header" in written_content
+    assert written_content.rstrip().endswith("<!-- AGENTTEAMS:END content -->")
+
+
+def test_emit_autofences_preserves_yaml_front_matter_position(tmp_path):
+    """Front matter must remain first; fence markers go after the closing --- line."""
+    content = "---\nname: My Agent\ndescription: test\n---\n\n# Header\n\nBody text.\n"
+    emit_all([("my.agent.md", content)], output_dir=tmp_path, dry_run=False, overwrite=True, yes=True)
+
+    written_content = (tmp_path / "my.agent.md").read_text(encoding="utf-8")
+    assert written_content.startswith("---\n"), "YAML front matter must be at position 0"
+    fence_begin_pos = written_content.find("<!-- AGENTTEAMS:BEGIN content v=1 -->")
+    fm_end_pos = written_content.find("---\n", 4) + 4  # end of closing ---
+    assert fence_begin_pos >= fm_end_pos, "fence BEGIN must appear after the front-matter block"
+    assert written_content.rstrip().endswith("<!-- AGENTTEAMS:END content -->")
 
 
 # ---------------------------------------------------------------------------
@@ -170,7 +195,9 @@ def test_emit_skipped_list_populated_when_file_exists(tmp_path):
     # yes=True promotes overwrite → file is written, not skipped or errored
     assert result.success is True
     assert len(result.written) == 1
-    assert existing_file.read_text(encoding="utf-8") == "NEW CONTENT"
+    written = existing_file.read_text(encoding="utf-8")
+    assert "NEW CONTENT" in written
+    assert written.startswith("<!-- AGENTTEAMS:BEGIN content v=1 -->\n")
 
 
 # ---------------------------------------------------------------------------
@@ -308,6 +335,84 @@ def test_merge_preserves_user_content_below_fence(tmp_path):
     content = target.read_text(encoding="utf-8")
     assert "# Header — NEW" in content
     assert "user-authored content below the fence" in content
+
+
+def test_merge_normalizes_unfenced_markdown_render_before_merge(tmp_path):
+    existing = (
+        "<!-- AGENTTEAMS:BEGIN content v=1 -->\n"
+        "# Header — OLD\n"
+        "<!-- AGENTTEAMS:END content -->\n"
+        "\n"
+        "## User Section\n"
+        "This is user-authored content below the fence.\n"
+    )
+    new_rendered = "# Header — NEW\n"
+    target = tmp_path / "agent.agent.md"
+    target.write_text(existing, encoding="utf-8")
+
+    result = emit_all(
+        [("agent.agent.md", new_rendered)],
+        output_dir=tmp_path,
+        merge=True,
+    )
+
+    assert result.success
+    content = target.read_text(encoding="utf-8")
+    assert "# Header — NEW" in content
+    assert "user-authored content below the fence" in content
+
+
+def test_merge_unchanged_result_not_counted_as_skip(tmp_path):
+    existing = (
+        "<!-- AGENTTEAMS:BEGIN content v=1 -->\n"
+        "# Header — SAME\n"
+        "<!-- AGENTTEAMS:END content -->\n"
+    )
+    target = tmp_path / "agent.agent.md"
+    target.write_text(existing, encoding="utf-8")
+
+    result = emit_all(
+        [("agent.agent.md", "# Header — SAME\n")],
+        output_dir=tmp_path,
+        merge=True,
+    )
+
+    assert result.success
+    assert len(result.unchanged) == 1
+    assert result.skipped == []
+
+
+def test_merge_overwrites_machine_managed_json_artifact_without_fences(tmp_path):
+    target = tmp_path / "references" / "security-vulnerability-watch.json"
+    target.parent.mkdir(parents=True, exist_ok=True)
+    target.write_text('{"generated_at":"old"}\n', encoding="utf-8")
+
+    result = emit_all(
+        [("references/security-vulnerability-watch.json", '{"generated_at":"new"}\n')],
+        output_dir=tmp_path,
+        merge=True,
+    )
+
+    assert result.success
+    assert len(result.merged) == 1
+    assert result.skipped == []
+    assert target.read_text(encoding="utf-8") == '{"generated_at":"new"}\n'
+
+
+def test_merge_counts_unchanged_machine_managed_json_artifact(tmp_path):
+    target = tmp_path / "references" / "security-vulnerability-watch.json"
+    target.parent.mkdir(parents=True, exist_ok=True)
+    target.write_text('{"generated_at":"same"}\n', encoding="utf-8")
+
+    result = emit_all(
+        [("references/security-vulnerability-watch.json", '{"generated_at":"same"}\n')],
+        output_dir=tmp_path,
+        merge=True,
+    )
+
+    assert result.success
+    assert len(result.unchanged) == 1
+    assert result.skipped == []
 
 
 # ---------------------------------------------------------------------------

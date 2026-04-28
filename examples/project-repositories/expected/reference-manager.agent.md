@@ -15,6 +15,7 @@ handoffs:
     prompt: "Reference database operation complete."
     send: false
 ---
+<!-- AGENTTEAMS:BEGIN content v=1 -->
 
 # Reference Manager — ProjectRepositories
 
@@ -77,3 +78,4 @@ Status: VERIFIED | UNVERIFIED | NOT-FOUND | FLAGGED
 Action taken: <description or "none">
 Escalation required: YES|NO — <reason if YES>
 ```
+<!-- AGENTTEAMS:END content -->

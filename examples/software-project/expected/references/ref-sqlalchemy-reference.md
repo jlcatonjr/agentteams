@@ -1,3 +1,4 @@
+<!-- AGENTTEAMS:BEGIN content v=1 -->
 # SQLAlchemy Reference — WebAppBackend
 
 > Quick-reference for **SQLAlchemy ** (library) in WebAppBackend.
@@ -39,3 +40,4 @@
 
 - `@technical-validator` — verify technical accuracy of SQLAlchemy usage
 - `@primary-producer` — implements code that depends on SQLAlchemy
+<!-- AGENTTEAMS:END content -->

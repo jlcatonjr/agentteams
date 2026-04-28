@@ -26,6 +26,8 @@ Short identifier for this framework (e.g., `'copilot-vscode'`).
 
 Post-process rendered agent content for this framework.
 
+This is the adapter step that turns the framework-agnostic output of `render.render_all()` into the final framework-specific file body.
+
 **Args:**
 
 - `content` (`str`) — Rendered agent file content (placeholders already resolved).

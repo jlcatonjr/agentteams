@@ -23,6 +23,7 @@ handoffs:
     prompt: "Deliverable production is complete."
     send: false
 ---
+<!-- AGENTTEAMS:BEGIN content v=1 -->
 # Primary Producer — WebAppBackend
 
 You draft and revise the primary deliverables for WebAppBackend. All production is driven by a **Component Brief** prepared by the workstream expert for the component you are producing.
@@ -63,3 +64,4 @@ Every deliverable must meet these floors before leaving this agent:
 
 1. **OpenAPI specification** (`docs/openapi.yaml`) — API contract accuracy
 2. **Database schema** (`src/models/schema.sql`) — data model accuracy
+<!-- AGENTTEAMS:END content -->
