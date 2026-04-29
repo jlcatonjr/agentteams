@@ -71,14 +71,14 @@ everything listed reflects the current development state.
 
 ### Templates & Schemas
 
-34. **10 Universal Governance Templates** — One tier-2 template per governance agent archetype
-35. **19 Domain Templates** — 13 project-type archetype templates plus 6 tool templates
+34. **11 Universal Governance Templates** — One tier-2 template per governance agent archetype
+35. **20 Domain Templates** — 14 project-type archetype templates (incl. `content-enricher` and `work-summarizer`) plus 6 tool templates
 36. **3 Builder Templates** — Team Builder agent variants
 37. **6 Workstream Expert Templates** — Component-scoped expertise patterns
 38. **`project-description.schema.json`** — JSON Schema for brief validation
 39. **`team-manifest.schema.json`** — JSON Schema for team manifest validation
 
-The `universal/` template library also includes the tier-1 Orchestrator template and the `git-operations` specialist template in addition to the 10 always-included tier-2 governance templates.
+The `universal/` template library includes the tier-1 Orchestrator template and all 11 always-included tier-2 governance templates.
 
 ---
 
@@ -177,7 +177,7 @@ Workflows are step sequences embedded in the generated Orchestrator agent. Every
 96. **Workflow 10 — Plan Documentation & Review** — Plan status scan → pre-execution truth check via `@technical-validator` → surface blocked steps
 97. **Workflow 10B — Work Summary Reporting** — Generate daily/weekly/monthly summaries from plan artifacts and git history, then audit them
 98. **Workflow 11 — Final Check (Part A)** — Scan current plan's `steps.csv` for `pending`/`blocked` rows; create audited sub-plans for each
-99. **Workflow 11 — Final Check (Part B)** — Scan `CHANGELOG.md` Known Issues, `tmp/` CSVs, and `git status` for at-large open issues; subject summaries to `@adversarial` + `@conflict-auditor`
+98. **Workflow 11 — Final Check (Part B)** — Scan `CHANGELOG.md` Known Issues, `tmp/by-week/YYYY-Www/` plan CSVs (legacy: `tmp/` root), and `git status` for at-large open issues; subject summaries to `@adversarial` + `@conflict-auditor`
 
 ---
 

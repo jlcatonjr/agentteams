@@ -97,7 +97,7 @@ Render a full Markdown document containing the Mermaid graph, a legend, and agen
 
 ## Functions
 
-### `build_graph(rendered_files, project_name)`
+### `build_graph(file_map, project_name='')`
 
 > *Source: `agentteams/graph.py`*
 
@@ -105,14 +105,14 @@ Build a `TeamGraph` from in-memory rendered agent file content.
 
 **Args:**
 
-- `rendered_files` (`dict[str, str]`) — Dict mapping relative path → rendered content.
-- `project_name` (`str`) — Display name for the project.
+- `file_map` (`dict[str, str]`) — Dict mapping relative path → rendered content.
+- `project_name` (`str`) — Display name for the project. Default: `''`.
 
 **Returns:** `TeamGraph`
 
 ---
 
-### `generate_graph_document(rendered_files, project_name)`
+### `generate_graph_document(file_map, project_name='')`
 
 > *Source: `agentteams/graph.py`*
 
@@ -120,8 +120,8 @@ Generate the full Markdown graph document combining Mermaid, DOT, and JSON repre
 
 **Args:**
 
-- `rendered_files` (`dict[str, str]`) — Dict mapping relative path → rendered content.
-- `project_name` (`str`) — Project display name for the document header.
+- `file_map` (`dict[str, str]`) — Dict mapping relative path → rendered content.
+- `project_name` (`str`) — Project display name for the document header. Default: `''`.
 
 **Returns:** `str` — Full Markdown document content.
 
@@ -134,10 +134,10 @@ Generate the full Markdown graph document combining Mermaid, DOT, and JSON repre
 CLI entry point for standalone graph generation.
 
 ```bash
-python -m src.graph /path/to/.github/agents/
-python -m src.graph /path/to/.github/agents/ --format mermaid
-python -m src.graph /path/to/.github/agents/ --format dot
-python -m src.graph /path/to/.github/agents/ --format json
+python -m agentteams.graph /path/to/.github/agents/
+python -m agentteams.graph /path/to/.github/agents/ --format mermaid
+python -m agentteams.graph /path/to/.github/agents/ --format dot
+python -m agentteams.graph /path/to/.github/agents/ --format json
 ```
 
 **Args:**

@@ -56,7 +56,7 @@ Add two new fields to the build-log:
 
 ---
 
-### Phase 2: Implement structural diff in `src/drift.py`
+### Phase 2: Implement structural diff in `agentteams/drift.py`
 
 **New function:** `compute_structural_diff(old_log, new_manifest, templates_dir) → StructuralDiffReport`
 
@@ -90,7 +90,7 @@ class StructuralDiffReport:
 
 ### Phase 3: Extend `--update` to handle structural changes
 
-**File:** `build_team.py` → the `if args.update:` block (lines 267–305)
+**File:** `build_team.py` → the `if args.update:` block
 
 Replace the current drift-only filter with:
 
@@ -205,7 +205,7 @@ When structural diff identifies removed files (agents deprecated from the taxono
 | File | Changes |
 |------|---------|
 | `build_team.py` | Enrich `_write_run_log()` (Phase 1), restructure `--update` block (Phase 3), add `--prune` flag (Phase 4) |
-| `src/drift.py` | Add `StructuralDiffReport`, `compute_structural_diff()`, `print_structural_diff_report()` (Phase 2) |
+| `agentteams/drift.py` | Add `StructuralDiffReport`, `compute_structural_diff()`, `print_structural_diff_report()` (Phase 2) |
 | `tests/test_drift.py` | New file — structural diff unit tests (Phase 6) |
 | `tests/test_integration.py` | Add `--update` integration tests (Phase 6) |
 | `README.md` | Document structural update (Phase 7) |
@@ -215,8 +215,8 @@ When structural diff identifies removed files (agents deprecated from the taxono
 
 | File | Reason |
 |------|--------|
-| `src/analyze.py` | Manifest already contains all structural data; no changes needed |
-| `src/render.py` | Rendering logic is unchanged; structural diff is a selection problem, not a rendering problem |
-| `src/emit.py` | Emit logic is unchanged; the `--update` block in `build_team.py` controls what gets emitted |
-| `src/ingest.py` | Input processing is unchanged |
+| `agentteams/analyze.py` | Manifest already contains all structural data; no changes needed |
+| `agentteams/render.py` | Rendering logic is unchanged; structural diff is a selection problem, not a rendering problem |
+| `agentteams/emit.py` | Emit logic is unchanged; the `--update` block in `build_team.py` controls what gets emitted |
+| `agentteams/ingest.py` | Input processing is unchanged |
 | Templates | Templates are unchanged; this plan is about the update mechanism, not template content |

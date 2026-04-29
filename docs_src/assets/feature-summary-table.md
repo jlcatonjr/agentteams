@@ -7,11 +7,10 @@
 | **Migration & Update** | 8 | `--migrate`, `--revert-migration`, `--enrich`, `--auto-correct`, `--scan-security`, security flags |
 | **Safety & Backups** | 6 | Automatic backups, restore capability, `--no-backup`, `--list-backups`, public backup API |
 | **Governance Agents** | 11 | navigator, security, code-hygiene, adversarial, conflict-auditor, conflict-resolution, cleanup, agent-updater, agent-refactor, repo-liaison, git-operations |
-| **Always-Included Operational Domain Agent** | 1 | `work-summarizer` (daily/weekly/monthly summary synthesis) |
 | **Workflows** | 12 | Workflows 1–12 with constitutional rules, guards, and final-check termination |
 | **Governance Infrastructure** | 7 | `@agent-updater` auto-triggers, `@adversarial` guards, truth check, drift-as-trigger, deployment protocol |
 | **Interoperability** | 8 | `convert`, `interop`, `bridge` modules; handoff manifest; CI flags |
 | **Bridge Automation** | 7 | Daily maintenance script, CI workflows, staleness watchdog, deduplication |
 | **Cross-Repository** | 8 | `@repo-liaison` agent, adjacent-repo tracking, impact/update/coordination protocols |
 
-**Total:** ~122 documented features across 12 capability areas.
+**Total:** ~125 documented features across 12 capability areas.

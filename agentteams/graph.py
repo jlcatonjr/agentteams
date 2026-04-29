@@ -14,10 +14,10 @@ Outputs
 
 CLI usage
 ---------
-    python -m src.graph /path/to/.github/agents/
-    python -m src.graph /path/to/.github/agents/ --format mermaid
-    python -m src.graph /path/to/.github/agents/ --format dot
-    python -m src.graph /path/to/.github/agents/ --format json
+    python -m agentteams.graph /path/to/.github/agents/
+    python -m agentteams.graph /path/to/.github/agents/ --format mermaid
+    python -m agentteams.graph /path/to/.github/agents/ --format dot
+    python -m agentteams.graph /path/to/.github/agents/ --format json
 
 The graph document is regenerated automatically on every ``build_team.py``
 run and written to ``references/pipeline-graph.md``.
@@ -46,7 +46,7 @@ AGENT_TYPES = {
     # Domain (archetype names)
     "primary-producer", "quality-auditor", "style-guardian", "technical-validator",
     "format-converter", "output-compiler", "reference-manager", "visual-designer",
-    "cohesion-repairer", "work-summarizer",
+    "cohesion-repairer",
 }
 
 
@@ -586,7 +586,8 @@ def _classify_agent_type(slug: str) -> str:
     _DOMAIN_SLUGS = frozenset({
         "primary-producer", "quality-auditor", "style-guardian", "technical-validator",
         "format-converter", "output-compiler", "reference-manager", "visual-designer",
-        "cohesion-repairer", "work-summarizer",
+        "cohesion-repairer", "work-summarizer", "content-enricher",
+        "module-doc-author", "module-doc-validator",
     })
     if slug in _GOVERNANCE_SLUGS:
         return "governance"
@@ -640,11 +641,11 @@ def main(argv: list[str] | None = None) -> int:
     """CLI entry point.
 
     Usage:
-        python -m src.graph /path/to/.github/agents/
-        python -m src.graph /path/to/.github/agents/ --format mermaid
-        python -m src.graph /path/to/.github/agents/ --format dot
-        python -m src.graph /path/to/.github/agents/ --format json
-        python -m src.graph /path/to/.github/agents/ --output pipeline-graph.md
+        python -m agentteams.graph /path/to/.github/agents/
+        python -m agentteams.graph /path/to/.github/agents/ --format mermaid
+        python -m agentteams.graph /path/to/.github/agents/ --format dot
+        python -m agentteams.graph /path/to/.github/agents/ --format json
+        python -m agentteams.graph /path/to/.github/agents/ --output pipeline-graph.md
 
     Args:
         argv: Argument list (defaults to sys.argv[1:]).
@@ -654,7 +655,7 @@ def main(argv: list[str] | None = None) -> int:
     """
     import argparse
     parser = argparse.ArgumentParser(
-        prog="python -m src.graph",
+        prog="python -m agentteams.graph",
         description="Build a directed graph of the agent team topology.",
     )
     parser.add_argument(

@@ -34,7 +34,7 @@ flowchart LR
     conflict_resolution["Conflict Resolution"]
     class conflict_resolution governance
     content_enricher["Content Enricher"]
-    class content_enricher unknown
+    class content_enricher domain
     format_converter["Format Converter"]
     class format_converter domain
     git_operations["Git Operations"]
@@ -205,7 +205,7 @@ flowchart LR
 | `cohesion-repairer` | domain | No | read, edit |
 | `conflict-auditor` | governance | No | read, edit, search, execute |
 | `conflict-resolution` | governance | No | edit, search, read |
-| `content-enricher` | unknown | Yes | read, edit, search |
+| `content-enricher` | domain | Yes | read, edit, search |
 | `format-converter` | domain | No | read, edit, execute |
 | `git-operations` | governance | Yes | read, execute, search |
 | `navigator` | governance | No | read, search, execute |
@@ -275,7 +275,7 @@ digraph "WebAppBackend Agent Team" {
     "cohesion-repairer" [label="Cohesion Repairer", fillcolor="#e8ffe8"];
     "conflict-auditor" [label="Conflict Auditor", fillcolor="#e8e8ff"];
     "conflict-resolution" [label="Conflict Resolution", fillcolor="#e8e8ff"];
-    "content-enricher" [label="Content Enricher", fillcolor="#f5f5f5"];
+    "content-enricher" [label="Content Enricher", fillcolor="#e8ffe8"];
     "format-converter" [label="Format Converter", fillcolor="#e8ffe8"];
     "git-operations" [label="Git Operations", fillcolor="#e8e8ff"];
     "navigator" [label="Navigator", fillcolor="#e8e8ff"];
@@ -476,7 +476,7 @@ digraph "WebAppBackend Agent Team" {
     },
     "content-enricher": {
       "display_name": "Content Enricher",
-      "agent_type": "unknown",
+      "agent_type": "domain",
       "user_invokable": true,
       "tools": [
         "read",

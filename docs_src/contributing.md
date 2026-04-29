@@ -54,7 +54,7 @@ See the [Template Authoring Guide](template-authoring.md) for full instructions.
 3. Every `.template.md` file must include a valid YAML front matter block with `name`, `description`, `user-invokable`, `tools`, and `model` fields
 4. Every agent template must contain an **Invariant Core** section marked with ⛔
 
-To register a new template for use in the rendering pipeline, add it to the appropriate section in `src/emit.py`'s template routing logic.
+To register a new template for use in the rendering pipeline, add it to the appropriate section in `agentteams/emit.py`'s template routing logic.
 
 ---
 
@@ -64,7 +64,7 @@ To register a new template for use in the rendering pipeline, add it to the appr
 2. Make your changes — keep each PR focused on a single concern
 3. Run `pytest tests/` and confirm all tests pass
 4. If you changed public API signatures, update the corresponding page in `docs_src/api-reference/`
-5. If you added or changed CLI flags, update `docs/cli-reference.md`
+5. If you added or changed CLI flags, update `docs_src/cli-reference.md`
 6. If you added or changed CLI flags/help text, regenerate `agentteams.1` before opening the PR:
 
 ```bash

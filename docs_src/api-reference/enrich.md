@@ -68,20 +68,21 @@ Applies three fill strategies in order: rule-based fills for known token pattern
 
 ---
 
-### `ai_enrich(findings, file_map, manifest, *, copilot_exe)`
+### `ai_enrich(findings, file_map, manifest, *, project_path=None, copilot_path=None)`
 
 > *Source: `agentteams/enrich/_enrich.py`*
 
 Fill remaining pending findings using the `copilot` CLI.
 
-Called after `auto_enrich` to handle tokens that rule-based logic could not resolve. Invokes the standalone `copilot` CLI in non-interactive mode with the project context and list of pending findings.
+Called after `auto_enrich` to handle tokens that rule-based logic could not resolve. Invokes the standalone `copilot` CLI in non-interactive mode with the project context and list of pending findings. When `copilot_path` is `None`, the executable is auto-detected via `shutil.which("copilot")`.
 
 **Args:**
 
 - `findings` (`list[DefaultFinding]`) — Findings list (pending items will be targeted).
 - `file_map` (`dict[str, str]`) — Current rendered file map (will be updated in place).
 - `manifest` (`dict[str, Any]`) — Team manifest.
-- `copilot_exe` (`str`, keyword-only) — Absolute path to the `copilot` executable (from `shutil.which`).
+- `project_path` (`Path | None`, keyword-only) — Absolute path to the project repo root; passed to the CLI for additional context. Default: `None`.
+- `copilot_path` (`str | None`, keyword-only) — Absolute path to the `copilot` executable. When `None`, auto-detected via `shutil.which`. Default: `None`.
 
 **Returns:** `tuple[dict[str, str], list[DefaultFinding]]` — `(enriched_file_map, updated_findings)`
 

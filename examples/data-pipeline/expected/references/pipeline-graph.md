@@ -32,7 +32,7 @@ flowchart LR
     conflict_resolution["Conflict Resolution"]
     class conflict_resolution governance
     content_enricher["Content Enricher"]
-    class content_enricher unknown
+    class content_enricher domain
     format_converter["Format Converter"]
     class format_converter domain
     git_operations["Git Operations"]
@@ -42,9 +42,9 @@ flowchart LR
     load_expert["Load Module Expert"]
     class load_expert workstream_expert
     module_doc_author["Module Doc Author"]
-    class module_doc_author unknown
+    class module_doc_author domain
     module_doc_validator["Module Doc Validator"]
-    class module_doc_validator unknown
+    class module_doc_validator domain
     navigator["Navigator"]
     class navigator governance
     orchestrator["Orchestrator"]
@@ -240,13 +240,13 @@ flowchart LR
 | `cohesion-repairer` | domain | No | read, edit |
 | `conflict-auditor` | governance | No | read, edit, search, execute |
 | `conflict-resolution` | governance | No | edit, search, read |
-| `content-enricher` | unknown | Yes | read, edit, search |
+| `content-enricher` | domain | Yes | read, edit, search |
 | `format-converter` | domain | No | read, edit, execute |
 | `git-operations` | governance | Yes | read, execute, search |
 | `ingest-expert` | workstream_expert | No | read, search, agent |
 | `load-expert` | workstream_expert | No | read, search, agent |
-| `module-doc-author` | unknown | No | read, edit, search |
-| `module-doc-validator` | unknown | No | read, search |
+| `module-doc-author` | domain | No | read, edit, search |
+| `module-doc-validator` | domain | No | read, search |
 | `navigator` | governance | No | read, search, execute |
 | `orchestrator` | governance | Yes | read, edit, search, execute, todo, agent |
 | `output-compiler` | domain | No | read, edit, execute |
@@ -320,13 +320,13 @@ digraph "SalesDataPipeline Agent Team" {
     "cohesion-repairer" [label="Cohesion Repairer", fillcolor="#e8ffe8"];
     "conflict-auditor" [label="Conflict Auditor", fillcolor="#e8e8ff"];
     "conflict-resolution" [label="Conflict Resolution", fillcolor="#e8e8ff"];
-    "content-enricher" [label="Content Enricher", fillcolor="#f5f5f5"];
+    "content-enricher" [label="Content Enricher", fillcolor="#e8ffe8"];
     "format-converter" [label="Format Converter", fillcolor="#e8ffe8"];
     "git-operations" [label="Git Operations", fillcolor="#e8e8ff"];
     "ingest-expert" [label="Ingest Module Expert", fillcolor="#fff8e8"];
     "load-expert" [label="Load Module Expert", fillcolor="#fff8e8"];
-    "module-doc-author" [label="Module Doc Author", fillcolor="#f5f5f5"];
-    "module-doc-validator" [label="Module Doc Validator", fillcolor="#f5f5f5"];
+    "module-doc-author" [label="Module Doc Author", fillcolor="#e8ffe8"];
+    "module-doc-validator" [label="Module Doc Validator", fillcolor="#e8ffe8"];
     "navigator" [label="Navigator", fillcolor="#e8e8ff"];
     "orchestrator" [label="Orchestrator", fillcolor="#e8e8ff"];
     "output-compiler" [label="Output Compiler", fillcolor="#e8ffe8"];
@@ -533,7 +533,7 @@ digraph "SalesDataPipeline Agent Team" {
     },
     "content-enricher": {
       "display_name": "Content Enricher",
-      "agent_type": "unknown",
+      "agent_type": "domain",
       "user_invokable": true,
       "tools": [
         "read",
@@ -583,7 +583,7 @@ digraph "SalesDataPipeline Agent Team" {
     },
     "module-doc-author": {
       "display_name": "Module Doc Author",
-      "agent_type": "unknown",
+      "agent_type": "domain",
       "user_invokable": false,
       "tools": [
         "read",
@@ -593,7 +593,7 @@ digraph "SalesDataPipeline Agent Team" {
     },
     "module-doc-validator": {
       "display_name": "Module Doc Validator",
-      "agent_type": "unknown",
+      "agent_type": "domain",
       "user_invokable": false,
       "tools": [
         "read",
