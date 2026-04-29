@@ -21,8 +21,8 @@ Given a project description (a `.json` or `.md` brief), the module:
 
 The generated team includes:
 - 1 **Orchestrator** agent — coordinates all workflows
-- 10 **Governance agents** — navigation, security, consistency, cleanup, documentation, and cross-repository coordination
-- 2–9 **Domain agents** — appropriate archetypes for your deliverable type
+- 11 **Governance agents** — navigation, security, consistency, cleanup, documentation, cross-repository coordination, and git operations
+- 3–10 **Domain agents** — `@work-summarizer` (always included) plus project-appropriate archetypes
 - 1 **Workstream Expert** per project component — deep, component-specific knowledge
 - 1 **Team Builder agent** — framework-native agent that can regenerate or expand the team from within your framework
 - A framework instructions file — `.github/copilot-instructions.md` (Copilot VS Code / Copilot CLI) or `.claude/CLAUDE.md` (Claude)

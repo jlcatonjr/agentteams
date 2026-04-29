@@ -22,6 +22,7 @@ Results of an emit operation.
 
 - `written` (`list[str]`) — Relative paths of files written successfully.
 - `merged` (`list[str]`) — Relative paths of files updated via fenced-section merge.
+- `unchanged` (`list[str]`) — Relative paths of files whose on-disk content was already identical to the rendered output (no write performed).
 - `skipped` (`list[str]`) — Relative paths of files skipped (already up to date or user declined overwrite).
 - `errors` (`list[str]`) — Error messages for any failed writes.
 - `dry_run` (`bool`) — `True` if this result is from a dry-run invocation.
@@ -90,6 +91,10 @@ Write rendered files to `output_dir`.
 - `yes` (`bool`, keyword-only) — If `True`, answer `'yes'` to all interactive prompts. Default: `False`.
 
 **Returns:** `EmitResult` — Results of all write operations.
+
+**Raises:**
+
+- `ValueError` — If both `overwrite` and `merge` are `True` (mutually exclusive).
 
 ---
 

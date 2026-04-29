@@ -22,8 +22,8 @@ A FastAPI backend with authentication and a task management API.
 
 **What gets generated:**
 
-- Orchestrator + 10 governance agents
-- Domain agents: `@primary-producer`, `@quality-auditor`, `@technical-validator`, `@format-converter`
+- Orchestrator + 11 governance agents
+- Domain agents: `@work-summarizer`, `@primary-producer`, `@quality-auditor`, `@technical-validator`, `@format-converter`
 - Workstream experts: one per component (e.g. `@auth-module-expert`, `@tasks-api-expert`)
 - Specialist agents for FastAPI and PostgreSQL
 - Framework instructions file wired to the full team (`.github/copilot-instructions.md` or `.claude/CLAUDE.md`)
