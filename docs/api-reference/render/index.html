@@ -327,25 +327,6 @@
   
   
     <li class="md-tabs__item">
-      <a href="../../interoperability/" class="md-tabs__link">
-        
-  
-  
-    
-  
-  Interoperability
-
-      </a>
-    </li>
-  
-
-      
-        
-  
-  
-  
-  
-    <li class="md-tabs__item">
       <a href="../../cli-reference/" class="md-tabs__link">
         
   
@@ -690,33 +671,6 @@
   
   
     <li class="md-nav__item">
-      <a href="../../interoperability/" class="md-nav__link">
-        
-  
-  
-  <span class="md-ellipsis">
-    
-  
-    Interoperability
-  
-
-    
-  </span>
-  
-  
-
-      </a>
-    </li>
-  
-
-    
-      
-      
-  
-  
-  
-  
-    <li class="md-nav__item">
       <a href="../../cli-reference/" class="md-nav__link">
         
   
@@ -762,10 +716,10 @@
       
         
         
-        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_9" checked>
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_8" checked>
         
           
-          <label class="md-nav__link" for="__nav_9" id="__nav_9_label" tabindex="">
+          <label class="md-nav__link" for="__nav_8" id="__nav_8_label" tabindex="">
             
   
   
@@ -783,8 +737,8 @@
             <span class="md-nav__icon md-icon"></span>
           </label>
         
-        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_9_label" aria-expanded="true">
-          <label class="md-nav__title" for="__nav_9">
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_8_label" aria-expanded="true">
+          <label class="md-nav__title" for="__nav_8">
             <span class="md-nav__icon md-icon"></span>
             
   
@@ -809,34 +763,6 @@
     
   
     Overview
-  
-
-    
-  </span>
-  
-  
-
-      </a>
-    </li>
-  
-
-              
-            
-              
-                
-  
-  
-  
-  
-    <li class="md-nav__item">
-      <a href="../feature-inventory/" class="md-nav__link">
-        
-  
-  
-  <span class="md-ellipsis">
-    
-  
-    Feature Inventory
   
 
     
@@ -1068,90 +994,6 @@
     
   
     emit
-  
-
-    
-  </span>
-  
-  
-
-      </a>
-    </li>
-  
-
-              
-            
-              
-                
-  
-  
-  
-  
-    <li class="md-nav__item">
-      <a href="../convert/" class="md-nav__link">
-        
-  
-  
-  <span class="md-ellipsis">
-    
-  
-    convert
-  
-
-    
-  </span>
-  
-  
-
-      </a>
-    </li>
-  
-
-              
-            
-              
-                
-  
-  
-  
-  
-    <li class="md-nav__item">
-      <a href="../interop/" class="md-nav__link">
-        
-  
-  
-  <span class="md-ellipsis">
-    
-  
-    interop
-  
-
-    
-  </span>
-  
-  
-
-      </a>
-    </li>
-  
-
-              
-            
-              
-                
-  
-  
-  
-  
-    <li class="md-nav__item">
-      <a href="../bridge/" class="md-nav__link">
-        
-  
-  
-  <span class="md-ellipsis">
-    
-  
-    bridge
   
 
     
@@ -1652,6 +1494,7 @@
 <h1 id="render-agentteamsmodule"><code>render</code> — AgentTeamsModule<a class="headerlink" href="#render-agentteamsmodule" title="Permanent link">&para;</a></h1>
 <p>Render agent files from templates by resolving placeholders.</p>
 <p>Takes a team manifest (from <code>analyze.py</code>) and a template directory, and produces a list of <code>(output_path, rendered_content)</code> pairs ready for the emit phase.</p>
+<p>The returned content is framework-agnostic. To produce the final emitted file format, pass each rendered body through the target framework adapter's <code>render_agent_file()</code> method before calling <code>emit.emit_all()</code>.</p>
 <blockquote>
 <p><em>Source: <code>agentteams/render.py</code></em></p>
 </blockquote>

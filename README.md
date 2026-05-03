@@ -349,7 +349,7 @@ agentteams --description brief.json --check
 
 ### Update drifted files and new agents (preserve manual values)
 
-When the module is updated (e.g., a new governance agent is added), run `--update` to bring an existing team in sync. New agent files are emitted; changed files are re-rendered preserving any `{MANUAL:*}` values you filled in previously; removed agents are reported but not deleted:
+When the module is updated (e.g., a new governance agent is added), run `--update` to bring an existing team in sync. New agent files are emitted; changed files are re-rendered preserving any `{MANUAL:*}` values you filled in previously; expected standard files that are missing on disk are restored; removed agents are reported but not deleted:
 
 ```bash
 agentteams --description brief.json --update
@@ -446,6 +446,11 @@ Run `--check` at any time to detect template content drift or taxonomy structura
 
 ### 2. Drift-as-trigger in `@agent-updater`
 The `@agent-updater` governance agent includes a **Drift detected by `--check`** trigger: whenever drift is detected, agents must re-render and re-verify before the next workflow executes.
+
+It also carries explicit lifecycle triggers aligned to the collector-management governance baseline:
+- **Team initialized** (first successful `build_team.py` run) establishes the canonical baseline for agent docs, references, workflow triggers, and output-file inventory.
+- **Team updated** (`--update` / `--update --merge`) requires drift reconciliation, emission of newly required files, and restoration of any expected standard files missing on disk.
+- **Expected output missing during update** is treated as documentation drift even when template hashes are unchanged; the missing file must be restored in the same update run.
 
 ### 3. Periodic Knowledge Re-verification
 The `@agent-updater` includes a `Periodic Knowledge Re-verification` protocol that kicks in when:
@@ -652,6 +657,7 @@ When `agentteams` is updated, templates may change and new agent types may be ad
 
 - Files whose templates changed are re-rendered, preserving any `{MANUAL:*}` values you filled in.
 - New agent types introduced since the last build are emitted as new files.
+- Expected standard outputs missing on disk are restored during the update run.
 - Agents removed from the taxonomy are **reported** but not deleted.
 
 ```bash

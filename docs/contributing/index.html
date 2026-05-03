@@ -327,25 +327,6 @@
   
   
     <li class="md-tabs__item">
-      <a href="../interoperability/" class="md-tabs__link">
-        
-  
-  
-    
-  
-  Interoperability
-
-      </a>
-    </li>
-  
-
-      
-        
-  
-  
-  
-  
-    <li class="md-tabs__item">
       <a href="../cli-reference/" class="md-tabs__link">
         
   
@@ -690,33 +671,6 @@
   
   
     <li class="md-nav__item">
-      <a href="../interoperability/" class="md-nav__link">
-        
-  
-  
-  <span class="md-ellipsis">
-    
-  
-    Interoperability
-  
-
-    
-  </span>
-  
-  
-
-      </a>
-    </li>
-  
-
-    
-      
-      
-  
-  
-  
-  
-    <li class="md-nav__item">
       <a href="../cli-reference/" class="md-nav__link">
         
   
@@ -757,10 +711,10 @@
       
         
         
-        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_9" >
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_8" >
         
           
-          <label class="md-nav__link" for="__nav_9" id="__nav_9_label" tabindex="0">
+          <label class="md-nav__link" for="__nav_8" id="__nav_8_label" tabindex="0">
             
   
   
@@ -778,8 +732,8 @@
             <span class="md-nav__icon md-icon"></span>
           </label>
         
-        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_9_label" aria-expanded="false">
-          <label class="md-nav__title" for="__nav_9">
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_8_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_8">
             <span class="md-nav__icon md-icon"></span>
             
   
@@ -804,34 +758,6 @@
     
   
     Overview
-  
-
-    
-  </span>
-  
-  
-
-      </a>
-    </li>
-  
-
-              
-            
-              
-                
-  
-  
-  
-  
-    <li class="md-nav__item">
-      <a href="../api-reference/feature-inventory/" class="md-nav__link">
-        
-  
-  
-  <span class="md-ellipsis">
-    
-  
-    Feature Inventory
   
 
     
@@ -944,90 +870,6 @@
     
   
     emit
-  
-
-    
-  </span>
-  
-  
-
-      </a>
-    </li>
-  
-
-              
-            
-              
-                
-  
-  
-  
-  
-    <li class="md-nav__item">
-      <a href="../api-reference/convert/" class="md-nav__link">
-        
-  
-  
-  <span class="md-ellipsis">
-    
-  
-    convert
-  
-
-    
-  </span>
-  
-  
-
-      </a>
-    </li>
-  
-
-              
-            
-              
-                
-  
-  
-  
-  
-    <li class="md-nav__item">
-      <a href="../api-reference/interop/" class="md-nav__link">
-        
-  
-  
-  <span class="md-ellipsis">
-    
-  
-    interop
-  
-
-    
-  </span>
-  
-  
-
-      </a>
-    </li>
-  
-
-              
-            
-              
-                
-  
-  
-  
-  
-    <li class="md-nav__item">
-      <a href="../api-reference/bridge/" class="md-nav__link">
-        
-  
-  
-  <span class="md-ellipsis">
-    
-  
-    bridge
   
 
     
@@ -1776,7 +1618,7 @@
 <li>Every <code>.template.md</code> file must include a valid YAML front matter block with <code>name</code>, <code>description</code>, <code>user-invokable</code>, <code>tools</code>, and <code>model</code> fields</li>
 <li>Every agent template must contain an <strong>Invariant Core</strong> section marked with ⛔</li>
 </ol>
-<p>To register a new template for use in the rendering pipeline, add it to the appropriate section in <code>src/emit.py</code>'s template routing logic.</p>
+<p>To register a new template for use in the rendering pipeline, add it to the appropriate section in <code>agentteams/emit.py</code>'s template routing logic.</p>
 <hr />
 <h2 id="pull-request-process">Pull Request Process<a class="headerlink" href="#pull-request-process" title="Permanent link">&para;</a></h2>
 <ol>
@@ -1784,7 +1626,7 @@
 <li>Make your changes — keep each PR focused on a single concern</li>
 <li>Run <code>pytest tests/</code> and confirm all tests pass</li>
 <li>If you changed public API signatures, update the corresponding page in <code>docs_src/api-reference/</code></li>
-<li>If you added or changed CLI flags, update <code>docs/cli-reference.md</code></li>
+<li>If you added or changed CLI flags, update <code>docs_src/cli-reference.md</code></li>
 <li>If you added or changed CLI flags/help text, regenerate <code>agentteams.1</code> before opening the PR:</li>
 </ol>
 <div class="highlight"><pre><span></span><code><a id="__codelineno-2-1" name="__codelineno-2-1" href="#__codelineno-2-1"></a>python<span class="w"> </span>-m<span class="w"> </span>agentteams.man<span class="w"> </span>&gt;<span class="w"> </span>agentteams.1

@@ -18,7 +18,7 @@
         <link rel="prev" href="../cli-reference/">
       
       
-        <link rel="next" href="feature-inventory/">
+        <link rel="next" href="ingest/">
       
       
         
@@ -315,25 +315,6 @@
     
   
   Examples
-
-      </a>
-    </li>
-  
-
-      
-        
-  
-  
-  
-  
-    <li class="md-tabs__item">
-      <a href="../interoperability/" class="md-tabs__link">
-        
-  
-  
-    
-  
-  Interoperability
 
       </a>
     </li>
@@ -690,33 +671,6 @@
   
   
     <li class="md-nav__item">
-      <a href="../interoperability/" class="md-nav__link">
-        
-  
-  
-  <span class="md-ellipsis">
-    
-  
-    Interoperability
-  
-
-    
-  </span>
-  
-  
-
-      </a>
-    </li>
-  
-
-    
-      
-      
-  
-  
-  
-  
-    <li class="md-nav__item">
       <a href="../cli-reference/" class="md-nav__link">
         
   
@@ -762,10 +716,10 @@
       
         
         
-        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_9" checked>
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_8" checked>
         
           
-          <label class="md-nav__link" for="__nav_9" id="__nav_9_label" tabindex="">
+          <label class="md-nav__link" for="__nav_8" id="__nav_8_label" tabindex="">
             
   
   
@@ -783,8 +737,8 @@
             <span class="md-nav__icon md-icon"></span>
           </label>
         
-        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_9_label" aria-expanded="true">
-          <label class="md-nav__title" for="__nav_9">
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_8_label" aria-expanded="true">
+          <label class="md-nav__title" for="__nav_8">
             <span class="md-nav__icon md-icon"></span>
             
   
@@ -920,34 +874,6 @@
   
   
     <li class="md-nav__item">
-      <a href="feature-inventory/" class="md-nav__link">
-        
-  
-  
-  <span class="md-ellipsis">
-    
-  
-    Feature Inventory
-  
-
-    
-  </span>
-  
-  
-
-      </a>
-    </li>
-  
-
-              
-            
-              
-                
-  
-  
-  
-  
-    <li class="md-nav__item">
       <a href="ingest/" class="md-nav__link">
         
   
@@ -1040,90 +966,6 @@
     
   
     emit
-  
-
-    
-  </span>
-  
-  
-
-      </a>
-    </li>
-  
-
-              
-            
-              
-                
-  
-  
-  
-  
-    <li class="md-nav__item">
-      <a href="convert/" class="md-nav__link">
-        
-  
-  
-  <span class="md-ellipsis">
-    
-  
-    convert
-  
-
-    
-  </span>
-  
-  
-
-      </a>
-    </li>
-  
-
-              
-            
-              
-                
-  
-  
-  
-  
-    <li class="md-nav__item">
-      <a href="interop/" class="md-nav__link">
-        
-  
-  
-  <span class="md-ellipsis">
-    
-  
-    interop
-  
-
-    
-  </span>
-  
-  
-
-      </a>
-    </li>
-  
-
-              
-            
-              
-                
-  
-  
-  
-  
-    <li class="md-nav__item">
-      <a href="bridge/" class="md-nav__link">
-        
-  
-  
-  <span class="md-ellipsis">
-    
-  
-    bridge
   
 
     
@@ -1689,13 +1531,16 @@
 <a id="__codelineno-0-6" name="__codelineno-0-6" href="#__codelineno-0-6"></a><span class="n">manifest</span> <span class="o">=</span> <span class="n">analyze</span><span class="o">.</span><span class="n">build_manifest</span><span class="p">(</span><span class="n">description</span><span class="p">,</span> <span class="n">framework</span><span class="o">=</span><span class="s2">&quot;copilot-vscode&quot;</span><span class="p">)</span>
 <a id="__codelineno-0-7" name="__codelineno-0-7" href="#__codelineno-0-7"></a><span class="n">rendered</span> <span class="o">=</span> <span class="n">render</span><span class="o">.</span><span class="n">render_all</span><span class="p">(</span><span class="n">manifest</span><span class="p">,</span> <span class="n">templates_dir</span><span class="o">=</span><span class="n">Path</span><span class="p">(</span><span class="s2">&quot;templates&quot;</span><span class="p">))</span>
 <a id="__codelineno-0-8" name="__codelineno-0-8" href="#__codelineno-0-8"></a>
-<a id="__codelineno-0-9" name="__codelineno-0-9" href="#__codelineno-0-9"></a><span class="n">adapter</span> <span class="o">=</span> <span class="n">CopilotVSCodeAdapter</span><span class="p">()</span>
-<a id="__codelineno-0-10" name="__codelineno-0-10" href="#__codelineno-0-10"></a><span class="n">final</span> <span class="o">=</span> <span class="p">[(</span><span class="n">p</span><span class="p">,</span> <span class="n">adapter</span><span class="o">.</span><span class="n">render_agent_file</span><span class="p">(</span><span class="n">c</span><span class="p">,</span> <span class="n">Path</span><span class="p">(</span><span class="n">p</span><span class="p">)</span><span class="o">.</span><span class="n">stem</span><span class="p">,</span> <span class="n">manifest</span><span class="p">))</span>
-<a id="__codelineno-0-11" name="__codelineno-0-11" href="#__codelineno-0-11"></a>         <span class="k">for</span> <span class="n">p</span><span class="p">,</span> <span class="n">c</span> <span class="ow">in</span> <span class="n">rendered</span><span class="p">]</span>
-<a id="__codelineno-0-12" name="__codelineno-0-12" href="#__codelineno-0-12"></a>
-<a id="__codelineno-0-13" name="__codelineno-0-13" href="#__codelineno-0-13"></a><span class="n">result</span> <span class="o">=</span> <span class="n">emit</span><span class="o">.</span><span class="n">emit_all</span><span class="p">(</span><span class="n">final</span><span class="p">,</span> <span class="n">output_dir</span><span class="o">=</span><span class="n">Path</span><span class="p">(</span><span class="s2">&quot;.github/agents&quot;</span><span class="p">),</span> <span class="n">dry_run</span><span class="o">=</span><span class="kc">False</span><span class="p">)</span>
-<a id="__codelineno-0-14" name="__codelineno-0-14" href="#__codelineno-0-14"></a><span class="n">emit</span><span class="o">.</span><span class="n">print_summary</span><span class="p">(</span><span class="n">result</span><span class="p">,</span> <span class="n">manifest</span><span class="p">)</span>
+<a id="__codelineno-0-9" name="__codelineno-0-9" href="#__codelineno-0-9"></a><span class="c1"># render_all() returns framework-agnostic content; adapters add framework-specific</span>
+<a id="__codelineno-0-10" name="__codelineno-0-10" href="#__codelineno-0-10"></a><span class="c1"># wrappers and metadata before emit.</span>
+<a id="__codelineno-0-11" name="__codelineno-0-11" href="#__codelineno-0-11"></a><span class="n">adapter</span> <span class="o">=</span> <span class="n">CopilotVSCodeAdapter</span><span class="p">()</span>
+<a id="__codelineno-0-12" name="__codelineno-0-12" href="#__codelineno-0-12"></a><span class="n">final</span> <span class="o">=</span> <span class="p">[(</span><span class="n">p</span><span class="p">,</span> <span class="n">adapter</span><span class="o">.</span><span class="n">render_agent_file</span><span class="p">(</span><span class="n">c</span><span class="p">,</span> <span class="n">Path</span><span class="p">(</span><span class="n">p</span><span class="p">)</span><span class="o">.</span><span class="n">stem</span><span class="p">,</span> <span class="n">manifest</span><span class="p">))</span>
+<a id="__codelineno-0-13" name="__codelineno-0-13" href="#__codelineno-0-13"></a>         <span class="k">for</span> <span class="n">p</span><span class="p">,</span> <span class="n">c</span> <span class="ow">in</span> <span class="n">rendered</span><span class="p">]</span>
+<a id="__codelineno-0-14" name="__codelineno-0-14" href="#__codelineno-0-14"></a>
+<a id="__codelineno-0-15" name="__codelineno-0-15" href="#__codelineno-0-15"></a><span class="n">result</span> <span class="o">=</span> <span class="n">emit</span><span class="o">.</span><span class="n">emit_all</span><span class="p">(</span><span class="n">final</span><span class="p">,</span> <span class="n">output_dir</span><span class="o">=</span><span class="n">Path</span><span class="p">(</span><span class="s2">&quot;.github/agents&quot;</span><span class="p">),</span> <span class="n">dry_run</span><span class="o">=</span><span class="kc">False</span><span class="p">)</span>
+<a id="__codelineno-0-16" name="__codelineno-0-16" href="#__codelineno-0-16"></a><span class="n">emit</span><span class="o">.</span><span class="n">print_summary</span><span class="p">(</span><span class="n">result</span><span class="p">,</span> <span class="n">manifest</span><span class="p">)</span>
 </code></pre></div>
+<p><code>render.render_all()</code> does not apply framework-specific post-processing on its own. Use the appropriate adapter from <code>agentteams.frameworks</code> to convert rendered content into the final framework format before passing it to <code>emit.emit_all()</code>.</p>
 <hr />
 <h2 id="interoperability-api-family">Interoperability API Family<a class="headerlink" href="#interoperability-api-family" title="Permanent link">&para;</a></h2>
 <p>The interoperability feature family has three dedicated modules:</p>

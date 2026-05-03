@@ -659,6 +659,21 @@ def main(argv: list[str] | None = None) -> int:
         update_paths: set[str] = {f["path"] for f in sdreport.update_files}
         update_paths.update(security_refresh_paths)
 
+        # Recover missing expected files even when build-log/template drift does not
+        # surface them (for example, files deleted manually after the last build).
+        expected_paths = {rel_path for rel_path, _ in final_rendered}
+        missing_expected_paths = {
+            rel_path
+            for rel_path in expected_paths
+            if not emit._resolve_path(output_dir, rel_path).exists()
+        }
+        if missing_expected_paths:
+            print(
+                "Detected missing expected output file(s); restoring during update: "
+                f"{len(missing_expected_paths)}"
+            )
+            update_paths.update(missing_expected_paths)
+
         update_rendered: list[tuple[str, str]] = []
         for rel_path, content in final_rendered:
             if rel_path not in update_paths:

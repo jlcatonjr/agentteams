@@ -485,6 +485,54 @@ def test_update_reports_removed_files(tmp_path):
     assert "deprecated-agent.agent.md" not in update_paths
 
 
+def test_update_restores_missing_expected_standard_file(tmp_path):
+    """--update restores standardized files missing on disk even without structural drift."""
+    import build_team
+
+    brief = EXAMPLES_DIR / "software-project" / "brief.json"
+    if not brief.exists():
+        pytest.skip("software-project brief not found")
+
+    output_dir = tmp_path / ".github" / "agents"
+
+    # Initial generation.
+    first_rc = build_team.main([
+        "--description", str(brief),
+        "--output", str(output_dir),
+        "--yes",
+        "--no-scan",
+        "--security-offline",
+    ])
+    assert first_rc == 0
+
+    # Seed a PASS decision so the runtime destructive gate allows overwrite updates.
+    refs = output_dir / "references"
+    refs.mkdir(parents=True, exist_ok=True)
+    decision_log = refs / "security-decisions.log.csv"
+    decision_log.write_text(
+        "timestamp,requesting_agent,action_reviewed,verdict,conditions,conditions_verified\n"
+        "2026-05-03T00:00:00Z,test-harness,overwrite,PASS,,verified\n",
+        encoding="utf-8",
+    )
+
+    missing_rel = "references/code-hygiene-rules.reference.md"
+    missing_path = output_dir / missing_rel
+    assert missing_path.exists(), "Precondition: expected standardized reference is generated"
+    missing_path.unlink()
+    assert not missing_path.exists(), "Precondition: file removal simulation failed"
+
+    update_rc = build_team.main([
+        "--description", str(brief),
+        "--output", str(output_dir),
+        "--update",
+        "--yes",
+        "--no-scan",
+        "--security-offline",
+    ])
+    assert update_rc == 0
+    assert missing_path.exists(), f"Expected --update to restore missing file: {missing_rel}"
+
+
 def test_build_log_schema_v12(tmp_path):
     """Build-log written by _write_run_log includes structural and manifest fingerprints."""
     import json

@@ -43,14 +43,17 @@ Use `references/github-workflows-merge.reference.md` when repository updates inv
 | What Changed | Why It Matters |
 |-------------|----------------|
 | New file added to `{PRIMARY_OUTPUT_DIR}` | `@navigator`, `@conflict-auditor`, `@primary-producer` need awareness |
+| Team initialized (first successful `build_team.py` generation) | Establishes the canonical baseline for agent docs, references, workflow triggers, and output-file inventory used by future drift and update checks |
 | Deliverable revised | `@conflict-auditor` may need re-audit |
 | Reference database updated | `@reference-manager`, `@output-compiler` need updating |
 | Style reference updated | `@style-guardian`, `@primary-producer` need recalibration |
 | Project structure changed | `@navigator` needs project map regeneration |
 | New agent file created | Orchestrator routing table needs updating |
 | Workstream added | All agents need awareness of new scope |
+| Team updated (`--update` or `--update --merge`) | Drifted files are re-rendered, newly required files are emitted, and missing expected standard outputs must be restored before closeout |
 | Repository content changed (tracked files added, modified, deleted, merged, reverted, or restored) | Requires repository change census and docs/API impact decision before closeout |
 | **Drift detected by `--check`** | Agents may be operating on outdated knowledge of file structure, agent slugs, placeholder values, or workflow counts — re-render and re-verify before next workflow execution |
+| Expected output file missing on disk during update | Treat as documentation drift even without template hash drift; restore the missing file in the same update run |
 
 ## Change-to-Agent Mapping
 

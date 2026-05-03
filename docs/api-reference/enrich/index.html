@@ -327,25 +327,6 @@
   
   
     <li class="md-tabs__item">
-      <a href="../../interoperability/" class="md-tabs__link">
-        
-  
-  
-    
-  
-  Interoperability
-
-      </a>
-    </li>
-  
-
-      
-        
-  
-  
-  
-  
-    <li class="md-tabs__item">
       <a href="../../cli-reference/" class="md-tabs__link">
         
   
@@ -690,33 +671,6 @@
   
   
     <li class="md-nav__item">
-      <a href="../../interoperability/" class="md-nav__link">
-        
-  
-  
-  <span class="md-ellipsis">
-    
-  
-    Interoperability
-  
-
-    
-  </span>
-  
-  
-
-      </a>
-    </li>
-  
-
-    
-      
-      
-  
-  
-  
-  
-    <li class="md-nav__item">
       <a href="../../cli-reference/" class="md-nav__link">
         
   
@@ -762,10 +716,10 @@
       
         
         
-        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_9" checked>
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_8" checked>
         
           
-          <label class="md-nav__link" for="__nav_9" id="__nav_9_label" tabindex="">
+          <label class="md-nav__link" for="__nav_8" id="__nav_8_label" tabindex="">
             
   
   
@@ -783,8 +737,8 @@
             <span class="md-nav__icon md-icon"></span>
           </label>
         
-        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_9_label" aria-expanded="true">
-          <label class="md-nav__title" for="__nav_9">
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_8_label" aria-expanded="true">
+          <label class="md-nav__title" for="__nav_8">
             <span class="md-nav__icon md-icon"></span>
             
   
@@ -809,34 +763,6 @@
     
   
     Overview
-  
-
-    
-  </span>
-  
-  
-
-      </a>
-    </li>
-  
-
-              
-            
-              
-                
-  
-  
-  
-  
-    <li class="md-nav__item">
-      <a href="../feature-inventory/" class="md-nav__link">
-        
-  
-  
-  <span class="md-ellipsis">
-    
-  
-    Feature Inventory
   
 
     
@@ -949,90 +875,6 @@
     
   
     emit
-  
-
-    
-  </span>
-  
-  
-
-      </a>
-    </li>
-  
-
-              
-            
-              
-                
-  
-  
-  
-  
-    <li class="md-nav__item">
-      <a href="../convert/" class="md-nav__link">
-        
-  
-  
-  <span class="md-ellipsis">
-    
-  
-    convert
-  
-
-    
-  </span>
-  
-  
-
-      </a>
-    </li>
-  
-
-              
-            
-              
-                
-  
-  
-  
-  
-    <li class="md-nav__item">
-      <a href="../interop/" class="md-nav__link">
-        
-  
-  
-  <span class="md-ellipsis">
-    
-  
-    interop
-  
-
-    
-  </span>
-  
-  
-
-      </a>
-    </li>
-  
-
-              
-            
-              
-                
-  
-  
-  
-  
-    <li class="md-nav__item">
-      <a href="../bridge/" class="md-nav__link">
-        
-  
-  
-  <span class="md-ellipsis">
-    
-  
-    bridge
   
 
     
@@ -1287,10 +1129,10 @@
 </li>
         
           <li class="md-nav__item">
-  <a href="#ai_enrichfindings-file_map-manifest-copilot_exe" class="md-nav__link">
+  <a href="#ai_enrichfindings-file_map-manifest-project_pathnone-copilot_pathnone" class="md-nav__link">
     <span class="md-ellipsis">
       
-        ai_enrich(findings, file_map, manifest, *, copilot_exe)
+        ai_enrich(findings, file_map, manifest, *, project_path=None, copilot_path=None)
       
     </span>
   </a>
@@ -1692,10 +1534,10 @@
 </li>
         
           <li class="md-nav__item">
-  <a href="#ai_enrichfindings-file_map-manifest-copilot_exe" class="md-nav__link">
+  <a href="#ai_enrichfindings-file_map-manifest-project_pathnone-copilot_pathnone" class="md-nav__link">
     <span class="md-ellipsis">
       
-        ai_enrich(findings, file_map, manifest, *, copilot_exe)
+        ai_enrich(findings, file_map, manifest, *, project_path=None, copilot_path=None)
       
     </span>
   </a>
@@ -1848,18 +1690,19 @@
 </ul>
 <p><strong>Returns:</strong> <code>tuple[dict[str, str], list[DefaultFinding]]</code> — <code>(enriched_file_map, updated_findings)</code></p>
 <hr />
-<h3 id="ai_enrichfindings-file_map-manifest-copilot_exe"><code>ai_enrich(findings, file_map, manifest, *, copilot_exe)</code><a class="headerlink" href="#ai_enrichfindings-file_map-manifest-copilot_exe" title="Permanent link">&para;</a></h3>
+<h3 id="ai_enrichfindings-file_map-manifest-project_pathnone-copilot_pathnone"><code>ai_enrich(findings, file_map, manifest, *, project_path=None, copilot_path=None)</code><a class="headerlink" href="#ai_enrichfindings-file_map-manifest-project_pathnone-copilot_pathnone" title="Permanent link">&para;</a></h3>
 <blockquote>
 <p><em>Source: <code>agentteams/enrich/_enrich.py</code></em></p>
 </blockquote>
 <p>Fill remaining pending findings using the <code>copilot</code> CLI.</p>
-<p>Called after <code>auto_enrich</code> to handle tokens that rule-based logic could not resolve. Invokes the standalone <code>copilot</code> CLI in non-interactive mode with the project context and list of pending findings.</p>
+<p>Called after <code>auto_enrich</code> to handle tokens that rule-based logic could not resolve. Invokes the standalone <code>copilot</code> CLI in non-interactive mode with the project context and list of pending findings. When <code>copilot_path</code> is <code>None</code>, the executable is auto-detected via <code>shutil.which("copilot")</code>.</p>
 <p><strong>Args:</strong></p>
 <ul>
 <li><code>findings</code> (<code>list[DefaultFinding]</code>) — Findings list (pending items will be targeted).</li>
 <li><code>file_map</code> (<code>dict[str, str]</code>) — Current rendered file map (will be updated in place).</li>
 <li><code>manifest</code> (<code>dict[str, Any]</code>) — Team manifest.</li>
-<li><code>copilot_exe</code> (<code>str</code>, keyword-only) — Absolute path to the <code>copilot</code> executable (from <code>shutil.which</code>).</li>
+<li><code>project_path</code> (<code>Path | None</code>, keyword-only) — Absolute path to the project repo root; passed to the CLI for additional context. Default: <code>None</code>.</li>
+<li><code>copilot_path</code> (<code>str | None</code>, keyword-only) — Absolute path to the <code>copilot</code> executable. When <code>None</code>, auto-detected via <code>shutil.which</code>. Default: <code>None</code>.</li>
 </ul>
 <p><strong>Returns:</strong> <code>tuple[dict[str, str], list[DefaultFinding]]</code> — <code>(enriched_file_map, updated_findings)</code></p>
 <hr />

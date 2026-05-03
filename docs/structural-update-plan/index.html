@@ -327,25 +327,6 @@
   
   
     <li class="md-tabs__item">
-      <a href="../interoperability/" class="md-tabs__link">
-        
-  
-  
-    
-  
-  Interoperability
-
-      </a>
-    </li>
-  
-
-      
-        
-  
-  
-  
-  
-    <li class="md-tabs__item">
       <a href="../cli-reference/" class="md-tabs__link">
         
   
@@ -690,33 +671,6 @@
   
   
     <li class="md-nav__item">
-      <a href="../interoperability/" class="md-nav__link">
-        
-  
-  
-  <span class="md-ellipsis">
-    
-  
-    Interoperability
-  
-
-    
-  </span>
-  
-  
-
-      </a>
-    </li>
-  
-
-    
-      
-      
-  
-  
-  
-  
-    <li class="md-nav__item">
       <a href="../cli-reference/" class="md-nav__link">
         
   
@@ -757,10 +711,10 @@
       
         
         
-        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_9" >
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_8" >
         
           
-          <label class="md-nav__link" for="__nav_9" id="__nav_9_label" tabindex="0">
+          <label class="md-nav__link" for="__nav_8" id="__nav_8_label" tabindex="0">
             
   
   
@@ -778,8 +732,8 @@
             <span class="md-nav__icon md-icon"></span>
           </label>
         
-        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_9_label" aria-expanded="false">
-          <label class="md-nav__title" for="__nav_9">
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_8_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_8">
             <span class="md-nav__icon md-icon"></span>
             
   
@@ -804,34 +758,6 @@
     
   
     Overview
-  
-
-    
-  </span>
-  
-  
-
-      </a>
-    </li>
-  
-
-              
-            
-              
-                
-  
-  
-  
-  
-    <li class="md-nav__item">
-      <a href="../api-reference/feature-inventory/" class="md-nav__link">
-        
-  
-  
-  <span class="md-ellipsis">
-    
-  
-    Feature Inventory
   
 
     
@@ -944,90 +870,6 @@
     
   
     emit
-  
-
-    
-  </span>
-  
-  
-
-      </a>
-    </li>
-  
-
-              
-            
-              
-                
-  
-  
-  
-  
-    <li class="md-nav__item">
-      <a href="../api-reference/convert/" class="md-nav__link">
-        
-  
-  
-  <span class="md-ellipsis">
-    
-  
-    convert
-  
-
-    
-  </span>
-  
-  
-
-      </a>
-    </li>
-  
-
-              
-            
-              
-                
-  
-  
-  
-  
-    <li class="md-nav__item">
-      <a href="../api-reference/interop/" class="md-nav__link">
-        
-  
-  
-  <span class="md-ellipsis">
-    
-  
-    interop
-  
-
-    
-  </span>
-  
-  
-
-      </a>
-    </li>
-  
-
-              
-            
-              
-                
-  
-  
-  
-  
-    <li class="md-nav__item">
-      <a href="../api-reference/bridge/" class="md-nav__link">
-        
-  
-  
-  <span class="md-ellipsis">
-    
-  
-    bridge
   
 
     
@@ -1438,10 +1280,10 @@
 </li>
         
           <li class="md-nav__item">
-  <a href="#phase-2-implement-structural-diff-in-srcdriftpy" class="md-nav__link">
+  <a href="#phase-2-implement-structural-diff-in-agentteamsdriftpy" class="md-nav__link">
     <span class="md-ellipsis">
       
-        Phase 2: Implement structural diff in src/drift.py
+        Phase 2: Implement structural diff in agentteams/drift.py
       
     </span>
   </a>
@@ -1675,10 +1517,10 @@
 </li>
         
           <li class="md-nav__item">
-  <a href="#phase-2-implement-structural-diff-in-srcdriftpy" class="md-nav__link">
+  <a href="#phase-2-implement-structural-diff-in-agentteamsdriftpy" class="md-nav__link">
     <span class="md-ellipsis">
       
-        Phase 2: Implement structural diff in src/drift.py
+        Phase 2: Implement structural diff in agentteams/drift.py
       
     </span>
   </a>
@@ -1863,7 +1705,7 @@
 <p><strong>Backward compat:</strong> <code>detect_drift()</code> already handles missing <code>template_hashes</code> (schema v1.0). The structural diff functions will treat missing <code>output_files_map</code> as "unknown previous state → treat all new-manifest files as potentially new."</p>
 <p><strong>Effort:</strong> Small — 4 fields added to <code>_write_run_log()</code>.</p>
 <hr />
-<h3 id="phase-2-implement-structural-diff-in-srcdriftpy">Phase 2: Implement structural diff in <code>src/drift.py</code><a class="headerlink" href="#phase-2-implement-structural-diff-in-srcdriftpy" title="Permanent link">&para;</a></h3>
+<h3 id="phase-2-implement-structural-diff-in-agentteamsdriftpy">Phase 2: Implement structural diff in <code>agentteams/drift.py</code><a class="headerlink" href="#phase-2-implement-structural-diff-in-agentteamsdriftpy" title="Permanent link">&para;</a></h3>
 <p><strong>New function:</strong> <code>compute_structural_diff(old_log, new_manifest, templates_dir) → StructuralDiffReport</code></p>
 <div class="highlight"><pre><span></span><code><a id="__codelineno-1-1" name="__codelineno-1-1" href="#__codelineno-1-1"></a><span class="nd">@dataclass</span>
 <a id="__codelineno-1-2" name="__codelineno-1-2" href="#__codelineno-1-2"></a><span class="k">class</span><span class="w"> </span><span class="nc">StructuralDiffReport</span><span class="p">:</span>
@@ -1890,7 +1732,7 @@
 <p><strong>Effort:</strong> Medium — new dataclass + ~60-line function in <code>drift.py</code>.</p>
 <hr />
 <h3 id="phase-3-extend-update-to-handle-structural-changes">Phase 3: Extend <code>--update</code> to handle structural changes<a class="headerlink" href="#phase-3-extend-update-to-handle-structural-changes" title="Permanent link">&para;</a></h3>
-<p><strong>File:</strong> <code>build_team.py</code> → the <code>if args.update:</code> block (lines 267–305)</p>
+<p><strong>File:</strong> <code>build_team.py</code> → the <code>if args.update:</code> block</p>
 <p>Replace the current drift-only filter with:</p>
 <div class="highlight"><pre><span></span><code><a id="__codelineno-2-1" name="__codelineno-2-1" href="#__codelineno-2-1"></a>1. Compute new manifest (already done — step 3)
 <a id="__codelineno-2-2" name="__codelineno-2-2" href="#__codelineno-2-2"></a>2. Load old build-log from output_dir
@@ -2113,7 +1955,7 @@
 <td>Enrich <code>_write_run_log()</code> (Phase 1), restructure <code>--update</code> block (Phase 3), add <code>--prune</code> flag (Phase 4)</td>
 </tr>
 <tr>
-<td><code>src/drift.py</code></td>
+<td><code>agentteams/drift.py</code></td>
 <td>Add <code>StructuralDiffReport</code>, <code>compute_structural_diff()</code>, <code>print_structural_diff_report()</code> (Phase 2)</td>
 </tr>
 <tr>
@@ -2144,19 +1986,19 @@
 </thead>
 <tbody>
 <tr>
-<td><code>src/analyze.py</code></td>
+<td><code>agentteams/analyze.py</code></td>
 <td>Manifest already contains all structural data; no changes needed</td>
 </tr>
 <tr>
-<td><code>src/render.py</code></td>
+<td><code>agentteams/render.py</code></td>
 <td>Rendering logic is unchanged; structural diff is a selection problem, not a rendering problem</td>
 </tr>
 <tr>
-<td><code>src/emit.py</code></td>
+<td><code>agentteams/emit.py</code></td>
 <td>Emit logic is unchanged; the <code>--update</code> block in <code>build_team.py</code> controls what gets emitted</td>
 </tr>
 <tr>
-<td><code>src/ingest.py</code></td>
+<td><code>agentteams/ingest.py</code></td>
 <td>Input processing is unchanged</td>
 </tr>
 <tr>

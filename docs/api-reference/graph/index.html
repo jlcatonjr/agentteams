@@ -327,25 +327,6 @@
   
   
     <li class="md-tabs__item">
-      <a href="../../interoperability/" class="md-tabs__link">
-        
-  
-  
-    
-  
-  Interoperability
-
-      </a>
-    </li>
-  
-
-      
-        
-  
-  
-  
-  
-    <li class="md-tabs__item">
       <a href="../../cli-reference/" class="md-tabs__link">
         
   
@@ -690,33 +671,6 @@
   
   
     <li class="md-nav__item">
-      <a href="../../interoperability/" class="md-nav__link">
-        
-  
-  
-  <span class="md-ellipsis">
-    
-  
-    Interoperability
-  
-
-    
-  </span>
-  
-  
-
-      </a>
-    </li>
-  
-
-    
-      
-      
-  
-  
-  
-  
-    <li class="md-nav__item">
       <a href="../../cli-reference/" class="md-nav__link">
         
   
@@ -762,10 +716,10 @@
       
         
         
-        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_9" checked>
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_8" checked>
         
           
-          <label class="md-nav__link" for="__nav_9" id="__nav_9_label" tabindex="">
+          <label class="md-nav__link" for="__nav_8" id="__nav_8_label" tabindex="">
             
   
   
@@ -783,8 +737,8 @@
             <span class="md-nav__icon md-icon"></span>
           </label>
         
-        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_9_label" aria-expanded="true">
-          <label class="md-nav__title" for="__nav_9">
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_8_label" aria-expanded="true">
+          <label class="md-nav__title" for="__nav_8">
             <span class="md-nav__icon md-icon"></span>
             
   
@@ -809,34 +763,6 @@
     
   
     Overview
-  
-
-    
-  </span>
-  
-  
-
-      </a>
-    </li>
-  
-
-              
-            
-              
-                
-  
-  
-  
-  
-    <li class="md-nav__item">
-      <a href="../feature-inventory/" class="md-nav__link">
-        
-  
-  
-  <span class="md-ellipsis">
-    
-  
-    Feature Inventory
   
 
     
@@ -949,90 +875,6 @@
     
   
     emit
-  
-
-    
-  </span>
-  
-  
-
-      </a>
-    </li>
-  
-
-              
-            
-              
-                
-  
-  
-  
-  
-    <li class="md-nav__item">
-      <a href="../convert/" class="md-nav__link">
-        
-  
-  
-  <span class="md-ellipsis">
-    
-  
-    convert
-  
-
-    
-  </span>
-  
-  
-
-      </a>
-    </li>
-  
-
-              
-            
-              
-                
-  
-  
-  
-  
-    <li class="md-nav__item">
-      <a href="../interop/" class="md-nav__link">
-        
-  
-  
-  <span class="md-ellipsis">
-    
-  
-    interop
-  
-
-    
-  </span>
-  
-  
-
-      </a>
-    </li>
-  
-
-              
-            
-              
-                
-  
-  
-  
-  
-    <li class="md-nav__item">
-      <a href="../bridge/" class="md-nav__link">
-        
-  
-  
-  <span class="md-ellipsis">
-    
-  
-    bridge
   
 
     
@@ -1387,10 +1229,10 @@
       <ul class="md-nav__list">
         
           <li class="md-nav__item">
-  <a href="#build_graphrendered_files-project_name" class="md-nav__link">
+  <a href="#build_graphfile_map-project_name" class="md-nav__link">
     <span class="md-ellipsis">
       
-        build_graph(rendered_files, project_name)
+        build_graph(file_map, project_name='')
       
     </span>
   </a>
@@ -1398,10 +1240,10 @@
 </li>
         
           <li class="md-nav__item">
-  <a href="#generate_graph_documentrendered_files-project_name" class="md-nav__link">
+  <a href="#generate_graph_documentfile_map-project_name" class="md-nav__link">
     <span class="md-ellipsis">
       
-        generate_graph_document(rendered_files, project_name)
+        generate_graph_document(file_map, project_name='')
       
     </span>
   </a>
@@ -1792,10 +1634,10 @@
       <ul class="md-nav__list">
         
           <li class="md-nav__item">
-  <a href="#build_graphrendered_files-project_name" class="md-nav__link">
+  <a href="#build_graphfile_map-project_name" class="md-nav__link">
     <span class="md-ellipsis">
       
-        build_graph(rendered_files, project_name)
+        build_graph(file_map, project_name='')
       
     </span>
   </a>
@@ -1803,10 +1645,10 @@
 </li>
         
           <li class="md-nav__item">
-  <a href="#generate_graph_documentrendered_files-project_name" class="md-nav__link">
+  <a href="#generate_graph_documentfile_map-project_name" class="md-nav__link">
     <span class="md-ellipsis">
       
-        generate_graph_document(rendered_files, project_name)
+        generate_graph_document(file_map, project_name='')
       
     </span>
   </a>
@@ -1917,27 +1759,27 @@
 <p><strong>Returns:</strong> <code>str</code> — Complete Markdown document as a string.</p>
 <hr />
 <h2 id="functions">Functions<a class="headerlink" href="#functions" title="Permanent link">&para;</a></h2>
-<h3 id="build_graphrendered_files-project_name"><code>build_graph(rendered_files, project_name)</code><a class="headerlink" href="#build_graphrendered_files-project_name" title="Permanent link">&para;</a></h3>
+<h3 id="build_graphfile_map-project_name"><code>build_graph(file_map, project_name='')</code><a class="headerlink" href="#build_graphfile_map-project_name" title="Permanent link">&para;</a></h3>
 <blockquote>
 <p><em>Source: <code>agentteams/graph.py</code></em></p>
 </blockquote>
 <p>Build a <code>TeamGraph</code> from in-memory rendered agent file content.</p>
 <p><strong>Args:</strong></p>
 <ul>
-<li><code>rendered_files</code> (<code>dict[str, str]</code>) — Dict mapping relative path → rendered content.</li>
-<li><code>project_name</code> (<code>str</code>) — Display name for the project.</li>
+<li><code>file_map</code> (<code>dict[str, str]</code>) — Dict mapping relative path → rendered content.</li>
+<li><code>project_name</code> (<code>str</code>) — Display name for the project. Default: <code>''</code>.</li>
 </ul>
 <p><strong>Returns:</strong> <code>TeamGraph</code></p>
 <hr />
-<h3 id="generate_graph_documentrendered_files-project_name"><code>generate_graph_document(rendered_files, project_name)</code><a class="headerlink" href="#generate_graph_documentrendered_files-project_name" title="Permanent link">&para;</a></h3>
+<h3 id="generate_graph_documentfile_map-project_name"><code>generate_graph_document(file_map, project_name='')</code><a class="headerlink" href="#generate_graph_documentfile_map-project_name" title="Permanent link">&para;</a></h3>
 <blockquote>
 <p><em>Source: <code>agentteams/graph.py</code></em></p>
 </blockquote>
 <p>Generate the full Markdown graph document combining Mermaid, DOT, and JSON representations.</p>
 <p><strong>Args:</strong></p>
 <ul>
-<li><code>rendered_files</code> (<code>dict[str, str]</code>) — Dict mapping relative path → rendered content.</li>
-<li><code>project_name</code> (<code>str</code>) — Project display name for the document header.</li>
+<li><code>file_map</code> (<code>dict[str, str]</code>) — Dict mapping relative path → rendered content.</li>
+<li><code>project_name</code> (<code>str</code>) — Project display name for the document header. Default: <code>''</code>.</li>
 </ul>
 <p><strong>Returns:</strong> <code>str</code> — Full Markdown document content.</p>
 <hr />
@@ -1946,10 +1788,10 @@
 <p><em>Source: <code>agentteams/graph.py</code></em></p>
 </blockquote>
 <p>CLI entry point for standalone graph generation.</p>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a>python<span class="w"> </span>-m<span class="w"> </span>src.graph<span class="w"> </span>/path/to/.github/agents/
-<a id="__codelineno-0-2" name="__codelineno-0-2" href="#__codelineno-0-2"></a>python<span class="w"> </span>-m<span class="w"> </span>src.graph<span class="w"> </span>/path/to/.github/agents/<span class="w"> </span>--format<span class="w"> </span>mermaid
-<a id="__codelineno-0-3" name="__codelineno-0-3" href="#__codelineno-0-3"></a>python<span class="w"> </span>-m<span class="w"> </span>src.graph<span class="w"> </span>/path/to/.github/agents/<span class="w"> </span>--format<span class="w"> </span>dot
-<a id="__codelineno-0-4" name="__codelineno-0-4" href="#__codelineno-0-4"></a>python<span class="w"> </span>-m<span class="w"> </span>src.graph<span class="w"> </span>/path/to/.github/agents/<span class="w"> </span>--format<span class="w"> </span>json
+<div class="highlight"><pre><span></span><code><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a>python<span class="w"> </span>-m<span class="w"> </span>agentteams.graph<span class="w"> </span>/path/to/.github/agents/
+<a id="__codelineno-0-2" name="__codelineno-0-2" href="#__codelineno-0-2"></a>python<span class="w"> </span>-m<span class="w"> </span>agentteams.graph<span class="w"> </span>/path/to/.github/agents/<span class="w"> </span>--format<span class="w"> </span>mermaid
+<a id="__codelineno-0-3" name="__codelineno-0-3" href="#__codelineno-0-3"></a>python<span class="w"> </span>-m<span class="w"> </span>agentteams.graph<span class="w"> </span>/path/to/.github/agents/<span class="w"> </span>--format<span class="w"> </span>dot
+<a id="__codelineno-0-4" name="__codelineno-0-4" href="#__codelineno-0-4"></a>python<span class="w"> </span>-m<span class="w"> </span>agentteams.graph<span class="w"> </span>/path/to/.github/agents/<span class="w"> </span>--format<span class="w"> </span>json
 </code></pre></div>
 <p><strong>Args:</strong></p>
 <ul>

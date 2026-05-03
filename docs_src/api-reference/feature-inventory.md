@@ -123,7 +123,7 @@ The `universal/` template library includes the tier-1 Orchestrator template and 
 
 62. **`--migrate` Flag** — One-step fencing migration: tags HEAD as `pre-fencing-snapshot`, then regenerates all files with fenced templates
 63. **`--revert-migration` Flag** — Undo a migration by resetting to `pre-fencing-snapshot` git tag
-64. **`--update` Mode** — Incremental re-render; preserves manual placeholder values
+64. **`--update` Mode** — Incremental re-render; preserves manual placeholder values and restores expected standard outputs that are missing on disk
 65. **`--prune` Mode** — Remove stale agent components from an existing team
 66. **`--auto-correct` Flag** — Invoke Copilot CLI to repair post-audit findings; reruns audit to confirm
 67. **`--scan-security` Flag** — Proactive scan for PII paths, credential patterns, unresolved placeholders
@@ -189,7 +189,10 @@ Workflows are step sequences embedded in the generated Orchestrator agent. Every
 103. **`@adversarial` Guards in Audit Workflows** — `@adversarial` runs as step 1 of Workflow 5 and step 2 of Workflow 8 to prevent stale-assumption conclusions
 104. **Pre-Execution Truth Check** — `@technical-validator` must verify factual claims in each plan step before it is marked `in_progress`
 105. **Drift-as-Trigger** — An explicit trigger in `@agent-updater` trigger tables: drift detected by `--check` requires re-render and re-verify before the next workflow
-106. **Cross-Repository Security Rule** — Any write to a repository other than `src/` must be assessed by `@repo-liaison` and cleared by `@security`
+106. **Initialization-as-Trigger** — First successful team generation is an explicit lifecycle trigger: it establishes the baseline inventory and trigger corpus used by future update and drift logic
+107. **Update Lifecycle Trigger Contract** — `--update` / `--update --merge` is treated as a governance trigger that must reconcile drift, emit newly required files, and preserve manual values
+108. **Missing Expected Output Recovery Trigger** — During update, absent expected standard outputs are treated as drift and must be restored even if template hashes are unchanged
+109. **Cross-Repository Security Rule** — Any write to a repository other than `src/` must be assessed by `@repo-liaison` and cleared by `@security`
 
 ---
 
