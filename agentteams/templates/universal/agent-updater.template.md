@@ -50,7 +50,7 @@ Use `references/github-workflows-merge.reference.md` when repository updates inv
 | Project structure changed | `@navigator` needs project map regeneration |
 | New agent file created | Orchestrator routing table needs updating |
 | Workstream added | All agents need awareness of new scope |
-| Team updated (`--update` or `--update --merge`) | Drifted files are re-rendered, newly required files are emitted, and missing expected standard outputs must be restored before closeout |
+| Team updated (canonical: `--update --merge`) | Drifted files are re-rendered, newly required files are emitted, and missing expected standard outputs must be restored before closeout |
 | Repository content changed (tracked files added, modified, deleted, merged, reverted, or restored) | Requires repository change census and docs/API impact decision before closeout |
 | **Drift detected by `--check`** | Agents may be operating on outdated knowledge of file structure, agent slugs, placeholder values, or workflow counts — re-render and re-verify before next workflow execution |
 | Expected output file missing on disk during update | Treat as documentation drift even without template hash drift; restore the missing file in the same update run |
@@ -69,7 +69,7 @@ Use `references/github-workflows-merge.reference.md` when repository updates inv
 ## Workflow
 
 1. **Detect drift:** Run `python build_team.py --description <brief> --check` to identify templates that have changed since the last build
-2. **Re-render drifted files:** Run `python build_team.py --description <brief> --update` to re-render only changed agent files while preserving any previously completed manual fields
+2. **Re-render drifted files:** Run `python build_team.py --description <brief> --update --merge` to re-render only changed agent files while preserving manual fields and user-authored content outside fenced regions
 3. **Security scan:** Run `python build_team.py --description <brief> --scan-security` to check all agent files for PII, credentials, and unresolved placeholders
 4. Run a repository change census across tracked additions/modifications/deletions/merges/reverts/restores
 5. Evaluate whether the census implies updates to published docs or API docs (`REQUIRED`, `REVIEW`, or `NONE`) and document rationale
@@ -93,7 +93,7 @@ Agent knowledge can drift silently when project structure evolves without a trig
 
 **Re-verification protocol:**
 1. Run `python build_team.py --description <brief> --check` → identify drift between current templates and deployed agents
-2. If drift exists → run `--update` to re-render; preserve all `{MANUAL:*}` values
+2. If drift exists → run `--update --merge` to re-render; preserve all `{MANUAL:*}` values and user-authored content outside fenced regions
 3. Invoke `@technical-validator` → verify that key factual claims in active plan steps (file paths, agent slugs, workflow counts) still match on-disk state
 4. If any claim is UNVERIFIED → surface to orchestrator before the plan step executes; do not allow the step to proceed on an unverified belief
 5. Log verification outcome in the relevant `.steps.csv` `notes` column
@@ -107,7 +107,7 @@ Any run of `--update` or `--update --merge` against a deployed agent team must f
 ### Pre-Update
 
 1. **Backup** — Confirm that `emit.backup_output_dir()` will be called before any write. For scripted batch runs, verify that `--update --merge --yes` is used (not bare `--update`), which calls `emit.backup_output_dir()` automatically. For non-git repos, this is the only rollback path; confirm the backup directory exists after the run.
-2. **Dry-run** — Run `--update --dry-run` first to see which files would be written. Review the list for unexpected targets.
+2. **Dry-run** — Run `--update --merge --dry-run` first to see which files would be written. Review the list for unexpected targets.
 3. **Drift check** — Run `--check` to confirm which templates have changed since the last build. This establishes the expected scope of changes.
 
 ### During Update

@@ -17,7 +17,6 @@ from __future__ import annotations
 
 import argparse
 import textwrap
-from datetime import date
 
 
 # ---------------------------------------------------------------------------
@@ -39,12 +38,14 @@ def generate_man_page(parser: argparse.ArgumentParser) -> str:
     """
     prog = parser.prog
     description = parser.description or ""
-    today = date.today().strftime("%B %Y")
+    # Keep the header date deterministic so CI freshness checks only fail on
+    # meaningful content drift, not monthly clock rollovers.
+    header_date = "Generated"
 
     lines: list[str] = []
 
     # .TH — title header
-    lines.append(f'.TH {prog.upper()} 1 "{today}" "{prog}" "User Commands"')
+    lines.append(f'.TH {prog.upper()} 1 "{header_date}" "{prog}" "User Commands"')
 
     # NAME
     lines.append(".SH NAME")

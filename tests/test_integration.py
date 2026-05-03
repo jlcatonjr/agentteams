@@ -533,6 +533,40 @@ def test_update_restores_missing_expected_standard_file(tmp_path):
     assert missing_path.exists(), f"Expected --update to restore missing file: {missing_rel}"
 
 
+def test_initialization_writes_baseline_inventory_artifacts(tmp_path):
+    """First successful generation writes baseline artifacts required for update/drift workflows."""
+    import build_team
+
+    brief = EXAMPLES_DIR / "software-project" / "brief.json"
+    if not brief.exists():
+        pytest.skip("software-project brief not found")
+
+    output_dir = tmp_path / ".github" / "agents"
+
+    rc = build_team.main([
+        "--description", str(brief),
+        "--output", str(output_dir),
+        "--yes",
+        "--no-scan",
+        "--security-offline",
+    ])
+    assert rc == 0
+
+    build_log_path = output_dir / "references" / "build-log.json"
+    assert build_log_path.exists(), "Initialization must write references/build-log.json"
+
+    payload = json.loads(build_log_path.read_text(encoding="utf-8"))
+    assert payload.get("schema_version") == "1.2"
+    assert payload.get("manifest_fingerprint")
+    assert payload.get("output_files_map"), "Baseline output inventory is required for structural update checks"
+    assert payload.get("agent_slug_list"), "Baseline agent slug inventory is required for team membership drift checks"
+
+    expected_reference = output_dir / "references" / "code-hygiene-rules.reference.md"
+    expected_graph = output_dir / "references" / "pipeline-graph.md"
+    assert expected_reference.exists(), "Initialization baseline must include standard code-hygiene reference"
+    assert expected_graph.exists(), "Initialization baseline must include team topology graph"
+
+
 def test_build_log_schema_v12(tmp_path):
     """Build-log written by _write_run_log includes structural and manifest fingerprints."""
     import json

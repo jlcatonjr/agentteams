@@ -1732,7 +1732,7 @@ everything listed reflects the current development state.</p>
 <ol>
 <li><strong><code>--migrate</code> Flag</strong> — One-step fencing migration: tags HEAD as <code>pre-fencing-snapshot</code>, then regenerates all files with fenced templates</li>
 <li><strong><code>--revert-migration</code> Flag</strong> — Undo a migration by resetting to <code>pre-fencing-snapshot</code> git tag</li>
-<li><strong><code>--update</code> Mode</strong> — Incremental re-render; preserves manual placeholder values and restores expected standard outputs that are missing on disk</li>
+<li><strong><code>--update --merge</code> Canonical Mode</strong> — Incremental re-render that preserves manual placeholder values, preserves user-authored content outside fences, and restores expected standard outputs missing on disk</li>
 <li><strong><code>--prune</code> Mode</strong> — Remove stale agent components from an existing team</li>
 <li><strong><code>--auto-correct</code> Flag</strong> — Invoke Copilot CLI to repair post-audit findings; reruns audit to confirm</li>
 <li><strong><code>--scan-security</code> Flag</strong> — Proactive scan for PII paths, credential patterns, unresolved placeholders</li>
@@ -1788,12 +1788,12 @@ everything listed reflects the current development state.</p>
 <ol>
 <li><strong>Constitutional Rules</strong> — Immutable rules encoded in the Orchestrator template: security clearance gates, code-hygiene before merge, conflict audit after multi-file sessions, adversarial review before irreversible changes</li>
 <li><strong>Authority Hierarchy</strong> — Explicit precedence ordering encoded in every generated Orchestrator (template library → schemas → pipeline source → placeholder conventions → implementation plan)</li>
-<li><strong>Automatic <code>@agent-updater</code> Triggers</strong> — Invoked at the close of Workflows 2, 3, and 5 after any knowledge-mutating operation</li>
+<li><strong>Automatic <code>@agent-updater</code> Routing in Documentation-Impact Workflows</strong> — Routed in Workflows 1, 2, 3, 5, 6, 7, 8, and 9 when knowledge-mutating or coordination changes occur</li>
 <li><strong><code>@adversarial</code> Guards in Audit Workflows</strong> — <code>@adversarial</code> runs as step 1 of Workflow 5 and step 2 of Workflow 8 to prevent stale-assumption conclusions</li>
 <li><strong>Pre-Execution Truth Check</strong> — <code>@technical-validator</code> must verify factual claims in each plan step before it is marked <code>in_progress</code></li>
 <li><strong>Drift-as-Trigger</strong> — An explicit trigger in <code>@agent-updater</code> trigger tables: drift detected by <code>--check</code> requires re-render and re-verify before the next workflow</li>
 <li><strong>Initialization-as-Trigger</strong> — First successful team generation is an explicit lifecycle trigger: it establishes the baseline inventory and trigger corpus used by future update and drift logic</li>
-<li><strong>Update Lifecycle Trigger Contract</strong> — <code>--update</code> / <code>--update --merge</code> is treated as a governance trigger that must reconcile drift, emit newly required files, and preserve manual values</li>
+<li><strong>Update Lifecycle Trigger Contract</strong> — Canonical <code>--update --merge</code> runs must reconcile drift, emit newly required files, preserve manual values, and preserve user-authored content outside fenced regions</li>
 <li><strong>Missing Expected Output Recovery Trigger</strong> — During update, absent expected standard outputs are treated as drift and must be restored even if template hashes are unchanged</li>
 <li><strong>Cross-Repository Security Rule</strong> — Any write to a repository other than <code>src/</code> must be assessed by <code>@repo-liaison</code> and cleared by <code>@security</code></li>
 </ol>

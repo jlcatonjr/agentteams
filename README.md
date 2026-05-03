@@ -349,16 +349,18 @@ agentteams --description brief.json --check
 
 ### Update drifted files and new agents (preserve manual values)
 
-When the module is updated (e.g., a new governance agent is added), run `--update` to bring an existing team in sync. New agent files are emitted; changed files are re-rendered preserving any `{MANUAL:*}` values you filled in previously; expected standard files that are missing on disk are restored; removed agents are reported but not deleted:
+When the module is updated (e.g., a new governance agent is added), run `--update --merge` to bring an existing team in sync safely. New agent files are emitted; changed files are re-rendered preserving any `{MANUAL:*}` values you filled in previously; expected standard files that are missing on disk are restored; removed agents are reported but not deleted:
 
 ```bash
-agentteams --description brief.json --update
+agentteams --description brief.json --update --merge
 ```
+
+Use bare `--update` only when you intentionally want full-file overwrite behavior on existing files.
 
 To also delete agents that are no longer part of the taxonomy:
 
 ```bash
-agentteams --description brief.json --update --prune
+agentteams --description brief.json --update --merge --prune
 ```
 
 ### Security scan
@@ -430,7 +432,8 @@ Templates ship with `AGENTTEAMS:BEGIN/END` fence markers around every template-o
 |------|-----------|
 | `--overwrite` | Full-file replacement — best for first-time generation |
 | `--merge` | Updates fenced sections only; preserves everything outside markers |
-| `--update` | Re-render drifted files + emit new agents (uses merge semantics for existing files) |
+| `--update --merge` | Canonical safe update mode: re-render drifted files + emit new agents while preserving user-authored content outside fences |
+| `--update` | Incremental update with overwrite semantics for existing files; use only when intentional |
 | `--migrate` | Retrofits fence markers onto a legacy team in one step |
 
 See [templates/FENCE-CONVENTIONS.md](agentteams/templates/FENCE-CONVENTIONS.md) for the full specification.
@@ -441,15 +444,15 @@ See [templates/FENCE-CONVENTIONS.md](agentteams/templates/FENCE-CONVENTIONS.md) 
 
 Generated agent teams stay current through three automatic mechanisms:
 
-### 1. Drift detection (`--check` / `--update`)
-Run `--check` at any time to detect template content drift or taxonomy structural changes. Use `--update` to apply them while preserving manually-filled values.
+### 1. Drift detection (`--check` / `--update --merge`)
+Run `--check` at any time to detect template content drift or taxonomy structural changes. Use `--update --merge` to apply them while preserving manually-filled values and user-authored content outside fenced regions.
 
 ### 2. Drift-as-trigger in `@agent-updater`
 The `@agent-updater` governance agent includes a **Drift detected by `--check`** trigger: whenever drift is detected, agents must re-render and re-verify before the next workflow executes.
 
 It also carries explicit lifecycle triggers aligned to the collector-management governance baseline:
 - **Team initialized** (first successful `build_team.py` run) establishes the canonical baseline for agent docs, references, workflow triggers, and output-file inventory.
-- **Team updated** (`--update` / `--update --merge`) requires drift reconciliation, emission of newly required files, and restoration of any expected standard files missing on disk.
+- **Team updated** (canonical: `--update --merge`) requires drift reconciliation, emission of newly required files, and restoration of any expected standard files missing on disk.
 - **Expected output missing during update** is treated as documentation drift even when template hashes are unchanged; the missing file must be restored in the same update run.
 
 ### 3. Periodic Knowledge Re-verification
@@ -458,7 +461,7 @@ The `@agent-updater` includes a `Periodic Knowledge Re-verification` protocol th
 - Any multi-file session ran without invoking `@agent-updater`
 - `@adversarial` flags a **Temporal (T)** presupposition in a plan review
 
-The protocol: run `--check` → re-render if drift found → invoke `@technical-validator` to verify plan facts against disk state → surface any unverified claims before execution proceeds.
+The protocol: run `--check` → re-render with `--update --merge` if drift found → invoke `@technical-validator` to verify plan facts against disk state → surface any unverified claims before execution proceeds.
 
 ---
 
@@ -653,7 +656,7 @@ agentteams --description brief.json --project ~/code/myproject --post-audit --au
 
 ### 8. Update an existing team after a module upgrade
 
-When `agentteams` is updated, templates may change and new agent types may be added to the taxonomy. Run `--update` to bring an existing team in sync:
+When `agentteams` is updated, templates may change and new agent types may be added to the taxonomy. Run `--update --merge` to bring an existing team in sync:
 
 - Files whose templates changed are re-rendered, preserving any `{MANUAL:*}` values you filled in.
 - New agent types introduced since the last build are emitted as new files.
@@ -664,7 +667,7 @@ When `agentteams` is updated, templates may change and new agent types may be ad
 cd agentteams
 git pull
 pip install -e .
-agentteams --description brief.json --update
+agentteams --description brief.json --update --merge
 ```
 
 ---
@@ -674,7 +677,7 @@ agentteams --description brief.json --update
 If agents were removed from the taxonomy in a module update and you want to clean them up:
 
 ```bash
-agentteams --description brief.json --update --prune
+agentteams --description brief.json --update --merge --prune
 ```
 
 `--prune` only takes effect alongside `--update`. It will delete files for agents that no longer exist in the taxonomy and were not manually created.
