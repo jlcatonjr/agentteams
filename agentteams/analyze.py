@@ -821,6 +821,8 @@ def _collect_manual_required(placeholder_map: dict[str, str]) -> list[dict[str, 
     """
     manual = []
     for placeholder, value in placeholder_map.items():
+        if value is None:
+            continue
         if _MANUAL_TOKEN_FULLMATCH_RE.fullmatch(value.strip()):
             manual.append({
                 "placeholder": placeholder,
