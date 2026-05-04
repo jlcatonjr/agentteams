@@ -43,6 +43,9 @@ Short reads (about five paragraphs each) explaining how core module components f
 7. [Tools and References](https://jameslcaton.com/#/blog/04-22-2026-AgentTeams%20Tools%20and%20References.html)
 8. [Security Agent](https://jameslcaton.com/#/blog/04-22-2026-AgentTeams%20Security%20Agent.html)
 9. [Audit Protocols and Security](https://jameslcaton.com/#/blog/04-22-2026-AgentTeams%20Audit%20Protocols%20and%20Security.html)
+10. [Regularly Auditing Agent Documentation](https://jameslcaton.com/#/blog/04-22-2026-AgentTeams%20Regularly%20Auditing%20Agent%20Documentation.html)
+11. [Constitutional Fencing](https://jameslcaton.com/#/blog/04-22-2026-AgentTeams%20Constitutional%20Fencing.html)
+12. [Efficient Inter-agent Communication via a Daily Work Summaries Document](https://jameslcaton.com/#/blog/04-22-2026-AgentTeams%20Efficient%20Inter-agent%20Communication%20via%20a%20Daily%20Work%20Summaries%20Document.html)
 
 ---
 
