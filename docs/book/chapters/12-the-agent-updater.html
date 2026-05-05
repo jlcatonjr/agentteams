@@ -44,7 +44,7 @@
       <p>In the book-production team, this chain is specified in the orchestrator's <a href="#fig-workflow-07">Workflow 7 (Documentation Maintenance)</a>: invoke the agent-updater, then the agent-refactorer, then the conflict-auditor.</p>
 
       <figure id="fig-workflow-07">
-        <img src="../figures/workflow-07-doc-maintenance.svg" alt="Workflow 7: Documentation Maintenance" />
+        <img src="../figures/workflow-07-doc-maintenance.pdf" alt="Workflow 7: Documentation Maintenance" />
         <figcaption>Workflow 7 — Documentation Maintenance. The agent-updater synchronizes documentation, the agent-refactorer checks for extraction opportunities and specification compliance, and the conflict-auditor verifies consistency.</figcaption>
       </figure>
       </div>
@@ -72,6 +72,8 @@
       <p>I enforce the living-document policy aggressively. Even content that might seem useful for context ("as of the last audit, 14 conflicts were found") is removed, because the statement will be false after the next audit and no mechanism guarantees its update. Better to store audit counts in a reference file maintained by the appropriate agent than to embed them in agent files that the updater must maintain.</p>
 
       <p>The same file scan that enforces the living-document policy also detects unreplaced placeholder tokens in newly instantiated agent files. A file that still contains a <code>{MANUAL:STYLE_REFERENCE_PATH}</code> or any other unfilled manual-required token has not completed initialization: the team-setup step that should have bound that value was not executed. The updater flags these as initialization-completeness failures and routes them to the operator for resolution. The two failure modes the scan surfaces are categorically distinct: a living-document violation reflects drift that accumulated during the project's life, while an unreplaced <code>{MANUAL:}</code> token reflects a gap at creation. The first is a documentation-maintenance failure; the second is an initialization-completeness failure. Both surface during the same scan; neither belongs in a file that agents depend on for current operating specifications.</p>
+
+      <p>The same maintenance scan also checks for accidental PII exposure in agent-facing documentation fields: user names, local absolute paths, email addresses, and secret-bearing literals. In module-aligned updater designs, unresolved placeholders and PII leakage are treated as standard updater findings because both indicate deployment-incomplete documentation that should not propagate downstream.</p>
 
       <div class="project-illustration">
       <p>In the book-production team, such reference files include the conflict-auditor's CSV log and the code-hygiene agent's violation reports: dedicated stores for point-in-time data that would otherwise clutter agent specifications.</p>

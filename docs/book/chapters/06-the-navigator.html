@@ -28,9 +28,11 @@
     </section>
 
     <section id="sec:navigator-dependency-matrix">
-      <h2>2. The Chapter Dependency Table</h2>
+      <h2>2. The Component Dependency Table</h2>
 
-      <p>The navigator maintains a chapter-to-source-file dependency matrix that maps each chapter to its primary architectural and theoretical sources, covering source files and key theoretical references across the full manuscript. The dependency table enables two operations. First, when a source file changes, the navigator can identify which chapters are potentially affected. If the daily pipeline script is modified, the navigator reports that Chapters 17 and 18 should be checked for consistency. Second, when a new chapter is being drafted, the navigator provides the drafting agent with the authoritative list of sources to consult. The drafting agent does not need to determine which source files are relevant. The navigator has already resolved that mapping.</p>
+      <p>The navigator maintains a component-to-source dependency matrix that maps chapters, governance artifacts, and pipeline components to their primary architectural and theoretical sources, covering source files and key theoretical references across the full manuscript. The dependency table enables two operations. First, when a source file changes, the navigator can identify which components are potentially affected. If the daily pipeline script is modified, the navigator reports that Chapters 17 and 18 should be checked for consistency. Second, when a new chapter is being drafted, the navigator provides the drafting agent with the authoritative list of sources to consult. The drafting agent does not need to determine which source files are relevant. The navigator has already resolved that mapping.</p>
+
+      <p>The same maintenance scope includes a topology artifact, <code>pipeline-graph.md</code>, that records stage dependencies and handoff edges for the daily pipeline. The dependency table answers "which claims depend on which sources"; the topology graph answers "which agents and stages depend on which handoffs." Together they provide the navigator's two structural views of the project.</p>
 
       <p>The table is a form of traceability documentation applied to the book's architecture. In software engineering, requirements traceability matrices map requirements to the code that implements them, enabling impact analysis when requirements change. The navigator's chapter dependency table maps theoretical and architectural claims to the source files that ground them, enabling the same kind of impact analysis: when the ground truth changes, the affected claims can be identified and verified.</p>
     </section>

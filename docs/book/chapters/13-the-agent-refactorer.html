@@ -38,6 +38,8 @@
 
       <p>The specification compliance audit ensures that agent files are not only correct in content but uniform in structure. A well-written agent whose file lacks a constraints section is harder for the orchestrator to parse. The orchestrator expects to find constraints in a predictable location within each agent file. A purpose statement that appears in one agent file's third paragraph and another's first paragraph creates ambiguity about where to look. The structural specification standardizes the layout so that any agent (including the orchestrator) can navigate any agent file using the same structural expectations.</p>
 
+      <p>The ten violation codes remain the richer local framework for this project. In the module's portable baseline, YAML front matter validation is expressed as a compact five-field contract (<code>name</code>, <code>description</code>, <code>user-invokable</code>, <code>tools</code>, <code>model</code>) that operationalizes specification compliance for broad reuse. The local ten-code system extends that baseline with project-specific structural checks.</p>
+
       <p>The refactorer's violation codes may overlap partially with the code-hygiene agent's audit rules (Chapter 8), but the overlap is deliberate rather than redundant. Both may flag the same agent file: the code-hygiene agent because a draft misquotes the file, the refactorer because the file's internal structure is malformed. The overlapping detection from different angles increases the probability that structural defects are caught.</p>
     </section>
 
