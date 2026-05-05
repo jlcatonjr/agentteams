@@ -14,26 +14,25 @@
     </blockquote>
 
     <section id="sec:hygiene-audit-rules">
-      <h2>1. Sixteen Audit Rules</h2>
+      <h2>1. Twenty Audit Rules in Six Thematic Groups</h2>
 
       <p>A code-hygiene agent maintains typed audit rules, each designating a specific category of technical inaccuracy. (Since the project involves a book, supported by scripts, I could just refer to this as the "hygiene agent." However, most projects that I envision are code-centric, so I maintain this naming convention.) The rules accumulate inductively from production experience rather than from a theoretical taxonomy: each code identifies a class of error that has actually appeared in the system's output and required structured remediation. Assigning a typed code to each violation category makes findings actionable. The code tells the correcting agent what kind of error it is looking for, independently of where and why that error appeared.</p>
 
       <div class="project-illustration">
-        <p>In this project, the code-hygiene agent maintains sixteen rules organized in four categories.</p>
-        <p><strong>Technical Accuracy Rules (CH-01 through CH-08):</strong></p>
+        <p>In this project, the code-hygiene agent maintains twenty rules grouped into six thematic clusters, with CH-21 and above reserved as extension-point slots for project-specific checks that should not be hardcoded in the portable baseline.</p>
+        <p><strong>Group 1: File Hygiene (CH-01 through CH-04):</strong></p>
         <ul>
           <li>CH-01 Source fidelity: every code block attributed to a specific file must match that file's current content on disk.</li>
           <li>CH-02 Agent excerpt accuracy: every agent file excerpt must match the actual .agent.md file verbatim.</li>
           <li>CH-03 Pipeline description accuracy: descriptions of pipeline stages must match the daily pipeline script's behavior.</li>
           <li>CH-04 Directory claims: claims about directory structure must match the actual layout.</li>
-          <li>CH-05 Single source of truth: no factual claim should be stated in two locations with different values.</li>
-          <li>CH-06 Agent count: any stated count of agents in a repository must match the actual count.</li>
-          <li>CH-07 File path: every file path mentioned in prose must resolve to an existing file.</li>
-          <li>CH-08 Command claims: any shell command described must actually work when run.</li>
         </ul>
-        <p><strong>Cross-Reference Rules (CH-09 through CH-11):</strong> citation verification, chapter-reference accuracy, and figure-reference accuracy.</p>
-        <p><strong>Consistency Rules (CH-12 through CH-15):</strong> terminology consistency, agent role names, hierarchy claims, and theoretical attribution.</p>
-        <p><strong>Formatting Rules (CH-16):</strong> paragraph formatting compliance.</p>
+        <p><strong>Group 2: Modularity and Structure (CH-05 through CH-08):</strong> single-source-of-truth assertions, agent counts, resolvable paths, and command claims.</p>
+        <p><strong>Group 3: Configuration and Code (CH-09 through CH-11):</strong> citation and chapter/figure cross-reference integrity.</p>
+        <p><strong>Group 4: Code Quality and Semantics (CH-12 through CH-15):</strong> terminology consistency, role-name consistency, hierarchy claims, and theoretical attribution checks.</p>
+        <p><strong>Group 5: Import and Dependency Integrity (CH-16 through CH-18):</strong> dependency references, unresolved placeholders, and stale import statements.</p>
+        <p><strong>Group 6: Documentation Integrity (CH-19 through CH-20):</strong> formatting compliance and living-document policy alignment.</p>
+        <p>In the book project, several checks are project-specific extensions. The module's comparative variant may split technical validation into a separate technical-validator role; this project keeps the broader code-hygiene scope and routes deterministic remediation through downstream specialists.</p>
       </div>
 
       <p>The typed violation system gives the code-hygiene agent's findings a precision that unstructured editorial feedback lacks. When the agent reports that a given file contains an invented-function-name violation at a specific line (a name that does not exist in the referenced source file) the finding is actionable without further interpretation. The violation type tells the correcting agent what kind of error to look for. The file path and line number tell it where, and the rule code tells it why the passage failed audit. Structured error codes enable the same workflow that structured type systems enable in programming. They make categories of error visible, classifiable, and trackable.</p>
@@ -43,6 +42,8 @@
       </div>
 
       <p>Errors common to any documentation project include paths that no longer exist, code that has been refactored since it was quoted, function names hallucinated by a drafting agent, and line-number references that have drifted. Artifacts specific to multi-agent production include copy-paste residue from templates, unreplaced placeholder tokens, terminology inconsistencies introduced when different agents draft sections with overlapping vocabulary, and bibliography keys that resolve in one file's citation context but not in another's. Unreplaced placeholder tokens divide into two sub-types: auto-resolved tokens where the rendering engine found no matching value in the project manifest, and manual-required tokens where the team-setup step was not completed. A third category comprises errors introduced by project-specific production phases such as renumbering, restructuring, or large-scale rewriting.</p>
+
+      <p>The twenty-rule arrangement is an architectural baseline, not a closed taxonomy. Extension slots (CH-21 and above) exist specifically so projects can add checks such as language-specific toolchain validations or domain-specific reference integrity constraints without destabilizing the shared core rule set.</p>
     </section>
 
     <section id="sec:hygiene-detection-remediation">
@@ -61,7 +62,7 @@
       <p>The code-hygiene agent audits the chapters that describe the system it belongs to, including chapters that describe the agent itself. This creates a self-referential loop. The agent can verify claims made about its own specification, comparing what a chapter states about the agent against what its agent file actually contains. If a future revision changes the specification but the chapter is not updated, the stale-count or inaccurate-description rule detects the discrepancy in a passage describing the very agent doing the detecting.</p>
 
       <div class="project-illustration">
-        <p>In this project, if a chapter claims "the code-hygiene agent maintains sixteen audit rules" but the agent file has been extended to seventeen, CH-05 (single source of truth) fires: no factual claim should be stated in a chapter draft with a value that differs from the source file.</p>
+        <p>In this project, if a chapter claims "the code-hygiene agent maintains sixteen audit rules" while the governing rule reference lists twenty, CH-05 (single source of truth) fires: no factual claim should be stated in a chapter draft with a value that differs from the source file.</p>
       </div>
 
       <p>The self-referential loop is a feature the team's architecture supports because the detecting agent and the correcting agent are different. A technical-accuracy auditor finds the discrepancy. A prose-composition agent corrects the text. The auditor then re-audits the correction. At no point does the code-hygiene agent modify its own description. It merely reports that its description in the chapter does not match its actual specification. The separation of detection from remediation prevents the self-referential loop from becoming circular. The audit passes through multiple agents before returning to the code-hygiene agent for re-verification.</p>
@@ -82,7 +83,7 @@
         <p>In this project's <a href="#fig-workflow-05">Workflow 5 (Code Hygiene Audit)</a>, the code-hygiene agent is invoked first. When corrections are needed, the book-content-expert updates the affected chapter files. Any such text edits then pass through the expert-critic for prose quality auditing, the argument-weaver for cohesion repair, and the voice-style agent for a three-pass audit, in that order, before reaching the agent-updater for documentation maintenance and the conflict-auditor for consistency verification. The code-hygiene agent's report determines which files the book-content-expert will revise, and those revisions trigger the prose-quality chain before the closing governance steps run.</p>
 
         <figure id="fig-workflow-05">
-          <img src="../figures/workflow-05-code-hygiene.svg" alt="Workflow 5: Code Hygiene Audit" />
+          <img src="../figures/workflow-05-code-hygiene.pdf" alt="Workflow 5: Code Hygiene Audit" />
           <figcaption>Workflow 5 — Code Hygiene Audit. The code-hygiene agent audits first. When corrections are needed, the book-content expert updates chapter drafts, triggering the prose-quality chain (expert-critic → argument-weaver → voice-style) before documentation updates and a closing consistency check.</figcaption>
         </figure>
       </div>
@@ -93,7 +94,7 @@
         <p>In <a href="#fig-workflow-06">Workflow 6 (Review Cycle)</a>, the code-hygiene agent is invoked after the conflict-auditor and before the bibliography-manager. The conflict-auditor identifies contradictions between chapter claims. The code-hygiene agent identifies divergences between chapter claims and source files. Their sequential placement captures both kinds of failure in a single pass.</p>
 
         <figure id="fig-workflow-06">
-          <img src="../figures/workflow-06-review-cycle.svg" alt="Workflow 6: Review Cycle" />
+          <img src="../figures/workflow-06-review-cycle.pdf" alt="Workflow 6: Review Cycle" />
           <figcaption>Workflow 6 — Review Cycle. The conflict-auditor scans for contradictions, the code-hygiene agent audits for source-file divergences, the bibliography-manager verifies every citation, and the voice-style agent runs a three-pass audit. Findings are consolidated and presented.</figcaption>
         </figure>
       </div>
@@ -101,7 +102,7 @@
       <p>I recommend invoking the code-hygiene agent in workflows where content has been recently modified or is being reviewed for the first time. Where the content under review has not changed, re-auditing produces redundant findings.</p>
 
       <div class="project-illustration">
-        <p>In this project, <a href="chapters/05-the-orchestrator.html#fig-workflow-03">Workflow 3 (Chapter Drafting)</a> does not include a code-hygiene step because the chapter does not yet exist to audit: the check occurs in the review cycle that follows drafting. <a href="chapters/05-the-orchestrator.html#fig-workflow-04">Workflow 4 (Chapter Revision)</a> does not include a dedicated code-hygiene step because the revision itself is expected to address technical accuracy issues identified in prior audits.</p>
+        <p>In this project, <a href="05-the-orchestrator.html#fig-workflow-03">Workflow 3 (Chapter Drafting)</a> does not include a code-hygiene step because the chapter does not yet exist to audit: the check occurs in the review cycle that follows drafting. <a href="05-the-orchestrator.html#fig-workflow-04">Workflow 4 (Chapter Revision)</a> does not include a dedicated code-hygiene step because the revision itself is expected to address technical accuracy issues identified in prior audits.</p>
       </div>
     </section>
 
@@ -111,7 +112,7 @@
       <p>The code-hygiene agent's audit rules share a common epistemological commitment: source files on disk are ground truth. When a chapter makes a quantitative claim about a system component (that some agent maintains a specific number of rules, or that a configuration file defines a specific number of workflow sequences) the code-hygiene agent does not evaluate whether those numbers are appropriate. It opens the referenced source file, counts the relevant items, and compares the count to the chapter's claim. The truth condition is correspondence. The chapter's description matches the source it describes, or it does not.</p>
 
       <div class="project-illustration">
-        <p>For example, when a chapter claims the orchestrator defines eleven numbered workflows, the code-hygiene agent opens the orchestrator's agent file, counts the workflows, and reports a CH-05 violation (single source of truth) if the stated count does not match the actual count.</p>
+        <p>For example, when a chapter claims the orchestrator defines ten numbered workflows, the code-hygiene agent opens the orchestrator's agent file, counts the workflows, and reports a CH-05 violation (single source of truth) if the stated count does not match the actual count.</p>
       </div>
 
       <p>This ground-truth commitment resolves what would otherwise be an ambiguity in the audit process. The code-hygiene agent distinguishes between a chapter making its own analytical claims (where paraphrase is legitimate) and a chapter representing what a source file contains, where accuracy is required. A chapter may use different terms when reasoning about an agent's role, but when it represents what an agent file says, it must represent it accurately. The distinction between analytical paraphrase and source representation is the boundary the code-hygiene agent polices.</p>
