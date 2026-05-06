@@ -35,10 +35,10 @@ jobs:
       - name: Build docs
         run: mkdocs build --site-dir _site
 
-      - name: Ensure book SPA assets are deployed
+      - name: Ensure book SPA assets are deployed (docs_src is authoritative)
         run: |
           mkdir -p _site/book
-          cp -rn docs_src/book/. _site/book/
+          rsync -a --delete docs_src/book/ _site/book/
 
       - name: Mark Pages artifact as static (no Jekyll)
         run: |
