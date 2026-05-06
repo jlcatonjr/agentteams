@@ -89,6 +89,14 @@ The following rules are invariant across all projects:
 
 > **Extension Point:** Projects may add rules CH-21+ for domain-specific hygiene in the companion reference file `references/code-hygiene-rules.reference.md`. Use the same ID/Name/Category/Severity structure.
 
+Required project extensions for this repository:
+
+| ID | Name | Category | Severity |
+|----|------|----------|----------|
+| CH-21 | Validate New Features Before Mainline Integration | Testing | High |
+| CH-22 | Type Check Function/Class Inputs | Type Safety | High |
+| CH-23 | Fail Fast on Invalid Inputs | Defensive Programming | **Critical** |
+
 ### Audit Output Format
 
 ```
@@ -126,4 +134,7 @@ Overall: 18/20 checks passing
 - **Security clearance required before all deletions.** Route through `@security` → `@cleanup`.
 - **Do not downgrade CH-05 or CH-20 severity.** These are Critical and must remain so.
 - **Extension rules (CH-21+) must use the same format.** Added to the companion reference file, never inline.
+- **CH-21 is mandatory in this repository.** New features must be tested/validated before integration into the main program.
+- **CH-22 is mandatory in this repository.** Function/class inputs must be type-checked so only meaningful input types are accepted.
+- **CH-23 is mandatory in this repository.** Invalid inputs must raise explicit errors and must never fail silently.
 <!-- AGENTTEAMS:END content -->
