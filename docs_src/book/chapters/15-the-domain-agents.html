@@ -74,7 +74,7 @@
         <p>In this project, HTML chapters are the canonical format from which LaTeX files are generated. The html-document-builder performs conversion: it validates the HTML structure of each chapter file against the project's template and translates HTML elements to LaTeX according to a defined mapping, which includes <code>&lt;section id="..."&gt;</code> to <code>\section{}\label{}</code>, <code>&lt;cite class="citation" data-key="key"&gt;</code> to <code>\cite{key}</code>, and so on, depositing the result in the <code>manuscript/</code> directory. The latex-specialist performs compilation: it assembles the converted <code>.tex</code> files into a root document with the correct preamble and chapter-inclusion order, integrates the bibliography via BibTeX, and runs the compiler and BibTeX across all re-compilation passes needed to resolve labels and cross-references. The constitutional rule that HTML chapters are the primary authored output prohibits any agent from editing <code>.tex</code> files directly. All corrections originate in the HTML source and arrive in the manuscript directory as regenerated LaTeX. </p>
 
         <figure id="fig-workflow-09">
-          <img src="../figures/workflow-09-latex-production.pdf" alt="Workflow 9: LaTeX Production" />
+          <img src="../figures/workflow-09-latex-production.svg" alt="Workflow 9: LaTeX Production" />
           <figcaption>Workflow 9 — LaTeX Production. The html-document-builder converts all HTML chapters to LaTeX, the bibliography-manager verifies BibTeX entries, the latex-specialist assembles and compiles the manuscript, and the cleanup agent removes intermediate build artifacts.</figcaption>
         </figure>
       </div>
@@ -144,7 +144,7 @@
         <p>In this project, the bibliography-manager maintains <code>references/bibliography.bib</code> as the citation database. Tier-one verification confirms key presence before a draft is finalized. Tier-two verification confirms metadata accuracy before the entry is treated as authenticated. The bibliography-manager also maintains three topical focus-area clusters, which includes Agent-Based Models and Computation, Knowledge, Speech Acts, Community, and Governance, and Capital, Institutions, and Transaction Costs, that organize the book's primary intellectual genealogy by topic, supplying the book-content-expert with pre-organized source material during the research phase. The security agent's S-3 rule provides the independent enforcement layer: citations reaching the security checkpoint without bibliography-manager verification are flagged as constitutional violations.</p>
 
         <figure id="fig-workflow-10">
-          <img src="../figures/workflow-10-bibliography-operations.pdf" alt="Workflow 10: Bibliography Operations" />
+          <img src="../figures/workflow-10-bibliography-operations.svg" alt="Workflow 10: Bibliography Operations" />
           <figcaption>Workflow 10 — Bibliography Operations. The bibliography-manager performs the requested citation operation, with a conditional conflict-audit when citations change.</figcaption>
         </figure>
       </div>

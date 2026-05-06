@@ -24,7 +24,7 @@
         <p>The book project's orchestrator defines twelve workflows. The simplest production workflow, <a href="#fig-workflow-01">Workflow 1 (Chapter Outline Development)</a>, illustrates the routing pattern: the book-content-expert researches theoretical and architectural sources, updates the chapter-outlines reference file, and the conflict-auditor verifies consistency with existing chapters. Each step routes to a designated specialist in a fixed sequence. More complex workflows chain more agents: <a href="chapters/08-the-code-hygiene-agent.html#fig-workflow-06">Workflow 6 (Review Cycle)</a> invokes four agents for contradictions, technical accuracy, citation verification, and voice fidelity. <a href="#fig-workflow-03">Workflow 3 (Chapter Drafting)</a> routes through nine agents in sequence (§6). The production pipeline follows a dependency chain, which includes outline (<a href="#fig-workflow-01">Workflow 1</a>), expert instantiation (<a href="#fig-workflow-02">Workflow 2</a>, §5), drafting (<a href="#fig-workflow-03">Workflow 3</a>, §6), revision (<a href="#fig-workflow-04">Workflow 4</a>, §6), each presupposing the output of its predecessor.</p>
 
         <figure id="fig-workflow-01">
-          <img src="../figures/workflow-01-chapter-outline.pdf" alt="Workflow 1: Chapter Outline Development" />
+          <img src="../figures/workflow-01-chapter-outline.svg" alt="Workflow 1: Chapter Outline Development" />
           <figcaption>Workflow 1 — Chapter Outline Development. The book-content expert researches the chapter's theoretical and architectural sources, updates the chapter-outlines reference file, and the conflict-auditor verifies outline consistency with existing chapters.</figcaption>
         </figure>
       </div>
@@ -97,7 +97,7 @@
         <p>In the book project, <a href="#fig-workflow-02">Workflow 2 (Chapter Expert Instantiation)</a> reads <code>workstream-expert.template.md</code> — the module's component-expert template — and the chapter outline reference file, populates the template's placeholder fields with chapter-specific data, and produces a new chapter expert agent. The template carries four manual-required placeholders: <code>{MANUAL:COMPONENT_SPEC}</code>, <code>{MANUAL:SECTION_SCHEMA}</code>, <code>{MANUAL:SOURCE_LIST}</code>, and <code>{MANUAL:QUALITY_CRITERIA}</code>. The chapter outline provides all four — binding those values statically rather than through the module's automated intake path. In a fully automated team setup, a team-builder agent in the module's <code>builder/</code> tier would conduct an intake interview (asking the operator for each <code>{MANUAL:}</code> binding through a structured prompt sequence) before Workflow 2 executes. The chapter outline reference file substitutes for this intake interview in the book project, encoding the values Workflow 2 needs in a form the orchestrator can read directly. Before drafting any chapter, Workflow 2 must be executed: it creates the chapter-expert specialist that prepares the Chapter Brief and reviews the draft against the outline's specifications.</p>
 
         <figure id="fig-workflow-02">
-          <img src="../figures/workflow-02-chapter-expert-instantiation.pdf" alt="Workflow 2: Chapter Expert Instantiation" />
+          <img src="../figures/workflow-02-chapter-expert-instantiation.svg" alt="Workflow 2: Chapter Expert Instantiation" />
           <figcaption>Workflow 2 — Chapter Expert Instantiation. The orchestrator reads a template and chapter outline, populates the template with chapter-specific data, verifies cross-references, and registers the new agent in project documentation.</figcaption>
         </figure>
         <p>The book project begins with eighteen agents. As chapters are scheduled for drafting, <a href="#fig-workflow-02">Workflow 2</a> adds chapter experts carrying chapter-specific knowledge, which includes thesis, sections, sources, and cross-references, that no existing agent holds. The schema is populated with data drawn from the chapter outline reference file.</p>
@@ -115,17 +115,17 @@
         <p>In the book project, <a href="#fig-workflow-01">Workflow 1</a> (§1), <a href="#fig-workflow-02">Workflow 2</a> (§5), <a href="#fig-workflow-03">Workflow 3</a>, <a href="#fig-workflow-04">Workflow 4</a>, and <a href="chapters/15-the-domain-agents.html#fig-workflow-09">Workflow 9</a> form the production pipeline: outlining, instantiating the chapter expert, drafting, revising, and manuscript compilation. <a href="chapters/08-the-code-hygiene-agent.html#fig-workflow-05">Workflow 5</a>, <a href="chapters/12-the-agent-updater.html#fig-workflow-07">Workflow 7</a>, and <a href="chapters/14-the-cleanup-agent.html#fig-workflow-08">Workflow 8</a> address maintenance: auditing technical accuracy, updating documentation, and removing stale artifacts. <a href="chapters/08-the-code-hygiene-agent.html#fig-workflow-06">Workflow 6</a> and <a href="chapters/15-the-domain-agents.html#fig-workflow-10">Workflow 10</a> serve both functions: the review cycle verifies production quality, and bibliography operations feed both content creation and system integrity. <a href="chapters/16-the-repo-liaison.html#fig-workflow-11">Workflow 11</a> governs cross-repository coordination: when a production or maintenance workflow modifies an architectural artifact that adjacent repositories depend on, the repo liaison assesses impact and executes approved updates with security clearance.</p>
 
         <figure id="fig-workflow-11-orchestrator">
-          <img src="../figures/workflow-11-cross-repository-coordination.pdf" alt="Workflow 11: Cross-Repository Coordination" />
+          <img src="../figures/workflow-11-cross-repository-coordination.svg" alt="Workflow 11: Cross-Repository Coordination" />
           <figcaption>Workflow 11 — Cross-Repository Coordination. The orchestrator triggers the repo liaison, which reads the adjacent-repository registry and assesses impact. Approved updates proceed with security clearance; repositories with their own orchestrator receive a Coordination Request instead of a direct write. The conflict-auditor closes the workflow.</figcaption>
         </figure>
 
         <figure id="fig-workflow-03">
-          <img src="../figures/workflow-03-chapter-drafting.pdf" alt="Workflow 3: Chapter Drafting" />
+          <img src="../figures/workflow-03-chapter-drafting.svg" alt="Workflow 3: Chapter Drafting" />
           <figcaption>Workflow 3 — Chapter Drafting. The orchestrator routes through navigator, chapter expert, adversarial agent, book-content expert, expert-critic, argument-weaver, voice-style auditor, HTML-document builder, conflict-auditor, and agent-updater in sequence, with review loops between the chapter expert and book-content expert, and between the expert-critic and book-content expert.</figcaption>
         </figure>
 
         <figure id="fig-workflow-04">
-          <img src="../figures/workflow-04-chapter-revision.pdf" alt="Workflow 4: Chapter Revision" />
+          <img src="../figures/workflow-04-chapter-revision.svg" alt="Workflow 4: Chapter Revision" />
           <figcaption>Workflow 4 — Chapter Revision. After the book-content expert revises the draft, the adversarial agent reviews the revision plan for hidden presuppositions. The expert-critic audits for structural weaknesses and prose defects (routing flagged passages back for correction), the argument-weaver repairs within-section cohesion, and the voice-style agent runs a three-pass audit. The conflict-auditor then verifies no new contradictions, and the bibliography-manager confirms all citations resolve.</figcaption>
         </figure>
       </div>
@@ -150,7 +150,7 @@
         <p>In this project, adaptive execution is used whenever a remediation plan has many dependent edits. After each completed step, the remaining rows are re-scoped using newly discovered constraints (for example, a section already corrected, a filename mismatch, or a dependency that moved to another chapter). The orchestrator does not continue with the original row order by default; it continues only after the adversarial and conflict gates approve the revised pending set.</p>
 
         <figure id="fig-workflow-12">
-          <img src="../figures/workflow-12-adaptive-plan-execution.pdf" alt="Workflow 12: Adaptive Plan Execution" />
+          <img src="../figures/workflow-12-adaptive-plan-execution.svg" alt="Workflow 12: Adaptive Plan Execution" />
           <figcaption>Workflow 12 — Adaptive Plan Execution. After each completed step, the orchestrator routes remaining pending rows through adversarial and conflict audits, revises the pending sequence, and only then advances to the next step. The loop repeats until the plan is complete.</figcaption>
         </figure>
       </div>

@@ -103,7 +103,7 @@
         <p>Workflow 11 (Cross-Repository Coordination) is triggered by the orchestrator when a production or maintenance workflow modifies an architectural artifact, which includes a schema, a template, a protocol definition, and a naming convention, that adjacent repositories' agents depend on. The trigger may arise from any other workflow's output: a new schema emitted by Workflow 9 (LaTeX Production), a template updated during Workflow 7 (Documentation Maintenance), or a naming change that propagates from Workflow 8 (Cleanup) to adjacent documentation. The trigger condition is not the modification itself but the orchestrator's judgment, based on the adjacent-repo registry, that the modification's scope reaches beyond this project's boundary.</p>
 
         <figure id="fig-workflow-11">
-          <img src="../figures/workflow-11-cross-repository-coordination.pdf" alt="Workflow 11: Cross-Repository Coordination" />
+          <img src="../figures/workflow-11-cross-repository-coordination.svg" alt="Workflow 11: Cross-Repository Coordination" />
           <figcaption>Workflow 11 — Cross-Repository Coordination. The orchestrator triggers the repo liaison, which reads the adjacent-repository registry and assesses cross-boundary impact. The liaison produces an Impact Report; the orchestrator reviews and approves updates. If the adjacent repository has its own orchestrator, the liaison composes a Coordination Request rather than writing directly. The security agent clears every adjacent-repo write before execution. The conflict-auditor closes the workflow.</figcaption>
         </figure>
       </div>

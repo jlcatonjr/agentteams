@@ -68,7 +68,7 @@
       <p>The orchestrator's <a href="#fig-workflow-08">Workflow 8 (Cleanup)</a> defines this project's cleanup sequence. The code-hygiene agent runs first, identifying files that are candidates for removal: stale artifacts, orphaned intermediates, superseded outputs. If the code-hygiene agent identifies any candidates, the adversarial agent reviews the deletion plan for hidden presuppositions. After adversarial review, the security agent is invoked for clearance. Only after security clearance does the cleanup agent execute deletions on the approved files. After deletions, the agent-updater synchronizes the project documentation to reflect the removed files.</p>
 
       <figure id="fig-workflow-08">
-        <img src="../figures/workflow-08-cleanup.pdf" alt="Workflow 8: Cleanup" />
+        <img src="../figures/workflow-08-cleanup.svg" alt="Workflow 8: Cleanup" />
         <figcaption>Workflow 8 — Cleanup. The code-hygiene agent identifies deletion candidates, the adversarial agent reviews the deletion plan, a security gate clears approved files, the cleanup agent executes deletions, and the agent-updater propagates the changes through project documentation.</figcaption>
       </figure>
       </div>
