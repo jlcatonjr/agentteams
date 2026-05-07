@@ -49,11 +49,54 @@
 
           <p>Every registered entry supports the liaison's judgment. When this project's orchestrator announces a change, the liaison can consult the registry to determine which adjacent repositories' documentation is likely to have relied on what has changed. An unregistered dependency is invisible to this determination - the liaison cannot assess what it has no record of. Stale registry entries - entries describing repositories that have changed their structure or whose relationship with this project has ended - are flagged rather than silently removed and surfaced to the orchestrator. The audit trail of the boundary relationship is preserved even when the relationship itself has ended, for the same reason the project's own contradiction register preserves a history of resolved contradictions: the past state of the system is sometimes the only evidence available to diagnose a current problem.</p>
 
-          <p>Work summaries extend this communication memory from boundary state to workflow state. Daily, weekly, and monthly summaries compress plan artifacts, git traces, and resolution outcomes into durable coordination memory that later agents can read directly. This summary layer does not replace the registry's boundary ledger; it complements it by providing temporal continuity across sessions. The registry answers: "What is this boundary relationship and what changed?" The work summary answers: "What sequence of decisions and remediations produced the current state?" Together they provide the minimum memory substrate required for reliable inter-agent coordination.</p>
+          <p>Work summaries extend this communication memory from boundary state to workflow state. Teams maintain two layers: event-triggered entries as governing records, and periodic rollups (daily, weekly, monthly) that consolidate those entries for handoff continuity. This summary layer does not replace the registry's boundary ledger. It complements it by providing temporal continuity across sessions. The registry answers: "What is this boundary relationship and what changed?" The work summary answers: "What sequence of decisions and remediations produced the current state?" Together they provide the minimum memory substrate required for reliable inter-agent coordination.</p>
+        </section>
+
+        <section id="sec:liaison-work-summaries">
+          <h2>4. Work Summaries as Coordination Infrastructure</h2>
+
+          <p>Work summaries are not narrative add-ons. They are typed coordination artifacts that bridge workflow state across sessions, agents, and repositories. A workflow log records every action in sequence. A work summary records the governing state transition that later agents must inherit. Without summaries, each agent must reconstruct prior decisions from raw logs, recreating context costs and increasing contradiction risk. With summaries, the team carries forward compressed, auditable state.</p>
+
+          <p>Each summary entry uses a minimum schema: trigger type, timestamp, contributing agent, affected scope (files/workflows/repositories), governing disposition, unresolved obligations, and pointers to source artifacts (plan steps, contradiction records, security clearances, or coordination requests). This schema ensures summaries remain machine-aidable and human-reviewable without granting new authority to the summary writer.</p>
+
+          <h3 id="sec:liaison-work-summary-triggers">4.1 Triggers That Initiate Work-Summary Contributions</h3>
+
+          <p>A contribution to, or edit of, a work summary is triggered by governance-relevant state change. The canonical trigger catalog is closed and typed.</p>
+
+          <p>Governance-relevant includes constitutionally significant events and workflow events that change obligation state, disposition, or cross-boundary traceability.</p>
+
+          <p>Closure of the trigger catalog does not authorize event suppression. If classification is uncertain, agents must file a provisional constitutional-event entry within the same session, and workflow progression may continue only under reversible dispositions until classification is resolved. Absence of a canonical trigger match is itself auditable signal, not grounds for omission.</p>
+
+          <ul>
+            <li><strong>Workflow step completion:</strong> Initiator: executing agent. Required fields: step identifier, output artifact, disposition. Destination: current workflow summary entry. Closure condition: step marked done and linked evidence recorded.</li>
+            <li><strong>Blockers:</strong> Initiator: blocked agent. Required fields: blocker type, dependency owner, unblock condition, affected scope. Destination: active summary entry plus open-obligations segment. Closure condition: blocker cleared or escalated with decision owner.</li>
+            <li><strong>Contradiction resolutions:</strong> Initiator: conflict auditor or remediating agent. Required fields: contradiction ID, resolution action, residual risk. Destination: summary entry with pointer to contradiction artifact. Closure condition: contradiction moved to resolved and verified.</li>
+            <li><strong>Cross-repository impacts:</strong> Initiator: repo liaison after impact assessment. Required fields: affected repository, stale surfaces, approved disposition. Destination: boundary summary entry tied to the registry changelog. Closure condition: disposition resolved as applied, rejected (including verified non-impact), deferred, or transferred to Coordination Request adjudication, with final status linked to workflow close record.</li>
+            <li><strong>Security exceptions or destructive-operation clearances:</strong> Initiator: security agent. Required fields: clearance scope, constraints, expiry or revocation conditions. Destination: summary entry referencing security evidence. Closure condition: operation completed within scope or clearance revoked.</li>
+            <li><strong>Deployment outcomes:</strong> Initiator: orchestrator or release-responsible agent. Required fields: target environment, run/result identifiers, observed content state. Destination: release summary entry. Closure condition: outcome verified against expected deployment state.</li>
+            <li><strong>Boundary decisions:</strong> Initiator: orchestrator principal decision point. Required fields: decision artifact ID, decision statement, alternatives considered, referenced obligations from governing artifact. Destination: coordination summary entry linked to impact report or coordination request. Closure condition: source-artifact obligations are referenced, ownership links are validated, and tracking status is synchronized.</li>
+            <li><strong>Unclassified constitutional event:</strong> Initiator: any agent detecting a governance-relevant state change that does not match an existing trigger type. Required fields: event description, provisional impact scope, escalation owner, classification deadline. Destination: temporary summary entry flagged unclassified. Closure condition: event reclassified into a canonical trigger type or formally retired as non-constitutional. This is a provisional intake state, not a canonical terminal class.</li>
+          </ul>
+
+          <p>Boundary-decision summaries are mirror records only. They import disposition verbatim from the governing decision artifact and may not create net-new obligations. Obligation fields are reference-only and must include source artifact identifiers. Any obligation text change requires revision of the governing decision artifact.</p>
+
+          <p>Periodic rollups do not introduce new dispositions. They restate event-triggered entries and unresolved obligations for session transfer.</p>
+
+          <h3 id="sec:liaison-work-summary-governance">4.2 Amendment Rules and Escalation</h3>
+
+          <p>Not every event creates a new summary. Clerical amendments are limited to an explicit whitelist: orthography, punctuation, rendering, and broken links. Clerical edits may not modify trigger type, disposition, obligations, scope, or evidence pointers. Any non-whitelisted edit opens a new entry with supersession linkage to the prior record.</p>
+
+          <p>Artifact precedence is explicit: workflow logs are execution ground truth, registry changelog entries are cross-boundary write ground truth, and work summaries are derived coordination digests. Summaries must carry shared event identifiers that point back to workflow and registry evidence. If records diverge, summaries are corrected to match governing artifacts rather than treated as independent authority.</p>
+
+          <p>Shared event identifiers must be globally unique within the workspace namespace and follow the format <code>{repo-slug}.{workflow-id}.{event-sequence}.{utc-date}</code>. On duplicate detection, closure is rejected and a regenerated identifier with a supersession pointer is required. Summaries lacking resolvable identifiers are invalid for closure and must be remediated before disposition finalization. Objective field mismatches against workflow or registry evidence are clerically corrected immediately. Interpretation disputes about disposition or obligations are marked disputed and escalated.</p>
+
+          <p>If two agents interpret a prior summary differently, the summary is not silently overwritten. The entry is marked disputed, non-clerical edits are frozen, and the conflict is escalated to the orchestrator with conflict-auditor cross-reference within the active workflow's escalation window. If that window expires without disposition, the workflow is paused and the dispute is surfaced to principal adjudication rather than resolved through delegated interim authority.</p>
+
+          <p>When a disputed or high-impact summary concerns a repository with its own orchestrator, escalation exits single-team governance and enters the Coordination Request path developed in Section 5.</p>
         </section>
 
         <section id="sec:liaison-orchestrator-coordination">
-          <h2>4. Orchestrator-to-Orchestrator Coordination</h2>
+          <h2>5. Orchestrator-to-Orchestrator Coordination</h2>
 
           <p>The governance gap at the repository boundary is most acute when the adjacent repository has its own orchestrator. An adjacent repository with a fully developed agent team - its own authority hierarchy, its own security requirements, its own living document policy - is not a passive target for updates. It is a constitutional peer. The liaison's mandate to govern information flow and to avoid unilateral modification of the adjacent team's constitutional rules comes into direct tension when the proposed change would alter an agent file that falls under the adjacent orchestrator's authority.</p>
 
@@ -65,7 +108,7 @@
         </section>
 
         <section id="sec:liaison-minimal-footprint">
-          <h2>5. Minimal-Footprint and Traceability</h2>
+          <h2>6. Minimal-Footprint and Traceability</h2>
 
           <p>The liaison holds a dangerous kind of authority: write access to adjacent repositories. This authority, if exercised carelessly, can degrade the adjacent team's constitutional infrastructure without any agent within that team detecting the change until the next audit cycle. The minimal-footprint invariant governs this authority.</p>
 
@@ -77,7 +120,7 @@
         </section>
 
         <section id="sec:liaison-institutional-bridge">
-          <h2>6. The Liaison as Institutional Bridge</h2>
+          <h2>7. The Liaison as Institutional Bridge</h2>
 
           <p>The repo liaison completes the separation-of-concerns architecture at the ecosystem level. Within a team, the functional/domain bifurcation separates governance functions from production functions: security agents clear destructive operations; cleanup agents remove stale content; orchestrators route and coordinate; domain agents produce deliverables (Chapter 3). The liaison extends this bifurcation to the team's external boundary: one designated agent holds the project's cross-boundary authority, and no other agent holds that authority in any scope.</p>
 
@@ -89,7 +132,7 @@
         </section>
 
         <section id="sec:liaison-workflow">
-          <h2>7. Workflow 11: Cross-Repository Coordination</h2>
+          <h2>8. Workflow 11: Cross-Repository Coordination</h2>
 
           <p>The orchestrator's workflow catalog encodes the team's coordination procedures as numbered, deterministic sequences (Chapter 5). The repo liaison is the agent through which cross-repository governance enters this catalog. Workflow 11 defines the Cross-Repository Coordination procedure: the sequence the orchestrator follows when an action within this project may affect an adjacent repository's agent infrastructure.</p>
 
@@ -104,7 +147,7 @@
 
           <p>The workflow steps implement the separation between detection and decision that governs all consequential actions in the team. Step 1: the orchestrator invokes the repo liaison and passes the triggering action's description. Step 2: the liaison reads the adjacent-repository registry and identifies potentially affected repositories. Step 3: the liaison inspects those repositories' agent files, produces an Impact Report, and the orchestrator reviews it - approving, rejecting, or deferring each proposed update. Step 4: for approved updates to repositories without their own orchestrator, the liaison invokes the security agent for write clearance, then executes the minimal update and records it in the registry's changelog. Step 5: for repositories with their own orchestrator, the liaison composes a Coordination Request rather than writing directly; the request is surfaced to both principals for resolution. Step 6: the conflict-auditor verifies that no new internal contradictions were introduced by the liaison's changes. The workflow closes with the conflict-audit regardless of whether any external writes were executed - even a confirmed non-impact should be recorded as a verified determination rather than left as an unexamined assumption.</p>
 
-          <p>Communication closure requires one more artifact layer: a work summary entry that records the trigger, affected repositories, disposition, and follow-on obligations. This does not duplicate the workflow record. It creates a reusable coordination digest that later workflows can read without traversing full logs. In practice, this summary artifact is what lets downstream maintenance, remediation, and audit stages consume cross-repository decisions as stable inputs rather than rediscovering them.</p>
+          <p>Communication closure requires one more artifact layer: a work summary entry that records the trigger, affected repositories, disposition, and follow-on obligations. As Section 4 specifies, this does not duplicate the workflow record. It creates a reusable coordination digest that later workflows can read without traversing full logs.</p>
 
           <p>Workflow 11 interacts with the mandatory-closer pattern that governs all multi-file change workflows (Chapter 5, Section 6). In this project's catalog, workflows that can change architectural artifacts route through Workflow 11 as a conditional follow-on check rather than leaving cross-repository impact to ad hoc memory. This placement makes boundary assessment a structured consequence of architectural change. The liaison determines whether impact is real; the orchestrator's judgment is engaged at the approval step, not at the detection step.</p>
 
