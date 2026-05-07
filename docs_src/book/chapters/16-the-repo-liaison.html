@@ -3,21 +3,23 @@
 
 <head>
   <meta charset="UTF-8">
-  <title>Chapter 16: The Repo Liaison: Cross-Repository Governance</title>
+  <title>Chapter 16: Agent Communication and Coordination</title>
 </head>
 
 <body>
   <article id="ch:repo-liaison">
-    <h1>Chapter 16: The Repo Liaison: Cross-Repository Governance</h1>
+    <h1>Chapter 16: Agent Communication and Coordination</h1>
     <p class="part-label">Part III: The Agents at Work</p>
 
 
     <section id="sec:liaison-boundary-problem">
-      <h2>1. The Problem of Boundary Governance</h2>
+      <h2>1. The Problem of Communication at the Boundary</h2>
 
       <p>An agent team operates within a bounded project: a repository, a workspace, a defined scope of files and configuration. The boundaries are not merely organizational conveniences. They are the structural preconditions for the authority hierarchies, security rules, and constitutional constraints that make coordinated governance possible. A cleanup agent's jurisdiction is well-defined because the project's boundary is clear. An orchestrator's authority hierarchy is coherent because every claim it adjudicates falls within the same scope.</p>
 
       <p>But the outputs of any agent team do not remain at the boundary. A book-writing team produces a manuscript that a typesetting system in another repository must process. A module-development team produces schemas and templates that an installation tool in another repository must resolve. A governance team detects patterns across a workspace that multiple repositories must respond to. The boundary that organizes the team's internal authority creates an interface with the surrounding ecosystem, and that interface is not governed by a single project's rules.</p>
+
+      <p>The immediate coordination problem is communicative before it is operational. Teams do not fail first because they cannot edit a file; they fail because they cannot reliably communicate which state transition occurred, why it matters, and which downstream constraints it triggers. Cross-repository coordination therefore requires both boundary governance and durable communication artifacts that survive session turnover. A coordination event that is not written into a stable artifact is effectively private memory, and private memory is not governable at ecosystem scale.</p>
 
       <p>The governance failure that arises at this interface is not one of intent but of scope. Within a project, the orchestrator can arbitrate the boundary between the cleanup agent's jurisdiction and the domain agent's scope because both are defined in that project's authority hierarchy. The orchestrator cannot arbitrate a tension between its project's authority hierarchy and the authority hierarchy of an adjacent repository. No single orchestrator holds legitimate authority across both. If every agent in the team were permitted to write to adjacent repositories, the constitutional rules of those repositories would be exposed to unilateral modification by agents whose authority was never designed to reach them. The adjacent team's invariant cores, jurisdiction definitions, and security requirements could be silently invalidated by any agent in this project that happened to touch the relevant files.</p>
 
@@ -25,7 +27,7 @@
     </section>
 
     <section id="sec:liaison-boundary-agent">
-      <h2>2. The Repo Liaison as Boundary Agent</h2>
+      <h2>2. The Repo Liaison as Communication Boundary Agent</h2>
 
       <p>The repo liaison is a dedicated boundary agent with a precisely delimited mandate: to govern information flow across repository boundaries without acquiring productive authority or bypassing the adjacent repository's own constitutional rules. The liaison reads, monitors, assesses, and reports. It does not produce primary deliverables. It does not route domain work. It does not modify its project's core architecture. Its entire function is the management of cross-boundary contact.</p>
 
@@ -35,21 +37,19 @@
 
       <p>The separation between detection and decision is architecturally deliberate. The liaison executes Protocols 1 and 3's discovery phase; the orchestrator approves Impact Reports; the two principals resolve Coordination Requests. This follows the same logic that applies to all consequential actions within the project: no single agent holds both the authority to identify a problem and the authority to unilaterally resolve it across a boundary that falls outside its constitutional scope. The liaison concentrates the boundary knowledge. The orchestrator holds the decision authority. Neither holds both.</p>
 
-      <p>In module-comparison terms, the liaison implementation is a partial concrete realization of the abstract layer rather than the abstract layer itself. It instantiates one boundary-governance template and its placeholder bindings (<code>templates/universal/</code> plus project-specific values), while the abstract layer encompasses the full cross-template platform architecture developed in Chapter 17.</p>
-
-      <h3 id="sec:liaison-template-architecture">2.1 The Template System at the Boundary</h3>
-
-      <p>The boundary architecture is expressed through a two-directory template partition: <code>templates/universal/</code> provides invariant governance roles, while <code>templates/domain/</code> provides production specialists. The liaison is a universal-governance template instance with boundary-specific bindings. AUTHORING-GUIDE and PLACEHOLDER-CONVENTIONS act as constitutional documents for this template layer: they define required file structure and how project-specific values are bound at instantiation.</p>
+      <p>The liaison also standardizes communication form. Impact Reports, Coordination Requests, and registry updates convert heterogeneous local observations into typed messages that other agents and principals can consume without reconstructing the original investigative context. This is coordination through artifact design: the liaison does not only move information across boundaries, it transforms information into forms that can be adjudicated under constitutional rules.</p>
     </section>
 
     <section id="sec:liaison-registry">
-      <h2>3. The Adjacent-Repository Registry</h2>
+      <h2>3. Communication Artifacts at the Boundary</h2>
 
       <p>The adjacent-repository registry is the liaison's primary institutional artifact: a declarative register of every repository this project is known to interact with. Each entry records the repository path, its agent infrastructure location, the nature of the relationship (dependency, shared schema, governance overlap, documentation reference), and a changelog of every cross-boundary action taken since the entry was created. The registry is maintained in the project's references directory and is the primary input for all liaison work.</p>
 
       <p>The registry is not a configuration file. A configuration file specifies parameters that software uses to initialize its state. The registry is institutional memory: a structured account of which projects this project is in a governance relationship with, what has already passed between them, and what the current status of those relationships is. <cite class="citation" data-key="williamson1985"><a href="../bibliography.html#williamson1985">Williamson (1985)</a></cite> analyzed how governance structures adapt to asset specificity. When two parties develop a relationship around assets whose value depends on the continuation of the exchange, both parties have incentives to invest in the governance mechanisms that protect those specific assets. Cross-repository agent infrastructure is asset-specific in exactly this sense. The adjacent repository's documentation is structured to assume that this project's schemas, templates, or protocols remain stable. If those change and the adjacent repository is not updated, its agents will follow stale instructions. The registry is the governance mechanism that makes this specificity visible and manageable. That governance mechanism is, in <cite class="citation" data-key="nonaka1994"><a href="../bibliography.html#nonaka1994">Nonaka's (1994)</a></cite> terms, an act of <em>combination</em>: the liaison reconfigures explicit knowledge about boundary relationships — repository paths, dependency structures, action histories — into a unified governing artifact, executing at the ecosystem level the same <em>combination</em> pattern that documentation files perform within a project.</p>
 
       <p>Every registered entry supports the liaison's judgment. When this project's orchestrator announces a change, the liaison can consult the registry to determine which adjacent repositories' documentation is likely to have relied on what has changed. An unregistered dependency is invisible to this determination — the liaison cannot assess what it has no record of. Stale registry entries — entries describing repositories that have changed their structure or whose relationship with this project has ended — are flagged rather than silently removed and surfaced to the orchestrator. The audit trail of the boundary relationship is preserved even when the relationship itself has ended, for the same reason the project's own contradiction register preserves a history of resolved contradictions: the past state of the system is sometimes the only evidence available to diagnose a current problem.</p>
+
+      <p>Work summaries extend this communication memory from boundary state to workflow state. Daily, weekly, and monthly summaries compress plan artifacts, git traces, and resolution outcomes into durable coordination memory that later agents can read directly. This summary layer does not replace the registry's boundary ledger; it complements it by providing temporal continuity across sessions. The registry answers: "What is this boundary relationship and what changed?" The work summary answers: "What sequence of decisions and remediations produced the current state?" Together they provide the minimum memory substrate required for reliable inter-agent coordination.</p>
     </section>
 
     <section id="sec:liaison-orchestrator-coordination">
@@ -62,8 +62,6 @@
       <p>The Coordination Request is the liaison's institutional response to this problem. Rather than proposing an update directly to the adjacent repository's files — an action that would violate the adjacent orchestrator's constitutional sovereignty over its own agent infrastructure — the liaison composes a written artifact that identifies the triggering change, describes the impact on the adjacent project, proposes a resolution, and surfaces this compound package to both principals for review. The Coordination Request presupposes nothing about the adjacent project's decision. It provides the information needed for that decision while respecting that the decision itself belongs to the adjacent orchestrator and its principal.</p>
 
       <p>The administrative separation the Coordination Request creates is not merely procedural caution. It is a mechanism for maintaining the interpretive intelligibility of the coordination event. If the adjacent project's principal reviews the Coordination Request in a later session and finds it inconsistent with the adjacent project's current state, the record exists. The liaison's detection work and the orchestrator's approval or rejection of the proposed change are separate events, separately logged. The institutional memory of the boundary interaction does not depend on any agent remembering it.</p>
-
-      <p>A related platform note belongs here for traceability. The workspace-level orchestrator, collector-discovery, and agent-abstraction-reviewer are currently described in the book but not yet templatized in the module (TA-033, TA-034, TA-035). The liaison therefore coordinates with a partially templatized ecosystem whose remaining meta-agent templates are still a development frontier rather than a conceptual gap.</p>
     </section>
 
     <section id="sec:liaison-minimal-footprint">
@@ -76,10 +74,6 @@
       <p>The minimal-footprint principle specifies how changes, once cleared, must be executed: change only what is necessitated by this project's activity; read the target file in full before writing; make the smallest change that resolves the identified staleness; record every change in the registry's changelog. The read-before-write invariant prevents the liaison from overwriting content in the adjacent repository that has changed since the liaison last consulted it. A repository modified by its own agents since the liaison last read it may contain changes that the proposed update would overwrite. Reading before writing makes this visible and forces the liaison to either adapt its proposed change or surface a conflict to the orchestrator.</p>
 
       <p>Stale entries in the registry are flagged and surfaced to the orchestrator rather than silently removed. Silent removal eliminates the institutional memory of the relationship: the history of what changes passed between the projects, when, and under whose authority. That history may be the only evidence available when a future audit discovers documentation in the adjacent project that references this project's older architecture. The principle of preserving the audit trail applies to the registry as surely as the living document policy's prohibition on silent removal applies within the project itself.</p>
-
-      <h3 id="sec:liaison-extension-points">5.1 Placeholder-Driven Extension Points</h3>
-
-      <p>The liaison template combines two mechanisms. First, invariant-core rules define non-negotiable boundary governance constraints (minimal footprint, security clearance, read-before-write, no productive authority acquisition). Second, placeholder tokens define project-specific bindings at instantiation, including values like <code>{PROJECT_NAME}</code> and <code>{MANUAL:STYLE_REFERENCE_PATH}</code>. Auto-resolved placeholders act as fixed interface bindings, while manual-required placeholders define explicit extension points where local constitutional detail enters the shared template.</p>
     </section>
 
     <section id="sec:liaison-institutional-bridge">
@@ -110,7 +104,9 @@
 
       <p>The workflow steps implement the separation between detection and decision that governs all consequential actions in the team. Step 1: the orchestrator invokes the repo liaison and passes the triggering action's description. Step 2: the liaison reads the adjacent-repository registry and identifies potentially affected repositories. Step 3: the liaison inspects those repositories' agent files, produces an Impact Report, and the orchestrator reviews it — approving, rejecting, or deferring each proposed update. Step 4: for approved updates to repositories without their own orchestrator, the liaison invokes the security agent for write clearance, then executes the minimal update and records it in the registry's changelog. Step 5: for repositories with their own orchestrator, the liaison composes a Coordination Request rather than writing directly; the request is surfaced to both principals for resolution. Step 6: the conflict-auditor verifies that no new internal contradictions were introduced by the liaison's changes. The workflow closes with the conflict-audit regardless of whether any external writes were executed — even a confirmed non-impact should be recorded as a verified determination rather than left as an unexamined assumption.</p>
 
-      <p>Workflow 11 interacts with the mandatory-closer pattern that governs all multi-file change workflows (Chapter 5, §6). Every workflow that could change an architectural artifact must list Workflow 11 as a conditional subsequent workflow, not a standalone optional step. This placement makes cross-repository impact assessment a structured consequence of architectural change rather than a practice that depends on human memory. The orchestrator does not need to decide whether to run Workflow 11 after Workflow 9; the workflow catalog specifies that Workflow 9's output triggers Workflow 11's conditional check. The liaison then determines whether the impact is real. The orchestrator's judgment is engaged at the approval step, not at the detection step.</p>
+      <p>Communication closure requires one more artifact layer: a work summary entry that records the trigger, affected repositories, disposition, and follow-on obligations. This does not duplicate the workflow record. It creates a reusable coordination digest that later workflows can read without traversing full logs. In practice, this summary artifact is what lets downstream maintenance, remediation, and audit stages consume cross-repository decisions as stable inputs rather than rediscovering them.</p>
+
+      <p>Workflow 11 interacts with the mandatory-closer pattern that governs all multi-file change workflows (Chapter 5, §6). In this project's catalog, workflows that can change architectural artifacts route through Workflow 11 as a conditional follow-on check rather than leaving cross-repository impact to ad hoc memory. This placement makes boundary assessment a structured consequence of architectural change. The liaison determines whether impact is real; the orchestrator's judgment is engaged at the approval step, not at the detection step.</p>
 
       <p>Because Workflow 11 is the structural complement to Workflows 1 through 10, its position in the catalog marks a shift in the team's governance scope. Workflows 1 through 10 govern the team's internal operations: drafting, revising, auditing, maintaining, generating, compiling, and managing citations. Workflow 11 governs the team's interface with the ecosystem. Together they define the full operational perimeter of the agent team's coordinated activity.</p>
     </section>
