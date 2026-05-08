@@ -35,6 +35,10 @@ tool-enrichment-steps.csv
 # Nothing in tmp/ should ever be committed; sanitize before moving anything to a permanent location
 tmp/
 
+# Daily work summaries — operational logs and tracking documents
+# Contains execution dates, timestamps, and per-repo status; not for publication
+workSummaries/
+
 # Local cross-repo operation plans and snapshots — contain machine-specific paths and org/repo names
 references/plans/
 
