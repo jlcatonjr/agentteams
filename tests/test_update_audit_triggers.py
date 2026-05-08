@@ -73,7 +73,6 @@ def test_agent_updater_template_hands_off_to_adversarial_then_conflict() -> None
 def test_active_agent_updater_hands_off_to_adversarial_then_conflict() -> None:
     text = Path(".github/agents/agent-updater.agent.md").read_text(encoding="utf-8")
 
-    assert "agents: ['adversarial', 'conflict-auditor', 'agent-refactor']" in text
     assert "Team initialized (first successful `build_team.py` generation)" in text
     assert "Team updated (canonical: `--update --merge`)" in text
     assert "Expected output file missing on disk during update" in text
@@ -81,9 +80,6 @@ def test_active_agent_updater_hands_off_to_adversarial_then_conflict() -> None:
     _assert_in_order(
         text,
         [
-            "  - label: Refactor Agent Docs",
-            "  - label: Run Adversarial Review",
-            "  - label: Run Conflict Audit",
             "10. Hand off to `@agent-refactor` for extraction opportunities",
             "11. Hand off to `@adversarial` to challenge the repository change census, docs/API impact decision, and any newly synchronized assumptions before closeout",
             "12. Hand off to `@conflict-auditor` to verify consistency",

@@ -29,4 +29,8 @@ If private advisory flow is unavailable, open a private coordination issue with 
 
 ## Security Maintenance Cadence
 
-This repository runs a scheduled daily security maintenance workflow for `agentteams` only. The workflow executes non-destructive maintenance steps and security-focused tests without touching other repositories.
+This repository attempts daily security maintenance through the scheduled bridge workflow (`.github/workflows/bridge-maintenance.yml`), which invokes `scripts/run_daily_security_maintenance.sh` as its first integrated step.
+
+The maintenance path is warn-and-continue; operators should review `tmp/bridge-maintenance/summary.md` for step-level outcomes.
+
+The standalone security workflow (`.github/workflows/security-maintenance.yml`) is retained as a manual fallback (`workflow_dispatch`) for ad-hoc reruns and incident response.

@@ -384,9 +384,9 @@ agentteams --self
 
 ### Daily security maintenance (agentteams only)
 
-This repository includes a scheduled workflow at `.github/workflows/security-maintenance.yml` that runs daily for `agentteams` only.
+Daily security maintenance is invoked as part of the scheduled bridge workflow at `.github/workflows/bridge-maintenance.yml`.
 
-The workflow executes `scripts/run_daily_security_maintenance.sh`, which:
+The integrated bridge workflow executes `scripts/run_daily_security_maintenance.sh`, which:
 
 1. Enforces repository scope (refuses to run outside the `agentteams` repo root).
 2. Runs non-destructive self update (`--self --update --merge --yes`).
@@ -401,6 +401,10 @@ Copilot execution policy for this maintenance path:
 3. Do not bypass destructive-risk protections.
 4. Keep operations non-destructive by default for routine maintenance.
 
+Because the maintenance path is warn-and-continue, check `tmp/bridge-maintenance/summary.md` for step-level outcomes after each run.
+
+Manual fallback: `.github/workflows/security-maintenance.yml` is retained as `workflow_dispatch` for ad-hoc reruns and incident response.
+
 ### Daily bridge maintenance (agentteams only)
 
 This repository includes a scheduled workflow at `.github/workflows/bridge-maintenance.yml`.
@@ -408,11 +412,12 @@ This repository includes a scheduled workflow at `.github/workflows/bridge-maint
 The workflow executes `scripts/run_daily_bridge_maintenance.sh`, which:
 
 1. Enforces repository scope (refuses to run outside the `agentteams` repo root).
-2. Runs bridge refresh for maintained pairs:
+2. Runs security maintenance as the first integrated step.
+3. Runs bridge refresh for maintained pairs:
   - `copilot-vscode -> copilot-cli`
   - `copilot-vscode -> claude`
-3. Runs bridge freshness checks for the same maintained pairs.
-4. Continues on non-critical failures (warn-and-continue) and emits summary artifacts under `tmp/bridge-maintenance/`.
+4. Runs bridge freshness checks for the same maintained pairs.
+5. Continues on non-critical failures (warn-and-continue) and emits summary artifacts under `tmp/bridge-maintenance/`.
 
 Bridge watchdog coverage:
 

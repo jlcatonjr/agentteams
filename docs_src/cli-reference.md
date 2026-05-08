@@ -132,8 +132,9 @@ Choose by intent:
 This repository includes automated bridge upkeep:
 
 1. `.github/workflows/bridge-maintenance.yml` (daily + manual) runs `scripts/run_daily_bridge_maintenance.sh`.
-2. The script performs `--bridge-refresh` then `--bridge-check` for maintained pairs and writes run summaries to `tmp/bridge-maintenance/`.
-3. `.github/workflows/bridge-watchdog.yml` opens a deduplicated issue if the latest successful bridge maintenance run is stale.
+2. The script runs security maintenance first, then performs `--bridge-refresh` and `--bridge-check` for maintained pairs, and writes run summaries to `tmp/bridge-maintenance/`.
+3. `.github/workflows/security-maintenance.yml` is retained as a manual fallback (`workflow_dispatch`) for incident response or ad-hoc reruns.
+4. `.github/workflows/bridge-watchdog.yml` opens a deduplicated issue if the latest successful bridge maintenance run is stale.
 
 For mode comparison and architecture-level guidance, see [Interoperability](interoperability.md).
 

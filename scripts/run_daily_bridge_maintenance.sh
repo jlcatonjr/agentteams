@@ -38,6 +38,17 @@ run_noncritical() {
 
 echo "[INFO] Daily agentteams bridge maintenance started at ${run_started_at}"
 
+SECURITY_SCRIPT="$ROOT_DIR/scripts/run_daily_security_maintenance.sh"
+if [[ -f "$SECURITY_SCRIPT" ]]; then
+  run_noncritical \
+    "Security maintenance" \
+    bash "$SECURITY_SCRIPT"
+else
+  noncritical_failures=$((noncritical_failures + 1))
+  echo "[WARN] Security maintenance script missing: $SECURITY_SCRIPT" >&2
+  summary_rows+=("| Security maintenance | WARN (missing script) |")
+fi
+
 SOURCE_DIR="$ROOT_DIR/.github/agents"
 FALLBACK_SOURCE_DIR="$ROOT_DIR/examples/project-repositories/expected"
 OUTPUT_ROOT="$ROOT_DIR"

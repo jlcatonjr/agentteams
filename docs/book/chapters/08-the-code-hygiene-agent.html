@@ -83,7 +83,7 @@
         <p>In this project's <a href="#fig-workflow-05">Workflow 5 (Code Hygiene Audit)</a>, the code-hygiene agent is invoked first. When corrections are needed, the book-content-expert updates the affected chapter files. Any such text edits then pass through the expert-critic for prose quality auditing, the argument-weaver for cohesion repair, and the voice-style agent for a three-pass audit, in that order, before reaching the agent-updater for documentation maintenance and the conflict-auditor for consistency verification. The code-hygiene agent's report determines which files the book-content-expert will revise, and those revisions trigger the prose-quality chain before the closing governance steps run.</p>
 
         <figure id="fig-workflow-05">
-          <img src="../figures/workflow-05-code-hygiene.pdf" alt="Workflow 5: Code Hygiene Audit" />
+          <img src="../figures/workflow-05-code-hygiene.svg" alt="Workflow 5: Code Hygiene Audit" />
           <figcaption>Workflow 5 — Code Hygiene Audit. The code-hygiene agent audits first. When corrections are needed, the book-content expert updates chapter drafts, triggering the prose-quality chain (expert-critic → argument-weaver → voice-style) before documentation updates and a closing consistency check.</figcaption>
         </figure>
       </div>
@@ -94,7 +94,7 @@
         <p>In <a href="#fig-workflow-06">Workflow 6 (Review Cycle)</a>, the code-hygiene agent is invoked after the conflict-auditor and before the bibliography-manager. The conflict-auditor identifies contradictions between chapter claims. The code-hygiene agent identifies divergences between chapter claims and source files. Their sequential placement captures both kinds of failure in a single pass.</p>
 
         <figure id="fig-workflow-06">
-          <img src="../figures/workflow-06-review-cycle.pdf" alt="Workflow 6: Review Cycle" />
+          <img src="../figures/workflow-06-review-cycle.svg" alt="Workflow 6: Review Cycle" />
           <figcaption>Workflow 6 — Review Cycle. The conflict-auditor scans for contradictions, the code-hygiene agent audits for source-file divergences, the bibliography-manager verifies every citation, and the voice-style agent runs a three-pass audit. Findings are consolidated and presented.</figcaption>
         </figure>
       </div>
@@ -102,7 +102,7 @@
       <p>I recommend invoking the code-hygiene agent in workflows where content has been recently modified or is being reviewed for the first time. Where the content under review has not changed, re-auditing produces redundant findings.</p>
 
       <div class="project-illustration">
-        <p>In this project, <a href="05-the-orchestrator.html#fig-workflow-03">Workflow 3 (Chapter Drafting)</a> does not include a code-hygiene step because the chapter does not yet exist to audit: the check occurs in the review cycle that follows drafting. <a href="05-the-orchestrator.html#fig-workflow-04">Workflow 4 (Chapter Revision)</a> does not include a dedicated code-hygiene step because the revision itself is expected to address technical accuracy issues identified in prior audits.</p>
+        <p>In this project, <a href="chapters/05-the-orchestrator.html#fig-workflow-03">Workflow 3 (Chapter Drafting)</a> does not include a code-hygiene step because the chapter does not yet exist to audit: the check occurs in the review cycle that follows drafting. <a href="chapters/05-the-orchestrator.html#fig-workflow-04">Workflow 4 (Chapter Revision)</a> does not include a dedicated code-hygiene step because the revision itself is expected to address technical accuracy issues identified in prior audits.</p>
       </div>
     </section>
 
