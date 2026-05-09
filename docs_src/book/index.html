@@ -131,6 +131,12 @@
     }
     .chapter-link:hover { background: #e2e8f0; color: #0044aa; }
     .chapter-link.active { background: #dce8f8; color: #003399; font-weight: 600; }
+    .intro-link {
+      border-bottom: 1px solid #ddd;
+      margin-bottom: 6px;
+      padding-top: 6px;
+      padding-bottom: 6px;
+    }
     .ch-num {
       font-size: 0.7em;
       font-weight: 700;
@@ -234,49 +240,6 @@
       font-size: 1em;
       color: #777;
       font-style: italic;
-    }
-
-    /* ── Welcome page ─────────────────────────────────────────── */
-    .welcome {
-      max-width: 820px;
-      margin: 5% auto;
-    }
-    .welcome-title {
-      text-align: center;
-      font-size: 1.5em;
-      font-weight: bold;
-      line-height: 1.2;
-      padding-right: 50px;
-      margin-bottom: 0.3em;
-    }
-    .welcome-author {
-      text-align: right;
-      font-weight: bold;
-      line-height: 1;
-      padding-right: 50px;
-      margin-top: 0.5em;
-    }
-    .welcome-abstract-head {
-      margin-top: 2em;
-      font-size: 1.1em;
-      font-weight: bold;
-    }
-    .welcome-abstract {
-      line-height: 1.8;
-      color: #222;
-      margin-top: 0.5em;
-    }
-    .welcome-nav-hint {
-      margin-top: 2em;
-      color: #666;
-      font-size: 0.8em;
-      border-top: 1px solid #ddd;
-      padding-top: 1em;
-    }
-    .welcome-divider {
-      border: none;
-      border-top: 1px solid #ddd;
-      margin: 2em 50px 2em 0;
     }
 
     /* ── Content area (chapter/bibliography body) ─────────────── */
@@ -408,6 +371,22 @@
       color: #444;
       margin-top: 0.4em;
     }
+    .content-body .intro-note {
+      font-size: 0.85em;
+      color: #666;
+      border: 1px solid #e0e0e0;
+      border-radius: 4px;
+      padding: 0.8em 1em;
+      margin: 1.4em 0 0.6em 0;
+      line-height: 1.7;
+    }
+    .content-body .intro-nav-hint {
+      margin-top: 1.8em;
+      color: #666;
+      font-size: 0.8em;
+      border-top: 1px solid #ddd;
+      padding-top: 1em;
+    }
 
     /* override the bib page's own sidebar/layout when loaded into content area */
     .content-body .sidebar { display: none !important; }
@@ -512,6 +491,20 @@
       </div>
 
       <nav class="sidebar-nav">
+        <a class="chapter-link intro-link"
+           :class="{ active: current === INTRO.file }"
+           href="#"
+           @click.prevent="loadChapter(INTRO.file)">
+          <span class="ch-num"></span>
+          <span class="ch-title-text">{{ INTRO.title }}</span>
+        </a>
+        <ul v-if="current === INTRO.file && chapterToc.length" class="chapter-toc">
+          <li v-for="h in chapterToc" :key="h.id">
+            <a class="toc-link" :class="{ 'toc-h3': h.level === 3 }"
+               href="#" @click.prevent="scrollToHeading(h.id)">{{ h.text }}</a>
+          </li>
+        </ul>
+
         <div v-for="part in BOOK" :key="part.id" class="sidebar-part">
 
           <div class="part-header" @click="togglePart(part.id)">
@@ -555,29 +548,8 @@
     <!-- ── Main content ─────────────────────────────────────────── -->
     <main class="main-content" ref="mainEl" @click.capture="handleClick">
 
-      <!-- Welcome page -->
-      <div v-if="!current && !loading" class="welcome">
-        <p class="welcome-title">Agent Teams: A Theoretically Grounded Approach</p>
-        <p class="welcome-author">James L. Caton</p>
-        <hr class="welcome-divider">
-        <p class="welcome-abstract-head">Abstract</p>
-        <p class="welcome-abstract">
-          What <em>is</em> a coding agent? We can define the coding agent as the bundle of a large language model with infrastructure to efficaciously guide that models activity toward productive ends. But to understand how to use the agent, we must borrow from theories of economics, entrepreneurship, and organization. Coase (1937) and Williamson (1985) found characteristic of the firm: a defined authority structure, a division of labor, and a governance regime that coordinates activity. An agent or agent team is best understood, on this account, as an <em>organization</em> whose members exercise means-ends rationality when allocated judgment, ranking outcomes and evaluating means within an environment that responds to their actions. The rationality is functional rather than phenomenological; Mises (1949) would recognize the pattern as purposeful behavior in his sense. What distinguishes a productive team from an unproductive one is less a matter of raw model capability than of infrastructure quality: the specification files, authority hierarchies, and governance procedures that shape the preference ordering within which judgment operates.
-        </p>
-        <p class="welcome-abstract">
-          Drawing on Hayek, Mises, Menger, Kirzner, and Lachmann for the analysis of dispersed knowledge and spontaneous order; on Coase, Williamson, and Foss and Klein for the theory of the firm; on North and Ostrom for institutional analysis; and on Nonaka for the dynamics of organizational knowledge creation, the book develops this argument from the elementary architecture of a single coding agent through the constitutional constraints and division of labor that that comprise well-functioning, multi-agent teams, to the individual agents that instantiate specialized roles and the mechanisms through which team and infrastructure maintain quality and co-evolve.
-        </p>
-        <p class="welcome-draft-notice" style="font-size:0.78em;color:#888;border:1px solid #e0e0e0;border-radius:4px;padding:0.6em 0.9em;margin:1.2em 0 0.4em;">
-          <strong>Early draft.</strong> This manuscript is incomplete and subject to substantial revision. It is an experiment in AI-assisted academic authorship: written in active cooperation with an agent team, with the author directing the research agenda, theoretical arguments, and editorial decisions while agents assisted with drafting, revision, and consistency auditing.
-        </p>
-        <p class="welcome-nav-hint">
-          Use the sidebar on the left to navigate chapters. Hover to expand it. Click any chapter to load.
-          Citations within chapters link to the <a href="#" @click.prevent="loadChapter('bibliography.html')">Bibliography</a>.
-        </p>
-      </div>
-
       <!-- Loading -->
-      <div v-else-if="loading" class="loading-state">Loading&hellip;</div>
+      <div v-if="loading" class="loading-state">Loading&hellip;</div>
 
       <!-- Chapter / bibliography content -->
       <div v-else class="content-body" v-html="content"></div>
@@ -664,11 +636,17 @@
       },
     ];
 
+    const INTRO = {
+      num: null,
+      file: 'chapters/00-introduction.html',
+      title: 'Introduction'
+    };
+
     createApp({
       setup() {
         const sidebarOpen    = ref(false);
         const openParts      = reactive(new Set(['p1']));
-        const current        = ref('');
+        const current        = ref(INTRO.file);
         const content        = ref('');
         const loading        = ref(false);
         const mainEl         = ref(null);
@@ -690,6 +668,7 @@
 
         onMounted(() => {
           window.addEventListener('scroll', updateScrollProgress, { passive: true });
+          loadChapter(INTRO.file);
         });
 
         onUnmounted(() => {
@@ -826,7 +805,7 @@
 
         // Flat list of all navigable files for prev/next navigation
         const allFiles = computed(() => {
-          const files = [];
+          const files = [INTRO];
           for (const part of BOOK) {
             for (const ch of part.chapters) files.push(ch);
           }
@@ -848,6 +827,7 @@
         );
 
         return {
+          INTRO,
           BOOK,
           sidebarOpen,
           openParts,
