@@ -36,6 +36,9 @@ nav:
   - How It Works: how-it-works.md
   - Examples: examples.md
   - CLI Reference: cli-reference.md
+  - Guides:
+      - Post-Production Auditor: post-production-auditor-guide.md
+      - Security Hardening & Threat Intelligence: security-hardening-guide.md
   - API Reference:
       - Overview: api-reference/index.md
       - ingest: api-reference/ingest.md

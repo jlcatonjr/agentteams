@@ -1,0 +1,125 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "Post-Production Audit Closure Gate Status",
+  "description": "Records the post-production audit verdict and closure gate state. Used to enforce closure blocking rules.",
+  "type": "object",
+  "required": [
+    "gate_state",
+    "audit_slug",
+    "verdict",
+    "timestamp"
+  ],
+  "properties": {
+    "gate_state": {
+      "type": "string",
+      "enum": [
+        "OPEN",
+        "BLOCKED",
+        "CONDITIONAL_PASS"
+      ],
+      "description": "Gate status: OPEN (closure permitted), BLOCKED (closure prohibited), CONDITIONAL_PASS (closure permitted with conditions)"
+    },
+    "audit_slug": {
+      "type": "string",
+      "description": "Unique identifier for this audit run (e.g., 'collector-2026-05-10')"
+    },
+    "verdict": {
+      "type": "string",
+      "enum": [
+        "PASS",
+        "PASS_WITH_NOTES",
+        "FAIL",
+        "INCONCLUSIVE"
+      ],
+      "description": "Final audit verdict based on sampling and source-of-truth verification"
+    },
+    "blocking_reason": {
+      "type": "string",
+      "description": "If gate_state=BLOCKED, explain the blocking reason (e.g., 'estimated defect rate 8% exceeds threshold 7%')"
+    },
+    "approver": {
+      "type": "string",
+      "description": "Name or email of the person/agent approving closure (required if gate_state=CONDITIONAL_PASS or OPEN)"
+    },
+    "timestamp": {
+      "type": "string",
+      "format": "date-time",
+      "description": "ISO 8601 timestamp when this gate status was recorded"
+    },
+    "remediation_due_at": {
+      "type": "string",
+      "format": "date-time",
+      "description": "If verdict=FAIL, the escalation SLA deadline for remediation completion"
+    },
+    "remediation_owner": {
+      "type": "string",
+      "description": "If verdict=FAIL, the person/team assigned to remediation"
+    },
+    "confidence_interval_width": {
+      "type": "number",
+      "description": "If verdict includes confidence bounds, the width of the confidence interval (e.g., 0.05 for ±5%)"
+    },
+    "sample_size": {
+      "type": "integer",
+      "description": "Number of records sampled for verification"
+    },
+    "total_population": {
+      "type": "integer",
+      "description": "Total population size from which sample was drawn"
+    }
+  },
+  "allOf": [
+    {
+      "if": {
+        "properties": { "gate_state": { "const": "BLOCKED" } }
+      },
+      "then": {
+        "required": ["blocking_reason"]
+      }
+    },
+    {
+      "if": {
+        "properties": { "gate_state": { "enum": ["OPEN", "CONDITIONAL_PASS"] } }
+      },
+      "then": {
+        "required": ["approver"]
+      }
+    },
+    {
+      "if": {
+        "properties": { "verdict": { "const": "FAIL" } }
+      },
+      "then": {
+        "required": ["remediation_due_at", "remediation_owner", "blocking_reason"],
+        "properties": { "gate_state": { "const": "BLOCKED" } }
+      }
+    },
+    {
+      "if": {
+        "properties": { "verdict": { "const": "PASS" } }
+      },
+      "then": {
+        "properties": { "gate_state": { "const": "OPEN" } }
+      }
+    },
+    {
+      "if": {
+        "properties": { "verdict": { "const": "PASS_WITH_NOTES" } }
+      },
+      "then": {
+        "properties": { "gate_state": { "const": "CONDITIONAL_PASS" } },
+        "required": ["approver"]
+      }
+    },
+    {
+      "if": {
+        "properties": { "verdict": { "const": "INCONCLUSIVE" } }
+      },
+      "then": {
+        "properties": { "gate_state": { "const": "BLOCKED" } },
+        "required": ["blocking_reason"]
+      }
+    }
+  ],
+  "additionalProperties": false
+}

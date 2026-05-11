@@ -37,7 +37,6 @@ SECTION MANIFEST — copilot-instructions.template.md
 | `src/` | Primary authored deliverables |
 | `reports/` | Compiled/converted output artifacts |
 | `reports/figures/` | Diagrams and figures |
-| `workSummaries/` | Daily, weekly, and monthly work summaries |
 | `{MANUAL:REFERENCE_DB_PATH}` | Reference/bibliography database |
 | `.github/agents/` | Agent definition files |
 | `.github/agents/references/` | Shared reference data |
@@ -82,6 +81,7 @@ SECTION MANIFEST — copilot-instructions.template.md
 - `@quality-auditor` — read-only structural and prose quality audit
 - `@cohesion-repairer` — repairs within-section cohesion failures
 - `@technical-validator` — verifies technical accuracy against authority sources
+- `@post-production-auditor` — specialized domain agent
 - `@format-converter` — converts deliverables to final output format
 - `@output-compiler` — assembles components into the final deliverable package
 - `@visual-designer` — creates and revises diagrams and figures

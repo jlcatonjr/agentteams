@@ -85,6 +85,7 @@ def test_build_security_placeholders_online(monkeypatch, tmp_path: Path) -> None
     assert "CISA KEV" in placeholders["SECURITY_SOURCE_REGISTRY"]
     payload = json.loads(placeholders["SECURITY_VULNERABILITY_WATCH_JSON"])
     assert len(payload["vulnerabilities"]) == 2
+    assert payload["freshness"]["status"] == "fresh"
     # LLM threats always present
     assert "LLM01:2025" in placeholders["SECURITY_LLM_THREATS_SUMMARY"]
     assert "Prompt Injection" in placeholders["SECURITY_LLM_THREATS_SUMMARY"]
@@ -93,6 +94,7 @@ def test_build_security_placeholders_online(monkeypatch, tmp_path: Path) -> None
     # LLM threats in JSON payload
     assert len(payload["llm_threats"]) == 10
     assert payload["llm_threats"][0]["id"] == "LLM01:2025"
+    assert "CTRL-01" in placeholders["SECURITY_CONTROL_EVIDENCE_SUMMARY"]
 
 
 def test_build_security_placeholders_nvd_enrichment(monkeypatch, tmp_path: Path) -> None:
@@ -445,6 +447,8 @@ def test_stale_cache_warning_applied_on_kev_failure(monkeypatch, tmp_path: Path)
     assert "STALE DATA" in placeholders["SECURITY_CURRENT_THREATS_SUMMARY"]
     assert "STALE DATA" in placeholders["SECURITY_PREVENTION_PLAYBOOK"]
     assert "CVE-2025-0001" in placeholders["SECURITY_CURRENT_THREATS_SUMMARY"]
+    payload = json.loads(placeholders["SECURITY_VULNERABILITY_WATCH_JSON"])
+    assert payload["freshness"]["status"] == "stale"
 
 
 def test_stale_cache_warning_absent_on_live_fetch(monkeypatch, tmp_path: Path) -> None:
@@ -486,4 +490,37 @@ def test_stale_cache_warning_absent_on_live_fetch(monkeypatch, tmp_path: Path) -
 
     assert "STALE DATA" not in placeholders["SECURITY_CURRENT_THREATS_SUMMARY"]
     assert "CVE-2026-9000" in placeholders["SECURITY_CURRENT_THREATS_SUMMARY"]
+
+
+def test_live_fetch_failure_without_cache_is_stale(monkeypatch, tmp_path: Path) -> None:
+    def _always_fail(req, timeout=12):
+        raise OSError("network unavailable")
+
+    monkeypatch.setattr(security_refs.urllib.request, "urlopen", _always_fail)
+
+    output_dir = tmp_path / ".github" / "agents"
+    placeholders = security_refs.build_security_placeholders(
+        output_dir=output_dir,
+        offline=False,
+        max_items=1,
+        skip_nvd=True,
+    )
+
+    payload = json.loads(placeholders["SECURITY_VULNERABILITY_WATCH_JSON"])
+    assert payload["freshness"]["status"] == "stale"
+    assert placeholders["SECURITY_DATA_FRESHNESS_STATUS"] == "stale"
+
+
+def test_offline_without_cache_is_stale(tmp_path: Path) -> None:
+    output_dir = tmp_path / ".github" / "agents"
+    placeholders = security_refs.build_security_placeholders(
+        output_dir=output_dir,
+        offline=True,
+        max_items=1,
+        skip_nvd=True,
+    )
+
+    payload = json.loads(placeholders["SECURITY_VULNERABILITY_WATCH_JSON"])
+    assert payload["freshness"]["status"] == "stale"
+    assert placeholders["SECURITY_DATA_FRESHNESS_STATUS"] == "stale"
 

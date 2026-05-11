@@ -176,6 +176,7 @@ Workflows are step sequences embedded in the generated Orchestrator agent. Every
 95. **Workflow 9 — Cross-Repository Coordination** — Impact assessment → approved updates → adjacent-repo writes (security-cleared) → consistency audit
 96. **Workflow 10 — Plan Documentation & Review** — Plan status scan → pre-execution truth check via `@technical-validator` → surface blocked steps
 97. **Workflow 10B — Work Summary Reporting** — Generate daily/weekly/monthly summaries from plan artifacts and git history, then audit them
+99. **Workflow 10C — Post-Production Audit Verification (Optional)** — User-editable extension workflow for outcome verification after implementation claims; runs `@post-production-auditor` + adversarial/conflict checks; blocks closeout on `FAIL`/`INCONCLUSIVE`
 98. **Workflow 11 — Final Check (Part A)** — Scan current plan's `steps.csv` for `pending`/`blocked` rows; create audited sub-plans for each
 98. **Workflow 11 — Final Check (Part B)** — Scan `CHANGELOG.md` Known Issues, `tmp/by-week/YYYY-Www/` plan CSVs (legacy: `tmp/` root), and `git status` for at-large open issues; subject summaries to `@adversarial` + `@conflict-auditor`
 
@@ -193,6 +194,8 @@ Workflows are step sequences embedded in the generated Orchestrator agent. Every
 107. **Update Lifecycle Trigger Contract** — Canonical `--update --merge` runs must reconcile drift, emit newly required files, preserve manual values, and preserve user-authored content outside fenced regions
 108. **Missing Expected Output Recovery Trigger** — During update, absent expected standard outputs are treated as drift and must be restored even if template hashes are unchanged
 109. **Cross-Repository Security Rule** — Any write to a repository other than `src/` must be assessed by `@repo-liaison` and cleared by `@security`
+110. **User-Editable Gap Safety Pattern** — Optional routing rows and optional workflow extensions (such as 10C) must be added outside FENCED sections so `--update --merge` does not force-propagate them to teams that do not include the required agent
+111. **Post-Production Closure Gate Artifacts** — Optional post-production audits can emit `closure_gate_status.json`, `capability_check.json`, and `decision_replay_packet.json` to support fail-closed closeout decisions and replay-auditability
 
 ---
 
@@ -211,12 +214,12 @@ Workflows are step sequences embedded in the generated Orchestrator agent. Every
 
 ## Bridge Automation
 
-115. **`run_daily_bridge_maintenance.sh`** — Daily warn-and-continue bridge refresh script for non-critical operations
+115. **`run_daily_bridge_maintenance.sh`** — Daily bridge refresh/check script that halts the run when the security-maintenance preflight fails and continues with warnings only for non-critical bridge refresh/check subtasks
 116. **`bridge-maintenance.yml` CI Workflow** — GitHub Actions workflow for daily automated bridge maintenance
 117. **`bridge-watchdog.yml` CI Workflow** — Staleness monitoring; creates deduplicated GitHub issues when drift is detected
 118. **Bridge Staleness Detection** — Compare bridge artifacts against source team; surface divergence
 119. **Deduplicated Issue Creation** — Watchdog suppresses duplicate GitHub issues for the same staleness event
-120. **CI Fallback Mechanism** — Maintenance workflow continues with warnings on non-critical failures rather than aborting
+120. **CI Fallback Mechanism** — Bridge refresh/check subtasks continue with warnings, but security-maintenance preflight failures abort the workflow
 121. **Snapshot Archive** — Pre-update snapshots stored in `references/plans/snapshots-*/` for reversible rollback
 
 ---

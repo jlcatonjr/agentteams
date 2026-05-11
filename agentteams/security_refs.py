@@ -175,6 +175,80 @@ _LLM_SECURITY_REFERENCES: list[dict[str, str]] = [
     },
 ]
 
+#: Control-to-test evidence matrix used to keep control claims executable.
+_CONTROL_EVIDENCE_ROWS: list[dict[str, str]] = [
+    {
+        "control_id": "CTRL-01",
+        "layer": "operational-fail-safe",
+        "test_id": "tests/test_build_team_security_gates.py::test_gate_blocks_missing_required_header_columns",
+        "enforcement_point": "build_team.py security decision gate",
+        "status": "implemented",
+    },
+    {
+        "control_id": "CTRL-02",
+        "layer": "secrets-and-data-loss-prevention",
+        "test_id": "tests/test_scan.py::test_detect_high_entropy_secret_like_token",
+        "enforcement_point": "agentteams.scan layered detector",
+        "status": "implemented",
+    },
+    {
+        "control_id": "CTRL-03",
+        "layer": "change-control-gates",
+        "test_id": "tests/test_build_team_security_gates.py::test_gate_accepts_current_repository_schema",
+        "enforcement_point": "build_team.py schema compatibility gate",
+        "status": "implemented",
+    },
+    {
+        "control_id": "CTRL-04",
+        "layer": "threat-intel-artifact-integrity",
+        "test_id": "tests/test_security_refs.py::test_build_security_placeholders_offline_from_cache",
+        "enforcement_point": "security_refs threat-intel cache path",
+        "status": "implemented",
+    },
+    {
+        "control_id": "CTRL-05",
+        "layer": "prompt-injection-defense",
+        "test_id": "tests/test_security_refs.py::test_build_security_placeholders_online",
+        "enforcement_point": "security_refs LLM threat baseline",
+        "status": "implemented",
+    },
+    {
+        "control_id": "CTRL-06",
+        "layer": "agentic-permission-boundaries",
+        "test_id": "tests/test_build_team_security_gates.py::test_action_matches_tokenized_action_names",
+        "enforcement_point": "build_team.py action matching boundary",
+        "status": "implemented",
+    },
+    {
+        "control_id": "CTRL-07",
+        "layer": "threat-intel-freshness-governance",
+        "test_id": "tests/test_security_refs.py::test_build_security_placeholders_nvd_enrichment",
+        "enforcement_point": "security_refs live CVSS/EPSS enrichment",
+        "status": "implemented",
+    },
+    {
+        "control_id": "CTRL-08",
+        "layer": "scoring-completeness",
+        "test_id": "tests/test_security_refs.py::test_build_security_placeholders_osv_packages",
+        "enforcement_point": "security_refs OSV enrichment",
+        "status": "implemented",
+    },
+    {
+        "control_id": "CTRL-09",
+        "layer": "stale-data-signaling",
+        "test_id": "tests/test_security_refs.py::test_build_security_placeholders_offline_from_cache",
+        "enforcement_point": "security_refs stale-cache warning",
+        "status": "implemented",
+    },
+    {
+        "control_id": "CTRL-10",
+        "layer": "continuous control drift",
+        "test_id": "scripts/run_daily_security_maintenance.sh",
+        "enforcement_point": "daily security maintenance pipeline",
+        "status": "implemented",
+    },
+]
+
 
 def _utc_now_iso() -> str:
     """Return current UTC time in ISO-8601 with trailing Z."""
@@ -522,6 +596,22 @@ def _format_source_registry(sources: list[dict]) -> str:
     return "\n".join(lines)
 
 
+def _format_control_evidence_matrix(rows: list[dict[str, str]]) -> str:
+    """Return a markdown table describing the control-to-test evidence matrix."""
+    if not rows:
+        return "- No control evidence available in this run."
+    lines = [
+        "| Control | Layer | Test | Enforcement Point | Status |",
+        "|---|---|---|---|---|",
+    ]
+    for row in rows:
+        lines.append(
+            f"| {row['control_id']} | {row['layer']} | {row['test_id']} | "
+            f"{row['enforcement_point']} | {row['status']} |"
+        )
+    return "\n".join(lines)
+
+
 def _format_threat_summary(
     vulns: list[dict],
     epss: dict[str, dict[str, str]],
@@ -617,6 +707,8 @@ def build_security_placeholders(
     nvd_map: dict[str, dict] = {}
     osv_findings: list[dict] = []
     _used_stale_cache: bool = False
+    _fetch_failed_without_cache: bool = False
+    _offline_without_cache: bool = False
 
     if offline:
         if cache_json.exists():
@@ -628,6 +720,8 @@ def build_security_placeholders(
                 osv_findings = cached.get("osv_packages", [])
             except (json.JSONDecodeError, OSError):
                 pass
+        else:
+            _offline_without_cache = True
     else:
         try:
             vulnerabilities, kev_source = _fetch_kev(max_items=max_items)
@@ -659,6 +753,8 @@ def build_security_placeholders(
                         sources = cached_sources
                 except (json.JSONDecodeError, OSError):
                     pass
+            else:
+                _fetch_failed_without_cache = True
 
         # OSV package lookup (independent of KEV; only when tool list provided)
         if tools:
@@ -675,6 +771,16 @@ def build_security_placeholders(
     prevention = _format_prevention_playbook(vulnerabilities)
     llm_threats = _format_llm_threats(include_references=True)
     osv_summary = _format_osv_summary(osv_findings)
+    control_evidence = _format_control_evidence_matrix(_CONTROL_EVIDENCE_ROWS)
+    freshness_age_hours = ""
+    freshness_status = "unknown"
+    try:
+        generated_dt = datetime.fromisoformat(generated_at.replace("Z", "+00:00"))
+        freshness_age_hours_value = max((datetime.now(UTC) - generated_dt).total_seconds() / 3600.0, 0.0)
+        freshness_age_hours = f"{freshness_age_hours_value:.2f}"
+        freshness_status = "stale" if (_used_stale_cache or _fetch_failed_without_cache or _offline_without_cache or freshness_age_hours_value > 24) else "fresh"
+    except ValueError:
+        freshness_status = "stale"
 
     if _used_stale_cache:
         threat_summary = _STALE_DATA_WARNING + threat_summary
@@ -706,6 +812,14 @@ def build_security_placeholders(
         "sources": sources,
         "vulnerabilities": vuln_records,
         "osv_packages": osv_findings,
+        "control_evidence": _CONTROL_EVIDENCE_ROWS,
+        "freshness": {
+            "status": freshness_status,
+            "age_hours": freshness_age_hours,
+            "ttl_hours": 24,
+            "used_stale_cache": _used_stale_cache,
+            "offline": offline,
+        },
         "llm_threats": [
             {"id": t["id"], "name": t["name"], "summary": t["summary"]}
             for t in _OWASP_LLM_TOP10
@@ -729,5 +843,9 @@ def build_security_placeholders(
         "SECURITY_PREVENTION_PLAYBOOK": prevention,
         "SECURITY_LLM_THREATS_SUMMARY": llm_threats,
         "SECURITY_OSV_PACKAGES_SUMMARY": osv_summary,
+        "SECURITY_CONTROL_EVIDENCE_SUMMARY": control_evidence,
+        "SECURITY_DATA_FRESHNESS_STATUS": freshness_status,
+        "SECURITY_DATA_AGE_HOURS": freshness_age_hours,
+        "SECURITY_DATA_TTL_HOURS": "24",
         "SECURITY_VULNERABILITY_WATCH_JSON": json.dumps(json_payload, indent=2),
     }

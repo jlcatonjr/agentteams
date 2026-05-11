@@ -32,6 +32,8 @@ _ARCHETYPE_TRIGGERS: list[tuple[list[str], str]] = [
     # technical-validator: code, data, or technical projects
     (["python", "javascript", "rust", "go", "java", "code", "api", "function", "module", "script",
       "pipeline", "data", "sql", "database", "csv", "json", "yaml"], "technical-validator"),
+        # post-production-auditor: mutation-heavy data/collector projects (conservative first-pass trigger)
+        (["pipeline", "etl", "collector", "mutation"], "post-production-auditor"),
     # format-converter: any project producing a compiled output
     (["latex", "pdf", "pandoc", "html", "markdown", "compile", "build", "convert", "manuscript"], "format-converter"),
     # reference-manager: any project with citations or bibliography
@@ -114,6 +116,18 @@ def build_manifest(description: dict[str, Any], *, framework: str = "copilot-vsc
         if "tool-doc-researcher" not in archetypes:
             archetypes = list(archetypes) + ["tool-doc-researcher"]
 
+    # Archetype-implied agents: certain archetypes depend on specific domain agents
+    # that may not be independently triggered by keyword matching.
+    _ARCHETYPE_IMPLIES: dict[str, list[str]] = {
+        "post-production-auditor": ["technical-validator"],
+    }
+    archetypes = list(archetypes)
+    for archetype, implied in _ARCHETYPE_IMPLIES.items():
+        if archetype in archetypes:
+            for dep in implied:
+                if dep not in archetypes:
+                    archetypes.append(dep)
+
     # Components
     components = _normalize_components(description.get("components", []))
 
@@ -195,6 +209,19 @@ def build_manifest(description: dict[str, Any], *, framework: str = "copilot-vsc
             "- Package-level vulnerability data will be generated during team initialization/update."
         ),
     )
+
+    # Post-production placeholder requirements are only relevant when the
+    # post-production-auditor archetype is selected.
+    if "post-production-auditor" in archetypes:
+        auto_resolved.update(
+            _build_placeholder_map(
+                trigger_contract_version="{MANUAL:TRIGGER_CONTRACT_VERSION}",
+                bulk_mutation_threshold="{MANUAL:BULK_MUTATION_THRESHOLD}",
+                source_of_truth_spec="{MANUAL:SOURCE_OF_TRUTH_SPEC}",
+                duplicate_cluster_cap="{MANUAL:DUPLICATE_CLUSTER_CAP}",
+                audit_slug="{MANUAL:AUDIT_SLUG}",
+            )
+        )
 
     # Manual-required placeholders (unfilled MANUAL tokens)
     manual_required = _collect_manual_required(auto_resolved)

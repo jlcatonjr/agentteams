@@ -1,0 +1,175 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "Post-Production Audit Decision Replay Packet",
+  "description": "Immutable record of audit inputs, environment state, and decision logic for replay-auditing and cross-run comparison. Enables verification that audit decisions are reproducible and based on documented assumptions.",
+  "type": "object",
+  "required": [
+    "audit_slug",
+    "timestamp",
+    "window_start",
+    "window_end",
+    "query_hashes",
+    "schema_version",
+    "environment_metadata"
+  ],
+  "properties": {
+    "audit_slug": {
+      "type": "string",
+      "description": "Unique identifier for this audit run"
+    },
+    "timestamp": {
+      "type": "string",
+      "format": "date-time",
+      "description": "ISO 8601 timestamp when audit was executed"
+    },
+    "window_start": {
+      "type": "string",
+      "format": "date-time",
+      "description": "Inclusive start timestamp for the replay evidence window"
+    },
+    "window_end": {
+      "type": "string",
+      "format": "date-time",
+      "description": "Inclusive end timestamp for the replay evidence window"
+    },
+    "trigger_category": {
+      "type": "string",
+      "enum": [
+        "always-trigger",
+        "risk-trigger",
+        "governance-trigger"
+      ],
+      "description": "Which trigger category caused this audit to run"
+    },
+    "query_hashes": {
+      "type": "object",
+      "description": "SHA-256 hashes of all queries used in source-of-truth verification",
+      "additionalProperties": {
+        "type": "string"
+      },
+      "example": {
+        "source_of_truth_query": "abc123def456...",
+        "sample_identity_query": "xyz789uvw012..."
+      }
+    },
+    "schema_version": {
+      "type": "string",
+      "description": "Version of the source-of-truth schema at audit time (e.g., '1.2.3')"
+    },
+    "trigger_contract_version": {
+      "type": "string",
+      "description": "Version of the Trigger Contract in effect when this audit was run"
+    },
+    "bulk_mutation_threshold": {
+      "type": "integer",
+      "description": "Record count threshold used in this audit (copy of {MANUAL:BULK_MUTATION_THRESHOLD})"
+    },
+    "duplicate_cluster_cap": {
+      "type": "integer",
+      "description": "Maximum duplicate clusters to sample (copy of {MANUAL:DUPLICATE_CLUSTER_CAP})"
+    },
+    "sampling_tier": {
+      "type": "string",
+      "enum": [
+        "tier-1",
+        "tier-2",
+        "tier-3"
+      ],
+      "description": "Risk tier used to select sampling rate"
+    },
+    "sample_size": {
+      "type": "integer",
+      "description": "Number of records actually sampled"
+    },
+    "sampling_criteria": {
+      "type": "object",
+      "description": "Selection logic applied (deterministic ordering rules, inclusion predicates)",
+      "additionalProperties": true
+    },
+    "environment_metadata": {
+      "type": "object",
+      "description": "State of tools and infrastructure at audit time",
+      "required": [
+        "tool_versions",
+        "database_system"
+      ],
+      "properties": {
+        "tool_versions": {
+          "type": "object",
+          "description": "Versions of key tools used (e.g., database client, API client)",
+          "additionalProperties": {
+            "type": "string"
+          }
+        },
+        "database_system": {
+          "type": "string",
+          "description": "Database or system being audited (e.g., 'PostgreSQL 14.5', 'API v2.3')"
+        },
+        "consistency_window_seconds": {
+          "type": "integer",
+          "description": "If eventual-consistent system, max lag window in seconds"
+        },
+        "platform_drift_detected": {
+          "type": "boolean",
+          "description": "Whether schema/API changes were detected since last audit"
+        }
+      }
+    },
+    "verdict_inputs": {
+      "type": "object",
+      "description": "Key metrics that influenced the verdict decision",
+      "properties": {
+        "defect_rate_estimate": {
+          "type": "number",
+          "description": "Estimated defect rate as decimal (e.g., 0.03 for 3%)"
+        },
+        "confidence_lower_bound": {
+          "type": "number",
+          "description": "Lower bound of confidence interval"
+        },
+        "confidence_upper_bound": {
+          "type": "number",
+          "description": "Upper bound of confidence interval"
+        },
+        "unknown_rate": {
+          "type": "number",
+          "description": "Percentage of sampled rows with UNKNOWN result"
+        },
+        "critical_defect_found": {
+          "type": "boolean",
+          "description": "Whether any critical defect (data loss, wrong mutation) was found"
+        }
+      }
+    },
+    "evidence_link_manifest": {
+      "type": "array",
+      "description": "List of evidence artifacts referenced in audit findings",
+      "items": {
+        "type": "object",
+        "properties": {
+          "evidence_id": {
+            "type": "string",
+            "description": "Unique identifier for this evidence (e.g., 'failed_row_123', 'screenshot_001')"
+          },
+          "file_path": {
+            "type": "string",
+            "description": "Path to evidence file relative to audit directory"
+          },
+          "media_type": {
+            "type": "string",
+            "description": "MIME type (e.g., 'image/png', 'text/csv', 'application/json')"
+          },
+          "query_hash": {
+            "type": "string",
+            "description": "If evidence is query output, SHA-256 of the query"
+          }
+        }
+      }
+    },
+    "crossrun_comparison_enabled": {
+      "type": "boolean",
+      "description": "Whether this packet was prepared for cross-run metric comparison"
+    }
+  },
+  "additionalProperties": false
+}

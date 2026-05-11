@@ -350,6 +350,26 @@
     
     
       <li class="md-tabs__item">
+        <a href="../post-production-auditor-guide/" class="md-tabs__link">
+          
+  
+  
+  Guides
+
+        </a>
+      </li>
+    
+  
+
+      
+        
+  
+  
+  
+  
+    
+    
+      <li class="md-tabs__item">
         <a href="../api-reference/" class="md-tabs__link">
           
   
@@ -772,6 +792,17 @@
 </li>
         
           <li class="md-nav__item">
+  <a href="#optional-outcome-verification-layer" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Optional Outcome-Verification Layer
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
   <a href="#agent-knowledge-updates" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -912,7 +943,7 @@
   <span class="md-ellipsis">
     
   
-    API Reference
+    Guides
   
 
     
@@ -925,6 +956,121 @@
         
         <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_8_label" aria-expanded="false">
           <label class="md-nav__title" for="__nav_8">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Guides
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../post-production-auditor-guide/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Post-Production Auditor
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../security-hardening-guide/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Security Hardening & Threat Intelligence
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+    
+    
+      
+      
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_9" >
+        
+          
+          <label class="md-nav__link" for="__nav_9" id="__nav_9_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    API Reference
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_9_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_9">
             <span class="md-nav__icon md-icon"></span>
             
   
@@ -1562,6 +1708,17 @@
 </li>
         
           <li class="md-nav__item">
+  <a href="#optional-outcome-verification-layer" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Optional Outcome-Verification Layer
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
   <a href="#agent-knowledge-updates" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -1703,15 +1860,16 @@ This path reads existing agent files, preserves body prose, and rewrites framewo
 <a id="__codelineno-1-13" name="__codelineno-1-13" href="#__codelineno-1-13"></a>Tier 3: Domain Agents
 <a id="__codelineno-1-14" name="__codelineno-1-14" href="#__codelineno-1-14"></a>   └── Work-Summarizer (always included),
 <a id="__codelineno-1-15" name="__codelineno-1-15" href="#__codelineno-1-15"></a>       Primary-Producer, Quality-Auditor, Technical-Validator,
-<a id="__codelineno-1-16" name="__codelineno-1-16" href="#__codelineno-1-16"></a>       Format-Converter, Reference-Manager, Output-Compiler, ...
-<a id="__codelineno-1-17" name="__codelineno-1-17" href="#__codelineno-1-17"></a>       Each owns a production workflow (drafting, auditing,
-<a id="__codelineno-1-18" name="__codelineno-1-18" href="#__codelineno-1-18"></a>       converting, compiling)
-<a id="__codelineno-1-19" name="__codelineno-1-19" href="#__codelineno-1-19"></a>
-<a id="__codelineno-1-20" name="__codelineno-1-20" href="#__codelineno-1-20"></a>Tier 4: Workstream Experts
-<a id="__codelineno-1-21" name="__codelineno-1-21" href="#__codelineno-1-21"></a>   └── One per project component (e.g. @auth-module-expert,
-<a id="__codelineno-1-22" name="__codelineno-1-22" href="#__codelineno-1-22"></a>       @tasks-api-expert)
-<a id="__codelineno-1-23" name="__codelineno-1-23" href="#__codelineno-1-23"></a>       Each owns one deliverable unit end-to-end:
-<a id="__codelineno-1-24" name="__codelineno-1-24" href="#__codelineno-1-24"></a>       component brief → domain agent commission → review
+<a id="__codelineno-1-16" name="__codelineno-1-16" href="#__codelineno-1-16"></a>    Post-Production-Auditor (keyword-triggered),
+<a id="__codelineno-1-17" name="__codelineno-1-17" href="#__codelineno-1-17"></a>    Format-Converter, Reference-Manager, Output-Compiler, ...
+<a id="__codelineno-1-18" name="__codelineno-1-18" href="#__codelineno-1-18"></a>       Each owns a production workflow (drafting, auditing,
+<a id="__codelineno-1-19" name="__codelineno-1-19" href="#__codelineno-1-19"></a>       converting, compiling)
+<a id="__codelineno-1-20" name="__codelineno-1-20" href="#__codelineno-1-20"></a>
+<a id="__codelineno-1-21" name="__codelineno-1-21" href="#__codelineno-1-21"></a>Tier 4: Workstream Experts
+<a id="__codelineno-1-22" name="__codelineno-1-22" href="#__codelineno-1-22"></a>   └── One per project component (e.g. @auth-module-expert,
+<a id="__codelineno-1-23" name="__codelineno-1-23" href="#__codelineno-1-23"></a>       @tasks-api-expert)
+<a id="__codelineno-1-24" name="__codelineno-1-24" href="#__codelineno-1-24"></a>       Each owns one deliverable unit end-to-end:
+<a id="__codelineno-1-25" name="__codelineno-1-25" href="#__codelineno-1-25"></a>       component brief → domain agent commission → review
 </code></pre></div>
 <h3 id="how-tiers-interact">How Tiers Interact<a class="headerlink" href="#how-tiers-interact" title="Permanent link">&para;</a></h3>
 <div class="highlight"><pre><span></span><code><a id="__codelineno-2-1" name="__codelineno-2-1" href="#__codelineno-2-1"></a>User Request
@@ -1726,9 +1884,12 @@ This path reads existing agent files, preserves body prose, and rewrites framewo
 <a id="__codelineno-2-10" name="__codelineno-2-10" href="#__codelineno-2-10"></a>Governance Agents (audits, reviews, clearances)
 </code></pre></div>
 <p>The orchestrator <strong>routes without producing</strong>. Domain agents <strong>produce without scoping</strong>. Workstream experts <strong>scope without producing</strong>. Governance agents <strong>audit without producing</strong>.</p>
+<h3 id="optional-outcome-verification-layer">Optional Outcome-Verification Layer<a class="headerlink" href="#optional-outcome-verification-layer" title="Permanent link">&para;</a></h3>
+<p>Teams that include <code>@post-production-auditor</code> can add an optional post-production workflow extension (Workflow 10C) in the orchestrator user-editable section. This workflow validates claimed completed outcomes against source-of-truth state and enforces fail-closed closure behavior on <code>FAIL</code>/<code>INCONCLUSIVE</code> verdicts.</p>
+<p>To avoid forced propagation to teams that do not include this archetype, Workflow 10C and its routing row are added outside FENCED sections (in user-editable gaps), not inside generated fenced blocks.</p>
 <h3 id="agent-knowledge-updates">Agent Knowledge Updates<a class="headerlink" href="#agent-knowledge-updates" title="Permanent link">&para;</a></h3>
 <p>Generated agent teams are designed to keep their documentation current automatically as projects evolve. Two mechanisms work together:</p>
-<p><strong>Automatic update triggers</strong> — <code>@agent-updater</code> is invoked at the close of every knowledge-mutating workflow step. Specifically, it runs after Workflow 2 (Revise), Workflow 3 (when corrections were made), Workflow 5 (when issues were found), Workflow 6, Workflow 7, Workflow 8, Workflow 9, and Workflow 11 (Module Documentation Update). Drift detected by <code>--check</code> is also an explicit trigger.</p>
+<p><strong>Automatic update triggers</strong> — <code>@agent-updater</code> is invoked at the close of knowledge-mutating workflow steps. Specifically, it runs in Workflow 1, Workflow 2, Workflow 3 (when corrections were made), Workflow 5 (when issues were found), Workflow 6, Workflow 7, Workflow 8, and Workflow 9. Drift detected by <code>--check</code> is also an explicit trigger.</p>
 <p><strong>Periodic Knowledge Re-verification</strong> — Before any plan step executes (Workflow 10), <code>@technical-validator</code> verifies the factual claims stated in that step's inputs, outputs, and notes against current on-disk state. Steps with unverified claims are held until the user confirms. If <code>--check</code> reports template drift, <code>@agent-updater</code> re-renders affected files and calls <code>@technical-validator</code> before the next workflow step proceeds.</p>
 <p><strong>Epistemic guard on audit workflows</strong> — <code>@adversarial</code> runs at the start of Workflow 5 (Consistency Review) before any audit conclusions are surfaced, and before any deletion plan in Workflow 8 (Code Hygiene Audit). This prevents agents from auditing on the basis of unchallenged assumptions about project state.</p>
 <p>These three mechanisms together ensure that agents do not assert stale beliefs as facts and that documentation lag — the primary cause of agent errors in long-lived teams — is detected and resolved automatically.</p>

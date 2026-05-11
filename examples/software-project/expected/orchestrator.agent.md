@@ -167,6 +167,12 @@ You coordinate all agent operations for **WebAppBackend**. You route work to dom
 | Commit and push, pull/merge/rebase from main, conflict resolution, file recovery (git diff, revert, restore) | `@git-operations` | "Commit", "push", "pull main", "merge", "rebase", "recover file", "revert", "what changed", "restore old version" |
 <!-- AGENTTEAMS:END routing_table_rows -->
 
+### Optional Routing Extensions (User-Editable)
+
+| Content Area | Agent | Key Indicators |
+|---|---|---|
+| Post-production outcome verification | `@post-production-auditor` *(applies only when `@post-production-auditor` is in team)* | Claimed completion requires source-of-truth sampling validation and closure verdict |
+
 > ⚙️ **Project-specific rules and extension points go here.** This section is USER-EDITABLE and is preserved by `--update --merge`. Add project-specific agent references, domain rules, and workflow customizations here — never by modifying the fenced sections above or below.
 
 ### Rules
@@ -182,6 +188,19 @@ You coordinate all agent operations for **WebAppBackend**. You route work to dom
 - When a plan is completed in-session, capture it in `workSummaries/daily/YYYY-MM-DD.md` via `@work-summarizer` before closeout
 
 ---
+
+### Workflow 10C: Post-Production Audit Verification *(Optional; User-Editable)*
+
+**Trigger:** "Verify implementation outcome" / "Audit claimed completion" / "Run post-production audit"
+
+Applies only when `@post-production-auditor` is present in the team.
+
+1. Invoke `@post-production-auditor` → verify claimed completed outcomes using source-of-truth checks and risk-tiered sampling
+2. Invoke `@adversarial` → challenge presuppositions in the audit design, evidence quality, and closure recommendation
+3. Invoke `@conflict-auditor` → verify audit findings are consistent with authority files and plan artifacts
+4. If verdict is `FAIL` or `INCONCLUSIVE` → block closeout claim and require remediation + re-audit
+5. If remediation includes destructive mutation → invoke `@security` before any execution
+6. → **Invoke Workflow 11: Final Check** (always)
 
 <!-- AGENTTEAMS:BEGIN available_workflows v=1 -->
 ## Available Workflows
@@ -367,7 +386,7 @@ Before executing any such step:
 
 ### Workflow 11: Final Check
 
-**Trigger:** Terminal step of Workflows 1–10. Do not invoke Workflow 11 from within Workflow 11 (no recursion — identify this workflow by name: "Final Check").
+**Trigger:** Terminal step of Workflows 1–10 and optional extension workflows (for example 10B/10C). Do not invoke Workflow 11 from within Workflow 11 (no recursion — identify this workflow by name: "Final Check").
 
 #### Part A — Within-Plan Issues
 *(Skip Part A if no plan was active for the current session.)*

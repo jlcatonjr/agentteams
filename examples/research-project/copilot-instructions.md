@@ -37,7 +37,6 @@ SECTION MANIFEST — copilot-instructions.template.md
 | `html/chapters/` | Primary authored deliverables |
 | `manuscript/` | Compiled/converted output artifacts |
 | `figures/` | Diagrams and figures |
-| `workSummaries/` | Daily, weekly, and monthly work summaries |
 | `references/bibliography.bib` | Reference/bibliography database |
 | `.github/agents/` | Agent definition files |
 | `.github/agents/references/` | Shared reference data |

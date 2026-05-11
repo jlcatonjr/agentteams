@@ -69,6 +69,18 @@ def test_no_credential_in_clean_content():
     assert not any(f.category == "credential" for f in findings)
 
 
+def test_detect_high_entropy_secret_like_token():
+    content = "client_secret = AbCdEfGhIjKlMnOpQrStUv1234567890"
+    findings = scan_content(content)
+    assert any(f.category == "credential" for f in findings)
+
+
+def test_ignore_long_non_secret_text_without_sensitive_context():
+    content = "reference_id = documentation-identifier-2026-05-10-brief"
+    findings = scan_content(content)
+    assert not any(f.category == "credential" for f in findings)
+
+
 # ---------------------------------------------------------------------------
 # scan_content — unresolved placeholders
 # ---------------------------------------------------------------------------

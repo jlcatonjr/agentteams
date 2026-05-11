@@ -344,6 +344,26 @@
     
     
       <li class="md-tabs__item">
+        <a href="../post-production-auditor-guide/" class="md-tabs__link">
+          
+  
+  
+  Guides
+
+        </a>
+      </li>
+    
+  
+
+      
+        
+  
+  
+  
+  
+    
+    
+      <li class="md-tabs__item">
         <a href="../api-reference/" class="md-tabs__link">
           
   
@@ -715,7 +735,7 @@
   <span class="md-ellipsis">
     
   
-    API Reference
+    Guides
   
 
     
@@ -728,6 +748,121 @@
         
         <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_8_label" aria-expanded="false">
           <label class="md-nav__title" for="__nav_8">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Guides
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../post-production-auditor-guide/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Post-Production Auditor
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../security-hardening-guide/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Security Hardening & Threat Intelligence
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+    
+    
+      
+      
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_9" >
+        
+          
+          <label class="md-nav__link" for="__nav_9" id="__nav_9_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    API Reference
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_9_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_9">
             <span class="md-nav__icon md-icon"></span>
             
   
@@ -1463,6 +1598,7 @@
 <li>Preserves agent body markdown.</li>
 <li>Rewrites front matter/wrapper format for target framework.</li>
 <li>Converts instructions naming (<code>copilot-instructions.md</code> &lt;-&gt; <code>CLAUDE.md</code>) as needed.</li>
+<li>Non-dry-run writes run a live security freshness preflight before files are written; stale-intel blocks can only be bypassed via a valid signed waiver (<code>references/security-waivers.log.csv</code> + <code>AGENTTEAMS_WAIVER_SIGNING_KEY</code>).</li>
 </ol>
 <hr />
 <h2 id="mode-b-cai-interop-pipeline-interop-from">Mode B: CAI Interop Pipeline (<code>--interop-from</code>)<a class="headerlink" href="#mode-b-cai-interop-pipeline-interop-from" title="Permanent link">&para;</a></h2>
@@ -1477,6 +1613,7 @@
 <ul>
 <li><code>direct</code>: write target framework files only.</li>
 <li><code>bundle</code>: write target framework files plus interoperability artifacts.</li>
+<li>Both write modes enforce the same live security freshness preflight used by the main render path, including the same signed-waiver exception model.</li>
 </ul>
 <p>Bundle artifacts are written under <code>references/interop/&lt;source&gt;-to-&lt;target&gt;/</code> and include:</p>
 <ol>
@@ -1508,6 +1645,7 @@
 <a id="__codelineno-3-4" name="__codelineno-3-4" href="#__codelineno-3-4"></a><span class="w">  </span>--output<span class="w"> </span>/path/to/project<span class="w"> </span><span class="se">\</span>
 <a id="__codelineno-3-5" name="__codelineno-3-5" href="#__codelineno-3-5"></a><span class="w">  </span>--bridge-check
 </code></pre></div>
+<p><code>--bridge-check</code> is read-only: it verifies bridge freshness against the source manifest and does not perform the write-path security freshness preflight.</p>
 <hr />
 <h2 id="directional-coverage">Directional Coverage<a class="headerlink" href="#directional-coverage" title="Permanent link">&para;</a></h2>
 <p>All three frameworks are supported in all six directional pairings:</p>

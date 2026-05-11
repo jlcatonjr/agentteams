@@ -40,9 +40,15 @@ echo "[INFO] Daily agentteams bridge maintenance started at ${run_started_at}"
 
 SECURITY_SCRIPT="$ROOT_DIR/scripts/run_daily_security_maintenance.sh"
 if [[ -f "$SECURITY_SCRIPT" ]]; then
-  run_noncritical \
-    "Security maintenance" \
-    bash "$SECURITY_SCRIPT"
+  echo
+  echo "==> Security maintenance"
+  if ! bash "$SECURITY_SCRIPT"; then
+    rc=$?
+    echo "[CRITICAL] Security maintenance failed (exit ${rc}); stopping bridge maintenance." >&2
+    exit "$rc"
+  fi
+  echo "[OK] Security maintenance"
+  summary_rows+=("| Security maintenance | OK |")
 else
   noncritical_failures=$((noncritical_failures + 1))
   echo "[WARN] Security maintenance script missing: $SECURITY_SCRIPT" >&2

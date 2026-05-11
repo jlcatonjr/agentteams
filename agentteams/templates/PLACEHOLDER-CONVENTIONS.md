@@ -43,6 +43,20 @@ These cannot be inferred from the project description and require human completi
 - `{MANUAL:TOOL_API_SURFACE}` — Key API surface when not provided in `tools[].api_surface`
 - `{MANUAL:TOOL_COMMON_PATTERNS}` — Common patterns when not provided in `tools[].common_patterns`
 
+### Post-Production-Auditor Specific Placeholders
+
+The `domain/post-production-auditor.template.md` archetype requires five additional manual placeholders:
+
+- `{MANUAL:TRIGGER_CONTRACT_VERSION}` — Semantic version number (e.g., "1.0", "2.1") to track when trigger rules change. Used to version the Trigger Contract section and alert users when audit criteria have been updated. Increment when adding/removing trigger conditions or changing severity tiers.
+
+- `{MANUAL:BULK_MUTATION_THRESHOLD}` — Integer record count threshold (e.g., "100", "5000") that unconditionally triggers a post-production audit. Any mutation affecting this many or more records automatically invokes the auditor; smaller mutations may skip audit if they don't match risk-trigger conditions.
+
+- `{MANUAL:SOURCE_OF_TRUTH_SPEC}` — Query specification (SQL statement, API endpoint list, or reference document path) that defines the expected final state after mutation. Used to verify actual state against expected state. Include table/field names, WHERE predicates, and any identity key definitions.
+
+- `{MANUAL:DUPLICATE_CLUSTER_CAP}` — Maximum number of duplicate-key cluster rows to include in the mandatory sample set (e.g., "50", "100"). Clusters larger than this cap are sampled up to the cap and remainder is tracked as "excluded" in audit output.
+
+- `{MANUAL:AUDIT_SLUG}` — Lowercase identifier slug for the current audit run (e.g., "collector-2026-05-10", "mutation-cleanup-phase-2"). Used to namespace audit artifacts in `tmp/by-week/YYYY-Www/{AUDIT_SLUG}/`. Must be unique per run and should include a date or sequence identifier.
+
 ## Section Fencing
 
 Templates may demarcate generated sections using fence markers so that `--merge` can update them without touching user-authored content. See [`FENCE-CONVENTIONS.md`](FENCE-CONVENTIONS.md) for the complete specification.

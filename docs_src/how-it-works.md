@@ -90,7 +90,8 @@ Tier 2: Governance Agents
 Tier 3: Domain Agents
    └── Work-Summarizer (always included),
        Primary-Producer, Quality-Auditor, Technical-Validator,
-       Format-Converter, Reference-Manager, Output-Compiler, ...
+    Post-Production-Auditor (keyword-triggered),
+    Format-Converter, Reference-Manager, Output-Compiler, ...
        Each owns a production workflow (drafting, auditing,
        converting, compiling)
 
@@ -118,11 +119,17 @@ Governance Agents (audits, reviews, clearances)
 
 The orchestrator **routes without producing**. Domain agents **produce without scoping**. Workstream experts **scope without producing**. Governance agents **audit without producing**.
 
+### Optional Outcome-Verification Layer
+
+Teams that include `@post-production-auditor` can add an optional post-production workflow extension (Workflow 10C) in the orchestrator user-editable section. This workflow validates claimed completed outcomes against source-of-truth state and enforces fail-closed closure behavior on `FAIL`/`INCONCLUSIVE` verdicts.
+
+To avoid forced propagation to teams that do not include this archetype, Workflow 10C and its routing row are added outside FENCED sections (in user-editable gaps), not inside generated fenced blocks.
+
 ### Agent Knowledge Updates
 
 Generated agent teams are designed to keep their documentation current automatically as projects evolve. Two mechanisms work together:
 
-**Automatic update triggers** — `@agent-updater` is invoked at the close of every knowledge-mutating workflow step. Specifically, it runs after Workflow 2 (Revise), Workflow 3 (when corrections were made), Workflow 5 (when issues were found), Workflow 6, Workflow 7, Workflow 8, Workflow 9, and Workflow 11 (Module Documentation Update). Drift detected by `--check` is also an explicit trigger.
+**Automatic update triggers** — `@agent-updater` is invoked at the close of knowledge-mutating workflow steps. Specifically, it runs in Workflow 1, Workflow 2, Workflow 3 (when corrections were made), Workflow 5 (when issues were found), Workflow 6, Workflow 7, Workflow 8, and Workflow 9. Drift detected by `--check` is also an explicit trigger.
 
 **Periodic Knowledge Re-verification** — Before any plan step executes (Workflow 10), `@technical-validator` verifies the factual claims stated in that step's inputs, outputs, and notes against current on-disk state. Steps with unverified claims are held until the user confirms. If `--check` reports template drift, `@agent-updater` re-renders affected files and calls `@technical-validator` before the next workflow step proceeds.
 

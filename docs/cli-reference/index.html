@@ -18,7 +18,7 @@
         <link rel="prev" href="../examples/">
       
       
-        <link rel="next" href="../api-reference/">
+        <link rel="next" href="../post-production-auditor-guide/">
       
       
         
@@ -339,6 +339,26 @@
 
       </a>
     </li>
+  
+
+      
+        
+  
+  
+  
+  
+    
+    
+      <li class="md-tabs__item">
+        <a href="../post-production-auditor-guide/" class="md-tabs__link">
+          
+  
+  
+  Guides
+
+        </a>
+      </li>
+    
   
 
       
@@ -1288,7 +1308,7 @@
   <span class="md-ellipsis">
     
   
-    API Reference
+    Guides
   
 
     
@@ -1301,6 +1321,121 @@
         
         <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_8_label" aria-expanded="false">
           <label class="md-nav__title" for="__nav_8">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Guides
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../post-production-auditor-guide/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Post-Production Auditor
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../security-hardening-guide/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Security Hardening & Threat Intelligence
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+    
+    
+      
+      
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_9" >
+        
+          
+          <label class="md-nav__link" for="__nav_9" id="__nav_9_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    API Reference
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_9_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_9">
             <span class="md-nav__icon md-icon"></span>
             
   
@@ -2448,12 +2583,14 @@
 <li>Replaces front matter and framework wrappers.</li>
 <li>Converts instructions naming (<code>copilot-instructions.md</code> &lt;-&gt; <code>CLAUDE.md</code>) based on target.</li>
 <li>Supports all six directional combinations between <code>copilot-vscode</code>, <code>copilot-cli</code>, and <code>claude</code>.</li>
+<li>Non-dry-run conversions run the same live security freshness preflight as the main render path; stale or unavailable security intel blocks writes unless a valid signed waiver exists in <code>references/security-waivers.log.csv</code> and <code>AGENTTEAMS_WAIVER_SIGNING_KEY</code> is configured.</li>
 </ul>
 <h3 id="-interop-from-dir"><code>--interop-from DIR</code><a class="headerlink" href="#-interop-from-dir" title="Permanent link">&para;</a></h3>
 <p>Run the CAI-based interop pipeline from an existing source team.</p>
 <ul>
 <li><code>direct</code> mode writes target framework files.</li>
 <li><code>bundle</code> mode writes target files and compatibility artifacts under <code>references/interop/&lt;source&gt;-to-&lt;target&gt;/</code>.</li>
+<li>Non-dry-run interop runs also enforce the live security freshness preflight before writing, with the same signed-waiver exception path.</li>
 </ul>
 <h3 id="-interop-source-framework-name"><code>--interop-source-framework NAME</code><a class="headerlink" href="#-interop-source-framework-name" title="Permanent link">&para;</a></h3>
 <p>Optional source framework override for interop runs. When omitted, source framework is auto-detected.</p>
@@ -2475,7 +2612,8 @@
 <ul>
 <li><code>references/bridges/&lt;source&gt;-to-&lt;target&gt;/</code></li>
 </ul>
-<p>Bridge supports all six directional combinations between <code>copilot-vscode</code>, <code>copilot-cli</code>, and <code>claude</code>.</p>
+<p>Bridge supports all six directional combinations between <code>copilot-vscode</code>, <code>copilot-cli</code>, and <code>claude</code>.
+- Bridge generation runs the live security freshness preflight before writing (including signed-waiver exception support); <code>--bridge-check</code> remains read-only and only verifies source-file freshness.</p>
 <h3 id="-bridge-source-framework-name"><code>--bridge-source-framework NAME</code><a class="headerlink" href="#-bridge-source-framework-name" title="Permanent link">&para;</a></h3>
 <p>Optional source framework override for bridge mode. If omitted, source framework is auto-detected.</p>
 <h3 id="-bridge-check"><code>--bridge-check</code><a class="headerlink" href="#-bridge-check" title="Permanent link">&para;</a></h3>
@@ -2558,6 +2696,7 @@
 <p>These flags control the live vulnerability feed used when rendering security-reference agent files.</p>
 <h3 id="-security-offline"><code>--security-offline</code><a class="headerlink" href="#-security-offline" title="Permanent link">&para;</a></h3>
 <p>Use the cached security vulnerability snapshot only — no network fetch. Useful in CI environments or when working without internet access.</p>
+<p>If live security data cannot be fetched and there is no cache to fall back to, the security snapshot is marked stale and write-capable commands block until the feed is refreshed. A valid signed waiver in <code>references/security-waivers.log.csv</code> can authorize a bounded exception when <code>AGENTTEAMS_WAIVER_SIGNING_KEY</code> is configured.</p>
 <h3 id="-security-max-items-n"><code>--security-max-items N</code><a class="headerlink" href="#-security-max-items-n" title="Permanent link">&para;</a></h3>
 <p>Maximum number of current vulnerabilities to include in generated security references. Default: <code>15</code>.</p>
 <h3 id="-security-no-nvd"><code>--security-no-nvd</code><a class="headerlink" href="#-security-no-nvd" title="Permanent link">&para;</a></h3>

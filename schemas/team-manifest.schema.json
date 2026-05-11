@@ -74,6 +74,10 @@
           "cohesion-repairer",
           "style-guardian",
           "technical-validator",
+          "module-doc-author",
+          "module-doc-validator",
+          "tool-doc-researcher",
+          "post-production-auditor",
           "format-converter",
           "reference-manager",
           "output-compiler",
@@ -237,7 +241,7 @@
           },
           "type": {
             "type": "string",
-            "enum": ["agent", "instructions", "reference", "setup-required", "builder", "graph"]
+            "enum": ["agent", "instructions", "reference", "setup-required", "builder", "graph", "artifact"]
           },
           "fallback_template": {
             "type": "string",

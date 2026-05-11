@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import hashlib
+import hmac
 from pathlib import Path
 import json
 
@@ -13,6 +15,48 @@ def _write_pass_security_decision(output_dir: Path, action: str = "overwrite") -
     (refs / "security-decisions.log.csv").write_text(
         "timestamp,requesting_agent,action_reviewed,verdict,conditions,conditions_verified\n"
         f"2026-04-24T00:00:00Z,test,{action}-001,PASS,,verified\n",
+        encoding="utf-8",
+    )
+
+
+def _write_freshness_waiver(output_dir: Path, key: str) -> None:
+    refs = output_dir / "references"
+    refs.mkdir(parents=True, exist_ok=True)
+    waiver = {
+        "timestamp": "2026-04-24T00:00:00Z",
+        "waiver_id": "waiver-freshness-test",
+        "action_reviewed": "security-intel-freshness",
+        "expires_at": "2099-01-01T00:00:00Z",
+        "max_uses": "10",
+        "uses": "0",
+        "approver": "test",
+        "ticket_id": "REMED-1",
+        "reason_code": "TEST",
+        "conditions_verified": "verified",
+        "signature": "",
+    }
+    payload = "|".join(
+        [
+            waiver["waiver_id"],
+            waiver["action_reviewed"],
+            waiver["expires_at"],
+            waiver["max_uses"],
+            waiver["uses"],
+            waiver["approver"],
+            waiver["ticket_id"],
+            waiver["reason_code"],
+            waiver["conditions_verified"],
+        ]
+    )
+    waiver["signature"] = hmac.new(
+        key.encode("utf-8"), payload.encode("utf-8"), hashlib.sha256
+    ).hexdigest()
+    (refs / "security-waivers.log.csv").write_text(
+        "timestamp,waiver_id,action_reviewed,expires_at,max_uses,uses,approver,"
+        "ticket_id,reason_code,conditions_verified,signature\n"
+        "{timestamp},{waiver_id},{action_reviewed},{expires_at},{max_uses},"
+        "{uses},{approver},{ticket_id},{reason_code},{conditions_verified},"
+        "{signature}\n".format(**waiver),
         encoding="utf-8",
     )
 
@@ -115,7 +159,10 @@ def test_build_main_auto_correct_reruns_audit(tmp_path, monkeypatch):
 
     brief = Path(__file__).parent.parent / "examples" / "software-project" / "brief.json"
     output_dir = tmp_path / ".github" / "agents"
+    waiver_key = "remediate-waiver-key"
+    monkeypatch.setenv("AGENTTEAMS_WAIVER_SIGNING_KEY", waiver_key)
     _write_pass_security_decision(output_dir)
+    _write_freshness_waiver(output_dir, waiver_key)
 
     rc = build_team.main([
         "--description",
@@ -140,7 +187,10 @@ def test_build_main_update_audits_emitted_files_from_disk(tmp_path, monkeypatch)
 
     brief = Path(__file__).parent.parent / "examples" / "software-project" / "brief.json"
     output_dir = tmp_path / ".github" / "agents"
+    waiver_key = "remediate-waiver-key"
+    monkeypatch.setenv("AGENTTEAMS_WAIVER_SIGNING_KEY", waiver_key)
     _write_pass_security_decision(output_dir)
+    _write_freshness_waiver(output_dir, waiver_key)
 
     first_rc = build_team.main([
         "--description",
@@ -158,6 +208,9 @@ def test_build_main_update_audits_emitted_files_from_disk(tmp_path, monkeypatch)
     payload = json.loads(build_log.read_text(encoding="utf-8"))
     payload["manifest_fingerprint"] = "outdated"
     build_log.write_text(json.dumps(payload), encoding="utf-8")
+
+    # Overwrite decisions are one-time-use; seed a fresh PASS decision for update.
+    _write_pass_security_decision(output_dir)
 
     captured: list[object] = []
 

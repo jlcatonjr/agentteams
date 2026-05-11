@@ -4,6 +4,7 @@ scan.py — Proactive security scanner for generated agent files.
 Scans .agent.md and related files in a generated agents directory for:
   - Absolute paths containing usernames (PII exposure)
   - Credential patterns (API keys, tokens, passwords)
+    - High-entropy secret-like tokens in sensitive contexts
   - Unresolved auto-placeholders ({UPPER_SNAKE_CASE} tokens)
   - Unresolved manual placeholders ({MANUAL:*} still present after setup)
 """
@@ -35,6 +36,23 @@ _CREDENTIAL_PATTERNS: list[tuple[str, re.Pattern[str]]] = [
     ("Password assignment", re.compile(r"(?:password|passwd|pwd)\s*[:=]\s*['\"][^'\"]{4,}", re.IGNORECASE)),
     ("Connection string", re.compile(r"(?:postgres|mysql|mongodb)://[^\s]+:[^\s]+@", re.IGNORECASE)),
 ]
+
+#: High-entropy tokens that look like opaque secrets when they are contiguous
+#: opaque strings rather than human-readable identifiers.
+_HIGH_ENTROPY_TOKEN_RE = re.compile(
+    r"(?<![A-Za-z0-9+/=])"
+    r"(?=[A-Za-z0-9+/=]{24,}(?![A-Za-z0-9+/=]))"
+    r"(?=.*[A-Za-z])"
+    r"(?=.*\d)"
+    r"[A-Za-z0-9+/=]{24,}"
+)
+
+#: Wider token matcher used only when the line already looks like secret
+#: material. This catches separator-rich tokens that would otherwise be missed.
+_SENSITIVE_CONTEXT_TOKEN_RE = re.compile(r"(?<!\S)[A-Za-z0-9+/=_-]{20,}(?!\S)")
+
+#: Sensitive context keywords that raise the severity of opaque token findings.
+_SECRET_CONTEXT_RE = re.compile(r"(?:secret|token|credential|auth|password|passwd|private\s+key|bearer)", re.IGNORECASE)
 
 #: Unresolved auto-placeholder tokens {UPPER_SNAKE_CASE}
 _UNRESOLVED_AUTO_RE = re.compile(r"\{([A-Z][A-Z0-9_]{2,})\}")
@@ -232,6 +250,27 @@ def _check_line(
                 snippet=stripped,
             ))
 
+    secret_context = _SECRET_CONTEXT_RE.search(line) is not None
+    token_regex = _SENSITIVE_CONTEXT_TOKEN_RE if secret_context else _HIGH_ENTROPY_TOKEN_RE
+    for token_match in token_regex.finditer(line):
+        token = token_match.group(0)
+        entropy = _token_entropy(token)
+        if entropy < 3.8:
+            continue
+        severity = "high" if secret_context or entropy >= 4.2 else "medium"
+        findings.append(ScanFinding(
+            file=filepath,
+            line=line_num,
+            category="credential",
+            severity=severity,
+            message=(
+                "Possible secret-like token detected"
+                if secret_context
+                else "High-entropy token detected"
+            ),
+            snippet=stripped,
+        ))
+
     # Unresolved auto-placeholders (excluding known safe tokens)
     for match in _UNRESOLVED_AUTO_RE.finditer(line):
         token = match.group(1)
@@ -264,3 +303,18 @@ def _check_line(
             message=f"Unresolved manual placeholder: {match.group(0)}",
             snippet=stripped,
         ))
+
+
+def _token_entropy(token: str) -> float:
+    """Return Shannon entropy for a token string."""
+    if not token:
+        return 0.0
+    counts: dict[str, int] = {}
+    for char in token:
+        counts[char] = counts.get(char, 0) + 1
+    total = len(token)
+    entropy = 0.0
+    for count in counts.values():
+        probability = count / total
+        entropy -= probability * __import__("math").log2(probability)
+    return entropy

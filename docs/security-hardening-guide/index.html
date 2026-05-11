@@ -1,0 +1,2630 @@
+
+<!doctype html>
+<html lang="en" class="no-js">
+  <head>
+    
+      <meta charset="utf-8">
+      <meta name="viewport" content="width=device-width,initial-scale=1">
+      
+        <meta name="description" content="Generate a complete, coordinated AI agent team for any project from a single description file.">
+      
+      
+        <meta name="author" content="jlcatonjr">
+      
+      
+        <link rel="canonical" href="https://jlcatonjr.github.io/agentteams/security-hardening-guide/">
+      
+      
+        <link rel="prev" href="../post-production-auditor-guide/">
+      
+      
+        <link rel="next" href="../api-reference/">
+      
+      
+        
+      
+      
+      <link rel="icon" href="../assets/images/favicon.png">
+      <meta name="generator" content="mkdocs-1.6.1, mkdocs-material-9.7.6">
+    
+    
+      
+        <title>Security Hardening & Threat Intelligence - Agent Teams Module</title>
+      
+    
+    
+      <link rel="stylesheet" href="../assets/stylesheets/main.484c7ddc.min.css">
+      
+        
+        <link rel="stylesheet" href="../assets/stylesheets/palette.ab4e12ef.min.css">
+      
+      
+
+
+    
+    
+      
+    
+    
+      
+        
+        
+        <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+        <link rel="stylesheet" href="https://fonts.googleapis.com/css?family=Roboto:300,300i,400,400i,700,700i%7CRoboto+Mono:400,400i,700,700i&display=fallback">
+        <style>:root{--md-text-font:"Roboto";--md-code-font:"Roboto Mono"}</style>
+      
+    
+    
+    <script>__md_scope=new URL("..",location),__md_hash=e=>[...e].reduce(((e,_)=>(e<<5)-e+_.charCodeAt(0)),0),__md_get=(e,_=localStorage,t=__md_scope)=>JSON.parse(_.getItem(t.pathname+"."+e)),__md_set=(e,_,t=localStorage,a=__md_scope)=>{try{t.setItem(a.pathname+"."+e,JSON.stringify(_))}catch(e){}}</script>
+    
+      
+
+    
+    
+  </head>
+  
+  
+    
+    
+      
+    
+    
+    
+    
+    <body dir="ltr" data-md-color-scheme="default" data-md-color-primary="indigo" data-md-color-accent="indigo">
+  
+    
+    <input class="md-toggle" data-md-toggle="drawer" type="checkbox" id="__drawer" autocomplete="off">
+    <input class="md-toggle" data-md-toggle="search" type="checkbox" id="__search" autocomplete="off">
+    <label class="md-overlay" for="__drawer"></label>
+    <div data-md-component="skip">
+      
+        
+        <a href="#security-hardening-threat-intelligence" class="md-skip">
+          Skip to content
+        </a>
+      
+    </div>
+    <div data-md-component="announce">
+      
+    </div>
+    
+    
+      
+
+<header class="md-header" data-md-component="header">
+  <nav class="md-header__inner md-grid" aria-label="Header">
+    <a href=".." title="Agent Teams Module" class="md-header__button md-logo" aria-label="Agent Teams Module" data-md-component="logo">
+      
+  
+  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 8a3 3 0 0 0 3-3 3 3 0 0 0-3-3 3 3 0 0 0-3 3 3 3 0 0 0 3 3m0 3.54C9.64 9.35 6.5 8 3 8v11c3.5 0 6.64 1.35 9 3.54 2.36-2.19 5.5-3.54 9-3.54V8c-3.5 0-6.64 1.35-9 3.54"/></svg>
+
+    </a>
+    <label class="md-header__button md-icon" for="__drawer">
+      
+      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M3 6h18v2H3zm0 5h18v2H3zm0 5h18v2H3z"/></svg>
+    </label>
+    <div class="md-header__title" data-md-component="header-title">
+      <div class="md-header__ellipsis">
+        <div class="md-header__topic">
+          <span class="md-ellipsis">
+            Agent Teams Module
+          </span>
+        </div>
+        <div class="md-header__topic" data-md-component="header-topic">
+          <span class="md-ellipsis">
+            
+              Security Hardening & Threat Intelligence
+            
+          </span>
+        </div>
+      </div>
+    </div>
+    
+      
+        <form class="md-header__option" data-md-component="palette">
+  
+    
+    
+    
+    <input class="md-option" data-md-color-media="" data-md-color-scheme="default" data-md-color-primary="indigo" data-md-color-accent="indigo"  aria-hidden="true"  type="radio" name="__palette" id="__palette_0">
+    
+  
+</form>
+      
+    
+    
+      <script>var palette=__md_get("__palette");if(palette&&palette.color){if("(prefers-color-scheme)"===palette.color.media){var media=matchMedia("(prefers-color-scheme: light)"),input=document.querySelector(media.matches?"[data-md-color-media='(prefers-color-scheme: light)']":"[data-md-color-media='(prefers-color-scheme: dark)']");palette.color.media=input.getAttribute("data-md-color-media"),palette.color.scheme=input.getAttribute("data-md-color-scheme"),palette.color.primary=input.getAttribute("data-md-color-primary"),palette.color.accent=input.getAttribute("data-md-color-accent")}for(var[key,value]of Object.entries(palette.color))document.body.setAttribute("data-md-color-"+key,value)}</script>
+    
+    
+    
+      
+      
+        <label class="md-header__button md-icon" for="__search">
+          
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M9.5 3A6.5 6.5 0 0 1 16 9.5c0 1.61-.59 3.09-1.56 4.23l.27.27h.79l5 5-1.5 1.5-5-5v-.79l-.27-.27A6.52 6.52 0 0 1 9.5 16 6.5 6.5 0 0 1 3 9.5 6.5 6.5 0 0 1 9.5 3m0 2C7 5 5 7 5 9.5S7 14 9.5 14 14 12 14 9.5 12 5 9.5 5"/></svg>
+        </label>
+        <div class="md-search" data-md-component="search" role="dialog">
+  <label class="md-search__overlay" for="__search"></label>
+  <div class="md-search__inner" role="search">
+    <form class="md-search__form" name="search">
+      <input type="text" class="md-search__input" name="query" aria-label="Search" placeholder="Search" autocapitalize="off" autocorrect="off" autocomplete="off" spellcheck="false" data-md-component="search-query" required>
+      <label class="md-search__icon md-icon" for="__search">
+        
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M9.5 3A6.5 6.5 0 0 1 16 9.5c0 1.61-.59 3.09-1.56 4.23l.27.27h.79l5 5-1.5 1.5-5-5v-.79l-.27-.27A6.52 6.52 0 0 1 9.5 16 6.5 6.5 0 0 1 3 9.5 6.5 6.5 0 0 1 9.5 3m0 2C7 5 5 7 5 9.5S7 14 9.5 14 14 12 14 9.5 12 5 9.5 5"/></svg>
+        
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M20 11v2H8l5.5 5.5-1.42 1.42L4.16 12l7.92-7.92L13.5 5.5 8 11z"/></svg>
+      </label>
+      <nav class="md-search__options" aria-label="Search">
+        
+        <button type="reset" class="md-search__icon md-icon" title="Clear" aria-label="Clear" tabindex="-1">
+          
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M19 6.41 17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z"/></svg>
+        </button>
+      </nav>
+      
+        <div class="md-search__suggest" data-md-component="search-suggest"></div>
+      
+    </form>
+    <div class="md-search__output">
+      <div class="md-search__scrollwrap" tabindex="0" data-md-scrollfix>
+        <div class="md-search-result" data-md-component="search-result">
+          <div class="md-search-result__meta">
+            Initializing search
+          </div>
+          <ol class="md-search-result__list" role="presentation"></ol>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+      
+    
+    
+      <div class="md-header__source">
+        <a href="https://github.com/jlcatonjr/agentteams" title="Go to repository" class="md-source" data-md-component="source">
+  <div class="md-source__icon md-icon">
+    
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 448 512"><!--! Font Awesome Free 7.1.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2025 Fonticons, Inc.--><path d="M439.6 236.1 244 40.5c-5.4-5.5-12.8-8.5-20.4-8.5s-15 3-20.4 8.4L162.5 81l51.5 51.5c27.1-9.1 52.7 16.8 43.4 43.7l49.7 49.7c34.2-11.8 61.2 31 35.5 56.7-26.5 26.5-70.2-2.9-56-37.3L240.3 199v121.9c25.3 12.5 22.3 41.8 9.1 55-6.4 6.4-15.2 10.1-24.3 10.1s-17.8-3.6-24.3-10.1c-17.6-17.6-11.1-46.9 11.2-56v-123c-20.8-8.5-24.6-30.7-18.6-45L142.6 101 8.5 235.1C3 240.6 0 247.9 0 255.5s3 15 8.5 20.4l195.6 195.7c5.4 5.4 12.7 8.4 20.4 8.4s15-3 20.4-8.4l194.7-194.7c5.4-5.4 8.4-12.8 8.4-20.4s-3-15-8.4-20.4"/></svg>
+  </div>
+  <div class="md-source__repository">
+    jlcatonjr/agentteams
+  </div>
+</a>
+      </div>
+    
+  </nav>
+  
+</header>
+    
+    <div class="md-container" data-md-component="container">
+      
+      
+        
+          
+            
+<nav class="md-tabs" aria-label="Tabs" data-md-component="tabs">
+  <div class="md-grid">
+    <ul class="md-tabs__list">
+      
+        
+  
+  
+  
+  
+    <li class="md-tabs__item">
+      <a href=".." class="md-tabs__link">
+        
+  
+  
+    
+  
+  Home
+
+      </a>
+    </li>
+  
+
+      
+        
+  
+  
+  
+  
+    <li class="md-tabs__item">
+      <a href="../manuscript/" class="md-tabs__link">
+        
+  
+  
+    
+  
+  Manuscript
+
+      </a>
+    </li>
+  
+
+      
+        
+  
+  
+  
+  
+    <li class="md-tabs__item">
+      <a href="../getting-started/" class="md-tabs__link">
+        
+  
+  
+    
+  
+  Getting Started
+
+      </a>
+    </li>
+  
+
+      
+        
+  
+  
+  
+  
+    <li class="md-tabs__item">
+      <a href="../agent-assisted-setup/" class="md-tabs__link">
+        
+  
+  
+    
+  
+  Agent-Assisted Setup
+
+      </a>
+    </li>
+  
+
+      
+        
+  
+  
+  
+  
+    <li class="md-tabs__item">
+      <a href="../how-it-works/" class="md-tabs__link">
+        
+  
+  
+    
+  
+  How It Works
+
+      </a>
+    </li>
+  
+
+      
+        
+  
+  
+  
+  
+    <li class="md-tabs__item">
+      <a href="../examples/" class="md-tabs__link">
+        
+  
+  
+    
+  
+  Examples
+
+      </a>
+    </li>
+  
+
+      
+        
+  
+  
+  
+  
+    <li class="md-tabs__item">
+      <a href="../cli-reference/" class="md-tabs__link">
+        
+  
+  
+    
+  
+  CLI Reference
+
+      </a>
+    </li>
+  
+
+      
+        
+  
+  
+  
+    
+  
+  
+    
+    
+      <li class="md-tabs__item md-tabs__item--active">
+        <a href="../post-production-auditor-guide/" class="md-tabs__link">
+          
+  
+  
+  Guides
+
+        </a>
+      </li>
+    
+  
+
+      
+        
+  
+  
+  
+  
+    
+    
+      <li class="md-tabs__item">
+        <a href="../api-reference/" class="md-tabs__link">
+          
+  
+  
+  API Reference
+
+        </a>
+      </li>
+    
+  
+
+      
+        
+  
+  
+  
+  
+    <li class="md-tabs__item">
+      <a href="../template-authoring/" class="md-tabs__link">
+        
+  
+  
+    
+  
+  Template Authoring
+
+      </a>
+    </li>
+  
+
+      
+        
+  
+  
+  
+  
+    <li class="md-tabs__item">
+      <a href="../DESCRIPTION-FORMAT/" class="md-tabs__link">
+        
+  
+  
+    
+  
+  Description Format
+
+      </a>
+    </li>
+  
+
+      
+        
+  
+  
+  
+  
+    <li class="md-tabs__item">
+      <a href="../structural-update-plan/" class="md-tabs__link">
+        
+  
+  
+    
+  
+  Structural Update Plan
+
+      </a>
+    </li>
+  
+
+      
+        
+  
+  
+  
+  
+    <li class="md-tabs__item">
+      <a href="../contributing/" class="md-tabs__link">
+        
+  
+  
+    
+  
+  Contributing
+
+      </a>
+    </li>
+  
+
+      
+        
+  
+  
+  
+  
+    <li class="md-tabs__item">
+      <a href="../changelog/" class="md-tabs__link">
+        
+  
+  
+    
+  
+  Changelog
+
+      </a>
+    </li>
+  
+
+      
+    </ul>
+  </div>
+</nav>
+          
+        
+      
+      <main class="md-main" data-md-component="main">
+        <div class="md-main__inner md-grid">
+          
+            
+              
+              <div class="md-sidebar md-sidebar--primary" data-md-component="sidebar" data-md-type="navigation" >
+                <div class="md-sidebar__scrollwrap">
+                  <div class="md-sidebar__inner">
+                    
+
+
+  
+
+
+<nav class="md-nav md-nav--primary md-nav--lifted" aria-label="Navigation" data-md-level="0">
+  <label class="md-nav__title" for="__drawer">
+    <a href=".." title="Agent Teams Module" class="md-nav__button md-logo" aria-label="Agent Teams Module" data-md-component="logo">
+      
+  
+  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 8a3 3 0 0 0 3-3 3 3 0 0 0-3-3 3 3 0 0 0-3 3 3 3 0 0 0 3 3m0 3.54C9.64 9.35 6.5 8 3 8v11c3.5 0 6.64 1.35 9 3.54 2.36-2.19 5.5-3.54 9-3.54V8c-3.5 0-6.64 1.35-9 3.54"/></svg>
+
+    </a>
+    Agent Teams Module
+  </label>
+  
+    <div class="md-nav__source">
+      <a href="https://github.com/jlcatonjr/agentteams" title="Go to repository" class="md-source" data-md-component="source">
+  <div class="md-source__icon md-icon">
+    
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 448 512"><!--! Font Awesome Free 7.1.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2025 Fonticons, Inc.--><path d="M439.6 236.1 244 40.5c-5.4-5.5-12.8-8.5-20.4-8.5s-15 3-20.4 8.4L162.5 81l51.5 51.5c27.1-9.1 52.7 16.8 43.4 43.7l49.7 49.7c34.2-11.8 61.2 31 35.5 56.7-26.5 26.5-70.2-2.9-56-37.3L240.3 199v121.9c25.3 12.5 22.3 41.8 9.1 55-6.4 6.4-15.2 10.1-24.3 10.1s-17.8-3.6-24.3-10.1c-17.6-17.6-11.1-46.9 11.2-56v-123c-20.8-8.5-24.6-30.7-18.6-45L142.6 101 8.5 235.1C3 240.6 0 247.9 0 255.5s3 15 8.5 20.4l195.6 195.7c5.4 5.4 12.7 8.4 20.4 8.4s15-3 20.4-8.4l194.7-194.7c5.4-5.4 8.4-12.8 8.4-20.4s-3-15-8.4-20.4"/></svg>
+  </div>
+  <div class="md-source__repository">
+    jlcatonjr/agentteams
+  </div>
+</a>
+    </div>
+  
+  <ul class="md-nav__list" data-md-scrollfix>
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href=".." class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Home
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../manuscript/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Manuscript
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../getting-started/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Getting Started
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../agent-assisted-setup/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Agent-Assisted Setup
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../how-it-works/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    How It Works
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../examples/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Examples
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../cli-reference/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    CLI Reference
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+    
+  
+  
+  
+    
+    
+    
+    
+      
+        
+        
+      
+      
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--active md-nav__item--section md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_8" checked>
+        
+          
+          <label class="md-nav__link" for="__nav_8" id="__nav_8_label" tabindex="">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Guides
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_8_label" aria-expanded="true">
+          <label class="md-nav__title" for="__nav_8">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Guides
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../post-production-auditor-guide/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Post-Production Auditor
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+    
+  
+  
+  
+    <li class="md-nav__item md-nav__item--active">
+      
+      <input class="md-nav__toggle md-toggle" type="checkbox" id="__toc">
+      
+      
+        
+      
+      
+        <label class="md-nav__link md-nav__link--active" for="__toc">
+          
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Security Hardening & Threat Intelligence
+  
+
+    
+  </span>
+  
+  
+
+          <span class="md-nav__icon md-icon"></span>
+        </label>
+      
+      <a href="./" class="md-nav__link md-nav__link--active">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Security Hardening & Threat Intelligence
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+      
+        
+
+<nav class="md-nav md-nav--secondary" aria-label="Table of contents">
+  
+  
+  
+    
+  
+  
+    <label class="md-nav__title" for="__toc">
+      <span class="md-nav__icon md-icon"></span>
+      Table of contents
+    </label>
+    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
+      
+        <li class="md-nav__item">
+  <a href="#overview" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Overview
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#threat-intelligence-sources" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Threat Intelligence Sources
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Threat Intelligence Sources">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#primary-data-feeds" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Primary Data Feeds
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#generated-security-reference-files" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Generated Security Reference Files
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#fail-closed-gating" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Fail-Closed Gating
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Fail-Closed Gating">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#freshness-enforcement" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Freshness Enforcement
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#why-fail-closed" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Why Fail-Closed?
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#waiver-system" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Waiver System
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Waiver System">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#when-waivers-apply" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        When Waivers Apply
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#waiver-lifecycle" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Waiver Lifecycle
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#creating-and-verifying-waivers" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Creating and Verifying Waivers
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#cli-flags-for-security-control" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        CLI Flags for Security Control
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="CLI Flags for Security Control">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#fetch-control" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Fetch Control
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#data-volume-control" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Data Volume Control
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#offline-mode" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Offline Mode
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#agent-level-vulnerability-handling" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Agent-Level Vulnerability Handling
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Agent-Level Vulnerability Handling">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#security-agent" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        @security Agent
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#code-hygiene-agent" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        @code-hygiene Agent
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#24-hour-auto-refresh" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        24-Hour Auto-Refresh
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="24-Hour Auto-Refresh">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#mechanism" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Mechanism
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#controlling-refresh" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Controlling Refresh
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#security-scan" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Security Scan
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#governance-integration" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Governance Integration
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Governance Integration">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#constitutional-rules" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Constitutional Rules
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#security-decisions-log" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Security Decisions Log
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#constitutional-rules_1" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Constitutional Rules
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#troubleshooting" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Troubleshooting
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Troubleshooting">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#security-gate-blocked-stale-or-unavailable" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        "Security gate blocked: stale or unavailable"
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#unresolved-placeholder-manual" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        "Unresolved placeholder: {MANUAL:...}"
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#epss-data-unavailable" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        "EPSS data unavailable"
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#best-practices" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Best Practices
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#references" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        References
+      
+    </span>
+  </a>
+  
+</li>
+      
+    </ul>
+  
+</nav>
+      
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+    
+    
+      
+      
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_9" >
+        
+          
+          <label class="md-nav__link" for="__nav_9" id="__nav_9_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    API Reference
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_9_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_9">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    API Reference
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../api-reference/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Overview
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../api-reference/ingest/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    ingest
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../api-reference/analyze/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    analyze
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../api-reference/render/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    render
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../api-reference/emit/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    emit
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../api-reference/drift/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    drift
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../api-reference/scan/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    scan
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../api-reference/audit/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    audit
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../api-reference/remediate/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    remediate
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../api-reference/enrich/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    enrich
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../api-reference/graph/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    graph
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../api-reference/frameworks/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    frameworks
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../api-reference/man/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    man
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../template-authoring/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Template Authoring
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../DESCRIPTION-FORMAT/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Description Format
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../structural-update-plan/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Structural Update Plan
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../contributing/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Contributing
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../changelog/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Changelog
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+  </ul>
+</nav>
+                  </div>
+                </div>
+              </div>
+            
+            
+              
+              <div class="md-sidebar md-sidebar--secondary" data-md-component="sidebar" data-md-type="toc" >
+                <div class="md-sidebar__scrollwrap">
+                  <div class="md-sidebar__inner">
+                    
+
+<nav class="md-nav md-nav--secondary" aria-label="Table of contents">
+  
+  
+  
+    
+  
+  
+    <label class="md-nav__title" for="__toc">
+      <span class="md-nav__icon md-icon"></span>
+      Table of contents
+    </label>
+    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
+      
+        <li class="md-nav__item">
+  <a href="#overview" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Overview
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#threat-intelligence-sources" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Threat Intelligence Sources
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Threat Intelligence Sources">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#primary-data-feeds" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Primary Data Feeds
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#generated-security-reference-files" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Generated Security Reference Files
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#fail-closed-gating" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Fail-Closed Gating
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Fail-Closed Gating">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#freshness-enforcement" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Freshness Enforcement
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#why-fail-closed" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Why Fail-Closed?
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#waiver-system" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Waiver System
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Waiver System">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#when-waivers-apply" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        When Waivers Apply
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#waiver-lifecycle" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Waiver Lifecycle
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#creating-and-verifying-waivers" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Creating and Verifying Waivers
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#cli-flags-for-security-control" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        CLI Flags for Security Control
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="CLI Flags for Security Control">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#fetch-control" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Fetch Control
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#data-volume-control" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Data Volume Control
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#offline-mode" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Offline Mode
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#agent-level-vulnerability-handling" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Agent-Level Vulnerability Handling
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Agent-Level Vulnerability Handling">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#security-agent" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        @security Agent
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#code-hygiene-agent" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        @code-hygiene Agent
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#24-hour-auto-refresh" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        24-Hour Auto-Refresh
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="24-Hour Auto-Refresh">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#mechanism" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Mechanism
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#controlling-refresh" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Controlling Refresh
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#security-scan" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Security Scan
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#governance-integration" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Governance Integration
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Governance Integration">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#constitutional-rules" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Constitutional Rules
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#security-decisions-log" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Security Decisions Log
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#constitutional-rules_1" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Constitutional Rules
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#troubleshooting" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Troubleshooting
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Troubleshooting">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#security-gate-blocked-stale-or-unavailable" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        "Security gate blocked: stale or unavailable"
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#unresolved-placeholder-manual" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        "Unresolved placeholder: {MANUAL:...}"
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#epss-data-unavailable" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        "EPSS data unavailable"
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#best-practices" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Best Practices
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#references" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        References
+      
+    </span>
+  </a>
+  
+</li>
+      
+    </ul>
+  
+</nav>
+                  </div>
+                </div>
+              </div>
+            
+          
+          
+            <div class="md-content" data-md-component="content">
+              
+              <article class="md-content__inner md-typeset">
+                
+                  
+
+
+  
+  
+
+
+<h1 id="security-hardening-threat-intelligence">Security Hardening &amp; Threat Intelligence<a class="headerlink" href="#security-hardening-threat-intelligence" title="Permanent link">&para;</a></h1>
+<p>Comprehensive vulnerability management integrated into the agent team generation pipeline.</p>
+<hr />
+<h2 id="overview">Overview<a class="headerlink" href="#overview" title="Permanent link">&para;</a></h2>
+<p>AgentTeams incorporates live threat intelligence (CVE, CISA KEV, EPSS) into every generation run. This guide explains:</p>
+<ol>
+<li><strong>What threat data is collected</strong></li>
+<li><strong>How fail-closed gates protect against stale intelligence</strong></li>
+<li><strong>Waiver system for offline/air-gapped environments</strong></li>
+<li><strong>24-hour auto-refresh and override controls</strong></li>
+<li><strong>Agent-level vulnerability handling</strong></li>
+</ol>
+<hr />
+<h2 id="threat-intelligence-sources">Threat Intelligence Sources<a class="headerlink" href="#threat-intelligence-sources" title="Permanent link">&para;</a></h2>
+<h3 id="primary-data-feeds">Primary Data Feeds<a class="headerlink" href="#primary-data-feeds" title="Permanent link">&para;</a></h3>
+<table>
+<thead>
+<tr>
+<th>Source</th>
+<th>Data</th>
+<th>Update Cadence</th>
+<th>Use Case</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><strong>CISA KEV</strong></td>
+<td>Known Exploited Vulnerabilities</td>
+<td>Real-time hourly</td>
+<td>High-priority exploit risk</td>
+</tr>
+<tr>
+<td><strong>NVD</strong></td>
+<td>National Vulnerability Database (CVSS 3.1)</td>
+<td>Daily official, real-time via third-party services</td>
+<td>Comprehensive CVE coverage, severity scoring</td>
+</tr>
+<tr>
+<td><strong>EPSS</strong></td>
+<td>Exploit Prediction Scoring System (0-1 probability)</td>
+<td>Daily</td>
+<td>Predictive exploit likelihood</td>
+</tr>
+</tbody>
+</table>
+<h3 id="generated-security-reference-files">Generated Security Reference Files<a class="headerlink" href="#generated-security-reference-files" title="Permanent link">&para;</a></h3>
+<p>When <code>@security</code> agent is included, the pipeline generates:</p>
+<ul>
+<li><strong><code>security-vulnerability-watch.reference.md</code></strong> — Live snapshot of current high-EPSS/KEV vulnerabilities at generation time</li>
+<li><strong><code>security.agent.md</code></strong> — Hardened instruction set for the <code>@security</code> agent including:</li>
+<li>KEV prioritization rules</li>
+<li>EPSS-based triage thresholds</li>
+<li>Compensating-control guidance</li>
+<li>Cross-repo validation procedures</li>
+</ul>
+<hr />
+<h2 id="fail-closed-gating">Fail-Closed Gating<a class="headerlink" href="#fail-closed-gating" title="Permanent link">&para;</a></h2>
+<h3 id="freshness-enforcement">Freshness Enforcement<a class="headerlink" href="#freshness-enforcement" title="Permanent link">&para;</a></h3>
+<p>Every write-capable operation (render, emit, convert, interop) enforces a <strong>mandatory freshness check</strong>:</p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a>Is security intelligence ≤24 hours old?
+<a id="__codelineno-0-2" name="__codelineno-0-2" href="#__codelineno-0-2"></a>  └─ YES → Proceed
+<a id="__codelineno-0-3" name="__codelineno-0-3" href="#__codelineno-0-3"></a>  └─ NO  → BLOCK write unless:
+<a id="__codelineno-0-4" name="__codelineno-0-4" href="#__codelineno-0-4"></a>           - Valid signed waiver exists (HMAC-SHA256 verified) AND
+<a id="__codelineno-0-5" name="__codelineno-0-5" href="#__codelineno-0-5"></a>           - Waiver not expired (expires_at &gt; current_time) AND
+<a id="__codelineno-0-6" name="__codelineno-0-6" href="#__codelineno-0-6"></a>           - AGENTTEAMS_WAIVER_SIGNING_KEY is configured
+</code></pre></div>
+<p><strong>Complete Waiver Validation (ALL checks required):</strong>
+1. Waiver record exists in <code>references/security-waivers.log.csv</code>
+2. HMAC-SHA256 signature is valid: <code>HMAC-SHA256(row_without_signature) == waiver.hmac_signature</code>
+3. <strong>Expiration is checked:</strong> <code>current_time() &lt;= waiver.expires_at</code>
+4. Reason matches operation type (e.g., "air-gapped" for <code>--security-offline</code>)</p>
+<p>If <strong>ANY</strong> check fails → Block write, return detailed error message</p>
+<p>The 24-hour window is automated:
+- First generation run fetches live data and records timestamp
+- All subsequent operations within 24h use cached snapshot
+- After 24h: automated refresh triggered before any write</p>
+<h3 id="why-fail-closed">Why Fail-Closed?<a class="headerlink" href="#why-fail-closed" title="Permanent link">&para;</a></h3>
+<p>Agent files are executable instructions. If threat intelligence is stale:
+- Security misclassifications in instructions become embodied in deployed agents
+- Patching delays compound across all generated teams
+- Regeneration happens frequently (updates, team creation), so stale data carries high risk</p>
+<p>→ <strong>Fail-closed design ensures agents always have current vulnerability context.</strong></p>
+<hr />
+<h2 id="waiver-system">Waiver System<a class="headerlink" href="#waiver-system" title="Permanent link">&para;</a></h2>
+<h3 id="when-waivers-apply">When Waivers Apply<a class="headerlink" href="#when-waivers-apply" title="Permanent link">&para;</a></h3>
+<p>Valid scenarios for signed waivers:</p>
+<ol>
+<li><strong>Air-gapped environments</strong> — No network access; CI runs offline with approved snapshot</li>
+<li><strong>Network outages</strong> — Temporary unavailability of threat feed services</li>
+<li><strong>Rate limiting</strong> — Transient service unavailability (fallback to cache)</li>
+<li><strong>Policy exception</strong> — Explicit business decision to accept stale data for bounded time</li>
+</ol>
+<h3 id="waiver-lifecycle">Waiver Lifecycle<a class="headerlink" href="#waiver-lifecycle" title="Permanent link">&para;</a></h3>
+<p><strong>Prerequisites:</strong>
+- <code>AGENTTEAMS_WAIVER_SIGNING_KEY</code> environment variable configured (HMAC-SHA256 key)
+- Signed record in <code>references/security-waivers.log.csv</code></p>
+<p><strong>Format:</strong>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-1-1" name="__codelineno-1-1" href="#__codelineno-1-1"></a>issued_at,expires_at,reason,approver,hmac_signature
+<a id="__codelineno-1-2" name="__codelineno-1-2" href="#__codelineno-1-2"></a>2026-05-10T15:30:00Z,2026-05-11T15:30:00Z,scheduled-maintenance,security-lead@org,abc123...
+</code></pre></div></p>
+<p><strong>Signature verification:</strong>
+- HMAC-SHA256(row_without_signature, AGENTTEAMS_WAIVER_SIGNING_KEY)
+- On every write, agentteams verifies signature and expiration
+- If verification fails or waiver expired: block write</p>
+<h3 id="creating-and-verifying-waivers">Creating and Verifying Waivers<a class="headerlink" href="#creating-and-verifying-waivers" title="Permanent link">&para;</a></h3>
+<p><strong>Waiver Format &amp; Fields:</strong>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-2-1" name="__codelineno-2-1" href="#__codelineno-2-1"></a>issued_at,expires_at,reason,approver,hmac_signature
+<a id="__codelineno-2-2" name="__codelineno-2-2" href="#__codelineno-2-2"></a>2026-05-10T15:30:00Z,2026-05-11T15:30:00Z,scheduled-maintenance,security-lead@org,abc123def456...
+</code></pre></div></p>
+<p><strong>Automated Waiver Creation &amp; Signature:</strong>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-3-1" name="__codelineno-3-1" href="#__codelineno-3-1"></a><span class="c1"># Set your signing key</span>
+<a id="__codelineno-3-2" name="__codelineno-3-2" href="#__codelineno-3-2"></a><span class="nb">export</span><span class="w"> </span><span class="nv">AGENTTEAMS_WAIVER_SIGNING_KEY</span><span class="o">=</span><span class="s2">&quot;your-hmac-key&quot;</span>
+<a id="__codelineno-3-3" name="__codelineno-3-3" href="#__codelineno-3-3"></a>
+<a id="__codelineno-3-4" name="__codelineno-3-4" href="#__codelineno-3-4"></a><span class="c1"># Create new waiver (auto-signs with HMAC-SHA256)</span>
+<a id="__codelineno-3-5" name="__codelineno-3-5" href="#__codelineno-3-5"></a>agentteams<span class="w"> </span>--create-waiver<span class="w"> </span><span class="se">\</span>
+<a id="__codelineno-3-6" name="__codelineno-3-6" href="#__codelineno-3-6"></a><span class="w">  </span>--reason<span class="w"> </span><span class="s2">&quot;scheduled-maintenance&quot;</span><span class="w"> </span><span class="se">\</span>
+<a id="__codelineno-3-7" name="__codelineno-3-7" href="#__codelineno-3-7"></a><span class="w">  </span>--approver<span class="w"> </span><span class="s2">&quot;security-lead@org&quot;</span><span class="w"> </span><span class="se">\</span>
+<a id="__codelineno-3-8" name="__codelineno-3-8" href="#__codelineno-3-8"></a><span class="w">  </span>--expires-in<span class="w"> </span>24h<span class="w"> </span><span class="se">\</span>
+<a id="__codelineno-3-9" name="__codelineno-3-9" href="#__codelineno-3-9"></a><span class="w">  </span>&gt;&gt;<span class="w"> </span>references/security-waivers.log.csv
+<a id="__codelineno-3-10" name="__codelineno-3-10" href="#__codelineno-3-10"></a>
+<a id="__codelineno-3-11" name="__codelineno-3-11" href="#__codelineno-3-11"></a><span class="c1"># Verify all existing waivers (checks expiration + signatures)</span>
+<a id="__codelineno-3-12" name="__codelineno-3-12" href="#__codelineno-3-12"></a>agentteams<span class="w"> </span>--verify-waivers
+<a id="__codelineno-3-13" name="__codelineno-3-13" href="#__codelineno-3-13"></a><span class="c1"># Output: ✅ 3 waivers valid (1 expiring in 23h)</span>
+</code></pre></div></p>
+<p><strong>Manual Verification (if no automation available):</strong>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-4-1" name="__codelineno-4-1" href="#__codelineno-4-1"></a><span class="c1"># Compute HMAC-SHA256 for row (without signature field)</span>
+<a id="__codelineno-4-2" name="__codelineno-4-2" href="#__codelineno-4-2"></a><span class="nb">echo</span><span class="w"> </span>-n<span class="w"> </span><span class="s2">&quot;2026-05-10T15:30:00Z,2026-05-11T15:30:00Z,scheduled-maintenance,security-lead@org&quot;</span><span class="w"> </span><span class="p">|</span><span class="w"> </span><span class="se">\</span>
+<a id="__codelineno-4-3" name="__codelineno-4-3" href="#__codelineno-4-3"></a><span class="w">  </span>openssl<span class="w"> </span>dgst<span class="w"> </span>-sha256<span class="w"> </span>-hmac<span class="w"> </span><span class="s2">&quot;</span><span class="nv">$AGENTTEAMS_WAIVER_SIGNING_KEY</span><span class="s2">&quot;</span>
+<a id="__codelineno-4-4" name="__codelineno-4-4" href="#__codelineno-4-4"></a><span class="c1"># Output: abc123def456... (must match waiver.hmac_signature)</span>
+</code></pre></div></p>
+<hr />
+<h2 id="cli-flags-for-security-control">CLI Flags for Security Control<a class="headerlink" href="#cli-flags-for-security-control" title="Permanent link">&para;</a></h2>
+<h3 id="fetch-control">Fetch Control<a class="headerlink" href="#fetch-control" title="Permanent link">&para;</a></h3>
+<p><strong><code>--security-offline</code></strong>
+- Use cached snapshot only; no network fetch
+- Useful in CI without internet or for reproducibility
+- Blocked if cache is stale and no valid waiver exists</p>
+<p><strong><code>--security-no-nvd</code></strong>
+- Skip NVD CVSS enrichment (saves ~7 seconds per CVE)
+- CISA KEV and EPSS data still fetched
+- Reduces data volume in air-gapped scenarios</p>
+<h3 id="data-volume-control">Data Volume Control<a class="headerlink" href="#data-volume-control" title="Permanent link">&para;</a></h3>
+<p><strong><code>--security-max-items N</code></strong> (default: 15)
+- Include only top N vulnerabilities by EPSS/KEV priority
+- Keeps generated files compact
+- Example: <code>--security-max-items 5</code> for minimal security reference</p>
+<h3 id="offline-mode">Offline Mode<a class="headerlink" href="#offline-mode" title="Permanent link">&para;</a></h3>
+<p><strong><code>--security-offline --security-max-items 10</code></strong>
+- Combined: minimal data volume + no network
+- Useful for reproducible builds in CI with locked threat snapshot</p>
+<hr />
+<h2 id="agent-level-vulnerability-handling">Agent-Level Vulnerability Handling<a class="headerlink" href="#agent-level-vulnerability-handling" title="Permanent link">&para;</a></h2>
+<h3 id="security-agent"><code>@security</code> Agent<a class="headerlink" href="#security-agent" title="Permanent link">&para;</a></h3>
+<p>The security agent receives live vulnerability context in its instructions:</p>
+<p><strong>Input:</strong> <code>security.agent.md</code> (generated from live threat feed)
+- Current KEV list with exploit indicators
+- High-EPSS vulnerabilities needing immediate attention
+- Compensating-control guidance for delayed patches</p>
+<p><strong>Responsibilities:</strong>
+1. Clear destructive operations (high-risk writes, external repos)
+2. Assess credential exposure in generated files
+3. Validate freshness of threat intelligence before closure decisions
+4. Enforce cross-repo coordination security rules</p>
+<h3 id="code-hygiene-agent"><code>@code-hygiene</code> Agent<a class="headerlink" href="#code-hygiene-agent" title="Permanent link">&para;</a></h3>
+<p>Performs static security checks:
+- Unresolved <code>{MANUAL:*}</code> placeholders (may contain credentials)
+- Absolute filesystem paths containing usernames (PII risk)
+- API keys or tokens embedded in templates</p>
+<hr />
+<h2 id="24-hour-auto-refresh">24-Hour Auto-Refresh<a class="headerlink" href="#24-hour-auto-refresh" title="Permanent link">&para;</a></h2>
+<h3 id="mechanism">Mechanism<a class="headerlink" href="#mechanism" title="Permanent link">&para;</a></h3>
+<table>
+<thead>
+<tr>
+<th>Event</th>
+<th>Behavior</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>First generation in 24h window</td>
+<td>Fetch live data, cache locally, record timestamp</td>
+</tr>
+<tr>
+<td>Subsequent operations within 24h</td>
+<td>Use cached data</td>
+</tr>
+<tr>
+<td>Operation after 24h elapsed</td>
+<td>Auto-fetch live data before proceeding</td>
+</tr>
+<tr>
+<td>Fetch fails with valid waiver</td>
+<td>Allow operation with <code>WAIVER</code> status logged</td>
+</tr>
+<tr>
+<td>Fetch fails without waiver</td>
+<td><strong>BLOCK</strong> operation, return error</td>
+</tr>
+</tbody>
+</table>
+<h3 id="controlling-refresh">Controlling Refresh<a class="headerlink" href="#controlling-refresh" title="Permanent link">&para;</a></h3>
+<p><strong>Force refresh (ignore cache):</strong>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-5-1" name="__codelineno-5-1" href="#__codelineno-5-1"></a>agentteams<span class="w"> </span>--description<span class="w"> </span>brief.json<span class="w"> </span>--update
+<a id="__codelineno-5-2" name="__codelineno-5-2" href="#__codelineno-5-2"></a><span class="c1"># Fetches live data even if cache is recent</span>
+</code></pre></div></p>
+<p><strong>Force offline (use cache, don't fetch):</strong>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-6-1" name="__codelineno-6-1" href="#__codelineno-6-1"></a>agentteams<span class="w"> </span>--description<span class="w"> </span>brief.json<span class="w"> </span>--security-offline
+<a id="__codelineno-6-2" name="__codelineno-6-2" href="#__codelineno-6-2"></a><span class="c1"># Uses existing cache; blocks if stale without waiver</span>
+</code></pre></div></p>
+<p><strong>Check freshness without writing:</strong>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-7-1" name="__codelineno-7-1" href="#__codelineno-7-1"></a>agentteams<span class="w"> </span>--description<span class="w"> </span>brief.json<span class="w"> </span>--check
+<a id="__codelineno-7-2" name="__codelineno-7-2" href="#__codelineno-7-2"></a><span class="c1"># Read-only: validates freshness, reports status, exits without changes</span>
+</code></pre></div></p>
+<hr />
+<h2 id="security-scan">Security Scan<a class="headerlink" href="#security-scan" title="Permanent link">&para;</a></h2>
+<p><strong><code>--scan-security</code></strong> flag performs post-generation security checks on all agent files:</p>
+<ol>
+<li><strong>PII detection</strong> — Absolute paths containing usernames</li>
+<li><strong>Credential patterns</strong> — API keys, tokens, passwords (regex)</li>
+<li><strong>Unresolved placeholders</strong> — <code>{MANUAL:*}</code> and <code>{UPPER_SNAKE_CASE}</code> left unfilled</li>
+<li><strong>Artifact validation</strong> — JSON schemas for output files</li>
+</ol>
+<p>Exit code 1 if issues found; use <code>--auto-correct</code> to attempt repairs (requires <code>--post-audit</code>).</p>
+<hr />
+<h2 id="governance-integration">Governance Integration<a class="headerlink" href="#governance-integration" title="Permanent link">&para;</a></h2>
+<h3 id="constitutional-rules">Constitutional Rules<a class="headerlink" href="#constitutional-rules" title="Permanent link">&para;</a></h3>
+<p><em>(These are Constitutional Rules #1 and #11 from the Orchestrator; see the orchestrator template for the complete set of 12 immutable rules.)</em></p>
+<p><strong>Rule #1 — Security Before Destructive Operations</strong>
+- File deletions, bulk edits (≥3 files), external repo writes all require <code>@security</code> clearance before proceeding</p>
+<p><strong>Rule #11 — Cross-Repository Writes</strong>
+- Any modification outside <code>src/</code> requires <code>@repo-liaison</code> assessment + <code>@security</code> clearance</p>
+<h3 id="security-decisions-log">Security Decisions Log<a class="headerlink" href="#security-decisions-log" title="Permanent link">&para;</a></h3>
+<p><code>references/security-decisions.log.csv</code> records all security gate clearances:</p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-8-1" name="__codelineno-8-1" href="#__codelineno-8-1"></a>operation_id,timestamp,operation_type,decision,conditions,conditions_verified,notes
+<a id="__codelineno-8-2" name="__codelineno-8-2" href="#__codelineno-8-2"></a>op-2026-05-10-001,2026-05-10T14:30:00Z,cross-repo-write,CONDITIONAL_PASS,&quot;waiver-expires-2026-05-11, approval-from-security-lead&quot;,pending,&quot;Cross-repo: collector-management, scope: 5 files, approver: @security&quot;
+</code></pre></div>
+<p><strong>Workflow:</strong>
+1. Dangerous operation requested (cross-repo write, destructive mutation clearance)
+2. <code>@security</code> routes through threat intelligence, approval chain
+3. Decision logged with conditions
+4. Conditions verified before execution
+5. Decision audit-able via <code>conflict-auditor</code></p>
+<h3 id="constitutional-rules_1">Constitutional Rules<a class="headerlink" href="#constitutional-rules_1" title="Permanent link">&para;</a></h3>
+<p><strong>Rule #1 — Security Before Destructive Operations</strong>
+- File deletions, bulk edits (≥3 files), external repo writes all require <code>@security</code> clearance</p>
+<p><strong>Rule #11 — Cross-Repository Writes</strong>
+- Any modification outside <code>src/</code> requires <code>@repo-liaison</code> assessment + <code>@security</code> clearance</p>
+<hr />
+<h2 id="troubleshooting">Troubleshooting<a class="headerlink" href="#troubleshooting" title="Permanent link">&para;</a></h2>
+<h3 id="security-gate-blocked-stale-or-unavailable">"Security gate blocked: stale or unavailable"<a class="headerlink" href="#security-gate-blocked-stale-or-unavailable" title="Permanent link">&para;</a></h3>
+<p><strong>Cause:</strong> Intelligence is &gt;24h old and no valid waiver exists</p>
+<p><strong>Solutions:</strong>
+1. <strong>Retry with network:</strong> <code>agentteams --description brief.json --update</code> (forces fresh fetch)
+2. <strong>Use offline mode:</strong> <code>agentteams --description brief.json --security-offline</code> (uses cache; only if cache exists)
+3. <strong>Create waiver:</strong> Add signed record to <code>references/security-waivers.log.csv</code> (see Waiver System above)</p>
+<h3 id="unresolved-placeholder-manual">"Unresolved placeholder: {MANUAL:...}"<a class="headerlink" href="#unresolved-placeholder-manual" title="Permanent link">&para;</a></h3>
+<p><strong>Cause:</strong> Security reference file generated with unfilled manual placeholder</p>
+<p><strong>Solution:</strong> Run <code>--scan-security</code> to identify, then fill in <code>SETUP-REQUIRED.md</code> or project description</p>
+<h3 id="epss-data-unavailable">"EPSS data unavailable"<a class="headerlink" href="#epss-data-unavailable" title="Permanent link">&para;</a></h3>
+<p><strong>Cause:</strong> Transient service issue or rate limiting</p>
+<p><strong>Solution:</strong>
+1. Retry in 5 minutes (third-party services may recover)
+2. Use <code>--security-no-nvd</code> to skip NVD and proceed with CISA KEV + EPSS only
+3. Use <code>--security-offline</code> if cache is recent enough</p>
+<hr />
+<h2 id="best-practices">Best Practices<a class="headerlink" href="#best-practices" title="Permanent link">&para;</a></h2>
+<ol>
+<li><strong>Pin threat snapshots in CI</strong> — Use <code>--check</code> in read-only CI jobs to verify freshness without writing</li>
+<li><strong>Rotate signing keys</strong> — Change <code>AGENTTEAMS_WAIVER_SIGNING_KEY</code> quarterly</li>
+<li><strong>Audit waivers</strong> — Review <code>references/security-waivers.log.csv</code> during security reviews</li>
+<li><strong>Monitor EPSS trends</strong> — Generated <code>security.agent.md</code> shows exploit likelihood; escalate high values</li>
+<li><strong>Document exceptions</strong> — Use <code>notes</code> column in <code>security-decisions.log.csv</code> to explain policy overrides</li>
+</ol>
+<hr />
+<h2 id="references">References<a class="headerlink" href="#references" title="Permanent link">&para;</a></h2>
+<ul>
+<li><strong>CLI Flags:</strong> <code>docs_src/cli-reference.md</code> → Security Intelligence Options</li>
+<li><strong>Security Agent Template:</strong> <code>agentteams/templates/universal/security.template.md</code></li>
+<li><strong>Threat Intelligence Module:</strong> <code>agentteams/security_refs.py</code></li>
+<li><strong>Audit &amp; Scan Modules:</strong> <code>agentteams/audit.py</code>, <code>agentteams/scan.py</code></li>
+</ul>
+
+
+
+
+
+
+
+
+
+
+
+
+                
+              </article>
+            </div>
+          
+          
+<script>var target=document.getElementById(location.hash.slice(1));target&&target.name&&(target.checked=target.name.startsWith("__tabbed_"))</script>
+        </div>
+        
+          <button type="button" class="md-top md-icon" data-md-component="top" hidden>
+  
+  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M13 20h-2V8l-5.5 5.5-1.42-1.42L12 4.16l7.92 7.92-1.42 1.42L13 8z"/></svg>
+  Back to top
+</button>
+        
+      </main>
+      
+        <footer class="md-footer">
+  
+  <div class="md-footer-meta md-typeset">
+    <div class="md-footer-meta__inner md-grid">
+      <div class="md-copyright">
+  
+    <div class="md-copyright__highlight">
+      &copy; <span id='copyright-year'></span> jlcatonjr
+    </div>
+  
+  
+</div>
+      
+    </div>
+  </div>
+</footer>
+      
+    </div>
+    <div class="md-dialog" data-md-component="dialog">
+      <div class="md-dialog__inner md-typeset"></div>
+    </div>
+    
+    
+    
+      
+      
+      <script id="__config" type="application/json">{"annotate": null, "base": "..", "features": ["navigation.tabs", "navigation.sections", "navigation.top", "search.suggest", "search.highlight", "content.code.copy"], "search": "../assets/javascripts/workers/search.2c215733.min.js", "tags": null, "translations": {"clipboard.copied": "Copied to clipboard", "clipboard.copy": "Copy to clipboard", "search.result.more.one": "1 more on this page", "search.result.more.other": "# more on this page", "search.result.none": "No matching documents", "search.result.one": "1 matching document", "search.result.other": "# matching documents", "search.result.placeholder": "Type to start searching", "search.result.term.missing": "Missing", "select.version": "Select version"}, "version": null}</script>
+    
+    
+      <script src="../assets/javascripts/bundle.79ae519e.min.js"></script>
+      
+        <script src="../javascripts/current-year.js"></script>
+      
+    
+  </body>
+</html>

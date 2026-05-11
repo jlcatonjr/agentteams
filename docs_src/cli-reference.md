@@ -61,6 +61,7 @@ Convert an existing team from `DIR` into the target `--framework` instead of ren
 - Replaces front matter and framework wrappers.
 - Converts instructions naming (`copilot-instructions.md` <-> `CLAUDE.md`) based on target.
 - Supports all six directional combinations between `copilot-vscode`, `copilot-cli`, and `claude`.
+- Non-dry-run conversions run the same live security freshness preflight as the main render path; stale or unavailable security intel blocks writes unless a valid signed waiver exists in `references/security-waivers.log.csv` and `AGENTTEAMS_WAIVER_SIGNING_KEY` is configured.
 
 ### `--interop-from DIR`
 
@@ -68,6 +69,7 @@ Run the CAI-based interop pipeline from an existing source team.
 
 - `direct` mode writes target framework files.
 - `bundle` mode writes target files and compatibility artifacts under `references/interop/<source>-to-<target>/`.
+- Non-dry-run interop runs also enforce the live security freshness preflight before writing, with the same signed-waiver exception path.
 
 ### `--interop-source-framework NAME`
 
@@ -96,6 +98,7 @@ Bridge artifacts are written under:
 - `references/bridges/<source>-to-<target>/`
 
 Bridge supports all six directional combinations between `copilot-vscode`, `copilot-cli`, and `claude`.
+- Bridge generation runs the live security freshness preflight before writing (including signed-waiver exception support); `--bridge-check` remains read-only and only verifies source-file freshness.
 
 ### `--bridge-source-framework NAME`
 
@@ -235,6 +238,8 @@ These flags control the live vulnerability feed used when rendering security-ref
 ### `--security-offline`
 
 Use the cached security vulnerability snapshot only — no network fetch. Useful in CI environments or when working without internet access.
+
+If live security data cannot be fetched and there is no cache to fall back to, the security snapshot is marked stale and write-capable commands block until the feed is refreshed. A valid signed waiver in `references/security-waivers.log.csv` can authorize a bounded exception when `AGENTTEAMS_WAIVER_SIGNING_KEY` is configured.
 
 ### `--security-max-items N`
 

@@ -702,6 +702,66 @@ def test_select_archetypes_module_doc_not_included_for_generic_project():
     assert "module-doc-validator" not in archetypes
 
 
+def test_select_archetypes_post_production_auditor_for_collector_mutation_projects():
+    desc = {"project_goal": "Run an ETL collector pipeline and verify destructive mutation outcomes."}
+    archetypes = select_archetypes(desc)
+    assert "post-production-auditor" in archetypes
+
+
+def test_select_archetypes_post_production_auditor_not_added_for_generic_audit_text():
+    desc = {"project_goal": "Conduct a security audit report for policy documentation."}
+    archetypes = select_archetypes(desc)
+    assert "post-production-auditor" not in archetypes
+
+
+def test_build_manifest_post_production_auditor_implies_technical_validator_via_etl():
+    """post-production-auditor triggered by 'etl/collector' must imply technical-validator
+    even when no keyword independently triggers technical-validator."""
+    desc = {"project_goal": "Run an ETL collector job and verify mutation outcomes."}
+    manifest = build_manifest(desc, framework="copilot-vscode")
+    archetypes = manifest["selected_archetypes"]
+    assert "post-production-auditor" in archetypes, "post-production-auditor should be selected"
+    assert "technical-validator" in archetypes, (
+        "technical-validator must be implied by post-production-auditor "
+        "so its agent file is generated and callable via the agents: field"
+    )
+
+
+def test_build_manifest_post_production_auditor_all_agents_generated():
+    """Verify that all agents referenced in post-production-auditor template
+    are actually in the generated manifest."""
+    # post-production-auditor template declares:
+    # agents: ['orchestrator', 'adversarial', 'conflict-auditor', 'technical-validator', 'security']
+    template_agents = ['orchestrator', 'adversarial', 'conflict-auditor', 'technical-validator', 'security']
+    
+    desc = {"project_goal": "Run an ETL collector pipeline and audit mutation outcomes."}
+    manifest = build_manifest(desc, framework="copilot-vscode")
+    
+    # All agents must be in the generated manifest's agent_slug_list
+    all_slugs = set(manifest["agent_slug_list"])
+    for agent in template_agents:
+        assert agent in all_slugs, (
+            f"Agent '{agent}' declared in post-production-auditor template "
+            f"but not generated in manifest. Handoff will fail at runtime."
+        )
+
+
+def test_build_manifest_post_production_auditor_manual_placeholders_surfaced():
+    """Post-production MANUAL placeholders should appear in manual_required_placeholders."""
+    desc = {"project_goal": "Run an ETL collector pipeline and verify mutation outcomes."}
+    manifest = build_manifest(desc, framework="copilot-vscode")
+    placeholders = {item["placeholder"] for item in manifest["manual_required_placeholders"]}
+    required = {
+        "TRIGGER_CONTRACT_VERSION",
+        "BULK_MUTATION_THRESHOLD",
+        "SOURCE_OF_TRUTH_SPEC",
+        "DUPLICATE_CLUSTER_CAP",
+        "AUDIT_SLUG",
+    }
+    missing = required - placeholders
+    assert not missing, f"Missing post-production MANUAL placeholders: {sorted(missing)}"
+
+
 # ---------------------------------------------------------------------------
 # build_manifest — tool-doc-researcher auto-include
 # ---------------------------------------------------------------------------

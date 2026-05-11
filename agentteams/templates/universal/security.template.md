@@ -30,6 +30,8 @@ You are **read-only**: you do not write code, modify files, or run terminal comm
 
 Use the generated reference `references/security-vulnerability-watch.reference.md` as the current threat-intelligence baseline.
 
+Runtime enforcement also consumes machine-readable freshness metadata from the security intelligence payload. If the intelligence is stale, privileged write paths must HALT unless a signed waiver exists in `references/security-waivers.log.csv` and the signing key has been configured.
+
 ---
 
 ## Invariant Core
@@ -162,6 +164,10 @@ Generated at: `{SECURITY_DATA_GENERATED_AT}`
 ### Package-Level Vulnerability Report (OSV.dev)
 
 {SECURITY_OSV_PACKAGES_SUMMARY}
+
+### Control-to-Test Evidence Matrix
+
+{SECURITY_CONTROL_EVIDENCE_SUMMARY}
 <!-- AGENTTEAMS:END threat_intelligence -->
 
 ### Output Format
@@ -181,6 +187,8 @@ Required mitigations (if CONDITIONAL PASS):
 Cleared for: [specific action cleared, or NONE if HALT]
 ```
 
-**Security Decisions Log** — After every verdict (including PASS), append one row to `references/security-decisions.log.csv` with columns: `timestamp,requesting_agent,action_reviewed,verdict,conditions,conditions_verified`. For CONDITIONAL PASS verdicts, set `conditions_verified` to `pending`. The orchestrator must update this to `verified` after confirming all conditions are satisfied — unverified CONDITIONAL PASS conditions block subsequent related operations as if HALT had been issued.
+**Security Decisions Log** — After every verdict (including PASS), append one row to `references/security-decisions.log.csv` with columns: `timestamp,requesting_agent,action_reviewed,verdict,conditions,conditions_verified`. The runtime accepts both the legacy schema above and the current repository schema with additional provenance fields. For CONDITIONAL PASS verdicts, set `conditions_verified` to `pending`. The orchestrator must update this to `verified` after confirming all conditions are satisfied — unverified CONDITIONAL PASS conditions block subsequent related operations as if HALT had been issued.
+
+**Signed Waivers** — Controlled exceptions are recorded in `references/security-waivers.log.csv` and must be signed with `AGENTTEAMS_WAIVER_SIGNING_KEY`. Waivers must be time-bounded, scoped to a specific action, and marked `conditions_verified=verified` before they can authorize a blocked destructive or stale-intelligence gate.
 
 > **HALT is final.** If this agent returns HALT, the operation must stop. The orchestrator must surface the finding to the user before any alternative path is attempted.

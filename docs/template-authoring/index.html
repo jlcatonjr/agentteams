@@ -348,6 +348,26 @@
     
     
       <li class="md-tabs__item">
+        <a href="../post-production-auditor-guide/" class="md-tabs__link">
+          
+  
+  
+  Guides
+
+        </a>
+      </li>
+    
+  
+
+      
+        
+  
+  
+  
+  
+    
+    
+      <li class="md-tabs__item">
         <a href="../api-reference/" class="md-tabs__link">
           
   
@@ -721,7 +741,7 @@
   <span class="md-ellipsis">
     
   
-    API Reference
+    Guides
   
 
     
@@ -734,6 +754,121 @@
         
         <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_8_label" aria-expanded="false">
           <label class="md-nav__title" for="__nav_8">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Guides
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../post-production-auditor-guide/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Post-Production Auditor
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../security-hardening-guide/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Security Hardening & Threat Intelligence
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+    
+    
+      
+      
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_9" >
+        
+          
+          <label class="md-nav__link" for="__nav_9" id="__nav_9_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    API Reference
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_9_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_9">
             <span class="md-nav__icon md-icon"></span>
             
   
@@ -1267,6 +1402,23 @@
     </span>
   </a>
   
+    <nav class="md-nav" aria-label="Registering a New Template">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#post-production-auditor-registration-notes" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Post-Production Auditor Registration Notes
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
 </li>
       
         <li class="md-nav__item">
@@ -1509,6 +1661,23 @@
     </span>
   </a>
   
+    <nav class="md-nav" aria-label="Registering a New Template">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#post-production-auditor-registration-notes" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Post-Production Auditor Registration Notes
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
 </li>
       
         <li class="md-nav__item">
@@ -1624,9 +1793,20 @@
 <li>Root level — orchestrator and copilot-instructions</li>
 <li>Add the archetype trigger rule to <code>agentteams/analyze.py</code>'s <code>_ARCHETYPE_TRIGGERS</code> list</li>
 <li>Add the new placeholder to <code>templates/PLACEHOLDER-CONVENTIONS.md</code> if introducing a new placeholder</li>
-<li>Add the archetype to the <code>selected_archetypes</code> enum in <code>schemas/project-description.schema.json</code></li>
+<li>Add the archetype slug to <code>selected_archetypes.items.enum</code> in <code>schemas/team-manifest.schema.json</code> (and update <code>schemas/project-description.schema.json</code> only if your intake schema explicitly validates allowed archetype labels)</li>
 <li>Update <code>template-library-expert.agent.md</code> sections count</li>
 </ol>
+<h3 id="post-production-auditor-registration-notes">Post-Production Auditor Registration Notes<a class="headerlink" href="#post-production-auditor-registration-notes" title="Permanent link">&para;</a></h3>
+<p>For <code>domain/post-production-auditor.template.md</code>, use this registration profile:</p>
+<ol>
+<li>Add an <code>_ARCHETYPE_TRIGGERS</code> entry in <code>agentteams/analyze.py</code> with conservative keywords for mutation-heavy data projects (<code>pipeline</code>, <code>etl</code>, <code>collector</code>, <code>mutation</code>)</li>
+<li>Add <code>post-production-auditor</code> to <code>selected_archetypes.items.enum</code> in <code>schemas/team-manifest.schema.json</code></li>
+<li>Register the template in <code>agentteams/templates/template-chapter-audit.csv</code> using a unique <code>TA-</code> ID</li>
+<li>Do not place optional post-production routing rows inside <code>AGENTTEAMS:BEGIN routing_table_rows</code>; add them in the user-editable gap below the fence</li>
+<li>Do not place optional post-production workflows inside <code>AGENTTEAMS:BEGIN available_workflows</code>; add them in the user-editable gap before that fence</li>
+<li>Use <code>{MANUAL:...}</code> placeholders for post-production profile values (specifically trigger version, bulk threshold, source-of-truth spec, duplicate cap, and audit slug) unless you also add auto-resolution mappings in <code>agentteams/analyze.py</code></li>
+</ol>
+<p>This prevents <code>--update --merge</code> from force-propagating post-production routing/workflow content to teams that do not include <code>@post-production-auditor</code>.</p>
 <hr />
 <h2 id="placeholder-rules">Placeholder Rules<a class="headerlink" href="#placeholder-rules" title="Permanent link">&para;</a></h2>
 <ol>

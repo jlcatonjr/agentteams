@@ -4,6 +4,8 @@ Integration test: run the full pipeline on each example brief.
 
 import json
 import re
+import hashlib
+import hmac
 import pytest
 from pathlib import Path
 
@@ -13,6 +15,7 @@ TEMPLATES_DIR = Path(__file__).parent.parent / "agentteams" / "templates"
 
 def _run_pipeline(brief_path: Path, tmp_path: Path, framework: str = "copilot-vscode") -> dict:
     from agentteams import ingest, analyze, render, emit
+    from agentteams import security_refs as _security_refs
     from agentteams.frameworks.copilot_vscode import CopilotVSCodeAdapter
     from agentteams.frameworks.copilot_cli import CopilotCLIAdapter
     from agentteams.frameworks.claude import ClaudeAdapter
@@ -31,6 +34,18 @@ def _run_pipeline(brief_path: Path, tmp_path: Path, framework: str = "copilot-vs
     manifest = analyze.build_manifest(description, framework=framework)
     assert manifest["project_name"]
     assert manifest["selected_archetypes"]
+
+    # Mirror build_team security placeholder injection so security templates
+    # have the same resolved placeholder surface in integration tests.
+    manifest["auto_resolved_placeholders"].update(
+        _security_refs.build_security_placeholders(
+            output_dir=tmp_path,
+            offline=True,
+            max_items=5,
+            tools=manifest.get("tools", []) or None,
+            skip_nvd=True,
+        )
+    )
 
     rendered = render.render_all(manifest, templates_dir=TEMPLATES_DIR)
     assert rendered, "render_all returned empty list"
@@ -237,7 +252,9 @@ def _parse_yaml_front_matter(content: str) -> dict | None:
 
 def _collect_agent_slugs_from_content(content: str) -> list[str]:
     """Extract agent slugs from handoffs and agents list in rendered content."""
-    _conditional_re = re.compile(r"\*\(If\b|\bIf `@[a-z0-9\-]+` in team\b|\| `@")
+    _conditional_re = re.compile(
+        r"\*\(If\b|\bIf `@[a-z0-9\-]+` in team\b|applies only when `@[a-z0-9\-]+` is in team|\| `@"
+    )
     slugs: list[str] = []
     for line in content.splitlines():
         # Skip *(If @slug in team)* conditional guards and routing-table rows
@@ -291,10 +308,17 @@ def test_generated_files_parse_correctly(tmp_path, example):
         for slug in _collect_agent_slugs_from_content(content):
             slug_references.append((agent_file.name, slug))
 
+    allowed_external_or_optional = {
+        "orchestrator",
+        "post-production-auditor",
+        "style-guardian",
+        "module-doc-expert",
+    }
+
     broken = [
         (fname, slug)
         for fname, slug in slug_references
-        if slug not in agent_slugs and slug != "orchestrator"
+        if slug not in agent_slugs and slug not in allowed_external_or_optional
     ]
     # Warn rather than fail — some slugs (style-guardian etc.) are conditionally included
     if broken:
@@ -356,6 +380,7 @@ def test_snapshot_comparison(tmp_path, example):
 def _run_pipeline_to_dir(brief_path: Path, output_dir: Path, framework: str = "copilot-vscode") -> dict:
     """Run the full pipeline and emit to output_dir, returning manifest + build-log path."""
     from agentteams import ingest, analyze, render, emit
+    from agentteams import security_refs as _security_refs
     from agentteams.frameworks.copilot_vscode import CopilotVSCodeAdapter
     from pathlib import Path as _Path
     import json
@@ -365,6 +390,15 @@ def _run_pipeline_to_dir(brief_path: Path, output_dir: Path, framework: str = "c
 
     description = ingest.load(brief_path, scan_project=False)
     manifest = analyze.build_manifest(description, framework=framework)
+    manifest["auto_resolved_placeholders"].update(
+        _security_refs.build_security_placeholders(
+            output_dir=output_dir,
+            offline=True,
+            max_items=5,
+            tools=manifest.get("tools", []) or None,
+            skip_nvd=True,
+        )
+    )
     rendered = render.render_all(manifest, templates_dir=TEMPLATES)
     template_hashes = render.compute_template_hashes(manifest, templates_dir=TEMPLATES)
 
@@ -485,7 +519,7 @@ def test_update_reports_removed_files(tmp_path):
     assert "deprecated-agent.agent.md" not in update_paths
 
 
-def test_update_restores_missing_expected_standard_file(tmp_path):
+def test_update_restores_missing_expected_standard_file(tmp_path, monkeypatch):
     """--update restores standardized files missing on disk even without structural drift."""
     import build_team
 
@@ -494,6 +528,48 @@ def test_update_restores_missing_expected_standard_file(tmp_path):
         pytest.skip("software-project brief not found")
 
     output_dir = tmp_path / ".github" / "agents"
+
+    waiver_key = "integration-waiver-key"
+    monkeypatch.setenv("AGENTTEAMS_WAIVER_SIGNING_KEY", waiver_key)
+    refs = output_dir / "references"
+    refs.mkdir(parents=True, exist_ok=True)
+    waiver = {
+        "timestamp": "2026-05-03T00:00:00Z",
+        "waiver_id": "waiver-freshness-001",
+        "action_reviewed": "security-intel-freshness",
+        "expires_at": "2099-01-01T00:00:00Z",
+        "max_uses": "5",
+        "uses": "0",
+        "approver": "test-harness",
+        "ticket_id": "INT-1",
+        "reason_code": "TEST",
+        "conditions_verified": "verified",
+        "signature": "",
+    }
+    payload = "|".join(
+        [
+            waiver["waiver_id"],
+            waiver["action_reviewed"],
+            waiver["expires_at"],
+            waiver["max_uses"],
+            waiver["uses"],
+            waiver["approver"],
+            waiver["ticket_id"],
+            waiver["reason_code"],
+            waiver["conditions_verified"],
+        ]
+    )
+    waiver["signature"] = hmac.new(
+        waiver_key.encode("utf-8"), payload.encode("utf-8"), hashlib.sha256
+    ).hexdigest()
+    (refs / "security-waivers.log.csv").write_text(
+        "timestamp,waiver_id,action_reviewed,expires_at,max_uses,uses,approver,"
+        "ticket_id,reason_code,conditions_verified,signature\n"
+        "{timestamp},{waiver_id},{action_reviewed},{expires_at},{max_uses},"
+        "{uses},{approver},{ticket_id},{reason_code},{conditions_verified},"
+        "{signature}\n".format(**waiver),
+        encoding="utf-8",
+    )
 
     # Initial generation.
     first_rc = build_team.main([
@@ -506,8 +582,6 @@ def test_update_restores_missing_expected_standard_file(tmp_path):
     assert first_rc == 0
 
     # Seed a PASS decision so the runtime destructive gate allows overwrite updates.
-    refs = output_dir / "references"
-    refs.mkdir(parents=True, exist_ok=True)
     decision_log = refs / "security-decisions.log.csv"
     decision_log.write_text(
         "timestamp,requesting_agent,action_reviewed,verdict,conditions,conditions_verified\n"
@@ -533,7 +607,7 @@ def test_update_restores_missing_expected_standard_file(tmp_path):
     assert missing_path.exists(), f"Expected --update to restore missing file: {missing_rel}"
 
 
-def test_initialization_writes_baseline_inventory_artifacts(tmp_path):
+def test_initialization_writes_baseline_inventory_artifacts(tmp_path, monkeypatch):
     """First successful generation writes baseline artifacts required for update/drift workflows."""
     import build_team
 
@@ -542,6 +616,48 @@ def test_initialization_writes_baseline_inventory_artifacts(tmp_path):
         pytest.skip("software-project brief not found")
 
     output_dir = tmp_path / ".github" / "agents"
+    waiver_key = "integration-waiver-key"
+    monkeypatch.setenv("AGENTTEAMS_WAIVER_SIGNING_KEY", waiver_key)
+
+    refs = output_dir / "references"
+    refs.mkdir(parents=True, exist_ok=True)
+    waiver = {
+        "timestamp": "2026-05-03T00:00:00Z",
+        "waiver_id": "waiver-freshness-002",
+        "action_reviewed": "security-intel-freshness",
+        "expires_at": "2099-01-01T00:00:00Z",
+        "max_uses": "5",
+        "uses": "0",
+        "approver": "test-harness",
+        "ticket_id": "INT-2",
+        "reason_code": "TEST",
+        "conditions_verified": "verified",
+        "signature": "",
+    }
+    payload = "|".join(
+        [
+            waiver["waiver_id"],
+            waiver["action_reviewed"],
+            waiver["expires_at"],
+            waiver["max_uses"],
+            waiver["uses"],
+            waiver["approver"],
+            waiver["ticket_id"],
+            waiver["reason_code"],
+            waiver["conditions_verified"],
+        ]
+    )
+    waiver["signature"] = hmac.new(
+        waiver_key.encode("utf-8"), payload.encode("utf-8"), hashlib.sha256
+    ).hexdigest()
+    (refs / "security-waivers.log.csv").write_text(
+        "timestamp,waiver_id,action_reviewed,expires_at,max_uses,uses,approver,"
+        "ticket_id,reason_code,conditions_verified,signature\n"
+        "{timestamp},{waiver_id},{action_reviewed},{expires_at},{max_uses},"
+        "{uses},{approver},{ticket_id},{reason_code},{conditions_verified},"
+        "{signature}\n".format(**waiver),
+        encoding="utf-8",
+    )
 
     rc = build_team.main([
         "--description", str(brief),

@@ -56,6 +56,7 @@ Behavior:
 1. Preserves agent body markdown.
 2. Rewrites front matter/wrapper format for target framework.
 3. Converts instructions naming (`copilot-instructions.md` <-> `CLAUDE.md`) as needed.
+4. Non-dry-run writes run a live security freshness preflight before files are written; stale-intel blocks can only be bypassed via a valid signed waiver (`references/security-waivers.log.csv` + `AGENTTEAMS_WAIVER_SIGNING_KEY`).
 
 ---
 
@@ -75,6 +76,7 @@ Modes:
 
 - `direct`: write target framework files only.
 - `bundle`: write target framework files plus interoperability artifacts.
+- Both write modes enforce the same live security freshness preflight used by the main render path, including the same signed-waiver exception model.
 
 Bundle artifacts are written under `references/interop/<source>-to-<target>/` and include:
 
@@ -113,6 +115,8 @@ agentteams \
   --output /path/to/project \
   --bridge-check
 ```
+
+`--bridge-check` is read-only: it verifies bridge freshness against the source manifest and does not perform the write-path security freshness preflight.
 
 ---
 

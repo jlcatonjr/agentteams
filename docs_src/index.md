@@ -16,7 +16,7 @@ Given a project description (a `.json` or `.md` brief), the module:
 The generated team includes:
 
 - 1 **Orchestrator** agent — coordinates all workflows
-- 11 **Governance agents** — navigation, security, consistency, cleanup, documentation, cross-repository coordination, and git operations
+- 12 **Governance agents** — navigation, security, code hygiene, consistency, cleanup, refactoring, documentation, cross-repository coordination, conflict resolution, and git operations
 - 3–10 **Domain agents** — `@work-summarizer` plus project-appropriate archetypes
 - 1 **Workstream Expert** per project component — deep, component-specific knowledge
 - 1 **Team Builder agent** — framework-native agent that can regenerate or expand the team
@@ -115,3 +115,32 @@ agentteams --description brief.json --project /path/to/project --framework copil
 ```
 
 See [Getting Started](getting-started.md) for a full walkthrough, [Agent-Assisted Setup](agent-assisted-setup.md) to use a coding agent to create your team interactively, or [CLI Reference](cli-reference.md) for all flags.
+
+---
+
+## In-Depth Guides
+
+### [Post-Production Auditor Guide](post-production-auditor-guide.md)
+
+Outcome-verification specialist for data-mutation and collection projects. Covers:
+
+- When to use post-production-auditor (automatic selection + manual triggers)
+- Core audit capability (sampling, verdict rules, closure gating)
+- Configuration and output artifacts
+- Escalation rules and remediation workflows
+- Applicability contract and limitations
+
+**Best for:** Projects with bulk mutations, migration work, contamination remediation, or compliance requirements.
+
+### [Security Hardening & Threat Intelligence](security-hardening-guide.md)
+
+Comprehensive vulnerability management integrated into every pipeline run. Covers:
+
+- Live threat intelligence feeds (CISA KEV, NVD CVSS, EPSS)
+- Fail-closed gating and 24-hour auto-refresh
+- Waiver system for offline/air-gapped environments
+- CLI flags for security control
+- Agent-level vulnerability handling
+- Security governance integration
+
+**Best for:** Security teams, CI/CD maintainers, and air-gapped deployments.
