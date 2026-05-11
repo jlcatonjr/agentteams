@@ -1689,6 +1689,12 @@
 <li><code>framework</code> (<code>str</code>, keyword-only) — Target agent framework: <code>'copilot-vscode'</code>, <code>'copilot-cli'</code>, or <code>'claude'</code>. Default: <code>'copilot-vscode'</code>.</li>
 </ul>
 <p><strong>Returns:</strong> <code>dict[str, Any]</code> — Team manifest conforming to <code>schemas/team-manifest.schema.json</code>.</p>
+<p><strong>Behavior Notes:</strong></p>
+<ul>
+<li>If <code>description</code> contains <code>selected_archetypes</code>, <code>build_manifest()</code> uses it as the primary archetype input, then applies required dependency and consistency additions.</li>
+<li>If <code>post-production-auditor</code> is selected (auto-selected or override), <code>technical-validator</code> is also ensured in the final archetype set.</li>
+<li>If tool metadata is incomplete, <code>tool-doc-researcher</code> may be auto-added to support metadata completion.</li>
+</ul>
 <hr />
 <h3 id="classify_project_typedescription"><code>classify_project_type(description)</code><a class="headerlink" href="#classify_project_typedescription" title="Permanent link">&para;</a></h3>
 <blockquote>
@@ -1711,6 +1717,13 @@
 <li><code>description</code> (<code>dict[str, Any]</code>) — Normalized project description.</li>
 </ul>
 <p><strong>Returns:</strong> <code>list[str]</code> — Ordered list of archetype slugs (e.g., <code>['primary-producer', 'quality-auditor', 'technical-validator']</code>).</p>
+<p><strong>Selection Notes:</strong></p>
+<ul>
+<li><code>post-production-auditor</code> is selected using contextual co-occurrence cues, not single keyword hits.</li>
+<li>Auto-selection requires at least one operation/state-change cue plus at least one verification/proof cue.</li>
+<li>Legacy pipeline cues (<code>pipeline</code>, <code>etl</code>, <code>collector</code>) still work when paired with verification/proof cues.</li>
+<li>Matching uses boundary-aware keyword detection to avoid substring collisions (for example, <code>sync</code> does not match inside <code>async</code>).</li>
+</ul>
 <hr />
 <h3 id="classify_tool_importancetool"><code>classify_tool_importance(tool)</code><a class="headerlink" href="#classify_tool_importancetool" title="Permanent link">&para;</a></h3>
 <blockquote>
@@ -1732,7 +1745,7 @@
 <ul>
 <li><code>tools</code> (<code>list[dict[str, Any]]</code>) — List of tool dicts from the project description.</li>
 </ul>
-<p><strong>Returns:</strong> <code>list[dict[str, Any]]</code> — Subset of <code>tools</code> where <code>classify_tool_importance</code> returns <code>'specialist'</code>.</p>
+<p><strong>Returns:</strong> <code>list[dict[str, Any]]</code> — Specialist-tier tool agent specs (not raw input tool dicts), each including <code>slug</code>, <code>tool_name</code>, <code>tool_version</code>, <code>tool_category</code>, <code>config_files</code>, <code>invocation_command</code>, <code>invocation_target</code>, <code>docs_url</code>, <code>api_surface</code>, and <code>common_patterns</code>.</p>
 <hr />
 <h3 id="detect_reference_toolstools"><code>detect_reference_tools(tools)</code><a class="headerlink" href="#detect_reference_toolstools" title="Permanent link">&para;</a></h3>
 <blockquote>
@@ -1743,7 +1756,7 @@
 <ul>
 <li><code>tools</code> (<code>list[dict[str, Any]]</code>) — List of tool dicts from the project description.</li>
 </ul>
-<p><strong>Returns:</strong> <code>list[dict[str, Any]]</code> — Subset of <code>tools</code> where <code>classify_tool_importance</code> returns <code>'reference'</code>.</p>
+<p><strong>Returns:</strong> <code>list[dict[str, Any]]</code> — Reference-tier tool specs (not raw input tool dicts), each including <code>slug</code>, <code>tool_name</code>, <code>tool_version</code>, <code>tool_category</code>, <code>config_files</code>, <code>docs_url</code>, <code>api_surface</code>, and <code>common_patterns</code>.</p>
 <hr />
 <h3 id="build_authority_hierarchydescription"><code>build_authority_hierarchy(description)</code><a class="headerlink" href="#build_authority_hierarchydescription" title="Permanent link">&para;</a></h3>
 <blockquote>
@@ -1754,7 +1767,7 @@
 <ul>
 <li><code>description</code> (<code>dict[str, Any]</code>) — Normalized project description.</li>
 </ul>
-<p><strong>Returns:</strong> <code>list[dict[str, Any]]</code> — Ordered list of authority source dicts, each with <code>name</code>, <code>path</code>, and <code>description</code> keys.</p>
+<p><strong>Returns:</strong> <code>list[dict[str, Any]]</code> — Ordered authority source dicts with <code>rank</code>, <code>name</code>, <code>path</code>, and <code>scope</code> keys.</p>
 
 
 

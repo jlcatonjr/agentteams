@@ -1860,7 +1860,7 @@ This path reads existing agent files, preserves body prose, and rewrites framewo
 <a id="__codelineno-1-13" name="__codelineno-1-13" href="#__codelineno-1-13"></a>Tier 3: Domain Agents
 <a id="__codelineno-1-14" name="__codelineno-1-14" href="#__codelineno-1-14"></a>   └── Work-Summarizer (always included),
 <a id="__codelineno-1-15" name="__codelineno-1-15" href="#__codelineno-1-15"></a>       Primary-Producer, Quality-Auditor, Technical-Validator,
-<a id="__codelineno-1-16" name="__codelineno-1-16" href="#__codelineno-1-16"></a>    Post-Production-Auditor (keyword-triggered),
+<a id="__codelineno-1-16" name="__codelineno-1-16" href="#__codelineno-1-16"></a>    Post-Production-Auditor (context-triggered),
 <a id="__codelineno-1-17" name="__codelineno-1-17" href="#__codelineno-1-17"></a>    Format-Converter, Reference-Manager, Output-Compiler, ...
 <a id="__codelineno-1-18" name="__codelineno-1-18" href="#__codelineno-1-18"></a>       Each owns a production workflow (drafting, auditing,
 <a id="__codelineno-1-19" name="__codelineno-1-19" href="#__codelineno-1-19"></a>       converting, compiling)
@@ -1886,6 +1886,7 @@ This path reads existing agent files, preserves body prose, and rewrites framewo
 <p>The orchestrator <strong>routes without producing</strong>. Domain agents <strong>produce without scoping</strong>. Workstream experts <strong>scope without producing</strong>. Governance agents <strong>audit without producing</strong>.</p>
 <h3 id="optional-outcome-verification-layer">Optional Outcome-Verification Layer<a class="headerlink" href="#optional-outcome-verification-layer" title="Permanent link">&para;</a></h3>
 <p>Teams that include <code>@post-production-auditor</code> can add an optional post-production workflow extension (Workflow 10C) in the orchestrator user-editable section. This workflow validates claimed completed outcomes against source-of-truth state and enforces fail-closed closure behavior on <code>FAIL</code>/<code>INCONCLUSIVE</code> verdicts.</p>
+<p>The analyzer auto-selection for <code>@post-production-auditor</code> uses contextual cue pairing (operation/state-change + verification/proof cues) to reduce false positives from single broad keywords. Teams can always force inclusion through <code>selected_archetypes</code> in the project description.</p>
 <p>To avoid forced propagation to teams that do not include this archetype, Workflow 10C and its routing row are added outside FENCED sections (in user-editable gaps), not inside generated fenced blocks.</p>
 <h3 id="agent-knowledge-updates">Agent Knowledge Updates<a class="headerlink" href="#agent-knowledge-updates" title="Permanent link">&para;</a></h3>
 <p>Generated agent teams are designed to keep their documentation current automatically as projects evolve. Two mechanisms work together:</p>

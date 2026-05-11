@@ -1791,7 +1791,7 @@
 <li><code>domain/</code> — domain archetypes</li>
 <li><code>builder/</code> — per-framework builder agents</li>
 <li>Root level — orchestrator and copilot-instructions</li>
-<li>Add the archetype trigger rule to <code>agentteams/analyze.py</code>'s <code>_ARCHETYPE_TRIGGERS</code> list</li>
+<li>Add the archetype trigger rule to <code>agentteams/analyze.py</code> (either via <code>_ARCHETYPE_TRIGGERS</code> or a dedicated selection helper when contextual matching is required)</li>
 <li>Add the new placeholder to <code>templates/PLACEHOLDER-CONVENTIONS.md</code> if introducing a new placeholder</li>
 <li>Add the archetype slug to <code>selected_archetypes.items.enum</code> in <code>schemas/team-manifest.schema.json</code> (and update <code>schemas/project-description.schema.json</code> only if your intake schema explicitly validates allowed archetype labels)</li>
 <li>Update <code>template-library-expert.agent.md</code> sections count</li>
@@ -1799,12 +1799,13 @@
 <h3 id="post-production-auditor-registration-notes">Post-Production Auditor Registration Notes<a class="headerlink" href="#post-production-auditor-registration-notes" title="Permanent link">&para;</a></h3>
 <p>For <code>domain/post-production-auditor.template.md</code>, use this registration profile:</p>
 <ol>
-<li>Add an <code>_ARCHETYPE_TRIGGERS</code> entry in <code>agentteams/analyze.py</code> with conservative keywords for mutation-heavy data projects (<code>pipeline</code>, <code>etl</code>, <code>collector</code>, <code>mutation</code>)</li>
+<li>Add contextual selection logic in <code>agentteams/analyze.py</code> for operation/state-change cues + verification/proof cues (avoid broad single-keyword auto-selection)</li>
 <li>Add <code>post-production-auditor</code> to <code>selected_archetypes.items.enum</code> in <code>schemas/team-manifest.schema.json</code></li>
 <li>Register the template in <code>agentteams/templates/template-chapter-audit.csv</code> using a unique <code>TA-</code> ID</li>
 <li>Do not place optional post-production routing rows inside <code>AGENTTEAMS:BEGIN routing_table_rows</code>; add them in the user-editable gap below the fence</li>
 <li>Do not place optional post-production workflows inside <code>AGENTTEAMS:BEGIN available_workflows</code>; add them in the user-editable gap before that fence</li>
-<li>Use <code>{MANUAL:...}</code> placeholders for post-production profile values (specifically trigger version, bulk threshold, source-of-truth spec, duplicate cap, and audit slug) unless you also add auto-resolution mappings in <code>agentteams/analyze.py</code></li>
+<li>Use <code>{MANUAL:...}</code> placeholders for post-production profile values (trigger version, bulk threshold, source-of-truth spec, duplicate cap, and audit slug) unless you also add auto-resolution mappings in <code>agentteams/analyze.py</code></li>
+<li>Document explicit manual override via <code>selected_archetypes</code> for teams that need guaranteed inclusion regardless of auto-selection cues</li>
 </ol>
 <p>This prevents <code>--update --merge</code> from force-propagating post-production routing/workflow content to teams that do not include <code>@post-production-auditor</code>.</p>
 <hr />

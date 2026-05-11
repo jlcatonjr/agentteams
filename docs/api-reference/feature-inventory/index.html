@@ -1690,10 +1690,10 @@
 
 
 <h1 id="agentteams-feature-inventory">AgentTeams — Feature Inventory<a class="headerlink" href="#agentteams-feature-inventory" title="Permanent link">&para;</a></h1>
-<p><strong>Version:</strong> 0.1.0 (Released 2026-04-15)</p>
-<p>Features below are grouped by capability area. Items described here have been implemented and are
-available on the <code>main</code> branch. The last formal versioned release is <strong>0.1.0 (2026-04-15)</strong>;
-everything listed reflects the current development state.</p>
+<p><strong>Version baseline:</strong> 0.1.0 (Released 2026-04-15)</p>
+<p>Features below are grouped by capability area. This inventory may include capabilities currently present on
+<code>main</code> that are not yet part of a tagged release. Release-specific availability should be verified against
+<code>CHANGELOG.md</code> and repository tags.</p>
 <hr />
 <h2 id="summary">Summary<a class="headerlink" href="#summary" title="Permanent link">&para;</a></h2>
 <table>
@@ -1777,14 +1777,14 @@ everything listed reflects the current development state.</p>
 <li><strong>Project Description Ingestion</strong> — Load project briefs from <code>.json</code> or <code>.md</code> format</li>
 <li><strong>Project Directory Scanning</strong> — Scan an existing project directory to supplement missing brief fields</li>
 <li><strong>Project Type Classification</strong> — Infer the deliverable type from the project goal</li>
-<li><strong>Agent Archetype Selection</strong> — Select the appropriate archetype set from the 9-archetype library</li>
+<li><strong>Agent Archetype Selection</strong> — Select the appropriate archetype set from the schema-supported archetype catalog, including contextual post-production auto-selection</li>
 <li><strong>Team Manifest Generation</strong> — Build complete team composition metadata</li>
 <li><strong>Template Placeholder Resolution</strong> — Resolve <code>{AUTO:token}</code> and <code>{MANUAL:token}</code> placeholders</li>
 </ol>
 <h3 id="core-pipeline-modules">Core Pipeline Modules<a class="headerlink" href="#core-pipeline-modules" title="Permanent link">&para;</a></h3>
 <ol>
 <li><strong><code>ingest</code> Module</strong> — Load and normalize project descriptions; parse JSON/Markdown; scan directories</li>
-<li><strong><code>analyze</code> Module</strong> — Classify project type; select archetypes; detect tool agents; build manifest</li>
+<li><strong><code>analyze</code> Module</strong> — Classify project type; select archetypes (including contextual post-production auto-selection for any task domain and manual <code>selected_archetypes</code> override support); detect tool agents; build manifest</li>
 <li><strong><code>render</code> Module</strong> — Resolve placeholders in templates; compute template hashes for drift detection</li>
 <li><strong><code>emit</code> Module</strong> — Write rendered files to disk with dry-run and overwrite-protection</li>
 <li><strong><code>drift</code> Module</strong> — Detect content drift (template hash comparison) and structural drift (team composition)</li>
@@ -1902,7 +1902,7 @@ everything listed reflects the current development state.</p>
 </ol>
 <hr />
 <h2 id="workflows">Workflows<a class="headerlink" href="#workflows" title="Permanent link">&para;</a></h2>
-<p>Workflows are step sequences embedded in the generated Orchestrator agent. Every workflow terminates with an unconditional call to Workflow 11 (Final Check).</p>
+<p>Workflows are step sequences embedded in the generated Orchestrator agent. Every built-in workflow terminates with an unconditional call to Workflow 11 (Final Check). Optional user-added workflow extensions must explicitly include the same terminal handoff.</p>
 <ol>
 <li><strong>Workflow 1 — Produce Deliverable</strong> — Source review → Component Brief → production → quality audit → style audit → consistency check</li>
 <li><strong>Workflow 2 — Revise Deliverable</strong> — Revision → adversarial review → quality audit → consistency check → <code>@agent-updater</code> sync</li>
@@ -1931,7 +1931,7 @@ everything listed reflects the current development state.</p>
 <li><strong>Initialization-as-Trigger</strong> — First successful team generation is an explicit lifecycle trigger: it establishes the baseline inventory and trigger corpus used by future update and drift logic</li>
 <li><strong>Update Lifecycle Trigger Contract</strong> — Canonical <code>--update --merge</code> runs must reconcile drift, emit newly required files, preserve manual values, and preserve user-authored content outside fenced regions</li>
 <li><strong>Missing Expected Output Recovery Trigger</strong> — During update, absent expected standard outputs are treated as drift and must be restored even if template hashes are unchanged</li>
-<li><strong>Cross-Repository Security Rule</strong> — Any write to a repository other than <code>src/</code> must be assessed by <code>@repo-liaison</code> and cleared by <code>@security</code></li>
+<li><strong>Cross-Repository Security Rule</strong> — Any write outside this project's configured primary output directory must be assessed by <code>@repo-liaison</code> and cleared by <code>@security</code></li>
 <li><strong>User-Editable Gap Safety Pattern</strong> — Optional routing rows and optional workflow extensions (such as 10C) must be added outside FENCED sections so <code>--update --merge</code> does not force-propagate them to teams that do not include the required agent</li>
 <li><strong>Post-Production Closure Gate Artifacts</strong> — Optional post-production audits can emit <code>closure_gate_status.json</code>, <code>capability_check.json</code>, and <code>decision_replay_packet.json</code> to support fail-closed closeout decisions and replay-auditability</li>
 </ol>
@@ -1967,7 +1967,7 @@ everything listed reflects the current development state.</p>
 <li><strong>Protocol 2 — Adjacent Updates</strong> — Apply approved updates to neighboring project repos (requires <code>@security</code> clearance on each write)</li>
 <li><strong>Protocol 3 — Orchestrator Coordination</strong> — Formal coordination request between independent orchestrators managing different repositories</li>
 <li><strong><code>@repo-liaison</code> in Constitutional Rules</strong> — Any write outside <code>src/</code> must be assessed by <code>@repo-liaison</code> before <code>@security</code> clearance can be granted</li>
-<li><strong><code>orchestrator-workflows.reference.md</code></strong> — Reference guide documenting all 12 workflows; kept in sync by <code>@agent-updater</code></li>
+<li><strong><code>orchestrator-workflows.reference.md</code></strong> — Reference guide documenting the baseline workflow set plus optional extension workflows (for example 10C when configured); kept in sync by <code>@agent-updater</code></li>
 </ol>
 <hr />
 <h2 id="getting-started">Getting Started<a class="headerlink" href="#getting-started" title="Permanent link">&para;</a></h2>

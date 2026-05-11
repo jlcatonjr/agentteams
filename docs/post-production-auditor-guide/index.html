@@ -2015,21 +2015,27 @@
 
 
 <h1 id="post-production-auditor-guide">Post-Production Auditor Guide<a class="headerlink" href="#post-production-auditor-guide" title="Permanent link">&para;</a></h1>
-<p>Outcome-verification specialist for data-mutation and collection projects. Validates claimed completed work against source-of-truth state using risk-tiered sampling and evidence-backed verdicts.</p>
+<p>Outcome-verification specialist for any task domain (software, docs, operations, data). Validates claimed completed work against source-of-truth state using risk-tiered sampling and evidence-backed verdicts.</p>
 <hr />
 <h2 id="when-to-use-post-production-auditor">When to Use Post-Production-Auditor<a class="headerlink" href="#when-to-use-post-production-auditor" title="Permanent link">&para;</a></h2>
-<p>The <code>@post-production-auditor</code> agent is automatically selected for projects with keywords: <code>pipeline</code>, <code>etl</code>, <code>collector</code>, or <code>mutation</code>.</p>
+<p>The <code>@post-production-auditor</code> agent is automatically selected using contextual trigger matching in <code>agentteams/analyze.py</code>.</p>
+<p>Auto-selection requires co-occurring cues, not a single keyword:
+- At least one operation/state-change cue (for example: <code>migration</code>, <code>deploy</code>, <code>release</code>, <code>cleanup</code>, <code>reconcile</code>, <code>mutation</code>)
+- At least one verification/proof cue (for example: <code>verify</code>, <code>validation</code>, <code>outcome</code>, <code>final state</code>, <code>proof-of-completion</code>, <code>source-of-truth</code>)</p>
+<p>Legacy pipeline wording remains supported when paired with verification cues (for example: <code>etl</code>, <code>collector</code>, <code>pipeline</code> + <code>verify</code>).</p>
 <p><strong>Manually trigger</strong> post-production verification for any project with:
-- Bulk data mutations (transformations, migrations, cleanups)
-- Record-level deletions or status changes
+- High-impact state changes (records, files, artifacts, endpoints)
+- Deletions, rewrites, migrations, releases, or remediations requiring proof-of-result
 - Dependencies on proof-of-completion (not just execution-log evidence)
 - Compliance or audit requirements</p>
+<p>Manual override path:
+- Set <code>selected_archetypes</code> in your project description to include <code>post-production-auditor</code> when you want explicit inclusion regardless of auto-selection.</p>
 <hr />
 <h2 id="core-capability">Core Capability<a class="headerlink" href="#core-capability" title="Permanent link">&para;</a></h2>
 <p>Post-production-auditor runs <strong>Workflow 10C</strong> (optional, user-editable) to:</p>
 <ol>
 <li><strong>Verify claimed outcomes</strong> against source-of-truth predicates</li>
-<li><strong>Sample mutation results</strong> using risk-tiered rates (Tier 1: 10%, Tier 2: 15%, Tier 3: 20%)</li>
+<li><strong>Sample outcome results</strong> using risk-tiered rates (Tier 1: 10%, Tier 2: 15%, Tier 3: 20%)</li>
 <li><strong>Classify findings</strong> as <code>PASS</code>, <code>PASS_WITH_NOTES</code>, <code>FAIL</code>, or <code>INCONCLUSIVE</code></li>
 <li><strong>Enforce closure gates</strong> — blocks plan closeout if verdict is <code>FAIL</code> or <code>INCONCLUSIVE</code></li>
 </ol>
@@ -2037,14 +2043,14 @@
 <h2 id="architecture">Architecture<a class="headerlink" href="#architecture" title="Permanent link">&para;</a></h2>
 <h3 id="trigger-contract">Trigger Contract<a class="headerlink" href="#trigger-contract" title="Permanent link">&para;</a></h3>
 <p>Always invoke audit for:
-- Mutations affecting ≥{MANUAL:BULK_MUTATION_THRESHOLD} records
-- Bulk user-visible mutations exceeding risk threshold
+- Irreversible or high-impact state changes affecting ≥{MANUAL:BULK_MUTATION_THRESHOLD} scoped units
+- Bulk user-visible state changes exceeding risk threshold
 - Contamination-remediation lane completion
 - User-visible correctness outcomes</p>
 <p>Risk-invoke if:
 - Execute output includes <code>FAILED</code>, <code>UNKNOWN</code>, or exceptions
-- Dry-run parity passed but confidence includes low/no-match rows
-- Duplicate-key clusters exist</p>
+- Dry-run parity passed but confidence includes low/no-match or low-evidence buckets
+- Identity-collision clusters exist</p>
 <p>Governance-invoke if:
 - Plan closeout depends on proof-of-completion
 - Adversarial or conflict audits flag unverified final-state assumptions
@@ -2082,9 +2088,9 @@
 </tbody>
 </table>
 <p>Mandatory inclusions for all tiers:
-- All rows marked <code>FAILED</code> or <code>UNKNOWN</code>
-- Duplicate-key clusters (up to {MANUAL:DUPLICATE_CLUSTER_CAP})
-- At least one row per high-risk subgroup</p>
+- All sampled units marked <code>FAILED</code> or <code>UNKNOWN</code>
+- Identity-collision clusters (up to {MANUAL:DUPLICATE_CLUSTER_CAP})
+- At least one sampled unit per high-risk subgroup</p>
 <h3 id="verdict-rules">Verdict Rules<a class="headerlink" href="#verdict-rules" title="Permanent link">&para;</a></h3>
 <table>
 <thead>
@@ -2100,7 +2106,7 @@
 </tr>
 <tr>
 <td><code>PASS_WITH_NOTES</code></td>
-<td>No critical defects, estimated defect ≤7%, all failed rows have remediation owner</td>
+<td>No critical defects, estimated defect ≤7%, all failed sampled units have remediation owner</td>
 </tr>
 <tr>
 <td><code>FAIL</code></td>
@@ -2114,7 +2120,7 @@
 </table>
 <p><strong>Critical defects:</strong>
 - Expected target state did not persist in source-of-truth
-- Wrong duplicate row retained while sibling row changed
+- Wrong identity-collision sibling retained while target sibling changed
 - Claimed save/update did not persist</p>
 <h3 id="output-artifacts">Output Artifacts<a class="headerlink" href="#output-artifacts" title="Permanent link">&para;</a></h3>
 <p>10 required outputs in <code>tmp/by-week/YYYY-Www/{audit-slug}/</code>:</p>
@@ -2134,7 +2140,7 @@
 <hr />
 <h2 id="configuration">Configuration<a class="headerlink" href="#configuration" title="Permanent link">&para;</a></h2>
 <h3 id="required-manual-placeholders">Required Manual Placeholders<a class="headerlink" href="#required-manual-placeholders" title="Permanent link">&para;</a></h3>
-<p>Each placeholder has a defined owner. Set these values in your project description or <code>SETUP-REQUIRED.md</code>:</p>
+<p>Each placeholder has a defined owner. Set these values in <code>SETUP-REQUIRED.md</code> (or extend your intake schema if you want them directly in project descriptions):</p>
 <table>
 <thead>
 <tr>
@@ -2153,8 +2159,8 @@
 </tr>
 <tr>
 <td><code>{MANUAL:BULK_MUTATION_THRESHOLD}</code></td>
-<td><strong>Project PM or Data Lead</strong></td>
-<td>Integer record count (e.g., "100") that always triggers audit</td>
+<td><strong>Project PM or Domain Lead</strong></td>
+<td>Integer scoped-unit threshold (e.g., "100") that always triggers audit</td>
 <td>Must be positive integer; reviewed against project risk profile</td>
 </tr>
 <tr>
@@ -2165,23 +2171,25 @@
 </tr>
 <tr>
 <td><code>{MANUAL:DUPLICATE_CLUSTER_CAP}</code></td>
-<td><strong>Data Team</strong></td>
-<td>Max duplicate-key cluster rows to sample (e.g., "50")</td>
-<td>Based on expected duplicates; positive integer</td>
+<td><strong>Domain Team</strong></td>
+<td>Max identity-collision cluster units to sample (e.g., "50")</td>
+<td>Based on expected collisions; positive integer</td>
 </tr>
 <tr>
 <td><code>{MANUAL:AUDIT_SLUG}</code></td>
-<td><strong>Auto-generated</strong></td>
-<td>Unique slug for this audit run (e.g., "collector-2026-05-10")</td>
+<td><strong>Project Team (manual-required)</strong></td>
+<td>Unique slug for this audit run (e.g., "release-2026-05-10")</td>
 <td>Format: <code>{project-name}-{YYYY-MM-DD}</code></td>
 </tr>
 </tbody>
 </table>
 <h3 id="pre-flight-validation">Pre-Flight Validation<a class="headerlink" href="#pre-flight-validation" title="Permanent link">&para;</a></h3>
-<p>Before audit execution, validate all placeholders are filled and correctly formatted:</p>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a>agentteams<span class="w"> </span>--validate-audit-config<span class="w"> </span>--description<span class="w"> </span>brief.json
-<a id="__codelineno-0-2" name="__codelineno-0-2" href="#__codelineno-0-2"></a><span class="c1"># Exit code 0: all placeholders valid and ownership confirmed</span>
-<a id="__codelineno-0-3" name="__codelineno-0-3" href="#__codelineno-0-3"></a><span class="c1"># Exit code 1: missing or invalid placeholder</span>
+<p>Before audit execution, validate all placeholders are filled and correctly formatted. The current CLI does not provide a dedicated <code>--validate-audit-config</code> flag.</p>
+<p>Recommended validation path:</p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a>agentteams<span class="w"> </span>--description<span class="w"> </span>brief.json<span class="w"> </span>--project<span class="w"> </span>/path/to/project<span class="w"> </span>--framework<span class="w"> </span>copilot-vscode<span class="w"> </span>--check
+<a id="__codelineno-0-2" name="__codelineno-0-2" href="#__codelineno-0-2"></a>agentteams<span class="w"> </span>--description<span class="w"> </span>brief.json<span class="w"> </span>--project<span class="w"> </span>/path/to/project<span class="w"> </span>--framework<span class="w"> </span>copilot-vscode<span class="w"> </span>--scan-security
+<a id="__codelineno-0-3" name="__codelineno-0-3" href="#__codelineno-0-3"></a><span class="c1"># --check detects drift/structural issues in generated teams</span>
+<a id="__codelineno-0-4" name="__codelineno-0-4" href="#__codelineno-0-4"></a><span class="c1"># --scan-security surfaces unresolved placeholders and security concerns</span>
 </code></pre></div>
 <p>If validation fails, update <code>SETUP-REQUIRED.md</code> with filled values and re-run validation.</p>
 <hr />
@@ -2222,7 +2230,7 @@
 <hr />
 <h2 id="escalation-remediation">Escalation &amp; Remediation<a class="headerlink" href="#escalation-remediation" title="Permanent link">&para;</a></h2>
 <h3 id="destructive-mutation-clearance">Destructive Mutation Clearance<a class="headerlink" href="#destructive-mutation-clearance" title="Permanent link">&para;</a></h3>
-<p>If remediation includes destructive mutation:
+<p>If remediation includes destructive mutation or irreversible state change:
 - Route to <code>@security</code> for approval
 - Require either:
   - Verified signed clearance record (HMAC-SHA256 waiver; see <strong><a href="../security-hardening-guide/#waiver-system">Waiver System</a></strong> in the Security Hardening guide for format, lifecycle, and verification procedures), OR
@@ -2231,8 +2239,8 @@
 <h3 id="break-glass-escalation">Break-Glass Escalation<a class="headerlink" href="#break-glass-escalation" title="Permanent link">&para;</a></h3>
 <p>If <code>@security</code> is unavailable &gt;4 hours and remediation is time-critical, break-glass escalation is permitted:</p>
 <p><strong>Approval Authority (ALL required):</strong>
-- One: Data team lead OR Engineering manager
-- One: Compliance officer OR CISO
+- Two independent authorized signers
+- Recommended: one technical owner and one compliance/security approver
 - Signature method: Both signers countersign in <code>decision_replay_packet.json</code> (immutable audit record)</p>
 <p><strong>Availability Check:</strong>
 - Automated check at execution: <code>@security</code> agent availability status in closure_gate_status.json
@@ -2244,7 +2252,7 @@
 3. Execute with git-commit signatures from both signers
 4. Schedule mandatory retrospective security audit within 5 business days
 5. Document business justification, emergency contacts, and approval chain</p>
-<p><strong>Emergency Contacts (add to project description):</strong>
+<p><strong>Emergency Contacts (store in operational runbook or incident reference, not in schema-validated brief fields unless you extend your schema):</strong>
 <div class="highlight"><pre><span></span><code><a id="__codelineno-1-1" name="__codelineno-1-1" href="#__codelineno-1-1"></a><span class="nt">emergency_contacts</span><span class="p">:</span>
 <a id="__codelineno-1-2" name="__codelineno-1-2" href="#__codelineno-1-2"></a><span class="w">  </span><span class="nt">data_team_lead</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">alice@org</span>
 <a id="__codelineno-1-3" name="__codelineno-1-3" href="#__codelineno-1-3"></a><span class="w">  </span><span class="nt">compliance_officer</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">bob@org</span>
@@ -2255,7 +2263,7 @@
 <h3 id="valid-for">Valid For<a class="headerlink" href="#valid-for" title="Permanent link">&para;</a></h3>
 <ul>
 <li>Projects with defined source-of-truth predicates and stability test (see below)</li>
-<li>Stable entity identity (immutable or versioned primary keys) — <strong>must be validated before audit</strong></li>
+<li>Stable target identity (immutable/versioned keys, stable file paths, or deterministic artifact identifiers) — <strong>must be validated before audit</strong></li>
 <li>Strong consistency or bounded staleness (atomic snapshots available)</li>
 </ul>
 <h3 id="entity-identity-stability-check-required">Entity Identity Stability Check (Required)<a class="headerlink" href="#entity-identity-stability-check-required" title="Permanent link">&para;</a></h3>
@@ -2272,16 +2280,16 @@
 <p><strong>Pre-flight check:</strong> The audit runs this query against a sample before proceeding</p>
 </li>
 <li>If test passes: continues with audit</li>
-<li>If test fails: blocks with error <code>STABILITY_CHECK_FAILED</code> and halts audit</li>
+<li>If test fails: block and halt audit (error code naming is profile-specific)</li>
 </ol>
 <h3 id="not-valid-for">NOT Valid For<a class="headerlink" href="#not-valid-for" title="Permanent link">&para;</a></h3>
 <ul>
-<li><strong>Eventual-consistent databases (DynamoDB, Cassandra) without consistency bounds</strong> — Pre-flight check will detect and block with error <code>CONSISTENCY_MODEL_VIOLATION</code></li>
+<li><strong>Eventual-consistent databases (DynamoDB, Cassandra) without consistency bounds</strong> — Pre-flight check must detect and block</li>
 <li>Projects lacking stable entity identity (detected via stability test; audit blocks if test fails)</li>
 <li>Systems where true state may diverge across replicas during audit window</li>
 </ul>
 <blockquote>
-<p>⚠️ <strong>If you attempt to audit an eventually-consistent system:</strong> The audit will block immediately with error <code>CONSISTENCY_MODEL_VIOLATION. Source-of-truth spec indicates eventual consistency without bounds. Pre-flight check failed.</code></p>
+<p>⚠️ <strong>If you attempt to audit an eventually-consistent system:</strong> The audit must block immediately with a consistency-model violation outcome and fail-closed gate behavior.</p>
 </blockquote>
 <p>→ <strong>For eventual-consistent systems:</strong> Use a domain-specific audit profile that accounts for replication windows and consistency bounds.</p>
 <hr />
@@ -2300,10 +2308,10 @@
 <h2 id="example-workflow">Example Workflow<a class="headerlink" href="#example-workflow" title="Permanent link">&para;</a></h2>
 <div class="highlight"><pre><span></span><code><a id="__codelineno-3-1" name="__codelineno-3-1" href="#__codelineno-3-1"></a><span class="c1"># Project description excerpt</span>
 <a id="__codelineno-3-2" name="__codelineno-3-2" href="#__codelineno-3-2"></a><span class="nt">project_goal</span><span class="p">:</span><span class="w"> </span><span class="p p-Indicator">|</span>
-<a id="__codelineno-3-3" name="__codelineno-3-3" href="#__codelineno-3-3"></a><span class="w">  </span><span class="no">Run an ETL mutation pipeline on 100K+ customer records </span>
-<a id="__codelineno-3-4" name="__codelineno-3-4" href="#__codelineno-3-4"></a><span class="w">  </span><span class="no">and verify no data was lost or incorrectly transformed.</span>
+<a id="__codelineno-3-3" name="__codelineno-3-3" href="#__codelineno-3-3"></a><span class="w">  </span><span class="no">Execute a production release with schema migration and verify final state</span>
+<a id="__codelineno-3-4" name="__codelineno-3-4" href="#__codelineno-3-4"></a><span class="w">  </span><span class="no">matches acceptance predicates before closeout.</span>
 <a id="__codelineno-3-5" name="__codelineno-3-5" href="#__codelineno-3-5"></a>
-<a id="__codelineno-3-6" name="__codelineno-3-6" href="#__codelineno-3-6"></a><span class="c1"># Auto-selects post-production-auditor due to &quot;pipeline&quot; + &quot;mutation&quot; keywords</span>
+<a id="__codelineno-3-6" name="__codelineno-3-6" href="#__codelineno-3-6"></a><span class="c1"># Auto-selects post-production-auditor due to operation + verification cues</span>
 <a id="__codelineno-3-7" name="__codelineno-3-7" href="#__codelineno-3-7"></a>
 <a id="__codelineno-3-8" name="__codelineno-3-8" href="#__codelineno-3-8"></a><span class="c1"># In orchestrator.agent.md (USER-EDITABLE section), add Workflow 10C:</span>
 <a id="__codelineno-3-9" name="__codelineno-3-9" href="#__codelineno-3-9"></a><span class="nt">Workflow 10C</span><span class="p">:</span>
