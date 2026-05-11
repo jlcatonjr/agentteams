@@ -3,6 +3,7 @@
 import hashlib
 import hmac
 import os
+from datetime import UTC, datetime, timedelta
 from pathlib import Path
 
 import pytest
@@ -76,6 +77,14 @@ def _write_security_waiver_log(output_dir: Path, rows: list[dict[str, str]]) -> 
     log_path.write_text(header + body, encoding="utf-8")
 
 
+def _future_iso(hours: int = 24) -> str:
+    return (datetime.now(UTC) + timedelta(hours=hours)).isoformat().replace("+00:00", "Z")
+
+
+def _past_iso(hours: int = 24) -> str:
+    return (datetime.now(UTC) - timedelta(hours=hours)).isoformat().replace("+00:00", "Z")
+
+
 def test_gate_blocks_when_log_missing(tmp_path):
     with pytest.raises(RuntimeError, match="no matching PASS"):
         _assert_destructive_action_allowed(tmp_path, action="prune")
@@ -99,10 +108,10 @@ def test_gate_prefers_halt_over_waiver(tmp_path, monkeypatch):
     )
 
     waiver = {
-        "timestamp": "2026-05-10T10:00:00Z",
+        "timestamp": _past_iso(2),
         "waiver_id": "waiver-prune-004",
         "action_reviewed": "prune",
-        "expires_at": "2026-05-11T10:00:00Z",
+        "expires_at": _future_iso(2),
         "max_uses": "1",
         "uses": "0",
         "approver": "security",
@@ -173,10 +182,10 @@ def test_gate_allows_valid_signed_waiver(tmp_path, monkeypatch):
     waiver_key = "test-waiver-key"
     monkeypatch.setenv("AGENTTEAMS_WAIVER_SIGNING_KEY", waiver_key)
     waiver = {
-        "timestamp": "2026-05-10T10:00:00Z",
+        "timestamp": _past_iso(2),
         "waiver_id": "waiver-prune-001",
         "action_reviewed": "prune",
-        "expires_at": "2026-05-11T10:00:00Z",
+        "expires_at": _future_iso(2),
         "max_uses": "1",
         "uses": "0",
         "approver": "security",
@@ -199,10 +208,10 @@ def test_gate_rejects_replayed_signed_waiver(tmp_path, monkeypatch):
     waiver_key = "test-waiver-key"
     monkeypatch.setenv("AGENTTEAMS_WAIVER_SIGNING_KEY", waiver_key)
     waiver = {
-        "timestamp": "2026-05-10T10:00:00Z",
+        "timestamp": _past_iso(2),
         "waiver_id": "waiver-prune-001",
         "action_reviewed": "prune",
-        "expires_at": "2026-05-11T10:00:00Z",
+        "expires_at": _future_iso(2),
         "max_uses": "1",
         "uses": "0",
         "approver": "security",
@@ -224,10 +233,10 @@ def test_gate_blocks_expired_signed_waiver(tmp_path, monkeypatch):
     waiver_key = "test-waiver-key"
     monkeypatch.setenv("AGENTTEAMS_WAIVER_SIGNING_KEY", waiver_key)
     waiver = {
-        "timestamp": "2026-05-10T10:00:00Z",
+        "timestamp": _past_iso(2),
         "waiver_id": "waiver-prune-002",
         "action_reviewed": "prune",
-        "expires_at": "2026-05-09T10:00:00Z",
+        "expires_at": _past_iso(2),
         "max_uses": "1",
         "uses": "0",
         "approver": "security",
@@ -246,10 +255,10 @@ def test_gate_blocks_expired_signed_waiver(tmp_path, monkeypatch):
 def test_gate_blocks_unsigned_waiver(tmp_path, monkeypatch):
     monkeypatch.setenv("AGENTTEAMS_WAIVER_SIGNING_KEY", "test-waiver-key")
     waiver = {
-        "timestamp": "2026-05-10T10:00:00Z",
+        "timestamp": _past_iso(2),
         "waiver_id": "waiver-prune-003",
         "action_reviewed": "prune",
-        "expires_at": "2026-05-11T10:00:00Z",
+        "expires_at": _future_iso(2),
         "max_uses": "1",
         "uses": "0",
         "approver": "security",
@@ -268,10 +277,10 @@ def test_gate_rejects_waiver_scope_mismatch(tmp_path, monkeypatch):
     waiver_key = "test-waiver-key"
     monkeypatch.setenv("AGENTTEAMS_WAIVER_SIGNING_KEY", waiver_key)
     waiver = {
-        "timestamp": "2026-05-10T10:00:00Z",
+        "timestamp": _past_iso(2),
         "waiver_id": "waiver-overwrite-001",
         "action_reviewed": "overwrite",
-        "expires_at": "2026-05-11T10:00:00Z",
+        "expires_at": _future_iso(2),
         "max_uses": "1",
         "uses": "0",
         "approver": "security",
@@ -300,10 +309,10 @@ def test_security_intelligence_freshness_consumes_signed_waiver(tmp_path, monkey
     waiver_key = "test-waiver-key"
     monkeypatch.setenv("AGENTTEAMS_WAIVER_SIGNING_KEY", waiver_key)
     waiver = {
-        "timestamp": "2026-05-10T10:00:00Z",
+        "timestamp": _past_iso(2),
         "waiver_id": "waiver-freshness-001",
         "action_reviewed": "security-intel-freshness",
-        "expires_at": "2026-05-11T10:00:00Z",
+        "expires_at": _future_iso(2),
         "max_uses": "1",
         "uses": "0",
         "approver": "security",
