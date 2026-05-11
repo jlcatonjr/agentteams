@@ -21,7 +21,6 @@ agents:
   - quality-auditor
   - cohesion-repairer
   - technical-validator
-  - post-production-auditor
   - format-converter
   - output-compiler
   - visual-designer
