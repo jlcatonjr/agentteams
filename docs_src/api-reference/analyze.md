@@ -23,6 +23,12 @@ Build and return a team manifest from a normalized project description.
 
 **Returns:** `dict[str, Any]` — Team manifest conforming to `schemas/team-manifest.schema.json`.
 
+**Behavior Notes:**
+
+- If `description` contains `selected_archetypes`, `build_manifest()` uses it as the primary archetype input, then applies required dependency and consistency additions.
+- If `post-production-auditor` is selected (auto-selected or override), `technical-validator` is also ensured in the final archetype set.
+- If tool metadata is incomplete, `tool-doc-researcher` may be auto-added to support metadata completion.
+
 ---
 
 ### `classify_project_type(description)`
@@ -51,6 +57,13 @@ Select and return the list of domain agent archetype slugs appropriate for the p
 
 **Returns:** `list[str]` — Ordered list of archetype slugs (e.g., `['primary-producer', 'quality-auditor', 'technical-validator']`).
 
+**Selection Notes:**
+
+- `post-production-auditor` is selected using contextual co-occurrence cues, not single keyword hits.
+- Auto-selection requires at least one operation/state-change cue plus at least one verification/proof cue.
+- Legacy pipeline cues (`pipeline`, `etl`, `collector`) still work when paired with verification/proof cues.
+- Matching uses boundary-aware keyword detection to avoid substring collisions (for example, `sync` does not match inside `async`).
+
 ---
 
 ### `classify_tool_importance(tool)`
@@ -77,7 +90,7 @@ Return tool dicts classified as requiring a dedicated tool-specialist agent.
 
 - `tools` (`list[dict[str, Any]]`) — List of tool dicts from the project description.
 
-**Returns:** `list[dict[str, Any]]` — Subset of `tools` where `classify_tool_importance` returns `'specialist'`.
+**Returns:** `list[dict[str, Any]]` — Specialist-tier tool agent specs (not raw input tool dicts), each including `slug`, `tool_name`, `tool_version`, `tool_category`, `config_files`, `invocation_command`, `invocation_target`, `docs_url`, `api_surface`, and `common_patterns`.
 
 ---
 
@@ -91,7 +104,7 @@ Return tool dicts classified as reference-tier (informational, no dedicated agen
 
 - `tools` (`list[dict[str, Any]]`) — List of tool dicts from the project description.
 
-**Returns:** `list[dict[str, Any]]` — Subset of `tools` where `classify_tool_importance` returns `'reference'`.
+**Returns:** `list[dict[str, Any]]` — Reference-tier tool specs (not raw input tool dicts), each including `slug`, `tool_name`, `tool_version`, `tool_category`, `config_files`, `docs_url`, `api_surface`, and `common_patterns`.
 
 ---
 
@@ -105,4 +118,4 @@ Build the authority hierarchy list from the project description's `authority_sou
 
 - `description` (`dict[str, Any]`) — Normalized project description.
 
-**Returns:** `list[dict[str, Any]]` — Ordered list of authority source dicts, each with `name`, `path`, and `description` keys.
+**Returns:** `list[dict[str, Any]]` — Ordered authority source dicts with `rank`, `name`, `path`, and `scope` keys.

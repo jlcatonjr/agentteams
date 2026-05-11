@@ -90,7 +90,7 @@ Tier 2: Governance Agents
 Tier 3: Domain Agents
    └── Work-Summarizer (always included),
        Primary-Producer, Quality-Auditor, Technical-Validator,
-    Post-Production-Auditor (keyword-triggered),
+    Post-Production-Auditor (context-triggered),
     Format-Converter, Reference-Manager, Output-Compiler, ...
        Each owns a production workflow (drafting, auditing,
        converting, compiling)
@@ -122,6 +122,8 @@ The orchestrator **routes without producing**. Domain agents **produce without s
 ### Optional Outcome-Verification Layer
 
 Teams that include `@post-production-auditor` can add an optional post-production workflow extension (Workflow 10C) in the orchestrator user-editable section. This workflow validates claimed completed outcomes against source-of-truth state and enforces fail-closed closure behavior on `FAIL`/`INCONCLUSIVE` verdicts.
+
+The analyzer auto-selection for `@post-production-auditor` uses contextual cue pairing (operation/state-change + verification/proof cues) to reduce false positives from single broad keywords. Teams can always force inclusion through `selected_archetypes` in the project description.
 
 To avoid forced propagation to teams that do not include this archetype, Workflow 10C and its routing row are added outside FENCED sections (in user-editable gaps), not inside generated fenced blocks.
 

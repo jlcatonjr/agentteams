@@ -1,18 +1,27 @@
 # Post-Production Auditor Guide
 
-Outcome-verification specialist for data-mutation and collection projects. Validates claimed completed work against source-of-truth state using risk-tiered sampling and evidence-backed verdicts.
+Outcome-verification specialist for any task domain (software, docs, operations, data). Validates claimed completed work against source-of-truth state using risk-tiered sampling and evidence-backed verdicts.
 
 ---
 
 ## When to Use Post-Production-Auditor
 
-The `@post-production-auditor` agent is automatically selected for projects with keywords: `pipeline`, `etl`, `collector`, or `mutation`.
+The `@post-production-auditor` agent is automatically selected using contextual trigger matching in `agentteams/analyze.py`.
+
+Auto-selection requires co-occurring cues, not a single keyword:
+- At least one operation/state-change cue (for example: `migration`, `deploy`, `release`, `cleanup`, `reconcile`, `mutation`)
+- At least one verification/proof cue (for example: `verify`, `validation`, `outcome`, `final state`, `proof-of-completion`, `source-of-truth`)
+
+Legacy pipeline wording remains supported when paired with verification cues (for example: `etl`, `collector`, `pipeline` + `verify`).
 
 **Manually trigger** post-production verification for any project with:
-- Bulk data mutations (transformations, migrations, cleanups)
-- Record-level deletions or status changes
+- High-impact state changes (records, files, artifacts, endpoints)
+- Deletions, rewrites, migrations, releases, or remediations requiring proof-of-result
 - Dependencies on proof-of-completion (not just execution-log evidence)
 - Compliance or audit requirements
+
+Manual override path:
+- Set `selected_archetypes` in your project description to include `post-production-auditor` when you want explicit inclusion regardless of auto-selection.
 
 ---
 
@@ -21,7 +30,7 @@ The `@post-production-auditor` agent is automatically selected for projects with
 Post-production-auditor runs **Workflow 10C** (optional, user-editable) to:
 
 1. **Verify claimed outcomes** against source-of-truth predicates
-2. **Sample mutation results** using risk-tiered rates (Tier 1: 10%, Tier 2: 15%, Tier 3: 20%)
+2. **Sample outcome results** using risk-tiered rates (Tier 1: 10%, Tier 2: 15%, Tier 3: 20%)
 3. **Classify findings** as `PASS`, `PASS_WITH_NOTES`, `FAIL`, or `INCONCLUSIVE`
 4. **Enforce closure gates** — blocks plan closeout if verdict is `FAIL` or `INCONCLUSIVE`
 
@@ -32,15 +41,15 @@ Post-production-auditor runs **Workflow 10C** (optional, user-editable) to:
 ### Trigger Contract
 
 Always invoke audit for:
-- Mutations affecting ≥{MANUAL:BULK_MUTATION_THRESHOLD} records
-- Bulk user-visible mutations exceeding risk threshold
+- Irreversible or high-impact state changes affecting ≥{MANUAL:BULK_MUTATION_THRESHOLD} scoped units
+- Bulk user-visible state changes exceeding risk threshold
 - Contamination-remediation lane completion
 - User-visible correctness outcomes
 
 Risk-invoke if:
 - Execute output includes `FAILED`, `UNKNOWN`, or exceptions
-- Dry-run parity passed but confidence includes low/no-match rows
-- Duplicate-key clusters exist
+- Dry-run parity passed but confidence includes low/no-match or low-evidence buckets
+- Identity-collision clusters exist
 
 Governance-invoke if:
 - Plan closeout depends on proof-of-completion
@@ -58,22 +67,22 @@ Three tiers by trigger severity:
 | 3 | High | max(50, 20%) | 250 |
 
 Mandatory inclusions for all tiers:
-- All rows marked `FAILED` or `UNKNOWN`
-- Duplicate-key clusters (up to {MANUAL:DUPLICATE_CLUSTER_CAP})
-- At least one row per high-risk subgroup
+- All sampled units marked `FAILED` or `UNKNOWN`
+- Identity-collision clusters (up to {MANUAL:DUPLICATE_CLUSTER_CAP})
+- At least one sampled unit per high-risk subgroup
 
 ### Verdict Rules
 
 | Verdict | Criteria |
 |---------|----------|
 | `PASS` | No critical defects, unknown ≤2%, estimated defect rate ≤3% |
-| `PASS_WITH_NOTES` | No critical defects, estimated defect ≤7%, all failed rows have remediation owner |
+| `PASS_WITH_NOTES` | No critical defects, estimated defect ≤7%, all failed sampled units have remediation owner |
 | `FAIL` | Any critical defect OR estimated defect rate >7% |
 | `INCONCLUSIVE` | Evidence quality or runtime stability prevents defensible inference |
 
 **Critical defects:**
 - Expected target state did not persist in source-of-truth
-- Wrong duplicate row retained while sibling row changed
+- Wrong identity-collision sibling retained while target sibling changed
 - Claimed save/update did not persist
 
 ### Output Artifacts
@@ -99,24 +108,27 @@ For `FAIL` verdicts, include `remediation_due_at` SLA and assigned `remediation_
 
 ### Required Manual Placeholders
 
-Each placeholder has a defined owner. Set these values in your project description or `SETUP-REQUIRED.md`:
+Each placeholder has a defined owner. Set these values in `SETUP-REQUIRED.md` (or extend your intake schema if you want them directly in project descriptions):
 
 | Placeholder | Owner | Purpose | Validation |
 |---|---|---|---|
 | `{MANUAL:TRIGGER_CONTRACT_VERSION}` | **Data Team Lead** | Semantic version (e.g., "1.0") to track trigger-rule changes | Matches pattern: `\d+\.\d+` |
-| `{MANUAL:BULK_MUTATION_THRESHOLD}` | **Project PM or Data Lead** | Integer record count (e.g., "100") that always triggers audit | Must be positive integer; reviewed against project risk profile |
+| `{MANUAL:BULK_MUTATION_THRESHOLD}` | **Project PM or Domain Lead** | Integer scoped-unit threshold (e.g., "100") that always triggers audit | Must be positive integer; reviewed against project risk profile |
 | `{MANUAL:SOURCE_OF_TRUTH_SPEC}` | **Data Architect** | Query definition + stability test (see Applicability section) | Must include stability test query and expected result |
-| `{MANUAL:DUPLICATE_CLUSTER_CAP}` | **Data Team** | Max duplicate-key cluster rows to sample (e.g., "50") | Based on expected duplicates; positive integer |
-| `{MANUAL:AUDIT_SLUG}` | **Auto-generated** | Unique slug for this audit run (e.g., "collector-2026-05-10") | Format: `{project-name}-{YYYY-MM-DD}` |
+| `{MANUAL:DUPLICATE_CLUSTER_CAP}` | **Domain Team** | Max identity-collision cluster units to sample (e.g., "50") | Based on expected collisions; positive integer |
+| `{MANUAL:AUDIT_SLUG}` | **Project Team (manual-required)** | Unique slug for this audit run (e.g., "release-2026-05-10") | Format: `{project-name}-{YYYY-MM-DD}` |
 
 ### Pre-Flight Validation
 
-Before audit execution, validate all placeholders are filled and correctly formatted:
+Before audit execution, validate all placeholders are filled and correctly formatted. The current CLI does not provide a dedicated `--validate-audit-config` flag.
+
+Recommended validation path:
 
 ```bash
-agentteams --validate-audit-config --description brief.json
-# Exit code 0: all placeholders valid and ownership confirmed
-# Exit code 1: missing or invalid placeholder
+agentteams --description brief.json --project /path/to/project --framework copilot-vscode --check
+agentteams --description brief.json --project /path/to/project --framework copilot-vscode --scan-security
+# --check detects drift/structural issues in generated teams
+# --scan-security surfaces unresolved placeholders and security concerns
 ```
 
 If validation fails, update `SETUP-REQUIRED.md` with filled values and re-run validation.
@@ -142,7 +154,7 @@ Orchestrator closeout is prohibited while `closure_gate_status.json` has `gate_s
 
 ### Destructive Mutation Clearance
 
-If remediation includes destructive mutation:
+If remediation includes destructive mutation or irreversible state change:
 - Route to `@security` for approval
 - Require either:
   - Verified signed clearance record (HMAC-SHA256 waiver; see **[Waiver System](security-hardening-guide.md#waiver-system)** in the Security Hardening guide for format, lifecycle, and verification procedures), OR
@@ -154,8 +166,8 @@ If remediation includes destructive mutation:
 If `@security` is unavailable >4 hours and remediation is time-critical, break-glass escalation is permitted:
 
 **Approval Authority (ALL required):**
-- One: Data team lead OR Engineering manager
-- One: Compliance officer OR CISO
+- Two independent authorized signers
+- Recommended: one technical owner and one compliance/security approver
 - Signature method: Both signers countersign in `decision_replay_packet.json` (immutable audit record)
 
 **Availability Check:**
@@ -170,7 +182,7 @@ If `@security` is unavailable >4 hours and remediation is time-critical, break-g
 4. Schedule mandatory retrospective security audit within 5 business days
 5. Document business justification, emergency contacts, and approval chain
 
-**Emergency Contacts (add to project description):**
+**Emergency Contacts (store in operational runbook or incident reference, not in schema-validated brief fields unless you extend your schema):**
 ```yaml
 emergency_contacts:
   data_team_lead: alice@org
@@ -185,7 +197,7 @@ emergency_contacts:
 ### Valid For
 
 - Projects with defined source-of-truth predicates and stability test (see below)
-- Stable entity identity (immutable or versioned primary keys) — **must be validated before audit**
+- Stable target identity (immutable/versioned keys, stable file paths, or deterministic artifact identifiers) — **must be validated before audit**
 - Strong consistency or bounded staleness (atomic snapshots available)
 
 ### Entity Identity Stability Check (Required)
@@ -201,15 +213,15 @@ Before audit proceeds, you **must** validate that entity identity is stable:
 
 2. **Pre-flight check:** The audit runs this query against a sample before proceeding
    - If test passes: continues with audit
-   - If test fails: blocks with error `STABILITY_CHECK_FAILED` and halts audit
+  - If test fails: block and halt audit (error code naming is profile-specific)
 
 ### NOT Valid For
 
-- **Eventual-consistent databases (DynamoDB, Cassandra) without consistency bounds** — Pre-flight check will detect and block with error `CONSISTENCY_MODEL_VIOLATION`
+- **Eventual-consistent databases (DynamoDB, Cassandra) without consistency bounds** — Pre-flight check must detect and block
 - Projects lacking stable entity identity (detected via stability test; audit blocks if test fails)
 - Systems where true state may diverge across replicas during audit window
 
-> ⚠️ **If you attempt to audit an eventually-consistent system:** The audit will block immediately with error `CONSISTENCY_MODEL_VIOLATION. Source-of-truth spec indicates eventual consistency without bounds. Pre-flight check failed.`
+> ⚠️ **If you attempt to audit an eventually-consistent system:** The audit must block immediately with a consistency-model violation outcome and fail-closed gate behavior.
 
 → **For eventual-consistent systems:** Use a domain-specific audit profile that accounts for replication windows and consistency bounds.
 
@@ -237,10 +249,10 @@ These affect operational convenience but do not block core audit functionality:
 ```yaml
 # Project description excerpt
 project_goal: |
-  Run an ETL mutation pipeline on 100K+ customer records 
-  and verify no data was lost or incorrectly transformed.
+  Execute a production release with schema migration and verify final state
+  matches acceptance predicates before closeout.
 
-# Auto-selects post-production-auditor due to "pipeline" + "mutation" keywords
+# Auto-selects post-production-auditor due to operation + verification cues
 
 # In orchestrator.agent.md (USER-EDITABLE section), add Workflow 10C:
 Workflow 10C:

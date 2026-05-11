@@ -175,6 +175,7 @@
           "cohesion-repairer",
           "style-guardian",
           "technical-validator",
+          "post-production-auditor",
           "format-converter",
           "reference-manager",
           "output-compiler",

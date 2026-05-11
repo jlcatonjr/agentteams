@@ -13,6 +13,7 @@ from agentteams.analyze import (
     build_authority_hierarchy,
     _has_unknown_tool_metadata,
     _format_unresolved_tool_list,
+    _contains_keyword,
 )
 
 
@@ -702,8 +703,47 @@ def test_select_archetypes_module_doc_not_included_for_generic_project():
     assert "module-doc-validator" not in archetypes
 
 
-def test_select_archetypes_post_production_auditor_for_collector_mutation_projects():
-    desc = {"project_goal": "Run an ETL collector pipeline and verify destructive mutation outcomes."}
+def test_select_archetypes_post_production_auditor_for_operation_plus_verification_non_data():
+    desc = {
+        "project_goal": "Execute a production release migration and verify final state against acceptance criteria."
+    }
+    archetypes = select_archetypes(desc)
+    assert "post-production-auditor" in archetypes
+
+
+def test_select_archetypes_post_production_auditor_for_legacy_plus_verification():
+    desc = {"project_goal": "Run an ETL collector pipeline and verify final state outcomes."}
+    archetypes = select_archetypes(desc)
+    assert "post-production-auditor" in archetypes
+
+
+@pytest.mark.parametrize(
+    "goal",
+    [
+        "Execute migration cleanup for production systems.",  # operation-only
+        "Verify outcome correctness and final-state proof.",  # verification-only
+        "Run an ETL collector pipeline.",  # legacy-only
+        "Run ETL pipeline migration rollout and cleanup.",  # operation + legacy, no verification
+        "Run async handlers and verify documentation formatting.",  # avoid substring collision (sync in async)
+        "Conduct a security audit report for policy documentation.",  # broad single term
+    ],
+)
+def test_select_archetypes_post_production_auditor_robust_negative_matrix(goal: str):
+    archetypes = select_archetypes({"project_goal": goal})
+    assert "post-production-auditor" not in archetypes
+
+
+def test_select_archetypes_post_production_auditor_cross_field_cues_trigger_selection():
+    desc = {
+        "project_goal": "Execute a production migration rollout.",
+        "components": [
+            {
+                "slug": "release-verification",
+                "name": "Release Verification",
+                "description": "Verify final state against source-of-truth acceptance criteria.",
+            }
+        ],
+    }
     archetypes = select_archetypes(desc)
     assert "post-production-auditor" in archetypes
 
@@ -714,10 +754,20 @@ def test_select_archetypes_post_production_auditor_not_added_for_generic_audit_t
     assert "post-production-auditor" not in archetypes
 
 
-def test_build_manifest_post_production_auditor_implies_technical_validator_via_etl():
-    """post-production-auditor triggered by 'etl/collector' must imply technical-validator
+def test_contains_keyword_rejects_non_string_text():
+    with pytest.raises(TypeError, match="text must be str"):
+        _contains_keyword(None, "verify")  # type: ignore[arg-type]
+
+
+def test_contains_keyword_rejects_non_string_keyword():
+    with pytest.raises(TypeError, match="keyword must be str"):
+        _contains_keyword("verify final state", None)  # type: ignore[arg-type]
+
+
+def test_build_manifest_post_production_auditor_implies_technical_validator_for_contextual_trigger():
+    """post-production-auditor selected via contextual cue pairing must imply technical-validator
     even when no keyword independently triggers technical-validator."""
-    desc = {"project_goal": "Run an ETL collector job and verify mutation outcomes."}
+    desc = {"project_goal": "Execute a production release migration and verify final state outcomes."}
     manifest = build_manifest(desc, framework="copilot-vscode")
     archetypes = manifest["selected_archetypes"]
     assert "post-production-auditor" in archetypes, "post-production-auditor should be selected"
@@ -744,6 +794,17 @@ def test_build_manifest_post_production_auditor_all_agents_generated():
             f"Agent '{agent}' declared in post-production-auditor template "
             f"but not generated in manifest. Handoff will fail at runtime."
         )
+
+
+def test_build_manifest_manual_override_selected_archetypes_includes_post_production_auditor():
+    desc = {
+        "project_goal": "Prepare release notes and deployment checklist.",
+        "selected_archetypes": ["post-production-auditor"],
+    }
+    manifest = build_manifest(desc, framework="copilot-vscode")
+    archetypes = manifest["selected_archetypes"]
+    assert "post-production-auditor" in archetypes
+    assert "technical-validator" in archetypes
 
 
 def test_build_manifest_post_production_auditor_manual_placeholders_surfaced():

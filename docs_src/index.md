@@ -16,7 +16,7 @@ Given a project description (a `.json` or `.md` brief), the module:
 The generated team includes:
 
 - 1 **Orchestrator** agent — coordinates all workflows
-- 12 **Governance agents** — navigation, security, code hygiene, consistency, cleanup, refactoring, documentation, cross-repository coordination, conflict resolution, and git operations
+- 11 **Governance agents** — navigation, security, code hygiene, consistency, cleanup, refactoring, documentation, cross-repository coordination, conflict resolution, and git operations
 - 3–10 **Domain agents** — `@work-summarizer` plus project-appropriate archetypes
 - 1 **Workstream Expert** per project component — deep, component-specific knowledge
 - 1 **Team Builder agent** — framework-native agent that can regenerate or expand the team
@@ -122,15 +122,15 @@ See [Getting Started](getting-started.md) for a full walkthrough, [Agent-Assiste
 
 ### [Post-Production Auditor Guide](post-production-auditor-guide.md)
 
-Outcome-verification specialist for data-mutation and collection projects. Covers:
+Outcome-verification specialist for domain-agnostic completion checks (software, docs, operations, data). Covers:
 
-- When to use post-production-auditor (automatic selection + manual triggers)
+- When to use post-production-auditor (contextual automatic selection + manual override)
 - Core audit capability (sampling, verdict rules, closure gating)
 - Configuration and output artifacts
 - Escalation rules and remediation workflows
 - Applicability contract and limitations
 
-**Best for:** Projects with bulk mutations, migration work, contamination remediation, or compliance requirements.
+**Best for:** Projects with high-impact state changes, migration/release/remediation work, or compliance requirements.
 
 ### [Security Hardening & Threat Intelligence](security-hardening-guide.md)
 

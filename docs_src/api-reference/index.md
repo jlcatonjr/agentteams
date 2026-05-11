@@ -2,7 +2,7 @@
 
 Public API for the `agentteams` package. Each module corresponds to a stage in the pipeline or a support capability.
 
-This reference defines the **supported public API contract**. Modules and symbols not documented here are considered internal and may change without notice.
+This reference defines the **supported public API surface** (documented modules and symbols). Modules and symbols not documented here are considered internal and may change without notice. Behavioral details may evolve between releases; check `CHANGELOG.md` for compatibility notes.
 
 ---
 
@@ -11,7 +11,7 @@ This reference defines the **supported public API contract**. Modules and symbol
 | Module | Role |
 |--------|------|
 | [`ingest`](ingest.md) | Load and normalize project description files |
-| [`analyze`](analyze.md) | Classify project type, select archetypes, build team manifest |
+| [`analyze`](analyze.md) | Classify project type, select archetypes (including contextual post-production selection), build team manifest |
 | [`render`](render.md) | Resolve templates and produce rendered agent file content |
 | [`emit`](emit.md) | Write rendered agent files to disk safely |
 

@@ -5,11 +5,11 @@ description: Comprehensive enumeration of all AgentTeams capabilities, organized
 
 # AgentTeams — Feature Inventory
 
-**Version:** 0.1.0 (Released 2026-04-15)
+**Version baseline:** 0.1.0 (Released 2026-04-15)
 
-Features below are grouped by capability area. Items described here have been implemented and are
-available on the `main` branch. The last formal versioned release is **0.1.0 (2026-04-15)**;
-everything listed reflects the current development state.
+Features below are grouped by capability area. This inventory may include capabilities currently present on
+`main` that are not yet part of a tagged release. Release-specific availability should be verified against
+`CHANGELOG.md` and repository tags.
 
 ---
 
@@ -28,14 +28,14 @@ everything listed reflects the current development state.
 3. **Project Description Ingestion** — Load project briefs from `.json` or `.md` format
 4. **Project Directory Scanning** — Scan an existing project directory to supplement missing brief fields
 5. **Project Type Classification** — Infer the deliverable type from the project goal
-6. **Agent Archetype Selection** — Select the appropriate archetype set from the 9-archetype library
+6. **Agent Archetype Selection** — Select the appropriate archetype set from the schema-supported archetype catalog, including contextual post-production auto-selection
 7. **Team Manifest Generation** — Build complete team composition metadata
 8. **Template Placeholder Resolution** — Resolve `{AUTO:token}` and `{MANUAL:token}` placeholders
 
 ### Core Pipeline Modules
 
 9. **`ingest` Module** — Load and normalize project descriptions; parse JSON/Markdown; scan directories
-10. **`analyze` Module** — Classify project type; select archetypes; detect tool agents; build manifest
+10. **`analyze` Module** — Classify project type; select archetypes (including contextual post-production auto-selection for any task domain and manual `selected_archetypes` override support); detect tool agents; build manifest
 11. **`render` Module** — Resolve placeholders in templates; compute template hashes for drift detection
 12. **`emit` Module** — Write rendered files to disk with dry-run and overwrite-protection
 13. **`drift` Module** — Detect content drift (template hash comparison) and structural drift (team composition)
@@ -163,7 +163,7 @@ The following eleven agents are included in every generated team, regardless of 
 
 ## Workflows
 
-Workflows are step sequences embedded in the generated Orchestrator agent. Every workflow terminates with an unconditional call to Workflow 11 (Final Check).
+Workflows are step sequences embedded in the generated Orchestrator agent. Every built-in workflow terminates with an unconditional call to Workflow 11 (Final Check). Optional user-added workflow extensions must explicitly include the same terminal handoff.
 
 87. **Workflow 1 — Produce Deliverable** — Source review → Component Brief → production → quality audit → style audit → consistency check
 88. **Workflow 2 — Revise Deliverable** — Revision → adversarial review → quality audit → consistency check → `@agent-updater` sync
@@ -193,7 +193,7 @@ Workflows are step sequences embedded in the generated Orchestrator agent. Every
 106. **Initialization-as-Trigger** — First successful team generation is an explicit lifecycle trigger: it establishes the baseline inventory and trigger corpus used by future update and drift logic
 107. **Update Lifecycle Trigger Contract** — Canonical `--update --merge` runs must reconcile drift, emit newly required files, preserve manual values, and preserve user-authored content outside fenced regions
 108. **Missing Expected Output Recovery Trigger** — During update, absent expected standard outputs are treated as drift and must be restored even if template hashes are unchanged
-109. **Cross-Repository Security Rule** — Any write to a repository other than `src/` must be assessed by `@repo-liaison` and cleared by `@security`
+109. **Cross-Repository Security Rule** — Any write outside this project's configured primary output directory must be assessed by `@repo-liaison` and cleared by `@security`
 110. **User-Editable Gap Safety Pattern** — Optional routing rows and optional workflow extensions (such as 10C) must be added outside FENCED sections so `--update --merge` does not force-propagate them to teams that do not include the required agent
 111. **Post-Production Closure Gate Artifacts** — Optional post-production audits can emit `closure_gate_status.json`, `capability_check.json`, and `decision_replay_packet.json` to support fail-closed closeout decisions and replay-auditability
 
@@ -232,7 +232,7 @@ Workflows are step sequences embedded in the generated Orchestrator agent. Every
 125. **Protocol 2 — Adjacent Updates** — Apply approved updates to neighboring project repos (requires `@security` clearance on each write)
 126. **Protocol 3 — Orchestrator Coordination** — Formal coordination request between independent orchestrators managing different repositories
 127. **`@repo-liaison` in Constitutional Rules** — Any write outside `src/` must be assessed by `@repo-liaison` before `@security` clearance can be granted
-128. **`orchestrator-workflows.reference.md`** — Reference guide documenting all 12 workflows; kept in sync by `@agent-updater`
+128. **`orchestrator-workflows.reference.md`** — Reference guide documenting the baseline workflow set plus optional extension workflows (for example 10C when configured); kept in sync by `@agent-updater`
 
 ---
 

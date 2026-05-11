@@ -32,8 +32,6 @@ _ARCHETYPE_TRIGGERS: list[tuple[list[str], str]] = [
     # technical-validator: code, data, or technical projects
     (["python", "javascript", "rust", "go", "java", "code", "api", "function", "module", "script",
       "pipeline", "data", "sql", "database", "csv", "json", "yaml"], "technical-validator"),
-        # post-production-auditor: mutation-heavy data/collector projects (conservative first-pass trigger)
-        (["pipeline", "etl", "collector", "mutation"], "post-production-auditor"),
     # format-converter: any project producing a compiled output
     (["latex", "pdf", "pandoc", "html", "markdown", "compile", "build", "convert", "manuscript"], "format-converter"),
     # reference-manager: any project with citations or bibliography
@@ -47,6 +45,57 @@ _ARCHETYPE_TRIGGERS: list[tuple[list[str], str]] = [
     # module-doc-validator: always paired with module-doc-author
     (["pip", "pypi", "package", "distribution", "install", "api reference", "changelog", "mkdocs", "sphinx", "readthedocs"], "module-doc-validator"),
 ]
+
+_POST_PRODUCTION_OPERATION_KEYWORDS: tuple[str, ...] = (
+    "mutation", "migrate", "migration", "backfill", "sync", "reconcile", "cleanup",
+    "deploy", "release", "cutover", "remediation", "upgrade", "downgrade", "reindex",
+    "rewrite", "delete", "state change",
+)
+
+_POST_PRODUCTION_VERIFICATION_KEYWORDS: tuple[str, ...] = (
+    "verify", "verification", "validate", "validation", "post-production", "post production",
+    "proof-of-completion", "proof of completion", "outcome", "final state", "correctness",
+    "closure", "replay", "source-of-truth", "source of truth",
+)
+
+_POST_PRODUCTION_LEGACY_KEYWORDS: tuple[str, ...] = (
+    "pipeline", "etl", "collector",
+)
+
+
+def _should_select_post_production_auditor(text: str) -> bool:
+    """Return True when project text indicates outcome-verification needs.
+
+    To reduce noisy auto-selection, require contextual co-occurrence:
+    - at least one operation/change cue, and
+    - at least one verification/proof cue.
+    """
+    if not isinstance(text, str):
+        raise TypeError("text must be str")
+
+    has_operation = any(_contains_keyword(text, kw) for kw in _POST_PRODUCTION_OPERATION_KEYWORDS)
+    has_verification = any(_contains_keyword(text, kw) for kw in _POST_PRODUCTION_VERIFICATION_KEYWORDS)
+    has_legacy = any(_contains_keyword(text, kw) for kw in _POST_PRODUCTION_LEGACY_KEYWORDS)
+
+    return (has_operation and has_verification) or (has_legacy and has_verification)
+
+
+def _contains_keyword(text: str, keyword: str) -> bool:
+    """Return True if keyword appears as a standalone word or phrase.
+
+    This avoids substring collisions such as matching "sync" inside "async".
+    """
+    if not isinstance(text, str):
+        raise TypeError("text must be str")
+    if not isinstance(keyword, str):
+        raise TypeError("keyword must be str")
+
+    if not keyword:
+        return False
+    # Accept optional hyphen/space variants for phrase matching.
+    normalized = re.escape(keyword).replace(r"\ ", r"[-\s]+")
+    pattern = rf"(?<![a-z0-9]){normalized}(?![a-z0-9])"
+    return re.search(pattern, text) is not None
 
 #: Always-included governance agent slugs (tier 2)
 GOVERNANCE_AGENTS = [
@@ -332,6 +381,12 @@ def select_archetypes(description: dict[str, Any]) -> list[str]:
         if keywords == ["*"] or any(kw in text for kw in keywords):
             selected.append(archetype)
             seen.add(archetype)
+
+    # post-production-auditor: outcome-verification trigger for any domain,
+    # guarded by contextual co-occurrence to avoid broad false positives.
+    if "post-production-auditor" not in seen and _should_select_post_production_auditor(text):
+        selected.append("post-production-auditor")
+        seen.add("post-production-auditor")
 
     # Always include primary-producer and quality-auditor
     for required in ("primary-producer", "quality-auditor"):

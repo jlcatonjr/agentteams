@@ -54,16 +54,16 @@ Run this agent when any of the following is true.
 
 ### Always-trigger
 
-1. Destructive mutation affects `{MANUAL:BULK_MUTATION_THRESHOLD}` or more records.
-2. Bulk user-visible mutation exceeds project-defined risk threshold.
+1. Destructive or irreversible state change affects `{MANUAL:BULK_MUTATION_THRESHOLD}` or more scoped units (records, files, artifacts, endpoints, or equivalent domain objects).
+2. Bulk user-visible state change exceeds project-defined risk threshold.
 3. A contamination-remediation lane is declared complete.
 4. A user-visible correctness outcome is declared complete.
 
 ### Risk-trigger
 
 1. Execute output includes `FAILED`, `UNKNOWN`, or runtime exception rows.
-2. Dry-run parity passed but confidence distribution includes low/no-match classes.
-3. Duplicate-key clusters exist for a project-defined identity key.
+2. Dry-run parity passed but confidence distribution includes low/no-match classes or low-evidence buckets.
+3. Identity-collision clusters exist for a project-defined identity key.
 4. Evidence disagreement exists between execute output and source-of-truth state.
 5. Session fragility appears (auth expiry, selector instability, transport errors).
 6. Platform drift appears (schema change, API contract change, auth-policy change).
@@ -97,9 +97,9 @@ Select a tier by trigger severity.
 
 Mandatory inclusions for every tier:
 
-1. all rows already marked `FAILED` or `UNKNOWN`
-2. duplicate-key clusters in deterministic priority order (severity, recency, impact), up to project-defined `{MANUAL:DUPLICATE_CLUSTER_CAP}`; record excluded cluster count and rationale
-3. at least one row per high-risk subgroup
+1. all sampled units already marked `FAILED` or `UNKNOWN`
+2. identity-collision clusters in deterministic priority order (severity, recency, impact), up to project-defined `{MANUAL:DUPLICATE_CLUSTER_CAP}`; record excluded cluster count and rationale
+3. at least one sampled unit per high-risk subgroup
 
 Use a documented selection criteria specification (population definition + deterministic ordering rules + inclusion predicates). Do not promise seed-level replay determinism for LLM execution.
 
@@ -112,9 +112,9 @@ Use a documented selection criteria specification (population definition + deter
 
 1. Normalize claim packet and verify required inputs.
 2. Build sample manifest using selected tier and mandatory inclusions.
-3. Run source-of-truth checks per sampled row.
-4. For failed/unknown rows, run one confirmation pass to reduce transient false negatives.
-5. Classify each sampled row as `PASS`, `FAIL`, or `UNKNOWN` with evidence links.
+3. Run source-of-truth checks per sampled unit.
+4. For failed/unknown sampled units, run one confirmation pass to reduce transient false negatives.
+5. Classify each sampled unit as `PASS`, `FAIL`, or `UNKNOWN` with evidence links.
 6. Compute summary metrics and produce verdict.
 7. Route adversarial and conflict checks before closure recommendation.
 
@@ -127,7 +127,7 @@ Use a documented selection criteria specification (population definition + deter
 - `PASS_WITH_NOTES`:
   - no critical defects
   - estimated defect rate <= 7%
-  - all failed rows have remediation owner
+  - all failed sampled units have remediation owner
 - `FAIL`:
   - any critical defect
   - or estimated defect rate > 7%
@@ -143,7 +143,7 @@ Estimator requirement:
 Critical defect examples:
 
 1. expected target state did not persist in source-of-truth
-2. wrong duplicate row retained while sibling row changed
+2. wrong identity-collision sibling retained while target sibling changed
 3. claimed save/update did not persist in source-of-truth state
 
 ## Output Artifacts
@@ -169,9 +169,9 @@ For `FAIL` verdicts, include an escalation SLA field (`remediation_due_at`) and 
 
 - If verdict is `FAIL` or `INCONCLUSIVE`:
   - block completion claim
-  - generate remediation queue from failed/unknown sampled rows
+  - generate remediation queue from failed/unknown sampled units
   - require rerun plus re-audit before closure
-- If proposed remediation includes destructive mutation:
+- If proposed remediation includes destructive mutation or irreversible state change:
   - route to `@security` and require either (a) verified signed clearance record or (b) two-person manual approval with immutable audit evidence
   - "two-person approval" means approval from two independent authorized signatories; if your org has only one authorized signer, document an exception and escalate to executive review
   - if signature verification is unavailable and dual approval evidence is missing, destructive remediation is prohibited
@@ -200,8 +200,8 @@ Closure enforcement:
 ## Applicability Contract
 
 This template applies only where:
-- Source-of-truth predicates and record-level verification criteria are defined
-- Stable entity identity exists (immutable or deterministically versioned primary keys)
+- Source-of-truth predicates and unit-level verification criteria are defined (records, files, artifacts, endpoints, or equivalent)
+- Stable target identity exists (for example immutable primary keys, stable file paths, versioned artifact IDs, or deterministic endpoint identifiers)
 - Strong consistency or bounded staleness is available (not eventual-consistent distributed systems with unbounded replication lag)
 
 If those preconditions are absent, use a domain-specific auditor profile instead of this template.
