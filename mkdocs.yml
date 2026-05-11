@@ -39,6 +39,14 @@ nav:
   - Guides:
       - Post-Production Auditor: post-production-auditor-guide.md
       - Security Hardening & Threat Intelligence: security-hardening-guide.md
+      - Section Fencing & Safe Merges: section-fencing-guide.md
+      - Update Lifecycle, Drift & Backups: update-lifecycle-guide.md
+      - Migration Guide: migration-guide.md
+      - Interoperability Patterns: interoperability-patterns-guide.md
+      - Bridge CI Automation: bridge-ci-automation-guide.md
+      - Enrichment Pipeline: enrichment-pipeline-guide.md
+      - Cross-Repository Coordination: cross-repository-coordination-guide.md
+      - Working with Your Generated Team: working-with-your-generated-team-guide.md
   - API Reference:
       - Overview: api-reference/index.md
       - ingest: api-reference/ingest.md

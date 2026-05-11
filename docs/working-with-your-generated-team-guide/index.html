@@ -1,0 +1,2391 @@
+
+<!doctype html>
+<html lang="en" class="no-js">
+  <head>
+    
+      <meta charset="utf-8">
+      <meta name="viewport" content="width=device-width,initial-scale=1">
+      
+        <meta name="description" content="Generate a complete, coordinated AI agent team for any project from a single description file.">
+      
+      
+        <meta name="author" content="jlcatonjr">
+      
+      
+        <link rel="canonical" href="https://jlcatonjr.github.io/agentteams/working-with-your-generated-team-guide/">
+      
+      
+        <link rel="prev" href="../cross-repository-coordination-guide/">
+      
+      
+        <link rel="next" href="../api-reference/">
+      
+      
+        
+      
+      
+      <link rel="icon" href="../assets/images/favicon.png">
+      <meta name="generator" content="mkdocs-1.6.1, mkdocs-material-9.7.6">
+    
+    
+      
+        <title>Working with Your Generated Team - Agent Teams Module</title>
+      
+    
+    
+      <link rel="stylesheet" href="../assets/stylesheets/main.484c7ddc.min.css">
+      
+        
+        <link rel="stylesheet" href="../assets/stylesheets/palette.ab4e12ef.min.css">
+      
+      
+
+
+    
+    
+      
+    
+    
+      
+        
+        
+        <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+        <link rel="stylesheet" href="https://fonts.googleapis.com/css?family=Roboto:300,300i,400,400i,700,700i%7CRoboto+Mono:400,400i,700,700i&display=fallback">
+        <style>:root{--md-text-font:"Roboto";--md-code-font:"Roboto Mono"}</style>
+      
+    
+    
+    <script>__md_scope=new URL("..",location),__md_hash=e=>[...e].reduce(((e,_)=>(e<<5)-e+_.charCodeAt(0)),0),__md_get=(e,_=localStorage,t=__md_scope)=>JSON.parse(_.getItem(t.pathname+"."+e)),__md_set=(e,_,t=localStorage,a=__md_scope)=>{try{t.setItem(a.pathname+"."+e,JSON.stringify(_))}catch(e){}}</script>
+    
+      
+
+    
+    
+  </head>
+  
+  
+    
+    
+      
+    
+    
+    
+    
+    <body dir="ltr" data-md-color-scheme="default" data-md-color-primary="indigo" data-md-color-accent="indigo">
+  
+    
+    <input class="md-toggle" data-md-toggle="drawer" type="checkbox" id="__drawer" autocomplete="off">
+    <input class="md-toggle" data-md-toggle="search" type="checkbox" id="__search" autocomplete="off">
+    <label class="md-overlay" for="__drawer"></label>
+    <div data-md-component="skip">
+      
+        
+        <a href="#working-with-your-generated-team" class="md-skip">
+          Skip to content
+        </a>
+      
+    </div>
+    <div data-md-component="announce">
+      
+    </div>
+    
+    
+      
+
+<header class="md-header" data-md-component="header">
+  <nav class="md-header__inner md-grid" aria-label="Header">
+    <a href=".." title="Agent Teams Module" class="md-header__button md-logo" aria-label="Agent Teams Module" data-md-component="logo">
+      
+  
+  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 8a3 3 0 0 0 3-3 3 3 0 0 0-3-3 3 3 0 0 0-3 3 3 3 0 0 0 3 3m0 3.54C9.64 9.35 6.5 8 3 8v11c3.5 0 6.64 1.35 9 3.54 2.36-2.19 5.5-3.54 9-3.54V8c-3.5 0-6.64 1.35-9 3.54"/></svg>
+
+    </a>
+    <label class="md-header__button md-icon" for="__drawer">
+      
+      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M3 6h18v2H3zm0 5h18v2H3zm0 5h18v2H3z"/></svg>
+    </label>
+    <div class="md-header__title" data-md-component="header-title">
+      <div class="md-header__ellipsis">
+        <div class="md-header__topic">
+          <span class="md-ellipsis">
+            Agent Teams Module
+          </span>
+        </div>
+        <div class="md-header__topic" data-md-component="header-topic">
+          <span class="md-ellipsis">
+            
+              Working with Your Generated Team
+            
+          </span>
+        </div>
+      </div>
+    </div>
+    
+      
+        <form class="md-header__option" data-md-component="palette">
+  
+    
+    
+    
+    <input class="md-option" data-md-color-media="" data-md-color-scheme="default" data-md-color-primary="indigo" data-md-color-accent="indigo"  aria-hidden="true"  type="radio" name="__palette" id="__palette_0">
+    
+  
+</form>
+      
+    
+    
+      <script>var palette=__md_get("__palette");if(palette&&palette.color){if("(prefers-color-scheme)"===palette.color.media){var media=matchMedia("(prefers-color-scheme: light)"),input=document.querySelector(media.matches?"[data-md-color-media='(prefers-color-scheme: light)']":"[data-md-color-media='(prefers-color-scheme: dark)']");palette.color.media=input.getAttribute("data-md-color-media"),palette.color.scheme=input.getAttribute("data-md-color-scheme"),palette.color.primary=input.getAttribute("data-md-color-primary"),palette.color.accent=input.getAttribute("data-md-color-accent")}for(var[key,value]of Object.entries(palette.color))document.body.setAttribute("data-md-color-"+key,value)}</script>
+    
+    
+    
+      
+      
+        <label class="md-header__button md-icon" for="__search">
+          
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M9.5 3A6.5 6.5 0 0 1 16 9.5c0 1.61-.59 3.09-1.56 4.23l.27.27h.79l5 5-1.5 1.5-5-5v-.79l-.27-.27A6.52 6.52 0 0 1 9.5 16 6.5 6.5 0 0 1 3 9.5 6.5 6.5 0 0 1 9.5 3m0 2C7 5 5 7 5 9.5S7 14 9.5 14 14 12 14 9.5 12 5 9.5 5"/></svg>
+        </label>
+        <div class="md-search" data-md-component="search" role="dialog">
+  <label class="md-search__overlay" for="__search"></label>
+  <div class="md-search__inner" role="search">
+    <form class="md-search__form" name="search">
+      <input type="text" class="md-search__input" name="query" aria-label="Search" placeholder="Search" autocapitalize="off" autocorrect="off" autocomplete="off" spellcheck="false" data-md-component="search-query" required>
+      <label class="md-search__icon md-icon" for="__search">
+        
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M9.5 3A6.5 6.5 0 0 1 16 9.5c0 1.61-.59 3.09-1.56 4.23l.27.27h.79l5 5-1.5 1.5-5-5v-.79l-.27-.27A6.52 6.52 0 0 1 9.5 16 6.5 6.5 0 0 1 3 9.5 6.5 6.5 0 0 1 9.5 3m0 2C7 5 5 7 5 9.5S7 14 9.5 14 14 12 14 9.5 12 5 9.5 5"/></svg>
+        
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M20 11v2H8l5.5 5.5-1.42 1.42L4.16 12l7.92-7.92L13.5 5.5 8 11z"/></svg>
+      </label>
+      <nav class="md-search__options" aria-label="Search">
+        
+        <button type="reset" class="md-search__icon md-icon" title="Clear" aria-label="Clear" tabindex="-1">
+          
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M19 6.41 17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z"/></svg>
+        </button>
+      </nav>
+      
+        <div class="md-search__suggest" data-md-component="search-suggest"></div>
+      
+    </form>
+    <div class="md-search__output">
+      <div class="md-search__scrollwrap" tabindex="0" data-md-scrollfix>
+        <div class="md-search-result" data-md-component="search-result">
+          <div class="md-search-result__meta">
+            Initializing search
+          </div>
+          <ol class="md-search-result__list" role="presentation"></ol>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+      
+    
+    
+      <div class="md-header__source">
+        <a href="https://github.com/jlcatonjr/agentteams" title="Go to repository" class="md-source" data-md-component="source">
+  <div class="md-source__icon md-icon">
+    
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 448 512"><!--! Font Awesome Free 7.1.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2025 Fonticons, Inc.--><path d="M439.6 236.1 244 40.5c-5.4-5.5-12.8-8.5-20.4-8.5s-15 3-20.4 8.4L162.5 81l51.5 51.5c27.1-9.1 52.7 16.8 43.4 43.7l49.7 49.7c34.2-11.8 61.2 31 35.5 56.7-26.5 26.5-70.2-2.9-56-37.3L240.3 199v121.9c25.3 12.5 22.3 41.8 9.1 55-6.4 6.4-15.2 10.1-24.3 10.1s-17.8-3.6-24.3-10.1c-17.6-17.6-11.1-46.9 11.2-56v-123c-20.8-8.5-24.6-30.7-18.6-45L142.6 101 8.5 235.1C3 240.6 0 247.9 0 255.5s3 15 8.5 20.4l195.6 195.7c5.4 5.4 12.7 8.4 20.4 8.4s15-3 20.4-8.4l194.7-194.7c5.4-5.4 8.4-12.8 8.4-20.4s-3-15-8.4-20.4"/></svg>
+  </div>
+  <div class="md-source__repository">
+    jlcatonjr/agentteams
+  </div>
+</a>
+      </div>
+    
+  </nav>
+  
+</header>
+    
+    <div class="md-container" data-md-component="container">
+      
+      
+        
+          
+            
+<nav class="md-tabs" aria-label="Tabs" data-md-component="tabs">
+  <div class="md-grid">
+    <ul class="md-tabs__list">
+      
+        
+  
+  
+  
+  
+    <li class="md-tabs__item">
+      <a href=".." class="md-tabs__link">
+        
+  
+  
+    
+  
+  Home
+
+      </a>
+    </li>
+  
+
+      
+        
+  
+  
+  
+  
+    <li class="md-tabs__item">
+      <a href="../manuscript/" class="md-tabs__link">
+        
+  
+  
+    
+  
+  Manuscript
+
+      </a>
+    </li>
+  
+
+      
+        
+  
+  
+  
+  
+    <li class="md-tabs__item">
+      <a href="../getting-started/" class="md-tabs__link">
+        
+  
+  
+    
+  
+  Getting Started
+
+      </a>
+    </li>
+  
+
+      
+        
+  
+  
+  
+  
+    <li class="md-tabs__item">
+      <a href="../agent-assisted-setup/" class="md-tabs__link">
+        
+  
+  
+    
+  
+  Agent-Assisted Setup
+
+      </a>
+    </li>
+  
+
+      
+        
+  
+  
+  
+  
+    <li class="md-tabs__item">
+      <a href="../how-it-works/" class="md-tabs__link">
+        
+  
+  
+    
+  
+  How It Works
+
+      </a>
+    </li>
+  
+
+      
+        
+  
+  
+  
+  
+    <li class="md-tabs__item">
+      <a href="../examples/" class="md-tabs__link">
+        
+  
+  
+    
+  
+  Examples
+
+      </a>
+    </li>
+  
+
+      
+        
+  
+  
+  
+  
+    <li class="md-tabs__item">
+      <a href="../cli-reference/" class="md-tabs__link">
+        
+  
+  
+    
+  
+  CLI Reference
+
+      </a>
+    </li>
+  
+
+      
+        
+  
+  
+  
+    
+  
+  
+    
+    
+      <li class="md-tabs__item md-tabs__item--active">
+        <a href="../post-production-auditor-guide/" class="md-tabs__link">
+          
+  
+  
+  Guides
+
+        </a>
+      </li>
+    
+  
+
+      
+        
+  
+  
+  
+  
+    
+    
+      <li class="md-tabs__item">
+        <a href="../api-reference/" class="md-tabs__link">
+          
+  
+  
+  API Reference
+
+        </a>
+      </li>
+    
+  
+
+      
+        
+  
+  
+  
+  
+    <li class="md-tabs__item">
+      <a href="../template-authoring/" class="md-tabs__link">
+        
+  
+  
+    
+  
+  Template Authoring
+
+      </a>
+    </li>
+  
+
+      
+        
+  
+  
+  
+  
+    <li class="md-tabs__item">
+      <a href="../DESCRIPTION-FORMAT/" class="md-tabs__link">
+        
+  
+  
+    
+  
+  Description Format
+
+      </a>
+    </li>
+  
+
+      
+        
+  
+  
+  
+  
+    <li class="md-tabs__item">
+      <a href="../structural-update-plan/" class="md-tabs__link">
+        
+  
+  
+    
+  
+  Structural Update Plan
+
+      </a>
+    </li>
+  
+
+      
+        
+  
+  
+  
+  
+    <li class="md-tabs__item">
+      <a href="../contributing/" class="md-tabs__link">
+        
+  
+  
+    
+  
+  Contributing
+
+      </a>
+    </li>
+  
+
+      
+        
+  
+  
+  
+  
+    <li class="md-tabs__item">
+      <a href="../changelog/" class="md-tabs__link">
+        
+  
+  
+    
+  
+  Changelog
+
+      </a>
+    </li>
+  
+
+      
+    </ul>
+  </div>
+</nav>
+          
+        
+      
+      <main class="md-main" data-md-component="main">
+        <div class="md-main__inner md-grid">
+          
+            
+              
+              <div class="md-sidebar md-sidebar--primary" data-md-component="sidebar" data-md-type="navigation" >
+                <div class="md-sidebar__scrollwrap">
+                  <div class="md-sidebar__inner">
+                    
+
+
+  
+
+
+<nav class="md-nav md-nav--primary md-nav--lifted" aria-label="Navigation" data-md-level="0">
+  <label class="md-nav__title" for="__drawer">
+    <a href=".." title="Agent Teams Module" class="md-nav__button md-logo" aria-label="Agent Teams Module" data-md-component="logo">
+      
+  
+  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 8a3 3 0 0 0 3-3 3 3 0 0 0-3-3 3 3 0 0 0-3 3 3 3 0 0 0 3 3m0 3.54C9.64 9.35 6.5 8 3 8v11c3.5 0 6.64 1.35 9 3.54 2.36-2.19 5.5-3.54 9-3.54V8c-3.5 0-6.64 1.35-9 3.54"/></svg>
+
+    </a>
+    Agent Teams Module
+  </label>
+  
+    <div class="md-nav__source">
+      <a href="https://github.com/jlcatonjr/agentteams" title="Go to repository" class="md-source" data-md-component="source">
+  <div class="md-source__icon md-icon">
+    
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 448 512"><!--! Font Awesome Free 7.1.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2025 Fonticons, Inc.--><path d="M439.6 236.1 244 40.5c-5.4-5.5-12.8-8.5-20.4-8.5s-15 3-20.4 8.4L162.5 81l51.5 51.5c27.1-9.1 52.7 16.8 43.4 43.7l49.7 49.7c34.2-11.8 61.2 31 35.5 56.7-26.5 26.5-70.2-2.9-56-37.3L240.3 199v121.9c25.3 12.5 22.3 41.8 9.1 55-6.4 6.4-15.2 10.1-24.3 10.1s-17.8-3.6-24.3-10.1c-17.6-17.6-11.1-46.9 11.2-56v-123c-20.8-8.5-24.6-30.7-18.6-45L142.6 101 8.5 235.1C3 240.6 0 247.9 0 255.5s3 15 8.5 20.4l195.6 195.7c5.4 5.4 12.7 8.4 20.4 8.4s15-3 20.4-8.4l194.7-194.7c5.4-5.4 8.4-12.8 8.4-20.4s-3-15-8.4-20.4"/></svg>
+  </div>
+  <div class="md-source__repository">
+    jlcatonjr/agentteams
+  </div>
+</a>
+    </div>
+  
+  <ul class="md-nav__list" data-md-scrollfix>
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href=".." class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Home
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../manuscript/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Manuscript
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../getting-started/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Getting Started
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../agent-assisted-setup/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Agent-Assisted Setup
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../how-it-works/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    How It Works
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../examples/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Examples
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../cli-reference/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    CLI Reference
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+    
+  
+  
+  
+    
+    
+    
+    
+      
+        
+        
+      
+      
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--active md-nav__item--section md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_8" checked>
+        
+          
+          <label class="md-nav__link" for="__nav_8" id="__nav_8_label" tabindex="">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Guides
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_8_label" aria-expanded="true">
+          <label class="md-nav__title" for="__nav_8">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Guides
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../post-production-auditor-guide/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Post-Production Auditor
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../security-hardening-guide/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Security Hardening & Threat Intelligence
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../section-fencing-guide/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Section Fencing & Safe Merges
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../update-lifecycle-guide/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Update Lifecycle, Drift & Backups
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../migration-guide/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Migration Guide
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../interoperability-patterns-guide/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Interoperability Patterns
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../bridge-ci-automation-guide/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Bridge CI Automation
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../enrichment-pipeline-guide/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Enrichment Pipeline
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../cross-repository-coordination-guide/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Cross-Repository Coordination
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+    
+  
+  
+  
+    <li class="md-nav__item md-nav__item--active">
+      
+      <input class="md-nav__toggle md-toggle" type="checkbox" id="__toc">
+      
+      
+        
+      
+      
+        <label class="md-nav__link md-nav__link--active" for="__toc">
+          
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Working with Your Generated Team
+  
+
+    
+  </span>
+  
+  
+
+          <span class="md-nav__icon md-icon"></span>
+        </label>
+      
+      <a href="./" class="md-nav__link md-nav__link--active">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Working with Your Generated Team
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+      
+        
+
+<nav class="md-nav md-nav--secondary" aria-label="Table of contents">
+  
+  
+  
+    
+  
+  
+    <label class="md-nav__title" for="__toc">
+      <span class="md-nav__icon md-icon"></span>
+      Table of contents
+    </label>
+    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
+      
+        <li class="md-nav__item">
+  <a href="#when-to-use-this-guide" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        When to Use This Guide
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#the-generated-team-structure" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        The Generated Team Structure
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#how-sessions-work" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        How Sessions Work
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#plan-documentation" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Plan Documentation
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Plan Documentation">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#where-plans-live" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Where Plans Live
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#steps-csv-format" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Steps CSV Format
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#reviewing-plan-status" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Reviewing Plan Status
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#when-plans-complete" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        When Plans Complete
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#work-summary-reporting" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Work Summary Reporting
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Work Summary Reporting">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#daily-summaries" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Daily Summaries
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#weekly-and-monthly-summaries" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Weekly and Monthly Summaries
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#when-to-invoke-governance-agents-directly" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        When to Invoke Governance Agents Directly
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="When to Invoke Governance Agents Directly">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#when-to-use-adversarial" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        When to Use @adversarial
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#when-to-use-conflict-auditor" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        When to Use @conflict-auditor
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#the-append-only-conflict-log" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        The Append-Only Conflict Log
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="The Append-Only Conflict Log">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#reading-the-conflict-log" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Reading the Conflict Log
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#final-check-workflow-11" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Final Check (Workflow 11)
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#best-practices" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Best Practices
+      
+    </span>
+  </a>
+  
+</li>
+      
+    </ul>
+  
+</nav>
+      
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+    
+    
+      
+      
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_9" >
+        
+          
+          <label class="md-nav__link" for="__nav_9" id="__nav_9_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    API Reference
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_9_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_9">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    API Reference
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../api-reference/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Overview
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../api-reference/ingest/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    ingest
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../api-reference/analyze/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    analyze
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../api-reference/render/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    render
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../api-reference/emit/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    emit
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../api-reference/drift/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    drift
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../api-reference/scan/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    scan
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../api-reference/audit/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    audit
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../api-reference/remediate/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    remediate
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../api-reference/enrich/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    enrich
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../api-reference/graph/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    graph
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../api-reference/frameworks/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    frameworks
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../api-reference/man/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    man
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../template-authoring/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Template Authoring
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../DESCRIPTION-FORMAT/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Description Format
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../structural-update-plan/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Structural Update Plan
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../contributing/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Contributing
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../changelog/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Changelog
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+  </ul>
+</nav>
+                  </div>
+                </div>
+              </div>
+            
+            
+              
+              <div class="md-sidebar md-sidebar--secondary" data-md-component="sidebar" data-md-type="toc" >
+                <div class="md-sidebar__scrollwrap">
+                  <div class="md-sidebar__inner">
+                    
+
+<nav class="md-nav md-nav--secondary" aria-label="Table of contents">
+  
+  
+  
+    
+  
+  
+    <label class="md-nav__title" for="__toc">
+      <span class="md-nav__icon md-icon"></span>
+      Table of contents
+    </label>
+    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
+      
+        <li class="md-nav__item">
+  <a href="#when-to-use-this-guide" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        When to Use This Guide
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#the-generated-team-structure" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        The Generated Team Structure
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#how-sessions-work" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        How Sessions Work
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#plan-documentation" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Plan Documentation
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Plan Documentation">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#where-plans-live" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Where Plans Live
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#steps-csv-format" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Steps CSV Format
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#reviewing-plan-status" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Reviewing Plan Status
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#when-plans-complete" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        When Plans Complete
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#work-summary-reporting" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Work Summary Reporting
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Work Summary Reporting">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#daily-summaries" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Daily Summaries
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#weekly-and-monthly-summaries" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Weekly and Monthly Summaries
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#when-to-invoke-governance-agents-directly" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        When to Invoke Governance Agents Directly
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="When to Invoke Governance Agents Directly">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#when-to-use-adversarial" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        When to Use @adversarial
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#when-to-use-conflict-auditor" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        When to Use @conflict-auditor
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#the-append-only-conflict-log" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        The Append-Only Conflict Log
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="The Append-Only Conflict Log">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#reading-the-conflict-log" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Reading the Conflict Log
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#final-check-workflow-11" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Final Check (Workflow 11)
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#best-practices" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Best Practices
+      
+    </span>
+  </a>
+  
+</li>
+      
+    </ul>
+  
+</nav>
+                  </div>
+                </div>
+              </div>
+            
+          
+          
+            <div class="md-content" data-md-component="content">
+              
+              <article class="md-content__inner md-typeset">
+                
+                  
+
+
+  
+  
+
+
+<h1 id="working-with-your-generated-team">Working with Your Generated Team<a class="headerlink" href="#working-with-your-generated-team" title="Permanent link">&para;</a></h1>
+<h2 id="when-to-use-this-guide">When to Use This Guide<a class="headerlink" href="#when-to-use-this-guide" title="Permanent link">&para;</a></h2>
+<p>Read this guide if you:</p>
+<ul>
+<li>Have just generated an agent team with AgentTeams and want to know how to use it effectively day-to-day</li>
+<li>Want to understand how plan documentation (<code>tmp/by-week/</code>) integrates with your team's orchestrator</li>
+<li>Need to understand when to invoke <code>@adversarial</code> vs <code>@conflict-auditor</code> vs other governance agents</li>
+<li>Want to use work summary reporting to track session output across days and weeks</li>
+</ul>
+<hr />
+<h2 id="the-generated-team-structure">The Generated Team Structure<a class="headerlink" href="#the-generated-team-structure" title="Permanent link">&para;</a></h2>
+<p>When AgentTeams generates a team, every team includes a four-tier hierarchy:</p>
+<ol>
+<li><strong>Orchestrator</strong> — routes all work, enforces constitutional rules, closes sessions</li>
+<li><strong>Governance agents</strong> — cross-cutting concerns (security, hygiene, adversarial review, conflict audit, etc.)</li>
+<li><strong>Domain agents</strong> — production workflows (producing, auditing, converting, compiling)</li>
+<li><strong>Workstream experts</strong> — one per project component</li>
+</ol>
+<p>See <a href="../how-it-works/">How It Works</a> for architecture details. This guide focuses on day-to-day operation.</p>
+<hr />
+<h2 id="how-sessions-work">How Sessions Work<a class="headerlink" href="#how-sessions-work" title="Permanent link">&para;</a></h2>
+<p>A session begins when you invoke the orchestrator (or a domain agent directly) with a task. For multi-step tasks, the orchestrator:</p>
+<ol>
+<li>Generates a plan before executing any step</li>
+<li>Routes each step to the appropriate domain agent</li>
+<li>After each step, audits remaining steps with governance agents</li>
+<li>Closes the session with a conflict audit and Final Check</li>
+</ol>
+<p>You do not need to manage this flow manually — the orchestrator handles it. What you should know is when and why the plan artifacts end up in <code>tmp/by-week/</code>.</p>
+<hr />
+<h2 id="plan-documentation">Plan Documentation<a class="headerlink" href="#plan-documentation" title="Permanent link">&para;</a></h2>
+<h3 id="where-plans-live">Where Plans Live<a class="headerlink" href="#where-plans-live" title="Permanent link">&para;</a></h3>
+<p>For every task involving two or more implementation steps, the orchestrator creates:</p>
+<ul>
+<li><code>tmp/by-week/YYYY-Www/&lt;plan-slug&gt;.plan.md</code> — summary: goal, agent sequence, success criteria, rollback notes</li>
+<li><code>tmp/by-week/YYYY-Www/&lt;plan-slug&gt;.steps.csv</code> — step-by-step record</li>
+</ul>
+<p>The ISO week folder (<code>YYYY-Www</code>) is created automatically if it does not exist.</p>
+<h3 id="steps-csv-format">Steps CSV Format<a class="headerlink" href="#steps-csv-format" title="Permanent link">&para;</a></h3>
+<p>Each row in the steps file has these columns:</p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a>step,agent,action,inputs,outputs,status,notes
+</code></pre></div>
+<table>
+<thead>
+<tr>
+<th>Column</th>
+<th>Values</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>status</code></td>
+<td><code>pending</code>, <code>in_progress</code>, <code>done</code>, <code>blocked</code></td>
+</tr>
+<tr>
+<td><code>notes</code></td>
+<td>Additional context, blockers, or deviation notes</td>
+</tr>
+</tbody>
+</table>
+<p>After each step completes, the orchestrator updates <code>status</code> to <code>done</code> and runs the remaining <code>pending</code> rows through <code>@adversarial</code> and <code>@conflict-auditor</code> before proceeding to the next step.</p>
+<h3 id="reviewing-plan-status">Reviewing Plan Status<a class="headerlink" href="#reviewing-plan-status" title="Permanent link">&para;</a></h3>
+<p>You can review plans at any time by asking:</p>
+<blockquote>
+<p>"Show plan status" or "Review plan progress"</p>
+</blockquote>
+<p>The orchestrator runs Workflow 10, which reads all <code>.plan.md</code> and <code>.steps.csv</code> files, summarizes status, and surfaces any blocked steps.</p>
+<h3 id="when-plans-complete">When Plans Complete<a class="headerlink" href="#when-plans-complete" title="Permanent link">&para;</a></h3>
+<p>When all rows reach <code>done</code>, the orchestrator invokes <code>@work-summarizer</code> to append the plan's outcomes to <code>workSummaries/daily/YYYY-MM-DD.md</code> before closing out the session.</p>
+<hr />
+<h2 id="work-summary-reporting">Work Summary Reporting<a class="headerlink" href="#work-summary-reporting" title="Permanent link">&para;</a></h2>
+<h3 id="daily-summaries">Daily Summaries<a class="headerlink" href="#daily-summaries" title="Permanent link">&para;</a></h3>
+<p><code>workSummaries/daily/YYYY-MM-DD.md</code> accumulates plan outcomes for each day. You can generate or update a summary at any time:</p>
+<blockquote>
+<p>"Summarize today's work" or "Daily summary for 2026-05-11"</p>
+</blockquote>
+<p>The orchestrator invokes <code>@work-summarizer</code>, which reads:
+- <code>tmp/by-week/</code> plan artifacts for the current week
+- Legacy undated plans in <code>tmp/</code> (fallback)
+- Git history and diffs for the day</p>
+<p>The summary is then passed through <code>@technical-validator</code> (verify commit hashes and paths), <code>@adversarial</code> (presupposition audit), and <code>@conflict-auditor</code> (consistency check) before being written.</p>
+<h3 id="weekly-and-monthly-summaries">Weekly and Monthly Summaries<a class="headerlink" href="#weekly-and-monthly-summaries" title="Permanent link">&para;</a></h3>
+<blockquote>
+<p>"Weekly summary for 2026-W20" or "Monthly summary for 2026-05"</p>
+</blockquote>
+<p>Weekly summaries aggregate daily summaries. Monthly summaries aggregate weekly ones. Both pass through the same audit chain.</p>
+<hr />
+<h2 id="when-to-invoke-governance-agents-directly">When to Invoke Governance Agents Directly<a class="headerlink" href="#when-to-invoke-governance-agents-directly" title="Permanent link">&para;</a></h2>
+<p>For most work, you should let the orchestrator route to governance agents automatically. However, you can invoke them directly when needed:</p>
+<table>
+<thead>
+<tr>
+<th>Situation</th>
+<th>Agent to invoke</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>You added a new agent file and want to check for duplicated scope</td>
+<td><code>@conflict-auditor</code></td>
+</tr>
+<tr>
+<td>You are about to delete files or make bulk edits to 3+ files</td>
+<td><code>@security</code> (required by Constitutional Rule #1)</td>
+</tr>
+<tr>
+<td>A task plan has hidden assumptions you want challenged before execution</td>
+<td><code>@adversarial</code></td>
+</tr>
+<tr>
+<td>Agent documentation seems out of date after recent code changes</td>
+<td><code>@agent-updater</code></td>
+</tr>
+<tr>
+<td>There are duplicate or orphaned files that should be cleaned up</td>
+<td><code>@code-hygiene</code></td>
+</tr>
+<tr>
+<td>You need to commit, push, or merge changes</td>
+<td><code>@git-operations</code></td>
+</tr>
+</tbody>
+</table>
+<h3 id="when-to-use-adversarial">When to Use <code>@adversarial</code><a class="headerlink" href="#when-to-use-adversarial" title="Permanent link">&para;</a></h3>
+<p>The adversarial agent challenges presuppositions in plans and technical claims — not prose quality or style. Invoke it when:</p>
+<ul>
+<li>A plan involves irreversible or cross-cutting changes</li>
+<li>You are about to execute based on a claim that hasn't been verified against source files</li>
+<li>A team member (or another agent) is confident about something that hasn't been checked</li>
+</ul>
+<p>Do not invoke <code>@adversarial</code> as a substitute for factual verification — use <code>@technical-validator</code> for that.</p>
+<h3 id="when-to-use-conflict-auditor">When to Use <code>@conflict-auditor</code><a class="headerlink" href="#when-to-use-conflict-auditor" title="Permanent link">&para;</a></h3>
+<p>The conflict auditor detects contradictions across agent files and documentation. Invoke it after:</p>
+<ul>
+<li>Any session modifying two or more files (required by Constitutional Rule #3)</li>
+<li>Adding new agents, routing rows, or workflow extensions</li>
+<li>Updating the authority hierarchy or constitutional rules</li>
+</ul>
+<hr />
+<h2 id="the-append-only-conflict-log">The Append-Only Conflict Log<a class="headerlink" href="#the-append-only-conflict-log" title="Permanent link">&para;</a></h2>
+<p>Conflict-audit findings are typically maintained under <code>references/conflict-log.csv</code> in generated teams. Keep this log append-only in your operating process so resolved findings remain visible in the audit trail.</p>
+<h3 id="reading-the-conflict-log">Reading the Conflict Log<a class="headerlink" href="#reading-the-conflict-log" title="Permanent link">&para;</a></h3>
+<p>Each row contains:</p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-1-1" name="__codelineno-1-1" href="#__codelineno-1-1"></a>id,session_date,file,finding_type,description,resolution,status
+</code></pre></div>
+<p>Rows with <code>status = open</code> require action. Rows with <code>status = resolved</code> are historical record.</p>
+<p>To review open conflicts:</p>
+<blockquote>
+<p>"What are the open conflict audit findings?"</p>
+</blockquote>
+<p>The orchestrator will read the latest conflict-log CSV entries and surface any <code>open</code> rows.</p>
+<hr />
+<h2 id="final-check-workflow-11">Final Check (Workflow 11)<a class="headerlink" href="#final-check-workflow-11" title="Permanent link">&para;</a></h2>
+<p>At the close of every multi-step session, the orchestrator runs a Final Check that:</p>
+<ol>
+<li>Reads the current plan's steps file and lists any <code>pending</code> or <code>blocked</code> rows</li>
+<li>Creates sub-plans for unresolved items</li>
+<li>Scans <code>CHANGELOG.md</code> for <code>Known Issues</code> headings</li>
+<li>Checks <code>git status</code> for untracked files in <code>tmp/</code> or modified files outside the plan's scope</li>
+<li>Invokes <code>@adversarial</code> and <code>@conflict-auditor</code> on the findings</li>
+<li>Presents audited summaries as a numbered list</li>
+</ol>
+<p>You do not need to run Final Check manually — the orchestrator invokes it automatically at the close of every workflow execution. If you want to trigger it explicitly:</p>
+<blockquote>
+<p>"Run a final check" or "Close out this session"</p>
+</blockquote>
+<hr />
+<h2 id="best-practices">Best Practices<a class="headerlink" href="#best-practices" title="Permanent link">&para;</a></h2>
+<ul>
+<li><strong>Let the orchestrator route work.</strong> Direct agent invocations bypass the constitutional rules checks and audit chains. Only invoke agents directly when you have a specific reason to.</li>
+<li><strong>Use "show plan status" frequently.</strong> Reviewing <code>pending</code> steps before starting a session saves you from re-doing work that was already planned but not started.</li>
+<li><strong>Keep <code>references/adjacent-repos.md</code> current.</strong> Out-of-date registry entries cause Protocol 1 assessments to miss affected repos. Run a registry maintenance pass after any fleet update.</li>
+<li><strong>Review AI-enriched values in <code>references/defaults-audit.csv</code> before committing.</strong> Values with <code>ai_filled</code> status are suggestions — verify them against your actual project before treating them as final.</li>
+<li><strong>Commit before migration; do not pre-create the migration tag.</strong> If you run <code>--migrate</code>, ensure your working tree is clean and let the command create <code>pre-fencing-snapshot</code> automatically.</li>
+</ul>
+
+
+
+
+
+
+
+
+
+
+
+
+                
+              </article>
+            </div>
+          
+          
+<script>var target=document.getElementById(location.hash.slice(1));target&&target.name&&(target.checked=target.name.startsWith("__tabbed_"))</script>
+        </div>
+        
+          <button type="button" class="md-top md-icon" data-md-component="top" hidden>
+  
+  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M13 20h-2V8l-5.5 5.5-1.42-1.42L12 4.16l7.92 7.92-1.42 1.42L13 8z"/></svg>
+  Back to top
+</button>
+        
+      </main>
+      
+        <footer class="md-footer">
+  
+  <div class="md-footer-meta md-typeset">
+    <div class="md-footer-meta__inner md-grid">
+      <div class="md-copyright">
+  
+    <div class="md-copyright__highlight">
+      &copy; <span id='copyright-year'></span> jlcatonjr
+    </div>
+  
+  
+</div>
+      
+    </div>
+  </div>
+</footer>
+      
+    </div>
+    <div class="md-dialog" data-md-component="dialog">
+      <div class="md-dialog__inner md-typeset"></div>
+    </div>
+    
+    
+    
+      
+      
+      <script id="__config" type="application/json">{"annotate": null, "base": "..", "features": ["navigation.tabs", "navigation.sections", "navigation.top", "search.suggest", "search.highlight", "content.code.copy"], "search": "../assets/javascripts/workers/search.2c215733.min.js", "tags": null, "translations": {"clipboard.copied": "Copied to clipboard", "clipboard.copy": "Copy to clipboard", "search.result.more.one": "1 more on this page", "search.result.more.other": "# more on this page", "search.result.none": "No matching documents", "search.result.one": "1 matching document", "search.result.other": "# matching documents", "search.result.placeholder": "Type to start searching", "search.result.term.missing": "Missing", "select.version": "Select version"}, "version": null}</script>
+    
+    
+      <script src="../assets/javascripts/bundle.79ae519e.min.js"></script>
+      
+        <script src="../javascripts/current-year.js"></script>
+      
+    
+  </body>
+</html>

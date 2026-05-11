@@ -817,6 +817,230 @@
 
               
             
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../section-fencing-guide/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Section Fencing & Safe Merges
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../update-lifecycle-guide/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Update Lifecycle, Drift & Backups
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../migration-guide/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Migration Guide
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../interoperability-patterns-guide/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Interoperability Patterns
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../bridge-ci-automation-guide/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Bridge CI Automation
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../enrichment-pipeline-guide/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Enrichment Pipeline
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../cross-repository-coordination-guide/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Cross-Repository Coordination
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../working-with-your-generated-team-guide/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Working with Your Generated Team
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
           </ul>
         </nav>
       
@@ -1434,6 +1658,17 @@
       <ul class="md-nav__list">
         
           <li class="md-nav__item">
+  <a href="#governance" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Governance
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
   <a href="#known-issues-bugs" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -1546,6 +1781,17 @@
       <ul class="md-nav__list">
         
           <li class="md-nav__item">
+  <a href="#governance" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Governance
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
   <a href="#known-issues-bugs" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -1636,25 +1882,33 @@
 The format is based on <a href="https://keepachangelog.com/en/1.0.0/">Keep a Changelog</a>,
 and this project adheres to <a href="https://semver.org/spec/v2.0.0.html">Semantic Versioning</a>.</p>
 <h2 id="unreleased">[Unreleased]<a class="headerlink" href="#unreleased" title="Permanent link">&para;</a></h2>
+<h3 id="governance">Governance<a class="headerlink" href="#governance" title="Permanent link">&para;</a></h3>
+<ul>
+<li><strong>History rewrite: VisualKnowledge references removed from commit history</strong> — all commit messages and tracked file content matching <code>visualknowledge</code>, <code>/visualknowledge/</code>, and <code>vk-[a-z0-9-]+</code> patterns were replaced with <code>REDACTED_REPO</code> / <code>REDACTED_SERVICE</code> using <code>git filter-repo</code>. Pre-rewrite HEAD: <code>10b8bfc</code>. Post-rewrite HEAD: <code>b67c514</code>. Mirror backup retained at <code>tmp/by-week/2026-W19/rewrite-backups/agentteams.mirror.20260504-160919.git</code>. Post-rewrite verification: MSG_HITS=0, TRACKED_HITS=0.</li>
+<li><strong>Commentary scope rule</strong> — added constitutional rule to <code>.github/copilot-instructions.md</code>, <code>orchestrator.agent.md</code>, <code>agent-updater.agent.md</code>, and <code>work-summarizer.agent.md</code>: VisualKnowledge repository operational updates must not appear in AgentTeams commit/PR notes, comments, or work summary narrative unless the entry documents a direct, material change to files inside this repository.</li>
+</ul>
 <h3 id="known-issues-bugs">Known Issues / Bugs<a class="headerlink" href="#known-issues-bugs" title="Permanent link">&para;</a></h3>
 <ul>
 <li><del><strong>BUG: <code>--update --merge</code> silently overwrites user-authored content below fences</strong></del> — <strong>Fixed in this release.</strong> See Added section below.</li>
+<li><strong>KNOWN ISSUE: <code>.agentteams-backups/</code> directories are committed in managed repos that lack a <code>.gitignore</code> rule</strong> — <code>build_team.py</code> does not auto-write a <code>.gitignore</code> rule for the backup directory in managed repos. Repos that have no pre-existing rule will commit rollback backup snapshots to git history. Affected repos should add <code>.github/agents/.agentteams-backups/</code> to <code>.gitignore</code> and run <code>git rm -r --cached .github/agents/.agentteams-backups/</code>. A systemic fix (auto-write the rule on init/update) is tracked for the agentteams pipeline. See <code>tmp/by-week/2026-W19/groupb-backup-dir-cleanup-2026-05-04.plan.md</code>.</li>
 </ul>
 <h3 id="added">Added<a class="headerlink" href="#added" title="Permanent link">&para;</a></h3>
 <ul>
+<li><strong>Security: post-production audit hardening</strong> — added the post-production auditor template, closure-gate schemas, and supporting docs/tests/build updates alongside the generated site and examples sync.</li>
+<li><strong>Docs: API reference alignment for post-production auditing</strong> — updated <code>docs_src/api-reference/analyze.md</code>, <code>docs_src/api-reference/index.md</code>, and <code>docs_src/api-reference/feature-inventory.md</code> to reflect current archetype selection behavior and release-availability wording.</li>
 <li>
 <p><strong>Bridge automation procedures</strong> — added <code>scripts/run_daily_bridge_maintenance.sh</code> for non-critical warn-and-continue bridge refresh/check operations, plus <code>.github/workflows/bridge-maintenance.yml</code> (daily maintenance) and <code>.github/workflows/bridge-watchdog.yml</code> (staleness monitoring with deduplicated issue creation).</p>
 </li>
 <li>
-<p><strong>Safety: automatic backup before writes</strong> — <code>build_team.py</code> now creates a timestamped backup of all agent files that will be overwritten before any <code>--overwrite</code>, <code>--merge</code>, or <code>--update</code> run. Backups are stored at <code>&lt;output_dir&gt;/.agentteams-backups/YYYYMMDD-HHMMSS/</code> (excluded from git via <code>.gitignore</code>). New flags: <code>--no-backup</code> (suppress for CI), <code>--list-backups</code> (enumerate available backups), <code>--restore-backup [TIMESTAMP|latest]</code> (restore a backup). New public API: <code>emit.backup_output_dir()</code>, <code>emit.list_backups()</code>, <code>emit.restore_backup()</code>.</p>
+<p><strong>Safety: automatic backup before writes</strong> — <code>build_team.py</code> now creates a timestamped backup of all agent files that will be overwritten before any <code>--overwrite</code>, <code>--merge</code>, or <code>--update</code> run. Backups are stored at <code>&lt;output_dir&gt;/.agentteams-backups/YYYYMMDD-HHMMSS/</code> (callers are responsible for adding a <code>.gitignore</code> rule to exclude backups from git — the tool does not write this rule automatically). New flags: <code>--no-backup</code> (suppress for CI), <code>--list-backups</code> (enumerate available backups), <code>--restore-backup [TIMESTAMP|latest]</code> (restore a backup). New public API: <code>emit.backup_output_dir()</code>, <code>emit.list_backups()</code>, <code>emit.restore_backup()</code>.</p>
 </li>
 <li><strong>Bug fix: <code>--update --merge</code> now honours the <code>--merge</code> flag</strong> — previously the <code>--update</code> code path hardcoded <code>overwrite=True</code> in <code>emit.emit_all()</code>, ignoring <code>--merge</code> entirely and silently destroying user-authored content below AGENTTEAMS fence markers (e.g. <code>adjacent-repos.md</code> Active Entries). The fix forwards <code>merge=args.merge</code> and sets <code>overwrite=not args.merge</code>.</li>
 <li><strong>Tests: 12 new tests in <code>tests/test_emit.py</code></strong> — covers <code>backup_output_dir</code> (empty dir, populated dir, selective, dry-run, no-backup-dir recursion), <code>list_backups</code> (empty, newest-first ordering), <code>restore_backup</code> (round-trip, missing-path error), and a regression test confirming <code>--merge</code> preserves user content below fences.</li>
-<li><strong>Governance: automatic <code>@agent-updater</code> triggers</strong> — <code>@agent-updater</code> is now invoked at the close of Workflows 2 (Revise), 3 (Technical Accuracy Audit, when corrections were made), and 5 (Consistency Review, when issues found); ensures agent documentation is synchronized after every knowledge-mutating operation</li>
+<li><strong>Governance: automatic <code>@agent-updater</code> triggers</strong> — <code>@agent-updater</code> is now invoked at the close of Workflows 2 (Revise), 3 (Technical Accuracy Audit, when corrections were made), and 5 (Consistency Review, when issues found); helps keep agent documentation synchronized after knowledge-mutating operations in those workflows</li>
 <li><strong>Governance: <code>@adversarial</code> guard on audit workflows</strong> — <code>@adversarial</code> now runs as step 1 of Workflow 5 (Consistency Review) before any audit conclusions are surfaced, and as step 2 of Workflow 8 (Code Hygiene Audit) before any deletion plan proceeds; prevents agents from acting on unchallenged stale assumptions</li>
 <li><strong>Governance: pre-execution truth check in Workflow 10 (Plan Review)</strong> — <code>@technical-validator</code> must verify factual claims in each plan step's <code>inputs</code>, <code>outputs</code>, and <code>notes</code> against current on-disk state before the step is marked <code>in_progress</code>; unverified claims are surfaced to the user and block execution</li>
-<li><strong>Governance: Workflow 11 — Final Check</strong> added to <code>orchestrator.template.md</code> as the terminal step of every workflow (Workflows 1–10 each close with an unconditional <code>→ Invoke Workflow 11: Final Check</code> step). Final Check has two parts: Part A scans the current plan's <code>steps.csv</code> for <code>pending</code>/<code>blocked</code> rows and creates audited sub-plans for each; Part B scans <code>CHANGELOG.md</code> Known Issues, <code>tmp/</code> CSVs, and <code>git status</code> for repo at-large open issues, summarises each, and subjects summaries to <code>@adversarial</code> + <code>@conflict-auditor</code> before surfacing to the user. The deployed <code>agentteams</code> orchestrator uses Workflow 12 for Final Check (Workflow 11 slot occupied by Module Documentation Update).</li>
-<li><strong>Infrastructure: <code>available_workflows</code> section now FENCED</strong> — <code>orchestrator.template.md</code> wraps the Available Workflows block in <code>&lt;!-- AGENTTEAMS:BEGIN available_workflows v=1 --&gt;</code> / <code>&lt;!-- AGENTTEAMS:END available_workflows --&gt;</code> markers. The USER-EDITABLE gap between the <code>routing_table_rows</code> END marker and the <code>available_workflows</code> BEGIN marker is the permanent home for project-specific rules. This means <code>--update --merge</code> now propagates all workflow changes (including new Final Check steps) while preserving project-specific rules (e.g. BBB IDs, conflict prefixes, domain agent lists) unconditionally across every future <code>--update --merge</code> run.</li>
+<li><strong>Governance: Workflow 11 — Final Check</strong> added to <code>orchestrator.template.md</code> as the terminal step of every workflow (Workflows 1–10 each close with an unconditional <code>→ Invoke Workflow 11: Final Check</code> step). Final Check has two parts: Part A scans the current plan's <code>steps.csv</code> for <code>pending</code>/<code>blocked</code> rows and creates audited sub-plans for each; Part B scans <code>CHANGELOG.md</code> Known Issues, <code>tmp/</code> CSVs, and <code>git status</code> for repo at-large open issues, summarises each, and subjects summaries to <code>@adversarial</code> + <code>@conflict-auditor</code> before surfacing to the user. The deployed <code>agentteams</code> orchestrator defines Final Check as Workflow 11.</li>
+<li><strong>Infrastructure: <code>available_workflows</code> section now FENCED</strong> — <code>orchestrator.template.md</code> wraps the Available Workflows block in <code>&lt;!-- AGENTTEAMS:BEGIN available_workflows v=1 --&gt;</code> / <code>&lt;!-- AGENTTEAMS:END available_workflows --&gt;</code> markers. The USER-EDITABLE gap between the <code>routing_table_rows</code> END marker and the <code>available_workflows</code> BEGIN marker is the permanent home for project-specific rules. This lets <code>--update --merge</code> propagate workflow changes (including new Final Check steps) while preserving project-specific rules (e.g. BBB IDs, conflict prefixes, domain agent lists) during fenced updates.</li>
 <li><strong>Protocol: Update Deployment Protocol</strong> added to <code>agent-updater.template.md</code> (and deployed to all <code>agent-updater.agent.md</code> files via batch update). Documents the required protocol for every <code>--update</code>/<code>--update --merge</code> run: pre-update dry-run, automatic backup verification, git pre/post diff capture, post-update outside-fence deletion analysis (OK/WARN/ERROR classification), WARN review gate before commit, non-git repo backup-vs-current diff path, and batch operation requirements (<code>batch_update.py</code> writes per-repo <code>.diff</code> files to <code>tmp/diffs/</code> and a summary CSV). Propagated to all 19 git repos and 2 non-git repos via <code>batch_update.py</code>.</li>
 <li><strong>Infrastructure: <code>tmp/inject_fences.py</code></strong> — new utility script that adds <code>AGENTTEAMS:BEGIN/END available_workflows</code> fence markers to orchestrator.agent.md files that have <code>routing_table_rows</code> fences but are missing the <code>available_workflows</code> fence. Used to prepare all 17 repos for <code>--update --merge</code> without duplication risk. Also patches section manifest comments.</li>
 <li><strong>Tests: snapshot comparison now excludes live-data files</strong> — <code>test_snapshot_comparison</code> skips <code>security-vulnerability-watch.reference.md</code> and <code>security.agent.md</code> from comparison (both contain live CISA/NVD/EPSS threat intelligence refreshed on every pipeline run; non-deterministic).</li>
