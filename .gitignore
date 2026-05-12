@@ -31,6 +31,9 @@ tool-enrichment-steps.csv
 # Automatic pre-write backups created by build_team.py
 .agentteams-backups/
 
+# MkDocs local build output — rebuilt by CI; never committed
+_site/
+
 # Operational scratch space — contains absolute machine paths and private repo names (OPSEC S-1)
 # Nothing in tmp/ should ever be committed; sanitize before moving anything to a permanent location
 tmp/

@@ -143,35 +143,21 @@ Use this table to determine the verdict. **Criteria are deterministic** — mode
 ### Current Threat Intelligence Snapshot
 
 <!-- AGENTTEAMS:BEGIN threat_intelligence v=1 -->
-Generated at: `2026-05-11T01:20:16Z`
+Generated at: `2026-05-12T14:21:40Z`
 
 **Sources:**
 
-- CISA KEV: ok (catalog 2026.05.08, items 1590) — https://www.cisa.gov/sites/default/files/feeds/known_exploited_vulnerabilities.json
+- CISA KEV: not_fetched — https://www.cisa.gov/sites/default/files/feeds/known_exploited_vulnerabilities.json
 - MITRE CVE: metadata_only — https://cveawg.mitre.org/api/cve/
-- FIRST EPSS: ok (items 15) — https://api.first.org/data/v1/epss
-- NVD (NIST): ok (items 5) — https://services.nvd.nist.gov/rest/json/cves/2.0
-- OSV.dev: skipped — https://api.osv.dev/v1/querybatch
+- FIRST EPSS: not_fetched — https://api.first.org/data/v1/epss
+- NVD (NIST): skipped — https://services.nvd.nist.gov/rest/json/cves/2.0
+- OSV.dev: not_fetched — https://api.osv.dev/v1/querybatch
 - OWASP LLM Top 10: static — https://owasp.org/www-project-top-10-for-large-language-model-applications/
 - MITRE ATLAS: static — https://atlas.mitre.org/
 
 **Current major vulnerabilities:**
 
-- `CVE-2026-42208` | BerriAI LiteLLM | BerriAI LiteLLM SQL Injection Vulnerability | added 2026-05-08 | EPSS 0.373680000, percentile 0.972080000 | CVSS 9.8 CRITICAL
-- `CVE-2026-6973` | Ivanti Endpoint Manager Mobile (EPMM) | Ivanti Endpoint Manager Mobile (EPMM) Improper Input Validation Vulnerability | added 2026-05-07 | EPSS 0.050090000, percentile 0.897780000 | CVSS 7.2 HIGH
-- `CVE-2026-0300` | Palo Alto Networks PAN-OS | Palo Alto Networks PAN-OS Out-of-bounds Write Vulnerability | added 2026-05-06 | EPSS 0.052870000, percentile 0.900720000 | CVSS 9.8 CRITICAL
-- `CVE-2026-31431` | Linux Kernel | Linux Kernel Incorrect Resource Transfer Between Spheres Vulnerability | added 2026-05-01 | EPSS 0.039120000, percentile 0.883700000 | CVSS 7.8 HIGH
-- `CVE-2026-41940` | WebPros cPanel & WHM and WP2 (WordPress Squared) | WebPros cPanel & WHM and WP2 (WordPress Squared) Missing Authentication for Critical Function Vulnerability | added 2026-04-30 | EPSS 0.670140000, percentile 0.985720000 | CVSS 9.8 CRITICAL
-- `CVE-2024-1708` | ConnectWise ScreenConnect | ConnectWise ScreenConnect Path Traversal Vulnerability | added 2026-04-28 | EPSS 0.839510000, percentile 0.993120000
-- `CVE-2026-32202` | Microsoft Windows | Microsoft Windows Protection Mechanism Failure Vulnerability | added 2026-04-28 | EPSS 0.071930000, percentile 0.916450000
-- `CVE-2025-29635` | D-Link DIR-823X | D-Link DIR-823X Command Injection Vulnerability | added 2026-04-24 | EPSS 0.657150000, percentile 0.985210000
-- `CVE-2024-7399` | Samsung MagicINFO 9 Server | Samsung MagicINFO 9 Server Path Traversal Vulnerability | added 2026-04-24 | EPSS 0.813000000, percentile 0.991810000
-- `CVE-2024-57728` | SimpleHelp  SimpleHelp | SimpleHelp Path Traversal Vulnerability | added 2026-04-24 | EPSS 0.593270000, percentile 0.982610000
-- `CVE-2024-57726` | SimpleHelp  SimpleHelp | SimpleHelp Missing Authorization Vulnerability | added 2026-04-24 | EPSS 0.491610000, percentile 0.978000000
-- `CVE-2026-39987` | Marimo Marimo | Marimo Remote Code Execution Vulnerability | added 2026-04-23 | EPSS 0.787120000, percentile 0.990600000
-- `CVE-2026-33825` | Microsoft Defender | Microsoft Defender Insufficient Granularity of Access Control Vulnerability | added 2026-04-22 | EPSS 0.048520000, percentile 0.896050000
-- `CVE-2026-20122` | Cisco Catalyst SD-WAN Manger | Cisco Catalyst SD-WAN Manager Incorrect Use of Privileged APIs Vulnerability | added 2026-04-20 | EPSS 0.011220000, percentile 0.783860000
-- `CVE-2026-20133` | Cisco Catalyst SD-WAN Manager | Cisco Catalyst SD-WAN Manager Exposure of Sensitive Information to an Unauthorized Actor Vulnerability | added 2026-04-20 | EPSS 0.012720000, percentile 0.796590000
+- No live vulnerability data was available; consult cached reference file.
 
 **Prevention and mitigation playbook:**
 
@@ -180,11 +166,6 @@ Generated at: `2026-05-11T01:20:16Z`
 - Enforce patch windows with owner, SLA, and verification evidence for each critical CVE.
 - When patching is blocked, define compensating controls (WAF rules, ACL tightening, feature disablement).
 - Add detections for exploitation attempts and verify telemetry coverage for affected assets.
-- Vendor/CISA required actions:
-  - Apply mitigations per vendor instructions, follow applicable BOD 22-01 guidance for cloud services, or discontinue use of the product if mitigations are unavailable.
-  - Apply mitigations per vendor instructions, follow applicable BOD 22-01 guidance for cloud services, or discontinue use of the product if mitigations are unavailable.    Until the vendor releases an official fix, the following workaround should be implemented:  - Restrict User-ID Authentication Portal access to only trusted zones.  - Disable User-ID Authentication Portal if not required.
-  - "Apply mitigations per vendor instructions, follow applicable BOD 22-01 guidance for cloud services, or discontinue use of the product if mitigations are unavailable.
-  - Please adhere to CISA’s guidelines to assess exposure and mitigate risks associated with Cisco SD-WAN devices as outlines in CISA’s Emergency Directive 26-03 (URL listed below in Notes) and CISA’s “Hunt & Hardening Guidance for Cisco SD-WAN Devices (URL listed below in Notes). Adhere to the applicable BOD 22-01 guidance for cloud services or discontinue use of the product if mitigations are not available.
 
 ### LLM and AI-Specific Threat Intelligence
 
