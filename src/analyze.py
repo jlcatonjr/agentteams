@@ -883,6 +883,14 @@ def _plan_output_files(
         "component_slug": None,
     })
 
+    # Unix philosophy mapping reference (always)
+    files.append({
+        "path": "references/unix-philosophy-mapping.reference.md",
+        "template": f"{domain_dir}unix-philosophy-mapping.template.md",
+        "type": "reference",
+        "component_slug": None,
+    })
+
     # Workstream experts
     for comp in components:
         files.append({
