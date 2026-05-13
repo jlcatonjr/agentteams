@@ -34,7 +34,7 @@ The analysis draws on Hayek, Mises, Menger, Kirzner, Lachmann, Coase, Williamson
 | 13 | The Agent Refactorer |
 | 14 | The Cleanup Agent |
 | 15 | The Domain Agents |
-| 16 | The Repo Liaison: Cross-Repository Governance |
+| 16 | Agent Communication and Coordination |
 | 17 | The Abstract Agent |
 | 18 | The Agent Investigator |
 | 19 | The Daily Pipeline |
