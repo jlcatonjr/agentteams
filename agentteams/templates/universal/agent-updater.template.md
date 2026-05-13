@@ -51,6 +51,7 @@ Use `references/github-workflows-merge.reference.md` when repository updates inv
 | New agent file created | Orchestrator routing table needs updating |
 | Workstream added | All agents need awareness of new scope |
 | Team updated (canonical: `--update --merge`) | Drifted files are re-rendered, newly required files are emitted, and missing expected standard outputs must be restored before closeout |
+| Agent documentation changed | Run repository change census, sync the affected agent docs, then hand off to `@adversarial` and `@conflict-auditor` before closeout |
 | Repository content changed (tracked files added, modified, deleted, merged, reverted, or restored) | Requires repository change census and docs/API impact decision before closeout |
 | **Drift detected by `--check`** | Agents may be operating on outdated knowledge of file structure, agent slugs, placeholder values, or workflow counts — re-render and re-verify before next workflow execution |
 | Expected output file missing on disk during update | Treat as documentation drift even without template hash drift; restore the missing file in the same update run |

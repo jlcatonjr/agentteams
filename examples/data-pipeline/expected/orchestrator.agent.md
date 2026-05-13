@@ -321,7 +321,7 @@ Before executing any such step:
 
 ### Workflow 6: Documentation Maintenance
 
-**Trigger:** "Update agent docs" / "Project structure changed" / "Repository updated"
+**Trigger:** "Update agent docs" / "Agent documentation changed" / "Project structure changed" / "Repository updated"
 
 1. Invoke `@agent-updater` → sync docs with changes, run the repository change census, and evaluate docs/API impact
 2. Invoke `@adversarial` → challenge the repository change census, docs/API impact decision, and synchronized workflow assumptions before closeout
