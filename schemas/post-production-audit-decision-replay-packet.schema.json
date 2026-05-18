@@ -169,6 +169,61 @@
     "crossrun_comparison_enabled": {
       "type": "boolean",
       "description": "Whether this packet was prepared for cross-run metric comparison"
+    },
+    "agent_session_trajectory": {
+      "type": "object",
+      "description": "Phase 1 extension. Ordered record of agent-to-agent handoff edges within a single generated-team session. Present only on packets that capture an agent-team session (optional, so audit-decision-only packets still validate). Walking handoff_edges by ascending sequence and following from_agent -> to_agent reconstructs multi-step handoff chains across component-experts.",
+      "required": [
+        "session_slug",
+        "handoff_edges"
+      ],
+      "properties": {
+        "session_slug": {
+          "type": "string",
+          "description": "Identifier for the agent-team session this trajectory belongs to"
+        },
+        "root_agent": {
+          "type": "string",
+          "description": "Slug of the agent that initiated the session (typically 'orchestrator')"
+        },
+        "handoff_edges": {
+          "type": "array",
+          "description": "Directed handoff edges in invocation order. The multi-step chain is recoverable by sorting on `sequence` and chaining edges where one edge's to_agent is the next edge's from_agent.",
+          "items": {
+            "type": "object",
+            "required": [
+              "sequence",
+              "from_agent",
+              "to_agent"
+            ],
+            "properties": {
+              "sequence": {
+                "type": "integer",
+                "minimum": 0,
+                "description": "Monotonic 0-based ordering index of this handoff within the session"
+              },
+              "from_agent": {
+                "type": "string",
+                "description": "Slug of the agent handing off control"
+              },
+              "to_agent": {
+                "type": "string",
+                "description": "Slug of the agent receiving control"
+              },
+              "payload_schema_id": {
+                "type": "string",
+                "description": "Optional $id of the typed handoff payload schema carried across this edge. Compared $id-only, consistent with agentteams/handoff_payloads.audit_handoff_chain (Cluster C payload_schema_in/out substrate). Absent for untyped handoffs."
+              },
+              "mediated_by": {
+                "type": "string",
+                "description": "Optional slug of the governance agent (e.g. 'orchestrator') that mediated this edge when coordination is not peer-to-peer. Lets a trajectory record orchestrator-mediated worker handoffs without collapsing the logical from_agent -> to_agent chain."
+              }
+            },
+            "additionalProperties": false
+          }
+        }
+      },
+      "additionalProperties": false
     }
   },
   "additionalProperties": false
