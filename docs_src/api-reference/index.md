@@ -30,6 +30,8 @@ This reference defines the **supported public API surface** (documented modules 
 | [`graph`](graph.md) | Directed graph inference for agent team topology |
 | [`frameworks`](frameworks.md) | Per-framework adapter classes |
 | [`man`](man.md) | Generate and validate the project man-page source |
+| [`handoff_payloads`](handoff_payloads.md) | Typed handoff payload substrate for plan `.steps.csv` artifacts |
+| [`plan_steps`](plan_steps.md) | Tolerant reader for plan `.steps.csv` artifacts |
 
 ---
 

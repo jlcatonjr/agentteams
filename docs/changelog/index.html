@@ -1464,6 +1464,62 @@
 
               
             
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../api-reference/handoff_payloads/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    handoff_payloads
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../api-reference/plan_steps/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    plan_steps
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
           </ul>
         </nav>
       
@@ -1884,7 +1940,13 @@ and this project adheres to <a href="https://semver.org/spec/v2.0.0.html">Semant
 <h2 id="unreleased">[Unreleased]<a class="headerlink" href="#unreleased" title="Permanent link">&para;</a></h2>
 <h3 id="governance">Governance<a class="headerlink" href="#governance" title="Permanent link">&para;</a></h3>
 <ul>
-<li><strong>History rewrite: VisualKnowledge references removed from commit history</strong> — all commit messages and tracked file content matching <code>visualknowledge</code>, <code>/visualknowledge/</code>, and <code>vk-[a-z0-9-]+</code> patterns were replaced with <code>REDACTED_REPO</code> / <code>REDACTED_SERVICE</code> using <code>git filter-repo</code>. Pre-rewrite HEAD: <code>10b8bfc</code>. Post-rewrite HEAD: <code>b67c514</code>. Mirror backup retained at <code>tmp/by-week/2026-W19/rewrite-backups/agentteams.mirror.20260504-160919.git</code>. Post-rewrite verification: MSG_HITS=0, TRACKED_HITS=0.</li>
+<li><strong>Typed handoffs: dated promotion of <code>PAYLOAD_UNTYPED</code> to HARD on 2026-07-01</strong> — <code>agentteams/handoff_payloads.py</code> defines <code>PAYLOAD_UNTYPED_HARD_DATE = date(2026, 7, 1)</code>. Before that date, plan <code>.steps.csv</code> rows missing <code>payload_schema_out</code> / <code>payload_schema_in</code> produce a <code>PAYLOAD_UNTYPED</code> finding at WARN severity; on and after that date the same finding is emitted at HARD severity. Severity is enforced mechanically — no editorial path softens it. Operators should type all <code>.steps.csv</code> handoffs before the cutoff or accept HARD findings.</li>
+<li>
+<p><strong>Conflict-auditor codes for handoff payloads</strong> — <code>agentteams/templates/universal/conflict-auditor.template.md</code> adds a fenced <code>handoff_payload_codes v=1</code> section declaring two new codes: <code>PAYLOAD_UNTYPED</code> (WARN until 2026-07-01, HARD thereafter) and <code>PAYLOAD_MISMATCH</code> (HARD). When auditing <code>.steps.csv</code> artifacts, <code>@conflict-auditor</code> invokes <code>agentteams.handoff_payloads.audit_handoff_chain</code> and surfaces the findings.</p>
+</li>
+<li>
+<p><strong>History rewrite: VisualKnowledge references removed from commit history</strong> — all commit messages and tracked file content matching <code>visualknowledge</code>, <code>/visualknowledge/</code>, and <code>vk-[a-z0-9-]+</code> patterns were replaced with <code>REDACTED_REPO</code> / <code>REDACTED_SERVICE</code> using <code>git filter-repo</code>. Pre-rewrite HEAD: <code>10b8bfc</code>. Post-rewrite HEAD: <code>b67c514</code>. Mirror backup retained at <code>tmp/by-week/2026-W19/rewrite-backups/agentteams.mirror.20260504-160919.git</code>. Post-rewrite verification: MSG_HITS=0, TRACKED_HITS=0.</p>
+</li>
 <li><strong>Commentary scope rule</strong> — added constitutional rule to <code>.github/copilot-instructions.md</code>, <code>orchestrator.agent.md</code>, <code>agent-updater.agent.md</code>, and <code>work-summarizer.agent.md</code>: VisualKnowledge repository operational updates must not appear in AgentTeams commit/PR notes, comments, or work summary narrative unless the entry documents a direct, material change to files inside this repository.</li>
 </ul>
 <h3 id="known-issues-bugs">Known Issues / Bugs<a class="headerlink" href="#known-issues-bugs" title="Permanent link">&para;</a></h3>
@@ -1894,7 +1956,23 @@ and this project adheres to <a href="https://semver.org/spec/v2.0.0.html">Semant
 </ul>
 <h3 id="added">Added<a class="headerlink" href="#added" title="Permanent link">&para;</a></h3>
 <ul>
-<li><strong>Security: post-production audit hardening</strong> — added the post-production auditor template, closure-gate schemas, and supporting docs/tests/build updates alongside the generated site and examples sync.</li>
+<li><strong>Typed handoff payload substrate (<code>agentteams.handoff_payloads</code>)</strong> — new module providing typed handoffs between agents along plan <code>.steps.csv</code> rows. Public API: <code>load_payload_schema</code> (path-restricted loader rejecting URLs, absolute paths, <code>..</code> segments, and non-matching globs), <code>strip_llm_visible_text</code> (mechanical sanitizer removing <code>description</code>/<code>title</code>/<code>$comment</code>/<code>examples</code> from schema text before any LLM sees it), <code>validate</code> (multiprocessing-isolated validator with cross-platform wallclock timeout and depth/cycle pre-walk), <code>audit_handoff_chain</code> (pure-Python <code>$id</code>-only comparator for adjacent handoff steps), and <code>Finding</code> / <code>PayloadSchemaError</code> / <code>SchemaInvalid</code> types. Constants: <code>PAYLOAD_UNTYPED_HARD_DATE = 2026-07-01</code>, <code>MAX_DEPTH = 32</code>, <code>VALIDATE_TIMEOUT_SECONDS = 2.0</code>. Mitigates six vulnerabilities (V1 path traversal, V2 schema poisoning, V3 LLM injection via schema text, V4 version drift, V5 DoS via recursive/slow schemas, V6 opt-in bypass).</li>
+<li><strong>Plan steps reader (<code>agentteams.plan_steps</code>)</strong> — new module exposing <code>read_steps(path)</code>, a tolerant CSV reader for <code>tmp/by-week/**/*.steps.csv</code> plan artifacts. Handles quoted multi-line cells (e.g. multi-line <code>notes</code> columns).</li>
+<li><strong>Meta-schema for handoff payloads</strong> — <code>schemas/handoff-payload-meta.schema.json</code> enforces the <code>&lt;slug&gt;/v&lt;n&gt;.schema.json</code> <code>$id</code> pattern, <code>additionalProperties: false</code>, and a non-empty <code>required</code> array on every concrete payload schema.</li>
+<li><strong>Worked-example payload schema</strong> — <code>schemas/handoff-payloads/conflict-audit-result.v1.schema.json</code> documents the <code>@conflict-auditor</code> finding payload shape.</li>
+<li><strong>Runtime dependency <code>jsonschema&gt;=4.20</code></strong> — added to <code>pyproject.toml</code> for handoff payload validation.</li>
+<li>
+<p><strong>Tests: 9 new tests in <code>tests/test_handoff_payloads.py</code></strong> — cover V1-V6 mitigations (path traversal, meta-schema rejection, LLM-text stripping, <code>$id</code> mismatch detection, depth/timeout bounds, dated WARN→HARD promotion) plus the multi-line CSV reader.</p>
+</li>
+<li>
+<p><strong>Governance: explicit agent-documentation trigger for audits</strong> — Workflow 6 (Documentation Maintenance) trigger phrase list now includes "Agent documentation changed", and <code>@agent-updater</code> has a new Trigger Conditions row requiring repository change census, doc sync, then <code>@adversarial</code> + <code>@conflict-auditor</code> handoff before closeout whenever agent documentation is updated. Applied to both deployed <code>.github/agents/</code> files and <code>agentteams/templates/universal/</code> so generated teams inherit the trigger.</p>
+</li>
+<li>
+<p><strong>Reference: Unix Philosophy Mapping for Code Hygiene Rules</strong> — added <code>agentteams/templates/domain/unix-philosophy-mapping.template.md</code> and integrated into build pipeline. Each generated team includes <code>references/unix-philosophy-mapping.reference.md</code> mapping rules (CH-01 through CH-23) to Unix design principles. Three-tier classification: Tier 1 (foundational), Tier 2 (aligned), Tier 3 (project-specific). See audit report <code>tmp/by-week/2026-W20/unix-philosophy-mapping-audit-revisions.md</code>.</p>
+</li>
+<li>
+<p><strong>Security: post-production audit hardening</strong> — added the post-production auditor template, closure-gate schemas, and supporting docs/tests/build updates alongside the generated site and examples sync.</p>
+</li>
 <li><strong>Docs: API reference alignment for post-production auditing</strong> — updated <code>docs_src/api-reference/analyze.md</code>, <code>docs_src/api-reference/index.md</code>, and <code>docs_src/api-reference/feature-inventory.md</code> to reflect current archetype selection behavior and release-availability wording.</li>
 <li>
 <p><strong>Bridge automation procedures</strong> — added <code>scripts/run_daily_bridge_maintenance.sh</code> for non-critical warn-and-continue bridge refresh/check operations, plus <code>.github/workflows/bridge-maintenance.yml</code> (daily maintenance) and <code>.github/workflows/bridge-watchdog.yml</code> (staleness monitoring with deduplicated issue creation).</p>
@@ -1942,7 +2020,12 @@ and this project adheres to <a href="https://semver.org/spec/v2.0.0.html">Semant
 <h2 id="010-2026-04-15">[0.1.0] - 2026-04-15<a class="headerlink" href="#010-2026-04-15" title="Permanent link">&para;</a></h2>
 <h3 id="added_1">Added<a class="headerlink" href="#added_1" title="Permanent link">&para;</a></h3>
 <ul>
-<li><code>ingest</code> module: load project descriptions from <code>.json</code> or <code>.md</code> briefs; scan existing project directories to supplement missing fields</li>
+<li>
+<p><strong>Reference: Unix Philosophy Mapping for Code Hygiene Rules</strong> — added <code>agentteams/templates/domain/unix-philosophy-mapping.template.md</code> and integrated into build pipeline. Each generated team includes <code>references/unix-philosophy-mapping.reference.md</code> mapping rules (CH-01 through CH-23) to Unix design principles. Three-tier classification: Tier 1 (foundational), Tier 2 (aligned), Tier 3 (project-specific). See audit report <code>tmp/by-week/2026-W20/unix-philosophy-mapping-audit-revisions.md</code>.</p>
+</li>
+<li>
+<p><code>ingest</code> module: load project descriptions from <code>.json</code> or <code>.md</code> briefs; scan existing project directories to supplement missing fields</p>
+</li>
 <li><code>analyze</code> module: classify project type, select agent archetypes, detect tool agents, build team manifest</li>
 <li><code>render</code> module: resolve auto and manual placeholders in agent templates; compute template hashes for drift detection</li>
 <li><code>emit</code> module: write rendered agent files to disk with dry-run and overwrite-protection support</li>

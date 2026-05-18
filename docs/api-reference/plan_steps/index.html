@@ -12,13 +12,13 @@
         <meta name="author" content="jlcatonjr">
       
       
-        <link rel="canonical" href="https://jlcatonjr.github.io/agentteams/api-reference/render/">
+        <link rel="canonical" href="https://jlcatonjr.github.io/agentteams/api-reference/plan_steps/">
       
       
-        <link rel="prev" href="../analyze/">
+        <link rel="prev" href="../handoff_payloads/">
       
       
-        <link rel="next" href="../emit/">
+        <link rel="next" href="../../template-authoring/">
       
       
         
@@ -29,7 +29,7 @@
     
     
       
-        <title>render - Agent Teams Module</title>
+        <title>plan_steps - Agent Teams Module</title>
       
     
     
@@ -80,7 +80,7 @@
     <div data-md-component="skip">
       
         
-        <a href="#render-agentteamsmodule" class="md-skip">
+        <a href="#plan_steps-agentteamsmodule" class="md-skip">
           Skip to content
         </a>
       
@@ -114,7 +114,7 @@
         <div class="md-header__topic" data-md-component="header-topic">
           <span class="md-ellipsis">
             
-              render
+              plan_steps
             
           </span>
         </div>
@@ -1195,37 +1195,10 @@
                 
   
   
-    
   
   
-  
-    <li class="md-nav__item md-nav__item--active">
-      
-      <input class="md-nav__toggle md-toggle" type="checkbox" id="__toc">
-      
-      
-        
-      
-      
-        <label class="md-nav__link md-nav__link--active" for="__toc">
-          
-  
-  
-  <span class="md-ellipsis">
-    
-  
-    render
-  
-
-    
-  </span>
-  
-  
-
-          <span class="md-nav__icon md-icon"></span>
-        </label>
-      
-      <a href="./" class="md-nav__link md-nav__link--active">
+    <li class="md-nav__item">
+      <a href="../render/" class="md-nav__link">
         
   
   
@@ -1241,98 +1214,6 @@
   
 
       </a>
-      
-        
-
-<nav class="md-nav md-nav--secondary" aria-label="Table of contents">
-  
-  
-  
-    
-  
-  
-    <label class="md-nav__title" for="__toc">
-      <span class="md-nav__icon md-icon"></span>
-      Table of contents
-    </label>
-    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
-      
-        <li class="md-nav__item">
-  <a href="#functions" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Functions
-      
-    </span>
-  </a>
-  
-    <nav class="md-nav" aria-label="Functions">
-      <ul class="md-nav__list">
-        
-          <li class="md-nav__item">
-  <a href="#render_allmanifest-templates_dir" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        render_all(manifest, *, templates_dir)
-      
-    </span>
-  </a>
-  
-</li>
-        
-          <li class="md-nav__item">
-  <a href="#compute_template_hashesmanifest-templates_dir" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        compute_template_hashes(manifest, *, templates_dir)
-      
-    </span>
-  </a>
-  
-</li>
-        
-          <li class="md-nav__item">
-  <a href="#resolve_placeholderstemplate_text-placeholder_map" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        resolve_placeholders(template_text, placeholder_map)
-      
-    </span>
-  </a>
-  
-</li>
-        
-          <li class="md-nav__item">
-  <a href="#collect_unresolved_manualrendered_text" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        collect_unresolved_manual(rendered_text)
-      
-    </span>
-  </a>
-  
-</li>
-        
-          <li class="md-nav__item">
-  <a href="#validate_cross_refsrendered_files" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        validate_cross_refs(rendered_files)
-      
-    </span>
-  </a>
-  
-</li>
-        
-      </ul>
-    </nav>
-  
-</li>
-      
-    </ul>
-  
-</nav>
-      
     </li>
   
 
@@ -1622,10 +1503,37 @@
                 
   
   
+    
   
   
-    <li class="md-nav__item">
-      <a href="../plan_steps/" class="md-nav__link">
+  
+    <li class="md-nav__item md-nav__item--active">
+      
+      <input class="md-nav__toggle md-toggle" type="checkbox" id="__toc">
+      
+      
+        
+      
+      
+        <label class="md-nav__link md-nav__link--active" for="__toc">
+          
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    plan_steps
+  
+
+    
+  </span>
+  
+  
+
+          <span class="md-nav__icon md-icon"></span>
+        </label>
+      
+      <a href="./" class="md-nav__link md-nav__link--active">
         
   
   
@@ -1641,6 +1549,65 @@
   
 
       </a>
+      
+        
+
+<nav class="md-nav md-nav--secondary" aria-label="Table of contents">
+  
+  
+  
+    
+  
+  
+    <label class="md-nav__title" for="__toc">
+      <span class="md-nav__icon md-icon"></span>
+      Table of contents
+    </label>
+    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
+      
+        <li class="md-nav__item">
+  <a href="#functions" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Functions
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Functions">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#read_stepspath" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        read_steps(path)
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#see-also" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        See Also
+      
+    </span>
+  </a>
+  
+</li>
+      
+    </ul>
+  
+</nav>
+      
     </li>
   
 
@@ -1827,54 +1794,10 @@
       <ul class="md-nav__list">
         
           <li class="md-nav__item">
-  <a href="#render_allmanifest-templates_dir" class="md-nav__link">
+  <a href="#read_stepspath" class="md-nav__link">
     <span class="md-ellipsis">
       
-        render_all(manifest, *, templates_dir)
-      
-    </span>
-  </a>
-  
-</li>
-        
-          <li class="md-nav__item">
-  <a href="#compute_template_hashesmanifest-templates_dir" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        compute_template_hashes(manifest, *, templates_dir)
-      
-    </span>
-  </a>
-  
-</li>
-        
-          <li class="md-nav__item">
-  <a href="#resolve_placeholderstemplate_text-placeholder_map" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        resolve_placeholders(template_text, placeholder_map)
-      
-    </span>
-  </a>
-  
-</li>
-        
-          <li class="md-nav__item">
-  <a href="#collect_unresolved_manualrendered_text" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        collect_unresolved_manual(rendered_text)
-      
-    </span>
-  </a>
-  
-</li>
-        
-          <li class="md-nav__item">
-  <a href="#validate_cross_refsrendered_files" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        validate_cross_refs(rendered_files)
+        read_steps(path)
       
     </span>
   </a>
@@ -1883,6 +1806,17 @@
         
       </ul>
     </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#see-also" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        See Also
+      
+    </span>
+  </a>
   
 </li>
       
@@ -1906,72 +1840,40 @@
   
 
 
-<h1 id="render-agentteamsmodule"><code>render</code> — AgentTeamsModule<a class="headerlink" href="#render-agentteamsmodule" title="Permanent link">&para;</a></h1>
-<p>Render agent files from templates by resolving placeholders.</p>
-<p>Takes a team manifest (from <code>analyze.py</code>) and a template directory, and produces a list of <code>(output_path, rendered_content)</code> pairs ready for the emit phase.</p>
-<p>The returned content is framework-agnostic. To produce the final emitted file format, pass each rendered body through the target framework adapter's <code>render_agent_file()</code> method before calling <code>emit.emit_all()</code>.</p>
+<h1 id="plan_steps-agentteamsmodule"><code>plan_steps</code> — AgentTeamsModule<a class="headerlink" href="#plan_steps-agentteamsmodule" title="Permanent link">&para;</a></h1>
+<p>Tolerant reader for plan <code>.steps.csv</code> artifacts.</p>
+<p>Plans in <code>tmp/by-week/&lt;ISO-week&gt;/&lt;slug&gt;.steps.csv</code> describe sequenced handoffs between agents. Some cells (typically <code>notes</code>) contain quoted multi-line text. This module's <code>read_steps</code> wraps <code>csv.DictReader</code> with the conventions used across the project — quoted multi-line cells preserved, rows without a <code>step</code> field skipped, missing cells coerced to empty strings.</p>
+<p>Introduced alongside <a href="../handoff_payloads/"><code>handoff_payloads</code></a> so the chain comparator can operate on dict rows.</p>
 <blockquote>
-<p><em>Source: <code>agentteams/render.py</code></em></p>
+<p><em>Source: <code>agentteams/plan_steps.py</code></em></p>
 </blockquote>
 <hr />
 <h2 id="functions">Functions<a class="headerlink" href="#functions" title="Permanent link">&para;</a></h2>
-<h3 id="render_allmanifest-templates_dir"><code>render_all(manifest, *, templates_dir)</code><a class="headerlink" href="#render_allmanifest-templates_dir" title="Permanent link">&para;</a></h3>
+<h3 id="read_stepspath"><code>read_steps(path)</code><a class="headerlink" href="#read_stepspath" title="Permanent link">&para;</a></h3>
 <blockquote>
-<p><em>Source: <code>agentteams/render.py</code></em></p>
+<p><em>Source: <code>agentteams/plan_steps.py</code></em></p>
 </blockquote>
-<p>Render all output files described in the manifest.</p>
+<p>Read a plan <code>.steps.csv</code>. Each returned dict is keyed by the CSV header row; missing values are normalized to empty strings (not <code>None</code>).</p>
 <p><strong>Args:</strong></p>
 <ul>
-<li><code>manifest</code> (<code>dict[str, Any]</code>) — Team manifest from <code>analyze.build_manifest()</code>.</li>
-<li><code>templates_dir</code> (<code>Path</code>, keyword-only) — Root directory of the <code>templates/</code> folder.</li>
+<li><code>path</code> (<code>Path | str</code>) — Path to a plan <code>.steps.csv</code> artifact.</li>
 </ul>
-<p><strong>Returns:</strong> <code>list[tuple[str, str]]</code> — List of <code>(output_path_relative_to_agents_dir, rendered_content)</code> tuples.</p>
+<p><strong>Returns:</strong> <code>list[dict[str, str]]</code> — One dict per data row. Rows whose <code>step</code> cell is empty are skipped (this allows trailing blank lines and comment-style header gaps without raising).</p>
+<p><strong>Example:</strong></p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a><span class="kn">from</span><span class="w"> </span><span class="nn">pathlib</span><span class="w"> </span><span class="kn">import</span> <span class="n">Path</span>
+<a id="__codelineno-0-2" name="__codelineno-0-2" href="#__codelineno-0-2"></a><span class="kn">from</span><span class="w"> </span><span class="nn">agentteams.plan_steps</span><span class="w"> </span><span class="kn">import</span> <span class="n">read_steps</span>
+<a id="__codelineno-0-3" name="__codelineno-0-3" href="#__codelineno-0-3"></a><span class="kn">from</span><span class="w"> </span><span class="nn">agentteams.handoff_payloads</span><span class="w"> </span><span class="kn">import</span> <span class="n">audit_handoff_chain</span>
+<a id="__codelineno-0-4" name="__codelineno-0-4" href="#__codelineno-0-4"></a>
+<a id="__codelineno-0-5" name="__codelineno-0-5" href="#__codelineno-0-5"></a><span class="n">steps</span> <span class="o">=</span> <span class="n">read_steps</span><span class="p">(</span><span class="n">Path</span><span class="p">(</span><span class="s2">&quot;tmp/by-week/2026-W21/my-plan.steps.csv&quot;</span><span class="p">))</span>
+<a id="__codelineno-0-6" name="__codelineno-0-6" href="#__codelineno-0-6"></a><span class="n">findings</span> <span class="o">=</span> <span class="n">audit_handoff_chain</span><span class="p">(</span><span class="n">steps</span><span class="p">)</span>
+<a id="__codelineno-0-7" name="__codelineno-0-7" href="#__codelineno-0-7"></a><span class="k">for</span> <span class="n">finding</span> <span class="ow">in</span> <span class="n">findings</span><span class="p">:</span>
+<a id="__codelineno-0-8" name="__codelineno-0-8" href="#__codelineno-0-8"></a>    <span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;</span><span class="si">{</span><span class="n">finding</span><span class="o">.</span><span class="n">severity</span><span class="si">}</span><span class="s2"> </span><span class="si">{</span><span class="n">finding</span><span class="o">.</span><span class="n">code</span><span class="si">}</span><span class="s2">: </span><span class="si">{</span><span class="n">finding</span><span class="o">.</span><span class="n">message</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
+</code></pre></div>
 <hr />
-<h3 id="compute_template_hashesmanifest-templates_dir"><code>compute_template_hashes(manifest, *, templates_dir)</code><a class="headerlink" href="#compute_template_hashesmanifest-templates_dir" title="Permanent link">&para;</a></h3>
-<blockquote>
-<p><em>Source: <code>agentteams/render.py</code></em></p>
-</blockquote>
-<p>Compute SHA-256 hashes of all templates used by the manifest.</p>
-<p><strong>Args:</strong></p>
+<h2 id="see-also">See Also<a class="headerlink" href="#see-also" title="Permanent link">&para;</a></h2>
 <ul>
-<li><code>manifest</code> (<code>dict[str, Any]</code>) — Team manifest from <code>analyze.build_manifest()</code>.</li>
-<li><code>templates_dir</code> (<code>Path</code>, keyword-only) — Root directory of the <code>templates/</code> folder.</li>
+<li><a href="../handoff_payloads/"><code>handoff_payloads</code></a> — typed handoff substrate that consumes the rows returned here.</li>
 </ul>
-<p><strong>Returns:</strong> <code>dict[str, str]</code> — Mapping of <code>template_relative_path → sha256_hex_digest</code>.</p>
-<hr />
-<h3 id="resolve_placeholderstemplate_text-placeholder_map"><code>resolve_placeholders(template_text, placeholder_map)</code><a class="headerlink" href="#resolve_placeholderstemplate_text-placeholder_map" title="Permanent link">&para;</a></h3>
-<blockquote>
-<p><em>Source: <code>agentteams/render.py</code></em></p>
-</blockquote>
-<p>Replace all <code>{PLACEHOLDER}</code> tokens in <code>template_text</code> using <code>placeholder_map</code>.</p>
-<p><strong>Args:</strong></p>
-<ul>
-<li><code>template_text</code> (<code>str</code>) — Raw template content.</li>
-<li><code>placeholder_map</code> (<code>dict[str, str]</code>) — Mapping of placeholder name → resolved value.</li>
-</ul>
-<p><strong>Returns:</strong> <code>str</code> — Template text with all auto-resolved placeholders substituted.</p>
-<hr />
-<h3 id="collect_unresolved_manualrendered_text"><code>collect_unresolved_manual(rendered_text)</code><a class="headerlink" href="#collect_unresolved_manualrendered_text" title="Permanent link">&para;</a></h3>
-<blockquote>
-<p><em>Source: <code>agentteams/render.py</code></em></p>
-</blockquote>
-<p>Return a list of all unresolved <code>{MANUAL:*}</code> token names remaining in rendered text.</p>
-<p><strong>Args:</strong></p>
-<ul>
-<li><code>rendered_text</code> (<code>str</code>) — Already-rendered template content.</li>
-</ul>
-<p><strong>Returns:</strong> <code>list[str]</code> — List of placeholder names (e.g., <code>['REFERENCE_DB_PATH', 'STYLE_REFERENCE_PATH']</code>).</p>
-<hr />
-<h3 id="validate_cross_refsrendered_files"><code>validate_cross_refs(rendered_files)</code><a class="headerlink" href="#validate_cross_refsrendered_files" title="Permanent link">&para;</a></h3>
-<blockquote>
-<p><em>Source: <code>agentteams/render.py</code></em></p>
-</blockquote>
-<p>Validate that every agent slug referenced in <code>agents:</code> YAML blocks resolves to a file in the rendered set.</p>
-<p><strong>Args:</strong></p>
-<ul>
-<li><code>rendered_files</code> (<code>list[tuple[str, str]]</code>) — Output of <code>render_all()</code>: list of <code>(relative_path, content)</code> pairs.</li>
-</ul>
-<p><strong>Returns:</strong> <code>list[str]</code> — List of unresolvable cross-reference error strings. Empty list means all references resolve.</p>
 
 
 

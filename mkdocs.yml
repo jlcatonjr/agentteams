@@ -61,6 +61,8 @@ nav:
       - graph: api-reference/graph.md
       - frameworks: api-reference/frameworks.md
       - man: api-reference/man.md
+      - handoff_payloads: api-reference/handoff_payloads.md
+      - plan_steps: api-reference/plan_steps.md
   - Template Authoring: template-authoring.md
   - Description Format: DESCRIPTION-FORMAT.md
   - Structural Update Plan: structural-update-plan.md
