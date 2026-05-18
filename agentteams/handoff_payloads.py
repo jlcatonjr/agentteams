@@ -14,6 +14,7 @@ from __future__ import annotations
 import json
 import multiprocessing
 import re
+import warnings
 from dataclasses import dataclass
 from datetime import date
 from pathlib import Path
@@ -94,6 +95,27 @@ def _assert_bounded_schema(schema: Any, *, max_depth: int = MAX_DEPTH) -> None:
     walk(schema, 0)
 
 
+def _validation_mp_context() -> "multiprocessing.context.BaseContext":
+    """Pick a start method that does not re-execute the caller's ``__main__``.
+
+    ``spawn`` (macOS/Windows default) and ``forkserver`` both re-import the
+    caller's ``__main__`` to bootstrap the child/server; a caller that invokes
+    ``validate`` from an unguarded top-level script then recursively re-runs
+    and the worker dies before producing a result — surfacing as a misleading
+    "schema invalid". Only ``fork`` avoids the re-import. Bare ``fork`` of a
+    multi-threaded process is deprecated (3.12+) because inherited locks can
+    deadlock the child, but ``_validate_worker`` acquires no inherited lock,
+    does pure-CPU work, and exits immediately, so that hazard does not apply
+    here — the specific DeprecationWarning is suppressed at the start site with
+    this justification. Prefer ``fork``; fall back to ``spawn`` only on
+    platforms without it (Windows), where the ``__main__``-guard requirement is
+    unavoidable and standard. The process stays ``terminate``-able, preserving
+    the V5 timeout guard.
+    """
+    methods = multiprocessing.get_all_start_methods()
+    return multiprocessing.get_context("fork" if "fork" in methods else "spawn")
+
+
 def _validate_worker(payload: Any, schema: dict[str, Any], queue: "multiprocessing.Queue") -> None:
     try:
         import jsonschema  # imported in worker so import failure surfaces as SchemaInvalid
@@ -115,18 +137,30 @@ def validate(
     ``_worker`` is an injection seam for tests; production callers must omit it.
     """
     _assert_bounded_schema(schema)
-    ctx = multiprocessing.get_context("spawn")
+    ctx = _validation_mp_context()
     queue: multiprocessing.Queue = ctx.Queue()
     target = _worker if _worker is not None else _validate_worker
     proc = ctx.Process(target=target, args=(payload, schema, queue))
-    proc.start()
+    with warnings.catch_warnings():
+        # See _validation_mp_context: fork-of-multithreaded is safe for this
+        # lock-free, short-lived worker; suppress only that specific advisory.
+        warnings.filterwarnings(
+            "ignore",
+            message=r".*fork.*may lead to deadlocks in the child.*",
+            category=DeprecationWarning,
+        )
+        proc.start()
     proc.join(timeout)
     if proc.is_alive():
         proc.terminate()
         proc.join(1.0)
         raise SchemaInvalid(f"validation exceeded {timeout}s")
     if queue.empty():
-        raise SchemaInvalid("validation worker exited without result")
+        raise SchemaInvalid(
+            "validation worker exited without result "
+            f"(exitcode={proc.exitcode}); this is a validation-infrastructure "
+            "failure, not necessarily an invalid schema"
+        )
     status, detail = queue.get()
     if status == "err":
         raise SchemaInvalid(detail)

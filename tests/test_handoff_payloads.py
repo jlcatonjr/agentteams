@@ -160,6 +160,35 @@ def test_recursive_schema_bounded_by_timeout():
         validate({"x": "y"}, schema, timeout=0.5, _worker=slow_validate_worker)
 
 
+# ---------- V5c: real worker path (no _worker injection) ----------
+# Regression: validate() previously hardcoded the "spawn" start method, which
+# re-imports the caller's __main__ in the child. An unguarded script caller
+# then recursively re-ran and the worker died, surfacing as a misleading
+# "schema invalid". Every prior validate() test injected a fake _worker, so the
+# real worker path was never exercised. These run it for real.
+def test_validate_real_worker_accepts_valid_payload():
+    schema = {
+        "$id": "realwork/v1.schema.json",
+        "type": "object",
+        "properties": {"x": {"type": "string"}},
+        "required": ["x"],
+        "additionalProperties": False,
+    }
+    validate({"x": "ok"}, schema)  # must not raise
+
+
+def test_validate_real_worker_rejects_invalid_payload():
+    schema = {
+        "$id": "realwork/v1.schema.json",
+        "type": "object",
+        "properties": {"x": {"type": "string"}},
+        "required": ["x"],
+        "additionalProperties": False,
+    }
+    with pytest.raises(SchemaInvalid):
+        validate({"x": 123}, schema)
+
+
 # ---------- V6a: dated promotion (frozen clock) ----------
 def test_payload_untyped_promotes_to_hard_on_cutoff():
     steps = [
