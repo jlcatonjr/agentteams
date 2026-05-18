@@ -759,6 +759,16 @@ def main(argv: list[str] | None = None) -> int:
             if rc != 0:
                 return rc
 
+        # Destructive-action gate must clear BEFORE any side effect (backup,
+        # log migration, "Writing..." output); otherwise a blocked update
+        # still creates a spurious backup and misreports that it wrote files.
+        if not args.dry_run and not args.merge:
+            try:
+                _assert_destructive_action_allowed(output_dir, action="overwrite")
+            except RuntimeError as exc:
+                print(f"Security gate blocked overwrite update: {exc}", file=sys.stderr)
+                return 1
+
         print(f"\nWriting {len(update_rendered)} file(s)...")
 
         # Back up BEFORE migration so the backup captures pre-migration state
@@ -777,13 +787,6 @@ def main(argv: list[str] | None = None) -> int:
                     f"  ✓  Migrated {mresult.changelog_rows_moved} changelog row(s) and "
                     f"{mresult.coord_log_rows_moved} coordination row(s) to CSV files."
                 )
-
-        if not args.dry_run and not args.merge:
-            try:
-                _assert_destructive_action_allowed(output_dir, action="overwrite")
-            except RuntimeError as exc:
-                print(f"Security gate blocked overwrite update: {exc}", file=sys.stderr)
-                return 1
 
         result = emit.emit_all(
             update_rendered,
@@ -911,6 +914,15 @@ def main(argv: list[str] | None = None) -> int:
             print("     These files will have their fenced sections updated; "
                   "user-authored content outside fences is preserved.")
 
+    # Destructive-action gate must clear BEFORE backup/migration so a blocked
+    # overwrite produces no spurious backup or log migration.
+    if not args.dry_run and args.overwrite:
+        try:
+            _assert_destructive_action_allowed(output_dir, action="overwrite")
+        except RuntimeError as exc:
+            print(f"Security gate blocked overwrite: {exc}", file=sys.stderr)
+            return 1
+
     if not args.dry_run and not args.no_backup and (args.overwrite or args.merge):
         emit.backup_output_dir(
             output_dir,
@@ -926,13 +938,6 @@ def main(argv: list[str] | None = None) -> int:
                 f"  ✓  Migrated {mresult.changelog_rows_moved} changelog row(s) and "
                 f"{mresult.coord_log_rows_moved} coordination row(s) to CSV files."
             )
-
-    if not args.dry_run and args.overwrite:
-        try:
-            _assert_destructive_action_allowed(output_dir, action="overwrite")
-        except RuntimeError as exc:
-            print(f"Security gate blocked overwrite: {exc}", file=sys.stderr)
-            return 1
 
     result = emit.emit_all(
         final_rendered,

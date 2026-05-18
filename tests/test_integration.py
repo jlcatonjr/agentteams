@@ -607,6 +607,87 @@ def test_update_restores_missing_expected_standard_file(tmp_path, monkeypatch):
     assert missing_path.exists(), f"Expected --update to restore missing file: {missing_rel}"
 
 
+def test_blocked_overwrite_update_creates_no_backup(tmp_path, monkeypatch):
+    """Regression: a security-gate-blocked --update must not create a backup.
+
+    The destructive-action gate was previously checked AFTER backup_output_dir,
+    so a blocked update still produced a spurious backup snapshot and printed
+    "Writing N file(s)..." while leaving files untouched. The gate now runs
+    before any side effect.
+    """
+    import build_team
+
+    brief = EXAMPLES_DIR / "software-project" / "brief.json"
+    if not brief.exists():
+        pytest.skip("software-project brief not found")
+
+    output_dir = tmp_path / ".github" / "agents"
+    backups_dir = output_dir / ".agentteams-backups"
+
+    # Freshness waiver so the ONLY thing that can block is the overwrite gate.
+    waiver_key = "integration-waiver-key"
+    monkeypatch.setenv("AGENTTEAMS_WAIVER_SIGNING_KEY", waiver_key)
+    refs = output_dir / "references"
+    refs.mkdir(parents=True, exist_ok=True)
+    waiver = {
+        "timestamp": "2026-05-03T00:00:00Z",
+        "waiver_id": "waiver-freshness-002",
+        "action_reviewed": "security-intel-freshness",
+        "expires_at": "2099-01-01T00:00:00Z",
+        "max_uses": "5",
+        "uses": "0",
+        "approver": "test-harness",
+        "ticket_id": "INT-2",
+        "reason_code": "TEST",
+        "conditions_verified": "verified",
+        "signature": "",
+    }
+    payload = "|".join(
+        [
+            waiver["waiver_id"], waiver["action_reviewed"], waiver["expires_at"],
+            waiver["max_uses"], waiver["uses"], waiver["approver"],
+            waiver["ticket_id"], waiver["reason_code"], waiver["conditions_verified"],
+        ]
+    )
+    waiver["signature"] = hmac.new(
+        waiver_key.encode("utf-8"), payload.encode("utf-8"), hashlib.sha256
+    ).hexdigest()
+    (refs / "security-waivers.log.csv").write_text(
+        "timestamp,waiver_id,action_reviewed,expires_at,max_uses,uses,approver,"
+        "ticket_id,reason_code,conditions_verified,signature\n"
+        "{timestamp},{waiver_id},{action_reviewed},{expires_at},{max_uses},"
+        "{uses},{approver},{ticket_id},{reason_code},{conditions_verified},"
+        "{signature}\n".format(**waiver),
+        encoding="utf-8",
+    )
+
+    assert build_team.main([
+        "--description", str(brief), "--output", str(output_dir),
+        "--yes", "--no-scan", "--security-offline",
+    ]) == 0
+
+    # Force something for --update to write, but DO NOT seed a PASS decision,
+    # so the destructive overwrite gate must block.
+    missing_path = output_dir / "references/code-hygiene-rules.reference.md"
+    assert missing_path.exists()
+    missing_path.unlink()
+
+    backups_before = set(backups_dir.glob("*")) if backups_dir.exists() else set()
+
+    rc = build_team.main([
+        "--description", str(brief), "--output", str(output_dir),
+        "--update", "--yes", "--no-scan", "--security-offline",
+    ])
+
+    assert rc == 1, "blocked overwrite update must return non-zero"
+    backups_after = set(backups_dir.glob("*")) if backups_dir.exists() else set()
+    assert backups_after == backups_before, (
+        "blocked update created a spurious backup: "
+        f"{sorted(p.name for p in backups_after - backups_before)}"
+    )
+    assert not missing_path.exists(), "blocked update must not have written files"
+
+
 def test_initialization_writes_baseline_inventory_artifacts(tmp_path, monkeypatch):
     """First successful generation writes baseline artifacts required for update/drift workflows."""
     import build_team
