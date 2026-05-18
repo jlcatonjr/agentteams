@@ -19,7 +19,7 @@ classifiers = [
     "Topic :: Software Development :: Code Generators",
     "Topic :: Software Development :: Libraries :: Python Modules",
 ]
-dependencies = []
+dependencies = ["jsonschema>=4.20"]
 keywords = ["agent", "ai", "copilot", "code-generation", "github-copilot", "llm", "multi-agent"]
 
 [project.urls]

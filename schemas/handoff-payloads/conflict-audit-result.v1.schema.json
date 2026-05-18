@@ -1,0 +1,34 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "conflict-audit-result/v1.schema.json",
+  "title": "Conflict Audit Result",
+  "description": "Payload produced by @conflict-auditor when reporting findings on a plan or diff.",
+  "type": "object",
+  "required": ["verdict", "findings", "audited_paths"],
+  "additionalProperties": false,
+  "properties": {
+    "verdict": {
+      "type": "string",
+      "enum": ["CLEAN", "CONDITIONAL", "BLOCKING"]
+    },
+    "findings": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["code", "severity", "path", "message"],
+        "additionalProperties": false,
+        "properties": {
+          "code": {"type": "string", "enum": ["TM", "CC", "AE", "SD", "RM", "RX", "CN", "HC", "SR", "PE"]},
+          "severity": {"type": "string", "enum": ["LOW", "MED", "HIGH"]},
+          "path": {"type": "string"},
+          "message": {"type": "string"}
+        }
+      }
+    },
+    "audited_paths": {
+      "type": "array",
+      "minItems": 1,
+      "items": {"type": "string"}
+    }
+  }
+}

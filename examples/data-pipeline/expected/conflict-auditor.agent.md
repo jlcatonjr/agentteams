@@ -29,6 +29,7 @@ SECTION MANIFEST — conflict-auditor.template.md
 | section_id             | designation   | notes                              |
 |------------------------|---------------|------------------------------------|
 | authority_sources_list | FENCED        | From project authority_hierarchy   |
+| handoff_payload_codes  | FENCED        | PAYLOAD_UNTYPED / PAYLOAD_MISMATCH |
 | scope_and_rules        | USER-EDITABLE | Project may extend                 |
 -->
 
@@ -100,3 +101,18 @@ Append to `.github/agents/references/conflict-log.csv` with columns:
 3. Route `SOURCE_DRIFT` to `@technical-validator` for verification
 4. Call `@conflict-resolution` for decisions on all other conflicts
 5. A clean audit (no findings) must still produce an entry in the log
+
+---
+
+## Handoff Payload Conflict Codes
+
+<!-- AGENTTEAMS:BEGIN handoff_payload_codes v=1 -->
+When auditing `.steps.csv` artifacts that declare `payload_schema_in` / `payload_schema_out` columns, emit these additional codes via `agentteams.handoff_payloads.audit_handoff_chain`:
+
+| Category | Code | Severity | Description |
+|----------|------|----------|-------------|
+| `PAYLOAD_UNTYPED` | PU | WARN until 2026-07-01, HARD thereafter | Adjacent steps missing `payload_schema_out` / `payload_schema_in` |
+| `PAYLOAD_MISMATCH` | PM | HARD | Adjacent steps declare typed handoffs whose `$id` strings differ |
+
+Severity for `PAYLOAD_UNTYPED` is enforced mechanically by `PAYLOAD_UNTYPED_HARD_DATE = 2026-07-01` in `agentteams/handoff_payloads.py`. Do not soften by editorial judgment.
+<!-- AGENTTEAMS:END handoff_payload_codes -->
