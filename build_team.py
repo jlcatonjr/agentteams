@@ -695,6 +695,19 @@ def main(argv: list[str] | None = None) -> int:
         # Compute structural diff: additions, removals, drifted, unchanged
         sdreport = drift.compute_structural_diff(old_log, manifest, TEMPLATES_DIR)
 
+        # Destructive-action gate. A real (non-dry-run, non-merge) --update
+        # overwrites files, so clear the gate BEFORE printing the structural
+        # report or performing any side effect (backup, migration, "Writing
+        # ..."). A team that cannot be updated must not show a misleading
+        # drift report or create a spurious backup. compute_structural_diff
+        # above is read-only, so evaluating the gate here is safe.
+        if not args.dry_run and not args.merge:
+            try:
+                _assert_destructive_action_allowed(output_dir, action="overwrite")
+            except RuntimeError as exc:
+                print(f"Security gate blocked overwrite update: {exc}", file=sys.stderr)
+                return 1
+
         # Always refresh security intelligence references during --update,
         # even when template/content drift is otherwise empty.
         security_refresh_paths = {
@@ -758,16 +771,6 @@ def main(argv: list[str] | None = None) -> int:
             rc = _prune_removed_files(sdreport.removed_files, output_dir, args.yes, args.dry_run)
             if rc != 0:
                 return rc
-
-        # Destructive-action gate must clear BEFORE any side effect (backup,
-        # log migration, "Writing..." output); otherwise a blocked update
-        # still creates a spurious backup and misreports that it wrote files.
-        if not args.dry_run and not args.merge:
-            try:
-                _assert_destructive_action_allowed(output_dir, action="overwrite")
-            except RuntimeError as exc:
-                print(f"Security gate blocked overwrite update: {exc}", file=sys.stderr)
-                return 1
 
         print(f"\nWriting {len(update_rendered)} file(s)...")
 

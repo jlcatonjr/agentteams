@@ -543,3 +543,62 @@ def test_print_structural_diff_report_with_changes(capsys):
     out = capsys.readouterr().out
     assert "Added" in out
     assert "Removed" in out
+
+
+# ---------------------------------------------------------------------------
+# Defect 2 invariants: compute_structural_diff is pure/mode-independent, and a
+# stale stored manifest_fingerprint promotes ALL unchanged files to drifted.
+#
+# build_team.py calls compute_structural_diff identically for --update and
+# --update --dry-run (one call site), so pinning purity here is what
+# guarantees dry-run and a real update never diverge. The fingerprint-staleness
+# behavior is the real Defect 2 (a build-log written by an older generator /
+# differently-normalized description no longer matches the recomputed
+# fingerprint); this test documents current behavior so any change to it is a
+# conscious, reviewed decision rather than silent drift.
+# ---------------------------------------------------------------------------
+
+def test_structural_diff_is_pure_and_mode_independent(tmp_path):
+    files = [
+        {"path": "orchestrator.agent.md", "template": "universal/orchestrator.template.md", "type": "agent"},
+        {"path": "primary-producer.agent.md", "template": "universal/primary-producer.template.md", "type": "agent"},
+    ]
+    old_log = _make_log_v12(files, {}, ["orchestrator", "primary-producer"],
+                            manifest_fingerprint="deadbeefdeadbeef")
+    manifest = _make_manifest(files, ["orchestrator", "primary-producer"])
+
+    r1 = compute_structural_diff(old_log, manifest, tmp_path)
+    r2 = compute_structural_diff(old_log, manifest, tmp_path)
+
+    assert {f["path"] for f in r1.drifted_files} == {f["path"] for f in r2.drifted_files}
+    assert len(r1.drifted_files) == len(r2.drifted_files)
+    assert r1.manifest_changed == r2.manifest_changed
+
+
+def test_stale_manifest_fingerprint_promotes_all_unchanged(tmp_path):
+    files = [
+        {"path": "orchestrator.agent.md", "template": "universal/orchestrator.template.md", "type": "agent"},
+        {"path": "primary-producer.agent.md", "template": "universal/primary-producer.template.md", "type": "agent"},
+    ]
+    agents = ["orchestrator", "primary-producer"]
+
+    # Matching fingerprint → nothing promoted on manifest grounds.
+    manifest = _make_manifest(files, agents)
+    fresh_fp = compute_manifest_fingerprint(manifest)
+    matched = compute_structural_diff(
+        _make_log_v12(files, {}, agents, manifest_fingerprint=fresh_fp), manifest, tmp_path
+    )
+    assert matched.manifest_changed is False
+
+    # Stale/mismatched stored fingerprint → manifest_changed set, nothing left
+    # in unchanged, every file ends up drifted. This is the observable Defect 2
+    # behavior seen on GeneralResearchTeam (all 40 files promoted). The exact
+    # per-file _reason depends on whether template drift also fired, so the
+    # robust invariant is "manifest_changed + no survivors in unchanged".
+    stale = compute_structural_diff(
+        _make_log_v12(files, {}, agents, manifest_fingerprint="0000000000000000"),
+        manifest, tmp_path,
+    )
+    assert stale.manifest_changed is True
+    assert stale.unchanged_files == []
+    assert {f["path"] for f in stale.drifted_files} == {f["path"] for f in files}

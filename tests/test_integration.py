@@ -607,13 +607,15 @@ def test_update_restores_missing_expected_standard_file(tmp_path, monkeypatch):
     assert missing_path.exists(), f"Expected --update to restore missing file: {missing_rel}"
 
 
-def test_blocked_overwrite_update_creates_no_backup(tmp_path, monkeypatch):
-    """Regression: a security-gate-blocked --update must not create a backup.
+def test_blocked_overwrite_update_creates_no_backup(tmp_path, monkeypatch, capsys):
+    """Regression: a security-gate-blocked --update must not create a backup,
+    print "Writing...", or print the structural-diff report.
 
-    The destructive-action gate was previously checked AFTER backup_output_dir,
-    so a blocked update still produced a spurious backup snapshot and printed
-    "Writing N file(s)..." while leaving files untouched. The gate now runs
-    before any side effect.
+    The destructive-action gate was previously checked AFTER backup_output_dir
+    and AFTER the structural-diff report, so a blocked update produced a
+    spurious backup, printed "Writing N file(s)...", and showed a misleading
+    "Updated (N)" report while leaving files untouched. The gate now runs
+    before compute_structural_diff's report and any side effect.
     """
     import build_team
 
@@ -686,6 +688,18 @@ def test_blocked_overwrite_update_creates_no_backup(tmp_path, monkeypatch):
         f"{sorted(p.name for p in backups_after - backups_before)}"
     )
     assert not missing_path.exists(), "blocked update must not have written files"
+
+    captured = capsys.readouterr()
+    combined = captured.out + captured.err
+    assert "Security gate blocked overwrite update" in combined
+    # Phase 2a: blocked update must not emit the misleading drift report or
+    # the write banner.
+    assert "Structural update" not in combined, (
+        "blocked update printed the structural-diff report"
+    )
+    assert "Writing " not in captured.out, (
+        "blocked update printed the 'Writing N file(s)...' banner"
+    )
 
 
 def test_initialization_writes_baseline_inventory_artifacts(tmp_path, monkeypatch):
