@@ -19,7 +19,7 @@ EVAL_SUITE_SCHEMA_VERSION = "1.0"
 
 # The worker-governance triad every workstream expert must wire in, and the
 # orchestrator-return edge — matches the Phase 0 canonical-scenario governance
-# predicate (tmp/by-week/2026-W21/cluster-a-phase-0).
+# predicate documented in orchestrator.agent.md (Workflow 1, steps 6–8).
 WORKER_GOVERNANCE_TRIAD = ["primary-producer", "adversarial", "reference-manager"]
 RETURN_TO_ORCHESTRATOR = "Return to Orchestrator"
 
