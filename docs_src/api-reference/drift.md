@@ -110,6 +110,8 @@ Print a human-readable drift report to stdout.
 
 Compute a structural diff between a stored build-log and a new manifest.
 
+In addition to added/removed/drifted classification, the function consumes the build-log's `fingerprint_algo_version` field (see `FINGERPRINT_ALGO_VERSION` below). A missing field is treated as a legacy log and is **not** sufficient on its own to trigger promotion; a present-but-mismatched value triggers a one-shot manifest promotion with `_reason = "fingerprint algo version bumped"`. The function also sets `report.manifest_changed` whenever the new manifest fingerprint differs from the recorded one or the algo version has been bumped.
+
 **Args:**
 
 - `old_log` (`dict[str, Any]`) — Previously stored build-log from `load_build_log()`.
@@ -117,6 +119,25 @@ Compute a structural diff between a stored build-log and a new manifest.
 - `templates_dir` (`Path`) — Path to the templates root directory.
 
 **Returns:** `StructuralDiffReport`
+
+---
+
+### `refine_manifest_promotion(report, content_matches)`
+
+> *Source: `agentteams/drift.py`*
+
+Demote fingerprint-only promotions whose rendered content matches disk.
+
+`compute_structural_diff` promotes *every* unchanged file to drifted when the manifest fingerprint differs (a coarse safety net). For each such entry — identified by a manifest `_reason` (`"manifest values changed"`, `"manifest fingerprint unavailable"`, or `"fingerprint algo version bumped"`) — the caller-supplied `content_matches(path)` predicate is consulted; entries whose freshly-rendered content would match disk byte-for-byte are moved back to `unchanged_files`.
+
+Pure: performs no rendering or I/O directly. The caller supplies the `content_matches` closure (typically a render-and-compare against the on-disk file). `report.manifest_changed` is left intact as telemetry — only the `drifted_files` / `unchanged_files` sets (and therefore `update_files` / `has_changes`) are corrected.
+
+**Args:**
+
+- `report` (`StructuralDiffReport`) — Report from `compute_structural_diff()`; mutated in place.
+- `content_matches` (`Callable[[str], bool]`) — Predicate: returns `True` when the rendered content for the given output path matches the bytes on disk.
+
+**Returns:** `None`
 
 ---
 
@@ -170,3 +191,19 @@ The check reports modified files that still exist on disk; missing files are ski
 Returns an empty list when the build log is missing, invalid, or has no recorded file hashes.
 
 Read-path OS errors while hashing existing files are not suppressed and may propagate to callers.
+
+---
+
+## Module Constants
+
+### `FINGERPRINT_ALGO_VERSION`
+
+> *Source: `agentteams/drift.py`*
+
+Integer version of the manifest-fingerprint algorithm (current value: `1`).
+
+Bump **only** when `compute_manifest_fingerprint` semantics change — i.e. when its output would differ for an otherwise-unchanged manifest. A bump forces a one-shot re-evaluation on the next `--update` for any consumer repo whose build log was produced by a prior algo version: `compute_structural_diff` detects the mismatch, sets `report.manifest_changed`, and promotes affected files with `_reason = "fingerprint algo version bumped"`. After the next successful write the new value is recorded in the build log and the promotion does not recur.
+
+Legacy logs that pre-date this field (no `fingerprint_algo_version` key) are not treated as bumped — they fall through to the normal fingerprint comparison.
+
+A pinned unit test asserts the current value to force explicit PR review of any bump.

@@ -23,6 +23,10 @@ Read this guide if you:
 
 Content drift is normal and expected over time. `--migrate` is only for legacy pre-fencing teams that need a one-time overwrite migration.
 
+### Manifest Fingerprint, Baseline Heal, and Delivery Receipt
+
+Each build records a manifest fingerprint and a `fingerprint_algo_version` in `build-log.json`. When `--check` detects a manifest-promotion event (fingerprint changed, unavailable, or algo version bumped) it renders the affected files in memory and demotes any whose rendered content already matches disk — so `--check` and `--update --dry-run` report the same `has_changes` set. When `--update` finds no material drift but the recorded baseline is stale (typical after a `FINGERPRINT_ALGO_VERSION` bump), the build-log baseline is healed in place (rewritten with the current fingerprint and algo version). Every successful non-dry-run `--update` then writes `references/delivery-receipt.json` (schema: `schemas/delivery-receipt.schema.json`) attesting the delivered fingerprint and algo version; the receipt is excluded from drift detection. After the build-log and receipt are written, the run prints `✓  Healed build-log baseline (no material drift; fingerprint refreshed).` so the convergence is observable. See [Delivery Procedure](delivery-procedure.md) for the full heal-then-attest contract.
+
 ### The Three Update Modes
 
 | Mode | Command | Writes Files? |

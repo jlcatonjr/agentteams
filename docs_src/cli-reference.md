@@ -183,6 +183,8 @@ Re-render drifted agent files and emit newly added agents without touching uncha
 
 A backup of the output directory is created automatically before any writes. Pair with `--merge` to also preserve user-authored content in fenced regions (the `--merge` flag is fully honoured with `--update`). Use `--no-backup` to suppress the backup.
 
+On a successful (non-dry-run) `--update`, AgentTeams writes a delivery receipt to `references/delivery-receipt.json` (schema: `schemas/delivery-receipt.schema.json`) recording the project name, framework, manifest fingerprint, and fingerprint algorithm version of the delivered build. When no material drift is detected but the build-log baseline is stale (for example after a `FINGERPRINT_ALGO_VERSION` bump), the baseline is healed in place: the build-log is rewritten first, the delivery receipt is then written against the healed baseline (heal-first-attest-second), and `--update` prints `✓  Healed build-log baseline (no material drift; fingerprint refreshed).` after both writes complete. Receipt write failures warn on stderr but do not fail the run.
+
 ### `--prune`
 
 Used with `--update`: also delete agent files that are no longer part of the team taxonomy.
@@ -190,6 +192,8 @@ Used with `--update`: also delete agent files that are no longer part of the tea
 ### `--check`
 
 Check for template drift and structural changes without writing any files. Exits with code `1` if drift or structural changes are detected, `0` otherwise. Suitable for CI gates.
+
+When the structural diff reports a manifest-promotion event (manifest fingerprint changed, fingerprint unavailable, or `fingerprint_algo_version` bumped), `--check` runs the full render pipeline in memory and reconciles each promoted file against its on-disk content; fingerprint-only promotions whose rendered output matches disk byte-for-byte are demoted back to unchanged. `--check` and `--update --dry-run` report the same `has_changes` set for the same inputs.
 
 ### `--scan-security`
 

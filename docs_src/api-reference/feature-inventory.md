@@ -236,6 +236,20 @@ Workflows are step sequences embedded in the generated Orchestrator agent. Every
 
 ---
 
+## Drift Trust & Delivery Gating
+
+129. **`FINGERPRINT_ALGO_VERSION` Constant** — Module-level integer in `agentteams.drift` recording the version of the manifest-fingerprint algorithm; recorded into `build-log.json` on every write and consulted on `--check` / `--update` to migrate existing teams when fingerprint semantics change
+130. **Algo-Bump Migration Mechanism** — `compute_structural_diff` detects `fingerprint_algo_version` mismatch between the stored build-log and the current module value, sets `manifest_changed`, and promotes affected files with `_reason = "fingerprint algo version bumped"` for a one-shot re-evaluation; legacy logs missing the field do not trigger promotion on their own
+131. **Observable Baseline Self-Heal on `--update`** — When an `--update` run finds no material drift but the recorded fingerprint or algo version is stale, the build-log baseline is refreshed and the run prints `✓  Healed build-log baseline (no material drift; fingerprint refreshed).`; heal occurs before delivery-receipt attestation
+132. **`refine_manifest_promotion` Render-Faithful Reconciliation** — Pure public function in `agentteams.drift` that demotes fingerprint-only promotions whose rendered content matches disk byte-for-byte; caller supplies a `content_matches(path)` closure; preserves `manifest_changed` as telemetry
+133. **`--check` Option C Render-Faithful Mode** — When the structural diff sets `manifest_changed` with a manifest-promotion reason, `--check` runs the full render pipeline (`render.render_all` → framework adapter → handoff/graph append) and applies `refine_manifest_promotion` against a content-match closure mirroring `--update`'s, eliminating false-positive drift signals
+134. **`--check` / `--update --dry-run` Parity Contract** — `--check` and `--update --dry-run` report the same `has_changes` set for the same inputs; enforced by `tests/test_integration.py::test_check_parity_with_update_dry_run`
+135. **Delivery Receipt Artifact** — `references/delivery-receipt.json` written after every successful `--update` (non-dry-run) recording `artifact_type`, `receipt_schema_version`, `delivered_at`, `project_name`, `framework`, `manifest_fingerprint`, and `fingerprint_algo_version`; heal-first-attest-second order ensures the receipt records the post-heal state; write failures warn on stderr but do not fail the run; receipt file is excluded from drift detection
+136. **`schemas/delivery-receipt.schema.json`** — Draft-07 JSON Schema for the delivery receipt; `additionalProperties: false`; top-level discriminator is `artifact_type` (const `"delivery-receipt"`); `receipt_schema_version` const `"1.0"`
+137. **`docs_src/delivery-procedure.md` Operator Guide** — Documents the heal/attest order, receipt schema, and operator procedure for verifying a delivered update; registered under Guides in `mkdocs.yml`
+
+---
+
 ## Getting Started
 
 ### Essential Features
