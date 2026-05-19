@@ -664,3 +664,79 @@ def test_refine_handles_unavailable_fingerprint_reason():
     refine_manifest_promotion(rep, lambda p: True)
     assert rep.drifted_files == []
     assert [f["path"] for f in rep.unchanged_files] == ["a"]
+
+
+# ---------------------------------------------------------------------------
+# P0 — fingerprint algorithm versioning (Step 4)
+# ---------------------------------------------------------------------------
+
+def test_fingerprint_algo_version_pinned():
+    """Force PR review of any bump to the fingerprint algo version.
+
+    Bump this assertion only when ``compute_manifest_fingerprint`` changes
+    semantics (i.e. its output would differ for an unchanged manifest), and
+    bump ``FINGERPRINT_ALGO_VERSION`` in lock-step.
+    """
+    from agentteams.drift import FINGERPRINT_ALGO_VERSION
+    assert FINGERPRINT_ALGO_VERSION == 1
+
+
+def test_structural_diff_algo_version_bump_promotes_unchanged(tmp_path):
+    """A bumped algo version forces a one-shot re-promotion of unchanged files."""
+    from agentteams.drift import FINGERPRINT_ALGO_VERSION
+
+    # No ``template`` field on entries so they reach the manifest-fingerprint
+    # promotion path rather than getting flagged as template drift.
+    files = [{"path": "a.agent.md", "type": "agent"}]
+    agents = ["a"]
+    manifest = _make_manifest(files, agents)
+    fresh_fp = compute_manifest_fingerprint(manifest)
+
+    # Old log has the matching fingerprint but a stale algo version.
+    old_log = _make_log_v12(files, {}, agents, manifest_fingerprint=fresh_fp)
+    old_log["fingerprint_algo_version"] = FINGERPRINT_ALGO_VERSION - 1
+
+    rep = compute_structural_diff(old_log, manifest, tmp_path)
+    assert rep.manifest_changed is True
+    assert {f["path"] for f in rep.drifted_files} == {"a.agent.md"}
+    assert all(
+        f.get("_reason") == "fingerprint algo version bumped"
+        for f in rep.drifted_files
+    )
+
+
+def test_structural_diff_missing_algo_version_treated_as_legacy(tmp_path):
+    """A build-log without ``fingerprint_algo_version`` is treated as pre-version.
+
+    Pre-version logs do not trigger algo-bump promotion on their own — the
+    fingerprint comparison is what drives promotion. The first ``--update``
+    after upgrade rewrites the log with the current algo version, healing the
+    baseline.
+    """
+    files = [{"path": "a.agent.md", "type": "agent"}]
+    agents = ["a"]
+    manifest = _make_manifest(files, agents)
+    fresh_fp = compute_manifest_fingerprint(manifest)
+    old_log = _make_log_v12(files, {}, agents, manifest_fingerprint=fresh_fp)
+    # No fingerprint_algo_version key at all — legacy log.
+    assert "fingerprint_algo_version" not in old_log
+
+    rep = compute_structural_diff(old_log, manifest, tmp_path)
+    # Same fingerprint, absent algo version → no manifest_changed, no promotion.
+    assert rep.manifest_changed is False
+    assert rep.unchanged_files
+    assert rep.drifted_files == []
+
+
+def test_refine_demotes_algo_version_bump_promotion():
+    """Algo-version-bump reason participates in content-aware refinement."""
+    rep = StructuralDiffReport()
+    rep.manifest_changed = True
+    rep.drifted_files = [
+        {"path": "a.agent.md", "_reason": "fingerprint algo version bumped"},
+        {"path": "b.agent.md", "_reason": "fingerprint algo version bumped"},
+    ]
+    rep.unchanged_files = []
+    refine_manifest_promotion(rep, lambda p: p == "a.agent.md")
+    assert {f["path"] for f in rep.unchanged_files} == {"a.agent.md"}
+    assert {f["path"] for f in rep.drifted_files} == {"b.agent.md"}

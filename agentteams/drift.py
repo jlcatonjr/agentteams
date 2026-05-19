@@ -332,13 +332,27 @@ def compute_structural_diff(
     # -----------------------------------------------------------------------
     # Manifest drift: a brief/config change can alter rendered content without
     # changing template hashes or file structure. Promote unchanged files into
-    # the drifted set when the manifest fingerprint changes.
+    # the drifted set when the manifest fingerprint changes OR when the
+    # fingerprint algorithm version has been bumped (see
+    # ``FINGERPRINT_ALGO_VERSION``). A bumped algo version means the function
+    # that computes fingerprints has changed semantics, so old fingerprints
+    # are not comparable — treat as a forced re-evaluation.
     # -----------------------------------------------------------------------
     old_fingerprint = old_log.get("manifest_fingerprint")
     new_fingerprint = compute_manifest_fingerprint(new_manifest)
-    if old_fingerprint != new_fingerprint:
+    old_algo_version = old_log.get("fingerprint_algo_version")
+    algo_bumped = (
+        old_algo_version is not None
+        and old_algo_version != FINGERPRINT_ALGO_VERSION
+    )
+    if old_fingerprint != new_fingerprint or algo_bumped:
         report.manifest_changed = True
-        reason = "manifest values changed" if old_fingerprint else "manifest fingerprint unavailable"
+        if algo_bumped:
+            reason = "fingerprint algo version bumped"
+        elif old_fingerprint:
+            reason = "manifest values changed"
+        else:
+            reason = "manifest fingerprint unavailable"
         promoted: list[dict[str, Any]] = []
         already_flagged = {f["path"] for f in report.added_files + report.drifted_files}
         for entry in report.unchanged_files:
@@ -356,6 +370,7 @@ def compute_structural_diff(
 _MANIFEST_PROMOTION_REASONS = (
     "manifest values changed",
     "manifest fingerprint unavailable",
+    "fingerprint algo version bumped",
 )
 
 
@@ -442,6 +457,15 @@ _VOLATILE_AUTO_RESOLVED_PLACEHOLDERS: frozenset[str] = frozenset([
 ])
 
 
+# Version of the manifest-fingerprint algorithm. Bump only when
+# ``compute_manifest_fingerprint`` semantics change — i.e. its output would
+# differ for an unchanged manifest. A bump forces a one-shot re-evaluation on
+# the next ``--update`` for any consumer repo with a build-log produced by a
+# prior algo version (see ``compute_structural_diff``). A pinned unit test
+# asserts this value to force PR review of bumps.
+FINGERPRINT_ALGO_VERSION: int = 1
+
+
 def _build_template_output_map(build_log: dict[str, Any]) -> dict[str, str]:
     """Reconstruct template→output_file mapping from build log data."""
     mapping: dict[str, str] = {}
@@ -479,6 +503,16 @@ def compute_manifest_fingerprint(manifest: dict[str, Any]) -> str:
 
     Returns:
         First 16 hex characters of a SHA-256 digest.
+
+    Versioning:
+        The shape of the returned digest is governed by
+        ``FINGERPRINT_ALGO_VERSION``. Bump that constant only when this
+        function's output would differ for an unchanged manifest (i.e. a
+        semantic change to what counts as "material" for re-rendering). The
+        bump triggers a one-shot re-promotion / heal on the next ``--update``
+        for any consumer repo with a build-log produced by a prior algo
+        version. A pinned unit test asserts the current value to force PR
+        review of bumps.
     """
 
     def _sanitize(value: Any) -> Any:

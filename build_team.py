@@ -746,6 +746,50 @@ def main(argv: list[str] | None = None) -> int:
 
         drift.refine_manifest_promotion(sdreport, _content_matches)
 
+        # ------------------------------------------------------------------
+        # Observable baseline self-heal (P0 — drift trust).
+        # When `compute_structural_diff` flagged manifest_changed (fingerprint
+        # delta or algo-version bump) but `refine_manifest_promotion` demoted
+        # every fingerprint-only promotion AND no real structural / template /
+        # team-membership drift survives, the prior build-log was merely stale
+        # — the team is byte-identical to what the current manifest would
+        # render. The subsequent `_write_run_log` call (gated by the
+        # destructive-action gate and `result.success`) rewrites the build-log
+        # with the fresh fingerprint + algo_version, healing the baseline for
+        # future runs. We surface the heal explicitly so it is observable in
+        # logs and testable. Heal is *not* asserted (and the print is
+        # suppressed) when:
+        #   - `removed_files` is non-empty (the file-set genuinely shrank;
+        #     resolution belongs to `--update --prune`, not heal)
+        #   - any surviving drifted entry has a non-manifest-promotion reason
+        #     (template / structural / team-membership drift is real work)
+        #   - any added_files / team_membership_changed signal is present
+        # The heal *write* is implicit (via `_write_run_log` at the end of the
+        # update path). It is gated by the same destructive-action gate as
+        # every other --update write; a blocked or failed update never heals.
+        # ------------------------------------------------------------------
+        heal_converged = False
+        if sdreport.manifest_changed:
+            surviving_manifest_promotions = [
+                e for e in sdreport.drifted_files
+                if e.get("_reason") in drift._MANIFEST_PROMOTION_REASONS
+            ]
+            real_surviving = [
+                e for e in surviving_manifest_promotions
+                if e["path"] not in security_refresh_paths
+            ]
+            non_manifest_drift = [
+                e for e in sdreport.drifted_files
+                if e.get("_reason") not in drift._MANIFEST_PROMOTION_REASONS
+            ]
+            heal_converged = (
+                not real_surviving
+                and not non_manifest_drift
+                and not sdreport.added_files
+                and not sdreport.removed_files
+                and not sdreport.team_membership_changed
+            )
+
         if not sdreport.has_changes and not sdreport.removed_files:
             print("No structural or content changes detected; refreshing security intelligence references.")
         else:
@@ -854,6 +898,11 @@ def main(argv: list[str] | None = None) -> int:
             if created:
                 print(f"  ✓  Created CSV log stubs: {', '.join(created)}")
             _write_run_log(manifest, result, output_dir, template_hashes)
+            if heal_converged:
+                print(
+                    "  ✓  Healed build-log baseline (no material drift; "
+                    "fingerprint refreshed)."
+                )
         return 0 if result.success else 1
 
     # -----------------------------------------------------------------------
@@ -2022,6 +2071,7 @@ def _write_run_log(manifest: dict, result: emit.EmitResult, output_dir: Path, te
         "agent_slug_list": manifest.get("agent_slug_list", []),
         "governance_agents": manifest.get("governance_agents", []),
         "manifest_fingerprint": _drift.compute_manifest_fingerprint(manifest),
+        "fingerprint_algo_version": _drift.FINGERPRINT_ALGO_VERSION,
         # v1.3 addition — per-file hashes for user-customization detection
         "file_hashes": _compute_file_hashes(result.written + result.merged, output_dir),
     }

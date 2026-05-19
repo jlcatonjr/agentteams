@@ -794,6 +794,114 @@ def test_stale_fingerprint_with_identical_content_does_not_rerender(tmp_path, mo
     assert promoted <= 3, f"expected ≤3 volatile files promoted, got {promoted}"
 
 
+def test_stale_fingerprint_converges_in_two_updates(tmp_path, monkeypatch, capsys):
+    """P0 — drift trust: a stale build-log fingerprint heals on the first
+    --update and the second --update reports zero manifest drift.
+
+    This pins the heal-converges-in-≤2-updates acceptance from
+    ``tmp/by-week/2026-W21/p0-p3-batch.plan.md`` (acceptance criterion under
+    P0). The first --update demotes every fingerprint-only promotion via
+    content-aware refinement and rewrites the build-log with a fresh
+    manifest_fingerprint + fingerprint_algo_version (the observable heal). The
+    second --update sees matching fingerprints and matching algo versions, so
+    sdreport.manifest_changed is False and no files are promoted under a
+    manifest reason.
+    """
+    import json as _json
+    import build_team
+
+    brief = EXAMPLES_DIR / "software-project" / "brief.json"
+    if not brief.exists():
+        pytest.skip("software-project brief not found")
+
+    output_dir = tmp_path / ".github" / "agents"
+    refs = output_dir / "references"
+    refs.mkdir(parents=True, exist_ok=True)
+
+    waiver_key = "integration-waiver-key"
+    monkeypatch.setenv("AGENTTEAMS_WAIVER_SIGNING_KEY", waiver_key)
+    waiver = {
+        "timestamp": "2026-05-03T00:00:00Z", "waiver_id": "waiver-freshness-p0heal",
+        "action_reviewed": "security-intel-freshness", "expires_at": "2099-01-01T00:00:00Z",
+        "max_uses": "9", "uses": "0", "approver": "test-harness", "ticket_id": "P0-HEAL",
+        "reason_code": "TEST", "conditions_verified": "verified", "signature": "",
+    }
+    payload = "|".join([
+        waiver["waiver_id"], waiver["action_reviewed"], waiver["expires_at"],
+        waiver["max_uses"], waiver["uses"], waiver["approver"],
+        waiver["ticket_id"], waiver["reason_code"], waiver["conditions_verified"],
+    ])
+    waiver["signature"] = hmac.new(
+        waiver_key.encode("utf-8"), payload.encode("utf-8"), hashlib.sha256
+    ).hexdigest()
+    (refs / "security-waivers.log.csv").write_text(
+        "timestamp,waiver_id,action_reviewed,expires_at,max_uses,uses,approver,"
+        "ticket_id,reason_code,conditions_verified,signature\n"
+        "{timestamp},{waiver_id},{action_reviewed},{expires_at},{max_uses},"
+        "{uses},{approver},{ticket_id},{reason_code},{conditions_verified},"
+        "{signature}\n".format(**waiver),
+        encoding="utf-8",
+    )
+
+    assert build_team.main([
+        "--description", str(brief), "--output", str(output_dir),
+        "--yes", "--no-scan", "--security-offline",
+    ]) == 0
+
+    (refs / "security-decisions.log.csv").write_text(
+        "timestamp,requesting_agent,action_reviewed,verdict,conditions,conditions_verified\n"
+        "2026-05-03T00:00:00Z,test-harness,overwrite,PASS,,verified\n",
+        encoding="utf-8",
+    )
+
+    # Corrupt the stored manifest_fingerprint AND drop fingerprint_algo_version
+    # to simulate a build-log produced before the algo-version field existed.
+    build_log_path = refs / "build-log.json"
+    log = _json.loads(build_log_path.read_text())
+    log["manifest_fingerprint"] = "staleStaleStale01"
+    log.pop("fingerprint_algo_version", None)
+    build_log_path.write_text(_json.dumps(log), encoding="utf-8")
+
+    # First --update: heal converges.
+    capsys.readouterr()
+    rc1 = build_team.main([
+        "--description", str(brief), "--output", str(output_dir),
+        "--update", "--yes", "--no-scan", "--security-offline",
+    ])
+    out1 = capsys.readouterr().out
+    assert rc1 == 0
+    assert "Healed build-log baseline" in out1, (
+        "first --update did not emit the heal-converged observable line"
+    )
+
+    # Build-log now has fresh fingerprint + current algo version.
+    healed_log = _json.loads(build_log_path.read_text())
+    from agentteams.drift import FINGERPRINT_ALGO_VERSION
+    assert healed_log["fingerprint_algo_version"] == FINGERPRINT_ALGO_VERSION
+    assert healed_log["manifest_fingerprint"] != "staleStaleStale01"
+
+    # Second --update: no manifest drift (security refresh files are still
+    # force-written; that is by design and not a heal). Re-seed the PASS
+    # row because the first --update consumed it.
+    (refs / "security-decisions.log.csv").write_text(
+        "timestamp,requesting_agent,action_reviewed,verdict,conditions,conditions_verified\n"
+        "2026-05-03T00:00:00Z,test-harness,overwrite,PASS,,verified\n",
+        encoding="utf-8",
+    )
+    capsys.readouterr()
+    rc2 = build_team.main([
+        "--description", str(brief), "--output", str(output_dir),
+        "--update", "--yes", "--no-scan", "--security-offline",
+    ])
+    out2 = capsys.readouterr().out
+    assert rc2 == 0
+    assert "Healed build-log baseline" not in out2, (
+        "second --update healed again — convergence did not stick"
+    )
+    assert "(manifest values changed)" not in out2
+    assert "(fingerprint algo version bumped)" not in out2
+
+
 def test_initialization_writes_baseline_inventory_artifacts(tmp_path, monkeypatch):
     """First successful generation writes baseline artifacts required for update/drift workflows."""
     import build_team
