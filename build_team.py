@@ -717,6 +717,35 @@ def main(argv: list[str] | None = None) -> int:
         if adapter.handoff_delivery_mode() == "manifest":
             security_refresh_paths.add("references/runtime-handoffs.json")
 
+        # Content-aware manifest-drift refinement (Defect 2 Option A).
+        # compute_structural_diff promotes EVERY unchanged file to drifted when
+        # the build-log manifest_fingerprint is merely stale (e.g. after a
+        # generator/description-shape change). Demote a fingerprint-only
+        # promotion when its freshly-rendered, manual-preserved content is
+        # byte-identical to disk, so --update stops re-rendering the whole team
+        # for a no-op. security_refresh_paths (the only files with per-render
+        # volatile content, and force-written every --update anyway) and
+        # missing files are never demoted.
+        rendered_by_path = {rel: content for rel, content in final_rendered}
+
+        def _content_matches(path: str) -> bool:
+            if path in security_refresh_paths:
+                return False
+            rendered = rendered_by_path.get(path)
+            if rendered is None:
+                return False
+            disk_path = emit._resolve_path(output_dir, path)
+            if not disk_path.exists():
+                return False
+            disk_text = disk_path.read_text(encoding="utf-8")
+            # Mirror exactly what emit writes for an overwrite update:
+            # manual-value preservation, then merge-fence normalization.
+            preserved = _preserve_manual_values(disk_text, rendered)
+            effective = emit._normalize_generated_content(path, preserved)
+            return effective == disk_text
+
+        drift.refine_manifest_promotion(sdreport, _content_matches)
+
         if not sdreport.has_changes and not sdreport.removed_files:
             print("No structural or content changes detected; refreshing security intelligence references.")
         else:

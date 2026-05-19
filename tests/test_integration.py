@@ -702,6 +702,98 @@ def test_blocked_overwrite_update_creates_no_backup(tmp_path, monkeypatch, capsy
     )
 
 
+def test_stale_fingerprint_with_identical_content_does_not_rerender(tmp_path, monkeypatch, capsys):
+    """Defect 2 Option A: a stale build-log manifest_fingerprint must NOT cause
+    --update to re-render files whose rendered content is identical to disk.
+
+    Before Option A, any fingerprint delta promoted every file to drifted
+    ("manifest values changed"). Now content-aware refinement demotes
+    fingerprint-only promotions when the file would be rewritten byte-for-byte.
+    """
+    import json as _json
+    import build_team
+
+    brief = EXAMPLES_DIR / "software-project" / "brief.json"
+    if not brief.exists():
+        pytest.skip("software-project brief not found")
+
+    output_dir = tmp_path / ".github" / "agents"
+    refs = output_dir / "references"
+    refs.mkdir(parents=True, exist_ok=True)
+
+    waiver_key = "integration-waiver-key"
+    monkeypatch.setenv("AGENTTEAMS_WAIVER_SIGNING_KEY", waiver_key)
+    waiver = {
+        "timestamp": "2026-05-03T00:00:00Z", "waiver_id": "waiver-freshness-003",
+        "action_reviewed": "security-intel-freshness", "expires_at": "2099-01-01T00:00:00Z",
+        "max_uses": "9", "uses": "0", "approver": "test-harness", "ticket_id": "INT-3",
+        "reason_code": "TEST", "conditions_verified": "verified", "signature": "",
+    }
+    payload = "|".join([
+        waiver["waiver_id"], waiver["action_reviewed"], waiver["expires_at"],
+        waiver["max_uses"], waiver["uses"], waiver["approver"],
+        waiver["ticket_id"], waiver["reason_code"], waiver["conditions_verified"],
+    ])
+    waiver["signature"] = hmac.new(
+        waiver_key.encode("utf-8"), payload.encode("utf-8"), hashlib.sha256
+    ).hexdigest()
+    (refs / "security-waivers.log.csv").write_text(
+        "timestamp,waiver_id,action_reviewed,expires_at,max_uses,uses,approver,"
+        "ticket_id,reason_code,conditions_verified,signature\n"
+        "{timestamp},{waiver_id},{action_reviewed},{expires_at},{max_uses},"
+        "{uses},{approver},{ticket_id},{reason_code},{conditions_verified},"
+        "{signature}\n".format(**waiver),
+        encoding="utf-8",
+    )
+
+    assert build_team.main([
+        "--description", str(brief), "--output", str(output_dir),
+        "--yes", "--no-scan", "--security-offline",
+    ]) == 0
+
+    # Allow the destructive overwrite gate.
+    (refs / "security-decisions.log.csv").write_text(
+        "timestamp,requesting_agent,action_reviewed,verdict,conditions,conditions_verified\n"
+        "2026-05-03T00:00:00Z,test-harness,overwrite,PASS,,verified\n",
+        encoding="utf-8",
+    )
+
+    # Corrupt ONLY the stored manifest_fingerprint; every rendered file on disk
+    # is still byte-identical to what the generator produces.
+    build_log_path = refs / "build-log.json"
+    log = _json.loads(build_log_path.read_text())
+    assert log.get("manifest_fingerprint"), "precondition: fingerprint recorded"
+    log["manifest_fingerprint"] = "staleStaleStale01"
+    build_log_path.write_text(_json.dumps(log), encoding="utf-8")
+
+    sentinel = output_dir / "orchestrator.agent.md"
+    before = sentinel.read_text(encoding="utf-8")
+
+    capsys.readouterr()  # clear
+    rc = build_team.main([
+        "--description", str(brief), "--output", str(output_dir),
+        "--update", "--yes", "--no-scan", "--security-offline",
+    ])
+    out = capsys.readouterr().out
+
+    assert rc == 0, "update with identical content must succeed"
+    # A stable (non-volatile) agent file must be demoted: not reported as
+    # drifted and not rewritten on disk. (security.agent.md and the
+    # security-vulnerability-watch.* files embed a per-render timestamp and
+    # legitimately stay drifted — they are rewritten every --update anyway.)
+    assert "orchestrator.agent.md  (manifest values changed)" not in out, (
+        "a content-identical agent file was still promoted as manifest drift "
+        "(content-aware refinement did not fire)"
+    )
+    assert sentinel.read_text(encoding="utf-8") == before, (
+        "a content-identical agent file was rewritten by a stale-fingerprint update"
+    )
+    # The bulk of the team must be demoted — only the inherently-volatile
+    # security trio may remain under the manifest reason.
+    promoted = out.count("(manifest values changed)")
+    assert promoted <= 3, f"expected ≤3 volatile files promoted, got {promoted}"
+
+
 def test_initialization_writes_baseline_inventory_artifacts(tmp_path, monkeypatch):
     """First successful generation writes baseline artifacts required for update/drift workflows."""
     import build_team

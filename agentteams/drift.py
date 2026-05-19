@@ -21,7 +21,7 @@ from __future__ import annotations
 import hashlib
 import json
 from pathlib import Path
-from typing import Any
+from typing import Any, Callable
 
 
 # ---------------------------------------------------------------------------
@@ -351,6 +351,46 @@ def compute_structural_diff(
         report.unchanged_files = []
 
     return report
+
+
+_MANIFEST_PROMOTION_REASONS = (
+    "manifest values changed",
+    "manifest fingerprint unavailable",
+)
+
+
+def refine_manifest_promotion(
+    report: StructuralDiffReport,
+    content_matches: Callable[[str], bool],
+) -> None:
+    """Demote fingerprint-only promotions whose rendered content matches disk.
+
+    ``compute_structural_diff`` promotes *every* unchanged file to drifted when
+    the manifest fingerprint differs (a coarse safety net). Those promotions
+    carry a manifest ``_reason`` and are, by construction, fingerprint-only —
+    template/structural/team-membership drift is classified earlier and never
+    reaches the promotion loop. For each such entry, if ``content_matches(path)``
+    is True the file would be rewritten byte-identically, so move it back to
+    ``unchanged_files``.
+
+    ``report.manifest_changed`` is left intact (a real fingerprint delta did
+    occur — useful telemetry); only the drifted/unchanged sets are corrected,
+    which shrinks ``update_files`` and ``has_changes`` accordingly. Pure: no
+    rendering or I/O here — the caller supplies ``content_matches``.
+    """
+    if not report.manifest_changed:
+        return
+    survivors: list[dict[str, Any]] = []
+    for entry in report.drifted_files:
+        if entry.get("_reason") in _MANIFEST_PROMOTION_REASONS and content_matches(
+            entry["path"]
+        ):
+            demoted = dict(entry)
+            demoted.pop("_reason", None)
+            report.unchanged_files.append(demoted)
+        else:
+            survivors.append(entry)
+    report.drifted_files = survivors
 
 
 def print_structural_diff_report(report: StructuralDiffReport) -> None:

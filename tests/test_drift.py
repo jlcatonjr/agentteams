@@ -13,6 +13,7 @@ from agentteams.drift import (
     compute_structural_diff,
     compute_manifest_fingerprint,
     print_structural_diff_report,
+    refine_manifest_promotion,
     StructuralDiffReport,
 )
 
@@ -602,3 +603,64 @@ def test_stale_manifest_fingerprint_promotes_all_unchanged(tmp_path):
     assert stale.manifest_changed is True
     assert stale.unchanged_files == []
     assert {f["path"] for f in stale.drifted_files} == {f["path"] for f in files}
+
+
+# ---------------------------------------------------------------------------
+# Defect 2 Option A: content-aware refinement of fingerprint-only promotions
+# ---------------------------------------------------------------------------
+
+def _fingerprint_promoted_report():
+    rep = StructuralDiffReport()
+    rep.manifest_changed = True
+    rep.drifted_files = [
+        {"path": "a.agent.md", "_reason": "manifest values changed"},
+        {"path": "b.agent.md", "_reason": "manifest values changed"},
+        {"path": "tpl.agent.md", "_reason": "template content changed"},
+    ]
+    rep.unchanged_files = []
+    return rep
+
+
+def test_refine_demotes_fingerprint_promotion_when_content_matches():
+    rep = _fingerprint_promoted_report()
+    # a matches disk, b does not.
+    refine_manifest_promotion(rep, lambda p: p == "a.agent.md")
+
+    drifted = {f["path"] for f in rep.drifted_files}
+    unchanged = {f["path"] for f in rep.unchanged_files}
+    assert "a.agent.md" in unchanged and "a.agent.md" not in drifted
+    assert "b.agent.md" in drifted          # content differs → stays
+    assert "tpl.agent.md" in drifted        # template drift → never demoted
+    # manifest_changed is telemetry; left intact
+    assert rep.manifest_changed is True
+    # demoted entry loses the manifest _reason
+    a_entry = next(f for f in rep.unchanged_files if f["path"] == "a.agent.md")
+    assert "_reason" not in a_entry
+
+
+def test_refine_never_demotes_non_manifest_reason():
+    rep = _fingerprint_promoted_report()
+    # Even if content matches, a template-drifted entry must stay drifted.
+    refine_manifest_promotion(rep, lambda p: True)
+    assert "tpl.agent.md" in {f["path"] for f in rep.drifted_files}
+    # both manifest-promoted ones demoted
+    assert {f["path"] for f in rep.unchanged_files} == {"a.agent.md", "b.agent.md"}
+
+
+def test_refine_noop_when_manifest_not_changed():
+    rep = StructuralDiffReport()
+    rep.manifest_changed = False
+    rep.drifted_files = [{"path": "x", "_reason": "manifest values changed"}]
+    refine_manifest_promotion(rep, lambda p: True)
+    # untouched because the promotion path never fired
+    assert rep.drifted_files == [{"path": "x", "_reason": "manifest values changed"}]
+    assert rep.unchanged_files == []
+
+
+def test_refine_handles_unavailable_fingerprint_reason():
+    rep = StructuralDiffReport()
+    rep.manifest_changed = True
+    rep.drifted_files = [{"path": "a", "_reason": "manifest fingerprint unavailable"}]
+    refine_manifest_promotion(rep, lambda p: True)
+    assert rep.drifted_files == []
+    assert [f["path"] for f in rep.unchanged_files] == ["a"]
