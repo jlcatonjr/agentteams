@@ -902,6 +902,108 @@ def test_stale_fingerprint_converges_in_two_updates(tmp_path, monkeypatch, capsy
     assert "(fingerprint algo version bumped)" not in out2
 
 
+def test_check_parity_with_update_dry_run(tmp_path, monkeypatch, capsys):
+    """P0 — Option C (D1): ``--check`` and ``--update --dry-run`` must agree on
+    the post-refinement drifted set under fingerprint drift.
+
+    Parity is asserted on the programmatic post-refinement state
+    (drifted paths + added + removed + team_membership_changed), NOT on
+    stdout — banner/text legitimately differs by branch and is not part of
+    the parity contract (per R2 in p0-p3-batch.plan.md).
+    """
+    import json as _json
+    import build_team
+    from agentteams import drift as _drift
+
+    brief = EXAMPLES_DIR / "software-project" / "brief.json"
+    if not brief.exists():
+        pytest.skip("software-project brief not found")
+
+    output_dir = tmp_path / ".github" / "agents"
+    refs = output_dir / "references"
+    refs.mkdir(parents=True, exist_ok=True)
+
+    waiver_key = "integration-waiver-key"
+    monkeypatch.setenv("AGENTTEAMS_WAIVER_SIGNING_KEY", waiver_key)
+    waiver = {
+        "timestamp": "2026-05-03T00:00:00Z", "waiver_id": "waiver-parity-001",
+        "action_reviewed": "security-intel-freshness", "expires_at": "2099-01-01T00:00:00Z",
+        "max_uses": "9", "uses": "0", "approver": "test-harness", "ticket_id": "PARITY",
+        "reason_code": "TEST", "conditions_verified": "verified", "signature": "",
+    }
+    payload = "|".join([
+        waiver["waiver_id"], waiver["action_reviewed"], waiver["expires_at"],
+        waiver["max_uses"], waiver["uses"], waiver["approver"],
+        waiver["ticket_id"], waiver["reason_code"], waiver["conditions_verified"],
+    ])
+    waiver["signature"] = hmac.new(
+        waiver_key.encode("utf-8"), payload.encode("utf-8"), hashlib.sha256
+    ).hexdigest()
+    (refs / "security-waivers.log.csv").write_text(
+        "timestamp,waiver_id,action_reviewed,expires_at,max_uses,uses,approver,"
+        "ticket_id,reason_code,conditions_verified,signature\n"
+        "{timestamp},{waiver_id},{action_reviewed},{expires_at},{max_uses},"
+        "{uses},{approver},{ticket_id},{reason_code},{conditions_verified},"
+        "{signature}\n".format(**waiver),
+        encoding="utf-8",
+    )
+
+    assert build_team.main([
+        "--description", str(brief), "--output", str(output_dir),
+        "--yes", "--no-scan", "--security-offline",
+    ]) == 0
+
+    # Corrupt the manifest_fingerprint so both --check and --update --dry-run
+    # see the same stale baseline. (Algo version intentionally retained so the
+    # only delta is the fingerprint mismatch.)
+    build_log_path = refs / "build-log.json"
+    log = _json.loads(build_log_path.read_text())
+    log["manifest_fingerprint"] = "staleStaleStale01"
+    build_log_path.write_text(_json.dumps(log), encoding="utf-8")
+
+    # Capture the post-refinement sdreport from both runs by intercepting
+    # `print_structural_diff_report` — both branches call it AFTER
+    # refine_manifest_promotion, so the captured object reflects the
+    # post-refinement state.
+    captured = {}
+    original_print = _drift.print_structural_diff_report
+
+    def _snapshot(label):
+        def _hook(report):
+            captured[label] = (
+                sorted(e["path"] for e in report.drifted_files),
+                sorted(report.added_files),
+                sorted(report.removed_files),
+                bool(report.team_membership_changed),
+            )
+            return original_print(report)
+        return _hook
+
+    monkeypatch.setattr(_drift, "print_structural_diff_report", _snapshot("check"))
+    # build_team imports print_structural_diff_report via the drift module, so
+    # patching the module attribute is sufficient.
+    rc_check = build_team.main([
+        "--description", str(brief), "--output", str(output_dir),
+        "--check", "--no-scan", "--security-offline",
+    ])
+    capsys.readouterr()
+
+    monkeypatch.setattr(_drift, "print_structural_diff_report", _snapshot("update"))
+    rc_update = build_team.main([
+        "--description", str(brief), "--output", str(output_dir),
+        "--update", "--dry-run", "--yes", "--no-scan", "--security-offline",
+    ])
+    capsys.readouterr()
+
+    assert rc_check in (0, 1), f"unexpected --check rc: {rc_check}"
+    assert rc_update == 0, f"--update --dry-run failed: {rc_update}"
+    assert "check" in captured, "print_structural_diff_report not called in --check"
+    assert "update" in captured, "print_structural_diff_report not called in --update --dry-run"
+    assert captured["check"] == captured["update"], (
+        f"parity violation: check={captured['check']} update={captured['update']}"
+    )
+
+
 def test_initialization_writes_baseline_inventory_artifacts(tmp_path, monkeypatch):
     """First successful generation writes baseline artifacts required for update/drift workflows."""
     import build_team

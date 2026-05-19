@@ -623,11 +623,92 @@ def main(argv: list[str] | None = None) -> int:
         try:
             old_log = drift.load_build_log(output_dir)
             sdreport = drift.compute_structural_diff(old_log, manifest, TEMPLATES_DIR)
-            if sdreport.added_files or sdreport.removed_files:
-                print("\n  Structural changes:")
-                drift.print_structural_diff_report(sdreport)
         except FileNotFoundError:
-            pass  # no build-log — structural diff not available
+            sdreport = None  # no build-log — structural diff not available
+
+        # --------------------------------------------------------------
+        # P0 — Option C render-faithful reconciliation (D1, R1, R1b, R1c).
+        #
+        # `compute_structural_diff` promotes every unchanged file to drifted
+        # whenever the build-log fingerprint is stale (mismatch or algo-version
+        # bump). Without rendering, `--check` cannot tell the difference
+        # between a real manifest delta and a baseline-only delta. To stay
+        # consistent with what `--update` actually writes, we render the team
+        # the same way `--update` does and run `refine_manifest_promotion`
+        # against `_content_matches` — but only when the fast-path predicate
+        # below fires. Outside the predicate, rendering would be wasted work
+        # because `refine_manifest_promotion` would be a no-op.
+        # --------------------------------------------------------------
+        if sdreport is not None and sdreport.manifest_changed and any(
+            e.get("_reason") in drift._MANIFEST_PROMOTION_REASONS
+            for e in sdreport.drifted_files
+        ):
+            check_rendered = render.render_all(manifest, templates_dir=TEMPLATES_DIR)
+            check_final: list[tuple[str, str]] = []
+            check_runtime_handoffs: list[dict[str, object]] = []
+            for rel_path, content in check_rendered:
+                file_type = _guess_file_type(rel_path)
+                if file_type == "agent":
+                    slug = Path(rel_path).stem.replace(".agent", "")
+                    if adapter.handoff_delivery_mode() == "manifest":
+                        handoffs = adapter.extract_handoffs(content)
+                        if handoffs:
+                            check_runtime_handoffs.append({
+                                "agent": slug, "handoffs": handoffs,
+                            })
+                    content = adapter.render_agent_file(content, slug, manifest)
+                elif file_type == "instructions":
+                    content = adapter.render_instructions_file(content, manifest)
+                final_path = adapter.finalize_output_path(rel_path, file_type)
+                check_final.append((final_path, content))
+            if check_runtime_handoffs:
+                check_final.append((
+                    "references/runtime-handoffs.json",
+                    json.dumps({
+                        "schema_version": "1.0",
+                        "framework": adapter.framework_id,
+                        "project_name": project_name,
+                        "agents": check_runtime_handoffs,
+                    }, indent=2) + "\n",
+                ))
+            from agentteams import graph as _graph_check
+            check_final.append((
+                "references/pipeline-graph.md",
+                _graph_check.generate_graph_document(
+                    dict(check_final), project_name=project_name
+                ),
+            ))
+
+            check_security_refresh = {
+                "references/security-vulnerability-watch.reference.md",
+                "references/security-vulnerability-watch.json",
+            }
+            if adapter.handoff_delivery_mode() == "manifest":
+                check_security_refresh.add("references/runtime-handoffs.json")
+
+            check_rendered_by_path = {rel: content for rel, content in check_final}
+
+            def _check_content_matches(path: str) -> bool:
+                if path in check_security_refresh:
+                    return False
+                rendered = check_rendered_by_path.get(path)
+                if rendered is None:
+                    return False
+                disk_path = emit._resolve_path(output_dir, path)
+                if not disk_path.exists():
+                    return False
+                disk_text = disk_path.read_text(encoding="utf-8")
+                preserved = _preserve_manual_values(disk_text, rendered)
+                effective = emit._normalize_generated_content(path, preserved)
+                return effective == disk_text
+
+            drift.refine_manifest_promotion(sdreport, _check_content_matches)
+
+        # Print structural diff under the same condition `--update` uses
+        # (R1c — print on has_changes, not just on added/removed).
+        if sdreport is not None and sdreport.has_changes:
+            print(f"\nStructural changes for {project_name!r}:")
+            drift.print_structural_diff_report(sdreport)
         has_any = dreport.has_drift or (sdreport.has_changes if sdreport is not None else False)
         return 1 if has_any else 0
 
