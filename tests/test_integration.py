@@ -902,6 +902,52 @@ def test_stale_fingerprint_converges_in_two_updates(tmp_path, monkeypatch, capsy
     assert "(fingerprint algo version bumped)" not in out2
 
 
+def test_heal_build_log_baseline_preserves_other_fields(tmp_path):
+    """RA1: targeted heal refreshes only the fingerprint fields and must NOT
+    wipe file_hashes / output_files_map (a full _write_run_log with an empty
+    result would). Pins the heal *write* effect independent of any message."""
+    import json as _json
+    import build_team
+    from agentteams.drift import compute_manifest_fingerprint, FINGERPRINT_ALGO_VERSION
+
+    refs = tmp_path / "references"
+    refs.mkdir(parents=True)
+    preserved_hashes = {"orchestrator.agent.md": "abc123", "x.agent.md": "def456"}
+    preserved_map = [{"path": "orchestrator.agent.md", "template": "t", "type": "agent"}]
+    (refs / "build-log.json").write_text(_json.dumps({
+        "schema_version": "1.2",
+        "project_name": "P",
+        "manifest_fingerprint": "staleStaleStale00",
+        "fingerprint_algo_version": 0,
+        "file_hashes": preserved_hashes,
+        "output_files_map": preserved_map,
+        "agent_slug_list": ["orchestrator"],
+    }), encoding="utf-8")
+
+    manifest = {
+        "project_name": "P", "framework": "copilot-vscode",
+        "project_type": "software", "selected_archetypes": [],
+        "components": [], "output_files": [], "agent_slug_list": ["orchestrator"],
+    }
+    build_team._heal_build_log_baseline(tmp_path, manifest)
+
+    healed = _json.loads((refs / "build-log.json").read_text())
+    assert healed["manifest_fingerprint"] == compute_manifest_fingerprint(manifest)
+    assert healed["manifest_fingerprint"] != "staleStaleStale00"
+    assert healed["fingerprint_algo_version"] == FINGERPRINT_ALGO_VERSION
+    # Non-fingerprint fields preserved (the whole point of the targeted heal).
+    assert healed["file_hashes"] == preserved_hashes
+    assert healed["output_files_map"] == preserved_map
+    assert healed["agent_slug_list"] == ["orchestrator"]
+
+
+def test_heal_build_log_baseline_noop_when_absent(tmp_path):
+    """No baseline to heal → no-op, no file created, no exception."""
+    import build_team
+    build_team._heal_build_log_baseline(tmp_path, {"project_name": "P"})
+    assert not (tmp_path / "references" / "build-log.json").exists()
+
+
 def test_check_parity_with_update_dry_run(tmp_path, monkeypatch, capsys):
     """P0 — Option C (D1): ``--check`` and ``--update --dry-run`` must agree on
     the post-refinement drifted set under fingerprint drift.

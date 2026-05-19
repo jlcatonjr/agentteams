@@ -38,6 +38,11 @@ _site/
 # Nothing in tmp/ should ever be committed; sanitize before moving anything to a permanent location
 tmp/
 
+# Harness-generated, machine-local permission state (RRM1). Scoped to the single
+# file — other .claude/ files (README.md, agent-team.md, quickstart-snippet.md)
+# are tracked and must NOT be ignored.
+.claude/settings.json
+
 # Daily work summaries — operational logs and tracking documents
 # Contains execution dates, timestamps, and per-repo status; not for publication
 workSummaries/

@@ -213,11 +213,11 @@ You coordinate all agent operations for **ResearchPaperProject**. You route work
 
 Applies only when `@post-production-auditor` is present in the team.
 
-1. Invoke `@post-production-auditor` → verify claimed completed outcomes using source-of-truth checks and risk-tiered sampling
-2. Invoke `@adversarial` → challenge presuppositions in the audit design, evidence quality, and closure recommendation
-3. Invoke `@conflict-auditor` → verify audit findings are consistent with authority files and plan artifacts
-4. If verdict is `FAIL` or `INCONCLUSIVE` → block closeout claim and require remediation + re-audit
-5. If remediation includes destructive mutation → invoke `@security` before any execution
+*(If @post-production-auditor in team)* 1. Invoke `@post-production-auditor` → verify claimed completed outcomes using source-of-truth checks and risk-tiered sampling
+*(If @post-production-auditor in team)* 2. Invoke `@adversarial` → challenge presuppositions in the audit design, evidence quality, and closure recommendation
+*(If @post-production-auditor in team)* 3. Invoke `@conflict-auditor` → verify audit findings are consistent with authority files and plan artifacts
+*(If @post-production-auditor in team)* 4. If verdict is `FAIL` or `INCONCLUSIVE` → block closeout claim and require remediation + re-audit
+*(If @post-production-auditor in team)* 5. If remediation includes destructive mutation → invoke `@security` before any execution
 6. → **Invoke Workflow 11: Final Check** (always)
 
 <!-- AGENTTEAMS:BEGIN available_workflows v=1 -->

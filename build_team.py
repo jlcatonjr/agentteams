@@ -643,42 +643,7 @@ def main(argv: list[str] | None = None) -> int:
             e.get("_reason") in drift._MANIFEST_PROMOTION_REASONS
             for e in sdreport.drifted_files
         ):
-            check_rendered = render.render_all(manifest, templates_dir=TEMPLATES_DIR)
-            check_final: list[tuple[str, str]] = []
-            check_runtime_handoffs: list[dict[str, object]] = []
-            for rel_path, content in check_rendered:
-                file_type = _guess_file_type(rel_path)
-                if file_type == "agent":
-                    slug = Path(rel_path).stem.replace(".agent", "")
-                    if adapter.handoff_delivery_mode() == "manifest":
-                        handoffs = adapter.extract_handoffs(content)
-                        if handoffs:
-                            check_runtime_handoffs.append({
-                                "agent": slug, "handoffs": handoffs,
-                            })
-                    content = adapter.render_agent_file(content, slug, manifest)
-                elif file_type == "instructions":
-                    content = adapter.render_instructions_file(content, manifest)
-                final_path = adapter.finalize_output_path(rel_path, file_type)
-                check_final.append((final_path, content))
-            if check_runtime_handoffs:
-                check_final.append((
-                    "references/runtime-handoffs.json",
-                    json.dumps({
-                        "schema_version": "1.0",
-                        "framework": adapter.framework_id,
-                        "project_name": project_name,
-                        "agents": check_runtime_handoffs,
-                    }, indent=2) + "\n",
-                ))
-            from agentteams import graph as _graph_check
-            check_final.append((
-                "references/pipeline-graph.md",
-                _graph_check.generate_graph_document(
-                    dict(check_final), project_name=project_name
-                ),
-            ))
-
+            check_final = _build_final_rendered(manifest, adapter, project_name)
             check_security_refresh = {
                 "references/security-vulnerability-watch.reference.md",
                 "references/security-vulnerability-watch.json",
@@ -686,23 +651,10 @@ def main(argv: list[str] | None = None) -> int:
             if adapter.handoff_delivery_mode() == "manifest":
                 check_security_refresh.add("references/runtime-handoffs.json")
 
-            check_rendered_by_path = {rel: content for rel, content in check_final}
-
-            def _check_content_matches(path: str) -> bool:
-                if path in check_security_refresh:
-                    return False
-                rendered = check_rendered_by_path.get(path)
-                if rendered is None:
-                    return False
-                disk_path = emit._resolve_path(output_dir, path)
-                if not disk_path.exists():
-                    return False
-                disk_text = disk_path.read_text(encoding="utf-8")
-                preserved = _preserve_manual_values(disk_text, rendered)
-                effective = emit._normalize_generated_content(path, preserved)
-                return effective == disk_text
-
-            drift.refine_manifest_promotion(sdreport, _check_content_matches)
+            drift.refine_manifest_promotion(
+                sdreport,
+                _make_content_matches(output_dir, dict(check_final), check_security_refresh),
+            )
 
         # Print structural diff under the same condition `--update` uses
         # (R1c — print on has_changes, not just on added/removed).
@@ -716,50 +668,13 @@ def main(argv: list[str] | None = None) -> int:
     # Step 5: Render
     # -----------------------------------------------------------------------
     print("Rendering templates...")
-    rendered = render.render_all(manifest, templates_dir=TEMPLATES_DIR)
 
     # Compute template hashes for drift detection
     template_hashes = render.compute_template_hashes(manifest, templates_dir=TEMPLATES_DIR)
 
-    # Apply framework-specific post-processing
-    final_rendered: list[tuple[str, str]] = []
-    runtime_handoff_agents: list[dict[str, object]] = []
-    for rel_path, content in rendered:
-        file_type = _guess_file_type(rel_path)
-        if file_type == "agent":
-            slug = Path(rel_path).stem.replace(".agent", "")
-            if adapter.handoff_delivery_mode() == "manifest":
-                handoffs = adapter.extract_handoffs(content)
-                if handoffs:
-                    runtime_handoff_agents.append({
-                        "agent": slug,
-                        "handoffs": handoffs,
-                    })
-            content = adapter.render_agent_file(content, slug, manifest)
-        elif file_type == "instructions":
-            content = adapter.render_instructions_file(content, manifest)
-        final_path = adapter.finalize_output_path(rel_path, file_type)
-        final_rendered.append((final_path, content))
-
-    if runtime_handoff_agents:
-        runtime_handoff_manifest = {
-            "schema_version": "1.0",
-            "framework": adapter.framework_id,
-            "project_name": project_name,
-            "agents": runtime_handoff_agents,
-        }
-        final_rendered.append(
-            ("references/runtime-handoffs.json", json.dumps(runtime_handoff_manifest, indent=2) + "\n")
-        )
-
-    # -----------------------------------------------------------------------
-    # Step 5c: Generate team topology graph
-    # -----------------------------------------------------------------------
-    from agentteams import graph as _graph
-    graph_content = _graph.generate_graph_document(
-        dict(final_rendered), project_name=project_name
-    )
-    final_rendered.append(("references/pipeline-graph.md", graph_content))
+    # Apply framework-specific post-processing; runtime-handoffs and pipeline
+    # graph (Step 5c) are appended by _build_final_rendered.
+    final_rendered = _build_final_rendered(manifest, adapter, project_name)
 
     # -----------------------------------------------------------------------
     # Step 5b: Handle --update (structural + content drift, manual preservation)
@@ -807,25 +722,10 @@ def main(argv: list[str] | None = None) -> int:
         # for a no-op. security_refresh_paths (the only files with per-render
         # volatile content, and force-written every --update anyway) and
         # missing files are never demoted.
-        rendered_by_path = {rel: content for rel, content in final_rendered}
-
-        def _content_matches(path: str) -> bool:
-            if path in security_refresh_paths:
-                return False
-            rendered = rendered_by_path.get(path)
-            if rendered is None:
-                return False
-            disk_path = emit._resolve_path(output_dir, path)
-            if not disk_path.exists():
-                return False
-            disk_text = disk_path.read_text(encoding="utf-8")
-            # Mirror exactly what emit writes for an overwrite update:
-            # manual-value preservation, then merge-fence normalization.
-            preserved = _preserve_manual_values(disk_text, rendered)
-            effective = emit._normalize_generated_content(path, preserved)
-            return effective == disk_text
-
-        drift.refine_manifest_promotion(sdreport, _content_matches)
+        drift.refine_manifest_promotion(
+            sdreport,
+            _make_content_matches(output_dir, dict(final_rendered), security_refresh_paths),
+        )
 
         # ------------------------------------------------------------------
         # Observable baseline self-heal (P0 — drift trust).
@@ -909,12 +809,40 @@ def main(argv: list[str] | None = None) -> int:
             update_rendered.append((rel_path, content))
 
         if not update_rendered:
+            # RA1: a converged team (manifest_changed but every fingerprint-only
+            # promotion demoted, no real drift) must still heal its stale
+            # baseline here — otherwise convergence depends on the incidental
+            # fact that security_refresh_paths kept update_rendered non-empty.
+            # The destructive-action gate already cleared above; a blocked
+            # update returned before this point. Dry-run never heals.
+            if heal_converged and not args.dry_run:
+                _heal_build_log_baseline(output_dir, manifest)
+                try:
+                    _write_delivery_receipt(manifest, output_dir)
+                except (OSError, DeliveryReceiptError) as exc:
+                    print(
+                        f"  !  Delivery receipt write failed (build-log healed): {exc}",
+                        file=sys.stderr,
+                    )
+                try:
+                    _write_eval_suite(manifest, output_dir)
+                except (OSError, EvalSuiteError) as exc:
+                    print(
+                        f"  !  Eval suite write failed (build-log healed): {exc}",
+                        file=sys.stderr,
+                    )
+                print(
+                    "  ✓  Healed build-log baseline (no material drift; "
+                    "fingerprint refreshed)."
+                )
+                return 0
             print("Changes detected but no matching rendered files — already up to date.")
             return 0
 
         # Always regenerate the team topology graph on every update
         graph_rel_path = "references/pipeline-graph.md"
         if not any(p == graph_rel_path for p, _ in update_rendered):
+            from agentteams import graph as _graph
             graph_update_content = _graph.generate_graph_document(
                 dict(final_rendered), project_name=project_name
             )
@@ -983,11 +911,20 @@ def main(argv: list[str] | None = None) -> int:
             # second"). Same gate as the log: only on real, successful runs.
             try:
                 _write_delivery_receipt(manifest, output_dir)
-            except OSError as exc:
+            except (OSError, DeliveryReceiptError) as exc:
                 # Heal still happened. Surface the failure but do not abort
                 # the update; the next --update will re-emit the receipt.
                 print(
                     f"  !  Delivery receipt write failed (build-log healed): {exc}",
+                    file=sys.stderr,
+                )
+            try:
+                _write_eval_suite(manifest, output_dir)
+            except (OSError, EvalSuiteError) as exc:
+                # Non-fatal, same contract as the receipt: next --update
+                # re-emits the suite.
+                print(
+                    f"  !  Eval suite write failed (build-log healed): {exc}",
                     file=sys.stderr,
                 )
             if heal_converged:
@@ -2022,6 +1959,84 @@ def _attempt_auto_correct(
     return rerun_result
 
 
+def _build_final_rendered(
+    manifest: dict,
+    adapter,
+    project_name: str,
+) -> list[tuple[str, str]]:
+    """Render templates and apply framework post-processing.
+
+    Returns a list of (relative_path, content) pairs including
+    runtime-handoffs (when the adapter uses manifest delivery) and the
+    pipeline graph. This is the shared rendering step used by the generate
+    path, ``--update``, and ``--check``; ``--check`` uses the result for
+    content comparison only and does not write to disk.
+    """
+    from agentteams import graph as _graph
+
+    rendered = render.render_all(manifest, templates_dir=TEMPLATES_DIR)
+    final: list[tuple[str, str]] = []
+    runtime_handoff_agents: list[dict[str, object]] = []
+    for rel_path, content in rendered:
+        file_type = _guess_file_type(rel_path)
+        if file_type == "agent":
+            slug = Path(rel_path).stem.replace(".agent", "")
+            if adapter.handoff_delivery_mode() == "manifest":
+                handoffs = adapter.extract_handoffs(content)
+                if handoffs:
+                    runtime_handoff_agents.append({"agent": slug, "handoffs": handoffs})
+            content = adapter.render_agent_file(content, slug, manifest)
+        elif file_type == "instructions":
+            content = adapter.render_instructions_file(content, manifest)
+        final_path = adapter.finalize_output_path(rel_path, file_type)
+        final.append((final_path, content))
+
+    if runtime_handoff_agents:
+        final.append((
+            "references/runtime-handoffs.json",
+            json.dumps({
+                "schema_version": "1.0",
+                "framework": adapter.framework_id,
+                "project_name": project_name,
+                "agents": runtime_handoff_agents,
+            }, indent=2) + "\n",
+        ))
+
+    final.append((
+        "references/pipeline-graph.md",
+        _graph.generate_graph_document(dict(final), project_name=project_name),
+    ))
+    return final
+
+
+def _make_content_matches(
+    output_dir: Path,
+    rendered_by_path: dict[str, str],
+    security_refresh_paths: set[str],
+):
+    """Return a predicate: does a file's disk content match its rendered content?
+
+    Files in ``security_refresh_paths`` always return False (they are
+    force-written on every ``--update``). Missing files return False.
+    The comparison mirrors what ``emit`` writes: manual-value preservation
+    followed by merge-fence normalization.
+    """
+    def _matches(path: str) -> bool:
+        if path in security_refresh_paths:
+            return False
+        rendered = rendered_by_path.get(path)
+        if rendered is None:
+            return False
+        disk_path = emit._resolve_path(output_dir, path)
+        if not disk_path.exists():
+            return False
+        disk_text = disk_path.read_text(encoding="utf-8")
+        preserved = _preserve_manual_values(disk_text, rendered)
+        effective = emit._normalize_generated_content(path, preserved)
+        return effective == disk_text
+    return _matches
+
+
 def _guess_file_type(rel_path: str) -> str:
     lower = rel_path.lower()
     if "copilot-instructions" in lower or rel_path.endswith("/CLAUDE.md") or rel_path == "../CLAUDE.md":
@@ -2147,6 +2162,12 @@ and the drift detector never reads it. See
 """
 
 
+class DeliveryReceiptError(RuntimeError):
+    """Raised when the delivery receipt cannot be produced or fails schema
+    validation (RA2). Callers treat this as non-fatal: the build-log heal
+    stands and the next ``--update`` re-emits the receipt."""
+
+
 def _write_delivery_receipt(manifest: dict, output_dir: Path) -> Path:
     """Write a P3 delivery receipt attesting that ``--update`` succeeded.
 
@@ -2161,13 +2182,19 @@ def _write_delivery_receipt(manifest: dict, output_dir: Path) -> Path:
     The receipt is excluded from drift detection by construction: it is never
     added to the rendered set, ``output_files``, ``template_hashes``, or
     ``file_hashes``. See ``schemas/delivery-receipt.schema.json`` for the
-    contract; see ``docs_src/delivery-procedure.md`` for the procedure.
+    contract; see ``docs_src/delivery-procedure.md`` for the procedure and the
+    "heal first, attest second" (R3) ordering rationale.
+
+    The payload is validated against ``schemas/delivery-receipt.schema.json``
+    at write time (RA2); a non-conforming receipt raises
+    ``DeliveryReceiptError`` and is *not* written. Callers treat that as
+    non-fatal — the build-log heal stands and the next ``--update`` re-emits.
     """
     from datetime import datetime, timezone
     from agentteams import drift as _drift
     try:
         from agentteams import __version__ as _agentteams_version
-    except Exception:  # pragma: no cover - version import edge cases
+    except (ImportError, AttributeError):  # version attr legitimately absent
         _agentteams_version = None
 
     receipt: dict[str, object] = {
@@ -2183,10 +2210,99 @@ def _write_delivery_receipt(manifest: dict, output_dir: Path) -> Path:
     if _agentteams_version:
         receipt["agentteams_version"] = str(_agentteams_version)
 
+    # RA2: validate against the shipped schema before writing. A non-conforming
+    # receipt is a real defect we want surfaced — not silently written.
+    import jsonschema
+    schema_path = Path(__file__).resolve().parent / "schemas" / "delivery-receipt.schema.json"
+    try:
+        schema = json.loads(schema_path.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError) as exc:
+        raise DeliveryReceiptError(
+            f"delivery-receipt schema unavailable ({schema_path}): {exc}"
+        ) from exc
+    try:
+        jsonschema.validate(receipt, schema)
+    except jsonschema.ValidationError as exc:
+        raise DeliveryReceiptError(
+            f"delivery receipt failed schema validation: {exc.message}"
+        ) from exc
+
     receipt_path = output_dir / DELIVERY_RECEIPT_REL_PATH
     receipt_path.parent.mkdir(parents=True, exist_ok=True)
     receipt_path.write_text(json.dumps(receipt, indent=2) + "\n", encoding="utf-8")
     return receipt_path
+
+
+EVAL_SUITE_REL_PATH = "references/eval-suite.json"
+
+
+class EvalSuiteError(RuntimeError):
+    """Raised when the eval suite cannot be produced or fails schema
+    validation (Cluster A Phase 2). Non-fatal to the caller, like
+    DeliveryReceiptError — the build-log heal stands and the next ``--update``
+    re-emits."""
+
+
+def _write_eval_suite(manifest: dict, output_dir: Path) -> Path:
+    """Emit the framework-neutral eval suite (Cluster A Phase 2, increment 1).
+
+    Mirrors ``_write_delivery_receipt``: build from the manifest, validate
+    against ``schemas/eval-suite.schema.json`` before writing, raise
+    ``EvalSuiteError`` (a RuntimeError, never OSError) on non-conformance and
+    write nothing. Generator-owned artifact at
+    ``<output_dir>/references/eval-suite.json``; excluded from drift by
+    construction (never added to the rendered set, output_files_map,
+    template_hashes, or file_hashes; never read by --check or --update). See
+    ``schemas/eval-suite.schema.json`` and ``docs_src`` for the contract.
+    """
+    from agentteams.eval_suite import build_eval_suite
+
+    suite = build_eval_suite(manifest)
+
+    import jsonschema
+    schema_path = Path(__file__).resolve().parent / "schemas" / "eval-suite.schema.json"
+    try:
+        schema = json.loads(schema_path.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError) as exc:
+        raise EvalSuiteError(
+            f"eval-suite schema unavailable ({schema_path}): {exc}"
+        ) from exc
+    try:
+        jsonschema.validate(suite, schema)
+    except jsonschema.ValidationError as exc:
+        raise EvalSuiteError(
+            f"eval suite failed schema validation: {exc.message}"
+        ) from exc
+
+    suite_path = output_dir / EVAL_SUITE_REL_PATH
+    suite_path.parent.mkdir(parents=True, exist_ok=True)
+    suite_path.write_text(json.dumps(suite, indent=2) + "\n", encoding="utf-8")
+    return suite_path
+
+
+def _heal_build_log_baseline(output_dir: Path, manifest: dict) -> None:
+    """Refresh only the fingerprint fields of an existing build-log (RA1).
+
+    Used on the converged ``--update`` path where there is nothing to (re)write
+    but the stored ``manifest_fingerprint`` / ``fingerprint_algo_version`` are
+    stale. Patches just those two fields in place so the next ``--update``
+    sees a matching baseline, while preserving ``file_hashes``,
+    ``output_files_map`` and every other field (a full ``_write_run_log`` with
+    an empty result would wipe ``file_hashes`` and break user-customization
+    detection). No-op if the build-log is absent — there is no baseline to heal.
+    """
+    from agentteams import drift as _drift
+
+    log_path = output_dir / "references" / "build-log.json"
+    if not log_path.exists():
+        return
+    try:
+        log = json.loads(log_path.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError):
+        return
+    log["manifest_fingerprint"] = _drift.compute_manifest_fingerprint(manifest)
+    log["fingerprint_algo_version"] = _drift.FINGERPRINT_ALGO_VERSION
+    log_path.write_text(json.dumps(log, indent=2), encoding="utf-8")
 
 
 def _write_run_log(manifest: dict, result: emit.EmitResult, output_dir: Path, template_hashes: dict[str, str] | None = None) -> None:

@@ -245,3 +245,30 @@ def test_delivery_receipt_excluded_from_drift_artifacts(tmp_path, monkeypatch):
     log_after = json.loads((output_dir / "references" / "build-log.json").read_text())
     assert receipt_rel not in log_after.get("template_hashes", {})
     assert receipt_rel not in log_after.get("file_hashes", {})
+
+
+# ---------------------------------------------------------------------------
+# RA2: runtime schema validation of the receipt
+# ---------------------------------------------------------------------------
+
+def test_write_delivery_receipt_rejects_nonconforming_payload(tmp_path, monkeypatch):
+    """RA2: a receipt that does not conform to the shipped schema must raise
+    DeliveryReceiptError at write time and write NO file (not silently emit a
+    malformed attestation)."""
+    # Force an invalid manifest_fingerprint (schema requires non-empty string).
+    monkeypatch.setattr(_drift, "compute_manifest_fingerprint", lambda m: "")
+
+    manifest = {"project_name": "P", "framework": "copilot-vscode"}
+    with pytest.raises(build_team.DeliveryReceiptError, match="schema validation"):
+        build_team._write_delivery_receipt(manifest, tmp_path)
+
+    assert not (tmp_path / build_team.DELIVERY_RECEIPT_REL_PATH).exists(), (
+        "a non-conforming receipt must not be written"
+    )
+
+
+def test_write_delivery_receipt_error_is_runtime_error_subclass():
+    """Callers catch (OSError, DeliveryReceiptError) and treat it non-fatally;
+    keep it a RuntimeError subclass so it never masquerades as OSError."""
+    assert issubclass(build_team.DeliveryReceiptError, RuntimeError)
+    assert not issubclass(build_team.DeliveryReceiptError, OSError)
