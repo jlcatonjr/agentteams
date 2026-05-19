@@ -41,6 +41,7 @@ nav:
       - Security Hardening & Threat Intelligence: security-hardening-guide.md
       - Section Fencing & Safe Merges: section-fencing-guide.md
       - Update Lifecycle, Drift & Backups: update-lifecycle-guide.md
+      - Delivery Procedure: delivery-procedure.md
       - Migration Guide: migration-guide.md
       - Interoperability Patterns: interoperability-patterns-guide.md
       - Bridge CI Automation: bridge-ci-automation-guide.md
