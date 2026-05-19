@@ -2,7 +2,7 @@
 .SH NAME
 agentteams \- Generate a complete agent team for any project.
 .SH SYNOPSIS
-.B agentteams [--description PATH] [--project PATH] [--framework NAME] [--output DIR] [--dry-run] [--overwrite] [--merge] [--yes] [--no-scan] [--update] [--prune] [--check] [--scan-security] [--self] [--post-audit] [--auto-correct] [--enrich] [--security-offline] [--security-max-items N] [--security-no-nvd] [--migrate] [--convert-from DIR] [--interop-from DIR] [--interop-source-framework INTEROP_SOURCE_FRAMEWORK] [--interop-mode INTEROP_MODE] [--bridge-from DIR] [--bridge-source-framework BRIDGE_SOURCE_FRAMEWORK] [--bridge-check] [--bridge-refresh] [--revert-migration] [--version] [--no-backup] [--list-backups] [--restore-backup TIMESTAMP]
+.B agentteams [--description PATH] [--project PATH] [--framework NAME] [--output DIR] [--dry-run] [--overwrite] [--merge] [--yes] [--no-scan] [--cost-routing] [--update] [--prune] [--check] [--scan-security] [--self] [--post-audit] [--auto-correct] [--enrich] [--security-offline] [--security-max-items N] [--security-no-nvd] [--migrate] [--convert-from DIR] [--interop-from DIR] [--interop-source-framework INTEROP_SOURCE_FRAMEWORK] [--interop-mode INTEROP_MODE] [--bridge-from DIR] [--bridge-source-framework BRIDGE_SOURCE_FRAMEWORK] [--bridge-check] [--bridge-refresh] [--revert-migration] [--version] [--no-backup] [--list-backups] [--restore-backup TIMESTAMP]
 .SH DESCRIPTION
 .PP
 Generate a complete agent team for any project.
@@ -38,6 +38,9 @@ Non\-interactive: answer yes to all prompts
 .TP
 .B \-\-no\-scan
 Disable project directory scanning
+.TP
+.B \-\-cost\-routing
+OFF by default. When set, emit references/model\-routing.json — a framework\-neutral per\-agent model\-tier contract (governance agents \-> 'cheap', producers/experts \-> 'primary'). Generated agent files are unchanged either way; this only adds the opt\-in contract artifact.
 .TP
 .B \-\-update
 Re\-render drifted files and emit new agents added to the taxonomy. Preserves manually\-filled \\(lCMANUAL:*\\(rC values from existing files. Removed agents are reported but not deleted (use \-\-prune to remove them).

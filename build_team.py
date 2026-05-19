@@ -190,6 +190,14 @@ def _build_parser() -> argparse.ArgumentParser:
         help="Disable project directory scanning",
     )
     parser.add_argument(
+        "--cost-routing",
+        action="store_true",
+        help="OFF by default. When set, emit references/model-routing.json — a "
+             "framework-neutral per-agent model-tier contract (governance agents "
+             "-> 'cheap', producers/experts -> 'primary'). Generated agent files "
+             "are unchanged either way; this only adds the opt-in contract artifact.",
+    )
+    parser.add_argument(
         "--update",
         action="store_true",
         help="Re-render drifted files and emit new agents added to the taxonomy. "
@@ -831,6 +839,21 @@ def main(argv: list[str] | None = None) -> int:
                         f"  !  Eval suite write failed (build-log healed): {exc}",
                         file=sys.stderr,
                     )
+                try:
+                    _write_memory_index(manifest, output_dir)
+                except (OSError, MemoryIndexError) as exc:
+                    print(
+                        f"  !  Memory index write failed: {exc}",
+                        file=sys.stderr,
+                    )
+                if args.cost_routing:
+                    try:
+                        _write_model_routing(manifest, output_dir)
+                    except (OSError, ModelRoutingError) as exc:
+                        print(
+                            f"  !  Model-routing write failed: {exc}",
+                            file=sys.stderr,
+                        )
                 print(
                     "  ✓  Healed build-log baseline (no material drift; "
                     "fingerprint refreshed)."
@@ -927,6 +950,21 @@ def main(argv: list[str] | None = None) -> int:
                     f"  !  Eval suite write failed (build-log healed): {exc}",
                     file=sys.stderr,
                 )
+            try:
+                _write_memory_index(manifest, output_dir)
+            except (OSError, MemoryIndexError) as exc:
+                print(
+                    f"  !  Memory index write failed: {exc}",
+                    file=sys.stderr,
+                )
+            if args.cost_routing:
+                try:
+                    _write_model_routing(manifest, output_dir)
+                except (OSError, ModelRoutingError) as exc:
+                    print(
+                        f"  !  Model-routing write failed: {exc}",
+                        file=sys.stderr,
+                    )
             if heal_converged:
                 print(
                     "  ✓  Healed build-log baseline (no material drift; "
@@ -1101,6 +1139,21 @@ def main(argv: list[str] | None = None) -> int:
                 f"  !  Eval suite write failed (team generated): {exc}",
                 file=sys.stderr,
             )
+        try:
+            _write_memory_index(manifest, output_dir)
+        except (OSError, MemoryIndexError) as exc:
+            print(
+                f"  !  Memory index write failed: {exc}",
+                file=sys.stderr,
+            )
+        if args.cost_routing:
+            try:
+                _write_model_routing(manifest, output_dir)
+            except (OSError, ModelRoutingError) as exc:
+                print(
+                    f"  !  Model-routing write failed: {exc}",
+                    file=sys.stderr,
+                )
 
     return 0 if result.success else 1
 
@@ -2290,6 +2343,128 @@ def _write_eval_suite(manifest: dict, output_dir: Path) -> Path:
     suite_path.parent.mkdir(parents=True, exist_ok=True)
     suite_path.write_text(json.dumps(suite, indent=2) + "\n", encoding="utf-8")
     return suite_path
+
+
+MODEL_ROUTING_REL_PATH = "references/model-routing.json"
+
+
+class ModelRoutingError(RuntimeError):
+    """Raised when the model-routing contract fails schema validation (F6).
+    Non-fatal to the caller, like EvalSuiteError — emitted only under
+    --cost-routing; a malformed contract is not written and the next run
+    re-emits."""
+
+
+def _write_model_routing(manifest: dict, output_dir: Path) -> Path:
+    """Emit the framework-neutral model-routing contract (F6, opt-in).
+
+    Called ONLY when ``--cost-routing`` is set. Same RA2 contract as
+    ``_write_eval_suite``: pure build → schema-validate against
+    ``schemas/model-routing.schema.json`` → raise ``ModelRoutingError``
+    (RuntimeError, never OSError) and write nothing on non-conformance.
+    Generator-owned, drift-excluded by construction (``.json``; never in
+    output_files_map/template_hashes/file_hashes; never read by --check or
+    --update). Does NOT modify any rendered agent file.
+    """
+    from agentteams.model_routing import build_routing_contract
+
+    contract = build_routing_contract(manifest)
+
+    import jsonschema
+    schema_path = Path(__file__).resolve().parent / "schemas" / "model-routing.schema.json"
+    try:
+        schema = json.loads(schema_path.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError) as exc:
+        raise ModelRoutingError(
+            f"model-routing schema unavailable ({schema_path}): {exc}"
+        ) from exc
+    try:
+        jsonschema.validate(contract, schema)
+    except jsonschema.ValidationError as exc:
+        raise ModelRoutingError(
+            f"model-routing contract failed schema validation: {exc.message}"
+        ) from exc
+
+    contract_path = output_dir / MODEL_ROUTING_REL_PATH
+    contract_path.parent.mkdir(parents=True, exist_ok=True)
+    contract_path.write_text(json.dumps(contract, indent=2) + "\n", encoding="utf-8")
+    return contract_path
+
+
+MEMORY_INDEX_REL_PATH = "references/memory-index.json"
+
+
+class MemoryIndexError(RuntimeError):
+    """Raised when the memory index fails schema validation (F8). Non-fatal
+    at the call site: the existing work-summary documents are the source of
+    truth — the navigator falls back to opening them and to filesystem search
+    when the index is absent / stale / malformed."""
+
+
+def _memory_index_sources(manifest: dict, output_dir: Path) -> list[Path]:
+    """Collect durable text sources for the memory index (F8).
+
+    RSR1-aware: durable, project-local sources only — never gitignored
+    scratch areas. Prefers the manifest's ``existing_project_path`` (the
+    operator's explicit signal of the project root, e.g. when ``--output``
+    is non-standard); falls back to inferring from ``output_dir`` when
+    absent (standard layout: ``<project>/.github/agents`` or
+    ``<project>/.claude/agents``).
+    """
+    epp = manifest.get("existing_project_path")
+    project_root = Path(epp) if epp else output_dir.parent.parent
+    sources: list[Path] = []
+    # Work summaries (the canonical durable history substrate).
+    ws = project_root / "workSummaries"
+    if ws.exists() and ws.is_dir():
+        sources.extend(sorted(ws.rglob("*.md")))
+    # Top-level durable docs.
+    for name in ("CHANGELOG.md", "README.md"):
+        p = project_root / name
+        if p.exists() and p.is_file():
+            sources.append(p)
+    return sources
+
+
+def _write_memory_index(manifest: dict, output_dir: Path) -> Path:
+    """Emit the additive lexical memory index (F8).
+
+    Always emitted (no opt-in flag): the index is *additive* to the existing
+    work-summary documents, never a replacement. Empty source list ⇒ an
+    empty-but-schema-valid index (a freshly generated team has no history
+    yet; later --update runs accumulate it). Same RA2 contract as the other
+    generator-owned artifacts: pure build → schema-validate at write time →
+    raise ``MemoryIndexError`` (RuntimeError, never OSError) on
+    non-conformance, write nothing → non-fatal at the call site →
+    drift-excluded by construction.
+    """
+    from agentteams.memory_index import build_memory_index
+
+    index = build_memory_index(
+        _memory_index_sources(manifest, output_dir),
+        project_name=manifest.get("project_name", ""),
+        framework=manifest.get("framework", ""),
+    )
+
+    import jsonschema
+    schema_path = Path(__file__).resolve().parent / "schemas" / "memory-index.schema.json"
+    try:
+        schema = json.loads(schema_path.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError) as exc:
+        raise MemoryIndexError(
+            f"memory-index schema unavailable ({schema_path}): {exc}"
+        ) from exc
+    try:
+        jsonschema.validate(index, schema)
+    except jsonschema.ValidationError as exc:
+        raise MemoryIndexError(
+            f"memory index failed schema validation: {exc.message}"
+        ) from exc
+
+    index_path = output_dir / MEMORY_INDEX_REL_PATH
+    index_path.parent.mkdir(parents=True, exist_ok=True)
+    index_path.write_text(json.dumps(index, indent=2) + "\n", encoding="utf-8")
+    return index_path
 
 
 def _heal_build_log_baseline(output_dir: Path, manifest: dict) -> None:

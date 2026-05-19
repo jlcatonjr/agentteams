@@ -1,0 +1,56 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "memory-index.schema.json",
+  "title": "AgentTeams Memory Index (additive lexical retrieval)",
+  "description": "Lexical BM25 index emitted by the generator over durable work-summary / CHANGELOG / plan sources. Additive: the original documents are NOT modified and remain the source of truth — the index is a fast-lookup layer the @navigator queries first, then opens the referenced document for detail, then falls back to filesystem search. Generator-owned; excluded from drift by construction (.json; never in output_files_map/template_hashes/file_hashes).",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "artifact_type",
+    "memory_index_schema_version",
+    "project_name",
+    "framework",
+    "documents",
+    "postings",
+    "avgdl",
+    "N"
+  ],
+  "properties": {
+    "artifact_type": { "const": "memory-index" },
+    "memory_index_schema_version": { "type": "string", "minLength": 1 },
+    "project_name": { "type": "string" },
+    "framework": { "type": "string" },
+    "documents": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["doc_id", "path", "title", "length", "snippet"],
+        "properties": {
+          "doc_id": { "type": "integer", "minimum": 0 },
+          "path": { "type": "string" },
+          "title": { "type": "string" },
+          "length": { "type": "integer", "minimum": 0 },
+          "snippet": { "type": "string" }
+        }
+      }
+    },
+    "postings": {
+      "type": "object",
+      "additionalProperties": {
+        "type": "array",
+        "items": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["doc_id", "tf"],
+          "properties": {
+            "doc_id": { "type": "integer", "minimum": 0 },
+            "tf": { "type": "integer", "minimum": 1 }
+          }
+        }
+      }
+    },
+    "avgdl": { "type": "number", "minimum": 0 },
+    "N": { "type": "integer", "minimum": 0 }
+  }
+}

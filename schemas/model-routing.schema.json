@@ -1,0 +1,42 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "model-routing.schema.json",
+  "title": "AgentTeams Model-Routing Contract (framework-neutral, opt-in)",
+  "description": "Per-agent tier-role assignment emitted ONLY when --cost-routing is passed. Framework-neutral: tier roles, not model strings (the runtime/adapter resolves a role to a concrete model). Generator-owned; excluded from drift by construction (never in output_files_map/template_hashes/file_hashes; .json so the .md snapshot suite is unaffected).",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "artifact_type",
+    "routing_schema_version",
+    "project_name",
+    "framework",
+    "tiers",
+    "assignments"
+  ],
+  "properties": {
+    "artifact_type": {
+      "const": "model-routing",
+      "description": "Top-level discriminator (NOT schema_version) so build-log readers never treat this as a baseline."
+    },
+    "routing_schema_version": { "type": "string", "minLength": 1 },
+    "project_name": { "type": "string" },
+    "framework": { "type": "string" },
+    "tiers": {
+      "type": "array",
+      "items": { "type": "string", "enum": ["primary", "cheap", "fallback"] },
+      "minItems": 1
+    },
+    "assignments": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["agent", "tier"],
+        "properties": {
+          "agent": { "type": "string", "minLength": 1 },
+          "tier": { "type": "string", "enum": ["primary", "cheap", "fallback"] }
+        }
+      }
+    }
+  }
+}

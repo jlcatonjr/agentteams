@@ -135,6 +135,10 @@ def build_manifest(description: dict[str, Any], *, framework: str = "copilot-vsc
     project_name = _resolve_project_name(description)
     project_goal = description["project_goal"]
     project_type = classify_project_type(description)
+    # F8/F-2: propagate the operator's canonical project root (when given) so
+    # downstream artifact emitters (e.g. memory-index) do not have to guess
+    # from output_dir layout.
+    existing_project_path = description.get("existing_project_path")
 
     # Core path fields
     primary_output_dir = description.get("primary_output_dir") or _default_primary_output_dir(project_type)
@@ -307,6 +311,7 @@ def build_manifest(description: dict[str, Any], *, framework: str = "copilot-vsc
         "project_goal": project_goal,
         "project_type": project_type,
         "framework": framework,
+        "existing_project_path": existing_project_path,
         "primary_output_dir": primary_output_dir,
         "build_output_dir": build_output_dir,
         "figures_dir": figures_dir,
