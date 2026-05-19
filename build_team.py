@@ -979,6 +979,17 @@ def main(argv: list[str] | None = None) -> int:
             if created:
                 print(f"  ✓  Created CSV log stubs: {', '.join(created)}")
             _write_run_log(manifest, result, output_dir, template_hashes)
+            # Receipt write AFTER build-log (R3 — "heal first, attest
+            # second"). Same gate as the log: only on real, successful runs.
+            try:
+                _write_delivery_receipt(manifest, output_dir)
+            except OSError as exc:
+                # Heal still happened. Surface the failure but do not abort
+                # the update; the next --update will re-emit the receipt.
+                print(
+                    f"  !  Delivery receipt write failed (build-log healed): {exc}",
+                    file=sys.stderr,
+                )
             if heal_converged:
                 print(
                     "  ✓  Healed build-log baseline (no material drift; "
@@ -2122,6 +2133,60 @@ def _compute_file_hashes(written_abs_paths: list[str], output_dir: Path) -> dict
         digest = hashlib.sha256(abs_path.read_bytes()).hexdigest()[:16]
         hashes[rel] = digest
     return hashes
+
+
+DELIVERY_RECEIPT_REL_PATH = "references/delivery-receipt.json"
+"""Path (relative to ``output_dir``) where ``--update`` writes the delivery
+receipt on success.
+
+The receipt is an ATTESTATION, not a baseline: it is intentionally not part of
+``output_files_map``, ``template_hashes``, or ``file_hashes`` in the build-log,
+and the drift detector never reads it. See
+``schemas/delivery-receipt.schema.json`` and
+``docs_src/delivery-procedure.md``.
+"""
+
+
+def _write_delivery_receipt(manifest: dict, output_dir: Path) -> Path:
+    """Write a P3 delivery receipt attesting that ``--update`` succeeded.
+
+    The receipt is written AFTER the build-log (``_write_run_log``) inside the
+    same ``not args.dry_run and result.success`` block, so its
+    ``manifest_fingerprint`` always matches the build-log just written. This is
+    the "heal first, attest second" ordering documented in
+    ``tmp/by-week/2026-W21/p0-p3-batch.plan.md`` (R3). If the receipt write
+    fails after the log is written, the next ``--update`` converges to zero
+    drift and re-emits the receipt — the safe failure direction.
+
+    The receipt is excluded from drift detection by construction: it is never
+    added to the rendered set, ``output_files``, ``template_hashes``, or
+    ``file_hashes``. See ``schemas/delivery-receipt.schema.json`` for the
+    contract; see ``docs_src/delivery-procedure.md`` for the procedure.
+    """
+    from datetime import datetime, timezone
+    from agentteams import drift as _drift
+    try:
+        from agentteams import __version__ as _agentteams_version
+    except Exception:  # pragma: no cover - version import edge cases
+        _agentteams_version = None
+
+    receipt: dict[str, object] = {
+        "artifact_type": "delivery-receipt",
+        "receipt_schema_version": "1.0",
+        "delivered_at": datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ"),
+        "project_name": manifest.get("project_name", ""),
+        "framework": manifest.get("framework", ""),
+        "manifest_fingerprint": _drift.compute_manifest_fingerprint(manifest),
+        "fingerprint_algo_version": _drift.FINGERPRINT_ALGO_VERSION,
+        "output_dir": str(output_dir),
+    }
+    if _agentteams_version:
+        receipt["agentteams_version"] = str(_agentteams_version)
+
+    receipt_path = output_dir / DELIVERY_RECEIPT_REL_PATH
+    receipt_path.parent.mkdir(parents=True, exist_ok=True)
+    receipt_path.write_text(json.dumps(receipt, indent=2) + "\n", encoding="utf-8")
+    return receipt_path
 
 
 def _write_run_log(manifest: dict, result: emit.EmitResult, output_dir: Path, template_hashes: dict[str, str] | None = None) -> None:
