@@ -128,6 +128,38 @@ def _seed_gates(output_dir: Path, monkeypatch):
     )
 
 
+def test_generate_emits_eval_suite_increment_1b(tmp_path, monkeypatch):
+    """F2 increment 1b: the eval suite is emitted on the GENERATE path too
+    (increment 1 was --update-only), schema-valid and drift-excluded."""
+    brief = EXAMPLES_DIR / "data-pipeline" / "brief.json"
+    if not brief.exists():
+        pytest.skip("data-pipeline brief not found")
+    output_dir = tmp_path / ".github" / "agents"
+    _seed_gates(output_dir, monkeypatch)
+    # Plain generate — NO --update.
+    assert build_team.main([
+        "--description", str(brief), "--output", str(output_dir),
+        "--yes", "--no-scan", "--security-offline",
+    ]) == 0
+
+    suite_path = output_dir / build_team.EVAL_SUITE_REL_PATH
+    assert suite_path.exists(), "eval suite not emitted on the generate path"
+    import jsonschema
+    suite = json.loads(suite_path.read_text())
+    jsonschema.Draft7Validator(_schema()).validate(suite)
+    assert suite["artifact_type"] == "eval-suite"
+    assert suite["scenarios"], "expected non-empty scenarios for data-pipeline"
+
+    # Drift-excluded by construction (parity with --update emission).
+    log = json.loads((output_dir / "references" / "build-log.json").read_text())
+    rel = build_team.EVAL_SUITE_REL_PATH
+    assert rel not in log.get("template_hashes", {})
+    assert rel not in log.get("file_hashes", {})
+    omap = log.get("output_files_map", [])
+    paths = {f.get("path") for f in omap} if omap and isinstance(omap[0], dict) else set(omap)
+    assert rel not in paths
+
+
 def test_update_emits_drift_excluded_eval_suite(tmp_path, monkeypatch):
     brief = EXAMPLES_DIR / "data-pipeline" / "brief.json"
     if not brief.exists():

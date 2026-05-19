@@ -1089,6 +1089,18 @@ def main(argv: list[str] | None = None) -> int:
     # -----------------------------------------------------------------------
     if not args.dry_run and result.success:
         _write_run_log(manifest, result, output_dir, template_hashes)
+        # F2 increment 1b: emit the framework-neutral eval suite on the
+        # generate path too (increment 1 was --update-only). Safe now that
+        # RCC2 unified the render pipeline. Non-fatal, same contract as on
+        # --update; eval-suite.json is drift-excluded by construction so it
+        # does not perturb snapshot comparisons (.md-only).
+        try:
+            _write_eval_suite(manifest, output_dir)
+        except (OSError, EvalSuiteError) as exc:
+            print(
+                f"  !  Eval suite write failed (team generated): {exc}",
+                file=sys.stderr,
+            )
 
     return 0 if result.success else 1
 
