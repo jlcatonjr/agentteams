@@ -148,3 +148,36 @@ This guarantees:
 2. The build-log has not been rewritten since delivery (fingerprints match).
 
 For full drift verification, follow with `agentteams build_team --check`.
+
+---
+
+## Dry-run redelivery to a downstream repo
+
+When delivering an update to a downstream consumer (e.g. a corpus repo), the
+recommended sequence — applied unchanged by the P5 generator-side close-out —
+is:
+
+1. **Snapshot first.** Take a read-only snapshot of the downstream repo's
+   current `.github/agents/` (or `.claude/`) tree. Do not edit yet.
+2. **Throwaway dry-run.** In a scratch clone of the downstream repo, run
+   `agentteams build_team --update --dry-run --project <path>`. Inspect the
+   stdout diff and the *unwritten* receipt path. No file is mutated.
+3. **Classify the diff.** Distinguish two failure modes:
+   - **Real drift** — generator output changed (template fix, schema bump).
+     This is the expected outcome of a delivery.
+   - **Reorg overlap** — downstream has moved files; the diff reflects a
+     downstream-only change. Resolve on the downstream's schedule before
+     redelivery.
+4. **Cross-repo gate.** Any actual write to the downstream repo must route
+   through `@repo-liaison` (Workflow 9) and require `@security` clearance.
+   The generator side never writes outside its own repository.
+5. **Real delivery.** Once the dry-run diff is classified and the downstream
+   reorg is settled, run `--update` without `--dry-run`. The receipt is
+   written iff the run succeeds.
+6. **Verify.** Re-run the CI verification block above against the downstream
+   tree to confirm fingerprints agree.
+
+> **Why this lives here.** The dry-run is a property of the delivery
+> procedure, not of a specific downstream repo. Downstream-specific
+> sequencing (e.g. P5 hayekAI reorg) is owned by `@repo-liaison` and recorded
+> in the cross-repository registry, not in this generator-side document.

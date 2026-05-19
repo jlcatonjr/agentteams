@@ -48,6 +48,7 @@ nav:
       - Enrichment Pipeline: enrichment-pipeline-guide.md
       - Cross-Repository Coordination: cross-repository-coordination-guide.md
       - Working with Your Generated Team: working-with-your-generated-team-guide.md
+      - Verification Environment: verification-environment.md
   - API Reference:
       - Overview: api-reference/index.md
       - ingest: api-reference/ingest.md

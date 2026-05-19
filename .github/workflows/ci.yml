@@ -8,9 +8,11 @@ on:
 
 jobs:
   test:
-    runs-on: ubuntu-latest
+    runs-on: ${{ matrix.os }}
     strategy:
+      fail-fast: false
       matrix:
+        os: [ubuntu-latest, macos-latest]
         python-version: ["3.11", "3.12"]
 
     steps:
@@ -19,6 +21,9 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: ${{ matrix.python-version }}
+
+      - name: Verify environment preconditions
+        run: python scripts/verify-env.py
 
       - name: Install package and pytest
         run: pip install -e . pytest
@@ -31,3 +36,7 @@ jobs:
 
       - name: Check man-page is current
         run: diff /tmp/agentteams-check.1 agentteams.1
+
+      - name: Lint — durable artifacts must not cite gitignored tmp/ paths (RSR1)
+        if: runner.os == 'Linux'
+        run: bash scripts/check-durable-tmp-refs.sh

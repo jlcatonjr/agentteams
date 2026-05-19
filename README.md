@@ -67,6 +67,11 @@ cd agentteams
 pip install -e .
 ```
 
+> **Verifying the environment.** Run `python scripts/verify-env.py` to confirm
+> the local interpreter and `git` meet the minimums asserted by CI. See
+> [`docs_src/verification-environment.md`](docs_src/verification-environment.md)
+> for the full preconditions matrix.
+
 ### 2. Write a project description
 
 Create `brief.json` (or `brief.md`):
