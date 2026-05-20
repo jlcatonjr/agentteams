@@ -14,7 +14,7 @@ agentteams [--description PATH] [--project PATH] [--framework NAME]
            [--bridge-check] [--bridge-refresh]
            [--dry-run] [--overwrite] [--merge] [--yes]
            [--no-scan] [--update] [--prune] [--check]
-           [--refresh-index] [--query-index TEXT] [--query-k N]
+           [--refresh-index] [--query-index TEXT] [--query-k N] [--query-strategy {lexical,vector}]
            [--scan-security] [--self] [--post-audit] [--auto-correct] [--enrich]
            [--strict-manual-placeholders] [--no-strict-manual-placeholders]
            [--no-backup] [--list-backups] [--restore-backup TIMESTAMP]
@@ -210,6 +210,15 @@ Query an existing `references/memory-index.json` and print ranked hits (title, p
 ### `--query-k N`
 
 Number of ranked results to return with `--query-index`. Default: `5`.
+
+### `--query-strategy {lexical,vector}`
+
+Retrieval strategy for `--query-index`. Default: `lexical`.
+
+- `lexical` — BM25 term-frequency ranking. High precision for keyword/exact-term queries ("when was X decided?", "where is the delivery doc?").
+- `vector` — Sparse tf·idf cosine similarity. Better recall for thematic/semantic queries ("what's our policy on error handling?", "find prior work on resource management"). Returns documents related to ALL query terms. Stdlib-only, <100ms at typical corpus sizes.
+
+Start with `lexical`; if results are low-confidence, retry with `vector`.
 
 ### `--scan-security`
 

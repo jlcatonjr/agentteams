@@ -1,8 +1,8 @@
 # `memory_index` — AgentTeamsModule
 
-Build and query a lexical (BM25) search index over durable agent team documentation.
+Build and query a search index over durable agent team documentation.
 
-Used by `@navigator` to retrieve relevant work summaries, CHANGELOG entries, and plan artifacts from previous sessions. Pure lexical retrieval (no embeddings) ensures deterministic, testable behavior without external dependencies.
+Used by `@navigator`, `@adversarial`, and `@work-summarizer` to retrieve relevant work summaries, CHANGELOG entries, and plan artifacts from previous sessions. Supports two retrieval strategies: BM25 lexical (default, high precision for keyword queries) and sparse tf·idf vector cosine similarity (optional, better for thematic/semantic queries). Both are stdlib-only, deterministic, and have no external dependencies.
 
 > *Source: `agentteams/memory_index.py`*
 
@@ -10,7 +10,7 @@ Used by `@navigator` to retrieve relevant work summaries, CHANGELOG entries, and
 
 ## Design Principles
 
-- **Lexical, not embeddings** — BM25 scoring; no vector/embedding dependencies
+- **Two strategies, no embeddings** — BM25 lexical (default) and sparse cosine vector; no external ML dependencies
 - **Durable sources only** — Caller passes explicit source paths; module never globs ignored directories
 - **Robust to absence** — Empty source list → empty but valid index (no error)
 - **Graceful degradation** — Per-paragraph passage scoring (I2, I9) with backward-compatible snippet fallback
@@ -94,23 +94,27 @@ Check if any source file is newer than the index's `built_at` timestamp.
 
 ---
 
-### `query_index(index, query, *, k=5)`
+### `query_index(index, query, *, k=5, strategy="lexical")`
 
 > *Source: `agentteams/memory_index.py`*
 
-Return the top-*k* documents for *query* by BM25 score.
+Return the top-*k* documents for *query* using the specified retrieval strategy.
 
 **Args:**
 
 - `index` (`dict[str, Any]`) — Index dict from `build_memory_index()`.
 - `query` (`str`) — Free-text search query (e.g., `"behavioral drift drift detection"`).
 - `k` (`int`, keyword-only) — Number of top results to return. Default: `5`.
+- `strategy` (`str`, keyword-only) — Query strategy. Default: `"lexical"`.
+  - `"lexical"`: BM25 term-frequency ranking. High precision for keyword/exact-term queries.
+  - `"vector"`: Sparse tf·idf cosine similarity. Better for thematic/semantic queries where multiple concepts must be related. Stdlib-only, deterministic, <100ms at N=180 docs.
+  - Raises `ValueError` for any other value.
 
-**Returns:** `list[dict[str, Any]]` — Ranked results (highest BM25 score first). Each result dict contains:
+**Returns:** `list[dict[str, Any]]` — Ranked results (highest score first). Each result dict contains:
 - `doc_id`: Internal document ID
 - `path`: Source file path
 - `title`: Extracted heading (first `# ` line) or filename
-- `score`: BM25 score (rounded to 6 decimal places)
+- `score`: Relevance score (rounded to 6 decimal places; BM25 for lexical, cosine similarity for vector)
 - `snippet`: Best single passage (backward-compat; always present)
 - `snippets`: List of up to 3 best-matching passages (new in v1.2; dynamic passage scoring; present even for v1.1 indexes)
 
@@ -121,6 +125,68 @@ Return the top-*k* documents for *query* by BM25 score.
 - Ties are broken deterministically by `(-score, doc_id)` so callers see stable ordering.
 - Passage scoring is intra-document only (relative ranking within each document); best paragraphs are ranked independently.
 - Backward-compat: v1.1 indexes (no `paragraphs` field) return the stored static `snippet` for all results.
+- Both strategies are stdlib-only with no external dependencies.
+
+---
+
+## Query Strategies
+
+The memory index supports two retrieval strategies, each optimized for different use cases.
+
+### Lexical (BM25) — Default
+
+**Algorithm:** Probabilistic information retrieval using term frequency and inverse document frequency.
+
+**Use when:**
+- You have specific keywords ("where is the delivery-procedure doc?")
+- You want exact-term matches ("when did we add feature X?")
+- Speed is the top priority (slightly faster than vector)
+
+**Example:**
+```python
+hits = query_index(index, "delivery receipt", strategy="lexical")
+```
+
+### Vector (Cosine Similarity) — Optional
+
+**Algorithm:** Sparse tf·idf vector-space scoring with cosine similarity. No numpy, no embeddings — stdlib only.
+
+**Use when:**
+- Searching for thematic overlaps ("what's our policy on error handling?")
+- You want documents related to ALL query terms, not just some
+- Generating summaries and need to avoid duplicating prior themes
+
+**Example:**
+```python
+hits = query_index(index, "memory index performance", strategy="vector")
+```
+
+### Strategy Selection
+
+```
+Is your query a simple keyword lookup?
+  ├─ YES → Use lexical (faster, exact matches)
+  └─ NO → Is it a thematic query with multiple concepts?
+        ├─ YES → Use vector (semantic matching)
+        └─ NO → Use lexical (safe default)
+
+Did your first query return low-confidence results (empty or score < 0.1)?
+  ├─ YES → Retry with the other strategy
+  └─ NO → Use the result
+```
+
+### Performance
+
+Both strategies are fast and have no external dependencies:
+
+| Operation | Corpus Size | Time (ms) |
+|-----------|-------------|-----------|
+| Build index | 180 docs | <100 |
+| Query (lexical) | 180 docs | 20–50 |
+| Query (vector) | 180 docs | 40–80 |
+| 25 queries | 180 docs | <2500 total |
+
+See `tests/test_memory_index_performance.py` for detailed benchmarks.
 
 ---
 

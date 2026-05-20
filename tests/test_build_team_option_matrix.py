@@ -2,12 +2,14 @@
 
 from __future__ import annotations
 
+import json
 from pathlib import Path
 
 import pytest
 
 import build_team
 from agentteams.emit import EmitResult
+from agentteams.memory_index import build_memory_index
 
 
 def _build_min_manifest(framework: str) -> dict:
@@ -747,4 +749,70 @@ def test_bridge_generate_skip_notice_cli(
     second_err = capsys.readouterr().err
     assert "Notice" in second_err
     assert "--bridge-refresh" in second_err
+
+
+# ---------------------------------------------------------------------------
+# --query-strategy: vector strategy CLI integration
+# ---------------------------------------------------------------------------
+
+def _make_query_index_fixture(tmp_path: Path) -> tuple[dict, Path]:
+    """Return (manifest, output_dir) with a pre-built memory index."""
+    output_dir = tmp_path / ".github" / "agents"
+    index_dir = output_dir / "references"
+    index_dir.mkdir(parents=True)
+
+    src = tmp_path / "prior.md"
+    src.write_text(
+        "# Prior Work\n\n"
+        "Memory drift detection and behavioral validation were introduced in W18. "
+        "The agent performance baseline was established to measure retrieval latency.\n",
+        encoding="utf-8",
+    )
+    idx = build_memory_index([src], project_name="P", framework="copilot-vscode")
+    (index_dir / "memory-index.json").write_text(json.dumps(idx), encoding="utf-8")
+
+    manifest = {
+        "project_name": "P",
+        "framework": "copilot-vscode",
+        "existing_project_path": str(tmp_path),
+    }
+    return manifest, output_dir
+
+
+def test_query_index_accepts_vector_strategy(tmp_path: Path) -> None:
+    """--query-strategy vector is accepted and returns structurally valid results."""
+    manifest, output_dir = _make_query_index_fixture(tmp_path)
+    rc = build_team._run_query_index(
+        manifest, output_dir, "memory drift behavioral validation", k=3, strategy="vector"
+    )
+    assert rc == 0
+
+
+def test_query_strategy_default_is_lexical(tmp_path: Path) -> None:
+    """Omitting --query-strategy produces the same results as strategy='lexical'."""
+    manifest, output_dir = _make_query_index_fixture(tmp_path)
+    from agentteams.memory_index import query_index
+    from agentteams import memory_index as mi_mod
+
+    index_path = output_dir / "references" / "memory-index.json"
+    index = json.loads(index_path.read_text(encoding="utf-8"))
+
+    hits_default = query_index(index, "memory drift", k=5)
+    hits_explicit = query_index(index, "memory drift", k=5, strategy="lexical")
+    assert hits_default == hits_explicit
+
+
+def test_query_strategy_validation(tmp_path: Path, capsys: pytest.CaptureFixture[str]) -> None:
+    """An unknown --query-strategy value is rejected by argparse before execution."""
+    import sys
+
+    with pytest.raises(SystemExit) as exc_info:
+        build_team.main([
+            "--description", "brief.json",
+            "--query-index", "drift",
+            "--query-strategy", "unknown",
+        ])
+    assert exc_info.value.code != 0
+    captured = capsys.readouterr()
+    assert "unknown" in captured.err or "invalid choice" in captured.err
 

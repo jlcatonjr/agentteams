@@ -28,6 +28,8 @@ Options:
     --refresh-index       Rebuild references/memory-index.json only
     --query-index TEXT    Query references/memory-index.json and print ranked hits
     --query-k N           Number of ranked results returned by --query-index (default: 5)
+    --query-strategy STR  Strategy for --query-index: 'lexical' (BM25, default) or 'vector'
+                          (cosine similarity, better for thematic/semantic queries)
     --scan-security       Scan agent files for security issues
     --auto-correct        After post-audit findings, invoke standalone `copilot` CLI to repair files
     --migrate             One-step legacy fencing migration: tag the current state as
@@ -254,6 +256,16 @@ def _build_parser() -> argparse.ArgumentParser:
         type=int,
         default=5,
         help="Number of ranked results to return with --query-index (default: 5).",
+    )
+    parser.add_argument(
+        "--query-strategy",
+        choices=["lexical", "vector"],
+        default="lexical",
+        dest="query_strategy",
+        help=(
+            "Query strategy for --query-index: 'lexical' (BM25, default) or 'vector' "
+            "(cosine similarity, better for semantic/thematic matching)."
+        ),
     )
     parser.add_argument(
         "--scan-security",
@@ -771,7 +783,10 @@ def main(argv: list[str] | None = None) -> int:
 
     if args.query_index:
         try:
-            return _run_query_index(manifest, output_dir, args.query_index, args.query_k)
+            return _run_query_index(
+                manifest, output_dir, args.query_index, args.query_k,
+                strategy=args.query_strategy,
+            )
         except (OSError, MemoryIndexError) as exc:
             print(f"Memory index query failed: {exc}", file=sys.stderr)
             return 1
@@ -2616,8 +2631,8 @@ def _write_delivery_receipt(manifest: dict, output_dir: Path) -> Path:
     The receipt is written AFTER the build-log (``_write_run_log``) inside the
     same ``not args.dry_run and result.success`` block, so its
     ``manifest_fingerprint`` always matches the build-log just written. This is
-    the "heal first, attest second" ordering documented in
-    ``tmp/by-week/2026-W21/p0-p3-batch.plan.md`` (R3). If the receipt write
+    the "heal first, attest second" ordering (see R3 rationale in
+    ``docs_src/delivery-procedure.md``). If the receipt write
     fails after the log is written, the next ``--update`` converges to zero
     drift and re-emits the receipt — the safe failure direction.
 
@@ -2864,13 +2879,15 @@ def _run_refresh_index(manifest: dict, output_dir: Path) -> int:
     return 0
 
 
-def _run_query_index(manifest: dict, output_dir: Path, query: str, k: int) -> int:
+def _run_query_index(
+    manifest: dict, output_dir: Path, query: str, k: int, strategy: str = "lexical"
+) -> int:
     """Query memory-index.json and print ranked hits."""
     from agentteams.memory_index import is_index_stale, query_index
 
     index = _read_memory_index(output_dir)
     sources = _memory_index_sources(manifest, output_dir)
-    hits = query_index(index, query, k=k)
+    hits = query_index(index, query, k=k, strategy=strategy)
 
     print(f"Query: {query!r}")
     if not hits:

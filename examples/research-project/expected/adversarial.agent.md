@@ -63,6 +63,18 @@ For every **Temporal (T)** and **Causal (C)** presupposition, query `references/
 
 The memory-index is a history layer, **not authoritative**: when its evidence conflicts with current state on disk, trust current state and queue an `SR` (Stale Reference) finding rather than letting stale memory anchor the audit.
 
+**Strategy selection for T/C queries:**
+- Start with **lexical** for precise temporal/causal terms (e.g., "when was X decided?", "did Y change before Z?"). High-precision, exact-match oriented.
+- If the index returns low-confidence hits (empty result or top score < 0.1), retry with **vector** strategy to surface thematic context — related decisions or causal background that use different terminology.
+- Never block on the index; if both strategies return empty or low-confidence results, proceed with filesystem search + `git log`.
+
+```python
+from agentteams.memory_index import query_index
+hits = query_index(index, "X decided", k=3, strategy="lexical")
+if not hits or hits[0]["score"] < 0.1:
+    hits = query_index(index, "X", k=5, strategy="vector")
+```
+
 ### Step 3: Challenge
 
 For each presupposition, ask:
