@@ -32,8 +32,9 @@ Each build records a manifest fingerprint and a `fingerprint_algo_version` in `b
 | Mode | Command | Writes Files? |
 |---|---|---|
 | Check only | `--check` | No |
-| Merge (selective) | `--update --merge` | Yes — inside fenced sections only |
-| Full regeneration | `--update --overwrite` | Yes — entire file |
+| Merge (default) | `--update` | Yes — inside fenced sections only |
+| Merge (explicit) | `--update --merge` | Yes — inside fenced sections only |
+| Full regeneration | `--update --overwrite` | Yes — entire file (requires security clearance) |
 
 ---
 
@@ -48,7 +49,7 @@ agentteams \
   --description brief.json \
   --project /path/to/project \
   --framework copilot-vscode \
-  --update --merge --dry-run
+  --update --dry-run
 ```
 
 Inspect the diff output. Verify that:
@@ -71,7 +72,7 @@ agentteams \
   --description brief.json \
   --project /path/to/project \
   --framework copilot-vscode \
-  --update --merge
+  --update
 ```
 
 ### Step 4 — Post-Diff Review

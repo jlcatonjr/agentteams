@@ -201,6 +201,10 @@ def _build_parser() -> argparse.ArgumentParser:
         "--update",
         action="store_true",
         help="Re-render drifted files and emit new agents added to the taxonomy. "
+             "Default behavior merges only template-fenced regions, preserving all "
+             "user-authored content outside fence markers (same as --update --merge). "
+             "Use --update --overwrite to fully re-render existing files, replacing "
+             "user-authored content (requires security clearance). "
              "Preserves manually-filled {MANUAL:*} values from existing files. "
              "Removed agents are reported but not deleted (use --prune to remove them).",
     )
@@ -705,11 +709,16 @@ def main(argv: list[str] | None = None) -> int:
         # ..."). A team that cannot be updated must not show a misleading
         # drift report or create a spurious backup. compute_structural_diff
         # above is read-only, so evaluating the gate here is safe.
-        if not args.dry_run and not args.merge:
+        if not args.dry_run and args.overwrite:
             try:
                 _assert_destructive_action_allowed(output_dir, action="overwrite")
             except RuntimeError as exc:
-                print(f"Security gate blocked overwrite update: {exc}", file=sys.stderr)
+                print(
+                    f"Security gate blocked overwrite update: {exc}\n"
+                    "  Tip: omit --overwrite (or use --merge explicitly) to preserve "
+                    "your customizations without requiring a security clearance.",
+                    file=sys.stderr,
+                )
                 return 1
 
         # Always refresh security intelligence references during --update,
@@ -900,8 +909,8 @@ def main(argv: list[str] | None = None) -> int:
             update_rendered,
             output_dir=output_dir,
             dry_run=args.dry_run,
-            overwrite=not args.merge,
-            merge=args.merge,
+            overwrite=args.overwrite,
+            merge=not args.overwrite,
             yes=args.yes,
         )
         emit.print_summary(result, manifest)

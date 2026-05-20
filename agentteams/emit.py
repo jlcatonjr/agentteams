@@ -602,8 +602,11 @@ def emit_all(
 
         try:
             target.parent.mkdir(parents=True, exist_ok=True)
-            target.write_text(normalized_content, encoding="utf-8")
-            result.written.append(str(target))
+            if target.exists() and target.read_text(encoding="utf-8") == normalized_content:
+                result.unchanged.append(str(target))
+            else:
+                target.write_text(normalized_content, encoding="utf-8")
+                result.written.append(str(target))
         except OSError as exc:
             result.errors.append(f"Failed to write {target}: {exc}")
 

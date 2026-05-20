@@ -5,14 +5,14 @@
 Read this guide if you:
 
 - Have an agent team that was generated before section fencing was introduced and want to bring it under merge-safe management
-- Want to use `--update --merge` but your team's files have no fence markers yet
+- Want to use `--update` but your team's files have no fence markers yet
 - Need to roll back a migration that produced unexpected results
 
 ---
 
 ## What Migration Does
 
-Before section fencing existed, AgentTeams generated agent files as flat Markdown with no structure markers. `--update --merge` depends on fence markers to know which regions to replace. Running merge on a pre-fencing file would fail gracefully (no markers to match) but leave the file stale.
+Before section fencing existed, AgentTeams generated agent files as flat Markdown with no structure markers. `--update` depends on fence markers to know which regions to replace. Running merge on a pre-fencing file would fail gracefully (no markers to match) but leave the file stale.
 
 The `--migrate` flag performs a one-time legacy migration:
 
@@ -21,7 +21,7 @@ The `--migrate` flag performs a one-time legacy migration:
 3. Re-runs generation in overwrite mode (`--overwrite --yes`) so agent files are fully regenerated with fenced templates
 4. Prints a post-migration checklist for restoring project-specific rules in USER-EDITABLE regions
 
-After migration, `--update --merge` can manage the file normally.
+After migration, `--update` can manage the file normally.
 
 ---
 
@@ -31,7 +31,7 @@ Before running `--migrate`:
 
 - [ ] Working tree is clean (`git status` shows no uncommitted changes)
 - [ ] You have run `--dry-run` to review the snapshot-tag + overwrite migration behavior
-- [ ] You understand which regions are USER-EDITABLE (they are preserved by future `--merge` updates, but `--migrate` itself performs full overwrite regeneration)
+- [ ] You understand which regions are USER-EDITABLE (they are preserved by future `--update` runs, but `--migrate` itself performs full overwrite regeneration)
 - [ ] You have a backup or recent commit to recover from if needed
 
 ---
@@ -85,7 +85,7 @@ The `pre-fencing-snapshot` tag is created automatically by `--migrate` and is us
 
 ## After Migration
 
-Once migration is complete, use `--update --merge` for all subsequent updates. You do not need to run `--migrate` again for already-migrated files.
+Once migration is complete, use `--update` for all subsequent updates. You do not need to run `--migrate` again for already-migrated files.
 
 If you add new templates to the team later, any new files written by a post-fencing generation are fence-compatible from creation. Only files generated before fencing existed need migration.
 
@@ -130,7 +130,7 @@ git tag -d pre-fencing-snapshot
 
 ### Template updated between generation and migration
 
-If the template has been updated since your files were generated, `--migrate` inserts content from the **current** template version. After migration, run `--update --merge` immediately to confirm the remaining non-fenced regions are still aligned.
+If the template has been updated since your files were generated, `--migrate` inserts content from the **current** template version. After migration, run `--update` immediately to confirm the remaining non-fenced regions are still aligned.
 
 ---
 
@@ -149,5 +149,5 @@ If the template has been updated since your files were generated, `--migrate` in
 
 - **Always commit before migrating.** The pre-fencing state should be preserved in git history, not just on disk.
 - **Do not pre-create `pre-fencing-snapshot`.** `--migrate` creates that tag automatically and aborts if it already exists.
-- **Migrate and merge in the same sitting.** Migrating and then leaving files in limbo (without running a subsequent `--update --merge`) creates a window where the file has markers but may have stale content inside them.
+- **Migrate and merge in the same sitting.** Migrating and then leaving files in limbo (without running a subsequent `--update`) creates a window where the file has markers but may have stale content inside them.
 - **Review each MIGRATE/SKIP line** in the dry run output. A section marked SKIP (USER-EDITABLE) will not receive template content — confirm that's correct for each skip.

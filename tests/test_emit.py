@@ -537,3 +537,32 @@ def test_backup_selective_csv_not_backed_up_if_absent(tmp_path):
     br = backup_output_dir(tmp_path, files_to_backup=["agent.agent.md"])
     assert br.files_backed_up == 1  # only the agent file, no CSVs
 
+
+# ---------------------------------------------------------------------------
+# Regression: mtime hygiene — overwrite path must not touch mtime for identical
+# content (F6 fix: --update --overwrite should not re-write byte-identical files)
+# ---------------------------------------------------------------------------
+
+def test_overwrite_unchanged_content_not_written(tmp_path):
+    """Overwrite path must not write a file when content is byte-identical."""
+    # Pre-fenced content to pass through _normalize_generated_content unchanged
+    content = (
+        "<!-- AGENTTEAMS:BEGIN content v=1 -->\n"
+        "# Test Agent\n"
+        "\nSome content.\n"
+        "<!-- AGENTTEAMS:END content -->\n"
+    )
+    target = tmp_path / "agent.agent.md"
+    target.write_text(content, encoding="utf-8")
+
+    result = emit_all(
+        [("agent.agent.md", content)],
+        output_dir=tmp_path,
+        overwrite=True,
+        yes=True,
+    )
+
+    assert result.success
+    assert len(result.unchanged) == 1
+    assert result.written == []
+

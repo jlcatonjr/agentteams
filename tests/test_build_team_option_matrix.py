@@ -359,3 +359,75 @@ def test_main_accepts_bridge_pipeline(tmp_path: Path, bridge_check: bool):
             / "copilot-vscode-to-claude"
             / "bridge-manifest.json"
         ).exists()
+
+
+# ---------------------------------------------------------------------------
+# Regression: Q2 — --update alone must not trigger the security gate (merge
+# is the default); --update --overwrite must trigger the gate (F1/F7 fix)
+# ---------------------------------------------------------------------------
+
+def _stub_drift(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Patch agentteams.drift so --update tests don't require real build-log state."""
+    from agentteams import drift as _drift_mod
+    from types import SimpleNamespace
+
+    fake_report = SimpleNamespace(
+        has_changes=False,
+        removed_files=[],
+        manifest_changed=False,
+        drifted_files=[],
+        added_files=[],
+        team_membership_changed=False,
+        update_files=[],
+    )
+    monkeypatch.setattr(_drift_mod, "load_build_log", lambda _: {})
+    monkeypatch.setattr(_drift_mod, "compute_structural_diff", lambda *_: fake_report)
+    monkeypatch.setattr(_drift_mod, "refine_manifest_promotion", lambda *_: None)
+    monkeypatch.setattr(_drift_mod, "print_structural_diff_report", lambda _: None)
+    # Stub the security-freshness gate so tests don't need a real security cache
+    monkeypatch.setattr(build_team, "_assert_security_intelligence_fresh", lambda *_a, **_k: None)
+
+
+def test_update_alone_bypasses_security_gate(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+):
+    """--update alone must not require a security clearance (Q2 regression).
+
+    Default update behavior is merge; only --overwrite triggers the gate.
+    No security-decisions.log.csv is present — gate would return rc=1 if invoked.
+    """
+    captured: dict = {}
+    _stub_core_pipeline(monkeypatch, "copilot-vscode", captured)
+    _stub_drift(monkeypatch)
+
+    rc = build_team.main([
+        "--description", "brief.json",
+        "--framework", "copilot-vscode",
+        "--output", str(tmp_path / ".github" / "agents"),
+        "--update",
+        "--security-offline",
+    ])
+
+    assert rc == 0  # gate not invoked; no clearance required for default merge
+
+
+def test_update_overwrite_triggers_security_gate(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+):
+    """--update --overwrite must be blocked by the security gate when no log exists (Q2 regression)."""
+    captured: dict = {}
+    _stub_core_pipeline(monkeypatch, "copilot-vscode", captured)
+    _stub_drift(monkeypatch)
+
+    # No references/security-decisions.log.csv in tmp_path — gate must block.
+    rc = build_team.main([
+        "--description", "brief.json",
+        "--framework", "copilot-vscode",
+        "--output", str(tmp_path / ".github" / "agents"),
+        "--update", "--overwrite",
+        "--security-offline",
+    ])
+
+    assert rc == 1  # gate invoked and blocked due to missing security clearance

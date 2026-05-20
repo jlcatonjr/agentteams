@@ -100,7 +100,7 @@ SECTION MANIFEST — orchestrator.template.md
 | routing_table_rows          | FENCED (partial)   | Generated rows only; user may add below   |
 | constitutional_rules        | USER-EDITABLE      | Project may extend                        |
 | available_workflows         | FENCED             | Full workflow definitions; project rules go in gap before BEGIN |
-| project_rules               | USER-EDITABLE      | Project-specific rules below routing table (preserved by --merge) |
+| project_rules               | USER-EDITABLE      | Project-specific rules below routing table (preserved by --update) |
 -->
 
 # Orchestrator — {PROJECT_NAME}
@@ -162,7 +162,7 @@ You coordinate all agent operations for **{PROJECT_NAME}**. You route work to do
 |---|---|---|
 | Post-production outcome verification | `@post-production-auditor` *(applies only when `@post-production-auditor` is in team)* | Claimed completion requires source-of-truth sampling validation and closure verdict |
 
-> ⚙️ **Project-specific rules and extension points go here.** This section is USER-EDITABLE and is preserved by `--update --merge`. Add project-specific agent references, domain rules, and workflow customizations here — never by modifying the fenced sections above or below.
+> ⚙️ **Project-specific rules and extension points go here.** This section is USER-EDITABLE and is preserved by `--update` (merge is the default). Use `--update --overwrite` only when intentional full-file regeneration is needed (requires security clearance). Add project-specific agent references, domain rules, and workflow customizations here — never by modifying the fenced sections above or below.
 
 ### Rules
 

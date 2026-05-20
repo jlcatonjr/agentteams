@@ -128,7 +128,7 @@ SECTION MANIFEST — orchestrator.template.md
 | routing_table_rows          | FENCED (partial)   | Generated rows only; user may add below   |
 | constitutional_rules        | USER-EDITABLE      | Project may extend                        |
 | available_workflows         | FENCED             | Full workflow definitions; project rules go in gap before BEGIN |
-| project_rules               | USER-EDITABLE      | Project-specific rules below routing table (preserved by --merge) |
+| project_rules               | USER-EDITABLE      | Project-specific rules below routing table (preserved by --update) |
 -->
 
 # Orchestrator — ProjectRepositories
@@ -188,7 +188,7 @@ You coordinate all agent operations for **ProjectRepositories**. You route work 
 | Commit and push, pull/merge/rebase from main, conflict resolution, file recovery (git diff, revert, restore) | `@git-operations` | "Commit", "push", "pull main", "merge", "rebase", "recover file", "revert", "what changed", "restore old version" |
 <!-- AGENTTEAMS:END routing_table_rows -->
 
-> ⚙️ **Project-specific rules and extension points go here.** This section is USER-EDITABLE and is preserved by `--update --merge`. Add project-specific agent references, domain rules, and workflow customizations here — never by modifying the fenced sections above or below.
+> ⚙️ **Project-specific rules and extension points go here.** This section is USER-EDITABLE and is preserved by `--update` (merge is the default). Use `--update --overwrite` only when intentional full-file regeneration is needed (requires security clearance). Add project-specific agent references, domain rules, and workflow customizations here — never by modifying the fenced sections above or below.
 
 ### Rules
 

@@ -608,8 +608,11 @@ def test_update_restores_missing_expected_standard_file(tmp_path, monkeypatch):
 
 
 def test_blocked_overwrite_update_creates_no_backup(tmp_path, monkeypatch, capsys):
-    """Regression: a security-gate-blocked --update must not create a backup,
-    print "Writing...", or print the structural-diff report.
+    """Regression: a security-gate-blocked --update --overwrite must not create a
+    backup, print "Writing...", or print the structural-diff report.
+
+    After Q2 (merge-as-default), --update alone no longer triggers the overwrite
+    gate. Use --update --overwrite to exercise the gate path.
 
     The destructive-action gate was previously checked AFTER backup_output_dir
     and AFTER the structural-diff report, so a blocked update produced a
@@ -678,7 +681,7 @@ def test_blocked_overwrite_update_creates_no_backup(tmp_path, monkeypatch, capsy
 
     rc = build_team.main([
         "--description", str(brief), "--output", str(output_dir),
-        "--update", "--yes", "--no-scan", "--security-offline",
+        "--update", "--overwrite", "--yes", "--no-scan", "--security-offline",
     ])
 
     assert rc == 1, "blocked overwrite update must return non-zero"

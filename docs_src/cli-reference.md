@@ -167,7 +167,7 @@ Overwrite existing agent files without prompting. Default behavior: prompt for e
 
 ### `--merge`
 
-Update only template-fenced regions in existing agent files, preserving all user-authored content outside fence markers. Skips legacy files (no fence markers) with a warning. Use this instead of `--overwrite` for all routine updates once a team has been migrated with `--migrate`.
+Update only template-fenced regions in existing agent files, preserving all user-authored content outside fence markers. Skips legacy files (no fence markers) with a warning. This is the default behavior for `--update`; pass `--merge` explicitly if you want to make this intent clear in scripts or CI. Use `--overwrite` only when intentional full-file regeneration is needed (requires security clearance).
 
 ### `--yes` / `-y`
 
@@ -181,7 +181,7 @@ Disable project directory scanning even when `existing_project_path` or `--proje
 
 Re-render drifted agent files and emit newly added agents without touching unchanged files. Preserves manually filled `{MANUAL:*}` values from existing files. Agents removed from the taxonomy are reported but not deleted (use `--prune` to also remove them).
 
-A backup of the output directory is created automatically before any writes. Pair with `--merge` to also preserve user-authored content in fenced regions (the `--merge` flag is fully honoured with `--update`). Use `--no-backup` to suppress the backup.
+A backup of the output directory is created automatically before any writes. By default, `--update` uses merge mode (equivalent to `--update --merge`): only template-fenced regions are re-rendered, and user-authored content outside fence markers is preserved. To perform a full destructive re-render, pass `--update --overwrite` (this invokes the security gate and requires a clearance in `references/security-decisions.log.csv`). Use `--no-backup` to suppress the backup.
 
 On a successful (non-dry-run) `--update`, AgentTeams writes a delivery receipt to `references/delivery-receipt.json` (schema: `schemas/delivery-receipt.schema.json`) recording the project name, framework, manifest fingerprint, and fingerprint algorithm version of the delivered build. When no material drift is detected but the build-log baseline is stale (for example after a `FINGERPRINT_ALGO_VERSION` bump), the baseline is healed in place: the build-log is rewritten first, the delivery receipt is then written against the healed baseline (heal-first-attest-second), and `--update` prints `✓  Healed build-log baseline (no material drift; fingerprint refreshed).` after both writes complete. Receipt write failures warn on stderr but do not fail the run.
 
