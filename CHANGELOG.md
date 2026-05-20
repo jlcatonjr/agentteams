@@ -6,6 +6,47 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### W21 `--update` improvements metaplan (4 plans)
+
+Four module-improvement plans surfaced by the 2026-05-19 `learn-python-update-data-loss-audit`, executed in metaplan order. All additive; full suite **836 passed** (was 810; +26 across the four plans).
+
+#### Plan 1 — `--update --dry-run` structured preview
+
+- New `--dry-run` semantics for the `--update` and generate paths: previews every per-file action (`WRITE` / `OVERWRITE` / `MERGE` / `MERGE-OVERWRITE-FENCED` / `UNCHANGED` / `SKIP`) and per-fence-region action (replaced / added / orphaned) **without writing anything** (no files, no backups).
+- New `--json` flag pairs with `--dry-run` to emit the plan as a single JSON document on stdout (pipes to `jq`).
+- `agentteams/emit.py` now exposes `DryRunEntry` / `DryRunReport` dataclasses; `EmitResult.dry_run_report` is populated on dry runs and `result.notices` is a unified channel both runs use. The reporter is an explicit *extension point* (Plan 3 hooks into `notices`/`DryRunReport.notices`).
+- 5 new tests (`tests/test_update_dry_run.py`): API shape, text mode, JSON mode, dry-run+overwrite, and dry-run/real-run consistency.
+
+#### Plan 2 — Backup manifest sidecar
+
+- Every `.agentteams-backups/<timestamp>/` directory now contains a `_manifest.json` sidecar documenting per-file `source_path` / `backup_path` / `source_size_bytes` / `source_sha256` plus a header (`agentteams_version`, `framework`, `description_path`, `output_root`, `reason`, `timestamp_utc`, `total_files`, `total_bytes`). Schema: `schemas/backup-manifest.schema.json`.
+- `emit.backup_output_dir(... reason=, framework=, description_path=)` is the single backup site; both `build_team.py` callers pass an explicit `reason` (`pre-update` / `overwrite-mode` / `pre-overwrite` / `merge-overwrite-fenced`).
+- `restore_backup` skips `_manifest.json` (metadata, not restored content).
+- 3 new tests (`tests/test_update_backup_manifest.py`): manifest on `--update`, manifest on `--overwrite`, SHA-256 integrity against on-disk backup files.
+
+#### Plan 3 — Fenced-section shrink Notice
+
+- During a merge, when a regenerated fence body is materially shorter or less specific than the existing on-disk body, a `Notice:` is queued on `MergeResult.shrink_notices` → aggregated into `EmitResult.notices` → printed once to stderr at end of run.
+- Detection rules (any one triggers): (a) new body length < 50% of existing; (b) ≥ 3 fewer markdown list items; (c) concrete file paths or backtick-quoted identifiers present in the existing body but absent from the new body.
+- Markdown-only by construction (fence merges only apply to `.md`). Dry-run surfaces the same Notices into the structured report (Plan 1 D-4).
+- 8 new tests (`tests/test_update_shrink_notice.py`) covering each rule, no-fire thresholds, content-grew, and `_merge_fenced_content` end-to-end.
+
+#### Plan 4 — Legacy-file fence-marker injection helper
+
+- New module `agentteams/fence_inject.py` + `inject_fence_markers(path, mode='sidecar'|'in-place', confirm_in_place=False)` that retrofits canonical `AGENTTEAMS:BEGIN/END` markers around a legacy file's existing body so it becomes eligible for future merge-mode `--update`.
+- **Sidecar (default):** writes `<name>.fenced.md` alongside the source — non-destructive. **`--in-place`:** requires `--yes` (and is documented to require `@security` clearance); creates a timestamped `.agentteams-backups/` backup before mutating.
+- Idempotent on already-fenced files (no-op, no sidecar written). Retrofit fence-id rule: base `legacy_body`, suffix `legacy_body_<n>` on collision — documented in `agentteams/templates/PLACEHOLDER-CONVENTIONS.md`.
+- New CLI flags `--add-fence-markers PATH` and `--in-place`; runs before any description-loading so works on standalone legacy files. YAML front matter (if present) stays above the BEGIN marker.
+- 10 new tests (`tests/test_fence_inject.py`): sidecar default, YAML-front-matter ordering, in-place + backup, in-place without confirm raises, idempotency, fence-id collision suffix, four CLI surface tests.
+
+#### Coordinated cross-plan invariants
+
+- Plan 1's reporter is an extension point; Plan 3's shrink Notices flow through it without forking the dry-run logic (the metaplan's cross-plan risk #1).
+- Plan 3 detection is markdown-only by construction (cross-plan risk #2).
+- Plan 2's manifest is written at the single `emit.backup_output_dir` site, which is the only backup-creation site in the codebase (cross-plan risk #3 verified).
+- Plan 4 `--in-place` mode requires explicit `--yes`; CLI gates it (cross-plan risk #4).
+- Man page (`agentteams.1`) deliberately regenerated to absorb the new `--json`, `--add-fence-markers PATH`, and `--in-place` flags.
+
 ### `--update` defaults to merge; `--overwrite` required for destructive re-render
 
 - **Breaking CLI change: `--update` now defaults to merge mode** — `--update` alone now preserves all user-authored content outside fence markers (equivalent to the former `--update --merge`). Full destructive re-render now requires `--update --overwrite`, which invokes the security gate. Existing scripts using `--update --merge` continue to work unchanged. Scripts using `--update` alone that relied on full overwrite must be updated to `--update --overwrite` and must have a valid `references/security-decisions.log.csv` clearance for action `overwrite`.

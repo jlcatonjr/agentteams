@@ -28,6 +28,33 @@ from typing import Any
 # ---------------------------------------------------------------------------
 
 @dataclass
+class DryRunEntry:
+    """One per-file row in the dry-run preview (Plan 1).
+
+    ``action`` is one of: WRITE, OVERWRITE, MERGE, MERGE-OVERWRITE-FENCED,
+    UNCHANGED, SKIP. ``fence_actions`` is a list of {fence_id, action,
+    delta_bytes} dicts populated for MERGE/MERGE-OVERWRITE-FENCED rows;
+    Plan 3 (shrink-notice) consumes the same per-fence info.
+    """
+    path: str
+    action: str
+    fence_actions: list[dict[str, Any]] = field(default_factory=list)
+    delta_bytes: int = 0
+
+
+@dataclass
+class DryRunReport:
+    """Structured preview of what an ``--update`` / generate would write.
+
+    Reporter is an explicit *extension point* — Plan 3 appends shrink notices
+    into ``notices`` without forking the dry-run logic. Set by ``emit_all``
+    when ``dry_run=True``; ``None`` on real runs.
+    """
+    entries: list[DryRunEntry] = field(default_factory=list)
+    notices: list[str] = field(default_factory=list)
+
+
+@dataclass
 class EmitResult:
     written: list[str] = field(default_factory=list)
     merged: list[str] = field(default_factory=list)
@@ -35,6 +62,10 @@ class EmitResult:
     skipped: list[str] = field(default_factory=list)
     errors: list[str] = field(default_factory=list)
     dry_run: bool = False
+    dry_run_report: DryRunReport | None = None
+    # Plan 3: notices surfaced from any run (real or dry); aggregated and
+    # printed once by build_team at end of run.
+    notices: list[str] = field(default_factory=list)
 
     @property
     def success(self) -> bool:
@@ -52,6 +83,9 @@ class MergeResult:
         parse_errors:       Human-readable messages for parse failures.
         unchanged:          section_ids that were identical in both files (no write needed).
         merged_content:     The final merged file content (empty string on parse failure).
+        shrink_notices:     Per-section human-readable Notices (Plan 3) when a
+                            regenerated fence body is materially shorter / less
+                            specific than the existing on-disk body.
     """
     sections_replaced: list[str] = field(default_factory=list)
     sections_added: list[str] = field(default_factory=list)
@@ -59,6 +93,7 @@ class MergeResult:
     parse_errors: list[str] = field(default_factory=list)
     unchanged: list[str] = field(default_factory=list)
     merged_content: str = ""
+    shrink_notices: list[str] = field(default_factory=list)
 
     @property
     def has_errors(self) -> bool:
@@ -124,6 +159,64 @@ def _normalize_generated_content(rel_path: str, content: str) -> str:
         normalized += "\n"
     normalized += "<!-- AGENTTEAMS:END content -->\n"
     return normalized
+
+
+_LIST_ITEM_RE = re.compile(r"^\s*(?:[-*+]\s|\d+\.\s)", re.MULTILINE)
+# Concrete file paths (foo/bar.py, foo.md) or backtick-quoted identifiers.
+_PATH_RE = re.compile(r"[A-Za-z0-9_./-]+\.(?:py|md|json|yaml|yml|toml|csv|tsv|sql|sh)\b")
+_BACKTICK_IDENT_RE = re.compile(r"`([^`\n]+)`")
+
+
+def _fence_body(block: str) -> str:
+    """Strip the BEGIN/END marker lines from a fenced block — returns body only."""
+    lines = block.splitlines(keepends=True)
+    if not lines:
+        return ""
+    body = lines[1:-1] if len(lines) >= 2 else lines
+    return "".join(body)
+
+
+def _detect_fence_shrink(sid: str, existing_block: str, new_block: str) -> str | None:
+    """Plan 3: return a Notice string when the new fence body is materially
+    shorter or less specific than the existing body (rules a/b/c), else None.
+
+    Rules (any one triggers):
+      (a) new body length < 50% of existing body length;
+      (b) new body has >= 3 fewer markdown list items than existing;
+      (c) existing body contained concrete file paths or backtick-quoted
+          identifiers that the new body does not.
+    """
+    existing = _fence_body(existing_block)
+    new = _fence_body(new_block)
+    if not existing.strip():
+        return None  # nothing to shrink from
+    ex_len, new_len = len(existing), len(new)
+    if ex_len == 0:
+        return None
+
+    reasons: list[str] = []
+    # (a) length shrink > 50%
+    if ex_len > 0 and new_len < ex_len / 2:
+        reasons.append(
+            f"body shrank {ex_len}->{new_len} bytes (>{50}% reduction)"
+        )
+    # (b) list-item delta >= 3
+    ex_items = len(_LIST_ITEM_RE.findall(existing))
+    new_items = len(_LIST_ITEM_RE.findall(new))
+    if ex_items - new_items >= 3:
+        reasons.append(f"lost {ex_items - new_items} list item(s) ({ex_items}->{new_items})")
+    # (c) lost concrete paths / backtick identifiers
+    ex_paths = set(_PATH_RE.findall(existing)) | set(_BACKTICK_IDENT_RE.findall(existing))
+    new_paths = set(_PATH_RE.findall(new)) | set(_BACKTICK_IDENT_RE.findall(new))
+    lost = ex_paths - new_paths
+    if lost:
+        sample = sorted(lost)[:3]
+        more = f" (+{len(lost) - 3} more)" if len(lost) > 3 else ""
+        reasons.append(f"lost concrete refs: {', '.join(sample)}{more}")
+
+    if not reasons:
+        return None
+    return f"fence '{sid}': " + "; ".join(reasons)
 
 
 def _extract_fenced_regions(content: str) -> dict[str, str] | str:
@@ -249,6 +342,12 @@ def _merge_fenced_content(new_rendered: str, existing_on_disk: str) -> MergeResu
                     result.unchanged.append(sid)
                 else:
                     result.sections_replaced.append(sid)
+                    # Plan 3: detect material shrink and queue a Notice.
+                    notice = _detect_fence_shrink(
+                        sid, existing_regions.get(sid, ""), new_regions[sid]
+                    )
+                    if notice:
+                        result.shrink_notices.append(notice)
                 replaced_sids.add(sid)
             else:
                 # Orphaned: in existing but not in new render — leave in place
@@ -297,11 +396,85 @@ class BackupResult:
     extra_files_removed: int = 0
 
 
+BACKUP_MANIFEST_NAME = "_manifest.json"
+BACKUP_MANIFEST_SCHEMA_VERSION = "1.0"
+
+
+def _write_backup_manifest(
+    backup_path: Path,
+    file_pairs: list[tuple[Path, Path]],
+    *,
+    reason: str,
+    framework: str,
+    output_root: Path,
+    description_path: str | None,
+) -> Path:
+    """Write the Plan 2 manifest sidecar inside *backup_path*.
+
+    ``file_pairs`` is a list of (source_abs, backup_abs) Paths recorded in
+    backup order. SHA-256 is computed from the backup copy (which is
+    byte-identical to the source via ``shutil.copy2``); using the backup avoids
+    a TOCTOU window where the source might mutate between copy and hash.
+    """
+    import json as _json
+    from datetime import timezone as _tz
+
+    try:
+        from agentteams import __version__ as _agentteams_version
+    except (ImportError, AttributeError):
+        _agentteams_version = None
+
+    files: list[dict[str, Any]] = []
+    total_bytes = 0
+    for src, dst in file_pairs:
+        try:
+            data = dst.read_bytes()
+        except OSError:
+            continue
+        size = len(data)
+        sha = hashlib.sha256(data).hexdigest()
+        total_bytes += size
+        try:
+            src_rel = str(src.relative_to(output_root))
+        except ValueError:
+            src_rel = str(src)
+        try:
+            dst_rel = str(dst.relative_to(backup_path))
+        except ValueError:
+            dst_rel = dst.name
+        files.append({
+            "source_path": src_rel,
+            "backup_path": dst_rel,
+            "source_size_bytes": size,
+            "source_sha256": sha,
+        })
+
+    manifest = {
+        "artifact_type": "backup-manifest",
+        "manifest_schema_version": BACKUP_MANIFEST_SCHEMA_VERSION,
+        "agentteams_version": str(_agentteams_version) if _agentteams_version else None,
+        "framework": framework,
+        "description_path": description_path,
+        "output_root": str(output_root),
+        "reason": reason,
+        "timestamp_utc": datetime.now(_tz.utc).strftime("%Y-%m-%dT%H:%M:%SZ"),
+        "total_files": len(files),
+        "total_bytes": total_bytes,
+        "files": files,
+    }
+    out = backup_path / BACKUP_MANIFEST_NAME
+    out.write_text(_json.dumps(manifest, indent=2) + "\n", encoding="utf-8")
+    return out
+
+
 def backup_output_dir(
     output_dir: Path,
     *,
     files_to_backup: list[str] | None = None,
     dry_run: bool = False,
+    reason: str = "unspecified",
+    framework: str = "",
+    description_path: str | None = None,
 ) -> BackupResult:
     """Copy existing agent files to a timestamped backup directory before a write.
 
@@ -371,6 +544,7 @@ def backup_output_dir(
 
     backup_path.mkdir(parents=True, exist_ok=True)
 
+    file_pairs: list[tuple[Path, Path]] = []
     for src in paths:
         try:
             rel = src.relative_to(output_dir)
@@ -381,7 +555,22 @@ def backup_output_dir(
         dest = backup_path / rel
         dest.parent.mkdir(parents=True, exist_ok=True)
         shutil.copy2(src, dest)
+        file_pairs.append((src, dest))
         result.files_backed_up += 1
+
+    # Plan 2: sidecar manifest documenting what was backed up and why.
+    try:
+        _write_backup_manifest(
+            backup_path, file_pairs,
+            reason=reason,
+            framework=framework,
+            output_root=output_dir,
+            description_path=description_path,
+        )
+    except OSError as exc:
+        # Manifest failure is non-fatal — the backup files themselves are
+        # safely on disk; the operator still has a recoverable backup.
+        print(f"  !  Backup manifest write failed: {exc}", file=sys.stderr)
 
     result.backup_path = backup_path
     print(f"  ✓  Backup created: {backup_path} ({result.files_backed_up} file(s))")
@@ -440,12 +629,17 @@ def restore_backup(
     if not backup_path.exists():
         raise FileNotFoundError(f"Backup not found: {backup_path}")
 
-    # Collect the set of relative paths present in the backup
+    # Collect the set of relative paths present in the backup. Plan 2's
+    # sidecar manifest (_manifest.json) is metadata ABOUT the backup, not
+    # restored content — exclude it from the restore set.
     backup_rels: set[Path] = set()
     for src in backup_path.rglob("*"):
         if not src.is_file():
             continue
-        backup_rels.add(src.relative_to(backup_path))
+        rel = src.relative_to(backup_path)
+        if rel == Path(BACKUP_MANIFEST_NAME):
+            continue
+        backup_rels.add(rel)
 
     # Restore all backed-up files
     count = 0
@@ -514,7 +708,10 @@ def emit_all(
     if overwrite and merge:
         raise ValueError("overwrite and merge are mutually exclusive")
 
-    result = EmitResult(dry_run=dry_run)
+    result = EmitResult(
+        dry_run=dry_run,
+        dry_run_report=DryRunReport() if dry_run else None,
+    )
 
     # Check for existing files before writing anything (only relevant for
     # overwrite path — merge handles its own existence check per-file)
@@ -550,11 +747,65 @@ def emit_all(
         normalized_content = _normalize_generated_content(rel_path, content)
 
         if dry_run:
-            if merge and target.exists():
-                action = "MERGE"
+            # Plan 1: compute the action accurately (mirror the real write
+            # path's classification) and record a structured DryRunEntry.
+            # Per-file action precedence matches the write branches below.
+            entry = DryRunEntry(path=str(target), action="WRITE")
+            existing_text: str | None = None
+            try:
+                if target.exists():
+                    existing_text = target.read_text(encoding="utf-8")
+            except OSError:
+                existing_text = None
+
+            if merge and existing_text is not None:
+                mr = _merge_fenced_content(normalized_content, existing_text)
+                # Plan 3: dry-run preview also surfaces the notices that the
+                # real run would emit (D-4 from update-dry-run plan).
+                for notice in mr.shrink_notices:
+                    result.notices.append(f"{rel_path}: {notice}")
+                    if result.dry_run_report is not None:
+                        result.dry_run_report.notices.append(f"{rel_path}: {notice}")
+                if mr.has_errors:
+                    legacy_no_fence = all(
+                        "No fence markers detected" in e for e in mr.parse_errors
+                    )
+                    if legacy_no_fence and _is_machine_managed_merge_overwrite_path(rel_path):
+                        if existing_text == normalized_content:
+                            entry.action = "UNCHANGED"
+                        else:
+                            entry.action = "MERGE-OVERWRITE-FENCED"
+                            entry.delta_bytes = len(normalized_content) - len(existing_text)
+                    else:
+                        entry.action = "SKIP"
+                elif not mr.content_changed and not mr.sections_added:
+                    entry.action = "UNCHANGED"
+                else:
+                    entry.action = "MERGE"
+                    entry.delta_bytes = len(mr.merged_content) - len(existing_text)
+                    for sid in mr.sections_replaced:
+                        entry.fence_actions.append({"fence_id": sid, "action": "replaced"})
+                    for sid in mr.sections_added:
+                        entry.fence_actions.append({"fence_id": sid, "action": "added"})
+                    for sid in mr.sections_orphaned:
+                        entry.fence_actions.append({"fence_id": sid, "action": "orphaned"})
+            elif existing_text is not None and not overwrite:
+                entry.action = "SKIP"
+            elif existing_text is not None and overwrite:
+                if existing_text == normalized_content:
+                    entry.action = "UNCHANGED"
+                else:
+                    entry.action = "OVERWRITE"
+                    entry.delta_bytes = len(normalized_content) - len(existing_text)
             else:
-                action = "OVERWRITE" if target.exists() else "WRITE"
-            print(f"[DRY RUN] {action} {target}")
+                entry.action = "WRITE"
+                entry.delta_bytes = len(normalized_content)
+
+            assert result.dry_run_report is not None  # set above
+            result.dry_run_report.entries.append(entry)
+            # Back-compat: keep the human-readable per-file line + the
+            # `written` count current callers expect.
+            print(f"[DRY RUN] {entry.action} {target}")
             result.written.append(str(target))
             continue
 
@@ -562,6 +813,9 @@ def emit_all(
         if merge and target.exists():
             existing_text = target.read_text(encoding="utf-8")
             merge_result = _merge_fenced_content(normalized_content, existing_text)
+            # Plan 3: surface shrink Notices from this merge (real-run path).
+            for notice in merge_result.shrink_notices:
+                result.notices.append(f"{rel_path}: {notice}")
             if merge_result.has_errors:
                 legacy_no_fence = all(
                     "No fence markers detected" in err for err in merge_result.parse_errors
@@ -617,6 +871,68 @@ def emit_all(
 # Summary report
 # ---------------------------------------------------------------------------
 
+def print_dry_run_report(
+    result: EmitResult,
+    manifest: dict[str, Any],
+    *,
+    fmt: str = "text",
+) -> None:
+    """Print the structured dry-run plan (Plan 1).
+
+    ``fmt='text'`` prints a per-file action table + aggregated counts +
+    notices; ``fmt='json'`` prints a single JSON document to stdout suitable
+    for ``jq`` piping. No-op (with a one-line note) if ``result.dry_run_report``
+    is None.
+    """
+    import json as _json
+    report = result.dry_run_report
+    if report is None:
+        return
+    project = manifest.get("project_name", "")
+    framework = manifest.get("framework", "")
+
+    if fmt == "json":
+        payload = {
+            "project_name": project,
+            "framework": framework,
+            "entries": [
+                {
+                    "path": e.path,
+                    "action": e.action,
+                    "delta_bytes": e.delta_bytes,
+                    "fence_actions": e.fence_actions,
+                }
+                for e in report.entries
+            ],
+            "notices": list(report.notices),
+            "counts": _dry_run_counts(report),
+        }
+        print(_json.dumps(payload, indent=2))
+        return
+
+    counts = _dry_run_counts(report)
+    print(f"\n[DRY RUN PLAN] {project!r} ({framework}) — no files written")
+    for entry in report.entries:
+        delta = f" ({entry.delta_bytes:+d} bytes)" if entry.delta_bytes else ""
+        print(f"  {entry.action:24s} {entry.path}{delta}")
+        for fa in entry.fence_actions:
+            print(f"      └─ fence:{fa['fence_id']:30s} {fa['action']}")
+    print("\n  Plan counts:")
+    for action, n in sorted(counts.items()):
+        print(f"    {action:24s} {n}")
+    if report.notices:
+        print(f"\n  Notices ({len(report.notices)}):")
+        for note in report.notices:
+            print(f"    Notice: {note}")
+
+
+def _dry_run_counts(report: DryRunReport) -> dict[str, int]:
+    counts: dict[str, int] = {}
+    for e in report.entries:
+        counts[e.action] = counts.get(e.action, 0) + 1
+    return counts
+
+
 def print_summary(result: EmitResult, manifest: dict[str, Any]) -> None:
     """Print a human-readable summary of the emit operation."""
     project = manifest.get("project_name", "")
@@ -635,6 +951,19 @@ def print_summary(result: EmitResult, manifest: dict[str, Any]) -> None:
             print(f"  Skipped:  {len(result.skipped)} (use --overwrite to replace, or --merge for fenced files)")
         if result.errors:
             print(f"  Errors:   {len(result.errors)}", file=sys.stderr)
+
+    # Plan 3: aggregated shrink Notices, printed once to stderr after the
+    # summary. Real-run channel; dry-run notices are folded into the dry-run
+    # report instead (so the JSON payload carries them).
+    if result.notices and not result.dry_run:
+        print(f"\n  Notice: {len(result.notices)} fenced region(s) shrank during merge:", file=sys.stderr)
+        for note in result.notices:
+            print(f"    Notice: {note}", file=sys.stderr)
+        print(
+            "     Review whether the source description needs to be expanded "
+            "before re-running, or use --overwrite if the shrink is intended.",
+            file=sys.stderr,
+        )
 
     manual_count = len(manifest.get("manual_required_placeholders", []))
     if manual_count > 0:

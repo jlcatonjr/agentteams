@@ -63,6 +63,21 @@ Note: placeholder keys below are legacy-compatible names retained for backward c
 
 Templates may demarcate generated sections using fence markers so that `--merge` can update them without touching user-authored content. See [`FENCE-CONVENTIONS.md`](FENCE-CONVENTIONS.md) for the complete specification.
 
+### Retrofit fence-id naming (Plan 4 of W21 --update improvements)
+
+When the `agentteams --add-fence-markers PATH` helper retrofits a legacy
+(unfenced) file with canonical fence markers, the injected single-region
+fence id follows this rule:
+
+- **Default base id:** `legacy_body`
+- **Collision rule:** if `legacy_body` is already present in the target file
+  (idempotent re-run, or hand-authored fences) the helper picks the smallest
+  available `legacy_body_<n>` for integer `n >= 1`.
+- **Id charset:** must match `^[a-z][a-z0-9_]*$` (same as every other fence id).
+
+This convention is enforced by `agentteams/fence_inject.py::_unique_fence_id`
+and pinned by `tests/test_fence_inject.py`.
+
 Every template section must be designated either **FENCED** (module-owned, updated on re-generation) or **USER-EDITABLE** (team-owned, never modified by `--merge`). This designation is recorded in a section manifest comment block at the top of each instrumented template.
 
 ## Rules

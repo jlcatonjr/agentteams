@@ -2,7 +2,7 @@
 .SH NAME
 agentteams \- Generate a complete agent team for any project.
 .SH SYNOPSIS
-.B agentteams [--description PATH] [--project PATH] [--framework NAME] [--output DIR] [--dry-run] [--overwrite] [--merge] [--yes] [--no-scan] [--cost-routing] [--update] [--prune] [--check] [--scan-security] [--self] [--post-audit] [--auto-correct] [--enrich] [--security-offline] [--security-max-items N] [--security-no-nvd] [--migrate] [--convert-from DIR] [--interop-from DIR] [--interop-source-framework INTEROP_SOURCE_FRAMEWORK] [--interop-mode INTEROP_MODE] [--bridge-from DIR] [--bridge-source-framework BRIDGE_SOURCE_FRAMEWORK] [--bridge-check] [--bridge-refresh] [--revert-migration] [--version] [--no-backup] [--list-backups] [--restore-backup TIMESTAMP]
+.B agentteams [--description PATH] [--project PATH] [--framework NAME] [--output DIR] [--dry-run] [--json] [--overwrite] [--merge] [--yes] [--no-scan] [--cost-routing] [--update] [--prune] [--check] [--refresh-index] [--query-index TEXT] [--query-k N] [--scan-security] [--self] [--allow-external-self-output] [--post-audit] [--auto-correct] [--enrich] [--security-offline] [--security-max-items N] [--security-no-nvd] [--migrate] [--convert-from DIR] [--interop-from DIR] [--interop-source-framework INTEROP_SOURCE_FRAMEWORK] [--interop-mode INTEROP_MODE] [--bridge-from DIR] [--bridge-source-framework BRIDGE_SOURCE_FRAMEWORK] [--bridge-check] [--bridge-refresh] [--revert-migration] [--version] [--no-backup] [--list-backups] [--restore-backup TIMESTAMP] [--add-fence-markers PATH] [--in-place]
 .SH DESCRIPTION
 .PP
 Generate a complete agent team for any project.
@@ -27,6 +27,9 @@ Output directory for agent files. Default: <project>/.github/agents/ (copilot\-v
 .B \-\-dry\-run
 Show what would be generated without writing files
 .TP
+.B \-\-json
+With \-\-dry\-run: emit the per\-file action plan as a single JSON document on stdout (no\-op without \-\-dry\-run).
+.TP
 .B \-\-overwrite
 Overwrite existing agent files unconditionally (full\-file replacement). Use \-\-merge instead to preserve user\-authored content in fenced files.
 .TP
@@ -43,7 +46,7 @@ Disable project directory scanning
 OFF by default. When set, emit references/model\-routing.json — a framework\-neutral per\-agent model\-tier contract (governance agents \-> 'cheap', producers/experts \-> 'primary'). Generated agent files are unchanged either way; this only adds the opt\-in contract artifact.
 .TP
 .B \-\-update
-Re\-render drifted files and emit new agents added to the taxonomy. Preserves manually\-filled \\(lCMANUAL:*\\(rC values from existing files. Removed agents are reported but not deleted (use \-\-prune to remove them).
+Re\-render drifted files and emit new agents added to the taxonomy. Default behavior merges only template\-fenced regions, preserving all user\-authored content outside fence markers (same as \-\-update \-\-merge). Use \-\-update \-\-overwrite to fully re\-render existing files, replacing user\-authored content (requires security clearance). Preserves manually\-filled \\(lCMANUAL:*\\(rC values from existing files. Removed agents are reported but not deleted (use \-\-prune to remove them).
 .TP
 .B \-\-prune
 Used with \-\-update: also delete agent files that are no longer part of the team.
@@ -51,11 +54,23 @@ Used with \-\-update: also delete agent files that are no longer part of the tea
 .B \-\-check
 Check for template drift and structural changes without writing any files (exit code 1 if drift or structural changes are detected)
 .TP
+.B \-\-refresh\-index
+Rebuild references/memory\-index.json only (no template emit/update). Useful after editing work summaries or docs.
+.TP
+.B \-\-query\-index TEXT
+Query references/memory\-index.json and print ranked hits. Requires a pre\-existing index in the output directory.
+.TP
+.B \-\-query\-k N
+Number of ranked results to return with \-\-query\-index (default: 5).
+.TP
 .B \-\-scan\-security
 Scan generated agent files for security issues (PII, credentials, unresolved placeholders)
 .TP
 .B \-\-self
 Operate on the module's own agent team using .github/agents/_build\-description.json
+.TP
+.B \-\-allow\-external\-self\-output
+Permit \-\-self to write self\-maintenance artifacts to an \-\-output path outside the AgentTeamsModule source tree. Required to prevent accidental writes into consumer repositories.
 .TP
 .B \-\-post\-audit
 Run a post\-generation audit after emit. Performs static checks (unresolved placeholders, YAML integrity, required\-agent coverage) and, if the `gh` CLI is authenticated, an AI\-powered conflict and presupposition review via GitHub Models (Claude Sonnet 4.6).
@@ -116,6 +131,12 @@ List available backups for the target output directory and exit.
 .TP
 .B \-\-restore\-backup TIMESTAMP
 Restore a previously created backup into the output directory. Pass the timestamp label shown by \-\-list\-backups, or 'latest' to restore the most recent backup.
+.TP
+.B \-\-add\-fence\-markers PATH
+Retrofit canonical AGENTTEAMS:BEGIN/END fence markers around PATH's existing body so it becomes eligible for future merge\-mode \-\-update runs. Default mode writes a non\-destructive sidecar <name>.fenced.md; pair with \-\-in\-place to rewrite PATH directly (requires \-\-yes; creates a timestamped backup first). Idempotent on already\-fenced files.
+.TP
+.B \-\-in\-place
+With \-\-add\-fence\-markers: rewrite the target file directly instead of producing a sidecar. Requires \-\-yes; a timestamped backup is written under .agentteams\-backups/ before the rewrite.
 .SH EXIT STATUS
 .TP
 .B 0

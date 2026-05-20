@@ -168,6 +168,12 @@ def _build_parser() -> argparse.ArgumentParser:
         action="store_true",
         help="Show what would be generated without writing files",
     )
+    parser.add_argument(
+        "--json",
+        action="store_true",
+        help="With --dry-run: emit the per-file action plan as a single JSON "
+             "document on stdout (no-op without --dry-run).",
+    )
     overwrite_group = parser.add_mutually_exclusive_group()
     overwrite_group.add_argument(
         "--overwrite",
@@ -441,6 +447,30 @@ def _build_parser() -> argparse.ArgumentParser:
             "to restore the most recent backup."
         ),
     )
+    parser.add_argument(
+        "--add-fence-markers",
+        metavar="PATH",
+        dest="add_fence_markers",
+        default=None,
+        help=(
+            "Retrofit canonical AGENTTEAMS:BEGIN/END fence markers around "
+            "PATH's existing body so it becomes eligible for future merge-mode "
+            "--update runs. Default mode writes a non-destructive sidecar "
+            "<name>.fenced.md; pair with --in-place to rewrite PATH directly "
+            "(requires --yes; creates a timestamped backup first). Idempotent "
+            "on already-fenced files."
+        ),
+    )
+    parser.add_argument(
+        "--in-place",
+        action="store_true",
+        dest="add_fence_markers_in_place",
+        help=(
+            "With --add-fence-markers: rewrite the target file directly instead "
+            "of producing a sidecar. Requires --yes; a timestamped backup is "
+            "written under .agentteams-backups/ before the rewrite."
+        ),
+    )
     return parser
 
 
@@ -452,6 +482,46 @@ def main(argv: list[str] | None = None) -> int:
     parser = _build_parser()
     args = parser.parse_args(argv)
     _validate_option_combinations(parser, args)
+
+    # -----------------------------------------------------------------------
+    # --add-fence-markers: standalone file-retrofit (no description needed).
+    # Plan 4 of the W21 --update improvements.
+    # -----------------------------------------------------------------------
+    if args.add_fence_markers is not None:
+        from agentteams.fence_inject import inject_fence_markers
+        target_path = Path(args.add_fence_markers)
+        if not target_path.exists():
+            print(f"Error: file not found: {target_path}", file=sys.stderr)
+            return 1
+        if args.add_fence_markers_in_place and not args.yes:
+            print(
+                "Error: --in-place requires --yes (this rewrites the file; a "
+                "backup is created first).",
+                file=sys.stderr,
+            )
+            return 1
+        try:
+            mode = "in-place" if args.add_fence_markers_in_place else "sidecar"
+            result = inject_fence_markers(
+                target_path, mode=mode,
+                confirm_in_place=args.add_fence_markers_in_place,
+            )
+        except (FileNotFoundError, ValueError) as exc:
+            print(f"Error: {exc}", file=sys.stderr)
+            return 1
+        if not result.injected:
+            print(f"  ✓  Already fenced; no changes: {target_path}")
+        elif mode == "sidecar":
+            print(
+                f"  ✓  Wrote sidecar with fence id {result.fence_id!r}: "
+                f"{result.output_path}"
+            )
+        else:
+            print(
+                f"  ✓  Rewrote in place with fence id {result.fence_id!r}; "
+                f"backup at {result.backup_path}"
+            )
+        return 0
 
     # -----------------------------------------------------------------------
     # --self: redirect to the module's own build description
@@ -971,6 +1041,9 @@ def main(argv: list[str] | None = None) -> int:
             emit.backup_output_dir(
                 output_dir,
                 files_to_backup=[rel for rel, _ in update_rendered],
+                reason="overwrite-mode" if args.overwrite else "pre-update",
+                framework=framework_id,
+                description_path=str(args.description) if args.description else None,
             )
 
         # Migrate any inline log tables to CSV before writing
@@ -992,6 +1065,11 @@ def main(argv: list[str] | None = None) -> int:
             yes=args.yes,
         )
         emit.print_summary(result, manifest)
+        if args.dry_run and result.dry_run_report is not None:
+            emit.print_dry_run_report(
+                result, manifest,
+                fmt="json" if args.json else "text",
+            )
 
         # ------------------------------------------------------------------
         # Post-generation audit (--update path)
@@ -1162,6 +1240,9 @@ def main(argv: list[str] | None = None) -> int:
         emit.backup_output_dir(
             output_dir,
             files_to_backup=[rel for rel, _ in final_rendered],
+            reason="pre-overwrite" if args.overwrite else "merge-overwrite-fenced",
+            framework=framework_id,
+            description_path=str(args.description) if args.description else None,
         )
 
     # Migrate any inline log tables to CSV before a merge run
@@ -1183,6 +1264,11 @@ def main(argv: list[str] | None = None) -> int:
         yes=args.yes,
     )
     emit.print_summary(result, manifest)
+    if args.dry_run and result.dry_run_report is not None:
+        emit.print_dry_run_report(
+            result, manifest,
+            fmt="json" if args.json else "text",
+        )
 
     # -----------------------------------------------------------------------
     # Step 8.5: Post-generation audit (if --post-audit)
