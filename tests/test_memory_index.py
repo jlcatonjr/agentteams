@@ -326,6 +326,32 @@ def test_query_index_cli_mode_returns_1_when_no_hits(tmp_path):
     assert rc == 1
 
 
+def test_read_memory_index_rejects_schema_invalid_shape(tmp_path):
+    output_dir = tmp_path / ".github" / "agents"
+    index_dir = output_dir / "references"
+    index_dir.mkdir(parents=True)
+    # Missing required keys such as "documents" and "postings".
+    (index_dir / "memory-index.json").write_text('{"N": 1, "avgdl": 1.0}', encoding="utf-8")
+
+    with pytest.raises(build_team.MemoryIndexError, match="schema validation"):
+        build_team._read_memory_index(output_dir)
+
+
+def test_run_query_index_raises_memoryindexerror_on_invalid_shape(tmp_path):
+    output_dir = tmp_path / ".github" / "agents"
+    index_dir = output_dir / "references"
+    index_dir.mkdir(parents=True)
+    (index_dir / "memory-index.json").write_text('{"N": 1, "avgdl": 1.0}', encoding="utf-8")
+
+    manifest = {
+        "project_name": "P",
+        "framework": "copilot-vscode",
+        "existing_project_path": str(tmp_path),
+    }
+    with pytest.raises(build_team.MemoryIndexError, match="schema validation"):
+        build_team._run_query_index(manifest, output_dir, "drift detection", 3)
+
+
 def test_main_refresh_index_writes_index_without_emit(tmp_path):
     brief = EXAMPLES_DIR / "data-pipeline" / "brief.json"
     if not brief.exists():
@@ -553,3 +579,25 @@ def test_query_index_backward_compat_with_11_index(tmp_path):
     assert len(hit["snippets"]) == 1
     assert hit["snippet"] == hit["snippets"][0]
     assert hit["snippet"]  # non-empty
+
+
+def test_query_index_vector_strategy_returns_results(tmp_path):
+    a = tmp_path / "drift.md"
+    a.write_text("# Drift\n\nDrift detection compares template hashes to a baseline.\n" * 4)
+    b = tmp_path / "handoff.md"
+    b.write_text("# Handoff\n\nTyped handoff payloads validate against schemas.\n")
+
+    idx = build_memory_index([a, b])
+    hits = query_index(idx, "drift baseline template", strategy="vector")
+
+    assert hits, "vector strategy returned no hits for present terms"
+    assert hits[0]["title"] == "Drift"
+
+
+def test_query_index_rejects_unknown_strategy(tmp_path):
+    a = tmp_path / "alpha.md"
+    a.write_text("# Alpha\n\nOne document with content.\n")
+    idx = build_memory_index([a])
+
+    with pytest.raises(ValueError, match="Unknown query strategy"):
+        query_index(idx, "alpha content", strategy="unknown")

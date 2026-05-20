@@ -262,16 +262,48 @@ def is_index_stale(index: dict[str, Any], sources: Iterable[Path | str]) -> bool
     return latest_source_ts > built_ts
 
 
-def query_index(index: dict[str, Any], query: str, *, k: int = 5) -> list[dict[str, Any]]:
-    """Return the top-*k* documents for *query* by BM25 score. Deterministic
-    tie-break on (-score, doc_id) so callers see a stable ordering.
+def _ranked_hits(
+    index: dict[str, Any],
+    ranked: list[tuple[int, float]],
+    *,
+    q_terms: list[str],
+    idf_map: dict[str, float],
+) -> list[dict[str, Any]]:
+    """Format ranked doc_ids into API hit records with dynamic snippets."""
+    docs = index["documents"]
+    out: list[dict[str, Any]] = []
+    for doc_id, score in ranked:
+        d = docs[doc_id]
+        stored_paragraphs: list[str] = d.get("paragraphs", [])
+        if stored_paragraphs and q_terms:
+            para_scores = [
+                (_score_paragraph(p, q_terms, idf_map), i, p)
+                for i, p in enumerate(stored_paragraphs)
+            ]
+            para_scores.sort(key=lambda x: (-x[0], x[1]))
+            best_snippets = [p for _, _, p in para_scores[:_SNIPPETS_PER_HIT]]
+            seen: set[str] = set()
+            distinct_snippets: list[str] = []
+            for s in best_snippets:
+                if s not in seen:
+                    seen.add(s)
+                    distinct_snippets.append(s[:240])
+            snippets = distinct_snippets or [d["snippet"]]
+        else:
+            snippets = [d["snippet"]]
+        out.append({
+            "doc_id": doc_id,
+            "path": d["path"],
+            "title": d["title"],
+            "score": round(score, 6),
+            "snippet": snippets[0],
+            "snippets": snippets,
+        })
+    return out
 
-    Each result includes:
-    - ``snippet``: best-matching passage (dynamic; from stored paragraphs when
-      available, falling back to the static stored snippet for ``"1.1"`` indexes).
-    - ``snippets``: up to ``_SNIPPETS_PER_HIT`` best-matching passages (same
-      fallback rule; always a list of at least one string when a hit is returned).
-    """
+
+def _query_index_lexical(index: dict[str, Any], query: str, *, k: int = 5) -> list[dict[str, Any]]:
+    """Return top-*k* hits using BM25 lexical ranking."""
     n = index.get("N", 0)
     if n == 0:
         return []
@@ -282,7 +314,6 @@ def query_index(index: dict[str, Any], query: str, *, k: int = 5) -> list[dict[s
     if not q_terms:
         return []
 
-    # Build IDF map once for reuse in per-paragraph scoring.
     idf_map: dict[str, float] = {}
     scores: dict[int, float] = {}
     for term in q_terms:
@@ -297,38 +328,82 @@ def query_index(index: dict[str, Any], query: str, *, k: int = 5) -> list[dict[s
             scores[doc_id] = scores.get(doc_id, 0.0) + idf * (tf * (_K1 + 1.0) / denom)
 
     ranked = sorted(scores.items(), key=lambda kv: (-kv[1], kv[0]))[:k]
-    out: list[dict[str, Any]] = []
-    for doc_id, score in ranked:
-        d = docs[doc_id]
-        stored_paragraphs: list[str] = d.get("paragraphs", [])
-        if stored_paragraphs and q_terms:
-            # Dynamic passage scoring: rank each stored paragraph.
-            para_scores = [
-                (_score_paragraph(p, q_terms, idf_map), i, p)
-                for i, p in enumerate(stored_paragraphs)
-            ]
-            para_scores.sort(key=lambda x: (-x[0], x[1]))
-            best_snippets = [p for _, _, p in para_scores[:_SNIPPETS_PER_HIT]]
-            # Ensure snippets are distinct; preserve order.
-            seen: set[str] = set()
-            distinct_snippets: list[str] = []
-            for s in best_snippets:
-                if s not in seen:
-                    seen.add(s)
-                    distinct_snippets.append(s[:240])
-            snippets = distinct_snippets or [d["snippet"]]
-        else:
-            # Backward-compat: 1.1 index has no paragraphs field.
-            snippets = [d["snippet"]]
-        out.append({
-            "doc_id": doc_id,
-            "path": d["path"],
-            "title": d["title"],
-            "score": round(score, 6),
-            "snippet": snippets[0],
-            "snippets": snippets,
-        })
-    return out
+    return _ranked_hits(index, ranked, q_terms=q_terms, idf_map=idf_map)
+
+
+def _query_index_vector(index: dict[str, Any], query: str, *, k: int = 5) -> list[dict[str, Any]]:
+    """Return top-*k* hits using a deterministic sparse vector-space scorer.
+
+    This provides an optional vector-space retrieval mode without adding heavy
+    dependencies. Lexical BM25 remains the default query strategy.
+    """
+    n = index.get("N", 0)
+    if n == 0:
+        return []
+    docs = index["documents"]
+    postings = index["postings"]
+    q_tokens = _tokenize(query)
+    if not q_tokens:
+        return []
+
+    q_tf: dict[str, int] = {}
+    for t in q_tokens:
+        if t in postings:
+            q_tf[t] = q_tf.get(t, 0) + 1
+    if not q_tf:
+        return []
+
+    idf_map: dict[str, float] = {}
+    q_weights: dict[str, float] = {}
+    q_norm_sq = 0.0
+    for term, tfq in q_tf.items():
+        df = len(postings[term])
+        idf = math.log(1.0 + (n - df + 0.5) / (df + 0.5))
+        idf_map[term] = idf
+        wq = tfq * idf
+        q_weights[term] = wq
+        q_norm_sq += wq * wq
+    if q_norm_sq == 0.0:
+        return []
+    q_norm = math.sqrt(q_norm_sq)
+
+    dot: dict[int, float] = {}
+    doc_norm_sq: dict[int, float] = {}
+    for term, wq in q_weights.items():
+        for entry in postings[term]:
+            doc_id = entry["doc_id"]
+            wd = entry["tf"] * idf_map[term]
+            dot[doc_id] = dot.get(doc_id, 0.0) + (wd * wq)
+            doc_norm_sq[doc_id] = doc_norm_sq.get(doc_id, 0.0) + (wd * wd)
+
+    scores: dict[int, float] = {}
+    for doc_id, d in dot.items():
+        denom = math.sqrt(doc_norm_sq.get(doc_id, 0.0)) * q_norm
+        if denom > 0.0:
+            scores[doc_id] = d / denom
+
+    ranked = sorted(scores.items(), key=lambda kv: (-kv[1], kv[0]))[:k]
+    return _ranked_hits(index, ranked, q_terms=list(q_weights.keys()), idf_map=idf_map)
+
+
+def query_index(
+    index: dict[str, Any],
+    query: str,
+    *,
+    k: int = 5,
+    strategy: str = "lexical",
+) -> list[dict[str, Any]]:
+    """Return the top-*k* documents for *query*.
+
+    Strategies:
+    - ``"lexical"``: BM25 lexical scoring (default).
+    - ``"vector"``: sparse vector-space cosine scoring (deterministic, stdlib-only).
+    """
+    if strategy == "lexical":
+        return _query_index_lexical(index, query, k=k)
+    if strategy == "vector":
+        return _query_index_vector(index, query, k=k)
+    raise ValueError(f"Unknown query strategy: {strategy!r}")
 
 
 __all__ = [

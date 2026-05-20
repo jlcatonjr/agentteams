@@ -2822,9 +2822,35 @@ def _read_memory_index(output_dir: Path) -> dict[str, object]:
             f"memory index not found at {index_path}; run --refresh-index or --update first"
         )
     try:
-        return json.loads(index_path.read_text(encoding="utf-8"))
+        index = json.loads(index_path.read_text(encoding="utf-8"))
     except (OSError, json.JSONDecodeError) as exc:
         raise MemoryIndexError(f"failed reading memory index at {index_path}: {exc}") from exc
+    _validate_memory_index_schema(index)
+    return index
+
+
+def _validate_memory_index_schema(index: dict[str, object]) -> None:
+    """Validate a parsed memory-index payload against its schema.
+
+    Query-mode reads must validate shape so malformed payloads fail with a
+    controlled ``MemoryIndexError`` instead of surfacing raw ``KeyError`` from
+    downstream ranking logic.
+    """
+    import jsonschema
+
+    schema_path = Path(__file__).resolve().parent / "schemas" / "memory-index.schema.json"
+    try:
+        schema = json.loads(schema_path.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError) as exc:
+        raise MemoryIndexError(
+            f"memory-index schema unavailable ({schema_path}): {exc}"
+        ) from exc
+    try:
+        jsonschema.validate(index, schema)
+    except jsonschema.ValidationError as exc:
+        raise MemoryIndexError(
+            f"memory index failed schema validation: {exc.message}"
+        ) from exc
 
 
 def _run_refresh_index(manifest: dict, output_dir: Path) -> int:
