@@ -14,6 +14,7 @@ agentteams [--description PATH] [--project PATH] [--framework NAME]
            [--bridge-check] [--bridge-refresh]
            [--dry-run] [--overwrite] [--merge] [--yes]
            [--no-scan] [--update] [--prune] [--check]
+           [--refresh-index] [--query-index TEXT] [--query-k N]
            [--scan-security] [--self] [--post-audit] [--auto-correct] [--enrich]
            [--no-backup] [--list-backups] [--restore-backup TIMESTAMP]
            [--security-offline] [--security-max-items N] [--security-no-nvd]
@@ -153,9 +154,11 @@ Global exclusions:
 - `--auto-correct` requires `--post-audit`.
 - `--prune` requires `--update`.
 - `--bridge-check` cannot be combined with `--bridge-refresh`.
+- `--refresh-index` and `--query-index` are mutually exclusive.
+- `--query-k` must be `>= 1`.
 
 Excluded with `--convert-from`, `--interop-from`, or `--bridge-from`:
-- `--description`, `--project`, `--self`, `--no-scan`, `--update`, `--prune`, `--check`, `--scan-security`, `--post-audit`, `--auto-correct`, `--enrich`, `--merge`, `--migrate`, `--revert-migration`, `--list-backups`, `--restore-backup`
+- `--description`, `--project`, `--self`, `--no-scan`, `--update`, `--prune`, `--check`, `--refresh-index`, `--query-index`, `--scan-security`, `--post-audit`, `--auto-correct`, `--enrich`, `--merge`, `--migrate`, `--revert-migration`, `--list-backups`, `--restore-backup`
 
 ### `--dry-run`
 
@@ -194,6 +197,18 @@ Used with `--update`: also delete agent files that are no longer part of the tea
 Check for template drift and structural changes without writing any files. Exits with code `1` if drift or structural changes are detected, `0` otherwise. Suitable for CI gates.
 
 When the structural diff reports a manifest-promotion event (manifest fingerprint changed, fingerprint unavailable, or `fingerprint_algo_version` bumped), `--check` runs the full render pipeline in memory and reconciles each promoted file against its on-disk content; fingerprint-only promotions whose rendered output matches disk byte-for-byte are demoted back to unchanged. `--check` and `--update --dry-run` report the same `has_changes` set for the same inputs.
+
+### `--refresh-index`
+
+Rebuild only `references/memory-index.json` in the output directory. This mode does not emit/update agent templates and is intended for fast memory-index refresh after editing source history documents (for example `workSummaries/`, `CHANGELOG.md`, `README.md`, `docs_src/*.md`, or `references/*.md`).
+
+### `--query-index TEXT`
+
+Query an existing `references/memory-index.json` and print ranked hits (title, path, score, snippet). Exits `0` when at least one hit is found and `1` when no matches are found.
+
+### `--query-k N`
+
+Number of ranked results to return with `--query-index`. Default: `5`.
 
 ### `--scan-security`
 

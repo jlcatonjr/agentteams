@@ -10,6 +10,8 @@
     "memory_index_schema_version",
     "project_name",
     "framework",
+    "built_at",
+    "source_count",
     "documents",
     "postings",
     "avgdl",
@@ -20,18 +22,29 @@
     "memory_index_schema_version": { "type": "string", "minLength": 1 },
     "project_name": { "type": "string" },
     "framework": { "type": "string" },
+    "built_at": {
+      "type": "string",
+      "pattern": "^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}(\\.\\d+)?Z$"
+    },
+    "source_count": { "type": "integer", "minimum": 0 },
     "documents": {
       "type": "array",
       "items": {
         "type": "object",
         "additionalProperties": false,
-        "required": ["doc_id", "path", "title", "length", "snippet"],
+        "required": ["doc_id", "path", "title", "length", "snippet", "paragraphs", "source_mtime"],
         "properties": {
           "doc_id": { "type": "integer", "minimum": 0 },
           "path": { "type": "string" },
           "title": { "type": "string" },
           "length": { "type": "integer", "minimum": 0 },
-          "snippet": { "type": "string" }
+          "snippet": { "type": "string" },
+          "paragraphs": {
+            "type": "array",
+            "items": { "type": "string" },
+            "description": "Substantive paragraphs extracted at build time for dynamic query-time passage scoring (I2). Up to 20 entries; each truncated at 480 characters."
+          },
+          "source_mtime": { "type": "number", "minimum": 0 }
         }
       }
     },

@@ -5,7 +5,7 @@
 Read this guide if you:
 
 - Need to bring an existing agent team up to date after template changes
-- Want to understand what `--update --merge` does step-by-step before running it on a production team
+- Want to understand what `--update` (default merge mode) does step-by-step before running it on a production team
 - Have diverged agent content and need to reconcile manual edits with a fresh template render
 - Want to understand when and how backups are created and how to restore from them
 - Use `--check` to test freshness without committing to a write
@@ -92,6 +92,20 @@ git add .github/agents/
 git commit -m "chore: update agent team to latest templates"
 ```
 
+### Optional: Fast Memory-Index Refresh
+
+If you only changed history/reference sources (for example `workSummaries/`, `CHANGELOG.md`, `README.md`, `docs_src/*.md`, or `references/*.md`) and you want retrieval updates without running full template update, rebuild just the index:
+
+```bash
+agentteams --description brief.json --refresh-index
+```
+
+To inspect relevance quickly from the CLI:
+
+```bash
+agentteams --description brief.json --query-index "security gate overwrite clearance" --query-k 5
+```
+
 ---
 
 ## Drift Detection (`--check`)
@@ -169,7 +183,7 @@ Restores all backup files from the specified timestamp to their original paths, 
 ### Disabling Backups
 
 ```bash
-agentteams --description brief.json --update --merge --no-backup
+agentteams --description brief.json --update --no-backup
 ```
 
 Use `--no-backup` only in automated pipelines where you have external version control as your safety net (e.g., git-managed source with a clean working tree before each run).
@@ -201,6 +215,9 @@ Use `--dry-run` first to review what would be pruned, and ensure version-control
 | `--overwrite` | Replace entire output file (use when full regeneration is needed) |
 | `--dry-run` | Show what would change without writing |
 | `--check` | Read-only freshness check; exit 1 if any file is stale |
+| `--refresh-index` | Rebuild only `references/memory-index.json` |
+| `--query-index` | Query memory-index and print ranked matches |
+| `--query-k` | Limit result count for `--query-index` |
 | `--no-backup` | Skip backup creation |
 | `--list-backups` | List available backups for the output directory |
 | `--restore-backup TIMESTAMP` | Restore all backups from a given timestamp |

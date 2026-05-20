@@ -25,6 +25,9 @@ Options:
                           Preserves manually-filled {MANUAL:*} values. Reports removed agents.
     --prune               Used with --update: also delete agents removed from the taxonomy.
     --check               Check for template drift and structural changes (exit code 1 if found)
+    --refresh-index       Rebuild references/memory-index.json only
+    --query-index TEXT    Query references/memory-index.json and print ranked hits
+    --query-k N           Number of ranked results returned by --query-index (default: 5)
     --scan-security       Scan agent files for security issues
     --auto-correct        After post-audit findings, invoke standalone `copilot` CLI to repair files
     --migrate             One-step legacy fencing migration: tag the current state as
@@ -218,6 +221,33 @@ def _build_parser() -> argparse.ArgumentParser:
         action="store_true",
         help="Check for template drift and structural changes without writing any files "
              "(exit code 1 if drift or structural changes are detected)",
+    )
+    parser.add_argument(
+        "--refresh-index",
+        action="store_true",
+        dest="refresh_index",
+        help=(
+            "Rebuild references/memory-index.json only (no template emit/update). "
+            "Useful after editing work summaries or docs."
+        ),
+    )
+    parser.add_argument(
+        "--query-index",
+        metavar="TEXT",
+        dest="query_index",
+        default=None,
+        help=(
+            "Query references/memory-index.json and print ranked hits. "
+            "Requires a pre-existing index in the output directory."
+        ),
+    )
+    parser.add_argument(
+        "--query-k",
+        metavar="N",
+        dest="query_k",
+        type=int,
+        default=5,
+        help="Number of ranked results to return with --query-index (default: 5).",
     )
     parser.add_argument(
         "--scan-security",
@@ -595,6 +625,23 @@ def main(argv: list[str] | None = None) -> int:
         report = scan.scan_directory(output_dir)
         scan.print_scan_report(report)
         return 1 if report.has_issues else 0
+
+    # -----------------------------------------------------------------------
+    # Step 4c: Handle memory-index utility modes (no template rendering)
+    # -----------------------------------------------------------------------
+    if args.refresh_index:
+        try:
+            return _run_refresh_index(manifest, output_dir)
+        except (OSError, MemoryIndexError) as exc:
+            print(f"Memory index refresh failed: {exc}", file=sys.stderr)
+            return 1
+
+    if args.query_index:
+        try:
+            return _run_query_index(manifest, output_dir, args.query_index, args.query_k)
+        except (OSError, MemoryIndexError) as exc:
+            print(f"Memory index query failed: {exc}", file=sys.stderr)
+            return 1
 
     # -----------------------------------------------------------------------
     # Step 4d: Build live security intelligence placeholders
@@ -1416,6 +1463,9 @@ def _run_bridge(
 
 def _validate_option_combinations(parser: argparse.ArgumentParser, args: argparse.Namespace) -> None:
     """Validate explicit incompatible option pairs and mode-specific constraints."""
+    if args.query_k < 1:
+        parser.error("--query-k must be >= 1")
+
     if args.auto_correct and not args.post_audit:
         parser.error("--auto-correct requires --post-audit")
 
@@ -1440,6 +1490,63 @@ def _validate_option_combinations(parser: argparse.ArgumentParser, args: argpars
     if args.bridge_refresh and not args.bridge_from:
         parser.error("--bridge-refresh requires --bridge-from")
 
+    if args.refresh_index and args.query_index:
+        parser.error("--refresh-index and --query-index are mutually exclusive")
+
+    if args.refresh_index:
+        refresh_incompatible = [
+            ("update", "--update"),
+            ("prune", "--prune"),
+            ("check", "--check"),
+            ("scan_security", "--scan-security"),
+            ("post_audit", "--post-audit"),
+            ("auto_correct", "--auto-correct"),
+            ("enrich", "--enrich"),
+            ("migrate", "--migrate"),
+            ("revert_migration", "--revert-migration"),
+            ("list_backups", "--list-backups"),
+            ("restore_backup", "--restore-backup"),
+            ("convert_from", "--convert-from"),
+            ("interop_from", "--interop-from"),
+            ("bridge_from", "--bridge-from"),
+            ("bridge_check", "--bridge-check"),
+            ("bridge_refresh", "--bridge-refresh"),
+        ]
+        for attr, flag in refresh_incompatible:
+            val = getattr(args, attr)
+            if attr == "restore_backup":
+                if val is not None:
+                    parser.error(f"{flag} cannot be used with --refresh-index")
+            elif val:
+                parser.error(f"{flag} cannot be used with --refresh-index")
+
+    if args.query_index:
+        query_incompatible = [
+            ("update", "--update"),
+            ("prune", "--prune"),
+            ("check", "--check"),
+            ("scan_security", "--scan-security"),
+            ("post_audit", "--post-audit"),
+            ("auto_correct", "--auto-correct"),
+            ("enrich", "--enrich"),
+            ("migrate", "--migrate"),
+            ("revert_migration", "--revert-migration"),
+            ("list_backups", "--list-backups"),
+            ("restore_backup", "--restore-backup"),
+            ("convert_from", "--convert-from"),
+            ("interop_from", "--interop-from"),
+            ("bridge_from", "--bridge-from"),
+            ("bridge_check", "--bridge-check"),
+            ("bridge_refresh", "--bridge-refresh"),
+        ]
+        for attr, flag in query_incompatible:
+            val = getattr(args, attr)
+            if attr == "restore_backup":
+                if val is not None:
+                    parser.error(f"{flag} cannot be used with --query-index")
+            elif val:
+                parser.error(f"{flag} cannot be used with --query-index")
+
     convert_incompatible = [
         ("description", "--description"),
         ("project", "--project"),
@@ -1448,6 +1555,8 @@ def _validate_option_combinations(parser: argparse.ArgumentParser, args: argpars
         ("update", "--update"),
         ("prune", "--prune"),
         ("check", "--check"),
+        ("refresh_index", "--refresh-index"),
+        ("query_index", "--query-index"),
         ("scan_security", "--scan-security"),
         ("post_audit", "--post-audit"),
         ("auto_correct", "--auto-correct"),
@@ -1467,6 +1576,8 @@ def _validate_option_combinations(parser: argparse.ArgumentParser, args: argpars
         ("update", "--update"),
         ("prune", "--prune"),
         ("check", "--check"),
+        ("refresh_index", "--refresh-index"),
+        ("query_index", "--query-index"),
         ("scan_security", "--scan-security"),
         ("post_audit", "--post-audit"),
         ("auto_correct", "--auto-correct"),
@@ -1486,6 +1597,8 @@ def _validate_option_combinations(parser: argparse.ArgumentParser, args: argpars
         ("update", "--update"),
         ("prune", "--prune"),
         ("check", "--check"),
+        ("refresh_index", "--refresh-index"),
+        ("query_index", "--query-index"),
         ("scan_security", "--scan-security"),
         ("post_audit", "--post-audit"),
         ("auto_correct", "--auto-correct"),
@@ -2401,6 +2514,7 @@ def _write_model_routing(manifest: dict, output_dir: Path) -> Path:
 
 
 MEMORY_INDEX_REL_PATH = "references/memory-index.json"
+MEMORY_INDEX_EXTRA_DOC_NAMES = ("CHANGELOG.md", "README.md", "build-team-plan.md")
 
 
 class MemoryIndexError(RuntimeError):
@@ -2428,11 +2542,71 @@ def _memory_index_sources(manifest: dict, output_dir: Path) -> list[Path]:
     if ws.exists() and ws.is_dir():
         sources.extend(sorted(ws.rglob("*.md")))
     # Top-level durable docs.
-    for name in ("CHANGELOG.md", "README.md"):
+    for name in MEMORY_INDEX_EXTRA_DOC_NAMES:
         p = project_root / name
         if p.exists() and p.is_file():
             sources.append(p)
+    # Additional durable authored docs.
+    docs_src = project_root / "docs_src"
+    if docs_src.exists() and docs_src.is_dir():
+        sources.extend(sorted(docs_src.glob("*.md")))
+    refs = project_root / "references"
+    if refs.exists() and refs.is_dir():
+        sources.extend(sorted(refs.rglob("*.md")))
     return sources
+
+
+def _read_memory_index(output_dir: Path) -> dict[str, object]:
+    """Load and parse references/memory-index.json from output_dir.
+
+    Raises RuntimeError when the file is missing or invalid.
+    """
+    index_path = output_dir / MEMORY_INDEX_REL_PATH
+    if not index_path.exists():
+        raise MemoryIndexError(
+            f"memory index not found at {index_path}; run --refresh-index or --update first"
+        )
+    try:
+        return json.loads(index_path.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError) as exc:
+        raise MemoryIndexError(f"failed reading memory index at {index_path}: {exc}") from exc
+
+
+def _run_refresh_index(manifest: dict, output_dir: Path) -> int:
+    """Rebuild memory-index.json only (no template emit/update path)."""
+    path = _write_memory_index(manifest, output_dir)
+    index = _read_memory_index(output_dir)
+    docs = int(index.get("N", 0))
+    source_count = int(index.get("source_count", 0))
+    print(f"  ✓  Refreshed memory index: {path}")
+    print(f"     Indexed {docs} document(s) from {source_count} source file(s).")
+    return 0
+
+
+def _run_query_index(manifest: dict, output_dir: Path, query: str, k: int) -> int:
+    """Query memory-index.json and print ranked hits."""
+    from agentteams.memory_index import is_index_stale, query_index
+
+    index = _read_memory_index(output_dir)
+    sources = _memory_index_sources(manifest, output_dir)
+    hits = query_index(index, query, k=k)
+
+    print(f"Query: {query!r}")
+    if not hits:
+        print("  No matching documents found.")
+        return 1
+    for idx, hit in enumerate(hits, start=1):
+        print(
+            f"  {idx}. score={hit['score']:.6f}  {hit['title']}\n"
+            f"     path: {hit['path']}\n"
+            f"     snippet: {hit['snippet']}"
+        )
+    if is_index_stale(index, sources):
+        print(
+            "  !  Index appears stale relative to source files. "
+            "Run --refresh-index (or --update) to rebuild."
+        )
+    return 0
 
 
 def _write_memory_index(manifest: dict, output_dir: Path) -> Path:

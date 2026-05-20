@@ -106,6 +106,8 @@ def _stub_core_pipeline(monkeypatch: pytest.MonkeyPatch, framework: str, capture
         ["--update", "--merge"],
         ["--update", "--prune"],
         ["--check"],
+        ["--refresh-index"],
+        ["--query-index", "drift baseline"],
         ["--scan-security"],
         ["--post-audit"],
         ["--post-audit", "--auto-correct"],
@@ -251,6 +253,10 @@ def test_main_post_audit_implicitly_enables_enrich(
         (["--bridge-from", "src", "--bridge-check", "--bridge-refresh"], "cannot be combined"),
         (["--auto-correct", "--description", "brief.json"], "requires --post-audit"),
         (["--prune", "--description", "brief.json"], "can only be used with --update"),
+        (["--refresh-index", "--update", "--description", "brief.json"], "cannot be used with --refresh-index"),
+        (["--query-index", "x", "--update", "--description", "brief.json"], "cannot be used with --query-index"),
+        (["--refresh-index", "--query-index", "x", "--description", "brief.json"], "mutually exclusive"),
+        (["--query-index", "x", "--query-k", "0", "--description", "brief.json"], "--query-k must be >= 1"),
     ],
 )
 def test_main_rejects_incompatible_option_pairs_stderr(

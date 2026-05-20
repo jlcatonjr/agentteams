@@ -5,6 +5,8 @@ from __future__ import annotations
 import hashlib
 import hmac
 import json
+import os
+import time
 from pathlib import Path
 
 import pytest
@@ -13,6 +15,7 @@ import build_team
 from agentteams.memory_index import (
     MEMORY_INDEX_SCHEMA_VERSION,
     build_memory_index,
+    is_index_stale,
     query_index,
 )
 
@@ -36,8 +39,11 @@ def test_build_memory_index_is_schema_valid(tmp_path):
     idx = build_memory_index([a, b], project_name="P", framework="claude")
     jsonschema.Draft7Validator(_schema()).validate(idx)
     assert idx["N"] == 2
+    assert "built_at" in idx
+    assert idx["source_count"] == 2
     assert idx["memory_index_schema_version"] == MEMORY_INDEX_SCHEMA_VERSION
     assert {d["title"] for d in idx["documents"]} == {"Alpha", "Beta"}
+    assert all("source_mtime" in d for d in idx["documents"])
 
 
 def test_query_returns_ranked_documents(tmp_path):
@@ -75,6 +81,19 @@ def test_query_with_no_matching_terms_returns_empty(tmp_path):
     p.write_text("# X\n\nOne narrow topic.\n")
     idx = build_memory_index([p])
     assert query_index(idx, "completely unrelated cryptographic terms") == []
+
+
+def test_is_index_stale_detects_newer_source(tmp_path):
+    src = tmp_path / "daily.md"
+    src.write_text("# Daily\n\nFirst entry.\n")
+    idx = build_memory_index([src])
+    assert not is_index_stale(idx, [src])
+
+    # Force source mtime newer than build timestamp.
+    time.sleep(1)
+    now = time.time()
+    os.utime(src, (now, now))
+    assert is_index_stale(idx, [src])
 
 
 # ----------------------------- writer -----------------------------
@@ -243,6 +262,129 @@ def test_existing_project_path_overrides_output_dir_inference(tmp_path, monkeypa
     )
 
 
+def test_memory_index_sources_include_docs_src_references_and_plan(tmp_path):
+    root = tmp_path / "project"
+    (root / "workSummaries").mkdir(parents=True)
+    (root / "workSummaries" / "daily.md").write_text("# Daily\n\nSummary.\n")
+    (root / "docs_src").mkdir()
+    (root / "docs_src" / "guide.md").write_text("# Guide\n\nHow to update.\n")
+    (root / "references").mkdir()
+    (root / "references" / "policy.md").write_text("# Policy\n\nReference text.\n")
+    (root / "build-team-plan.md").write_text("# Plan\n\nArchitecture notes.\n")
+    output_dir = root / ".github" / "agents"
+    output_dir.mkdir(parents=True)
+
+    manifest = {
+        "project_name": "P",
+        "framework": "copilot-vscode",
+        "existing_project_path": str(root),
+    }
+    sources = build_team._memory_index_sources(manifest, output_dir)
+    source_set = {str(p) for p in sources}
+
+    assert str(root / "workSummaries" / "daily.md") in source_set
+    assert str(root / "docs_src" / "guide.md") in source_set
+    assert str(root / "references" / "policy.md") in source_set
+    assert str(root / "build-team-plan.md") in source_set
+
+
+def test_query_index_cli_mode_returns_results(tmp_path):
+    output_dir = tmp_path / ".github" / "agents"
+    index_dir = output_dir / "references"
+    index_dir.mkdir(parents=True)
+
+    src = tmp_path / "daily.md"
+    src.write_text("# Daily\n\nSecurity gate overwrite guidance was updated.\n")
+    idx = build_memory_index([src], project_name="P", framework="copilot-vscode")
+    (index_dir / "memory-index.json").write_text(json.dumps(idx), encoding="utf-8")
+
+    manifest = {
+        "project_name": "P",
+        "framework": "copilot-vscode",
+        "existing_project_path": str(tmp_path),
+    }
+    rc = build_team._run_query_index(manifest, output_dir, "security overwrite guidance", 3)
+    assert rc == 0
+
+
+def test_query_index_cli_mode_returns_1_when_no_hits(tmp_path):
+    output_dir = tmp_path / ".github" / "agents"
+    index_dir = output_dir / "references"
+    index_dir.mkdir(parents=True)
+
+    src = tmp_path / "daily.md"
+    src.write_text("# Daily\n\nOne narrow topic only.\n")
+    idx = build_memory_index([src], project_name="P", framework="copilot-vscode")
+    (index_dir / "memory-index.json").write_text(json.dumps(idx), encoding="utf-8")
+
+    manifest = {
+        "project_name": "P",
+        "framework": "copilot-vscode",
+        "existing_project_path": str(tmp_path),
+    }
+    rc = build_team._run_query_index(manifest, output_dir, "unrelated cryptographic terms", 3)
+    assert rc == 1
+
+
+def test_main_refresh_index_writes_index_without_emit(tmp_path):
+    brief = EXAMPLES_DIR / "data-pipeline" / "brief.json"
+    if not brief.exists():
+        pytest.skip("data-pipeline brief not found")
+
+    project_root = tmp_path
+    output_dir = project_root / ".github" / "agents"
+    (project_root / "workSummaries").mkdir()
+    (project_root / "workSummaries" / "day.md").write_text(
+        "# Daily\n\nRefresh index mode test content.\n"
+    )
+    (project_root / "README.md").write_text("# Readme\n\nProject details.\n")
+
+    rc = build_team.main([
+        "--description", str(brief),
+        "--output", str(output_dir),
+        "--refresh-index",
+        "--yes",
+        "--no-scan",
+        "--security-offline",
+    ])
+    assert rc == 0
+    assert (output_dir / "references" / "memory-index.json").exists()
+
+
+def test_main_query_index_mode_reads_existing_index(tmp_path):
+    brief = EXAMPLES_DIR / "data-pipeline" / "brief.json"
+    if not brief.exists():
+        pytest.skip("data-pipeline brief not found")
+
+    project_root = tmp_path
+    output_dir = project_root / ".github" / "agents"
+    (project_root / "workSummaries").mkdir()
+    (project_root / "workSummaries" / "day.md").write_text(
+        "# Daily\n\nTyped handoff payload validation details.\n"
+    )
+    (project_root / "README.md").write_text("# Readme\n\nProject details.\n")
+
+    assert build_team.main([
+        "--description", str(brief),
+        "--output", str(output_dir),
+        "--refresh-index",
+        "--yes",
+        "--no-scan",
+        "--security-offline",
+    ]) == 0
+
+    rc = build_team.main([
+        "--description", str(brief),
+        "--output", str(output_dir),
+        "--query-index", "typed handoff payload",
+        "--query-k", "3",
+        "--yes",
+        "--no-scan",
+        "--security-offline",
+    ])
+    assert rc == 0
+
+
 def test_navigator_template_carries_nested_index_protocol_with_fallback():
     """F8 nested protocol (audit Correction 3): the navigator template tells
     the agent to query the memory index first, then open the referenced
@@ -258,3 +400,156 @@ def test_navigator_template_carries_nested_index_protocol_with_fallback():
     )
     # Open-the-document step must be present (the "nested" part).
     assert "open" in nav.lower() and "document" in nav.lower()
+
+
+# ---------------------- I2: per-paragraph storage ----------------------
+
+def test_build_memory_index_stores_paragraphs_per_document(tmp_path):
+    """I2: each document entry must include a non-empty paragraphs list."""
+    p = tmp_path / "rich.md"
+    p.write_text(
+        "# Rich Document\n\n"
+        "First paragraph contains unique information about drift detection.\n\n"
+        "Second paragraph describes audit pipeline and behavioral replay.\n\n"
+        "Third paragraph covers template hash comparison for baseline drift.\n"
+    )
+    idx = build_memory_index([p])
+    doc = idx["documents"][0]
+    assert "paragraphs" in doc, "document entry missing 'paragraphs' field (I2)"
+    assert isinstance(doc["paragraphs"], list)
+    assert len(doc["paragraphs"]) >= 2, "expected at least 2 substantive paragraphs"
+    # No paragraph should be empty.
+    assert all(s.strip() for s in doc["paragraphs"])
+
+
+def test_paragraphs_are_substantive_not_headings_or_badges(tmp_path):
+    """I2: _extract_paragraphs must skip headings, badges, tables, boilerplate."""
+    p = tmp_path / "mixed.md"
+    p.write_text(
+        "# Heading\n\n"
+        "[![badge](https://img.shields.io/badge/test-passing-green)]\n\n"
+        "| col1 | col2 |\n|------|------|\n| a    | b    |\n\n"
+        "All notable changes to this project will be documented in this file.\n\n"
+        "This paragraph has enough words to be substantive and carries real content "
+        "about the enrichment pipeline and tool catalog.\n"
+    )
+    idx = build_memory_index([p])
+    paras = idx["documents"][0]["paragraphs"]
+    joined = " ".join(paras)
+    assert "badge" not in joined, "badge line should not appear in paragraphs"
+    assert "col1" not in joined, "table content should not appear in paragraphs"
+    assert "All notable" not in joined, "CHANGELOG boilerplate should not appear in paragraphs"
+    assert "enrichment" in joined, "substantive paragraph should be retained"
+
+
+def test_paragraphs_capped_at_max(tmp_path):
+    """I2: paragraphs are capped at _MAX_PARAGRAPHS_PER_DOC (20)."""
+    from agentteams.memory_index import _MAX_PARAGRAPHS_PER_DOC
+
+    paragraphs = "\n\n".join(
+        f"Paragraph number {i} contains enough distinct substantive words to qualify."
+        for i in range(30)
+    )
+    p = tmp_path / "long.md"
+    p.write_text(f"# Long\n\n{paragraphs}\n")
+    idx = build_memory_index([p])
+    assert len(idx["documents"][0]["paragraphs"]) <= _MAX_PARAGRAPHS_PER_DOC
+
+
+def test_schema_version_is_1_2():
+    assert MEMORY_INDEX_SCHEMA_VERSION == "1.2"
+
+
+def test_schema_requires_paragraphs_field(tmp_path):
+    """Schema 1.2 must require the paragraphs field; validation fails if absent."""
+    import jsonschema
+    p = tmp_path / "a.md"
+    p.write_text("# A\n\nContent here.\n")
+    idx = build_memory_index([p])
+    # Remove paragraphs to trigger schema violation.
+    for doc in idx["documents"]:
+        doc.pop("paragraphs", None)
+    with pytest.raises(jsonschema.ValidationError):
+        import jsonschema
+        jsonschema.Draft7Validator(
+            json.loads(SCHEMA_PATH.read_text(encoding="utf-8"))
+        ).validate(idx)
+
+
+# ---------------------- I9: multi-snippet results ----------------------
+
+def test_query_index_returns_snippets_list(tmp_path):
+    """I9: every query result must include snippets: list[str] with ≥ 1 entry."""
+    a = tmp_path / "a.md"
+    a.write_text(
+        "# Alpha\n\n"
+        "Security audit pipeline covers drift detection baseline.\n\n"
+        "Behavioral replay validates handoff payloads against schema.\n"
+    )
+    idx = build_memory_index([a])
+    hits = query_index(idx, "security drift baseline")
+    assert hits, "expected at least one result"
+    for hit in hits:
+        assert "snippets" in hit, "result missing 'snippets' field (I9)"
+        assert isinstance(hit["snippets"], list)
+        assert len(hit["snippets"]) >= 1
+        # snippet (legacy alias) must equal snippets[0].
+        assert hit["snippet"] == hit["snippets"][0]
+
+
+def test_query_index_snippets_are_query_relevant(tmp_path):
+    """I9: dynamic passage scoring returns the most query-relevant paragraph."""
+    p = tmp_path / "mixed.md"
+    p.write_text(
+        "# Mixed Topics\n\n"
+        "Introduction paragraph without the target terms we are looking for.\n\n"
+        "This paragraph discusses enrichment tool catalog and pipeline registration "
+        "in detail with many relevant terms for the enrichment query.\n\n"
+        "Closing paragraph about unrelated housekeeping items only.\n"
+    )
+    idx = build_memory_index([p])
+    hits = query_index(idx, "enrichment tool catalog pipeline")
+    assert hits
+    # The enrichment paragraph must be in snippets[0] — it's the most relevant.
+    assert "enrichment" in hits[0]["snippets"][0].lower(), (
+        "Dynamic passage scoring should surface the enrichment paragraph first"
+    )
+
+
+def test_query_index_snippets_multi_paragraph(tmp_path):
+    """I9: when a document has multiple relevant paragraphs, snippets has up to 3."""
+    p = tmp_path / "multi.md"
+    p.write_text(
+        "# Multi\n\n"
+        "First relevant paragraph covers drift detection and memory index integration.\n\n"
+        "Second relevant paragraph also covers drift detection behavioral baseline.\n\n"
+        "Third relevant paragraph examines drift detection audit logs.\n\n"
+        "Fourth paragraph is unrelated housekeeping content about file paths.\n"
+    )
+    idx = build_memory_index([p])
+    hits = query_index(idx, "drift detection baseline")
+    assert hits
+    # We have 3 drift paragraphs; snippets should return up to 3 distinct entries.
+    assert len(hits[0]["snippets"]) >= 1
+    from agentteams.memory_index import _SNIPPETS_PER_HIT
+    assert len(hits[0]["snippets"]) <= _SNIPPETS_PER_HIT
+
+
+def test_query_index_backward_compat_with_11_index(tmp_path):
+    """I2/I9 backward compat: a schema-1.1 index (no paragraphs field) returns
+    results where snippet == snippets[0] == the stored static snippet."""
+    p = tmp_path / "old.md"
+    p.write_text("# Old\n\nLegacy content about drift detection pipeline.\n")
+    idx = build_memory_index([p])
+    # Simulate a 1.1 index by stripping paragraphs.
+    for doc in idx["documents"]:
+        doc.pop("paragraphs", None)
+    idx["memory_index_schema_version"] = "1.1"
+
+    hits = query_index(idx, "drift detection pipeline")
+    assert hits, "backward compat: 1.1 index should still return results"
+    hit = hits[0]
+    assert "snippets" in hit
+    assert len(hit["snippets"]) == 1
+    assert hit["snippet"] == hit["snippets"][0]
+    assert hit["snippet"]  # non-empty
