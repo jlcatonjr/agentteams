@@ -12,6 +12,25 @@ Backup behavior is provided by `backup_output_dir()` and by CLI orchestration fl
 
 ## Classes
 
+### `DryRunReport`
+
+> *Source: `agentteams/emit.py`*
+
+Structured preview of what an emit/update would write without performing the write.
+
+Only present when `emit_all(..., dry_run=True)`. Serves as an extension point for Plan 3 shrink-delta notices.
+
+**Attributes:**
+
+- `entries` (`list[DryRunEntry]`) — List of planned write actions, each with:
+  - `action` (`str`) — One of `'write'`, `'merge'`, `'skip'`, `'error'`
+  - `fence_actions` (`list[dict[str, Any]]`) — Details of fenced-section merge actions (if `action == 'merge'`)
+  - `delta_bytes` (`int`) — Estimated byte delta for the operation
+
+- `notices` (`list[str]`) — Human-readable notices for Plan 3 extension (e.g., shrink alerts). Empty by default.
+
+---
+
 ### `EmitResult`
 
 > *Source: `agentteams/emit.py`*
@@ -22,10 +41,12 @@ Results of an emit operation.
 
 - `written` (`list[str]`) — Relative paths of files written successfully.
 - `merged` (`list[str]`) — Relative paths of files updated via fenced-section merge.
-- `unchanged` (`list[str]`) — Relative paths of files whose on-disk content was already identical to the rendered output (no write performed).
+- `unchanged` (`list[str]`) — Relative paths of files whose on-disk content was already identical to the rendered output (no write performed). **Note:** Files in this list were not written (byte-equality check); callers should not count them in result-counting logic.
 - `skipped` (`list[str]`) — Relative paths of files skipped (already up to date or user declined overwrite).
 - `errors` (`list[str]`) — Error messages for any failed writes.
 - `dry_run` (`bool`) — `True` if this result is from a dry-run invocation.
+- `dry_run_report` (`DryRunReport | None`) — Structured dry-run preview (only when `dry_run=True`).
+- `notices` (`list[str]`) — Aggregated notices from all operations (Plan 3 extension point). May include shrink alerts, deprecation warnings, etc.
 
 **Properties:**
 
@@ -47,8 +68,9 @@ Result for a single fenced-content merge operation.
 - `sections_added` (`list[str]`) — Section IDs present in the new render but absent in the existing file.
 - `sections_orphaned` (`list[str]`) — Section IDs present in existing file but absent in new render.
 - `parse_errors` (`list[str]`) — Parse-related error messages from fenced-region extraction/validation.
-- `unchanged` (`list[str]`) — Section IDs that were identical in both files.
+- `unchanged` (`list[str]`) — Section IDs that were identical in both files (no write needed).
 - `merged_content` (`str`) — Final merged file content. Empty string when parse fails.
+- `shrink_notices` (`list[str]`) — Per-section human-readable notices (Plan 3) when a regenerated fence body is materially shorter or less specific than the existing on-disk version. Used for alerting on potential loss of detail during merge.
 
 **Properties:**
 

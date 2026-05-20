@@ -10,6 +10,8 @@ Read this guide if you:
 - Want to understand when and how backups are created and how to restore from them
 - Use `--check` to test freshness without committing to a write
 
+For long-term infrastructure hygiene standards that keep teams compatible with `--update`, see [Update Compatibility Maintenance Guide](update-compatibility-maintenance-guide.md).
+
 ---
 
 ## Core Concepts

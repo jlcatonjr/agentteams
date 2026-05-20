@@ -41,6 +41,7 @@ nav:
       - Security Hardening & Threat Intelligence: security-hardening-guide.md
       - Section Fencing & Safe Merges: section-fencing-guide.md
       - Update Lifecycle, Drift & Backups: update-lifecycle-guide.md
+      - Update Compatibility Maintenance: update-compatibility-maintenance-guide.md
       - Delivery Procedure: delivery-procedure.md
       - Migration Guide: migration-guide.md
       - Interoperability Patterns: interoperability-patterns-guide.md
@@ -55,16 +56,26 @@ nav:
       - analyze: api-reference/analyze.md
       - render: api-reference/render.md
       - emit: api-reference/emit.md
+      - convert: api-reference/convert.md
+      - interop: api-reference/interop.md
+      - bridge: api-reference/bridge.md
       - drift: api-reference/drift.md
+      - behavioral-drift: api-reference/behavioral-drift.md
       - scan: api-reference/scan.md
       - audit: api-reference/audit.md
       - remediate: api-reference/remediate.md
+      - security-refs: api-reference/security-refs.md
       - enrich: api-reference/enrich.md
+      - memory-index: api-reference/memory-index.md
+      - fence-inject: api-reference/fence-inject.md
       - graph: api-reference/graph.md
+      - model-routing: api-reference/model-routing.md
+      - eval-suite: api-reference/eval-suite.md
       - frameworks: api-reference/frameworks.md
       - man: api-reference/man.md
       - handoff_payloads: api-reference/handoff_payloads.md
       - plan_steps: api-reference/plan_steps.md
+      - liaison-logs: api-reference/liaison-logs.md
   - Template Authoring: template-authoring.md
   - Description Format: DESCRIPTION-FORMAT.md
   - Structural Update Plan: structural-update-plan.md

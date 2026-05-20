@@ -1,0 +1,162 @@
+# `model_routing` — AgentTeamsModule
+
+Generate framework-neutral model-routing contracts for agent cost/capability tiering.
+
+Assigns each agent in a team to a tier role (`cheap`, `primary`, `fallback`) based on manifest governance classification. The contract is emitted only when the caller passes `--cost-routing`; this module is pure and never decides on its own.
+
+> *Source: `agentteams/model_routing.py`*
+
+---
+
+## Design Principles
+
+- **Framework-neutral** — Assigns tier *roles*, not concrete model strings
+- **Off by default** — Only emitted when explicitly requested (`--cost-routing` in CLI)
+- **Deterministic** — Pure functions; same manifest always yields same routing
+- **Conservative** — Unknown agents default to `primary` (never downgraded)
+- **Governance-driven** — Tier rule is derived purely from the manifest; no hardcoded archetype lists
+
+---
+
+## Constants
+
+### `ROUTING_SCHEMA_VERSION`
+
+> *Source: `agentteams/model_routing.py`*
+
+Current schema version for routing contract artifacts. Used to detect compatibility between build and consumer versions.
+
+**Type:** `str`  
+**Current value:** `"1.0"`
+
+---
+
+### `MODEL_TIERS`
+
+> *Source: `agentteams/model_routing.py`*
+
+Tuple of recognized tier role names.
+
+**Type:** `tuple[str, ...]`  
+**Value:** `("primary", "cheap", "fallback")`
+
+---
+
+## Functions
+
+### `agent_tier(slug, manifest)`
+
+> *Source: `agentteams/model_routing.py`*
+
+Determine the tier role for a single agent, pure.
+
+**Args:**
+
+- `slug` (`str`) — Agent slug (e.g., `"quality-auditor"`).
+- `manifest` (`dict[str, Any]`) — Team manifest dict from [`analyze.build_manifest()`](analyze.md).
+
+**Returns:** `str` — Tier role: one of `MODEL_TIERS` (`"primary"`, `"cheap"`, `"fallback"`).
+
+**Rule:**
+
+- If `slug` is in `manifest['governance_agents']` → `"cheap"` (read-only, structured, cost-optimizable)
+- Otherwise → `"primary"` (conservative; unknown agents stay on primary tier)
+
+**Notes:**
+
+- No hardcoded archetype list; rule is data-driven from the manifest
+- `"fallback"` is declared in `MODEL_TIERS` but currently not assigned (reserved for future use)
+
+---
+
+### `build_routing_contract(manifest)`
+
+> *Source: `agentteams/model_routing.py`*
+
+Build a framework-neutral model-routing contract dict from a team manifest.
+
+**Args:**
+
+- `manifest` (`dict[str, Any]`) — Team manifest dict from [`analyze.build_manifest()`](analyze.md).
+
+**Returns:** `dict[str, Any]` — Routing contract with keys:
+- `artifact_type`: `"model-routing"`
+- `routing_schema_version`: Current schema version
+- `project_name`: Copied from manifest
+- `framework`: Copied from manifest
+- `tiers`: List of all recognized tier roles (from `MODEL_TIERS`)
+- `assignments`: List of dicts, each with `agent` (slug) and `tier` (role)
+
+**Behavior:**
+
+- Pure function; no network/I/O
+- Processes all agents in `manifest['agent_slug_list']`
+- Order matches the manifest's agent list (stable, deterministic)
+
+---
+
+## Typical Usage
+
+```python
+from agentteams import analyze
+from agentteams.model_routing import build_routing_contract
+
+# Build manifest
+description = {"name": "my-project", ...}
+manifest = analyze.build_manifest(description)
+
+# Generate routing contract (optional; only if cost tiering needed)
+routing = build_routing_contract(manifest)
+
+# Inspect assignments
+for assignment in routing['assignments']:
+    agent, tier = assignment['agent'], assignment['tier']
+    print(f"{agent:30} → {tier}")
+
+# Output example:
+# orchestrator                  → primary
+# @navigator                    → cheap
+# @code-hygiene                 → cheap
+# @primary-producer             → primary
+# @quality-auditor              → primary
+```
+
+---
+
+## Integration with build_team.py
+
+The CLI emits this contract only when `--cost-routing` is passed:
+
+```bash
+python build_team.py --description brief.json --cost-routing
+# Writes: .github/agents/.build-artifacts/model-routing.json
+```
+
+---
+
+## Downstream Consumption
+
+The routing contract is typically consumed by:
+
+1. **VS Code Copilot** — Map tier roles to concrete model strings in settings
+2. **Claude API** — Route governance agents to Claude 3.5 Haiku; domain agents to Claude 3.5 Sonnet
+3. **Cost analysis tools** — Compute expected token costs per tier
+4. **Policy enforcement** — Ensure sensitive agents (auditors, security) stay on premium tiers
+
+The contract does **not** specify concrete models; that's the runtime/adapter's responsibility.
+
+---
+
+## Tier Semantics
+
+| Tier | Semantic | Typical Agents | Model Guidance |
+|------|----------|---|---|
+| `primary` | Default; full capability | orchestrator, primary-producer, domain experts | Latest/largest models (e.g., GPT-4, Claude 3 Sonnet) |
+| `cheap` | Read-only, structured | governance agents (auditors, validators, hygiene checkers) | Smaller/faster models (e.g., GPT-3.5, Claude 3 Haiku) |
+| `fallback` | Reserved | (none currently) | Minimal fallback models or cached responses |
+
+---
+
+## Schema Note
+
+The routing contract schema is not yet released as a standalone `.schema.json`. Follow `routing_schema_version` for version tracking and compatibility checks.

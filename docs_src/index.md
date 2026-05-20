@@ -144,3 +144,15 @@ Comprehensive vulnerability management integrated into every pipeline run. Cover
 - Security governance integration
 
 **Best for:** Security teams, CI/CD maintainers, and air-gapped deployments.
+
+### [Update Compatibility Maintenance Guide](update-compatibility-maintenance-guide.md)
+
+Infrastructure hygiene practices for keeping generated agent teams continuously compatible with `--update` over time. Covers:
+
+- Fence coverage checks and legacy retrofit strategy
+- Safe merge-mode update invocation patterns
+- Outside-fence diff review and backup hygiene
+- CI maintenance cadence for early drift detection
+- Common compatibility failure modes and fast remediation paths
+
+**Best for:** Team maintainers, platform engineers, and repository owners responsible for long-lived agent infrastructure.

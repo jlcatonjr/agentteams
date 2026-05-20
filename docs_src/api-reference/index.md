@@ -15,7 +15,7 @@ This reference defines the **supported public API surface** (documented modules 
 | [`render`](render.md) | Resolve templates and produce rendered agent file content |
 | [`emit`](emit.md) | Write rendered agent files to disk safely |
 
-## Support Modules
+## Core Support Modules
 
 | Module | Role |
 |--------|------|
@@ -23,15 +23,42 @@ This reference defines the **supported public API surface** (documented modules 
 | [`interop`](interop.md) | Canonical Agent Interface (CAI) interop pipeline |
 | [`bridge`](bridge.md) | Lightweight runtime compatibility bridge artifacts |
 | [`drift`](drift.md) | Detect template-to-instance drift for incremental updates |
+| [`behavioral-drift`](behavioral-drift.md) | Detect behavioral divergence in agent runs vs. specification |
+
+## Audit & Security Support
+
+| Module | Role |
+|--------|------|
 | [`scan`](scan.md) | Proactive security scan for generated agent files |
 | [`audit`](audit.md) | Post-generation static and AI-powered audit |
 | [`remediate`](remediate.md) | Auto-correct audit findings via standalone Copilot CLI |
+| [`security-refs`](security-refs.md) | Build live security intelligence placeholders for templates |
+
+## Enhancement & Enrichment
+
+| Module | Role |
+|--------|------|
 | [`enrich`](enrich.md) | Default-value audit and context-aware placeholder enrichment |
+| [`memory-index`](memory-index.md) | Lexical (BM25) search index for work summaries and documentation |
+| [`fence-inject`](fence-inject.md) | Inject and extract fenced-region content from agent files |
+
+## Agent & Team Analysis
+
+| Module | Role |
+|--------|------|
 | [`graph`](graph.md) | Directed graph inference for agent team topology |
+| [`model-routing`](model-routing.md) | Framework-neutral model-routing contracts for cost/capability tiering |
+| [`eval_suite`](eval-suite.md) | Build behavioral evaluation specs for agent team runs |
+
+## Manifest & Documentation
+
+| Module | Role |
+|--------|------|
 | [`frameworks`](frameworks.md) | Per-framework adapter classes |
 | [`man`](man.md) | Generate and validate the project man-page source |
 | [`handoff_payloads`](handoff_payloads.md) | Typed handoff payload substrate for plan `.steps.csv` artifacts |
 | [`plan_steps`](plan_steps.md) | Tolerant reader for plan `.steps.csv` artifacts |
+| [`liaison_logs`](liaison_logs.md) | Cross-repository coordination logs and artifacts |
 
 ---
 
