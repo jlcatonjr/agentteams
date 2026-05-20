@@ -527,10 +527,11 @@ def main(argv: list[str] | None = None) -> int:
     # --self: redirect to the module's own build description
     # -----------------------------------------------------------------------
     if args.self_update:
-        self_desc = _SCRIPT_DIR / ".github" / "agents" / "_build-description.json"
-        if not self_desc.exists():
-            print(f"Error: Self-description not found at {self_desc}", file=sys.stderr)
-            return 1
+        # External-output guard runs FIRST — it does not depend on the
+        # self-description existing, and refusing to write into a foreign
+        # repository is the more meaningful error in that scenario. (Also
+        # makes the test hermetic on CI runners where the self-description
+        # is gitignored and therefore absent.)
         if args.output and not args.dry_run:
             try:
                 resolved_output = Path(args.output).resolve()
@@ -552,6 +553,10 @@ def main(argv: list[str] | None = None) -> int:
                     file=sys.stderr,
                 )
                 return 1
+        self_desc = _SCRIPT_DIR / ".github" / "agents" / "_build-description.json"
+        if not self_desc.exists():
+            print(f"Error: Self-description not found at {self_desc}", file=sys.stderr)
+            return 1
         args.description = str(self_desc)
         args.project = str(_SCRIPT_DIR)
         if not args.output:
