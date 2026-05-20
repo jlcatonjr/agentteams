@@ -2,7 +2,7 @@
 .SH NAME
 agentteams \- Generate a complete agent team for any project.
 .SH SYNOPSIS
-.B agentteams [--description PATH] [--project PATH] [--framework NAME] [--output DIR] [--dry-run] [--json] [--overwrite] [--merge] [--yes] [--no-scan] [--cost-routing] [--update] [--prune] [--check] [--refresh-index] [--query-index TEXT] [--query-k N] [--query-strategy {lexical,vector}] [--scan-security] [--self] [--allow-external-self-output] [--post-audit] [--auto-correct] [--enrich] [--strict-manual-placeholders] [--no-strict-manual-placeholders STRICT_MANUAL_PLACEHOLDERS] [--security-offline] [--security-max-items N] [--security-no-nvd] [--migrate] [--convert-from DIR] [--interop-from DIR] [--interop-source-framework INTEROP_SOURCE_FRAMEWORK] [--interop-mode INTEROP_MODE] [--bridge-from DIR] [--bridge-source-framework BRIDGE_SOURCE_FRAMEWORK] [--bridge-check] [--bridge-refresh] [--revert-migration] [--version] [--no-backup] [--list-backups] [--restore-backup TIMESTAMP] [--add-fence-markers PATH] [--in-place]
+.B agentteams [--description PATH] [--project PATH] [--framework NAME] [--output DIR] [--dry-run] [--json] [--overwrite] [--merge] [--yes] [--no-scan] [--cost-routing] [--update] [--prune] [--check] [--refresh-index] [--query-index TEXT] [--query-k N] [--query-strategy QUERY_STRATEGY] [--scan-security] [--self] [--allow-external-self-output] [--post-audit] [--auto-correct] [--enrich] [--strict-manual-placeholders] [--no-strict-manual-placeholders STRICT_MANUAL_PLACEHOLDERS] [--security-offline] [--security-max-items N] [--security-no-nvd] [--migrate] [--convert-from DIR] [--interop-from DIR] [--interop-source-framework INTEROP_SOURCE_FRAMEWORK] [--interop-mode INTEROP_MODE] [--bridge-from DIR] [--bridge-source-framework BRIDGE_SOURCE_FRAMEWORK] [--bridge-check] [--bridge-refresh] [--revert-migration] [--version] [--no-backup] [--list-backups] [--restore-backup TIMESTAMP] [--add-fence-markers PATH] [--in-place]
 .SH DESCRIPTION
 .PP
 Generate a complete agent team for any project.
@@ -64,7 +64,7 @@ Query references/memory\-index.json and print ranked hits. Requires a pre\-exist
 Number of ranked results to return with \-\-query\-index (default: 5).
 .TP
 .B \-\-query\-strategy {lexical,vector}
-Query strategy for \-\-query\-index: 'lexical' (BM25, default) or 'vector' (cosine similarity, better for semantic/thematic matching). Default: lexical.
+Query strategy for \-\-query\-index: 'lexical' (BM25, default) or 'vector' (cosine similarity, better for semantic/thematic matching).
 .TP
 .B \-\-scan\-security
 Scan generated agent files for security issues (PII, credentials, unresolved placeholders)
