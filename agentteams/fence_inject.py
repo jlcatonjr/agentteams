@@ -9,8 +9,13 @@ Design choices (per the plan):
 - D-1: single fence region wrapping the entire body (default, safety-first).
   Heuristic per-section detection is deliberately out of scope for this pass.
 - D-2: retrofit fence-id naming convention is documented in
-  ``agentteams/templates/PLACEHOLDER-CONVENTIONS.md``. Default id = ``legacy_body``;
-  if that id is already present in the file we append a numeric suffix.
+  ``agentteams/templates/PLACEHOLDER-CONVENTIONS.md``. Default id = ``content``
+  (matches the fence id ``emit._normalize_generated_content`` uses for the
+  default whole-body wrap, so a later ``--update --merge`` against a team that
+  emits the same file replaces in-place cleanly instead of duplicating the
+  body alongside an orphaned ``legacy_body`` fence — a real bug observed in
+  the 2026-05-20 collector-management cross-repo update). If ``content`` is
+  already present in the target file the helper appends a numeric suffix.
 - D-3: default mode is **sidecar** (writes ``<name>.fenced.md`` alongside the
   source). ``in-place`` mode requires the caller to pass ``confirm_in_place=True``
   (CLI gates this behind ``--yes`` and an ``@security`` review) and creates a
@@ -32,7 +37,7 @@ from pathlib import Path
 
 from agentteams.emit import _FENCE_BEGIN_RE, _YAML_FM_RE
 
-DEFAULT_RETROFIT_FENCE_ID = "legacy_body"
+DEFAULT_RETROFIT_FENCE_ID = "content"
 _BACKUP_DIR_NAME = ".agentteams-backups"
 _SAFE_FENCE_ID_RE = re.compile(r"^[a-z][a-z0-9_]*$")
 

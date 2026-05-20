@@ -69,11 +69,12 @@ When the `agentteams --add-fence-markers PATH` helper retrofits a legacy
 (unfenced) file with canonical fence markers, the injected single-region
 fence id follows this rule:
 
-- **Default base id:** `legacy_body`
-- **Collision rule:** if `legacy_body` is already present in the target file
+- **Default base id:** `content` — matches the fence id `emit._normalize_generated_content` uses for its default whole-body wrap. A subsequent `--update --merge` against a team that *does* emit this file will then replace the fenced body in-place instead of leaving a stale `legacy_body` block and appending a duplicate `content` block (a real bug observed in the 2026-05-20 collector-management cross-repo update).
+- **Collision rule:** if `content` is already present in the target file
   (idempotent re-run, or hand-authored fences) the helper picks the smallest
-  available `legacy_body_<n>` for integer `n >= 1`.
+  available `content_<n>` for integer `n >= 1`.
 - **Id charset:** must match `^[a-z][a-z0-9_]*$` (same as every other fence id).
+- **Migration note:** files retrofitted by an older agentteams (`legacy_body` default) should be re-fenced — sed `s/AGENTTEAMS:BEGIN legacy_body /AGENTTEAMS:BEGIN content /` + matching END — before the next `--update --merge` to avoid the duplication mode.
 
 This convention is enforced by `agentteams/fence_inject.py::_unique_fence_id`
 and pinned by `tests/test_fence_inject.py`.

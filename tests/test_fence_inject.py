@@ -16,7 +16,7 @@ from agentteams.emit import _FENCE_BEGIN_RE, _extract_fenced_regions
 
 # ---------------- 1. single-region default (sidecar wraps body) ----------------
 
-def test_sidecar_default_wraps_body_with_single_legacy_body_fence(tmp_path):
+def test_sidecar_default_wraps_body_with_single_content_fence(tmp_path):
     src = tmp_path / "pipeline-graph.md"
     src.write_text("# Pipeline Graph\n\nA -> B -> C\n", encoding="utf-8")
     r = inject_fence_markers(src)
@@ -87,16 +87,31 @@ def test_already_fenced_file_is_no_op(tmp_path):
     assert not (tmp_path / "fenced.fenced.md").exists()
 
 
-def test_collision_picks_legacy_body_suffix(tmp_path):
-    """If 'legacy_body' is already taken, the helper picks legacy_body_1 etc."""
-    # Construct a file that has 'legacy_body' as a manually-authored fence but
-    # no other fence — actually any existing fence triggers the idempotent
-    # no-op path; to exercise _unique_fence_id we call it directly.
+def test_collision_picks_content_suffix(tmp_path):
+    """If the default retrofit id ('content', matching emit's default-wrap id)
+    is already taken, the helper picks content_1 etc. — verified directly via
+    _unique_fence_id since any existing fence triggers the idempotent no-op
+    path in inject_fence_markers."""
     from agentteams.fence_inject import _unique_fence_id
-    text = "<!-- AGENTTEAMS:BEGIN legacy_body v=1 -->\nx\n<!-- AGENTTEAMS:END legacy_body -->\n"
-    assert _unique_fence_id(text) == "legacy_body_1"
-    text2 = text + "<!-- AGENTTEAMS:BEGIN legacy_body_1 v=1 -->\ny\n<!-- AGENTTEAMS:END legacy_body_1 -->\n"
-    assert _unique_fence_id(text2) == "legacy_body_2"
+    text = "<!-- AGENTTEAMS:BEGIN content v=1 -->\nx\n<!-- AGENTTEAMS:END content -->\n"
+    assert _unique_fence_id(text) == "content_1"
+    text2 = text + "<!-- AGENTTEAMS:BEGIN content_1 v=1 -->\ny\n<!-- AGENTTEAMS:END content_1 -->\n"
+    assert _unique_fence_id(text2) == "content_2"
+
+
+def test_retrofit_default_id_matches_emit_default_wrap_id():
+    """Regression: the retrofit fence id MUST equal the id used by
+    emit._normalize_generated_content's default whole-body wrap, so a later
+    --update --merge against a team that does emit the file replaces the
+    fenced body in-place. A drift between these two constants is the bug
+    that produced duplicated bodies in the 2026-05-20 collector-management
+    cross-repo update."""
+    from agentteams.fence_inject import DEFAULT_RETROFIT_FENCE_ID
+    # The default wrap id is hardcoded as 'content' inside
+    # emit._normalize_generated_content; surface it here so any future
+    # rename of either side trips this test.
+    EMIT_DEFAULT_WRAP_ID = "content"
+    assert DEFAULT_RETROFIT_FENCE_ID == EMIT_DEFAULT_WRAP_ID
 
 
 # ---------------- 4. CLI surface ----------------
