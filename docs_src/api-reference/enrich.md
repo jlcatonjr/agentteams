@@ -4,6 +4,10 @@ Default-value audit and context-aware enrichment for generated agent teams.
 
 After build, scans agent files for unresolved `{MANUAL:*}` placeholders and underdeveloped template sections, exports an audit CSV, then attempts auto-enrichment using rule-based fills, project source scanning, and a built-in tool metadata catalog. An optional AI pass via the `copilot` CLI can fill anything that rule-based logic cannot resolve.
 
+Placeholder policy note:
+- In default module runs, `build_team.py` may pre-resolve optional governance MANUAL placeholders (`REFERENCE_DB_PATH`, `STYLE_REFERENCE_PATH`) to explicit `N/A` values before enrichment executes.
+- In strict mode (`--strict-manual-placeholders`, default in `--self`), those placeholders remain unresolved and are handled by the enrichment/defaults-audit flow.
+
 > *Source: `agentteams/enrich/`*
 
 ---

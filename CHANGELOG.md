@@ -6,6 +6,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Dual-mode manual placeholder policy (usability default + strict self mode)
+
+- Added CLI flags `--strict-manual-placeholders` and `--no-strict-manual-placeholders` to control whether optional unresolved governance placeholders remain as `{MANUAL:*}` tokens or are replaced with explicit `N/A` defaults.
+- Introduced manifest policy application in `build_team.py` so default module runs favor usability:
+  - `{MANUAL:REFERENCE_DB_PATH}` -> `N/A - no citation database configured for this project`
+  - `{MANUAL:STYLE_REFERENCE_PATH}` -> `N/A - no formal style guide defined for this project` (or `style_reference` value when provided)
+- Strict mode now defaults to enabled in `--self` runs; non-self runs default to usability mode.
+- Updated docs: enrichment pipeline guide, CLI reference, and enrich API/module reference.
+- Added regression tests covering strict/non-strict policy transforms and strict-mode resolution precedence.
+
 ### Agent-prompt wiring for the W21 substrate (init + update parity)
 
 Closes the integration gap surfaced by the 2026-05-20 evaluation: substrate (eval-suite, memory-index, delivery-receipt, backup-manifest, shrink-Notice, model-routing, typed handoffs) was fully shipped, but only 3 of 9 behavioral surfaces were wired into agent prompts. This batch edits the **templates** so every newly-initialized team AND every `--update`d team automatically gains the wiring (both pipelines render from the same templates).

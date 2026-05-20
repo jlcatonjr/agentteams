@@ -307,6 +307,27 @@ def _build_parser() -> argparse.ArgumentParser:
             "Combine with --post-audit to also run AI-powered enrichment."
         ),
     )
+    strict_group = parser.add_mutually_exclusive_group()
+    strict_group.add_argument(
+        "--strict-manual-placeholders",
+        dest="strict_manual_placeholders",
+        action="store_true",
+        help=(
+            "Preserve unresolved {MANUAL:*} placeholder tokens for core governance "
+            "fields instead of auto-replacing them with explicit N/A defaults. "
+            "Enabled by default in --self mode."
+        ),
+    )
+    strict_group.add_argument(
+        "--no-strict-manual-placeholders",
+        dest="strict_manual_placeholders",
+        action="store_false",
+        help=(
+            "Disable strict MANUAL placeholder preservation and apply usability "
+            "defaults for optional governance placeholders."
+        ),
+    )
+    parser.set_defaults(strict_manual_placeholders=None)
     parser.add_argument(
         "--security-offline",
         action="store_true",
@@ -563,6 +584,11 @@ def main(argv: list[str] | None = None) -> int:
             args.output = str(_SCRIPT_DIR / ".github" / "agents")
         print(f"Self-maintenance mode: using {self_desc.name}")
 
+    strict_manual_placeholders = _resolve_strict_manual_mode(
+        strict_arg=args.strict_manual_placeholders,
+        self_update=args.self_update,
+    )
+
     # -----------------------------------------------------------------------
     # --revert-migration: undo a previous --migrate run
     # -----------------------------------------------------------------------
@@ -663,6 +689,7 @@ def main(argv: list[str] | None = None) -> int:
     # -----------------------------------------------------------------------
     print(f"Analyzing project for {framework_id!r} framework...")
     manifest = analyze.build_manifest(description, framework=framework_id)
+    _apply_placeholder_policy(manifest, strict_manual_placeholders=strict_manual_placeholders)
 
     project_name = manifest["project_name"]
     project_type = manifest["project_type"]
@@ -2320,6 +2347,58 @@ def _attempt_auto_correct(
     print("\n  --- Post-Remediation Audit ---")
     _audit.print_audit_report(rerun_result)
     return rerun_result
+
+
+def _apply_placeholder_policy(
+    manifest: dict,
+    *,
+    strict_manual_placeholders: bool,
+) -> None:
+    """Apply dual-mode policy for optional governance placeholders.
+
+    In strict mode, unresolved {MANUAL:*} tokens are preserved as-is.
+    In usability mode, selected optional placeholders are replaced with
+    explicit defaults and removed from SETUP-REQUIRED tracking.
+    """
+    if strict_manual_placeholders:
+        return
+
+    auto = manifest.get("auto_resolved_placeholders", {})
+    ref_key = "REFERENCE_DB_PATH"
+    style_key = "STYLE_REFERENCE_PATH"
+    ref_manual = "{MANUAL:REFERENCE_DB_PATH}"
+    style_manual = "{MANUAL:STYLE_REFERENCE_PATH}"
+
+    if str(auto.get(ref_key, "")).strip() == ref_manual:
+        auto[ref_key] = "N/A - no citation database configured for this project"
+
+    if str(auto.get(style_key, "")).strip() == style_manual:
+        desc = manifest.get("description", {}) or {}
+        style_value = desc.get("style_reference") or desc.get("style_reference_path")
+        auto[style_key] = (
+            str(style_value)
+            if style_value
+            else "N/A - no formal style guide defined for this project"
+        )
+
+    manual_items = manifest.get("manual_required_placeholders", [])
+    if manual_items:
+        filtered = [
+            item for item in manual_items
+            if item.get("placeholder") not in {ref_key, style_key}
+        ]
+        manifest["manual_required_placeholders"] = filtered
+
+
+def _resolve_strict_manual_mode(*, strict_arg: bool | None, self_update: bool) -> bool:
+    """Resolve strict/manual policy from CLI args.
+
+    Explicit CLI flags win. Otherwise strict mode defaults to True in
+    self-maintenance mode and False for normal generation.
+    """
+    if strict_arg is not None:
+        return bool(strict_arg)
+    return bool(self_update)
 
 
 def _build_final_rendered(

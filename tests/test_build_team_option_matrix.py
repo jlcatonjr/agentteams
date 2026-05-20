@@ -126,6 +126,76 @@ def test_parser_rejects_mutually_exclusive_overwrite_and_merge():
         parser.parse_args(["--description", "brief.json", "--overwrite", "--merge"])
 
 
+def test_dual_mode_policy_non_strict_replaces_optional_manual_placeholders():
+    manifest = {
+        "auto_resolved_placeholders": {
+            "REFERENCE_DB_PATH": "{MANUAL:REFERENCE_DB_PATH}",
+            "STYLE_REFERENCE_PATH": "{MANUAL:STYLE_REFERENCE_PATH}",
+        },
+        "manual_required_placeholders": [
+            {"placeholder": "REFERENCE_DB_PATH", "agent_file": "multiple", "context": "ref"},
+            {"placeholder": "STYLE_REFERENCE_PATH", "agent_file": "multiple", "context": "style"},
+            {"placeholder": "CONVERSION_PIPELINE", "agent_file": "multiple", "context": "conv"},
+        ],
+        "description": {
+            "style_reference": None,
+            "style_reference_path": None,
+        },
+    }
+
+    build_team._apply_placeholder_policy(manifest, strict_manual_placeholders=False)
+
+    assert manifest["auto_resolved_placeholders"]["REFERENCE_DB_PATH"].startswith("N/A")
+    assert manifest["auto_resolved_placeholders"]["STYLE_REFERENCE_PATH"].startswith("N/A")
+    placeholders = {item["placeholder"] for item in manifest["manual_required_placeholders"]}
+    assert "REFERENCE_DB_PATH" not in placeholders
+    assert "STYLE_REFERENCE_PATH" not in placeholders
+    assert "CONVERSION_PIPELINE" in placeholders
+
+
+def test_dual_mode_policy_strict_preserves_optional_manual_placeholders():
+    manifest = {
+        "auto_resolved_placeholders": {
+            "REFERENCE_DB_PATH": "{MANUAL:REFERENCE_DB_PATH}",
+            "STYLE_REFERENCE_PATH": "{MANUAL:STYLE_REFERENCE_PATH}",
+        },
+        "manual_required_placeholders": [
+            {"placeholder": "REFERENCE_DB_PATH", "agent_file": "multiple", "context": "ref"},
+            {"placeholder": "STYLE_REFERENCE_PATH", "agent_file": "multiple", "context": "style"},
+        ],
+        "description": {
+            "style_reference": "docs/style.md",
+        },
+    }
+
+    build_team._apply_placeholder_policy(manifest, strict_manual_placeholders=True)
+
+    assert manifest["auto_resolved_placeholders"]["REFERENCE_DB_PATH"] == "{MANUAL:REFERENCE_DB_PATH}"
+    assert manifest["auto_resolved_placeholders"]["STYLE_REFERENCE_PATH"] == "{MANUAL:STYLE_REFERENCE_PATH}"
+    placeholders = {item["placeholder"] for item in manifest["manual_required_placeholders"]}
+    assert "REFERENCE_DB_PATH" in placeholders
+    assert "STYLE_REFERENCE_PATH" in placeholders
+
+
+@pytest.mark.parametrize(
+    "strict_arg,self_update,expected",
+    [
+        (None, False, False),
+        (None, True, True),
+        (False, True, False),
+        (True, False, True),
+    ],
+)
+def test_resolve_strict_manual_mode(strict_arg: bool | None, self_update: bool, expected: bool):
+    assert (
+        build_team._resolve_strict_manual_mode(
+            strict_arg=strict_arg,
+            self_update=self_update,
+        )
+        == expected
+    )
+
+
 @pytest.mark.parametrize(
     "mode_flags, expected_overwrite, expected_merge",
     [

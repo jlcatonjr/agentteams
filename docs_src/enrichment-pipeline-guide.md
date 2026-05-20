@@ -32,6 +32,10 @@ agentteams \
 
 Enrichment runs after generation and before file emission. The enriched content is written in place.
 
+Dual-mode placeholder policy:
+- Default module runs prioritize usability and replace selected optional MANUAL placeholders with explicit `N/A` defaults.
+- Strict runs preserve unresolved MANUAL tokens for governance review. Strict mode is on by default for `--self` and can be toggled explicitly.
+
 ### With Post-Audit (AI-Powered Fills)
 
 ```bash
@@ -141,6 +145,8 @@ Exit code 1 if issues are found. Use `--auto-correct` to attempt automated repai
 |---|---|
 | `--enrich` | Run the enrichment pipeline after generation |
 | `--post-audit` | Run AI-powered post-generation audit (implies `--enrich`) |
+| `--strict-manual-placeholders` | Preserve unresolved MANUAL tokens for optional governance placeholders |
+| `--no-strict-manual-placeholders` | Prefer usability defaults (explicit `N/A`) for optional governance placeholders |
 | `--scan-security` | Run security scan on output files (use after enrichment) |
 | `--auto-correct` | Attempt automated repair of security scan findings (requires `--post-audit`) |
 | `--project PATH` | Project directory to scan for context fills (required for Phase 3) |

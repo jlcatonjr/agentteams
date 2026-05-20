@@ -16,6 +16,7 @@ agentteams [--description PATH] [--project PATH] [--framework NAME]
            [--no-scan] [--update] [--prune] [--check]
            [--refresh-index] [--query-index TEXT] [--query-k N]
            [--scan-security] [--self] [--post-audit] [--auto-correct] [--enrich]
+           [--strict-manual-placeholders] [--no-strict-manual-placeholders]
            [--no-backup] [--list-backups] [--restore-backup TIMESTAMP]
            [--security-offline] [--security-max-items N] [--security-no-nvd]
            [--migrate] [--revert-migration]
@@ -229,6 +230,21 @@ Used with `--post-audit`: after audit finds issues, invoke the standalone `copil
 ### `--enrich`
 
 After generating the team, scan for default template elements (unresolved `{MANUAL:*}` placeholders, underdeveloped sections, incomplete tool metadata) and attempt context-aware auto-enrichment. Exports a `defaults-audit.csv` to the `references/` directory. Combine with `--post-audit` to also run AI-powered enrichment.
+
+### `--strict-manual-placeholders`
+
+Preserve unresolved `{MANUAL:*}` placeholders for optional governance fields instead of replacing them with usability defaults.
+
+This mode is the default for `--self` runs.
+
+### `--no-strict-manual-placeholders`
+
+Disable strict manual placeholder preservation and apply usability-oriented defaults for optional governance placeholders:
+
+- `REFERENCE_DB_PATH` -> `N/A - no citation database configured for this project`
+- `STYLE_REFERENCE_PATH` -> `N/A - no formal style guide defined for this project` (or the configured `style_reference` value)
+
+This mode is the default for non-self runs.
 
 ---
 
