@@ -129,7 +129,7 @@ The CLI emits this contract only when `--cost-routing` is passed:
 
 ```bash
 python build_team.py --description brief.json --cost-routing
-# Writes: .github/agents/.build-artifacts/model-routing.json
+# Writes: .github/agents/references/model-routing.json
 ```
 
 ---
@@ -144,6 +144,46 @@ The routing contract is typically consumed by:
 4. **Policy enforcement** — Ensure sensitive agents (auditors, security) stay on premium tiers
 
 The contract does **not** specify concrete models; that's the runtime/adapter's responsibility.
+
+---
+
+## Downstream Integration Examples
+
+### Runtime model selection map
+
+```python
+from agentteams.model_routing import build_routing_contract
+
+routing = build_routing_contract(manifest)
+
+tier_to_model = {
+    "cheap": "gpt-4.1-mini",
+    "primary": "gpt-5.3-codex",
+    "fallback": "gpt-4.1-mini",
+}
+
+resolved = {
+    item["agent"]: tier_to_model[item["tier"]]
+    for item in routing["assignments"]
+}
+```
+
+### Combined eval + routing export pattern
+
+```python
+from pathlib import Path
+from agentteams.eval_suite import build_eval_suite
+from agentteams.model_routing import build_routing_contract
+from agentteams.eval_adapters.openai_evals import write_openai_evals_definition
+
+suite = build_eval_suite(manifest)
+routing = build_routing_contract(manifest)
+
+write_openai_evals_definition(suite, Path("references/evals/openai_evals_definition.json"))
+Path("references/model-routing.json").write_text(__import__("json").dumps(routing, indent=2) + "\n", encoding="utf-8")
+```
+
+This pattern keeps behavioral verification (`eval-suite`) and cost/capability policy (`model-routing`) decoupled but composable.
 
 ---
 

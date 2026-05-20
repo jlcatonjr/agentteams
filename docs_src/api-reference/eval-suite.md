@@ -91,4 +91,36 @@ The eval-suite is designed to be **framework-agnostic**: it contains no terms fr
 2. Deterministic testing of the spec itself
 3. Reusability across eval frameworks without re-derivation
 
-Framework-specific adapters (Inspect AI, OpenAI Evals, etc.) are produced in later phases by bridge modules; not by this module.
+Framework-specific adapters are provided by `agentteams.eval_adapters`; this module remains neutral and adapter-free.
+
+---
+
+## Adapter Integration Examples
+
+### Inspect AI adapter flow
+
+```python
+from pathlib import Path
+from agentteams.eval_suite import build_eval_suite
+from agentteams.eval_adapters.inspect_ai import write_inspect_ai_module
+
+suite = build_eval_suite(manifest)
+write_inspect_ai_module(suite, Path("references/evals/inspect_team_eval.py"))
+```
+
+### OpenAI Evals adapter flow
+
+```python
+from pathlib import Path
+from agentteams.eval_suite import build_eval_suite
+from agentteams.eval_adapters.openai_evals import write_openai_evals_definition
+
+suite = build_eval_suite(manifest)
+write_openai_evals_definition(suite, Path("references/evals/openai_evals_definition.json"))
+```
+
+### End-to-end pattern
+
+1. Build neutral suite with `build_eval_suite(manifest)`.
+2. Convert through target adapter in `agentteams.eval_adapters`.
+3. Execute with your selected eval runtime/tooling.

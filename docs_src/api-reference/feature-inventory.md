@@ -19,6 +19,22 @@ Features below are grouped by capability area. This inventory may include capabi
 
 ---
 
+## Artifact Selection Matrix
+
+Use this matrix when deciding which module/artifact to rely on for a specific operational goal.
+
+| Goal | Primary Module | Primary Artifact | Typical Trigger | Notes |
+|------|----------------|------------------|-----------------|-------|
+| Detect template/structure drift | `drift` | `references/build-log.json` | `--check`, `--update` | Structural + template fingerprint analysis |
+| Verify behavioral conformance | `eval_suite` + `behavioral_drift` | `references/eval-suite.json` + trajectory payload | Post-run behavioral validation | Neutral suite + runtime trajectory comparison |
+| Fast historical retrieval | `memory_index` | `references/memory-index.json` | `--refresh-index`, `--query-index` | Use lexical first, vector when thematic recall is needed |
+| Cost/capability routing policy | `model_routing` | `references/model-routing.json` | `--cost-routing` | Tier-role contract, concrete models resolved downstream |
+| Cross-framework eval execution | `eval_adapters` | Generated adapter output (Inspect module / OpenAI Evals JSON) | Adapter export step | Converts neutral eval-suite into framework-specific eval assets |
+| Security intelligence refresh | `security_refs` | `references/security-vulnerability-watch.reference.md` + `.json` | Normal generate/update path (unless offline) | Live-data artifacts; intentionally non-deterministic |
+| Rollback-ready update safety | `emit` backup APIs | `.agentteams-backups/<timestamp>/` + `_manifest.json` | `--update`, `--merge`, `--overwrite` | Supports restoration and backup integrity checks |
+
+---
+
 ## Core Pipeline
 
 ### Team Generation

@@ -210,10 +210,9 @@ from pathlib import Path
 from agentteams.memory_index import build_memory_index, query_index
 
 # Build index from durable sources
-sources = [
-    Path("workSummaries/daily"),
-    Path("CHANGELOG.md"),
-    Path("tmp/by-week"),
+sources = sorted(Path("workSummaries").rglob("*.md")) + [
+  Path("CHANGELOG.md"),
+  Path("README.md"),
 ]
 index = build_memory_index(sources, project_name="agentteams", framework="copilot-vscode")
 
@@ -227,6 +226,48 @@ for r in results:
     for i, passage in enumerate(r['snippets'], 1):
         print(f"   [{i}] {passage[:80]}...")
 ```
+
+---
+
+## Strategy And Staleness Decision Flows
+
+### Query Strategy Decision
+
+```python
+from agentteams.memory_index import query_index
+
+hits = query_index(index, "delivery receipt fingerprint parity", k=5, strategy="lexical")
+if not hits:
+  # Retry thematic match when lexical confidence is low
+  hits = query_index(index, "delivery verification workflow", k=5, strategy="vector")
+```
+
+Practical guidance:
+
+- Start with `lexical` for exact-term lookups.
+- Retry with `vector` for thematic queries or sparse lexical matches.
+
+### Staleness Handling Decision
+
+```python
+from agentteams.memory_index import is_index_stale
+
+if is_index_stale(index, sources):
+  # Caller policy: rebuild before serving query results
+  index = build_memory_index(sources)
+
+hits = query_index(index, "workflow 11 final check", k=5)
+```
+
+### CLI Flow (Operator Path)
+
+```bash
+agentteams --description brief.json --refresh-index
+agentteams --description brief.json --query-index "security gate overwrite clearance" --query-k 5 --query-strategy lexical
+agentteams --description brief.json --query-index "policy guidance for update safety" --query-k 5 --query-strategy vector
+```
+
+Use `--refresh-index` after editing durable sources (for example `workSummaries/`, `CHANGELOG.md`, `README.md`, `docs_src/*.md`, `references/*.md`) before query-heavy sessions.
 
 ---
 

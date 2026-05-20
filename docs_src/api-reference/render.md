@@ -82,3 +82,23 @@ Validate that every agent slug referenced in `agents:` YAML blocks resolves to a
 - `rendered_files` (`list[tuple[str, str]]`) — Output of `render_all()`: list of `(relative_path, content)` pairs.
 
 **Returns:** `list[str]` — List of unresolvable cross-reference error strings. Empty list means all references resolve.
+
+**Validation Behavior Notes:**
+
+- Validation is warning-oriented: unresolved references are returned as warning strings rather than raising.
+- The validator suppresses references in explicitly conditional/optional prose, including patterns such as:
+	- guarded workflow markers (`If @... in team`)
+	- routing-table style rows
+	- optional applicability guards (`Applies only when ... is present in team`)
+- References inside fenced code blocks are ignored.
+- Duplicate unresolved `(file, slug)` pairs are de-duplicated.
+- `@orchestrator` is treated as a universally valid routing target even if no corresponding generated file is present in the current rendered set.
+
+---
+
+## Rendering and Validation Contracts
+
+- `render_all()` produces framework-agnostic content; framework adapters apply final shaping.
+- Placeholder replacement is deterministic for supplied manifest data.
+- Manual placeholder collection reports unresolved `{MANUAL:*}` tokens post-render.
+- Cross-reference validation is designed to reduce false positives for optional agents while preserving true unresolved-reference signals.

@@ -71,6 +71,7 @@ nav:
       - graph: api-reference/graph.md
       - model-routing: api-reference/model-routing.md
       - eval-suite: api-reference/eval-suite.md
+      - eval-adapters: api-reference/eval-adapters.md
       - frameworks: api-reference/frameworks.md
       - man: api-reference/man.md
       - handoff_payloads: api-reference/handoff_payloads.md

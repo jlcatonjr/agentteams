@@ -49,6 +49,7 @@ This reference defines the **supported public API surface** (documented modules 
 | [`graph`](graph.md) | Directed graph inference for agent team topology |
 | [`model-routing`](model-routing.md) | Framework-neutral model-routing contracts for cost/capability tiering |
 | [`eval_suite`](eval-suite.md) | Build behavioral evaluation specs for agent team runs |
+| [`eval-adapters`](eval-adapters.md) | Convert neutral eval-suite contracts into Inspect AI and OpenAI Evals artifacts |
 
 ## Manifest & Documentation
 

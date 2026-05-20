@@ -137,6 +137,13 @@ Adapter for GitHub Copilot in VS Code.
 
 Validates and normalizes YAML front matter; preserves all fields defined in the template.
 
+**Current behavior notes:**
+
+- Normalizes front matter while filtering `agents` references to generated team members.
+- Supports both `agents:` flow-list and block-list syntax.
+- Filters handoff targets to generated team members.
+- Preserves original formatting when membership is unchanged to avoid no-op cosmetic drift in generated outputs.
+
 ---
 
 ## `CopilotCLIAdapter`
@@ -152,6 +159,11 @@ Adapter for Copilot CLI.
 
 Strips YAML front matter and inline handoff blocks to produce plain Markdown system prompts compatible with the Copilot CLI, while preserving extracted handoff metadata in `references/runtime-handoffs.json` when any handoffs are present.
 
+**Current behavior notes:**
+
+- Handoff extraction happens before stripping so routing metadata can be persisted for runtime use.
+- `handoff_delivery_mode()` is `manifest`, meaning routing metadata is delivered via `references/runtime-handoffs.json` rather than inline YAML.
+
 ---
 
 ## `ClaudeAdapter`
@@ -166,3 +178,14 @@ Adapter for Claude Projects.
 - **Agents dir:** `<project>/.claude/agents/`
 
 Strips VS Code YAML and inline handoff blocks, then injects Claude-compatible front matter and preserves Markdown body content. Extracted handoff metadata is emitted separately in `references/runtime-handoffs.json` when any handoffs are present.
+
+**Current behavior notes:**
+
+- Uses manifest-based handoff delivery (`references/runtime-handoffs.json`) for routing semantics.
+- Performs framework-specific output shaping while preserving rendered prompt body intent.
+
+---
+
+## Runtime Handoff Artifact Contract
+
+Adapters using manifest-based handoff delivery (`CopilotCLIAdapter`, `ClaudeAdapter`) rely on extracted handoff metadata generated from rendered content and emitted as `references/runtime-handoffs.json` when handoffs exist. Native-handoff adapters (`CopilotVSCodeAdapter`) keep handoff semantics inline.

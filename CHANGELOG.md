@@ -6,6 +6,21 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Two-day implementation/debug hardening addendum (2026-05-19 to 2026-05-20)
+
+- **Retrieval integration contract hardening shipped across pipeline + templates**:
+  - Added retrieval integration schema contracts in `schemas/project-description.schema.json` and `schemas/team-manifest.schema.json`.
+  - Added conservative repository inference for retrieval mode/entrypoints/trigger sources in `agentteams/ingest.py`.
+  - Added normalization + manifest propagation + retrieval archetype auto-selection + retrieval reference planning in `agentteams/analyze.py`.
+  - Added new retrieval artifacts in templates: `agentteams/templates/domain/retrieval-integrator.template.md`, `agentteams/templates/universal/retrieval-integration.reference.template.md`, and `agentteams/templates/universal/retrieval-trigger-contract.reference.template.md`.
+  - Added regression coverage in `tests/test_ingest.py` and `tests/test_analyze.py`.
+
+- **Copilot adapter reliability hardening shipped after snapshot-debug cycle**:
+  - Hardened YAML team filtering in `agentteams/frameworks/copilot_vscode.py` for mixed `agents:` flow-list/block-list variants and flexible handoff formatting.
+  - Added no-op formatting preservation when filtered membership is unchanged to avoid cosmetic snapshot drift in generated orchestrator output.
+  - Refined optional applicability suppression in `agentteams/render.py` to reduce false unresolved cross-reference warnings.
+  - Added/updated tests in `tests/test_frameworks.py` and `tests/test_render.py`; full suite verification completed at **877 passed**.
+
 ### Dual-mode manual placeholder policy (usability default + strict self mode)
 
 - Added CLI flags `--strict-manual-placeholders` and `--no-strict-manual-placeholders` to control whether optional unresolved governance placeholders remain as `{MANUAL:*}` tokens or are replaced with explicit `N/A` defaults.

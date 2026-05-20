@@ -28,6 +28,12 @@ Build and return a team manifest from a normalized project description.
 - If `description` contains `selected_archetypes`, `build_manifest()` uses it as the primary archetype input, then applies required dependency and consistency additions.
 - If `post-production-auditor` is selected (auto-selected or override), `technical-validator` is also ensured in the final archetype set.
 - If tool metadata is incomplete, `tool-doc-researcher` may be auto-added to support metadata completion.
+- Retrieval integration is normalized into a stable manifest contract with defaults (`mode`, entrypoints, trigger sources, source-of-truth, staleness SLO, trigger contract version).
+- If normalized retrieval mode is not `none`, `retrieval-integrator` is auto-included when absent.
+- When retrieval integration is enabled, output planning adds retrieval reference artifacts:
+	- `references/retrieval-integration.reference.md`
+	- `references/retrieval-trigger-contract.reference.md`
+- `existing_project_path` is propagated to the manifest so downstream artifact builders (for example memory-index source collection) can use the operator's explicit project root.
 
 ---
 
@@ -119,3 +125,28 @@ Build the authority hierarchy list from the project description's `authority_sou
 - `description` (`dict[str, Any]`) — Normalized project description.
 
 **Returns:** `list[dict[str, Any]]` — Ordered authority source dicts with `rank`, `name`, `path`, and `scope` keys.
+
+---
+
+## Retrieval Contract Normalization
+
+`build_manifest()` normalizes retrieval integration before placeholder resolution and output planning.
+
+### Defaults when input is missing/invalid
+
+- `mode`: `none`
+- `query_entrypoints`: `[]`
+- `maintenance_entrypoints`: `[]`
+- `trigger_sources`: `['manual']`
+- `source_of_truth`: `[]`
+- `staleness_slo_minutes`: `60`
+- `trigger_contract_version`: `v1`
+
+### Normalization guarantees
+
+- Unknown retrieval modes are coerced to `none`.
+- Non-list entrypoint/source fields are sanitized to empty lists.
+- Empty trigger-source lists are normalized to `['manual']`.
+- Invalid staleness values fall back to `60`.
+
+These guarantees stabilize downstream rendering and schema validation behavior.
