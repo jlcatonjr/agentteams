@@ -2,7 +2,7 @@
 .SH NAME
 agentteams \- Generate a complete agent team for any project.
 .SH SYNOPSIS
-.B agentteams [--description PATH] [--project PATH] [--framework NAME] [--output DIR] [--dry-run] [--json] [--overwrite] [--merge] [--yes] [--no-scan] [--cost-routing] [--update] [--prune] [--check] [--refresh-index] [--query-index TEXT] [--query-k N] [--scan-security] [--self] [--allow-external-self-output] [--post-audit] [--auto-correct] [--enrich] [--security-offline] [--security-max-items N] [--security-no-nvd] [--migrate] [--convert-from DIR] [--interop-from DIR] [--interop-source-framework INTEROP_SOURCE_FRAMEWORK] [--interop-mode INTEROP_MODE] [--bridge-from DIR] [--bridge-source-framework BRIDGE_SOURCE_FRAMEWORK] [--bridge-check] [--bridge-refresh] [--revert-migration] [--version] [--no-backup] [--list-backups] [--restore-backup TIMESTAMP] [--add-fence-markers PATH] [--in-place]
+.B agentteams [--description PATH] [--project PATH] [--framework NAME] [--output DIR] [--dry-run] [--json] [--overwrite] [--merge] [--yes] [--no-scan] [--cost-routing] [--update] [--prune] [--check] [--refresh-index] [--query-index TEXT] [--query-k N] [--scan-security] [--self] [--allow-external-self-output] [--post-audit] [--auto-correct] [--enrich] [--strict-manual-placeholders] [--no-strict-manual-placeholders STRICT_MANUAL_PLACEHOLDERS] [--security-offline] [--security-max-items N] [--security-no-nvd] [--migrate] [--convert-from DIR] [--interop-from DIR] [--interop-source-framework INTEROP_SOURCE_FRAMEWORK] [--interop-mode INTEROP_MODE] [--bridge-from DIR] [--bridge-source-framework BRIDGE_SOURCE_FRAMEWORK] [--bridge-check] [--bridge-refresh] [--revert-migration] [--version] [--no-backup] [--list-backups] [--restore-backup TIMESTAMP] [--add-fence-markers PATH] [--in-place]
 .SH DESCRIPTION
 .PP
 Generate a complete agent team for any project.
@@ -80,6 +80,12 @@ After \-\-post\-audit finds issues, invoke the standalone `copilot` CLI in non\-
 .TP
 .B \-\-enrich
 After generating the team, scan for default template elements (unresolved \\(lCMANUAL:*\\(rC placeholders, underdeveloped sections, incomplete tool metadata) and attempt context\-aware auto\-enrichment. Exports a defaults\-audit.csv to the references/ directory. Combine with \-\-post\-audit to also run AI\-powered enrichment.
+.TP
+.B \-\-strict\-manual\-placeholders
+Preserve unresolved \\(lCMANUAL:*\\(rC placeholder tokens for core governance fields instead of auto\-replacing them with explicit N/A defaults. Enabled by default in \-\-self mode.
+.TP
+.B \-\-no\-strict\-manual\-placeholders
+Disable strict MANUAL placeholder preservation and apply usability defaults for optional governance placeholders.
 .TP
 .B \-\-security\-offline
 Use cached security vulnerability snapshot only (no network fetch) when rendering security intelligence references.
