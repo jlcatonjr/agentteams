@@ -261,6 +261,16 @@ def _build_parser() -> argparse.ArgumentParser:
         help="Operate on the module's own agent team using .github/agents/_build-description.json",
     )
     parser.add_argument(
+        "--allow-external-self-output",
+        action="store_true",
+        dest="allow_external_self_output",
+        help=(
+            "Permit --self to write self-maintenance artifacts to an --output "
+            "path outside the AgentTeamsModule source tree. Required to prevent "
+            "accidental writes into consumer repositories."
+        ),
+    )
+    parser.add_argument(
         "--post-audit",
         action="store_true",
         dest="post_audit",
@@ -451,6 +461,27 @@ def main(argv: list[str] | None = None) -> int:
         if not self_desc.exists():
             print(f"Error: Self-description not found at {self_desc}", file=sys.stderr)
             return 1
+        if args.output and not args.dry_run:
+            try:
+                resolved_output = Path(args.output).resolve()
+                module_root = _SCRIPT_DIR.resolve()
+                output_inside_module = (
+                    resolved_output == module_root
+                    or resolved_output.is_relative_to(module_root)
+                )
+            except (OSError, ValueError):
+                output_inside_module = False
+            if not output_inside_module and not args.allow_external_self_output:
+                print(
+                    "Error: --self with an --output path outside the AgentTeamsModule "
+                    "source tree is refused to prevent self-maintenance artifacts from "
+                    "being written into consumer repositories.\n"
+                    f"  module root:    {module_root}\n"
+                    f"  requested out:  {resolved_output}\n"
+                    "If this is intentional, pass --allow-external-self-output.",
+                    file=sys.stderr,
+                )
+                return 1
         args.description = str(self_desc)
         args.project = str(_SCRIPT_DIR)
         if not args.output:
@@ -1385,6 +1416,41 @@ def _run_interop(
     return 0 if result.success else 1
 
 
+# Bridge --output is interpreted as the *repo root*, not the agents directory.
+# When users pass a known agents-dir suffix (intuiting that --output means
+# "where agent files go"), normalize by stripping the suffix and warn so the
+# bridge does not produce nested .github/.github/... layouts.
+_BRIDGE_AGENTS_DIR_SUFFIXES: dict[str, tuple[tuple[str, ...], ...]] = {
+    "copilot-vscode": ((".github", "agents"),),
+    "copilot-cli": ((".github", "copilot"),),
+    "claude": ((".claude", "agents"),),
+}
+
+
+def _normalize_bridge_output_root(output: Path, target_framework: str) -> Path:
+    """Strip a known agents-dir suffix from a bridge --output path.
+
+    Bridge mode treats --output as the *repo root*; if a user passes the
+    target framework's conventional agents directory (e.g. ``.github/agents``
+    for copilot-vscode), strip the suffix and emit a warning so bridge
+    artifacts do not land at nested ``.github/.github/...`` paths.
+    """
+    suffixes = _BRIDGE_AGENTS_DIR_SUFFIXES.get(target_framework, ())
+    parts = output.parts
+    for suffix in suffixes:
+        if len(parts) >= len(suffix) and parts[-len(suffix):] == suffix:
+            normalized = Path(*parts[:-len(suffix)]) if parts[:-len(suffix)] else Path(output.anchor or ".")
+            print(
+                f"Warning: bridge --output {output} ends in '{'/'.join(suffix)}'.\n"
+                f"  Bridge mode treats --output as the repository root, not the\n"
+                f"  agents directory. Normalizing to {normalized} so bridge\n"
+                f"  artifacts are written under the expected layout.",
+                file=sys.stderr,
+            )
+            return normalized
+    return output
+
+
 def _run_bridge(
     source_dir: Path,
     source_framework: str | None,
@@ -1400,7 +1466,7 @@ def _run_bridge(
 
     detected = source_framework or detect_framework(source_dir)
     if output is not None:
-        output_root = output
+        output_root = _normalize_bridge_output_root(output, target_framework)
     else:
         project_root = source_dir.parent.parent
         output_root = project_root
@@ -1450,6 +1516,13 @@ def _run_bridge(
         print(f"\n  Bridge check: {'PASS' if result.check_ok else 'FAIL'}")
         if result.check_report_path:
             print(f"  Report: {result.check_report_path}")
+        if result.manifest_missing:
+            print(
+                "\n  Hint: no bridge manifest exists yet. Run the same command "
+                "with --bridge-refresh (omit --bridge-check) to generate the "
+                "initial bridge artifacts, then re-run --bridge-check.",
+                file=sys.stderr,
+            )
     else:
         verb = "Would write" if dry_run else "Wrote"
         print(
@@ -1457,8 +1530,20 @@ def _run_bridge(
             + (f", skipped {len(result.skipped)}" if result.skipped else "")
             + "."
         )
+        for notice in result.notices:
+            print(f"  Notice: {notice}", file=sys.stderr)
 
     return 0 if result.success else 1
+
+
+_BRIDGE_USAGE_HINT = (
+    " Bridge mode is independent of description/project-driven generation.\n"
+    "  Example:\n"
+    "    agentteams --bridge-from <source-agents-dir> \\\n"
+    "               --bridge-source-framework <claude|copilot-cli|copilot-vscode> \\\n"
+    "               --framework <target-framework> \\\n"
+    "               [--bridge-check | --bridge-refresh]"
+)
 
 
 def _validate_option_combinations(parser: argparse.ArgumentParser, args: argparse.Namespace) -> None:
@@ -1485,10 +1570,10 @@ def _validate_option_combinations(parser: argparse.ArgumentParser, args: argpars
         parser.error("--bridge-check cannot be combined with --bridge-refresh")
 
     if args.bridge_check and not args.bridge_from:
-        parser.error("--bridge-check requires --bridge-from")
+        parser.error("--bridge-check requires --bridge-from." + _BRIDGE_USAGE_HINT)
 
     if args.bridge_refresh and not args.bridge_from:
-        parser.error("--bridge-refresh requires --bridge-from")
+        parser.error("--bridge-refresh requires --bridge-from." + _BRIDGE_USAGE_HINT)
 
     if args.refresh_index and args.query_index:
         parser.error("--refresh-index and --query-index are mutually exclusive")
@@ -1639,12 +1724,12 @@ def _validate_option_combinations(parser: argparse.ArgumentParser, args: argpars
             val = getattr(args, attr)
             if attr == "description":
                 if val is not None:
-                    parser.error(f"{flag} cannot be used with --bridge-from")
+                    parser.error(f"{flag} cannot be used with --bridge-from." + _BRIDGE_USAGE_HINT)
             elif attr == "restore_backup":
                 if val is not None:
-                    parser.error(f"{flag} cannot be used with --bridge-from")
+                    parser.error(f"{flag} cannot be used with --bridge-from." + _BRIDGE_USAGE_HINT)
             elif val:
-                parser.error(f"{flag} cannot be used with --bridge-from")
+                parser.error(f"{flag} cannot be used with --bridge-from." + _BRIDGE_USAGE_HINT)
 
 
 def _prune_removed_files(

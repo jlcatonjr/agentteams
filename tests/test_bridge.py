@@ -167,3 +167,92 @@ def test_bridge_check_passes_when_fresh(tmp_path: Path):
     report = Path(checked.check_report_path)
     assert report.exists()
     assert "PASS" in report.read_text(encoding="utf-8")
+
+
+def test_bridge_check_missing_manifest_hints_at_refresh(tmp_path: Path):
+    """When no manifest exists, --bridge-check should point the user at --bridge-refresh."""
+    source_dir = tmp_path / "src" / ".claude" / "agents"
+    _build_source("claude", source_dir)
+
+    checked = run_bridge(
+        source_dir=source_dir,
+        source_framework="claude",
+        target_framework="copilot-vscode",
+        output_root=tmp_path / "out",
+        dry_run=False,
+        overwrite=False,
+        check_only=True,
+    )
+    assert not checked.success
+    assert checked.check_ok is False
+    assert checked.manifest_missing is True
+    report = Path(checked.check_report_path)
+    assert report.exists()
+    text = report.read_text(encoding="utf-8")
+    assert "FAIL" in text
+    assert "--bridge-refresh" in text
+    assert "missing" in text.lower()
+
+
+def test_bridge_generate_emits_skip_notice_when_files_exist(tmp_path: Path):
+    """Generate mode without --bridge-refresh must surface a notice when any file is skipped."""
+    source_dir = tmp_path / "src" / ".claude" / "agents"
+    _build_source("claude", source_dir)
+    out_root = tmp_path / "out"
+
+    first = run_bridge(
+        source_dir=source_dir,
+        source_framework="claude",
+        target_framework="copilot-vscode",
+        output_root=out_root,
+        dry_run=False,
+        overwrite=True,
+        check_only=False,
+    )
+    assert first.success
+    assert first.skipped == []
+    assert first.notices == []
+
+    # Second run without overwrite: every file already exists, expect notice.
+    second = run_bridge(
+        source_dir=source_dir,
+        source_framework="claude",
+        target_framework="copilot-vscode",
+        output_root=out_root,
+        dry_run=False,
+        overwrite=False,
+        check_only=False,
+    )
+    assert second.success
+    assert len(second.skipped) >= 4
+    assert second.notices, "expected a skip notice when files were skipped"
+    assert any("--bridge-refresh" in n for n in second.notices)
+
+
+def test_bridge_generate_no_notice_when_overwriting(tmp_path: Path):
+    """Refresh mode (overwrite=True) must not emit the skip notice."""
+    source_dir = tmp_path / "src" / ".claude" / "agents"
+    _build_source("claude", source_dir)
+    out_root = tmp_path / "out"
+
+    run_bridge(
+        source_dir=source_dir,
+        source_framework="claude",
+        target_framework="copilot-vscode",
+        output_root=out_root,
+        dry_run=False,
+        overwrite=True,
+        check_only=False,
+    )
+    refreshed = run_bridge(
+        source_dir=source_dir,
+        source_framework="claude",
+        target_framework="copilot-vscode",
+        output_root=out_root,
+        dry_run=False,
+        overwrite=True,
+        check_only=False,
+    )
+    assert refreshed.success
+    assert refreshed.notices == []
+

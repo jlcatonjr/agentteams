@@ -31,6 +31,8 @@ class BridgeResult:
     check_only: bool = False
     check_ok: bool = True
     check_report_path: str = ""
+    manifest_missing: bool = False
+    notices: list[str] = field(default_factory=list)
 
     @property
     def success(self) -> bool:
@@ -83,6 +85,7 @@ def run_bridge(
         report_path = pair_dir / "bridge-check.report.md"
         result.check_ok = ok
         result.check_report_path = str(report_path)
+        result.manifest_missing = not manifest_path.exists()
         if not dry_run:
             report_path.parent.mkdir(parents=True, exist_ok=True)
             report_path.write_text(report, encoding="utf-8")
@@ -123,6 +126,13 @@ def run_bridge(
             path.parent.mkdir(parents=True, exist_ok=True)
             path.write_text(content, encoding="utf-8")
         result.written.append(str(path))
+
+    if result.skipped and not overwrite:
+        result.notices.append(
+            f"{len(result.skipped)} existing bridge file(s) were not overwritten. "
+            "Pass --bridge-refresh to regenerate the full bridge artifact set "
+            "(recommended when bridge state is incomplete or stale)."
+        )
 
     return result
 
@@ -193,6 +203,9 @@ def _run_bridge_check(*, manifest_path: Path, source_hash_rows: list[dict[str, s
             "# Bridge Check Report\n\n"
             "Result: FAIL\n\n"
             "- bridge-manifest.json is missing.\n"
+            "- No bridge has been generated yet. Run with --bridge-refresh "
+            "(omit --bridge-check) to generate the initial bridge artifacts, "
+            "then re-run --bridge-check to validate them.\n"
         )
         return False, report
 

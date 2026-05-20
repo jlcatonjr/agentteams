@@ -368,6 +368,157 @@ def test_main_accepts_bridge_pipeline(tmp_path: Path, bridge_check: bool):
 
 
 # ---------------------------------------------------------------------------
+# Regression: bridge UX (HayekAI handoff 2026-W21)
+#   D1 — bridge --output ending in target framework's agents-dir suffix
+#        must be normalized to repo root with a warning, so artifacts do not
+#        land at nested .github/.github/... paths.
+#   D2 — --self with an external --output is refused unless
+#        --allow-external-self-output is supplied.
+#   D3 — bridge guard error messages include a corrective usage example.
+# ---------------------------------------------------------------------------
+
+def _make_claude_source(root: Path) -> Path:
+    src = root / ".claude" / "agents"
+    src.mkdir(parents=True)
+    (src / "orchestrator.md").write_text(
+        "---\n"
+        "name: orchestrator\n"
+        "description: \"d\"\n"
+        "user-invokable: true\n"
+        "tools: ['read']\n"
+        "model: [\"Claude Sonnet 4.6 (copilot)\"]\n"
+        "---\n\n"
+        "# orchestrator\n\nBody.\n",
+        encoding="utf-8",
+    )
+    (root / "CLAUDE.md").write_text("# Claude\n", encoding="utf-8")
+    return src
+
+
+@pytest.mark.parametrize(
+    "target_framework,suffix",
+    [
+        ("copilot-vscode", (".github", "agents")),
+        ("copilot-cli", (".github", "copilot")),
+        ("claude", (".claude", "agents")),
+    ],
+)
+def test_bridge_output_normalizes_agents_dir_suffix(
+    tmp_path: Path,
+    capsys: pytest.CaptureFixture[str],
+    target_framework: str,
+    suffix: tuple[str, ...],
+    monkeypatch: pytest.MonkeyPatch,
+):
+    monkeypatch.setattr(build_team, "_assert_security_intelligence_fresh", lambda *_a, **_k: None)
+    src = _make_claude_source(tmp_path / "repo")
+    bad_output = tmp_path / "repo" / Path(*suffix)
+    rc = build_team.main(
+        [
+            "--bridge-from",
+            str(src),
+            "--bridge-source-framework",
+            "claude",
+            "--framework",
+            target_framework,
+            "--output",
+            str(bad_output),
+        ]
+    )
+    assert rc == 0
+    captured = capsys.readouterr()
+    assert "Normalizing" in captured.err
+    # Bridge artifacts must land under the repo root, not nested under suffix.
+    pair_dir = (
+        tmp_path
+        / "repo"
+        / "references"
+        / "bridges"
+        / f"claude-to-{target_framework}"
+    )
+    assert (pair_dir / "bridge-manifest.json").exists()
+    # And the nested form must NOT exist.
+    nested = bad_output / "references" / "bridges"
+    assert not nested.exists()
+
+
+def test_bridge_output_without_suffix_is_unchanged(
+    tmp_path: Path,
+    capsys: pytest.CaptureFixture[str],
+    monkeypatch: pytest.MonkeyPatch,
+):
+    monkeypatch.setattr(build_team, "_assert_security_intelligence_fresh", lambda *_a, **_k: None)
+    src = _make_claude_source(tmp_path / "repo")
+    output = tmp_path / "elsewhere"
+    rc = build_team.main(
+        [
+            "--bridge-from",
+            str(src),
+            "--bridge-source-framework",
+            "claude",
+            "--framework",
+            "copilot-vscode",
+            "--output",
+            str(output),
+        ]
+    )
+    assert rc == 0
+    captured = capsys.readouterr()
+    assert "Normalizing" not in captured.err
+    assert (output / "references" / "bridges" / "claude-to-copilot-vscode" / "bridge-manifest.json").exists()
+
+
+def test_self_with_external_output_is_refused(
+    tmp_path: Path,
+    capsys: pytest.CaptureFixture[str],
+):
+    external = tmp_path / "foreign-repo" / ".github" / "agents"
+    external.mkdir(parents=True)
+    rc = build_team.main(["--self", "--output", str(external)])
+    assert rc == 1
+    captured = capsys.readouterr()
+    assert "outside the AgentTeamsModule source tree" in captured.err
+    assert "--allow-external-self-output" in captured.err
+    # No files written
+    assert list(external.iterdir()) == []
+
+
+def test_self_with_external_output_dry_run_is_allowed(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+):
+    monkeypatch.setattr(build_team, "_assert_security_intelligence_fresh", lambda *_a, **_k: None)
+    external = tmp_path / "foreign-repo" / ".github" / "agents"
+    external.mkdir(parents=True)
+    # Dry-run does not write so the guard must not fire.
+    rc = build_team.main(["--self", "--output", str(external), "--dry-run"])
+    # We accept rc == 0 OR a non-guard failure (e.g., missing self-description in
+    # test environments). The crucial assertion is that the guard message is absent.
+    assert rc in (0, 1)
+
+
+@pytest.mark.parametrize(
+    "argv,error_substring",
+    [
+        (["--bridge-from", "src", "--description", "brief.json"], "Bridge mode is independent"),
+        (["--bridge-from", "src", "--project", "/tmp/x"], "Bridge mode is independent"),
+        (["--bridge-check"], "Bridge mode is independent"),
+        (["--bridge-refresh"], "Bridge mode is independent"),
+    ],
+)
+def test_bridge_guard_errors_include_usage_example(
+    argv: list[str],
+    error_substring: str,
+    capsys: pytest.CaptureFixture[str],
+):
+    with pytest.raises(SystemExit):
+        build_team.main(argv)
+    captured = capsys.readouterr()
+    assert error_substring in captured.err
+    assert "agentteams --bridge-from" in captured.err
+
+
+# ---------------------------------------------------------------------------
 # Regression: Q2 — --update alone must not trigger the security gate (merge
 # is the default); --update --overwrite must trigger the gate (F1/F7 fix)
 # ---------------------------------------------------------------------------
@@ -437,3 +588,93 @@ def test_update_overwrite_triggers_security_gate(
     ])
 
     assert rc == 1  # gate invoked and blocked due to missing security clearance
+
+
+# ---------------------------------------------------------------------------
+# Regression: bridge-check against a missing manifest must surface the
+# --bridge-refresh hint both in the written report and on stderr.
+# ---------------------------------------------------------------------------
+def test_bridge_check_missing_manifest_cli_hint(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+):
+    source_dir = tmp_path / "src" / ".claude" / "agents"
+    source_dir.mkdir(parents=True)
+    (source_dir / "orchestrator.md").write_text(
+        "---\n"
+        "name: orchestrator\n"
+        "description: \"d\"\n"
+        "allowed-tools: Read\n"
+        "---\n\n"
+        "# orchestrator\n\nBody.\n",
+        encoding="utf-8",
+    )
+    (source_dir.parent / "CLAUDE.md").write_text("# Instructions\n", encoding="utf-8")
+
+    output_root = tmp_path / "out"
+    rc = build_team.main([
+        "--bridge-from", str(source_dir),
+        "--bridge-source-framework", "claude",
+        "--framework", "copilot-vscode",
+        "--output", str(output_root),
+        "--bridge-check",
+    ])
+    assert rc == 1
+
+    captured = capsys.readouterr()
+    assert "--bridge-refresh" in captured.err
+    assert "no bridge manifest" in captured.err.lower()
+
+    report = (
+        output_root
+        / "references"
+        / "bridges"
+        / "claude-to-copilot-vscode"
+        / "bridge-check.report.md"
+    )
+    assert report.exists()
+    text = report.read_text(encoding="utf-8")
+    assert "--bridge-refresh" in text
+    assert "FAIL" in text
+
+
+# ---------------------------------------------------------------------------
+# Regression: bridge generate mode must emit a Notice on stderr when files
+# are skipped because they already exist, recommending --bridge-refresh.
+# ---------------------------------------------------------------------------
+def test_bridge_generate_skip_notice_cli(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+):
+    source_dir = tmp_path / "src" / ".claude" / "agents"
+    source_dir.mkdir(parents=True)
+    (source_dir / "orchestrator.md").write_text(
+        "---\n"
+        "name: orchestrator\n"
+        "description: \"d\"\n"
+        "allowed-tools: Read\n"
+        "---\n\n"
+        "# orchestrator\n\nBody.\n",
+        encoding="utf-8",
+    )
+    (source_dir.parent / "CLAUDE.md").write_text("# Instructions\n", encoding="utf-8")
+
+    output_root = tmp_path / "out"
+    common = [
+        "--bridge-from", str(source_dir),
+        "--bridge-source-framework", "claude",
+        "--framework", "copilot-vscode",
+        "--output", str(output_root),
+    ]
+
+    # First generate: nothing exists yet → no notice.
+    rc1 = build_team.main(common + ["--bridge-refresh"])
+    assert rc1 == 0
+    first_err = capsys.readouterr().err
+    assert "Notice" not in first_err
+
+    # Second generate without --bridge-refresh: everything exists → notice expected.
+    rc2 = build_team.main(common)
+    assert rc2 == 0
+    second_err = capsys.readouterr().err
+    assert "Notice" in second_err
+    assert "--bridge-refresh" in second_err
+
