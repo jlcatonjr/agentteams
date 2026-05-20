@@ -66,6 +66,13 @@ class EmitResult:
     # Plan 3: notices surfaced from any run (real or dry); aggregated and
     # printed once by build_team at end of run.
     notices: list[str] = field(default_factory=list)
+    # legacy-skip visibility: subset of `skipped` containing files that were
+    # skipped because they had no fence markers (unfenced legacy files).
+    # Template updates targeting these files were NOT applied. Parallel list
+    # `skipped_legacy_drift` flags whether the rendered content actually differs
+    # from on-disk (True = template change was lost; False = harmless skip).
+    skipped_legacy: list[str] = field(default_factory=list)
+    skipped_legacy_drift: list[bool] = field(default_factory=list)
 
     @property
     def success(self) -> bool:
@@ -778,6 +785,11 @@ def emit_all(
                             entry.delta_bytes = len(normalized_content) - len(existing_text)
                     else:
                         entry.action = "SKIP"
+                        if legacy_no_fence:
+                            result.skipped_legacy.append(str(target))
+                            result.skipped_legacy_drift.append(
+                                existing_text != normalized_content
+                            )
                 elif not mr.content_changed and not mr.sections_added:
                     entry.action = "UNCHANGED"
                 else:
@@ -833,6 +845,11 @@ def emit_all(
                     for err in merge_result.parse_errors:
                         print(f"  ⚠  Merge skipped ({target.name}): {err}", file=sys.stderr)
                     result.skipped.append(str(target))
+                    if legacy_no_fence:
+                        result.skipped_legacy.append(str(target))
+                        result.skipped_legacy_drift.append(
+                            existing_text != normalized_content
+                        )
             elif not merge_result.content_changed and not merge_result.sections_added:
                 result.unchanged.append(str(target))
             else:
@@ -951,6 +968,28 @@ def print_summary(result: EmitResult, manifest: dict[str, Any]) -> None:
             print(f"  Skipped:  {len(result.skipped)} (use --overwrite to replace, or --merge for fenced files)")
         if result.errors:
             print(f"  Errors:   {len(result.errors)}", file=sys.stderr)
+
+    # Legacy-skip visibility: when --merge skipped one or more files because
+    # they lacked fence markers, the template updates targeting those files
+    # were NOT applied. Surface this explicitly with the retrofit options,
+    # because the per-file inline warnings get lost in long outputs.
+    if result.skipped_legacy:
+        n = len(result.skipped_legacy)
+        pending = sum(1 for d in result.skipped_legacy_drift if d)
+        suffix = f" ({pending} with template change pending)" if pending else ""
+        print(
+            f"\n  ⚠  Legacy files skipped — template updates NOT applied: {n}{suffix}",
+            file=sys.stderr,
+        )
+        for path, drift in zip(result.skipped_legacy, result.skipped_legacy_drift):
+            marker = "  (template change pending)" if drift else ""
+            print(f"       {path}{marker}", file=sys.stderr)
+        print(
+            "     Retrofit options:\n"
+            "       agentteams --add-fence-markers <path> [--in-place]\n"
+            "       agentteams ... --overwrite           # replace unconditionally (loses local edits)",
+            file=sys.stderr,
+        )
 
     # Plan 3: aggregated shrink Notices, printed once to stderr after the
     # summary. Real-run channel; dry-run notices are folded into the dry-run

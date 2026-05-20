@@ -816,3 +816,49 @@ def test_query_strategy_validation(tmp_path: Path, capsys: pytest.CaptureFixture
     captured = capsys.readouterr()
     assert "unknown" in captured.err or "invalid choice" in captured.err
 
+
+# ---------------------------------------------------------------------------
+# --fail-on-legacy-skip: exit-code promotion when legacy files skipped
+# ---------------------------------------------------------------------------
+
+def test_finalize_exit_code_promotes_on_legacy_skip_with_flag(capsys: pytest.CaptureFixture[str]) -> None:
+    """_finalize_exit_code returns 1 when flag is set and legacy skips occurred."""
+    from argparse import Namespace
+    result = EmitResult()
+    result.skipped_legacy.append("/some/path/legacy.agent.md")
+    result.skipped_legacy_drift.append(True)
+
+    args_on = Namespace(fail_on_legacy_skip=True)
+    assert build_team._finalize_exit_code(result, args_on) == 1
+    captured = capsys.readouterr()
+    assert "--fail-on-legacy-skip" in captured.err
+    assert "1 legacy file(s) skipped" in captured.err
+
+
+def test_finalize_exit_code_unaffected_without_flag() -> None:
+    """Default behavior: legacy skips don't change exit code."""
+    from argparse import Namespace
+    result = EmitResult()
+    result.skipped_legacy.append("/some/path/legacy.agent.md")
+    result.skipped_legacy_drift.append(True)
+
+    args_off = Namespace(fail_on_legacy_skip=False)
+    assert build_team._finalize_exit_code(result, args_off) == 0
+
+
+def test_finalize_exit_code_zero_when_no_legacy_skips_even_with_flag() -> None:
+    """Flag set but no legacy skips: still exits 0."""
+    from argparse import Namespace
+    result = EmitResult()
+    args_on = Namespace(fail_on_legacy_skip=True)
+    assert build_team._finalize_exit_code(result, args_on) == 0
+
+
+def test_finalize_exit_code_returns_1_on_emit_errors_regardless_of_flag() -> None:
+    """Emit errors always return 1, independent of the new flag."""
+    from argparse import Namespace
+    result = EmitResult()
+    result.errors.append("synthetic failure")
+    args_off = Namespace(fail_on_legacy_skip=False)
+    assert build_team._finalize_exit_code(result, args_off) == 1
+

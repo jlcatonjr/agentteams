@@ -15,6 +15,7 @@ agentteams [--description PATH] [--project PATH] [--framework NAME]
            [--dry-run] [--overwrite] [--merge] [--yes]
            [--no-scan] [--update] [--prune] [--check]
            [--refresh-index] [--query-index TEXT] [--query-k N] [--query-strategy {lexical,vector}]
+           [--fail-on-legacy-skip]
            [--scan-security] [--self] [--post-audit] [--auto-correct] [--enrich]
            [--strict-manual-placeholders] [--no-strict-manual-placeholders]
            [--no-backup] [--list-backups] [--restore-backup TIMESTAMP]
@@ -219,6 +220,17 @@ Retrieval strategy for `--query-index`. Default: `lexical`.
 - `vector` — Sparse tf·idf cosine similarity. Better recall for thematic/semantic queries ("what's our policy on error handling?", "find prior work on resource management"). Returns documents related to ALL query terms. Stdlib-only, <100ms at typical corpus sizes.
 
 Start with `lexical`; if results are low-confidence, retry with `vector`.
+
+### `--fail-on-legacy-skip`
+
+Exit with non-zero status if `--merge` skipped any files due to missing fence markers (legacy files). Use in CI to enforce that template updates always propagate to downstream repositories.
+
+Without this flag, legacy skips are reported in the end-of-run summary but the exit code remains `0`. The summary block also fires without the flag — the flag only changes the exit code so CI can fail builds on detected propagation gaps.
+
+**Remediation** for files that appear in the legacy-skip block:
+
+- `agentteams --add-fence-markers <path> [--in-place]` — retrofit AGENTTEAMS fence markers so the next `--merge` run updates the file.
+- `agentteams ... --overwrite` — replace unconditionally (will discard any local edits to those files; use only after backup).
 
 ### `--scan-security`
 

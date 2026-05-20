@@ -268,6 +268,16 @@ def _build_parser() -> argparse.ArgumentParser:
         ),
     )
     parser.add_argument(
+        "--fail-on-legacy-skip",
+        action="store_true",
+        dest="fail_on_legacy_skip",
+        help=(
+            "Exit with non-zero status if --merge skipped any files due to "
+            "missing fence markers (legacy files). Use in CI to enforce that "
+            "template updates always propagate to downstream repositories."
+        ),
+    )
+    parser.add_argument(
         "--scan-security",
         action="store_true",
         help="Scan generated agent files for security issues (PII, credentials, unresolved placeholders)",
@@ -1182,7 +1192,7 @@ def main(argv: list[str] | None = None) -> int:
                     "  ✓  Healed build-log baseline (no material drift; "
                     "fingerprint refreshed)."
                 )
-        return 0 if result.success else 1
+        return _finalize_exit_code(result, args)
 
     # -----------------------------------------------------------------------
     # Step 5d: Defaults audit + auto-enrichment (--enrich)
@@ -1375,12 +1385,31 @@ def main(argv: list[str] | None = None) -> int:
                     file=sys.stderr,
                 )
 
-    return 0 if result.success else 1
+    return _finalize_exit_code(result, args)
 
 
 # ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------
+
+def _finalize_exit_code(result, args) -> int:
+    """Return the final exit code, applying optional fail-on-legacy-skip gate.
+
+    A successful emit returns 0 by default. When ``--fail-on-legacy-skip`` is
+    set and any files were skipped due to missing fence markers, the run is
+    promoted to non-zero so CI can enforce template propagation.
+    """
+    if not result.success:
+        return 1
+    if getattr(args, "fail_on_legacy_skip", False) and result.skipped_legacy:
+        print(
+            f"\nExit 1: --fail-on-legacy-skip set and "
+            f"{len(result.skipped_legacy)} legacy file(s) skipped.",
+            file=sys.stderr,
+        )
+        return 1
+    return 0
+
 
 def _run_convert(
     source_dir: Path,
