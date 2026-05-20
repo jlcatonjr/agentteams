@@ -53,6 +53,16 @@ Enumerate every assumption — stated and unstated. Common sources:
 | Temporal | T | Depends on timing or sequence |
 | Causal | C | Claims a cause-effect relationship |
 
+**Memory-index consultation for T and C classes:** *(applies when `references/memory-index.json` is present)*
+
+For every **Temporal (T)** and **Causal (C)** presupposition, query `references/memory-index.json` before adjudicating. The index returns ranked document pointers with snippets over the team's durable history (work summaries, CHANGELOG, plan/handoff artifacts):
+
+1. Formulate the query from the presupposition's key terms (e.g., "when was X decided", "did Y change before Z").
+2. If a snippet is **clearly responsive**, open the pointed document for full detail and treat that as prior-decision evidence; cite the document path in the audit output.
+3. If the snippet is **not clearly responsive** — or the index is absent/empty/stale — proceed with filesystem search + `git log`, exactly as before. Never block on the index; never cite a low-confidence snippet.
+
+The memory-index is a history layer, **not authoritative**: when its evidence conflicts with current state on disk, trust current state and queue an `SR` (Stale Reference) finding rather than letting stale memory anchor the audit.
+
 ### Step 3: Challenge
 
 For each presupposition, ask:

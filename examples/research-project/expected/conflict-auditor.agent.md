@@ -66,6 +66,28 @@ You detect logical inconsistencies across deliverables, agent documentation, ref
 | `HIERARCHY_CONFLICT` | HC | Authority hierarchy stated differently in different locations |
 | `STALE_REFERENCE` | SR | Reference to removed or renamed file |
 | `PHANTOM_ENTRY` | PE | Entry in reference file with no corresponding source |
+| `PAYLOAD_MISMATCH` | PM | Typed-handoff audit: an adjacent step pair's `payload_schema_out` (step N) does not equal the next step's `payload_schema_in` (step N+1) |
+| `PAYLOAD_UNTYPED` | PU | Typed-handoff audit: a plan step is missing `payload_schema_in` or `payload_schema_out` (severity follows `agentteams.handoff_payloads.PAYLOAD_UNTYPED_HARD_DATE`) |
+
+### Typed-handoff audit *(applies when a plan `.steps.csv` carries `payload_schema_in/out` columns)*
+
+For each adjacent step pair `(N, N+1)` in the current plan's `.steps.csv`:
+
+1. Read `steps[N].payload_schema_out` and `steps[N+1].payload_schema_in`.
+2. If either is missing or empty → emit `PAYLOAD_UNTYPED`.
+3. Otherwise compare the two `$id` strings byte-for-byte. If they differ → emit `PAYLOAD_MISMATCH`.
+
+This is a prose restatement of `agentteams.handoff_payloads.audit_handoff_chain(steps)`; if engineering integration is available, invoke that function and merge its `Finding` list into the conflict log instead of re-walking the rows by hand.
+
+### Behavioral spec cross-check *(applies when `references/eval-suite.json` is present)*
+
+When `references/eval-suite.json` exists, treat its `scenarios[].predicate` entries as **authoritative behavioral assertions about the team**. During a routine audit:
+
+1. For every `category: routing` scenario — verify the predicate against the emitted `orchestrator.agent.md` (agents list, expert count). Mismatch → `CLAIM_CONFLICT` keyed to the scenario id.
+2. For every `category: handoff` scenario — verify the chain agents all exist and that the chain's `returns_to` is referenced in each chain member's body. Mismatch → `CLAIM_CONFLICT`.
+3. For every `category: governance` scenario — verify the `agents_contains_all` set and the `body_contains` string. Mismatch → `CLAIM_CONFLICT`.
+
+If `eval-suite.json` is absent or empty (older team): skip this section silently — do not fabricate findings against a missing artifact.
 
 ### Conflict Log Format
 
@@ -81,6 +103,7 @@ Append to `.github/agents/references/conflict-log.csv` with columns:
 
 ### Reference Layer
 - `references/bibliography.bib` — Reference database
+- `.github/agents/references/eval-suite.json` — Behavioral spec (framework-neutral; consumed by the Typed-handoff and Behavioral-spec cross-checks above)
 
 ### Agent Documentation Layer
 - `.github/agents/*.agent.md` — Agent team files

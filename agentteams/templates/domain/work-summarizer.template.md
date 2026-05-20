@@ -59,6 +59,16 @@ Use only two authoritative source classes:
 1. Planning artifacts in canonical week-organized storage `tmp/by-week/YYYY-Www/` plus legacy undated artifacts in `tmp/` (`*.plan.md`, `*.steps.csv`)
 2. Git history from this repository (commit metadata, stats, and diffs)
 
+### Memory-index consultation (weekly / monthly only)
+
+When generating a **weekly** or **monthly** summary, query `references/memory-index.json` **before** scanning the filesystem for prior weeks' summaries:
+
+1. Build queries from the week/month's headline themes (extracted from the plan/steps artifacts you read in source class 1).
+2. The index returns ranked document pointers with snippets across `workSummaries/**`, `CHANGELOG.md`, and `README.md`. Use the top responsive snippets to (a) avoid duplicating coverage already in prior summaries and (b) cite continuity ("see also: YYYY-MM-DD daily for prior decision on X").
+3. **If `references/memory-index.json` is absent, empty, or its snippets do not clearly answer**, proceed with the conventional approach — read prior summary files directly under `workSummaries/`. Never block on the index. (Daily summaries are too short-horizon to benefit from the index; skip this step for them.)
+
+The index is an additive fast-lookup layer; the underlying work-summary documents remain the source of truth and must still be read directly when cited.
+
 Boundary rules:
 - Git history is authoritative for what changed.
 - Plan artifacts are authoritative for intended sequence and declared statuses.

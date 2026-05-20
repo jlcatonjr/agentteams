@@ -188,6 +188,12 @@ You coordinate all agent operations for **ProjectRepositories**. You route work 
 | Commit and push, pull/merge/rebase from main, conflict resolution, file recovery (git diff, revert, restore) | `@git-operations` | "Commit", "push", "pull main", "merge", "rebase", "recover file", "revert", "what changed", "restore old version" |
 <!-- AGENTTEAMS:END routing_table_rows -->
 
+### Optional Routing Extensions (User-Editable)
+
+| Content Area | Agent | Key Indicators |
+|---|---|---|
+| Post-production outcome verification | `@post-production-auditor` *(applies only when `@post-production-auditor` is in team)* | Claimed completion requires source-of-truth sampling validation and closure verdict |
+
 > ⚙️ **Project-specific rules and extension points go here.** This section is USER-EDITABLE and is preserved by `--update` (merge is the default). Use `--update --overwrite` only when intentional full-file regeneration is needed (requires security clearance). Add project-specific agent references, domain rules, and workflow customizations here — never by modifying the fenced sections above or below.
 
 ### Rules
@@ -203,6 +209,19 @@ You coordinate all agent operations for **ProjectRepositories**. You route work 
 - When a plan is completed in-session, capture it in `workSummaries/daily/YYYY-MM-DD.md` via `@work-summarizer` before closeout
 
 ---
+
+### Workflow 10C: Post-Production Audit Verification *(Optional; User-Editable)*
+
+**Trigger:** "Verify implementation outcome" / "Audit claimed completion" / "Run post-production audit"
+
+Applies only when `@post-production-auditor` is present in the team.
+
+*(If @post-production-auditor in team)* 1. Invoke `@post-production-auditor` → verify claimed completed outcomes using source-of-truth checks and risk-tiered sampling
+*(If @post-production-auditor in team)* 2. Invoke `@adversarial` → challenge presuppositions in the audit design, evidence quality, and closure recommendation
+*(If @post-production-auditor in team)* 3. Invoke `@conflict-auditor` → verify audit findings are consistent with authority files and plan artifacts
+*(If @post-production-auditor in team)* 4. If verdict is `FAIL` or `INCONCLUSIVE` → block closeout claim and require remediation + re-audit
+*(If @post-production-auditor in team)* 5. If remediation includes destructive mutation → invoke `@security` before any execution
+6. → **Invoke Workflow 11: Final Check** (always)
 
 <!-- AGENTTEAMS:BEGIN available_workflows v=1 -->
 ## Available Workflows
@@ -314,7 +333,7 @@ Before executing any such step:
 
 ### Workflow 6: Documentation Maintenance
 
-**Trigger:** "Update agent docs" / "Project structure changed" / "Repository updated"
+**Trigger:** "Update agent docs" / "Agent documentation changed" / "Project structure changed" / "Repository updated"
 
 1. Invoke `@agent-updater` → sync docs with changes, run the repository change census, and evaluate docs/API impact
 2. Invoke `@adversarial` → challenge the repository change census, docs/API impact decision, and synchronized workflow assumptions before closeout
@@ -386,9 +405,25 @@ Before executing any such step:
 5. If a weekly summary was produced → run aggregate weekly audits: `@adversarial`, then `@conflict-auditor`
 6. → **Invoke Workflow 11: Final Check** (always; after all conditional branches above complete)
 
+### Workflow 10D: Behavioral Verification *(Optional; Generator-Owned)*
+
+**Trigger:** Operator-initiated after a workflow that materially changed agent behavior (handoffs, governance, routing) — for example, after agent-updater regenerates the team or after a multi-step plan that touches the orchestrator/expert handoff surfaces.
+
+**Premise:** The generator emits two behavioral-governance artifacts on every successful `--update` (and `--init`):
+- `references/eval-suite.json` — framework-neutral behavioral spec (routing/handoff/governance scenarios derived from the manifest).
+- `agent_session_trajectory` packets — recorded handoff edges (Phase 1 substrate).
+
+`@orchestrator` does NOT itself execute the eval framework; it coordinates the operator handoff:
+
+1. Read `references/eval-suite.json`. If absent or empty (older team that has not yet been `--update`d past 2026-05-W21): skip Workflow 10D, note "no behavioral spec available", proceed to Workflow 11.
+2. Instruct the operator to translate the suite to a target framework via one of the shipped adapters (Inspect AI or OpenAI Evals) and run the scoring step. Adapters live in `agentteams/eval_adapters/`.
+3. If a recent `agent_session_trajectory` packet exists for the just-completed session, invoke `@adversarial` to inspect it via `agentteams.behavioral_drift.detect_behavioral_drift(trajectory, eval_suite)`; the function returns a list of findings (chain divergence, missing return, broken contiguity, payload break). Escalate any HARD severity to `@conflict-auditor` for diff against `eval-suite.json` predicates.
+4. If no trajectory exists: emit "no trajectory available — behavioral drift check skipped (Phase 1 substrate requires a recorded session)" and proceed.
+5. → **Invoke Workflow 11: Final Check** (terminal; do not recurse — Workflow 11's non-recursion guard applies).
+
 ### Workflow 11: Final Check
 
-**Trigger:** Terminal step of Workflows 1–10. Do not invoke Workflow 11 from within Workflow 11 (no recursion — identify this workflow by name: "Final Check").
+**Trigger:** Terminal step of Workflows 1–10 and optional extension workflows (for example 10B/10C/10D). Do not invoke Workflow 11 from within Workflow 11 (no recursion — identify this workflow by name: "Final Check").
 
 #### Part A — Within-Plan Issues
 *(Skip Part A if no plan was active for the current session.)*

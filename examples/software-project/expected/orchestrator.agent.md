@@ -384,9 +384,25 @@ Before executing any such step:
 5. If a weekly summary was produced → run aggregate weekly audits: `@adversarial`, then `@conflict-auditor`
 6. → **Invoke Workflow 11: Final Check** (always; after all conditional branches above complete)
 
+### Workflow 10D: Behavioral Verification *(Optional; Generator-Owned)*
+
+**Trigger:** Operator-initiated after a workflow that materially changed agent behavior (handoffs, governance, routing) — for example, after agent-updater regenerates the team or after a multi-step plan that touches the orchestrator/expert handoff surfaces.
+
+**Premise:** The generator emits two behavioral-governance artifacts on every successful `--update` (and `--init`):
+- `references/eval-suite.json` — framework-neutral behavioral spec (routing/handoff/governance scenarios derived from the manifest).
+- `agent_session_trajectory` packets — recorded handoff edges (Phase 1 substrate).
+
+`@orchestrator` does NOT itself execute the eval framework; it coordinates the operator handoff:
+
+1. Read `references/eval-suite.json`. If absent or empty (older team that has not yet been `--update`d past 2026-05-W21): skip Workflow 10D, note "no behavioral spec available", proceed to Workflow 11.
+2. Instruct the operator to translate the suite to a target framework via one of the shipped adapters (Inspect AI or OpenAI Evals) and run the scoring step. Adapters live in `agentteams/eval_adapters/`.
+3. If a recent `agent_session_trajectory` packet exists for the just-completed session, invoke `@adversarial` to inspect it via `agentteams.behavioral_drift.detect_behavioral_drift(trajectory, eval_suite)`; the function returns a list of findings (chain divergence, missing return, broken contiguity, payload break). Escalate any HARD severity to `@conflict-auditor` for diff against `eval-suite.json` predicates.
+4. If no trajectory exists: emit "no trajectory available — behavioral drift check skipped (Phase 1 substrate requires a recorded session)" and proceed.
+5. → **Invoke Workflow 11: Final Check** (terminal; do not recurse — Workflow 11's non-recursion guard applies).
+
 ### Workflow 11: Final Check
 
-**Trigger:** Terminal step of Workflows 1–10 and optional extension workflows (for example 10B/10C). Do not invoke Workflow 11 from within Workflow 11 (no recursion — identify this workflow by name: "Final Check").
+**Trigger:** Terminal step of Workflows 1–10 and optional extension workflows (for example 10B/10C/10D). Do not invoke Workflow 11 from within Workflow 11 (no recursion — identify this workflow by name: "Final Check").
 
 #### Part A — Within-Plan Issues
 *(Skip Part A if no plan was active for the current session.)*
