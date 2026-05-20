@@ -69,6 +69,7 @@ You detect logical inconsistencies across deliverables, agent documentation, ref
 | `PAYLOAD_MISMATCH` | PM | Typed-handoff audit: an adjacent step pair's `payload_schema_out` (step N) does not equal the next step's `payload_schema_in` (step N+1) |
 | `PAYLOAD_UNTYPED` | PU | Typed-handoff audit: a plan step is missing `payload_schema_in` or `payload_schema_out` (severity follows `agentteams.handoff_payloads.PAYLOAD_UNTYPED_HARD_DATE`) |
 
+<!-- AGENTTEAMS:BEGIN typed_handoff_audit v=1 -->
 ### Typed-handoff audit *(applies when a plan `.steps.csv` carries `payload_schema_in/out` columns)*
 
 For each adjacent step pair `(N, N+1)` in the current plan's `.steps.csv`:
@@ -78,7 +79,9 @@ For each adjacent step pair `(N, N+1)` in the current plan's `.steps.csv`:
 3. Otherwise compare the two `$id` strings byte-for-byte. If they differ → emit `PAYLOAD_MISMATCH`.
 
 This is a prose restatement of `agentteams.handoff_payloads.audit_handoff_chain(steps)`; if engineering integration is available, invoke that function and merge its `Finding` list into the conflict log instead of re-walking the rows by hand.
+<!-- AGENTTEAMS:END typed_handoff_audit -->
 
+<!-- AGENTTEAMS:BEGIN behavioral_spec_cross_check v=1 -->
 ### Behavioral spec cross-check *(applies when `references/eval-suite.json` is present)*
 
 When `references/eval-suite.json` exists, treat its `scenarios[].predicate` entries as **authoritative behavioral assertions about the team**. During a routine audit:
@@ -88,6 +91,7 @@ When `references/eval-suite.json` exists, treat its `scenarios[].predicate` entr
 3. For every `category: governance` scenario — verify the `agents_contains_all` set and the `body_contains` string. Mismatch → `CLAIM_CONFLICT`.
 
 If `eval-suite.json` is absent or empty (older team): skip this section silently — do not fabricate findings against a missing artifact.
+<!-- AGENTTEAMS:END behavioral_spec_cross_check -->
 
 ### Conflict Log Format
 
@@ -103,7 +107,6 @@ Append to `.github/agents/references/conflict-log.csv` with columns:
 
 ### Reference Layer
 - `{MANUAL:REFERENCE_DB_PATH}` — Reference database
-- `.github/agents/references/eval-suite.json` — Behavioral spec (framework-neutral; consumed by the Typed-handoff and Behavioral-spec cross-checks above)
 
 ### Agent Documentation Layer
 - `.github/agents/*.agent.md` — Agent team files
