@@ -347,3 +347,44 @@ def test_supplement_from_directory_adds_deps(tmp_path):
     assert "Python" in tool_names
     assert "flask" in tool_names
     assert "pandas" in tool_names
+
+
+def test_scan_infers_retrieval_integration_relational_metadata(tmp_path):
+    services_dir = tmp_path / "services"
+    services_dir.mkdir()
+    (services_dir / "run_services.py").write_text(
+        """
+import os
+def run():
+    mode = os.environ.get('BBB_IDS')
+    parser = '--service refresh-mvs'
+    sql = 'UPDATE agency_datasets SET retrieval_type = ...'
+""",
+        encoding="utf-8",
+    )
+    scripts_dir = tmp_path / "scripts"
+    scripts_dir.mkdir()
+    (scripts_dir / "refresh.sh").write_text("python services/run_services.py --service refresh-mvs\n", encoding="utf-8")
+
+    brief = {
+        "project_goal": "Collector maintenance pipeline.",
+        "existing_project_path": str(tmp_path),
+    }
+    result = load(_write_brief(tmp_path, brief), scan_project=True)
+    retrieval = result.get("retrieval_integration", {})
+
+    assert retrieval.get("mode") == "relational-metadata"
+    assert "services/run_services.py" in retrieval.get("query_entrypoints", [])
+    assert "services/run_services.py" in retrieval.get("maintenance_entrypoints", [])
+    assert "cli" in retrieval.get("trigger_sources", [])
+    assert "env" in retrieval.get("trigger_sources", [])
+
+
+def test_scan_skips_retrieval_integration_when_none_detected(tmp_path):
+    (tmp_path / "README.md").write_text("Minimal project", encoding="utf-8")
+    brief = {
+        "project_goal": "Simple project.",
+        "existing_project_path": str(tmp_path),
+    }
+    result = load(_write_brief(tmp_path, brief), scan_project=True)
+    assert "retrieval_integration" not in result

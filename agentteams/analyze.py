@@ -62,6 +62,14 @@ _POST_PRODUCTION_LEGACY_KEYWORDS: tuple[str, ...] = (
     "pipeline", "etl", "collector",
 )
 
+_RETRIEVAL_MODES: set[str] = {
+    "none",
+    "relational-metadata",
+    "lexical-index",
+    "sparse-vector",
+    "embedding-vector",
+}
+
 
 def _should_select_post_production_auditor(text: str) -> bool:
     """Return True when project text indicates outcome-verification needs.
@@ -151,12 +159,17 @@ def build_manifest(description: dict[str, Any], *, framework: str = "copilot-vsc
     conversion_pipeline = description.get("conversion_pipeline")
     pip_package_name = description.get("pip_package_name")
     doc_site_config_file = description.get("doc_site_config_file")
+    retrieval_integration = _normalize_retrieval_integration(description.get("retrieval_integration"))
+    retrieval_enabled = retrieval_integration.get("mode", "none") != "none"
 
     # Archetype selection
     if "selected_archetypes" in description:
         archetypes = description["selected_archetypes"]
     else:
         archetypes = select_archetypes(description)
+
+    if retrieval_enabled and "retrieval-integrator" not in archetypes:
+        archetypes = list(archetypes) + ["retrieval-integrator"]
 
     # Tool agents
     tool_agents = detect_tool_agents(description.get("tools", []))
@@ -237,6 +250,25 @@ def build_manifest(description: dict[str, Any], *, framework: str = "copilot-vsc
         diagram_extension=diagram_extension,
         component_slug="<component-slug>",
         unresolved_tool_list=_format_unresolved_tool_list(tool_agents, reference_tools),
+        retrieval_mode=retrieval_integration.get("mode", "none"),
+        retrieval_query_entrypoints=_format_string_list(
+            retrieval_integration.get("query_entrypoints", []),
+            default="No retrieval query entrypoints declared."
+        ),
+        retrieval_maintenance_entrypoints=_format_string_list(
+            retrieval_integration.get("maintenance_entrypoints", []),
+            default="No retrieval maintenance entrypoints declared."
+        ),
+        retrieval_trigger_sources=_format_string_list(
+            retrieval_integration.get("trigger_sources", []),
+            default="manual"
+        ),
+        retrieval_source_of_truth=_format_string_list(
+            retrieval_integration.get("source_of_truth", []),
+            default="No retrieval source-of-truth declared."
+        ),
+        retrieval_staleness_slo_minutes=str(retrieval_integration.get("staleness_slo_minutes", 60)),
+        retrieval_trigger_contract_version=retrieval_integration.get("trigger_contract_version", "v1"),
         security_data_generated_at="Not yet generated",
         security_source_registry=(
             "- CISA KEV (https://www.cisa.gov/known-exploited-vulnerabilities-catalog)\\n"
@@ -320,6 +352,8 @@ def build_manifest(description: dict[str, Any], *, framework: str = "copilot-vsc
         "deliverable_type": deliverable_type,
         "output_format": output_format,
         "conversion_pipeline": conversion_pipeline,
+        "retrieval_trigger_contract_version": retrieval_integration.get("trigger_contract_version", "v1"),
+        "retrieval_integration": retrieval_integration,
         "selected_archetypes": archetypes,
         "tool_agents": tool_agents,
         "reference_tools": reference_tools,
@@ -829,6 +863,14 @@ def _format_style_rules(rules: list[str]) -> str:
     return "\n".join(f"- {r}" for r in rules)
 
 
+def _format_string_list(values: list[str], *, default: str) -> str:
+    """Format a plain Markdown bullet list or return a default string."""
+    cleaned = [v for v in values if v]
+    if not cleaned:
+        return default
+    return "\n".join(f"- {v}" for v in cleaned)
+
+
 _DIAGRAM_TOOL_MAP: dict[str, tuple[str, str]] = {
     # tool-name-lower → (display-name, file-extension)
     "mermaid": ("Mermaid", "mmd"),
@@ -867,6 +909,7 @@ def _format_domain_agent_list(agent_slugs: list[str]) -> str:
         "cohesion-repairer": "repairs within-section cohesion failures",
         "style-guardian": "enforces voice and style fidelity",
         "technical-validator": "verifies technical accuracy against authority sources",
+        "retrieval-integrator": "validates retrieval query, maintenance, and trigger contracts",
         "format-converter": "converts deliverables to final output format",
         "reference-manager": "manages the reference/bibliography database",
         "output-compiler": "assembles components into the final deliverable package",
@@ -1095,6 +1138,20 @@ def _plan_output_files(
         "component_slug": None,
     })
 
+    if "retrieval-integrator" in archetypes:
+        files.append({
+            "path": "references/retrieval-integration.reference.md",
+            "template": f"{agents_dir}retrieval-integration.reference.template.md",
+            "type": "reference",
+            "component_slug": None,
+        })
+        files.append({
+            "path": "references/retrieval-trigger-contract.reference.md",
+            "template": f"{agents_dir}retrieval-trigger-contract.reference.template.md",
+            "type": "reference",
+            "component_slug": None,
+        })
+
     # Workstream experts
     for comp in components:
         files.append({
@@ -1175,7 +1232,56 @@ def _description_text(description: dict[str, Any]) -> str:
         parts.append(t.get("name", ""))
         parts.append(t.get("category", ""))
         parts.append(t.get("version", ""))
+    retrieval = description.get("retrieval_integration", {})
+    if isinstance(retrieval, dict):
+        parts.append(retrieval.get("mode", ""))
+        parts.extend(retrieval.get("query_entrypoints", []))
+        parts.extend(retrieval.get("maintenance_entrypoints", []))
+        parts.extend(retrieval.get("trigger_sources", []))
     return " ".join(parts)
+
+
+def _normalize_retrieval_integration(raw: Any) -> dict[str, Any]:
+    """Normalize retrieval integration contract to a stable shape."""
+    if not isinstance(raw, dict):
+        return {
+            "mode": "none",
+            "query_entrypoints": [],
+            "maintenance_entrypoints": [],
+            "trigger_sources": ["manual"],
+            "source_of_truth": [],
+            "staleness_slo_minutes": 60,
+            "trigger_contract_version": "v1",
+        }
+
+    mode = str(raw.get("mode", "none")).strip().lower()
+    if mode not in _RETRIEVAL_MODES:
+        mode = "none"
+
+    def _list(name: str) -> list[str]:
+        values = raw.get(name, [])
+        if not isinstance(values, list):
+            return []
+        return [str(v) for v in values if str(v).strip()]
+
+    trigger_sources = _list("trigger_sources")
+    if not trigger_sources:
+        trigger_sources = ["manual"]
+
+    try:
+        staleness = int(raw.get("staleness_slo_minutes", 60) or 60)
+    except (TypeError, ValueError):
+        staleness = 60
+
+    return {
+        "mode": mode,
+        "query_entrypoints": _list("query_entrypoints"),
+        "maintenance_entrypoints": _list("maintenance_entrypoints"),
+        "trigger_sources": trigger_sources,
+        "source_of_truth": _list("source_of_truth"),
+        "staleness_slo_minutes": staleness,
+        "trigger_contract_version": str(raw.get("trigger_contract_version", "v1") or "v1"),
+    }
 
 
 def _has_unknown_tool_metadata(

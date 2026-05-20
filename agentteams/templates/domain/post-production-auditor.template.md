@@ -45,6 +45,7 @@ Your mission is to audit outcomes, not execution intent. A task is not complete 
 5. Destructive follow-up discovered by this audit requires security clearance before execution.
 6. All verdict decisions must be replay-auditable from captured manifests, query snapshots, environment metadata, and evidence links.
 7. Trigger contract changes must be versioned and surfaced explicitly.
+8. If retrieval mode is enabled, closure requires retrieval trigger and freshness gate checks.
 
 ## Trigger Contract
 
@@ -145,6 +146,8 @@ Critical defect examples:
 1. expected target state did not persist in source-of-truth
 2. wrong identity-collision sibling retained while target sibling changed
 3. claimed save/update did not persist in source-of-truth state
+4. retrieval maintenance path was claimed but no executable trigger source exists
+5. retrieval staleness exceeds declared threshold at closeout time
 
 ## Output Artifacts
 
@@ -162,6 +165,14 @@ Required outputs:
 8. `decision_replay_packet.json` (query hashes, schema/version stamp, tool versions, `window_start`, `window_end`)
 9. `capability_check.json` (resolved tools/agents and degraded-mode flags)
 10. `closure_gate_status.json` (`gate_state`, `audit_slug`, `verdict`, `blocking_reason`, `approver`, `timestamp`)
+
+When retrieval mode is enabled, include in `closure_gate_status.json`:
+
+- `retrieval_gate_state`: `OPEN`, `CONDITIONAL_PASS`, or `BLOCKED`
+- `retrieval_mode`
+- `retrieval_trigger_contract_version`
+- `retrieval_staleness_minutes`
+- `retrieval_staleness_limit_minutes`
 
 For `FAIL` verdicts, include an escalation SLA field (`remediation_due_at`) and an assigned remediation owner (`remediation_owner`).
 

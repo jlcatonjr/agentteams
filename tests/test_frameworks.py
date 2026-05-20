@@ -211,6 +211,57 @@ class TestCopilotVSCodeAdapter:
         assert "'adversarial'" in result
         assert "'reference-manager'" not in result
 
+    def test_render_agent_file_filters_absent_agents_from_yaml_list_double_and_bare(self):
+        """Flow-list parser accepts double-quoted and bare slugs."""
+        content = (
+            "---\n"
+            "name: Expert — TestProject\n"
+            "description: 'Expert'\n"
+            "user-invokable: false\n"
+            "tools: ['read', 'search']\n"
+            "model: [\"Claude Sonnet 4.6 (copilot)\"]\n"
+            "agents: [\"primary-producer\", adversarial, \"reference-manager\"]\n"
+            "---\n\n# Body\n"
+        )
+        manifest = {
+            "project_name": "TestProject",
+            "output_files": [
+                {"path": "primary-producer.agent.md", "type": "agent"},
+                {"path": "adversarial.agent.md", "type": "agent"},
+            ],
+        }
+        result = self.adapter.render_agent_file(content, "expert", manifest)
+        assert "'primary-producer'" in result
+        assert "'adversarial'" in result
+        assert "reference-manager" not in result
+
+    def test_render_agent_file_filters_absent_agents_from_yaml_block_list(self):
+        """Block-list agents syntax is filtered to generated team members."""
+        content = (
+            "---\n"
+            "name: Expert — TestProject\n"
+            "description: 'Expert'\n"
+            "user-invokable: false\n"
+            "tools: ['read', 'search']\n"
+            "model: [\"Claude Sonnet 4.6 (copilot)\"]\n"
+            "agents:\n"
+            "  - primary-producer\n"
+            "  - reference-manager\n"
+            "  - adversarial\n"
+            "---\n\n# Body\n"
+        )
+        manifest = {
+            "project_name": "TestProject",
+            "output_files": [
+                {"path": "primary-producer.agent.md", "type": "agent"},
+                {"path": "adversarial.agent.md", "type": "agent"},
+            ],
+        }
+        result = self.adapter.render_agent_file(content, "expert", manifest)
+        assert "primary-producer" in result
+        assert "adversarial" in result
+        assert "reference-manager" not in result
+
     def test_render_agent_file_filters_absent_agents_from_handoffs(self):
         """Handoff entries for agents not in the team are removed from the YAML front matter."""
         content = (
@@ -243,6 +294,37 @@ class TestCopilotVSCodeAdapter:
         assert "Invoke Producer" in result
         assert "reference-manager" not in result
         assert "Verify Citations" not in result
+
+    def test_render_agent_file_filters_handoffs_with_flexible_formatting(self):
+        """Handoff filtering tolerates common indentation and additional keys."""
+        content = (
+            "---\n"
+            "name: Expert — TestProject\n"
+            "description: 'Expert'\n"
+            "user-invokable: false\n"
+            "tools: ['read', 'search']\n"
+            "model: [\"Claude Sonnet 4.6 (copilot)\"]\n"
+            "handoffs:\n"
+            "   - label: Keep\n"
+            "     agent: \"primary-producer\"\n"
+            "     prompt: \"Draft\"\n"
+            "     send: false\n"
+            "     notes: optional\n"
+            "   - label: Drop\n"
+            "     agent: \"reference-manager\"\n"
+            "     prompt: \"Verify\"\n"
+            "     send: false\n"
+            "---\n\n# Body\n"
+        )
+        manifest = {
+            "project_name": "TestProject",
+            "output_files": [
+                {"path": "primary-producer.agent.md", "type": "agent"},
+            ],
+        }
+        result = self.adapter.render_agent_file(content, "expert", manifest)
+        assert "primary-producer" in result
+        assert "reference-manager" not in result
 
     def test_render_agent_file_orchestrator_always_kept_in_handoffs(self):
         """@orchestrator is always retained in handoffs even when absent from output_files."""

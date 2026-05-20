@@ -191,6 +191,14 @@ def test_validate_cross_refs_skips_routing_table_rows():
     assert warnings == []
 
 
+def test_validate_cross_refs_skips_applies_when_present_in_team_lines():
+    rendered = [
+        ("orchestrator.agent.md", "This applies when `@retrieval-integrator` is present in team."),
+    ]
+    warnings = validate_cross_refs(rendered)
+    assert warnings == []
+
+
 def test_validate_cross_refs_deduplicates_per_file():
     # Bug 2 regression: same (file, slug) pair must produce exactly one warning
     rendered = [

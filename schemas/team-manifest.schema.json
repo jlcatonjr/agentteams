@@ -63,6 +63,48 @@
     "conversion_pipeline": {
       "type": ["string", "null"]
     },
+    "retrieval_trigger_contract_version": {
+      "type": "string",
+      "description": "Version identifier for retrieval trigger governance.",
+      "default": "v1"
+    },
+    "retrieval_integration": {
+      "type": "object",
+      "description": "Normalized retrieval integration contract carried from the project description and inference stage.",
+      "properties": {
+        "mode": {
+          "type": "string",
+          "enum": ["none", "relational-metadata", "lexical-index", "sparse-vector", "embedding-vector"]
+        },
+        "query_entrypoints": {
+          "type": "array",
+          "items": { "type": "string" }
+        },
+        "maintenance_entrypoints": {
+          "type": "array",
+          "items": { "type": "string" }
+        },
+        "trigger_sources": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "enum": ["cli", "env", "scheduler", "workflow", "script", "manual"]
+          }
+        },
+        "source_of_truth": {
+          "type": "array",
+          "items": { "type": "string" }
+        },
+        "staleness_slo_minutes": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "trigger_contract_version": {
+          "type": "string"
+        }
+      },
+      "additionalProperties": false
+    },
     "selected_archetypes": {
       "type": "array",
       "description": "List of domain archetype slugs selected for this project.",
@@ -74,6 +116,7 @@
           "cohesion-repairer",
           "style-guardian",
           "technical-validator",
+          "retrieval-integrator",
           "module-doc-author",
           "module-doc-validator",
           "tool-doc-researcher",

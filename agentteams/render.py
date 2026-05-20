@@ -468,7 +468,8 @@ def validate_cross_refs(rendered_files: list[tuple[str, str]]) -> list[str]:
         r"|if in team"                      # inline "if in team" suffix
         r"|route to"                        # "route to @slug" guidance lines
         r"|`@[a-z0-9\-]+` / `@"            # slash-separated agent lists
-        r"|Applies only when",             # prose guard: "Applies only when @slug is present"
+        r"|Applies only when"               # prose guard: "Applies only when @slug is present"
+        r"|applies when .* is present in team",  # variant prose guard
         re.IGNORECASE,
     )
 

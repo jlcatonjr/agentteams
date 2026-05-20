@@ -146,6 +146,52 @@
         }
       }
     },
+    "retrieval_integration": {
+      "type": "object",
+      "description": "Structured contract for retrieval query, maintenance, and trigger behavior.",
+      "properties": {
+        "mode": {
+          "type": "string",
+          "description": "Retrieval implementation mode.",
+          "enum": ["none", "relational-metadata", "lexical-index", "sparse-vector", "embedding-vector"],
+          "default": "none"
+        },
+        "query_entrypoints": {
+          "type": "array",
+          "description": "Files, symbols, or commands where retrieval lookups are executed.",
+          "items": { "type": "string" }
+        },
+        "maintenance_entrypoints": {
+          "type": "array",
+          "description": "Commands, scripts, or functions that refresh or rebuild retrieval state.",
+          "items": { "type": "string" }
+        },
+        "trigger_sources": {
+          "type": "array",
+          "description": "Trigger channels used to run retrieval workflows.",
+          "items": {
+            "type": "string",
+            "enum": ["cli", "env", "scheduler", "workflow", "script", "manual"]
+          }
+        },
+        "source_of_truth": {
+          "type": "array",
+          "description": "Tables/files used to verify retrieval correctness and freshness.",
+          "items": { "type": "string" }
+        },
+        "staleness_slo_minutes": {
+          "type": "integer",
+          "description": "Maximum allowed retrieval staleness window in minutes.",
+          "minimum": 0
+        },
+        "trigger_contract_version": {
+          "type": "string",
+          "description": "Version identifier for retrieval trigger governance.",
+          "default": "v1"
+        }
+      },
+      "additionalProperties": false
+    },
     "style_rules": {
       "type": "array",
       "description": "Project-specific style rules in plain English. Used in copilot-instructions.md.",
@@ -175,6 +221,7 @@
           "cohesion-repairer",
           "style-guardian",
           "technical-validator",
+          "retrieval-integrator",
           "post-production-auditor",
           "format-converter",
           "reference-manager",

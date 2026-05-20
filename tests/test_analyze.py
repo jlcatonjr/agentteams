@@ -183,6 +183,40 @@ def test_build_manifest_with_components():
     assert len(expert_files) == 2
 
 
+def test_build_manifest_retrieval_mode_adds_retrieval_integrator():
+    desc = {
+        "project_goal": "Validate retrieval pipeline wiring.",
+        "retrieval_integration": {
+            "mode": "relational-metadata",
+            "query_entrypoints": ["services/run_services.py"],
+            "maintenance_entrypoints": ["services/run_services.py --service refresh-mvs"],
+            "trigger_sources": ["cli", "env"],
+            "source_of_truth": ["agency_datasets"],
+            "staleness_slo_minutes": 45,
+            "trigger_contract_version": "v2",
+        },
+    }
+    manifest = build_manifest(desc, framework="copilot-vscode")
+
+    assert "retrieval-integrator" in manifest["selected_archetypes"]
+    assert manifest["retrieval_integration"]["mode"] == "relational-metadata"
+    assert manifest["retrieval_trigger_contract_version"] == "v2"
+
+    planned_paths = {f["path"] for f in manifest["output_files"]}
+    assert "retrieval-integrator.agent.md" in planned_paths
+    assert "references/retrieval-integration.reference.md" in planned_paths
+    assert "references/retrieval-trigger-contract.reference.md" in planned_paths
+
+
+def test_build_manifest_no_retrieval_mode_does_not_add_retrieval_files():
+    desc = {"project_goal": "Build a simple module.", "retrieval_integration": {"mode": "none"}}
+    manifest = build_manifest(desc, framework="copilot-vscode")
+
+    planned_paths = {f["path"] for f in manifest["output_files"]}
+    assert "references/retrieval-integration.reference.md" not in planned_paths
+    assert "references/retrieval-trigger-contract.reference.md" not in planned_paths
+
+
 def test_build_manifest_includes_builder_agent():
     desc = {"project_goal": "Test project"}
     for fw in ("copilot-vscode", "copilot-cli", "claude"):

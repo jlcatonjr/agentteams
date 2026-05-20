@@ -60,9 +60,11 @@ _YAML_DEFAULTS = {
 
 # Patterns for team-ref filtering
 _AGENTS_FLOW_RE = re.compile(r"^(agents: )\[([^\]]*)\]", re.MULTILINE)
-_HANDOFF_ENTRY_RE = re.compile(
-    r"  - label: [^\n]+\n    agent: ([^\n]+)\n    prompt: [^\n]+\n    send: [^\n]+\n?",
-)
+_AGENTS_BLOCK_RE = re.compile(r"(?ms)^agents:\s*\n((?:[ \t]+-\s*[^\n]+\n)+)")
+_HANDOFF_SECTION_RE = re.compile(r"(?ms)^handoffs:\s*\n((?:[ \t]+[^\n]*\n)*)")
+_HANDOFF_ENTRY_START_RE = re.compile(r"^[ \t]*-\s+label:\s*", re.MULTILINE)
+_HANDOFF_AGENT_LINE_RE = re.compile(r"^[ \t]*agent:\s*['\"]?([a-z0-9][a-z0-9\-]*)['\"]?\s*$", re.MULTILINE)
+_SLUG_RE = re.compile(r"^[a-z0-9][a-z0-9\-]*$")
 
 
 def _get_team_slugs(manifest: dict[str, Any]) -> frozenset[str]:
@@ -83,20 +85,96 @@ def _filter_yaml_team_refs(yaml_body: str, team_slugs: frozenset[str]) -> str:
     """Remove agent slugs from ``agents:`` and ``handoffs:`` that are absent from the team."""
 
     def _filter_agents(m: re.Match) -> str:
-        slugs = re.findall(r"'([^']+)'", m.group(2))
+        slugs = _parse_flow_agents(m.group(2))
         keep = [s for s in slugs if s in team_slugs]
+        if keep == slugs:
+            return m.group(0)
         if not keep:
             return f"{m.group(1)}[]"
         return f"{m.group(1)}[{', '.join(repr(s) for s in keep)}]"
 
     yaml_body = _AGENTS_FLOW_RE.sub(_filter_agents, yaml_body)
 
-    def _keep_handoff(m: re.Match) -> str:
-        slug = m.group(1).strip().strip("'\"")
-        return m.group(0) if slug in team_slugs else ""
+    def _filter_agents_block(m: re.Match) -> str:
+        block = m.group(1)
+        slugs = _parse_block_agents(block)
+        keep = [s for s in slugs if s in team_slugs]
+        if keep == slugs:
+            return m.group(0)
+        if not keep:
+            return "agents: []\n"
+        lines = "".join(f"  - '{slug}'\n" for slug in keep)
+        return "agents:\n" + lines
 
-    yaml_body = _HANDOFF_ENTRY_RE.sub(_keep_handoff, yaml_body)
+    yaml_body = _AGENTS_BLOCK_RE.sub(_filter_agents_block, yaml_body)
+
+    def _filter_handoffs_section(m: re.Match) -> str:
+        block = m.group(1)
+        entries = _split_handoff_entries(block)
+        if not entries:
+            return "handoffs: []\n"
+
+        kept_entries: list[str] = []
+        for entry in entries:
+            agent_match = _HANDOFF_AGENT_LINE_RE.search(entry)
+            if not agent_match:
+                continue
+            slug = agent_match.group(1)
+            if slug in team_slugs:
+                kept_entries.append(entry)
+
+        if not kept_entries:
+            return "handoffs: []\n"
+
+        return "handoffs:\n" + "".join(kept_entries)
+
+    yaml_body = _HANDOFF_SECTION_RE.sub(_filter_handoffs_section, yaml_body)
+
     return yaml_body
+
+
+def _parse_flow_agents(value: str) -> list[str]:
+    """Parse ``agents: [ ... ]`` values supporting single/double/bare slugs."""
+    slugs: list[str] = []
+    token_re = re.compile(r"'([^']+)'|\"([^\"]+)\"|([A-Za-z0-9][A-Za-z0-9\-]*)")
+    for match in token_re.finditer(value):
+        slug = next((group for group in match.groups() if group), "")
+        slug = slug.strip()
+        if _SLUG_RE.fullmatch(slug):
+            slugs.append(slug)
+    return slugs
+
+
+def _parse_block_agents(block: str) -> list[str]:
+    """Parse ``agents:`` block-list entries and return valid slugs."""
+    slugs: list[str] = []
+    for raw_line in block.splitlines():
+        line = raw_line.strip()
+        if not line.startswith("-"):
+            continue
+        item = line[1:].strip().strip("\"'")
+        if _SLUG_RE.fullmatch(item):
+            slugs.append(item)
+    return slugs
+
+
+def _split_handoff_entries(block: str) -> list[str]:
+    """Split a handoffs block into per-entry YAML chunks."""
+    lines = block.splitlines(keepends=True)
+    entries: list[list[str]] = []
+    current: list[str] = []
+    for line in lines:
+        if _HANDOFF_ENTRY_START_RE.match(line):
+            if current:
+                entries.append(current)
+            current = [line]
+            continue
+        if current:
+            current.append(line)
+    if current:
+        entries.append(current)
+
+    return ["".join(entry) for entry in entries]
 
 
 def _ensure_yaml_front_matter(content: str, agent_slug: str, manifest: dict[str, Any]) -> str:

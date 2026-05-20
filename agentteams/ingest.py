@@ -273,6 +273,11 @@ def _supplement_from_directory(desc: dict[str, Any], project_path: Path) -> dict
         if detected:
             desc["primary_output_dir"] = detected
 
+    if "retrieval_integration" not in desc:
+        inferred = _infer_retrieval_integration(project_path)
+        if inferred.get("mode") != "none":
+            desc["retrieval_integration"] = inferred
+
     return desc
 
 
@@ -557,6 +562,116 @@ def _walk_depth(path: Path, max_depth: int = 3) -> list[Path]:
         for fname in files:
             results.append(Path(root) / fname)
     return results
+
+
+def _infer_retrieval_integration(project_path: Path) -> dict[str, Any]:
+    """Infer retrieval integration contract from repository files.
+
+    The inference is intentionally conservative and stdlib-only. It detects
+    retrieval maintenance/query contracts from code/config patterns without
+    requiring external parsers.
+    """
+    mode = "none"
+    query_entrypoints: list[str] = []
+    maintenance_entrypoints: list[str] = []
+    source_of_truth: list[str] = []
+    trigger_sources: set[str] = set()
+
+    candidates = _candidate_retrieval_files(project_path)
+    for file_path in candidates:
+        try:
+            text = file_path.read_text(encoding="utf-8", errors="replace")
+        except OSError:
+            continue
+
+        lower = text.lower()
+        rel = str(file_path.relative_to(project_path))
+
+        if "workflow_dispatch" in lower or "schedule:" in lower or "cron:" in lower:
+            trigger_sources.add("workflow")
+        if "--service" in lower or "argparse" in lower:
+            trigger_sources.add("cli")
+        if "os.environ" in lower or "getenv(" in lower or "env var" in lower:
+            trigger_sources.add("env")
+        if file_path.suffix in {".sh", ".bash"}:
+            trigger_sources.add("script")
+
+        if (
+            "retrieval_type" in lower
+            or "refresh-mvs" in lower
+            or "refresh materialized" in lower
+            or "refresh partition" in lower
+            or "reindex" in lower
+        ):
+            if mode == "none":
+                mode = "relational-metadata"
+
+        if "query_index(" in lower and "strategy" in lower:
+            if mode in {"none", "relational-metadata"}:
+                mode = "lexical-index"
+            query_entrypoints.append(rel)
+        elif "retrieval_type" in lower and "update" in lower:
+            query_entrypoints.append(rel)
+
+        if "refresh" in lower or "reindex" in lower or "post-etl maintenance" in lower:
+            maintenance_entrypoints.append(rel)
+
+        if "agency_datasets" in lower:
+            source_of_truth.append("agency_datasets")
+        if "enriched_agency_datasets" in lower:
+            source_of_truth.append("enriched_agency_datasets")
+        if "bbb_dataset_mapping" in lower:
+            source_of_truth.append("bbb_dataset_mapping")
+
+        if any(token in lower for token in ("embedding", "faiss", "chroma", "pinecone", "qdrant", "weaviate", "milvus")):
+            mode = "embedding-vector"
+        elif mode != "embedding-vector" and any(token in lower for token in ("sparse vector", "cosine", "bm25")):
+            mode = "sparse-vector"
+
+    return {
+        "mode": mode,
+        "query_entrypoints": _unique(query_entrypoints),
+        "maintenance_entrypoints": _unique(maintenance_entrypoints),
+        "trigger_sources": sorted(trigger_sources) if trigger_sources else ["manual"],
+        "source_of_truth": _unique(source_of_truth),
+        "staleness_slo_minutes": 60,
+        "trigger_contract_version": "v1",
+    }
+
+
+def _candidate_retrieval_files(project_path: Path) -> list[Path]:
+    """Return likely files for retrieval and trigger inference."""
+    candidates: list[Path] = []
+    roots = ["services", "scripts", ".github/workflows"]
+    for root in roots:
+        root_path = project_path / root
+        if root_path.exists():
+            candidates.extend(_walk_depth(root_path, max_depth=4))
+
+    for root_file in ("CLAUDE.md", "README.md", "build_team.py"):
+        fp = project_path / root_file
+        if fp.exists():
+            candidates.append(fp)
+
+    filtered: list[Path] = []
+    for path in candidates:
+        if not path.is_file():
+            continue
+        if path.suffix.lower() in {".py", ".sh", ".md", ".yml", ".yaml", ".json", ".sql", ".txt"}:
+            filtered.append(path)
+    return filtered
+
+
+def _unique(values: list[str]) -> list[str]:
+    """Return values in first-seen order without duplicates."""
+    seen: set[str] = set()
+    result: list[str] = []
+    for value in values:
+        if not value or value in seen:
+            continue
+        seen.add(value)
+        result.append(value)
+    return result
 
 
 # ---------------------------------------------------------------------------
