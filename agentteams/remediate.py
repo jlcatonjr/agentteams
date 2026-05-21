@@ -16,7 +16,7 @@ from pathlib import Path
 from typing import Any
 
 
-_COPILOT_MODEL = "gpt-5.4"
+_COPILOT_MODEL = "auto"
 _COPILOT_TIMEOUT_SECONDS = 180
 
 

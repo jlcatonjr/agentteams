@@ -306,7 +306,7 @@ def _build_parser() -> argparse.ArgumentParser:
             "Run a post-generation audit after emit. Performs static checks "
             "(unresolved placeholders, YAML integrity, required-agent coverage) "
             "and, if the `gh` CLI is authenticated, an AI-powered conflict and "
-            "presupposition review via GitHub Models (Claude Sonnet 4.6)."
+            "presupposition review via GitHub Models (Auto model selection)."
         ),
     )
     parser.add_argument(

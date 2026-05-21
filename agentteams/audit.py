@@ -67,7 +67,7 @@ _SAFE_TOKENS: frozenset[str] = frozenset({
 })
 
 #: Model to use for AI audit via the standalone `copilot` CLI
-_AI_MODEL = "gpt-5.4"
+_AI_MODEL = "auto"
 
 #: Approximate max characters of agent-file excerpts sent to AI
 _AI_CONTEXT_LIMIT = 12_000
@@ -213,7 +213,7 @@ def print_audit_report(result: AuditResult) -> None:
     _print_phase("Code Hygiene Audit", result.code_hygiene_findings)
 
     if result.ai_available and result.ai_report:
-        print("\n  --- AI Audit (GitHub Models / Claude Sonnet 4.6) ---")
+        print("\n  --- AI Audit (GitHub Models / Auto model selection) ---")
         for line in result.ai_report.splitlines():
             print(f"     {line}")
     elif not result.ai_available:
