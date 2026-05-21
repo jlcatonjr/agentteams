@@ -188,6 +188,22 @@ You coordinate all agent operations for **ProjectRepositories**. You route work 
 | Commit and push, pull/merge/rebase from main, conflict resolution, file recovery (git diff, revert, restore) | `@git-operations` | "Commit", "push", "pull main", "merge", "rebase", "recover file", "revert", "what changed", "restore old version" |
 <!-- AGENTTEAMS:END routing_table_rows -->
 
+### Update Compatibility Source Pack
+
+Before orchestrating any on-the-fly agent file update, review these canonical files in order:
+
+1. `.github/copilot-instructions.md` — authority hierarchy, constitutional rules, and project-specific constraints
+2. `.github/agents/agent-updater.agent.md` — update protocol, drift triggers, and compatibility maintenance practices
+3. `.github/agents/references/github-workflows-merge.reference.md` — merge/rebase/conflict and repository operation guardrails
+4. `SETUP-REQUIRED.md` — unresolved manual placeholders that can affect update correctness
+
+Use this baseline command sequence for update-safe execution:
+
+1. `agentteams --description <brief> --check` (or `python build_team.py --description <brief> --check`)
+2. `agentteams --description <brief> --update --merge --dry-run` for scope preview
+3. `agentteams --description <brief> --update --merge` for apply
+4. `agentteams --description <brief> --scan-security` and `--post-audit` closeout when required by policy
+
 ### Optional Routing Extensions (User-Editable)
 
 | Content Area | Agent | Key Indicators |

@@ -127,6 +127,8 @@ def test_research_project_pipeline(tmp_path):
     content = orchestrator_file.read_text(encoding="utf-8")
     assert "---" in content  # YAML front matter present
     assert manifest["project_name"] in content
+    assert "Update Compatibility Source Pack" in content
+    assert "--update --merge" in content
 
 
 # ---------------------------------------------------------------------------

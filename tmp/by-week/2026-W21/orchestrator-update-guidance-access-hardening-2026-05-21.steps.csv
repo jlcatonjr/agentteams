@@ -1,0 +1,10 @@
+step,agent,action,inputs,outputs,status,notes
+1,@orchestrator,Investigate orchestrator guidance-access surface,"orchestrator.template.md, agent-updater.template.md, copilot-instructions template, README/update docs","Findings report",done,"Completed in orchestrator-update-guidance-access-hardening-2026-05-21.findings.report.md"
+2,@adversarial,Audit findings assumptions,"Findings report","Findings adversarial audit",done,"Completed in orchestrator-update-guidance-access-hardening-2026-05-21.findings.adversarial.audit.md (PASS WITH NOTES)"
+3,@conflict-auditor,Audit findings consistency,"Findings report + adversarial notes","Findings conflict audit",done,"Completed in orchestrator-update-guidance-access-hardening-2026-05-21.findings.conflict.audit.md (PASS WITH NOTES)"
+4,@orchestrator,Prepare remediation plan,"Audited findings","Remediation plan",done,"Completed in orchestrator-update-guidance-access-hardening-2026-05-21.remediation.plan.md"
+5,@adversarial,Audit remediation plan assumptions,"Remediation plan","Remediation adversarial audit",done,"Completed in orchestrator-update-guidance-access-hardening-2026-05-21.remediation.adversarial.audit.md (PASS WITH NOTES)"
+6,@conflict-auditor,Audit remediation plan consistency,"Remediation plan + adversarial notes","Remediation conflict audit",done,"Completed in orchestrator-update-guidance-access-hardening-2026-05-21.remediation.conflict.audit.md (PASS)"
+7,@primary-producer,Implement approved remediation,"Audited remediation plan","Template/test updates",done,"Implemented source-pack section in orchestrator template + integration guardrail assertion + refreshed expected orchestrator snapshots"
+8,@technical-validator,Validate implementation,"Changed templates/tests","Passing tests and generated-output checks",done,"python -m pytest tests/test_integration.py -q --tb=short -x => 28 passed"
+9,@conflict-auditor,Run final consistency audit,"All changed files and outputs","Final audit note",done,"Completed in orchestrator-update-guidance-access-hardening-2026-05-21.final.conflict.audit.md (PASS)"
