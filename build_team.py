@@ -2916,6 +2916,14 @@ def _run_query_index(
 
     index = _read_memory_index(output_dir)
     sources = _memory_index_sources(manifest, output_dir)
+    if is_index_stale(index, sources):
+        refreshed_path = _write_memory_index(manifest, output_dir)
+        index = _read_memory_index(output_dir)
+        print(
+            "  !  Index was stale relative to source files. "
+            f"Auto-refreshed: {refreshed_path}"
+        )
+
     hits = query_index(index, query, k=k, strategy=strategy)
 
     print(f"Query: {query!r}")
@@ -2927,11 +2935,6 @@ def _run_query_index(
             f"  {idx}. score={hit['score']:.6f}  {hit['title']}\n"
             f"     path: {hit['path']}\n"
             f"     snippet: {hit['snippet']}"
-        )
-    if is_index_stale(index, sources):
-        print(
-            "  !  Index appears stale relative to source files. "
-            "Run --refresh-index (or --update) to rebuild."
         )
     return 0
 
@@ -2949,6 +2952,33 @@ def _write_memory_index(manifest: dict, output_dir: Path) -> Path:
     drift-excluded by construction.
     """
     from agentteams.memory_index import build_memory_index
+    from agentteams.memory_index_incremental import try_incremental_sed_update
+
+    index_path = output_dir / MEMORY_INDEX_REL_PATH
+    incremental_enabled = os.getenv("AGENTTEAMS_MEMORY_INDEX_INCREMENTAL_SED", "").strip() == "1"
+
+    if incremental_enabled and index_path.exists():
+        try:
+            current = _read_memory_index(output_dir)
+            result = try_incremental_sed_update(
+                index_path=index_path,
+                index=current,
+                sources=_memory_index_sources(manifest, output_dir),
+                project_name=manifest.get("project_name", ""),
+                framework=manifest.get("framework", ""),
+                validate_index=_validate_memory_index_schema,
+            )
+            if result.applied:
+                return index_path
+            print(
+                "  !  Incremental memory-index update skipped "
+                f"({result.reason}); falling back to full rebuild."
+            )
+        except (OSError, MemoryIndexError, RuntimeError) as exc:
+            print(
+                "  !  Incremental memory-index update failed "
+                f"({exc}); falling back to full rebuild."
+            )
 
     index = build_memory_index(
         _memory_index_sources(manifest, output_dir),
@@ -2971,7 +3001,6 @@ def _write_memory_index(manifest: dict, output_dir: Path) -> Path:
             f"memory index failed schema validation: {exc.message}"
         ) from exc
 
-    index_path = output_dir / MEMORY_INDEX_REL_PATH
     index_path.parent.mkdir(parents=True, exist_ok=True)
     index_path.write_text(json.dumps(index, indent=2) + "\n", encoding="utf-8")
     return index_path

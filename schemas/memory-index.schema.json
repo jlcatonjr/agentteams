@@ -20,6 +20,20 @@
   "properties": {
     "artifact_type": { "const": "memory-index" },
     "memory_index_schema_version": { "type": "string", "minLength": 1 },
+    "index_format_version": { "type": "string", "minLength": 1 },
+    "index_build_id": {
+      "type": "string",
+      "pattern": "^[a-f0-9]{64}$"
+    },
+    "index_write_owner": { "type": "string", "minLength": 1 },
+    "vector_runtime_mode": { "type": "string", "minLength": 1 },
+    "vector_model_id": { "type": ["string", "null"] },
+    "vector_dim": { "type": ["integer", "null"], "minimum": 1 },
+    "fallback_policy": { "type": "string", "minLength": 1 },
+    "source_fingerprint": {
+      "type": "string",
+      "pattern": "^[a-f0-9]{64}$"
+    },
     "project_name": { "type": "string" },
     "framework": { "type": "string" },
     "built_at": {
@@ -43,6 +57,10 @@
             "type": "array",
             "items": { "type": "string" },
             "description": "Substantive paragraphs extracted at build time for dynamic query-time passage scoring (I2). Up to 20 entries; each truncated at 480 characters."
+          },
+          "source_hash": {
+            "type": "string",
+            "pattern": "^[a-f0-9]{64}$"
           },
           "source_mtime": { "type": "number", "minimum": 0 }
         }

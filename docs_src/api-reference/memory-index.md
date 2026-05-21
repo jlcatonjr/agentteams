@@ -14,6 +14,7 @@ Used by `@navigator`, `@adversarial`, and `@work-summarizer` to retrieve relevan
 - **Durable sources only** — Caller passes explicit source paths; module never globs ignored directories
 - **Robust to absence** — Empty source list → empty but valid index (no error)
 - **Graceful degradation** — Per-paragraph passage scoring (I2, I9) with backward-compatible snippet fallback
+- **Explicit contract metadata** — Build/runtime ownership, fallback policy, and vector runtime mode are encoded in the index payload
 - **Deterministic** — Same source set always yields same scores; suitable for testing and reproducible workflows
 
 ---
@@ -27,7 +28,7 @@ Used by `@navigator`, `@adversarial`, and `@work-summarizer` to retrieve relevan
 Current schema version for memory index artifacts. Used to detect compatibility between build and consumer versions.
 
 **Type:** `str`  
-**Current value:** `"1.2"`
+**Current value:** `"1.3"`
 
 **Schema versions:**
 
@@ -35,6 +36,7 @@ Current schema version for memory index artifacts. Used to detect compatibility 
 |---------|--------|
 | 1.1 | Legacy: no per-paragraph storage; single `snippet` field only |
 | 1.2 | Per-paragraph passage storage; `paragraphs` list added; `query_index()` returns `snippets` list alongside legacy `snippet` alias |
+| 1.3 | Adds explicit contract metadata (`index_format_version`, `index_build_id`, `index_write_owner`, `vector_runtime_mode`, `fallback_policy`, `source_fingerprint`) and per-document `source_hash` |
 
 ---
 
@@ -55,10 +57,17 @@ Build a BM25 search index over durable text sources.
 **Returns:** `dict[str, Any]` — Index dict with keys:
 - `artifact_type`: `"memory-index"`
 - `memory_index_schema_version`: Current schema version
+- `index_format_version`: Serving-format identifier for the artifact structure
+- `index_build_id`: Build fingerprint for this specific index emission
+- `index_write_owner`: Writer ownership marker (`agentteams.build_team`)
+- `vector_runtime_mode`: Runtime strategy implementation (`sparse-tfidf-cosine`)
+- `vector_model_id`, `vector_dim`: Reserved nullable fields for future embedding/vector model metadata
+- `fallback_policy`: Declares non-blocking fallback semantics
+- `source_fingerprint`: Stable digest across indexed document path/hash pairs
 - `project_name`, `framework`: Supplied metadata
 - `built_at`: ISO-8601 timestamp
 - `source_count`: Number of files supplied
-- `documents`: List of indexed documents (with title, path, snippet, paragraphs, length, etc.)
+- `documents`: List of indexed documents (with title, path, snippet, paragraphs, length, `source_hash`, etc.)
 - `postings`: Term-to-document frequency postings (BM25 substrate)
 - `avgdl`: Average document length (for BM25 normalization)
 - `N`: Total document count
@@ -81,16 +90,16 @@ Build a BM25 search index over durable text sources.
 
 > *Source: `agentteams/memory_index.py`*
 
-Check if any source file is newer than the index's `built_at` timestamp.
+Check if any source file is newer than the index's `built_at` timestamp or no longer matches recorded content hashes.
 
 **Args:**
 
 - `index` (`dict[str, Any]`) — Index dict from `build_memory_index()`.
 - `sources` (`Iterable[Path | str]`) — Original source paths (same list used for build, or a subset).
 
-**Returns:** `bool` — `True` if any source mtime > index `built_at` (index is stale); `False` otherwise.
+**Returns:** `bool` — `True` if any source content hash mismatches indexed `source_hash`, or if any source mtime > index `built_at` (index is stale); `False` otherwise.
 
-**Safety:** Invalid/missing timestamps are treated as stale (conservative).
+**Safety:** Invalid/missing timestamps are treated as stale (conservative). Missing/unreadable files for hashed documents are also treated as stale.
 
 ---
 
@@ -269,13 +278,31 @@ agentteams --description brief.json --query-index "policy guidance for update sa
 
 Use `--refresh-index` after editing durable sources (for example `workSummaries/`, `CHANGELOG.md`, `README.md`, `docs_src/*.md`, `references/*.md`) before query-heavy sessions.
 
+Query CLI synchronization behavior:
+
+- `--query-index` now checks staleness before serving results.
+- When stale, it auto-refreshes `references/memory-index.json` and then executes the query.
+- `--refresh-index` remains useful for proactive pre-warm workflows and CI/operator scripts.
+
+Incremental update mode (feature-flagged):
+
+- Set `AGENTTEAMS_MEMORY_INDEX_INCREMENTAL_SED=1` to enable a reliability-first incremental updater.
+- The updater generates and applies `references/memory-index.incremental-update.sed` for eligible updates.
+- Eligibility is intentionally narrow (single changed document, no source set changes, stable term vocabulary).
+- On any ineligible shape or sed/validation failure, behavior falls back to canonical full rebuild.
+
+Domain boundary note:
+
+- The `strategy="vector"` option in `memory_index` is local sparse tf·idf vector-space ranking for memory-history retrieval only.
+- It is separate from relational retrieval-integrator validation contracts in other module domains.
+
 ---
 
 ## Integration Notes
 
 - **Durable sources** (I7): Caller is responsible for passing explicit source paths; the module never globs `tmp/` or ignored directories
 - **Absence safety** (I5): Empty source list is valid; returns a skeleton index with zero documents
-- **Stale detection** (via `is_index_stale()`) — Callers can refresh indexes before querying
+- **Stale detection** (via `is_index_stale()`) — Query CLI auto-refreshes stale indexes; callers may still refresh proactively
 - **Fallback protocol** — `@navigator` consults this index first, then opens referenced files for detail, then falls back to filesystem search
 
 ---

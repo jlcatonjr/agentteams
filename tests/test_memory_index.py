@@ -13,7 +13,11 @@ import pytest
 
 import build_team
 from agentteams.memory_index import (
+    FALLBACK_POLICY,
+    INDEX_FORMAT_VERSION,
+    INDEX_WRITE_OWNER,
     MEMORY_INDEX_SCHEMA_VERSION,
+    VECTOR_RUNTIME_MODE,
     build_memory_index,
     is_index_stale,
     query_index,
@@ -42,8 +46,17 @@ def test_build_memory_index_is_schema_valid(tmp_path):
     assert "built_at" in idx
     assert idx["source_count"] == 2
     assert idx["memory_index_schema_version"] == MEMORY_INDEX_SCHEMA_VERSION
+    assert idx["index_format_version"] == INDEX_FORMAT_VERSION
+    assert idx["index_write_owner"] == INDEX_WRITE_OWNER
+    assert idx["vector_runtime_mode"] == VECTOR_RUNTIME_MODE
+    assert idx["fallback_policy"] == FALLBACK_POLICY
+    assert idx["vector_model_id"] is None
+    assert idx["vector_dim"] is None
+    assert isinstance(idx["index_build_id"], str) and len(idx["index_build_id"]) == 64
+    assert isinstance(idx["source_fingerprint"], str) and len(idx["source_fingerprint"]) == 64
     assert {d["title"] for d in idx["documents"]} == {"Alpha", "Beta"}
     assert all("source_mtime" in d for d in idx["documents"])
+    assert all("source_hash" in d and len(d["source_hash"]) == 64 for d in idx["documents"])
 
 
 def test_query_returns_ranked_documents(tmp_path):
@@ -93,6 +106,17 @@ def test_is_index_stale_detects_newer_source(tmp_path):
     time.sleep(1)
     now = time.time()
     os.utime(src, (now, now))
+    assert is_index_stale(idx, [src])
+
+
+def test_is_index_stale_detects_hash_mismatch(tmp_path):
+    src = tmp_path / "daily.md"
+    src.write_text("# Daily\n\nFirst entry.\n")
+    idx = build_memory_index([src])
+    assert not is_index_stale(idx, [src])
+
+    # Simulate stale index metadata against unchanged timestamps.
+    idx["documents"][0]["source_hash"] = "0" * 64
     assert is_index_stale(idx, [src])
 
 
@@ -326,6 +350,121 @@ def test_query_index_cli_mode_returns_1_when_no_hits(tmp_path):
     assert rc == 1
 
 
+def test_query_index_cli_mode_auto_refreshes_when_stale(tmp_path):
+    output_dir = tmp_path / ".github" / "agents"
+    index_dir = output_dir / "references"
+    index_dir.mkdir(parents=True)
+
+    ws = tmp_path / "workSummaries"
+    ws.mkdir()
+    src = ws / "day.md"
+    src.write_text("# Daily\n\nOriginal summary text only.\n")
+
+    # Seed an index that does not contain the future query term.
+    idx = build_memory_index([src], project_name="P", framework="copilot-vscode")
+    (index_dir / "memory-index.json").write_text(json.dumps(idx), encoding="utf-8")
+
+    # Modify source after index write so the query path sees a stale artifact.
+    src.write_text("# Daily\n\nUpdated content now includes autorefresh-token.\n")
+
+    manifest = {
+        "project_name": "P",
+        "framework": "copilot-vscode",
+        "existing_project_path": str(tmp_path),
+    }
+    rc = build_team._run_query_index(manifest, output_dir, "autorefresh-token", 3)
+    assert rc == 0
+
+    refreshed = json.loads((index_dir / "memory-index.json").read_text(encoding="utf-8"))
+    hits = query_index(refreshed, "autorefresh-token", k=3)
+    assert hits, "expected persisted memory index to be refreshed before query serving"
+
+
+def test_write_memory_index_incremental_sed_single_doc_success_without_full_rebuild(
+    tmp_path, monkeypatch
+):
+    import agentteams.memory_index as mi
+
+    output_dir = tmp_path / ".github" / "agents"
+    index_dir = output_dir / "references"
+    index_dir.mkdir(parents=True)
+
+    ws = tmp_path / "workSummaries"
+    ws.mkdir()
+    src = ws / "day.md"
+    src.write_text("# Daily\n\nalpha beta beta\n", encoding="utf-8")
+
+    initial = build_memory_index([src], project_name="P", framework="copilot-vscode")
+    idx_path = index_dir / "memory-index.json"
+    idx_path.write_text(json.dumps(initial, indent=2) + "\n", encoding="utf-8")
+
+    # Same vocabulary terms, different frequencies => eligible incremental patch.
+    src.write_text("# Daily\n\nalpha alpha beta\n", encoding="utf-8")
+
+    monkeypatch.setenv("AGENTTEAMS_MEMORY_INDEX_INCREMENTAL_SED", "1")
+
+    def _should_not_full_rebuild(*args, **kwargs):
+        raise AssertionError("full rebuild should not be called for eligible incremental update")
+
+    monkeypatch.setattr(mi, "build_memory_index", _should_not_full_rebuild)
+
+    manifest = {
+        "project_name": "P",
+        "framework": "copilot-vscode",
+        "existing_project_path": str(tmp_path),
+    }
+    build_team._write_memory_index(manifest, output_dir)
+
+    updated = json.loads(idx_path.read_text(encoding="utf-8"))
+    hits = query_index(updated, "alpha", k=3)
+    assert hits
+
+
+def test_write_memory_index_incremental_sed_falls_back_on_term_set_change(
+    tmp_path, monkeypatch
+):
+    import agentteams.memory_index as mi
+
+    output_dir = tmp_path / ".github" / "agents"
+    index_dir = output_dir / "references"
+    index_dir.mkdir(parents=True)
+
+    ws = tmp_path / "workSummaries"
+    ws.mkdir()
+    src = ws / "day.md"
+    src.write_text("# Daily\n\nalpha beta beta\n", encoding="utf-8")
+
+    initial = build_memory_index([src], project_name="P", framework="copilot-vscode")
+    idx_path = index_dir / "memory-index.json"
+    idx_path.write_text(json.dumps(initial, indent=2) + "\n", encoding="utf-8")
+
+    # Introduce a new vocabulary term => incremental gate should fallback.
+    src.write_text("# Daily\n\nalpha beta gamma\n", encoding="utf-8")
+
+    monkeypatch.setenv("AGENTTEAMS_MEMORY_INDEX_INCREMENTAL_SED", "1")
+
+    original_build = mi.build_memory_index
+    calls = {"n": 0}
+
+    def _counting_build(*args, **kwargs):
+        calls["n"] += 1
+        return original_build(*args, **kwargs)
+
+    monkeypatch.setattr(mi, "build_memory_index", _counting_build)
+
+    manifest = {
+        "project_name": "P",
+        "framework": "copilot-vscode",
+        "existing_project_path": str(tmp_path),
+    }
+    build_team._write_memory_index(manifest, output_dir)
+    assert calls["n"] == 1, "expected fallback full rebuild when term set changes"
+
+    updated = json.loads(idx_path.read_text(encoding="utf-8"))
+    hits = query_index(updated, "gamma", k=3)
+    assert hits
+
+
 def test_read_memory_index_rejects_schema_invalid_shape(tmp_path):
     output_dir = tmp_path / ".github" / "agents"
     index_dir = output_dir / "references"
@@ -482,8 +621,8 @@ def test_paragraphs_capped_at_max(tmp_path):
     assert len(idx["documents"][0]["paragraphs"]) <= _MAX_PARAGRAPHS_PER_DOC
 
 
-def test_schema_version_is_1_2():
-    assert MEMORY_INDEX_SCHEMA_VERSION == "1.2"
+def test_schema_version_is_1_3():
+    assert MEMORY_INDEX_SCHEMA_VERSION == "1.3"
 
 
 def test_schema_requires_paragraphs_field(tmp_path):

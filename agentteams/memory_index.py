@@ -33,11 +33,16 @@ from __future__ import annotations
 
 import math
 import re
+import hashlib
 from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any, Iterable
 
-MEMORY_INDEX_SCHEMA_VERSION = "1.2"
+MEMORY_INDEX_SCHEMA_VERSION = "1.3"
+INDEX_FORMAT_VERSION = "json-bm25-postings-v1"
+INDEX_WRITE_OWNER = "agentteams.build_team"
+VECTOR_RUNTIME_MODE = "sparse-tfidf-cosine"
+FALLBACK_POLICY = "non-blocking-file-read-then-search"
 
 # BM25 parameters.  Grid-searched K1 ∈ {1.2, 1.5, 2.0} × B ∈ {0.75, 0.85, 1.0}
 # on the AgentTeams N≈105 corpus (2026-05-19) using the eval set in
@@ -181,6 +186,23 @@ def _source_mtime(path: Path) -> float:
         return 0.0
 
 
+def _source_text_hash(path: Path) -> str:
+    """Return SHA-256 of source text, or empty string when unreadable."""
+    try:
+        text = path.read_text(encoding="utf-8")
+    except (OSError, UnicodeDecodeError):
+        return ""
+    return hashlib.sha256(text.encode("utf-8")).hexdigest()
+
+
+def _documents_fingerprint(documents: list[dict[str, Any]]) -> str:
+    """Stable fingerprint over indexed document path/hash pairs."""
+    parts: list[str] = []
+    for doc in sorted(documents, key=lambda d: str(d.get("path", ""))):
+        parts.append(f"{doc.get('path', '')}:{doc.get('source_hash', '')}")
+    return hashlib.sha256("|".join(parts).encode("utf-8")).hexdigest()
+
+
 def build_memory_index(
     sources: Iterable[Path | str],
     *,
@@ -220,18 +242,32 @@ def build_memory_index(
             "length": len(tokens),
             "snippet": _snippet_from_paragraphs(paragraphs) or _snippet(text),
             "paragraphs": paragraphs,
+            "source_hash": hashlib.sha256(text.encode("utf-8")).hexdigest(),
             "source_mtime": _source_mtime(path),
         })
         doc_lengths.append(len(tokens))
 
     avgdl = (sum(doc_lengths) / len(doc_lengths)) if doc_lengths else 0.0
+    built_at = _utc_now_iso()
+    source_fingerprint = _documents_fingerprint(documents)
+    index_build_id = hashlib.sha256(
+        f"{source_fingerprint}|{built_at}|{len(source_paths)}".encode("utf-8")
+    ).hexdigest()
 
     return {
         "artifact_type": "memory-index",
         "memory_index_schema_version": MEMORY_INDEX_SCHEMA_VERSION,
+        "index_format_version": INDEX_FORMAT_VERSION,
+        "index_build_id": index_build_id,
+        "index_write_owner": INDEX_WRITE_OWNER,
+        "vector_runtime_mode": VECTOR_RUNTIME_MODE,
+        "vector_model_id": None,
+        "vector_dim": None,
+        "fallback_policy": FALLBACK_POLICY,
+        "source_fingerprint": source_fingerprint,
         "project_name": project_name,
         "framework": framework,
-        "built_at": _utc_now_iso(),
+        "built_at": built_at,
         "source_count": len(source_paths),
         "documents": documents,
         "postings": postings,
@@ -253,6 +289,18 @@ def is_index_stale(index: dict[str, Any], sources: Iterable[Path | str]) -> bool
     except ValueError:
         return True
     built_ts = built_dt.timestamp()
+
+    # Hash-aware freshness when available. We still keep the legacy mtime gate
+    # for conservative stale detection.
+    for doc in index.get("documents", []):
+        if not isinstance(doc, dict):
+            continue
+        path_str = doc.get("path")
+        expected_hash = doc.get("source_hash")
+        if isinstance(path_str, str) and isinstance(expected_hash, str) and expected_hash:
+            actual_hash = _source_text_hash(Path(path_str))
+            if not actual_hash or actual_hash != expected_hash:
+                return True
 
     latest_source_ts = 0.0
     for p in sources:
@@ -408,6 +456,10 @@ def query_index(
 
 __all__ = [
     "MEMORY_INDEX_SCHEMA_VERSION",
+    "INDEX_FORMAT_VERSION",
+    "INDEX_WRITE_OWNER",
+    "VECTOR_RUNTIME_MODE",
+    "FALLBACK_POLICY",
     "build_memory_index",
     "is_index_stale",
     "query_index",
