@@ -689,6 +689,75 @@ def test_ch14_skips_non_agent_files():
     assert not findings
 
 
+def test_ch14_allow_marked_block_not_flagged():
+    content = """---
+name: Agent — TestProject
+description: x
+user-invokable: false
+tools: ['read']
+model: [x]
+---
+
+# Agent
+
+<!-- CH14:ALLOW_INLINE_DATA -->
+| A | B |
+| --- | --- |
+| 1 | 1 |
+| 2 | 2 |
+| 3 | 3 |
+| 4 | 4 |
+| 5 | 5 |
+| 6 | 6 |
+| 7 | 7 |
+| 8 | 8 |
+| 9 | 9 |
+| 10 | 10 |
+| 11 | 11 |
+| 12 | 12 |
+| 13 | 13 |
+<!-- /CH14:ALLOW_INLINE_DATA -->
+"""
+    findings = _check_ch14_inline_data_blocks({"agent.agent.md": content})
+    assert not any(f.code == "CH14_INLINE_DATA_BLOCK" for f in findings)
+
+
+def test_ch14_still_flags_unmarked_large_block():
+    content = """---
+name: Agent — TestProject
+description: x
+user-invokable: false
+tools: ['read']
+model: [x]
+---
+
+# Agent
+
+<!-- CH14:ALLOW_INLINE_DATA -->
+| A | B |
+| --- | --- |
+| 1 | 1 |
+| 2 | 2 |
+<!-- /CH14:ALLOW_INLINE_DATA -->
+
+| C | D |
+| --- | --- |
+| 1 | 1 |
+| 2 | 2 |
+| 3 | 3 |
+| 4 | 4 |
+| 5 | 5 |
+| 6 | 6 |
+| 7 | 7 |
+| 8 | 8 |
+| 9 | 9 |
+| 10 | 10 |
+| 11 | 11 |
+"""
+    findings = _check_ch14_inline_data_blocks({"agent.agent.md": content})
+    assert any(f.code == "CH14_INLINE_DATA_BLOCK" for f in findings)
+
+
 # ---------------------------------------------------------------------------
 # _check_ch20_duplicate_descriptions (CH-20)
 # ---------------------------------------------------------------------------

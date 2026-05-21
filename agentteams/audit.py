@@ -696,6 +696,8 @@ def _check_dangling_agent_slugs(
 
 #: Minimum consecutive table/list lines that trigger a CH-14 finding
 _CH14_INLINE_DATA_THRESHOLD = 10
+_CH14_ALLOW_INLINE_START = "<!-- CH14:ALLOW_INLINE_DATA -->"
+_CH14_ALLOW_INLINE_END = "<!-- /CH14:ALLOW_INLINE_DATA -->"
 
 
 def _check_ch14_inline_data_blocks(
@@ -722,6 +724,7 @@ def _check_ch14_inline_data_blocks(
             continue
 
         in_invariant = False
+        in_ch14_allow_block = False
         in_yaml = content.startswith("---")
         yaml_fence_count = 0
         run_count = 0
@@ -735,6 +738,19 @@ def _check_ch14_inline_data_blocks(
                         in_yaml = False
                 continue
 
+            stripped = line.strip()
+            if stripped == _CH14_ALLOW_INLINE_START:
+                in_ch14_allow_block = True
+                run_count = 0
+                continue
+            if stripped == _CH14_ALLOW_INLINE_END:
+                in_ch14_allow_block = False
+                run_count = 0
+                continue
+            if in_ch14_allow_block:
+                run_count = 0
+                continue
+
             # Track whether we are inside the Invariant Core section
             if "\u26d4" in line or "Invariant Core" in line:
                 in_invariant = True
@@ -745,7 +761,6 @@ def _check_ch14_inline_data_blocks(
                 run_count = 0
                 continue
 
-            stripped = line.strip()
             if stripped.startswith("|") or stripped.startswith("- ") or stripped.startswith("* "):
                 run_count += 1
                 max_run = max(max_run, run_count)

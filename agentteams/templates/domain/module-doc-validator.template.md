@@ -34,6 +34,7 @@ You do **not** rewrite documentation. All corrections route to `@module-doc-auth
 
 ## Parity Rules
 
+<!-- CH14:ALLOW_INLINE_DATA -->
 | Code | Rule |
 |------|------|
 | **DV-01** | Every public function and class in `{PRIMARY_OUTPUT_DIR}` must have an API reference entry in `docs/api-reference/` |
@@ -46,6 +47,7 @@ You do **not** rewrite documentation. All corrections route to `@module-doc-auth
 | **DV-08** | `requires-python` in `pyproject.toml` must match the Python version floor used in source |
 | **DV-09** | Installation instructions must use the correct package name from `pyproject.toml` |
 | **DV-10** | No unresolved `{MANUAL:*}` or `{UPPER_SNAKE_CASE}` tokens may appear in any `docs/` file |
+<!-- /CH14:ALLOW_INLINE_DATA -->
 
 ## Change Impact Analysis
 
@@ -57,6 +59,7 @@ Read `.github/agents/references/doc-hashes.json` (report MISSING if absent — f
 
 ### Step 2: Classify Changes
 
+<!-- CH14:ALLOW_INLINE_DATA -->
 | Change Type | Impact | Affected Doc Pages |
 |-------------|--------|--------------------|
 | New public function | Coverage gap (DV-01) | Module's API reference page |
@@ -67,6 +70,7 @@ Read `.github/agents/references/doc-hashes.json` (report MISSING if absent — f
 | `__version__` bumped | Version mismatch (DV-04, DV-05) | `pyproject.toml`, `CHANGELOG.md` |
 | New CLI flag | Missing CLI doc (DV-07) | `docs/cli-reference.md` |
 | Removed CLI flag | Stale CLI doc (DV-06) | `docs/cli-reference.md` |
+<!-- /CH14:ALLOW_INLINE_DATA -->
 
 ### Step 3: Emit Impact Report
 

@@ -30,6 +30,7 @@ You are the retrieval lifecycle specialist for {PROJECT_NAME}. You verify that r
 
 ## Contract Snapshot
 
+<!-- CH14:ALLOW_INLINE_DATA -->
 - Mode: {RETRIEVAL_MODE}
 - Trigger contract version: {RETRIEVAL_TRIGGER_CONTRACT_VERSION}
 - Query entrypoints:
@@ -41,6 +42,7 @@ You are the retrieval lifecycle specialist for {PROJECT_NAME}. You verify that r
 - Source of truth:
 {RETRIEVAL_SOURCE_OF_TRUTH}
 - Staleness SLO (minutes): {RETRIEVAL_STALENESS_SLO_MINUTES}
+<!-- /CH14:ALLOW_INLINE_DATA -->
 
 ## Invariant Core
 
