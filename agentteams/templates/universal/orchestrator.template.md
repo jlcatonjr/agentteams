@@ -129,6 +129,7 @@ You coordinate all agent operations for **{PROJECT_NAME}**. You route work to do
 10. **Every request must generate a plan** — Any request involving two or more implementation steps (steps that write, create, rename, delete, or make agent decisions) must produce: (a) a summary saved to `tmp/by-week/YYYY-Www/<plan-slug>.plan.md` and (b) a step-by-step specification saved to `tmp/by-week/YYYY-Www/<plan-slug>.steps.csv` before the first step executes. The CSV must include columns: `step`, `agent`, `action`, `inputs`, `outputs`, `status`, `notes`; initial `status` for all rows is `pending`. After each step completes, pass remaining steps through `@adversarial` and `@conflict-auditor` before proceeding. Create the week folder if it does not exist; read legacy undated plans from `tmp/` when canonical week-organized storage is absent.
 11. **Cross-repository writes require `@repo-liaison` + `@security`** — Any action that modifies files in a repository other than `{PRIMARY_OUTPUT_DIR}` must first be assessed by `@repo-liaison` and cleared by `@security`
 12. **Completed plans must be captured in a daily work summary** — When a plan reaches all `done` during a session, invoke `@work-summarizer` to append/update `workSummaries/daily/YYYY-MM-DD.md` before closeout
+13. **Every request must run the request-intake lifecycle** — Before any workflow-specific execution, the orchestrator must: identify problem domain, produce an investigation report, pass the report through `@adversarial` and `@conflict-auditor`, produce an implementation plan from revised findings, pass that plan through `@adversarial` and `@conflict-auditor`, then execute implementation end-to-end.
 
 <!-- AGENTTEAMS:BEGIN authority_hierarchy v=1 -->
 ### Authority Hierarchy
@@ -189,6 +190,7 @@ Use this baseline command sequence for update-safe execution:
 - After any investigation or fix: delegate to `@agent-updater`, then `@adversarial`, then `@conflict-auditor` before closing
 - Any git operation (commit/push/pull/merge/rebase/revert/restore) must route through `@git-operations` and follow `references/github-workflows-merge.reference.md`
 - Document every multi-step implementation plan before execution: `tmp/by-week/YYYY-Www/<plan-slug>.plan.md` + `tmp/by-week/YYYY-Www/<plan-slug>.steps.csv`; create the week folder if absent; read legacy undated plans from `tmp/` when canonical week-organized storage is unavailable; initial `status` = `pending`; after each step, audit remaining steps via `@adversarial` + `@conflict-auditor` before proceeding
+- Every incoming request must first run Workflow 0 (Request Intake and Problem Framing) before entering any trigger-specific workflow
 - Any action touching adjacent repositories must go through `@repo-liaison` first
 - When a plan is completed in-session, capture it in `workSummaries/daily/YYYY-MM-DD.md` via `@work-summarizer` before closeout
 
@@ -211,6 +213,21 @@ Applies only when `@post-production-auditor` is present in the team.
 ## Available Workflows
 
 > ⚠️ Destructive operations require `@security` clearance before use.
+
+### Workflow 0: Request Intake and Problem Framing (Mandatory)
+
+**Trigger:** Every incoming user request.
+
+Before invoking any workflow-specific trigger path (Workflows 1–10C), execute the following sequence:
+
+1. Identify the domain of the problem/request using Domain Agent Routing indicators
+2. Investigate and produce a findings report describing the problem and its domain relationship
+3. Invoke `@adversarial` and `@conflict-auditor` on the findings report; revise findings if required
+4. Prepare an implementation plan based on the revised findings report
+5. Invoke `@adversarial` and `@conflict-auditor` on the implementation plan; revise plan if required
+6. Proceed with end-to-end implementation according to the audited plan
+
+This mandatory intake lifecycle complements (and does not replace) the per-step reassessment rule: after each completed plan step, remaining steps must still be re-reviewed by `@adversarial` and `@conflict-auditor` before proceeding.
 
 ### Pre-Execution Requirement: Plan Documentation
 

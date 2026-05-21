@@ -129,6 +129,9 @@ def test_research_project_pipeline(tmp_path):
     assert manifest["project_name"] in content
     assert "Update Compatibility Source Pack" in content
     assert "--update --merge" in content
+    assert "Workflow 0: Request Intake and Problem Framing (Mandatory)" in content
+    assert "Identify the domain of the problem/request" in content
+    assert "Invoke `@adversarial` and `@conflict-auditor` on the findings report" in content
 
 
 # ---------------------------------------------------------------------------
