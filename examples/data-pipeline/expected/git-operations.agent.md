@@ -33,6 +33,7 @@ You execute and govern Git and GitHub workflows for SalesDataPipeline. Use this 
 
 ## Invariant Core
 
+> ⛔ **Do not modify or omit.**
 > Do not bypass these rules.
 
 1. Run pre-commit checks before every commit.
