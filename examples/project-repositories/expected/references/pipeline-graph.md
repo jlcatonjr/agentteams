@@ -1,4 +1,3 @@
-<!-- AGENTTEAMS:BEGIN content v=1 -->
 # ProjectRepositories — Agent Team Topology
 
 > **Auto-generated.** Regenerated on every `build_team.py` run.
@@ -32,7 +31,7 @@ flowchart LR
     conflict_resolution["Conflict Resolution"]
     class conflict_resolution governance
     content_enricher["Content Enricher"]
-    class content_enricher unknown
+    class content_enricher domain
     crisis_credit_allocation_expert["Crisis and Credit Allocation Expert"]
     class crisis_credit_allocation_expert workstream_expert
     fed_response_dag_expert["Federal Reserve Response Function DAG Analysis Expert"]
@@ -259,7 +258,7 @@ flowchart LR
 | `cohesion-repairer` | domain | No | read, edit |
 | `conflict-auditor` | governance | No | read, edit, search, execute |
 | `conflict-resolution` | governance | No | edit, search, read |
-| `content-enricher` | unknown | Yes | read, edit, search |
+| `content-enricher` | domain | Yes | read, edit, search |
 | `crisis-credit-allocation-expert` | workstream_expert | No | read, search, agent |
 | `fed-response-dag-expert` | workstream_expert | No | read, search, agent |
 | `format-converter` | domain | No | read, edit, execute |
@@ -339,7 +338,7 @@ digraph "ProjectRepositories Agent Team" {
     "cohesion-repairer" [label="Cohesion Repairer", fillcolor="#e8ffe8"];
     "conflict-auditor" [label="Conflict Auditor", fillcolor="#e8e8ff"];
     "conflict-resolution" [label="Conflict Resolution", fillcolor="#e8e8ff"];
-    "content-enricher" [label="Content Enricher", fillcolor="#f5f5f5"];
+    "content-enricher" [label="Content Enricher", fillcolor="#e8ffe8"];
     "crisis-credit-allocation-expert" [label="Crisis and Credit Allocation Expert", fillcolor="#fff8e8"];
     "fed-response-dag-expert" [label="Federal Reserve Response Function DAG Analysis Expert", fillcolor="#fff8e8"];
     "format-converter" [label="Format Converter", fillcolor="#e8ffe8"];
@@ -562,7 +561,7 @@ digraph "ProjectRepositories Agent Team" {
     },
     "content-enricher": {
       "display_name": "Content Enricher",
-      "agent_type": "unknown",
+      "agent_type": "domain",
       "user_invokable": true,
       "tools": [
         "read",
@@ -1905,4 +1904,3 @@ digraph "ProjectRepositories Agent Team" {
   }
 }
 ```
-<!-- AGENTTEAMS:END content -->

@@ -1,4 +1,3 @@
-<!-- AGENTTEAMS:BEGIN content v=1 -->
 # Code Hygiene Rules — Enforcement Catalog (ProjectRepositories)
 
 > **Authoritative source for:** `@code-hygiene` agent rule enforcement
@@ -107,6 +106,27 @@ No two agent files may make contradictory claims about the same fact (e.g., whic
 
 > Add project-specific hygiene rules below using the same ID/Name/Category/Severity structure.
 
+### CH-21 — Validate New Features Before Mainline Integration
+
+**Category:** Testing
+**Severity:** High
+
+Newly developed features must be tested or otherwise validated before they are merged into the main program path.
+
+### CH-22 — Type Check Function/Class Inputs
+
+**Category:** Type Safety
+**Severity:** High
+
+All function and class inputs must be type-checked (statically, at runtime, or both) to ensure only valid and meaningful input types are accepted.
+
+### CH-23 — Fail Fast on Invalid Inputs
+
+**Category:** Defensive Programming
+**Severity:** Critical
+
+Invalid inputs must raise explicit errors. Invalid data must never pass silently, and implicit fallback behavior that masks bad inputs is prohibited.
+
 <!-- Example:
 ### CH-21 — Project-Specific Rule Name
 
@@ -115,4 +135,3 @@ No two agent files may make contradictory claims about the same fact (e.g., whic
 
 Description and enforcement check.
 -->
-<!-- AGENTTEAMS:END content -->

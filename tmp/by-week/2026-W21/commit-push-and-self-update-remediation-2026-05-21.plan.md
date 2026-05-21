@@ -28,3 +28,8 @@
 
 - Use git revert for faulty remediation commits.
 - If self-update output regresses, rerun from prior commit baseline with `--check` and compare.
+
+## Completion
+
+- Completed on 2026-05-21.
+- Outcome: self-update challenge set reduced to expected manual placeholder warning; module-level template issues were remediated and validated before final push.

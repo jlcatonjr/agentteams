@@ -1,4 +1,3 @@
-<!-- AGENTTEAMS:BEGIN content v=1 -->
 # pandas-datareader Reference — ProjectRepositories
 
 > Quick-reference for **pandas-datareader ** (library) in ProjectRepositories.
@@ -40,4 +39,3 @@ Cache downloaded data for reproducibility, document provider-specific limits, an
 
 - `@technical-validator` — verify technical accuracy of pandas-datareader usage
 - `@primary-producer` — implements code that depends on pandas-datareader
-<!-- AGENTTEAMS:END content -->

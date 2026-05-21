@@ -1135,6 +1135,7 @@ def main(argv: list[str] | None = None) -> int:
             from agentteams import audit as _audit
             audit_result = _audit.run_post_audit(
                 output_dir, manifest,
+                rendered_files=final_rendered,
                 ai_audit=True,
             )
             _audit.print_audit_report(audit_result)

@@ -23,7 +23,6 @@ handoffs:
     prompt: "Agent documentation has been synchronized with project changes."
     send: false
 ---
-<!-- AGENTTEAMS:BEGIN content v=1 -->
 
 # Agent Updater — ProjectRepositories
 
@@ -41,6 +40,7 @@ Use `references/github-workflows-merge.reference.md` when repository updates inv
 
 ## Trigger Conditions
 
+<!-- CH14:ALLOW_INLINE_DATA -->
 | What Changed | Why It Matters |
 |-------------|----------------|
 | New file added to `*/outputs/` | `@navigator`, `@conflict-auditor`, `@primary-producer` need awareness |
@@ -56,6 +56,7 @@ Use `references/github-workflows-merge.reference.md` when repository updates inv
 | Repository content changed (tracked files added, modified, deleted, merged, reverted, or restored) | Requires repository change census and docs/API impact decision before closeout |
 | **Drift detected by `--check`** | Agents may be operating on outdated knowledge of file structure, agent slugs, placeholder values, or workflow counts — re-render and re-verify before next workflow execution |
 | Expected output file missing on disk during update | Treat as documentation drift even without template hash drift; restore the missing file in the same update run |
+<!-- /CH14:ALLOW_INLINE_DATA -->
 
 ## Change-to-Agent Mapping
 
@@ -187,4 +188,3 @@ These maintenance practices keep deployed teams compatible with `--update --merg
 - **No resolved-issue archaeology** — once fixed, remove from docs
 - **No dated fix logs** — remove after verification
 - **Hardcoded volatile state belongs in reference files** — not embedded in agent prose
-<!-- AGENTTEAMS:END content -->

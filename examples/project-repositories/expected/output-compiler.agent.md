@@ -19,7 +19,6 @@ handoffs:
     prompt: "Final output assembly complete."
     send: false
 ---
-<!-- AGENTTEAMS:BEGIN content v=1 -->
 
 # Output Compiler — ProjectRepositories
 
@@ -69,4 +68,3 @@ Final output: <path to assembled deliverable>
 - *(If `@format-converter` in team)* Never include components that have not been converted by `@format-converter`
 - Never silently skip missing components — always report and wait
 - Do not modify source files in `*/outputs/` during assembly
-<!-- AGENTTEAMS:END content -->

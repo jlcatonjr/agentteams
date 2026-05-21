@@ -181,7 +181,7 @@ def test_build_main_auto_correct_reruns_audit(tmp_path, monkeypatch):
     assert remediation_calls == [output_dir.resolve()]
 
 
-def test_build_main_update_audits_emitted_files_from_disk(tmp_path, monkeypatch):
+def test_build_main_update_audits_current_rendered_set(tmp_path, monkeypatch):
     import build_team
     import agentteams.audit as audit_module
 
@@ -233,4 +233,6 @@ def test_build_main_update_audits_emitted_files_from_disk(tmp_path, monkeypatch)
     ])
 
     assert update_rc == 0
-    assert captured == [None]
+    assert len(captured) == 1
+    assert isinstance(captured[0], list)
+    assert captured[0]

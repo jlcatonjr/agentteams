@@ -1,4 +1,3 @@
-<!-- AGENTTEAMS:BEGIN content v=1 -->
 # Jupyter Reference — ProjectRepositories
 
 > Quick-reference for **Jupyter ** (framework) in ProjectRepositories.
@@ -40,4 +39,3 @@ Keep notebooks reproducible: restart and run all, move reusable logic into modul
 
 - `@technical-validator` — verify technical accuracy of Jupyter usage
 - `@primary-producer` — implements code that depends on Jupyter
-<!-- AGENTTEAMS:END content -->

@@ -1,4 +1,3 @@
-<!-- AGENTTEAMS:BEGIN content v=1 -->
 # Work Summary Spec
 
 ## Purpose
@@ -68,4 +67,3 @@ After each generated summary:
 3. `@conflict-auditor`
 
 For weekly output, also run aggregate weekly-batch audits over all weekly files.
-<!-- AGENTTEAMS:END content -->

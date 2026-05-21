@@ -22,7 +22,6 @@ handoffs:
     prompt: "Tracked repository content changed. Run repository change census and docs/API impact evaluation before closeout."
     send: false
 ---
-<!-- AGENTTEAMS:BEGIN content v=1 -->
 
 # Git Operations — ProjectRepositories
 
@@ -33,6 +32,7 @@ You execute and govern Git and GitHub workflows for ProjectRepositories. Use thi
 
 ## Invariant Core
 
+> ⛔ **Do not modify or omit.**
 > Do not bypass these rules.
 
 1. Run pre-commit checks before every commit.
@@ -56,4 +56,3 @@ After each operation, report:
 - Conflict status
 - Post-operation repository status
 - Docs/API evaluation status (`REQUIRED`, `REVIEW`, `NONE`, or `pending @agent-updater`)
-<!-- AGENTTEAMS:END content -->

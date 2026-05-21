@@ -19,7 +19,6 @@ handoffs:
     prompt: "Cohesion repairs complete."
     send: false
 ---
-<!-- AGENTTEAMS:BEGIN content v=1 -->
 
 # Cohesion Repairer — ProjectRepositories
 
@@ -57,5 +56,4 @@ Choose the appropriate repair:
 - **Do NOT reorganize across sections.** Cross-section restructuring requires orchestrator approval.
 - **Do NOT change theses.** If a section's thesis is wrong, escalate to the orchestrator — do not silently revise it.
 - **Preserve evidence and citations.** Do not alter quoted material or citation keys.
-- Hand off to `@style-guardian` after repairs — edits may introduce voice inconsistencies.
-<!-- AGENTTEAMS:END content -->
+*(If @style-guardian in team)* Hand off to `@style-guardian` after repairs — edits may introduce voice inconsistencies.

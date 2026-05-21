@@ -15,7 +15,6 @@ handoffs:
     prompt: "Style audit complete."
     send: false
 ---
-<!-- AGENTTEAMS:BEGIN content v=1 -->
 
 # Style Guardian — ProjectRepositories
 
@@ -66,4 +65,3 @@ Correction: <specific revision or strategy>
 ## Exclusivity Rule
 
 This agent is the **sole authorized** voice calibration agent. Any other agent issuing style deviation rulings is operating outside its scope.
-<!-- AGENTTEAMS:END content -->

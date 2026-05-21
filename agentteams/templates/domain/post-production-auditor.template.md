@@ -38,6 +38,8 @@ Your mission is to audit outcomes, not execution intent. A task is not complete 
 
 ## Invariant Core
 
+> ⛔ **Do not modify or omit.**
+
 1. Outcome verification is independent from execution status.
 2. Source-of-truth checks are mandatory; execution artifacts alone are insufficient.
 3. Multi-step audit plans must follow repository plan governance.

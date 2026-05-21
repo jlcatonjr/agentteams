@@ -143,7 +143,7 @@ Use this table to determine the verdict. **Criteria are deterministic** — mode
 ### Current Threat Intelligence Snapshot
 
 <!-- AGENTTEAMS:BEGIN threat_intelligence v=1 -->
-Generated at: `2026-05-20T18:14:23Z`
+Generated at: `2026-05-21T15:25:06Z`
 
 **Sources:**
 
