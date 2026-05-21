@@ -107,6 +107,20 @@ def test_unresolved_manual_placeholder_skips_setup_required():
     assert not findings
 
 
+def test_load_files_from_disk_skips_agentteams_backups(tmp_path):
+    output_dir = tmp_path / ".github" / "agents"
+    output_dir.mkdir(parents=True)
+    (output_dir / "orchestrator.agent.md").write_text(_VALID_AGENT_CONTENT, encoding="utf-8")
+
+    backup_dir = output_dir / ".agentteams-backups" / "20260521-000000"
+    backup_dir.mkdir(parents=True)
+    (backup_dir / "legacy.agent.md").write_text("# legacy snapshot", encoding="utf-8")
+
+    loaded = _load_files_from_disk(output_dir)
+    assert "orchestrator.agent.md" in loaded
+    assert all(".agentteams-backups" not in rel for rel in loaded)
+
+
 # ---------------------------------------------------------------------------
 # _check_yaml_front_matter
 # ---------------------------------------------------------------------------

@@ -32,6 +32,7 @@ You execute and govern Git and GitHub workflows for {PROJECT_NAME}. Use this ref
 
 ## Invariant Core
 
+> ⛔ **Do not modify or omit.**
 > Do not bypass these rules.
 
 1. Run pre-commit checks before every commit.
