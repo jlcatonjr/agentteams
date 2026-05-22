@@ -6,6 +6,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Orphan-agent advisory in --update (2026-05-22)
+
+- **`--update` now reports agent files on disk that the current team no longer
+  emits.** `--prune` only removes agents dropped since the last build
+  (`StructuralDiffReport.removed_files`, a build-log diff); files orphaned by
+  *older* team-config changes — which the build log no longer records —
+  previously accumulated invisibly. Surfaced by self-updating the agentteams
+  team (6 such orphans found in `.github/agents/`). Report-only advisory; no
+  deletion.
+- Test: `tests/test_integration.py::test_update_reports_orphan_agent_files`.
+
 ### --migrate hardening + researchteam test update (2026-05-22)
 
 Surfaced by using the `researchteam` repo (12 fenced / 17 legacy agent files) as

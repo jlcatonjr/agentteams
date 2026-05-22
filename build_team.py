@@ -1101,6 +1101,30 @@ def main(argv: list[str] | None = None) -> int:
             if rc != 0:
                 return rc
 
+        # Orphan-agent advisory: agent files present on disk that the current
+        # team no longer emits. `--prune` above handles removals tracked since
+        # the last build; these are older orphans the build log no longer
+        # records, so without this advisory they accumulate invisibly.
+        _emitted_agent_names = {
+            Path(p).name for p, _ in final_rendered if p.endswith(".agent.md")
+        }
+        _orphan_agents = sorted(
+            f.name for f in output_dir.glob("*.agent.md")
+            if f.name not in _emitted_agent_names
+        )
+        if _orphan_agents:
+            print(
+                f"\n  ⚠  {len(_orphan_agents)} agent file(s) on disk are not part "
+                "of the current team (orphaned by past team-config changes):",
+                file=sys.stderr,
+            )
+            for _name in _orphan_agents:
+                print(f"       {_name}", file=sys.stderr)
+            print(
+                "     These are not updated by --update. Review and delete if obsolete.",
+                file=sys.stderr,
+            )
+
         print(f"\nWriting {len(update_rendered)} file(s)...")
 
         # Back up BEFORE migration so the backup captures pre-migration state

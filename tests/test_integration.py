@@ -710,6 +710,36 @@ def test_blocked_overwrite_update_creates_no_backup(tmp_path, monkeypatch, capsy
     )
 
 
+def test_update_reports_orphan_agent_files(tmp_path, capsys):
+    """--update surfaces agent files on disk that the current team no longer
+    emits — orphans left by past team-config changes (build-log diff misses them)."""
+    import build_team
+
+    brief = EXAMPLES_DIR / "software-project" / "brief.json"
+    if not brief.exists():
+        pytest.skip("software-project brief not found")
+
+    output_dir = tmp_path / ".github" / "agents"
+    # Generate via the harness pipeline (bypasses CLI security-freshness gates).
+    _run_pipeline_to_dir(brief, output_dir)
+
+    # An agent file on disk that is not part of the team.
+    (output_dir / "zz-orphan-expert.agent.md").write_text(
+        "---\nname: Orphan\ndescription: stale\n---\n# Orphan\n", encoding="utf-8"
+    )
+
+    capsys.readouterr()  # clear
+    rc = build_team.main([
+        "--description", str(brief), "--output", str(output_dir),
+        "--update", "--merge", "--dry-run", "--yes", "--no-scan", "--security-offline",
+    ])
+    combined = "".join(capsys.readouterr())
+
+    assert rc == 0
+    assert "orphaned by past team-config changes" in combined
+    assert "zz-orphan-expert.agent.md" in combined
+
+
 def test_stale_fingerprint_with_identical_content_does_not_rerender(tmp_path, monkeypatch, capsys):
     """Defect 2 Option A: a stale build-log manifest_fingerprint must NOT cause
     --update to re-render files whose rendered content is identical to disk.
