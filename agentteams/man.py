@@ -68,6 +68,8 @@ def generate_man_page(parser: argparse.ArgumentParser) -> str:
     for action in parser._actions:
         if isinstance(action, argparse._HelpAction):
             continue
+        if action.help is argparse.SUPPRESS:
+            continue  # internal/hidden flags are not documented in the man page
         lines.extend(_format_option(action))
 
     # EXIT STATUS
@@ -122,6 +124,8 @@ def _build_synopsis(parser: argparse.ArgumentParser) -> str:
     for action in parser._actions:
         if isinstance(action, argparse._HelpAction):
             continue
+        if action.help is argparse.SUPPRESS:
+            continue  # internal/hidden flags are omitted from the synopsis
         if isinstance(action, argparse._VersionAction):
             parts.append("[--version]")
             continue
