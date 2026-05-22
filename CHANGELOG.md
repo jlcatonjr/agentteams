@@ -6,6 +6,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Retrieval-integrator template reference extraction (2026-05-21)
+
+- **`retrieval-integrator.template.md` — inline contract snapshot extracted to references.** The agent template's volatile `Contract Snapshot` block (retrieval mode, trigger contract version, query/maintenance entrypoints, trigger sources, source of truth, staleness SLO) is replaced with two `#file:` pointers to the already-generated `references/retrieval-integration.reference.md` and `references/retrieval-trigger-contract.reference.md`. Both reference files are emitted under the same archetype gate as the agent, so the pointers always resolve. Invariant Core, Validation Procedure, and Output Format remain inline; the now-redundant `CH14:ALLOW_INLINE_DATA` marker was removed with the extracted block. Behavior-preserving: a regenerated retrieval team showed no information loss and no unresolved placeholder tokens.
+- **Tests: 3 new template-content regression tests in `tests/test_render.py`** — assert the retrieval reference linkage, the absence of the extracted inline contract placeholders, and the retention of the inline invariant/procedure sections.
+- **Scoped extraction only.** The companion tool-specialist refactor was audited and **rejected** — specialist-tier tools never emit a `references/{slug}-reference.md` (the specialist and reference tiers are mutually exclusive in `analyze.py`), so the proposed `#file:` pointer would have been a fabricated reference. The module-doc shared-reference extraction stays **deferred** pending unmet phase-2 entry criteria. Full suite green at **887 passed**.
+
 ### Two-day implementation/debug hardening addendum (2026-05-19 to 2026-05-20)
 
 - **Retrieval integration contract hardening shipped across pipeline + templates**:

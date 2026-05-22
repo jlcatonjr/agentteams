@@ -30,19 +30,23 @@ You are the retrieval lifecycle specialist for {PROJECT_NAME}. You verify that r
 
 ## Contract Snapshot
 
-<!-- CH14:ALLOW_INLINE_DATA -->
-- Mode: {RETRIEVAL_MODE}
-- Trigger contract version: {RETRIEVAL_TRIGGER_CONTRACT_VERSION}
-- Query entrypoints:
-{RETRIEVAL_QUERY_ENTRYPOINTS}
-- Maintenance entrypoints:
-{RETRIEVAL_MAINTENANCE_ENTRYPOINTS}
-- Trigger sources:
-{RETRIEVAL_TRIGGER_SOURCES}
-- Source of truth:
-{RETRIEVAL_SOURCE_OF_TRUTH}
-- Staleness SLO (minutes): {RETRIEVAL_STALENESS_SLO_MINUTES}
-<!-- /CH14:ALLOW_INLINE_DATA -->
+The retrieval contract for {PROJECT_NAME} — retrieval mode, trigger contract
+version, query and maintenance entrypoints, trigger sources, source-of-truth
+tables, and the staleness SLO — is maintained in the generated retrieval
+reference files. Treat these files as the single source of truth for the
+contract; consult them before validating any retrieval claim:
+
+**Retrieval contract references:**
+
+`#file:.github/agents/references/retrieval-integration.reference.md`
+
+`#file:.github/agents/references/retrieval-trigger-contract.reference.md`
+
+The integration reference holds retrieval mode, query and maintenance
+entrypoints, source of truth, and freshness. The trigger contract reference
+holds the trigger contract version and the allowed trigger sources. Both files
+are generated alongside this agent whenever retrieval integration is enabled —
+do not restate their values inline here.
 
 ## Invariant Core
 

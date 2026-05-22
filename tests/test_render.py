@@ -482,3 +482,67 @@ def test_tool_cli_template_uses_auto_resolved_api_surface():
     assert "{MANUAL:TOOL_API_SURFACE}" not in content, (
         "tool-cli.template.md must not contain literal {MANUAL:TOOL_API_SURFACE}"
     )
+
+
+# ---------------------------------------------------------------------------
+# Retrieval contract extraction (template-refactoring-implementation-2026-05-21)
+# ---------------------------------------------------------------------------
+
+#: Volatile contract-snapshot placeholders extracted out of the agent template
+#: into the generated retrieval reference files.
+_RETRIEVAL_CONTRACT_PLACEHOLDERS = (
+    "{RETRIEVAL_MODE}",
+    "{RETRIEVAL_TRIGGER_CONTRACT_VERSION}",
+    "{RETRIEVAL_QUERY_ENTRYPOINTS}",
+    "{RETRIEVAL_MAINTENANCE_ENTRYPOINTS}",
+    "{RETRIEVAL_TRIGGER_SOURCES}",
+    "{RETRIEVAL_SOURCE_OF_TRUTH}",
+    "{RETRIEVAL_STALENESS_SLO_MINUTES}",
+)
+
+
+def _retrieval_integrator_template_text() -> str:
+    templates_dir = Path(__file__).parent.parent / "agentteams" / "templates"
+    template = templates_dir / "domain" / "retrieval-integrator.template.md"
+    assert template.exists(), "retrieval-integrator.template.md not found"
+    return template.read_text(encoding="utf-8")
+
+
+def test_retrieval_integrator_template_references_contract_files():
+    """retrieval-integrator agent must point to both generated retrieval reference files."""
+    content = _retrieval_integrator_template_text()
+    assert "#file:.github/agents/references/retrieval-integration.reference.md" in content, (
+        "retrieval-integrator.template.md must #file:-reference the retrieval integration "
+        "reference"
+    )
+    assert "#file:.github/agents/references/retrieval-trigger-contract.reference.md" in content, (
+        "retrieval-integrator.template.md must #file:-reference the retrieval trigger "
+        "contract reference"
+    )
+
+
+def test_retrieval_integrator_template_does_not_inline_contract_data():
+    """The volatile contract snapshot must be extracted, not inlined in the agent template.
+
+    Both reference files are emitted under the same archetype gate as the agent
+    (analyze._plan_output_files), so the agent never restates their volatile values.
+    """
+    content = _retrieval_integrator_template_text()
+    for placeholder in _RETRIEVAL_CONTRACT_PLACEHOLDERS:
+        assert placeholder not in content, (
+            f"retrieval-integrator.template.md must not inline {placeholder} — "
+            "the retrieval contract lives in the generated reference files"
+        )
+    assert "CH14:ALLOW_INLINE_DATA" not in content, (
+        "retrieval-integrator.template.md no longer holds inline data; the "
+        "CH14:ALLOW_INLINE_DATA marker must be removed with the extracted block"
+    )
+
+
+def test_retrieval_integrator_template_keeps_invariant_and_procedure_inline():
+    """Role, Invariant Core, Validation Procedure, and Output Format stay inline."""
+    content = _retrieval_integrator_template_text()
+    for section in ("## Invariant Core", "## Validation Procedure", "## Output Format"):
+        assert section in content, (
+            f"retrieval-integrator.template.md must keep '{section}' inline"
+        )
