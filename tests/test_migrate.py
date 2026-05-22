@@ -256,3 +256,21 @@ class TestMigrateRevertRoundTrip:
         # Tag should be gone
         rc_tag2, _, _ = _git(["rev-parse", "--verify", _MIGRATION_TAG], tmp_path)
         assert rc_tag2 != 0
+
+
+def test_from_migrate_is_not_a_cli_flag():
+    """Regression: --from-migrate must NOT be a CLI flag.
+
+    The --migrate-driven overwrite exemption from the destructive-action
+    security gate must be reachable only via the internal _run_migrate path
+    (a module-level flag scoped by try/finally). If --from-migrate were
+    parseable from argv, a user could pass it with --overwrite to bypass
+    the gate WITHOUT the pre-fencing-snapshot safety tag --migrate creates.
+    """
+    import build_team
+    parser = build_team._build_parser()
+    flags = {opt for action in parser._actions for opt in action.option_strings}
+    assert "--from-migrate" not in flags, (
+        "--from-migrate must not be a CLI flag — it would expose the security-gate "
+        "exemption without --migrate's snapshot-tag safety."
+    )

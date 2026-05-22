@@ -6,6 +6,23 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Security hardening: --migrate gate exemption is in-process only (2026-05-22)
+
+- **Audit finding (HIGH):** the `--from-migrate` flag introduced with the prior
+  `--migrate` hardening was a parseable CLI flag (`argparse.SUPPRESS` only hides
+  from `--help`, not from argv). A user who knew the name could pass
+  `agentteams ... --overwrite --from-migrate --yes` to bypass the
+  destructive-action security gate **without going through `--migrate`'s
+  snapshot-tag safety** — a regression I shipped one commit earlier.
+- **Fix:** removed `--from-migrate` from the CLI parser entirely. The gate
+  exemption is now reachable only via a module-level flag
+  (`_MIGRATE_GATE_EXEMPTION_ACTIVE`) set by `_run_migrate` around its `main()`
+  re-invocation, scoped by `try/finally`. A direct CLI invocation cannot reach
+  the exemption path.
+- Regression test:
+  `tests/test_migrate.py::test_from_migrate_is_not_a_cli_flag` asserts the
+  flag is absent from `_build_parser()`. Full suite green at **899 passed**.
+
 ### Orphan-agent advisory in --update (2026-05-22)
 
 - **`--update` now reports agent files on disk that the current team no longer

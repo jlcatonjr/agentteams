@@ -384,16 +384,6 @@ def _build_parser() -> argparse.ArgumentParser:
         ),
     )
     parser.add_argument(
-        # Internal: set only by --migrate when it re-invokes main() with
-        # --overwrite. Exempts that overwrite from the security-decision gate
-        # because --migrate provides its own safety (the pre-fencing-snapshot
-        # git tag + --revert-migration). Not for direct use.
-        "--from-migrate",
-        action="store_true",
-        dest="from_migrate",
-        help=argparse.SUPPRESS,
-    )
-    parser.add_argument(
         "--convert-from",
         metavar="DIR",
         dest="convert_from",
@@ -1322,14 +1312,17 @@ def main(argv: list[str] | None = None) -> int:
     # Destructive-action gate must clear BEFORE backup/migration so a blocked
     # overwrite produces no spurious backup or log migration. A --migrate-driven
     # overwrite is exempt: --migrate supplies its own safety (the
-    # pre-fencing-snapshot git tag + --revert-migration).
-    if not args.dry_run and args.overwrite and not args.from_migrate:
+    # pre-fencing-snapshot git tag + --revert-migration). The exemption is
+    # gated on _MIGRATE_GATE_EXEMPTION_ACTIVE — a module-level flag set ONLY
+    # by _run_migrate around its main() re-invocation, so the bypass is not
+    # reachable from the CLI.
+    if not args.dry_run and args.overwrite and not _MIGRATE_GATE_EXEMPTION_ACTIVE:
         try:
             _assert_destructive_action_allowed(output_dir, action="overwrite")
         except RuntimeError as exc:
             print(f"Security gate blocked overwrite: {exc}", file=sys.stderr)
             return 1
-    elif not args.dry_run and args.overwrite and args.from_migrate:
+    elif not args.dry_run and args.overwrite and _MIGRATE_GATE_EXEMPTION_ACTIVE:
         print(
             "  ℹ  Security-decision gate exempted for --migrate "
             "(rollback point is the 'pre-fencing-snapshot' tag).",
@@ -3132,6 +3125,12 @@ def _git(args: list[str], cwd: Path) -> tuple[int, str, str]:
 
 _MIGRATION_TAG = "pre-fencing-snapshot"
 
+# In-process flag exempting `--migrate`-driven --overwrite from the
+# destructive-action security gate. Set ONLY by _run_migrate around its
+# main() re-invocation (try/finally-scoped). Never exposed to the CLI — a
+# direct user invocation cannot reach the exemption path.
+_MIGRATE_GATE_EXEMPTION_ACTIVE = False
+
 
 def _run_migrate(project_dir: Path, original_argv: list[str]) -> int:
     """Create the pre-fencing snapshot tag, then run --overwrite.
@@ -3192,18 +3191,23 @@ def _run_migrate(project_dir: Path, original_argv: list[str]) -> int:
     print(f"  ✓  Snapshot tag '{_MIGRATION_TAG}' set at HEAD.")
 
     # Re-invoke main() with --overwrite replacing --migrate; force --yes.
-    # --from-migrate marks the overwrite as migration-driven so it is exempt
-    # from the security-decision gate (the snapshot tag is the safety net).
+    # Set the in-process gate-exemption flag so the security gate skips this
+    # overwrite (the snapshot tag is the safety net). The flag is NEVER set
+    # via the CLI — set only here, scoped by try/finally, so a direct user
+    # invocation cannot reach the exemption path.
     new_argv = [a for a in original_argv if a not in ("--migrate", "--revert-migration")]
     if "--overwrite" not in new_argv:
         new_argv.append("--overwrite")
     if "--yes" not in new_argv and "-y" not in new_argv:
         new_argv.append("--yes")
-    if "--from-migrate" not in new_argv:
-        new_argv.append("--from-migrate")
 
     print("  Running --overwrite migration...\n")
-    rc_emit = main(new_argv)
+    global _MIGRATE_GATE_EXEMPTION_ACTIVE
+    _MIGRATE_GATE_EXEMPTION_ACTIVE = True
+    try:
+        rc_emit = main(new_argv)
+    finally:
+        _MIGRATE_GATE_EXEMPTION_ACTIVE = False
 
     if rc_emit != 0:
         print(
