@@ -142,3 +142,7 @@ After completing all tools in the list, hand off to `@agent-updater` with these 
 1. Add `docs_url`, `api_surface`, and `common_patterns` to each matching tool entry in the project brief so that future pipeline reruns auto-populate these fields.
 2. Directly update the affected tool agent files and reference files in `.github/agents/` so the current generation is complete without requiring a full rerender.
 <!-- AGENTTEAMS:END content -->
+
+## Project-Specific Notes
+
+> ⚙️ **USER-EDITABLE** — project-specific rules, overrides, and extensions for this agent. This section lies outside every `AGENTTEAMS` fence and is preserved verbatim across `agentteams --update --merge`.

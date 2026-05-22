@@ -136,6 +136,9 @@ Each template must contain an `## Invariant Core` section. This section is prefa
 
 The invariant core defines the agent's non-negotiable rules, constraints, and authority. It must not be removed by automated refactoring or cleanup agents.
 
+`## Invariant Core` is a **bounded region**, not a label — see §3 for the
+canonical heading taxonomy and the boundary rule.
+
 ### Handoffs
 
 For agents with downstream workflow steps, list handoffs as a numbered procedure or as a table. All agent slug references within the body must use the `@slug` format.
@@ -166,15 +169,61 @@ Examples:
 
 ---
 
-## 3. Required Sections by Tier
+## 3. Canonical Heading Taxonomy
 
-| Tier | Required Sections |
-|------|------------------|
-| Orchestrator | YAML front matter; Invariant Core; Workflows (numbered step sequences); Authority Hierarchy; Domain Agent Routing table |
-| Governance | YAML front matter; Invariant Core; Trigger conditions; Procedure; Output format |
-| Domain archetype | YAML front matter; Invariant Core; Scope and responsibility; Procedure (numbered); Constraints; Handoffs |
-| Workstream expert | YAML front matter; Invariant Core; Component Specification block; Component Brief workflow; Review-and-approve workflow |
-| Tool-specific | YAML front matter; Invariant Core; Tool identification; Configuration management; Invocation procedure; Verification procedure; Cleanup procedure |
+Every emitted agent document follows one heading taxonomy. This makes documents
+structurally uniform, addressable by tooling (structural lint, bridge inventory),
+and unambiguous about which regions are immutable versus team-owned.
+
+> **Standards impact:** This taxonomy is a **required** structure. Per
+> §"Versioning Standards", adopting it is a **major** agent-documentation
+> standards change — existing templates must be migrated to conform.
+
+### 3.1 Document spine (all agent tiers)
+
+| Heading | Level | Region | Notes |
+|---|---|---|---|
+| `# {Agent Name} — {PROJECT_NAME}` | H1 | — | Title; exactly one per file |
+| *(intro paragraph)* | — | — | One short paragraph, no heading |
+| `## Invariant Core` | H2 | FENCED | Bounded immutable region — see §3.3 |
+| `## Project-Specific Notes` | H2 | USER-EDITABLE | Per-project rules/overrides; preserved by `--merge` |
+
+Tier-specific content lives as **H3 subsections inside `## Invariant Core`**.
+Optional non-invariant H2 sections may follow `## Project-Specific Notes`.
+
+### 3.2 Canonical per-tier subsections
+
+| Tier | Recommended subsections (in order) |
+|------|------------------------------------|
+| Orchestrator | Follows its own established partitioned structure (Constitutional Rules; Authority Hierarchy; Domain Agent Routing; Rules; Available Workflows) — it is the **reference exemplar** for this taxonomy and is exempt from the strict §3.1 spine. |
+| Governance | Trigger; Procedure; Output Format; Rules |
+| Domain archetype | Scope & Responsibility; Procedure; Constraints; Handoffs |
+| Workstream expert | Component Specification; Component Brief Workflow; Review & Approve |
+| Tool-specific | Tool Identification; Configuration Management; Invocation; Verification; Cleanup |
+
+These section **names** are canonical; heading **depth** is at author
+discretion *within* the Invariant Core region (§3.3) — keep it consistent
+within a tier. Tool-tier agents may additionally carry FENCED
+placeholder-driven sections (Key API Surface, etc.).
+
+### 3.3 The Invariant Core boundary rule
+
+The Invariant Core is a **machine-bounded region**, not a heading convention:
+it is exactly the agent file's **FENCED content** — the
+`<!-- AGENTTEAMS:BEGIN … -->` … `<!-- AGENTTEAMS:END … -->` regions. Everything
+fenced is module-owned: the immutable contract, replaced wholesale on
+`agentteams --update --merge`. The merge engine enforces this boundary, so it is
+machine-checkable and cannot silently drift.
+
+`## Invariant Core` is the conventional heading opening an agent's primary
+fenced region, and the ⛔ banner restates its immutability — but the **fence**,
+not the heading, is the authoritative boundary. Automated refactor/cleanup
+agents must not alter fenced content.
+
+Team-owned content lives **outside** every fence: the `## Project-Specific
+Notes` section present in all agent files (§3.1) and, for the orchestrator, its
+`project_rules` gap. This is the supported, merge-safe home for project-specific
+rules — the first-class alternative to ad-hoc orphan fences.
 
 ---
 

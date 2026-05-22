@@ -107,3 +107,7 @@ Affected pages: <list>
 - **Log cross-document conflicts** to `@conflict-auditor`.
 - **Do not validate narrative prose** — only structural parity, coverage, signatures, and version consistency.
 <!-- AGENTTEAMS:END content -->
+
+## Project-Specific Notes
+
+> ⚙️ **USER-EDITABLE** — project-specific rules, overrides, and extensions for this agent. This section lies outside every `AGENTTEAMS` fence and is preserved verbatim across `agentteams --update --merge`.

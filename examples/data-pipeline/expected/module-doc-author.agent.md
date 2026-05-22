@@ -124,3 +124,7 @@ Before returning any draft:
 1. **Source CSV schema** (`docs/source-schema.md`) — field names and types in raw data
 2. **Warehouse schema** (`sql/warehouse-schema.sql`) — target table structure
 <!-- AGENTTEAMS:END content -->
+
+## Project-Specific Notes
+
+> ⚙️ **USER-EDITABLE** — project-specific rules, overrides, and extensions for this agent. This section lies outside every `AGENTTEAMS` fence and is preserved verbatim across `agentteams --update --merge`.

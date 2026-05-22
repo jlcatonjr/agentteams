@@ -157,3 +157,7 @@ Trigger examples: "Summarize this month", "Monthly summary for YYYY-MM"
 - If a target summary already exists, use the selected write mode and state it explicitly in your run notes.
 - Mark uncertain claims as `unverified` instead of inferring.
 <!-- AGENTTEAMS:END content -->
+
+## Project-Specific Notes
+
+> ⚙️ **USER-EDITABLE** — project-specific rules, overrides, and extensions for this agent. This section lies outside every `AGENTTEAMS` fence and is preserved verbatim across `agentteams --update --merge`.

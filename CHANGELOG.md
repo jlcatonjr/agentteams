@@ -6,6 +6,49 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### --migrate hardening + researchteam test update (2026-05-22)
+
+Surfaced by using the `researchteam` repo (12 fenced / 17 legacy agent files) as
+a live test of `--update --merge` and `--migrate`:
+
+- **Legacy-skip warning** (`emit.py`) now recommends `--migrate` alongside
+  `--add-fence-markers` and `--overwrite`.
+- **`--migrate` no longer hard-errors on a stale `pre-fencing-snapshot` tag** —
+  with `--yes` it moves the tag to current HEAD.
+- **`--migrate`'s internal `--overwrite` is exempt from the security-decision
+  gate** (internal `--from-migrate` marker) — `--migrate` carries its own safety
+  via the snapshot tag.
+- **`--revert-migration` is no longer gated by the security check.** It is a
+  recovery operation restoring a deliberate checkpoint; gating the rollback path
+  left a failed `--migrate` unrecoverable via the CLI.
+- Test: `tests/test_migrate.py::test_migrate_moves_stale_tag_with_yes`.
+- **Finding (not yet a fix):** `--migrate` is `--overwrite`-based, so it
+  regenerates agent bodies from templates and discards post-generation
+  enrichment not captured in `_build-description.json` — verified destructive
+  against `researchteam` (a curated literature list in `primary-producer`), then
+  reverted. The safe update path for a mixed legacy/fenced repo is plain
+  `--update --merge`: it updates fence-ready files and skips legacy files
+  **intact**. A content-preserving migration remains a design follow-up.
+- Full suite green at **897 passed**.
+
+### Fence-based Invariant Core boundary + structural lint (2026-05-22)
+
+- **AUTHORING-GUIDE §3.2–§3.3 revised** so the Invariant Core is defined as the agent file's FENCED region — a machine-checkable, merge-enforced boundary — rather than a heading convention. Implements Recommendation R1 / Finding F1. The adversarial audit of the original plan replaced a ~32-template heading-demotion pass with this zero-churn definition, which fixes F1 better: the fence boundary cannot silently drift.
+- **New `tests/test_doc_structure.py`** — structural lint over freshly rendered agents: every persona carries a balanced fenced Invariant Core region and a USER-EDITABLE `## Project-Specific Notes` section outside all fences; reference files carry neither. Implements Recommendations R3 + R5 (merged per audit — the fence-based boundary makes the fence, not the manifest, the authoritative structural contract).
+- Completes the four-plan agent-document-structure metaplan (2026-05-22). Full suite green at **896 passed**.
+
+### USER-EDITABLE Project-Specific Notes section for agent files (2026-05-22)
+
+- **Every emitted agent persona now carries a `## Project-Specific Notes` USER-EDITABLE section** outside all `AGENTTEAMS` fences (`emit._ensure_project_notes_section`) — the first-class, merge-safe home for per-project rules and overrides. Implements Recommendation R2 of the 2026-05-22 structure assessment and resolves Finding F2 (domain-archetype agents previously had zero user-editable region). Reference and instruction files are excluded.
+- **Migration follows path b:** the section is appended to merged output as well as fresh renders, so existing fleet files gain it on `--update --merge`. Pure append — project-authored orphan fences and hand edits outside the templated structure are preserved verbatim.
+- **`build_team.py` `_make_content_matches`** updated to mirror the new emit output so drift refinement still demotes content-identical files.
+- Tests: 3 new `tests/test_emit.py` cases; example snapshots regenerated (109 files); full suite green at **887 passed**.
+
+### Canonical heading taxonomy for agent documents (2026-05-22)
+
+- **`AUTHORING-GUIDE.md` §3 rewritten as a Canonical Heading Taxonomy** (was "Required Sections by Tier"). Defines the document spine — `# Title` (H1), `## Invariant Core` (H2, FENCED), `## Project-Specific Notes` (H2, USER-EDITABLE) — plus canonical per-tier H3 subsections and the Invariant Core boundary rule (it is a bounded container, not a label). §2 cross-references the new boundary rule. Implements Recommendation R4 of the 2026-05-22 agent-document-structure assessment.
+- **Standards impact: major.** Per the guide's own versioning standard, requiring a new document structure is a major agent-documentation standards change; templates must be migrated to conform (tracked as plan P2 — Invariant Core + per-project editable regions). No template or emitted file changed by this entry yet — taxonomy definition only.
+
 ### Retrieval-integrator template reference extraction (2026-05-21)
 
 - **`retrieval-integrator.template.md` — inline contract snapshot extracted to references.** The agent template's volatile `Contract Snapshot` block (retrieval mode, trigger contract version, query/maintenance entrypoints, trigger sources, source of truth, staleness SLO) is replaced with two `#file:` pointers to the already-generated `references/retrieval-integration.reference.md` and `references/retrieval-trigger-contract.reference.md`. Both reference files are emitted under the same archetype gate as the agent, so the pointers always resolve. Invariant Core, Validation Procedure, and Output Format remain inline; the now-redundant `CH14:ALLOW_INLINE_DATA` marker was removed with the extracted block. Behavior-preserving: a regenerated retrieval team showed no information loss and no unresolved placeholder tokens.

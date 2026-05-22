@@ -168,6 +168,51 @@ def _normalize_generated_content(rel_path: str, content: str) -> str:
     return normalized
 
 
+_PROJECT_NOTES_HEADING = "## Project-Specific Notes"
+_PROJECT_NOTES_SECTION = (
+    "\n"
+    "## Project-Specific Notes\n"
+    "\n"
+    "> ⚙️ **USER-EDITABLE** — project-specific rules, overrides, and extensions "
+    "for this agent. This section lies outside every `AGENTTEAMS` fence and is "
+    "preserved verbatim across `agentteams --update --merge`.\n"
+)
+
+
+def _is_agent_doc(rel_path: str, content: str) -> bool:
+    """Return True when rel_path/content is a generated agent persona document.
+
+    Agent personas carry YAML front matter; reference files, instruction files,
+    and SETUP-REQUIRED.md do not and are excluded.
+    """
+    if not rel_path.endswith(".md"):
+        return False
+    base = rel_path.rsplit("/", 1)[-1]
+    if "references/" in rel_path:
+        return False
+    if base in {"copilot-instructions.md", "CLAUDE.md", "SETUP-REQUIRED.md"}:
+        return False
+    return bool(_YAML_FM_RE.match(content))
+
+
+def _ensure_project_notes_section(rel_path: str, content: str) -> str:
+    """Append the USER-EDITABLE 'Project-Specific Notes' section if absent.
+
+    Pure append: existing content — including project-authored orphan fences
+    and hand edits outside the templated structure — is never rewritten, only
+    extended. Idempotent: a file that already carries the section is returned
+    unchanged. Applied to merged output as well as fresh renders, so existing
+    fleet files gain the section on ``--update --merge`` (migration path b).
+    """
+    if not _is_agent_doc(rel_path, content):
+        return content
+    if _PROJECT_NOTES_HEADING in content:
+        return content
+    if not content.endswith("\n"):
+        content += "\n"
+    return content + _PROJECT_NOTES_SECTION
+
+
 _LIST_ITEM_RE = re.compile(r"^\s*(?:[-*+]\s|\d+\.\s)", re.MULTILINE)
 # Concrete file paths (foo/bar.py, foo.md) or backtick-quoted identifiers.
 _PATH_RE = re.compile(r"[A-Za-z0-9_./-]+\.(?:py|md|json|yaml|yml|toml|csv|tsv|sql|sh)\b")
@@ -752,6 +797,7 @@ def emit_all(
     for rel_path, content in rendered_files:
         target = _resolve_path(output_dir, rel_path)
         normalized_content = _normalize_generated_content(rel_path, content)
+        normalized_content = _ensure_project_notes_section(rel_path, normalized_content)
 
         if dry_run:
             # Plan 1: compute the action accurately (mirror the real write
@@ -790,17 +836,23 @@ def emit_all(
                             result.skipped_legacy_drift.append(
                                 existing_text != normalized_content
                             )
-                elif not mr.content_changed and not mr.sections_added:
-                    entry.action = "UNCHANGED"
                 else:
-                    entry.action = "MERGE"
-                    entry.delta_bytes = len(mr.merged_content) - len(existing_text)
-                    for sid in mr.sections_replaced:
-                        entry.fence_actions.append({"fence_id": sid, "action": "replaced"})
-                    for sid in mr.sections_added:
-                        entry.fence_actions.append({"fence_id": sid, "action": "added"})
-                    for sid in mr.sections_orphaned:
-                        entry.fence_actions.append({"fence_id": sid, "action": "orphaned"})
+                    migrated = _ensure_project_notes_section(rel_path, mr.merged_content)
+                    if (
+                        not mr.content_changed
+                        and not mr.sections_added
+                        and migrated == existing_text
+                    ):
+                        entry.action = "UNCHANGED"
+                    else:
+                        entry.action = "MERGE"
+                        entry.delta_bytes = len(migrated) - len(existing_text)
+                        for sid in mr.sections_replaced:
+                            entry.fence_actions.append({"fence_id": sid, "action": "replaced"})
+                        for sid in mr.sections_added:
+                            entry.fence_actions.append({"fence_id": sid, "action": "added"})
+                        for sid in mr.sections_orphaned:
+                            entry.fence_actions.append({"fence_id": sid, "action": "orphaned"})
             elif existing_text is not None and not overwrite:
                 entry.action = "SKIP"
             elif existing_text is not None and overwrite:
@@ -850,21 +902,29 @@ def emit_all(
                         result.skipped_legacy_drift.append(
                             existing_text != normalized_content
                         )
-            elif not merge_result.content_changed and not merge_result.sections_added:
-                result.unchanged.append(str(target))
             else:
-                try:
-                    target.write_text(merge_result.merged_content, encoding="utf-8")
-                    result.merged.append(str(target))
-                    if merge_result.sections_orphaned:
-                        print(
-                            f"  ⚠  {target.name}: {len(merge_result.sections_orphaned)} "
-                            f"orphaned section(s) left in place: "
-                            f"{', '.join(merge_result.sections_orphaned)}",
-                            file=sys.stderr,
-                        )
-                except OSError as exc:
-                    result.errors.append(f"Failed to write {target}: {exc}")
+                migrated = _ensure_project_notes_section(
+                    rel_path, merge_result.merged_content
+                )
+                if (
+                    not merge_result.content_changed
+                    and not merge_result.sections_added
+                    and migrated == existing_text
+                ):
+                    result.unchanged.append(str(target))
+                else:
+                    try:
+                        target.write_text(migrated, encoding="utf-8")
+                        result.merged.append(str(target))
+                        if merge_result.sections_orphaned:
+                            print(
+                                f"  ⚠  {target.name}: {len(merge_result.sections_orphaned)} "
+                                f"orphaned section(s) left in place: "
+                                f"{', '.join(merge_result.sections_orphaned)}",
+                                file=sys.stderr,
+                            )
+                    except OSError as exc:
+                        result.errors.append(f"Failed to write {target}: {exc}")
             continue
 
         if target.exists() and not overwrite:
@@ -985,8 +1045,9 @@ def print_summary(result: EmitResult, manifest: dict[str, Any]) -> None:
             marker = "  (template change pending)" if drift else ""
             print(f"       {path}{marker}", file=sys.stderr)
         print(
-            "     Retrofit options:\n"
-            "       agentteams --add-fence-markers <path> [--in-place]\n"
+            "     Retrofit options (one-step --migrate is recommended):\n"
+            "       agentteams ... --migrate             # tag 'pre-fencing-snapshot' then fence all files; reversible via --revert-migration\n"
+            "       agentteams --add-fence-markers <path> [--in-place]   # non-destructive, one file at a time\n"
             "       agentteams ... --overwrite           # replace unconditionally (loses local edits)",
             file=sys.stderr,
         )

@@ -67,3 +67,7 @@ Correction: <specific revision or strategy>
 
 This agent is the **sole authorized** voice calibration agent. Any other agent issuing style deviation rulings is operating outside its scope.
 <!-- AGENTTEAMS:END content -->
+
+## Project-Specific Notes
+
+> ⚙️ **USER-EDITABLE** — project-specific rules, overrides, and extensions for this agent. This section lies outside every `AGENTTEAMS` fence and is preserved verbatim across `agentteams --update --merge`.

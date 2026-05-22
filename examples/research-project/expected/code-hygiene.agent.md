@@ -148,3 +148,7 @@ Overall: 18/20 checks passing
 - **CH-22 is mandatory in this repository.** Function/class inputs must be type-checked so only meaningful input types are accepted.
 - **CH-23 is mandatory in this repository.** Invalid inputs must raise explicit errors and must never fail silently.
 <!-- AGENTTEAMS:END content -->
+
+## Project-Specific Notes
+
+> ⚙️ **USER-EDITABLE** — project-specific rules, overrides, and extensions for this agent. This section lies outside every `AGENTTEAMS` fence and is preserved verbatim across `agentteams --update --merge`.

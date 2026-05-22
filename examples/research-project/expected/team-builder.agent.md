@@ -106,3 +106,7 @@ python build_team.py \
 - After generation, verify each generated `.agent.md` file exists and has valid YAML front matter
 - Always end by reviewing `SETUP-REQUIRED.md` with the user
 <!-- AGENTTEAMS:END content -->
+
+## Project-Specific Notes
+
+> ⚙️ **USER-EDITABLE** — project-specific rules, overrides, and extensions for this agent. This section lies outside every `AGENTTEAMS` fence and is preserved verbatim across `agentteams --update --merge`.

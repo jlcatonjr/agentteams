@@ -126,6 +126,32 @@ class TestRunMigrate:
         rc = _run_migrate(tmp_path, ["--description", str(tmp_path / ".github" / "agents" / "brief.json")])
         assert rc == 1
 
+    def test_migrate_moves_stale_tag_with_yes(self, tmp_path, monkeypatch):
+        """With --yes, a stale pre-fencing-snapshot tag is moved to current HEAD
+        rather than hard-failing — a previously migrated repo can be re-migrated."""
+        _init_git_repo(tmp_path)
+        _git(["tag", _MIGRATION_TAG], tmp_path)
+        _, old_sha, _ = _git(["rev-parse", _MIGRATION_TAG], tmp_path)
+        # advance HEAD past the tagged commit
+        (tmp_path / "sentinel.txt").write_text("x", encoding="utf-8")
+        _git(["add", "-A"], tmp_path)
+        _git(["commit", "-m", "advance"], tmp_path)
+        _, head_sha, _ = _git(["rev-parse", "HEAD"], tmp_path)
+
+        import build_team as _bt
+        monkeypatch.setattr(_bt, "main", lambda argv: 0)
+        argv = [
+            "--description", str(tmp_path / ".github" / "agents" / "brief.json"),
+            "--project", str(tmp_path),
+            "--migrate", "--yes",
+        ]
+        rc = _run_migrate(tmp_path, argv)
+        assert rc == 0, "migrate with --yes must not fail on a stale tag"
+
+        _, new_tag_sha, _ = _git(["rev-parse", _MIGRATION_TAG], tmp_path)
+        assert new_tag_sha.strip() == head_sha.strip(), "tag should move to current HEAD"
+        assert new_tag_sha.strip() != old_sha.strip(), "tag should leave the stale commit"
+
     def test_migrate_creates_snapshot_tag(self, tmp_path, monkeypatch):
         """--migrate creates the pre-fencing-snapshot tag."""
         _init_git_repo(tmp_path)

@@ -384,6 +384,16 @@ def _build_parser() -> argparse.ArgumentParser:
         ),
     )
     parser.add_argument(
+        # Internal: set only by --migrate when it re-invokes main() with
+        # --overwrite. Exempts that overwrite from the security-decision gate
+        # because --migrate provides its own safety (the pre-fencing-snapshot
+        # git tag + --revert-migration). Not for direct use.
+        "--from-migrate",
+        action="store_true",
+        dest="from_migrate",
+        help=argparse.SUPPRESS,
+    )
+    parser.add_argument(
         "--convert-from",
         metavar="DIR",
         dest="convert_from",
@@ -1286,13 +1296,21 @@ def main(argv: list[str] | None = None) -> int:
                   "user-authored content outside fences is preserved.")
 
     # Destructive-action gate must clear BEFORE backup/migration so a blocked
-    # overwrite produces no spurious backup or log migration.
-    if not args.dry_run and args.overwrite:
+    # overwrite produces no spurious backup or log migration. A --migrate-driven
+    # overwrite is exempt: --migrate supplies its own safety (the
+    # pre-fencing-snapshot git tag + --revert-migration).
+    if not args.dry_run and args.overwrite and not args.from_migrate:
         try:
             _assert_destructive_action_allowed(output_dir, action="overwrite")
         except RuntimeError as exc:
             print(f"Security gate blocked overwrite: {exc}", file=sys.stderr)
             return 1
+    elif not args.dry_run and args.overwrite and args.from_migrate:
+        print(
+            "  ℹ  Security-decision gate exempted for --migrate "
+            "(rollback point is the 'pre-fencing-snapshot' tag).",
+            file=sys.stderr,
+        )
 
     if not args.dry_run and not args.no_backup and (args.overwrite or args.merge):
         emit.backup_output_dir(
@@ -2520,6 +2538,7 @@ def _make_content_matches(
         disk_text = disk_path.read_text(encoding="utf-8")
         preserved = _preserve_manual_values(disk_text, rendered)
         effective = emit._normalize_generated_content(path, preserved)
+        effective = emit._ensure_project_notes_section(path, effective)
         return effective == disk_text
     return _matches
 
@@ -3118,27 +3137,46 @@ def _run_migrate(project_dir: Path, original_argv: list[str]) -> int:
             "current HEAD commit, not the working-tree state. Consider committing first."
         )
 
-    # Create snapshot tag (fail if it already exists)
+    # Create the snapshot tag at HEAD. A stale tag from a prior migration is
+    # moved to current HEAD when --yes is set — the rollback point for THIS
+    # migration is the current state — instead of hard-failing on the collision.
+    migrate_yes = "--yes" in original_argv or "-y" in original_argv
     rc3, _, tag_err = _git(["tag", _MIGRATION_TAG], project_dir)
     if rc3 != 0:
-        if "already exists" in tag_err or "already a tag" in tag_err.lower():
+        is_collision = "already exists" in tag_err or "already a tag" in tag_err.lower()
+        if is_collision and migrate_yes:
+            rc_mv, _, mv_err = _git(["tag", "-f", _MIGRATION_TAG], project_dir)
+            if rc_mv != 0:
+                print(f"Error moving snapshot tag: {mv_err}", file=sys.stderr)
+                return 1
+            print(
+                f"  ⚠  Existing '{_MIGRATION_TAG}' tag from a prior migration "
+                "moved to current HEAD."
+            )
+        elif is_collision:
             print(
                 f"Error: tag '{_MIGRATION_TAG}' already exists in {project_dir}. "
-                "Delete it first with: git tag -d pre-fencing-snapshot",
+                "Re-run with --yes to move it to the current HEAD, or delete it "
+                "first with: git tag -d pre-fencing-snapshot",
                 file=sys.stderr,
             )
+            return 1
         else:
             print(f"Error creating snapshot tag: {tag_err}", file=sys.stderr)
-        return 1
+            return 1
 
-    print(f"  ✓  Snapshot tag '{_MIGRATION_TAG}' created at HEAD.")
+    print(f"  ✓  Snapshot tag '{_MIGRATION_TAG}' set at HEAD.")
 
-    # Re-invoke main() with --overwrite replacing --migrate; force --yes
+    # Re-invoke main() with --overwrite replacing --migrate; force --yes.
+    # --from-migrate marks the overwrite as migration-driven so it is exempt
+    # from the security-decision gate (the snapshot tag is the safety net).
     new_argv = [a for a in original_argv if a not in ("--migrate", "--revert-migration")]
     if "--overwrite" not in new_argv:
         new_argv.append("--overwrite")
     if "--yes" not in new_argv and "-y" not in new_argv:
         new_argv.append("--yes")
+    if "--from-migrate" not in new_argv:
+        new_argv.append("--from-migrate")
 
     print("  Running --overwrite migration...\n")
     rc_emit = main(new_argv)
@@ -3203,15 +3241,10 @@ def _run_revert_migration(project_dir: Path) -> int:
         )
         return 1
 
-    try:
-        _assert_destructive_action_allowed(
-            project_dir / ".github" / "agents",
-            action="revert-migration",
-        )
-    except RuntimeError as exc:
-        print(f"Security gate blocked revert-migration: {exc}", file=sys.stderr)
-        return 1
-
+    # --revert-migration is a recovery operation: it restores a deliberate
+    # safety checkpoint (the pre-fencing-snapshot tag). It is intentionally NOT
+    # gated by the destructive-action security check — gating the rollback path
+    # would leave a failed --migrate effectively unrecoverable via the CLI.
     print(f"  Reverting to snapshot tag '{_MIGRATION_TAG}' ({tag_sha[:12]})...")
 
     rc3, _, reset_err = _git(["reset", "--hard", _MIGRATION_TAG], project_dir)

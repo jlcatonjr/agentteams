@@ -101,3 +101,7 @@ Escalate to orchestrator if:
 - Tool exits with an unexpected error (not a findings report)
 - Configuration conflicts with another tool in the project
 - Security-related rules need to be disabled
+
+## Project-Specific Notes
+
+> ⚙️ **USER-EDITABLE** — project-specific rules, overrides, and extensions for this agent. This section lies outside every `AGENTTEAMS` fence and is preserved verbatim across `agentteams --update --merge`.

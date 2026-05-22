@@ -24,10 +24,12 @@ def test_orchestrator_template_routes_post_update_chain() -> None:
     _assert_in_order(
         text,
         [
+            "### Standard Doc-Sync Closeout",
+            "1. Invoke `@agent-updater` → sync agent documentation with the session's changes, run the repository change census, and evaluate docs/API impact",
+            "2. Invoke `@adversarial` → challenge the repository change census, the docs/API impact decision, and any newly synchronized assumptions before closeout",
+            "3. Invoke `@conflict-auditor` → verify the synchronized docs and closeout decisions remain consistent",
             "### Workflow 6: Documentation Maintenance",
-            "1. Invoke `@agent-updater` → sync docs with changes, run the repository change census, and evaluate docs/API impact",
-            "2. Invoke `@adversarial` → challenge the repository change census, docs/API impact decision, and synchronized workflow assumptions before closeout",
-            "3. Invoke `@conflict-auditor` → verify consistency after documentation synchronization",
+            "1. → **Standard Doc-Sync Closeout**",
         ],
     )
 
@@ -40,10 +42,12 @@ def test_active_orchestrator_routes_post_update_chain() -> None:
     _assert_in_order(
         text,
         [
+            "### Standard Doc-Sync Closeout",
+            "1. Invoke `@agent-updater` → sync agent documentation with the session's changes, run the repository change census, and evaluate docs/API impact",
+            "2. Invoke `@adversarial` → challenge the repository change census, the docs/API impact decision, and any newly synchronized assumptions before closeout",
+            "3. Invoke `@conflict-auditor` → verify the synchronized docs and closeout decisions remain consistent",
             "### Workflow 6: Documentation Maintenance",
-            "1. Invoke `@agent-updater` → sync docs with changes, run the repository change census, and evaluate docs/API impact",
-            "2. Invoke `@adversarial` → challenge the repository change census, docs/API impact decision, and synchronized workflow assumptions before closeout",
-            "3. Invoke `@conflict-auditor` → verify consistency after documentation synchronization",
+            "1. → **Standard Doc-Sync Closeout**",
         ],
     )
 

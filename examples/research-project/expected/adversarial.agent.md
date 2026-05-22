@@ -126,3 +126,7 @@ CLEARED FOR EXECUTION: YES | NO | CONDITIONAL
 - Cascade analysis is required for every challenged presupposition, not optional
 - You do not make ACCEPT/REJECT decisions — that is the orchestrator's role after reviewing your findings
 <!-- AGENTTEAMS:END content -->
+
+## Project-Specific Notes
+
+> ⚙️ **USER-EDITABLE** — project-specific rules, overrides, and extensions for this agent. This section lies outside every `AGENTTEAMS` fence and is preserved verbatim across `agentteams --update --merge`.

@@ -137,7 +137,59 @@ def test_emit_autofences_preserves_yaml_front_matter_position(tmp_path):
     fence_begin_pos = written_content.find("<!-- AGENTTEAMS:BEGIN content v=1 -->")
     fm_end_pos = written_content.find("---\n", 4) + 4  # end of closing ---
     assert fence_begin_pos >= fm_end_pos, "fence BEGIN must appear after the front-matter block"
-    assert written_content.rstrip().endswith("<!-- AGENTTEAMS:END content -->")
+    end_pos = written_content.find("<!-- AGENTTEAMS:END content -->")
+    assert end_pos > fence_begin_pos, "content fence END must follow BEGIN"
+    # R2: the USER-EDITABLE Project-Specific Notes section is appended outside the fence
+    notes_pos = written_content.find("## Project-Specific Notes")
+    assert notes_pos > end_pos, "Project-Specific Notes section must follow the content fence"
+
+
+# ---------------------------------------------------------------------------
+# R2 — USER-EDITABLE Project-Specific Notes section
+# ---------------------------------------------------------------------------
+
+_AGENT = "---\nname: A\ndescription: d\n---\n\n# A\n\nBody.\n"
+
+
+def test_emit_appends_project_notes_section_to_agent_files(tmp_path):
+    """Every emitted agent persona gains the USER-EDITABLE section."""
+    emit_all([("a.agent.md", _AGENT)], output_dir=tmp_path, overwrite=True, yes=True)
+    text = (tmp_path / "a.agent.md").read_text(encoding="utf-8")
+    assert "## Project-Specific Notes" in text
+    assert "USER-EDITABLE" in text
+    # the section sits outside the content fence
+    assert text.index("## Project-Specific Notes") > text.index("<!-- AGENTTEAMS:END content -->")
+
+
+def test_emit_skips_project_notes_for_reference_files(tmp_path):
+    """Reference files (no front matter) and instruction files do not get the section."""
+    emit_all(
+        [("references/ref.md", "# Ref\n\nReference data.\n")],
+        output_dir=tmp_path, overwrite=True, yes=True,
+    )
+    assert "## Project-Specific Notes" not in (tmp_path / "references/ref.md").read_text(encoding="utf-8")
+
+
+def test_emit_project_notes_section_is_idempotent_and_merge_safe(tmp_path):
+    """Path b: merge migrates an existing file once, then preserves user edits.
+
+    A pre-existing project-authored orphan fence outside the templated structure
+    is preserved across the migration (pure-append guarantee)."""
+    emit_all([("a.agent.md", _AGENT)], output_dir=tmp_path, overwrite=True, yes=True)
+    target = tmp_path / "a.agent.md"
+    # user edits the section and adds a project-authored orphan fence
+    edited = target.read_text(encoding="utf-8").replace(
+        "preserved verbatim across `agentteams --update --merge`.",
+        "preserved verbatim across `agentteams --update --merge`.\n\nPROJECT RULE: keep X.\n"
+        "<!-- AGENTTEAMS:BEGIN proj_extra v=1 -->\ncustom\n<!-- AGENTTEAMS:END proj_extra -->",
+    )
+    target.write_text(edited, encoding="utf-8")
+    # re-emit with merge — section not duplicated, user content + orphan fence preserved
+    emit_all([("a.agent.md", _AGENT)], output_dir=tmp_path, merge=True, yes=True)
+    final = target.read_text(encoding="utf-8")
+    assert final.count("## Project-Specific Notes") == 1
+    assert "PROJECT RULE: keep X." in final
+    assert "proj_extra" in final
 
 
 # ---------------------------------------------------------------------------

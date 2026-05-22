@@ -69,3 +69,7 @@ Update `.github/agents/references/conflict-log.csv`: change `status` to `resolve
 3. ESCALATE only when genuinely unresolvable by the hierarchy
 4. Update the conflict log for every decision, including ACCEPT
 <!-- AGENTTEAMS:END content -->
+
+## Project-Specific Notes
+
+> ⚙️ **USER-EDITABLE** — project-specific rules, overrides, and extensions for this agent. This section lies outside every `AGENTTEAMS` fence and is preserved verbatim across `agentteams --update --merge`.
