@@ -62,7 +62,12 @@
             "type": "string",
             "pattern": "^[a-f0-9]{64}$"
           },
-          "source_mtime": { "type": "number", "minimum": 0 }
+          "source_mtime": { "type": "number", "minimum": 0 },
+          "vector_norm_sq": {
+            "type": "number",
+            "minimum": 0,
+            "description": "Precomputed full IDF-weighted TF-IDF vector norm-squared for cosine denominator (vector strategy). Added in index_format_version json-bm25-postings-v2; legacy indices without this field fall back to on-the-fly computation."
+          }
         }
       }
     },
