@@ -11,18 +11,6 @@ Fetches curated vulnerability feeds from CISA KEV, FIRST EPSS, MITRE CVE, NVD, a
 
 ---
 
-## Constants
-
-### `ROUTING_SCHEMA_VERSION`
-
-> *Source: `agentteams/security_refs.py`*
-
-Current schema version for the security placeholders artifact. Used to detect compatibility between build and consumer versions.
-
-**Type:** `str`
-
----
-
 ## Functions
 
 ### `build_security_placeholders(packages, *, cache_dir=None, offline=False)`

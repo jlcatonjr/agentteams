@@ -6,6 +6,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### API docs: phantom-source fix + public emit surface (2026-05-22)
+
+Audit of `docs_src/api-reference/*.md` against the agentteams code surface:
+
+- **Phantom-source attribution fixed.** `security-refs.md` carried a `### ROUTING_SCHEMA_VERSION` section attributed to `agentteams/security_refs.py`, but the constant lives in `agentteams/model_routing.py` (where it is already correctly documented). Removed the misattributed duplicate.
+- **Documented public emit dry-run surface that was missing.** Added `### DryRunEntry` (the dataclass populating `DryRunReport.entries`) and `### print_dry_run_report(result, manifest, *, fmt='text')` to `emit.md`. Both have been public-facing for some time but had no dedicated doc section.
+- Spot-check: `emit_all` signature in docs matches code; `drift.FINGERPRINT_ALGO_VERSION` is correctly documented (the initial scan flagged it as a phantom but the constant exists as a typed assignment).
+
 ### Security hardening: --migrate gate exemption is in-process only (2026-05-22)
 
 - **Audit finding (HIGH):** the `--from-migrate` flag introduced with the prior

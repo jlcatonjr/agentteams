@@ -31,6 +31,21 @@ Only present when `emit_all(..., dry_run=True)`. Serves as an extension point fo
 
 ---
 
+### `DryRunEntry`
+
+> *Source: `agentteams/emit.py`*
+
+One per-file row in the dry-run preview. Populated by `emit_all(..., dry_run=True)` into `DryRunReport.entries`.
+
+**Attributes:**
+
+- `path` (`str`) — Absolute path of the file the action would touch.
+- `action` (`str`) — One of `WRITE`, `OVERWRITE`, `MERGE`, `MERGE-OVERWRITE-FENCED`, `UNCHANGED`, `SKIP`.
+- `fence_actions` (`list[dict[str, Any]]`) — Per-fence merge details for `MERGE` / `MERGE-OVERWRITE-FENCED` rows (each dict carries `fence_id` and `action`). Empty for other actions.
+- `delta_bytes` (`int`) — Estimated byte delta for the action.
+
+---
+
 ### `EmitResult`
 
 > *Source: `agentteams/emit.py`*
@@ -132,6 +147,22 @@ Print a human-readable summary of an emit operation to stdout.
 - `manifest` (`dict[str, Any]`) — Team manifest from `analyze.build_manifest()`.
 
 ---
+---
+
+### `print_dry_run_report(result, manifest, *, fmt='text')`
+
+> *Source: `agentteams/emit.py`*
+
+Print the structured dry-run plan recorded on `EmitResult.dry_run_report`.
+
+**Args:**
+
+- `result` (`EmitResult`) — Result returned by `emit_all(..., dry_run=True)`. If `result.dry_run_report` is `None`, the function is a no-op that prints a one-line note.
+- `manifest` (`dict`) — Manifest from `analyze.build_manifest()`; used for header context.
+- `fmt` (`str`, keyword-only) — `'text'` prints a per-file action table plus aggregated counts and notices; `'json'` prints a single JSON document to stdout suitable for `jq` piping. Default: `'text'`.
+
+**Returns:** `None`.
+
 ---
 
 ### `backup_output_dir(output_dir, *, files_to_backup=None, dry_run=False)`
