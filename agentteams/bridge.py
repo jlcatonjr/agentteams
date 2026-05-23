@@ -541,7 +541,7 @@ def _render_recall_skill() -> str:
         "- Index mode is `sparse-tfidf-cosine` — keyword-aware, NOT semantic "
         "  embeddings. Synonyms and paraphrases may miss.\n"
         "- Index covers durable sources (work summaries, CHANGELOG, plans), "
-        "  NOT code or `tmp/`.\n"
+        "  NOT code or the gitignored `tmp/` scratch tree.\n"
         "- Index is rebuilt explicitly via `--refresh-index`, not on file save.\n"
     )
 
