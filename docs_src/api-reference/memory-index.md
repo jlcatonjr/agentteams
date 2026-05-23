@@ -10,7 +10,7 @@ Used by `@navigator`, `@adversarial`, and `@work-summarizer` to retrieve relevan
 
 ## Design Principles
 
-- **Two strategies, no embeddings** — BM25 lexical (default) and sparse cosine vector; no external ML dependencies
+- **Two strategies, no embeddings — a deliberate design boundary, not a "later tier."** BM25 lexical (default) and sparse cosine vector; both stdlib-only, no external ML dependencies. The reserved fields `vector_model_id` and `vector_dim` exist for forward-compatibility metadata only; dense embeddings are intentionally out of scope for this module. Consumers needing dense vectors should layer their own retrieval atop the indexed sources rather than expecting the module to grow an embeddings backend.
 - **Durable sources only** — Caller passes explicit source paths; module never globs ignored directories
 - **Robust to absence** — Empty source list → empty but valid index (no error)
 - **Graceful degradation** — Per-paragraph passage scoring (I2, I9) with backward-compatible snippet fallback
@@ -61,7 +61,7 @@ Build a BM25 search index over durable text sources.
 - `index_build_id`: Build fingerprint for this specific index emission
 - `index_write_owner`: Writer ownership marker (`agentteams.build_team`)
 - `vector_runtime_mode`: Runtime strategy implementation (`sparse-tfidf-cosine`)
-- `vector_model_id`, `vector_dim`: Reserved nullable fields for future embedding/vector model metadata
+- `vector_model_id`, `vector_dim`: Reserved nullable fields for forward-compatibility metadata. Always `null` for this module — dense embeddings are intentionally out of scope (see Design Principles). Consumers that layer their own dense retrieval may use these fields in their own derived artifacts.
 - `fallback_policy`: Declares non-blocking fallback semantics
 - `source_fingerprint`: Stable digest across indexed document path/hash pairs
 - `project_name`, `framework`: Supplied metadata

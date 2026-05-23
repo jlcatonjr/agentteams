@@ -256,3 +256,189 @@ def test_bridge_generate_no_notice_when_overwriting(tmp_path: Path):
     assert refreshed.success
     assert refreshed.notices == []
 
+
+def test_bridge_merge_preserves_content_outside_fence(tmp_path: Path):
+    """--bridge-merge must not touch content outside AGENTTEAMS-BRIDGE fences."""
+    source_dir = tmp_path / "src" / ".github" / "agents"
+    _build_source("copilot-vscode", source_dir)
+    out_root = tmp_path / "out"
+
+    # First-time generation creates fenced target files.
+    first = run_bridge(
+        source_dir=source_dir,
+        source_framework="copilot-vscode",
+        target_framework="claude",
+        output_root=out_root,
+        dry_run=False,
+        overwrite=True,
+        check_only=False,
+    )
+    assert first.success
+
+    claude_md = out_root / "CLAUDE.md"
+    original = claude_md.read_text(encoding="utf-8")
+    assert "AGENTTEAMS-BRIDGE:BEGIN claude-bridge-entry" in original
+
+    # Consumer adds content outside the fence.
+    customized = original + "\n## Consumer Notes\n\nProject-specific guidance.\n"
+    claude_md.write_text(customized, encoding="utf-8")
+
+    # Merge re-run: fenced region may update, outside content preserved.
+    merged = run_bridge(
+        source_dir=source_dir,
+        source_framework="copilot-vscode",
+        target_framework="claude",
+        output_root=out_root,
+        dry_run=False,
+        overwrite=False,
+        check_only=False,
+        merge_only=True,
+    )
+    assert merged.success
+
+    final = claude_md.read_text(encoding="utf-8")
+    assert "## Consumer Notes" in final
+    assert "Project-specific guidance." in final
+    assert "AGENTTEAMS-BRIDGE:BEGIN claude-bridge-entry" in final
+
+
+def test_bridge_merge_skips_files_without_fence(tmp_path: Path):
+    """--bridge-merge skips existing target files that lack any bridge fence."""
+    source_dir = tmp_path / "src" / ".github" / "agents"
+    _build_source("copilot-vscode", source_dir)
+    out_root = tmp_path / "out"
+
+    # Pre-create CLAUDE.md WITHOUT any bridge fence (legacy consumer state).
+    (out_root).mkdir(parents=True, exist_ok=True)
+    (out_root / "CLAUDE.md").write_text("# Legacy Claude entry\n\nNo fences here.\n", encoding="utf-8")
+
+    result = run_bridge(
+        source_dir=source_dir,
+        source_framework="copilot-vscode",
+        target_framework="claude",
+        output_root=out_root,
+        dry_run=False,
+        overwrite=False,
+        check_only=False,
+        merge_only=True,
+    )
+    assert result.success
+    assert str(out_root / "CLAUDE.md") in result.skipped
+
+    report_path = out_root / "references" / "bridges" / "copilot-vscode-to-claude" / "bridge-merge.report.md"
+    assert report_path.exists()
+    report = report_path.read_text(encoding="utf-8")
+    assert "no AGENTTEAMS-BRIDGE fence" in report
+
+
+def test_bridge_merge_creates_missing_files(tmp_path: Path):
+    """--bridge-merge creates target files that do not yet exist."""
+    source_dir = tmp_path / "src" / ".github" / "agents"
+    _build_source("copilot-vscode", source_dir)
+    out_root = tmp_path / "out"
+
+    result = run_bridge(
+        source_dir=source_dir,
+        source_framework="copilot-vscode",
+        target_framework="claude",
+        output_root=out_root,
+        dry_run=False,
+        overwrite=False,
+        check_only=False,
+        merge_only=True,
+    )
+    assert result.success
+    assert (out_root / "CLAUDE.md").exists()
+    assert (out_root / ".claude" / "agent-team.md").exists()
+
+
+def test_bridge_emits_domain_boundary(tmp_path: Path):
+    """Every bridge run emits domain-boundary.md under references/bridges/<pair>/."""
+    source_dir = tmp_path / "src" / ".github" / "agents"
+    _build_source("copilot-vscode", source_dir)
+    out_root = tmp_path / "out"
+
+    run_bridge(
+        source_dir=source_dir,
+        source_framework="copilot-vscode",
+        target_framework="claude",
+        output_root=out_root,
+        dry_run=False,
+        overwrite=True,
+        check_only=False,
+    )
+    boundary = out_root / "references" / "bridges" / "copilot-vscode-to-claude" / "domain-boundary.md"
+    assert boundary.exists()
+    text = boundary.read_text(encoding="utf-8")
+    assert "memory-history retrieval only" in text
+    assert "separate" in text.lower()
+
+
+def test_bridge_emits_recall_skill_for_claude_target(tmp_path: Path):
+    """Claude target with emit_skills=True (default) emits .claude/skills/recall.md."""
+    source_dir = tmp_path / "src" / ".github" / "agents"
+    _build_source("copilot-vscode", source_dir)
+    out_root = tmp_path / "out"
+
+    run_bridge(
+        source_dir=source_dir,
+        source_framework="copilot-vscode",
+        target_framework="claude",
+        output_root=out_root,
+        dry_run=False,
+        overwrite=True,
+        check_only=False,
+    )
+    assert (out_root / ".claude" / "skills" / "recall.md").exists()
+
+
+def test_bridge_quickstart_and_entrypoint_advertise_retrieval(tmp_path: Path):
+    """Bridge quickstart and entrypoint must surface the memory-index retrieval CLI.
+
+    Closes the consumption-loop defect: prior to this, consumers reading the
+    bridge artifacts had no hint that --query-index existed. The bridge is
+    the bridge consumer's primary documentation surface, so the retrieval
+    affordance must appear here, not only in the consumer-side CLAUDE.md.
+    """
+    source_dir = tmp_path / "src" / ".github" / "agents"
+    _build_source("copilot-vscode", source_dir)
+    out_root = tmp_path / "out"
+
+    run_bridge(
+        source_dir=source_dir,
+        source_framework="copilot-vscode",
+        target_framework="claude",
+        output_root=out_root,
+        dry_run=False,
+        overwrite=True,
+        check_only=False,
+    )
+    pair_dir = out_root / "references" / "bridges" / "copilot-vscode-to-claude"
+    quickstart = (pair_dir / "quickstart-snippet.md").read_text(encoding="utf-8")
+    entrypoint = (pair_dir / "entrypoint.md").read_text(encoding="utf-8")
+
+    assert "--query-index" in quickstart
+    assert "--query-strategy vector" in quickstart
+    assert "--query-index" in entrypoint
+    assert "--query-strategy vector" in entrypoint
+    assert "domain-boundary.md" in entrypoint
+
+
+def test_bridge_skips_recall_skill_when_disabled(tmp_path: Path):
+    """emit_skills=False suppresses recall.md emission."""
+    source_dir = tmp_path / "src" / ".github" / "agents"
+    _build_source("copilot-vscode", source_dir)
+    out_root = tmp_path / "out"
+
+    run_bridge(
+        source_dir=source_dir,
+        source_framework="copilot-vscode",
+        target_framework="claude",
+        output_root=out_root,
+        dry_run=False,
+        overwrite=True,
+        check_only=False,
+        emit_skills=False,
+    )
+    assert not (out_root / ".claude" / "skills" / "recall.md").exists()
+

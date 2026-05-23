@@ -105,6 +105,9 @@ Bridge artifacts are written under `references/bridges/<source>-to-<target>/`:
 2. `agent-inventory.md`
 3. `quickstart-snippet.md`
 4. `entrypoint.md`
+5. `domain-boundary.md` — clarifies the memory-index vector-mode boundary vs project-level retrieval-integrator contracts (so consumers don't conflate them).
+
+The bridge also writes target-framework entry files (e.g. `CLAUDE.md`, `.claude/*` for claude target) at the output root. **These writes are destructive** under `--bridge-refresh` and non-destructive (fence-aware) under `--bridge-merge`.
 
 Bridge freshness checks:
 
@@ -117,6 +120,14 @@ agentteams \
 ```
 
 `--bridge-check` is read-only: it verifies bridge freshness against the source manifest and does not perform the write-path security freshness preflight.
+
+### First Run vs Subsequent Refresh
+
+| First time generating the bridge for a project | `--bridge-refresh` (creates target entry files from scratch) |
+| Subsequent refresh after source agents change, consumer entry files have been customized | **`--bridge-merge`** (fence-aware non-destructive update) |
+| Verifying freshness without writing | `--bridge-check` |
+
+`--bridge-refresh` overwrites consumer `CLAUDE.md` / `.claude/*` with terse bridge-stub content. If your team has rich entry files, use `--bridge-merge`. Consumer-managed sections should live OUTSIDE the bridge's `<!-- AGENTTEAMS-BRIDGE:BEGIN ... -->` fences so the merge logic preserves them.
 
 ---
 
