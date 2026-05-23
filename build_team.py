@@ -446,7 +446,35 @@ def _build_parser() -> argparse.ArgumentParser:
         "--bridge-refresh",
         action="store_true",
         dest="bridge_refresh",
-        help="Refresh bridge artifacts even if they already exist.",
+        help=(
+            "Refresh bridge artifacts AND overwrite target-framework entry "
+            "files (CLAUDE.md, .claude/agent-team.md, etc.). Destructive at "
+            "the target — use --bridge-merge for non-destructive updates."
+        ),
+    )
+    parser.add_argument(
+        "--bridge-merge",
+        action="store_true",
+        dest="bridge_merge",
+        help=(
+            "Non-destructive update: regenerate bridge-internal artifacts, "
+            "and for target-framework entry files only re-render content "
+            "inside <!-- AGENTTEAMS-BRIDGE:BEGIN ... --> fences. Files "
+            "lacking any bridge fence are skipped with notices in "
+            "bridge-merge.report.md. First-time consumers should use "
+            "--bridge-refresh."
+        ),
+    )
+    parser.add_argument(
+        "--bridge-no-skills",
+        action="store_true",
+        dest="bridge_no_skills",
+        help=(
+            "Suppress emission of .claude/skills/recall.md (Claude target "
+            "only). The recall skill wraps `agentteams --query-index` for "
+            "in-session memory-index retrieval; disable if your team manages "
+            "skills separately."
+        ),
     )
     parser.add_argument(
         "--revert-migration",
@@ -657,6 +685,15 @@ def main(argv: list[str] | None = None) -> int:
     # --bridge-from: lightweight bridge interface generation/check
     # -----------------------------------------------------------------------
     if args.bridge_from:
+        # Mode mutual exclusion: at most one of {check, refresh, merge}.
+        bridge_mode_flags = sum(
+            (bool(args.bridge_check), bool(args.bridge_refresh), bool(args.bridge_merge))
+        )
+        if bridge_mode_flags > 1:
+            parser.error(
+                "--bridge-check, --bridge-refresh, and --bridge-merge are "
+                "mutually exclusive; pass at most one."
+            )
         return _run_bridge(
             source_dir=Path(args.bridge_from).resolve(),
             source_framework=args.bridge_source_framework,
@@ -665,6 +702,8 @@ def main(argv: list[str] | None = None) -> int:
             dry_run=args.dry_run,
             overwrite=(args.overwrite or args.bridge_refresh),
             check_only=args.bridge_check,
+            merge_only=args.bridge_merge,
+            emit_skills=not args.bridge_no_skills,
         )
 
     if not args.description:
@@ -1657,6 +1696,8 @@ def _run_bridge(
     dry_run: bool,
     overwrite: bool,
     check_only: bool,
+    merge_only: bool = False,
+    emit_skills: bool = True,
 ) -> int:
     """Execute the --bridge-from path via lightweight compatibility artifacts."""
     from agentteams.bridge import run_bridge
@@ -1700,6 +1741,8 @@ def _run_bridge(
             dry_run=dry_run,
             overwrite=overwrite,
             check_only=check_only,
+            merge_only=merge_only,
+            emit_skills=emit_skills,
         )
     except (ValueError, FileNotFoundError) as exc:
         print(f"Error: {exc}", file=sys.stderr)

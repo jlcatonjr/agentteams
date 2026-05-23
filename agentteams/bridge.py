@@ -3,6 +3,20 @@
 This module creates compatibility bridge artifacts that let one framework use
 another framework's canonical agent infrastructure without regenerating all
 agent documentation.
+
+Three write modes:
+
+- `--bridge-refresh` (overwrite=True): regenerate all bridge artifacts AND
+  unconditionally overwrite target-framework entry files (CLAUDE.md,
+  .claude/agent-team.md, etc.). Destructive at the target. Use for initial
+  generation or when consumer entry files are known-disposable.
+- `--bridge-merge` (merge_only=True): regenerate bridge-internal artifacts;
+  for target-framework entry files, only re-render content inside
+  `<!-- AGENTTEAMS-BRIDGE:BEGIN <region> v=N -->...
+  <!-- AGENTTEAMS-BRIDGE:END <region> -->` fences. Content outside fences is
+  preserved. Files lacking any bridge fence are skipped with a notice in
+  `bridge-merge.report.md`. First-time consumers should use `--bridge-refresh`.
+- `--bridge-check` (check_only=True): read-only; verify bridge freshness.
 """
 
 from __future__ import annotations
@@ -18,6 +32,11 @@ from typing import Any
 from agentteams.interop import detect_framework
 
 _INSTRUCTIONS_NAMES = {"copilot-instructions.md", "CLAUDE.md"}
+
+_FENCE_BEGIN_RE = re.compile(
+    r"<!--\s*AGENTTEAMS-BRIDGE:BEGIN\s+(?P<region>[A-Za-z0-9_-]+)\s+v=(?P<ver>\d+)\s*-->",
+)
+_FENCE_END_TPL = "<!-- AGENTTEAMS-BRIDGE:END {region} -->"
 
 
 @dataclass
@@ -48,6 +67,8 @@ def run_bridge(
     dry_run: bool = False,
     overwrite: bool = False,
     check_only: bool = False,
+    merge_only: bool = False,
+    emit_skills: bool = True,
 ) -> BridgeResult:
     """Generate or validate lightweight bridge artifacts.
 
@@ -57,8 +78,15 @@ def run_bridge(
         output_root: Root directory where bridge artifacts are written.
         source_framework: Optional explicit source framework.
         dry_run: When True, report writes without writing.
-        overwrite: Overwrite existing bridge files when True.
+        overwrite: Overwrite existing bridge files when True (--bridge-refresh).
         check_only: Validate existing bridge freshness without writing.
+        merge_only: Non-destructive update of target-framework entry files
+            (--bridge-merge). For files containing `AGENTTEAMS-BRIDGE` fences,
+            only fenced regions are re-rendered; content outside fences is
+            preserved. Files without fences are skipped with notices.
+        emit_skills: For claude target only — emit the recall skill template
+            at `.claude/skills/recall.md`. Default True. Has no effect on
+            non-claude targets.
 
     Returns:
         BridgeResult.
@@ -105,27 +133,85 @@ def run_bridge(
         "bridge_version": "1",
     }
 
-    files: list[tuple[Path, str]] = []
-    files.append((manifest_path, json.dumps(manifest, indent=2) + "\n"))
-    files.append((pair_dir / "agent-inventory.md", _render_inventory_md(inventory)))
-    files.append((pair_dir / "quickstart-snippet.md", _render_quickstart(src_fw, target_framework)))
-    files.append((pair_dir / "entrypoint.md", _render_entrypoint(src_fw, target_framework)))
+    # Bridge-internal artifacts: always regenerated regardless of mode.
+    bridge_files: list[tuple[Path, str]] = []
+    bridge_files.append((manifest_path, json.dumps(manifest, indent=2) + "\n"))
+    bridge_files.append((pair_dir / "agent-inventory.md", _render_inventory_md(inventory)))
+    bridge_files.append((pair_dir / "quickstart-snippet.md", _render_quickstart(src_fw, target_framework)))
+    bridge_files.append((pair_dir / "entrypoint.md", _render_entrypoint(src_fw, target_framework)))
+    bridge_files.append((pair_dir / "domain-boundary.md", _render_domain_boundary(src_fw, target_framework)))
 
+    # Target-framework entry files: subject to mode (refresh vs merge).
     target_files = _render_target_files(
         source_framework=src_fw,
         target_framework=target_framework,
         pair_dir=pair_dir,
     )
-    files.extend(target_files)
+    if target_framework == "claude" and emit_skills:
+        target_files.append(
+            (output_root / ".claude" / "skills" / "recall.md", _render_recall_skill()),
+        )
 
-    for path, content in files:
-        if path.exists() and not overwrite:
+    # Bridge-internal artifacts: refresh and merge both regenerate these.
+    # (Skip and overwrite policies do not apply to bridge-owned files.)
+    for path, content in bridge_files:
+        # Refresh-or-overwrite: write unconditionally.
+        # Merge: also write unconditionally — these are bridge-owned.
+        # Otherwise (initial generation): write only if missing.
+        if path.exists() and not overwrite and not merge_only:
             result.skipped.append(str(path))
             continue
         if not dry_run:
             path.parent.mkdir(parents=True, exist_ok=True)
             path.write_text(content, encoding="utf-8")
         result.written.append(str(path))
+
+    # Target-framework entry files: dispatched by mode.
+    merge_report_lines: list[str] = []
+    for path, content in target_files:
+        if not path.exists():
+            # First-time creation: write the rendered content regardless of mode.
+            if not dry_run:
+                path.parent.mkdir(parents=True, exist_ok=True)
+                path.write_text(content, encoding="utf-8")
+            result.written.append(str(path))
+            continue
+
+        if merge_only:
+            existing = path.read_text(encoding="utf-8")
+            merged, status = _merge_target_file(existing=existing, rendered=content)
+            if status == "merged":
+                if not dry_run:
+                    path.write_text(merged, encoding="utf-8")
+                result.written.append(str(path))
+                merge_report_lines.append(f"- merged: {path}")
+            elif status == "no-fence":
+                result.skipped.append(str(path))
+                merge_report_lines.append(
+                    f"- skipped (no AGENTTEAMS-BRIDGE fence in existing file): {path}"
+                )
+            else:
+                result.skipped.append(str(path))
+                merge_report_lines.append(f"- skipped ({status}): {path}")
+            continue
+
+        if not overwrite:
+            result.skipped.append(str(path))
+            continue
+        if not dry_run:
+            path.parent.mkdir(parents=True, exist_ok=True)
+            path.write_text(content, encoding="utf-8")
+        result.written.append(str(path))
+
+    if merge_only:
+        report_path = pair_dir / "bridge-merge.report.md"
+        report_body = "# Bridge Merge Report\n\n" + (
+            "\n".join(merge_report_lines) if merge_report_lines else "- (no target files processed)"
+        ) + "\n"
+        if not dry_run:
+            report_path.parent.mkdir(parents=True, exist_ok=True)
+            report_path.write_text(report_body, encoding="utf-8")
+        result.written.append(str(report_path))
 
     if result.skipped and not overwrite:
         result.notices.append(
@@ -303,17 +389,39 @@ def _render_target_files(
     if target_framework == "claude":
         claude_md = root / "CLAUDE.md"
         claude_dir = root / ".claude"
-        entry = (
-            "# Claude Bridge Entry Point\n\n"
+        entry_body = (
             f"Use source framework `{source_framework}` as canonical agent infrastructure.\n"
             f"Read `{rel_inventory}` and `{rel_quickstart}`.\n"
             "Start with orchestrator routing.\n"
         )
+        entry = (
+            "# Claude Bridge Entry Point\n\n"
+            + _wrap_fence("claude-bridge-entry", entry_body)
+        )
         return [
             (claude_md, entry),
-            (claude_dir / "agent-team.md", f"See `{rel_inventory}` for bridge inventory.\n"),
-            (claude_dir / "quickstart-snippet.md", f"See `{rel_quickstart}` for bridge quickstart.\n"),
-            (claude_dir / "README.md", "# Claude Bridge\n\nLightweight bridge; source files are canonical.\n"),
+            (
+                claude_dir / "agent-team.md",
+                _wrap_fence(
+                    "claude-bridge-pointer",
+                    f"See `{rel_inventory}` for bridge inventory.\n",
+                ),
+            ),
+            (
+                claude_dir / "quickstart-snippet.md",
+                _wrap_fence(
+                    "claude-bridge-quickstart",
+                    f"See `{rel_quickstart}` for bridge quickstart.\n",
+                ),
+            ),
+            (
+                claude_dir / "README.md",
+                "# Claude Bridge\n\n"
+                + _wrap_fence(
+                    "claude-bridge-readme",
+                    "Lightweight bridge; source files are canonical.\n",
+                ),
+            ),
         ]
 
     if target_framework == "copilot-vscode":
@@ -358,6 +466,121 @@ def _render_target_files(
         (gh_dir / "copilot-instructions.md", instructions),
         (copilot_dir / "bridge-entry.md", entry),
     ]
+
+
+def _wrap_fence(region_id: str, body: str, version: int = 1) -> str:
+    """Wrap body in an AGENTTEAMS-BRIDGE fence the merge logic can find."""
+    body = body if body.endswith("\n") else body + "\n"
+    return (
+        f"<!-- AGENTTEAMS-BRIDGE:BEGIN {region_id} v={version} -->\n"
+        f"{body}"
+        f"<!-- AGENTTEAMS-BRIDGE:END {region_id} -->\n"
+    )
+
+
+def _render_domain_boundary(source_framework: str, target_framework: str) -> str:
+    return (
+        "# Domain Boundary — Memory-Index Vector vs Retrieval-Integrator\n\n"
+        "The agentteams `memory_index` module ships a `--query-strategy vector` "
+        "mode that is a **local sparse tf-idf vector-space ranking for "
+        "memory-history retrieval only**. It is stdlib-only, deterministic, and "
+        "scoped to durable text sources (work summaries, CHANGELOG, durable "
+        "plans).\n\n"
+        "It is **separate** from any project-level retrieval-integrator "
+        "validation contract (e.g., relational metadata retrieval against "
+        "project data tables). When a project's retrieval contract has "
+        "`mode: relational-metadata`, that is independent from the memory-"
+        "index's `vector_runtime_mode: sparse-tfidf-cosine` — the two retrieval "
+        "surfaces address different questions and must not be conflated.\n\n"
+        f"Bridge direction: `{source_framework}` → `{target_framework}`.\n"
+    )
+
+
+def _render_recall_skill() -> str:
+    return (
+        "---\n"
+        "name: recall\n"
+        "description: Memory-index retrieval via agentteams --query-index. "
+        "Use BEFORE grep for broad 'where' or thematic questions about this project.\n"
+        "---\n\n"
+        "# /recall — Memory-Index Retrieval\n\n"
+        "For broad 'where is X' or thematic questions, query the agentteams "
+        "memory-index before falling back to grep:\n\n"
+        "```\n"
+        "agentteams --query-index \"<the user's question, quoted>\" "
+        "--query-strategy vector --query-k 5\n"
+        "```\n\n"
+        "(Some installations require `--description PATH` for read-only "
+        "queries — pass the project brief if so.)\n\n"
+        "## Fallback policy\n\n"
+        "`non-blocking-file-read-then-search` (declared in the index): if "
+        "vector returns no/weak hits, try `--query-strategy lexical`, then "
+        "fall back to Grep / Glob. Never block on the index.\n\n"
+        "## Caveats\n\n"
+        "- Index mode is `sparse-tfidf-cosine` — keyword-aware, NOT semantic "
+        "  embeddings. Synonyms and paraphrases may miss.\n"
+        "- Index covers durable sources (work summaries, CHANGELOG, plans), "
+        "  NOT code or `tmp/`.\n"
+        "- Index is rebuilt explicitly via `--refresh-index`, not on file save.\n"
+    )
+
+
+def _merge_target_file(*, existing: str, rendered: str) -> tuple[str, str]:
+    """Merge bridge-rendered content into an existing target file.
+
+    For each AGENTTEAMS-BRIDGE fence in `rendered`, locate the matching fence
+    region in `existing` and substitute the rendered content. Content outside
+    fences in `existing` is preserved verbatim.
+
+    Returns:
+        (merged_text, status). Status is one of:
+        - 'merged': at least one fence region updated; merged_text returned.
+        - 'no-fence': existing file lacks any matching AGENTTEAMS-BRIDGE fence.
+            Caller should skip with notice; merged_text is the original.
+        - 'no-rendered-fence': rendered content has no fences (programmer
+            error in caller); merged_text is original.
+    """
+    rendered_regions = _extract_fence_regions(rendered)
+    if not rendered_regions:
+        return existing, "no-rendered-fence"
+
+    out = existing
+    any_replaced = False
+    for region_id, region_text in rendered_regions.items():
+        pattern = re.compile(
+            r"<!--\s*AGENTTEAMS-BRIDGE:BEGIN\s+"
+            + re.escape(region_id)
+            + r"\s+v=\d+\s*-->.*?<!--\s*AGENTTEAMS-BRIDGE:END\s+"
+            + re.escape(region_id)
+            + r"\s*-->",
+            re.DOTALL,
+        )
+        new_out, n = pattern.subn(region_text.rstrip("\n"), out)
+        if n > 0:
+            out = new_out
+            any_replaced = True
+
+    if not any_replaced:
+        return existing, "no-fence"
+    return out, "merged"
+
+
+def _extract_fence_regions(text: str) -> dict[str, str]:
+    """Extract AGENTTEAMS-BRIDGE fenced regions from text.
+
+    Returns a dict mapping region_id to the full fence block including the
+    BEGIN/END markers.
+    """
+    regions: dict[str, str] = {}
+    for match in _FENCE_BEGIN_RE.finditer(text):
+        region_id = match.group("region")
+        end_marker = _FENCE_END_TPL.format(region=region_id)
+        end_idx = text.find(end_marker, match.end())
+        if end_idx == -1:
+            continue
+        block = text[match.start() : end_idx + len(end_marker)]
+        regions[region_id] = block
+    return regions
 
 
 def _parse_front_matter(text: str) -> tuple[dict[str, Any], str]:

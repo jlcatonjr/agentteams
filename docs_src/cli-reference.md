@@ -113,7 +113,15 @@ Validate bridge freshness against source files by comparing source-file checksum
 
 ### `--bridge-refresh`
 
-Refresh bridge artifacts by overwriting existing bridge outputs.
+Refresh bridge artifacts by **destructively overwriting** existing bridge outputs **and target-framework entry files** (`CLAUDE.md`, `.claude/agent-team.md`, `.claude/quickstart-snippet.md`, `.claude/README.md`, etc.) at the output root. Use for initial generation or when consumer entry files are known-disposable. For non-destructive refresh, use `--bridge-merge`.
+
+### `--bridge-merge`
+
+Non-destructive bridge update. Regenerates bridge-internal artifacts under `references/bridges/<src>-to-<target>/` (always overwrites those — bridge-owned). For target-framework entry files, only re-renders content inside `<!-- AGENTTEAMS-BRIDGE:BEGIN <region> v=N --> ... <!-- AGENTTEAMS-BRIDGE:END <region> -->` fences. Content outside fences is preserved verbatim. Files lacking any bridge fence are skipped with notices written to `bridge-merge.report.md`. First-time consumers should use `--bridge-refresh`; subsequent refreshes should use `--bridge-merge` to preserve consumer customization.
+
+### `--bridge-no-skills`
+
+Suppress emission of `.claude/skills/recall.md` (Claude target only). The recall skill wraps `agentteams --query-index` for in-session memory-index retrieval; disable when your team manages skills via another channel.
 
 ---
 
@@ -155,7 +163,7 @@ Global exclusions:
 - `--bridge-from` cannot be used with `--convert-from` or `--interop-from`.
 - `--auto-correct` requires `--post-audit`.
 - `--prune` requires `--update`.
-- `--bridge-check` cannot be combined with `--bridge-refresh`.
+- `--bridge-check`, `--bridge-refresh`, and `--bridge-merge` are mutually exclusive; at most one may be passed.
 - `--refresh-index` and `--query-index` are mutually exclusive.
 - `--query-k` must be `>= 1`.
 
