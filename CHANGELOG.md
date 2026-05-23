@@ -6,6 +6,36 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+(no changes since 1.0.0-rc.1)
+
+## [1.0.0-rc.1] - 2026-05-23
+
+First release candidate for the 1.0 line. Functionally complete; in soak
+for at least one week before promotion to 1.0.0 final.
+
+### highlights
+- **Stability contract published** ([STABILITY.md](STABILITY.md)) enumerating
+  the public surface covered by SemVer and the surfaces explicitly excluded.
+- **Security policy published** ([SECURITY.md](SECURITY.md)) with disclosure
+  process and threat model.
+- **Classifier moved to `Development Status :: 5 - Production/Stable`.**
+- **`__version__` is now single-sourced** from installed package metadata
+  via `importlib.metadata`; no more drift between `pyproject.toml` and
+  `build_team.py`.
+- **`build-team` console-script alias is now soft-deprecated** — it still
+  works through the 1.x series but emits a stderr deprecation notice on
+  every invocation. It will be removed at 2.0. Switch to `agentteams`.
+- **Packaging audit** caught and fixed a leak where untracked-on-disk
+  scratch directories (`tmp/`, `references/plans/`, etc.) were being
+  pulled into the wheel and sdist by setuptools' default file discovery.
+  Now constrained via `[tool.setuptools.packages.find]` includes and a
+  `MANIFEST.in` with explicit `prune` directives. Wheel: 337K; sdist: 446K.
+
+### rolled-up changes since 0.1.0
+
+The full set of behavior changes accumulated under `[Unreleased]` since
+2026-04-15 is preserved verbatim below.
+
 ### fix(ci): memory-index relevance test now skips on incomplete corpus (2026-05-23)
 
 `tests/test_memory_index_relevance.py` was failing on every CI matrix leg with
