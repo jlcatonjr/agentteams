@@ -363,6 +363,12 @@ def _render_quickstart(source_framework: str, target_framework: str) -> str:
         f"Use the {source_framework} agent infrastructure through this {target_framework} bridge.\n"
         "Start with the source orchestrator and follow source governance rules.\n"
         "Do not bypass orchestrator for multi-step, destructive, or cross-repo work.\n"
+        "\n"
+        "Retrieval-first: for 'where is X' / 'have we seen Y before' / thematic\n"
+        "questions, run `agentteams --query-index \"<question>\" --query-strategy vector`\n"
+        "before grep. The memory-index covers durable prose (work summaries,\n"
+        "plans, CHANGELOG). See references/bridges/<src>-to-<target>/domain-boundary.md\n"
+        "for the boundary vs project-level retrieval contracts.\n"
         "```\n"
     )
 
@@ -373,6 +379,21 @@ def _render_entrypoint(source_framework: str, target_framework: str) -> str:
         "This is a lightweight interface bridge.\n"
         "Canonical agent definitions remain in source framework files.\n"
         "Use orchestrator-first routing for team-based work.\n"
+        "\n"
+        "## Retrieval Surface\n\n"
+        "Before falling back to grep / filesystem search for thematic or\n"
+        "cross-summary questions, query the agentteams memory-index:\n\n"
+        "```\n"
+        "agentteams --query-index \"<the user's question>\" --query-strategy vector --query-k 5\n"
+        "```\n\n"
+        "Some installations require `--description PATH` for read-only queries —\n"
+        "pass the project brief if so. The index covers durable prose (work\n"
+        "summaries, plans, CHANGELOG, references), NOT code. For code-symbol\n"
+        "lookups, grep remains primary.\n\n"
+        "See `domain-boundary.md` (this directory) for the boundary between the\n"
+        "memory-index vector mode and project-level retrieval-integrator\n"
+        "validation contracts — they address different questions and must not\n"
+        "be conflated.\n"
     )
 
 

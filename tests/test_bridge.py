@@ -392,6 +392,38 @@ def test_bridge_emits_recall_skill_for_claude_target(tmp_path: Path):
     assert (out_root / ".claude" / "skills" / "recall.md").exists()
 
 
+def test_bridge_quickstart_and_entrypoint_advertise_retrieval(tmp_path: Path):
+    """Bridge quickstart and entrypoint must surface the memory-index retrieval CLI.
+
+    Closes the consumption-loop defect: prior to this, consumers reading the
+    bridge artifacts had no hint that --query-index existed. The bridge is
+    the bridge consumer's primary documentation surface, so the retrieval
+    affordance must appear here, not only in the consumer-side CLAUDE.md.
+    """
+    source_dir = tmp_path / "src" / ".github" / "agents"
+    _build_source("copilot-vscode", source_dir)
+    out_root = tmp_path / "out"
+
+    run_bridge(
+        source_dir=source_dir,
+        source_framework="copilot-vscode",
+        target_framework="claude",
+        output_root=out_root,
+        dry_run=False,
+        overwrite=True,
+        check_only=False,
+    )
+    pair_dir = out_root / "references" / "bridges" / "copilot-vscode-to-claude"
+    quickstart = (pair_dir / "quickstart-snippet.md").read_text(encoding="utf-8")
+    entrypoint = (pair_dir / "entrypoint.md").read_text(encoding="utf-8")
+
+    assert "--query-index" in quickstart
+    assert "--query-strategy vector" in quickstart
+    assert "--query-index" in entrypoint
+    assert "--query-strategy vector" in entrypoint
+    assert "domain-boundary.md" in entrypoint
+
+
 def test_bridge_skips_recall_skill_when_disabled(tmp_path: Path):
     """emit_skills=False suppresses recall.md emission."""
     source_dir = tmp_path / "src" / ".github" / "agents"
