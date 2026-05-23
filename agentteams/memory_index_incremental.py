@@ -138,11 +138,21 @@ def _find_doc_inner_range(lines: list[str], doc_id: int) -> tuple[int, int] | No
             break
     if start is None:
         return None
+    last_field_idx = None
     for idx in range(start - 1, len(lines)):
-        if lines[idx].startswith('      "source_mtime": '):
-            end = idx + 1
+        line = lines[idx]
+        # The last field of a document varies across index_format_versions:
+        # v1 ends at source_mtime, v2 may add vector_norm_sq after it. Track
+        # whichever appears last within this doc's block (stop at the closing
+        # brace).
+        if line.startswith('      "source_mtime": ') or line.startswith('      "vector_norm_sq": '):
+            last_field_idx = idx
+        elif line.startswith("    }"):
             break
-    if end is None or end < start:
+    if last_field_idx is None:
+        return None
+    end = last_field_idx + 1
+    if end < start:
         return None
     return start, end
 

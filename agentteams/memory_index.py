@@ -39,7 +39,7 @@ from pathlib import Path
 from typing import Any, Iterable
 
 MEMORY_INDEX_SCHEMA_VERSION = "1.3"
-INDEX_FORMAT_VERSION = "json-bm25-postings-v1"
+INDEX_FORMAT_VERSION = "json-bm25-postings-v2"
 INDEX_WRITE_OWNER = "agentteams.build_team"
 VECTOR_RUNTIME_MODE = "sparse-tfidf-cosine"
 FALLBACK_POLICY = "non-blocking-file-read-then-search"
@@ -248,6 +248,23 @@ def build_memory_index(
         doc_lengths.append(len(tokens))
 
     avgdl = (sum(doc_lengths) / len(doc_lengths)) if doc_lengths else 0.0
+
+    # Precompute each document's full IDF-weighted TF-IDF vector norm-squared
+    # for vector-strategy cosine. Using the full norm (not just the
+    # query-intersection norm) is required for the cosine denominator to be
+    # mathematically correct; otherwise short queries with one matching term
+    # produce a trivial cosine of 1.0.
+    n_docs = len(documents)
+    doc_norm_sq = [0.0] * n_docs
+    for term, entries in postings.items():
+        df = len(entries)
+        idf = math.log(1.0 + (n_docs - df + 0.5) / (df + 0.5))
+        for entry in entries:
+            w = entry["tf"] * idf
+            doc_norm_sq[entry["doc_id"]] += w * w
+    for doc_id, ns in enumerate(doc_norm_sq):
+        documents[doc_id]["vector_norm_sq"] = ns
+
     built_at = _utc_now_iso()
     source_fingerprint = _documents_fingerprint(documents)
     index_build_id = hashlib.sha256(
@@ -416,17 +433,36 @@ def _query_index_vector(index: dict[str, Any], query: str, *, k: int = 5) -> lis
     q_norm = math.sqrt(q_norm_sq)
 
     dot: dict[int, float] = {}
-    doc_norm_sq: dict[int, float] = {}
     for term, wq in q_weights.items():
         for entry in postings[term]:
             doc_id = entry["doc_id"]
             wd = entry["tf"] * idf_map[term]
             dot[doc_id] = dot.get(doc_id, 0.0) + (wd * wq)
-            doc_norm_sq[doc_id] = doc_norm_sq.get(doc_id, 0.0) + (wd * wd)
+
+    # Use each document's full TF-IDF vector norm — not the partial norm
+    # restricted to query-intersection terms — so cosine is a true similarity
+    # over the shared term space, not the artificially-parallel subspace.
+    # Legacy indices (pre v2) lack the stored norm; reconstruct on demand.
+    doc_norm_sq_full: dict[int, float] | None = None
+    def _legacy_doc_norm_sq() -> dict[int, float]:
+        ns: dict[int, float] = {}
+        for term, entries in postings.items():
+            df = len(entries)
+            idf = math.log(1.0 + (n - df + 0.5) / (df + 0.5))
+            for entry in entries:
+                w = entry["tf"] * idf
+                doc_id = entry["doc_id"]
+                ns[doc_id] = ns.get(doc_id, 0.0) + w * w
+        return ns
 
     scores: dict[int, float] = {}
     for doc_id, d in dot.items():
-        denom = math.sqrt(doc_norm_sq.get(doc_id, 0.0)) * q_norm
+        stored = docs[doc_id].get("vector_norm_sq")
+        if stored is None:
+            if doc_norm_sq_full is None:
+                doc_norm_sq_full = _legacy_doc_norm_sq()
+            stored = doc_norm_sq_full.get(doc_id, 0.0)
+        denom = math.sqrt(stored) * q_norm
         if denom > 0.0:
             scores[doc_id] = d / denom
 

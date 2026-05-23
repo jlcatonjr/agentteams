@@ -89,6 +89,60 @@ def test_missing_or_unreadable_sources_are_silently_skipped(tmp_path):
     assert idx["N"] == 1
 
 
+def test_vector_cosine_does_not_collapse_on_short_partial_match(tmp_path):
+    """Regression: a query whose only matching token is a single shared term
+    must not produce cosine ~= 1.0. Previously _query_index_vector accumulated
+    doc_norm_sq only over query-intersection terms, making the restricted doc
+    vector trivially parallel to the restricted query vector.
+    """
+    # Two documents on unrelated topics; "budget" is the single shared token
+    # with the out-of-domain query.
+    a = tmp_path / "deploy.md"
+    a.write_text(
+        "# Deploy notes\n\nThe quarterly deploy budget covers staging and "
+        "production rollouts, with allocations for tooling, monitoring, "
+        "and on-call rotations. Many words here unrelated to kubernetes.\n" * 3
+    )
+    b = tmp_path / "other.md"
+    b.write_text(
+        "# Other\n\nThis document discusses unrelated topics such as "
+        "ingestion pipelines, query planning, and observability.\n"
+    )
+    idx = build_memory_index([a, b])
+    hits = query_index(idx, "kubernetes pod disruption budget", strategy="vector")
+    assert hits, "expected at least one hit via single-term overlap on 'budget'"
+    top = hits[0]
+    # Score must reflect genuine cosine, not a degenerate 1.0 from the
+    # restricted-norm bug. The pre-fix behavior produced 1.000 here; the
+    # corrected denominator must keep the score well below the CLAUDE.md
+    # trust floor of 0.5 even on a tiny two-document corpus.
+    assert top["score"] < 0.5, (
+        f"vector cosine collapsed on short partial-match query: score={top['score']}"
+    )
+
+
+def test_vector_norm_sq_is_precomputed_and_used(tmp_path):
+    """v2 indices carry a per-doc vector_norm_sq; legacy indices without it
+    must still produce identical scores via the on-the-fly fallback."""
+    a = tmp_path / "alpha.md"
+    a.write_text("alpha beta gamma delta epsilon zeta eta theta iota kappa\n")
+    b = tmp_path / "beta.md"
+    b.write_text("beta beta gamma gamma delta delta epsilon epsilon\n")
+    idx = build_memory_index([a, b])
+    assert all("vector_norm_sq" in d for d in idx["documents"])
+    fresh_hits = query_index(idx, "beta gamma", strategy="vector")
+
+    # Simulate a legacy on-disk index by stripping the precomputed field.
+    legacy = {**idx, "documents": [
+        {k: v for k, v in d.items() if k != "vector_norm_sq"} for d in idx["documents"]
+    ]}
+    legacy_hits = query_index(legacy, "beta gamma", strategy="vector")
+    assert len(fresh_hits) == len(legacy_hits)
+    for f, l in zip(fresh_hits, legacy_hits):
+        assert f["doc_id"] == l["doc_id"]
+        assert abs(f["score"] - l["score"]) < 1e-9
+
+
 def test_query_with_no_matching_terms_returns_empty(tmp_path):
     p = tmp_path / "x.md"
     p.write_text("# X\n\nOne narrow topic.\n")
