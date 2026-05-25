@@ -79,17 +79,22 @@ def _cmd_apply() -> int:
         print("proposal has no changes; nothing to apply")
         return 0
 
-    target = ROOT / framework_research.EXPERT_REF_REL
-    original = target.read_text(encoding="utf-8") if target.exists() else ""
+    originals: dict[str, str] = {}
+    for change in proposal.get("changes", []):
+        rel = change["path"]
+        target = ROOT / rel
+        originals[rel] = target.read_text(encoding="utf-8") if target.exists() else ""
+
     result = framework_research.apply_module_patch(proposal, ROOT)
     print(f"applied: {result['applied']}")
 
-    test_cmd = ["python", "-m", "pytest", "-q", "tests/test_frameworks.py"]
+    test_cmd = ["python", "-m", "pytest", "-q", "tests/test_frameworks.py", "tests/test_framework_research.py"]
     print(f"running: {' '.join(test_cmd)}")
     proc = subprocess.run(test_cmd, cwd=ROOT)
     if proc.returncode != 0:
-        target.write_text(original, encoding="utf-8")
-        print(f"tests failed (exit {proc.returncode}); reverted {framework_research.EXPERT_REF_REL}")
+        for rel, original in originals.items():
+            (ROOT / rel).write_text(original, encoding="utf-8")
+        print(f"tests failed (exit {proc.returncode}); reverted {list(originals)}")
         return proc.returncode
     print("tests passed; change retained")
     return 0

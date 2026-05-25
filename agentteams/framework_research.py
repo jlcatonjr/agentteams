@@ -31,6 +31,33 @@ STALE_DAYS = 7
 EXPECTED_FRONT_MATTER_KEYS = ["name", "description", "tools", "model"]
 EXPECTED_LOCATIONS = [".claude/agents", "CLAUDE.md"]
 
+# Registry: each entry produces an advisory snapshot. Token allow-lists are
+# intentionally small and prose-survivable; see plan
+# references/plans/daily-pipeline-deferred-followups-2026-05-25.plan.md A6.
+FRAMEWORK_REGISTRY = {
+    "claude": {
+        "label": "Claude Code Sub-Agents",
+        "source_url": CLAUDE_DOC_URL,
+        "expert_ref": "references/claude-agent-infrastructure-expert.md",
+        "expected_keys": ["name", "description", "tools", "model"],
+        "expected_locations": [".claude/agents", "CLAUDE.md"],
+    },
+    "copilot_vscode": {
+        "label": "GitHub Copilot — VS Code Chat Modes",
+        "source_url": "https://code.visualstudio.com/docs/copilot/customization/custom-chat-modes",
+        "expert_ref": "references/copilot-agent-infrastructure-expert.md",
+        "expected_keys": ["description", "tools", "model"],
+        "expected_locations": [".github/agents", ".github/chatmodes"],
+    },
+    "copilot_cli": {
+        "label": "GitHub Copilot — CLI",
+        "source_url": "https://docs.github.com/en/copilot/github-copilot-in-the-cli/about-github-copilot-in-the-cli",
+        "expert_ref": "references/copilot-agent-infrastructure-expert.md",
+        "expected_keys": ["gh", "copilot"],
+        "expected_locations": [".github/copilot"],
+    },
+}
+
 _KEY_LIST_RE = re.compile(r"_CLAUDE_REQUIRED_KEYS\s*=\s*\{([^}]*)\}")
 _DEFAULT_TOOLS_RE = re.compile(r'_CLAUDE_DEFAULT_ALLOWED_TOOLS\s*=\s*"([^"]+)"')
 
@@ -92,71 +119,120 @@ def _snapshot_age_hours(snapshot: dict[str, Any]) -> float | None:
     return (_utcnow() - dt).total_seconds() / 3600.0
 
 
-def refresh_snapshot(repo_root: Path, offline: bool = False) -> dict[str, Any]:
-    """Fetch (or reuse) the upstream Claude Code docs snapshot.
+def _scan_tokens_for(text: str, expected_keys: list[str], expected_locations: list[str]) -> dict[str, list[str]]:
+    lower = text.lower()
+    found_keys = sorted({k for k in expected_keys if re.search(rf"\b{re.escape(k)}\b\s*:", text)})
+    found_locations = sorted({loc for loc in expected_locations if loc.lower() in lower})
+    return {"front_matter_keys_present": found_keys, "locations_present": found_locations}
 
-    Returns the snapshot dict that was written (or the prior cache if the
-    refresh was skipped). Used by the daily-pipeline research stage.
+
+def _scan_framework(entry: dict[str, Any], offline: bool) -> dict[str, Any]:
+    fetch_status = "skipped" if offline else "ok"
+    fetch_error = ""
+    tokens: dict[str, list[str]] = {}
+    raw_len = 0
+    if not offline:
+        try:
+            text = _fetch(entry["source_url"])
+            raw_len = len(text)
+            tokens = _scan_tokens_for(text, entry["expected_keys"], entry["expected_locations"])
+        except (urllib.error.URLError, TimeoutError, OSError) as exc:
+            fetch_status = "failed"
+            fetch_error = f"{type(exc).__name__}: {exc}"
+    return {
+        "label": entry["label"],
+        "source_url": entry["source_url"],
+        "expert_ref": entry["expert_ref"],
+        "expected_keys": entry["expected_keys"],
+        "fetch_status": fetch_status,
+        "fetch_error": fetch_error,
+        "raw_bytes": raw_len,
+        "upstream_tokens": tokens,
+    }
+
+
+def refresh_snapshot(repo_root: Path, offline: bool = False) -> dict[str, Any]:
+    """Fetch (or reuse) upstream framework docs snapshots.
+
+    Writes the multi-framework snapshot. Claude entries remain at the
+    top level for backward compatibility with the prior single-framework
+    schema; per-framework details live under `frameworks[id]`.
     """
     snapshot_path = _snapshot_path(repo_root)
     snapshot_path.parent.mkdir(parents=True, exist_ok=True)
     now = _utcnow()
     adapter = _load_local_adapter_constants(repo_root)
-    fetch_status = "skipped" if offline else "ok"
-    fetch_error = ""
-    upstream_tokens: dict[str, list[str]] = {}
-    raw_len = 0
 
-    if not offline:
-        try:
-            text = _fetch(CLAUDE_DOC_URL)
-            raw_len = len(text)
-            upstream_tokens = _scan_tokens(text)
-        except (urllib.error.URLError, TimeoutError, OSError) as exc:
-            fetch_status = "failed"
-            fetch_error = f"{type(exc).__name__}: {exc}"
+    per_framework: dict[str, dict[str, Any]] = {}
+    for fid, entry in FRAMEWORK_REGISTRY.items():
+        per_framework[fid] = _scan_framework(entry, offline=offline)
 
-    if fetch_status in {"skipped", "failed"}:
+    # If everything was skipped or failed, prefer the prior cached snapshot.
+    all_unfetched = all(p["fetch_status"] != "ok" for p in per_framework.values())
+    if all_unfetched:
         prev = _load_snapshot(snapshot_path)
         if prev:
             return prev
-        upstream_tokens = {}
 
-    keys_diff = _diff_keys(adapter["required_front_matter_keys"], upstream_tokens.get("front_matter_keys_present", []))
+    claude = per_framework["claude"]
+    claude_tokens = claude.get("upstream_tokens", {})
+    keys_diff = _diff_keys(adapter["required_front_matter_keys"], claude_tokens.get("front_matter_keys_present", []))
+
     snapshot = {
-        "schema_version": "1.0",
-        "framework": "claude",
+        "schema_version": "1.1",
+        "framework": "claude",  # legacy top-level for back-compat
         "source_url": CLAUDE_DOC_URL,
         "generated_at": now.strftime("%Y-%m-%dT%H:%M:%SZ"),
         "generated_on": now.strftime("%Y-%m-%d"),
-        "fetch_status": fetch_status,
-        "fetch_error": fetch_error,
-        "raw_bytes": raw_len,
-        "upstream_tokens": upstream_tokens,
+        "fetch_status": claude["fetch_status"],
+        "fetch_error": claude["fetch_error"],
+        "raw_bytes": claude["raw_bytes"],
+        "upstream_tokens": claude_tokens,
         "local_adapter": adapter,
         "keys_diff": keys_diff,
+        "frameworks": per_framework,
     }
     snapshot_path.write_text(json.dumps(snapshot, indent=2) + "\n", encoding="utf-8")
     return snapshot
 
 
 def _render_table(snapshot: dict[str, Any]) -> str:
-    tokens = snapshot.get("upstream_tokens", {})
+    frameworks = snapshot.get("frameworks") or {
+        "claude": {
+            "label": "Claude Code Sub-Agents",
+            "source_url": snapshot.get("source_url", ""),
+            "fetch_status": snapshot.get("fetch_status", "?"),
+            "upstream_tokens": snapshot.get("upstream_tokens", {}),
+            "expected_keys": EXPECTED_FRONT_MATTER_KEYS,
+        }
+    }
     adapter = snapshot.get("local_adapter", {})
-    diff = snapshot.get("keys_diff", {})
     lines = [
-        "| Field | Value |",
-        "|---|---|",
-        f"| framework | {snapshot.get('framework', 'claude')} |",
-        f"| source_url | {snapshot.get('source_url', '')} |",
-        f"| upstream_front_matter_keys | {', '.join(tokens.get('front_matter_keys_present', [])) or '—'} |",
-        f"| upstream_locations | {', '.join(tokens.get('locations_present', [])) or '—'} |",
-        f"| local_required_keys | {', '.join(adapter.get('required_front_matter_keys', [])) or '—'} |",
-        f"| local_default_allowed_tools | {', '.join(adapter.get('default_allowed_tools', [])) or '—'} |",
-        f"| matched | {', '.join(diff.get('matched', [])) or '—'} |",
-        f"| documented_locally_not_upstream | {', '.join(diff.get('missing_upstream', [])) or '—'} |",
-        f"| new_upstream | {', '.join(diff.get('new_upstream', [])) or '—'} |",
+        "| Framework | Fetch | Tokens observed | Locations observed |",
+        "|---|---|---|---|",
     ]
+    for fid, entry in frameworks.items():
+        tokens = entry.get("upstream_tokens", {})
+        lines.append(
+            f"| {fid} ({entry.get('label', fid)}) "
+            f"| `{entry.get('fetch_status', '?')}` "
+            f"| {', '.join(tokens.get('front_matter_keys_present', [])) or '—'} "
+            f"| {', '.join(tokens.get('locations_present', [])) or '—'} |"
+        )
+    lines.append("")
+    lines.append("Local Claude adapter constants:")
+    lines.append(
+        f"- required_front_matter_keys: {', '.join(adapter.get('required_front_matter_keys', [])) or '—'}"
+    )
+    lines.append(
+        f"- default_allowed_tools: {', '.join(adapter.get('default_allowed_tools', [])) or '—'}"
+    )
+    diff = snapshot.get("keys_diff", {})
+    lines.append(
+        f"- claude diff — matched: {', '.join(diff.get('matched', [])) or '—'}; "
+        f"new_upstream: {', '.join(diff.get('new_upstream', [])) or '—'}; "
+        f"missing_upstream: {', '.join(diff.get('missing_upstream', [])) or '—'}"
+    )
     return "\n".join(lines)
 
 
@@ -208,76 +284,131 @@ def build_framework_placeholders(output_dir: Path, offline: bool = True) -> dict
 # ---------------------------------------------------------------------------
 
 EXPERT_REF_REL = "references/claude-agent-infrastructure-expert.md"
-OBSERVATION_HEADING = "## Observed Upstream Tokens (Daily Pipeline)"
-_OBSERVATION_RE = re.compile(
+COPILOT_EXPERT_REF_REL = "references/copilot-agent-infrastructure-expert.md"
+ALLOWED_EXPERT_REFS = {EXPERT_REF_REL, COPILOT_EXPERT_REF_REL}
+
+
+def propose_module_patch(repo_root: Path) -> dict[str, Any]:
+    """Produce a v1 module-core patch proposal across all frameworks.
+
+    Targets: append/refresh a dated observation stanza in each
+    framework's expert reference. Constants in `agentteams/frameworks/`
+    are NOT proposed for mutation — the upstream token scan does not
+    distinguish required from supported keys.
+    """
+    snapshot = _load_snapshot(_snapshot_path(repo_root)) or {}
+    if not snapshot.get("generated_on"):
+        return {"changes": [], "reason": "no snapshot"}
+
+    frameworks = snapshot.get("frameworks") or {"claude": {
+        "label": "Claude Code Sub-Agents",
+        "source_url": snapshot.get("source_url", CLAUDE_DOC_URL),
+        "expert_ref": EXPERT_REF_REL,
+        "upstream_tokens": snapshot.get("upstream_tokens", {}),
+    }}
+
+    # Group frameworks by target expert-ref so each file gets one change.
+    by_path: dict[str, list[tuple[str, dict[str, Any]]]] = {}
+    for fid, entry in frameworks.items():
+        ref_path = entry.get("expert_ref", "")
+        if not ref_path:
+            continue
+        by_path.setdefault(ref_path, []).append((fid, entry))
+
+    changes: list[dict[str, Any]] = []
+    for ref_path, entries in by_path.items():
+        target = repo_root / ref_path
+        original_text = target.read_text(encoding="utf-8") if target.exists() else ""
+        current_text = original_text
+        framework_ids: list[str] = []
+        for fid, entry in entries:
+            block = _render_observation_block_for(
+                fid=fid,
+                entry=entry,
+                generated_on=snapshot.get("generated_on", ""),
+                claude_diff=snapshot.get("keys_diff", {}) if fid == "claude" else {},
+            )
+            current_text = _splice_observation_block(current_text, block, fid=fid)
+            framework_ids.append(fid)
+        if current_text == original_text:
+            continue
+        changes.append({
+            "frameworks": framework_ids,
+            "path": ref_path,
+            "operation": "append_or_replace_section",
+            "section_heading": ", ".join(_observation_heading(fid) for fid in framework_ids),
+            "old_text": original_text,
+            "new_text": current_text,
+        })
+
+    if not changes:
+        return {"changes": [], "reason": "no drift to record"}
+
+    return {
+        "schema_version": "1.1",
+        "generated_at": _utcnow().strftime("%Y-%m-%dT%H:%M:%SZ"),
+        "snapshot_generated_on": snapshot.get("generated_on", ""),
+        "frameworks": list(frameworks.keys()),
+        "changes": changes,
+    }
+
+
+def _observation_heading(fid: str) -> str:
+    return f"## Observed Upstream Tokens — `{fid}` (Daily Pipeline)"
+
+
+def _observation_re_for(fid: str) -> re.Pattern:
+    return re.compile(
+        rf"\n## Observed Upstream Tokens — `{re.escape(fid)}` \(Daily Pipeline\).*?(?=\n## |\Z)",
+        re.DOTALL,
+    )
+
+
+def _render_observation_block_for(
+    fid: str,
+    entry: dict[str, Any],
+    generated_on: str,
+    claude_diff: dict[str, list[str]] | None = None,
+) -> str:
+    tokens = entry.get("upstream_tokens", {})
+    keys = tokens.get("front_matter_keys_present", [])
+    locations = tokens.get("locations_present", [])
+    lines = [
+        "",
+        _observation_heading(fid),
+        "",
+        f"Recorded by the daily pipeline on `{generated_on}` "
+        f"from `{entry.get('source_url', '')}`.",
+        "",
+        f"- Upstream tokens observed: {', '.join(keys) or '—'}",
+        f"- Upstream locations observed: {', '.join(locations) or '—'}",
+        f"- Fetch status: `{entry.get('fetch_status', '?')}`",
+    ]
+    if claude_diff:
+        lines.extend([
+            f"- Matched against local required keys: {', '.join(claude_diff.get('matched', [])) or '—'}",
+            f"- Documented locally but not seen upstream: "
+            f"{', '.join(claude_diff.get('missing_upstream', [])) or '—'}",
+            f"- Seen upstream but not in local required set "
+            f"(advisory only — may be optional keys): "
+            f"{', '.join(claude_diff.get('new_upstream', [])) or '—'}",
+        ])
+    return "\n".join(lines) + "\n"
+
+
+_LEGACY_OBSERVATION_RE = re.compile(
     r"\n## Observed Upstream Tokens \(Daily Pipeline\).*?(?=\n## |\Z)",
     re.DOTALL,
 )
 
 
-def propose_module_patch(repo_root: Path) -> dict[str, Any]:
-    """Produce a v1 module-core patch proposal.
-
-    Only target in v1: append/refresh a dated observation stanza in
-    `references/claude-agent-infrastructure-expert.md`. Constants in
-    `agentteams/frameworks/claude.py` are NOT proposed for mutation —
-    the upstream token scan does not distinguish required from
-    supported keys.
-    """
-    snapshot = _load_snapshot(_snapshot_path(repo_root)) or {}
-    tokens = snapshot.get("upstream_tokens", {})
-    diff = snapshot.get("keys_diff", {})
-    if not snapshot.get("generated_on"):
-        return {"changes": [], "reason": "no snapshot"}
-
-    proposed_block = _render_observation_block(snapshot)
-    target = repo_root / EXPERT_REF_REL
-    current_text = target.read_text(encoding="utf-8") if target.exists() else ""
-    new_text = _splice_observation_block(current_text, proposed_block)
-
-    if new_text == current_text:
-        return {"changes": [], "reason": "no drift to record"}
-
-    return {
-        "schema_version": "1.0",
-        "generated_at": _utcnow().strftime("%Y-%m-%dT%H:%M:%SZ"),
-        "snapshot_generated_on": snapshot.get("generated_on", ""),
-        "tokens": tokens,
-        "diff": diff,
-        "changes": [
-            {
-                "path": EXPERT_REF_REL,
-                "operation": "append_or_replace_section",
-                "section_heading": OBSERVATION_HEADING,
-                "old_text": current_text,
-                "new_text": new_text,
-            }
-        ],
-    }
-
-
-def _render_observation_block(snapshot: dict[str, Any]) -> str:
-    tokens = snapshot.get("upstream_tokens", {})
-    diff = snapshot.get("keys_diff", {})
-    keys = tokens.get("front_matter_keys_present", [])
-    locations = tokens.get("locations_present", [])
-    return (
-        f"\n{OBSERVATION_HEADING}\n\n"
-        f"Recorded by the daily pipeline on `{snapshot.get('generated_on', '')}` "
-        f"from `{snapshot.get('source_url', CLAUDE_DOC_URL)}`.\n\n"
-        f"- Upstream front-matter tokens observed: {', '.join(keys) or '—'}\n"
-        f"- Upstream locations observed: {', '.join(locations) or '—'}\n"
-        f"- Matched against local required keys: {', '.join(diff.get('matched', [])) or '—'}\n"
-        f"- Documented locally but not seen upstream: "
-        f"{', '.join(diff.get('missing_upstream', [])) or '—'}\n"
-        f"- Seen upstream but not in local required set (advisory only — "
-        f"may be optional keys): {', '.join(diff.get('new_upstream', [])) or '—'}\n"
-    )
-
-
-def _splice_observation_block(current: str, block: str) -> str:
-    if _OBSERVATION_RE.search(current):
-        return _OBSERVATION_RE.sub("\n" + block.rstrip() + "\n", current, count=1).rstrip() + "\n"
+def _splice_observation_block(current: str, block: str, fid: str = "claude") -> str:
+    # Strip the legacy (single-framework) heading once for the Claude file.
+    if fid == "claude":
+        current = _LEGACY_OBSERVATION_RE.sub("", current, count=1)
+    pat = _observation_re_for(fid)
+    if pat.search(current):
+        return pat.sub("\n" + block.rstrip() + "\n", current, count=1).rstrip() + "\n"
     return (current.rstrip() + "\n" + block).rstrip() + "\n"
 
 
@@ -296,7 +427,7 @@ def apply_module_patch(proposal: dict[str, Any], repo_root: Path) -> dict[str, A
     if not changes:
         return {"applied": [], "reason": "nothing to apply"}
 
-    allowed_paths = {EXPERT_REF_REL}
+    allowed_paths = set(ALLOWED_EXPERT_REFS)
     allowed_ops = {"append_or_replace_section"}
     applied: list[str] = []
     for change in changes:
