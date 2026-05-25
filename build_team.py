@@ -634,6 +634,56 @@ def _check_dual_descriptor(args) -> None:
         print(f"[WARN] could not persist dual-descriptor event: {exc}", file=sys.stderr)
 
 
+def _persist_orphan_events(orphans: list[str], manifest, output_dir: Path) -> None:
+    """F5: append the current orphan set to a daily-pipeline artefact.
+
+    Delta-only on a (project_label, sorted_orphans) signature so the same
+    orphan inventory does not produce repeat sections within one day.
+    Best-effort; failure never blocks the build.
+    Plan: references/plans/F5-orphan-files-lifecycle-2026-05-25.md
+    """
+    if not orphans:
+        return
+    try:
+        log_dir = Path(__file__).resolve().parent / "tmp" / "daily-pipeline" / "orphan-events"
+        log_dir.mkdir(parents=True, exist_ok=True)
+        now_utc = datetime.now(UTC)
+        project_label = manifest.get("project_name") or output_dir.name or "unknown"
+        signature = f"{project_label}|{','.join(orphans)}"
+        log_path = log_dir / f"{now_utc.strftime('%Y-%m-%d')}.md"
+        if log_path.exists() and signature in log_path.read_text(encoding="utf-8"):
+            return
+        section = [
+            "",
+            f"## {project_label} @ {now_utc.strftime('%Y-%m-%dT%H:%M:%SZ')}",
+            "",
+            f"- output_dir: `{output_dir}`",
+            f"- orphan_count: {len(orphans)}",
+            f"- signature: `{signature}`",
+            "",
+            "Orphan agent files (present on disk, not in current team config):",
+            "",
+        ]
+        for name in orphans:
+            section.append(f"- `{name}`")
+        section.append("")
+        section.append("Routing: `@cleanup` (delete if obsolete) or `@code-hygiene` (review). "
+                       "Daily pipeline never auto-deletes — destructive action requires "
+                       "orchestrator approval.")
+        section.append("")
+        if log_path.exists():
+            log_path.write_text(log_path.read_text(encoding="utf-8") + "\n".join(section), encoding="utf-8")
+        else:
+            header = (
+                f"# Orphan Agent Events — {now_utc.strftime('%Y-%m-%d')}\n\n"
+                "Append-only daily log of orphaned agent files detected by "
+                "`build_team.py --update`. Each section records one run.\n"
+            )
+            log_path.write_text(header + "\n".join(section), encoding="utf-8")
+    except Exception as exc:  # pragma: no cover - never block emit
+        print(f"[WARN] could not persist orphan events: {exc}", file=sys.stderr)
+
+
 def _persist_shrink_events(args, result, manifest, output_dir: Path) -> None:
     """D5: append shrink notices from this run to a daily log under the
     agentteams source tree's tmp/. Delta-only — no notices means no write.
@@ -1317,6 +1367,7 @@ def main(argv: list[str] | None = None) -> int:
                 "     These are not updated by --update. Review and delete if obsolete.",
                 file=sys.stderr,
             )
+            _persist_orphan_events(_orphan_agents, manifest, output_dir)
 
         print(f"\nWriting {len(update_rendered)} file(s)...")
 

@@ -152,8 +152,8 @@ def build_manifest(description: dict[str, Any], *, framework: str = "copilot-vsc
     primary_output_dir = description.get("primary_output_dir") or _default_primary_output_dir(project_type)
     build_output_dir = description.get("build_output_dir") or "build/"
     figures_dir = description.get("figures_dir") or "figures/"
-    reference_db_path = description.get("reference_db_path")
-    style_reference_path = description.get("style_reference")
+    reference_db_path = description.get("reference_db_path") or _default_reference_db_path(description)
+    style_reference_path = description.get("style_reference") or _default_style_reference_path(description)
     deliverable_type = _format_deliverable_type(description.get("deliverables", []), project_type)
     output_format = description.get("output_format") or _default_output_format(project_type)
     conversion_pipeline = description.get("conversion_pipeline")
@@ -777,6 +777,47 @@ def _resolve_project_name(description: dict[str, Any]) -> str:
     if not name and description.get("existing_project_path"):
         name = Path(description["existing_project_path"]).name
     return name or "MyProject"
+
+
+def _default_reference_db_path(description: dict) -> str | None:
+    """Infer a sensible `reference_db_path` for projects with a doc site.
+
+    Triggers only when the descriptor declares a `doc_site_config_file`
+    AND a `docs/` directory exists on disk at the project root. Returns
+    None otherwise so the manual-placeholder fallback is preserved.
+    Plan: references/plans/F1-self-team-manual-placeholders-2026-05-25.md
+    """
+    if not description.get("doc_site_config_file"):
+        return None
+    project_path = description.get("existing_project_path")
+    if not project_path:
+        return None
+    from pathlib import Path as _Path
+
+    if (_Path(project_path) / "docs").is_dir():
+        return "docs/"
+    return None
+
+
+def _default_style_reference_path(description: dict) -> str | None:
+    """Infer a sensible `style_reference_path` for doc-site projects.
+
+    Prefers `docs_src/` (the mkdocs convention used in agentteams),
+    falls back to `docs/` if `docs_src/` is absent. None otherwise.
+    """
+    if not description.get("doc_site_config_file"):
+        return None
+    project_path = description.get("existing_project_path")
+    if not project_path:
+        return None
+    from pathlib import Path as _Path
+
+    root = _Path(project_path)
+    if (root / "docs_src").is_dir():
+        return "docs_src/"
+    if (root / "docs").is_dir():
+        return "docs/"
+    return None
 
 
 def _default_primary_output_dir(project_type: str) -> str:

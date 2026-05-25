@@ -100,6 +100,7 @@ def main(argv: list[str]) -> int:
         _framework_research_section,
         lambda: _per_day_section("shrink", "Fenced-region shrink events", "shrink-events"),
         lambda: _per_day_section("dual", "Dual-descriptor events", "dual-descriptor-events"),
+        lambda: _per_day_section("orphan", "Orphan agent events", "orphan-events"),
         _bridge_summary_section,
     ):
         body, active = renderer()
