@@ -55,6 +55,21 @@ else
   summary_rows+=("| Security maintenance | WARN (missing script) |")
 fi
 
+RESEARCH_SCRIPT="$ROOT_DIR/scripts/research_claude_code_docs.py"
+if [[ -f "$RESEARCH_SCRIPT" ]]; then
+  research_flags=()
+  if [[ -n "${AGENTTEAMS_RESEARCH_OFFLINE:-}" ]]; then
+    research_flags+=("--offline")
+  fi
+  run_noncritical \
+    "Upstream research: Claude Code sub-agents" \
+    python "$RESEARCH_SCRIPT" "${research_flags[@]}"
+else
+  noncritical_failures=$((noncritical_failures + 1))
+  echo "[WARN] Upstream research script missing: $RESEARCH_SCRIPT" >&2
+  summary_rows+=("| Upstream research: Claude Code sub-agents | WARN (missing script) |")
+fi
+
 SOURCE_DIR="$ROOT_DIR/.github/agents"
 FALLBACK_SOURCE_DIR="$ROOT_DIR/examples/project-repositories/expected"
 OUTPUT_ROOT="$ROOT_DIR"

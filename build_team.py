@@ -855,6 +855,20 @@ def main(argv: list[str] | None = None) -> int:
     )
     manifest["auto_resolved_placeholders"].update(security_placeholders)
 
+    # Step 4d.2: Framework-watch placeholders (Claude Code etc.).
+    # Offline by default so consumer repos do not need network; the
+    # daily-pipeline refreshes the snapshot via the research stage.
+    try:
+        from agentteams import framework_research as _framework_research
+
+        framework_placeholders = _framework_research.build_framework_placeholders(
+            output_dir=output_dir,
+            offline=True,
+        )
+        manifest["auto_resolved_placeholders"].update(framework_placeholders)
+    except Exception as exc:  # pragma: no cover - never block build on research stage
+        print(f"[WARN] framework-watch placeholders unavailable: {exc}", file=sys.stderr)
+
     if not args.check and not args.dry_run:
         try:
             _assert_security_intelligence_fresh(security_placeholders, output_dir=output_dir)

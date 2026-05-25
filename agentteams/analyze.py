@@ -1108,6 +1108,14 @@ def _plan_output_files(
         "component_slug": None,
     })
 
+    # Framework watch reference (always — daily-pipeline transmission target)
+    files.append({
+        "path": "references/framework-watch.reference.md",
+        "template": f"{agents_dir}framework-watch.reference.template.md",
+        "type": "artifact",
+        "component_slug": None,
+    })
+
     # Adjacent repository registry (always — repo-liaison reference)
     files.append({
         "path": "references/adjacent-repos.md",
