@@ -64,6 +64,10 @@ if [[ -f "$RESEARCH_SCRIPT" ]]; then
   run_noncritical \
     "Upstream research: Claude Code sub-agents" \
     python "$RESEARCH_SCRIPT" "${research_flags[@]}"
+
+  run_noncritical \
+    "Module-core update proposal (advisory)" \
+    python "$RESEARCH_SCRIPT" --propose
 else
   noncritical_failures=$((noncritical_failures + 1))
   echo "[WARN] Upstream research script missing: $RESEARCH_SCRIPT" >&2

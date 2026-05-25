@@ -54,10 +54,59 @@ def _write_report(snapshot: dict) -> Path:
     return report
 
 
+def _cmd_propose() -> int:
+    import json as _json
+
+    proposal = framework_research.propose_module_patch(ROOT)
+    out_path = ROOT / "tmp" / "daily-pipeline" / "framework-research" / "proposal.json"
+    out_path.parent.mkdir(parents=True, exist_ok=True)
+    out_path.write_text(_json.dumps(proposal, indent=2) + "\n", encoding="utf-8")
+    n = len(proposal.get("changes", []))
+    print(f"proposal: {n} change(s) → {out_path}")
+    return 0
+
+
+def _cmd_apply() -> int:
+    import json as _json
+    import subprocess
+
+    proposal_path = ROOT / "tmp" / "daily-pipeline" / "framework-research" / "proposal.json"
+    if not proposal_path.exists():
+        print("no proposal.json — run --propose first", flush=True)
+        return 2
+    proposal = _json.loads(proposal_path.read_text(encoding="utf-8"))
+    if not proposal.get("changes"):
+        print("proposal has no changes; nothing to apply")
+        return 0
+
+    target = ROOT / framework_research.EXPERT_REF_REL
+    original = target.read_text(encoding="utf-8") if target.exists() else ""
+    result = framework_research.apply_module_patch(proposal, ROOT)
+    print(f"applied: {result['applied']}")
+
+    test_cmd = ["python", "-m", "pytest", "-q", "tests/test_frameworks.py"]
+    print(f"running: {' '.join(test_cmd)}")
+    proc = subprocess.run(test_cmd, cwd=ROOT)
+    if proc.returncode != 0:
+        target.write_text(original, encoding="utf-8")
+        print(f"tests failed (exit {proc.returncode}); reverted {framework_research.EXPERT_REF_REL}")
+        return proc.returncode
+    print("tests passed; change retained")
+    return 0
+
+
 def main(argv: list[str]) -> int:
     parser = argparse.ArgumentParser(description="Daily Claude Code docs research stage")
     parser.add_argument("--offline", action="store_true", help="Skip network fetch; reuse cached snapshot if present.")
+    parser.add_argument("--propose", action="store_true", help="Write a module-core patch proposal (advisory).")
+    parser.add_argument("--apply", action="store_true", help="Apply the previously generated proposal; reverts on test failure.")
     args = parser.parse_args(argv)
+
+    if args.apply:
+        return _cmd_apply()
+    if args.propose:
+        return _cmd_propose()
+
     snapshot = framework_research.refresh_snapshot(ROOT, offline=args.offline)
     _write_report(snapshot)
     diff = snapshot.get("keys_diff", {})
@@ -65,7 +114,6 @@ def main(argv: list[str]) -> int:
         f"[{snapshot.get('fetch_status', '?')}] matched={len(diff.get('matched', []))} "
         f"new={len(diff.get('new_upstream', []))} missing={len(diff.get('missing_upstream', []))}"
     )
-    # Non-zero exit when snapshot is stale or fetch failed without prior cache.
     if snapshot.get("fetch_status") not in {"ok", "skipped"}:
         return 1
     return 0

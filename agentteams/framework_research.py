@@ -201,3 +201,111 @@ def build_framework_placeholders(output_dir: Path, offline: bool = True) -> dict
         "FRAMEWORK_RESEARCH_STALE_BANNER": banner,
         "FRAMEWORK_RESEARCH_DIFF_SUMMARY": " ".join(summary_parts),
     }
+
+
+# ---------------------------------------------------------------------------
+# Module-core update path (human-invoked; never run by cron).
+# ---------------------------------------------------------------------------
+
+EXPERT_REF_REL = "references/claude-agent-infrastructure-expert.md"
+OBSERVATION_HEADING = "## Observed Upstream Tokens (Daily Pipeline)"
+_OBSERVATION_RE = re.compile(
+    r"\n## Observed Upstream Tokens \(Daily Pipeline\).*?(?=\n## |\Z)",
+    re.DOTALL,
+)
+
+
+def propose_module_patch(repo_root: Path) -> dict[str, Any]:
+    """Produce a v1 module-core patch proposal.
+
+    Only target in v1: append/refresh a dated observation stanza in
+    `references/claude-agent-infrastructure-expert.md`. Constants in
+    `agentteams/frameworks/claude.py` are NOT proposed for mutation —
+    the upstream token scan does not distinguish required from
+    supported keys.
+    """
+    snapshot = _load_snapshot(_snapshot_path(repo_root)) or {}
+    tokens = snapshot.get("upstream_tokens", {})
+    diff = snapshot.get("keys_diff", {})
+    if not snapshot.get("generated_on"):
+        return {"changes": [], "reason": "no snapshot"}
+
+    proposed_block = _render_observation_block(snapshot)
+    target = repo_root / EXPERT_REF_REL
+    current_text = target.read_text(encoding="utf-8") if target.exists() else ""
+    new_text = _splice_observation_block(current_text, proposed_block)
+
+    if new_text == current_text:
+        return {"changes": [], "reason": "no drift to record"}
+
+    return {
+        "schema_version": "1.0",
+        "generated_at": _utcnow().strftime("%Y-%m-%dT%H:%M:%SZ"),
+        "snapshot_generated_on": snapshot.get("generated_on", ""),
+        "tokens": tokens,
+        "diff": diff,
+        "changes": [
+            {
+                "path": EXPERT_REF_REL,
+                "operation": "append_or_replace_section",
+                "section_heading": OBSERVATION_HEADING,
+                "old_text": current_text,
+                "new_text": new_text,
+            }
+        ],
+    }
+
+
+def _render_observation_block(snapshot: dict[str, Any]) -> str:
+    tokens = snapshot.get("upstream_tokens", {})
+    diff = snapshot.get("keys_diff", {})
+    keys = tokens.get("front_matter_keys_present", [])
+    locations = tokens.get("locations_present", [])
+    return (
+        f"\n{OBSERVATION_HEADING}\n\n"
+        f"Recorded by the daily pipeline on `{snapshot.get('generated_on', '')}` "
+        f"from `{snapshot.get('source_url', CLAUDE_DOC_URL)}`.\n\n"
+        f"- Upstream front-matter tokens observed: {', '.join(keys) or '—'}\n"
+        f"- Upstream locations observed: {', '.join(locations) or '—'}\n"
+        f"- Matched against local required keys: {', '.join(diff.get('matched', [])) or '—'}\n"
+        f"- Documented locally but not seen upstream: "
+        f"{', '.join(diff.get('missing_upstream', [])) or '—'}\n"
+        f"- Seen upstream but not in local required set (advisory only — "
+        f"may be optional keys): {', '.join(diff.get('new_upstream', [])) or '—'}\n"
+    )
+
+
+def _splice_observation_block(current: str, block: str) -> str:
+    if _OBSERVATION_RE.search(current):
+        return _OBSERVATION_RE.sub("\n" + block.rstrip() + "\n", current, count=1).rstrip() + "\n"
+    return (current.rstrip() + "\n" + block).rstrip() + "\n"
+
+
+def apply_module_patch(proposal: dict[str, Any], repo_root: Path) -> dict[str, Any]:
+    """Apply a v1 proposal in-place; refuses to run in CI.
+
+    Allow-listed operations only. The caller is responsible for
+    git-committing on success and running the relevant tests.
+    """
+    import os
+
+    if os.environ.get("CI"):
+        raise RuntimeError("apply_module_patch refuses to run in CI (CI env var set)")
+
+    changes = proposal.get("changes", [])
+    if not changes:
+        return {"applied": [], "reason": "nothing to apply"}
+
+    allowed_paths = {EXPERT_REF_REL}
+    allowed_ops = {"append_or_replace_section"}
+    applied: list[str] = []
+    for change in changes:
+        path = change.get("path", "")
+        op = change.get("operation", "")
+        if path not in allowed_paths or op not in allowed_ops:
+            raise RuntimeError(f"refusing change outside allow-list: {op} {path}")
+        target = repo_root / path
+        target.write_text(change["new_text"], encoding="utf-8")
+        applied.append(path)
+    return {"applied": applied}
+
