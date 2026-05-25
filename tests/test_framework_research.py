@@ -145,10 +145,23 @@ def test_apply_refuses_in_ci(tmp_path, monkeypatch):
     _write_snapshot(tmp_path, with_drift=True)
     monkeypatch.setattr(fr, "_snapshot_path", lambda root: tmp_path / fr.SNAPSHOT_REL)
     monkeypatch.setenv("CI", "true")
+    monkeypatch.delenv("AGENTTEAMS_ALLOW_CI_APPLY", raising=False)
     proposal = fr.propose_module_patch(tmp_path)
     assert proposal["changes"], "expected drift in fixture"
     with pytest.raises(RuntimeError, match="CI"):
         fr.apply_module_patch(proposal, tmp_path)
+
+
+def test_apply_runs_in_ci_with_explicit_marker(tmp_path, monkeypatch):
+    """T2.D3: AGENTTEAMS_ALLOW_CI_APPLY=1 lifts the CI refusal."""
+    _write_minimal_module(tmp_path)
+    _write_snapshot(tmp_path, with_drift=True)
+    monkeypatch.setattr(fr, "_snapshot_path", lambda root: tmp_path / fr.SNAPSHOT_REL)
+    monkeypatch.setenv("CI", "true")
+    monkeypatch.setenv("AGENTTEAMS_ALLOW_CI_APPLY", "1")
+    proposal = fr.propose_module_patch(tmp_path)
+    result = fr.apply_module_patch(proposal, tmp_path)
+    assert result["applied"], "explicit marker should permit CI apply"
 
 
 def test_apply_writes_observation_blocks(tmp_path, monkeypatch):

@@ -502,6 +502,18 @@ def _build_parser() -> argparse.ArgumentParser:
         ),
     )
     parser.add_argument(
+        "--shrink-policy",
+        choices=("warn", "halt", "allow"),
+        default="warn",
+        dest="shrink_policy",
+        help=(
+            "Behaviour when a fenced-region merge would lose concrete refs. "
+            "'warn' (default) logs and writes; 'halt' refuses the write and "
+            "lists the blocked file; 'allow' writes silently. Plan: "
+            "references/plans/T2-D5-shrink-policy-2026-05-25.plan.md"
+        ),
+    )
+    parser.add_argument(
         "--list-backups",
         action="store_true",
         dest="list_backups",
@@ -715,6 +727,16 @@ def _persist_shrink_events(args, result, manifest, output_dir: Path) -> None:
         except OSError:
             pass
 
+        blocked_lines = []
+        if getattr(result, "shrink_blocked", None):
+            blocked_lines = [
+                "",
+                f"Blocked (shrink-policy=halt): {len(result.shrink_blocked)} file(s)",
+                "",
+            ]
+            for path in result.shrink_blocked:
+                blocked_lines.append(f"- BLOCKED: `{path}`")
+
         section = [
             "",
             f"## {project_label} @ {now_utc.strftime('%Y-%m-%dT%H:%M:%SZ')}",
@@ -722,10 +744,12 @@ def _persist_shrink_events(args, result, manifest, output_dir: Path) -> None:
             f"- output_dir: `{output_dir}`",
             f"- backup_dir: `{backup_dir_str}`",
             f"- notices: {len(result.notices)}",
+            f"- shrink_policy: `{getattr(args, 'shrink_policy', 'warn')}`",
             "",
         ]
         for notice in result.notices:
             section.append(f"- {notice}")
+        section.extend(blocked_lines)
         section.append("")
 
         log_path = shrink_dir / f"{today}.md"
@@ -1398,6 +1422,7 @@ def main(argv: list[str] | None = None) -> int:
             overwrite=args.overwrite,
             merge=not args.overwrite,
             yes=args.yes,
+            shrink_policy=getattr(args, "shrink_policy", "warn"),
         )
         emit.print_summary(result, manifest)
         _persist_shrink_events(args, result, manifest, output_dir)
@@ -1610,6 +1635,7 @@ def main(argv: list[str] | None = None) -> int:
         overwrite=args.overwrite,
         merge=args.merge,
         yes=args.yes,
+        shrink_policy=getattr(args, "shrink_policy", "warn"),
     )
     emit.print_summary(result, manifest)
     _persist_shrink_events(args, result, manifest, output_dir)

@@ -420,8 +420,13 @@ def apply_module_patch(proposal: dict[str, Any], repo_root: Path) -> dict[str, A
     """
     import os
 
-    if os.environ.get("CI"):
-        raise RuntimeError("apply_module_patch refuses to run in CI (CI env var set)")
+    if os.environ.get("CI") and not os.environ.get("AGENTTEAMS_ALLOW_CI_APPLY"):
+        raise RuntimeError(
+            "apply_module_patch refuses to run in CI without an explicit "
+            "AGENTTEAMS_ALLOW_CI_APPLY=1 marker. The auto-PR workflow at "
+            ".github/workflows/framework-auto-update.yml sets this guard "
+            "intentionally; never set it elsewhere."
+        )
 
     changes = proposal.get("changes", [])
     if not changes:
