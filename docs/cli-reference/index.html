@@ -905,6 +905,28 @@
   
 </li>
         
+          <li class="md-nav__item">
+  <a href="#-bridge-merge" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        --bridge-merge
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#-bridge-no-skills" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        --bridge-no-skills
+      
+    </span>
+  </a>
+  
+</li>
+        
       </ul>
     </nav>
   
@@ -2881,6 +2903,28 @@
   
 </li>
         
+          <li class="md-nav__item">
+  <a href="#-bridge-merge" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        --bridge-merge
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#-bridge-no-skills" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        --bridge-no-skills
+      
+    </span>
+  </a>
+  
+</li>
+        
       </ul>
     </nav>
   
@@ -3448,7 +3492,11 @@
 <h3 id="-bridge-check"><code>--bridge-check</code><a class="headerlink" href="#-bridge-check" title="Permanent link">&para;</a></h3>
 <p>Validate bridge freshness against source files by comparing source-file checksums with the bridge manifest.</p>
 <h3 id="-bridge-refresh"><code>--bridge-refresh</code><a class="headerlink" href="#-bridge-refresh" title="Permanent link">&para;</a></h3>
-<p>Refresh bridge artifacts by overwriting existing bridge outputs.</p>
+<p>Refresh bridge artifacts by <strong>destructively overwriting</strong> existing bridge outputs <strong>and target-framework entry files</strong> (<code>CLAUDE.md</code>, <code>.claude/agent-team.md</code>, <code>.claude/quickstart-snippet.md</code>, <code>.claude/README.md</code>, etc.) at the output root. Use for initial generation or when consumer entry files are known-disposable. For non-destructive refresh, use <code>--bridge-merge</code>.</p>
+<h3 id="-bridge-merge"><code>--bridge-merge</code><a class="headerlink" href="#-bridge-merge" title="Permanent link">&para;</a></h3>
+<p>Non-destructive bridge update. Regenerates bridge-internal artifacts under <code>references/bridges/&lt;src&gt;-to-&lt;target&gt;/</code> (always overwrites those — bridge-owned). For target-framework entry files, only re-renders content inside <code>&lt;!-- AGENTTEAMS-BRIDGE:BEGIN &lt;region&gt; v=N --&gt; ... &lt;!-- AGENTTEAMS-BRIDGE:END &lt;region&gt; --&gt;</code> fences. Content outside fences is preserved verbatim. Files lacking any bridge fence are skipped with notices written to <code>bridge-merge.report.md</code>. First-time consumers should use <code>--bridge-refresh</code>; subsequent refreshes should use <code>--bridge-merge</code> to preserve consumer customization.</p>
+<h3 id="-bridge-no-skills"><code>--bridge-no-skills</code><a class="headerlink" href="#-bridge-no-skills" title="Permanent link">&para;</a></h3>
+<p>Suppress emission of <code>.claude/skills/recall.md</code> (Claude target only). The recall skill wraps <code>agentteams --query-index</code> for in-session memory-index retrieval; disable when your team manages skills via another channel.</p>
 <hr />
 <h2 id="how-these-three-options-differ">How These Three Options Differ<a class="headerlink" href="#how-these-three-options-differ" title="Permanent link">&para;</a></h2>
 <p>If you are deciding between the interoperability options:</p>
@@ -3481,7 +3529,7 @@
 - <code>--bridge-from</code> cannot be used with <code>--convert-from</code> or <code>--interop-from</code>.
 - <code>--auto-correct</code> requires <code>--post-audit</code>.
 - <code>--prune</code> requires <code>--update</code>.
-- <code>--bridge-check</code> cannot be combined with <code>--bridge-refresh</code>.
+- <code>--bridge-check</code>, <code>--bridge-refresh</code>, and <code>--bridge-merge</code> are mutually exclusive; at most one may be passed.
 - <code>--refresh-index</code> and <code>--query-index</code> are mutually exclusive.
 - <code>--query-k</code> must be <code>&gt;= 1</code>.</p>
 <p>Excluded with <code>--convert-from</code>, <code>--interop-from</code>, or <code>--bridge-from</code>:

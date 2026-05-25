@@ -1393,6 +1393,17 @@
 </li>
         
           <li class="md-nav__item">
+  <a href="#dryrunentry" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        DryRunEntry
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
   <a href="#emitresult" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -1497,6 +1508,17 @@
   
     <nav class="md-nav" aria-label="---">
       <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#print_dry_run_reportresult-manifest-fmttext" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        print_dry_run_report(result, manifest, *, fmt='text')
+      
+    </span>
+  </a>
+  
+</li>
         
           <li class="md-nav__item">
   <a href="#backup_output_diroutput_dir-files_to_backupnone-dry_runfalse" class="md-nav__link">
@@ -2336,6 +2358,17 @@
 </li>
         
           <li class="md-nav__item">
+  <a href="#dryrunentry" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        DryRunEntry
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
   <a href="#emitresult" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -2442,6 +2475,17 @@
       <ul class="md-nav__list">
         
           <li class="md-nav__item">
+  <a href="#print_dry_run_reportresult-manifest-fmttext" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        print_dry_run_report(result, manifest, *, fmt='text')
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
   <a href="#backup_output_diroutput_dir-files_to_backupnone-dry_runfalse" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -2538,6 +2582,19 @@
 </li>
 </ul>
 <hr />
+<h3 id="dryrunentry"><code>DryRunEntry</code><a class="headerlink" href="#dryrunentry" title="Permanent link">&para;</a></h3>
+<blockquote>
+<p><em>Source: <code>agentteams/emit.py</code></em></p>
+</blockquote>
+<p>One per-file row in the dry-run preview. Populated by <code>emit_all(..., dry_run=True)</code> into <code>DryRunReport.entries</code>.</p>
+<p><strong>Attributes:</strong></p>
+<ul>
+<li><code>path</code> (<code>str</code>) — Absolute path of the file the action would touch.</li>
+<li><code>action</code> (<code>str</code>) — One of <code>WRITE</code>, <code>OVERWRITE</code>, <code>MERGE</code>, <code>MERGE-OVERWRITE-FENCED</code>, <code>UNCHANGED</code>, <code>SKIP</code>.</li>
+<li><code>fence_actions</code> (<code>list[dict[str, Any]]</code>) — Per-fence merge details for <code>MERGE</code> / <code>MERGE-OVERWRITE-FENCED</code> rows (each dict carries <code>fence_id</code> and <code>action</code>). Empty for other actions.</li>
+<li><code>delta_bytes</code> (<code>int</code>) — Estimated byte delta for the action.</li>
+</ul>
+<hr />
 <h3 id="emitresult"><code>EmitResult</code><a class="headerlink" href="#emitresult" title="Permanent link">&para;</a></h3>
 <blockquote>
 <p><em>Source: <code>agentteams/emit.py</code></em></p>
@@ -2628,6 +2685,19 @@
 <li><code>manifest</code> (<code>dict[str, Any]</code>) — Team manifest from <code>analyze.build_manifest()</code>.</li>
 </ul>
 <h2 id="-_1">---<a class="headerlink" href="#-_1" title="Permanent link">&para;</a></h2>
+<h3 id="print_dry_run_reportresult-manifest-fmttext"><code>print_dry_run_report(result, manifest, *, fmt='text')</code><a class="headerlink" href="#print_dry_run_reportresult-manifest-fmttext" title="Permanent link">&para;</a></h3>
+<blockquote>
+<p><em>Source: <code>agentteams/emit.py</code></em></p>
+</blockquote>
+<p>Print the structured dry-run plan recorded on <code>EmitResult.dry_run_report</code>.</p>
+<p><strong>Args:</strong></p>
+<ul>
+<li><code>result</code> (<code>EmitResult</code>) — Result returned by <code>emit_all(..., dry_run=True)</code>. If <code>result.dry_run_report</code> is <code>None</code>, the function is a no-op that prints a one-line note.</li>
+<li><code>manifest</code> (<code>dict</code>) — Manifest from <code>analyze.build_manifest()</code>; used for header context.</li>
+<li><code>fmt</code> (<code>str</code>, keyword-only) — <code>'text'</code> prints a per-file action table plus aggregated counts and notices; <code>'json'</code> prints a single JSON document to stdout suitable for <code>jq</code> piping. Default: <code>'text'</code>.</li>
+</ul>
+<p><strong>Returns:</strong> <code>None</code>.</p>
+<hr />
 <h3 id="backup_output_diroutput_dir-files_to_backupnone-dry_runfalse"><code>backup_output_dir(output_dir, *, files_to_backup=None, dry_run=False)</code><a class="headerlink" href="#backup_output_diroutput_dir-files_to_backupnone-dry_runfalse" title="Permanent link">&para;</a></h3>
 <blockquote>
 <p><em>Source: <code>agentteams/emit.py</code></em></p>

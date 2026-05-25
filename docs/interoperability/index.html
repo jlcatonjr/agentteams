@@ -2146,6 +2146,23 @@
     </span>
   </a>
   
+    <nav class="md-nav" aria-label="Mode C: Lightweight Bridge (--bridge-from)">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#first-run-vs-subsequent-refresh" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        First Run vs Subsequent Refresh
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
 </li>
       
         <li class="md-nav__item">
@@ -2309,7 +2326,9 @@
 <li><code>agent-inventory.md</code></li>
 <li><code>quickstart-snippet.md</code></li>
 <li><code>entrypoint.md</code></li>
+<li><code>domain-boundary.md</code> — clarifies the memory-index vector-mode boundary vs project-level retrieval-integrator contracts (so consumers don't conflate them).</li>
 </ol>
+<p>The bridge also writes target-framework entry files (e.g. <code>CLAUDE.md</code>, <code>.claude/*</code> for claude target) at the output root. <strong>These writes are destructive</strong> under <code>--bridge-refresh</code> and non-destructive (fence-aware) under <code>--bridge-merge</code>.</p>
 <p>Bridge freshness checks:</p>
 <div class="highlight"><pre><span></span><code><a id="__codelineno-3-1" name="__codelineno-3-1" href="#__codelineno-3-1"></a>agentteams<span class="w"> </span><span class="se">\</span>
 <a id="__codelineno-3-2" name="__codelineno-3-2" href="#__codelineno-3-2"></a><span class="w">  </span>--bridge-from<span class="w"> </span>/path/to/source/agents<span class="w"> </span><span class="se">\</span>
@@ -2318,6 +2337,11 @@
 <a id="__codelineno-3-5" name="__codelineno-3-5" href="#__codelineno-3-5"></a><span class="w">  </span>--bridge-check
 </code></pre></div>
 <p><code>--bridge-check</code> is read-only: it verifies bridge freshness against the source manifest and does not perform the write-path security freshness preflight.</p>
+<h3 id="first-run-vs-subsequent-refresh">First Run vs Subsequent Refresh<a class="headerlink" href="#first-run-vs-subsequent-refresh" title="Permanent link">&para;</a></h3>
+<p>| First time generating the bridge for a project | <code>--bridge-refresh</code> (creates target entry files from scratch) |
+| Subsequent refresh after source agents change, consumer entry files have been customized | <strong><code>--bridge-merge</code></strong> (fence-aware non-destructive update) |
+| Verifying freshness without writing | <code>--bridge-check</code> |</p>
+<p><code>--bridge-refresh</code> overwrites consumer <code>CLAUDE.md</code> / <code>.claude/*</code> with terse bridge-stub content. If your team has rich entry files, use <code>--bridge-merge</code>. Consumer-managed sections should live OUTSIDE the bridge's <code>&lt;!-- AGENTTEAMS-BRIDGE:BEGIN ... --&gt;</code> fences so the merge logic preserves them.</p>
 <hr />
 <h2 id="directional-coverage">Directional Coverage<a class="headerlink" href="#directional-coverage" title="Permanent link">&para;</a></h2>
 <p>All three frameworks are supported in all six directional pairings:</p>

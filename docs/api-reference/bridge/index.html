@@ -1494,10 +1494,10 @@
       <ul class="md-nav__list">
         
           <li class="md-nav__item">
-  <a href="#run_bridge-source_dir-target_framework-output_root-source_frameworknone-dry_runfalse-overwritefalse-check_onlyfalse" class="md-nav__link">
+  <a href="#run_bridge-source_dir-target_framework-output_root-source_frameworknone-dry_runfalse-overwritefalse-check_onlyfalse-merge_onlyfalse-emit_skillstrue" class="md-nav__link">
     <span class="md-ellipsis">
       
-        run_bridge(*, source_dir, target_framework, output_root, source_framework=None, dry_run=False, overwrite=False, check_only=False)
+        run_bridge(*, source_dir, target_framework, output_root, source_framework=None, dry_run=False, overwrite=False, check_only=False, merge_only=False, emit_skills=True)
       
     </span>
   </a>
@@ -1525,6 +1525,28 @@
     <span class="md-ellipsis">
       
         Notes
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#mode-selection-guidance" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Mode Selection Guidance
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#fence-convention" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Fence Convention
       
     </span>
   </a>
@@ -2253,10 +2275,10 @@
       <ul class="md-nav__list">
         
           <li class="md-nav__item">
-  <a href="#run_bridge-source_dir-target_framework-output_root-source_frameworknone-dry_runfalse-overwritefalse-check_onlyfalse" class="md-nav__link">
+  <a href="#run_bridge-source_dir-target_framework-output_root-source_frameworknone-dry_runfalse-overwritefalse-check_onlyfalse-merge_onlyfalse-emit_skillstrue" class="md-nav__link">
     <span class="md-ellipsis">
       
-        run_bridge(*, source_dir, target_framework, output_root, source_framework=None, dry_run=False, overwrite=False, check_only=False)
+        run_bridge(*, source_dir, target_framework, output_root, source_framework=None, dry_run=False, overwrite=False, check_only=False, merge_only=False, emit_skills=True)
       
     </span>
   </a>
@@ -2284,6 +2306,28 @@
     <span class="md-ellipsis">
       
         Notes
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#mode-selection-guidance" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Mode Selection Guidance
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#fence-convention" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Fence Convention
       
     </span>
   </a>
@@ -2335,7 +2379,7 @@
 </ul>
 <hr />
 <h2 id="public-function">Public Function<a class="headerlink" href="#public-function" title="Permanent link">&para;</a></h2>
-<h3 id="run_bridge-source_dir-target_framework-output_root-source_frameworknone-dry_runfalse-overwritefalse-check_onlyfalse"><code>run_bridge(*, source_dir, target_framework, output_root, source_framework=None, dry_run=False, overwrite=False, check_only=False)</code><a class="headerlink" href="#run_bridge-source_dir-target_framework-output_root-source_frameworknone-dry_runfalse-overwritefalse-check_onlyfalse" title="Permanent link">&para;</a></h3>
+<h3 id="run_bridge-source_dir-target_framework-output_root-source_frameworknone-dry_runfalse-overwritefalse-check_onlyfalse-merge_onlyfalse-emit_skillstrue"><code>run_bridge(*, source_dir, target_framework, output_root, source_framework=None, dry_run=False, overwrite=False, check_only=False, merge_only=False, emit_skills=True)</code><a class="headerlink" href="#run_bridge-source_dir-target_framework-output_root-source_frameworknone-dry_runfalse-overwritefalse-check_onlyfalse-merge_onlyfalse-emit_skillstrue" title="Permanent link">&para;</a></h3>
 <p>Generate bridge artifacts or validate bridge freshness.</p>
 <p>Args:</p>
 <ol>
@@ -2344,8 +2388,10 @@
 <li><code>output_root</code> (<code>Path</code>): root where bridge artifacts are written.</li>
 <li><code>source_framework</code> (<code>str | None</code>): optional source override.</li>
 <li><code>dry_run</code> (<code>bool</code>): simulate writes.</li>
-<li><code>overwrite</code> (<code>bool</code>): overwrite existing bridge artifacts.</li>
-<li><code>check_only</code> (<code>bool</code>): run freshness check only.</li>
+<li><code>overwrite</code> (<code>bool</code>): destructively overwrite <strong>existing target-framework entry files</strong> at <code>output_root</code> (CLAUDE.md, <code>.claude/agent-team.md</code>, etc.) and existing bridge-internal artifacts. Triggered by <code>--bridge-refresh</code>.</li>
+<li><code>check_only</code> (<code>bool</code>): run freshness check only; no writes.</li>
+<li><code>merge_only</code> (<code>bool</code>): non-destructive update of target-framework entry files. Bridge-internal artifacts under <code>references/bridges/.../</code> are always regenerated. For target entry files, only content inside <code>&lt;!-- AGENTTEAMS-BRIDGE:BEGIN &lt;region&gt; v=N --&gt; ... &lt;!-- AGENTTEAMS-BRIDGE:END &lt;region&gt; --&gt;</code> fences is re-rendered; content outside fences is preserved verbatim. Files lacking any bridge fence are skipped with notices in <code>bridge-merge.report.md</code>. Triggered by <code>--bridge-merge</code>.</li>
+<li><code>emit_skills</code> (<code>bool</code>): emit <code>.claude/skills/recall.md</code> skill template (claude target only). Default <code>True</code>. Set to <code>False</code> (via <code>--bridge-no-skills</code>) if your team manages skills separately.</li>
 </ol>
 <p>Returns:</p>
 <ul>
@@ -2368,10 +2414,19 @@
 <li><code>agent-inventory.md</code></li>
 <li><code>quickstart-snippet.md</code></li>
 <li><code>entrypoint.md</code></li>
+<li><code>domain-boundary.md</code> — clarifies the memory-index vector-mode boundary vs project-level retrieval-integrator contracts.</li>
 </ol>
 <p>Check mode also emits:</p>
 <ul>
 <li><code>bridge-check.report.md</code></li>
+</ul>
+<p>Merge mode also emits:</p>
+<ul>
+<li><code>bridge-merge.report.md</code> — per-file status: merged / skipped (no fence) / skipped (no rendered fence).</li>
+</ul>
+<p>Claude target with <code>emit_skills=True</code> (default) also emits at <code>output_root</code>:</p>
+<ul>
+<li><code>.claude/skills/recall.md</code> — wraps <code>agentteams --query-index</code> for in-session retrieval. <strong>Not</strong> under <code>references/bridges/...</code>; lives in the consumer's <code>.claude/skills/</code> directory.</li>
 </ul>
 <hr />
 <h2 id="notes">Notes<a class="headerlink" href="#notes" title="Permanent link">&para;</a></h2>
@@ -2380,6 +2435,43 @@
 <li>Hash-based freshness checks detect changed, missing, and newly added source files.</li>
 <li>Target entry files are emitted to help route users through source orchestrator-first flow.</li>
 </ol>
+<h2 id="mode-selection-guidance">Mode Selection Guidance<a class="headerlink" href="#mode-selection-guidance" title="Permanent link">&para;</a></h2>
+<table>
+<thead>
+<tr>
+<th>Situation</th>
+<th>Use</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>First-time bridge generation for a project</td>
+<td><code>--bridge-refresh</code> (or <code>--bridge-from</code> with no mode flag, on a project that has no target entry files yet)</td>
+</tr>
+<tr>
+<td>Re-running after source agents changed; consumer's <code>CLAUDE.md</code>/<code>.claude/*</code> have been customized</td>
+<td><strong><code>--bridge-merge</code></strong> — preserves customization outside the bridge's fenced regions</td>
+</tr>
+<tr>
+<td>Re-running with no consumer customization to preserve</td>
+<td>Either <code>--bridge-refresh</code> or <code>--bridge-merge</code> works; <code>--bridge-merge</code> is the safer default</td>
+</tr>
+<tr>
+<td>Verifying source has not drifted from manifest</td>
+<td><code>--bridge-check</code></td>
+</tr>
+</tbody>
+</table>
+<blockquote>
+<p><strong>Warning:</strong> <code>--bridge-refresh</code> unconditionally overwrites <code>CLAUDE.md</code> and <code>.claude/*</code> at the consumer's <code>output_root</code> with terse stubs. If your team has rich entry files, use <code>--bridge-merge</code> for refreshes. Consumer-managed sections should live <strong>outside</strong> the <code>&lt;!-- AGENTTEAMS-BRIDGE:BEGIN ... --&gt;</code> fences so the merge logic preserves them.</p>
+</blockquote>
+<h2 id="fence-convention">Fence Convention<a class="headerlink" href="#fence-convention" title="Permanent link">&para;</a></h2>
+<p>Target entry files emitted by the bridge contain <code>AGENTTEAMS-BRIDGE</code> fences (distinct from the <code>AGENTTEAMS</code> fences used by the agent-template emit pipeline):</p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a>&lt;!-- AGENTTEAMS-BRIDGE:BEGIN &lt;region-id&gt; v=&lt;version&gt; --&gt;
+<a id="__codelineno-0-2" name="__codelineno-0-2" href="#__codelineno-0-2"></a>&lt;bridge-managed content&gt;
+<a id="__codelineno-0-3" name="__codelineno-0-3" href="#__codelineno-0-3"></a>&lt;!-- AGENTTEAMS-BRIDGE:END &lt;region-id&gt; --&gt;
+</code></pre></div>
+<p><code>--bridge-merge</code> updates only the content inside these fences. Place consumer-side notes, project-specific context, or richer documentation OUTSIDE the fences so they survive every merge.</p>
 
 
 
