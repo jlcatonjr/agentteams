@@ -4,8 +4,8 @@ Mirrors the contract of `agentteams.security_refs.build_security_placeholders`
 so the daily-pipeline's upstream-research stage is transmitted to consumer
 repositories through `--update --merge`.
 
-Snapshot path:
-    tmp/daily-pipeline/framework-research/latest.json
+Snapshot path (gitignored — operator-local state, regenerated daily):
+    tmp/daily-pipeline/framework-research/latest.json — gitignored.
 
 `refresh_snapshot()` (re)fetches upstream docs and writes the snapshot.
 `build_framework_placeholders()` reads whatever snapshot exists and returns
@@ -25,7 +25,7 @@ from pathlib import Path
 from typing import Any
 
 CLAUDE_DOC_URL = "https://docs.anthropic.com/en/docs/claude-code/sub-agents"
-SNAPSHOT_REL = "tmp/daily-pipeline/framework-research/latest.json"
+SNAPSHOT_REL = "tmp/daily-pipeline/framework-research/latest.json"  # gitignored — operator-local
 STALE_DAYS = 7
 
 EXPECTED_FRONT_MATTER_KEYS = ["name", "description", "tools", "model"]
@@ -251,7 +251,7 @@ def _staleness_banner(snapshot: dict[str, Any]) -> str:
 def build_framework_placeholders(output_dir: Path, offline: bool = True) -> dict[str, str]:
     """Return placeholders for the framework-watch reference template.
 
-    Reads the existing snapshot under `tmp/daily-pipeline/framework-research/`.
+    Reads the existing snapshot under `tmp/daily-pipeline/framework-research/` (gitignored).
     Set `offline=False` to refresh from the network first (daily-pipeline use).
     """
     # The snapshot lives under the *module* tree, not the output tree.

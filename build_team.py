@@ -569,7 +569,7 @@ def _check_dual_descriptor(args) -> None:
     """Advisory check: warn when a consumer repo has both the user-supplied
     descriptor and a sibling `_build-description.json` that diverges on a
     small set of stable fields. Read-only; never modifies either file.
-    Records hits to tmp/daily-pipeline/dual-descriptor-events/<date>.md.
+    Records hits to tmp/daily-pipeline/dual-descriptor-events/<date>.md (gitignored).
     Rationale and field list: references/plans/dual-descriptor-divergence-2026-05-25.plan.md
     """
     if getattr(args, "self_update", False):
@@ -698,7 +698,7 @@ def _persist_orphan_events(orphans: list[str], manifest, output_dir: Path) -> No
 
 def _persist_shrink_events(args, result, manifest, output_dir: Path) -> None:
     """D5: append shrink notices from this run to a daily log under the
-    agentteams source tree's tmp/. Delta-only — no notices means no write.
+    agentteams source tree's gitignored tmp/. Delta-only — no notices means no write.
     Never raises; logging is a best-effort side effect.
     """
     if not (args.update and args.merge and not args.dry_run and result.notices):
