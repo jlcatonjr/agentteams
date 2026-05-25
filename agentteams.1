@@ -2,7 +2,7 @@
 .SH NAME
 agentteams \- Generate a complete agent team for any project.
 .SH SYNOPSIS
-.B agentteams [--description PATH] [--project PATH] [--framework NAME] [--output DIR] [--dry-run] [--json] [--overwrite] [--merge] [--yes] [--no-scan] [--cost-routing] [--update] [--prune] [--check] [--refresh-index] [--query-index TEXT] [--query-k N] [--query-strategy QUERY_STRATEGY] [--fail-on-legacy-skip] [--scan-security] [--self] [--allow-external-self-output] [--post-audit] [--auto-correct] [--enrich] [--strict-manual-placeholders] [--no-strict-manual-placeholders STRICT_MANUAL_PLACEHOLDERS] [--security-offline] [--security-max-items N] [--security-no-nvd] [--migrate] [--convert-from DIR] [--interop-from DIR] [--interop-source-framework INTEROP_SOURCE_FRAMEWORK] [--interop-mode INTEROP_MODE] [--bridge-from DIR] [--bridge-source-framework BRIDGE_SOURCE_FRAMEWORK] [--bridge-check] [--bridge-refresh] [--bridge-merge] [--bridge-no-skills] [--revert-migration] [--version] [--no-backup] [--list-backups] [--restore-backup TIMESTAMP] [--add-fence-markers PATH] [--in-place]
+.B agentteams [--description PATH] [--project PATH] [--framework NAME] [--output DIR] [--dry-run] [--json] [--overwrite] [--merge] [--yes] [--no-scan] [--cost-routing] [--update] [--prune] [--check] [--refresh-index] [--query-index TEXT] [--query-k N] [--query-strategy QUERY_STRATEGY] [--fail-on-legacy-skip] [--scan-security] [--self] [--allow-external-self-output] [--post-audit] [--auto-correct] [--enrich] [--strict-manual-placeholders] [--no-strict-manual-placeholders STRICT_MANUAL_PLACEHOLDERS] [--security-offline] [--security-max-items N] [--security-no-nvd] [--migrate] [--convert-from DIR] [--interop-from DIR] [--interop-source-framework INTEROP_SOURCE_FRAMEWORK] [--interop-mode INTEROP_MODE] [--bridge-from DIR] [--bridge-source-framework BRIDGE_SOURCE_FRAMEWORK] [--bridge-check] [--bridge-refresh] [--bridge-merge] [--bridge-no-skills] [--revert-migration] [--version] [--no-backup] [--shrink-policy SHRINK_POLICY] [--list-backups] [--restore-backup TIMESTAMP] [--add-fence-markers PATH] [--in-place]
 .SH DESCRIPTION
 .PP
 Generate a complete agent team for any project.
@@ -143,6 +143,9 @@ show program's version number and exit
 .TP
 .B \-\-no\-backup
 Skip automatic backup of existing agent files before any write operation. Not recommended for interactive use; intended for CI/scripted pipelines where an external snapshot mechanism is already in place.
+.TP
+.B \-\-shrink\-policy {warn,halt,allow}
+Behaviour when a fenced\-region merge would lose concrete refs. 'warn' (default) logs and writes; 'halt' refuses the write and lists the blocked file; 'allow' writes silently. Plan: references/plans/T2\-D5\-shrink\-policy\-2026\-05\-25.plan.md
 .TP
 .B \-\-list\-backups
 List available backups for the target output directory and exit.
