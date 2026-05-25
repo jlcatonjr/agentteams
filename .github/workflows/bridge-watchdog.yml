@@ -73,6 +73,12 @@ jobs:
                 `Threshold: ${staleHours} hours`,
                 "",
                 "Please review `.github/workflows/bridge-maintenance.yml` and `scripts/run_daily_bridge_maintenance.sh`.",
+                "",
+                "Framework-research staleness: a stalled bridge-maintenance run also means the",
+                "Claude Code / Copilot upstream research snapshot at",
+                "`tmp/daily-pipeline/framework-research/latest.json` is no longer being refreshed.",
+                "Check the latest `tmp/bridge-maintenance/summary.md` row labeled 'Upstream research:",
+                "Claude Code sub-agents' and verify the snapshot's `generated_at` timestamp is recent.",
               ].join("\n");
 
               await github.rest.issues.create({

@@ -1410,6 +1410,41 @@ def main(argv: list[str] | None = None) -> int:
         yes=args.yes,
     )
     emit.print_summary(result, manifest)
+
+    # D5: persist shrink notices to a daily-pipeline artefact so the
+    # ephemeral stderr record survives the run. Delta-only (skip when
+    # there were no notices), gated to --self --update --merge to avoid
+    # writing into consumer-repo trees.
+    if (
+        getattr(args, "self_update", False)
+        and args.update
+        and args.merge
+        and not args.dry_run
+        and result.notices
+    ):
+        try:
+            shrink_dir = (
+                Path(__file__).resolve().parent / "tmp" / "daily-pipeline" / "shrink-events"
+            )
+            shrink_dir.mkdir(parents=True, exist_ok=True)
+            now_utc = datetime.now(UTC)
+            today = now_utc.strftime("%Y-%m-%d")
+            lines = [
+                f"# Fenced-Region Shrink Events — {today}",
+                "",
+                f"Recorded by build_team.py during `--self --update --merge` "
+                f"at {now_utc.strftime('%Y-%m-%dT%H:%M:%SZ')}.",
+                "",
+                f"Total notices: {len(result.notices)}",
+                "",
+            ]
+            for notice in result.notices:
+                lines.append(f"- {notice}")
+            lines.append("")
+            (shrink_dir / f"{today}.md").write_text("\n".join(lines), encoding="utf-8")
+        except Exception as exc:  # pragma: no cover - never block emit
+            print(f"[WARN] could not persist shrink events: {exc}", file=sys.stderr)
+
     if args.dry_run and result.dry_run_report is not None:
         emit.print_dry_run_report(
             result, manifest,
