@@ -127,6 +127,11 @@ def test_propose_with_drift_targets_both_refs(tmp_path, monkeypatch):
 def test_apply_refuses_outside_allow_list(tmp_path, monkeypatch):
     _write_minimal_module(tmp_path)
     monkeypatch.setattr(fr, "_snapshot_path", lambda root: tmp_path / fr.SNAPSHOT_REL)
+    # GitHub Actions sets CI=true unconditionally; that gate fires before
+    # the allow-list check. Unset it so this test exercises the allow-list
+    # path specifically. The CI gate has its own dedicated test below.
+    monkeypatch.delenv("CI", raising=False)
+    monkeypatch.delenv("AGENTTEAMS_ALLOW_CI_APPLY", raising=False)
     bad_proposal = {
         "changes": [
             {
