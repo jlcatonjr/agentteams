@@ -6,6 +6,170 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### feat(daily-pipeline): framework-research + module-core update path (2026-05-25)
+
+Branch `feature/daily-pipeline-framework-research-2026-05-25` (PR #2,
+17 commits). Adversarial+conflict audits documented per item under
+`references/plans/` (gitignored — operator-local plans).
+
+**New CLI flags and entry points**
+
+- `--shrink-policy {warn,halt,allow}` (default `warn`): controls
+  `emit.emit_all` behaviour when a fenced-region merge would drop
+  concrete references. `warn` (back-compat) logs and writes; `halt`
+  refuses the write and lists the blocked file under
+  `EmitResult.shrink_blocked`; `allow` writes silently. The
+  self-team daily script (`scripts/run_daily_security_maintenance.sh`)
+  adopts `halt`; consumer-repo invocations stay on the default `warn`.
+- `scripts/research_claude_code_docs.py --propose | --apply` — thin
+  CLI wrapper around `agentteams.framework_research`. Propose writes
+  `tmp/daily-pipeline/framework-research/proposal.json` (gitignored).
+  Apply runs `tests/test_frameworks.py` + `tests/test_framework_research.py`
+  and reverts on failure. CI-refusal lifted only when
+  `AGENTTEAMS_ALLOW_CI_APPLY=1` is set (auto-PR workflow only).
+- `scripts/daily_pipeline_digest.py` — delta-only quality digest
+  aggregating framework-research, shrink-events, dual-descriptor-events,
+  orphan-events, and bridge-maintenance summary into a single
+  `tmp/daily-pipeline/digest/<date>.md` (gitignored).
+
+**New public module: `agentteams.framework_research`**
+
+Mirrors the contract of `agentteams.security_refs.build_security_placeholders`.
+
+- `FRAMEWORK_REGISTRY` — three frameworks: `claude`, `copilot_vscode`,
+  `copilot_cli`. Each entry records its doc URL, expert-reference
+  path, and allow-listed token set.
+- `refresh_snapshot(repo_root, offline=False) -> dict` — fetches the
+  multi-framework snapshot; writes `latest.json` (schema 1.1) with
+  Claude-level top-level keys preserved for back-compat plus a
+  `frameworks` dict.
+- `build_framework_placeholders(output_dir, offline=True) -> dict[str, str]` —
+  returns `FRAMEWORK_RESEARCH_*` placeholders for the
+  `framework-watch.reference.md` template.
+- `propose_module_patch(repo_root) -> dict` — produces a v1
+  observation-stanza proposal for the Claude and Copilot expert
+  references. Never proposes constant mutations.
+- `apply_module_patch(proposal, repo_root) -> dict` — allow-list
+  restricted (`ALLOWED_EXPERT_REFS`); refuses to run when `CI=true`
+  unless `AGENTTEAMS_ALLOW_CI_APPLY=1` is also set.
+
+**New generated reference (every consumer team gets it)**
+
+- `<output>/references/framework-watch.reference.md` — single
+  `framework_data` fence populated from the snapshot; one row per
+  framework with observed tokens.
+
+**Quality-signal artefacts (delta-only, gitignored)**
+
+All paths below live under the gitignored daily-pipeline tree
+(`tmp/daily-pipeline/`) — Operator-local state, never durable:
+
+- `framework-research/latest.json` plus dated research reports
+  (gitignored).
+- `shrink-events/<date>.md` (gitignored) — fenced-region shrink
+  notices, with `backup_dir:` linking to the
+  `.agentteams-backups/<ts>/` containing the pre-shrink content.
+- `dual-descriptor-events/<date>.md` (gitignored) — emitted when a
+  consumer repo has both `brief.json` and a sibling
+  `.github/agents/_build-description.json` diverging on
+  `{project_name, primary_output_dir, reference_db_path, deliverables}`.
+- `orphan-events/<date>.md` (gitignored) — agent files on disk not
+  in the current team's manifest.
+- `digest/<date>.md` (gitignored) — aggregator.
+
+**`emit.emit_all` changes**
+
+- New kwarg `shrink_policy: str = "warn"` (see above).
+- New field `EmitResult.shrink_blocked: list[str]` — paths skipped
+  due to halt-mode.
+
+**`agentteams.scan.scan_directory` changes**
+
+- New kwarg `expected_agent_names: set[str] | None = None`. When
+  provided, `.agent.md` files outside this set are treated as
+  orphans and skipped (the orphan advisory surfaces them
+  separately).
+- Walk now skips `.agentteams-backups/` subtrees (point-in-time
+  snapshots, not live content).
+- Placeholder matches inside inline-code spans (`` `…` ``) are
+  skipped (documentation prose mentioning placeholder names).
+- `_SECRET_CONTEXT_RE` now word-bounded so prose like "tokenized"
+  doesn't trip on adjacent identifier-shaped strings.
+- Operational-metadata JSON allow-list `_OPERATIONAL_JSON_NAMES`
+  (`build-log.json`, `delivery-receipt.json`, `memory-index.json`,
+  `eval-suite.json`, `doc-hashes.json`): suppresses PII path,
+  entropy, and placeholder detection in these files;
+  pattern-based credentials (`sk_live_*`, `xoxb-*`, etc.) still
+  apply.
+- `_SAFE_TOKENS` adds `PLACEHOLDER` and `UPPER_SNAKE_CASE` as
+  meta-documentation tokens.
+
+**`agentteams.analyze` changes**
+
+- New `_default_reference_db_path` / `_default_style_reference_path`
+  helpers infer `docs/` / `docs_src/` when the descriptor declares
+  a `doc_site_config_file` and the directory exists on disk.
+  Eliminates the persistent `{REFERENCE_DB_PATH}` / `{STYLE_REFERENCE_PATH}`
+  manual placeholders for projects with mkdocs (and similar).
+
+**`build_team.py` changes**
+
+- `_check_dual_descriptor` advisory fires after `--description` is
+  resolved; never reads the sibling, never modifies either file.
+  Self-update is exempt (the sibling IS the descriptor there).
+- `_persist_shrink_events` / `_persist_orphan_events` helpers
+  append to the daily logs above. Wired into both emit code paths
+  (`--update` branch and post-emit main path).
+
+**New / updated workflows**
+
+- `.github/workflows/framework-auto-update.yml` — supervised
+  auto-PR workflow. Runs daily (cron `23 7 * * *`), refreshes
+  snapshot, runs `--propose`, dedups by proposal hash against
+  existing open PRs, applies on transient branch
+  `auto/framework-update-<hash>`, opens PR via `gh pr create`.
+  Permissions: `contents: write`, `pull-requests: write`.
+- `.github/workflows/bridge-maintenance.yml` — artifact upload
+  now includes the gitignored `tmp/daily-pipeline/` directory so
+  the watchdog can inspect the framework-research snapshot.
+- `.github/workflows/bridge-watchdog.yml` — restructured into
+  three steps: locate latest run, `gh run download` its artifact,
+  evaluate both workflow-age AND snapshot-age. Detects the case
+  where the workflow succeeded but the non-critical research stage
+  silently failed.
+
+**Repo policy**
+
+- Branch protection set on `main` (2026-05-25):
+  required PR (0 approvals — solo-maintainer policy: PR is the
+  gate, owner self-merges), force-push blocked, deletion blocked,
+  enforce_admins=false (owner break-glass available).
+
+**Tracked bootstrap aid**
+
+- `references/_self-build-description.template.json` — operator
+  copies to `.github/agents/_build-description.json` (gitignored).
+- `references/SELF-BUILD-DESCRIPTOR.md` — bootstrap procedure.
+
+**Tests added (44 new tests; 924 total)**
+
+- `tests/test_framework_research.py` (8 cases)
+- `tests/test_dual_descriptor.py` (3 cases)
+- `tests/test_daily_pipeline_digest.py` (2 cases)
+- `tests/test_orphan_events.py` (4 cases)
+- `tests/test_analyze_defaults.py` (5 cases)
+- `tests/test_shrink_policy.py` (3 cases)
+- `tests/test_auto_update_workflow.py` (6 cases)
+- `tests/test_scan.py` extensions (5 new cases: backup skip,
+  backtick spans, operational-JSON suppression, word-bounded
+  secret context, real-token still fires)
+
+**Plans (gitignored, operator-local; reference only)**
+
+All adversarial+conflict audits and implementation steps for the
+above are recorded under `references/plans/` with the slug pattern
+`<tier>-<id>-<topic>-2026-05-25.{plan.,}md`.
+
 ### fix(ci): memory-index relevance test now skips on incomplete corpus (2026-05-23)
 
 `tests/test_memory_index_relevance.py` was failing on every CI matrix leg with

@@ -49,15 +49,45 @@ Results of a security scan.
 
 ## Functions
 
-### `scan_directory(agents_dir)`
+### `scan_directory(agents_dir, *, expected_agent_names=None)`
 
 > *Source: `agentteams/scan.py`*
 
-Scan all `.agent.md` and `.md` files in `agents_dir` for security issues.
+Scan all `.agent.md`, `.md`, and `.json` files in `agents_dir` for
+security issues.
 
 **Args:**
 
 - `agents_dir` (`Path`) — Path to the `.github/agents/` directory.
+- `expected_agent_names` (`set[str] | None`, keyword-only) — *(T3a.2 v4)*
+  When provided, `.agent.md` files whose basename is NOT in this
+  set are treated as orphans from a prior team configuration and
+  skipped. The build_team orphan advisory at `build_team.py:1304`
+  surfaces them separately so they remain visible; double-flagging
+  them in the security scan only blocks the daily pipeline without
+  adding actionable signal. Default: `None` (scan every
+  `.agent.md` found).
+
+**Walk semantics:**
+
+- The `.agentteams-backups/` subtree is always skipped.
+  Point-in-time snapshots faithfully preserve historical
+  (already-surfaced) content and should not gate the live scan.
+- `_OPERATIONAL_JSON_NAMES` (`build-log.json`,
+  `delivery-receipt.json`, `memory-index.json`, `eval-suite.json`,
+  `doc-hashes.json`) suppresses the absolute-path PII detector,
+  the entropy-based detectors, and unresolved-placeholder
+  detection in those files. These are pipeline-controlled
+  artefacts that legitimately carry paths, content hashes, and
+  indexed copies of documentation. Pattern-based credential
+  detection (`sk_live_*`, `xoxb-*`, etc.) still applies.
+- Placeholder matches that fall entirely inside an inline-code
+  span (`` `…` ``) on the same line are skipped — those are
+  documentation prose mentioning placeholder names, not real
+  unresolved placeholders.
+- `_SECRET_CONTEXT_RE` is word-bounded so prose like "tokenized"
+  or "authorize" does not elevate the line into secret-context
+  scanning.
 
 **Returns:** `ScanReport`
 

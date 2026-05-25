@@ -33,6 +33,7 @@ This reference defines the **supported public API surface** (documented modules 
 | [`audit`](audit.md) | Post-generation static and AI-powered audit |
 | [`remediate`](remediate.md) | Auto-correct audit findings via standalone Copilot CLI |
 | [`security-refs`](security-refs.md) | Build live security intelligence placeholders for templates |
+| [`framework-research`](framework-research.md) | Detect upstream framework drift; transmit via `--update --merge`; supervised-PR auto-update path |
 
 ## Enhancement & Enrichment
 

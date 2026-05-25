@@ -65,6 +65,7 @@ nav:
       - audit: api-reference/audit.md
       - remediate: api-reference/remediate.md
       - security-refs: api-reference/security-refs.md
+      - framework-research: api-reference/framework-research.md
       - enrich: api-reference/enrich.md
       - memory-index: api-reference/memory-index.md
       - fence-inject: api-reference/fence-inject.md
