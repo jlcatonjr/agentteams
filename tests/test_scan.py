@@ -241,3 +241,108 @@ def test_scan_directory_does_not_skip_md_files(tmp_path):
     report = scan_directory(agents_dir)
     assert report.has_issues
 
+
+def test_placeholder_inside_backticks_is_not_flagged(tmp_path):
+    """T3a.2 v2: documentation placeholders inside `...` spans are skipped."""
+    agents_dir = tmp_path / ".github" / "agents"
+    agents_dir.mkdir(parents=True)
+    (agents_dir / "doc.md").write_text(
+        "Templates use `{UPPER_SNAKE_CASE}` for auto-resolved placeholders.\n",
+        encoding="utf-8",
+    )
+    report = scan_directory(agents_dir)
+    msgs = [f.message for f in report.findings if f.category == "unresolved-placeholder"]
+    assert not msgs, f"backticked doc placeholder should not fire: {msgs}"
+
+
+def test_placeholder_outside_backticks_still_flagged(tmp_path):
+    """T3a.2 v2: a bare unresolved placeholder still fires."""
+    agents_dir = tmp_path / ".github" / "agents"
+    agents_dir.mkdir(parents=True)
+    (agents_dir / "live.agent.md").write_text(
+        "The reference path is {REFERENCE_DB_PATH} (not resolved).\n",
+        encoding="utf-8",
+    )
+    report = scan_directory(agents_dir)
+    msgs = [f.message for f in report.findings if f.category == "unresolved-placeholder"]
+    assert any("REFERENCE_DB_PATH" in m for m in msgs)
+
+
+def test_pii_in_operational_json_is_suppressed(tmp_path):
+    """T3a.2 v2: delivery-receipt.json and friends are allowed to carry paths."""
+    agents_dir = tmp_path / ".github" / "agents"
+    refs = agents_dir / "references"
+    refs.mkdir(parents=True)
+    (refs / "delivery-receipt.json").write_text(
+        '{"path": "/Users/jamescaton/githubrepositories/foo"}\n',
+        encoding="utf-8",
+    )
+    report = scan_directory(agents_dir)
+    pii = [f for f in report.findings if f.category == "PII"]
+    assert not pii, f"operational JSON should not carry PII findings: {pii}"
+
+
+def test_pii_in_regular_md_still_flagged(tmp_path):
+    """T3a.2 v2: PII suppression is narrow to operational JSON names."""
+    agents_dir = tmp_path / ".github" / "agents"
+    agents_dir.mkdir(parents=True)
+    (agents_dir / "live.agent.md").write_text(
+        "Note: see /Users/jamescaton/githubrepositories/foo for details.\n",
+        encoding="utf-8",
+    )
+    report = scan_directory(agents_dir)
+    pii = [f for f in report.findings if f.category == "PII"]
+    assert pii, "PII should still fire in regular .md files"
+
+
+def test_word_bounded_secret_context_avoids_false_positive(tmp_path):
+    """T3a.2 v3: 'tokenized' inside a test name should not trigger
+    secret_context on the surrounding line (no long opaque token to flag).
+    """
+    agents_dir = tmp_path / ".github" / "agents"
+    agents_dir.mkdir(parents=True)
+    (agents_dir / "controls.reference.md").write_text(
+        "| CTRL-06 | agentic-permission-boundaries | "
+        "tests/test_build_team_security_gates.py::"
+        "test_action_matches_tokenized_action_names | "
+        "build_team.py action matching boundary | implemented |\n",
+        encoding="utf-8",
+    )
+    report = scan_directory(agents_dir)
+    cred = [f for f in report.findings if f.category == "credential"]
+    assert not cred, f"prose 'tokenized' must not trip secret_context: {cred}"
+
+
+def test_actual_secret_token_still_flagged(tmp_path):
+    """T3a.2 v3: a real secret-shaped key in a real auth-shaped line still fires."""
+    agents_dir = tmp_path / ".github" / "agents"
+    agents_dir.mkdir(parents=True)
+    (agents_dir / "leak.agent.md").write_text(
+        "auth token: aZxQ9mPL3kFn5rT8wYbCdE6gHj1iU2sV4\n",
+        encoding="utf-8",
+    )
+    report = scan_directory(agents_dir)
+    cred = [f for f in report.findings if f.category == "credential"]
+    assert cred, "real auth token line should still flag"
+
+
+def test_scan_directory_skips_agentteams_backups(tmp_path):
+    """T3a.2: backup snapshots under .agentteams-backups/ are not scanned.
+
+    Live files with the same flagged content are still reported.
+    """
+    agents_dir = tmp_path / ".github" / "agents"
+    agents_dir.mkdir(parents=True)
+    flagged = "api_key: sk_live_abc1234567890123456789\n"
+
+    backup_dir = agents_dir / ".agentteams-backups" / "20260420-222216"
+    backup_dir.mkdir(parents=True)
+    (backup_dir / "snapshot.agent.md").write_text(flagged, encoding="utf-8")
+
+    (agents_dir / "live.agent.md").write_text(flagged, encoding="utf-8")
+
+    report = scan_directory(agents_dir)
+    flagged_paths = {f.file for f in report.findings}
+    assert any("live.agent.md" in p for p in flagged_paths)
+    assert not any(".agentteams-backups" in p for p in flagged_paths)
+

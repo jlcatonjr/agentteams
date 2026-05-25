@@ -1040,7 +1040,15 @@ def main(argv: list[str] | None = None) -> int:
     # -----------------------------------------------------------------------
     if args.scan_security:
         from agentteams import scan
-        report = scan.scan_directory(output_dir)
+        # T3a.2 v4: pass the current manifest's expected agent-file set so the
+        # scanner can skip orphans that the build_team orphan advisory already
+        # surfaces separately.
+        expected = {
+            Path(f["path"]).name
+            for f in manifest.get("output_files", [])
+            if isinstance(f, dict) and str(f.get("path", "")).endswith(".agent.md")
+        }
+        report = scan.scan_directory(output_dir, expected_agent_names=expected or None)
         scan.print_scan_report(report)
         return 1 if report.has_issues else 0
 
