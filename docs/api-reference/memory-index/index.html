@@ -2651,10 +2651,11 @@
 <hr />
 <h2 id="design-principles">Design Principles<a class="headerlink" href="#design-principles" title="Permanent link">&para;</a></h2>
 <ul>
-<li><strong>Two strategies, no embeddings</strong> — BM25 lexical (default) and sparse cosine vector; no external ML dependencies</li>
+<li><strong>Two strategies, no dense embeddings — a deliberate design boundary, not a "later tier."</strong> BM25 lexical (default) and sparse cosine vector; both stdlib-only, no external ML dependencies. ("No embeddings" here means no <em>dense</em> learned embeddings; the sparse tf·idf strategy does build sparse term-frequency vectors, which are not dense neural embeddings.) The reserved fields <code>vector_model_id</code> and <code>vector_dim</code> exist for forward-compatibility metadata only; dense embeddings are intentionally out of scope for this module. Consumers needing dense vectors should layer their own retrieval atop the indexed sources rather than expecting the module to grow an embeddings backend.</li>
 <li><strong>Durable sources only</strong> — Caller passes explicit source paths; module never globs ignored directories</li>
 <li><strong>Robust to absence</strong> — Empty source list → empty but valid index (no error)</li>
 <li><strong>Graceful degradation</strong> — Per-paragraph passage scoring (I2, I9) with backward-compatible snippet fallback</li>
+<li><strong>Explicit contract metadata</strong> — Build/runtime ownership, fallback policy, and vector runtime mode are encoded in the index payload</li>
 <li><strong>Deterministic</strong> — Same source set always yields same scores; suitable for testing and reproducible workflows</li>
 </ul>
 <hr />
@@ -2665,7 +2666,7 @@
 </blockquote>
 <p>Current schema version for memory index artifacts. Used to detect compatibility between build and consumer versions.</p>
 <p><strong>Type:</strong> <code>str</code><br />
-<strong>Current value:</strong> <code>"1.2"</code></p>
+<strong>Current value:</strong> <code>"1.3"</code></p>
 <p><strong>Schema versions:</strong></p>
 <table>
 <thead>
@@ -2682,6 +2683,10 @@
 <tr>
 <td>1.2</td>
 <td>Per-paragraph passage storage; <code>paragraphs</code> list added; <code>query_index()</code> returns <code>snippets</code> list alongside legacy <code>snippet</code> alias</td>
+</tr>
+<tr>
+<td>1.3</td>
+<td>Adds explicit contract metadata (<code>index_format_version</code>, <code>index_build_id</code>, <code>index_write_owner</code>, <code>vector_runtime_mode</code>, <code>fallback_policy</code>, <code>source_fingerprint</code>) and per-document <code>source_hash</code></td>
 </tr>
 </tbody>
 </table>
@@ -2701,10 +2706,17 @@
 <p><strong>Returns:</strong> <code>dict[str, Any]</code> — Index dict with keys:
 - <code>artifact_type</code>: <code>"memory-index"</code>
 - <code>memory_index_schema_version</code>: Current schema version
+- <code>index_format_version</code>: Serving-format identifier for the artifact structure
+- <code>index_build_id</code>: Build fingerprint for this specific index emission
+- <code>index_write_owner</code>: Writer ownership marker (<code>agentteams.build_team</code>)
+- <code>vector_runtime_mode</code>: Runtime strategy implementation (<code>sparse-tfidf-cosine</code>)
+- <code>vector_model_id</code>, <code>vector_dim</code>: Reserved nullable fields for forward-compatibility metadata. Always <code>null</code> for this module — dense embeddings are intentionally out of scope (see Design Principles). Consumers that layer their own dense retrieval may use these fields in their own derived artifacts.
+- <code>fallback_policy</code>: Declares non-blocking fallback semantics
+- <code>source_fingerprint</code>: Stable digest across indexed document path/hash pairs
 - <code>project_name</code>, <code>framework</code>: Supplied metadata
 - <code>built_at</code>: ISO-8601 timestamp
 - <code>source_count</code>: Number of files supplied
-- <code>documents</code>: List of indexed documents (with title, path, snippet, paragraphs, length, etc.)
+- <code>documents</code>: List of indexed documents (with title, path, snippet, paragraphs, length, <code>source_hash</code>, etc.)
 - <code>postings</code>: Term-to-document frequency postings (BM25 substrate)
 - <code>avgdl</code>: Average document length (for BM25 normalization)
 - <code>N</code>: Total document count</p>
@@ -2725,14 +2737,14 @@
 <blockquote>
 <p><em>Source: <code>agentteams/memory_index.py</code></em></p>
 </blockquote>
-<p>Check if any source file is newer than the index's <code>built_at</code> timestamp.</p>
+<p>Check if any source file is newer than the index's <code>built_at</code> timestamp or no longer matches recorded content hashes.</p>
 <p><strong>Args:</strong></p>
 <ul>
 <li><code>index</code> (<code>dict[str, Any]</code>) — Index dict from <code>build_memory_index()</code>.</li>
 <li><code>sources</code> (<code>Iterable[Path | str]</code>) — Original source paths (same list used for build, or a subset).</li>
 </ul>
-<p><strong>Returns:</strong> <code>bool</code> — <code>True</code> if any source mtime &gt; index <code>built_at</code> (index is stale); <code>False</code> otherwise.</p>
-<p><strong>Safety:</strong> Invalid/missing timestamps are treated as stale (conservative).</p>
+<p><strong>Returns:</strong> <code>bool</code> — <code>True</code> if any source content hash mismatches indexed <code>source_hash</code>, or if any source mtime &gt; index <code>built_at</code> (index is stale); <code>False</code> otherwise.</p>
+<p><strong>Safety:</strong> Invalid/missing timestamps are treated as stale (conservative). Missing/unreadable files for hashed documents are also treated as stale.</p>
 <hr />
 <h3 id="query_indexindex-query-k5-strategylexical"><code>query_index(index, query, *, k=5, strategy="lexical")</code><a class="headerlink" href="#query_indexindex-query-k5-strategylexical" title="Permanent link">&para;</a></h3>
 <blockquote>
@@ -2778,7 +2790,7 @@
 <div class="highlight"><pre><span></span><code><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a><span class="n">hits</span> <span class="o">=</span> <span class="n">query_index</span><span class="p">(</span><span class="n">index</span><span class="p">,</span> <span class="s2">&quot;delivery receipt&quot;</span><span class="p">,</span> <span class="n">strategy</span><span class="o">=</span><span class="s2">&quot;lexical&quot;</span><span class="p">)</span>
 </code></pre></div></p>
 <h3 id="vector-cosine-similarity-optional">Vector (Cosine Similarity) — Optional<a class="headerlink" href="#vector-cosine-similarity-optional" title="Permanent link">&para;</a></h3>
-<p><strong>Algorithm:</strong> Sparse tf·idf vector-space scoring with cosine similarity. No numpy, no embeddings — stdlib only.</p>
+<p><strong>Algorithm:</strong> Sparse tf·idf vector-space scoring with cosine similarity. No numpy, no dense embeddings — stdlib only. (Sparse tf·idf term vectors are built and compared directly; no learned dense embedding model is loaded or used.)</p>
 <p><strong>Use when:</strong>
 - Searching for thematic overlaps ("what's our policy on error handling?")
 - You want documents related to ALL query terms, not just some
@@ -2911,12 +2923,30 @@
 <a id="__codelineno-6-3" name="__codelineno-6-3" href="#__codelineno-6-3"></a>agentteams<span class="w"> </span>--description<span class="w"> </span>brief.json<span class="w"> </span>--query-index<span class="w"> </span><span class="s2">&quot;policy guidance for update safety&quot;</span><span class="w"> </span>--query-k<span class="w"> </span><span class="m">5</span><span class="w"> </span>--query-strategy<span class="w"> </span>vector
 </code></pre></div>
 <p>Use <code>--refresh-index</code> after editing durable sources (for example <code>workSummaries/</code>, <code>CHANGELOG.md</code>, <code>README.md</code>, <code>docs_src/*.md</code>, <code>references/*.md</code>) before query-heavy sessions.</p>
+<p>Query CLI synchronization behavior:</p>
+<ul>
+<li><code>--query-index</code> now checks staleness before serving results.</li>
+<li>When stale, it auto-refreshes <code>references/memory-index.json</code> and then executes the query.</li>
+<li><code>--refresh-index</code> remains useful for proactive pre-warm workflows and CI/operator scripts.</li>
+</ul>
+<p>Incremental update mode (feature-flagged):</p>
+<ul>
+<li>Set <code>AGENTTEAMS_MEMORY_INDEX_INCREMENTAL_SED=1</code> to enable a reliability-first incremental updater.</li>
+<li>The updater generates and applies <code>references/memory-index.incremental-update.sed</code> for eligible updates.</li>
+<li>Eligibility is intentionally narrow (single changed document, no source set changes, stable term vocabulary).</li>
+<li>On any ineligible shape or sed/validation failure, behavior falls back to canonical full rebuild.</li>
+</ul>
+<p>Domain boundary note:</p>
+<ul>
+<li>The <code>strategy="vector"</code> option in <code>memory_index</code> is local sparse tf·idf vector-space ranking for memory-history retrieval only.</li>
+<li>It is separate from relational retrieval-integrator validation contracts in other module domains.</li>
+</ul>
 <hr />
 <h2 id="integration-notes">Integration Notes<a class="headerlink" href="#integration-notes" title="Permanent link">&para;</a></h2>
 <ul>
 <li><strong>Durable sources</strong> (I7): Caller is responsible for passing explicit source paths; the module never globs <code>tmp/</code> or ignored directories</li>
 <li><strong>Absence safety</strong> (I5): Empty source list is valid; returns a skeleton index with zero documents</li>
-<li><strong>Stale detection</strong> (via <code>is_index_stale()</code>) — Callers can refresh indexes before querying</li>
+<li><strong>Stale detection</strong> (via <code>is_index_stale()</code>) — Query CLI auto-refreshes stale indexes; callers may still refresh proactively</li>
 <li><strong>Fallback protocol</strong> — <code>@navigator</code> consults this index first, then opens referenced files for detail, then falls back to filesystem search</li>
 </ul>
 <hr />

@@ -10,7 +10,7 @@ Used by `@navigator`, `@adversarial`, and `@work-summarizer` to retrieve relevan
 
 ## Design Principles
 
-- **Two strategies, no embeddings — a deliberate design boundary, not a "later tier."** BM25 lexical (default) and sparse cosine vector; both stdlib-only, no external ML dependencies. The reserved fields `vector_model_id` and `vector_dim` exist for forward-compatibility metadata only; dense embeddings are intentionally out of scope for this module. Consumers needing dense vectors should layer their own retrieval atop the indexed sources rather than expecting the module to grow an embeddings backend.
+- **Two strategies, no dense embeddings — a deliberate design boundary, not a "later tier."** BM25 lexical (default) and sparse cosine vector; both stdlib-only, no external ML dependencies. ("No embeddings" here means no *dense* learned embeddings; the sparse tf·idf strategy does build sparse term-frequency vectors, which are not dense neural embeddings.) The reserved fields `vector_model_id` and `vector_dim` exist for forward-compatibility metadata only; dense embeddings are intentionally out of scope for this module. Consumers needing dense vectors should layer their own retrieval atop the indexed sources rather than expecting the module to grow an embeddings backend.
 - **Durable sources only** — Caller passes explicit source paths; module never globs ignored directories
 - **Robust to absence** — Empty source list → empty but valid index (no error)
 - **Graceful degradation** — Per-paragraph passage scoring (I2, I9) with backward-compatible snippet fallback
@@ -158,7 +158,7 @@ hits = query_index(index, "delivery receipt", strategy="lexical")
 
 ### Vector (Cosine Similarity) — Optional
 
-**Algorithm:** Sparse tf·idf vector-space scoring with cosine similarity. No numpy, no embeddings — stdlib only.
+**Algorithm:** Sparse tf·idf vector-space scoring with cosine similarity. No numpy, no dense embeddings — stdlib only. (Sparse tf·idf term vectors are built and compared directly; no learned dense embedding model is loaded or used.)
 
 **Use when:**
 - Searching for thematic overlaps ("what's our policy on error handling?")
