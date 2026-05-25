@@ -17,16 +17,18 @@ def test_workflow_yaml_parses():
     yaml.safe_load(WORKFLOW.read_text(encoding="utf-8"))
 
 
-def test_schedule_disabled_by_default():
-    text = WORKFLOW.read_text(encoding="utf-8")
-    # The `on:` block that is parsed (not commented) must NOT include schedule.
-    doc = yaml.safe_load(text)
-    # PyYAML parses YAML key `on` as Python `True` because YAML 1.1 treats `on`
-    # as a boolean. Cover both cases for robustness.
+def test_schedule_enabled_after_t3a1():
+    """T3a.1 (2026-05-25): branch protection on main was set and verified,
+    so the schedule trigger is now active. Disabling it again should be a
+    deliberate decision documented in a plan.
+    """
+    doc = yaml.safe_load(WORKFLOW.read_text(encoding="utf-8"))
     triggers = doc.get("on", doc.get(True, {}))
     assert isinstance(triggers, dict)
     assert "workflow_dispatch" in triggers
-    assert "schedule" not in triggers, "cron must remain commented out (T2.D3 plan)"
+    assert "schedule" in triggers, "T3a.1 activated cron; expected `schedule:` in `on:`"
+    schedule_entries = triggers["schedule"]
+    assert any("cron" in entry for entry in schedule_entries), "schedule must define cron"
 
 
 def test_workflow_uses_explicit_ci_marker():

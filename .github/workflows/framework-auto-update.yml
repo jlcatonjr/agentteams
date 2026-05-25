@@ -1,17 +1,17 @@
 name: Framework Auto-Update (Supervised PR)
 
-# Cron is intentionally commented out — this workflow ships disabled
-# by default. Enable only after verifying that branch protection on
-# `main` requires review. See:
-# references/plans/T2-D3-ci-auto-pr-2026-05-25.plan.md
-#
-# UNCOMMENT TO ENABLE SCHEDULED RUNS:
-# on:
-#   schedule:
-#     - cron: "23 7 * * *"
-#   workflow_dispatch:
+# T3a.1: cron enabled after branch protection set on `main`.
+# Verification (2026-05-25): `gh api .../branches/main/protection` returns
+# required_pull_request_reviews (0 approvals — solo-maintainer policy),
+# allow_force_pushes=false, allow_deletions=false. Direct pushes blocked;
+# auto-PRs from this workflow flow through the PR review surface.
+# Plans:
+#   references/plans/T3-1-enable-auto-pr-cron-2026-05-25.plan.md
+#   references/plans/T2-D3-ci-auto-pr-2026-05-25.plan.md
 
 on:
+  schedule:
+    - cron: "23 7 * * *"
   workflow_dispatch:
 
 permissions:
