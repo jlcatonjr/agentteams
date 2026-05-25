@@ -85,9 +85,17 @@ else
 fi
 
 # 1) Non-destructive self update (merge only) to keep generated team in sync.
+#
+# T3.2: --shrink-policy=halt makes the self-team strict about fence content.
+# A destructive shrink (CVEs dropped, paths lost) blocks the write and exits
+# critical. Recovery if you hit a legitimate shrink: run ONCE with
+# `--shrink-policy=allow` (or warn), commit the resulting state, then this
+# script returns to halt enforcement on the next run. Consumer repos are
+# unaffected — they get the default warn behaviour.
+# Plan: references/plans/T3-2-self-team-halt-policy-2026-05-25.plan.md
 run_critical \
-  "Self-team non-destructive update (--update --merge)" \
-  python build_team.py "${update_flags[@]}" --update --merge
+  "Self-team non-destructive update (--update --merge --shrink-policy=halt)" \
+  python build_team.py "${update_flags[@]}" --update --merge --shrink-policy=halt
 
 # 2) Security scan pass for generated agent files.
 run_critical \
