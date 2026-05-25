@@ -647,11 +647,30 @@ def _persist_shrink_events(args, result, manifest, output_dir: Path) -> None:
         now_utc = datetime.now(UTC)
         today = now_utc.strftime("%Y-%m-%d")
         project_label = manifest.get("project_name") or output_dir.name or "unknown"
+        # F2: link this run's shrink notices to the timestamped backup
+        # directory that emit just created (most-recent mtime under
+        # <output>/.agentteams-backups/). Best-effort; missing backups
+        # produce a "—" entry rather than blocking the log.
+        backup_dir_str = "—"
+        try:
+            backups_root = output_dir / ".agentteams-backups"
+            if backups_root.is_dir():
+                latest_backup = max(
+                    (p for p in backups_root.iterdir() if p.is_dir()),
+                    key=lambda p: p.stat().st_mtime,
+                    default=None,
+                )
+                if latest_backup is not None:
+                    backup_dir_str = str(latest_backup)
+        except OSError:
+            pass
+
         section = [
             "",
             f"## {project_label} @ {now_utc.strftime('%Y-%m-%dT%H:%M:%SZ')}",
             "",
             f"- output_dir: `{output_dir}`",
+            f"- backup_dir: `{backup_dir_str}`",
             f"- notices: {len(result.notices)}",
             "",
         ]

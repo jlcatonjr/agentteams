@@ -68,6 +68,13 @@ if [[ -f "$RESEARCH_SCRIPT" ]]; then
   run_noncritical \
     "Module-core update proposal (advisory)" \
     python "$RESEARCH_SCRIPT" --propose
+
+  DIGEST_SCRIPT="$ROOT_DIR/scripts/daily_pipeline_digest.py"
+  if [[ -f "$DIGEST_SCRIPT" ]]; then
+    run_noncritical \
+      "Daily-pipeline quality digest" \
+      python "$DIGEST_SCRIPT"
+  fi
 else
   noncritical_failures=$((noncritical_failures + 1))
   echo "[WARN] Upstream research script missing: $RESEARCH_SCRIPT" >&2
