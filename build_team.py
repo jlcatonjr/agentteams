@@ -549,6 +549,51 @@ def _build_parser() -> argparse.ArgumentParser:
 # Main pipeline
 # ---------------------------------------------------------------------------
 
+
+def _persist_shrink_events(args, result, manifest, output_dir: Path) -> None:
+    """D5: append shrink notices from this run to a daily log under the
+    agentteams source tree's tmp/. Delta-only — no notices means no write.
+    Never raises; logging is a best-effort side effect.
+    """
+    if not (args.update and args.merge and not args.dry_run and result.notices):
+        return
+    try:
+        shrink_dir = Path(__file__).resolve().parent / "tmp" / "daily-pipeline" / "shrink-events"
+        shrink_dir.mkdir(parents=True, exist_ok=True)
+        now_utc = datetime.now(UTC)
+        today = now_utc.strftime("%Y-%m-%d")
+        project_label = manifest.get("project_name") or output_dir.name or "unknown"
+        section = [
+            "",
+            f"## {project_label} @ {now_utc.strftime('%Y-%m-%dT%H:%M:%SZ')}",
+            "",
+            f"- output_dir: `{output_dir}`",
+            f"- notices: {len(result.notices)}",
+            "",
+        ]
+        for notice in result.notices:
+            section.append(f"- {notice}")
+        section.append("")
+
+        log_path = shrink_dir / f"{today}.md"
+        if log_path.exists():
+            log_path.write_text(
+                log_path.read_text(encoding="utf-8") + "\n".join(section),
+                encoding="utf-8",
+            )
+        else:
+            header = [
+                f"# Fenced-Region Shrink Events — {today}",
+                "",
+                "Append-only daily log of fenced-region shrink notices emitted by "
+                "`build_team.py --update --merge`. Each section records one run.",
+                "",
+            ]
+            log_path.write_text("\n".join(header + section), encoding="utf-8")
+    except Exception as exc:  # pragma: no cover - never block emit
+        print(f"[WARN] could not persist shrink events: {exc}", file=sys.stderr)
+
+
 def main(argv: list[str] | None = None) -> int:
     parser = _build_parser()
     args = parser.parse_args(argv)
@@ -1199,6 +1244,7 @@ def main(argv: list[str] | None = None) -> int:
             yes=args.yes,
         )
         emit.print_summary(result, manifest)
+        _persist_shrink_events(args, result, manifest, output_dir)
         if args.dry_run and result.dry_run_report is not None:
             emit.print_dry_run_report(
                 result, manifest,
@@ -1410,40 +1456,7 @@ def main(argv: list[str] | None = None) -> int:
         yes=args.yes,
     )
     emit.print_summary(result, manifest)
-
-    # D5: persist shrink notices to a daily-pipeline artefact so the
-    # ephemeral stderr record survives the run. Delta-only (skip when
-    # there were no notices), gated to --self --update --merge to avoid
-    # writing into consumer-repo trees.
-    if (
-        getattr(args, "self_update", False)
-        and args.update
-        and args.merge
-        and not args.dry_run
-        and result.notices
-    ):
-        try:
-            shrink_dir = (
-                Path(__file__).resolve().parent / "tmp" / "daily-pipeline" / "shrink-events"
-            )
-            shrink_dir.mkdir(parents=True, exist_ok=True)
-            now_utc = datetime.now(UTC)
-            today = now_utc.strftime("%Y-%m-%d")
-            lines = [
-                f"# Fenced-Region Shrink Events — {today}",
-                "",
-                f"Recorded by build_team.py during `--self --update --merge` "
-                f"at {now_utc.strftime('%Y-%m-%dT%H:%M:%SZ')}.",
-                "",
-                f"Total notices: {len(result.notices)}",
-                "",
-            ]
-            for notice in result.notices:
-                lines.append(f"- {notice}")
-            lines.append("")
-            (shrink_dir / f"{today}.md").write_text("\n".join(lines), encoding="utf-8")
-        except Exception as exc:  # pragma: no cover - never block emit
-            print(f"[WARN] could not persist shrink events: {exc}", file=sys.stderr)
+    _persist_shrink_events(args, result, manifest, output_dir)
 
     if args.dry_run and result.dry_run_report is not None:
         emit.print_dry_run_report(
