@@ -14,10 +14,50 @@ jobs:
   bridge-watchdog:
     runs-on: ubuntu-latest
     steps:
-      - name: Check last successful bridge maintenance run
+      - name: Find latest successful bridge-maintenance run
+        id: find-run
         uses: actions/github-script@v7
         with:
           script: |
+            const runs = await github.rest.actions.listWorkflowRuns({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              workflow_id: "bridge-maintenance.yml",
+              status: "completed",
+              per_page: 20,
+            });
+            const latestSuccess = runs.data.workflow_runs.find((r) => r.conclusion === "success");
+            if (latestSuccess) {
+              core.setOutput("run_id", String(latestSuccess.id));
+              core.setOutput("updated_at", latestSuccess.updated_at || latestSuccess.created_at);
+            } else {
+              core.setOutput("run_id", "");
+              core.setOutput("updated_at", "");
+            }
+
+      - name: Download latest bridge-maintenance artifact
+        if: steps.find-run.outputs.run_id != ''
+        id: download
+        continue-on-error: true
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RUN_ID: ${{ steps.find-run.outputs.run_id }}
+        run: |
+          mkdir -p artifact
+          gh run download "$RUN_ID" \
+            --repo "${{ github.repository }}" \
+            --name bridge-maintenance-summary \
+            --dir artifact || echo "download_failed=true" >>"$GITHUB_OUTPUT"
+
+      - name: Evaluate staleness and manage issue
+        uses: actions/github-script@v7
+        env:
+          RUN_UPDATED_AT: ${{ steps.find-run.outputs.updated_at }}
+          DOWNLOAD_FAILED: ${{ steps.download.outputs.download_failed }}
+        with:
+          script: |
+            const fs = require("fs");
+            const path = require("path");
             const owner = context.repo.owner;
             const repo = context.repo.repo;
             const workflowId = "bridge-maintenance.yml";
@@ -25,32 +65,58 @@ jobs:
             const staleMs = staleHours * 60 * 60 * 1000;
             const now = Date.now();
 
-            const runs = await github.rest.actions.listWorkflowRuns({
-              owner,
-              repo,
-              workflow_id: workflowId,
-              status: "completed",
-              per_page: 20,
-            });
-
-            const latestSuccess = runs.data.workflow_runs.find((run) => run.conclusion === "success");
-            let isStale = false;
-            let detail = "";
-
-            if (!latestSuccess) {
-              isStale = true;
-              detail = "No successful bridge-maintenance workflow run found.";
+            // Workflow-run age check (existing behaviour).
+            const updatedAt = process.env.RUN_UPDATED_AT || "";
+            let workflowStale = false;
+            let workflowDetail = "";
+            if (!updatedAt) {
+              workflowStale = true;
+              workflowDetail = "No successful bridge-maintenance workflow run found.";
             } else {
-              const completedAt = Date.parse(latestSuccess.updated_at || latestSuccess.created_at);
-              const ageMs = now - completedAt;
+              const ageMs = now - Date.parse(updatedAt);
               const ageHours = Math.floor(ageMs / (60 * 60 * 1000));
               if (ageMs > staleMs) {
-                isStale = true;
-                detail = `Latest successful bridge-maintenance run is stale (${ageHours}h old).`;
+                workflowStale = true;
+                workflowDetail = `Latest successful workflow run is stale (${ageHours}h old).`;
               } else {
-                detail = `Bridge-maintenance run is fresh (${ageHours}h old).`;
+                workflowDetail = `Workflow run is fresh (${ageHours}h old).`;
               }
             }
+
+            // Snapshot age check (D7 v2 addition).
+            let snapshotStale = false;
+            let snapshotDetail = "";
+            const snapPath = path.join("artifact", "daily-pipeline", "framework-research", "latest.json");
+            if (process.env.DOWNLOAD_FAILED === "true") {
+              snapshotDetail = "Snapshot artifact download failed; treating as unknown (not flagging).";
+            } else if (!fs.existsSync(snapPath)) {
+              snapshotStale = true;
+              snapshotDetail = "Snapshot `latest.json` missing from latest artifact.";
+            } else {
+              try {
+                const snap = JSON.parse(fs.readFileSync(snapPath, "utf8"));
+                const generatedAt = snap.generated_at || "";
+                if (!generatedAt) {
+                  snapshotStale = true;
+                  snapshotDetail = "Snapshot has no `generated_at` timestamp.";
+                } else {
+                  const ageMs = now - Date.parse(generatedAt);
+                  const ageHours = Math.floor(ageMs / (60 * 60 * 1000));
+                  if (ageMs > staleMs) {
+                    snapshotStale = true;
+                    snapshotDetail = `Framework-research snapshot is stale (${ageHours}h old).`;
+                  } else {
+                    snapshotDetail = `Framework-research snapshot is fresh (${ageHours}h old).`;
+                  }
+                }
+              } catch (err) {
+                snapshotStale = true;
+                snapshotDetail = `Snapshot parse failed: ${err.message}`;
+              }
+            }
+
+            const isStale = workflowStale || snapshotStale;
+            const detail = `${workflowDetail} ${snapshotDetail}`.trim();
 
             const label = "bridge-watchdog";
             const openIssues = await github.rest.issues.listForRepo({
@@ -67,12 +133,16 @@ jobs:
               const body = [
                 "Bridge maintenance appears stale.",
                 "",
-                `Detail: ${detail}`,
+                `Workflow check: ${workflowDetail}`,
+                `Snapshot check: ${snapshotDetail}`,
                 "",
                 `Workflow file checked: ${workflowId}`,
                 `Threshold: ${staleHours} hours`,
                 "",
                 "Please review `.github/workflows/bridge-maintenance.yml` and `scripts/run_daily_bridge_maintenance.sh`.",
+                "If only the snapshot check fired, the workflow ran but its non-critical",
+                "upstream-research stage failed. Inspect the latest `tmp/bridge-maintenance/summary.md`",
+                "and the run logs for the 'Upstream research: Claude Code sub-agents' row.",
               ].join("\n");
 
               await github.rest.issues.create({

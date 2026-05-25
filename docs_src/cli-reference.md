@@ -18,7 +18,8 @@ agentteams [--description PATH] [--project PATH] [--framework NAME]
            [--fail-on-legacy-skip]
            [--scan-security] [--self] [--post-audit] [--auto-correct] [--enrich]
            [--strict-manual-placeholders] [--no-strict-manual-placeholders]
-           [--no-backup] [--list-backups] [--restore-backup TIMESTAMP]
+           [--no-backup] [--shrink-policy {warn,halt,allow}]
+           [--list-backups] [--restore-backup TIMESTAMP]
            [--security-offline] [--security-max-items N] [--security-no-nvd]
            [--migrate] [--revert-migration]
            [--version]
@@ -284,6 +285,34 @@ By default, `--overwrite`, `--merge`, and `--update` all take an automatic backu
 ### `--no-backup`
 
 Skip the automatic backup. The write proceeds without creating a backup.
+
+### `--shrink-policy {warn,halt,allow}`
+
+*(T2.D5)* Controls behaviour when a fenced-region merge would lose
+concrete references (paths, identifiers, CVE IDs, list items) from
+the on-disk fence body relative to the freshly rendered content.
+
+- `warn` (default, back-compatible): log the shrink notice into the
+  emit notices stream and proceed with the smaller content. The
+  notice is also appended to
+  `tmp/daily-pipeline/shrink-events/<date>.md` (gitignored) with
+  the backup directory path so the operator can recover lost
+  content.
+- `halt`: log the notice, refuse the write, and list the blocked
+  file in `EmitResult.shrink_blocked` and on stderr. Returns the
+  emit step with the file untouched. Used by the self-team daily
+  script (`scripts/run_daily_security_maintenance.sh`) to enforce
+  strict fence preservation. Recovery: re-run once with
+  `--shrink-policy=allow` (or `warn`), commit the resulting state,
+  then halt enforcement resumes on the next cycle.
+- `allow`: suppress notices and write the smaller content silently.
+  Intended only for that one-time recovery sequence after a
+  legitimate upstream-driven shrink (e.g., a retired CVE feed
+  entry).
+
+Consumer-repo invocations of `build_team.py` continue to default to
+`warn`. The flag is plumbed into both emit code paths (the
+`--update` branch and the post-emit main path).
 
 ### `--list-backups`
 

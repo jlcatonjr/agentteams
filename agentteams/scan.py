@@ -52,7 +52,12 @@ _HIGH_ENTROPY_TOKEN_RE = re.compile(
 _SENSITIVE_CONTEXT_TOKEN_RE = re.compile(r"(?<!\S)[A-Za-z0-9+/=_-]{20,}(?!\S)")
 
 #: Sensitive context keywords that raise the severity of opaque token findings.
-_SECRET_CONTEXT_RE = re.compile(r"(?:secret|token|credential|auth|password|passwd|private\s+key|bearer)", re.IGNORECASE)
+#: T3a.2 v3: word-bounded so prose like "tokenized", "authorize", "passport"
+#: doesn't falsely flag adjacent identifier-shaped strings as secrets.
+_SECRET_CONTEXT_RE = re.compile(
+    r"\b(?:secret|token|credential|auth|password|passwd|bearer)\b|private\s+key",
+    re.IGNORECASE,
+)
 
 #: Unresolved auto-placeholder tokens {UPPER_SNAKE_CASE}
 _UNRESOLVED_AUTO_RE = re.compile(r"\{([A-Z][A-Z0-9_]{2,})\}")
@@ -64,6 +69,10 @@ _UNRESOLVED_MANUAL_RE = re.compile(r"\{MANUAL:([A-Z][A-Z0-9_]*)\}")
 _SAFE_TOKENS = frozenset({
     "TRUE", "FALSE", "NULL", "NONE", "TODO", "FIXME", "NOTE",
     "TBD", "REQUIRED", "OPTIONAL", "DEPRECATED",
+    # T3a.2 v4: meta-documentation tokens that name the placeholder
+    # convention itself. These appear in descriptors and reference
+    # files as documentation, never as real unresolved placeholders.
+    "PLACEHOLDER", "UPPER_SNAKE_CASE",
 })
 
 
@@ -113,11 +122,21 @@ class ScanReport:
 # Public entry points
 # ---------------------------------------------------------------------------
 
-def scan_directory(agents_dir: Path) -> ScanReport:
+def scan_directory(
+    agents_dir: Path,
+    *,
+    expected_agent_names: set[str] | None = None,
+) -> ScanReport:
     """Scan all agent files in a directory for security issues.
 
     Args:
         agents_dir: Path to the .github/agents/ directory.
+        expected_agent_names: When provided, `.agent.md` files whose basename
+            is NOT in this set are treated as orphans from a prior team
+            configuration and skipped. The orphan advisory at
+            build_team.py:1304 surfaces them separately so they remain
+            visible; double-flagging them here only blocks the daily
+            pipeline without adding actionable signal. (T3a.2 v4.)
 
     Returns:
         ScanReport with all findings.
@@ -129,6 +148,24 @@ def scan_directory(agents_dir: Path) -> ScanReport:
     files_to_scan: list[Path] = []
     for pattern in scan_patterns:
         files_to_scan.extend(agents_dir.rglob(pattern))
+
+    # T3a.2: skip the merge engine's backup directory. Backups are
+    # point-in-time snapshots; any flagged token inside them was already
+    # surfaced when that content was live, so re-flagging them only
+    # produces stale-looking false positives.
+    # Plan: references/plans/T3a-2-scan-skip-backups-2026-05-25.plan.md
+    files_to_scan = [
+        p for p in files_to_scan
+        if ".agentteams-backups" not in p.parts
+    ]
+
+    # T3a.2 v4: drop orphan .agent.md files when the caller provided the
+    # current team's expected agent-name set.
+    if expected_agent_names is not None:
+        files_to_scan = [
+            p for p in files_to_scan
+            if not p.name.endswith(".agent.md") or p.name in expected_agent_names
+        ]
 
     # Also scan copilot-instructions.md one level up
     instructions = agents_dir.parent / "copilot-instructions.md"
@@ -199,6 +236,42 @@ def print_scan_report(report: ScanReport) -> None:
 # Internal scanning logic
 # ---------------------------------------------------------------------------
 
+# T3a.2 v2: operational-metadata JSON files written by the build
+# pipeline legitimately carry absolute paths into the working tree
+# (delivery receipts, memory index, build log, etc.). Suppress the
+# absolute-path PII detector for these specific files. Other
+# detectors (credentials, entropy) still apply.
+_OPERATIONAL_JSON_NAMES = frozenset({
+    "build-log.json",
+    "delivery-receipt.json",
+    "memory-index.json",
+    "eval-suite.json",
+    "doc-hashes.json",
+})
+
+
+def _match_inside_code_span(line: str, start: int, end: int) -> bool:
+    """Return True when [start, end) on *line* lies fully inside a
+    backtick-delimited inline-code span. Used to suppress
+    documentation placeholders from unresolved-placeholder detection.
+    """
+    # Walk paired backticks left-to-right.
+    i = 0
+    in_span = False
+    span_start = -1
+    while i < len(line):
+        if line[i] == "`":
+            if not in_span:
+                in_span = True
+                span_start = i + 1
+            else:
+                if span_start <= start and end <= i:
+                    return True
+                in_span = False
+        i += 1
+    return False
+
+
 def _scan_file(file_path: Path, agents_dir: Path, report: ScanReport) -> None:
     """Scan a single file and append findings to report."""
     try:
@@ -211,8 +284,14 @@ def _scan_file(file_path: Path, agents_dir: Path, report: ScanReport) -> None:
     except ValueError:
         rel_path = str(file_path)
 
+    is_operational_json = file_path.name in _OPERATIONAL_JSON_NAMES
     for line_num, line in enumerate(content.splitlines(), start=1):
-        _check_line(line, line_num, rel_path, report.findings)
+        _check_line(
+            line, line_num, rel_path, report.findings,
+            skip_pii_path=is_operational_json,
+            skip_entropy=is_operational_json,
+            skip_placeholders=is_operational_json,
+        )
 
 
 def _check_line(
@@ -220,6 +299,10 @@ def _check_line(
     line_num: int,
     filepath: str,
     findings: list[ScanFinding],
+    *,
+    skip_pii_path: bool = False,
+    skip_entropy: bool = False,
+    skip_placeholders: bool = False,
 ) -> None:
     """Check a single line for all security patterns."""
     # Skip markdown comments and code fence markers
@@ -228,15 +311,16 @@ def _check_line(
         return
 
     # PII: absolute paths with usernames
-    for match in _PII_PATH_RE.finditer(line):
-        findings.append(ScanFinding(
-            file=filepath,
-            line=line_num,
-            category="PII",
-            severity="high",
-            message=f"Absolute path with username: {match.group(0)}",
-            snippet=stripped,
-        ))
+    if not skip_pii_path:
+        for match in _PII_PATH_RE.finditer(line):
+            findings.append(ScanFinding(
+                file=filepath,
+                line=line_num,
+                category="PII",
+                severity="high",
+                message=f"Absolute path with username: {match.group(0)}",
+                snippet=stripped,
+            ))
 
     # Credentials
     for cred_name, pattern in _CREDENTIAL_PATTERNS:
@@ -250,9 +334,16 @@ def _check_line(
                 snippet=stripped,
             ))
 
-    secret_context = _SECRET_CONTEXT_RE.search(line) is not None
-    token_regex = _SENSITIVE_CONTEXT_TOKEN_RE if secret_context else _HIGH_ENTROPY_TOKEN_RE
-    for token_match in token_regex.finditer(line):
+    # Entropy/secret-context detection is suppressed in operational JSON
+    # files (memory-index.json etc.) where high-entropy SHA hashes and
+    # identifier keys are operational metadata, not credentials. Pattern-
+    # based credential checks above (sk_live_, xoxb-, etc.) still apply.
+    if skip_entropy:
+        token_regex = None
+    else:
+        secret_context = _SECRET_CONTEXT_RE.search(line) is not None
+        token_regex = _SENSITIVE_CONTEXT_TOKEN_RE if secret_context else _HIGH_ENTROPY_TOKEN_RE
+    for token_match in (token_regex.finditer(line) if token_regex else ()):
         token = token_match.group(0)
         entropy = _token_entropy(token)
         if entropy < 3.8:
@@ -271,7 +362,12 @@ def _check_line(
             snippet=stripped,
         ))
 
-    # Unresolved auto-placeholders (excluding known safe tokens)
+    # Unresolved auto-placeholders (excluding known safe tokens).
+    # Suppressed in operational JSON where indexed copies of doc/template
+    # content legitimately mention placeholder names; the source files
+    # are scanned separately.
+    if skip_placeholders:
+        return
     for match in _UNRESOLVED_AUTO_RE.finditer(line):
         token = match.group(1)
         if token in _SAFE_TOKENS:
@@ -284,6 +380,9 @@ def _check_line(
         # Skip tokens in template syntax documentation
         if "template" in filepath.lower() and ("placeholder" in stripped.lower() or "convention" in stripped.lower()):
             continue
+        # T3a.2 v2: skip when inside an inline-code span (documentation).
+        if _match_inside_code_span(line, start, match.end()):
+            continue
         findings.append(ScanFinding(
             file=filepath,
             line=line_num,
@@ -295,6 +394,8 @@ def _check_line(
 
     # Unresolved manual placeholders
     for match in _UNRESOLVED_MANUAL_RE.finditer(line):
+        if _match_inside_code_span(line, match.start(), match.end()):
+            continue
         findings.append(ScanFinding(
             file=filepath,
             line=line_num,

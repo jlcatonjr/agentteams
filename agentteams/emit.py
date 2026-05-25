@@ -73,6 +73,11 @@ class EmitResult:
     # from on-disk (True = template change was lost; False = harmless skip).
     skipped_legacy: list[str] = field(default_factory=list)
     skipped_legacy_drift: list[bool] = field(default_factory=list)
+    # T2.D5: paths whose merge was skipped because shrink_policy="halt"
+    # detected a destructive shrink. Distinct from `skipped` (overwrite
+    # declined) and `errors` (true failures) — these are intentional
+    # non-writes that the operator can review.
+    shrink_blocked: list[str] = field(default_factory=list)
 
     @property
     def success(self) -> bool:
@@ -737,6 +742,7 @@ def emit_all(
     overwrite: bool = False,
     merge: bool = False,
     yes: bool = False,
+    shrink_policy: str = "warn",
 ) -> EmitResult:
     """Write rendered files to output_dir.
 
@@ -750,6 +756,12 @@ def emit_all(
                         while preserving all user-authored content outside fences.
                         Mutually exclusive with *overwrite*.
         yes:            If True, answer 'yes' to all interactive prompts.
+        shrink_policy:  Policy for fenced-region shrinks during merge.
+                        "warn" (default): log notice, write smaller content.
+                        "halt": log notice, SKIP write, append to
+                                result.shrink_blocked.
+                        "allow": suppress notice, write smaller content.
+                        Plan: references/plans/T2-D5-shrink-policy-2026-05-25.plan.md
 
     Returns:
         EmitResult with results of all write operations.
@@ -878,8 +890,21 @@ def emit_all(
             existing_text = target.read_text(encoding="utf-8")
             merge_result = _merge_fenced_content(normalized_content, existing_text)
             # Plan 3: surface shrink Notices from this merge (real-run path).
-            for notice in merge_result.shrink_notices:
-                result.notices.append(f"{rel_path}: {notice}")
+            # T2.D5: shrink_policy controls whether to surface and whether
+            # to write the smaller content.
+            if merge_result.shrink_notices and shrink_policy != "allow":
+                for notice in merge_result.shrink_notices:
+                    result.notices.append(f"{rel_path}: {notice}")
+            if merge_result.shrink_notices and shrink_policy == "halt":
+                # Skip the write entirely; record the path for operator review.
+                result.shrink_blocked.append(str(target))
+                print(
+                    f"  ⛔  shrink-halt: refused to write {rel_path} "
+                    f"({len(merge_result.shrink_notices)} shrink notice(s)). "
+                    f"Re-run with --shrink-policy=warn or allow to override.",
+                    file=sys.stderr,
+                )
+                continue
             if merge_result.has_errors:
                 legacy_no_fence = all(
                     "No fence markers detected" in err for err in merge_result.parse_errors

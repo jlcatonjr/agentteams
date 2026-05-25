@@ -502,6 +502,18 @@ def _build_parser() -> argparse.ArgumentParser:
         ),
     )
     parser.add_argument(
+        "--shrink-policy",
+        choices=("warn", "halt", "allow"),
+        default="warn",
+        dest="shrink_policy",
+        help=(
+            "Behaviour when a fenced-region merge would lose concrete refs. "
+            "'warn' (default) logs and writes; 'halt' refuses the write and "
+            "lists the blocked file; 'allow' writes silently. Plan: "
+            "references/plans/T2-D5-shrink-policy-2026-05-25.plan.md"
+        ),
+    )
+    parser.add_argument(
         "--list-backups",
         action="store_true",
         dest="list_backups",
@@ -548,6 +560,216 @@ def _build_parser() -> argparse.ArgumentParser:
 # ---------------------------------------------------------------------------
 # Main pipeline
 # ---------------------------------------------------------------------------
+
+
+_DUAL_DESCRIPTOR_FIELDS = ("project_name", "primary_output_dir", "reference_db_path", "deliverables")
+
+
+def _check_dual_descriptor(args) -> None:
+    """Advisory check: warn when a consumer repo has both the user-supplied
+    descriptor and a sibling `_build-description.json` that diverges on a
+    small set of stable fields. Read-only; never modifies either file.
+    Records hits to tmp/daily-pipeline/dual-descriptor-events/<date>.md (gitignored).
+    Rationale and field list: references/plans/dual-descriptor-divergence-2026-05-25.plan.md
+    """
+    if getattr(args, "self_update", False):
+        return
+    if not getattr(args, "description", None):
+        return
+    desc_path = Path(args.description).resolve()
+    if not desc_path.exists():
+        return
+    # Probe the conventional sibling location used by --self.
+    out = getattr(args, "output", None)
+    project_root = Path(out).resolve() if out else desc_path.parent
+    # The sibling lives at <project>/.github/agents/_build-description.json.
+    candidates = [
+        project_root / "_build-description.json",
+        project_root / ".github" / "agents" / "_build-description.json",
+        project_root.parent / "_build-description.json" if project_root.name == "agents" else None,
+    ]
+    sibling = next((c for c in candidates if c and c.exists() and c.resolve() != desc_path), None)
+    if sibling is None:
+        return
+
+    try:
+        import json as _json
+
+        primary = _json.loads(desc_path.read_text(encoding="utf-8"))
+        sibling_doc = _json.loads(sibling.read_text(encoding="utf-8"))
+    except (OSError, _json.JSONDecodeError):
+        return
+
+    diverging: list[str] = []
+    for field in _DUAL_DESCRIPTOR_FIELDS:
+        if primary.get(field) != sibling_doc.get(field):
+            diverging.append(field)
+    if not diverging:
+        return
+
+    print(
+        f"[WARN] Dual descriptor detected; {len(diverging)} field(s) diverge "
+        f"between\n  primary: {desc_path}\n  sibling: {sibling}\n"
+        f"  divergent fields: {', '.join(diverging)}\n"
+        f"  Resolution: align or remove the sibling. Primary is authoritative for this run.",
+        file=sys.stderr,
+    )
+    try:
+        log_dir = Path(__file__).resolve().parent / "tmp" / "daily-pipeline" / "dual-descriptor-events"
+        log_dir.mkdir(parents=True, exist_ok=True)
+        now_utc = datetime.now(UTC)
+        project_label = primary.get("project_name") or project_root.name
+        signature = f"{project_label}|{','.join(diverging)}"
+        log_path = log_dir / f"{now_utc.strftime('%Y-%m-%d')}.md"
+        if log_path.exists() and signature in log_path.read_text(encoding="utf-8"):
+            return  # delta-only: same divergence already logged today
+        header = (
+            f"# Dual-Descriptor Events — {now_utc.strftime('%Y-%m-%d')}\n\n"
+            "Append-only daily log of dual-descriptor advisories from "
+            "`build_team.py --update --merge`. Each section records one run.\n"
+        )
+        section = [
+            "",
+            f"## {project_label} @ {now_utc.strftime('%Y-%m-%dT%H:%M:%SZ')}",
+            "",
+            f"- primary: `{desc_path}`",
+            f"- sibling: `{sibling}`",
+            f"- divergent_fields: {', '.join(diverging)}",
+            f"- signature: `{signature}`",
+            "",
+        ]
+        if log_path.exists():
+            log_path.write_text(log_path.read_text(encoding="utf-8") + "\n".join(section), encoding="utf-8")
+        else:
+            log_path.write_text(header + "\n".join(section), encoding="utf-8")
+    except Exception as exc:  # pragma: no cover - never block emit
+        print(f"[WARN] could not persist dual-descriptor event: {exc}", file=sys.stderr)
+
+
+def _persist_orphan_events(orphans: list[str], manifest, output_dir: Path) -> None:
+    """F5: append the current orphan set to a daily-pipeline artefact.
+
+    Delta-only on a (project_label, sorted_orphans) signature so the same
+    orphan inventory does not produce repeat sections within one day.
+    Best-effort; failure never blocks the build.
+    Plan: references/plans/F5-orphan-files-lifecycle-2026-05-25.md
+    """
+    if not orphans:
+        return
+    try:
+        log_dir = Path(__file__).resolve().parent / "tmp" / "daily-pipeline" / "orphan-events"
+        log_dir.mkdir(parents=True, exist_ok=True)
+        now_utc = datetime.now(UTC)
+        project_label = manifest.get("project_name") or output_dir.name or "unknown"
+        signature = f"{project_label}|{','.join(orphans)}"
+        log_path = log_dir / f"{now_utc.strftime('%Y-%m-%d')}.md"
+        if log_path.exists() and signature in log_path.read_text(encoding="utf-8"):
+            return
+        section = [
+            "",
+            f"## {project_label} @ {now_utc.strftime('%Y-%m-%dT%H:%M:%SZ')}",
+            "",
+            f"- output_dir: `{output_dir}`",
+            f"- orphan_count: {len(orphans)}",
+            f"- signature: `{signature}`",
+            "",
+            "Orphan agent files (present on disk, not in current team config):",
+            "",
+        ]
+        for name in orphans:
+            section.append(f"- `{name}`")
+        section.append("")
+        section.append("Routing: `@cleanup` (delete if obsolete) or `@code-hygiene` (review). "
+                       "Daily pipeline never auto-deletes — destructive action requires "
+                       "orchestrator approval.")
+        section.append("")
+        if log_path.exists():
+            log_path.write_text(log_path.read_text(encoding="utf-8") + "\n".join(section), encoding="utf-8")
+        else:
+            header = (
+                f"# Orphan Agent Events — {now_utc.strftime('%Y-%m-%d')}\n\n"
+                "Append-only daily log of orphaned agent files detected by "
+                "`build_team.py --update`. Each section records one run.\n"
+            )
+            log_path.write_text(header + "\n".join(section), encoding="utf-8")
+    except Exception as exc:  # pragma: no cover - never block emit
+        print(f"[WARN] could not persist orphan events: {exc}", file=sys.stderr)
+
+
+def _persist_shrink_events(args, result, manifest, output_dir: Path) -> None:
+    """D5: append shrink notices from this run to a daily log under the
+    agentteams source tree's gitignored tmp/. Delta-only — no notices means no write.
+    Never raises; logging is a best-effort side effect.
+    """
+    if not (args.update and args.merge and not args.dry_run and result.notices):
+        return
+    try:
+        shrink_dir = Path(__file__).resolve().parent / "tmp" / "daily-pipeline" / "shrink-events"
+        shrink_dir.mkdir(parents=True, exist_ok=True)
+        now_utc = datetime.now(UTC)
+        today = now_utc.strftime("%Y-%m-%d")
+        project_label = manifest.get("project_name") or output_dir.name or "unknown"
+        # F2: link this run's shrink notices to the timestamped backup
+        # directory that emit just created (most-recent mtime under
+        # <output>/.agentteams-backups/). Best-effort; missing backups
+        # produce a "—" entry rather than blocking the log.
+        backup_dir_str = "—"
+        try:
+            backups_root = output_dir / ".agentteams-backups"
+            if backups_root.is_dir():
+                latest_backup = max(
+                    (p for p in backups_root.iterdir() if p.is_dir()),
+                    key=lambda p: p.stat().st_mtime,
+                    default=None,
+                )
+                if latest_backup is not None:
+                    backup_dir_str = str(latest_backup)
+        except OSError:
+            pass
+
+        blocked_lines = []
+        if getattr(result, "shrink_blocked", None):
+            blocked_lines = [
+                "",
+                f"Blocked (shrink-policy=halt): {len(result.shrink_blocked)} file(s)",
+                "",
+            ]
+            for path in result.shrink_blocked:
+                blocked_lines.append(f"- BLOCKED: `{path}`")
+
+        section = [
+            "",
+            f"## {project_label} @ {now_utc.strftime('%Y-%m-%dT%H:%M:%SZ')}",
+            "",
+            f"- output_dir: `{output_dir}`",
+            f"- backup_dir: `{backup_dir_str}`",
+            f"- notices: {len(result.notices)}",
+            f"- shrink_policy: `{getattr(args, 'shrink_policy', 'warn')}`",
+            "",
+        ]
+        for notice in result.notices:
+            section.append(f"- {notice}")
+        section.extend(blocked_lines)
+        section.append("")
+
+        log_path = shrink_dir / f"{today}.md"
+        if log_path.exists():
+            log_path.write_text(
+                log_path.read_text(encoding="utf-8") + "\n".join(section),
+                encoding="utf-8",
+            )
+        else:
+            header = [
+                f"# Fenced-Region Shrink Events — {today}",
+                "",
+                "Append-only daily log of fenced-region shrink notices emitted by "
+                "`build_team.py --update --merge`. Each section records one run.",
+                "",
+            ]
+            log_path.write_text("\n".join(header + section), encoding="utf-8")
+    except Exception as exc:  # pragma: no cover - never block emit
+        print(f"[WARN] could not persist shrink events: {exc}", file=sys.stderr)
+
 
 def main(argv: list[str] | None = None) -> int:
     parser = _build_parser()
@@ -709,6 +931,8 @@ def main(argv: list[str] | None = None) -> int:
     if not args.description:
         parser.error("--description is required (or use --self for self-maintenance)")
 
+    _check_dual_descriptor(args)
+
     framework_id: str = args.framework
     adapter = FRAMEWORKS[framework_id]()
 
@@ -816,7 +1040,15 @@ def main(argv: list[str] | None = None) -> int:
     # -----------------------------------------------------------------------
     if args.scan_security:
         from agentteams import scan
-        report = scan.scan_directory(output_dir)
+        # T3a.2 v4: pass the current manifest's expected agent-file set so the
+        # scanner can skip orphans that the build_team orphan advisory already
+        # surfaces separately.
+        expected = {
+            Path(f["path"]).name
+            for f in manifest.get("output_files", [])
+            if isinstance(f, dict) and str(f.get("path", "")).endswith(".agent.md")
+        }
+        report = scan.scan_directory(output_dir, expected_agent_names=expected or None)
         scan.print_scan_report(report)
         return 1 if report.has_issues else 0
 
@@ -854,6 +1086,20 @@ def main(argv: list[str] | None = None) -> int:
         skip_nvd=args.security_no_nvd,
     )
     manifest["auto_resolved_placeholders"].update(security_placeholders)
+
+    # Step 4d.2: Framework-watch placeholders (Claude Code etc.).
+    # Offline by default so consumer repos do not need network; the
+    # daily-pipeline refreshes the snapshot via the research stage.
+    try:
+        from agentteams import framework_research as _framework_research
+
+        framework_placeholders = _framework_research.build_framework_placeholders(
+            output_dir=output_dir,
+            offline=True,
+        )
+        manifest["auto_resolved_placeholders"].update(framework_placeholders)
+    except Exception as exc:  # pragma: no cover - never block build on research stage
+        print(f"[WARN] framework-watch placeholders unavailable: {exc}", file=sys.stderr)
 
     if not args.check and not args.dry_run:
         try:
@@ -1153,6 +1399,7 @@ def main(argv: list[str] | None = None) -> int:
                 "     These are not updated by --update. Review and delete if obsolete.",
                 file=sys.stderr,
             )
+            _persist_orphan_events(_orphan_agents, manifest, output_dir)
 
         print(f"\nWriting {len(update_rendered)} file(s)...")
 
@@ -1183,8 +1430,10 @@ def main(argv: list[str] | None = None) -> int:
             overwrite=args.overwrite,
             merge=not args.overwrite,
             yes=args.yes,
+            shrink_policy=getattr(args, "shrink_policy", "warn"),
         )
         emit.print_summary(result, manifest)
+        _persist_shrink_events(args, result, manifest, output_dir)
         if args.dry_run and result.dry_run_report is not None:
             emit.print_dry_run_report(
                 result, manifest,
@@ -1394,8 +1643,11 @@ def main(argv: list[str] | None = None) -> int:
         overwrite=args.overwrite,
         merge=args.merge,
         yes=args.yes,
+        shrink_policy=getattr(args, "shrink_policy", "warn"),
     )
     emit.print_summary(result, manifest)
+    _persist_shrink_events(args, result, manifest, output_dir)
+
     if args.dry_run and result.dry_run_report is not None:
         emit.print_dry_run_report(
             result, manifest,

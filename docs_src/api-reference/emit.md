@@ -62,6 +62,7 @@ Results of an emit operation.
 - `dry_run` (`bool`) — `True` if this result is from a dry-run invocation.
 - `dry_run_report` (`DryRunReport | None`) — Structured dry-run preview (only when `dry_run=True`).
 - `notices` (`list[str]`) — Aggregated notices from all operations (Plan 3 extension point). May include shrink alerts, deprecation warnings, etc.
+- `shrink_blocked` (`list[str]`) — *(T2.D5)* Absolute paths whose merge was skipped because `shrink_policy="halt"` detected a destructive shrink. Distinct from `skipped` (overwrite declined) and `errors` (true failures) — these are intentional non-writes the operator can review.
 
 **Properties:**
 
@@ -112,7 +113,7 @@ Result of a backup operation.
 
 ## Functions
 
-### `emit_all(rendered_files, *, output_dir, dry_run=False, overwrite=False, merge=False, yes=False)`
+### `emit_all(rendered_files, *, output_dir, dry_run=False, overwrite=False, merge=False, yes=False, shrink_policy="warn")`
 
 > *Source: `agentteams/emit.py`*
 
@@ -126,6 +127,10 @@ Write rendered files to `output_dir`.
 - `overwrite` (`bool`, keyword-only) — If `True`, overwrite existing files without prompting. Default: `False`.
 - `merge` (`bool`, keyword-only) — If `True`, update only fenced template regions in existing files, preserving user-authored content. Default: `False`.
 - `yes` (`bool`, keyword-only) — If `True`, answer `'yes'` to all interactive prompts. Default: `False`.
+- `shrink_policy` (`str`, keyword-only) — *(T2.D5)* Behaviour when a fenced-region merge would lose concrete references (paths, identifiers, list items). One of:
+    - `"warn"` (default, back-compatible): log the shrink notice into `EmitResult.notices` and proceed with the smaller content.
+    - `"halt"`: log the notice, refuse the write, and append the path to `EmitResult.shrink_blocked`. Use to enforce strict fence-content preservation for self-team daily runs.
+    - `"allow"`: suppress notices and write the smaller content silently. Use for one-time recovery when a previous halt was over-cautious.
 
 **Returns:** `EmitResult` — Results of all write operations.
 

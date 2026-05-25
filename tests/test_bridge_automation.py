@@ -28,7 +28,9 @@ def test_bridge_maintenance_workflow_invokes_script_and_uploads_summary():
     assert 'cron: "41 5 * * *"' in text
     assert 'bash scripts/run_daily_bridge_maintenance.sh' in text
     assert 'uses: actions/upload-artifact@v4' in text
-    assert 'path: tmp/bridge-maintenance/' in text
+    # Multi-line path list (D7 v2 added daily-pipeline alongside bridge-maintenance).
+    assert 'tmp/bridge-maintenance/' in text
+    assert 'tmp/daily-pipeline/' in text
 
 
 def test_bridge_watchdog_workflow_checks_staleness_and_dedupes_issue():
@@ -39,10 +41,16 @@ def test_bridge_watchdog_workflow_checks_staleness_and_dedupes_issue():
     assert 'name: AgentTeams Bridge Watchdog' in text
     assert 'issues: write' in text
     assert 'actions: read' in text
-    assert 'workflow_id: workflowId' in text
+    # D7 v2: workflow_id is now an inline string literal, and the watchdog
+    # additionally inspects the framework-research snapshot artifact.
+    assert 'workflow_id: "bridge-maintenance.yml"' in text
     assert 'const staleHours = 48;' in text
     assert 'const label = "bridge-watchdog";' in text
     assert 'const existingIssues = openIssues.data.filter' in text
     assert 'state: "closed"' in text
     assert 'Closing this stale alert issue.' in text
     assert 'title: "Bridge Maintenance Stale"' in text
+    # D7 v2 additions: artifact download and snapshot freshness check.
+    assert 'gh run download' in text
+    assert '"framework-research"' in text
+    assert '"latest.json"' in text
