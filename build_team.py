@@ -550,6 +550,90 @@ def _build_parser() -> argparse.ArgumentParser:
 # ---------------------------------------------------------------------------
 
 
+_DUAL_DESCRIPTOR_FIELDS = ("project_name", "primary_output_dir", "reference_db_path", "deliverables")
+
+
+def _check_dual_descriptor(args) -> None:
+    """Advisory check: warn when a consumer repo has both the user-supplied
+    descriptor and a sibling `_build-description.json` that diverges on a
+    small set of stable fields. Read-only; never modifies either file.
+    Records hits to tmp/daily-pipeline/dual-descriptor-events/<date>.md.
+    Rationale and field list: references/plans/dual-descriptor-divergence-2026-05-25.plan.md
+    """
+    if getattr(args, "self_update", False):
+        return
+    if not getattr(args, "description", None):
+        return
+    desc_path = Path(args.description).resolve()
+    if not desc_path.exists():
+        return
+    # Probe the conventional sibling location used by --self.
+    out = getattr(args, "output", None)
+    project_root = Path(out).resolve() if out else desc_path.parent
+    # The sibling lives at <project>/.github/agents/_build-description.json.
+    candidates = [
+        project_root / "_build-description.json",
+        project_root / ".github" / "agents" / "_build-description.json",
+        project_root.parent / "_build-description.json" if project_root.name == "agents" else None,
+    ]
+    sibling = next((c for c in candidates if c and c.exists() and c.resolve() != desc_path), None)
+    if sibling is None:
+        return
+
+    try:
+        import json as _json
+
+        primary = _json.loads(desc_path.read_text(encoding="utf-8"))
+        sibling_doc = _json.loads(sibling.read_text(encoding="utf-8"))
+    except (OSError, _json.JSONDecodeError):
+        return
+
+    diverging: list[str] = []
+    for field in _DUAL_DESCRIPTOR_FIELDS:
+        if primary.get(field) != sibling_doc.get(field):
+            diverging.append(field)
+    if not diverging:
+        return
+
+    print(
+        f"[WARN] Dual descriptor detected; {len(diverging)} field(s) diverge "
+        f"between\n  primary: {desc_path}\n  sibling: {sibling}\n"
+        f"  divergent fields: {', '.join(diverging)}\n"
+        f"  Resolution: align or remove the sibling. Primary is authoritative for this run.",
+        file=sys.stderr,
+    )
+    try:
+        log_dir = Path(__file__).resolve().parent / "tmp" / "daily-pipeline" / "dual-descriptor-events"
+        log_dir.mkdir(parents=True, exist_ok=True)
+        now_utc = datetime.now(UTC)
+        project_label = primary.get("project_name") or project_root.name
+        signature = f"{project_label}|{','.join(diverging)}"
+        log_path = log_dir / f"{now_utc.strftime('%Y-%m-%d')}.md"
+        if log_path.exists() and signature in log_path.read_text(encoding="utf-8"):
+            return  # delta-only: same divergence already logged today
+        header = (
+            f"# Dual-Descriptor Events — {now_utc.strftime('%Y-%m-%d')}\n\n"
+            "Append-only daily log of dual-descriptor advisories from "
+            "`build_team.py --update --merge`. Each section records one run.\n"
+        )
+        section = [
+            "",
+            f"## {project_label} @ {now_utc.strftime('%Y-%m-%dT%H:%M:%SZ')}",
+            "",
+            f"- primary: `{desc_path}`",
+            f"- sibling: `{sibling}`",
+            f"- divergent_fields: {', '.join(diverging)}",
+            f"- signature: `{signature}`",
+            "",
+        ]
+        if log_path.exists():
+            log_path.write_text(log_path.read_text(encoding="utf-8") + "\n".join(section), encoding="utf-8")
+        else:
+            log_path.write_text(header + "\n".join(section), encoding="utf-8")
+    except Exception as exc:  # pragma: no cover - never block emit
+        print(f"[WARN] could not persist dual-descriptor event: {exc}", file=sys.stderr)
+
+
 def _persist_shrink_events(args, result, manifest, output_dir: Path) -> None:
     """D5: append shrink notices from this run to a daily log under the
     agentteams source tree's tmp/. Delta-only — no notices means no write.
@@ -753,6 +837,8 @@ def main(argv: list[str] | None = None) -> int:
 
     if not args.description:
         parser.error("--description is required (or use --self for self-maintenance)")
+
+    _check_dual_descriptor(args)
 
     framework_id: str = args.framework
     adapter = FRAMEWORKS[framework_id]()
