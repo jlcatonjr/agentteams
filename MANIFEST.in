@@ -1,0 +1,32 @@
+include README.md
+include LICENSE
+include CHANGELOG.md
+include STABILITY.md
+include SECURITY.md
+include pyproject.toml
+include agentteams.1
+include build_team.py
+recursive-include agentteams *.py *.md *.json *.yaml *.yml *.toml *.txt
+recursive-include agentteams/templates *
+recursive-include schemas *.json
+recursive-include tests *.py
+recursive-include scripts *.py
+
+prune tmp
+prune _site
+prune workSummaries
+prune memories
+prune docs
+prune docs_src
+prune examples
+prune references
+prune templates
+prune .venv
+prune .venv-ci
+prune .github
+prune .vscode
+prune .pytest_cache
+prune .agentteams-backups
+global-exclude __pycache__
+global-exclude *.py[cod]
+global-exclude .DS_Store
