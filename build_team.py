@@ -68,7 +68,15 @@ from agentteams.frameworks.copilot_vscode import CopilotVSCodeAdapter
 from agentteams.frameworks.copilot_cli import CopilotCLIAdapter
 from agentteams.frameworks.claude import ClaudeAdapter
 
-__version__ = "0.1.0"
+try:
+    from importlib.metadata import version as _pkg_version, PackageNotFoundError
+    try:
+        __version__ = _pkg_version("agentteams")
+    except PackageNotFoundError:
+        # Running from a source checkout without an installed dist
+        __version__ = "0.0.0+local"
+except ImportError:  # pragma: no cover
+    __version__ = "0.0.0+local"
 
 FRAMEWORKS = {
     "copilot-vscode": CopilotVSCodeAdapter,
@@ -561,7 +569,6 @@ def _build_parser() -> argparse.ArgumentParser:
 # Main pipeline
 # ---------------------------------------------------------------------------
 
-
 _DUAL_DESCRIPTOR_FIELDS = ("project_name", "primary_output_dir", "reference_db_path", "deliverables")
 
 
@@ -769,6 +776,21 @@ def _persist_shrink_events(args, result, manifest, output_dir: Path) -> None:
             log_path.write_text("\n".join(header + section), encoding="utf-8")
     except Exception as exc:  # pragma: no cover - never block emit
         print(f"[WARN] could not persist shrink events: {exc}", file=sys.stderr)
+
+
+def _deprecated_build_team_entry(argv: list[str] | None = None) -> int:
+    """Entry point for the legacy ``build-team`` console script.
+
+    Emits a one-line deprecation notice to stderr then delegates to :func:`main`.
+    The alias is retained through the 1.x series and will be removed at 2.0.
+    """
+    print(
+        "warning: the 'build-team' command is a deprecated alias for "
+        "'agentteams' and will be removed in agentteams 2.0. "
+        "Switch your scripts to 'agentteams'.",
+        file=sys.stderr,
+    )
+    return main(argv)
 
 
 def main(argv: list[str] | None = None) -> int:
