@@ -33,8 +33,10 @@ jobs:
         with:
           python-version: "3.11"
 
-      - name: Install package
-        run: pip install -e .
+      - name: Install package and test dependencies
+        # pytest needed for the framework_research --apply test gate.
+        # Matches the bridge-maintenance.yml install pattern.
+        run: pip install -e . pytest
 
       - name: Refresh framework-research snapshot
         run: python scripts/research_claude_code_docs.py
