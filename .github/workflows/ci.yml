@@ -29,7 +29,7 @@ jobs:
         run: python scripts/verify-env.py
 
       - name: Install package and pytest
-        run: pip install -e . pytest
+        run: pip install -e ".[test]"
 
       - name: Run tests
         run: pytest tests/
