@@ -1,0 +1,4372 @@
+{
+  "file_count": 1091,
+  "files": [
+    {
+      "path": ".agentteams-backups/20260420-224450/SETUP-REQUIRED.md",
+      "sha256": "8cc897bb3e07ae0550323f5080a3368cb543307d5d55689bfb0b212cc6dc64d4"
+    },
+    {
+      "path": ".agentteams-backups/20260420-224450/adversarial.agent.md",
+      "sha256": "733924a36354ae5236a51c8f76c3e9b4c8f74082bfdee9c12fd6a90fee9b618e"
+    },
+    {
+      "path": ".agentteams-backups/20260420-224450/agent-refactor.agent.md",
+      "sha256": "fb5c93a5c5f6df7c22e69a268a5cdc81a99731414e5a6f62b544cc39a6cef325"
+    },
+    {
+      "path": ".agentteams-backups/20260420-224450/agent-updater.agent.md",
+      "sha256": "495d31b875889ff28fb320a740a32c29b201b21279b0084f8ce3818003863357"
+    },
+    {
+      "path": ".agentteams-backups/20260420-224450/cleanup.agent.md",
+      "sha256": "807cc5b965717289194999de2c9b35b589a2f5ffc31bcc7260d365218ffe6d1f"
+    },
+    {
+      "path": ".agentteams-backups/20260420-224450/code-hygiene.agent.md",
+      "sha256": "d4cc9bd6e9d25d1e59e8d3794d23f3fe28972ea81c79b03288f9fb93b9e5c0d3"
+    },
+    {
+      "path": ".agentteams-backups/20260420-224450/conflict-auditor.agent.md",
+      "sha256": "58d40e5bea6de23ee134403f96de6692be691c4a2c4887605a651082832c0b49"
+    },
+    {
+      "path": ".agentteams-backups/20260420-224450/conflict-resolution.agent.md",
+      "sha256": "c7004e312004b407f266c4990c86ffddde8bed31f2d031ad1a2e2363202ee2b8"
+    },
+    {
+      "path": ".agentteams-backups/20260420-224450/content-enricher.agent.md",
+      "sha256": "41cc263890ba47f539eb41a2e241c24e4f74e5b62a04f33eac1656adbb52ebea"
+    },
+    {
+      "path": ".agentteams-backups/20260420-224450/copilot-instructions.md",
+      "sha256": "504d6429f83ef517a0a711d377f43387ca36849a535ad98522ef4398e3867556"
+    },
+    {
+      "path": ".agentteams-backups/20260420-224450/module-doc-author.agent.md",
+      "sha256": "c4a84085f749c9be170c3d8c5e32a62b6d4a2f566f9d532b339e84a51c57aeb1"
+    },
+    {
+      "path": ".agentteams-backups/20260420-224450/module-doc-validator.agent.md",
+      "sha256": "5a29b1f36ad299a3945ce0e8f2f16c999f164f169eab632a030e0f2dabd2aa87"
+    },
+    {
+      "path": ".agentteams-backups/20260420-224450/navigator.agent.md",
+      "sha256": "41f7866a8fb427d32174ace49f04aa5bda643132b048e161c09ca03869e086f9"
+    },
+    {
+      "path": ".agentteams-backups/20260420-224450/orchestrator.agent.md",
+      "sha256": "6423c71865500a353e15885b996b91dafcd126ce88a85c7c88cab9d51b7706b0"
+    },
+    {
+      "path": ".agentteams-backups/20260420-224450/primary-producer.agent.md",
+      "sha256": "44e7f55fbb2946c385ec3369e12066dbd677a163601d619c19a2af56a874480a"
+    },
+    {
+      "path": ".agentteams-backups/20260420-224450/quality-auditor.agent.md",
+      "sha256": "909cef87cbddb7c31ed06e7e584f75d02eb62da30d48be8f74bb47a91f0b4953"
+    },
+    {
+      "path": ".agentteams-backups/20260420-224450/references/adjacent-repos.md",
+      "sha256": "a0ee435276f1218dbaf633bb791e9f9a5fbf46c9f541abdf38bcc05822536821"
+    },
+    {
+      "path": ".agentteams-backups/20260420-224450/references/code-hygiene-rules.reference.md",
+      "sha256": "deb626951cd457ea665665e88d890d4f1b633e3c1cf3adc1b7b59ed9f88bbfd6"
+    },
+    {
+      "path": ".agentteams-backups/20260420-224450/references/pipeline-graph.md",
+      "sha256": "15f71183075206e6edd1f6889ac67a6c4420e74afc3e047c183cb7da642de83c"
+    },
+    {
+      "path": ".agentteams-backups/20260420-224450/references/security-vulnerability-watch.json",
+      "sha256": "76667354b74b4fc671c916b6808fd2cba194fe70631711b1fc2dbba60bc7759f"
+    },
+    {
+      "path": ".agentteams-backups/20260420-224450/references/security-vulnerability-watch.reference.md",
+      "sha256": "da57fdefc751f677c0e47d13b5861be0b8fd2a0cbb265881844bff83185ae7ba"
+    },
+    {
+      "path": ".agentteams-backups/20260420-224450/repo-liaison.agent.md",
+      "sha256": "e9d5146a788c79d1f1bf26f27e5cf72dfec92d26a0e4e2b696a94b7e8b2a3889"
+    },
+    {
+      "path": ".agentteams-backups/20260420-224450/security.agent.md",
+      "sha256": "082c18e067c29173cfc027496fb26a45742179b26da5211cf0c206ed0b86648b"
+    },
+    {
+      "path": ".agentteams-backups/20260420-224450/team-builder.agent.md",
+      "sha256": "6a0e998c5ce278f2623ba7d50b9f889e7dd286436b61bc51778b608b058c5268"
+    },
+    {
+      "path": ".agentteams-backups/20260420-224450/technical-validator.agent.md",
+      "sha256": "8814b8b3fa96024e0c986d1a91cad2441ee25f1941b7a6494209d6cd8758d1d8"
+    },
+    {
+      "path": ".agentteams-backups/20260421-092730/references/adjacent-repos-changelog.csv",
+      "sha256": "025280db1d4844c399afa19b192acc3ffd5af12cd30cca71251f87bdfbc8a275"
+    },
+    {
+      "path": ".agentteams-backups/20260421-092730/references/adjacent-repos-coordination-log.csv",
+      "sha256": "260125e878d967bf60896bc5653ac36b428b6304b20c4a53c315c87f8353ef47"
+    },
+    {
+      "path": ".agentteams-backups/20260421-092730/repo-liaison.agent.md",
+      "sha256": "e9d5146a788c79d1f1bf26f27e5cf72dfec92d26a0e4e2b696a94b7e8b2a3889"
+    },
+    {
+      "path": ".agentteams-backups/20260421-092730-1/SETUP-REQUIRED.md",
+      "sha256": "8cc897bb3e07ae0550323f5080a3368cb543307d5d55689bfb0b212cc6dc64d4"
+    },
+    {
+      "path": ".agentteams-backups/20260421-092730-1/adversarial.agent.md",
+      "sha256": "733924a36354ae5236a51c8f76c3e9b4c8f74082bfdee9c12fd6a90fee9b618e"
+    },
+    {
+      "path": ".agentteams-backups/20260421-092730-1/agent-refactor.agent.md",
+      "sha256": "fb5c93a5c5f6df7c22e69a268a5cdc81a99731414e5a6f62b544cc39a6cef325"
+    },
+    {
+      "path": ".agentteams-backups/20260421-092730-1/agent-updater.agent.md",
+      "sha256": "495d31b875889ff28fb320a740a32c29b201b21279b0084f8ce3818003863357"
+    },
+    {
+      "path": ".agentteams-backups/20260421-092730-1/cleanup.agent.md",
+      "sha256": "807cc5b965717289194999de2c9b35b589a2f5ffc31bcc7260d365218ffe6d1f"
+    },
+    {
+      "path": ".agentteams-backups/20260421-092730-1/code-hygiene.agent.md",
+      "sha256": "d4cc9bd6e9d25d1e59e8d3794d23f3fe28972ea81c79b03288f9fb93b9e5c0d3"
+    },
+    {
+      "path": ".agentteams-backups/20260421-092730-1/conflict-auditor.agent.md",
+      "sha256": "58d40e5bea6de23ee134403f96de6692be691c4a2c4887605a651082832c0b49"
+    },
+    {
+      "path": ".agentteams-backups/20260421-092730-1/conflict-resolution.agent.md",
+      "sha256": "c7004e312004b407f266c4990c86ffddde8bed31f2d031ad1a2e2363202ee2b8"
+    },
+    {
+      "path": ".agentteams-backups/20260421-092730-1/content-enricher.agent.md",
+      "sha256": "41cc263890ba47f539eb41a2e241c24e4f74e5b62a04f33eac1656adbb52ebea"
+    },
+    {
+      "path": ".agentteams-backups/20260421-092730-1/copilot-instructions.md",
+      "sha256": "caf3f1eb8bf7f5ef64afcf55be7cb14c96d5997c629bdac298f1eb0315bd3ed1"
+    },
+    {
+      "path": ".agentteams-backups/20260421-092730-1/module-doc-author.agent.md",
+      "sha256": "c4a84085f749c9be170c3d8c5e32a62b6d4a2f566f9d532b339e84a51c57aeb1"
+    },
+    {
+      "path": ".agentteams-backups/20260421-092730-1/module-doc-validator.agent.md",
+      "sha256": "5a29b1f36ad299a3945ce0e8f2f16c999f164f169eab632a030e0f2dabd2aa87"
+    },
+    {
+      "path": ".agentteams-backups/20260421-092730-1/navigator.agent.md",
+      "sha256": "41f7866a8fb427d32174ace49f04aa5bda643132b048e161c09ca03869e086f9"
+    },
+    {
+      "path": ".agentteams-backups/20260421-092730-1/orchestrator.agent.md",
+      "sha256": "579f3850f43800becaaca216d6120ba7cac302754ec6c01eed4caef960a51eab"
+    },
+    {
+      "path": ".agentteams-backups/20260421-092730-1/primary-producer.agent.md",
+      "sha256": "44e7f55fbb2946c385ec3369e12066dbd677a163601d619c19a2af56a874480a"
+    },
+    {
+      "path": ".agentteams-backups/20260421-092730-1/quality-auditor.agent.md",
+      "sha256": "909cef87cbddb7c31ed06e7e584f75d02eb62da30d48be8f74bb47a91f0b4953"
+    },
+    {
+      "path": ".agentteams-backups/20260421-092730-1/references/adjacent-repos-changelog.csv",
+      "sha256": "025280db1d4844c399afa19b192acc3ffd5af12cd30cca71251f87bdfbc8a275"
+    },
+    {
+      "path": ".agentteams-backups/20260421-092730-1/references/adjacent-repos-coordination-log.csv",
+      "sha256": "260125e878d967bf60896bc5653ac36b428b6304b20c4a53c315c87f8353ef47"
+    },
+    {
+      "path": ".agentteams-backups/20260421-092730-1/references/adjacent-repos.md",
+      "sha256": "a0ee435276f1218dbaf633bb791e9f9a5fbf46c9f541abdf38bcc05822536821"
+    },
+    {
+      "path": ".agentteams-backups/20260421-092730-1/references/code-hygiene-rules.reference.md",
+      "sha256": "deb626951cd457ea665665e88d890d4f1b633e3c1cf3adc1b7b59ed9f88bbfd6"
+    },
+    {
+      "path": ".agentteams-backups/20260421-092730-1/references/pipeline-graph.md",
+      "sha256": "15f71183075206e6edd1f6889ac67a6c4420e74afc3e047c183cb7da642de83c"
+    },
+    {
+      "path": ".agentteams-backups/20260421-092730-1/references/security-vulnerability-watch.json",
+      "sha256": "76667354b74b4fc671c916b6808fd2cba194fe70631711b1fc2dbba60bc7759f"
+    },
+    {
+      "path": ".agentteams-backups/20260421-092730-1/references/security-vulnerability-watch.reference.md",
+      "sha256": "4e9ac91addf40900e1804bf52f39ad037ec7e7fd220dc1211223e616b19bec10"
+    },
+    {
+      "path": ".agentteams-backups/20260421-092730-1/repo-liaison.agent.md",
+      "sha256": "a4a50fedeb3f1bcc58791713527ce297a41eeedbe7af2a131a8368bd63cb2c93"
+    },
+    {
+      "path": ".agentteams-backups/20260421-092730-1/security.agent.md",
+      "sha256": "b04d5a4fa299f024c8473525cc60bbbd9ad78b171585073a323bbf5bcc172bd1"
+    },
+    {
+      "path": ".agentteams-backups/20260421-092730-1/team-builder.agent.md",
+      "sha256": "6a0e998c5ce278f2623ba7d50b9f889e7dd286436b61bc51778b608b058c5268"
+    },
+    {
+      "path": ".agentteams-backups/20260421-092730-1/technical-validator.agent.md",
+      "sha256": "8814b8b3fa96024e0c986d1a91cad2441ee25f1941b7a6494209d6cd8758d1d8"
+    },
+    {
+      "path": ".agentteams-backups/20260421-125305/SETUP-REQUIRED.md",
+      "sha256": "8cc897bb3e07ae0550323f5080a3368cb543307d5d55689bfb0b212cc6dc64d4"
+    },
+    {
+      "path": ".agentteams-backups/20260421-125305/adversarial.agent.md",
+      "sha256": "733924a36354ae5236a51c8f76c3e9b4c8f74082bfdee9c12fd6a90fee9b618e"
+    },
+    {
+      "path": ".agentteams-backups/20260421-125305/agent-refactor.agent.md",
+      "sha256": "fb5c93a5c5f6df7c22e69a268a5cdc81a99731414e5a6f62b544cc39a6cef325"
+    },
+    {
+      "path": ".agentteams-backups/20260421-125305/agent-updater.agent.md",
+      "sha256": "495d31b875889ff28fb320a740a32c29b201b21279b0084f8ce3818003863357"
+    },
+    {
+      "path": ".agentteams-backups/20260421-125305/cleanup.agent.md",
+      "sha256": "807cc5b965717289194999de2c9b35b589a2f5ffc31bcc7260d365218ffe6d1f"
+    },
+    {
+      "path": ".agentteams-backups/20260421-125305/code-hygiene.agent.md",
+      "sha256": "d4cc9bd6e9d25d1e59e8d3794d23f3fe28972ea81c79b03288f9fb93b9e5c0d3"
+    },
+    {
+      "path": ".agentteams-backups/20260421-125305/conflict-auditor.agent.md",
+      "sha256": "58d40e5bea6de23ee134403f96de6692be691c4a2c4887605a651082832c0b49"
+    },
+    {
+      "path": ".agentteams-backups/20260421-125305/conflict-resolution.agent.md",
+      "sha256": "c7004e312004b407f266c4990c86ffddde8bed31f2d031ad1a2e2363202ee2b8"
+    },
+    {
+      "path": ".agentteams-backups/20260421-125305/content-enricher.agent.md",
+      "sha256": "41cc263890ba47f539eb41a2e241c24e4f74e5b62a04f33eac1656adbb52ebea"
+    },
+    {
+      "path": ".agentteams-backups/20260421-125305/copilot-instructions.md",
+      "sha256": "caf3f1eb8bf7f5ef64afcf55be7cb14c96d5997c629bdac298f1eb0315bd3ed1"
+    },
+    {
+      "path": ".agentteams-backups/20260421-125305/module-doc-author.agent.md",
+      "sha256": "c4a84085f749c9be170c3d8c5e32a62b6d4a2f566f9d532b339e84a51c57aeb1"
+    },
+    {
+      "path": ".agentteams-backups/20260421-125305/module-doc-validator.agent.md",
+      "sha256": "5a29b1f36ad299a3945ce0e8f2f16c999f164f169eab632a030e0f2dabd2aa87"
+    },
+    {
+      "path": ".agentteams-backups/20260421-125305/navigator.agent.md",
+      "sha256": "41f7866a8fb427d32174ace49f04aa5bda643132b048e161c09ca03869e086f9"
+    },
+    {
+      "path": ".agentteams-backups/20260421-125305/orchestrator.agent.md",
+      "sha256": "fb7728274bc6cca67d4b2519a0e7051f74b4954d1fde38794379d52218ed758c"
+    },
+    {
+      "path": ".agentteams-backups/20260421-125305/primary-producer.agent.md",
+      "sha256": "44e7f55fbb2946c385ec3369e12066dbd677a163601d619c19a2af56a874480a"
+    },
+    {
+      "path": ".agentteams-backups/20260421-125305/quality-auditor.agent.md",
+      "sha256": "909cef87cbddb7c31ed06e7e584f75d02eb62da30d48be8f74bb47a91f0b4953"
+    },
+    {
+      "path": ".agentteams-backups/20260421-125305/references/adjacent-repos-changelog.csv",
+      "sha256": "61acfc52834c00360cc355463cf8b9e6c5d71a1857f2cea3317bb33047390916"
+    },
+    {
+      "path": ".agentteams-backups/20260421-125305/references/adjacent-repos-coordination-log.csv",
+      "sha256": "260125e878d967bf60896bc5653ac36b428b6304b20c4a53c315c87f8353ef47"
+    },
+    {
+      "path": ".agentteams-backups/20260421-125305/references/adjacent-repos.md",
+      "sha256": "72f32f1b6159052652d2609143d036a45171ca4d03ec930cb2d7e0f176595716"
+    },
+    {
+      "path": ".agentteams-backups/20260421-125305/references/code-hygiene-rules.reference.md",
+      "sha256": "deb626951cd457ea665665e88d890d4f1b633e3c1cf3adc1b7b59ed9f88bbfd6"
+    },
+    {
+      "path": ".agentteams-backups/20260421-125305/references/pipeline-graph.md",
+      "sha256": "15f71183075206e6edd1f6889ac67a6c4420e74afc3e047c183cb7da642de83c"
+    },
+    {
+      "path": ".agentteams-backups/20260421-125305/references/security-vulnerability-watch.json",
+      "sha256": "76667354b74b4fc671c916b6808fd2cba194fe70631711b1fc2dbba60bc7759f"
+    },
+    {
+      "path": ".agentteams-backups/20260421-125305/references/security-vulnerability-watch.reference.md",
+      "sha256": "da57fdefc751f677c0e47d13b5861be0b8fd2a0cbb265881844bff83185ae7ba"
+    },
+    {
+      "path": ".agentteams-backups/20260421-125305/repo-liaison.agent.md",
+      "sha256": "a4a50fedeb3f1bcc58791713527ce297a41eeedbe7af2a131a8368bd63cb2c93"
+    },
+    {
+      "path": ".agentteams-backups/20260421-125305/security.agent.md",
+      "sha256": "1ce039b7fb24e8b1cbf01a515231e5061dcd82660e6cb6d580f2bcf559bd2ad1"
+    },
+    {
+      "path": ".agentteams-backups/20260421-125305/team-builder.agent.md",
+      "sha256": "6a0e998c5ce278f2623ba7d50b9f889e7dd286436b61bc51778b608b058c5268"
+    },
+    {
+      "path": ".agentteams-backups/20260421-125305/technical-validator.agent.md",
+      "sha256": "8814b8b3fa96024e0c986d1a91cad2441ee25f1941b7a6494209d6cd8758d1d8"
+    },
+    {
+      "path": ".agentteams-backups/20260421-125913/SETUP-REQUIRED.md",
+      "sha256": "8cc897bb3e07ae0550323f5080a3368cb543307d5d55689bfb0b212cc6dc64d4"
+    },
+    {
+      "path": ".agentteams-backups/20260421-125913/adversarial.agent.md",
+      "sha256": "733924a36354ae5236a51c8f76c3e9b4c8f74082bfdee9c12fd6a90fee9b618e"
+    },
+    {
+      "path": ".agentteams-backups/20260421-125913/agent-refactor.agent.md",
+      "sha256": "fb5c93a5c5f6df7c22e69a268a5cdc81a99731414e5a6f62b544cc39a6cef325"
+    },
+    {
+      "path": ".agentteams-backups/20260421-125913/agent-updater.agent.md",
+      "sha256": "495d31b875889ff28fb320a740a32c29b201b21279b0084f8ce3818003863357"
+    },
+    {
+      "path": ".agentteams-backups/20260421-125913/cleanup.agent.md",
+      "sha256": "807cc5b965717289194999de2c9b35b589a2f5ffc31bcc7260d365218ffe6d1f"
+    },
+    {
+      "path": ".agentteams-backups/20260421-125913/code-hygiene.agent.md",
+      "sha256": "d4cc9bd6e9d25d1e59e8d3794d23f3fe28972ea81c79b03288f9fb93b9e5c0d3"
+    },
+    {
+      "path": ".agentteams-backups/20260421-125913/conflict-auditor.agent.md",
+      "sha256": "58d40e5bea6de23ee134403f96de6692be691c4a2c4887605a651082832c0b49"
+    },
+    {
+      "path": ".agentteams-backups/20260421-125913/conflict-resolution.agent.md",
+      "sha256": "c7004e312004b407f266c4990c86ffddde8bed31f2d031ad1a2e2363202ee2b8"
+    },
+    {
+      "path": ".agentteams-backups/20260421-125913/content-enricher.agent.md",
+      "sha256": "41cc263890ba47f539eb41a2e241c24e4f74e5b62a04f33eac1656adbb52ebea"
+    },
+    {
+      "path": ".agentteams-backups/20260421-125913/copilot-instructions.md",
+      "sha256": "caf3f1eb8bf7f5ef64afcf55be7cb14c96d5997c629bdac298f1eb0315bd3ed1"
+    },
+    {
+      "path": ".agentteams-backups/20260421-125913/module-doc-author.agent.md",
+      "sha256": "c4a84085f749c9be170c3d8c5e32a62b6d4a2f566f9d532b339e84a51c57aeb1"
+    },
+    {
+      "path": ".agentteams-backups/20260421-125913/module-doc-validator.agent.md",
+      "sha256": "5a29b1f36ad299a3945ce0e8f2f16c999f164f169eab632a030e0f2dabd2aa87"
+    },
+    {
+      "path": ".agentteams-backups/20260421-125913/navigator.agent.md",
+      "sha256": "41f7866a8fb427d32174ace49f04aa5bda643132b048e161c09ca03869e086f9"
+    },
+    {
+      "path": ".agentteams-backups/20260421-125913/orchestrator.agent.md",
+      "sha256": "73d0a6156c877d1d943b0f67a69e69becb9a0081474fc22362f6f90a4661db78"
+    },
+    {
+      "path": ".agentteams-backups/20260421-125913/primary-producer.agent.md",
+      "sha256": "44e7f55fbb2946c385ec3369e12066dbd677a163601d619c19a2af56a874480a"
+    },
+    {
+      "path": ".agentteams-backups/20260421-125913/quality-auditor.agent.md",
+      "sha256": "909cef87cbddb7c31ed06e7e584f75d02eb62da30d48be8f74bb47a91f0b4953"
+    },
+    {
+      "path": ".agentteams-backups/20260421-125913/references/adjacent-repos-changelog.csv",
+      "sha256": "61acfc52834c00360cc355463cf8b9e6c5d71a1857f2cea3317bb33047390916"
+    },
+    {
+      "path": ".agentteams-backups/20260421-125913/references/adjacent-repos-coordination-log.csv",
+      "sha256": "260125e878d967bf60896bc5653ac36b428b6304b20c4a53c315c87f8353ef47"
+    },
+    {
+      "path": ".agentteams-backups/20260421-125913/references/adjacent-repos.md",
+      "sha256": "72f32f1b6159052652d2609143d036a45171ca4d03ec930cb2d7e0f176595716"
+    },
+    {
+      "path": ".agentteams-backups/20260421-125913/references/code-hygiene-rules.reference.md",
+      "sha256": "deb626951cd457ea665665e88d890d4f1b633e3c1cf3adc1b7b59ed9f88bbfd6"
+    },
+    {
+      "path": ".agentteams-backups/20260421-125913/references/pipeline-graph.md",
+      "sha256": "15f71183075206e6edd1f6889ac67a6c4420e74afc3e047c183cb7da642de83c"
+    },
+    {
+      "path": ".agentteams-backups/20260421-125913/references/security-vulnerability-watch.json",
+      "sha256": "76667354b74b4fc671c916b6808fd2cba194fe70631711b1fc2dbba60bc7759f"
+    },
+    {
+      "path": ".agentteams-backups/20260421-125913/references/security-vulnerability-watch.reference.md",
+      "sha256": "5f71c2cf22ff6b0a5af09ed6f8cee4d4d71e21422b90775c171fd9475393b1fd"
+    },
+    {
+      "path": ".agentteams-backups/20260421-125913/repo-liaison.agent.md",
+      "sha256": "a4a50fedeb3f1bcc58791713527ce297a41eeedbe7af2a131a8368bd63cb2c93"
+    },
+    {
+      "path": ".agentteams-backups/20260421-125913/security.agent.md",
+      "sha256": "e05bc66ea5d98c232aa033d4d4f06674d187ac68ed31d813a4b8f3f6bad42c2e"
+    },
+    {
+      "path": ".agentteams-backups/20260421-125913/team-builder.agent.md",
+      "sha256": "6a0e998c5ce278f2623ba7d50b9f889e7dd286436b61bc51778b608b058c5268"
+    },
+    {
+      "path": ".agentteams-backups/20260421-125913/technical-validator.agent.md",
+      "sha256": "8814b8b3fa96024e0c986d1a91cad2441ee25f1941b7a6494209d6cd8758d1d8"
+    },
+    {
+      "path": ".agentteams-backups/20260421-130111/SETUP-REQUIRED.md",
+      "sha256": "8cc897bb3e07ae0550323f5080a3368cb543307d5d55689bfb0b212cc6dc64d4"
+    },
+    {
+      "path": ".agentteams-backups/20260421-130111/adversarial.agent.md",
+      "sha256": "733924a36354ae5236a51c8f76c3e9b4c8f74082bfdee9c12fd6a90fee9b618e"
+    },
+    {
+      "path": ".agentteams-backups/20260421-130111/agent-refactor.agent.md",
+      "sha256": "fb5c93a5c5f6df7c22e69a268a5cdc81a99731414e5a6f62b544cc39a6cef325"
+    },
+    {
+      "path": ".agentteams-backups/20260421-130111/agent-updater.agent.md",
+      "sha256": "495d31b875889ff28fb320a740a32c29b201b21279b0084f8ce3818003863357"
+    },
+    {
+      "path": ".agentteams-backups/20260421-130111/cleanup.agent.md",
+      "sha256": "807cc5b965717289194999de2c9b35b589a2f5ffc31bcc7260d365218ffe6d1f"
+    },
+    {
+      "path": ".agentteams-backups/20260421-130111/code-hygiene.agent.md",
+      "sha256": "d4cc9bd6e9d25d1e59e8d3794d23f3fe28972ea81c79b03288f9fb93b9e5c0d3"
+    },
+    {
+      "path": ".agentteams-backups/20260421-130111/conflict-auditor.agent.md",
+      "sha256": "58d40e5bea6de23ee134403f96de6692be691c4a2c4887605a651082832c0b49"
+    },
+    {
+      "path": ".agentteams-backups/20260421-130111/conflict-resolution.agent.md",
+      "sha256": "c7004e312004b407f266c4990c86ffddde8bed31f2d031ad1a2e2363202ee2b8"
+    },
+    {
+      "path": ".agentteams-backups/20260421-130111/content-enricher.agent.md",
+      "sha256": "41cc263890ba47f539eb41a2e241c24e4f74e5b62a04f33eac1656adbb52ebea"
+    },
+    {
+      "path": ".agentteams-backups/20260421-130111/copilot-instructions.md",
+      "sha256": "caf3f1eb8bf7f5ef64afcf55be7cb14c96d5997c629bdac298f1eb0315bd3ed1"
+    },
+    {
+      "path": ".agentteams-backups/20260421-130111/module-doc-author.agent.md",
+      "sha256": "c4a84085f749c9be170c3d8c5e32a62b6d4a2f566f9d532b339e84a51c57aeb1"
+    },
+    {
+      "path": ".agentteams-backups/20260421-130111/module-doc-validator.agent.md",
+      "sha256": "5a29b1f36ad299a3945ce0e8f2f16c999f164f169eab632a030e0f2dabd2aa87"
+    },
+    {
+      "path": ".agentteams-backups/20260421-130111/navigator.agent.md",
+      "sha256": "41f7866a8fb427d32174ace49f04aa5bda643132b048e161c09ca03869e086f9"
+    },
+    {
+      "path": ".agentteams-backups/20260421-130111/orchestrator.agent.md",
+      "sha256": "73d0a6156c877d1d943b0f67a69e69becb9a0081474fc22362f6f90a4661db78"
+    },
+    {
+      "path": ".agentteams-backups/20260421-130111/primary-producer.agent.md",
+      "sha256": "44e7f55fbb2946c385ec3369e12066dbd677a163601d619c19a2af56a874480a"
+    },
+    {
+      "path": ".agentteams-backups/20260421-130111/quality-auditor.agent.md",
+      "sha256": "909cef87cbddb7c31ed06e7e584f75d02eb62da30d48be8f74bb47a91f0b4953"
+    },
+    {
+      "path": ".agentteams-backups/20260421-130111/references/adjacent-repos-changelog.csv",
+      "sha256": "61acfc52834c00360cc355463cf8b9e6c5d71a1857f2cea3317bb33047390916"
+    },
+    {
+      "path": ".agentteams-backups/20260421-130111/references/adjacent-repos-coordination-log.csv",
+      "sha256": "260125e878d967bf60896bc5653ac36b428b6304b20c4a53c315c87f8353ef47"
+    },
+    {
+      "path": ".agentteams-backups/20260421-130111/references/adjacent-repos.md",
+      "sha256": "72f32f1b6159052652d2609143d036a45171ca4d03ec930cb2d7e0f176595716"
+    },
+    {
+      "path": ".agentteams-backups/20260421-130111/references/code-hygiene-rules.reference.md",
+      "sha256": "deb626951cd457ea665665e88d890d4f1b633e3c1cf3adc1b7b59ed9f88bbfd6"
+    },
+    {
+      "path": ".agentteams-backups/20260421-130111/references/pipeline-graph.md",
+      "sha256": "15f71183075206e6edd1f6889ac67a6c4420e74afc3e047c183cb7da642de83c"
+    },
+    {
+      "path": ".agentteams-backups/20260421-130111/references/security-vulnerability-watch.json",
+      "sha256": "76667354b74b4fc671c916b6808fd2cba194fe70631711b1fc2dbba60bc7759f"
+    },
+    {
+      "path": ".agentteams-backups/20260421-130111/references/security-vulnerability-watch.reference.md",
+      "sha256": "c4e1fa48cae493c8273286550e17ca6f3d677fae44cb0ff10bbc4322e11f705b"
+    },
+    {
+      "path": ".agentteams-backups/20260421-130111/repo-liaison.agent.md",
+      "sha256": "a4a50fedeb3f1bcc58791713527ce297a41eeedbe7af2a131a8368bd63cb2c93"
+    },
+    {
+      "path": ".agentteams-backups/20260421-130111/security.agent.md",
+      "sha256": "e528a74c9283b91e17176d3bd1f07b7f9ac208084b14985a8013c0bf125cfa43"
+    },
+    {
+      "path": ".agentteams-backups/20260421-130111/team-builder.agent.md",
+      "sha256": "6a0e998c5ce278f2623ba7d50b9f889e7dd286436b61bc51778b608b058c5268"
+    },
+    {
+      "path": ".agentteams-backups/20260421-130111/technical-validator.agent.md",
+      "sha256": "8814b8b3fa96024e0c986d1a91cad2441ee25f1941b7a6494209d6cd8758d1d8"
+    },
+    {
+      "path": ".agentteams-backups/20260421-130150/SETUP-REQUIRED.md",
+      "sha256": "8cc897bb3e07ae0550323f5080a3368cb543307d5d55689bfb0b212cc6dc64d4"
+    },
+    {
+      "path": ".agentteams-backups/20260421-130150/adversarial.agent.md",
+      "sha256": "733924a36354ae5236a51c8f76c3e9b4c8f74082bfdee9c12fd6a90fee9b618e"
+    },
+    {
+      "path": ".agentteams-backups/20260421-130150/agent-refactor.agent.md",
+      "sha256": "fb5c93a5c5f6df7c22e69a268a5cdc81a99731414e5a6f62b544cc39a6cef325"
+    },
+    {
+      "path": ".agentteams-backups/20260421-130150/agent-updater.agent.md",
+      "sha256": "495d31b875889ff28fb320a740a32c29b201b21279b0084f8ce3818003863357"
+    },
+    {
+      "path": ".agentteams-backups/20260421-130150/cleanup.agent.md",
+      "sha256": "807cc5b965717289194999de2c9b35b589a2f5ffc31bcc7260d365218ffe6d1f"
+    },
+    {
+      "path": ".agentteams-backups/20260421-130150/code-hygiene.agent.md",
+      "sha256": "d4cc9bd6e9d25d1e59e8d3794d23f3fe28972ea81c79b03288f9fb93b9e5c0d3"
+    },
+    {
+      "path": ".agentteams-backups/20260421-130150/conflict-auditor.agent.md",
+      "sha256": "58d40e5bea6de23ee134403f96de6692be691c4a2c4887605a651082832c0b49"
+    },
+    {
+      "path": ".agentteams-backups/20260421-130150/conflict-resolution.agent.md",
+      "sha256": "c7004e312004b407f266c4990c86ffddde8bed31f2d031ad1a2e2363202ee2b8"
+    },
+    {
+      "path": ".agentteams-backups/20260421-130150/content-enricher.agent.md",
+      "sha256": "41cc263890ba47f539eb41a2e241c24e4f74e5b62a04f33eac1656adbb52ebea"
+    },
+    {
+      "path": ".agentteams-backups/20260421-130150/copilot-instructions.md",
+      "sha256": "caf3f1eb8bf7f5ef64afcf55be7cb14c96d5997c629bdac298f1eb0315bd3ed1"
+    },
+    {
+      "path": ".agentteams-backups/20260421-130150/module-doc-author.agent.md",
+      "sha256": "c4a84085f749c9be170c3d8c5e32a62b6d4a2f566f9d532b339e84a51c57aeb1"
+    },
+    {
+      "path": ".agentteams-backups/20260421-130150/module-doc-validator.agent.md",
+      "sha256": "5a29b1f36ad299a3945ce0e8f2f16c999f164f169eab632a030e0f2dabd2aa87"
+    },
+    {
+      "path": ".agentteams-backups/20260421-130150/navigator.agent.md",
+      "sha256": "41f7866a8fb427d32174ace49f04aa5bda643132b048e161c09ca03869e086f9"
+    },
+    {
+      "path": ".agentteams-backups/20260421-130150/orchestrator.agent.md",
+      "sha256": "73d0a6156c877d1d943b0f67a69e69becb9a0081474fc22362f6f90a4661db78"
+    },
+    {
+      "path": ".agentteams-backups/20260421-130150/primary-producer.agent.md",
+      "sha256": "44e7f55fbb2946c385ec3369e12066dbd677a163601d619c19a2af56a874480a"
+    },
+    {
+      "path": ".agentteams-backups/20260421-130150/quality-auditor.agent.md",
+      "sha256": "909cef87cbddb7c31ed06e7e584f75d02eb62da30d48be8f74bb47a91f0b4953"
+    },
+    {
+      "path": ".agentteams-backups/20260421-130150/references/adjacent-repos-changelog.csv",
+      "sha256": "61acfc52834c00360cc355463cf8b9e6c5d71a1857f2cea3317bb33047390916"
+    },
+    {
+      "path": ".agentteams-backups/20260421-130150/references/adjacent-repos-coordination-log.csv",
+      "sha256": "260125e878d967bf60896bc5653ac36b428b6304b20c4a53c315c87f8353ef47"
+    },
+    {
+      "path": ".agentteams-backups/20260421-130150/references/adjacent-repos.md",
+      "sha256": "72f32f1b6159052652d2609143d036a45171ca4d03ec930cb2d7e0f176595716"
+    },
+    {
+      "path": ".agentteams-backups/20260421-130150/references/code-hygiene-rules.reference.md",
+      "sha256": "deb626951cd457ea665665e88d890d4f1b633e3c1cf3adc1b7b59ed9f88bbfd6"
+    },
+    {
+      "path": ".agentteams-backups/20260421-130150/references/pipeline-graph.md",
+      "sha256": "15f71183075206e6edd1f6889ac67a6c4420e74afc3e047c183cb7da642de83c"
+    },
+    {
+      "path": ".agentteams-backups/20260421-130150/references/security-vulnerability-watch.json",
+      "sha256": "76667354b74b4fc671c916b6808fd2cba194fe70631711b1fc2dbba60bc7759f"
+    },
+    {
+      "path": ".agentteams-backups/20260421-130150/references/security-vulnerability-watch.reference.md",
+      "sha256": "82ded508f6e64e13b6f730c0039682df0f30eb295c06fbe2e84d08a7f7b3210b"
+    },
+    {
+      "path": ".agentteams-backups/20260421-130150/repo-liaison.agent.md",
+      "sha256": "a4a50fedeb3f1bcc58791713527ce297a41eeedbe7af2a131a8368bd63cb2c93"
+    },
+    {
+      "path": ".agentteams-backups/20260421-130150/security.agent.md",
+      "sha256": "79a74159c667952ea1359e3b831311020054b4196d06d1b5b36c1faaa9ea6012"
+    },
+    {
+      "path": ".agentteams-backups/20260421-130150/team-builder.agent.md",
+      "sha256": "6a0e998c5ce278f2623ba7d50b9f889e7dd286436b61bc51778b608b058c5268"
+    },
+    {
+      "path": ".agentteams-backups/20260421-130150/technical-validator.agent.md",
+      "sha256": "8814b8b3fa96024e0c986d1a91cad2441ee25f1941b7a6494209d6cd8758d1d8"
+    },
+    {
+      "path": ".agentteams-backups/20260421-130302/SETUP-REQUIRED.md",
+      "sha256": "8cc897bb3e07ae0550323f5080a3368cb543307d5d55689bfb0b212cc6dc64d4"
+    },
+    {
+      "path": ".agentteams-backups/20260421-130302/adversarial.agent.md",
+      "sha256": "733924a36354ae5236a51c8f76c3e9b4c8f74082bfdee9c12fd6a90fee9b618e"
+    },
+    {
+      "path": ".agentteams-backups/20260421-130302/agent-refactor.agent.md",
+      "sha256": "fb5c93a5c5f6df7c22e69a268a5cdc81a99731414e5a6f62b544cc39a6cef325"
+    },
+    {
+      "path": ".agentteams-backups/20260421-130302/agent-updater.agent.md",
+      "sha256": "495d31b875889ff28fb320a740a32c29b201b21279b0084f8ce3818003863357"
+    },
+    {
+      "path": ".agentteams-backups/20260421-130302/cleanup.agent.md",
+      "sha256": "807cc5b965717289194999de2c9b35b589a2f5ffc31bcc7260d365218ffe6d1f"
+    },
+    {
+      "path": ".agentteams-backups/20260421-130302/code-hygiene.agent.md",
+      "sha256": "d4cc9bd6e9d25d1e59e8d3794d23f3fe28972ea81c79b03288f9fb93b9e5c0d3"
+    },
+    {
+      "path": ".agentteams-backups/20260421-130302/conflict-auditor.agent.md",
+      "sha256": "58d40e5bea6de23ee134403f96de6692be691c4a2c4887605a651082832c0b49"
+    },
+    {
+      "path": ".agentteams-backups/20260421-130302/conflict-resolution.agent.md",
+      "sha256": "c7004e312004b407f266c4990c86ffddde8bed31f2d031ad1a2e2363202ee2b8"
+    },
+    {
+      "path": ".agentteams-backups/20260421-130302/content-enricher.agent.md",
+      "sha256": "41cc263890ba47f539eb41a2e241c24e4f74e5b62a04f33eac1656adbb52ebea"
+    },
+    {
+      "path": ".agentteams-backups/20260421-130302/copilot-instructions.md",
+      "sha256": "caf3f1eb8bf7f5ef64afcf55be7cb14c96d5997c629bdac298f1eb0315bd3ed1"
+    },
+    {
+      "path": ".agentteams-backups/20260421-130302/module-doc-author.agent.md",
+      "sha256": "c4a84085f749c9be170c3d8c5e32a62b6d4a2f566f9d532b339e84a51c57aeb1"
+    },
+    {
+      "path": ".agentteams-backups/20260421-130302/module-doc-validator.agent.md",
+      "sha256": "5a29b1f36ad299a3945ce0e8f2f16c999f164f169eab632a030e0f2dabd2aa87"
+    },
+    {
+      "path": ".agentteams-backups/20260421-130302/navigator.agent.md",
+      "sha256": "41f7866a8fb427d32174ace49f04aa5bda643132b048e161c09ca03869e086f9"
+    },
+    {
+      "path": ".agentteams-backups/20260421-130302/orchestrator.agent.md",
+      "sha256": "73d0a6156c877d1d943b0f67a69e69becb9a0081474fc22362f6f90a4661db78"
+    },
+    {
+      "path": ".agentteams-backups/20260421-130302/primary-producer.agent.md",
+      "sha256": "44e7f55fbb2946c385ec3369e12066dbd677a163601d619c19a2af56a874480a"
+    },
+    {
+      "path": ".agentteams-backups/20260421-130302/quality-auditor.agent.md",
+      "sha256": "909cef87cbddb7c31ed06e7e584f75d02eb62da30d48be8f74bb47a91f0b4953"
+    },
+    {
+      "path": ".agentteams-backups/20260421-130302/references/adjacent-repos-changelog.csv",
+      "sha256": "61acfc52834c00360cc355463cf8b9e6c5d71a1857f2cea3317bb33047390916"
+    },
+    {
+      "path": ".agentteams-backups/20260421-130302/references/adjacent-repos-coordination-log.csv",
+      "sha256": "260125e878d967bf60896bc5653ac36b428b6304b20c4a53c315c87f8353ef47"
+    },
+    {
+      "path": ".agentteams-backups/20260421-130302/references/adjacent-repos.md",
+      "sha256": "72f32f1b6159052652d2609143d036a45171ca4d03ec930cb2d7e0f176595716"
+    },
+    {
+      "path": ".agentteams-backups/20260421-130302/references/code-hygiene-rules.reference.md",
+      "sha256": "deb626951cd457ea665665e88d890d4f1b633e3c1cf3adc1b7b59ed9f88bbfd6"
+    },
+    {
+      "path": ".agentteams-backups/20260421-130302/references/pipeline-graph.md",
+      "sha256": "15f71183075206e6edd1f6889ac67a6c4420e74afc3e047c183cb7da642de83c"
+    },
+    {
+      "path": ".agentteams-backups/20260421-130302/references/security-vulnerability-watch.json",
+      "sha256": "76667354b74b4fc671c916b6808fd2cba194fe70631711b1fc2dbba60bc7759f"
+    },
+    {
+      "path": ".agentteams-backups/20260421-130302/references/security-vulnerability-watch.reference.md",
+      "sha256": "aaf7fa3a56105c975224d0bc70b5eccc31a74656157f9112e111aa9d9f88a6b6"
+    },
+    {
+      "path": ".agentteams-backups/20260421-130302/repo-liaison.agent.md",
+      "sha256": "a4a50fedeb3f1bcc58791713527ce297a41eeedbe7af2a131a8368bd63cb2c93"
+    },
+    {
+      "path": ".agentteams-backups/20260421-130302/security.agent.md",
+      "sha256": "42a99bf3728e15b93d8b7a7c2568b33f3b17b434ea64f8871bdfa8ae080515fb"
+    },
+    {
+      "path": ".agentteams-backups/20260421-130302/team-builder.agent.md",
+      "sha256": "6a0e998c5ce278f2623ba7d50b9f889e7dd286436b61bc51778b608b058c5268"
+    },
+    {
+      "path": ".agentteams-backups/20260421-130302/technical-validator.agent.md",
+      "sha256": "8814b8b3fa96024e0c986d1a91cad2441ee25f1941b7a6494209d6cd8758d1d8"
+    },
+    {
+      "path": ".agentteams-backups/20260421-140713/SETUP-REQUIRED.md",
+      "sha256": "8cc897bb3e07ae0550323f5080a3368cb543307d5d55689bfb0b212cc6dc64d4"
+    },
+    {
+      "path": ".agentteams-backups/20260421-140713/adversarial.agent.md",
+      "sha256": "733924a36354ae5236a51c8f76c3e9b4c8f74082bfdee9c12fd6a90fee9b618e"
+    },
+    {
+      "path": ".agentteams-backups/20260421-140713/agent-refactor.agent.md",
+      "sha256": "fb5c93a5c5f6df7c22e69a268a5cdc81a99731414e5a6f62b544cc39a6cef325"
+    },
+    {
+      "path": ".agentteams-backups/20260421-140713/agent-updater.agent.md",
+      "sha256": "495d31b875889ff28fb320a740a32c29b201b21279b0084f8ce3818003863357"
+    },
+    {
+      "path": ".agentteams-backups/20260421-140713/cleanup.agent.md",
+      "sha256": "807cc5b965717289194999de2c9b35b589a2f5ffc31bcc7260d365218ffe6d1f"
+    },
+    {
+      "path": ".agentteams-backups/20260421-140713/code-hygiene.agent.md",
+      "sha256": "d4cc9bd6e9d25d1e59e8d3794d23f3fe28972ea81c79b03288f9fb93b9e5c0d3"
+    },
+    {
+      "path": ".agentteams-backups/20260421-140713/conflict-auditor.agent.md",
+      "sha256": "58d40e5bea6de23ee134403f96de6692be691c4a2c4887605a651082832c0b49"
+    },
+    {
+      "path": ".agentteams-backups/20260421-140713/conflict-resolution.agent.md",
+      "sha256": "c7004e312004b407f266c4990c86ffddde8bed31f2d031ad1a2e2363202ee2b8"
+    },
+    {
+      "path": ".agentteams-backups/20260421-140713/content-enricher.agent.md",
+      "sha256": "41cc263890ba47f539eb41a2e241c24e4f74e5b62a04f33eac1656adbb52ebea"
+    },
+    {
+      "path": ".agentteams-backups/20260421-140713/copilot-instructions.md",
+      "sha256": "caf3f1eb8bf7f5ef64afcf55be7cb14c96d5997c629bdac298f1eb0315bd3ed1"
+    },
+    {
+      "path": ".agentteams-backups/20260421-140713/module-doc-author.agent.md",
+      "sha256": "c4a84085f749c9be170c3d8c5e32a62b6d4a2f566f9d532b339e84a51c57aeb1"
+    },
+    {
+      "path": ".agentteams-backups/20260421-140713/module-doc-validator.agent.md",
+      "sha256": "5a29b1f36ad299a3945ce0e8f2f16c999f164f169eab632a030e0f2dabd2aa87"
+    },
+    {
+      "path": ".agentteams-backups/20260421-140713/navigator.agent.md",
+      "sha256": "41f7866a8fb427d32174ace49f04aa5bda643132b048e161c09ca03869e086f9"
+    },
+    {
+      "path": ".agentteams-backups/20260421-140713/orchestrator.agent.md",
+      "sha256": "73d0a6156c877d1d943b0f67a69e69becb9a0081474fc22362f6f90a4661db78"
+    },
+    {
+      "path": ".agentteams-backups/20260421-140713/primary-producer.agent.md",
+      "sha256": "44e7f55fbb2946c385ec3369e12066dbd677a163601d619c19a2af56a874480a"
+    },
+    {
+      "path": ".agentteams-backups/20260421-140713/quality-auditor.agent.md",
+      "sha256": "909cef87cbddb7c31ed06e7e584f75d02eb62da30d48be8f74bb47a91f0b4953"
+    },
+    {
+      "path": ".agentteams-backups/20260421-140713/references/adjacent-repos-changelog.csv",
+      "sha256": "61acfc52834c00360cc355463cf8b9e6c5d71a1857f2cea3317bb33047390916"
+    },
+    {
+      "path": ".agentteams-backups/20260421-140713/references/adjacent-repos-coordination-log.csv",
+      "sha256": "260125e878d967bf60896bc5653ac36b428b6304b20c4a53c315c87f8353ef47"
+    },
+    {
+      "path": ".agentteams-backups/20260421-140713/references/adjacent-repos.md",
+      "sha256": "72f32f1b6159052652d2609143d036a45171ca4d03ec930cb2d7e0f176595716"
+    },
+    {
+      "path": ".agentteams-backups/20260421-140713/references/code-hygiene-rules.reference.md",
+      "sha256": "deb626951cd457ea665665e88d890d4f1b633e3c1cf3adc1b7b59ed9f88bbfd6"
+    },
+    {
+      "path": ".agentteams-backups/20260421-140713/references/pipeline-graph.md",
+      "sha256": "15f71183075206e6edd1f6889ac67a6c4420e74afc3e047c183cb7da642de83c"
+    },
+    {
+      "path": ".agentteams-backups/20260421-140713/references/security-vulnerability-watch.json",
+      "sha256": "76667354b74b4fc671c916b6808fd2cba194fe70631711b1fc2dbba60bc7759f"
+    },
+    {
+      "path": ".agentteams-backups/20260421-140713/references/security-vulnerability-watch.reference.md",
+      "sha256": "125d5e34a5f5feab6f19d7b7c3527a0eb5809cde1a0fc55c70b56f138cbe0791"
+    },
+    {
+      "path": ".agentteams-backups/20260421-140713/repo-liaison.agent.md",
+      "sha256": "a4a50fedeb3f1bcc58791713527ce297a41eeedbe7af2a131a8368bd63cb2c93"
+    },
+    {
+      "path": ".agentteams-backups/20260421-140713/security.agent.md",
+      "sha256": "42dc31a25261bf90cc26689a972a19ace73c62acc8d83b02fb0bbbe935b9c37d"
+    },
+    {
+      "path": ".agentteams-backups/20260421-140713/team-builder.agent.md",
+      "sha256": "6a0e998c5ce278f2623ba7d50b9f889e7dd286436b61bc51778b608b058c5268"
+    },
+    {
+      "path": ".agentteams-backups/20260421-140713/technical-validator.agent.md",
+      "sha256": "8814b8b3fa96024e0c986d1a91cad2441ee25f1941b7a6494209d6cd8758d1d8"
+    },
+    {
+      "path": ".agentteams-backups/20260421-140900/SETUP-REQUIRED.md",
+      "sha256": "8cc897bb3e07ae0550323f5080a3368cb543307d5d55689bfb0b212cc6dc64d4"
+    },
+    {
+      "path": ".agentteams-backups/20260421-140900/adversarial.agent.md",
+      "sha256": "733924a36354ae5236a51c8f76c3e9b4c8f74082bfdee9c12fd6a90fee9b618e"
+    },
+    {
+      "path": ".agentteams-backups/20260421-140900/agent-refactor.agent.md",
+      "sha256": "fb5c93a5c5f6df7c22e69a268a5cdc81a99731414e5a6f62b544cc39a6cef325"
+    },
+    {
+      "path": ".agentteams-backups/20260421-140900/agent-updater.agent.md",
+      "sha256": "495d31b875889ff28fb320a740a32c29b201b21279b0084f8ce3818003863357"
+    },
+    {
+      "path": ".agentteams-backups/20260421-140900/cleanup.agent.md",
+      "sha256": "807cc5b965717289194999de2c9b35b589a2f5ffc31bcc7260d365218ffe6d1f"
+    },
+    {
+      "path": ".agentteams-backups/20260421-140900/code-hygiene.agent.md",
+      "sha256": "d4cc9bd6e9d25d1e59e8d3794d23f3fe28972ea81c79b03288f9fb93b9e5c0d3"
+    },
+    {
+      "path": ".agentteams-backups/20260421-140900/conflict-auditor.agent.md",
+      "sha256": "58d40e5bea6de23ee134403f96de6692be691c4a2c4887605a651082832c0b49"
+    },
+    {
+      "path": ".agentteams-backups/20260421-140900/conflict-resolution.agent.md",
+      "sha256": "c7004e312004b407f266c4990c86ffddde8bed31f2d031ad1a2e2363202ee2b8"
+    },
+    {
+      "path": ".agentteams-backups/20260421-140900/content-enricher.agent.md",
+      "sha256": "41cc263890ba47f539eb41a2e241c24e4f74e5b62a04f33eac1656adbb52ebea"
+    },
+    {
+      "path": ".agentteams-backups/20260421-140900/copilot-instructions.md",
+      "sha256": "caf3f1eb8bf7f5ef64afcf55be7cb14c96d5997c629bdac298f1eb0315bd3ed1"
+    },
+    {
+      "path": ".agentteams-backups/20260421-140900/module-doc-author.agent.md",
+      "sha256": "c4a84085f749c9be170c3d8c5e32a62b6d4a2f566f9d532b339e84a51c57aeb1"
+    },
+    {
+      "path": ".agentteams-backups/20260421-140900/module-doc-validator.agent.md",
+      "sha256": "5a29b1f36ad299a3945ce0e8f2f16c999f164f169eab632a030e0f2dabd2aa87"
+    },
+    {
+      "path": ".agentteams-backups/20260421-140900/navigator.agent.md",
+      "sha256": "41f7866a8fb427d32174ace49f04aa5bda643132b048e161c09ca03869e086f9"
+    },
+    {
+      "path": ".agentteams-backups/20260421-140900/orchestrator.agent.md",
+      "sha256": "2a1b9d6a7d9b61644cbd5c65942c4130f7a3ef40d44ae32bb6910830441e7128"
+    },
+    {
+      "path": ".agentteams-backups/20260421-140900/primary-producer.agent.md",
+      "sha256": "44e7f55fbb2946c385ec3369e12066dbd677a163601d619c19a2af56a874480a"
+    },
+    {
+      "path": ".agentteams-backups/20260421-140900/quality-auditor.agent.md",
+      "sha256": "909cef87cbddb7c31ed06e7e584f75d02eb62da30d48be8f74bb47a91f0b4953"
+    },
+    {
+      "path": ".agentteams-backups/20260421-140900/references/adjacent-repos-changelog.csv",
+      "sha256": "61acfc52834c00360cc355463cf8b9e6c5d71a1857f2cea3317bb33047390916"
+    },
+    {
+      "path": ".agentteams-backups/20260421-140900/references/adjacent-repos-coordination-log.csv",
+      "sha256": "260125e878d967bf60896bc5653ac36b428b6304b20c4a53c315c87f8353ef47"
+    },
+    {
+      "path": ".agentteams-backups/20260421-140900/references/adjacent-repos.md",
+      "sha256": "72f32f1b6159052652d2609143d036a45171ca4d03ec930cb2d7e0f176595716"
+    },
+    {
+      "path": ".agentteams-backups/20260421-140900/references/code-hygiene-rules.reference.md",
+      "sha256": "deb626951cd457ea665665e88d890d4f1b633e3c1cf3adc1b7b59ed9f88bbfd6"
+    },
+    {
+      "path": ".agentteams-backups/20260421-140900/references/pipeline-graph.md",
+      "sha256": "15f71183075206e6edd1f6889ac67a6c4420e74afc3e047c183cb7da642de83c"
+    },
+    {
+      "path": ".agentteams-backups/20260421-140900/references/security-vulnerability-watch.json",
+      "sha256": "76667354b74b4fc671c916b6808fd2cba194fe70631711b1fc2dbba60bc7759f"
+    },
+    {
+      "path": ".agentteams-backups/20260421-140900/references/security-vulnerability-watch.reference.md",
+      "sha256": "5f71c2cf22ff6b0a5af09ed6f8cee4d4d71e21422b90775c171fd9475393b1fd"
+    },
+    {
+      "path": ".agentteams-backups/20260421-140900/repo-liaison.agent.md",
+      "sha256": "a4a50fedeb3f1bcc58791713527ce297a41eeedbe7af2a131a8368bd63cb2c93"
+    },
+    {
+      "path": ".agentteams-backups/20260421-140900/security.agent.md",
+      "sha256": "8a6a999f2ec294dd77f4cc55f97f712020308293cdf53a868e0f94186f96b658"
+    },
+    {
+      "path": ".agentteams-backups/20260421-140900/team-builder.agent.md",
+      "sha256": "6a0e998c5ce278f2623ba7d50b9f889e7dd286436b61bc51778b608b058c5268"
+    },
+    {
+      "path": ".agentteams-backups/20260421-140900/technical-validator.agent.md",
+      "sha256": "8814b8b3fa96024e0c986d1a91cad2441ee25f1941b7a6494209d6cd8758d1d8"
+    },
+    {
+      "path": ".agentteams-backups/20260421-141439/SETUP-REQUIRED.md",
+      "sha256": "8cc897bb3e07ae0550323f5080a3368cb543307d5d55689bfb0b212cc6dc64d4"
+    },
+    {
+      "path": ".agentteams-backups/20260421-141439/adversarial.agent.md",
+      "sha256": "733924a36354ae5236a51c8f76c3e9b4c8f74082bfdee9c12fd6a90fee9b618e"
+    },
+    {
+      "path": ".agentteams-backups/20260421-141439/agent-refactor.agent.md",
+      "sha256": "fb5c93a5c5f6df7c22e69a268a5cdc81a99731414e5a6f62b544cc39a6cef325"
+    },
+    {
+      "path": ".agentteams-backups/20260421-141439/agent-updater.agent.md",
+      "sha256": "495d31b875889ff28fb320a740a32c29b201b21279b0084f8ce3818003863357"
+    },
+    {
+      "path": ".agentteams-backups/20260421-141439/cleanup.agent.md",
+      "sha256": "807cc5b965717289194999de2c9b35b589a2f5ffc31bcc7260d365218ffe6d1f"
+    },
+    {
+      "path": ".agentteams-backups/20260421-141439/code-hygiene.agent.md",
+      "sha256": "d4cc9bd6e9d25d1e59e8d3794d23f3fe28972ea81c79b03288f9fb93b9e5c0d3"
+    },
+    {
+      "path": ".agentteams-backups/20260421-141439/conflict-auditor.agent.md",
+      "sha256": "58d40e5bea6de23ee134403f96de6692be691c4a2c4887605a651082832c0b49"
+    },
+    {
+      "path": ".agentteams-backups/20260421-141439/conflict-resolution.agent.md",
+      "sha256": "c7004e312004b407f266c4990c86ffddde8bed31f2d031ad1a2e2363202ee2b8"
+    },
+    {
+      "path": ".agentteams-backups/20260421-141439/content-enricher.agent.md",
+      "sha256": "41cc263890ba47f539eb41a2e241c24e4f74e5b62a04f33eac1656adbb52ebea"
+    },
+    {
+      "path": ".agentteams-backups/20260421-141439/copilot-instructions.md",
+      "sha256": "caf3f1eb8bf7f5ef64afcf55be7cb14c96d5997c629bdac298f1eb0315bd3ed1"
+    },
+    {
+      "path": ".agentteams-backups/20260421-141439/module-doc-author.agent.md",
+      "sha256": "c4a84085f749c9be170c3d8c5e32a62b6d4a2f566f9d532b339e84a51c57aeb1"
+    },
+    {
+      "path": ".agentteams-backups/20260421-141439/module-doc-validator.agent.md",
+      "sha256": "5a29b1f36ad299a3945ce0e8f2f16c999f164f169eab632a030e0f2dabd2aa87"
+    },
+    {
+      "path": ".agentteams-backups/20260421-141439/navigator.agent.md",
+      "sha256": "41f7866a8fb427d32174ace49f04aa5bda643132b048e161c09ca03869e086f9"
+    },
+    {
+      "path": ".agentteams-backups/20260421-141439/orchestrator.agent.md",
+      "sha256": "2a1b9d6a7d9b61644cbd5c65942c4130f7a3ef40d44ae32bb6910830441e7128"
+    },
+    {
+      "path": ".agentteams-backups/20260421-141439/primary-producer.agent.md",
+      "sha256": "44e7f55fbb2946c385ec3369e12066dbd677a163601d619c19a2af56a874480a"
+    },
+    {
+      "path": ".agentteams-backups/20260421-141439/quality-auditor.agent.md",
+      "sha256": "909cef87cbddb7c31ed06e7e584f75d02eb62da30d48be8f74bb47a91f0b4953"
+    },
+    {
+      "path": ".agentteams-backups/20260421-141439/references/adjacent-repos-changelog.csv",
+      "sha256": "61acfc52834c00360cc355463cf8b9e6c5d71a1857f2cea3317bb33047390916"
+    },
+    {
+      "path": ".agentteams-backups/20260421-141439/references/adjacent-repos-coordination-log.csv",
+      "sha256": "260125e878d967bf60896bc5653ac36b428b6304b20c4a53c315c87f8353ef47"
+    },
+    {
+      "path": ".agentteams-backups/20260421-141439/references/adjacent-repos.md",
+      "sha256": "72f32f1b6159052652d2609143d036a45171ca4d03ec930cb2d7e0f176595716"
+    },
+    {
+      "path": ".agentteams-backups/20260421-141439/references/code-hygiene-rules.reference.md",
+      "sha256": "deb626951cd457ea665665e88d890d4f1b633e3c1cf3adc1b7b59ed9f88bbfd6"
+    },
+    {
+      "path": ".agentteams-backups/20260421-141439/references/pipeline-graph.md",
+      "sha256": "15f71183075206e6edd1f6889ac67a6c4420e74afc3e047c183cb7da642de83c"
+    },
+    {
+      "path": ".agentteams-backups/20260421-141439/references/security-vulnerability-watch.json",
+      "sha256": "76667354b74b4fc671c916b6808fd2cba194fe70631711b1fc2dbba60bc7759f"
+    },
+    {
+      "path": ".agentteams-backups/20260421-141439/references/security-vulnerability-watch.reference.md",
+      "sha256": "99120d799ab9b01764eb6f95488654e390e06646a3feeeaea0bed90b81321c92"
+    },
+    {
+      "path": ".agentteams-backups/20260421-141439/repo-liaison.agent.md",
+      "sha256": "a4a50fedeb3f1bcc58791713527ce297a41eeedbe7af2a131a8368bd63cb2c93"
+    },
+    {
+      "path": ".agentteams-backups/20260421-141439/security.agent.md",
+      "sha256": "480c674ad8ff8b0594efc64a633a34500b73574e6fc2112436844b914e9037bf"
+    },
+    {
+      "path": ".agentteams-backups/20260421-141439/team-builder.agent.md",
+      "sha256": "6a0e998c5ce278f2623ba7d50b9f889e7dd286436b61bc51778b608b058c5268"
+    },
+    {
+      "path": ".agentteams-backups/20260421-141439/technical-validator.agent.md",
+      "sha256": "8814b8b3fa96024e0c986d1a91cad2441ee25f1941b7a6494209d6cd8758d1d8"
+    },
+    {
+      "path": ".agentteams-backups/20260421-200217/SETUP-REQUIRED.md",
+      "sha256": "8cc897bb3e07ae0550323f5080a3368cb543307d5d55689bfb0b212cc6dc64d4"
+    },
+    {
+      "path": ".agentteams-backups/20260421-200217/adversarial.agent.md",
+      "sha256": "733924a36354ae5236a51c8f76c3e9b4c8f74082bfdee9c12fd6a90fee9b618e"
+    },
+    {
+      "path": ".agentteams-backups/20260421-200217/agent-refactor.agent.md",
+      "sha256": "fb5c93a5c5f6df7c22e69a268a5cdc81a99731414e5a6f62b544cc39a6cef325"
+    },
+    {
+      "path": ".agentteams-backups/20260421-200217/agent-updater.agent.md",
+      "sha256": "495d31b875889ff28fb320a740a32c29b201b21279b0084f8ce3818003863357"
+    },
+    {
+      "path": ".agentteams-backups/20260421-200217/cleanup.agent.md",
+      "sha256": "807cc5b965717289194999de2c9b35b589a2f5ffc31bcc7260d365218ffe6d1f"
+    },
+    {
+      "path": ".agentteams-backups/20260421-200217/code-hygiene.agent.md",
+      "sha256": "d4cc9bd6e9d25d1e59e8d3794d23f3fe28972ea81c79b03288f9fb93b9e5c0d3"
+    },
+    {
+      "path": ".agentteams-backups/20260421-200217/conflict-auditor.agent.md",
+      "sha256": "58d40e5bea6de23ee134403f96de6692be691c4a2c4887605a651082832c0b49"
+    },
+    {
+      "path": ".agentteams-backups/20260421-200217/conflict-resolution.agent.md",
+      "sha256": "c7004e312004b407f266c4990c86ffddde8bed31f2d031ad1a2e2363202ee2b8"
+    },
+    {
+      "path": ".agentteams-backups/20260421-200217/content-enricher.agent.md",
+      "sha256": "41cc263890ba47f539eb41a2e241c24e4f74e5b62a04f33eac1656adbb52ebea"
+    },
+    {
+      "path": ".agentteams-backups/20260421-200217/copilot-instructions.md",
+      "sha256": "caf3f1eb8bf7f5ef64afcf55be7cb14c96d5997c629bdac298f1eb0315bd3ed1"
+    },
+    {
+      "path": ".agentteams-backups/20260421-200217/module-doc-author.agent.md",
+      "sha256": "c4a84085f749c9be170c3d8c5e32a62b6d4a2f566f9d532b339e84a51c57aeb1"
+    },
+    {
+      "path": ".agentteams-backups/20260421-200217/module-doc-validator.agent.md",
+      "sha256": "5a29b1f36ad299a3945ce0e8f2f16c999f164f169eab632a030e0f2dabd2aa87"
+    },
+    {
+      "path": ".agentteams-backups/20260421-200217/navigator.agent.md",
+      "sha256": "41f7866a8fb427d32174ace49f04aa5bda643132b048e161c09ca03869e086f9"
+    },
+    {
+      "path": ".agentteams-backups/20260421-200217/orchestrator.agent.md",
+      "sha256": "2a1b9d6a7d9b61644cbd5c65942c4130f7a3ef40d44ae32bb6910830441e7128"
+    },
+    {
+      "path": ".agentteams-backups/20260421-200217/primary-producer.agent.md",
+      "sha256": "44e7f55fbb2946c385ec3369e12066dbd677a163601d619c19a2af56a874480a"
+    },
+    {
+      "path": ".agentteams-backups/20260421-200217/quality-auditor.agent.md",
+      "sha256": "909cef87cbddb7c31ed06e7e584f75d02eb62da30d48be8f74bb47a91f0b4953"
+    },
+    {
+      "path": ".agentteams-backups/20260421-200217/references/adjacent-repos-changelog.csv",
+      "sha256": "61acfc52834c00360cc355463cf8b9e6c5d71a1857f2cea3317bb33047390916"
+    },
+    {
+      "path": ".agentteams-backups/20260421-200217/references/adjacent-repos-coordination-log.csv",
+      "sha256": "260125e878d967bf60896bc5653ac36b428b6304b20c4a53c315c87f8353ef47"
+    },
+    {
+      "path": ".agentteams-backups/20260421-200217/references/adjacent-repos.md",
+      "sha256": "72f32f1b6159052652d2609143d036a45171ca4d03ec930cb2d7e0f176595716"
+    },
+    {
+      "path": ".agentteams-backups/20260421-200217/references/code-hygiene-rules.reference.md",
+      "sha256": "deb626951cd457ea665665e88d890d4f1b633e3c1cf3adc1b7b59ed9f88bbfd6"
+    },
+    {
+      "path": ".agentteams-backups/20260421-200217/references/pipeline-graph.md",
+      "sha256": "15f71183075206e6edd1f6889ac67a6c4420e74afc3e047c183cb7da642de83c"
+    },
+    {
+      "path": ".agentteams-backups/20260421-200217/references/security-vulnerability-watch.json",
+      "sha256": "76667354b74b4fc671c916b6808fd2cba194fe70631711b1fc2dbba60bc7759f"
+    },
+    {
+      "path": ".agentteams-backups/20260421-200217/references/security-vulnerability-watch.reference.md",
+      "sha256": "99120d799ab9b01764eb6f95488654e390e06646a3feeeaea0bed90b81321c92"
+    },
+    {
+      "path": ".agentteams-backups/20260421-200217/repo-liaison.agent.md",
+      "sha256": "a4a50fedeb3f1bcc58791713527ce297a41eeedbe7af2a131a8368bd63cb2c93"
+    },
+    {
+      "path": ".agentteams-backups/20260421-200217/security.agent.md",
+      "sha256": "89fd3246c67ccc49dc9984f0e73abf8b723ca7506e0281064af9cd7df685dc76"
+    },
+    {
+      "path": ".agentteams-backups/20260421-200217/team-builder.agent.md",
+      "sha256": "6a0e998c5ce278f2623ba7d50b9f889e7dd286436b61bc51778b608b058c5268"
+    },
+    {
+      "path": ".agentteams-backups/20260421-200217/technical-validator.agent.md",
+      "sha256": "8814b8b3fa96024e0c986d1a91cad2441ee25f1941b7a6494209d6cd8758d1d8"
+    },
+    {
+      "path": ".agentteams-backups/20260421-201640/SETUP-REQUIRED.md",
+      "sha256": "8cc897bb3e07ae0550323f5080a3368cb543307d5d55689bfb0b212cc6dc64d4"
+    },
+    {
+      "path": ".agentteams-backups/20260421-201640/adversarial.agent.md",
+      "sha256": "733924a36354ae5236a51c8f76c3e9b4c8f74082bfdee9c12fd6a90fee9b618e"
+    },
+    {
+      "path": ".agentteams-backups/20260421-201640/agent-refactor.agent.md",
+      "sha256": "fb5c93a5c5f6df7c22e69a268a5cdc81a99731414e5a6f62b544cc39a6cef325"
+    },
+    {
+      "path": ".agentteams-backups/20260421-201640/agent-updater.agent.md",
+      "sha256": "495d31b875889ff28fb320a740a32c29b201b21279b0084f8ce3818003863357"
+    },
+    {
+      "path": ".agentteams-backups/20260421-201640/cleanup.agent.md",
+      "sha256": "807cc5b965717289194999de2c9b35b589a2f5ffc31bcc7260d365218ffe6d1f"
+    },
+    {
+      "path": ".agentteams-backups/20260421-201640/code-hygiene.agent.md",
+      "sha256": "d4cc9bd6e9d25d1e59e8d3794d23f3fe28972ea81c79b03288f9fb93b9e5c0d3"
+    },
+    {
+      "path": ".agentteams-backups/20260421-201640/conflict-auditor.agent.md",
+      "sha256": "58d40e5bea6de23ee134403f96de6692be691c4a2c4887605a651082832c0b49"
+    },
+    {
+      "path": ".agentteams-backups/20260421-201640/conflict-resolution.agent.md",
+      "sha256": "c7004e312004b407f266c4990c86ffddde8bed31f2d031ad1a2e2363202ee2b8"
+    },
+    {
+      "path": ".agentteams-backups/20260421-201640/content-enricher.agent.md",
+      "sha256": "41cc263890ba47f539eb41a2e241c24e4f74e5b62a04f33eac1656adbb52ebea"
+    },
+    {
+      "path": ".agentteams-backups/20260421-201640/copilot-instructions.md",
+      "sha256": "e9f4937b3397dfd9306ccd8c45e26feaac808358c6e365df01c6674b8352ec09"
+    },
+    {
+      "path": ".agentteams-backups/20260421-201640/module-doc-author.agent.md",
+      "sha256": "c4a84085f749c9be170c3d8c5e32a62b6d4a2f566f9d532b339e84a51c57aeb1"
+    },
+    {
+      "path": ".agentteams-backups/20260421-201640/module-doc-validator.agent.md",
+      "sha256": "5a29b1f36ad299a3945ce0e8f2f16c999f164f169eab632a030e0f2dabd2aa87"
+    },
+    {
+      "path": ".agentteams-backups/20260421-201640/navigator.agent.md",
+      "sha256": "41f7866a8fb427d32174ace49f04aa5bda643132b048e161c09ca03869e086f9"
+    },
+    {
+      "path": ".agentteams-backups/20260421-201640/orchestrator.agent.md",
+      "sha256": "ad700fa935af64bd5903b361938c418bb37f0000485d67a1a6562a8cb4aefe6a"
+    },
+    {
+      "path": ".agentteams-backups/20260421-201640/primary-producer.agent.md",
+      "sha256": "44e7f55fbb2946c385ec3369e12066dbd677a163601d619c19a2af56a874480a"
+    },
+    {
+      "path": ".agentteams-backups/20260421-201640/quality-auditor.agent.md",
+      "sha256": "909cef87cbddb7c31ed06e7e584f75d02eb62da30d48be8f74bb47a91f0b4953"
+    },
+    {
+      "path": ".agentteams-backups/20260421-201640/references/adjacent-repos-changelog.csv",
+      "sha256": "61acfc52834c00360cc355463cf8b9e6c5d71a1857f2cea3317bb33047390916"
+    },
+    {
+      "path": ".agentteams-backups/20260421-201640/references/adjacent-repos-coordination-log.csv",
+      "sha256": "260125e878d967bf60896bc5653ac36b428b6304b20c4a53c315c87f8353ef47"
+    },
+    {
+      "path": ".agentteams-backups/20260421-201640/references/adjacent-repos.md",
+      "sha256": "72f32f1b6159052652d2609143d036a45171ca4d03ec930cb2d7e0f176595716"
+    },
+    {
+      "path": ".agentteams-backups/20260421-201640/references/code-hygiene-rules.reference.md",
+      "sha256": "deb626951cd457ea665665e88d890d4f1b633e3c1cf3adc1b7b59ed9f88bbfd6"
+    },
+    {
+      "path": ".agentteams-backups/20260421-201640/references/pipeline-graph.md",
+      "sha256": "15f71183075206e6edd1f6889ac67a6c4420e74afc3e047c183cb7da642de83c"
+    },
+    {
+      "path": ".agentteams-backups/20260421-201640/references/security-vulnerability-watch.json",
+      "sha256": "76667354b74b4fc671c916b6808fd2cba194fe70631711b1fc2dbba60bc7759f"
+    },
+    {
+      "path": ".agentteams-backups/20260421-201640/references/security-vulnerability-watch.reference.md",
+      "sha256": "5f71c2cf22ff6b0a5af09ed6f8cee4d4d71e21422b90775c171fd9475393b1fd"
+    },
+    {
+      "path": ".agentteams-backups/20260421-201640/repo-liaison.agent.md",
+      "sha256": "a4a50fedeb3f1bcc58791713527ce297a41eeedbe7af2a131a8368bd63cb2c93"
+    },
+    {
+      "path": ".agentteams-backups/20260421-201640/security.agent.md",
+      "sha256": "0517ed2c56cc2399ec54c723508199b2e9412eab4b309395f299beae7ad1e2eb"
+    },
+    {
+      "path": ".agentteams-backups/20260421-201640/team-builder.agent.md",
+      "sha256": "6a0e998c5ce278f2623ba7d50b9f889e7dd286436b61bc51778b608b058c5268"
+    },
+    {
+      "path": ".agentteams-backups/20260421-201640/technical-validator.agent.md",
+      "sha256": "8814b8b3fa96024e0c986d1a91cad2441ee25f1941b7a6494209d6cd8758d1d8"
+    },
+    {
+      "path": ".agentteams-backups/20260421-205546/SETUP-REQUIRED.md",
+      "sha256": "8cc897bb3e07ae0550323f5080a3368cb543307d5d55689bfb0b212cc6dc64d4"
+    },
+    {
+      "path": ".agentteams-backups/20260421-205546/adversarial.agent.md",
+      "sha256": "733924a36354ae5236a51c8f76c3e9b4c8f74082bfdee9c12fd6a90fee9b618e"
+    },
+    {
+      "path": ".agentteams-backups/20260421-205546/agent-refactor.agent.md",
+      "sha256": "fb5c93a5c5f6df7c22e69a268a5cdc81a99731414e5a6f62b544cc39a6cef325"
+    },
+    {
+      "path": ".agentteams-backups/20260421-205546/agent-updater.agent.md",
+      "sha256": "495d31b875889ff28fb320a740a32c29b201b21279b0084f8ce3818003863357"
+    },
+    {
+      "path": ".agentteams-backups/20260421-205546/cleanup.agent.md",
+      "sha256": "807cc5b965717289194999de2c9b35b589a2f5ffc31bcc7260d365218ffe6d1f"
+    },
+    {
+      "path": ".agentteams-backups/20260421-205546/code-hygiene.agent.md",
+      "sha256": "d4cc9bd6e9d25d1e59e8d3794d23f3fe28972ea81c79b03288f9fb93b9e5c0d3"
+    },
+    {
+      "path": ".agentteams-backups/20260421-205546/conflict-auditor.agent.md",
+      "sha256": "58d40e5bea6de23ee134403f96de6692be691c4a2c4887605a651082832c0b49"
+    },
+    {
+      "path": ".agentteams-backups/20260421-205546/conflict-resolution.agent.md",
+      "sha256": "c7004e312004b407f266c4990c86ffddde8bed31f2d031ad1a2e2363202ee2b8"
+    },
+    {
+      "path": ".agentteams-backups/20260421-205546/content-enricher.agent.md",
+      "sha256": "41cc263890ba47f539eb41a2e241c24e4f74e5b62a04f33eac1656adbb52ebea"
+    },
+    {
+      "path": ".agentteams-backups/20260421-205546/copilot-instructions.md",
+      "sha256": "e9f4937b3397dfd9306ccd8c45e26feaac808358c6e365df01c6674b8352ec09"
+    },
+    {
+      "path": ".agentteams-backups/20260421-205546/module-doc-author.agent.md",
+      "sha256": "c4a84085f749c9be170c3d8c5e32a62b6d4a2f566f9d532b339e84a51c57aeb1"
+    },
+    {
+      "path": ".agentteams-backups/20260421-205546/module-doc-validator.agent.md",
+      "sha256": "5a29b1f36ad299a3945ce0e8f2f16c999f164f169eab632a030e0f2dabd2aa87"
+    },
+    {
+      "path": ".agentteams-backups/20260421-205546/navigator.agent.md",
+      "sha256": "41f7866a8fb427d32174ace49f04aa5bda643132b048e161c09ca03869e086f9"
+    },
+    {
+      "path": ".agentteams-backups/20260421-205546/orchestrator.agent.md",
+      "sha256": "ad700fa935af64bd5903b361938c418bb37f0000485d67a1a6562a8cb4aefe6a"
+    },
+    {
+      "path": ".agentteams-backups/20260421-205546/primary-producer.agent.md",
+      "sha256": "44e7f55fbb2946c385ec3369e12066dbd677a163601d619c19a2af56a874480a"
+    },
+    {
+      "path": ".agentteams-backups/20260421-205546/quality-auditor.agent.md",
+      "sha256": "909cef87cbddb7c31ed06e7e584f75d02eb62da30d48be8f74bb47a91f0b4953"
+    },
+    {
+      "path": ".agentteams-backups/20260421-205546/references/adjacent-repos-changelog.csv",
+      "sha256": "61acfc52834c00360cc355463cf8b9e6c5d71a1857f2cea3317bb33047390916"
+    },
+    {
+      "path": ".agentteams-backups/20260421-205546/references/adjacent-repos-coordination-log.csv",
+      "sha256": "260125e878d967bf60896bc5653ac36b428b6304b20c4a53c315c87f8353ef47"
+    },
+    {
+      "path": ".agentteams-backups/20260421-205546/references/adjacent-repos.md",
+      "sha256": "72f32f1b6159052652d2609143d036a45171ca4d03ec930cb2d7e0f176595716"
+    },
+    {
+      "path": ".agentteams-backups/20260421-205546/references/code-hygiene-rules.reference.md",
+      "sha256": "deb626951cd457ea665665e88d890d4f1b633e3c1cf3adc1b7b59ed9f88bbfd6"
+    },
+    {
+      "path": ".agentteams-backups/20260421-205546/references/pipeline-graph.md",
+      "sha256": "15f71183075206e6edd1f6889ac67a6c4420e74afc3e047c183cb7da642de83c"
+    },
+    {
+      "path": ".agentteams-backups/20260421-205546/references/security-vulnerability-watch.json",
+      "sha256": "76667354b74b4fc671c916b6808fd2cba194fe70631711b1fc2dbba60bc7759f"
+    },
+    {
+      "path": ".agentteams-backups/20260421-205546/references/security-vulnerability-watch.reference.md",
+      "sha256": "5f71c2cf22ff6b0a5af09ed6f8cee4d4d71e21422b90775c171fd9475393b1fd"
+    },
+    {
+      "path": ".agentteams-backups/20260421-205546/repo-liaison.agent.md",
+      "sha256": "a4a50fedeb3f1bcc58791713527ce297a41eeedbe7af2a131a8368bd63cb2c93"
+    },
+    {
+      "path": ".agentteams-backups/20260421-205546/security.agent.md",
+      "sha256": "eef06f4dba56983425ef92d888c8095f9c54e1c7ef01ed7c52d33c874a9eec42"
+    },
+    {
+      "path": ".agentteams-backups/20260421-205546/team-builder.agent.md",
+      "sha256": "6a0e998c5ce278f2623ba7d50b9f889e7dd286436b61bc51778b608b058c5268"
+    },
+    {
+      "path": ".agentteams-backups/20260421-205546/technical-validator.agent.md",
+      "sha256": "8814b8b3fa96024e0c986d1a91cad2441ee25f1941b7a6494209d6cd8758d1d8"
+    },
+    {
+      "path": ".agentteams-backups/20260421-213434/SETUP-REQUIRED.md",
+      "sha256": "8cc897bb3e07ae0550323f5080a3368cb543307d5d55689bfb0b212cc6dc64d4"
+    },
+    {
+      "path": ".agentteams-backups/20260421-213434/adversarial.agent.md",
+      "sha256": "733924a36354ae5236a51c8f76c3e9b4c8f74082bfdee9c12fd6a90fee9b618e"
+    },
+    {
+      "path": ".agentteams-backups/20260421-213434/agent-refactor.agent.md",
+      "sha256": "fb5c93a5c5f6df7c22e69a268a5cdc81a99731414e5a6f62b544cc39a6cef325"
+    },
+    {
+      "path": ".agentteams-backups/20260421-213434/agent-updater.agent.md",
+      "sha256": "495d31b875889ff28fb320a740a32c29b201b21279b0084f8ce3818003863357"
+    },
+    {
+      "path": ".agentteams-backups/20260421-213434/cleanup.agent.md",
+      "sha256": "807cc5b965717289194999de2c9b35b589a2f5ffc31bcc7260d365218ffe6d1f"
+    },
+    {
+      "path": ".agentteams-backups/20260421-213434/code-hygiene.agent.md",
+      "sha256": "d4cc9bd6e9d25d1e59e8d3794d23f3fe28972ea81c79b03288f9fb93b9e5c0d3"
+    },
+    {
+      "path": ".agentteams-backups/20260421-213434/conflict-auditor.agent.md",
+      "sha256": "58d40e5bea6de23ee134403f96de6692be691c4a2c4887605a651082832c0b49"
+    },
+    {
+      "path": ".agentteams-backups/20260421-213434/conflict-resolution.agent.md",
+      "sha256": "c7004e312004b407f266c4990c86ffddde8bed31f2d031ad1a2e2363202ee2b8"
+    },
+    {
+      "path": ".agentteams-backups/20260421-213434/content-enricher.agent.md",
+      "sha256": "41cc263890ba47f539eb41a2e241c24e4f74e5b62a04f33eac1656adbb52ebea"
+    },
+    {
+      "path": ".agentteams-backups/20260421-213434/copilot-instructions.md",
+      "sha256": "34cd3d36f00c51c2576a222a5566e3794ea36beeab97c4db3cad2754c8c9614b"
+    },
+    {
+      "path": ".agentteams-backups/20260421-213434/module-doc-author.agent.md",
+      "sha256": "c4a84085f749c9be170c3d8c5e32a62b6d4a2f566f9d532b339e84a51c57aeb1"
+    },
+    {
+      "path": ".agentteams-backups/20260421-213434/module-doc-validator.agent.md",
+      "sha256": "5a29b1f36ad299a3945ce0e8f2f16c999f164f169eab632a030e0f2dabd2aa87"
+    },
+    {
+      "path": ".agentteams-backups/20260421-213434/navigator.agent.md",
+      "sha256": "41f7866a8fb427d32174ace49f04aa5bda643132b048e161c09ca03869e086f9"
+    },
+    {
+      "path": ".agentteams-backups/20260421-213434/orchestrator.agent.md",
+      "sha256": "ad700fa935af64bd5903b361938c418bb37f0000485d67a1a6562a8cb4aefe6a"
+    },
+    {
+      "path": ".agentteams-backups/20260421-213434/primary-producer.agent.md",
+      "sha256": "44e7f55fbb2946c385ec3369e12066dbd677a163601d619c19a2af56a874480a"
+    },
+    {
+      "path": ".agentteams-backups/20260421-213434/quality-auditor.agent.md",
+      "sha256": "909cef87cbddb7c31ed06e7e584f75d02eb62da30d48be8f74bb47a91f0b4953"
+    },
+    {
+      "path": ".agentteams-backups/20260421-213434/references/adjacent-repos-changelog.csv",
+      "sha256": "61acfc52834c00360cc355463cf8b9e6c5d71a1857f2cea3317bb33047390916"
+    },
+    {
+      "path": ".agentteams-backups/20260421-213434/references/adjacent-repos-coordination-log.csv",
+      "sha256": "260125e878d967bf60896bc5653ac36b428b6304b20c4a53c315c87f8353ef47"
+    },
+    {
+      "path": ".agentteams-backups/20260421-213434/references/adjacent-repos.md",
+      "sha256": "72f32f1b6159052652d2609143d036a45171ca4d03ec930cb2d7e0f176595716"
+    },
+    {
+      "path": ".agentteams-backups/20260421-213434/references/code-hygiene-rules.reference.md",
+      "sha256": "deb626951cd457ea665665e88d890d4f1b633e3c1cf3adc1b7b59ed9f88bbfd6"
+    },
+    {
+      "path": ".agentteams-backups/20260421-213434/references/pipeline-graph.md",
+      "sha256": "15f71183075206e6edd1f6889ac67a6c4420e74afc3e047c183cb7da642de83c"
+    },
+    {
+      "path": ".agentteams-backups/20260421-213434/references/security-vulnerability-watch.json",
+      "sha256": "76667354b74b4fc671c916b6808fd2cba194fe70631711b1fc2dbba60bc7759f"
+    },
+    {
+      "path": ".agentteams-backups/20260421-213434/references/security-vulnerability-watch.reference.md",
+      "sha256": "5f71c2cf22ff6b0a5af09ed6f8cee4d4d71e21422b90775c171fd9475393b1fd"
+    },
+    {
+      "path": ".agentteams-backups/20260421-213434/repo-liaison.agent.md",
+      "sha256": "a4a50fedeb3f1bcc58791713527ce297a41eeedbe7af2a131a8368bd63cb2c93"
+    },
+    {
+      "path": ".agentteams-backups/20260421-213434/security.agent.md",
+      "sha256": "a1523967ccbb50ef357f9ebed4140e78e3a9d14fb30c2762973f9b0369572dfe"
+    },
+    {
+      "path": ".agentteams-backups/20260421-213434/team-builder.agent.md",
+      "sha256": "6a0e998c5ce278f2623ba7d50b9f889e7dd286436b61bc51778b608b058c5268"
+    },
+    {
+      "path": ".agentteams-backups/20260421-213434/technical-validator.agent.md",
+      "sha256": "8814b8b3fa96024e0c986d1a91cad2441ee25f1941b7a6494209d6cd8758d1d8"
+    },
+    {
+      "path": ".agentteams-backups/20260421-213434/tool-doc-researcher.agent.md",
+      "sha256": "49183f81b4b1c675355f40368bb58fbf7503d6a9b39a1030cf1e70ff1faf887b"
+    },
+    {
+      "path": ".agentteams-backups/20260421-213434/tool-sql.agent.md",
+      "sha256": "04d5c52ad05e6bacf1bef2564910bc9b41db3534f3090c14966560c2d5e07546"
+    },
+    {
+      "path": ".agentteams-backups/20260422-131547/SETUP-REQUIRED.md",
+      "sha256": "8cc897bb3e07ae0550323f5080a3368cb543307d5d55689bfb0b212cc6dc64d4"
+    },
+    {
+      "path": ".agentteams-backups/20260422-131547/adversarial.agent.md",
+      "sha256": "733924a36354ae5236a51c8f76c3e9b4c8f74082bfdee9c12fd6a90fee9b618e"
+    },
+    {
+      "path": ".agentteams-backups/20260422-131547/agent-refactor.agent.md",
+      "sha256": "fb5c93a5c5f6df7c22e69a268a5cdc81a99731414e5a6f62b544cc39a6cef325"
+    },
+    {
+      "path": ".agentteams-backups/20260422-131547/agent-updater.agent.md",
+      "sha256": "495d31b875889ff28fb320a740a32c29b201b21279b0084f8ce3818003863357"
+    },
+    {
+      "path": ".agentteams-backups/20260422-131547/cleanup.agent.md",
+      "sha256": "807cc5b965717289194999de2c9b35b589a2f5ffc31bcc7260d365218ffe6d1f"
+    },
+    {
+      "path": ".agentteams-backups/20260422-131547/code-hygiene.agent.md",
+      "sha256": "d4cc9bd6e9d25d1e59e8d3794d23f3fe28972ea81c79b03288f9fb93b9e5c0d3"
+    },
+    {
+      "path": ".agentteams-backups/20260422-131547/conflict-auditor.agent.md",
+      "sha256": "58d40e5bea6de23ee134403f96de6692be691c4a2c4887605a651082832c0b49"
+    },
+    {
+      "path": ".agentteams-backups/20260422-131547/conflict-resolution.agent.md",
+      "sha256": "c7004e312004b407f266c4990c86ffddde8bed31f2d031ad1a2e2363202ee2b8"
+    },
+    {
+      "path": ".agentteams-backups/20260422-131547/content-enricher.agent.md",
+      "sha256": "41cc263890ba47f539eb41a2e241c24e4f74e5b62a04f33eac1656adbb52ebea"
+    },
+    {
+      "path": ".agentteams-backups/20260422-131547/copilot-instructions.md",
+      "sha256": "34cd3d36f00c51c2576a222a5566e3794ea36beeab97c4db3cad2754c8c9614b"
+    },
+    {
+      "path": ".agentteams-backups/20260422-131547/module-doc-author.agent.md",
+      "sha256": "c4a84085f749c9be170c3d8c5e32a62b6d4a2f566f9d532b339e84a51c57aeb1"
+    },
+    {
+      "path": ".agentteams-backups/20260422-131547/module-doc-validator.agent.md",
+      "sha256": "5a29b1f36ad299a3945ce0e8f2f16c999f164f169eab632a030e0f2dabd2aa87"
+    },
+    {
+      "path": ".agentteams-backups/20260422-131547/navigator.agent.md",
+      "sha256": "41f7866a8fb427d32174ace49f04aa5bda643132b048e161c09ca03869e086f9"
+    },
+    {
+      "path": ".agentteams-backups/20260422-131547/orchestrator.agent.md",
+      "sha256": "ad700fa935af64bd5903b361938c418bb37f0000485d67a1a6562a8cb4aefe6a"
+    },
+    {
+      "path": ".agentteams-backups/20260422-131547/primary-producer.agent.md",
+      "sha256": "44e7f55fbb2946c385ec3369e12066dbd677a163601d619c19a2af56a874480a"
+    },
+    {
+      "path": ".agentteams-backups/20260422-131547/quality-auditor.agent.md",
+      "sha256": "909cef87cbddb7c31ed06e7e584f75d02eb62da30d48be8f74bb47a91f0b4953"
+    },
+    {
+      "path": ".agentteams-backups/20260422-131547/references/adjacent-repos-changelog.csv",
+      "sha256": "61acfc52834c00360cc355463cf8b9e6c5d71a1857f2cea3317bb33047390916"
+    },
+    {
+      "path": ".agentteams-backups/20260422-131547/references/adjacent-repos-coordination-log.csv",
+      "sha256": "260125e878d967bf60896bc5653ac36b428b6304b20c4a53c315c87f8353ef47"
+    },
+    {
+      "path": ".agentteams-backups/20260422-131547/references/adjacent-repos.md",
+      "sha256": "72f32f1b6159052652d2609143d036a45171ca4d03ec930cb2d7e0f176595716"
+    },
+    {
+      "path": ".agentteams-backups/20260422-131547/references/code-hygiene-rules.reference.md",
+      "sha256": "deb626951cd457ea665665e88d890d4f1b633e3c1cf3adc1b7b59ed9f88bbfd6"
+    },
+    {
+      "path": ".agentteams-backups/20260422-131547/references/pipeline-graph.md",
+      "sha256": "15f71183075206e6edd1f6889ac67a6c4420e74afc3e047c183cb7da642de83c"
+    },
+    {
+      "path": ".agentteams-backups/20260422-131547/references/security-vulnerability-watch.json",
+      "sha256": "76667354b74b4fc671c916b6808fd2cba194fe70631711b1fc2dbba60bc7759f"
+    },
+    {
+      "path": ".agentteams-backups/20260422-131547/references/security-vulnerability-watch.reference.md",
+      "sha256": "5f71c2cf22ff6b0a5af09ed6f8cee4d4d71e21422b90775c171fd9475393b1fd"
+    },
+    {
+      "path": ".agentteams-backups/20260422-131547/repo-liaison.agent.md",
+      "sha256": "a4a50fedeb3f1bcc58791713527ce297a41eeedbe7af2a131a8368bd63cb2c93"
+    },
+    {
+      "path": ".agentteams-backups/20260422-131547/security.agent.md",
+      "sha256": "a50b42a1f9b25ac3b78b6553f1707b9460c7f0b1b8a0d33a392817e751ff23c9"
+    },
+    {
+      "path": ".agentteams-backups/20260422-131547/team-builder.agent.md",
+      "sha256": "6a0e998c5ce278f2623ba7d50b9f889e7dd286436b61bc51778b608b058c5268"
+    },
+    {
+      "path": ".agentteams-backups/20260422-131547/technical-validator.agent.md",
+      "sha256": "8814b8b3fa96024e0c986d1a91cad2441ee25f1941b7a6494209d6cd8758d1d8"
+    },
+    {
+      "path": ".agentteams-backups/20260422-131932/SETUP-REQUIRED.md",
+      "sha256": "8cc897bb3e07ae0550323f5080a3368cb543307d5d55689bfb0b212cc6dc64d4"
+    },
+    {
+      "path": ".agentteams-backups/20260422-131932/adversarial.agent.md",
+      "sha256": "733924a36354ae5236a51c8f76c3e9b4c8f74082bfdee9c12fd6a90fee9b618e"
+    },
+    {
+      "path": ".agentteams-backups/20260422-131932/agent-refactor.agent.md",
+      "sha256": "fb5c93a5c5f6df7c22e69a268a5cdc81a99731414e5a6f62b544cc39a6cef325"
+    },
+    {
+      "path": ".agentteams-backups/20260422-131932/agent-updater.agent.md",
+      "sha256": "495d31b875889ff28fb320a740a32c29b201b21279b0084f8ce3818003863357"
+    },
+    {
+      "path": ".agentteams-backups/20260422-131932/cleanup.agent.md",
+      "sha256": "807cc5b965717289194999de2c9b35b589a2f5ffc31bcc7260d365218ffe6d1f"
+    },
+    {
+      "path": ".agentteams-backups/20260422-131932/code-hygiene.agent.md",
+      "sha256": "d4cc9bd6e9d25d1e59e8d3794d23f3fe28972ea81c79b03288f9fb93b9e5c0d3"
+    },
+    {
+      "path": ".agentteams-backups/20260422-131932/conflict-auditor.agent.md",
+      "sha256": "58d40e5bea6de23ee134403f96de6692be691c4a2c4887605a651082832c0b49"
+    },
+    {
+      "path": ".agentteams-backups/20260422-131932/conflict-resolution.agent.md",
+      "sha256": "c7004e312004b407f266c4990c86ffddde8bed31f2d031ad1a2e2363202ee2b8"
+    },
+    {
+      "path": ".agentteams-backups/20260422-131932/content-enricher.agent.md",
+      "sha256": "41cc263890ba47f539eb41a2e241c24e4f74e5b62a04f33eac1656adbb52ebea"
+    },
+    {
+      "path": ".agentteams-backups/20260422-131932/copilot-instructions.md",
+      "sha256": "caf3f1eb8bf7f5ef64afcf55be7cb14c96d5997c629bdac298f1eb0315bd3ed1"
+    },
+    {
+      "path": ".agentteams-backups/20260422-131932/module-doc-author.agent.md",
+      "sha256": "c4a84085f749c9be170c3d8c5e32a62b6d4a2f566f9d532b339e84a51c57aeb1"
+    },
+    {
+      "path": ".agentteams-backups/20260422-131932/module-doc-validator.agent.md",
+      "sha256": "5a29b1f36ad299a3945ce0e8f2f16c999f164f169eab632a030e0f2dabd2aa87"
+    },
+    {
+      "path": ".agentteams-backups/20260422-131932/navigator.agent.md",
+      "sha256": "41f7866a8fb427d32174ace49f04aa5bda643132b048e161c09ca03869e086f9"
+    },
+    {
+      "path": ".agentteams-backups/20260422-131932/orchestrator.agent.md",
+      "sha256": "2a1b9d6a7d9b61644cbd5c65942c4130f7a3ef40d44ae32bb6910830441e7128"
+    },
+    {
+      "path": ".agentteams-backups/20260422-131932/primary-producer.agent.md",
+      "sha256": "44e7f55fbb2946c385ec3369e12066dbd677a163601d619c19a2af56a874480a"
+    },
+    {
+      "path": ".agentteams-backups/20260422-131932/quality-auditor.agent.md",
+      "sha256": "909cef87cbddb7c31ed06e7e584f75d02eb62da30d48be8f74bb47a91f0b4953"
+    },
+    {
+      "path": ".agentteams-backups/20260422-131932/references/adjacent-repos-changelog.csv",
+      "sha256": "61acfc52834c00360cc355463cf8b9e6c5d71a1857f2cea3317bb33047390916"
+    },
+    {
+      "path": ".agentteams-backups/20260422-131932/references/adjacent-repos-coordination-log.csv",
+      "sha256": "260125e878d967bf60896bc5653ac36b428b6304b20c4a53c315c87f8353ef47"
+    },
+    {
+      "path": ".agentteams-backups/20260422-131932/references/adjacent-repos.md",
+      "sha256": "72f32f1b6159052652d2609143d036a45171ca4d03ec930cb2d7e0f176595716"
+    },
+    {
+      "path": ".agentteams-backups/20260422-131932/references/code-hygiene-rules.reference.md",
+      "sha256": "deb626951cd457ea665665e88d890d4f1b633e3c1cf3adc1b7b59ed9f88bbfd6"
+    },
+    {
+      "path": ".agentteams-backups/20260422-131932/references/pipeline-graph.md",
+      "sha256": "15f71183075206e6edd1f6889ac67a6c4420e74afc3e047c183cb7da642de83c"
+    },
+    {
+      "path": ".agentteams-backups/20260422-131932/references/security-vulnerability-watch.json",
+      "sha256": "76667354b74b4fc671c916b6808fd2cba194fe70631711b1fc2dbba60bc7759f"
+    },
+    {
+      "path": ".agentteams-backups/20260422-131932/references/security-vulnerability-watch.reference.md",
+      "sha256": "941ad4fd2a7f1bf939000eb162fcf47c668cfa78716b7748f04a58eda2f0680e"
+    },
+    {
+      "path": ".agentteams-backups/20260422-131932/repo-liaison.agent.md",
+      "sha256": "a4a50fedeb3f1bcc58791713527ce297a41eeedbe7af2a131a8368bd63cb2c93"
+    },
+    {
+      "path": ".agentteams-backups/20260422-131932/security.agent.md",
+      "sha256": "d31a00a28a9872250c0f02acb4e05c14662fdef6f4eb51810df29c7576478318"
+    },
+    {
+      "path": ".agentteams-backups/20260422-131932/team-builder.agent.md",
+      "sha256": "6a0e998c5ce278f2623ba7d50b9f889e7dd286436b61bc51778b608b058c5268"
+    },
+    {
+      "path": ".agentteams-backups/20260422-131932/technical-validator.agent.md",
+      "sha256": "8814b8b3fa96024e0c986d1a91cad2441ee25f1941b7a6494209d6cd8758d1d8"
+    },
+    {
+      "path": ".agentteams-backups/20260504-091624/SETUP-REQUIRED.md",
+      "sha256": "8cc897bb3e07ae0550323f5080a3368cb543307d5d55689bfb0b212cc6dc64d4"
+    },
+    {
+      "path": ".agentteams-backups/20260504-091624/adversarial.agent.md",
+      "sha256": "733924a36354ae5236a51c8f76c3e9b4c8f74082bfdee9c12fd6a90fee9b618e"
+    },
+    {
+      "path": ".agentteams-backups/20260504-091624/agent-refactor.agent.md",
+      "sha256": "fb5c93a5c5f6df7c22e69a268a5cdc81a99731414e5a6f62b544cc39a6cef325"
+    },
+    {
+      "path": ".agentteams-backups/20260504-091624/agent-updater.agent.md",
+      "sha256": "8408cb2f92fe1b48e455950ff8e3787a57db8a66560daa7833c6854ee9e5217e"
+    },
+    {
+      "path": ".agentteams-backups/20260504-091624/cleanup.agent.md",
+      "sha256": "fec94aab8fde11b0a8cf53760f485ef7da16f2d28c0df98825bfaa95bf405cc3"
+    },
+    {
+      "path": ".agentteams-backups/20260504-091624/code-hygiene.agent.md",
+      "sha256": "3b23543a04624a2a5e002889e5cfd2e62b6aa907c87069b3dce4b56a0b549929"
+    },
+    {
+      "path": ".agentteams-backups/20260504-091624/conflict-auditor.agent.md",
+      "sha256": "a236891acda6b64375dd06dc02281255e46fa0940bf93fced1338f8eeacc92b4"
+    },
+    {
+      "path": ".agentteams-backups/20260504-091624/conflict-resolution.agent.md",
+      "sha256": "2661b6c21ebf0b282f89d3b73a677f553db5c28325d66c7a3339e7754f66ac21"
+    },
+    {
+      "path": ".agentteams-backups/20260504-091624/content-enricher.agent.md",
+      "sha256": "41cc263890ba47f539eb41a2e241c24e4f74e5b62a04f33eac1656adbb52ebea"
+    },
+    {
+      "path": ".agentteams-backups/20260504-091624/copilot-instructions.md",
+      "sha256": "56762dca5228056ac9a59a3a43616ae872d1bd809af7f7c4101c1648a7c77f7b"
+    },
+    {
+      "path": ".agentteams-backups/20260504-091624/module-doc-author.agent.md",
+      "sha256": "337806652fa1fbcbbe795382cbe128758737c7c4ad416e28318e5f65dbd78975"
+    },
+    {
+      "path": ".agentteams-backups/20260504-091624/module-doc-validator.agent.md",
+      "sha256": "29c7fb45e26c75a1bdca4a607413d8b9a0cd10f387b488f5ea0ce63e6529b776"
+    },
+    {
+      "path": ".agentteams-backups/20260504-091624/navigator.agent.md",
+      "sha256": "ca22af0b0222e5ee38c635430cc6d1b1d38e6c7c55591df85990a23345a85402"
+    },
+    {
+      "path": ".agentteams-backups/20260504-091624/orchestrator.agent.md",
+      "sha256": "1c4e06ffb8e15b6f59d513886a92755be18e3c169d807c161b24c49a4d008b5c"
+    },
+    {
+      "path": ".agentteams-backups/20260504-091624/primary-producer.agent.md",
+      "sha256": "6a9d73465a9f43b16f7590a7a44134bf24050fa197dc3ef12c78607db1d785d2"
+    },
+    {
+      "path": ".agentteams-backups/20260504-091624/quality-auditor.agent.md",
+      "sha256": "909cef87cbddb7c31ed06e7e584f75d02eb62da30d48be8f74bb47a91f0b4953"
+    },
+    {
+      "path": ".agentteams-backups/20260504-091624/references/adjacent-repos-changelog.csv",
+      "sha256": "a87a453134fb495bb356ef0812afebc1780b1d84ccf3286ffd208864e691bdc8"
+    },
+    {
+      "path": ".agentteams-backups/20260504-091624/references/adjacent-repos-coordination-log.csv",
+      "sha256": "0d8e3d4672759f98e43539918191c172c6fa08b880b910456632d37f67b75135"
+    },
+    {
+      "path": ".agentteams-backups/20260504-091624/references/adjacent-repos.md",
+      "sha256": "b61b03900f8a4bfb9fae3b656904a10d7477b355cdd2625e3f150116ae26d7d9"
+    },
+    {
+      "path": ".agentteams-backups/20260504-091624/references/code-hygiene-rules.reference.md",
+      "sha256": "be9f318ccf236f7c96f73367865a76f4f028a545ebf97a38b9b81ddb71006a84"
+    },
+    {
+      "path": ".agentteams-backups/20260504-091624/references/pipeline-graph.md",
+      "sha256": "15f71183075206e6edd1f6889ac67a6c4420e74afc3e047c183cb7da642de83c"
+    },
+    {
+      "path": ".agentteams-backups/20260504-091624/references/security-vulnerability-watch.json",
+      "sha256": "76667354b74b4fc671c916b6808fd2cba194fe70631711b1fc2dbba60bc7759f"
+    },
+    {
+      "path": ".agentteams-backups/20260504-091624/references/security-vulnerability-watch.reference.md",
+      "sha256": "941ad4fd2a7f1bf939000eb162fcf47c668cfa78716b7748f04a58eda2f0680e"
+    },
+    {
+      "path": ".agentteams-backups/20260504-091624/references/work-summary-spec.reference.md",
+      "sha256": "3396ba960836e2585587f3829e6824a9942c28bb2ba3176f1800948399cc8756"
+    },
+    {
+      "path": ".agentteams-backups/20260504-091624/references/work-summary-tooling.reference.md",
+      "sha256": "ff9e4d0b7a7984dac6bb97c8c0b522ce3acd8c5e9471cdce45b62fca06892331"
+    },
+    {
+      "path": ".agentteams-backups/20260504-091624/repo-liaison.agent.md",
+      "sha256": "f0cc111c39baf16a001b8527583d597c38e3c7d527d58131e5114f257ac00753"
+    },
+    {
+      "path": ".agentteams-backups/20260504-091624/security.agent.md",
+      "sha256": "7fd317ec76d02b89b19b504532edb593e0c2d65d860164d081b4efa49b5e3ff9"
+    },
+    {
+      "path": ".agentteams-backups/20260504-091624/team-builder.agent.md",
+      "sha256": "903abf533ced81ab4a7ba5c30a34d5c5df723bcfd5bcf5a207b8fc7388d28109"
+    },
+    {
+      "path": ".agentteams-backups/20260504-091624/technical-validator.agent.md",
+      "sha256": "8814b8b3fa96024e0c986d1a91cad2441ee25f1941b7a6494209d6cd8758d1d8"
+    },
+    {
+      "path": ".agentteams-backups/20260504-091624/work-summarizer.agent.md",
+      "sha256": "55f45e277fb28fd5869724fd2b3e675acc7bf597702e90e8988dd4ef39593f06"
+    },
+    {
+      "path": ".agentteams-backups/20260520-002932/SETUP-REQUIRED.md",
+      "sha256": "05799be0094a45fa39e64d0e4ed29796b630eb7db83efc9fd45e9a7bb61376bc"
+    },
+    {
+      "path": ".agentteams-backups/20260520-002932/_manifest.json",
+      "sha256": "a2bfdde978582ac2152d2f9f10d4e3d731ec4caa9b3cc898428b0ea48d3ac8b0"
+    },
+    {
+      "path": ".agentteams-backups/20260520-002932/adversarial.agent.md",
+      "sha256": "733924a36354ae5236a51c8f76c3e9b4c8f74082bfdee9c12fd6a90fee9b618e"
+    },
+    {
+      "path": ".agentteams-backups/20260520-002932/agent-refactor.agent.md",
+      "sha256": "fb5c93a5c5f6df7c22e69a268a5cdc81a99731414e5a6f62b544cc39a6cef325"
+    },
+    {
+      "path": ".agentteams-backups/20260520-002932/agent-updater.agent.md",
+      "sha256": "8408cb2f92fe1b48e455950ff8e3787a57db8a66560daa7833c6854ee9e5217e"
+    },
+    {
+      "path": ".agentteams-backups/20260520-002932/cleanup.agent.md",
+      "sha256": "fec94aab8fde11b0a8cf53760f485ef7da16f2d28c0df98825bfaa95bf405cc3"
+    },
+    {
+      "path": ".agentteams-backups/20260520-002932/code-hygiene.agent.md",
+      "sha256": "3b23543a04624a2a5e002889e5cfd2e62b6aa907c87069b3dce4b56a0b549929"
+    },
+    {
+      "path": ".agentteams-backups/20260520-002932/conflict-auditor.agent.md",
+      "sha256": "a236891acda6b64375dd06dc02281255e46fa0940bf93fced1338f8eeacc92b4"
+    },
+    {
+      "path": ".agentteams-backups/20260520-002932/conflict-resolution.agent.md",
+      "sha256": "2661b6c21ebf0b282f89d3b73a677f553db5c28325d66c7a3339e7754f66ac21"
+    },
+    {
+      "path": ".agentteams-backups/20260520-002932/content-enricher.agent.md",
+      "sha256": "41cc263890ba47f539eb41a2e241c24e4f74e5b62a04f33eac1656adbb52ebea"
+    },
+    {
+      "path": ".agentteams-backups/20260520-002932/copilot-instructions.md",
+      "sha256": "3ae49c1e96acb1a9e1ac434fd6eb0ae3c40d0f900da9b126a6c619c2698f31f6"
+    },
+    {
+      "path": ".agentteams-backups/20260520-002932/git-operations.agent.md",
+      "sha256": "4e2b8d683abc5aa1b847e81f6c235879e4a448ffef289984ec449b8b68927a36"
+    },
+    {
+      "path": ".agentteams-backups/20260520-002932/module-doc-author.agent.md",
+      "sha256": "337806652fa1fbcbbe795382cbe128758737c7c4ad416e28318e5f65dbd78975"
+    },
+    {
+      "path": ".agentteams-backups/20260520-002932/module-doc-validator.agent.md",
+      "sha256": "29c7fb45e26c75a1bdca4a607413d8b9a0cd10f387b488f5ea0ce63e6529b776"
+    },
+    {
+      "path": ".agentteams-backups/20260520-002932/navigator.agent.md",
+      "sha256": "ca22af0b0222e5ee38c635430cc6d1b1d38e6c7c55591df85990a23345a85402"
+    },
+    {
+      "path": ".agentteams-backups/20260520-002932/orchestrator.agent.md",
+      "sha256": "a5d96c59c4218c85dcf2d3e9a6ab3f923b669e32bb8776bfc842de165dcbf131"
+    },
+    {
+      "path": ".agentteams-backups/20260520-002932/primary-producer.agent.md",
+      "sha256": "6a9d73465a9f43b16f7590a7a44134bf24050fa197dc3ef12c78607db1d785d2"
+    },
+    {
+      "path": ".agentteams-backups/20260520-002932/quality-auditor.agent.md",
+      "sha256": "909cef87cbddb7c31ed06e7e584f75d02eb62da30d48be8f74bb47a91f0b4953"
+    },
+    {
+      "path": ".agentteams-backups/20260520-002932/references/adjacent-repos-changelog.csv",
+      "sha256": "a87a453134fb495bb356ef0812afebc1780b1d84ccf3286ffd208864e691bdc8"
+    },
+    {
+      "path": ".agentteams-backups/20260520-002932/references/adjacent-repos-coordination-log.csv",
+      "sha256": "0d8e3d4672759f98e43539918191c172c6fa08b880b910456632d37f67b75135"
+    },
+    {
+      "path": ".agentteams-backups/20260520-002932/references/adjacent-repos.md",
+      "sha256": "b61b03900f8a4bfb9fae3b656904a10d7477b355cdd2625e3f150116ae26d7d9"
+    },
+    {
+      "path": ".agentteams-backups/20260520-002932/references/code-hygiene-rules.reference.md",
+      "sha256": "be9f318ccf236f7c96f73367865a76f4f028a545ebf97a38b9b81ddb71006a84"
+    },
+    {
+      "path": ".agentteams-backups/20260520-002932/references/pipeline-graph.md",
+      "sha256": "b6aeb077437f341a2d871e826e0082e185f64b000d101d6fd1907b0c4a6a985f"
+    },
+    {
+      "path": ".agentteams-backups/20260520-002932/references/security-vulnerability-watch.json",
+      "sha256": "76667354b74b4fc671c916b6808fd2cba194fe70631711b1fc2dbba60bc7759f"
+    },
+    {
+      "path": ".agentteams-backups/20260520-002932/references/security-vulnerability-watch.reference.md",
+      "sha256": "da57fdefc751f677c0e47d13b5861be0b8fd2a0cbb265881844bff83185ae7ba"
+    },
+    {
+      "path": ".agentteams-backups/20260520-002932/references/work-summary-spec.reference.md",
+      "sha256": "3396ba960836e2585587f3829e6824a9942c28bb2ba3176f1800948399cc8756"
+    },
+    {
+      "path": ".agentteams-backups/20260520-002932/references/work-summary-tooling.reference.md",
+      "sha256": "ff9e4d0b7a7984dac6bb97c8c0b522ce3acd8c5e9471cdce45b62fca06892331"
+    },
+    {
+      "path": ".agentteams-backups/20260520-002932/security.agent.md",
+      "sha256": "e260533b28633b40113d16e05039de6271ba4553d4a6d29efec25983f1007298"
+    },
+    {
+      "path": ".agentteams-backups/20260520-002932/team-builder.agent.md",
+      "sha256": "903abf533ced81ab4a7ba5c30a34d5c5df723bcfd5bcf5a207b8fc7388d28109"
+    },
+    {
+      "path": ".agentteams-backups/20260520-002932/tool-doc-researcher.agent.md",
+      "sha256": "49183f81b4b1c675355f40368bb58fbf7503d6a9b39a1030cf1e70ff1faf887b"
+    },
+    {
+      "path": ".agentteams-backups/20260520-002932/tool-sql.agent.md",
+      "sha256": "e822de8b36c90e706ad08fd321c74f6a0aec575145a6a9d19a7c9367be3dbe08"
+    },
+    {
+      "path": ".agentteams-backups/20260520-002932/work-summarizer.agent.md",
+      "sha256": "55f45e277fb28fd5869724fd2b3e675acc7bf597702e90e8988dd4ef39593f06"
+    },
+    {
+      "path": ".agentteams-backups/20260520-003044/_manifest.json",
+      "sha256": "8602361913b4c9a6322ff4987c9bb42bfd1049d4e2e1a28d45d0288aa9a3c10d"
+    },
+    {
+      "path": ".agentteams-backups/20260520-003044/references/adjacent-repos-changelog.csv",
+      "sha256": "a87a453134fb495bb356ef0812afebc1780b1d84ccf3286ffd208864e691bdc8"
+    },
+    {
+      "path": ".agentteams-backups/20260520-003044/references/adjacent-repos-coordination-log.csv",
+      "sha256": "0d8e3d4672759f98e43539918191c172c6fa08b880b910456632d37f67b75135"
+    },
+    {
+      "path": ".agentteams-backups/20260520-003044/references/pipeline-graph.md",
+      "sha256": "4a2917c6180f4e292b9dcbb109e571c233d5c4e944112f3737a5e4680567c1ed"
+    },
+    {
+      "path": ".agentteams-backups/20260520-003044/references/security-vulnerability-watch.json",
+      "sha256": "829c3c4c2775f585c3171b744a04ee18d437d263e46e91439ac4d4b08cc20423"
+    },
+    {
+      "path": ".agentteams-backups/20260520-003044/references/security-vulnerability-watch.reference.md",
+      "sha256": "b73fdbc1760da6ecf599944d85a53485e88dc5fa337ac1511040214fe775b992"
+    },
+    {
+      "path": ".agentteams-backups/20260520-004343/_manifest.json",
+      "sha256": "4b6ccd11a49fd43029224f76234241e617667ca106c895fb874dacadf5df1265"
+    },
+    {
+      "path": ".agentteams-backups/20260520-004343/agent-updater.agent.md",
+      "sha256": "3496e1844f5a33771dbe96c3dad86619de8c9da45ed13b96e287c68a0595669f"
+    },
+    {
+      "path": ".agentteams-backups/20260520-004343/references/adjacent-repos-changelog.csv",
+      "sha256": "a87a453134fb495bb356ef0812afebc1780b1d84ccf3286ffd208864e691bdc8"
+    },
+    {
+      "path": ".agentteams-backups/20260520-004343/references/adjacent-repos-coordination-log.csv",
+      "sha256": "0d8e3d4672759f98e43539918191c172c6fa08b880b910456632d37f67b75135"
+    },
+    {
+      "path": ".agentteams-backups/20260520-004343/references/pipeline-graph.md",
+      "sha256": "7b13678caea4999c1c35641c84273d248fbcc8b4d6bcd4352aa282899d804bb0"
+    },
+    {
+      "path": ".agentteams-backups/20260520-004343/references/security-vulnerability-watch.json",
+      "sha256": "cc49767e209738e1b7c51b1cdaddedb9f67e24cf08188113fa0f931b134d8a95"
+    },
+    {
+      "path": ".agentteams-backups/20260520-004343/references/security-vulnerability-watch.reference.md",
+      "sha256": "b73fdbc1760da6ecf599944d85a53485e88dc5fa337ac1511040214fe775b992"
+    },
+    {
+      "path": ".agentteams-backups/20260520-043001/adversarial.agent.md",
+      "sha256": "733924a36354ae5236a51c8f76c3e9b4c8f74082bfdee9c12fd6a90fee9b618e"
+    },
+    {
+      "path": ".agentteams-backups/20260520-043001/code-hygiene.agent.md",
+      "sha256": "3b23543a04624a2a5e002889e5cfd2e62b6aa907c87069b3dce4b56a0b549929"
+    },
+    {
+      "path": ".agentteams-backups/20260520-043001/conflict-resolution.agent.md",
+      "sha256": "2661b6c21ebf0b282f89d3b73a677f553db5c28325d66c7a3339e7754f66ac21"
+    },
+    {
+      "path": ".agentteams-backups/20260520-043002/SETUP-REQUIRED.md",
+      "sha256": "05799be0094a45fa39e64d0e4ed29796b630eb7db83efc9fd45e9a7bb61376bc"
+    },
+    {
+      "path": ".agentteams-backups/20260520-043002/agent-refactor.agent.md",
+      "sha256": "fb5c93a5c5f6df7c22e69a268a5cdc81a99731414e5a6f62b544cc39a6cef325"
+    },
+    {
+      "path": ".agentteams-backups/20260520-043002/agent-updater.agent.md",
+      "sha256": "8408cb2f92fe1b48e455950ff8e3787a57db8a66560daa7833c6854ee9e5217e"
+    },
+    {
+      "path": ".agentteams-backups/20260520-043002/cleanup.agent.md",
+      "sha256": "fec94aab8fde11b0a8cf53760f485ef7da16f2d28c0df98825bfaa95bf405cc3"
+    },
+    {
+      "path": ".agentteams-backups/20260520-043002/module-doc-author.agent.md",
+      "sha256": "337806652fa1fbcbbe795382cbe128758737c7c4ad416e28318e5f65dbd78975"
+    },
+    {
+      "path": ".agentteams-backups/20260520-043002/module-doc-validator.agent.md",
+      "sha256": "29c7fb45e26c75a1bdca4a607413d8b9a0cd10f387b488f5ea0ce63e6529b776"
+    },
+    {
+      "path": ".agentteams-backups/20260520-043002/primary-producer.agent.md",
+      "sha256": "6a9d73465a9f43b16f7590a7a44134bf24050fa197dc3ef12c78607db1d785d2"
+    },
+    {
+      "path": ".agentteams-backups/20260520-043002/quality-auditor.agent.md",
+      "sha256": "909cef87cbddb7c31ed06e7e584f75d02eb62da30d48be8f74bb47a91f0b4953"
+    },
+    {
+      "path": ".agentteams-backups/20260520-043002/team-builder.agent.md",
+      "sha256": "903abf533ced81ab4a7ba5c30a34d5c5df723bcfd5bcf5a207b8fc7388d28109"
+    },
+    {
+      "path": ".agentteams-backups/20260520-043002/tool-doc-researcher.agent.md",
+      "sha256": "49183f81b4b1c675355f40368bb58fbf7503d6a9b39a1030cf1e70ff1faf887b"
+    },
+    {
+      "path": ".agentteams-backups/20260520-043002/work-summarizer.agent.md",
+      "sha256": "55f45e277fb28fd5869724fd2b3e675acc7bf597702e90e8988dd4ef39593f06"
+    },
+    {
+      "path": ".agentteams-backups/20260520-043003/content-enricher.agent.md",
+      "sha256": "41cc263890ba47f539eb41a2e241c24e4f74e5b62a04f33eac1656adbb52ebea"
+    },
+    {
+      "path": ".agentteams-backups/20260520-102504/SETUP-REQUIRED.md",
+      "sha256": "eb233dc3773a00660a17f6632ddb5461b83c18e22454349732c724f1b3c09dfa"
+    },
+    {
+      "path": ".agentteams-backups/20260520-102504/_manifest.json",
+      "sha256": "3d597cce6defc003c1b83a7d64db44670ef543cd71305390ec7fcfb81ea3fe0a"
+    },
+    {
+      "path": ".agentteams-backups/20260520-102504/adversarial.agent.md",
+      "sha256": "cc7bab1e43c1f6a71be2af8890b451072df1d1788961aa33166f8c1554c1ef85"
+    },
+    {
+      "path": ".agentteams-backups/20260520-102504/agent-updater.agent.md",
+      "sha256": "8c2070be98d44b8948dbe71d814fdcb48d53d0696918db14beec2026ae24dbb7"
+    },
+    {
+      "path": ".agentteams-backups/20260520-102504/cleanup.agent.md",
+      "sha256": "be4104ef27284f189c7b8da1f83da3aa5e344ba1c66d302748cfa36e4fa3bfeb"
+    },
+    {
+      "path": ".agentteams-backups/20260520-102504/code-hygiene.agent.md",
+      "sha256": "5a64ef969684612e2dcae53fa1a6e79b792f15ad986122b1da6bb88f460e0aed"
+    },
+    {
+      "path": ".agentteams-backups/20260520-102504/conflict-auditor.agent.md",
+      "sha256": "39d7d1877f544996b9a842c3a457c4a84cb7c77fe1820a9d42a1cf03e26e6fe1"
+    },
+    {
+      "path": ".agentteams-backups/20260520-102504/conflict-resolution.agent.md",
+      "sha256": "af5d0577f863618887cacb8bbe328f3f1893efeea9f6aec9d77f1d4d77131222"
+    },
+    {
+      "path": ".agentteams-backups/20260520-102504/content-enricher.agent.md",
+      "sha256": "aeccd3d2e072de3e69c41ddd9da828074cd01dda3468f5daad88257dee7315ff"
+    },
+    {
+      "path": ".agentteams-backups/20260520-102504/copilot-instructions.md",
+      "sha256": "00f608707a94963ab0e6ba3ee7f8a4dc1b1160ee0146febdda32154abef82c09"
+    },
+    {
+      "path": ".agentteams-backups/20260520-102504/module-doc-author.agent.md",
+      "sha256": "8c62b2fe016cfdfd2f15cfc7ac921a0b94394593782208ae0bf2282bd064f7ac"
+    },
+    {
+      "path": ".agentteams-backups/20260520-102504/module-doc-validator.agent.md",
+      "sha256": "4c005f94aa383feefb32959852e1b1775d03506e4b5ff7192bdeb5c99d04b554"
+    },
+    {
+      "path": ".agentteams-backups/20260520-102504/navigator.agent.md",
+      "sha256": "ca22af0b0222e5ee38c635430cc6d1b1d38e6c7c55591df85990a23345a85402"
+    },
+    {
+      "path": ".agentteams-backups/20260520-102504/orchestrator.agent.md",
+      "sha256": "83e9376b639aabe03be8426e6478f7dc843d575b392ce4bb080a2e245e48f6f7"
+    },
+    {
+      "path": ".agentteams-backups/20260520-102504/primary-producer.agent.md",
+      "sha256": "d9ef0ab2fe84bc98b12e4099f9dcf57020e11f99e05d9d708e78c01f34817398"
+    },
+    {
+      "path": ".agentteams-backups/20260520-102504/references/adjacent-repos-changelog.csv",
+      "sha256": "a87a453134fb495bb356ef0812afebc1780b1d84ccf3286ffd208864e691bdc8"
+    },
+    {
+      "path": ".agentteams-backups/20260520-102504/references/adjacent-repos-coordination-log.csv",
+      "sha256": "0d8e3d4672759f98e43539918191c172c6fa08b880b910456632d37f67b75135"
+    },
+    {
+      "path": ".agentteams-backups/20260520-102504/references/adjacent-repos.md",
+      "sha256": "e021b6d851fa0381868f0d4183d5b37a4644f1b27059bc6c5270de7267417176"
+    },
+    {
+      "path": ".agentteams-backups/20260520-102504/references/code-hygiene-rules.reference.md",
+      "sha256": "d30e7861d7d7976752630fbba6f437a92b7b2bbf75bb9d4a284ce96608809586"
+    },
+    {
+      "path": ".agentteams-backups/20260520-102504/references/pipeline-graph.md",
+      "sha256": "dd029348328bd42ee9a51293aed76c7920691434fccaca9b3a7f7bb257df929c"
+    },
+    {
+      "path": ".agentteams-backups/20260520-102504/references/security-vulnerability-watch.json",
+      "sha256": "c2f7e39812b17468e51736c58b564b7bc03fc71948084ec796d5a8eb1c9f1d94"
+    },
+    {
+      "path": ".agentteams-backups/20260520-102504/references/security-vulnerability-watch.reference.md",
+      "sha256": "b73fdbc1760da6ecf599944d85a53485e88dc5fa337ac1511040214fe775b992"
+    },
+    {
+      "path": ".agentteams-backups/20260520-102504/references/work-summary-spec.reference.md",
+      "sha256": "ccb17b06bce25ece0d243d18c645ebc597f091400a0c7d1808ecf214e0dbc864"
+    },
+    {
+      "path": ".agentteams-backups/20260520-102504/references/work-summary-tooling.reference.md",
+      "sha256": "55cd86cc5b1eebe6086d03f164b9d68690e643d2927175a59c2b3caa0ed38b97"
+    },
+    {
+      "path": ".agentteams-backups/20260520-102504/security.agent.md",
+      "sha256": "81ecdf8d9b8e0dd0427e05512557d2c2560f1c907a123b597d76a9fd75c5d46a"
+    },
+    {
+      "path": ".agentteams-backups/20260520-102504/team-builder.agent.md",
+      "sha256": "94d757baa992074f491c2362e15e7b50c34a34d5a0366ed50b74d68080e25f99"
+    },
+    {
+      "path": ".agentteams-backups/20260520-102504/work-summarizer.agent.md",
+      "sha256": "4f22102ea998b32fbab7c9d96c607cacec13ed94e62aa74779a9806fdc91aa63"
+    },
+    {
+      "path": ".agentteams-backups/20260520-102709/SETUP-REQUIRED.md",
+      "sha256": "b2af7c4d9f3a52e40dc467cf8b0769e43df109563db2342e81762a854016599d"
+    },
+    {
+      "path": ".agentteams-backups/20260520-102709/_manifest.json",
+      "sha256": "51ed683170432425c09a1e93cd83e49da1e994f8f1215712fba95bb2a2cad94f"
+    },
+    {
+      "path": ".agentteams-backups/20260520-102709/agent-updater.agent.md",
+      "sha256": "2f4f7fc8699176a09459dcca1ecdf74d2bedf81499e18771cfc933c3fa4dd3b2"
+    },
+    {
+      "path": ".agentteams-backups/20260520-102709/cleanup.agent.md",
+      "sha256": "6a473b1920a33704871623fc3ed873d422701b7b8c331cc19fea58fdd03ac263"
+    },
+    {
+      "path": ".agentteams-backups/20260520-102709/code-hygiene.agent.md",
+      "sha256": "ed8b7cee33db24c4379bb7f9396c494b90231ffa8c211e9686dc791a197243c0"
+    },
+    {
+      "path": ".agentteams-backups/20260520-102709/conflict-auditor.agent.md",
+      "sha256": "980bc02c1bf73dce90e402f61409dbd8f4520cd338dfddc6c41781b89aa84343"
+    },
+    {
+      "path": ".agentteams-backups/20260520-102709/conflict-resolution.agent.md",
+      "sha256": "b08b4b177c334233696174d85c9695a38f5cd2bd577b5cb4ec85a8fde76deba4"
+    },
+    {
+      "path": ".agentteams-backups/20260520-102709/content-enricher.agent.md",
+      "sha256": "9463198e4894af888c8e4c30efe3769e7e6021cafc5cef0251e2489eb5e51466"
+    },
+    {
+      "path": ".agentteams-backups/20260520-102709/copilot-instructions.md",
+      "sha256": "3e7f98a49dbf426c22356fbd0e4f086c71b36f060549cc4009ddba6db690bcbc"
+    },
+    {
+      "path": ".agentteams-backups/20260520-102709/module-doc-author.agent.md",
+      "sha256": "47c89d0a64eadaea48e7cad8d2818d3ed4f743d9c1e4163b2c19b23543a67173"
+    },
+    {
+      "path": ".agentteams-backups/20260520-102709/module-doc-validator.agent.md",
+      "sha256": "cd6ecf82364f61895d789afadf5fee317d35f429fa43a8c6b1ea6c55200bb753"
+    },
+    {
+      "path": ".agentteams-backups/20260520-102709/navigator.agent.md",
+      "sha256": "ca22af0b0222e5ee38c635430cc6d1b1d38e6c7c55591df85990a23345a85402"
+    },
+    {
+      "path": ".agentteams-backups/20260520-102709/orchestrator.agent.md",
+      "sha256": "48da7650d94fd589a400eefcc7b46645a7bf0608f1f313ca14a974e8aa79d01d"
+    },
+    {
+      "path": ".agentteams-backups/20260520-102709/primary-producer.agent.md",
+      "sha256": "aa6edcd904d11862d557cb8e1dc06c080790652984d7ba69eef37a944d35e62f"
+    },
+    {
+      "path": ".agentteams-backups/20260520-102709/references/adjacent-repos-changelog.csv",
+      "sha256": "a87a453134fb495bb356ef0812afebc1780b1d84ccf3286ffd208864e691bdc8"
+    },
+    {
+      "path": ".agentteams-backups/20260520-102709/references/adjacent-repos-coordination-log.csv",
+      "sha256": "0d8e3d4672759f98e43539918191c172c6fa08b880b910456632d37f67b75135"
+    },
+    {
+      "path": ".agentteams-backups/20260520-102709/references/adjacent-repos.md",
+      "sha256": "2293a9b36d15926b453292cc1e5105a03a19eaf865f146f2b0a5cbaa1c21c18a"
+    },
+    {
+      "path": ".agentteams-backups/20260520-102709/references/code-hygiene-rules.reference.md",
+      "sha256": "44fe7410d3b212bafa70c1a54621a20893aa6ff57742d69ea2c853c81938b7be"
+    },
+    {
+      "path": ".agentteams-backups/20260520-102709/references/pipeline-graph.md",
+      "sha256": "f6de3592171bd45d13c825607ee7067508c54dc671e07ec71679c095fba50df7"
+    },
+    {
+      "path": ".agentteams-backups/20260520-102709/references/security-vulnerability-watch.json",
+      "sha256": "347baf82fe9dece51ddfbf172533bf2d14fe77de10d4d5ca21ece45f5cd14504"
+    },
+    {
+      "path": ".agentteams-backups/20260520-102709/references/security-vulnerability-watch.reference.md",
+      "sha256": "44e0cc70228fb1eb4fa6597907ff7b87663b3b170d75cd9859a033d2df4c5963"
+    },
+    {
+      "path": ".agentteams-backups/20260520-102709/references/work-summary-spec.reference.md",
+      "sha256": "3f57763d843c638e342d1bea6f65a25f101d931971502a9ef26fa0ae3d792d1a"
+    },
+    {
+      "path": ".agentteams-backups/20260520-102709/references/work-summary-tooling.reference.md",
+      "sha256": "1ba41c309d9e1d4140293d8deda596e181630524ecec78ba2d4d97195304ae46"
+    },
+    {
+      "path": ".agentteams-backups/20260520-102709/security.agent.md",
+      "sha256": "384ff910bcaed825313766e916674ed7f8d8098307c6ccca9a0b06c14cd3fcf2"
+    },
+    {
+      "path": ".agentteams-backups/20260520-102709/team-builder.agent.md",
+      "sha256": "256283faf9aa0c73df48d0f701cbd306b1378dcacf3913526320463c072b9245"
+    },
+    {
+      "path": ".agentteams-backups/20260520-102709/work-summarizer.agent.md",
+      "sha256": "16c138a6179beec921c98abf4aa29611d26b716663eac87103c55e2099c641ba"
+    },
+    {
+      "path": ".agentteams-backups/20260520-163249/SETUP-REQUIRED.md",
+      "sha256": "93715e5e224b7a038efcccd7cad3c7ebcb02e08165f7fbd484616fac1b514adc"
+    },
+    {
+      "path": ".agentteams-backups/20260520-163249/_manifest.json",
+      "sha256": "90730fc089743483592441b9ce7a8ea5559c3d57a5a3e45334a92ad3fe49cf91"
+    },
+    {
+      "path": ".agentteams-backups/20260520-163249/agent-updater.agent.md",
+      "sha256": "1fdff62da6b6e3c22dff9f6e5c2f024545a6f9271e8752ea85361216381b069d"
+    },
+    {
+      "path": ".agentteams-backups/20260520-163249/cleanup.agent.md",
+      "sha256": "02dc9a033099a40df4710e0685b3112052d00b62a5e8106031c298f4e1287620"
+    },
+    {
+      "path": ".agentteams-backups/20260520-163249/code-hygiene.agent.md",
+      "sha256": "ed8b7cee33db24c4379bb7f9396c494b90231ffa8c211e9686dc791a197243c0"
+    },
+    {
+      "path": ".agentteams-backups/20260520-163249/conflict-auditor.agent.md",
+      "sha256": "980bc02c1bf73dce90e402f61409dbd8f4520cd338dfddc6c41781b89aa84343"
+    },
+    {
+      "path": ".agentteams-backups/20260520-163249/conflict-resolution.agent.md",
+      "sha256": "b08b4b177c334233696174d85c9695a38f5cd2bd577b5cb4ec85a8fde76deba4"
+    },
+    {
+      "path": ".agentteams-backups/20260520-163249/content-enricher.agent.md",
+      "sha256": "9463198e4894af888c8e4c30efe3769e7e6021cafc5cef0251e2489eb5e51466"
+    },
+    {
+      "path": ".agentteams-backups/20260520-163249/copilot-instructions.md",
+      "sha256": "5d403d7c12839d810887788ef80f1f55fef334715748914091003b3dc1801a6e"
+    },
+    {
+      "path": ".agentteams-backups/20260520-163249/module-doc-author.agent.md",
+      "sha256": "47c89d0a64eadaea48e7cad8d2818d3ed4f743d9c1e4163b2c19b23543a67173"
+    },
+    {
+      "path": ".agentteams-backups/20260520-163249/module-doc-validator.agent.md",
+      "sha256": "cd6ecf82364f61895d789afadf5fee317d35f429fa43a8c6b1ea6c55200bb753"
+    },
+    {
+      "path": ".agentteams-backups/20260520-163249/navigator.agent.md",
+      "sha256": "ca22af0b0222e5ee38c635430cc6d1b1d38e6c7c55591df85990a23345a85402"
+    },
+    {
+      "path": ".agentteams-backups/20260520-163249/orchestrator.agent.md",
+      "sha256": "248b958c3a99d0561f793ceb6a653c96bd141432b7179c8b3d3500440d1f15a8"
+    },
+    {
+      "path": ".agentteams-backups/20260520-163249/primary-producer.agent.md",
+      "sha256": "611a9c0995b2c078d76e816b6554496c396635545a6159dd6115c7fbae13d213"
+    },
+    {
+      "path": ".agentteams-backups/20260520-163249/references/adjacent-repos-changelog.csv",
+      "sha256": "a87a453134fb495bb356ef0812afebc1780b1d84ccf3286ffd208864e691bdc8"
+    },
+    {
+      "path": ".agentteams-backups/20260520-163249/references/adjacent-repos-coordination-log.csv",
+      "sha256": "0d8e3d4672759f98e43539918191c172c6fa08b880b910456632d37f67b75135"
+    },
+    {
+      "path": ".agentteams-backups/20260520-163249/references/adjacent-repos.md",
+      "sha256": "2293a9b36d15926b453292cc1e5105a03a19eaf865f146f2b0a5cbaa1c21c18a"
+    },
+    {
+      "path": ".agentteams-backups/20260520-163249/references/code-hygiene-rules.reference.md",
+      "sha256": "44fe7410d3b212bafa70c1a54621a20893aa6ff57742d69ea2c853c81938b7be"
+    },
+    {
+      "path": ".agentteams-backups/20260520-163249/references/pipeline-graph.md",
+      "sha256": "1b6aa842e28a3457b310600032786da354f099b226960a1c0cfb4121090e711d"
+    },
+    {
+      "path": ".agentteams-backups/20260520-163249/references/security-vulnerability-watch.json",
+      "sha256": "80753eeb4673d0dbb7ef3026aaddbc913e31382ffe8899b6aa1c365921587cdd"
+    },
+    {
+      "path": ".agentteams-backups/20260520-163249/references/security-vulnerability-watch.reference.md",
+      "sha256": "44e0cc70228fb1eb4fa6597907ff7b87663b3b170d75cd9859a033d2df4c5963"
+    },
+    {
+      "path": ".agentteams-backups/20260520-163249/references/work-summary-spec.reference.md",
+      "sha256": "3f57763d843c638e342d1bea6f65a25f101d931971502a9ef26fa0ae3d792d1a"
+    },
+    {
+      "path": ".agentteams-backups/20260520-163249/references/work-summary-tooling.reference.md",
+      "sha256": "1ba41c309d9e1d4140293d8deda596e181630524ecec78ba2d4d97195304ae46"
+    },
+    {
+      "path": ".agentteams-backups/20260520-163249/security.agent.md",
+      "sha256": "384ff910bcaed825313766e916674ed7f8d8098307c6ccca9a0b06c14cd3fcf2"
+    },
+    {
+      "path": ".agentteams-backups/20260520-163249/team-builder.agent.md",
+      "sha256": "256283faf9aa0c73df48d0f701cbd306b1378dcacf3913526320463c072b9245"
+    },
+    {
+      "path": ".agentteams-backups/20260520-163249/tool-doc-researcher.agent.md",
+      "sha256": "5c0723396f042cdf289a4332893333489027858c148677425e1de5ca0f619696"
+    },
+    {
+      "path": ".agentteams-backups/20260520-163249/tool-sql.agent.md",
+      "sha256": "1af9095847d6b3653c1eceb50d6d6e7c359f2ffcbb25c060f644eb3ee0a24ac1"
+    },
+    {
+      "path": ".agentteams-backups/20260520-163249/work-summarizer.agent.md",
+      "sha256": "3b19f8db0063979e5137b19b7d87d75dcc4253f7542a9f1b93cac720b097fce2"
+    },
+    {
+      "path": ".agentteams-backups/20260521-104041/SETUP-REQUIRED.md",
+      "sha256": "ada8eeda84f64a661fabdddda54103fea6386d7a743bd71504a27e158ea772f1"
+    },
+    {
+      "path": ".agentteams-backups/20260521-104041/_manifest.json",
+      "sha256": "5931e80d0cbe64500d5f4bb5113e21c149e81bb22e61fb66cb0a30b367e76110"
+    },
+    {
+      "path": ".agentteams-backups/20260521-104041/agent-updater.agent.md",
+      "sha256": "6c875c0853d3419d2c991b4d54fb5402039cfa1fde5402cd2c4ff72c211bfc5b"
+    },
+    {
+      "path": ".agentteams-backups/20260521-104041/cleanup.agent.md",
+      "sha256": "b24bd9daef18153722f5b8346775fa6eca3234d9dba2a376ea3fa86ebee8aac3"
+    },
+    {
+      "path": ".agentteams-backups/20260521-104041/code-hygiene.agent.md",
+      "sha256": "8a93388e0357896cc620c36adada3a381569fd2c17fb659a6042ffafb9920f6f"
+    },
+    {
+      "path": ".agentteams-backups/20260521-104041/conflict-auditor.agent.md",
+      "sha256": "980bc02c1bf73dce90e402f61409dbd8f4520cd338dfddc6c41781b89aa84343"
+    },
+    {
+      "path": ".agentteams-backups/20260521-104041/conflict-resolution.agent.md",
+      "sha256": "b08b4b177c334233696174d85c9695a38f5cd2bd577b5cb4ec85a8fde76deba4"
+    },
+    {
+      "path": ".agentteams-backups/20260521-104041/content-enricher.agent.md",
+      "sha256": "c726287c61656500c2c282fcb96c34309df59597801a1297438b1198bc03110b"
+    },
+    {
+      "path": ".agentteams-backups/20260521-104041/copilot-instructions.md",
+      "sha256": "259eb1488e8b9b67b9b46afdf8778fb84efdd66c26095abb36621e5a2b36999a"
+    },
+    {
+      "path": ".agentteams-backups/20260521-104041/git-operations.agent.md",
+      "sha256": "cb28c3b58f0cf4de281731a9e1d3710a3311913313b904058f355cda107ed394"
+    },
+    {
+      "path": ".agentteams-backups/20260521-104041/module-doc-author.agent.md",
+      "sha256": "e1be3f3575718b332967f5a884f3ad427cdb1f54a1a3722cdc5e1dc4c684126f"
+    },
+    {
+      "path": ".agentteams-backups/20260521-104041/module-doc-validator.agent.md",
+      "sha256": "39b238da1091b405651011bda0212cc779a1eff33bde6b38cc7a893de56b7e31"
+    },
+    {
+      "path": ".agentteams-backups/20260521-104041/navigator.agent.md",
+      "sha256": "ca22af0b0222e5ee38c635430cc6d1b1d38e6c7c55591df85990a23345a85402"
+    },
+    {
+      "path": ".agentteams-backups/20260521-104041/orchestrator.agent.md",
+      "sha256": "1a97cb9262748c756bef34fcf433065d2a01ba126dddfc01b0fd338b26c35794"
+    },
+    {
+      "path": ".agentteams-backups/20260521-104041/primary-producer.agent.md",
+      "sha256": "066c4cc2c52d4cba1dab760c4e37df961376138190ce5ad5d6aaddcd1153a8d9"
+    },
+    {
+      "path": ".agentteams-backups/20260521-104041/references/adjacent-repos-changelog.csv",
+      "sha256": "a87a453134fb495bb356ef0812afebc1780b1d84ccf3286ffd208864e691bdc8"
+    },
+    {
+      "path": ".agentteams-backups/20260521-104041/references/adjacent-repos-coordination-log.csv",
+      "sha256": "0d8e3d4672759f98e43539918191c172c6fa08b880b910456632d37f67b75135"
+    },
+    {
+      "path": ".agentteams-backups/20260521-104041/references/adjacent-repos.md",
+      "sha256": "2293a9b36d15926b453292cc1e5105a03a19eaf865f146f2b0a5cbaa1c21c18a"
+    },
+    {
+      "path": ".agentteams-backups/20260521-104041/references/code-hygiene-rules.reference.md",
+      "sha256": "d6ea9af11198129513203e0c4f9b57ec3dfc05541066c0f6d335bf493a2e7d5a"
+    },
+    {
+      "path": ".agentteams-backups/20260521-104041/references/pipeline-graph.md",
+      "sha256": "33eba693ac069d3dace169955ab7d1a85251febf12a6eb9af6fadff6e91d6a64"
+    },
+    {
+      "path": ".agentteams-backups/20260521-104041/references/security-vulnerability-watch.json",
+      "sha256": "e0236938e28d8d5d8d38d3404c1f2e2d83814187f6bc6dfc3ae0b5cd17c7b48c"
+    },
+    {
+      "path": ".agentteams-backups/20260521-104041/references/security-vulnerability-watch.reference.md",
+      "sha256": "2f029b2e84b07e547685366a52cc69205e8a164755ba7bab6127dbc5dc89d353"
+    },
+    {
+      "path": ".agentteams-backups/20260521-104041/references/work-summary-spec.reference.md",
+      "sha256": "3f57763d843c638e342d1bea6f65a25f101d931971502a9ef26fa0ae3d792d1a"
+    },
+    {
+      "path": ".agentteams-backups/20260521-104041/references/work-summary-tooling.reference.md",
+      "sha256": "1ba41c309d9e1d4140293d8deda596e181630524ecec78ba2d4d97195304ae46"
+    },
+    {
+      "path": ".agentteams-backups/20260521-104041/security.agent.md",
+      "sha256": "635996273d68491611c0dc85859dfa20fd4584b7b626a1ca7f75e1e2544da1fa"
+    },
+    {
+      "path": ".agentteams-backups/20260521-104041/team-builder.agent.md",
+      "sha256": "256283faf9aa0c73df48d0f701cbd306b1378dcacf3913526320463c072b9245"
+    },
+    {
+      "path": ".agentteams-backups/20260521-104041/work-summarizer.agent.md",
+      "sha256": "3b19f8db0063979e5137b19b7d87d75dcc4253f7542a9f1b93cac720b097fce2"
+    },
+    {
+      "path": ".agentteams-backups/20260521-104118/SETUP-REQUIRED.md",
+      "sha256": "93715e5e224b7a038efcccd7cad3c7ebcb02e08165f7fbd484616fac1b514adc"
+    },
+    {
+      "path": ".agentteams-backups/20260521-104118/_manifest.json",
+      "sha256": "657b31da8bb3437f7f0528bdc32aa967f67522e19795a91b5c60cf58f9119520"
+    },
+    {
+      "path": ".agentteams-backups/20260521-104118/agent-updater.agent.md",
+      "sha256": "48c0dd140f1c8b5996a6fe1cd6f76b514566b0430392a5d6f558b5e474c17304"
+    },
+    {
+      "path": ".agentteams-backups/20260521-104118/cleanup.agent.md",
+      "sha256": "02dc9a033099a40df4710e0685b3112052d00b62a5e8106031c298f4e1287620"
+    },
+    {
+      "path": ".agentteams-backups/20260521-104118/code-hygiene.agent.md",
+      "sha256": "ed8b7cee33db24c4379bb7f9396c494b90231ffa8c211e9686dc791a197243c0"
+    },
+    {
+      "path": ".agentteams-backups/20260521-104118/conflict-auditor.agent.md",
+      "sha256": "980bc02c1bf73dce90e402f61409dbd8f4520cd338dfddc6c41781b89aa84343"
+    },
+    {
+      "path": ".agentteams-backups/20260521-104118/conflict-resolution.agent.md",
+      "sha256": "b08b4b177c334233696174d85c9695a38f5cd2bd577b5cb4ec85a8fde76deba4"
+    },
+    {
+      "path": ".agentteams-backups/20260521-104118/content-enricher.agent.md",
+      "sha256": "9237662e787340a7b2fa1ca3abbad324efc4860bf2cbee2334d111e914aa135f"
+    },
+    {
+      "path": ".agentteams-backups/20260521-104118/copilot-instructions.md",
+      "sha256": "5d403d7c12839d810887788ef80f1f55fef334715748914091003b3dc1801a6e"
+    },
+    {
+      "path": ".agentteams-backups/20260521-104118/module-doc-author.agent.md",
+      "sha256": "47c89d0a64eadaea48e7cad8d2818d3ed4f743d9c1e4163b2c19b23543a67173"
+    },
+    {
+      "path": ".agentteams-backups/20260521-104118/module-doc-validator.agent.md",
+      "sha256": "c8bf9245c468ad998d99f9aa1d3286332caced2923013eb982682b626192e866"
+    },
+    {
+      "path": ".agentteams-backups/20260521-104118/navigator.agent.md",
+      "sha256": "ca22af0b0222e5ee38c635430cc6d1b1d38e6c7c55591df85990a23345a85402"
+    },
+    {
+      "path": ".agentteams-backups/20260521-104118/orchestrator.agent.md",
+      "sha256": "248b958c3a99d0561f793ceb6a653c96bd141432b7179c8b3d3500440d1f15a8"
+    },
+    {
+      "path": ".agentteams-backups/20260521-104118/primary-producer.agent.md",
+      "sha256": "611a9c0995b2c078d76e816b6554496c396635545a6159dd6115c7fbae13d213"
+    },
+    {
+      "path": ".agentteams-backups/20260521-104118/references/adjacent-repos-changelog.csv",
+      "sha256": "a87a453134fb495bb356ef0812afebc1780b1d84ccf3286ffd208864e691bdc8"
+    },
+    {
+      "path": ".agentteams-backups/20260521-104118/references/adjacent-repos-coordination-log.csv",
+      "sha256": "0d8e3d4672759f98e43539918191c172c6fa08b880b910456632d37f67b75135"
+    },
+    {
+      "path": ".agentteams-backups/20260521-104118/references/adjacent-repos.md",
+      "sha256": "2293a9b36d15926b453292cc1e5105a03a19eaf865f146f2b0a5cbaa1c21c18a"
+    },
+    {
+      "path": ".agentteams-backups/20260521-104118/references/code-hygiene-rules.reference.md",
+      "sha256": "44fe7410d3b212bafa70c1a54621a20893aa6ff57742d69ea2c853c81938b7be"
+    },
+    {
+      "path": ".agentteams-backups/20260521-104118/references/pipeline-graph.md",
+      "sha256": "1b6aa842e28a3457b310600032786da354f099b226960a1c0cfb4121090e711d"
+    },
+    {
+      "path": ".agentteams-backups/20260521-104118/references/security-vulnerability-watch.json",
+      "sha256": "8255aa613a8e7ea72368cc1262762bbdbe74de239dc06c717999d69f43970c1e"
+    },
+    {
+      "path": ".agentteams-backups/20260521-104118/references/security-vulnerability-watch.reference.md",
+      "sha256": "eafa8315585223dd32f97fbccafba3e46162a23d3d9b2030047c1a59a1a57fa9"
+    },
+    {
+      "path": ".agentteams-backups/20260521-104118/references/work-summary-spec.reference.md",
+      "sha256": "3f57763d843c638e342d1bea6f65a25f101d931971502a9ef26fa0ae3d792d1a"
+    },
+    {
+      "path": ".agentteams-backups/20260521-104118/references/work-summary-tooling.reference.md",
+      "sha256": "1ba41c309d9e1d4140293d8deda596e181630524ecec78ba2d4d97195304ae46"
+    },
+    {
+      "path": ".agentteams-backups/20260521-104118/security.agent.md",
+      "sha256": "9a7eeb80be64a6da386d868061a160f3856fd09524d4d54eefa123077e985203"
+    },
+    {
+      "path": ".agentteams-backups/20260521-104118/team-builder.agent.md",
+      "sha256": "256283faf9aa0c73df48d0f701cbd306b1378dcacf3913526320463c072b9245"
+    },
+    {
+      "path": ".agentteams-backups/20260521-104118/work-summarizer.agent.md",
+      "sha256": "3b19f8db0063979e5137b19b7d87d75dcc4253f7542a9f1b93cac720b097fce2"
+    },
+    {
+      "path": ".agentteams-backups/20260521-104201/SETUP-REQUIRED.md",
+      "sha256": "93715e5e224b7a038efcccd7cad3c7ebcb02e08165f7fbd484616fac1b514adc"
+    },
+    {
+      "path": ".agentteams-backups/20260521-104201/_manifest.json",
+      "sha256": "b52004a500e5bf4b04685a9b1d5756bab53da6edcbf6379b800d64f6099b3bd8"
+    },
+    {
+      "path": ".agentteams-backups/20260521-104201/agent-updater.agent.md",
+      "sha256": "48c0dd140f1c8b5996a6fe1cd6f76b514566b0430392a5d6f558b5e474c17304"
+    },
+    {
+      "path": ".agentteams-backups/20260521-104201/cleanup.agent.md",
+      "sha256": "02dc9a033099a40df4710e0685b3112052d00b62a5e8106031c298f4e1287620"
+    },
+    {
+      "path": ".agentteams-backups/20260521-104201/code-hygiene.agent.md",
+      "sha256": "ed8b7cee33db24c4379bb7f9396c494b90231ffa8c211e9686dc791a197243c0"
+    },
+    {
+      "path": ".agentteams-backups/20260521-104201/conflict-auditor.agent.md",
+      "sha256": "980bc02c1bf73dce90e402f61409dbd8f4520cd338dfddc6c41781b89aa84343"
+    },
+    {
+      "path": ".agentteams-backups/20260521-104201/conflict-resolution.agent.md",
+      "sha256": "b08b4b177c334233696174d85c9695a38f5cd2bd577b5cb4ec85a8fde76deba4"
+    },
+    {
+      "path": ".agentteams-backups/20260521-104201/content-enricher.agent.md",
+      "sha256": "9237662e787340a7b2fa1ca3abbad324efc4860bf2cbee2334d111e914aa135f"
+    },
+    {
+      "path": ".agentteams-backups/20260521-104201/copilot-instructions.md",
+      "sha256": "5d403d7c12839d810887788ef80f1f55fef334715748914091003b3dc1801a6e"
+    },
+    {
+      "path": ".agentteams-backups/20260521-104201/module-doc-author.agent.md",
+      "sha256": "47c89d0a64eadaea48e7cad8d2818d3ed4f743d9c1e4163b2c19b23543a67173"
+    },
+    {
+      "path": ".agentteams-backups/20260521-104201/module-doc-validator.agent.md",
+      "sha256": "c8bf9245c468ad998d99f9aa1d3286332caced2923013eb982682b626192e866"
+    },
+    {
+      "path": ".agentteams-backups/20260521-104201/navigator.agent.md",
+      "sha256": "ca22af0b0222e5ee38c635430cc6d1b1d38e6c7c55591df85990a23345a85402"
+    },
+    {
+      "path": ".agentteams-backups/20260521-104201/orchestrator.agent.md",
+      "sha256": "248b958c3a99d0561f793ceb6a653c96bd141432b7179c8b3d3500440d1f15a8"
+    },
+    {
+      "path": ".agentteams-backups/20260521-104201/primary-producer.agent.md",
+      "sha256": "611a9c0995b2c078d76e816b6554496c396635545a6159dd6115c7fbae13d213"
+    },
+    {
+      "path": ".agentteams-backups/20260521-104201/references/adjacent-repos-changelog.csv",
+      "sha256": "a87a453134fb495bb356ef0812afebc1780b1d84ccf3286ffd208864e691bdc8"
+    },
+    {
+      "path": ".agentteams-backups/20260521-104201/references/adjacent-repos-coordination-log.csv",
+      "sha256": "0d8e3d4672759f98e43539918191c172c6fa08b880b910456632d37f67b75135"
+    },
+    {
+      "path": ".agentteams-backups/20260521-104201/references/adjacent-repos.md",
+      "sha256": "2293a9b36d15926b453292cc1e5105a03a19eaf865f146f2b0a5cbaa1c21c18a"
+    },
+    {
+      "path": ".agentteams-backups/20260521-104201/references/code-hygiene-rules.reference.md",
+      "sha256": "44fe7410d3b212bafa70c1a54621a20893aa6ff57742d69ea2c853c81938b7be"
+    },
+    {
+      "path": ".agentteams-backups/20260521-104201/references/pipeline-graph.md",
+      "sha256": "1b6aa842e28a3457b310600032786da354f099b226960a1c0cfb4121090e711d"
+    },
+    {
+      "path": ".agentteams-backups/20260521-104201/references/security-vulnerability-watch.json",
+      "sha256": "bf460e43b1ccd7fd7e5e25a4a5c495ce13491699339c246bc0fc5ee784d0ac9b"
+    },
+    {
+      "path": ".agentteams-backups/20260521-104201/references/security-vulnerability-watch.reference.md",
+      "sha256": "eafa8315585223dd32f97fbccafba3e46162a23d3d9b2030047c1a59a1a57fa9"
+    },
+    {
+      "path": ".agentteams-backups/20260521-104201/references/work-summary-spec.reference.md",
+      "sha256": "3f57763d843c638e342d1bea6f65a25f101d931971502a9ef26fa0ae3d792d1a"
+    },
+    {
+      "path": ".agentteams-backups/20260521-104201/references/work-summary-tooling.reference.md",
+      "sha256": "1ba41c309d9e1d4140293d8deda596e181630524ecec78ba2d4d97195304ae46"
+    },
+    {
+      "path": ".agentteams-backups/20260521-104201/security.agent.md",
+      "sha256": "9a7eeb80be64a6da386d868061a160f3856fd09524d4d54eefa123077e985203"
+    },
+    {
+      "path": ".agentteams-backups/20260521-104201/team-builder.agent.md",
+      "sha256": "256283faf9aa0c73df48d0f701cbd306b1378dcacf3913526320463c072b9245"
+    },
+    {
+      "path": ".agentteams-backups/20260521-104201/work-summarizer.agent.md",
+      "sha256": "3b19f8db0063979e5137b19b7d87d75dcc4253f7542a9f1b93cac720b097fce2"
+    },
+    {
+      "path": ".agentteams-backups/20260521-114915/SETUP-REQUIRED.md",
+      "sha256": "93715e5e224b7a038efcccd7cad3c7ebcb02e08165f7fbd484616fac1b514adc"
+    },
+    {
+      "path": ".agentteams-backups/20260521-114915/_manifest.json",
+      "sha256": "44cceeeb9dc5c1b2877fd5727ee0cbb4a65341ec560118e331dac9ebebd5739e"
+    },
+    {
+      "path": ".agentteams-backups/20260521-114915/agent-updater.agent.md",
+      "sha256": "48c0dd140f1c8b5996a6fe1cd6f76b514566b0430392a5d6f558b5e474c17304"
+    },
+    {
+      "path": ".agentteams-backups/20260521-114915/cleanup.agent.md",
+      "sha256": "02dc9a033099a40df4710e0685b3112052d00b62a5e8106031c298f4e1287620"
+    },
+    {
+      "path": ".agentteams-backups/20260521-114915/code-hygiene.agent.md",
+      "sha256": "ed8b7cee33db24c4379bb7f9396c494b90231ffa8c211e9686dc791a197243c0"
+    },
+    {
+      "path": ".agentteams-backups/20260521-114915/conflict-auditor.agent.md",
+      "sha256": "980bc02c1bf73dce90e402f61409dbd8f4520cd338dfddc6c41781b89aa84343"
+    },
+    {
+      "path": ".agentteams-backups/20260521-114915/conflict-resolution.agent.md",
+      "sha256": "b08b4b177c334233696174d85c9695a38f5cd2bd577b5cb4ec85a8fde76deba4"
+    },
+    {
+      "path": ".agentteams-backups/20260521-114915/content-enricher.agent.md",
+      "sha256": "9237662e787340a7b2fa1ca3abbad324efc4860bf2cbee2334d111e914aa135f"
+    },
+    {
+      "path": ".agentteams-backups/20260521-114915/copilot-instructions.md",
+      "sha256": "5d403d7c12839d810887788ef80f1f55fef334715748914091003b3dc1801a6e"
+    },
+    {
+      "path": ".agentteams-backups/20260521-114915/module-doc-author.agent.md",
+      "sha256": "47c89d0a64eadaea48e7cad8d2818d3ed4f743d9c1e4163b2c19b23543a67173"
+    },
+    {
+      "path": ".agentteams-backups/20260521-114915/module-doc-validator.agent.md",
+      "sha256": "c8bf9245c468ad998d99f9aa1d3286332caced2923013eb982682b626192e866"
+    },
+    {
+      "path": ".agentteams-backups/20260521-114915/navigator.agent.md",
+      "sha256": "ca22af0b0222e5ee38c635430cc6d1b1d38e6c7c55591df85990a23345a85402"
+    },
+    {
+      "path": ".agentteams-backups/20260521-114915/orchestrator.agent.md",
+      "sha256": "248b958c3a99d0561f793ceb6a653c96bd141432b7179c8b3d3500440d1f15a8"
+    },
+    {
+      "path": ".agentteams-backups/20260521-114915/primary-producer.agent.md",
+      "sha256": "611a9c0995b2c078d76e816b6554496c396635545a6159dd6115c7fbae13d213"
+    },
+    {
+      "path": ".agentteams-backups/20260521-114915/references/adjacent-repos-changelog.csv",
+      "sha256": "a87a453134fb495bb356ef0812afebc1780b1d84ccf3286ffd208864e691bdc8"
+    },
+    {
+      "path": ".agentteams-backups/20260521-114915/references/adjacent-repos-coordination-log.csv",
+      "sha256": "0d8e3d4672759f98e43539918191c172c6fa08b880b910456632d37f67b75135"
+    },
+    {
+      "path": ".agentteams-backups/20260521-114915/references/adjacent-repos.md",
+      "sha256": "2293a9b36d15926b453292cc1e5105a03a19eaf865f146f2b0a5cbaa1c21c18a"
+    },
+    {
+      "path": ".agentteams-backups/20260521-114915/references/code-hygiene-rules.reference.md",
+      "sha256": "44fe7410d3b212bafa70c1a54621a20893aa6ff57742d69ea2c853c81938b7be"
+    },
+    {
+      "path": ".agentteams-backups/20260521-114915/references/pipeline-graph.md",
+      "sha256": "1b6aa842e28a3457b310600032786da354f099b226960a1c0cfb4121090e711d"
+    },
+    {
+      "path": ".agentteams-backups/20260521-114915/references/security-vulnerability-watch.json",
+      "sha256": "15c75fe404079a6119aa62aa8d6e69862c637389ed3dd842a30b9110b9c848fb"
+    },
+    {
+      "path": ".agentteams-backups/20260521-114915/references/security-vulnerability-watch.reference.md",
+      "sha256": "eafa8315585223dd32f97fbccafba3e46162a23d3d9b2030047c1a59a1a57fa9"
+    },
+    {
+      "path": ".agentteams-backups/20260521-114915/references/work-summary-spec.reference.md",
+      "sha256": "3f57763d843c638e342d1bea6f65a25f101d931971502a9ef26fa0ae3d792d1a"
+    },
+    {
+      "path": ".agentteams-backups/20260521-114915/references/work-summary-tooling.reference.md",
+      "sha256": "1ba41c309d9e1d4140293d8deda596e181630524ecec78ba2d4d97195304ae46"
+    },
+    {
+      "path": ".agentteams-backups/20260521-114915/security.agent.md",
+      "sha256": "9a7eeb80be64a6da386d868061a160f3856fd09524d4d54eefa123077e985203"
+    },
+    {
+      "path": ".agentteams-backups/20260521-114915/team-builder.agent.md",
+      "sha256": "256283faf9aa0c73df48d0f701cbd306b1378dcacf3913526320463c072b9245"
+    },
+    {
+      "path": ".agentteams-backups/20260521-114915/work-summarizer.agent.md",
+      "sha256": "3b19f8db0063979e5137b19b7d87d75dcc4253f7542a9f1b93cac720b097fce2"
+    },
+    {
+      "path": ".agentteams-backups/20260521-130458/SETUP-REQUIRED.md",
+      "sha256": "93715e5e224b7a038efcccd7cad3c7ebcb02e08165f7fbd484616fac1b514adc"
+    },
+    {
+      "path": ".agentteams-backups/20260521-130458/_manifest.json",
+      "sha256": "262ed7c1a26863f1dfa4cadce375d81d621cb19e2099dba6beff63cd0c2f48b2"
+    },
+    {
+      "path": ".agentteams-backups/20260521-130458/agent-updater.agent.md",
+      "sha256": "48c0dd140f1c8b5996a6fe1cd6f76b514566b0430392a5d6f558b5e474c17304"
+    },
+    {
+      "path": ".agentteams-backups/20260521-130458/cleanup.agent.md",
+      "sha256": "02dc9a033099a40df4710e0685b3112052d00b62a5e8106031c298f4e1287620"
+    },
+    {
+      "path": ".agentteams-backups/20260521-130458/code-hygiene.agent.md",
+      "sha256": "ed8b7cee33db24c4379bb7f9396c494b90231ffa8c211e9686dc791a197243c0"
+    },
+    {
+      "path": ".agentteams-backups/20260521-130458/conflict-auditor.agent.md",
+      "sha256": "980bc02c1bf73dce90e402f61409dbd8f4520cd338dfddc6c41781b89aa84343"
+    },
+    {
+      "path": ".agentteams-backups/20260521-130458/conflict-resolution.agent.md",
+      "sha256": "b08b4b177c334233696174d85c9695a38f5cd2bd577b5cb4ec85a8fde76deba4"
+    },
+    {
+      "path": ".agentteams-backups/20260521-130458/content-enricher.agent.md",
+      "sha256": "9237662e787340a7b2fa1ca3abbad324efc4860bf2cbee2334d111e914aa135f"
+    },
+    {
+      "path": ".agentteams-backups/20260521-130458/copilot-instructions.md",
+      "sha256": "5d403d7c12839d810887788ef80f1f55fef334715748914091003b3dc1801a6e"
+    },
+    {
+      "path": ".agentteams-backups/20260521-130458/module-doc-author.agent.md",
+      "sha256": "47c89d0a64eadaea48e7cad8d2818d3ed4f743d9c1e4163b2c19b23543a67173"
+    },
+    {
+      "path": ".agentteams-backups/20260521-130458/module-doc-validator.agent.md",
+      "sha256": "c8bf9245c468ad998d99f9aa1d3286332caced2923013eb982682b626192e866"
+    },
+    {
+      "path": ".agentteams-backups/20260521-130458/navigator.agent.md",
+      "sha256": "ca22af0b0222e5ee38c635430cc6d1b1d38e6c7c55591df85990a23345a85402"
+    },
+    {
+      "path": ".agentteams-backups/20260521-130458/orchestrator.agent.md",
+      "sha256": "248b958c3a99d0561f793ceb6a653c96bd141432b7179c8b3d3500440d1f15a8"
+    },
+    {
+      "path": ".agentteams-backups/20260521-130458/primary-producer.agent.md",
+      "sha256": "611a9c0995b2c078d76e816b6554496c396635545a6159dd6115c7fbae13d213"
+    },
+    {
+      "path": ".agentteams-backups/20260521-130458/references/adjacent-repos-changelog.csv",
+      "sha256": "a87a453134fb495bb356ef0812afebc1780b1d84ccf3286ffd208864e691bdc8"
+    },
+    {
+      "path": ".agentteams-backups/20260521-130458/references/adjacent-repos-coordination-log.csv",
+      "sha256": "0d8e3d4672759f98e43539918191c172c6fa08b880b910456632d37f67b75135"
+    },
+    {
+      "path": ".agentteams-backups/20260521-130458/references/adjacent-repos.md",
+      "sha256": "2293a9b36d15926b453292cc1e5105a03a19eaf865f146f2b0a5cbaa1c21c18a"
+    },
+    {
+      "path": ".agentteams-backups/20260521-130458/references/code-hygiene-rules.reference.md",
+      "sha256": "44fe7410d3b212bafa70c1a54621a20893aa6ff57742d69ea2c853c81938b7be"
+    },
+    {
+      "path": ".agentteams-backups/20260521-130458/references/pipeline-graph.md",
+      "sha256": "1b6aa842e28a3457b310600032786da354f099b226960a1c0cfb4121090e711d"
+    },
+    {
+      "path": ".agentteams-backups/20260521-130458/references/security-vulnerability-watch.json",
+      "sha256": "538d0042da462d16f7200162b2a2503c153ec89235936651ba14d113f376cb94"
+    },
+    {
+      "path": ".agentteams-backups/20260521-130458/references/security-vulnerability-watch.reference.md",
+      "sha256": "eafa8315585223dd32f97fbccafba3e46162a23d3d9b2030047c1a59a1a57fa9"
+    },
+    {
+      "path": ".agentteams-backups/20260521-130458/references/work-summary-spec.reference.md",
+      "sha256": "3f57763d843c638e342d1bea6f65a25f101d931971502a9ef26fa0ae3d792d1a"
+    },
+    {
+      "path": ".agentteams-backups/20260521-130458/references/work-summary-tooling.reference.md",
+      "sha256": "1ba41c309d9e1d4140293d8deda596e181630524ecec78ba2d4d97195304ae46"
+    },
+    {
+      "path": ".agentteams-backups/20260521-130458/security.agent.md",
+      "sha256": "9a7eeb80be64a6da386d868061a160f3856fd09524d4d54eefa123077e985203"
+    },
+    {
+      "path": ".agentteams-backups/20260521-130458/team-builder.agent.md",
+      "sha256": "256283faf9aa0c73df48d0f701cbd306b1378dcacf3913526320463c072b9245"
+    },
+    {
+      "path": ".agentteams-backups/20260521-130458/work-summarizer.agent.md",
+      "sha256": "3b19f8db0063979e5137b19b7d87d75dcc4253f7542a9f1b93cac720b097fce2"
+    },
+    {
+      "path": ".agentteams-backups/20260521-142554/SETUP-REQUIRED.md",
+      "sha256": "93715e5e224b7a038efcccd7cad3c7ebcb02e08165f7fbd484616fac1b514adc"
+    },
+    {
+      "path": ".agentteams-backups/20260521-142554/_manifest.json",
+      "sha256": "9d6842f864fa7a2cc329fdd09a4dd70e0f0ebdd0ff0bcde9e5235256129379c4"
+    },
+    {
+      "path": ".agentteams-backups/20260521-142554/agent-updater.agent.md",
+      "sha256": "48c0dd140f1c8b5996a6fe1cd6f76b514566b0430392a5d6f558b5e474c17304"
+    },
+    {
+      "path": ".agentteams-backups/20260521-142554/cleanup.agent.md",
+      "sha256": "02dc9a033099a40df4710e0685b3112052d00b62a5e8106031c298f4e1287620"
+    },
+    {
+      "path": ".agentteams-backups/20260521-142554/code-hygiene.agent.md",
+      "sha256": "ed8b7cee33db24c4379bb7f9396c494b90231ffa8c211e9686dc791a197243c0"
+    },
+    {
+      "path": ".agentteams-backups/20260521-142554/conflict-auditor.agent.md",
+      "sha256": "980bc02c1bf73dce90e402f61409dbd8f4520cd338dfddc6c41781b89aa84343"
+    },
+    {
+      "path": ".agentteams-backups/20260521-142554/conflict-resolution.agent.md",
+      "sha256": "b08b4b177c334233696174d85c9695a38f5cd2bd577b5cb4ec85a8fde76deba4"
+    },
+    {
+      "path": ".agentteams-backups/20260521-142554/content-enricher.agent.md",
+      "sha256": "9237662e787340a7b2fa1ca3abbad324efc4860bf2cbee2334d111e914aa135f"
+    },
+    {
+      "path": ".agentteams-backups/20260521-142554/copilot-instructions.md",
+      "sha256": "5d403d7c12839d810887788ef80f1f55fef334715748914091003b3dc1801a6e"
+    },
+    {
+      "path": ".agentteams-backups/20260521-142554/module-doc-author.agent.md",
+      "sha256": "47c89d0a64eadaea48e7cad8d2818d3ed4f743d9c1e4163b2c19b23543a67173"
+    },
+    {
+      "path": ".agentteams-backups/20260521-142554/module-doc-validator.agent.md",
+      "sha256": "c8bf9245c468ad998d99f9aa1d3286332caced2923013eb982682b626192e866"
+    },
+    {
+      "path": ".agentteams-backups/20260521-142554/navigator.agent.md",
+      "sha256": "ca22af0b0222e5ee38c635430cc6d1b1d38e6c7c55591df85990a23345a85402"
+    },
+    {
+      "path": ".agentteams-backups/20260521-142554/orchestrator.agent.md",
+      "sha256": "27a9fb7ac3cf72df00f3a6cbd2af435322529763edd348bea2ef9862ab036aad"
+    },
+    {
+      "path": ".agentteams-backups/20260521-142554/primary-producer.agent.md",
+      "sha256": "611a9c0995b2c078d76e816b6554496c396635545a6159dd6115c7fbae13d213"
+    },
+    {
+      "path": ".agentteams-backups/20260521-142554/references/adjacent-repos-changelog.csv",
+      "sha256": "a87a453134fb495bb356ef0812afebc1780b1d84ccf3286ffd208864e691bdc8"
+    },
+    {
+      "path": ".agentteams-backups/20260521-142554/references/adjacent-repos-coordination-log.csv",
+      "sha256": "0d8e3d4672759f98e43539918191c172c6fa08b880b910456632d37f67b75135"
+    },
+    {
+      "path": ".agentteams-backups/20260521-142554/references/adjacent-repos.md",
+      "sha256": "2293a9b36d15926b453292cc1e5105a03a19eaf865f146f2b0a5cbaa1c21c18a"
+    },
+    {
+      "path": ".agentteams-backups/20260521-142554/references/code-hygiene-rules.reference.md",
+      "sha256": "44fe7410d3b212bafa70c1a54621a20893aa6ff57742d69ea2c853c81938b7be"
+    },
+    {
+      "path": ".agentteams-backups/20260521-142554/references/pipeline-graph.md",
+      "sha256": "1b6aa842e28a3457b310600032786da354f099b226960a1c0cfb4121090e711d"
+    },
+    {
+      "path": ".agentteams-backups/20260521-142554/references/security-vulnerability-watch.json",
+      "sha256": "09f9c349985c1397320f71674bde4458632becf68f0a9bea26a8b4c4ffacb6cf"
+    },
+    {
+      "path": ".agentteams-backups/20260521-142554/references/security-vulnerability-watch.reference.md",
+      "sha256": "eafa8315585223dd32f97fbccafba3e46162a23d3d9b2030047c1a59a1a57fa9"
+    },
+    {
+      "path": ".agentteams-backups/20260521-142554/references/work-summary-spec.reference.md",
+      "sha256": "3f57763d843c638e342d1bea6f65a25f101d931971502a9ef26fa0ae3d792d1a"
+    },
+    {
+      "path": ".agentteams-backups/20260521-142554/references/work-summary-tooling.reference.md",
+      "sha256": "1ba41c309d9e1d4140293d8deda596e181630524ecec78ba2d4d97195304ae46"
+    },
+    {
+      "path": ".agentteams-backups/20260521-142554/security.agent.md",
+      "sha256": "9a7eeb80be64a6da386d868061a160f3856fd09524d4d54eefa123077e985203"
+    },
+    {
+      "path": ".agentteams-backups/20260521-142554/team-builder.agent.md",
+      "sha256": "256283faf9aa0c73df48d0f701cbd306b1378dcacf3913526320463c072b9245"
+    },
+    {
+      "path": ".agentteams-backups/20260521-142554/work-summarizer.agent.md",
+      "sha256": "3b19f8db0063979e5137b19b7d87d75dcc4253f7542a9f1b93cac720b097fce2"
+    },
+    {
+      "path": ".agentteams-backups/20260521-145542/SETUP-REQUIRED.md",
+      "sha256": "93715e5e224b7a038efcccd7cad3c7ebcb02e08165f7fbd484616fac1b514adc"
+    },
+    {
+      "path": ".agentteams-backups/20260521-145542/_manifest.json",
+      "sha256": "329a5b1959bc588794f24b591fb8bad3cf9f096bc5f0e2a756d8c4e6faec255f"
+    },
+    {
+      "path": ".agentteams-backups/20260521-145542/agent-updater.agent.md",
+      "sha256": "48c0dd140f1c8b5996a6fe1cd6f76b514566b0430392a5d6f558b5e474c17304"
+    },
+    {
+      "path": ".agentteams-backups/20260521-145542/cleanup.agent.md",
+      "sha256": "02dc9a033099a40df4710e0685b3112052d00b62a5e8106031c298f4e1287620"
+    },
+    {
+      "path": ".agentteams-backups/20260521-145542/code-hygiene.agent.md",
+      "sha256": "ed8b7cee33db24c4379bb7f9396c494b90231ffa8c211e9686dc791a197243c0"
+    },
+    {
+      "path": ".agentteams-backups/20260521-145542/conflict-auditor.agent.md",
+      "sha256": "980bc02c1bf73dce90e402f61409dbd8f4520cd338dfddc6c41781b89aa84343"
+    },
+    {
+      "path": ".agentteams-backups/20260521-145542/conflict-resolution.agent.md",
+      "sha256": "b08b4b177c334233696174d85c9695a38f5cd2bd577b5cb4ec85a8fde76deba4"
+    },
+    {
+      "path": ".agentteams-backups/20260521-145542/content-enricher.agent.md",
+      "sha256": "9237662e787340a7b2fa1ca3abbad324efc4860bf2cbee2334d111e914aa135f"
+    },
+    {
+      "path": ".agentteams-backups/20260521-145542/copilot-instructions.md",
+      "sha256": "5d403d7c12839d810887788ef80f1f55fef334715748914091003b3dc1801a6e"
+    },
+    {
+      "path": ".agentteams-backups/20260521-145542/module-doc-author.agent.md",
+      "sha256": "47c89d0a64eadaea48e7cad8d2818d3ed4f743d9c1e4163b2c19b23543a67173"
+    },
+    {
+      "path": ".agentteams-backups/20260521-145542/module-doc-validator.agent.md",
+      "sha256": "c8bf9245c468ad998d99f9aa1d3286332caced2923013eb982682b626192e866"
+    },
+    {
+      "path": ".agentteams-backups/20260521-145542/navigator.agent.md",
+      "sha256": "ca22af0b0222e5ee38c635430cc6d1b1d38e6c7c55591df85990a23345a85402"
+    },
+    {
+      "path": ".agentteams-backups/20260521-145542/orchestrator.agent.md",
+      "sha256": "27a9fb7ac3cf72df00f3a6cbd2af435322529763edd348bea2ef9862ab036aad"
+    },
+    {
+      "path": ".agentteams-backups/20260521-145542/primary-producer.agent.md",
+      "sha256": "611a9c0995b2c078d76e816b6554496c396635545a6159dd6115c7fbae13d213"
+    },
+    {
+      "path": ".agentteams-backups/20260521-145542/references/adjacent-repos-changelog.csv",
+      "sha256": "a87a453134fb495bb356ef0812afebc1780b1d84ccf3286ffd208864e691bdc8"
+    },
+    {
+      "path": ".agentteams-backups/20260521-145542/references/adjacent-repos-coordination-log.csv",
+      "sha256": "0d8e3d4672759f98e43539918191c172c6fa08b880b910456632d37f67b75135"
+    },
+    {
+      "path": ".agentteams-backups/20260521-145542/references/adjacent-repos.md",
+      "sha256": "2293a9b36d15926b453292cc1e5105a03a19eaf865f146f2b0a5cbaa1c21c18a"
+    },
+    {
+      "path": ".agentteams-backups/20260521-145542/references/code-hygiene-rules.reference.md",
+      "sha256": "44fe7410d3b212bafa70c1a54621a20893aa6ff57742d69ea2c853c81938b7be"
+    },
+    {
+      "path": ".agentteams-backups/20260521-145542/references/pipeline-graph.md",
+      "sha256": "1b6aa842e28a3457b310600032786da354f099b226960a1c0cfb4121090e711d"
+    },
+    {
+      "path": ".agentteams-backups/20260521-145542/references/security-vulnerability-watch.json",
+      "sha256": "89956ec2351f0435c08f934a183782f0a126b2ffdbffac34fbad2f6a8b34842a"
+    },
+    {
+      "path": ".agentteams-backups/20260521-145542/references/security-vulnerability-watch.reference.md",
+      "sha256": "4b4d7a4c588f41b4dfc678c609ed9fc450aa501a7275436ffd277950dd55b999"
+    },
+    {
+      "path": ".agentteams-backups/20260521-145542/references/work-summary-spec.reference.md",
+      "sha256": "3f57763d843c638e342d1bea6f65a25f101d931971502a9ef26fa0ae3d792d1a"
+    },
+    {
+      "path": ".agentteams-backups/20260521-145542/references/work-summary-tooling.reference.md",
+      "sha256": "1ba41c309d9e1d4140293d8deda596e181630524ecec78ba2d4d97195304ae46"
+    },
+    {
+      "path": ".agentteams-backups/20260521-145542/security.agent.md",
+      "sha256": "e22fe9dd76969d2083f8f1967f2ddb20d76060fb0adf6982dac2e81e027997d0"
+    },
+    {
+      "path": ".agentteams-backups/20260521-145542/team-builder.agent.md",
+      "sha256": "256283faf9aa0c73df48d0f701cbd306b1378dcacf3913526320463c072b9245"
+    },
+    {
+      "path": ".agentteams-backups/20260521-145542/work-summarizer.agent.md",
+      "sha256": "3b19f8db0063979e5137b19b7d87d75dcc4253f7542a9f1b93cac720b097fce2"
+    },
+    {
+      "path": ".agentteams-backups/20260521-150009/SETUP-REQUIRED.md",
+      "sha256": "93715e5e224b7a038efcccd7cad3c7ebcb02e08165f7fbd484616fac1b514adc"
+    },
+    {
+      "path": ".agentteams-backups/20260521-150009/_manifest.json",
+      "sha256": "fb294d1342b3fdd9734d02f363cff418f44196380f3b300506a2edfd14cf757b"
+    },
+    {
+      "path": ".agentteams-backups/20260521-150009/agent-updater.agent.md",
+      "sha256": "48c0dd140f1c8b5996a6fe1cd6f76b514566b0430392a5d6f558b5e474c17304"
+    },
+    {
+      "path": ".agentteams-backups/20260521-150009/cleanup.agent.md",
+      "sha256": "02dc9a033099a40df4710e0685b3112052d00b62a5e8106031c298f4e1287620"
+    },
+    {
+      "path": ".agentteams-backups/20260521-150009/code-hygiene.agent.md",
+      "sha256": "ed8b7cee33db24c4379bb7f9396c494b90231ffa8c211e9686dc791a197243c0"
+    },
+    {
+      "path": ".agentteams-backups/20260521-150009/conflict-auditor.agent.md",
+      "sha256": "980bc02c1bf73dce90e402f61409dbd8f4520cd338dfddc6c41781b89aa84343"
+    },
+    {
+      "path": ".agentteams-backups/20260521-150009/conflict-resolution.agent.md",
+      "sha256": "b08b4b177c334233696174d85c9695a38f5cd2bd577b5cb4ec85a8fde76deba4"
+    },
+    {
+      "path": ".agentteams-backups/20260521-150009/content-enricher.agent.md",
+      "sha256": "9237662e787340a7b2fa1ca3abbad324efc4860bf2cbee2334d111e914aa135f"
+    },
+    {
+      "path": ".agentteams-backups/20260521-150009/copilot-instructions.md",
+      "sha256": "5d403d7c12839d810887788ef80f1f55fef334715748914091003b3dc1801a6e"
+    },
+    {
+      "path": ".agentteams-backups/20260521-150009/module-doc-author.agent.md",
+      "sha256": "47c89d0a64eadaea48e7cad8d2818d3ed4f743d9c1e4163b2c19b23543a67173"
+    },
+    {
+      "path": ".agentteams-backups/20260521-150009/module-doc-validator.agent.md",
+      "sha256": "c8bf9245c468ad998d99f9aa1d3286332caced2923013eb982682b626192e866"
+    },
+    {
+      "path": ".agentteams-backups/20260521-150009/navigator.agent.md",
+      "sha256": "ca22af0b0222e5ee38c635430cc6d1b1d38e6c7c55591df85990a23345a85402"
+    },
+    {
+      "path": ".agentteams-backups/20260521-150009/orchestrator.agent.md",
+      "sha256": "27a9fb7ac3cf72df00f3a6cbd2af435322529763edd348bea2ef9862ab036aad"
+    },
+    {
+      "path": ".agentteams-backups/20260521-150009/primary-producer.agent.md",
+      "sha256": "611a9c0995b2c078d76e816b6554496c396635545a6159dd6115c7fbae13d213"
+    },
+    {
+      "path": ".agentteams-backups/20260521-150009/references/adjacent-repos-changelog.csv",
+      "sha256": "a87a453134fb495bb356ef0812afebc1780b1d84ccf3286ffd208864e691bdc8"
+    },
+    {
+      "path": ".agentteams-backups/20260521-150009/references/adjacent-repos-coordination-log.csv",
+      "sha256": "0d8e3d4672759f98e43539918191c172c6fa08b880b910456632d37f67b75135"
+    },
+    {
+      "path": ".agentteams-backups/20260521-150009/references/adjacent-repos.md",
+      "sha256": "2293a9b36d15926b453292cc1e5105a03a19eaf865f146f2b0a5cbaa1c21c18a"
+    },
+    {
+      "path": ".agentteams-backups/20260521-150009/references/code-hygiene-rules.reference.md",
+      "sha256": "44fe7410d3b212bafa70c1a54621a20893aa6ff57742d69ea2c853c81938b7be"
+    },
+    {
+      "path": ".agentteams-backups/20260521-150009/references/pipeline-graph.md",
+      "sha256": "1b6aa842e28a3457b310600032786da354f099b226960a1c0cfb4121090e711d"
+    },
+    {
+      "path": ".agentteams-backups/20260521-150009/references/security-vulnerability-watch.json",
+      "sha256": "413921d4756a749aaf5c2d3dc91801db4b9b83961596647bac48b27a1cfeb680"
+    },
+    {
+      "path": ".agentteams-backups/20260521-150009/references/security-vulnerability-watch.reference.md",
+      "sha256": "e1842411418b34986f3a59b30b1a7126df28f191fbf9ad6821b30dffc2e52fd4"
+    },
+    {
+      "path": ".agentteams-backups/20260521-150009/references/work-summary-spec.reference.md",
+      "sha256": "3f57763d843c638e342d1bea6f65a25f101d931971502a9ef26fa0ae3d792d1a"
+    },
+    {
+      "path": ".agentteams-backups/20260521-150009/references/work-summary-tooling.reference.md",
+      "sha256": "1ba41c309d9e1d4140293d8deda596e181630524ecec78ba2d4d97195304ae46"
+    },
+    {
+      "path": ".agentteams-backups/20260521-150009/security.agent.md",
+      "sha256": "d54b2945b1ae55e87c160b5ea9fbdb96128e29f74373fe9480d28181a4c42d08"
+    },
+    {
+      "path": ".agentteams-backups/20260521-150009/team-builder.agent.md",
+      "sha256": "256283faf9aa0c73df48d0f701cbd306b1378dcacf3913526320463c072b9245"
+    },
+    {
+      "path": ".agentteams-backups/20260521-150009/work-summarizer.agent.md",
+      "sha256": "3b19f8db0063979e5137b19b7d87d75dcc4253f7542a9f1b93cac720b097fce2"
+    },
+    {
+      "path": ".agentteams-backups/20260521-232716/SETUP-REQUIRED.md",
+      "sha256": "93715e5e224b7a038efcccd7cad3c7ebcb02e08165f7fbd484616fac1b514adc"
+    },
+    {
+      "path": ".agentteams-backups/20260521-232716/_manifest.json",
+      "sha256": "750e0132108b91a8b8a4800f2fad995fa22bc824c0385114a48d710117cea57c"
+    },
+    {
+      "path": ".agentteams-backups/20260521-232716/agent-updater.agent.md",
+      "sha256": "48c0dd140f1c8b5996a6fe1cd6f76b514566b0430392a5d6f558b5e474c17304"
+    },
+    {
+      "path": ".agentteams-backups/20260521-232716/cleanup.agent.md",
+      "sha256": "02dc9a033099a40df4710e0685b3112052d00b62a5e8106031c298f4e1287620"
+    },
+    {
+      "path": ".agentteams-backups/20260521-232716/code-hygiene.agent.md",
+      "sha256": "ed8b7cee33db24c4379bb7f9396c494b90231ffa8c211e9686dc791a197243c0"
+    },
+    {
+      "path": ".agentteams-backups/20260521-232716/conflict-auditor.agent.md",
+      "sha256": "980bc02c1bf73dce90e402f61409dbd8f4520cd338dfddc6c41781b89aa84343"
+    },
+    {
+      "path": ".agentteams-backups/20260521-232716/conflict-resolution.agent.md",
+      "sha256": "b08b4b177c334233696174d85c9695a38f5cd2bd577b5cb4ec85a8fde76deba4"
+    },
+    {
+      "path": ".agentteams-backups/20260521-232716/content-enricher.agent.md",
+      "sha256": "9237662e787340a7b2fa1ca3abbad324efc4860bf2cbee2334d111e914aa135f"
+    },
+    {
+      "path": ".agentteams-backups/20260521-232716/copilot-instructions.md",
+      "sha256": "848402e0d68180341cfe04e70124cfb4edcb2c4140e2cbc9c23703ba7d70e1fb"
+    },
+    {
+      "path": ".agentteams-backups/20260521-232716/module-doc-author.agent.md",
+      "sha256": "47c89d0a64eadaea48e7cad8d2818d3ed4f743d9c1e4163b2c19b23543a67173"
+    },
+    {
+      "path": ".agentteams-backups/20260521-232716/module-doc-validator.agent.md",
+      "sha256": "c8bf9245c468ad998d99f9aa1d3286332caced2923013eb982682b626192e866"
+    },
+    {
+      "path": ".agentteams-backups/20260521-232716/navigator.agent.md",
+      "sha256": "ca22af0b0222e5ee38c635430cc6d1b1d38e6c7c55591df85990a23345a85402"
+    },
+    {
+      "path": ".agentteams-backups/20260521-232716/orchestrator.agent.md",
+      "sha256": "27a9fb7ac3cf72df00f3a6cbd2af435322529763edd348bea2ef9862ab036aad"
+    },
+    {
+      "path": ".agentteams-backups/20260521-232716/primary-producer.agent.md",
+      "sha256": "611a9c0995b2c078d76e816b6554496c396635545a6159dd6115c7fbae13d213"
+    },
+    {
+      "path": ".agentteams-backups/20260521-232716/references/adjacent-repos-changelog.csv",
+      "sha256": "a87a453134fb495bb356ef0812afebc1780b1d84ccf3286ffd208864e691bdc8"
+    },
+    {
+      "path": ".agentteams-backups/20260521-232716/references/adjacent-repos-coordination-log.csv",
+      "sha256": "0d8e3d4672759f98e43539918191c172c6fa08b880b910456632d37f67b75135"
+    },
+    {
+      "path": ".agentteams-backups/20260521-232716/references/adjacent-repos.md",
+      "sha256": "2293a9b36d15926b453292cc1e5105a03a19eaf865f146f2b0a5cbaa1c21c18a"
+    },
+    {
+      "path": ".agentteams-backups/20260521-232716/references/code-hygiene-rules.reference.md",
+      "sha256": "44fe7410d3b212bafa70c1a54621a20893aa6ff57742d69ea2c853c81938b7be"
+    },
+    {
+      "path": ".agentteams-backups/20260521-232716/references/pipeline-graph.md",
+      "sha256": "1b6aa842e28a3457b310600032786da354f099b226960a1c0cfb4121090e711d"
+    },
+    {
+      "path": ".agentteams-backups/20260521-232716/references/retrieval-integration.reference.md",
+      "sha256": "bd0f24109cbd7ab3f5fb52ad31f29a3e9cb7e11ff0333b932ecfcbcec7acc41b"
+    },
+    {
+      "path": ".agentteams-backups/20260521-232716/references/retrieval-trigger-contract.reference.md",
+      "sha256": "8010912506cac600f72456d2dc995f9e39517d6954f6475dcae0e2f1a1b9ecfa"
+    },
+    {
+      "path": ".agentteams-backups/20260521-232716/references/security-vulnerability-watch.json",
+      "sha256": "d6215356668930caf0b248bb49684d5e4565b8a088987189178598357f3885cd"
+    },
+    {
+      "path": ".agentteams-backups/20260521-232716/references/security-vulnerability-watch.reference.md",
+      "sha256": "23fa7e0406b0770fb9254b606802e36e7b7c9ed51ba0b35bc91d06d0ce524436"
+    },
+    {
+      "path": ".agentteams-backups/20260521-232716/references/work-summary-spec.reference.md",
+      "sha256": "3f57763d843c638e342d1bea6f65a25f101d931971502a9ef26fa0ae3d792d1a"
+    },
+    {
+      "path": ".agentteams-backups/20260521-232716/references/work-summary-tooling.reference.md",
+      "sha256": "1ba41c309d9e1d4140293d8deda596e181630524ecec78ba2d4d97195304ae46"
+    },
+    {
+      "path": ".agentteams-backups/20260521-232716/retrieval-integrator.agent.md",
+      "sha256": "08a566b8eb930edd395a64c8a7dfb16c49023243db49cce6086c5644237f247e"
+    },
+    {
+      "path": ".agentteams-backups/20260521-232716/security.agent.md",
+      "sha256": "c50dbabcff907c6cf2a7977d58f1b6335f1f63d09b2cbf1df33047320577b757"
+    },
+    {
+      "path": ".agentteams-backups/20260521-232716/team-builder.agent.md",
+      "sha256": "256283faf9aa0c73df48d0f701cbd306b1378dcacf3913526320463c072b9245"
+    },
+    {
+      "path": ".agentteams-backups/20260521-232716/tool-doc-researcher.agent.md",
+      "sha256": "5c0723396f042cdf289a4332893333489027858c148677425e1de5ca0f619696"
+    },
+    {
+      "path": ".agentteams-backups/20260521-232716/tool-sql.agent.md",
+      "sha256": "1af9095847d6b3653c1eceb50d6d6e7c359f2ffcbb25c060f644eb3ee0a24ac1"
+    },
+    {
+      "path": ".agentteams-backups/20260521-232716/visual-designer.agent.md",
+      "sha256": "58460e1f7e602b46b8e4e2a27f837fb56edfb556c765ea587902395066459fc6"
+    },
+    {
+      "path": ".agentteams-backups/20260521-232716/work-summarizer.agent.md",
+      "sha256": "3b19f8db0063979e5137b19b7d87d75dcc4253f7542a9f1b93cac720b097fce2"
+    },
+    {
+      "path": ".agentteams-backups/20260522-164651/SETUP-REQUIRED.md",
+      "sha256": "ada8eeda84f64a661fabdddda54103fea6386d7a743bd71504a27e158ea772f1"
+    },
+    {
+      "path": ".agentteams-backups/20260522-164651/_manifest.json",
+      "sha256": "e9086eb1be2b85a80027718b19d8939f90f2ccdb7d5e896eac3fb6ccb8e1cabf"
+    },
+    {
+      "path": ".agentteams-backups/20260522-164651/adversarial.agent.md",
+      "sha256": "6121ee390f54dfd18f74988a2106864499a8561cd7b0d34f316435cc6280a3bb"
+    },
+    {
+      "path": ".agentteams-backups/20260522-164651/agent-refactor.agent.md",
+      "sha256": "6015bfb8fe9ad4d0e2ba67555c0e0824512259c99940c013b3f6e49ce2dba17a"
+    },
+    {
+      "path": ".agentteams-backups/20260522-164651/agent-updater.agent.md",
+      "sha256": "dc3efe265b7dc9d1a3bad16ef89f1d6120183bf82fd302465f48a5535fdb16e4"
+    },
+    {
+      "path": ".agentteams-backups/20260522-164651/cleanup.agent.md",
+      "sha256": "b24bd9daef18153722f5b8346775fa6eca3234d9dba2a376ea3fa86ebee8aac3"
+    },
+    {
+      "path": ".agentteams-backups/20260522-164651/code-hygiene.agent.md",
+      "sha256": "8a93388e0357896cc620c36adada3a381569fd2c17fb659a6042ffafb9920f6f"
+    },
+    {
+      "path": ".agentteams-backups/20260522-164651/conflict-auditor.agent.md",
+      "sha256": "980bc02c1bf73dce90e402f61409dbd8f4520cd338dfddc6c41781b89aa84343"
+    },
+    {
+      "path": ".agentteams-backups/20260522-164651/conflict-resolution.agent.md",
+      "sha256": "b08b4b177c334233696174d85c9695a38f5cd2bd577b5cb4ec85a8fde76deba4"
+    },
+    {
+      "path": ".agentteams-backups/20260522-164651/content-enricher.agent.md",
+      "sha256": "ab1f6e1617125d4c95db0256f3a286a8b9659361fb64145b6b5546f14d06da4e"
+    },
+    {
+      "path": ".agentteams-backups/20260522-164651/copilot-instructions.md",
+      "sha256": "c219ee54591d05156225b086572f2829e497090914574dc18597a5ba55a80081"
+    },
+    {
+      "path": ".agentteams-backups/20260522-164651/git-operations.agent.md",
+      "sha256": "d0b3d1a2491aff565a1256d3cac525355af783db968fe1f880cfc2ec5fe5f18e"
+    },
+    {
+      "path": ".agentteams-backups/20260522-164651/module-doc-author.agent.md",
+      "sha256": "e1be3f3575718b332967f5a884f3ad427cdb1f54a1a3722cdc5e1dc4c684126f"
+    },
+    {
+      "path": ".agentteams-backups/20260522-164651/module-doc-validator.agent.md",
+      "sha256": "ac0a87df41b5b19f6e3cb9136459041b86c82ce5f156078db1169894294bd626"
+    },
+    {
+      "path": ".agentteams-backups/20260522-164651/navigator.agent.md",
+      "sha256": "ca22af0b0222e5ee38c635430cc6d1b1d38e6c7c55591df85990a23345a85402"
+    },
+    {
+      "path": ".agentteams-backups/20260522-164651/orchestrator.agent.md",
+      "sha256": "ba438aa15e3eadd61ac5151903ac5c695df4b18c9ad558408c9fe30b6a2be3fb"
+    },
+    {
+      "path": ".agentteams-backups/20260522-164651/primary-producer.agent.md",
+      "sha256": "066c4cc2c52d4cba1dab760c4e37df961376138190ce5ad5d6aaddcd1153a8d9"
+    },
+    {
+      "path": ".agentteams-backups/20260522-164651/quality-auditor.agent.md",
+      "sha256": "f7c9612e225cf77fdf4cf6691a2657e5889d67a658924f9baca12d1c14ce37a3"
+    },
+    {
+      "path": ".agentteams-backups/20260522-164651/references/adjacent-repos-changelog.csv",
+      "sha256": "a87a453134fb495bb356ef0812afebc1780b1d84ccf3286ffd208864e691bdc8"
+    },
+    {
+      "path": ".agentteams-backups/20260522-164651/references/adjacent-repos-coordination-log.csv",
+      "sha256": "0d8e3d4672759f98e43539918191c172c6fa08b880b910456632d37f67b75135"
+    },
+    {
+      "path": ".agentteams-backups/20260522-164651/references/adjacent-repos.md",
+      "sha256": "2293a9b36d15926b453292cc1e5105a03a19eaf865f146f2b0a5cbaa1c21c18a"
+    },
+    {
+      "path": ".agentteams-backups/20260522-164651/references/code-hygiene-rules.reference.md",
+      "sha256": "d6ea9af11198129513203e0c4f9b57ec3dfc05541066c0f6d335bf493a2e7d5a"
+    },
+    {
+      "path": ".agentteams-backups/20260522-164651/references/pipeline-graph.md",
+      "sha256": "33eba693ac069d3dace169955ab7d1a85251febf12a6eb9af6fadff6e91d6a64"
+    },
+    {
+      "path": ".agentteams-backups/20260522-164651/references/security-vulnerability-watch.json",
+      "sha256": "3e985fa81b7e9df21103257c219e1802184af534d6210446b4072177dba74e5e"
+    },
+    {
+      "path": ".agentteams-backups/20260522-164651/references/security-vulnerability-watch.reference.md",
+      "sha256": "e9d734065ba7117dfe270ab1f00bc4095ef82a86d10930b6692ee76852027f7c"
+    },
+    {
+      "path": ".agentteams-backups/20260522-164651/references/work-summary-spec.reference.md",
+      "sha256": "3f57763d843c638e342d1bea6f65a25f101d931971502a9ef26fa0ae3d792d1a"
+    },
+    {
+      "path": ".agentteams-backups/20260522-164651/references/work-summary-tooling.reference.md",
+      "sha256": "1ba41c309d9e1d4140293d8deda596e181630524ecec78ba2d4d97195304ae46"
+    },
+    {
+      "path": ".agentteams-backups/20260522-164651/repo-liaison.agent.md",
+      "sha256": "a4a50fedeb3f1bcc58791713527ce297a41eeedbe7af2a131a8368bd63cb2c93"
+    },
+    {
+      "path": ".agentteams-backups/20260522-164651/retrieval-integrator.agent.md",
+      "sha256": "2db685bac7f50eb0479a01afa5d1ea4d4a53e70ce419e3e085706201153a9412"
+    },
+    {
+      "path": ".agentteams-backups/20260522-164651/security.agent.md",
+      "sha256": "926e32b73ffea5ec7a5e6011587a368ecd896b1301c69f1cdad536133b4e0246"
+    },
+    {
+      "path": ".agentteams-backups/20260522-164651/team-builder.agent.md",
+      "sha256": "256283faf9aa0c73df48d0f701cbd306b1378dcacf3913526320463c072b9245"
+    },
+    {
+      "path": ".agentteams-backups/20260522-164651/technical-validator.agent.md",
+      "sha256": "8814b8b3fa96024e0c986d1a91cad2441ee25f1941b7a6494209d6cd8758d1d8"
+    },
+    {
+      "path": ".agentteams-backups/20260522-164651/tool-doc-researcher.agent.md",
+      "sha256": "5c0723396f042cdf289a4332893333489027858c148677425e1de5ca0f619696"
+    },
+    {
+      "path": ".agentteams-backups/20260522-164651/tool-sql.agent.md",
+      "sha256": "1af9095847d6b3653c1eceb50d6d6e7c359f2ffcbb25c060f644eb3ee0a24ac1"
+    },
+    {
+      "path": ".agentteams-backups/20260522-164651/visual-designer.agent.md",
+      "sha256": "58460e1f7e602b46b8e4e2a27f837fb56edfb556c765ea587902395066459fc6"
+    },
+    {
+      "path": ".agentteams-backups/20260522-164651/work-summarizer.agent.md",
+      "sha256": "3b19f8db0063979e5137b19b7d87d75dcc4253f7542a9f1b93cac720b097fce2"
+    },
+    {
+      "path": ".agentteams-backups/20260522-234934/SETUP-REQUIRED.md",
+      "sha256": "ada8eeda84f64a661fabdddda54103fea6386d7a743bd71504a27e158ea772f1"
+    },
+    {
+      "path": ".agentteams-backups/20260522-234934/_manifest.json",
+      "sha256": "5a147eabc4455797d7ed339fa084919d4f573a6b512a971053a9a47db3966340"
+    },
+    {
+      "path": ".agentteams-backups/20260522-234934/agent-updater.agent.md",
+      "sha256": "1c2dc0500c8ee8e50527ddcbefec02bbe825acd619597da140a4594955c59d3c"
+    },
+    {
+      "path": ".agentteams-backups/20260522-234934/cleanup.agent.md",
+      "sha256": "054b1ba1835a7018d46f4e772e06fd363064cadbccbfa37388fbbe7e7c129ec8"
+    },
+    {
+      "path": ".agentteams-backups/20260522-234934/code-hygiene.agent.md",
+      "sha256": "2e127e72ebc39ad93a8b0561fa87f9cef557a65ef5606980824a53f7f2b1cbf7"
+    },
+    {
+      "path": ".agentteams-backups/20260522-234934/conflict-auditor.agent.md",
+      "sha256": "2048181ac38e128c13040160362ba0e8f28c267b87ef8961031d9aac43e95d3e"
+    },
+    {
+      "path": ".agentteams-backups/20260522-234934/conflict-resolution.agent.md",
+      "sha256": "6cd546e5f0b85370c964291b26dced178fd09b51ba2f554fbebf46fd1bf93e29"
+    },
+    {
+      "path": ".agentteams-backups/20260522-234934/content-enricher.agent.md",
+      "sha256": "15bae118decf917f2c7ae0124c38a82475c0701533b9cff47a7218ff85f0ac11"
+    },
+    {
+      "path": ".agentteams-backups/20260522-234934/copilot-instructions.md",
+      "sha256": "dd5cfca014ce616808d8160d7a4bb2ce0f506e4442fbfa0cfe3c1069c96e4a3a"
+    },
+    {
+      "path": ".agentteams-backups/20260522-234934/module-doc-author.agent.md",
+      "sha256": "cc1c0e3de70a8926500072be7c5344addd274f35e1365dd55fa75a8e2ae8f3d6"
+    },
+    {
+      "path": ".agentteams-backups/20260522-234934/module-doc-validator.agent.md",
+      "sha256": "2c242f588c86e56516e8065441c7f04a1a0d38b7b375b429a9573aa394989227"
+    },
+    {
+      "path": ".agentteams-backups/20260522-234934/navigator.agent.md",
+      "sha256": "4bff19075a23369af92050f9c159a89ab4c1ea374b057fc6459faf6e932f8292"
+    },
+    {
+      "path": ".agentteams-backups/20260522-234934/orchestrator.agent.md",
+      "sha256": "35b2a4b80ca64bd76e309de3b539ed3503a3f1233c8f2f47031ece49c6ce2c81"
+    },
+    {
+      "path": ".agentteams-backups/20260522-234934/primary-producer.agent.md",
+      "sha256": "d0a550f859e0fa12d10fbcc8465eed6c174d5f164e92030d50dcbdae46d9bb8d"
+    },
+    {
+      "path": ".agentteams-backups/20260522-234934/references/adjacent-repos-changelog.csv",
+      "sha256": "a87a453134fb495bb356ef0812afebc1780b1d84ccf3286ffd208864e691bdc8"
+    },
+    {
+      "path": ".agentteams-backups/20260522-234934/references/adjacent-repos-coordination-log.csv",
+      "sha256": "0d8e3d4672759f98e43539918191c172c6fa08b880b910456632d37f67b75135"
+    },
+    {
+      "path": ".agentteams-backups/20260522-234934/references/adjacent-repos.md",
+      "sha256": "2293a9b36d15926b453292cc1e5105a03a19eaf865f146f2b0a5cbaa1c21c18a"
+    },
+    {
+      "path": ".agentteams-backups/20260522-234934/references/code-hygiene-rules.reference.md",
+      "sha256": "d6ea9af11198129513203e0c4f9b57ec3dfc05541066c0f6d335bf493a2e7d5a"
+    },
+    {
+      "path": ".agentteams-backups/20260522-234934/references/pipeline-graph.md",
+      "sha256": "33eba693ac069d3dace169955ab7d1a85251febf12a6eb9af6fadff6e91d6a64"
+    },
+    {
+      "path": ".agentteams-backups/20260522-234934/references/security-vulnerability-watch.json",
+      "sha256": "205df5f749a70656594c873c9ee7af92b8217b0d93be244d1692bda4cde5e221"
+    },
+    {
+      "path": ".agentteams-backups/20260522-234934/references/security-vulnerability-watch.reference.md",
+      "sha256": "266dc4329daad8be9479d742236d066264b8c5b94c3ab24e439734db654a2d6d"
+    },
+    {
+      "path": ".agentteams-backups/20260522-234934/references/work-summary-spec.reference.md",
+      "sha256": "3f57763d843c638e342d1bea6f65a25f101d931971502a9ef26fa0ae3d792d1a"
+    },
+    {
+      "path": ".agentteams-backups/20260522-234934/references/work-summary-tooling.reference.md",
+      "sha256": "1ba41c309d9e1d4140293d8deda596e181630524ecec78ba2d4d97195304ae46"
+    },
+    {
+      "path": ".agentteams-backups/20260522-234934/security.agent.md",
+      "sha256": "646ad51cd2ed97e4dfb172a47bf32087482f62703456e25b2a0d6330d59d52a2"
+    },
+    {
+      "path": ".agentteams-backups/20260522-234934/team-builder.agent.md",
+      "sha256": "709cf822bfbfe93099abd8a98c77f6b44c11475e67c6f030a239b67823360a11"
+    },
+    {
+      "path": ".agentteams-backups/20260522-234934/work-summarizer.agent.md",
+      "sha256": "d282f14ee9e9af39ce51495093a8a4c117571bd6d4884a4260d6f7c219c481f0"
+    },
+    {
+      "path": ".agentteams-backups/20260523-004326/SETUP-REQUIRED.md",
+      "sha256": "ada8eeda84f64a661fabdddda54103fea6386d7a743bd71504a27e158ea772f1"
+    },
+    {
+      "path": ".agentteams-backups/20260523-004326/_manifest.json",
+      "sha256": "1a2969f2dcb2df79519d07e4abb61a8a4ff6bf3e0bdbca805de51fbf8fc3682f"
+    },
+    {
+      "path": ".agentteams-backups/20260523-004326/agent-updater.agent.md",
+      "sha256": "1c2dc0500c8ee8e50527ddcbefec02bbe825acd619597da140a4594955c59d3c"
+    },
+    {
+      "path": ".agentteams-backups/20260523-004326/cleanup.agent.md",
+      "sha256": "054b1ba1835a7018d46f4e772e06fd363064cadbccbfa37388fbbe7e7c129ec8"
+    },
+    {
+      "path": ".agentteams-backups/20260523-004326/code-hygiene.agent.md",
+      "sha256": "2e127e72ebc39ad93a8b0561fa87f9cef557a65ef5606980824a53f7f2b1cbf7"
+    },
+    {
+      "path": ".agentteams-backups/20260523-004326/conflict-auditor.agent.md",
+      "sha256": "2048181ac38e128c13040160362ba0e8f28c267b87ef8961031d9aac43e95d3e"
+    },
+    {
+      "path": ".agentteams-backups/20260523-004326/conflict-resolution.agent.md",
+      "sha256": "6cd546e5f0b85370c964291b26dced178fd09b51ba2f554fbebf46fd1bf93e29"
+    },
+    {
+      "path": ".agentteams-backups/20260523-004326/content-enricher.agent.md",
+      "sha256": "15bae118decf917f2c7ae0124c38a82475c0701533b9cff47a7218ff85f0ac11"
+    },
+    {
+      "path": ".agentteams-backups/20260523-004326/copilot-instructions.md",
+      "sha256": "a9c1d4fd2d5f7488191dc0a0b6202fcd46fd08d48aa1d0b324d1c7ae73ddaa7a"
+    },
+    {
+      "path": ".agentteams-backups/20260523-004326/module-doc-author.agent.md",
+      "sha256": "cc1c0e3de70a8926500072be7c5344addd274f35e1365dd55fa75a8e2ae8f3d6"
+    },
+    {
+      "path": ".agentteams-backups/20260523-004326/module-doc-validator.agent.md",
+      "sha256": "2c242f588c86e56516e8065441c7f04a1a0d38b7b375b429a9573aa394989227"
+    },
+    {
+      "path": ".agentteams-backups/20260523-004326/navigator.agent.md",
+      "sha256": "4bff19075a23369af92050f9c159a89ab4c1ea374b057fc6459faf6e932f8292"
+    },
+    {
+      "path": ".agentteams-backups/20260523-004326/orchestrator.agent.md",
+      "sha256": "35b2a4b80ca64bd76e309de3b539ed3503a3f1233c8f2f47031ece49c6ce2c81"
+    },
+    {
+      "path": ".agentteams-backups/20260523-004326/primary-producer.agent.md",
+      "sha256": "d0a550f859e0fa12d10fbcc8465eed6c174d5f164e92030d50dcbdae46d9bb8d"
+    },
+    {
+      "path": ".agentteams-backups/20260523-004326/references/adjacent-repos-changelog.csv",
+      "sha256": "a87a453134fb495bb356ef0812afebc1780b1d84ccf3286ffd208864e691bdc8"
+    },
+    {
+      "path": ".agentteams-backups/20260523-004326/references/adjacent-repos-coordination-log.csv",
+      "sha256": "0d8e3d4672759f98e43539918191c172c6fa08b880b910456632d37f67b75135"
+    },
+    {
+      "path": ".agentteams-backups/20260523-004326/references/adjacent-repos.md",
+      "sha256": "2293a9b36d15926b453292cc1e5105a03a19eaf865f146f2b0a5cbaa1c21c18a"
+    },
+    {
+      "path": ".agentteams-backups/20260523-004326/references/code-hygiene-rules.reference.md",
+      "sha256": "d6ea9af11198129513203e0c4f9b57ec3dfc05541066c0f6d335bf493a2e7d5a"
+    },
+    {
+      "path": ".agentteams-backups/20260523-004326/references/pipeline-graph.md",
+      "sha256": "33eba693ac069d3dace169955ab7d1a85251febf12a6eb9af6fadff6e91d6a64"
+    },
+    {
+      "path": ".agentteams-backups/20260523-004326/references/retrieval-integration.reference.md",
+      "sha256": "bd0f24109cbd7ab3f5fb52ad31f29a3e9cb7e11ff0333b932ecfcbcec7acc41b"
+    },
+    {
+      "path": ".agentteams-backups/20260523-004326/references/retrieval-trigger-contract.reference.md",
+      "sha256": "8010912506cac600f72456d2dc995f9e39517d6954f6475dcae0e2f1a1b9ecfa"
+    },
+    {
+      "path": ".agentteams-backups/20260523-004326/references/security-vulnerability-watch.json",
+      "sha256": "205df5f749a70656594c873c9ee7af92b8217b0d93be244d1692bda4cde5e221"
+    },
+    {
+      "path": ".agentteams-backups/20260523-004326/references/security-vulnerability-watch.reference.md",
+      "sha256": "266dc4329daad8be9479d742236d066264b8c5b94c3ab24e439734db654a2d6d"
+    },
+    {
+      "path": ".agentteams-backups/20260523-004326/references/work-summary-spec.reference.md",
+      "sha256": "3f57763d843c638e342d1bea6f65a25f101d931971502a9ef26fa0ae3d792d1a"
+    },
+    {
+      "path": ".agentteams-backups/20260523-004326/references/work-summary-tooling.reference.md",
+      "sha256": "1ba41c309d9e1d4140293d8deda596e181630524ecec78ba2d4d97195304ae46"
+    },
+    {
+      "path": ".agentteams-backups/20260523-004326/retrieval-integrator.agent.md",
+      "sha256": "2f3a54daa94f260ad69a31807c2ab97fe50015aed14cbbe9f2726582c97a260d"
+    },
+    {
+      "path": ".agentteams-backups/20260523-004326/security.agent.md",
+      "sha256": "646ad51cd2ed97e4dfb172a47bf32087482f62703456e25b2a0d6330d59d52a2"
+    },
+    {
+      "path": ".agentteams-backups/20260523-004326/team-builder.agent.md",
+      "sha256": "709cf822bfbfe93099abd8a98c77f6b44c11475e67c6f030a239b67823360a11"
+    },
+    {
+      "path": ".agentteams-backups/20260523-004326/technical-validator.agent.md",
+      "sha256": "323475b25a07d6fcb8ba4b45e1cb4bbeba6dfcefb61a290d6751da658672b7c7"
+    },
+    {
+      "path": ".agentteams-backups/20260523-004326/visual-designer.agent.md",
+      "sha256": "4d9dc8d75dc856f4ff6a709ec97cc0285082af9c404c07f0898ba4f3809fe8c7"
+    },
+    {
+      "path": ".agentteams-backups/20260523-004326/work-summarizer.agent.md",
+      "sha256": "d282f14ee9e9af39ce51495093a8a4c117571bd6d4884a4260d6f7c219c481f0"
+    },
+    {
+      "path": ".agentteams-backups/20260523-004722/SETUP-REQUIRED.md",
+      "sha256": "4f460bfc5539450257b73a94991e2e2a65e37b557d24d0d2259a268dc81f4c0e"
+    },
+    {
+      "path": ".agentteams-backups/20260523-004722/_manifest.json",
+      "sha256": "b8bde43fc6809489d8468b18fbad5b4a850a32e627fa3ef60f217737f1ff846b"
+    },
+    {
+      "path": ".agentteams-backups/20260523-004722/agent-updater.agent.md",
+      "sha256": "d540e474dfe236f75d3d2f729c99cca63737947103932de2db995003fed24a5f"
+    },
+    {
+      "path": ".agentteams-backups/20260523-004722/cleanup.agent.md",
+      "sha256": "30d0a3cdc5373fe4d0ee98094e2d2b99a68cc37ed26219b9bbb7e5da905b4347"
+    },
+    {
+      "path": ".agentteams-backups/20260523-004722/code-hygiene.agent.md",
+      "sha256": "28c5b32a1cc40a96fa64eedbc8e7b8fb8e5a942c96472143af348b7fde1baf1b"
+    },
+    {
+      "path": ".agentteams-backups/20260523-004722/conflict-auditor.agent.md",
+      "sha256": "a5741e971a105ecb1c7aabceb092cccb4cdb85f5826b410db8332a6b641a6ba3"
+    },
+    {
+      "path": ".agentteams-backups/20260523-004722/conflict-resolution.agent.md",
+      "sha256": "6cd546e5f0b85370c964291b26dced178fd09b51ba2f554fbebf46fd1bf93e29"
+    },
+    {
+      "path": ".agentteams-backups/20260523-004722/content-enricher.agent.md",
+      "sha256": "4cef5505a811f5071fff9389b8ee545fa454abd991a8e3205c6c9fff3773748b"
+    },
+    {
+      "path": ".agentteams-backups/20260523-004722/copilot-instructions.md",
+      "sha256": "aa5b8b08eff2ab1fbaac05491b465a004e243ddc879b39d7dec5d1e3cd0a4a1f"
+    },
+    {
+      "path": ".agentteams-backups/20260523-004722/navigator.agent.md",
+      "sha256": "4bff19075a23369af92050f9c159a89ab4c1ea374b057fc6459faf6e932f8292"
+    },
+    {
+      "path": ".agentteams-backups/20260523-004722/orchestrator.agent.md",
+      "sha256": "bc97ea497125590ef7cafce5e070a463850fab091b15c2e80c672fbadcca58e4"
+    },
+    {
+      "path": ".agentteams-backups/20260523-004722/primary-producer.agent.md",
+      "sha256": "924ee20a0f0bdfab2dd54161062dbbf41ecf478f9971ad7e1c8406431f4524eb"
+    },
+    {
+      "path": ".agentteams-backups/20260523-004722/references/adjacent-repos-changelog.csv",
+      "sha256": "a87a453134fb495bb356ef0812afebc1780b1d84ccf3286ffd208864e691bdc8"
+    },
+    {
+      "path": ".agentteams-backups/20260523-004722/references/adjacent-repos-coordination-log.csv",
+      "sha256": "0d8e3d4672759f98e43539918191c172c6fa08b880b910456632d37f67b75135"
+    },
+    {
+      "path": ".agentteams-backups/20260523-004722/references/adjacent-repos.md",
+      "sha256": "2293a9b36d15926b453292cc1e5105a03a19eaf865f146f2b0a5cbaa1c21c18a"
+    },
+    {
+      "path": ".agentteams-backups/20260523-004722/references/code-hygiene-rules.reference.md",
+      "sha256": "484e74e3eea1b6da564a0c8de301dfc4aa6081e05f3ab051e0d499885a91392c"
+    },
+    {
+      "path": ".agentteams-backups/20260523-004722/references/pipeline-graph.md",
+      "sha256": "2e36803fc26ca942cf0a68a132d1ec4ef9b8a79ddc4babbbd573ce72c08ffba2"
+    },
+    {
+      "path": ".agentteams-backups/20260523-004722/references/security-vulnerability-watch.json",
+      "sha256": "a53bc467ae6332c2c5ba8022824c1dcee78eb1fe015184bf30a1b17adaf9cd0b"
+    },
+    {
+      "path": ".agentteams-backups/20260523-004722/references/security-vulnerability-watch.reference.md",
+      "sha256": "3077795dc1d3faedcdb2fdf1b7fd1640338c1665233dd3783e5444ba0af16fcd"
+    },
+    {
+      "path": ".agentteams-backups/20260523-004722/references/work-summary-spec.reference.md",
+      "sha256": "3f57763d843c638e342d1bea6f65a25f101d931971502a9ef26fa0ae3d792d1a"
+    },
+    {
+      "path": ".agentteams-backups/20260523-004722/references/work-summary-tooling.reference.md",
+      "sha256": "1ba41c309d9e1d4140293d8deda596e181630524ecec78ba2d4d97195304ae46"
+    },
+    {
+      "path": ".agentteams-backups/20260523-004722/security.agent.md",
+      "sha256": "5ca9d2588ceb1037508c90f29d69fa7bba7991e2b40707c0de875c28c51b62bb"
+    },
+    {
+      "path": ".agentteams-backups/20260523-004722/team-builder.agent.md",
+      "sha256": "709cf822bfbfe93099abd8a98c77f6b44c11475e67c6f030a239b67823360a11"
+    },
+    {
+      "path": ".agentteams-backups/20260523-004722/work-summarizer.agent.md",
+      "sha256": "d282f14ee9e9af39ce51495093a8a4c117571bd6d4884a4260d6f7c219c481f0"
+    },
+    {
+      "path": ".agentteams-backups/20260523-020818/SETUP-REQUIRED.md",
+      "sha256": "0a4eb5b611b4cbcf339d34a5bc51531752ec0f6fead2f3ceb8f595e506755358"
+    },
+    {
+      "path": ".agentteams-backups/20260523-020818/_manifest.json",
+      "sha256": "10b7d0835321198e15e076c6278aa726a17351739aff610e91a5b65571243383"
+    },
+    {
+      "path": ".agentteams-backups/20260523-020818/agent-updater.agent.md",
+      "sha256": "3f4c8b96f7aed9d649ca25d0321059919e2b848ca3f9ff244d8653c5e29355c2"
+    },
+    {
+      "path": ".agentteams-backups/20260523-020818/cleanup.agent.md",
+      "sha256": "30d0a3cdc5373fe4d0ee98094e2d2b99a68cc37ed26219b9bbb7e5da905b4347"
+    },
+    {
+      "path": ".agentteams-backups/20260523-020818/code-hygiene.agent.md",
+      "sha256": "28c5b32a1cc40a96fa64eedbc8e7b8fb8e5a942c96472143af348b7fde1baf1b"
+    },
+    {
+      "path": ".agentteams-backups/20260523-020818/conflict-auditor.agent.md",
+      "sha256": "a5741e971a105ecb1c7aabceb092cccb4cdb85f5826b410db8332a6b641a6ba3"
+    },
+    {
+      "path": ".agentteams-backups/20260523-020818/conflict-resolution.agent.md",
+      "sha256": "6cd546e5f0b85370c964291b26dced178fd09b51ba2f554fbebf46fd1bf93e29"
+    },
+    {
+      "path": ".agentteams-backups/20260523-020818/content-enricher.agent.md",
+      "sha256": "4cef5505a811f5071fff9389b8ee545fa454abd991a8e3205c6c9fff3773748b"
+    },
+    {
+      "path": ".agentteams-backups/20260523-020818/copilot-instructions.md",
+      "sha256": "d4ce3fff88dede980a4f83f669f857558f7c9ef8d4e821f22051b5245fe04139"
+    },
+    {
+      "path": ".agentteams-backups/20260523-020818/navigator.agent.md",
+      "sha256": "eeedf8b0c856c5ac1a54db28cd1e80b92050869cc85ff4d74c2fa4193cc86384"
+    },
+    {
+      "path": ".agentteams-backups/20260523-020818/orchestrator.agent.md",
+      "sha256": "c71707c57848fec2361badf80cfde2caf2dbbcb2be6ac06599cf9284ea101eff"
+    },
+    {
+      "path": ".agentteams-backups/20260523-020818/primary-producer.agent.md",
+      "sha256": "924ee20a0f0bdfab2dd54161062dbbf41ecf478f9971ad7e1c8406431f4524eb"
+    },
+    {
+      "path": ".agentteams-backups/20260523-020818/references/adjacent-repos-changelog.csv",
+      "sha256": "a87a453134fb495bb356ef0812afebc1780b1d84ccf3286ffd208864e691bdc8"
+    },
+    {
+      "path": ".agentteams-backups/20260523-020818/references/adjacent-repos-coordination-log.csv",
+      "sha256": "0d8e3d4672759f98e43539918191c172c6fa08b880b910456632d37f67b75135"
+    },
+    {
+      "path": ".agentteams-backups/20260523-020818/references/adjacent-repos.md",
+      "sha256": "2293a9b36d15926b453292cc1e5105a03a19eaf865f146f2b0a5cbaa1c21c18a"
+    },
+    {
+      "path": ".agentteams-backups/20260523-020818/references/code-hygiene-rules.reference.md",
+      "sha256": "484e74e3eea1b6da564a0c8de301dfc4aa6081e05f3ab051e0d499885a91392c"
+    },
+    {
+      "path": ".agentteams-backups/20260523-020818/references/pipeline-graph.md",
+      "sha256": "8501ec28bcba22fc63549f2d882c6be7a5c7e609677ae61b839da29c84bf63ea"
+    },
+    {
+      "path": ".agentteams-backups/20260523-020818/references/security-vulnerability-watch.json",
+      "sha256": "5b7c80da8bff235cf41a61e3a7b504d095ff8addf3e4283792cb297036cb4b70"
+    },
+    {
+      "path": ".agentteams-backups/20260523-020818/references/security-vulnerability-watch.reference.md",
+      "sha256": "3849c0074cad283d20fbc6549e30a660d3f2a64319b73b57d52e7d27eed34790"
+    },
+    {
+      "path": ".agentteams-backups/20260523-020818/references/work-summary-spec.reference.md",
+      "sha256": "3f57763d843c638e342d1bea6f65a25f101d931971502a9ef26fa0ae3d792d1a"
+    },
+    {
+      "path": ".agentteams-backups/20260523-020818/references/work-summary-tooling.reference.md",
+      "sha256": "1ba41c309d9e1d4140293d8deda596e181630524ecec78ba2d4d97195304ae46"
+    },
+    {
+      "path": ".agentteams-backups/20260523-020818/security.agent.md",
+      "sha256": "37e59be50f8e32f721d7fae4c9da00ae63e7a0c3a8f1c27428fcb810c7ce2303"
+    },
+    {
+      "path": ".agentteams-backups/20260523-020818/team-builder.agent.md",
+      "sha256": "709cf822bfbfe93099abd8a98c77f6b44c11475e67c6f030a239b67823360a11"
+    },
+    {
+      "path": ".agentteams-backups/20260523-020818/work-summarizer.agent.md",
+      "sha256": "d282f14ee9e9af39ce51495093a8a4c117571bd6d4884a4260d6f7c219c481f0"
+    },
+    {
+      "path": "SETUP-REQUIRED.md",
+      "sha256": "0a4eb5b611b4cbcf339d34a5bc51531752ec0f6fead2f3ceb8f595e506755358"
+    },
+    {
+      "path": "_build-description.json",
+      "sha256": "2f8568cbc6a8ead60bf67bea7a081f33d2117a5eaf67b406ac92236c8214c4c4"
+    },
+    {
+      "path": "adversarial.agent.md",
+      "sha256": "4819e70ed692420db4e3a58e73a52e79e7f6a6ccf41764f456ba0042e4d4e30f"
+    },
+    {
+      "path": "agency-data.agent.md",
+      "sha256": "75c7aab2e552f913642f3dcfd25e4f450fa2a8633f15eae45926a46ae4dad611"
+    },
+    {
+      "path": "agent-refactor.agent.md",
+      "sha256": "2bfd42e663c0c0057b39e1235c5c3e08c2d096f66754c423a29b2f57f56f4faa"
+    },
+    {
+      "path": "agent-updater.agent.md",
+      "sha256": "3f4c8b96f7aed9d649ca25d0321059919e2b848ca3f9ff244d8653c5e29355c2"
+    },
+    {
+      "path": "bbb-reference.agent.md",
+      "sha256": "88c00e936711937c46c491336e067a13654b3ea38401874f88ce348bfd3aa5d7"
+    },
+    {
+      "path": "blue.agent.md",
+      "sha256": "7e6bf2db6abc382f4d97376843b95900ba53645f30edaadd98feb1ab7a9862ea"
+    },
+    {
+      "path": "captcha-reference.md",
+      "sha256": "e7de8ee1aa5c1febd73cb20910a2f570da590d4da83df242670b37435cf25c11"
+    },
+    {
+      "path": "cleanup.agent.md",
+      "sha256": "30d0a3cdc5373fe4d0ee98094e2d2b99a68cc37ed26219b9bbb7e5da905b4347"
+    },
+    {
+      "path": "code-hygiene.agent.md",
+      "sha256": "28c5b32a1cc40a96fa64eedbc8e7b8fb8e5a942c96472143af348b7fde1baf1b"
+    },
+    {
+      "path": "conflict-auditor.agent.md",
+      "sha256": "a5741e971a105ecb1c7aabceb092cccb4cdb85f5826b410db8332a6b641a6ba3"
+    },
+    {
+      "path": "conflict-resolution.agent.md",
+      "sha256": "6cd546e5f0b85370c964291b26dced178fd09b51ba2f554fbebf46fd1bf93e29"
+    },
+    {
+      "path": "contact-sheet.agent.md",
+      "sha256": "9475bf0f0413d71d986137ad24eefa8c18c93eddd7fc9e766e1dea6f54edecef"
+    },
+    {
+      "path": "contamination-registry-maintainer.agent.md",
+      "sha256": "4d083999498e8e5a242e643064ff22afeddb08dbd122bbe4d5d2fcbfc8735e96"
+    },
+    {
+      "path": "content-enricher.agent.md",
+      "sha256": "4cef5505a811f5071fff9389b8ee545fa454abd991a8e3205c6c9fff3773748b"
+    },
+    {
+      "path": "endo.agent.md",
+      "sha256": "a04ab07a329459eab596b7aaa2f1ae67642b99d697926640955f3c2caaaed5db"
+    },
+    {
+      "path": "git-operations.agent.md",
+      "sha256": "24ea6bca2765ee4e5dff7115b08426210fbc633b8de813de9deca96d1d6c9661"
+    },
+    {
+      "path": "infrastructure.agent.md",
+      "sha256": "17159115ba88cf491b798a35f200e14f79cbd1fe294cf6d27850c42d49f25434"
+    },
+    {
+      "path": "metadata-backfill.agent.md",
+      "sha256": "33e522b25e9f7fd0a796d223830f880e3940dd5e01d536ea54f14732df5e1abe"
+    },
+    {
+      "path": "navigator.agent.md",
+      "sha256": "eeedf8b0c856c5ac1a54db28cd1e80b92050869cc85ff4d74c2fa4193cc86384"
+    },
+    {
+      "path": "orchestrator.agent.md",
+      "sha256": "c71707c57848fec2361badf80cfde2caf2dbbcb2be6ac06599cf9284ea101eff"
+    },
+    {
+      "path": "outputs/source-update-2026-04-14.md",
+      "sha256": "253b99a4dbac4ec0fdabb9887fbd6be1b5a3d969539440a27512df58c0dc6ff0"
+    },
+    {
+      "path": "pipeline-generation-integrity-auditor.agent.md",
+      "sha256": "2e9213f65cce8f5dc18755b30435374052b9c618db87cbe4f2600ffdf5d7ad7e"
+    },
+    {
+      "path": "pr-request-manager.agent.md",
+      "sha256": "627a2f88c0f761475a5eb7f78d9601c647cbbcd30e2facd069008aae6c9b45c1"
+    },
+    {
+      "path": "pr-reviewer.agent.md",
+      "sha256": "f952508b31b6221a1a864d5b0cc4d5012c9e2511afa3ac4dff4573e00dbee96c"
+    },
+    {
+      "path": "primary-producer.agent.md",
+      "sha256": "924ee20a0f0bdfab2dd54161062dbbf41ecf478f9971ad7e1c8406431f4524eb"
+    },
+    {
+      "path": "program-graphing.agent.md",
+      "sha256": "7b441eaec666aa08d5efd85f058eedd1da0c79e3e2cac4a8e01c2dcc66dbb487"
+    },
+    {
+      "path": "quality-auditor.agent.md",
+      "sha256": "9311f7fbe11b1cb6673e294c41f3c3e352a6105720df4c2bbb9345429ad98e3f"
+    },
+    {
+      "path": "references/.agentteams-backups/20260520-043002/adjacent-repos.md",
+      "sha256": "b61b03900f8a4bfb9fae3b656904a10d7477b355cdd2625e3f150116ae26d7d9"
+    },
+    {
+      "path": "references/.agentteams-backups/20260520-043002/code-hygiene-rules.reference.md",
+      "sha256": "be9f318ccf236f7c96f73367865a76f4f028a545ebf97a38b9b81ddb71006a84"
+    },
+    {
+      "path": "references/.agentteams-backups/20260520-043002/work-summary-spec.reference.md",
+      "sha256": "3396ba960836e2585587f3829e6824a9942c28bb2ba3176f1800948399cc8756"
+    },
+    {
+      "path": "references/.agentteams-backups/20260520-043002/work-summary-tooling.reference.md",
+      "sha256": "ff9e4d0b7a7984dac6bb97c8c0b522ce3acd8c5e9471cdce45b62fca06892331"
+    },
+    {
+      "path": "references/.agentteams-backups/20260520-043003/pipeline-graph.md",
+      "sha256": "b6aeb077437f341a2d871e826e0082e185f64b000d101d6fd1907b0c4a6a985f"
+    },
+    {
+      "path": "references/adjacent-repos-changelog.csv",
+      "sha256": "a87a453134fb495bb356ef0812afebc1780b1d84ccf3286ffd208864e691bdc8"
+    },
+    {
+      "path": "references/adjacent-repos-coordination-log.csv",
+      "sha256": "0d8e3d4672759f98e43539918191c172c6fa08b880b910456632d37f67b75135"
+    },
+    {
+      "path": "references/adjacent-repos-entries.md",
+      "sha256": "fe2c2efd3c5584427b670e049cef9b89000e5783ab8ef83df7312d8957cce088"
+    },
+    {
+      "path": "references/adjacent-repos.md",
+      "sha256": "2293a9b36d15926b453292cc1e5105a03a19eaf865f146f2b0a5cbaa1c21c18a"
+    },
+    {
+      "path": "references/aws-infrastructure.reference.md",
+      "sha256": "e09bcaec6e5dcca2a07791a40424dd237c072a2a09e7b53735320df64efea349"
+    },
+    {
+      "path": "references/bam-bdm-registration-rules.reference.md",
+      "sha256": "23e5a2b0a426980a04eb935aa4463b545d75c5c90fd9df8eadcc1e72d1114b9f"
+    },
+    {
+      "path": "references/blue-api.reference.md",
+      "sha256": "08dbe4d7b98d236e5c6a013fc79b31ff60b131c27c24a36542679cc31b7cb84b"
+    },
+    {
+      "path": "references/build-log.json",
+      "sha256": "69a1d23313cf5df6f37b5728bf0cc738ebdce096d35e45a101928fc0e548b267"
+    },
+    {
+      "path": "references/code-hygiene-rules.reference.md",
+      "sha256": "484e74e3eea1b6da564a0c8de301dfc4aa6081e05f3ab051e0d499885a91392c"
+    },
+    {
+      "path": "references/collector-repo-governance-migration-tracker.csv",
+      "sha256": "6abe365155de02a747b565ab1b3c32f252b56a1c8f8c997f650a1ac2b3a30f3c"
+    },
+    {
+      "path": "references/conflict-log.csv",
+      "sha256": "700b6c3865f280d2832c8832f194e328177ed22e5985cc709466ad749d3444fd"
+    },
+    {
+      "path": "references/contact-sheet-index.reference.md",
+      "sha256": "2454b30ad4b668b470c00df8fbf447163b5f762f12c5156850a89a482ba9c574"
+    },
+    {
+      "path": "references/contamination-class-taxonomy.reference.md",
+      "sha256": "79fa0cc2ed0af41d0bb35ac34ab7781c96563bbfeb74f30949d601c1be2b993b"
+    },
+    {
+      "path": "references/contamination-incident-register.reference.md",
+      "sha256": "16cfa2a575e3dfe3a87e88dc6e7ff0b288500c1cb09b1d4ef52d2d4b07602b45"
+    },
+    {
+      "path": "references/cross-orchestrator-requests/2026-04-28-bbb-0272-akron-duplicate-cleanup.md",
+      "sha256": "c0218f1fa3b065e8ea08b76d32aac5aead91288f71b36057acc18e5516b3fca0"
+    },
+    {
+      "path": "references/cross-orchestrator-requests/2026-04-28-bbb-0673-dataset-cleanup.md",
+      "sha256": "46d94a812179fc413ea74cdefc07e90c0ffbf28185996a9c91638f84f4746a77"
+    },
+    {
+      "path": "references/cross-orchestrator-requests/2026-04-28-h015-vk-services-local-protocol3-request.md",
+      "sha256": "45b65e93f4eb733ae66430426dc861168f7dc5daa0c7e0a0f5c27b40d7d93fc8"
+    },
+    {
+      "path": "references/cross-orchestrator-requests/2026-04-28-h016-vk-data-uploader-orchestrator-gap-escalation.md",
+      "sha256": "8906a483ed4b0625fcfab8f7f48f91ee195f0ab8b6f8edb960d57507938da22b"
+    },
+    {
+      "path": "references/cross-orchestrator-requests/2026-04-28-h016-vk-data-uploader-protocol3-followup-request.md",
+      "sha256": "af79fbb3accee599cb677bb5e1f5ef47f9b1368cdfb6011046bee56fefcc7e62"
+    },
+    {
+      "path": "references/cross-orchestrator-requests/2026-04-29-ohio-fleet-bootstrap.md",
+      "sha256": "dc1ec54a5b3e02ffe2174efea825a773812ab2281668f2d154d40732786730c6"
+    },
+    {
+      "path": "references/cross-orchestrator-requests/CM-sc-collectors-xserver-remediation-2026-05-04.md",
+      "sha256": "02af27189a0be0fe637840660adbc3359e5ddff1cc4ef790e484b74896dde0b4"
+    },
+    {
+      "path": "references/cross-repo-resources.reference.md",
+      "sha256": "23e445fa58db1bc2660d8db19200797eba8a300ed1e33ba3efc4ad9413f96182"
+    },
+    {
+      "path": "references/current-projects-aws-execution-path.reference.md",
+      "sha256": "28217b0e37fc8b09754256eca891c6ea1e75ecf4b5e070fd24ff0b4491936f22"
+    },
+    {
+      "path": "references/database-schema.reference.md",
+      "sha256": "ab270c7ed5f7032b8d5f43b98bd59e3fe485e7574157be548c0a070852598831"
+    },
+    {
+      "path": "references/dataset-category-mapping.reference.md",
+      "sha256": "949cda6d1b3f7696fc07f0d4a115f7ba6c2f977e90883008d07d007bab6d1a1f"
+    },
+    {
+      "path": "references/dataset-whitelist-filter.reference.md",
+      "sha256": "cf312b8ab6caf4a1620ffc0b74de3b6cc85e1f1cf21929c9a1247c5387fa8d89"
+    },
+    {
+      "path": "references/defaults-audit.csv",
+      "sha256": "8f43de99b8833255895628524628cb58141d4097c6b68285d6519acba43acb87"
+    },
+    {
+      "path": "references/delivery-receipt.json",
+      "sha256": "10a5ddb323d45bbb71772ec90a8da54d4270cdfd51dd2558bf112dcd61d9f0b5"
+    },
+    {
+      "path": "references/endojs-least-authority.reference.md",
+      "sha256": "37fbebc981da03727f92237cea26664985c0cf0b081b472e4cb1466c860049f0"
+    },
+    {
+      "path": "references/eval-suite.json",
+      "sha256": "40a5ce9efbcaf358dab4c070013410c841d27db2db120cb00cc7ac2d9cc12ce3"
+    },
+    {
+      "path": "references/generation-validation-slo.reference.md",
+      "sha256": "c9931d9e8d6316ab8485ed5c2c9cec46dd6594ca0f68d03019f01f1715f276b1"
+    },
+    {
+      "path": "references/github-workflows-merge.reference.md",
+      "sha256": "dfcbd0ef30e601b84584ee841f87afae0a00960527a1a836d25f7482dba8255c"
+    },
+    {
+      "path": "references/governance-baseline/v1.0.0/README.md",
+      "sha256": "affc275a9bf26ba0c4e8fa52a45e4991cf9ec6d0daab17e7d23240063bbe5df7"
+    },
+    {
+      "path": "references/governance-baseline/v1.0.0/allowed-local-overrides.reference.md",
+      "sha256": "428d422e0d01dfc8687c4cc8a5736159ed8f5011cfd8445966e12eeb9d5a3d90"
+    },
+    {
+      "path": "references/governance-baseline/v1.0.0/constitutional-core.reference.md",
+      "sha256": "291eb710edfbe51208a5389270a2b6ffb2f3ba55440ee7b07177c4b05bdee383"
+    },
+    {
+      "path": "references/governance-baseline/v1.0.0/cross-repo-governance.reference.md",
+      "sha256": "8dbb169613031e4dd7fe5b68ecfaa43807c30360707519bbdb671ada77adc211"
+    },
+    {
+      "path": "references/governance-baseline/v1.0.0/governance-handoffs.reference.md",
+      "sha256": "845cfbf21bea6e5b0dc5079205d35a366d55805edf2ff6ac92da89f072bffad7"
+    },
+    {
+      "path": "references/governance-baseline/v1.0.0/workflow-catalog.reference.md",
+      "sha256": "5dd4674d8e4ea72b45bef88f3794c51e79cb154dfa6547dbfa11c985031cfd95"
+    },
+    {
+      "path": "references/memory-index.json",
+      "sha256": "391d4ac02309929ca5d3b78c026a2380d196137f31951baf81789e7da85eb947"
+    },
+    {
+      "path": "references/pipeline-graph.md",
+      "sha256": "8501ec28bcba22fc63549f2d882c6be7a5c7e609677ae61b839da29c84bf63ea"
+    },
+    {
+      "path": "references/pr-request-workflow.reference.md",
+      "sha256": "86b9229f305fd182c34ce8a46f8358bab59cea3422725446a136850dc47e4ce3"
+    },
+    {
+      "path": "references/pr-review-standards.reference.md",
+      "sha256": "a66f25960f8ed728a2f8b8988b9a7c8d033e882343a683ae97a0e4eed65e7552"
+    },
+    {
+      "path": "references/program-graphing-best-practices.reference.md",
+      "sha256": "1c5d41707849d31399e3fca0488edb1f7298839e14ce3df0f2df48dbb6f0a177"
+    },
+    {
+      "path": "references/program-graphing-tooling.reference.md",
+      "sha256": "1d956ded54939a28fae2fb674e48d3f919ccf71944269599aee55b75ab9e0dd1"
+    },
+    {
+      "path": "references/program-graphing-workflow.reference.md",
+      "sha256": "0f1b948fe63682a7e356f2abd5749c5478b21b041b77fa7bc9cb3276023542b7"
+    },
+    {
+      "path": "references/project-map.md",
+      "sha256": "cad3f623c586cbfc17994292a7441f5a36047950f0b336122b9f7d944624b43c"
+    },
+    {
+      "path": "references/retrieval-integration.reference.md",
+      "sha256": "9b6aeca6e7309c5dcef0911894d1643653f50caa6b51100bf6580cbcfdca76eb"
+    },
+    {
+      "path": "references/retrieval-trigger-contract.reference.md",
+      "sha256": "4cf28cc32325f2b3b17e8d380906f7d0899a6a4f12a76523952c2e8d56a2a517"
+    },
+    {
+      "path": "references/runtime-metadata-generation.reference.md",
+      "sha256": "dfec46291356d4b4fabc827ce54270469145539516df4441d6a1b2bfde94117e"
+    },
+    {
+      "path": "references/scheduled-activities.reference.md",
+      "sha256": "86fc6275526fd9d06e55e0d6dab84f4a67c2a3fd7a282ab81c726166bdd09257"
+    },
+    {
+      "path": "references/security-decisions.log.csv",
+      "sha256": "e65e6585ad7a8b65fd23450eefdb97128aed2f8d53a63a1bfc9b719656d4358a"
+    },
+    {
+      "path": "references/security-vulnerability-watch.json",
+      "sha256": "09760562ab09be8817053fcb3467efb36e1a9873c2d5726f40d3a32abeb60470"
+    },
+    {
+      "path": "references/security-vulnerability-watch.reference.md",
+      "sha256": "b7e2b8985699e0c9e41ee5398c2ba322b4e13d2edd70ca0a0d06ff45bf1a4fe8"
+    },
+    {
+      "path": "references/site-architecture-discovery.reference.md",
+      "sha256": "95588bafcffe5394d122d952e302fe3be8508d1d8f1f7af89297e1ed8b0df59a"
+    },
+    {
+      "path": "references/work-summary-spec.reference.md",
+      "sha256": "3f57763d843c638e342d1bea6f65a25f101d931971502a9ef26fa0ae3d792d1a"
+    },
+    {
+      "path": "references/work-summary-templates.reference.md",
+      "sha256": "24f12e742a38adcdb9179a70ec8470085c8c817cb29b05900810161903b7f897"
+    },
+    {
+      "path": "references/work-summary-tooling.reference.md",
+      "sha256": "1ba41c309d9e1d4140293d8deda596e181630524ecec78ba2d4d97195304ae46"
+    },
+    {
+      "path": "repo-liaison.agent.md",
+      "sha256": "3558c9ff225057cf0be39548996f161e1b3e7127560e267800ae5a92dcf6b07a"
+    },
+    {
+      "path": "retrieval-integrator.agent.md",
+      "sha256": "2f3a54daa94f260ad69a31807c2ab97fe50015aed14cbbe9f2726582c97a260d"
+    },
+    {
+      "path": "security.agent.md",
+      "sha256": "763f58a1b7debee38f0d9d22a74d14159a98286ec2cee92cb863b9c14e3236a1"
+    },
+    {
+      "path": "service-contamination-investigator.agent.md",
+      "sha256": "8322fd1ddc7e420692222b927ae1ca57e6f94fed2b151bac5b63aadaada0005d"
+    },
+    {
+      "path": "team-builder.agent.md",
+      "sha256": "709cf822bfbfe93099abd8a98c77f6b44c11475e67c6f030a239b67823360a11"
+    },
+    {
+      "path": "technical-validator.agent.md",
+      "sha256": "6fb35aeef1987c3126d0cb5b685ffea7ed4529abf6009f7411385c46b2f8372a"
+    },
+    {
+      "path": "tool-doc-researcher.agent.md",
+      "sha256": "0c71692c84cf07a57db89413042cc9edfb212d39dadb38cdf534071dcae197e2"
+    },
+    {
+      "path": "tool-postgresql.agent.md",
+      "sha256": "68111f34dd1afa6cce0b6f4ad028b17b020e2356dd0b493471d6ebdd8a3a1052"
+    },
+    {
+      "path": "tool-sql.agent.md",
+      "sha256": "75131f39be3e2883c760d73137daa5794dc0ab7ee51a41bd82ac43778b6867e8"
+    },
+    {
+      "path": "url-discovery.agent.md",
+      "sha256": "be936aff42131676ae50bad9d5fdfb19335e0e61dda253495610d4eea2b6a4d0"
+    },
+    {
+      "path": "visual-designer.agent.md",
+      "sha256": "4d9dc8d75dc856f4ff6a709ec97cc0285082af9c404c07f0898ba4f3809fe8c7"
+    },
+    {
+      "path": "work-summarizer.agent.md",
+      "sha256": "d282f14ee9e9af39ce51495093a8a4c117571bd6d4884a4260d6f7c219c481f0"
+    }
+  ],
+  "label": "collector-management-copilot-vscode",
+  "root": "/Users/jamescaton/githubrepositories/visualknowledge/collector-management/.github/agents",
+  "schema_version": "1.0"
+}

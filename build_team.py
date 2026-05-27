@@ -572,6 +572,51 @@ def _build_parser() -> argparse.ArgumentParser:
             "written under .agentteams-backups/ before the rewrite."
         ),
     )
+    parser.add_argument(
+        "--target-host-features",
+        metavar="TOKENS",
+        dest="target_host_features",
+        default=None,
+        help=(
+            "Comma-separated host-feature subselectors gating opt-in emission. "
+            "Tokens are <ns>:<feature>; ns is one of claude, copilot-vscode, "
+            "copilot-cli, bridge:copilot-vscode-to-claude, etc. Examples: "
+            "'bridge:copilot-vscode-to-claude:subagents,bridge:copilot-vscode-to-claude:hooks'. "
+            "Default emission is unchanged when omitted."
+        ),
+    )
+    parser.add_argument(
+        "--capture-baseline",
+        metavar="PATH",
+        dest="capture_baseline",
+        default=None,
+        help=(
+            "Capture a deterministic SHA-256 manifest of the output tree and "
+            "write it to PATH (e.g., tests/baselines/<target>.json). Used by "
+            "regression tests to detect emission drift across phases. Skips "
+            "the normal generation pipeline."
+        ),
+    )
+    parser.add_argument(
+        "--baseline-label",
+        metavar="LABEL",
+        dest="baseline_label",
+        default=None,
+        help=(
+            "Label embedded in the captured baseline manifest "
+            "(default: --framework value)."
+        ),
+    )
+    parser.add_argument(
+        "--check-baseline",
+        metavar="PATH",
+        dest="check_baseline",
+        default=None,
+        help=(
+            "Compare the current output tree against the baseline at PATH and "
+            "exit non-zero on any diff. Lists added/removed/changed files."
+        ),
+    )
     return parser
 
 
@@ -809,6 +854,53 @@ def main(argv: list[str] | None = None) -> int:
     _validate_option_combinations(parser, args)
 
     # -----------------------------------------------------------------------
+    # --target-host-features: parse early so emitters can read the list.
+    # Validation errors abort before any expensive work.
+    # -----------------------------------------------------------------------
+    try:
+        from agentteams.host_features import parse_tokens as _parse_host_features
+        args.host_features = _parse_host_features(getattr(args, "target_host_features", None))
+    except Exception as exc:
+        print(f"Error: --target-host-features: {exc}", file=sys.stderr)
+        return 1
+
+    # -----------------------------------------------------------------------
+    # --capture-baseline / --check-baseline: standalone baseline ops.
+    # Skip the generation pipeline; operate on an existing output tree.
+    # -----------------------------------------------------------------------
+    if args.capture_baseline or args.check_baseline:
+        from agentteams import baseline as _baseline
+        # Resolve the target tree: prefer --output, else --project, else CWD.
+        target_dir = args.output or args.project or "."
+        target_path = Path(target_dir).resolve()
+        if not target_path.exists():
+            print(f"Error: baseline target does not exist: {target_path}", file=sys.stderr)
+            return 1
+        label = args.baseline_label or (args.framework or "default")
+        current = _baseline.capture(target_path, label=label)
+        if args.capture_baseline:
+            out_path = Path(args.capture_baseline)
+            _baseline.write(current, out_path)
+            print(f"  ✓  Baseline captured: {out_path} ({current['file_count']} files)")
+            return 0
+        if args.check_baseline:
+            prior_path = Path(args.check_baseline)
+            if not prior_path.exists():
+                print(f"Error: baseline not found: {prior_path}", file=sys.stderr)
+                return 1
+            prior = _baseline.load(prior_path)
+            d = _baseline.diff(prior, current)
+            total = sum(len(d[k]) for k in ("added", "removed", "changed"))
+            if total == 0:
+                print(f"  ✓  Baseline match: {prior_path} ({current['file_count']} files)")
+                return 0
+            print(f"  ✗  Baseline drift: {prior_path}")
+            for k in ("added", "removed", "changed"):
+                for p in d[k]:
+                    print(f"     {k:8s} {p}")
+            return 2
+
+    # -----------------------------------------------------------------------
     # --add-fence-markers: standalone file-retrofit (no description needed).
     # Plan 4 of the W21 --update improvements.
     # -----------------------------------------------------------------------
@@ -1007,6 +1099,10 @@ def main(argv: list[str] | None = None) -> int:
     print(f"Analyzing project for {framework_id!r} framework...")
     manifest = analyze.build_manifest(description, framework=framework_id)
     _apply_placeholder_policy(manifest, strict_manual_placeholders=strict_manual_placeholders)
+    # Host-feature subselectors (Phase 0): default [] preserves existing emission.
+    manifest["host_features"] = list(getattr(args, "host_features", []) or [])
+    if manifest["host_features"]:
+        print(f"  Host features: {', '.join(manifest['host_features'])}")
 
     project_name = manifest["project_name"]
     project_type = manifest["project_type"]
