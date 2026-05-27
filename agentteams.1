@@ -2,7 +2,7 @@
 .SH NAME
 agentteams \- Generate a complete agent team for any project.
 .SH SYNOPSIS
-.B agentteams [--description PATH] [--project PATH] [--framework NAME] [--output DIR] [--dry-run] [--json] [--overwrite] [--merge] [--yes] [--no-scan] [--cost-routing] [--update] [--prune] [--check] [--refresh-index] [--query-index TEXT] [--query-k N] [--query-strategy QUERY_STRATEGY] [--fail-on-legacy-skip] [--scan-security] [--check-budget] [--self] [--allow-external-self-output] [--post-audit] [--auto-correct] [--enrich] [--strict-manual-placeholders] [--no-strict-manual-placeholders STRICT_MANUAL_PLACEHOLDERS] [--security-offline] [--security-max-items N] [--security-no-nvd] [--migrate] [--convert-from DIR] [--interop-from DIR] [--interop-source-framework INTEROP_SOURCE_FRAMEWORK] [--interop-mode INTEROP_MODE] [--bridge-from DIR] [--bridge-source-framework BRIDGE_SOURCE_FRAMEWORK] [--bridge-check] [--bridge-refresh] [--bridge-merge] [--bridge-no-skills] [--revert-migration] [--version] [--no-backup] [--shrink-policy SHRINK_POLICY] [--list-backups] [--restore-backup TIMESTAMP] [--add-fence-markers PATH] [--in-place]
+.B agentteams [--description PATH] [--project PATH] [--framework NAME] [--output DIR] [--dry-run] [--json] [--overwrite] [--merge] [--yes] [--no-scan] [--cost-routing] [--update] [--prune] [--check] [--refresh-index] [--query-index TEXT] [--query-k N] [--query-strategy QUERY_STRATEGY] [--fail-on-legacy-skip] [--scan-security] [--check-budget] [--self] [--allow-external-self-output] [--post-audit] [--auto-correct] [--enrich] [--strict-manual-placeholders] [--no-strict-manual-placeholders STRICT_MANUAL_PLACEHOLDERS] [--security-offline] [--security-max-items N] [--security-no-nvd] [--migrate] [--convert-from DIR] [--interop-from DIR] [--interop-source-framework INTEROP_SOURCE_FRAMEWORK] [--interop-mode INTEROP_MODE] [--bridge-from DIR] [--bridge-source-framework BRIDGE_SOURCE_FRAMEWORK] [--bridge-check] [--bridge-refresh] [--bridge-merge] [--bridge-no-skills] [--revert-migration] [--version] [--no-backup] [--shrink-policy SHRINK_POLICY] [--list-backups] [--restore-backup TIMESTAMP] [--add-fence-markers PATH] [--in-place] [--target-host-features TOKENS] [--capture-baseline PATH] [--baseline-label LABEL] [--check-baseline PATH]
 .SH DESCRIPTION
 .PP
 Generate a complete agent team for any project.
@@ -161,6 +161,18 @@ Retrofit canonical AGENTTEAMS:BEGIN/END fence markers around PATH's existing bod
 .TP
 .B \-\-in\-place
 With \-\-add\-fence\-markers: rewrite the target file directly instead of producing a sidecar. Requires \-\-yes; a timestamped backup is written under .agentteams\-backups/ before the rewrite.
+.TP
+.B \-\-target\-host\-features TOKENS
+Comma\-separated host\-feature subselectors gating opt\-in emission. Tokens are <ns>:<feature>; ns is one of claude, copilot\-vscode, copilot\-cli, bridge:copilot\-vscode\-to\-claude, etc. Examples: 'bridge:copilot\-vscode\-to\-claude:subagents,bridge:copilot\-vscode\-to\-claude:hooks'. Default emission is unchanged when omitted.
+.TP
+.B \-\-capture\-baseline PATH
+Capture a deterministic SHA\-256 manifest of the output tree and write it to PATH (e.g., tests/baselines/<target>.json). Used by regression tests to detect emission drift across phases. Skips the normal generation pipeline.
+.TP
+.B \-\-baseline\-label LABEL
+Label embedded in the captured baseline manifest (default: \-\-framework value).
+.TP
+.B \-\-check\-baseline PATH
+Compare the current output tree against the baseline at PATH and exit non\-zero on any diff. Lists added/removed/changed files.
 .SH EXIT STATUS
 .TP
 .B 0
