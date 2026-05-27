@@ -1,0 +1,13 @@
+{
+  "version": 1,
+  "default_reminder_interval_hours": 24,
+  "recipients": [
+    {
+      "login": "jlcatonjr",
+      "role": "owner",
+      "default_assignee": true,
+      "opt_out": false,
+      "notifications_confirmed": true
+    }
+  ]
+}

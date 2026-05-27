@@ -6,7 +6,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
-(no changes since 1.0.0-rc.6)
+### added
+
+- **PR management subsystem.** New agents `@pr-manager`, `@pr-notifier`, and
+  `@pr-reminder`; Python module `agentteams.pr_management` (recipient-registry
+  loader, gh-CLI wrappers, stale-PR scan with dedup, end-of-task
+  three-way disposition prompt: `continue-branch` / `push-main` / `open-pr`);
+  schema `schemas/pr-recipient-registry.schema.json` with seed
+  `references/pr-recipients.json`; daily-cron workflow
+  `.github/workflows/pr-reminders.yml` (configurable `REMINDER_INTERVAL_HOURS`,
+  `pull-requests:write` only — never merges or pushes); CLI entry-point
+  `python -m agentteams.pr_management {prompt,remind}`. Plan + audits in
+  `tmp/by-week/2026-W22/`.
 
 ## [1.0.0-rc.6] - 2026-05-27
 

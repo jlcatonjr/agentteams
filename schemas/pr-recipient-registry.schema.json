@@ -1,0 +1,66 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://agentteams.dev/schemas/pr-recipient-registry.schema.json",
+  "title": "PR Recipient Registry",
+  "description": "Canonical list of GitHub logins eligible to be assigned to PRs and pinged by @pr-notifier / @pr-reminder.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["version", "recipients"],
+  "properties": {
+    "version": {
+      "type": "integer",
+      "const": 1,
+      "description": "Schema version. Currently always 1."
+    },
+    "default_reminder_interval_hours": {
+      "type": "integer",
+      "minimum": 1,
+      "default": 24,
+      "description": "Fallback reminder cadence when a recipient does not override."
+    },
+    "recipients": {
+      "type": "array",
+      "minItems": 1,
+      "items": { "$ref": "#/$defs/recipient" }
+    }
+  },
+  "$defs": {
+    "recipient": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["login", "role"],
+      "properties": {
+        "login": {
+          "type": "string",
+          "pattern": "^[A-Za-z0-9][A-Za-z0-9-]{0,38}$",
+          "description": "GitHub login (no leading @)."
+        },
+        "role": {
+          "type": "string",
+          "enum": ["owner", "reviewer", "maintainer", "contributor"],
+          "description": "Recipient role for routing decisions."
+        },
+        "default_assignee": {
+          "type": "boolean",
+          "default": false,
+          "description": "If true, this login is auto-assigned to every PR this subsystem opens."
+        },
+        "opt_out": {
+          "type": "boolean",
+          "default": false,
+          "description": "If true, skip all notifications and reminders for this login."
+        },
+        "reminder_interval_hours": {
+          "type": "integer",
+          "minimum": 1,
+          "description": "Per-recipient reminder cadence override; otherwise default_reminder_interval_hours applies."
+        },
+        "notifications_confirmed": {
+          "type": "boolean",
+          "default": false,
+          "description": "Operator-confirmed that this login receives GitHub notifications (web/mobile/email). Workflow emits a step-summary warning when false."
+        }
+      }
+    }
+  }
+}

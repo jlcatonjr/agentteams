@@ -1,0 +1,77 @@
+name: PR Reminders
+
+# Scans open PRs labelled `pr-mgmt` and posts a reminder comment to
+# assignees of PRs whose age exceeds REMINDER_INTERVAL_HOURS (default 24).
+# Never modifies code; never merges. See:
+#   - .github/agents/pr-reminder.agent.md
+#   - agentteams/pr_management.py
+
+on:
+  schedule:
+    - cron: "0 8 * * *"
+  workflow_dispatch:
+    inputs:
+      dry_run:
+        description: "Dry-run (synthesize a fake stale PR; no real comments)"
+        required: false
+        default: "false"
+
+permissions:
+  contents: read
+  pull-requests: write
+
+env:
+  REMINDER_INTERVAL_HOURS: "24"
+
+jobs:
+  remind:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout main
+        uses: actions/checkout@v4
+        with:
+          ref: main
+          fetch-depth: 1
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install package
+        run: pip install -e ".[test]"
+
+      - name: Post reminders
+        id: remind
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REMINDER_INTERVAL_HOURS: ${{ env.REMINDER_INTERVAL_HOURS }}
+        run: |
+          set +e
+          if [[ "${{ inputs.dry_run }}" == "true" ]]; then
+            python scripts/post_pr_reminders.py --dry-run
+          else
+            python scripts/post_pr_reminders.py
+          fi
+          rc=$?
+          echo "rc=$rc" >> "$GITHUB_OUTPUT"
+          # gh API 403 is the most likely org-policy failure mode.
+          # Surface it but do not fail the workflow.
+          if [[ $rc -ne 0 ]]; then
+            echo "::warning::post_pr_reminders.py exited $rc — check step summary"
+          fi
+          exit 0
+
+      - name: Emit step summary
+        if: always()
+        env:
+          RC: ${{ steps.remind.outputs.rc }}
+          DRY: ${{ inputs.dry_run }}
+        run: |
+          {
+            echo "## PR reminder run"
+            echo
+            echo "- dry-run: \`${DRY:-false}\`"
+            echo "- exit code: \`${RC:-?}\`"
+            echo "- interval hours: \`${REMINDER_INTERVAL_HOURS}\`"
+          } >> "$GITHUB_STEP_SUMMARY"
