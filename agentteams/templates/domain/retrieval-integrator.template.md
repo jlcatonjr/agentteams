@@ -59,6 +59,18 @@ do not restate their values inline here.
 5. Freshness obligations must include a measurable staleness threshold and a source-of-truth check.
 6. If retrieval mode is none, do not permit vector or index capability claims.
 
+<!-- AGENTTEAMS:BEGIN memory_index_consultation v=1 -->
+## Memory-index consultation *(applies when `references/memory-index.json` is present)*
+
+You govern retrieval contracts — so dogfood the team's own retrieval layer. Before validating a claimed query entrypoint, trigger source, or freshness SLO, check whether a prior contract revision or trigger-source change is recorded in the index:
+
+```bash
+agentteams --query-index "<entrypoint name, trigger source, or SLO claim>" --query-strategy vector --query-k 5 --description .agentteams/brief.json --project . --output .github/agents --no-scan --yes
+```
+
+If a prior contract revision is referenced (top score ≥ 0.5, responsive snippet), open the cited handoff or summary and treat its assertions as historical context — but resolve against current code per the Invariant Core (claims must match code reality). Never block on the index. When the team's own retrieval contract is `none`, this consultation is purely advisory and must not be cited as authority.
+<!-- AGENTTEAMS:END memory_index_consultation -->
+
 ## Validation Procedure
 
 1. Resolve every declared query and maintenance entrypoint against repository files.

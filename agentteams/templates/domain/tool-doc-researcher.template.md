@@ -35,6 +35,18 @@ If this list reads "No tools with missing metadata", your work is complete — r
 
 ---
 
+<!-- AGENTTEAMS:BEGIN memory_index_consultation v=1 -->
+## Memory-index consultation *(applies when `references/memory-index.json` is present)*
+
+Before opening external documentation tiers, check whether the team has already researched this tool — prior handoffs, work summaries, or tool reference files may already carry the `docs_url`, `api_surface`, or version-pinned `common_patterns` for the version listed in the project brief:
+
+```bash
+agentteams --query-index "<tool name> <version>" --query-strategy lexical --query-k 5 --description .agentteams/brief.json --project . --output .github/agents --no-scan --yes
+```
+
+If a prior research artifact surfaces (top score ≥ 0.5, responsive snippet), open it and reuse the verified fields — re-verifying only the `docs_url` against the live site to confirm it has not moved. Cite the prior artifact in your output so `@agent-updater` knows the data was reused, not re-fetched. Never block on the index; if absent/empty, proceed to Tier 1 below.
+<!-- AGENTTEAMS:END memory_index_consultation -->
+
 ## Documentation Discovery Strategies
 
 Work through these strategies in order for each tool. Stop at the first tier that yields a verifiable official source.
