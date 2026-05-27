@@ -1,0 +1,184 @@
+{
+  "file_count": 44,
+  "files": [
+    {
+      "path": "README.md",
+      "sha256": "624c1ba182d1dc4ac93f2c0075a6a9a7c48d05ff116526014c52b1d3a1bc4ab2"
+    },
+    {
+      "path": "agent-team.md",
+      "sha256": "6781873f75cb8fb513bebc873f6b17cc8ce5acdde406a5cf0f350977c3df4578"
+    },
+    {
+      "path": "agents/adversarial.md",
+      "sha256": "ec01282e94e16d82b01e9f1018865dc39a7705e48f668c4e8d3cb2d0010fbe8b"
+    },
+    {
+      "path": "agents/agency-data.md",
+      "sha256": "f55ebd1119baf655b2a987a1954207088df2f0bc2d72daf41cbee4b2622ec2a5"
+    },
+    {
+      "path": "agents/agent-refactor.md",
+      "sha256": "f1e0585f8d1f41b13613e064af0f8d204b11fd7e0fc66e2b515b8d44dae8fcd1"
+    },
+    {
+      "path": "agents/agent-updater.md",
+      "sha256": "b091f0301624868ea9d39dbdfc3db79d435efbd949bc1312cbf270ee97445fb2"
+    },
+    {
+      "path": "agents/bbb-reference.md",
+      "sha256": "d9b4944a5357c34bd8301005fe06de3052a878bd0f73b3557f71c1b5895a7ae0"
+    },
+    {
+      "path": "agents/blue.md",
+      "sha256": "f0708ad690f1023ba46f2deebbb60122233d0a15e134a4360d39fbf758fa85df"
+    },
+    {
+      "path": "agents/cleanup.md",
+      "sha256": "3a8ad07c6e78762ae3f4c114dcb737946f47c910c12d23e5f64b9cf1381f1606"
+    },
+    {
+      "path": "agents/code-hygiene.md",
+      "sha256": "acc60acd174e8b529233e9b5d5af07cf4691b6e948bd60f6fbd3bf4e730ac67d"
+    },
+    {
+      "path": "agents/conflict-auditor.md",
+      "sha256": "b20c2be568ce8123b586f9f48541333b46f0b1a709a66cb0f4607dea2d1a7cb8"
+    },
+    {
+      "path": "agents/conflict-resolution.md",
+      "sha256": "dead4b6eb0be3fa74b09278e09a373ac938b28c78442a1d3704c613cceb3d8ad"
+    },
+    {
+      "path": "agents/contact-sheet.md",
+      "sha256": "34b17702aa55872323ce6633e44de97ac5f5910e67d0a25f1524f09cdbff4893"
+    },
+    {
+      "path": "agents/contamination-registry-maintainer.md",
+      "sha256": "aee097449538ae51d269e6cdd783db2db84bdf3ca9fa1c587d21811b2988a823"
+    },
+    {
+      "path": "agents/content-enricher.md",
+      "sha256": "d93900f3867a5b543551e71e88cdcfa822a3b155b0c1a8f5ad25beec3c8464c6"
+    },
+    {
+      "path": "agents/endo.md",
+      "sha256": "a59cd1ea076420e67707bae708eb47c142088776589731834cd1e3126f377f24"
+    },
+    {
+      "path": "agents/git-operations.md",
+      "sha256": "c641bdf1e4273893929b386a5fb0c84adced97842537c0edc25005e6df69c8d5"
+    },
+    {
+      "path": "agents/infrastructure.md",
+      "sha256": "e6977fa0cdefadedf3381d67d1372bc5b274f826b1782db87037b5de5b47b143"
+    },
+    {
+      "path": "agents/metadata-backfill.md",
+      "sha256": "8b091dbfd0b72c768e0822310703fe83042a8743f70eae9cb768a5c22f6f989c"
+    },
+    {
+      "path": "agents/navigator.md",
+      "sha256": "20667deae317456e8be827d8223d719b907f179df92b61119844844260d1f218"
+    },
+    {
+      "path": "agents/orchestrator.md",
+      "sha256": "84a341cc4bac1d0857a8bacc79cc3711c6e45504b667217181cabc90e4d16e85"
+    },
+    {
+      "path": "agents/pipeline-generation-integrity-auditor.md",
+      "sha256": "a6e161c84ec42e2617cf6c05d704bc66eab7cdb41115a1cb32fa6983a0231912"
+    },
+    {
+      "path": "agents/pr-request-manager.md",
+      "sha256": "516c93b42e17d367732e12d39047f3925ae0d512bcafb49da3f2f8aa4ecb36d9"
+    },
+    {
+      "path": "agents/pr-reviewer.md",
+      "sha256": "b9fd1001cb57307363785015a775faac16a86f3875791efed26b42640e86646d"
+    },
+    {
+      "path": "agents/primary-producer.md",
+      "sha256": "868ae2fa7e2be777f5bcb5b706527f92cfe73c83b319a6880d17fa5e5a3bc186"
+    },
+    {
+      "path": "agents/program-graphing.md",
+      "sha256": "bacfc7c5fac183b2845ba80b7816a09bfd0ba678ea7fca520c711071332b188a"
+    },
+    {
+      "path": "agents/quality-auditor.md",
+      "sha256": "5c9232f27e9253c4110e1416d6e193356be0c59bd621c65b71020560eb5b6a53"
+    },
+    {
+      "path": "agents/repo-liaison.md",
+      "sha256": "64f60846c31c816999c367e0608bbf92f17345030331a6d459318067f09c7c85"
+    },
+    {
+      "path": "agents/retrieval-integrator.md",
+      "sha256": "564aef7d6c4c93867a99c9d08796f81effdc66b71ca385235ee090f0ef255f2c"
+    },
+    {
+      "path": "agents/security.md",
+      "sha256": "b7afd0ebdcbff376c68471d87f15080c003970eab1248ecaf6e6d3e7a05a554d"
+    },
+    {
+      "path": "agents/service-contamination-investigator.md",
+      "sha256": "c745527331d0ca0e191df6bf72eafc5ae09d08db86d8a9fe40e8c9b41b87a8f4"
+    },
+    {
+      "path": "agents/team-builder.md",
+      "sha256": "b5f77139c9bfb4e25ccef94d12d006ba3b0bd3fcad7a8a648619122b936f3b57"
+    },
+    {
+      "path": "agents/technical-validator.md",
+      "sha256": "8b4f17a29901e983b77ff6152ec3ee43870b121a762423d1af9af53bcbce8f0a"
+    },
+    {
+      "path": "agents/tool-doc-researcher.md",
+      "sha256": "6bf940ffdd0be879ca5de3238e0adf1c01f9fef853d4fb387471667173a4a554"
+    },
+    {
+      "path": "agents/tool-postgresql.md",
+      "sha256": "daa2496e5aaffb8247f3bb5399c404f6b85d116951cac46714d8d06be78745ed"
+    },
+    {
+      "path": "agents/tool-sql.md",
+      "sha256": "f7074050966eefb669e3bb81cca5e5b84a29ea35e9459599dac3f35ea9743a57"
+    },
+    {
+      "path": "agents/url-discovery.md",
+      "sha256": "aa8176dd2ecd5ddd51a68de8217d5b4b90d8d6b6c840d45177b53eeddcf30e84"
+    },
+    {
+      "path": "agents/visual-designer.md",
+      "sha256": "9862ea486d1e05f05dcd9c42e735672ab13fc0723cd6ec70e0dfa7aeca68f317"
+    },
+    {
+      "path": "agents/work-summarizer.md",
+      "sha256": "186dc9426836b2129a9fae593195937571f984e8244d70819c48a0df004ef315"
+    },
+    {
+      "path": "quickstart-snippet.md",
+      "sha256": "8de62bf2fd917c12ebc7e35f7fa253f02e47ed0068aab3846390b68055affd3e"
+    },
+    {
+      "path": "scheduled_tasks.lock",
+      "sha256": "74a942b748a09fe0a3cfbc7ba3b67648e8889eff831e040e623f7762bcc040d8"
+    },
+    {
+      "path": "settings.json",
+      "sha256": "2a901f10724bc8a07b5f2d537f4d125fb994845294a27ff40a476511bff921dc"
+    },
+    {
+      "path": "settings.local.json",
+      "sha256": "3ed37919b24aa30448c2ee65c975d1933aa1dd5456603564ae47f17d30b07538"
+    },
+    {
+      "path": "skills/recall.md",
+      "sha256": "21d3b75c422fd8abf8f2aeb994733dcefed7cff1e60244d52cd2cf6ccb318a58"
+    }
+  ],
+  "label": "collector-management-claude-bridge",
+  "root": "/Users/jamescaton/githubrepositories/visualknowledge/collector-management/.claude",
+  "schema_version": "1.0"
+}

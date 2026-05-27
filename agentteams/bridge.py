@@ -69,6 +69,7 @@ def run_bridge(
     check_only: bool = False,
     merge_only: bool = False,
     emit_skills: bool = True,
+    host_features: list[str] | None = None,
 ) -> BridgeResult:
     """Generate or validate lightweight bridge artifacts.
 
@@ -219,6 +220,32 @@ def run_bridge(
             "Pass --bridge-refresh to regenerate the full bridge artifact set "
             "(recommended when bridge state is incomplete or stale)."
         )
+
+    # Phase 2: emit Claude subagent stubs delegating to copilot-vscode source.
+    # Opt-in via host feature subselector; default emission is unchanged.
+    features = host_features or []
+    if (
+        target_framework == "claude"
+        and src_fw == "copilot-vscode"
+        and "bridge:copilot-vscode-to-claude:subagents" in features
+    ):
+        from agentteams.bridge_subagents import emit_subagent_stubs
+
+        stub_result = emit_subagent_stubs(
+            source_dir=source_dir,
+            output_root=output_root,
+            dry_run=dry_run,
+            overwrite=overwrite or merge_only,  # bridge-refresh / -merge both regenerate stubs
+        )
+        result.written.extend(stub_result.written)
+        result.skipped.extend(stub_result.skipped)
+        result.errors.extend(stub_result.errors)
+        if stub_result.experts_collapsed:
+            result.notices.append(
+                f"Collapsed {len(stub_result.experts_collapsed)} workstream-expert "
+                f"agent(s) into a single parametric stub: "
+                f"{', '.join(stub_result.experts_collapsed)}"
+            )
 
     return result
 

@@ -1050,6 +1050,7 @@ def main(argv: list[str] | None = None) -> int:
             check_only=args.bridge_check,
             merge_only=args.bridge_merge,
             emit_skills=not args.bridge_no_skills,
+            host_features=getattr(args, "host_features", []) or [],
         )
 
     if not args.description:
@@ -2087,6 +2088,7 @@ def _run_bridge(
     check_only: bool,
     merge_only: bool = False,
     emit_skills: bool = True,
+    host_features: list[str] | None = None,
 ) -> int:
     """Execute the --bridge-from path via lightweight compatibility artifacts."""
     from agentteams.bridge import run_bridge
@@ -2132,6 +2134,7 @@ def _run_bridge(
             check_only=check_only,
             merge_only=merge_only,
             emit_skills=emit_skills,
+            host_features=host_features or [],
         )
     except (ValueError, FileNotFoundError) as exc:
         print(f"Error: {exc}", file=sys.stderr)

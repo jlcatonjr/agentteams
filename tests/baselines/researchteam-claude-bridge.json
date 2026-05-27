@@ -1,0 +1,136 @@
+{
+  "file_count": 32,
+  "files": [
+    {
+      "path": "README.md",
+      "sha256": "624c1ba182d1dc4ac93f2c0075a6a9a7c48d05ff116526014c52b1d3a1bc4ab2"
+    },
+    {
+      "path": "agent-team.md",
+      "sha256": "6781873f75cb8fb513bebc873f6b17cc8ce5acdde406a5cf0f350977c3df4578"
+    },
+    {
+      "path": "agents/adversarial.md",
+      "sha256": "87f462056edda8814e4caaa7cc796608cf6856d1b037ead0639887c83c02e59e"
+    },
+    {
+      "path": "agents/agent-refactor.md",
+      "sha256": "86150be8b010c15e2fcc1d6b152a7463fadde7a0f66a8343a6fa153edc3065b3"
+    },
+    {
+      "path": "agents/agent-updater.md",
+      "sha256": "e2623420bf95c42f45a784333ef2d4ba5d80e11159562b58d8780898b32e5951"
+    },
+    {
+      "path": "agents/cleanup.md",
+      "sha256": "02e061360196ca06eb13cdc998b27f75114d3bf937d312809e6cd2d2617c49e5"
+    },
+    {
+      "path": "agents/code-hygiene.md",
+      "sha256": "84ba97342fce599e5e09d66a71700515957200f6c46689d7f7a2f5c096eeffaf"
+    },
+    {
+      "path": "agents/cohesion-repairer.md",
+      "sha256": "22ac80ed4a5eed90aa38944d5e74419004e6fea9f439beb87f16f6749db3d569"
+    },
+    {
+      "path": "agents/conflict-auditor.md",
+      "sha256": "c52e07b0ef6df7d9e1f308fde8126a5ba25997e39db03c97fefe3e44e7be50ac"
+    },
+    {
+      "path": "agents/conflict-resolution.md",
+      "sha256": "01b9ac235ad4cc4ef43403ce0af373b4d229255aadf467d8b0ec9ef885627e97"
+    },
+    {
+      "path": "agents/content-enricher.md",
+      "sha256": "358c354e8ad9461292fc387bcb2e1e95c34e8863a21c1d6f1fd26d82ad4cba38"
+    },
+    {
+      "path": "agents/format-converter.md",
+      "sha256": "681ab3b5bcb168e07f97050a383fc0c476e5a43de1c1c92b2471917cf44088ac"
+    },
+    {
+      "path": "agents/git-operations.md",
+      "sha256": "5b2c273cad7c68f56cb513c46c75222a7a689e5cd171b9c2a6f86c949ee921f4"
+    },
+    {
+      "path": "agents/navigator.md",
+      "sha256": "c22822bd528ea582b76ec926369f951712c29f4da4eb5c0daa64fc5c68035218"
+    },
+    {
+      "path": "agents/orchestrator.md",
+      "sha256": "4edcb3af4e974aa22bde19f149aef33ad569a9536934ddb9fdfbcfd4e1d35d1b"
+    },
+    {
+      "path": "agents/output-compiler.md",
+      "sha256": "a370fde85a692f3f542e31ceb642e73f99c18fe5d6be5a40c10e835c03233c75"
+    },
+    {
+      "path": "agents/primary-producer.md",
+      "sha256": "386b4b54a6491c4e5afc8db24f91567c0e913230af83db367ec44e82ea208641"
+    },
+    {
+      "path": "agents/quality-auditor.md",
+      "sha256": "a8c2a6cebfb126b341cac8c3226ea3eff8bc55ec531787c03539588c0f03a84c"
+    },
+    {
+      "path": "agents/reference-manager.md",
+      "sha256": "951507aa8d263c0ca46deaa9f2f35dc92a7d8b770a9d9f28bd7c8a0164dd5807"
+    },
+    {
+      "path": "agents/repo-liaison.md",
+      "sha256": "dcf17b1383368fa3d10a3168c4a1adfd83ac55a5b127b04db179e84e642095a0"
+    },
+    {
+      "path": "agents/security.md",
+      "sha256": "0d0036549c17ba600ee127d7779db8165e0ab9c6c9425b6aa11ad6a5c44e612a"
+    },
+    {
+      "path": "agents/team-builder.md",
+      "sha256": "8ddc8a2ad640f0bce92d2fecf11157b18b0554ae1be0a7ab2c00d386678a0dfc"
+    },
+    {
+      "path": "agents/technical-validator.md",
+      "sha256": "503c53f678dadd574f45340c99b4930de16fa9320ffb9451c03fe8a7309005ff"
+    },
+    {
+      "path": "agents/tool-doc-researcher.md",
+      "sha256": "52a84935cdae866a5aed8f9664d303eab0fd6cb2b8b2ce94550fd8ccc2e2c76b"
+    },
+    {
+      "path": "agents/tool-pandoc.md",
+      "sha256": "a84c3aa1e9aa526655008aaa15d60e2d6bc651c45a7af4b8aaf68cb3482d335b"
+    },
+    {
+      "path": "agents/visual-designer.md",
+      "sha256": "35800d440a6983d1ab74c36ead93c4187d7e8ad0575deaac353da6614033ae62"
+    },
+    {
+      "path": "agents/work-summarizer.md",
+      "sha256": "6e6032a91c93cf518eff75f0b75813611a50f88d3a9903e08fa66b77f6a7271f"
+    },
+    {
+      "path": "agents/workstream-expert.md",
+      "sha256": "57853de8deb09ebc0497f7aca6cbfd6f3b165381ea25843a0af0eaf24eefa298"
+    },
+    {
+      "path": "checklists/research-task-preflight.md",
+      "sha256": "6c6be25200fc11399f2ea79b9e726b4ea54ec7f3730b50a405cd6cc691659dc9"
+    },
+    {
+      "path": "prompts/research-report.prompt.md",
+      "sha256": "7f60139ab60ac67ede04145261915166aad4a612f8ff4aab70bd57b90c73c953"
+    },
+    {
+      "path": "quickstart-snippet.md",
+      "sha256": "8de62bf2fd917c12ebc7e35f7fa253f02e47ed0068aab3846390b68055affd3e"
+    },
+    {
+      "path": "skills/recall.md",
+      "sha256": "21d3b75c422fd8abf8f2aeb994733dcefed7cff1e60244d52cd2cf6ccb318a58"
+    }
+  ],
+  "label": "researchteam-claude-bridge",
+  "root": "/Users/jamescaton/githubrepositories/researchteam/.claude",
+  "schema_version": "1.0"
+}
