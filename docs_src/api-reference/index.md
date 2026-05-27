@@ -60,7 +60,25 @@ This reference defines the **supported public API surface** (documented modules 
 | [`man`](man.md) | Generate and validate the project man-page source |
 | [`handoff_payloads`](handoff_payloads.md) | Typed handoff payload substrate for plan `.steps.csv` artifacts |
 | [`plan_steps`](plan_steps.md) | Tolerant reader for plan `.steps.csv` artifacts |
-| [`liaison_logs`](liaison_logs.md) | Cross-repository coordination logs and artifacts |
+| [`plan_steps_todo`](plan-steps-todo.md) | TodoWrite projection of plan `.steps.csv` (CSV is canonical; TodoWrite is the projection) |
+| [`liaison_logs`](liaison-logs.md) | Cross-repository coordination logs and artifacts |
+
+## Host Features & Bridge Emission
+
+| Module | Role |
+|--------|------|
+| [`host_features`](host-features.md) | Parse / validate `<ns>:<feature>` opt-in subselector tokens for emission gating |
+| [`baseline`](baseline.md) | Deterministic SHA-256 emission baselines (capture / diff) used by regression tests |
+| [`bridge_subagents`](bridge-subagents.md) | Per-agent Claude subagent stub emitter (bridge:copilot-vscode-to-claude:subagents) |
+| [`hooks_emit`](hooks-emit.md) | Claude hooks settings + recursion-bounded guard emitter (bridge:copilot-vscode-to-claude:hooks) |
+| [`instructions_split`](instructions-split.md) | Cache-aware CLAUDE.md layout: preamble + boundary + dynamic stanza (bridge:copilot-vscode-to-claude:cache-split) |
+| [`schedule_emit`](schedule-emit.md) | `/schedule` routine spec emitter (bridge:copilot-vscode-to-claude:schedule) |
+
+## PR Management
+
+| Module | Role |
+|--------|------|
+| [`pr_management`](pr-management.md) | Recipient registry, gh-CLI wrappers, stale-PR scan, end-of-task three-way disposition prompt |
 
 ---
 

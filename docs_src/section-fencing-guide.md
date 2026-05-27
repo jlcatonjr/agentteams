@@ -165,6 +165,10 @@ No CLI flags are required for fencing to work — it is always active when `--me
 
 **Fix:** Move custom content to below the `<!-- AGENTTEAMS:END ... -->` marker, into the USER-EDITABLE gap.
 
+**Recovery (W22 data-loss safety net):** Under the default `--shrink-policy=warn`, the full pre-merge body of every fence that triggered a shrink notice is persisted to a sidecar at `<backup>/<rel_path>.lost.<sid>.md` inside the timestamped backup directory (`.agentteams-backups/<ts>/`). The shrink Notice in the emit output is annotated with `— recovery: <sidecar-path>`. To recover: copy the lost text from the sidecar into the USER-EDITABLE gap below the fence, then re-run.
+
+Two fence ids are exempt from the shrink heuristic and never produce sidecars: `threat_intelligence` and `threat_data`. Those are refreshed each run from live CISA KEV / NVD / OSV feeds; CVE rotation is expected. The canonical history for live-feed fences is the cache JSON (`references/security-vulnerability-watch.json`).
+
 ### Merge left stale generated content
 
 **Cause:** The output file was created before fence markers were introduced (pre-fencing era file). It has no markers to match.

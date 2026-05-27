@@ -17,6 +17,128 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `.github/workflows/pr-reminders.yml` (configurable `REMINDER_INTERVAL_HOURS`,
   `pull-requests:write` only — never merges or pushes); CLI entry-point
   `python -m agentteams.pr_management {prompt,remind}`.
+- **Host-feature subselectors (Phase 0).** New `--target-host-features`
+  flag accepts comma-separated `<namespace>:<feature>` tokens that gate
+  opt-in emission paths. Default emission is unchanged when omitted.
+  Public surface: `agentteams.host_features.parse_tokens`, `validate`,
+  `is_enabled`. See [API reference](api-reference/host-features.md).
+- **Emission baselines (Phase 0).** New `--capture-baseline` /
+  `--check-baseline` flags write a deterministic SHA-256 manifest of the
+  output tree and diff against a stored one — used by the new
+  `tests/baselines/*.json` regression contracts for the two test teams.
+  Public surface: `agentteams.baseline.capture`, `write`, `load`, `diff`.
+- **Bridge subagent stubs (Phase 2).** With
+  `--target-host-features bridge:copilot-vscode-to-claude:subagents`,
+  `agentteams --bridge-refresh` (or `--bridge-merge`) emits per-agent
+  Claude subagent stubs into `<project>/.claude/agents/` that delegate
+  to the canonical copilot-vscode source agent bodies via a `Read`
+  directive. Workstream-experts collapse into a single parametric
+  `workstream-expert.md` stub. Public surface:
+  `agentteams.bridge_subagents.emit_subagent_stubs`,
+  `detect_stub_drift`.
+- **Bridge Claude hooks (Phase 3).** With
+  `bridge:copilot-vscode-to-claude:hooks` selected, the bridge writes
+  `.claude/settings.agentteams.example.json` (sample hooks block the
+  user merges into their own settings) and `.claude/hook-guard.sh`
+  (recursion-depth-bounded notification wrapper; default
+  `AGENTTEAMS_HOOK_MAX_DEPTH=2`). The user's own
+  `settings.json` / `settings.local.json` is never overwritten.
+  Public surface: `agentteams.hooks_emit.build_settings_dict`,
+  `emit_hooks_artifacts`.
+- **Cache-aware CLAUDE.md emission (Phase 4).** With
+  `bridge:copilot-vscode-to-claude:cache-split` selected, the bridge
+  replaces its default pointer-only `CLAUDE.md` with a layout that
+  inlines `.github/copilot-instructions.md` verbatim followed by a
+  `SYSTEM_PROMPT_DYNAMIC_BOUNDARY` marker and a dynamic
+  source-SHA-256 / build-timestamp / attribution stanza. Original
+  text is preserved as a contiguous substring (verified). Public
+  surface: `agentteams.instructions_split.render_cache_split`,
+  `verify_equivalence`.
+- **/schedule routine emission (Phase 5).** With
+  `bridge:copilot-vscode-to-claude:schedule` selected, the bridge
+  writes `.claude/schedules.agentteams.json` — recurring routine
+  specs (cron + agent slug) for Claude's `/schedule` skill to
+  enroll. Default cadences: `work-summarizer` daily, `drift`
+  weekly Monday, `post-production-auditor` weekly Friday,
+  `advisory` monthly. Routines are only emitted when the matching
+  slug exists in the source dir. agentteams does not enroll the
+  routines itself. Public surface:
+  `agentteams.schedule_emit.build_routines`,
+  `emit_schedule_artifact`. `model_routing.agent_tier` extended
+  with an `_ALWAYS_CHEAP_SLUGS` set covering per-action lookup
+  roles so PreToolUse critic / retrieval-policy / navigator /
+  reference-manager / memory-index-query stay on the cheap tier
+  regardless of governance-agents membership.
+- **CSV plan-steps ↔ TodoWrite projection (Phase 1).** New
+  `agentteams.plan_steps_todo` projects the canonical plan-steps
+  CSV into TodoWrite-shaped dicts for runtime visibility in
+  Claude. Status writeback is append-only and mutates only the
+  status column (atomic write). With
+  `bridge:copilot-vscode-to-claude:todo-projection` selected, the
+  bridge emits `.claude/skills/todo-from-plan.md`. CSV remains the
+  audit-bearing plan-of-record; TodoWrite is the projection.
+  Public surface: `read_steps`, `project_to_todos`,
+  `update_status`, `detect_divergence`, `render_skill`.
+- **Consumer-declarable memory-index source dirs.** `brief.json`
+  now accepts a `memory_index_extra_dirs` list — project-relative
+  directories (recursive `*.md` scan) or glob patterns (literal
+  expansion). Safety: absolute paths rejected; traversal rejected
+  via `Path.resolve` + `relative_to`; symlink escapes rejected via
+  post-glob `os.path.realpath` check. Threaded through
+  `analyze.build_manifest` and `build_team._memory_index_sources`.
+- **Recall-first clauses in audit / validation / research agents.**
+  Six templates gained a fenced `memory_index_consultation` block
+  so `@conflict-auditor`, `@conflict-resolution`,
+  `@quality-auditor`, `@technical-validator`,
+  `@retrieval-integrator`, and `@tool-doc-researcher` call the
+  memory-index directly for in-workflow "have we seen / decided /
+  audited / researched X before?" lookups instead of round-tripping
+  through navigator/orchestrator. Coverage delta on a typical
+  37-agent copilot-vscode team: 4 → 9 recall-first agents.
+- **Per-strategy memory-index thresholds (v=2).** The four
+  audit/validation templates above bumped
+  `memory_index_consultation` v=1 → v=2: lexical-first by default,
+  vector fallback only on zero hits OR zero query-term overlap
+  (single-term false-positive guard), per-strategy thresholds
+  (lexical reliable ≥3.0; vector reliable ≥0.30, cap ~0.42).
+  Validated against `collector-management`: corpus 69 → 198 docs,
+  lexical reliable rate 3/4 → 4/4, vector reliable 0/9 → 3/9 + 1
+  candidate.
+- **Bridge-refresh Pre-Flight as durable agent invariant.**
+  `references/bridge-refresh-safety.md` is now the canonical
+  policy. Encoded as constitutional rule 14 in `@orchestrator`,
+  invariant-core rule 6 in `@git-operations`, mandatory-review
+  trigger in `@security`, protected-files row in `@cleanup`, and
+  §D of `references/git-procedures.md`. Records the precaution
+  learned from the 2026-05-27 information-loss incident where
+  `--bridge-refresh` clobbered user-authored `CLAUDE.md` and
+  `.claude/*` content.
+
+### fixed
+
+- **`emit`: preserve lost fence bodies as `.lost.<sid>.md`
+  sidecars under shrink-warn.** When `--update --merge` replaces a
+  fenced region whose existing body contained hand-edits beyond
+  the template's body, the full pre-merge body is now written to
+  `<backup>/<rel_path>.lost.<sid>.md` and the shrink Notice is
+  annotated with the recovery path. Earlier behavior wrote the
+  smaller content with only a partial 3-ref hint, leaving the
+  operator dependent on whole-file diffing of the backup. New
+  surface on `emit.emit_all`: `backup_path: Path | None = None`;
+  on `MergeResult`: `lost_fence_bodies: dict[sid, str]`.
+- **`emit`: suppress shrink-warn for live-feed-managed fences.**
+  The `threat_intelligence` and `threat_data` fences are filled
+  from live CISA KEV / NVD / OSV feeds each run; their canonical
+  history is the cache JSON, not the embedded snapshot, and CVE
+  rotation was triggering shrink-warn on every `--update --merge`.
+  Added `_LIVE_DATA_FENCES` allowlist; `_detect_fence_shrink`
+  early-returns for those sids. Dry-run shrink notices now
+  reference the sidecar-preservation hint (real-run path already
+  did).
+- **CLI test guard: `test_agent_files_present`.** Pr-agent
+  presence test now skips when the gitignored `.github/agents/`
+  tree is empty (fresh clone / CI) and only validates structural
+  invariants when files are present.
 
 ## [1.0.0-rc.6] - 2026-05-27
 

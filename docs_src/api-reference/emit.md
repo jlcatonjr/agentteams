@@ -87,6 +87,7 @@ Result for a single fenced-content merge operation.
 - `unchanged` (`list[str]`) — Section IDs that were identical in both files (no write needed).
 - `merged_content` (`str`) — Final merged file content. Empty string when parse fails.
 - `shrink_notices` (`list[str]`) — Per-section human-readable notices (Plan 3) when a regenerated fence body is materially shorter or less specific than the existing on-disk version. Used for alerting on potential loss of detail during merge.
+- `lost_fence_bodies` (`dict[str, str]`) — W22 data-loss recovery: full pre-merge body of every fence that fired a shrink notice, keyed by `section_id`. Persisted as a `<rel_path>.lost.<sid>.md` sidecar inside the backup dir by `emit_all` when `backup_path` is provided. Empty when no shrink fired.
 
 **Properties:**
 
@@ -113,7 +114,7 @@ Result of a backup operation.
 
 ## Functions
 
-### `emit_all(rendered_files, *, output_dir, dry_run=False, overwrite=False, merge=False, yes=False, shrink_policy="warn")`
+### `emit_all(rendered_files, *, output_dir, dry_run=False, overwrite=False, merge=False, yes=False, shrink_policy="warn", backup_path=None)`
 
 > *Source: `agentteams/emit.py`*
 
@@ -131,6 +132,10 @@ Write rendered files to `output_dir`.
     - `"warn"` (default, back-compatible): log the shrink notice into `EmitResult.notices` and proceed with the smaller content.
     - `"halt"`: log the notice, refuse the write, and append the path to `EmitResult.shrink_blocked`. Use to enforce strict fence-content preservation for self-team daily runs.
     - `"allow"`: suppress notices and write the smaller content silently. Use for one-time recovery when a previous halt was over-cautious.
+
+    The fence-id allowlist `_LIVE_DATA_FENCES` (`threat_intelligence`, `threat_data`) is exempt from the shrink heuristic — those fences are filled each run from live CISA KEV / NVD / OSV feeds, and CVE rotation is expected behavior, not user-content deletion. The canonical history for these fences is the cache JSON (`references/security-vulnerability-watch.json`), not the embedded snapshot.
+
+- `backup_path` (`Path | None`, keyword-only) — When provided and a shrink notice fires under `warn`, the full pre-merge body of every shrunken fence is written to `<backup_path>/<rel_path>.lost.<sid>.md` and the corresponding `EmitResult.notices` entry is annotated with `— recovery: <sidecar-path>`. This makes `warn` recoverable even when the operator didn't catch the notice — the sidecar is the durable evidence of what was dropped. Default: `None` (no sidecar written; notices are not annotated).
 
 **Returns:** `EmitResult` — Results of all write operations.
 

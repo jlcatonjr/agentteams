@@ -304,6 +304,21 @@ Domain boundary note:
 - **Absence safety** (I5): Empty source list is valid; returns a skeleton index with zero documents
 - **Stale detection** (via `is_index_stale()`) — Query CLI auto-refreshes stale indexes; callers may still refresh proactively
 - **Fallback protocol** — `@navigator` consults this index first, then opens referenced files for detail, then falls back to filesystem search
+- **Consumer-declared source dirs:** `brief.json` may add a `memory_index_extra_dirs` list — project-relative directories (recursive `*.md` scan) or glob patterns (literal expansion). Absolute paths are rejected; traversal is rejected via `Path.resolve` + `relative_to`; symlink escapes are rejected via a post-glob `os.path.realpath` check. Resolved paths are threaded through `analyze.build_manifest` and `build_team._memory_index_sources` and merged with the default source set.
+
+---
+
+## Consultation Clause (`memory_index_consultation` v=2)
+
+Audit / validation / research agents (`@conflict-auditor`, `@conflict-resolution`, `@quality-auditor`, `@technical-validator`, `@retrieval-integrator`, `@tool-doc-researcher`) carry a fenced `memory_index_consultation` clause that runs `agentteams --query-index` directly inside their workflow loop rather than round-tripping through `@navigator`.
+
+**v=2 thresholds (per-strategy):**
+
+- **Lexical (default):** reliable hit at score `≥ 3.0`. Single-term queries always go lexical-first.
+- **Vector fallback:** triggered on zero hits OR zero query-term overlap (single-term false-positive guard). Reliable at score `≥ 0.30`; cap typically `~0.42`.
+- **Either strategy:** `< reliable` but `> 0` → "candidate" — open the snippet's source file, never block on the index.
+
+Empirically: corpus expanded 69 → 198 docs on `collector-management`, lexical reliable rate 3/4 → 4/4, vector reliable 0/9 → 3/9 + 1 candidate.
 
 ---
 

@@ -20,6 +20,8 @@ agentteams [--description PATH] [--project PATH] [--framework NAME]
            [--strict-manual-placeholders] [--no-strict-manual-placeholders]
            [--no-backup] [--shrink-policy {warn,halt,allow}]
            [--list-backups] [--restore-backup TIMESTAMP]
+           [--target-host-features TOKENS]
+           [--capture-baseline PATH] [--baseline-label LABEL] [--check-baseline PATH]
            [--security-offline] [--security-max-items N] [--security-no-nvd]
            [--migrate] [--revert-migration]
            [--version]
@@ -313,6 +315,52 @@ the on-disk fence body relative to the freshly rendered content.
 Consumer-repo invocations of `build_team.py` continue to default to
 `warn`. The flag is plumbed into both emit code paths (the
 `--update` branch and the post-emit main path).
+
+Under `warn`, the full pre-merge body of every shrunken fence is
+written to `<backup>/<rel_path>.lost.<sid>.md` (the backup is taken
+automatically before the merge) and the shrink Notice is annotated
+with `— recovery: <sidecar-path>` so the operator can recover
+dropped hand-edits without diffing the whole-file backup. The fence
+allowlist `_LIVE_DATA_FENCES` (`threat_intelligence`, `threat_data`)
+is exempt — those fences are filled each run from live CISA KEV /
+NVD / OSV feeds; CVE rotation is expected.
+
+### `--target-host-features TOKENS`
+
+Comma-separated `<namespace>:<feature>` subselectors that gate
+opt-in emission paths. Tokens flow onto the manifest and are
+consumed by feature-gated emitters. Default emission is unchanged
+when omitted. Recognised tokens:
+
+| Token | Effect |
+|---|---|
+| `bridge:copilot-vscode-to-claude:subagents` | Per-agent Claude subagent stubs under `<project>/.claude/agents/`. |
+| `bridge:copilot-vscode-to-claude:hooks` | `.claude/settings.agentteams.example.json` + `.claude/hook-guard.sh`. |
+| `bridge:copilot-vscode-to-claude:cache-split` | Cache-aware `CLAUDE.md` (preamble + boundary + dynamic stanza). |
+| `bridge:copilot-vscode-to-claude:schedule` | `.claude/schedules.agentteams.json` for the `/schedule` skill. |
+| `bridge:copilot-vscode-to-claude:todo-projection` | `.claude/skills/todo-from-plan.md` skill. |
+
+Unknown tokens are syntactically valid but produce no emission.
+See [`host_features`](api-reference/host-features.md) for parser
+contract.
+
+### `--capture-baseline PATH`
+
+Capture a deterministic SHA-256 manifest of the output tree and
+write it to `PATH` (e.g. `tests/baselines/<team>-<framework>.json`).
+Used by regression tests to detect emission drift across phases.
+Skips the normal generation pipeline.
+
+### `--baseline-label LABEL`
+
+Label embedded in the captured baseline manifest. Defaults to the
+`--framework` value when omitted.
+
+### `--check-baseline PATH`
+
+Compare the current output tree against the baseline at `PATH` and
+exit non-zero on any diff. Lists added / removed / changed files to
+stderr.
 
 ### `--list-backups`
 

@@ -30,7 +30,7 @@ Property:
 
 ## Public Function
 
-### `run_bridge(*, source_dir, target_framework, output_root, source_framework=None, dry_run=False, overwrite=False, check_only=False, merge_only=False, emit_skills=True)`
+### `run_bridge(*, source_dir, target_framework, output_root, source_framework=None, dry_run=False, overwrite=False, check_only=False, merge_only=False, emit_skills=True, host_features=None)`
 
 Generate bridge artifacts or validate bridge freshness.
 
@@ -45,6 +45,14 @@ Args:
 7. `check_only` (`bool`): run freshness check only; no writes.
 8. `merge_only` (`bool`): non-destructive update of target-framework entry files. Bridge-internal artifacts under `references/bridges/.../` are always regenerated. For target entry files, only content inside `<!-- AGENTTEAMS-BRIDGE:BEGIN <region> v=N --> ... <!-- AGENTTEAMS-BRIDGE:END <region> -->` fences is re-rendered; content outside fences is preserved verbatim. Files lacking any bridge fence are skipped with notices in `bridge-merge.report.md`. Triggered by `--bridge-merge`.
 9. `emit_skills` (`bool`): emit `.claude/skills/recall.md` skill template (claude target only). Default `True`. Set to `False` (via `--bridge-no-skills`) if your team manages skills separately.
+10. `host_features` (`list[str] | None`): opt-in subselectors that gate additional emission paths. When `None` or `[]`, default emission is unchanged. Recognised tokens (claude target):
+    - `bridge:copilot-vscode-to-claude:subagents` — emit per-agent stubs via [`bridge_subagents`](bridge-subagents.md).
+    - `bridge:copilot-vscode-to-claude:hooks` — emit hook settings + guard via [`hooks_emit`](hooks-emit.md).
+    - `bridge:copilot-vscode-to-claude:cache-split` — emit cache-aware `CLAUDE.md` via [`instructions_split`](instructions-split.md) in place of the default pointer file.
+    - `bridge:copilot-vscode-to-claude:schedule` — emit `.claude/schedules.agentteams.json` via [`schedule_emit`](schedule-emit.md).
+    - `bridge:copilot-vscode-to-claude:todo-projection` — emit `.claude/skills/todo-from-plan.md` (rendered by [`plan_steps_todo.render_skill`](plan-steps-todo.md)).
+
+    Tokens are parsed and validated by [`host_features`](host-features.md). CLI surface: `--target-host-features TOKENS`.
 
 Returns:
 

@@ -77,7 +77,15 @@ nav:
       - man: api-reference/man.md
       - handoff_payloads: api-reference/handoff_payloads.md
       - plan_steps: api-reference/plan_steps.md
+      - plan-steps-todo: api-reference/plan-steps-todo.md
       - liaison-logs: api-reference/liaison-logs.md
+      - host-features: api-reference/host-features.md
+      - baseline: api-reference/baseline.md
+      - bridge-subagents: api-reference/bridge-subagents.md
+      - hooks-emit: api-reference/hooks-emit.md
+      - instructions-split: api-reference/instructions-split.md
+      - schedule-emit: api-reference/schedule-emit.md
+      - pr-management: api-reference/pr-management.md
   - Template Authoring: template-authoring.md
   - Description Format: DESCRIPTION-FORMAT.md
   - Structural Update Plan: structural-update-plan.md
