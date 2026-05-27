@@ -69,6 +69,14 @@ if [[ -f "$RESEARCH_SCRIPT" ]]; then
     "Module-core update proposal (advisory)" \
     python "$RESEARCH_SCRIPT" --propose
 
+  # 3.1 + 3.4 from the 2026-05-27 efficiency review: per-agent token-budget
+  # and prompt-cache prefix lint. Advisory only; remediation routes to
+  # @agent-refactor per the constitutional gate. Run on self-team so the
+  # daily-pipeline tracks our own agent-file efficiency drift.
+  run_noncritical \
+    "Self-team agent-budget audit (advisory)" \
+    python build_team.py --self --yes --check-budget --security-offline --security-no-nvd
+
   DIGEST_SCRIPT="$ROOT_DIR/scripts/daily_pipeline_digest.py"
   if [[ -f "$DIGEST_SCRIPT" ]]; then
     run_noncritical \

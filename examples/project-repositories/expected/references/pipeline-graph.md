@@ -256,7 +256,7 @@ flowchart LR
 | `cleanup` | governance | No | edit, search, execute |
 | `code-hygiene` | governance | No | read, search |
 | `cohesion-repairer` | domain | No | read, edit |
-| `conflict-auditor` | governance | No | read, edit, search, execute |
+| `conflict-auditor` | governance | No | read, search |
 | `conflict-resolution` | governance | No | edit, search, read |
 | `content-enricher` | domain | Yes | read, edit, search |
 | `crisis-credit-allocation-expert` | workstream_expert | No | read, search, agent |
@@ -544,9 +544,7 @@ digraph "ProjectRepositories Agent Team" {
       "user_invokable": false,
       "tools": [
         "read",
-        "edit",
-        "search",
-        "execute"
+        "search"
       ]
     },
     "conflict-resolution": {

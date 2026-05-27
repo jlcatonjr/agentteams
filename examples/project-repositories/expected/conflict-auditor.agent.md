@@ -2,7 +2,7 @@
 name: Conflict Auditor — ProjectRepositories
 description: "Detects logical conflicts across deliverables, agent documentation, reference files, and source material in ProjectRepositories"
 user-invokable: false
-tools: ['read', 'edit', 'search', 'execute']
+tools: ['read', 'search']
 agents: ['conflict-resolution', 'agent-updater', 'technical-validator']
 model: ["Claude Sonnet 4.6 (copilot)"]
 handoffs:

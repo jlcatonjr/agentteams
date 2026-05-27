@@ -6,7 +6,56 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
-(no changes since 1.0.0-rc.2)
+(no changes since 1.0.0-rc.3)
+
+## [1.0.0-rc.3] - 2026-05-27
+
+Agent-efficiency release. Soak clock resets per pre-release
+convention; earliest defensible promotion to 1.0.0 final is now
+on or after 2026-06-03 (one week after rc.3).
+
+No public-API breaks since rc.2. New efficiency lints are
+advisory; the one template change (terse-mode directive) is
+additive and propagates to consumers via `--update --merge`.
+
+### added
+
+- **Per-agent token-budget + prompt-cache prefix lint
+  (`--check-budget`).** New `agentteams.budget` module audits live
+  `.agent.md` files for two efficiency dimensions. Budget warns
+  when a non-orchestrator agent exceeds 300 lines, fails at 600
+  lines (orchestrator-class fail threshold: 1000 lines). Prefix-
+  cache flags ISO-date patterns within the first 60 lines
+  outside HTML comments — volatile content in the prefix defeats
+  Anthropic prompt-cache hits on every refresh. CLI exits 1 on
+  fail-class findings, 0 on warn-class only.
+- **Daily-pipeline integration of the budget audit.**
+  `scripts/run_daily_bridge_maintenance.sh` invokes the audit as
+  a non-critical advisory step. Remediation routes to
+  `@agent-refactor` per the constitutional gate.
+- **Tone-and-style fence in the copilot-instructions template.**
+  Declares: read-only auditor and governance roles default to
+  ≤200-word responses; producing roles are explicitly exempt so
+  they aren't silenced when emitting deliverables. Reduces
+  consumer-harness token consumption on the common case of
+  audit-and-route turns.
+
+### fixed
+
+- **`conflict-auditor` template was over-scoped.** Its role
+  description says "Detects logical conflicts" — pure audit, with
+  routing to `@conflict-resolution` for the actual edits. The
+  template previously declared `['read', 'edit', 'search',
+  'execute']`. Trimmed to `['read', 'search']` to match the
+  contract. The new `tests/test_agent_tool_scopes.py` regression
+  keeps it honest across `security`, `adversarial`,
+  `code-hygiene`, and `conflict-auditor`.
+
+### tests added
+
+- `tests/test_budget.py` (9 cases).
+- `tests/test_agent_tool_scopes.py` (6 cases).
+- `tests/test_terse_mode_directive.py` (3 cases).
 
 ## [1.0.0-rc.2] - 2026-05-27
 
