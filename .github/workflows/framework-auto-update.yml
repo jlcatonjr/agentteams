@@ -54,8 +54,12 @@ jobs:
           if [[ "$changes" -eq 0 ]]; then
             echo "no_proposal=true" >> "$GITHUB_OUTPUT"
           else
-            # Stable per-content hash drives the branch name and dedup.
-            phash=$(python -c "import hashlib,json; d=json.load(open('$proposal')); s=json.dumps(d['changes'], sort_keys=True); print(hashlib.sha256(s.encode()).hexdigest()[:12])")
+            # Use the module's dedup_hash field (proposal schema 1.2+). It is
+            # computed over upstream tokens + adapter constants only — NOT
+            # over the rendered new_text (which contains today's date), so
+            # day-over-day runs with identical observations produce the same
+            # hash and the workflow's existing dedup step finds the open PR.
+            phash=$(python -c "import json; d=json.load(open('$proposal')); print(d.get('dedup_hash') or d.get('changes', [{}])[0].get('path','unknown'))")
             echo "phash=$phash" >> "$GITHUB_OUTPUT"
             echo "branch=auto/framework-update-$phash" >> "$GITHUB_OUTPUT"
           fi
