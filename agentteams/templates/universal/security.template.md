@@ -52,6 +52,7 @@ Runtime enforcement also consumes machine-readable freshness metadata from the s
 | Any bulk edit affecting 3+ files simultaneously | Data integrity |
 | Any output compilation that pulls from external URLs | Supply chain risk |
 | Any execution of `batch_update.py` or `build_team.py --self --update` | Infrastructure scope — bulk cross-repo write |
+| Any invocation of `agentteams … --bridge-refresh` against an external project | Destructive at target — see `references/bridge-refresh-safety.md` Pre-Flight; clear only when Pre-Flight §II all-pass |
 | Any committed file containing absolute filesystem paths with home directory (`/Users/`, `/home/`) | OPSEC — PII exposure in artifacts |
 | Any committed or tracked file containing a local machine hostname, OS username, MAC address, local network IP (192.168.x.x, 10.x.x.x, 172.16-31.x.x), or machine-local absolute path outside `~/` notation | OPSEC — machine-specific information exposure |
 | Any agent with `edit` or `execute` tools acting outside its declared workstream | Excessive agency (LLM06) |

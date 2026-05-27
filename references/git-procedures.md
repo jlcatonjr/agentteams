@@ -361,3 +361,29 @@ Need to recover something?
   → Preserve WIP before risky op → C.6 git stash
   → Find which commit broke something → C.7 git bisect (appendix)
 ```
+
+## D. Bridge-Refresh Safety (Cross-Repository)
+
+`agentteams … --bridge-refresh` is **destructive at the target project** — it
+unconditionally overwrites `CLAUDE.md`, `.claude/README.md`,
+`.claude/agent-team.md`, `.claude/quickstart-snippet.md`, and
+`.claude/skills/recall.md`. Before any such invocation against an external
+project (including the `researchteam` and `collector-management` test
+teams), the full Pre-Flight in `references/bridge-refresh-safety.md` §II
+MUST pass:
+
+1. Inventory existing target entry files.
+2. For each present file, confirm an `AGENTTEAMS-BRIDGE:BEGIN` fence is
+   present (signals bridge-managed; safe to overwrite). Unfenced files
+   contain user content and **must not** be overwritten.
+3. Confirm the target's working tree is clean for `CLAUDE.md` and
+   `.claude/`.
+4. Classify each present file as tracked vs untracked. Untracked files
+   have no git safety net; never overwrite.
+
+If any check fails, switch to `--bridge-merge`. The merge mode re-renders
+only content inside bridge fences and skips unfenced files with a notice.
+
+Recovery procedure when destruction has occurred: see
+`references/bridge-refresh-safety.md` §IV. The recovery primitive is
+`git checkout HEAD -- <file>`, which only works for tracked files.

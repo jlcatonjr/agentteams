@@ -32,6 +32,7 @@ You remove stale files from {PROJECT_NAME}: abandoned intermediate outputs, buil
 | Project instructions | `copilot-instructions.md` | Project conventions |
 | Style references | `{STYLE_REFERENCE_PATH}` | Standards reference |
 | Referenced assets | Any file referenced in a primary deliverable | Content dependency |
+| Bridge-emitted artifacts in external projects | `<external>/CLAUDE.md`, `<external>/.claude/*` | May be the only copy of user content after a forced `--bridge-refresh`; verify against `references/bridge-refresh-safety.md` §IV before any removal |
 
 ---
 
