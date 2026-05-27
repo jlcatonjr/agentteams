@@ -1,5 +1,5 @@
 {
-  "file_count": 32,
+  "file_count": 34,
   "files": [
     {
       "path": "README.md",
@@ -118,12 +118,20 @@
       "sha256": "6c6be25200fc11399f2ea79b9e726b4ea54ec7f3730b50a405cd6cc691659dc9"
     },
     {
+      "path": "hook-guard.sh",
+      "sha256": "f61a6c5718e5049c54bf28d7a387290da92d75d595281d178e7af61c8b763e47"
+    },
+    {
       "path": "prompts/research-report.prompt.md",
       "sha256": "7f60139ab60ac67ede04145261915166aad4a612f8ff4aab70bd57b90c73c953"
     },
     {
       "path": "quickstart-snippet.md",
       "sha256": "8de62bf2fd917c12ebc7e35f7fa253f02e47ed0068aab3846390b68055affd3e"
+    },
+    {
+      "path": "settings.agentteams.example.json",
+      "sha256": "532aac001ed4e2b6f7b5b4837845d25e1a8aa4f40f1341d186c3c670021b8c24"
     },
     {
       "path": "skills/recall.md",

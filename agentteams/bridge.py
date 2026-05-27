@@ -247,6 +247,32 @@ def run_bridge(
                 f"{', '.join(stub_result.experts_collapsed)}"
             )
 
+    # Phase 3: emit Claude hooks example + recursion-guarded guard script.
+    # Opt-in; emits .claude/settings.agentteams.example.json (user merges
+    # into their own settings.json) and .claude/hook-guard.sh.
+    if (
+        target_framework == "claude"
+        and src_fw == "copilot-vscode"
+        and "bridge:copilot-vscode-to-claude:hooks" in features
+    ):
+        from agentteams.hooks_emit import emit_hooks_artifacts
+
+        hook_result = emit_hooks_artifacts(
+            source_dir=source_dir,
+            output_root=output_root,
+            dry_run=dry_run,
+            overwrite=overwrite or merge_only,
+        )
+        result.written.extend(hook_result.written)
+        result.skipped.extend(hook_result.skipped)
+        result.errors.extend(hook_result.errors)
+        if hook_result.written:
+            result.notices.append(
+                "Hooks artifacts emitted. Merge "
+                ".claude/settings.agentteams.example.json into your own "
+                ".claude/settings.json to activate notification hooks."
+            )
+
     return result
 
 
