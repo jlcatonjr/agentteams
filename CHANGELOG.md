@@ -6,7 +6,70 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
-(no changes since 1.0.0-rc.1)
+(no changes since 1.0.0-rc.2)
+
+## [1.0.0-rc.2] - 2026-05-27
+
+Second release candidate. Soak continues; no public-API breaks
+since rc.1. Bugfixes against the supervised auto-update loop, plus
+small quality-of-life features and a test-extras refactor.
+
+### fixed
+
+- **Auto-PR dedup hash no longer includes today's date.**
+  `framework_research.propose_module_patch` now emits a top-level
+  `dedup_hash` field (proposal schema bumped to 1.2) computed only
+  over upstream tokens and adapter constants. The
+  `framework-auto-update.yml` workflow's hash step reads this
+  field instead of hashing the rendered new_text. Effect: on
+  no-drift days, the proposal hash matches the prior day's PR,
+  the existing dedup check finds the open PR, and no duplicate
+  is created. Symptom that triggered the fix: rc.1 opened a fresh
+  PR each scheduled run even when observed tokens were
+  byte-identical.
+- **Blank-line accumulation in observation splices.**
+  `_splice_observation_block` now collapses any run of three or
+  more newlines to a single blank line after substitution.
+  Previously each daily refresh added one extra blank line above
+  the heading.
+
+### added
+
+- **`--shrink-policy=halt` pre-flight in dry-run.** `emit.emit_all`
+  with `dry_run=True, shrink_policy="halt"` populates
+  `EmitResult.shrink_blocked` with paths that a real run would
+  refuse, without modifying any file. Lets operators preview a
+  halt-mode posture before adopting it.
+- **Auto-PR labels.** The `framework-auto-update.yml` workflow now
+  applies `framework-update` and `automerge:false` labels at PR
+  creation. Improves the discovery surface and signals to future
+  reviewers that the PR must not be auto-merged. Labels created
+  on the remote with `gh label create`.
+- **Operational-JSON allow-list audit in the daily digest.**
+  `scripts/daily_pipeline_digest.py` walks the gitignored
+  `.github/agents/references/*.json` tree and flags any
+  non-allow-listed file whose lines exceed a 5% density of
+  absolute paths or high-entropy hex tokens. Catches future
+  generated files escaping `scan._OPERATIONAL_JSON_NAMES` before
+  they re-block the daily security scan.
+- **`[project.optional-dependencies] test` extras group.**
+  pyproject declares `test = ["pytest>=8", "pyyaml>=6"]`; CI
+  workflows now install via `pip install -e ".[test]"`. Runtime
+  dependency list unchanged (jsonschema only); the wheel stays
+  small.
+
+### infrastructure
+
+- **Initial scheduled auto-update fires hardened during soak.**
+  Three issues found and fixed on 2026-05-26:
+    - `pytest` was missing from `framework-auto-update.yml`'s
+      install step.
+    - `actions/permissions/workflow.can_approve_pull_request_reviews`
+      defaulted to `false`; enabled via `gh api`.
+    - A stale transient branch from the failed first dispatch was
+      cleaned up.
+  Result: subsequent auto-update PRs opened successfully under
+  the supervised pattern.
 
 ## [1.0.0-rc.1] - 2026-05-25
 

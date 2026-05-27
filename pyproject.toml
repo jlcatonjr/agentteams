@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "agentteams"
-version = "1.0.0rc1"
+version = "1.0.0rc2"
 description = "Generate a complete, coordinated AI agent team for any project from a single description file."
 readme = "README.md"
 license = { text = "MIT" }
