@@ -40,9 +40,10 @@ Purpose: Canonical guidance for integrating GitHub Copilot agent infrastructure 
 4. Add/maintain tests for extension + content transformation parity.
 
 
+
 ## Observed Upstream Tokens — `copilot_vscode` (Daily Pipeline)
 
-Recorded by the daily pipeline on `2026-05-26` from `https://code.visualstudio.com/docs/copilot/customization/custom-chat-modes`.
+Recorded by the daily pipeline on `2026-05-27` from `https://code.visualstudio.com/docs/copilot/customization/custom-chat-modes`.
 
 - Upstream tokens observed: —
 - Upstream locations observed: .github/agents
@@ -51,7 +52,7 @@ Recorded by the daily pipeline on `2026-05-26` from `https://code.visualstudio.c
 
 ## Observed Upstream Tokens — `copilot_cli` (Daily Pipeline)
 
-Recorded by the daily pipeline on `2026-05-26` from `https://docs.github.com/en/copilot/github-copilot-in-the-cli/about-github-copilot-in-the-cli`.
+Recorded by the daily pipeline on `2026-05-27` from `https://docs.github.com/en/copilot/github-copilot-in-the-cli/about-github-copilot-in-the-cli`.
 
 - Upstream tokens observed: —
 - Upstream locations observed: —
