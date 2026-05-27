@@ -93,6 +93,18 @@ When `references/eval-suite.json` exists, treat its `scenarios[].predicate` entr
 If `eval-suite.json` is absent or empty (older team): skip this section silently — do not fabricate findings against a missing artifact.
 <!-- AGENTTEAMS:END behavioral_spec_cross_check -->
 
+<!-- AGENTTEAMS:BEGIN memory_index_consultation v=1 -->
+### Memory-index consultation *(applies when `references/memory-index.json` is present)*
+
+Before adjudicating a conflict whose shape is **"has this been decided / accepted / rejected before?"** — typically `HC` (Hierarchy Conflict), `SR` (Stale Reference), and ambiguous `CC` (Claim Conflict) cases — query the index first:
+
+```bash
+agentteams --query-index "<the conflict question>" --query-strategy vector --query-k 5 --description .agentteams/brief.json --project . --output .github/agents --no-scan --yes
+```
+
+If the top score ≥ 0.5 and a snippet addresses the question, open the named file and cite its decision in the conflict log. The index is a history layer, **not authoritative** — when it conflicts with current state on disk, trust disk and queue an `SR` finding rather than letting stale memory anchor adjudication. Never block on the index; if absent/empty/low-confidence, fall back to filesystem search + `git log`.
+<!-- AGENTTEAMS:END memory_index_consultation -->
+
 ### Conflict Log Format
 
 Append to `.github/agents/references/conflict-log.csv` with columns:
@@ -145,3 +157,7 @@ When auditing `.steps.csv` artifacts that declare `payload_schema_in` / `payload
 
 Severity for `PAYLOAD_UNTYPED` is enforced mechanically by `PAYLOAD_UNTYPED_HARD_DATE = 2026-07-01` in `agentteams/handoff_payloads.py`. Do not soften by editorial judgment.
 <!-- AGENTTEAMS:END handoff_payload_codes -->
+
+## Project-Specific Notes
+
+> ⚙️ **USER-EDITABLE** — project-specific rules, overrides, and extensions for this agent. This section lies outside every `AGENTTEAMS` fence and is preserved verbatim across `agentteams --update --merge`.

@@ -46,6 +46,18 @@ For each conflict in `.github/agents/references/conflict-log.csv` with status `o
 | `SR` (Stale Reference) | REJECT the stale reference; REVISE the deliverable to remove or update it |
 | `PE` (Phantom Entry) | REJECT the entry; *(If `@reference-manager` in team)* flag for `@reference-manager` investigation |
 
+<!-- AGENTTEAMS:BEGIN memory_index_consultation v=1 -->
+### Memory-index consultation *(applies when `references/memory-index.json` is present)*
+
+Before deciding, check whether a structurally similar conflict has been resolved before — a prior `ACCEPT`/`REJECT`/`REVISE` outcome is binding precedent unless the authority hierarchy has changed:
+
+```bash
+agentteams --query-index "<the conflict claim or terminology>" --query-strategy vector --query-k 5 --description .agentteams/brief.json --project . --output .github/agents --no-scan --yes
+```
+
+If a prior resolution surfaces (top score ≥ 0.5 with a clearly responsive snippet), open the cited resolution log entry and apply the same outcome; record the precedent in the new log entry's `resolution` field. Never block on the index — if no precedent is found, proceed with the hierarchy-based rules below.
+<!-- AGENTTEAMS:END memory_index_consultation -->
+
 ### Step 3: Apply Decision
 
 | Decision | Action |
@@ -67,3 +79,7 @@ Update `.github/agents/references/conflict-log.csv`: change `status` to `resolve
 2. Authority hierarchy (from `copilot-instructions.md`) is the tiebreaker — always
 3. ESCALATE only when genuinely unresolvable by the hierarchy
 4. Update the conflict log for every decision, including ACCEPT
+
+## Project-Specific Notes
+
+> ⚙️ **USER-EDITABLE** — project-specific rules, overrides, and extensions for this agent. This section lies outside every `AGENTTEAMS` fence and is preserved verbatim across `agentteams --update --merge`.
