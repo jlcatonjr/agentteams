@@ -136,6 +136,17 @@ _MACHINE_MANAGED_MERGE_OVERWRITE_PATHS: frozenset[str] = frozenset([
     "references/security-vulnerability-watch.json",
 ])
 
+# Fences whose body is refreshed each run from an upstream live feed
+# (CISA KEV, NVD CVSS, OSV.dev, etc.). Content "loss" in these fences reflects
+# normal feed rotation, not user-content deletion — suppress the shrink-warn
+# heuristic so structural --update runs don't emit alarming false positives.
+# The canonical history for these feeds is the cache JSON, not the embedded
+# snapshot. Real user content sits in adjacent operator-managed fences.
+_LIVE_DATA_FENCES: frozenset[str] = frozenset([
+    "threat_intelligence",
+    "threat_data",
+])
+
 
 def _normalize_generated_content(rel_path: str, content: str) -> str:
     """Return emitted content normalized for merge-safe markdown generation.
@@ -246,7 +257,14 @@ def _detect_fence_shrink(sid: str, existing_block: str, new_block: str) -> str |
       (b) new body has >= 3 fewer markdown list items than existing;
       (c) existing body contained concrete file paths or backtick-quoted
           identifiers that the new body does not.
+
+    Live-feed fences (`_LIVE_DATA_FENCES`) are exempt: their bodies are
+    refreshed each run from upstream feeds and rotation is expected. The
+    sidecar mechanism in `lost_fence_bodies` still preserves the prior body
+    on disk if real recovery is ever needed.
     """
+    if sid in _LIVE_DATA_FENCES:
+        return None
     existing = _fence_body(existing_block)
     new = _fence_body(new_block)
     if not existing.strip():
@@ -890,10 +908,13 @@ def emit_all(
                 mr = _merge_fenced_content(normalized_content, existing_text)
                 # Plan 3: dry-run preview also surfaces the notices that the
                 # real run would emit (D-4 from update-dry-run plan).
+                # Annotate with sidecar-preservation hint so operators don't
+                # mistake the warning for irreversible data loss.
                 for notice in mr.shrink_notices:
-                    result.notices.append(f"{rel_path}: {notice}")
+                    annotated = f"{rel_path}: {notice} (prior body will be preserved in a .lost.<sid>.md sidecar in the backup dir on the real run)"
+                    result.notices.append(annotated)
                     if result.dry_run_report is not None:
-                        result.dry_run_report.notices.append(f"{rel_path}: {notice}")
+                        result.dry_run_report.notices.append(annotated)
                 # T5.1 / IV.1: in dry-run, also pre-flight the halt decision
                 # so operators see what a real --shrink-policy=halt run would
                 # block, without actually modifying any file.
