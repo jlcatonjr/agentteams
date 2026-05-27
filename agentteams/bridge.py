@@ -291,6 +291,29 @@ def run_bridge(
                 ".claude/settings.json to activate notification hooks."
             )
 
+    # Phase 5: emit recurring routine specs for Claude's /schedule skill.
+    if (
+        target_framework == "claude"
+        and src_fw == "copilot-vscode"
+        and "bridge:copilot-vscode-to-claude:schedule" in features
+    ):
+        from agentteams.schedule_emit import emit_schedule_artifact
+
+        sched_result = emit_schedule_artifact(
+            source_dir=source_dir,
+            output_root=output_root,
+            dry_run=dry_run,
+            overwrite=overwrite or merge_only,
+        )
+        result.written.extend(sched_result.written)
+        result.skipped.extend(sched_result.skipped)
+        result.errors.extend(sched_result.errors)
+        if sched_result.omitted_routines:
+            result.notices.append(
+                "Omitted schedule routines (no matching canonical agent in source): "
+                + ", ".join(sched_result.omitted_routines)
+            )
+
     return result
 
 

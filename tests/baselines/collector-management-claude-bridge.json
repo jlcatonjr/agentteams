@@ -1,5 +1,5 @@
 {
-  "file_count": 47,
+  "file_count": 48,
   "files": [
     {
       "path": "README.md",
@@ -168,6 +168,10 @@
     {
       "path": "scheduled_tasks.lock",
       "sha256": "74a942b748a09fe0a3cfbc7ba3b67648e8889eff831e040e623f7762bcc040d8"
+    },
+    {
+      "path": "schedules.agentteams.json",
+      "sha256": "1b4f7f77191692165df261d9c5841bd3062cc3e6395114d4304004de2f001256"
     },
     {
       "path": "settings.agentteams.example.json",

@@ -1,5 +1,5 @@
 {
-  "file_count": 35,
+  "file_count": 36,
   "files": [
     {
       "path": "README.md",
@@ -128,6 +128,10 @@
     {
       "path": "quickstart-snippet.md",
       "sha256": "8de62bf2fd917c12ebc7e35f7fa253f02e47ed0068aab3846390b68055affd3e"
+    },
+    {
+      "path": "schedules.agentteams.json",
+      "sha256": "1b4f7f77191692165df261d9c5841bd3062cc3e6395114d4304004de2f001256"
     },
     {
       "path": "settings.agentteams.example.json",
