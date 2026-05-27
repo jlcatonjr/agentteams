@@ -1542,14 +1542,16 @@ def main(argv: list[str] | None = None) -> int:
         print(f"\nWriting {len(update_rendered)} file(s)...")
 
         # Back up BEFORE migration so the backup captures pre-migration state
+        backup_path = None
         if not args.dry_run and not args.no_backup:
-            emit.backup_output_dir(
+            backup_result = emit.backup_output_dir(
                 output_dir,
                 files_to_backup=[rel for rel, _ in update_rendered],
                 reason="overwrite-mode" if args.overwrite else "pre-update",
                 framework=framework_id,
                 description_path=str(args.description) if args.description else None,
             )
+            backup_path = backup_result.backup_path
 
         # Migrate any inline log tables to CSV before writing
         if not args.dry_run:
@@ -1569,6 +1571,7 @@ def main(argv: list[str] | None = None) -> int:
             merge=not args.overwrite,
             yes=args.yes,
             shrink_policy=getattr(args, "shrink_policy", "warn"),
+            backup_path=backup_path,
         )
         emit.print_summary(result, manifest)
         _persist_shrink_events(args, result, manifest, output_dir)
@@ -1755,14 +1758,16 @@ def main(argv: list[str] | None = None) -> int:
             file=sys.stderr,
         )
 
+    backup_path = None
     if not args.dry_run and not args.no_backup and (args.overwrite or args.merge):
-        emit.backup_output_dir(
+        backup_result = emit.backup_output_dir(
             output_dir,
             files_to_backup=[rel for rel, _ in final_rendered],
             reason="pre-overwrite" if args.overwrite else "merge-overwrite-fenced",
             framework=framework_id,
             description_path=str(args.description) if args.description else None,
         )
+        backup_path = backup_result.backup_path
 
     # Migrate any inline log tables to CSV before a merge run
     if args.merge and not args.dry_run:
@@ -1782,6 +1787,7 @@ def main(argv: list[str] | None = None) -> int:
         merge=args.merge,
         yes=args.yes,
         shrink_policy=getattr(args, "shrink_policy", "warn"),
+        backup_path=backup_path,
     )
     emit.print_summary(result, manifest)
     _persist_shrink_events(args, result, manifest, output_dir)

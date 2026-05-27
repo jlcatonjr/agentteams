@@ -106,6 +106,10 @@ class MergeResult:
     unchanged: list[str] = field(default_factory=list)
     merged_content: str = ""
     shrink_notices: list[str] = field(default_factory=list)
+    # W22 data-loss recovery: full pre-merge body of every fence that fired
+    # a shrink notice, keyed by section_id. Persisted as a .lost.<sid>.md
+    # sidecar inside the backup dir by emit_all when backup_path is provided.
+    lost_fence_bodies: dict[str, str] = field(default_factory=dict)
 
     @property
     def has_errors(self) -> bool:
@@ -405,6 +409,11 @@ def _merge_fenced_content(new_rendered: str, existing_on_disk: str) -> MergeResu
                     )
                     if notice:
                         result.shrink_notices.append(notice)
+                        # W22 data-loss recovery: capture the pre-merge body
+                        # so emit_all can write a .lost.<sid>.md sidecar.
+                        result.lost_fence_bodies[sid] = _fence_body(
+                            existing_regions.get(sid, "")
+                        )
                 replaced_sids.add(sid)
             else:
                 # Orphaned: in existing but not in new render — leave in place
@@ -734,6 +743,54 @@ def restore_backup(
 # Public entry point
 # ---------------------------------------------------------------------------
 
+# W22 data-loss recovery -----------------------------------------------------
+
+_SHRINK_NOTICE_SID_RE = re.compile(r"^fence '([^']+)':")
+
+
+def _shrink_notice_sid(notice: str) -> str | None:
+    """Extract the fence section_id from a shrink Notice string."""
+    m = _SHRINK_NOTICE_SID_RE.match(notice)
+    return m.group(1) if m else None
+
+
+def _write_lost_fence_sidecars(
+    backup_path: Path,
+    rel_path: str,
+    lost_bodies: dict[str, str],
+) -> dict[str, str]:
+    """Persist each lost fence body as ``<backup>/<rel_path>.lost.<sid>.md``.
+
+    Returns a mapping of section_id → sidecar path (string, relative to repo
+    root when possible, else absolute) so the caller can annotate Notices.
+    Failures are non-fatal: the function returns whatever sidecars were
+    written and skips the rest.
+    """
+    written: dict[str, str] = {}
+    if not lost_bodies:
+        return written
+    try:
+        backup_path.mkdir(parents=True, exist_ok=True)
+    except OSError:
+        return written
+    for sid, body in lost_bodies.items():
+        if not body.strip():
+            continue
+        # Flatten the rel_path into the filename so sibling files never collide:
+        # references/foo.md + sid=content → references/foo.md.lost.content.md
+        sidecar = backup_path / f"{rel_path}.lost.{sid}.md"
+        try:
+            sidecar.parent.mkdir(parents=True, exist_ok=True)
+            sidecar.write_text(body, encoding="utf-8")
+        except OSError:
+            continue
+        try:
+            written[sid] = str(sidecar.relative_to(Path.cwd()))
+        except ValueError:
+            written[sid] = str(sidecar)
+    return written
+
+
 def emit_all(
     rendered_files: list[tuple[str, str]],
     *,
@@ -743,6 +800,7 @@ def emit_all(
     merge: bool = False,
     yes: bool = False,
     shrink_policy: str = "warn",
+    backup_path: Path | None = None,
 ) -> EmitResult:
     """Write rendered files to output_dir.
 
@@ -762,6 +820,11 @@ def emit_all(
                                 result.shrink_blocked.
                         "allow": suppress notice, write smaller content.
                         Plan: references/plans/T2-D5-shrink-policy-2026-05-25.plan.md
+        backup_path:    If provided, write per-fence ``.lost.<sid>.md`` sidecars
+                        inside this directory whenever a merge fires a shrink
+                        notice — capturing the full pre-merge fence body so the
+                        operator can recover dropped hand-edits even under the
+                        default ``warn`` policy. (W22 data-loss recovery.)
 
     Returns:
         EmitResult with results of all write operations.
@@ -902,8 +965,21 @@ def emit_all(
             # T2.D5: shrink_policy controls whether to surface and whether
             # to write the smaller content.
             if merge_result.shrink_notices and shrink_policy != "allow":
+                # W22 data-loss recovery: persist each lost fence body to a
+                # sidecar in the backup dir so the operator can recover from
+                # silent shrinks even under default "warn".
+                sidecar_paths: dict[str, str] = {}
+                if backup_path is not None and merge_result.lost_fence_bodies:
+                    sidecar_paths = _write_lost_fence_sidecars(
+                        backup_path, rel_path, merge_result.lost_fence_bodies,
+                    )
                 for notice in merge_result.shrink_notices:
-                    result.notices.append(f"{rel_path}: {notice}")
+                    sid = _shrink_notice_sid(notice)
+                    sidecar = sidecar_paths.get(sid) if sid else None
+                    line = f"{rel_path}: {notice}"
+                    if sidecar:
+                        line += f" — recovery: {sidecar}"
+                    result.notices.append(line)
             if merge_result.shrink_notices and shrink_policy == "halt":
                 # Skip the write entirely; record the path for operator review.
                 result.shrink_blocked.append(str(target))
