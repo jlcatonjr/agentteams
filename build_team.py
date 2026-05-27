@@ -291,6 +291,16 @@ def _build_parser() -> argparse.ArgumentParser:
         help="Scan generated agent files for security issues (PII, credentials, unresolved placeholders)",
     )
     parser.add_argument(
+        "--check-budget",
+        action="store_true",
+        dest="check_budget",
+        help=(
+            "Audit live .agent.md files for token-budget overrun and "
+            "prompt-cache prefix volatility. Read-only. Exits 1 on fail-class "
+            "findings; 0 on warn-class only. Routes remediation to @agent-refactor."
+        ),
+    )
+    parser.add_argument(
         "--self",
         action="store_true",
         dest="self_update",
@@ -1073,6 +1083,15 @@ def main(argv: list[str] | None = None) -> int:
         report = scan.scan_directory(output_dir, expected_agent_names=expected or None)
         scan.print_scan_report(report)
         return 1 if report.has_issues else 0
+
+    # -----------------------------------------------------------------------
+    # Step 4b.2: Handle --check-budget (3.1 + 3.4 efficiency lints)
+    # -----------------------------------------------------------------------
+    if args.check_budget:
+        from agentteams import budget
+        breport = budget.scan_directory(output_dir)
+        budget.print_report(breport)
+        return 1 if breport.has_failures else 0
 
     # -----------------------------------------------------------------------
     # Step 4c: Handle memory-index utility modes (no template rendering)
