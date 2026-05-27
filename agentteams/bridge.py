@@ -148,6 +148,39 @@ def run_bridge(
         target_framework=target_framework,
         pair_dir=pair_dir,
     )
+
+    # Phase 4: replace the default CLAUDE.md entry with a cache-aware split
+    # that inlines the canonical copilot-instructions.md as a stable
+    # preamble. Opt-in via host-feature subselector. Only meaningful for
+    # the copilot-vscode → claude direction.
+    _features_early = host_features or []
+    if (
+        target_framework == "claude"
+        and src_fw == "copilot-vscode"
+        and "bridge:copilot-vscode-to-claude:cache-split" in _features_early
+    ):
+        from agentteams.instructions_split import render_cache_split
+
+        # Source copilot-instructions.md sits at <project>/.github/copilot-instructions.md
+        project_root = source_dir.parent.parent
+        copilot_instr_path = project_root / ".github" / "copilot-instructions.md"
+        if copilot_instr_path.exists():
+            instr_body = copilot_instr_path.read_text(encoding="utf-8")
+            cache_split = render_cache_split(copilot_instructions=instr_body)
+            # Replace the CLAUDE.md tuple (first tuple ending in CLAUDE.md).
+            target_files = [
+                (p, cache_split) if p.name == "CLAUDE.md" else (p, c)
+                for (p, c) in target_files
+            ]
+            result.notices.append(
+                "CLAUDE.md emitted with cache-aware stable/dynamic split "
+                "from .github/copilot-instructions.md."
+            )
+        else:
+            result.notices.append(
+                "cache-split subselector active but "
+                f"{copilot_instr_path} not found; default CLAUDE.md retained."
+            )
     if target_framework == "claude" and emit_skills:
         target_files.append(
             (output_root / ".claude" / "skills" / "recall.md", _render_recall_skill()),
