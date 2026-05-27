@@ -39,8 +39,6 @@ Purpose: Canonical guidance for integrating GitHub Copilot agent infrastructure 
 3. Keep instructions filename stable as copilot-instructions.md for Copilot frameworks.
 4. Add/maintain tests for extension + content transformation parity.
 
-
-
 ## Observed Upstream Tokens — `copilot_vscode` (Daily Pipeline)
 
 Recorded by the daily pipeline on `2026-05-27` from `https://code.visualstudio.com/docs/copilot/customization/custom-chat-modes`.
@@ -48,7 +46,6 @@ Recorded by the daily pipeline on `2026-05-27` from `https://code.visualstudio.c
 - Upstream tokens observed: —
 - Upstream locations observed: .github/agents
 - Fetch status: `ok`
-
 
 ## Observed Upstream Tokens — `copilot_cli` (Daily Pipeline)
 
