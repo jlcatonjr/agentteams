@@ -831,6 +831,15 @@ def emit_all(
                     result.notices.append(f"{rel_path}: {notice}")
                     if result.dry_run_report is not None:
                         result.dry_run_report.notices.append(f"{rel_path}: {notice}")
+                # T5.1 / IV.1: in dry-run, also pre-flight the halt decision
+                # so operators see what a real --shrink-policy=halt run would
+                # block, without actually modifying any file.
+                if (
+                    mr.shrink_notices
+                    and shrink_policy == "halt"
+                    and result.dry_run_report is not None
+                ):
+                    result.shrink_blocked.append(str(target))
                 if mr.has_errors:
                     legacy_no_fence = all(
                         "No fence markers detected" in e for e in mr.parse_errors
