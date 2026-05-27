@@ -6,7 +6,40 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
-(no changes since 1.0.0-rc.3)
+(no changes since 1.0.0-rc.4)
+
+## [1.0.0-rc.4] - 2026-05-27
+
+Auto-merge release. The daily pipeline now implements revisions
+automatically rather than waiting for a human merge action. Soak
+clock resets per pre-release convention; earliest defensible
+promotion to 1.0.0 final is now on or after 2026-06-03 (one week
+after rc.4).
+
+No public-API breaks since rc.3.
+
+### changed
+
+- **`framework-auto-update.yml` auto-merges its own PR.** The
+  workflow now runs `gh pr merge --merge --delete-branch`
+  immediately after `gh pr create`. PRs created by `GITHUB_TOKEN`
+  do not trigger CI (GitHub's infinite-loop safeguard), so there
+  is no CI gate to await; the merge commit on `main` fires the
+  normal CI run, which is the post-merge safety net. Branch
+  protection on `main` is unchanged — the workflow merges through
+  the same PR surface that a human would. Reversibility: standard
+  `git revert` of the merge commit.
+- **`automerge:false` label dropped** from auto-PRs. The label
+  conflicted with the new behaviour; `framework-update` remains
+  for discovery filtering.
+
+### added
+
+- **Post-execution report via `GITHUB_STEP_SUMMARY`.** Each
+  `framework-auto-update` run emits a step summary listing the PR
+  URL, proposal hash, merge commit SHA, and the merged diff
+  (first 200 lines). Recorded in the GitHub Actions run UI so
+  every cycle has an auditable "what landed today" surface.
 
 ## [1.0.0-rc.3] - 2026-05-27
 

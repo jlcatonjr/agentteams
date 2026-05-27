@@ -126,10 +126,36 @@ jobs:
             echo
             echo "Hash: \`$PHASH\`"
           } > "$body_file"
-          gh pr create \
+          # rc.4: the daily pipeline implements revisions automatically.
+          # PRs created by GITHUB_TOKEN do not trigger CI (GitHub's
+          # infinite-loop safeguard), so there is no CI to gate on; merge
+          # immediately. Branch protection still requires a PR (we just
+          # made one); 0 required approvals lets the workflow merge its
+          # own. The merge commit on main fires the normal CI run, which
+          # is the post-merge safety net.
+          pr_url=$(gh pr create \
             --base main \
             --head "$BRANCH" \
             --title "auto: framework upstream-token observation ($PHASH)" \
             --body-file "$body_file" \
-            --label "framework-update" \
-            --label "automerge:false"
+            --label "framework-update")
+          pr_num=$(basename "$pr_url")
+          echo "Opened PR: $pr_url"
+
+          gh pr merge "$pr_num" --merge --delete-branch
+          merged_sha=$(gh pr view "$pr_num" --json mergeCommit --jq '.mergeCommit.oid')
+          echo "Merged as $merged_sha"
+
+          # rc.4 post-execution report: emit a step summary so the run
+          # log records exactly what landed on main this cycle.
+          {
+            echo "## Auto-update execution report"
+            echo
+            echo "- PR: $pr_url"
+            echo "- Hash: \`$PHASH\`"
+            echo "- Merge commit: \`$merged_sha\`"
+            echo "- Branch: \`$BRANCH\` (deleted)"
+            echo
+            echo "### Diff scope"
+            gh pr diff "$pr_num" --color never | head -200
+          } >> "$GITHUB_STEP_SUMMARY" || true
