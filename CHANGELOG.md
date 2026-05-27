@@ -6,7 +6,71 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
-(no changes since 1.0.0-rc.5)
+(no changes since 1.0.0-rc.6)
+
+## [1.0.0-rc.6] - 2026-05-27
+
+Advisory-PR pattern. The five in-repo advisory detectors (shrink,
+orphan, budget, prefix-cache, operational-JSON) now post their
+findings as a labeled PR awaiting operator review, rather than
+sitting silently in gitignored logs. Soak clock resets per
+pre-release convention; earliest defensible promotion to 1.0.0
+final is now on or after 2026-06-03 (one week after rc.6).
+
+No public-API breaks since rc.5.
+
+### added
+
+- **`agentteams.advisory` module.** Aggregates findings from the
+  five in-repo advisory detectors into a single PR-ready markdown
+  body. Reads the gitignored `tmp/daily-pipeline/` logs the daily
+  pipeline already writes; produces empty output when there are
+  no findings (caller's signal to skip opening a PR). Public
+  surface: `aggregate(today)` and `hash_body(body)`.
+- **`scripts/build_advisory_pr.py`.** Wraps the aggregator; writes
+  `references/advisories/<today>.md` (tracked) when findings exist;
+  prints `findings=true|false`, `hash=<12hex>`, `path=<rel>` to
+  `GITHUB_OUTPUT` for the workflow's downstream steps.
+- **`.github/workflows/advisory-pr.yml`.** Runs daily at 07:47 UTC
+  (after bridge-maintenance and framework-auto-update). When
+  findings exist, commits the advisory file on a transient
+  `advisory/<hash>` branch and opens a PR with labels `advisory` +
+  `awaiting-human`. Does **not** auto-merge. Operator merges to
+  commit the audit record, closes to dismiss, or comments with
+  guidance for the next pass.
+- **`references/advisories/` directory** (tracked, initially
+  empty). Each merged advisory PR adds one dated file.
+- **Labels `advisory` and `awaiting-human`** created on the remote
+  via `gh label create` out-of-band.
+
+### changed
+
+- **Daily-pipeline integration.** The 5 advisory detectors continue
+  to write their gitignored tmp/ logs unchanged; the new workflow consumes
+  those logs as the aggregation source.
+- **Behaviour on no-drift days.** No findings → no advisory PR.
+  Stable findings across days → dedup by content hash; same
+  findings as an open PR produce no second PR.
+
+### maintenance
+
+- **Self-team orphans cleaned up** (one-time, local). Six
+  `.agent.md` files left over from earlier team configurations
+  (`best-practices-expert`, `docs-research-expert`,
+  `implementation-guidance-expert`, `module-doc-expert`,
+  `pipeline-health-expert`, `post-production-auditor`) deleted
+  from the local `.github/agents/` tree (gitignored — no commit).
+  The orphan detector is now silent for the agentteams self-team.
+
+### tests added
+
+- `tests/test_advisory.py` (6 cases) — empty/with-findings paths
+  for each detector, dedup-hash stability and sensitivity.
+- `tests/test_advisory_pr_workflow.py` (7 cases) — workflow shape:
+  cron + dispatch, minimal permissions, **no `gh pr merge`** (the
+  key contract distinguishing this from framework-auto-update),
+  advisory labels applied, step summary emitted, distinct branch
+  prefix from the auto-update workflow.
 
 ## [1.0.0-rc.5] - 2026-05-27
 
