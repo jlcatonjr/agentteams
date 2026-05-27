@@ -1,5 +1,5 @@
 {
-  "file_count": 34,
+  "file_count": 35,
   "files": [
     {
       "path": "README.md",
@@ -136,6 +136,10 @@
     {
       "path": "skills/recall.md",
       "sha256": "21d3b75c422fd8abf8f2aeb994733dcefed7cff1e60244d52cd2cf6ccb318a58"
+    },
+    {
+      "path": "skills/todo-from-plan.md",
+      "sha256": "ae21373063154026d061a83737ea3b9c2fb96a677cc1e1f4bc829b8bda8d6035"
     }
   ],
   "label": "researchteam-claude-bridge",

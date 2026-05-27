@@ -247,6 +247,24 @@ def run_bridge(
                 f"{', '.join(stub_result.experts_collapsed)}"
             )
 
+    # Phase 1: emit the todo-from-plan skill so the bridged orchestrator
+    # can project the canonical plan-steps CSV into TodoWrite on activation.
+    if (
+        target_framework == "claude"
+        and src_fw == "copilot-vscode"
+        and "bridge:copilot-vscode-to-claude:todo-projection" in features
+    ):
+        from agentteams.plan_steps_todo import render_skill as _render_todo_skill
+
+        skill_path = output_root / ".claude" / "skills" / "todo-from-plan.md"
+        if skill_path.exists() and not (overwrite or merge_only):
+            result.skipped.append(str(skill_path))
+        else:
+            if not dry_run:
+                skill_path.parent.mkdir(parents=True, exist_ok=True)
+                skill_path.write_text(_render_todo_skill(), encoding="utf-8")
+            result.written.append(str(skill_path))
+
     # Phase 3: emit Claude hooks example + recursion-guarded guard script.
     # Opt-in; emits .claude/settings.agentteams.example.json (user merges
     # into their own settings.json) and .claude/hook-guard.sh.
