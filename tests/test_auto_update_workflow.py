@@ -97,6 +97,37 @@ def test_workflow_emits_post_execution_step_summary():
     assert 'gh pr diff' in text
 
 
+def test_workflow_dispatches_ci_after_automerge():
+    """rc.5: after the auto-merge lands the commit on main, the workflow
+    must dispatch ci.yml against main. workflow_dispatch is exempt from
+    the GITHUB_TOKEN filter, so this restores the post-merge safety net
+    that the rc.4 CHANGELOG claimed but did not actually deliver.
+    """
+    text = WORKFLOW.read_text(encoding="utf-8")
+    # The dispatch must come AFTER the merge (substring order check).
+    merge_idx = text.find('gh pr merge "$pr_num" --merge --delete-branch')
+    dispatch_idx = text.find('gh workflow run ci.yml --ref main')
+    assert merge_idx >= 0, "merge step missing"
+    assert dispatch_idx >= 0, "ci.yml dispatch step missing"
+    assert dispatch_idx > merge_idx, (
+        "CI dispatch must run AFTER the merge so it tests the merge commit"
+    )
+
+
+def test_ci_workflow_accepts_dispatch():
+    """rc.5: ci.yml must declare workflow_dispatch so the framework-auto-update
+    workflow can fire it programmatically. Without this trigger the
+    dispatch in framework-auto-update is a no-op.
+    """
+    ci_path = WORKFLOW.parent / "ci.yml"
+    text = ci_path.read_text(encoding="utf-8")
+    import re as _re
+    on_block = _re.search(r"^on:\n((?:[ \t#].*\n)+)", text, _re.MULTILINE)
+    assert on_block, "ci.yml has no on: block"
+    assert _re.search(r"^\s*workflow_dispatch:\s*$", on_block.group(1), _re.MULTILINE), \
+        "ci.yml must include workflow_dispatch under on:"
+
+
 def test_workflow_targets_only_main_via_pr():
     text = WORKFLOW.read_text(encoding="utf-8")
     assert "--base main" in text
