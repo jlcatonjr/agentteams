@@ -74,6 +74,26 @@ def test_halt_skips_write_and_records_blocked(tmp_path):
     assert "CVE-2024-DDDD" in body
 
 
+def test_dry_run_halt_preflight_lists_blocked_without_writing(tmp_path):
+    """T5.1 / IV.1: dry-run + halt populates shrink_blocked with the file
+    that a real run would refuse to write, without touching the file.
+    """
+    target = _setup(tmp_path)
+    original_bytes = target.read_bytes()
+    result = emit.emit_all(
+        [("demo.agent.md", NEW_RENDER)],
+        output_dir=tmp_path,
+        merge=True,
+        yes=True,
+        dry_run=True,
+        shrink_policy="halt",
+    )
+    assert result.notices
+    assert str(target) in result.shrink_blocked
+    # File must be byte-identical to before — dry-run never writes.
+    assert target.read_bytes() == original_bytes
+
+
 def test_allow_writes_silently(tmp_path):
     target = _setup(tmp_path)
     result = emit.emit_all(

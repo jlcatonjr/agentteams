@@ -190,3 +190,54 @@ def test_refresh_snapshot_offline_returns_cached(tmp_path, monkeypatch):
     snap = fr.refresh_snapshot(tmp_path, offline=True)
     assert snap.get("framework") == "claude"
     assert snap.get("generated_on") == "2026-05-25"
+
+
+def test_dedup_hash_stable_across_dates(tmp_path, monkeypatch):
+    """1.0.0-rc.2: proposal.dedup_hash must be identical across runs when
+    only generated_on differs (token-set unchanged). This is the property
+    the auto-PR dedup step relies on; if it breaks, the workflow opens a
+    fresh PR every day on no-drift days.
+    """
+    _write_minimal_module(tmp_path)
+    monkeypatch.setattr(fr, "_snapshot_path", lambda root: tmp_path / fr.SNAPSHOT_REL)
+    monkeypatch.delenv("CI", raising=False)
+
+    # Day 1.
+    _write_snapshot(tmp_path, with_drift=True)
+    snap_path = tmp_path / fr.SNAPSHOT_REL
+    p1 = fr.propose_module_patch(tmp_path)
+    h1 = p1.get("dedup_hash")
+    assert h1, "proposal must carry a dedup_hash"
+
+    # Day 2: same token-set, different generated_on.
+    body = json.loads(snap_path.read_text(encoding="utf-8"))
+    body["generated_on"] = "2026-05-26"
+    body["generated_at"] = "2026-05-26T00:00:00Z"
+    snap_path.write_text(json.dumps(body), encoding="utf-8")
+    p2 = fr.propose_module_patch(tmp_path)
+    h2 = p2.get("dedup_hash")
+    assert h1 == h2, f"dedup_hash drifted with date: {h1} vs {h2}"
+
+
+def test_splice_no_blank_line_accumulation():
+    """1.0.0-rc.2: repeated splice of the same heading must not grow
+    leading blank lines on each pass. Surfaced from PR #6's diff which
+    showed +1 blank line above the heading per day.
+    """
+    initial = (
+        "# Header\n\n"
+        "Some prose.\n\n"
+        "## Observed Upstream Tokens — `claude` (Daily Pipeline)\n\n"
+        "Old content.\n"
+    )
+    block = "\n## Observed Upstream Tokens — `claude` (Daily Pipeline)\n\nNew content.\n"
+    once = fr._splice_observation_block(initial, block, fid="claude")
+    twice = fr._splice_observation_block(once, block, fid="claude")
+    thrice = fr._splice_observation_block(twice, block, fid="claude")
+    # No run of 3+ consecutive newlines should appear.
+    import re as _re
+
+    assert not _re.search(r"\n{3,}", thrice), \
+        f"blank-line accumulation:\n{thrice!r}"
+    # And the body content stays exactly once.
+    assert thrice.count("New content.") == 1

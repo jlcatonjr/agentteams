@@ -93,6 +93,61 @@ def _bridge_summary_section() -> tuple[str, bool]:
     )
 
 
+def _operational_json_audit_section() -> tuple[str, bool]:
+    """T7/VI.1: detect generated `.github/agents/references/*.json` files
+    that look like operational metadata (high density of paths or
+    high-entropy tokens) but are NOT in scan._OPERATIONAL_JSON_NAMES.
+    Surfaces escapes from the suppression allow-list early so a future
+    new generated file can't silently re-block the daily security scan.
+    """
+    refs_dir = ROOT / ".github" / "agents" / "references"
+    if not refs_dir.is_dir():
+        return ("", False)
+    try:
+        from agentteams.scan import _OPERATIONAL_JSON_NAMES
+    except ImportError:
+        return ("", False)
+
+    import re as _re
+
+    path_re = _re.compile(r"/Users/|/home/|[A-Z]:\\\\")
+    hash_re = _re.compile(r'"[a-f0-9]{32,}"')
+    suspects: list[tuple[str, int, int]] = []
+    for jp in sorted(refs_dir.glob("*.json")):
+        if jp.name in _OPERATIONAL_JSON_NAMES:
+            continue
+        try:
+            lines = jp.read_text(encoding="utf-8").splitlines()
+        except OSError:
+            continue
+        if not lines:
+            continue
+        n_path = sum(1 for ln in lines if path_re.search(ln))
+        n_hash = sum(1 for ln in lines if hash_re.search(ln))
+        ratio = (n_path + n_hash) / max(1, len(lines))
+        if ratio > 0.05:
+            suspects.append((jp.name, n_path + n_hash, len(lines)))
+
+    if not suspects:
+        return ("", False)
+
+    lines = [
+        "## Operational-JSON allow-list audit",
+        "",
+        "Files matching the operational-metadata shape but NOT in",
+        "`agentteams.scan._OPERATIONAL_JSON_NAMES`. Review and add to",
+        "the allow-list if these are legitimate pipeline-controlled artefacts,",
+        "or scrub them if they leaked path/hash content unintentionally.",
+        "",
+        "| File | Flagged lines | Total lines |",
+        "|---|---|---|",
+    ]
+    for name, flagged, total in suspects:
+        lines.append(f"| `{name}` | {flagged} | {total} |")
+    lines.append("")
+    return ("\n".join(lines), True)
+
+
 def main(argv: list[str]) -> int:
     sections: list[str] = []
     any_active = False
@@ -101,6 +156,7 @@ def main(argv: list[str]) -> int:
         lambda: _per_day_section("shrink", "Fenced-region shrink events", "shrink-events"),
         lambda: _per_day_section("dual", "Dual-descriptor events", "dual-descriptor-events"),
         lambda: _per_day_section("orphan", "Orphan agent events", "orphan-events"),
+        _operational_json_audit_section,
         _bridge_summary_section,
     ):
         body, active = renderer()

@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "agentteams"
-version = "1.0.0rc1"
+version = "1.0.0rc2"
 description = "Generate a complete, coordinated AI agent team for any project from a single description file."
 readme = "README.md"
 license = { text = "MIT" }
@@ -27,6 +27,15 @@ classifiers = [
 ]
 dependencies = ["jsonschema>=4.20"]
 keywords = ["agent", "ai", "copilot", "code-generation", "github-copilot", "llm", "multi-agent"]
+
+[project.optional-dependencies]
+# Tooling needed only to run the test suite. CI workflows install via
+# `pip install -e .[test]`. Adding to this list rather than to runtime
+# dependencies keeps the wheel small for end users.
+test = [
+    "pytest>=8",
+    "pyyaml>=6",
+]
 
 [project.urls]
 Homepage = "https://github.com/jlcatonjr/agentteams"

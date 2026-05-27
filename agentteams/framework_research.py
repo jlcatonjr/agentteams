@@ -344,11 +344,33 @@ def propose_module_patch(repo_root: Path) -> dict[str, Any]:
     if not changes:
         return {"changes": [], "reason": "no drift to record"}
 
+    # Dedup signature: hash over upstream tokens + adapter constants only.
+    # Excludes generated_on and the rendered new_text so day-over-day runs
+    # with identical observations produce the SAME signature, letting the
+    # auto-PR workflow recognise "no real drift" and skip a duplicate PR.
+    import hashlib as _hashlib
+
+    dedup_payload = {
+        "frameworks": {
+            fid: {
+                "upstream_tokens": entry.get("upstream_tokens", {}),
+                "expected_keys": entry.get("expected_keys", []),
+            }
+            for fid, entry in frameworks.items()
+        },
+        "local_adapter": snapshot.get("local_adapter", {}),
+        "claude_keys_diff": snapshot.get("keys_diff", {}),
+    }
+    dedup_hash = _hashlib.sha256(
+        json.dumps(dedup_payload, sort_keys=True).encode()
+    ).hexdigest()[:12]
+
     return {
-        "schema_version": "1.1",
+        "schema_version": "1.2",
         "generated_at": _utcnow().strftime("%Y-%m-%dT%H:%M:%SZ"),
         "snapshot_generated_on": snapshot.get("generated_on", ""),
         "frameworks": list(frameworks.keys()),
+        "dedup_hash": dedup_hash,
         "changes": changes,
     }
 
@@ -408,8 +430,13 @@ def _splice_observation_block(current: str, block: str, fid: str = "claude") -> 
         current = _LEGACY_OBSERVATION_RE.sub("", current, count=1)
     pat = _observation_re_for(fid)
     if pat.search(current):
-        return pat.sub("\n" + block.rstrip() + "\n", current, count=1).rstrip() + "\n"
-    return (current.rstrip() + "\n" + block).rstrip() + "\n"
+        out = pat.sub("\n" + block.rstrip() + "\n", current, count=1).rstrip() + "\n"
+    else:
+        out = (current.rstrip() + "\n" + block).rstrip() + "\n"
+    # Collapse any run of >=3 blank lines that the splice may have produced
+    # between adjacent sections to exactly one blank line. Prevents the
+    # blank-line accumulation observed in the daily auto-update PR diff.
+    return re.sub(r"\n{3,}", "\n\n", out)
 
 
 def apply_module_patch(proposal: dict[str, Any], repo_root: Path) -> dict[str, Any]:

@@ -33,6 +33,43 @@ def test_no_inputs_no_digest(tmp_path, capsys, monkeypatch):
     assert "no active signals" in capsys.readouterr().out
 
 
+def test_operational_json_audit_flags_unknown_high_density(tmp_path, monkeypatch):
+    """VI.1: a non-allow-listed JSON file under .github/agents/references/
+    with >5% path/hash lines is flagged in the digest section.
+    """
+    mod = _run_with_root(tmp_path, monkeypatch)
+    refs = tmp_path / ".github" / "agents" / "references"
+    refs.mkdir(parents=True)
+    # 8 lines, 2 with path/hash content -> 25% density.
+    (refs / "weird-state.json").write_text(
+        '{\n'
+        '  "a": 1,\n'
+        '  "path": "/Users/op/data",\n'
+        '  "b": 2,\n'
+        '  "hash": "deadbeef0123456789abcdef0123456789abcdef0123",\n'
+        '  "c": 3,\n'
+        '  "d": 4,\n'
+        '}\n',
+        encoding="utf-8",
+    )
+    body, active = mod._operational_json_audit_section()
+    assert active
+    assert "weird-state.json" in body
+
+
+def test_operational_json_audit_silent_on_allowed(tmp_path, monkeypatch):
+    """VI.1: files inside _OPERATIONAL_JSON_NAMES never trigger the audit."""
+    mod = _run_with_root(tmp_path, monkeypatch)
+    refs = tmp_path / ".github" / "agents" / "references"
+    refs.mkdir(parents=True)
+    (refs / "memory-index.json").write_text(
+        '{\n  "path": "/Users/op/agentteams"\n}\n', encoding="utf-8"
+    )
+    body, active = mod._operational_json_audit_section()
+    assert not active
+    assert body == ""
+
+
 def test_with_inputs_writes_digest(tmp_path, capsys, monkeypatch):
     mod = _run_with_root(tmp_path, monkeypatch)
 
