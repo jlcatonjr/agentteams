@@ -59,16 +59,22 @@ do not restate their values inline here.
 5. Freshness obligations must include a measurable staleness threshold and a source-of-truth check.
 6. If retrieval mode is none, do not permit vector or index capability claims.
 
-<!-- AGENTTEAMS:BEGIN memory_index_consultation v=1 -->
+<!-- AGENTTEAMS:BEGIN memory_index_consultation v=2 -->
 ## Memory-index consultation *(applies when `references/memory-index.json` is present)*
 
-You govern retrieval contracts — so dogfood the team's own retrieval layer. Before validating a claimed query entrypoint, trigger source, or freshness SLO, check whether a prior contract revision or trigger-source change is recorded in the index:
+You govern retrieval contracts — so dogfood the team's own retrieval layer. Before validating a claimed query entrypoint, trigger source, or freshness SLO, check whether a prior contract revision or trigger-source change is recorded in the index. Lexical-first because contract claims usually name specific entrypoints, source-of-truth tables, or SLO values:
 
 ```bash
-agentteams --query-index "<entrypoint name, trigger source, or SLO claim>" --query-strategy vector --query-k 5 --description .agentteams/brief.json --project . --output .github/agents --no-scan --yes
+agentteams --query-index "<entrypoint name, table name, trigger source, or SLO value>" --query-strategy lexical --query-k 5 --description .agentteams/brief.json --project . --output .github/agents --no-scan --yes
 ```
 
-If a prior contract revision is referenced (top score ≥ 0.5, responsive snippet), open the cited handoff or summary and treat its assertions as historical context — but resolve against current code per the Invariant Core (claims must match code reality). Never block on the index. When the team's own retrieval contract is `none`, this consultation is purely advisory and must not be cited as authority.
+Fall back to `--query-strategy vector` when **either** (a) lexical returns zero hits, **or** (b) the lexical top-1 has no content-word overlap with the query (single-term false-positive guard), **or** (c) the question is about a contract concept rather than a named artifact.
+
+Per-strategy thresholds (the two scales are not comparable):
+- **Lexical:** top-1 ≥ 3.0 is a reliable hit; 1.0–3.0 is candidate-for-inspection.
+- **Vector:** top-1 ≥ 0.30 is reliable; 0.20–0.30 is candidate-for-inspection. The empirical cap is ~0.42; never demand ≥ 0.5 on vector.
+
+If a prior contract revision is referenced, open the cited handoff or summary and treat its assertions as historical context — but resolve against current code per the Invariant Core (claims must match code reality). Never block on the index. When the team's own retrieval contract is `none`, this consultation is purely advisory and must not be cited as authority.
 <!-- AGENTTEAMS:END memory_index_consultation -->
 
 ## Validation Procedure

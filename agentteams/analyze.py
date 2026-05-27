@@ -366,6 +366,10 @@ def build_manifest(description: dict[str, Any], *, framework: str = "copilot-vsc
         "auto_resolved_placeholders": auto_resolved,
         "manual_required_placeholders": manual_required,
         "output_files": output_files,
+        # W22: consumer-declared extra index source paths/globs. Read directly
+        # from description so _memory_index_sources can see it without depending
+        # on the description being re-attached later in the update path.
+        "memory_index_extra_dirs": description.get("memory_index_extra_dirs") or [],
     }
 
 

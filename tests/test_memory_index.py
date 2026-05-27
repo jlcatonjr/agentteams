@@ -366,6 +366,88 @@ def test_memory_index_sources_include_docs_src_references_and_plan(tmp_path):
     assert str(root / "build-team-plan.md") in source_set
 
 
+def test_memory_index_sources_picks_up_extra_dirs_directory(tmp_path):
+    """W22: consumer-declared extra dirs (bare directory) are scanned recursively."""
+    root = tmp_path / "project"
+    (root / "workSummaries").mkdir(parents=True)
+    (root / "workSummaries" / "daily.md").write_text("daily")
+    (root / "docs").mkdir()
+    (root / "docs" / "top.md").write_text("top")
+    (root / "docs" / "decisions").mkdir()
+    (root / "docs" / "decisions" / "adr-001.md").write_text("adr")
+    output_dir = root / ".github" / "agents"
+    output_dir.mkdir(parents=True)
+
+    manifest = {
+        "existing_project_path": str(root),
+        "memory_index_extra_dirs": ["docs/"],
+    }
+    sources = build_team._memory_index_sources(manifest, output_dir)
+    source_set = {str(p) for p in sources}
+    assert str(root / "docs" / "top.md") in source_set
+    assert str(root / "docs" / "decisions" / "adr-001.md") in source_set
+
+
+def test_memory_index_sources_picks_up_extra_dirs_glob(tmp_path):
+    """W22: glob-form extra dirs expand literally and respect recursion implied
+    by the glob (non-recursive `docs/*.md` picks up only top-level)."""
+    root = tmp_path / "project"
+    (root / "workSummaries").mkdir(parents=True)
+    (root / "docs").mkdir()
+    (root / "docs" / "top.md").write_text("top")
+    (root / "docs" / "sub").mkdir()
+    (root / "docs" / "sub" / "deep.md").write_text("deep")
+    output_dir = root / ".github" / "agents"
+    output_dir.mkdir(parents=True)
+
+    manifest = {
+        "existing_project_path": str(root),
+        "memory_index_extra_dirs": ["docs/*.md"],
+    }
+    sources = build_team._memory_index_sources(manifest, output_dir)
+    source_set = {str(p) for p in sources}
+    assert str(root / "docs" / "top.md") in source_set
+    assert str(root / "docs" / "sub" / "deep.md") not in source_set
+
+
+def test_memory_index_sources_rejects_path_traversal_and_symlinks(tmp_path):
+    """W22 (adv-6): paths escaping project_root are rejected, including
+    symlinked escapes from inside the tree."""
+    root = tmp_path / "project"
+    outside = tmp_path / "outside"
+    (root / "workSummaries").mkdir(parents=True)
+    outside.mkdir()
+    (outside / "secret.md").write_text("secret")
+
+    # Symlink inside the project tree pointing outside.
+    symlink_target = root / "docs"
+    try:
+        symlink_target.symlink_to(outside, target_is_directory=True)
+    except (OSError, NotImplementedError):
+        # Platforms without symlink support — skip the symlink half.
+        symlink_target = None
+
+    output_dir = root / ".github" / "agents"
+    output_dir.mkdir(parents=True)
+
+    manifest = {
+        "existing_project_path": str(root),
+        "memory_index_extra_dirs": [
+            "../outside/",       # literal traversal — rejected pre-glob
+            "/etc/",             # absolute path — rejected
+            "docs/",             # symlink escape — rejected post-realpath
+        ],
+    }
+    sources = build_team._memory_index_sources(manifest, output_dir)
+    source_set = {str(p) for p in sources}
+    # The secret file must never appear regardless of how it was reached.
+    assert str(outside / "secret.md") not in source_set
+    # Realpath of any included path must remain under project_root.
+    project_real = str(Path(root).resolve())
+    for p in sources:
+        assert str(Path(p).resolve()).startswith(project_real), p
+
+
 def test_query_index_cli_mode_returns_results(tmp_path):
     output_dir = tmp_path / ".github" / "agents"
     index_dir = output_dir / "references"

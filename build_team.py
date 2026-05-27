@@ -3330,6 +3330,47 @@ def _memory_index_sources(manifest: dict, output_dir: Path) -> list[Path]:
     refs = project_root / "references"
     if refs.exists() and refs.is_dir():
         sources.extend(sorted(refs.rglob("*.md")))
+    # Consumer-declared extra index dirs / globs (W22 recall-first follow-up).
+    # Each entry is a project-relative string treated as:
+    #   - a glob pattern if it contains '*' or '?' (expanded literally), or
+    #   - a directory otherwise (recursively scanned for *.md).
+    # Safety: reject absolute paths, traversal that escapes project_root, and
+    # symlinked escapes (post-glob realpath check).
+    extra = manifest.get("memory_index_extra_dirs")
+    if isinstance(extra, list):
+        try:
+            project_root_resolved = project_root.resolve()
+        except OSError:
+            project_root_resolved = project_root
+        for raw in extra:
+            if not isinstance(raw, str) or not raw.strip():
+                continue
+            if Path(raw).is_absolute():
+                continue
+            is_glob = any(ch in raw for ch in "*?[")
+            try:
+                if is_glob:
+                    candidates = sorted(project_root.glob(raw))
+                else:
+                    target = (project_root / raw)
+                    if not (target.exists() and target.is_dir()):
+                        continue
+                    try:
+                        target.resolve().relative_to(project_root_resolved)
+                    except (ValueError, OSError):
+                        continue
+                    candidates = sorted(target.rglob("*.md"))
+            except (OSError, ValueError):
+                continue
+            for c in candidates:
+                if not c.is_file() or c.suffix != ".md":
+                    continue
+                try:
+                    real = Path(os.path.realpath(c))
+                    real.relative_to(project_root_resolved)
+                except (ValueError, OSError):
+                    continue
+                sources.append(c)
     return sources
 
 
