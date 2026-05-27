@@ -16,8 +16,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `references/pr-recipients.json`; daily-cron workflow
   `.github/workflows/pr-reminders.yml` (configurable `REMINDER_INTERVAL_HOURS`,
   `pull-requests:write` only — never merges or pushes); CLI entry-point
-  `python -m agentteams.pr_management {prompt,remind}`. Plan + audits in
-  `tmp/by-week/2026-W22/`.
+  `python -m agentteams.pr_management {prompt,remind}`.
 
 ## [1.0.0-rc.6] - 2026-05-27
 
