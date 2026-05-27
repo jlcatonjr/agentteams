@@ -35,8 +35,6 @@ Purpose: Canonical guidance for integrating Anthropic Claude Code sub-agent infr
 3. Keep reference and artifact files at existing relative locations unless framework semantics require rename.
 4. Add/maintain tests for CLAUDE.md naming and content transformation.
 
-
-
 ## Observed Upstream Tokens — `claude` (Daily Pipeline)
 
 Recorded by the daily pipeline on `2026-05-27` from `https://docs.anthropic.com/en/docs/claude-code/sub-agents`.
