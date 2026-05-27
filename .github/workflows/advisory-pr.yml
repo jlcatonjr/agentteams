@@ -1,0 +1,131 @@
+name: Daily-Pipeline Advisory PR
+
+# rc.6: opens a PR with the day's in-repo advisory findings
+# (shrink / orphan / budget / prefix-cache / operational-JSON).
+# Does NOT auto-merge — the operator reviews, comments, and decides.
+# Runs after bridge-maintenance (06:55 UTC) and framework-auto-update
+# (07:23 UTC) so any logs they produce are visible.
+
+on:
+  schedule:
+    - cron: "47 7 * * *"
+  workflow_dispatch:
+
+permissions:
+  contents: write
+  pull-requests: write
+
+jobs:
+  open-advisory:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout main
+        uses: actions/checkout@v4
+        with:
+          ref: main
+          fetch-depth: 0
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install package and test dependencies
+        run: pip install -e ".[test]"
+
+      - name: Refresh underlying daily-pipeline logs
+        # The advisory aggregator reads logs the daily pipeline already
+        # writes. If this workflow ran before bridge-maintenance today
+        # (manual dispatch, etc.), regenerate the digest stage so we
+        # don't miss findings.
+        run: |
+          if [[ -f "scripts/daily_pipeline_digest.py" ]]; then
+            python scripts/daily_pipeline_digest.py || true
+          fi
+
+      - name: Build advisory file (if findings)
+        id: build
+        run: python scripts/build_advisory_pr.py
+
+      - name: Check for existing advisory PR with same hash
+        if: steps.build.outputs.findings == 'true'
+        id: dedupe
+        env:
+          GH_TOKEN: ${{ github.token }}
+          PHASH: ${{ steps.build.outputs.hash }}
+        run: |
+          existing=$(gh pr list --state open --search "head:advisory/$PHASH" --json number --jq '.[0].number // empty')
+          if [[ -n "$existing" ]]; then
+            echo "duplicate=true" >> "$GITHUB_OUTPUT"
+            echo "Existing open advisory PR #$existing matches today's findings hash $PHASH; skipping."
+          fi
+
+      - name: Commit advisory file on branch
+        if: steps.build.outputs.findings == 'true' && steps.dedupe.outputs.duplicate != 'true'
+        env:
+          PHASH: ${{ steps.build.outputs.hash }}
+          ADVISORY_PATH: ${{ steps.build.outputs.path }}
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          branch="advisory/$PHASH"
+          git checkout -b "$branch"
+          git add -- "$ADVISORY_PATH"
+          if git diff --cached --quiet; then
+            echo "No diff after add (file unchanged on main?); exiting."
+            exit 0
+          fi
+          git commit -m "advisory: daily-pipeline findings ($PHASH)" \
+                     -m "Generated from in-repo advisory detectors. Awaiting operator review."
+          git push --set-upstream origin "$branch"
+
+      - name: Open PR (no auto-merge — operator review required)
+        if: steps.build.outputs.findings == 'true' && steps.dedupe.outputs.duplicate != 'true'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          PHASH: ${{ steps.build.outputs.hash }}
+          ADVISORY_PATH: ${{ steps.build.outputs.path }}
+          TODAY: ${{ steps.build.outputs.today }}
+        run: |
+          branch="advisory/$PHASH"
+          if ! git ls-remote --exit-code origin "$branch" >/dev/null 2>&1; then
+            echo "Branch $branch was not pushed; nothing to PR."
+            exit 0
+          fi
+          body_file="$(mktemp)"
+          {
+            cat "$ADVISORY_PATH"
+            echo
+            echo "---"
+            echo "Hash: \`$PHASH\`"
+          } > "$body_file"
+          gh pr create \
+            --base main \
+            --head "$branch" \
+            --title "advisory: daily-pipeline findings $TODAY ($PHASH)" \
+            --body-file "$body_file" \
+            --label "advisory" \
+            --label "awaiting-human"
+          # Intentionally NOT calling 'gh pr merge'. This PR awaits
+          # operator review.
+
+      - name: Emit step summary
+        if: always()
+        env:
+          FINDINGS: ${{ steps.build.outputs.findings }}
+          PHASH: ${{ steps.build.outputs.hash }}
+          ADVISORY_PATH: ${{ steps.build.outputs.path }}
+          DUPLICATE: ${{ steps.dedupe.outputs.duplicate }}
+        run: |
+          {
+            echo "## Advisory PR run"
+            echo
+            if [[ "$FINDINGS" != "true" ]]; then
+              echo "No findings today — no PR opened."
+            elif [[ "$DUPLICATE" == "true" ]]; then
+              echo "Findings match an existing open advisory PR (\`$PHASH\`); no new PR opened."
+            else
+              echo "Opened advisory PR for hash \`$PHASH\`."
+              echo "Tracked file: \`$ADVISORY_PATH\`."
+            fi
+          } >> "$GITHUB_STEP_SUMMARY"
