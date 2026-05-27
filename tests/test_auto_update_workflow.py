@@ -64,6 +64,16 @@ def test_workflow_minimal_permissions():
         f"expected exactly contents+pull-requests, got: {permission_lines}"
 
 
+def test_workflow_applies_supervised_labels():
+    """T5.2 / IV.2: auto-PRs must be labeled framework-update and
+    automerge:false so the operator can filter on the discovery surface
+    and so future reviewers can't confuse them with regular PRs.
+    """
+    text = WORKFLOW.read_text(encoding="utf-8")
+    assert '--label "framework-update"' in text
+    assert '--label "automerge:false"' in text
+
+
 def test_workflow_targets_only_main_via_pr():
     text = WORKFLOW.read_text(encoding="utf-8")
     assert "--base main" in text

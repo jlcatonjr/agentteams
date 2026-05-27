@@ -130,4 +130,6 @@ jobs:
             --base main \
             --head "$BRANCH" \
             --title "auto: framework upstream-token observation ($PHASH)" \
-            --body-file "$body_file"
+            --body-file "$body_file" \
+            --label "framework-update" \
+            --label "automerge:false"
