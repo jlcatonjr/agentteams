@@ -64,14 +64,37 @@ def test_workflow_minimal_permissions():
         f"expected exactly contents+pull-requests, got: {permission_lines}"
 
 
-def test_workflow_applies_supervised_labels():
-    """T5.2 / IV.2: auto-PRs must be labeled framework-update and
-    automerge:false so the operator can filter on the discovery surface
-    and so future reviewers can't confuse them with regular PRs.
+def test_workflow_applies_framework_update_label():
+    """T5.2 / IV.2 + rc.4: auto-PRs must be labeled framework-update so
+    the operator can filter on the discovery surface. The automerge:false
+    label was removed in rc.4 when the daily pipeline began implementing
+    revisions automatically; the workflow now merges its own PR
+    immediately after creation.
     """
     text = WORKFLOW.read_text(encoding="utf-8")
     assert '--label "framework-update"' in text
-    assert '--label "automerge:false"' in text
+    assert '--label "automerge:false"' not in text, (
+        "rc.4 removed the automerge:false label; the workflow auto-merges its own PR"
+    )
+
+
+def test_workflow_auto_merges_its_own_pr():
+    """rc.4: the workflow runs `gh pr merge` immediately after creating
+    the PR. CI does not fire on GITHUB_TOKEN-created PRs (GitHub's
+    infinite-loop safeguard), so there is no CI gate to await.
+    """
+    text = WORKFLOW.read_text(encoding="utf-8")
+    assert 'gh pr merge "$pr_num" --merge --delete-branch' in text
+
+
+def test_workflow_emits_post_execution_step_summary():
+    """rc.4: GITHUB_STEP_SUMMARY captures the PR URL, hash, merge commit,
+    and the merged diff so each run log records exactly what landed on main.
+    """
+    text = WORKFLOW.read_text(encoding="utf-8")
+    assert 'GITHUB_STEP_SUMMARY' in text
+    assert 'Auto-update execution report' in text
+    assert 'gh pr diff' in text
 
 
 def test_workflow_targets_only_main_via_pr():
