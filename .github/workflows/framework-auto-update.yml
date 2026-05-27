@@ -128,11 +128,10 @@ jobs:
           } > "$body_file"
           # rc.4: the daily pipeline implements revisions automatically.
           # PRs created by GITHUB_TOKEN do not trigger CI (GitHub's
-          # infinite-loop safeguard), so there is no CI to gate on; merge
-          # immediately. Branch protection still requires a PR (we just
-          # made one); 0 required approvals lets the workflow merge its
-          # own. The merge commit on main fires the normal CI run, which
-          # is the post-merge safety net.
+          # infinite-loop safeguard), nor does the merge event itself.
+          # rc.5 closes the resulting safety-net gap by explicitly
+          # dispatching ci.yml against main after the merge —
+          # workflow_dispatch is exempt from the GITHUB_TOKEN filter.
           pr_url=$(gh pr create \
             --base main \
             --head "$BRANCH" \
@@ -146,6 +145,20 @@ jobs:
           merged_sha=$(gh pr view "$pr_num" --json mergeCommit --jq '.mergeCommit.oid')
           echo "Merged as $merged_sha"
 
+          # rc.5: dispatch CI on main so the broader test matrix runs
+          # against the auto-merge commit. The dispatched run is the
+          # restored post-merge safety net (rc.4 claimed this happened
+          # via the normal push trigger; it does not, due to
+          # GITHUB_TOKEN filtering).
+          ci_run_url=""
+          if gh workflow run ci.yml --ref main; then
+            sleep 3
+            ci_run_url=$(gh run list --workflow=ci.yml --limit 1 --json url --jq '.[0].url' || true)
+            echo "Dispatched CI: $ci_run_url"
+          else
+            echo "WARN: CI dispatch failed; the auto-merge landed but post-merge CI did not fire" >&2
+          fi
+
           # rc.4 post-execution report: emit a step summary so the run
           # log records exactly what landed on main this cycle.
           {
@@ -155,6 +168,7 @@ jobs:
             echo "- Hash: \`$PHASH\`"
             echo "- Merge commit: \`$merged_sha\`"
             echo "- Branch: \`$BRANCH\` (deleted)"
+            echo "- Post-merge CI: $ci_run_url"
             echo
             echo "### Diff scope"
             gh pr diff "$pr_num" --color never | head -200

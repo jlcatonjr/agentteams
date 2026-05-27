@@ -6,7 +6,52 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
-(no changes since 1.0.0-rc.4)
+(no changes since 1.0.0-rc.5)
+
+## [1.0.0-rc.5] - 2026-05-27
+
+Post-merge safety net restored. Drift-detector inventory audited.
+Soak clock resets per pre-release convention; earliest defensible
+promotion to 1.0.0 final is now on or after 2026-06-03 (one week
+after rc.5).
+
+No public-API breaks since rc.4.
+
+### fixed
+
+- **`framework-auto-update.yml` now dispatches `ci.yml` after the
+  auto-merge.** Production test of rc.4 (workflow run 26518916462,
+  merge commit `25afe9f`) revealed that the rc.4 CHANGELOG claim
+  "the merge commit on main fires the normal CI run, which is the
+  post-merge safety net" was wrong: GitHub's GITHUB_TOKEN
+  infinite-loop safeguard suppresses workflow runs caused by
+  GITHUB_TOKEN events, including the merge event itself.
+  Empirical: `gh api .../commits/25afe9f/check-runs` returned
+  empty. rc.5 closes the gap by calling
+  `gh workflow run ci.yml --ref main` after the merge.
+  `workflow_dispatch` is **exempt** from the GITHUB_TOKEN filter,
+  so the dispatched CI run actually fires.
+
+### added
+
+- **`workflow_dispatch:` trigger added to `ci.yml`.** Required by
+  the rc.5 dispatch call above. Side benefit: operators can now
+  manually fire CI against any commit on main.
+- **CI run URL in the auto-update step summary.** The post-execution
+  report now lists the dispatched-CI run URL alongside the PR URL,
+  hash, and merge SHA — single-screen audit per cycle.
+
+### audited (no code change)
+
+- **Drift-detector inventory.** 12 detectors classified across the
+  codebase: 6 auto-implementing (framework upstream drift, security
+  threat-intel, bridge drift, template content, tool-scope at CI
+  time, watchdog auto-issue) and 6 correctly advisory because
+  mechanical auto-fix would be unsafe (shrink, orphan, dual-
+  descriptor, budget, prefix-cache, operational-JSON). Full
+  inventory in
+  `references/plans/rc5-drift-detector-inventory-2026-05-27.plan.md`.
+  No gaps requiring closure.
 
 ## [1.0.0-rc.4] - 2026-05-27
 
