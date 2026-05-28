@@ -79,6 +79,10 @@ python -m src.graph .github/agents/ --output .github/agents/references/pipeline-
 
 ---
 
+<!-- agentteams-lint: no-memory-index OK — the consultation protocol is
+     stated authoritatively as Invariant Rule 2 below rather than via the
+     canonical v=2 fence; @navigator IS the source of the protocol that
+     audit/validation templates' fences reference. -->
 ## Invariant Rules
 
 1. **Structural lookups never come from memory.** For *structural / current-file* queries ("where is `foo.py`?", "what files are in module Y?", "which agent owns workstream Z?"), always read the project map or search the file system. Do not consult the memory index for these — it is a history layer, not a structural index.

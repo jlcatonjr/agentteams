@@ -60,6 +60,9 @@ Use only two authoritative source classes:
 1. Planning artifacts in canonical week-organized storage `tmp/by-week/YYYY-Www/` plus legacy undated artifacts in `tmp/` (`*.plan.md`, `*.steps.csv`)
 2. Git history from this repository (commit metadata, stats, and diffs)
 
+<!-- agentteams-lint: no-memory-index OK — protocol is encoded inline below
+     with template-specific weekly/monthly framing rather than the canonical
+     v=2 fence; new audit/validation templates should use the fence instead. -->
 ### Memory-index consultation (weekly / monthly only)
 
 When generating a **weekly** or **monthly** summary, query `references/memory-index.json` **before** scanning the filesystem for prior weeks' summaries:

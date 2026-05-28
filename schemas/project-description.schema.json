@@ -290,6 +290,16 @@
         }
       }
     },
+    "memory_index_extra_dirs": {
+      "type": "array",
+      "description": "Optional consumer-declared extra source directories or glob patterns merged into the durable memory index in addition to the built-in defaults (workSummaries/, docs_src/, references/, CHANGELOG.md, README.md). Each entry is a project-relative string: a directory (recursively scanned for *.md) or a glob (literal expansion). Absolute paths, traversal escapes, and symlinked escapes outside the project root are rejected. See docs_src/api-reference/memory-index.md.",
+      "items": { "type": "string" },
+      "examples": [
+        ["agentteams/templates", "examples"],
+        ["tools", "services/docs"],
+        ["docs/**/*.md"]
+      ]
+    },
     "conversion_pipeline": {
       "type": "string",
       "description": "Command or tool used to convert primary deliverables to output format. Used as {CONVERSION_PIPELINE} in format-converter agent.",

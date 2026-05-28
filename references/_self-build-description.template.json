@@ -53,6 +53,10 @@
   "style_reference": null,
   "reference_db_path": null,
   "reference_key_convention": "AuthorYear",
+  "memory_index_extra_dirs": [
+    "agentteams/templates",
+    "examples"
+  ],
   "tools": [
     {
       "name": "Python",

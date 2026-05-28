@@ -105,3 +105,39 @@ This prevents `--update --merge` from force-propagating post-production routing/
 2. Every auto-resolved placeholder must map to a key in `_build_placeholder_map()` in `agentteams/analyze.py`
 3. Never use `{UPPER_SNAKE_CASE}` for a value that cannot be auto-resolved — use `{MANUAL:}` instead
 4. Do not introduce new auto-resolved placeholders without adding them to `PLACEHOLDER-CONVENTIONS.md` and `agentteams/analyze.py`
+
+---
+
+## Extending the Memory Index
+
+The durable memory index (`references/memory-index.json`) is built from a fixed default source set: `workSummaries/`, `docs_src/`, `references/`, plus top-level docs (`CHANGELOG.md`, `README.md`, `build-team-plan.md`). Consumer projects whose agents frequently grep over additional history-like markdown trees can declare extra source directories in their `_build-description.json`:
+
+```json
+{
+  "memory_index_extra_dirs": [
+    "tools",
+    "services/docs",
+    "docs/**/*.md"
+  ]
+}
+```
+
+Each entry is a project-relative string. Bare directories are recursively scanned for `*.md`; entries containing `*`, `?`, or `[` are expanded as globs literally. Absolute paths, traversal that escapes the project root, and symlinked escapes are rejected at index-build time (see `build_team._memory_index_sources`).
+
+**When to add entries.** Add a directory if it (a) contains durable, history-bearing markdown that current-state grep tooling regularly searches, and (b) is not already covered by a default source. Do *not* add code or test directories — the index is a *history layer*, not a structural index (see Invariant Rule 1 in `agentteams/templates/universal/navigator.template.md`).
+
+**Reference example.** agentteams itself declares `agentteams/templates` and `examples` in its own `_build-description.json`, so prior-art queries against template phrasing and example briefs surface in the index alongside work summaries.
+
+---
+
+## Memory-Index Consultation Fence
+
+Audit / validation / research agents must carry a fenced `<!-- AGENTTEAMS:BEGIN memory_index_consultation v=2 -->` … `<!-- AGENTTEAMS:END memory_index_consultation -->` block when their workflow reasons over prior decisions, temporal/causal claims, or other historical content. A template-author lint (`tests/test_template_memory_index_fence.py`) scans for trigger phrases — "prior decision", "when did", "history of", "previously", "what did we decide" — and fails CI if a matching template lacks the fence.
+
+If a template legitimately uses one of those phrases without needing the fence (e.g. it discusses history in passing rather than acting on it), add an inline escape marker anywhere in the body:
+
+```html
+<!-- agentteams-lint: no-memory-index OK -->
+```
+
+The marker disables the lint for that file. Use it sparingly; the default expectation is that decision-bearing agents follow the consultation protocol.
