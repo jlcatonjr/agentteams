@@ -40,6 +40,78 @@ Each build records a manifest fingerprint and a `fingerprint_algo_version` in `b
 
 ---
 
+## Picking the Right Descriptor
+
+Before running `--update`, identify the **canonical project description** and pass it as `--description`. Choosing the wrong file causes silent, file-spanning data loss that `--merge` will not flag.
+
+### Canonical vs. operator descriptors
+
+A project may have more than one descriptor on disk:
+
+| File | Role | Use with `--update`? |
+|---|---|---|
+| `.agentteams/brief.json` | **Canonical brief** — schema-valid against `schemas/project-description.schema.json`; carries the full `components`, `tools`, `selected_archetypes`, `memory_index_extra_dirs`, output-directory fields, etc. | **Yes** when present |
+| `brief.json` (project root) | Same role as `.agentteams/brief.json` for older layouts | Yes when present |
+| `.github/agents/_build-description.json` | Operator-side scaffold created by setup; may be a thin stub (project_name + project_goal + governance_agents) or may be a full mirror of the brief | Only if it is a full mirror; otherwise treat as stale |
+
+If a `.agentteams/README.md` exists it usually quotes the exact `agentteams --update --merge --description …` command the project expects. Run that command verbatim instead of guessing.
+
+### Failure modes from running `--update` against a thin descriptor
+
+A descriptor missing fields the renderer needs will silently substitute defaults inside template-fenced regions. Observed failure modes include:
+
+- **`workstream_source_map` fence renders as `TBD`** when `components[].output_file` is absent — overwrites previously concrete paths.
+- **`copilot-instructions.md` directory rows shift** to schema defaults (`./` → `src/`, `outputs/` → `build/`) when `primary_output_dir` / `build_output_dir` are absent.
+- **Pipeline graph drops archetypes** (e.g. `visual-designer`, `retrieval-integrator`) when `selected_archetypes` is absent and analyzer auto-selection differs from the historical brief.
+- **Memory index loses extra-dir coverage** (e.g. `docs/`, `docs/decisions/`) when `memory_index_extra_dirs` is absent. The agent files themselves are preserved, but their content surfaces less in `--query-index` results.
+
+Because `--merge` only re-renders inside fences, these regressions are valid merges from the renderer's perspective — there is no warning. The only signal is the diff.
+
+### Pre-update verification
+
+Before the first `--update` against an unfamiliar project:
+
+```bash
+# 1. Confirm which descriptor is canonical
+ls .agentteams/brief.json brief.json .github/agents/_build-description.json 2>/dev/null
+cat .agentteams/README.md 2>/dev/null | head -40
+
+# 2. Spot-check the descriptor has the fields the analyzer needs
+python3 -c "import json; d=json.load(open('PATH/TO/DESCRIPTOR')); \
+  print('keys:', list(d.keys())); \
+  print('components have output_file:', \
+    all('output_file' in c for c in d.get('components', [])))"
+
+# 3. Dry-run and inspect for unexpected regressions
+agentteams --update --merge --dry-run \
+  --description .agentteams/brief.json \
+  --project . --output .github/agents --no-scan --yes
+```
+
+If the dry-run shows fenced regions reverting to `TBD`, generic defaults, or dropping documented archetypes, **stop**. The descriptor is wrong or incomplete; resolve before writing.
+
+### Stash-first debugging when `--update` regresses
+
+If a non-dry-run `--update` has already written suspicious output:
+
+```bash
+# 1. Stash the bad output so working tree returns to HEAD
+git stash push -u -m "pre-debug --update output (<failure summary>)"
+
+# 2. Identify the missing descriptor fields by comparing the canonical brief
+#    against the descriptor you ran with — fix the descriptor.
+
+# 3. Re-run --update from the now-clean working tree
+
+# 4. If the new output is clean (only justified timestamp/fingerprint churn
+#    and intended template changes), drop the debug stash:
+git stash drop stash@{0}
+```
+
+This pattern is safer than `git restore` because the bad output remains recoverable until the stash is explicitly dropped.
+
+---
+
 ## Update Deployment Protocol
 
 For production teams, follow this sequence to ensure safe updates:
