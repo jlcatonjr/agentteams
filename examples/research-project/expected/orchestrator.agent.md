@@ -32,7 +32,7 @@ agents:
   - tool-pandoc
   - ch01-introduction-expert
   - ch02-literature-expert
-model: ["Claude Sonnet 4.6 (copilot)"]
+model: ["Claude Opus 4.8 (copilot)"]
 handoffs:
   - label: Produce / Revise Deliverable
     agent: primary-producer

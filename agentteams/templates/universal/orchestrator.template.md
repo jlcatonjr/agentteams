@@ -4,7 +4,7 @@ description: "Coordinates all agent operations for {PROJECT_NAME}: routes work t
 user-invokable: true
 tools: ['read', 'edit', 'search', 'execute', 'todo', 'agent']
 agents:{AGENT_SLUG_LIST}
-model: ["Claude Sonnet 4.6 (copilot)"]
+model: ["Claude Opus 4.8 (copilot)"]
 handoffs:
   - label: Produce / Revise Deliverable
     agent: primary-producer

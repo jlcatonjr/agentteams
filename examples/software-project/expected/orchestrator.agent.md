@@ -27,7 +27,7 @@ agents:
   - tool-postgresql
   - auth-module-expert
   - tasks-api-expert
-model: ["Claude Sonnet 4.6 (copilot)"]
+model: ["Claude Opus 4.8 (copilot)"]
 handoffs:
   - label: Produce / Revise Deliverable
     agent: primary-producer
