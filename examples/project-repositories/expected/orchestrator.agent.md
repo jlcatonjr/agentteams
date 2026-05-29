@@ -32,7 +32,7 @@ agents:
   - prairie-prosperity-expert
   - sugarscape-expert
   - visualize-energy-data-expert
-model: ["Claude Sonnet 4.6 (copilot)"]
+model: ["Claude Opus 4.8 (copilot)"]
 handoffs:
   - label: Produce / Revise Deliverable
     agent: primary-producer

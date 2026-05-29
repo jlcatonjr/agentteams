@@ -114,6 +114,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `--bridge-refresh` clobbered user-authored `CLAUDE.md` and
   `.claude/*` content.
 
+### changed
+
+- **Orchestrator model pinned to Claude Opus 4.8.** The tier-1
+  Orchestrator template front matter now declares
+  `model: ["Claude Opus 4.8 (copilot)"]` (was Claude Sonnet 4.6).
+  Scoped to the orchestrator only; all other agent templates remain on
+  Sonnet 4.6. Affects newly generated and re-rendered teams; existing
+  downstream teams pick it up on the next `--update --merge`. Example
+  `expected/orchestrator.agent.md` snapshots regenerated. No CLI/Python-API/
+  schema changes.
+
 ### fixed
 
 - **`emit`: preserve lost fence bodies as `.lost.<sid>.md`
