@@ -165,7 +165,7 @@ The following eleven agents are included in every generated team, regardless of 
 
 76. **`@navigator`** — Project structure mapping, file location queries, dependency tracking (read-only)
 77. **`@security`** — Highest-priority sentinel; clears destructive operations, credential exposure, and external writes (read-only)
-78. **`@code-hygiene`** — Architecture auditor; file hygiene, duplication, script lifecycle, agent doc quality — CH-01 through CH-20+ (read-only)
+78. **`@code-hygiene`** — Architecture auditor; file hygiene, duplication, script lifecycle, agent doc quality — invariant CH-01 through CH-20 plus project extension rules CH-21–CH-24 (Testing, Type Safety, Defensive Programming; CH-24: `try`/`except`/`finally` is a last resort — encode expected conditions in dictionaries/guards and fail hard, reinforcing CH-23 Fail Fast) (read-only)
 79. **`@adversarial`** — Presupposition critic; challenges plans and hidden assumptions before execution (read-only)
 80. **`@conflict-auditor`** — Detects logical inconsistencies across all output files; logs findings (read + log)
 81. **`@conflict-resolution`** — Makes ACCEPT/REJECT/REVISE decisions on flagged conflicts (read + edit)
@@ -188,81 +188,81 @@ Workflows are step sequences embedded in the generated Orchestrator agent. Every
 91. **Workflow 5 — Consistency Review** — `@adversarial` challenge → cross-file consistency audit → technical validation → `@agent-updater`
 92. **Workflow 6 — Documentation Maintenance** — Sync agent docs → refactor check → consistency audit
 93. **Workflow 7 — Cleanup** — Identify stale artifacts → `@adversarial` review → `@security` clearance → delete → update docs
-94. **Workflow 8 — Code Hygiene Audit** — CH-01–CH-20 audit → `@adversarial` guard before deletion plan → conditional cleanup/refactor
+94. **Workflow 8 — Code Hygiene Audit** — CH-01–CH-24 audit (CH-01–CH-20 invariant + CH-21–CH-24 project extensions) → `@adversarial` guard before deletion plan → conditional cleanup/refactor
 95. **Workflow 9 — Cross-Repository Coordination** — Impact assessment → approved updates → adjacent-repo writes (security-cleared) → consistency audit
 96. **Workflow 10 — Plan Documentation & Review** — Plan status scan → pre-execution truth check via `@technical-validator` → surface blocked steps
 97. **Workflow 10B — Work Summary Reporting** — Generate daily/weekly/monthly summaries from plan artifacts and git history, then audit them
-99. **Workflow 10C — Post-Production Audit Verification (Optional)** — User-editable extension workflow for outcome verification after implementation claims; runs `@post-production-auditor` + adversarial/conflict checks; blocks closeout on `FAIL`/`INCONCLUSIVE`
-98. **Workflow 11 — Final Check (Part A)** — Scan current plan's `steps.csv` for `pending`/`blocked` rows; create audited sub-plans for each
-98. **Workflow 11 — Final Check (Part B)** — Scan `CHANGELOG.md` Known Issues, `tmp/by-week/YYYY-Www/` plan CSVs (legacy: `tmp/` root), and `git status` for at-large open issues; subject summaries to `@adversarial` + `@conflict-auditor`
+98. **Workflow 10C — Post-Production Audit Verification (Optional)** — User-editable extension workflow for outcome verification after implementation claims; runs `@post-production-auditor` + adversarial/conflict checks; blocks closeout on `FAIL`/`INCONCLUSIVE`
+99. **Workflow 11 — Final Check (Part A)** — Scan current plan's `steps.csv` for `pending`/`blocked` rows; create audited sub-plans for each
+100. **Workflow 11 — Final Check (Part B)** — Scan `CHANGELOG.md` Known Issues, `tmp/by-week/YYYY-Www/` plan CSVs (legacy: `tmp/` root), and `git status` for at-large open issues; subject summaries to `@adversarial` + `@conflict-auditor`
 
 ---
 
 ## Governance Infrastructure
 
-100. **Constitutional Rules** — Immutable rules encoded in the Orchestrator template: security clearance gates, code-hygiene before merge, conflict audit after multi-file sessions, adversarial review before irreversible changes
-101. **Authority Hierarchy** — Explicit precedence ordering encoded in every generated Orchestrator (template library → schemas → pipeline source → placeholder conventions → implementation plan)
-102. **Automatic `@agent-updater` Routing in Documentation-Impact Workflows** — Routed in Workflows 1, 2, 3, 5, 6, 7, 8, and 9 when knowledge-mutating or coordination changes occur
-103. **`@adversarial` Guards in Audit Workflows** — `@adversarial` runs as step 1 of Workflow 5 and step 2 of Workflow 8 to prevent stale-assumption conclusions
-104. **Pre-Execution Truth Check** — `@technical-validator` must verify factual claims in each plan step before it is marked `in_progress`
-105. **Drift-as-Trigger** — An explicit trigger in `@agent-updater` trigger tables: drift detected by `--check` requires re-render and re-verify before the next workflow
-106. **Initialization-as-Trigger** — First successful team generation is an explicit lifecycle trigger: it establishes the baseline inventory and trigger corpus used by future update and drift logic
-107. **Update Lifecycle Trigger Contract** — Canonical `--update --merge` runs must reconcile drift, emit newly required files, preserve manual values, and preserve user-authored content outside fenced regions
-108. **Missing Expected Output Recovery Trigger** — During update, absent expected standard outputs are treated as drift and must be restored even if template hashes are unchanged
-109. **Cross-Repository Security Rule** — Any write outside this project's configured primary output directory must be assessed by `@repo-liaison` and cleared by `@security`
-110. **User-Editable Gap Safety Pattern** — Optional routing rows and optional workflow extensions (such as 10C) must be added outside FENCED sections so `--update --merge` does not force-propagate them to teams that do not include the required agent
-111. **Post-Production Closure Gate Artifacts** — Optional post-production audits can emit `closure_gate_status.json`, `capability_check.json`, and `decision_replay_packet.json` to support fail-closed closeout decisions and replay-auditability
+101. **Constitutional Rules** — Immutable rules encoded in the Orchestrator template: security clearance gates, code-hygiene before merge, conflict audit after multi-file sessions, adversarial review before irreversible changes
+102. **Authority Hierarchy** — Explicit precedence ordering encoded in every generated Orchestrator (template library → schemas → pipeline source → placeholder conventions → implementation plan)
+103. **Automatic `@agent-updater` Routing in Documentation-Impact Workflows** — Routed in Workflows 1, 2, 3, 5, 6, 7, 8, and 9 when knowledge-mutating or coordination changes occur
+104. **`@adversarial` Guards in Audit Workflows** — `@adversarial` runs as step 1 of Workflow 5 and step 2 of Workflow 8 to prevent stale-assumption conclusions
+105. **Pre-Execution Truth Check** — `@technical-validator` must verify factual claims in each plan step before it is marked `in_progress`
+106. **Drift-as-Trigger** — An explicit trigger in `@agent-updater` trigger tables: drift detected by `--check` requires re-render and re-verify before the next workflow
+107. **Initialization-as-Trigger** — First successful team generation is an explicit lifecycle trigger: it establishes the baseline inventory and trigger corpus used by future update and drift logic
+108. **Update Lifecycle Trigger Contract** — Canonical `--update --merge` runs must reconcile drift, emit newly required files, preserve manual values, and preserve user-authored content outside fenced regions
+109. **Missing Expected Output Recovery Trigger** — During update, absent expected standard outputs are treated as drift and must be restored even if template hashes are unchanged
+110. **Cross-Repository Security Rule** — Any write outside this project's configured primary output directory must be assessed by `@repo-liaison` and cleared by `@security`
+111. **User-Editable Gap Safety Pattern** — Optional routing rows and optional workflow extensions (such as 10C) must be added outside FENCED sections so `--update --merge` does not force-propagate them to teams that do not include the required agent
+112. **Post-Production Closure Gate Artifacts** — Optional post-production audits can emit `closure_gate_status.json`, `capability_check.json`, and `decision_replay_packet.json` to support fail-closed closeout decisions and replay-auditability
 
 ---
 
 ## Interoperability
 
-107. **`convert` Module** — Direct format migration between framework outputs (`copilot-vscode` ↔ `copilot-cli` ↔ `claude`)
-108. **`--convert-from` Flag** — Convert an existing agent team to a different framework format
-109. **File Classification** — Auto-detect file role (agent, instruction, reference) for correct translation
-110. **`interop` Module** — Canonical Agent Interface (CAI) normalization and compatibility pipeline
-111. **`--interop-from` Flag** — Run the CAI interop pipeline against an existing team
-112. **`bridge` Module** — Lightweight runtime compatibility bridge; generate bridge artifacts without regenerating sources
-113. **`--bridge-from` Flag** — Generate bridge artifacts from a source canonical team
-114. **Runtime Handoff Manifest** — `references/runtime-handoffs.json`; emitted when handoffs are extracted from non-VS Code adapters, consumed by bridge layers and external tooling
+113. **`convert` Module** — Direct format migration between framework outputs (`copilot-vscode` ↔ `copilot-cli` ↔ `claude`)
+114. **`--convert-from` Flag** — Convert an existing agent team to a different framework format
+115. **File Classification** — Auto-detect file role (agent, instruction, reference) for correct translation
+116. **`interop` Module** — Canonical Agent Interface (CAI) normalization and compatibility pipeline
+117. **`--interop-from` Flag** — Run the CAI interop pipeline against an existing team
+118. **`bridge` Module** — Lightweight runtime compatibility bridge; generate bridge artifacts without regenerating sources
+119. **`--bridge-from` Flag** — Generate bridge artifacts from a source canonical team
+120. **Runtime Handoff Manifest** — `references/runtime-handoffs.json`; emitted when handoffs are extracted from non-VS Code adapters, consumed by bridge layers and external tooling
 
 ---
 
 ## Bridge Automation
 
-115. **`run_daily_bridge_maintenance.sh`** — Daily bridge refresh/check script that halts the run when the security-maintenance preflight fails and continues with warnings only for non-critical bridge refresh/check subtasks
-116. **`bridge-maintenance.yml` CI Workflow** — GitHub Actions workflow for daily automated bridge maintenance
-117. **`bridge-watchdog.yml` CI Workflow** — Staleness monitoring; creates deduplicated GitHub issues when drift is detected
-118. **Bridge Staleness Detection** — Compare bridge artifacts against source team; surface divergence
-119. **Deduplicated Issue Creation** — Watchdog suppresses duplicate GitHub issues for the same staleness event
-120. **CI Fallback Mechanism** — Bridge refresh/check subtasks continue with warnings, but security-maintenance preflight failures abort the workflow
-121. **Snapshot Archive** — Pre-update snapshots stored in `references/plans/snapshots-*/` for reversible rollback
+121. **`run_daily_bridge_maintenance.sh`** — Daily bridge refresh/check script that halts the run when the security-maintenance preflight fails and continues with warnings only for non-critical bridge refresh/check subtasks
+122. **`bridge-maintenance.yml` CI Workflow** — GitHub Actions workflow for daily automated bridge maintenance
+123. **`bridge-watchdog.yml` CI Workflow** — Staleness monitoring; creates deduplicated GitHub issues when drift is detected
+124. **Bridge Staleness Detection** — Compare bridge artifacts against source team; surface divergence
+125. **Deduplicated Issue Creation** — Watchdog suppresses duplicate GitHub issues for the same staleness event
+126. **CI Fallback Mechanism** — Bridge refresh/check subtasks continue with warnings, but security-maintenance preflight failures abort the workflow
+127. **Snapshot Archive** — Pre-update snapshots stored in `references/plans/snapshots-*/` for reversible rollback
 
 ---
 
 ## Cross-Repository Support
 
-122. **`@repo-liaison` Agent** — Manages cross-repository impact assessment, updates, and orchestrator coordination
-123. **`references/adjacent-repos.md`** — Living record of adjacent repositories with changelog entries
-124. **Protocol 1 — Impact Assessment** — Evaluate which adjacent repos are affected by a proposed change; produce an Impact Report
-125. **Protocol 2 — Adjacent Updates** — Apply approved updates to neighboring project repos (requires `@security` clearance on each write)
-126. **Protocol 3 — Orchestrator Coordination** — Formal coordination request between independent orchestrators managing different repositories
-127. **`@repo-liaison` in Constitutional Rules** — Any write outside `src/` must be assessed by `@repo-liaison` before `@security` clearance can be granted
-128. **`orchestrator-workflows.reference.md`** — Reference guide documenting the baseline workflow set plus optional extension workflows (for example 10C when configured); kept in sync by `@agent-updater`
+128. **`@repo-liaison` Agent** — Manages cross-repository impact assessment, updates, and orchestrator coordination
+129. **`references/adjacent-repos.md`** — Living record of adjacent repositories with changelog entries
+130. **Protocol 1 — Impact Assessment** — Evaluate which adjacent repos are affected by a proposed change; produce an Impact Report
+131. **Protocol 2 — Adjacent Updates** — Apply approved updates to neighboring project repos (requires `@security` clearance on each write)
+132. **Protocol 3 — Orchestrator Coordination** — Formal coordination request between independent orchestrators managing different repositories
+133. **`@repo-liaison` in Constitutional Rules** — Any write outside `src/` must be assessed by `@repo-liaison` before `@security` clearance can be granted
+134. **`orchestrator-workflows.reference.md`** — Reference guide documenting the baseline workflow set plus optional extension workflows (for example 10C when configured); kept in sync by `@agent-updater`
 
 ---
 
 ## Drift Trust & Delivery Gating
 
-129. **`FINGERPRINT_ALGO_VERSION` Constant** — Module-level integer in `agentteams.drift` recording the version of the manifest-fingerprint algorithm; recorded into `build-log.json` on every write and consulted on `--check` / `--update` to migrate existing teams when fingerprint semantics change
-130. **Algo-Bump Migration Mechanism** — `compute_structural_diff` detects `fingerprint_algo_version` mismatch between the stored build-log and the current module value, sets `manifest_changed`, and promotes affected files with `_reason = "fingerprint algo version bumped"` for a one-shot re-evaluation; legacy logs missing the field do not trigger promotion on their own
-131. **Observable Baseline Self-Heal on `--update`** — When an `--update` run finds no material drift but the recorded fingerprint or algo version is stale, the build-log baseline is refreshed and the run prints `✓  Healed build-log baseline (no material drift; fingerprint refreshed).`; heal occurs before delivery-receipt attestation
-132. **`refine_manifest_promotion` Render-Faithful Reconciliation** — Pure public function in `agentteams.drift` that demotes fingerprint-only promotions whose rendered content matches disk byte-for-byte; caller supplies a `content_matches(path)` closure; preserves `manifest_changed` as telemetry
-133. **`--check` Option C Render-Faithful Mode** — When the structural diff sets `manifest_changed` with a manifest-promotion reason, `--check` runs the full render pipeline (`render.render_all` → framework adapter → handoff/graph append) and applies `refine_manifest_promotion` against a content-match closure mirroring `--update`'s, eliminating false-positive drift signals
-134. **`--check` / `--update --dry-run` Parity Contract** — `--check` and `--update --dry-run` report the same `has_changes` set for the same inputs; enforced by `tests/test_integration.py::test_check_parity_with_update_dry_run`
-135. **Delivery Receipt Artifact** — `references/delivery-receipt.json` written after every successful `--update` (non-dry-run) recording `artifact_type`, `receipt_schema_version`, `delivered_at`, `project_name`, `framework`, `manifest_fingerprint`, and `fingerprint_algo_version`; heal-first-attest-second order ensures the receipt records the post-heal state; write failures warn on stderr but do not fail the run; receipt file is excluded from drift detection
-136. **`schemas/delivery-receipt.schema.json`** — Draft-07 JSON Schema for the delivery receipt; `additionalProperties: false`; top-level discriminator is `artifact_type` (const `"delivery-receipt"`); `receipt_schema_version` const `"1.0"`
-137. **`docs_src/delivery-procedure.md` Operator Guide** — Documents the heal/attest order, receipt schema, and operator procedure for verifying a delivered update; registered under Guides in `mkdocs.yml`
+135. **`FINGERPRINT_ALGO_VERSION` Constant** — Module-level integer in `agentteams.drift` recording the version of the manifest-fingerprint algorithm; recorded into `build-log.json` on every write and consulted on `--check` / `--update` to migrate existing teams when fingerprint semantics change
+136. **Algo-Bump Migration Mechanism** — `compute_structural_diff` detects `fingerprint_algo_version` mismatch between the stored build-log and the current module value, sets `manifest_changed`, and promotes affected files with `_reason = "fingerprint algo version bumped"` for a one-shot re-evaluation; legacy logs missing the field do not trigger promotion on their own
+137. **Observable Baseline Self-Heal on `--update`** — When an `--update` run finds no material drift but the recorded fingerprint or algo version is stale, the build-log baseline is refreshed and the run prints `✓  Healed build-log baseline (no material drift; fingerprint refreshed).`; heal occurs before delivery-receipt attestation
+138. **`refine_manifest_promotion` Render-Faithful Reconciliation** — Pure public function in `agentteams.drift` that demotes fingerprint-only promotions whose rendered content matches disk byte-for-byte; caller supplies a `content_matches(path)` closure; preserves `manifest_changed` as telemetry
+139. **`--check` Option C Render-Faithful Mode** — When the structural diff sets `manifest_changed` with a manifest-promotion reason, `--check` runs the full render pipeline (`render.render_all` → framework adapter → handoff/graph append) and applies `refine_manifest_promotion` against a content-match closure mirroring `--update`'s, eliminating false-positive drift signals
+140. **`--check` / `--update --dry-run` Parity Contract** — `--check` and `--update --dry-run` report the same `has_changes` set for the same inputs; enforced by `tests/test_integration.py::test_check_parity_with_update_dry_run`
+141. **Delivery Receipt Artifact** — `references/delivery-receipt.json` written after every successful `--update` (non-dry-run) recording `artifact_type`, `receipt_schema_version`, `delivered_at`, `project_name`, `framework`, `manifest_fingerprint`, and `fingerprint_algo_version`; heal-first-attest-second order ensures the receipt records the post-heal state; write failures warn on stderr but do not fail the run; receipt file is excluded from drift detection
+142. **`schemas/delivery-receipt.schema.json`** — Draft-07 JSON Schema for the delivery receipt; `additionalProperties: false`; top-level discriminator is `artifact_type` (const `"delivery-receipt"`); `receipt_schema_version` const `"1.0"`
+143. **`docs_src/delivery-procedure.md` Operator Guide** — Documents the heal/attest order, receipt schema, and operator procedure for verifying a delivered update; registered under Guides in `mkdocs.yml`
 
 ---
 

@@ -128,6 +128,37 @@ All function and class inputs must be type-checked (statically, at runtime, or b
 
 Invalid inputs must raise explicit errors. Invalid data must never pass silently, and implicit fallback behavior that masks bad inputs is prohibited.
 
+### CH-24 — Exception Handling Is a Last Resort; Encode Conditions Explicitly
+
+**Category:** Defensive Programming
+**Severity:** Critical
+
+`try`/`except`/`finally` is the *last* resort, not the first. Broad or speculative exception handling hides the moment a program breaks, which delays the iterative debug-and-test cycle that depends on knowing immediately that something is wrong.
+
+**Preferred order of control flow:**
+
+1. **Encode expected conditions in data.** Map valid cases in a dictionary / lookup table / dispatch map. Membership and key lookups make the set of handled cases explicit and reviewable.
+2. **Guard with explicit checks, then fail hard.** Validate up front and `raise` (or assert) on the unexpected — see [[CH-23]]. A loud failure is a working failure: it points straight at the defect.
+3. **Use `try`/`except` only for genuinely unavoidable external failures** — I/O, network, subprocess, third-party calls whose failure modes cannot be predicted by inspection.
+
+**Prohibited patterns:**
+
+- Bare `except:` or `except Exception:` that swallows or logs-and-continues, hiding the real failure.
+- `try`/`except` used as flow control where a dictionary lookup, membership test, or `if`/`elif` chain would express the condition directly.
+- `except` blocks that return a default / fallback value, masking that the program is in a broken state.
+- `finally` used to paper over partial failures instead of letting the error propagate.
+
+**Required when `try`/`except` is genuinely warranted:**
+
+- Catch the *narrowest* applicable exception type, never a bare or blanket catch.
+- Either re-raise (optionally wrapped with context) or handle the specific, known recoverable case — never silently continue.
+
+**Enforcement check (illustrative):**
+```
+grep -rn "except:\|except Exception" html/chapters/
+```
+Each hit must be justified as an unavoidable external-failure boundary; otherwise it is a violation. Prefer a dictionary-driven dispatch or an explicit guard that raises.
+
 <!-- Example:
 ### CH-21 — Project-Specific Rule Name
 
