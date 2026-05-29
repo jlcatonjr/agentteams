@@ -113,6 +113,24 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   learned from the 2026-05-27 information-loss incident where
   `--bridge-refresh` clobbered user-authored `CLAUDE.md` and
   `.claude/*` content.
+- **Code-hygiene rule CH-24 — Exception Handling Is a Last Resort.**
+  New invariant extension rule (Defensive Programming, **Critical**) in
+  the `@code-hygiene` agent: `try`/`except`/`finally` is reserved for
+  genuinely unavoidable external failures (I/O, network, subprocess,
+  third-party calls). Expected conditions must instead be encoded in
+  dictionaries / lookup tables / explicit guards that **fail hard** on
+  the unexpected, so a broken program surfaces immediately rather than
+  being masked by broad exception handling — preserving the fast
+  iterative debug-and-test cycle. Reinforces CH-23 (Fail Fast on Invalid
+  Inputs). Added to `agentteams/templates/universal/code-hygiene.template.md`
+  (rule table, consult trigger, delegation row, mandatory-rule bullet),
+  the full enforcement section in
+  `agentteams/templates/domain/code-hygiene-rules-reference.template.md`
+  (preferred control-flow order, prohibited patterns, narrow-catch
+  requirements, illustrative `grep` check), and the Unix-philosophy
+  mapping (`unix-philosophy-mapping.template.md`, Tier 3 — Transparency +
+  Defensive Programming). Example `expected/` snapshots regenerated for
+  all four example teams.
 
 ### fixed
 

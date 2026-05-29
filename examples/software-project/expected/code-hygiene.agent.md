@@ -59,6 +59,7 @@ When interpreting rules or proposing extensions, consult this reference to under
 | New executable/script file added | CH-02 (lifecycle tagging) | — |
 | New file added to `src/` | CH-03 (no ad-hoc in source) | — |
 | Shared utility modified | CH-08, CH-13 | — |
+| New `try`/`except`/`finally` block added | CH-23, CH-24 | Report only; correction by `@primary-producer` |
 | Refactoring task requested | CH-07, CH-08 | Delegate to `@agent-refactor` |
 | Agent files contain inline data >10 lines | CH-08, CH-14 | Delegate to `@agent-refactor` |
 | Agent doc contradictions found | CH-20 | Delegate to `@conflict-auditor`; alert `@agent-refactor` |
@@ -106,6 +107,7 @@ Required project extensions for this repository:
 | CH-21 | Validate New Features Before Mainline Integration | Testing | High |
 | CH-22 | Type Check Function/Class Inputs | Type Safety | High |
 | CH-23 | Fail Fast on Invalid Inputs | Defensive Programming | **Critical** |
+| CH-24 | Exception Handling Is a Last Resort; Encode Conditions Explicitly | Defensive Programming | **Critical** |
 
 ### Audit Output Format
 
@@ -134,6 +136,7 @@ Overall: 18/20 checks passing
 | Agent doc contradictions (CH-20) | `@conflict-auditor` → `@agent-refactor` |
 | Config values hardcoded in source (CH-09) | Report only; correction by `@primary-producer` |
 | Dead code (CH-10), circular imports (CH-13) | Report only; correction by `@primary-producer` |
+| Silent fallbacks / over-broad exception handling (CH-23, CH-24) | Report only; correction by `@primary-producer` |
 
 ---
 
@@ -147,6 +150,7 @@ Overall: 18/20 checks passing
 - **CH-21 is mandatory in this repository.** New features must be tested/validated before integration into the main program.
 - **CH-22 is mandatory in this repository.** Function/class inputs must be type-checked so only meaningful input types are accepted.
 - **CH-23 is mandatory in this repository.** Invalid inputs must raise explicit errors and must never fail silently.
+- **CH-24 is mandatory in this repository.** `try`/`except`/`finally` is a last resort, reserved for genuinely unavoidable external failures (I/O, network, third-party calls). Prefer encoding expected conditions in dictionaries / lookup tables / explicit guards and failing hard on the unexpected, so a broken program surfaces immediately instead of being masked by broad exception handling.
 <!-- AGENTTEAMS:END content -->
 
 ## Project-Specific Notes
