@@ -37,7 +37,7 @@ Purpose: Canonical guidance for integrating Anthropic Claude Code sub-agent infr
 
 ## Observed Upstream Tokens — `claude` (Daily Pipeline)
 
-Recorded by the daily pipeline on `2026-05-31` from `https://docs.anthropic.com/en/docs/claude-code/sub-agents`.
+Recorded by the daily pipeline on `2026-06-01` from `https://docs.anthropic.com/en/docs/claude-code/sub-agents`.
 
 - Upstream tokens observed: model, name, tools
 - Upstream locations observed: .claude/agents, CLAUDE.md
