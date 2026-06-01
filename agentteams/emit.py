@@ -92,6 +92,9 @@ class MergeResult:
         sections_replaced:  section_ids whose content was updated from the new render.
         sections_added:     section_ids present in new render but absent in existing file.
         sections_orphaned:  section_ids present in existing file but absent in new render.
+        sections_preserved: section_ids whose new render would have shrunk the
+                            existing body, kept unchanged under shrink_policy
+                            "preserve" (respectful update — no content lost).
         parse_errors:       Human-readable messages for parse failures.
         unchanged:          section_ids that were identical in both files (no write needed).
         merged_content:     The final merged file content (empty string on parse failure).
@@ -102,6 +105,7 @@ class MergeResult:
     sections_replaced: list[str] = field(default_factory=list)
     sections_added: list[str] = field(default_factory=list)
     sections_orphaned: list[str] = field(default_factory=list)
+    sections_preserved: list[str] = field(default_factory=list)
     parse_errors: list[str] = field(default_factory=list)
     unchanged: list[str] = field(default_factory=list)
     merged_content: str = ""
@@ -347,7 +351,11 @@ def _is_machine_managed_merge_overwrite_path(rel_path: str) -> bool:
     return rel_path in _MACHINE_MANAGED_MERGE_OVERWRITE_PATHS
 
 
-def _merge_fenced_content(new_rendered: str, existing_on_disk: str) -> MergeResult:
+def _merge_fenced_content(
+    new_rendered: str,
+    existing_on_disk: str,
+    preserve_on_shrink: bool = False,
+) -> MergeResult:
     """Merge fenced sections from *new_rendered* into *existing_on_disk*.
 
     Template-owned (fenced) regions in the existing file are replaced with
@@ -357,6 +365,13 @@ def _merge_fenced_content(new_rendered: str, existing_on_disk: str) -> MergeResu
     Args:
         new_rendered:     Fully rendered file content from the render phase.
         existing_on_disk: Current content of the on-disk file.
+        preserve_on_shrink: When True (shrink_policy="preserve"), a fence whose
+            new render would materially shrink the existing body is left
+            unchanged instead of being replaced — the richer enriched body is
+            kept and recorded in ``sections_preserved``. Non-shrinking fences
+            still receive their template updates. This is the respectful,
+            non-destructive update path: no content is lost and no whole-file
+            write is blocked.
 
     Returns:
         MergeResult describing what changed.  ``merged_content`` is empty on
@@ -416,22 +431,32 @@ def _merge_fenced_content(new_rendered: str, existing_on_disk: str) -> MergeResu
                 i += 1
             # Inject replacement or preserve orphan
             if sid in new_regions:
-                output_lines.append(new_regions[sid])
                 if new_regions[sid] == existing_regions.get(sid, ""):
+                    output_lines.append(new_regions[sid])
                     result.unchanged.append(sid)
                 else:
-                    result.sections_replaced.append(sid)
                     # Plan 3: detect material shrink and queue a Notice.
                     notice = _detect_fence_shrink(
                         sid, existing_regions.get(sid, ""), new_regions[sid]
                     )
-                    if notice:
+                    if notice and preserve_on_shrink:
+                        # Respectful update: the new render would drop enriched
+                        # content. Keep the existing body verbatim; surface a
+                        # notice so the suppression is visible. No data lost, so
+                        # no .lost.<sid>.md sidecar is needed.
+                        output_lines.append(existing_regions[sid])
+                        result.sections_preserved.append(sid)
                         result.shrink_notices.append(notice)
-                        # W22 data-loss recovery: capture the pre-merge body
-                        # so emit_all can write a .lost.<sid>.md sidecar.
-                        result.lost_fence_bodies[sid] = _fence_body(
-                            existing_regions.get(sid, "")
-                        )
+                    else:
+                        output_lines.append(new_regions[sid])
+                        result.sections_replaced.append(sid)
+                        if notice:
+                            result.shrink_notices.append(notice)
+                            # W22 data-loss recovery: capture the pre-merge body
+                            # so emit_all can write a .lost.<sid>.md sidecar.
+                            result.lost_fence_bodies[sid] = _fence_body(
+                                existing_regions.get(sid, "")
+                            )
                 replaced_sids.add(sid)
             else:
                 # Orphaned: in existing but not in new render — leave in place
@@ -817,7 +842,7 @@ def emit_all(
     overwrite: bool = False,
     merge: bool = False,
     yes: bool = False,
-    shrink_policy: str = "warn",
+    shrink_policy: str = "preserve",
     backup_path: Path | None = None,
 ) -> EmitResult:
     """Write rendered files to output_dir.
@@ -833,7 +858,13 @@ def emit_all(
                         Mutually exclusive with *overwrite*.
         yes:            If True, answer 'yes' to all interactive prompts.
         shrink_policy:  Policy for fenced-region shrinks during merge.
-                        "warn" (default): log notice, write smaller content.
+                        "preserve" (default): keep the existing enriched body
+                                for any fence the new render would shrink; still
+                                apply template updates to non-shrinking fences.
+                                Respectful, non-destructive — no content lost,
+                                no whole-file block.
+                        "warn": log notice, write smaller content (recoverable
+                                via .lost.<sid>.md sidecar).
                         "halt": log notice, SKIP write, append to
                                 result.shrink_blocked.
                         "allow": suppress notice, write smaller content.
@@ -905,13 +936,21 @@ def emit_all(
                 existing_text = None
 
             if merge and existing_text is not None:
-                mr = _merge_fenced_content(normalized_content, existing_text)
+                mr = _merge_fenced_content(
+                    normalized_content,
+                    existing_text,
+                    preserve_on_shrink=(shrink_policy == "preserve"),
+                )
                 # Plan 3: dry-run preview also surfaces the notices that the
                 # real run would emit (D-4 from update-dry-run plan).
-                # Annotate with sidecar-preservation hint so operators don't
-                # mistake the warning for irreversible data loss.
+                # Annotate so operators understand what the real run will do
+                # with each shrink — preserve in place, or sidecar+write.
                 for notice in mr.shrink_notices:
-                    annotated = f"{rel_path}: {notice} (prior body will be preserved in a .lost.<sid>.md sidecar in the backup dir on the real run)"
+                    if shrink_policy == "preserve":
+                        suffix = " (existing enriched body will be retained; template update suppressed for this fence — use --shrink-policy=allow to force)"
+                    else:
+                        suffix = " (prior body will be preserved in a .lost.<sid>.md sidecar in the backup dir on the real run)"
+                    annotated = f"{rel_path}: {notice}{suffix}"
                     result.notices.append(annotated)
                     if result.dry_run_report is not None:
                         result.dry_run_report.notices.append(annotated)
@@ -958,6 +997,8 @@ def emit_all(
                             entry.fence_actions.append({"fence_id": sid, "action": "added"})
                         for sid in mr.sections_orphaned:
                             entry.fence_actions.append({"fence_id": sid, "action": "orphaned"})
+                        for sid in mr.sections_preserved:
+                            entry.fence_actions.append({"fence_id": sid, "action": "preserved"})
             elif existing_text is not None and not overwrite:
                 entry.action = "SKIP"
             elif existing_text is not None and overwrite:
@@ -981,11 +1022,25 @@ def emit_all(
         # Merge path
         if merge and target.exists():
             existing_text = target.read_text(encoding="utf-8")
-            merge_result = _merge_fenced_content(normalized_content, existing_text)
+            merge_result = _merge_fenced_content(
+                normalized_content,
+                existing_text,
+                preserve_on_shrink=(shrink_policy == "preserve"),
+            )
             # Plan 3: surface shrink Notices from this merge (real-run path).
             # T2.D5: shrink_policy controls whether to surface and whether
             # to write the smaller content.
-            if merge_result.shrink_notices and shrink_policy != "allow":
+            if merge_result.shrink_notices and shrink_policy == "preserve":
+                # Respectful update: the enriched body was kept in place; no
+                # content was lost, so no sidecar is needed. Surface a notice so
+                # the suppressed template update is visible to the operator.
+                for notice in merge_result.shrink_notices:
+                    result.notices.append(
+                        f"{rel_path}: {notice} — retained existing enriched "
+                        f"body (template update suppressed; use "
+                        f"--shrink-policy=allow to force)"
+                    )
+            elif merge_result.shrink_notices and shrink_policy != "allow":
                 # W22 data-loss recovery: persist each lost fence body to a
                 # sidecar in the backup dir so the operator can recover from
                 # silent shrinks even under default "warn".

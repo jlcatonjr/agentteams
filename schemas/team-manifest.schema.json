@@ -296,6 +296,46 @@
           }
         }
       }
+    },
+    "adopted_agents": {
+      "type": "array",
+      "description": "Slugs of pre-existing agent files registered into the team roster via --adopt-orphans. They appear in the orchestrator's agents:/handoffs lists but are intentionally absent from output_files (their files are preserved, not regenerated).",
+      "items": { "type": "string" }
+    },
+    "mcp_candidates": {
+      "type": "array",
+      "description": "Advisory MCP-suitability recommendations produced by the detection rubric (agentteams.mcp_detect). Surfaced to the operator; never auto-provisions. See references/mcp-auto-detection-report.md §5.",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["candidate_id", "recommendation", "rationale"],
+        "properties": {
+          "candidate_id": { "type": "string", "minLength": 1 },
+          "recommendation": {
+            "type": "string",
+            "enum": ["BUILD_MCP", "USE_DIRECT_API", "DEFER_TO_SECURITY_REVIEW"]
+          },
+          "rationale": { "type": "string" },
+          "signals": {
+            "type": "object",
+            "additionalProperties": false,
+            "description": "The evaluated signal values that produced the recommendation.",
+            "properties": {
+              "cross_host_reuse": { "type": "boolean" },
+              "statefulness": { "type": "boolean" },
+              "large_dynamic_surface": { "type": "boolean" },
+              "commits_lazy_disclosure": { "type": "boolean" },
+              "efficiency_risk": { "type": "boolean" },
+              "hard_gate": { "type": "boolean" }
+            }
+          }
+        }
+      }
+    },
+    "mcp_servers": {
+      "type": "array",
+      "description": "MCP server definitions (each conforms to mcp-server.schema.json) accepted for emission. Populated only when MCP host-features are enabled.",
+      "items": { "$ref": "mcp-server.schema.json" }
     }
   },
   "additionalProperties": false

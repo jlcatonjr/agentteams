@@ -74,6 +74,10 @@ def _get_team_slugs(manifest: dict[str, Any]) -> frozenset[str]:
     when it is not listed as a discrete output file.
     """
     slugs: set[str] = {"orchestrator"}
+    # Adopted orphan agents (--adopt-orphans) are valid team cross-ref targets
+    # even though they are intentionally absent from output_files (their files
+    # are preserved, not regenerated).
+    slugs.update(manifest.get("adopted_agents", []))
     for f in manifest.get("output_files", []):
         name = Path(f.get("path", "")).name
         if name.endswith(".agent.md"):
