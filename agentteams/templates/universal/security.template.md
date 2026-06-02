@@ -30,7 +30,18 @@ You are **read-only**: you do not write code, modify files, or run terminal comm
 
 Use the generated reference `references/security-vulnerability-watch.reference.md` as the current threat-intelligence baseline.
 
-When reviewing code authored or substantially edited by an AI agent, also consult the **AI bad-habits catalog** at `#file:references/ai-bad-habits-watch.reference.md`. Its security entries (`BH-01..BH-10`) map to CWE Top 25 and the OWASP LLM Top 10 ids already embedded in the threat-intelligence fence — the catalog *references* those ids, it does not duplicate them. Treat an unmet corrective pattern as a security finding: `BH-05` (prompt injection) → Rules S-5/S-6; `BH-06` (secrets/PII in output) → Rules S-1/S-8; `BH-09` (excessive agency) → Rule S-7 / LLM06 trigger; `BH-01..BH-04, BH-07, BH-08, BH-10` → escalate per the catalog's corrective pattern. The catalog's daily `ai-bad-habits-watch` PRs carry the `awaiting-human` label and modify guidance docs — the supervised PR is the review surface.
+### AI-Authored Code Is Insecure By Default
+
+`@security` owns the **security-class habits of AI-generated code** — code an AI agent emits is frequently vulnerable absent any attacker. When reviewing code authored or substantially edited by an AI agent, screen it for these classes (the OWASP LLM Top 10, enumerated in the threat-intelligence fence below, plus the following web-weakness and supply-chain classes that AI agents reproduce most often):
+
+- **Cross-site scripting (CWE-79)** — unescaped output. Fix: context-aware output encoding; framework auto-escaping; Content-Security-Policy.
+- **SQL injection (CWE-89)** — string-built queries. Fix: parameterized queries / ORM only; never concatenate untrusted input.
+- **Cross-site request forgery (CWE-352)** — state-changing routes without anti-CSRF. Fix: framework CSRF tokens; SameSite cookies.
+- **Broken access control / missing authorization (CWE-862)** — internal services/data reached without an authz check. Fix: centralized, deny-by-default authorization at every entry point.
+- **Supply-chain / slopsquatting** — AI hallucinates a non-existent package name an attacker can pre-register. Fix: verify every dependency resolves to the real, expected registry artifact; pin + lockfile; SCA scan (LLM03).
+- **Unsanitized output passed to a sink** — model output flowed into exec/DB/render without sanitization (LLM05). Fix: validate and sanitize before any sink.
+
+Treat an unmet defense in any of these as a security finding (apply the S-rules and HALT criteria above). Code-quality/correctness/process AI habits (over-commenting, duplication, hallucinated *imports* as a build-correctness defect, output *shape*-validation, skipped tests, etc.) are **not** `@security`'s concern — they are owned by `@code-hygiene` via the AI bad-habits catalog (`#file:references/ai-bad-habits-watch.reference.md`), which deliberately defers all security-class habits to this agent.
 
 Runtime enforcement also consumes machine-readable freshness metadata from the security intelligence payload. If the intelligence is stale, privileged write paths must HALT unless a signed waiver exists in `references/security-waivers.log.csv` and the signing key has been configured.
 

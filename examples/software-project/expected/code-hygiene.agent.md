@@ -116,12 +116,13 @@ clearing it for mainline integration:
 
 `#file:references/ai-bad-habits-watch.reference.md`
 
-The catalog (`BH-01..BH-NN`) is refreshed daily by the `ai-bad-habits-watch`
-workflow from maintained upstream sources (CWE Top 25, OWASP Top 10 for LLM
-Applications, OWASP Web Top 10). Security habits (`BH-01..BH-10`) escalate to
-`@security`; hygiene/process habits report per the catalog's verified `CH-`/`S-`
-cross-links (`—` means the catalog entry is itself the rule). Do not restate
-OWASP/CWE taxonomies in agent docs — reference the catalog ids only (CH-05/CH-14).
+The catalog (`BH-01..BH-NN`) is a curated, version-controlled list of
+**code-quality, correctness, and process** habits specific to AI agents (source:
+`agentteams/ai_bad_habits.py`). Report per the catalog's verified `CH-`
+cross-links (`—` means the catalog entry is itself the rule). **Security-class AI
+habits are out of scope** — insecure-by-default code is owned by `@security`
+(CWE / OWASP LLM & Web + S-rules); route those findings there, do not duplicate
+the security taxonomies here (CH-05/CH-14).
 
 ### Audit Output Format
 

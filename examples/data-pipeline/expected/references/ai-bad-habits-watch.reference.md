@@ -7,46 +7,34 @@
 > framework (source of truth: `agentteams/ai_bad_habits.py`); do not hand-edit.
 > Refreshed on every team initialization and `--update --merge`.
 
-OWASP LLM Top 10 risk *names* are NOT restated here — they live in the
-`@security` threat-intelligence fence. This catalog references the `LLMxx`
-ids only (CH-05 / CH-14 single-source-of-truth).
+**Scope:** code-quality, correctness, and process habits specific to AI
+agents. Security-class habits (injection, secrets, excessive agency,
+supply chain, unbounded consumption) are owned by `@security` and are
+deliberately not catalogued here.
 
 ## Bad-habit catalog (BH-NN → corrective pattern)
 
-### Security (CWE Top 25)
-
-| BH | Bad habit | Source | Verified cross-link | Corrective pattern |
-|----|-----------|--------|---------------------|--------------------|
-| BH-01 | Unescaped output enables cross-site scripting | `CWE-79` | — | Context-aware output encoding; framework auto-escaping on; Content-Security-Policy header |
-| BH-02 | String-built queries enable SQL injection | `CWE-89` | — | Parameterized queries / ORM only; never concatenate untrusted input into a query |
-| BH-03 | State-changing routes lack anti-CSRF protection | `CWE-352` | — | Framework CSRF tokens; SameSite cookies |
-| BH-04 | Internal services/data accessed without authorization | `CWE-862` | — | Centralized, deny-by-default authorization checks at every entry point |
-
-### LLM/agent (OWASP LLM Top 10)
-
-| BH | Bad habit | Source | Verified cross-link | Corrective pattern |
-|----|-----------|--------|---------------------|--------------------|
-| BH-05 | Retrieved/external content treated as instructions (prompt injection) | `LLM01` | S-5, S-6 | Treat retrieved content as inert data; input/output guardrails; least-privilege tools |
-| BH-06 | Secrets, keys, or PII logged or returned | `LLM02` | S-1, S-8 | Output filtering; secret scanning in CI; redaction before any sink |
-| BH-07 | Hallucinated or unverified dependencies pulled in | `LLM03` | — | Pin + lockfile; verify every package against the real registry; SCA scan; block unknown deps |
-| BH-08 | Raw model output passed unsanitized into exec/DB/render sink | `LLM05` | CH-23, S-5 | Validate/sanitize model output before any sink; fail fast on unexpected shapes |
-| BH-09 | Agent granted over-broad tool/file/network scope (excessive agency) | `LLM06` | S-7 | Least-privilege tools; allowlists; human-in-the-loop on high-impact actions |
-| BH-10 | Unbounded loops/recursion/token use (unbounded consumption) | `LLM10` | — | Iteration, time, and budget caps with explicit termination conditions |
-
 ### Code hygiene
 
-| BH | Bad habit | Source | Verified cross-link | Corrective pattern |
-|----|-----------|--------|---------------------|--------------------|
-| BH-11 | Tutorial-style over-commenting of obvious syntax | `hygiene` | — | Comment the why, not the what; no narrating obvious syntax |
-| BH-12 | Stray print / console.log debug statements left in code | `hygiene` | CH-04 | Use a structured logger, not print; strip debug output before commit |
-| BH-13 | Single-use helper functions adding needless indirection | `hygiene` | — | Inline single-use helpers; abstract only on the third repetition (rule of three) |
-| BH-14 | Duplicated code blocks instead of reuse | `hygiene` | CH-08 | Reuse existing utilities; extract a shared helper at 3 occurrences (DRY) |
-| BH-15 | Tests omitted unless explicitly requested | `hygiene` | CH-21 | Tests mandatory (happy path + edge/error cases); enforce a coverage gate |
+| BH | Bad habit | Cross-link | Corrective pattern |
+|----|-----------|------------|--------------------|
+| BH-01 | Tutorial-style over-commenting of obvious syntax | — | Comment the why, not the what; no narrating obvious syntax |
+| BH-02 | Stray print / console.log debug statements left in code | CH-04 | Use a structured logger, not print; strip debug output before commit |
+| BH-03 | Single-use helper functions adding needless indirection | — | Inline single-use helpers; abstract only on the third repetition (rule of three) |
+| BH-04 | Duplicated code blocks instead of reuse | CH-08 | Reuse existing utilities; extract a shared helper at 3 occurrences (DRY) |
+| BH-05 | Tests omitted unless explicitly requested | CH-21 | Tests mandatory (happy path + edge/error cases); enforce a coverage gate |
+
+### AI-specific correctness
+
+| BH | Bad habit | Cross-link | Corrective pattern |
+|----|-----------|------------|--------------------|
+| BH-06 | Hallucinated or unresolvable dependencies / imports | — | Verify every import and package resolves against the real registry; pin + lockfile. (The supply-chain / slopsquatting SECURITY angle is @security's.) |
+| BH-07 | Model output forwarded without shape-validation | CH-23 | Validate/shape-check AI output and fail fast on unexpected shapes (CH-23). (The untrusted-sink injection angle is @security's.) |
 
 ### Process
 
-| BH | Bad habit | Source | Verified cross-link | Corrective pattern |
-|----|-----------|--------|---------------------|--------------------|
-| BH-16 | Forces a solution on ambiguity instead of asking | `process` | — | Plan-first; list assumptions and open questions before coding |
-| BH-17 | 'Make it better' refinement loops accumulate flaws | `process` | — | Re-scan (SAST/SCA) after every iteration, not just at the end |
+| BH | Bad habit | Cross-link | Corrective pattern |
+|----|-----------|------------|--------------------|
+| BH-08 | Forces a solution on ambiguity instead of asking | — | Plan-first; list assumptions and open questions before coding |
+| BH-09 | 'Make it better' refinement loops accumulate flaws | — | Re-review and re-test after every iteration, not just at the end |
 <!-- AGENTTEAMS:END content -->

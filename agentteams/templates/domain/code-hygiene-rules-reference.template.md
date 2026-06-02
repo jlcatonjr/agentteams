@@ -165,26 +165,30 @@ Each hit must be justified as an unavoidable external-failure boundary; otherwis
 
 Code authored or substantially edited by an AI agent must be screened against
 the AI bad-habits catalog before integration into the main program path. The
-catalog (`references/ai-bad-habits-watch.reference.md`, entries
-`BH-01..BH-NN`) maps each habit to a corrective pattern and is refreshed daily
-from maintained
-upstream sources (CWE Top 25, OWASP Top 10 for LLM Applications, OWASP Web Top
-10) by `scripts/research_ai_bad_habits.py`.
+catalog (`references/ai-bad-habits-watch.reference.md`, entries `BH-01..BH-NN`)
+is a curated, version-controlled list of **code-quality, correctness, and
+process** habits specific to AI agents, each mapped to a corrective pattern
+(source of truth: `agentteams/ai_bad_habits.py`).
 
-The catalog is **authoritative** for these habits; where a `BH-` entry carries a
-verified cross-link to an existing `CH-` or `S-` rule, that rule governs the
+**Security-class AI habits are out of scope here.** Insecure-by-default code
+(injection, secrets exposure, excessive agency, supply chain, unbounded
+consumption) is owned by `@security` (CWE / OWASP LLM & Web taxonomies +
+S-rules). The catalog deliberately does not duplicate them; route every security
+finding to `@security`.
+
+The catalog is **authoritative** for the habits it lists; where a `BH-` entry
+carries a verified cross-link to an existing `CH-` rule, that rule governs the
 detail. Where the cross-link is `—`, the catalog entry is itself the rule.
 
 **Enforcement check (illustrative):**
 ```
-# A new/changed file authored by an agent must not introduce any BH-NN habit
-# whose corrective pattern is unmet. Security habits (BH-01..BH-10) escalate
-# to @security; hygiene/process habits route per the catalog cross-links.
+# A new/changed file authored by an agent must not introduce any BH-NN
+# code-quality/correctness/process habit whose corrective pattern is unmet.
+# Security-class concerns are escalated to @security, not catalogued here.
 ```
 
-This rule does not duplicate upstream taxonomies: OWASP LLM Top 10 names live in
-the `@security` threat-intelligence fence (single-source-of-truth, [[CH-05]] /
-[[CH-14]]); the catalog references the `LLMxx` ids only.
+This rule does not duplicate `@security`'s domain (single-source-of-truth,
+[[CH-05]] / [[CH-14]]).
 
 <!-- Example:
 ### CH-21 — Project-Specific Rule Name

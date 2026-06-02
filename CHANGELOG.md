@@ -6,6 +6,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### changed
+
+- **AI bad-habits catalog refocused away from `@security`'s domain.** Removed the
+  security-class entries (CWE web weaknesses + OWASP LLM Top 10) that duplicated
+  `@security`; the catalog (`BH-01..BH-09`) now covers only **code-quality,
+  correctness, and process** AI habits. The web-weakness / slopsquat / sink
+  classes plus the "AI-authored code is insecure-by-default" guidance were
+  **relocated into `security.template.md`** (their proper home — `@security` did
+  not previously embed the CWE/Web taxonomy). Dropped the `UPSTREAM_SOURCES`
+  watch + network probe (those taxonomies are `@security`'s threat-intel); the
+  catalog is now curated/version-controlled and the workflow is a dispatch-only
+  catalog-sync guard. CH-25 reframed to code-quality scope with explicit
+  security deferral. Plans + adversarial audits under `references/plans/`.
+
 ### added
 
 - **AI bad-habits watch.** New `agentteams.ai_bad_habits` catalog (`BH-01..BH-17`)
