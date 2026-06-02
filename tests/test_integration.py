@@ -385,6 +385,30 @@ def test_snapshot_comparison(tmp_path, example):
     )
 
 
+@pytest.mark.parametrize("example", ["software-project", "research-project", "data-pipeline"])
+def test_file_references_resolve(tmp_path, example):
+    """Every `#file:` companion reference in a generated team must resolve to an
+    emitted file. Guards the unix-philosophy-mapping class of regression (a #file:
+    token whose target was never added to the emission registry).
+
+    Only `#file:`-class warnings are asserted on. `@agent` cross-reference warnings
+    are intentionally NOT asserted — they are contextual (an always-emitted file may
+    reference an optional agent that a given team does not include) and benign.
+    """
+    from agentteams import render
+
+    brief = EXAMPLES_DIR / example / "brief.json"
+    if not brief.exists():
+        pytest.skip(f"{example} brief not found")
+
+    output = _run_pipeline(brief, tmp_path)
+    warnings = render.validate_cross_refs(output["rendered"])
+    file_warnings = [w for w in warnings if "does not resolve to a generated reference file" in w]
+    assert not file_warnings, (
+        f"{example}: unresolved #file: reference(s):\n  " + "\n  ".join(file_warnings)
+    )
+
+
 # ===========================================================================
 # --update integration tests (structural diff + MANUAL preservation)
 # ===========================================================================

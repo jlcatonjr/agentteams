@@ -885,7 +885,7 @@ agentteams/
 - [agentteams/templates/AUTHORING-GUIDE.md](agentteams/templates/AUTHORING-GUIDE.md) — How to write and register new agent templates
 - [agentteams/templates/FENCE-CONVENTIONS.md](agentteams/templates/FENCE-CONVENTIONS.md) — Section fencing specification
 - [agentteams/templates/PLACEHOLDER-CONVENTIONS.md](agentteams/templates/PLACEHOLDER-CONVENTIONS.md) — Placeholder syntax rules
-- [.github/agents/references/agent-taxonomy.reference.md](.github/agents/references/agent-taxonomy.reference.md) — Four-tier agent taxonomy specification
+- [docs_src/how-it-works.md](docs_src/how-it-works.md) — Four-tier agent taxonomy and pipeline overview
 - [schemas/project-description.schema.json](schemas/project-description.schema.json) — JSON Schema for project descriptions
 - [schemas/team-manifest.schema.json](schemas/team-manifest.schema.json) — JSON Schema for the internal team manifest
 
