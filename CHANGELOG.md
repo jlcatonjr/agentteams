@@ -8,32 +8,60 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### changed
 
-- **AI bad-habits catalog refocused away from `@security`'s domain.** Removed the
-  security-class entries (CWE web weaknesses + OWASP LLM Top 10) that duplicated
-  `@security`; the catalog (`BH-01..BH-09`) now covers only **code-quality,
-  correctness, and process** AI habits. The web-weakness / slopsquat / sink
-  classes plus the "AI-authored code is insecure-by-default" guidance were
-  **relocated into `security.template.md`** (their proper home — `@security` did
-  not previously embed the CWE/Web taxonomy). Dropped the `UPSTREAM_SOURCES`
-  watch + network probe (those taxonomies are `@security`'s threat-intel); the
-  catalog is now curated/version-controlled and the workflow is a dispatch-only
-  catalog-sync guard. CH-25 reframed to code-quality scope with explicit
-  security deferral. Plans + adversarial audits under `references/plans/`.
+- **`framework-auto-update.yml` converted from auto-merge to a supervised PR.**
+  The daily framework-update workflow now opens an `awaiting-human` PR and stops
+  — the maintainer reviews and merges manually (matching `advisory-pr` and
+  `ai-bad-habits-watch`). Removes `gh pr merge` and the post-merge `ci.yml`
+  dispatch (the manual merge triggers CI the normal way), and matches the dedup
+  hash across **all** PR states so the open PR is found on later runs and not
+  re-created. Supersedes the rc.4/rc.5 auto-merge behavior.
+- **Orchestrator pinned to Claude Opus 4.8** (was Claude Sonnet 4.6). Scoped to
+  the Tier-1 orchestrator only; all other agent templates remain on Sonnet 4.6.
+  Downstream teams adopt it on the next `--update --merge`.
+- **`@work-summarizer` daily-capture broadened.** The daily-summary obligation
+  fired only when a plan reached all `done`; it now also fires on *executed
+  work* — commits, applied migrations/scripts, data mutations, or adjacent-repo
+  changes evidenced in operational logs — so a zero-commit primary repo no
+  longer exempts a session. Adds a daily-only completeness scan over non-plan
+  execution-evidence files (apply-logs, run-results, operation/deletion logs).
 
 ### added
 
-- **AI bad-habits watch.** New `agentteams.ai_bad_habits` catalog (`BH-01..BH-17`)
-  of bad coding habits common across AI agents, each mapped to a corrective
-  pattern and sourced only from maintained upstream catalogs (CWE Top 25, OWASP
-  Top 10 for LLM Applications, OWASP Web Top 10). Adds code-hygiene rule **CH-25**
-  (screen AI-authored/edited code), a per-consumer
+- **AI bad-habits catalog + code-hygiene rule CH-25.** New
+  `agentteams.ai_bad_habits` — a curated, version-controlled catalog
+  (`BH-01..BH-09`) of **code-quality, correctness, and process** habits specific
+  to AI agents, each mapped to a corrective pattern. Adds rule **CH-25** (screen
+  AI-authored/edited code against the catalog) to `@code-hygiene`, a per-consumer
   `references/ai-bad-habits-watch.reference.md` generated like the security watch
   (template + `build_catalog_placeholders` + `analyze.py` registration), a tracked
-  repo-root daily-watch artifact `references/ai-bad-habits-watch.md`, the
-  `scripts/research_ai_bad_habits.py` daily stage, and the supervised-PR
-  `.github/workflows/ai-bad-habits-watch.yml` (`awaiting-human`, no auto-merge;
-  `workflow_dispatch`-only until the first run is reviewed). Plans and
-  adversarial/conflict audits under `references/plans/`.
+  repo-root artifact `references/ai-bad-habits-watch.md`, the
+  `scripts/research_ai_bad_habits.py` sync stage, and the supervised-PR
+  `.github/workflows/ai-bad-habits-watch.yml` (`awaiting-human`, no auto-merge,
+  `workflow_dispatch`-only). Security-class AI habits are deliberately **out of
+  scope** — owned by `@security` (see below). Plans + adversarial/conflict audits
+  under `references/plans/`.
+- **`@security`: AI-authored-code-is-insecure-by-default guidance.**
+  `security.template.md` now owns the security-class AI habits with a block
+  naming the web-weakness classes AI agents reproduce most (XSS/CWE-79,
+  SQLi/CWE-89, CSRF/CWE-352, broken access control/CWE-862), the
+  supply-chain/slopsquatting vector, and unsanitized-output-to-sink — closing a
+  gap where `@security` previously embedded only the OWASP LLM Top 10.
+- **MCP server auto-detection (opt-in, inert).** `schemas/mcp-server.schema.json`
+  (allOf hard-gate), `agentteams/mcp_detect.py` (fail-closed
+  necessary-condition rubric) wired into `analyze.py`, and
+  `agentteams/mcp_emit.py` (gated, self-enforcing emitter — not pipeline-wired by
+  design). Adds manifest `mcp_candidates` + project-description `mcp_hints`;
+  default emission is unchanged.
+- **`--adopt-orphans` flag.** Registers pre-existing agent files the generated
+  taxonomy does not produce (bespoke custom agents) into the team roster — the
+  orchestrator's handoff list and domain routing — without generating or
+  overwriting their files. The opposite of `--prune`. Requires the orchestrator
+  to be re-rendered (use with `--overwrite` or `--migrate`).
+- **Markdown `project_goal` ingest fallback.** `ingest._load_markdown` derives
+  `project_goal` from a ranked overview-style heading (or the first prose
+  paragraph) when no explicit `## Project Goal` exists, letting agentteams ingest
+  existing `copilot-instructions.md`-style entry files. Hardened for
+  setext/fences/lists, length-capped and min-length-guarded.
 
 - **PR management subsystem.** New agents `@pr-manager`, `@pr-notifier`, and
   `@pr-reminder`; Python module `agentteams.pr_management` (recipient-registry
