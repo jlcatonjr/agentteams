@@ -58,7 +58,8 @@ jobs:
             # computed over upstream tokens + adapter constants only — NOT
             # over the rendered new_text (which contains today's date), so
             # day-over-day runs with identical observations produce the same
-            # hash and the workflow's existing dedup step finds the open PR.
+            # hash and the dedup step below finds the matching PR (open or
+            # already-merged) and skips, preventing date-only churn.
             phash=$(python -c "import json; d=json.load(open('$proposal')); print(d.get('dedup_hash') or d.get('changes', [{}])[0].get('path','unknown'))")
             echo "phash=$phash" >> "$GITHUB_OUTPUT"
             echo "branch=auto/framework-update-$phash" >> "$GITHUB_OUTPUT"
@@ -71,10 +72,20 @@ jobs:
           GH_TOKEN: ${{ github.token }}
           PHASH: ${{ steps.propose.outputs.phash }}
         run: |
-          existing=$(gh pr list --state open --search "head:auto/framework-update-$PHASH" --json number --jq '.[0].number // empty')
+          # Match the hash across ALL PR states, not just open ones. The hash
+          # is computed over upstream tokens + adapter constants (NOT the
+          # rendered date), so it stays constant while observations are
+          # unchanged. Matching merged/closed PRs too means that once a given
+          # observation has landed we never re-PR it on later days — the
+          # rendered date alone no longer produces daily churn. A new PR is
+          # created only when the hash changes (observations actually drifted).
+          # The branch is deleted on merge, so match on the title (which embeds
+          # the hash) rather than the head ref.
+          existing=$(gh pr list --state all --limit 100 --json number,title \
+            --jq "[.[] | select(.title | contains(\"$PHASH\"))] | .[0].number // empty")
           if [[ -n "$existing" ]]; then
             echo "duplicate=true" >> "$GITHUB_OUTPUT"
-            echo "Existing open PR #$existing matches proposal hash $PHASH; skipping."
+            echo "PR #$existing already carries proposal hash $PHASH; skipping (no new drift)."
           fi
 
       - name: Apply proposal on branch
@@ -126,12 +137,16 @@ jobs:
             echo
             echo "Hash: \`$PHASH\`"
           } > "$body_file"
-          # rc.4: the daily pipeline implements revisions automatically.
-          # PRs created by GITHUB_TOKEN do not trigger CI (GitHub's
-          # infinite-loop safeguard), nor does the merge event itself.
-          # rc.5 closes the resulting safety-net gap by explicitly
-          # dispatching ci.yml against main after the merge —
-          # workflow_dispatch is exempt from the GITHUB_TOKEN filter.
+          # Supervised flow: the workflow OPENS the PR and stops. It does not
+          # merge. The maintainer reviews and merges manually (matching the
+          # commit message and PR body, which both state human review is
+          # required). Because the dedup step above matches the hash across all
+          # PR states, the open PR is found on subsequent daily runs and no
+          # duplicate is created while it awaits review; once merged, the same
+          # hash keeps matching so the observation is never re-PR'd until it
+          # actually changes. No post-merge CI dispatch is needed here — the
+          # maintainer's manual merge is a normal push to main and triggers CI
+          # the usual way.
           pr_url=$(gh pr create \
             --base main \
             --head "$BRANCH" \
@@ -139,36 +154,15 @@ jobs:
             --body-file "$body_file" \
             --label "framework-update")
           pr_num=$(basename "$pr_url")
-          echo "Opened PR: $pr_url"
+          echo "Opened PR (awaiting review): $pr_url"
 
-          gh pr merge "$pr_num" --merge --delete-branch
-          merged_sha=$(gh pr view "$pr_num" --json mergeCommit --jq '.mergeCommit.oid')
-          echo "Merged as $merged_sha"
-
-          # rc.5: dispatch CI on main so the broader test matrix runs
-          # against the auto-merge commit. The dispatched run is the
-          # restored post-merge safety net (rc.4 claimed this happened
-          # via the normal push trigger; it does not, due to
-          # GITHUB_TOKEN filtering).
-          ci_run_url=""
-          if gh workflow run ci.yml --ref main; then
-            sleep 3
-            ci_run_url=$(gh run list --workflow=ci.yml --limit 1 --json url --jq '.[0].url' || true)
-            echo "Dispatched CI: $ci_run_url"
-          else
-            echo "WARN: CI dispatch failed; the auto-merge landed but post-merge CI did not fire" >&2
-          fi
-
-          # rc.4 post-execution report: emit a step summary so the run
-          # log records exactly what landed on main this cycle.
+          # Post-execution report: record what was proposed this cycle.
           {
-            echo "## Auto-update execution report"
+            echo "## Auto-update proposal report"
             echo
-            echo "- PR: $pr_url"
+            echo "- PR (awaiting review): $pr_url"
             echo "- Hash: \`$PHASH\`"
-            echo "- Merge commit: \`$merged_sha\`"
-            echo "- Branch: \`$BRANCH\` (deleted)"
-            echo "- Post-merge CI: $ci_run_url"
+            echo "- Branch: \`$BRANCH\`"
             echo
             echo "### Diff scope"
             gh pr diff "$pr_num" --color never | head -200
