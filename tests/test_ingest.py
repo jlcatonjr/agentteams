@@ -10,6 +10,7 @@ from agentteams.ingest import (
     load,
     validate,
     _slugify,
+    _load_markdown,
     parse_dependency_manifests,
     _parse_requirements_txt,
     _parse_package_json,
@@ -17,6 +18,130 @@ from agentteams.ingest import (
     _parse_go_mod,
     _parse_pyproject_toml,
 )
+
+
+def _md(tmp_path, text):
+    p = tmp_path / "desc.md"
+    p.write_text(textwrap.dedent(text), encoding="utf-8")
+    return p
+
+
+# --- project_goal derivation fallback (feat/ingest-goal-fallback) -----------
+
+def test_explicit_goal_heading_wins_over_overview(tmp_path):
+    desc = _load_markdown(_md(tmp_path, """\
+        # Title
+        ## Project Goal
+        The real goal.
+        ## Project Overview
+        Overview prose that should be ignored.
+        """))
+    assert desc["project_goal"] == "The real goal."
+
+
+def test_overview_heading_used_as_goal_fallback(tmp_path):
+    desc = _load_markdown(_md(tmp_path, """\
+        # Title
+        ## Project Overview
+        A website for economics research.
+        ## Architecture
+        details
+        """))
+    assert desc["project_goal"] == "A website for economics research."
+
+
+def test_lead_paragraph_fallback_stops_at_next_heading(tmp_path):
+    desc = _load_markdown(_md(tmp_path, """\
+        # Commodity Money Working Paper
+        Dual-system project: an app and a manuscript.
+        ## Layout
+        | a | b |
+        """))
+    assert desc["project_goal"] == "Dual-system project: an app and a manuscript."
+
+
+def test_no_prose_leaves_goal_unset_and_fails_validation(tmp_path):
+    # Headings + only a table, no prose paragraph -> no goal derivable.
+    p = _md(tmp_path, """\
+        # Title
+        ## Layout
+        | a | b |
+        | - | - |
+        """)
+    with pytest.raises(ValueError):
+        load(p, scan_project=False)
+
+
+def test_fallback_does_not_override_explicit_goal_heading(tmp_path):
+    desc = _load_markdown(_md(tmp_path, """\
+        ## Overview
+        overview text
+        ## Goal
+        explicit goal text
+        """))
+    assert desc["project_goal"] == "explicit goal text"
+
+
+def test_setext_heading_not_treated_as_prose(tmp_path):
+    # "My Project Title" underlined with === is a heading, not the goal.
+    desc = _load_markdown(_md(tmp_path, """\
+        My Project Title
+        ================
+
+        The actual project description paragraph.
+
+        ## Details
+        x
+        """))
+    assert desc["project_goal"] == "The actual project description paragraph."
+
+
+def test_overview_priority_overview_beats_about_regardless_of_order(tmp_path):
+    desc = _load_markdown(_md(tmp_path, """\
+        # Title
+        ## About the Authors
+        Jane and John wrote this.
+        ## Project Overview
+        The real project overview.
+        """))
+    assert desc["project_goal"] == "The real project overview."
+
+
+def test_list_first_content_not_used_as_goal(tmp_path):
+    # A leading bullet list is not prose; with no prose/overview, goal stays unset.
+    p = _md(tmp_path, """\
+        # Title
+        - feature one
+        - feature two
+        """)
+    with pytest.raises(ValueError):
+        load(p, scan_project=False)
+
+
+def test_goal_fallback_capped_and_collapsed(tmp_path):
+    long = "word " * 400  # ~2000 chars, multi-space
+    desc = _load_markdown(_md(tmp_path, f"# T\n## Project Overview\n{long}\n"))
+    assert len(desc["project_goal"]) <= 500
+    assert "  " not in desc["project_goal"]  # whitespace collapsed
+
+
+def test_too_short_fallback_is_ignored(tmp_path):
+    p = _md(tmp_path, "# T\n## Project Overview\nHi\n")  # <10 chars
+    with pytest.raises(ValueError):
+        load(p, scan_project=False)
+
+
+def test_nested_fence_code_not_leaked_into_goal(tmp_path):
+    desc = _load_markdown(_md(tmp_path, """\
+        # T
+        ```
+        ~~~
+        secret_code_here()
+        ```
+        Real project goal prose.
+        """))
+    assert "secret_code_here" not in desc["project_goal"]
+    assert desc["project_goal"] == "Real project goal prose."
 
 
 # ---------------------------------------------------------------------------

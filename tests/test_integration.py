@@ -47,6 +47,13 @@ def _run_pipeline(brief_path: Path, tmp_path: Path, framework: str = "copilot-vs
         )
     )
 
+    # Mirror build_team's AI bad-habits catalog placeholder injection.
+    from agentteams import ai_bad_habits as _ai_bad_habits
+
+    manifest["auto_resolved_placeholders"].update(
+        _ai_bad_habits.build_catalog_placeholders()
+    )
+
     rendered = render.render_all(manifest, templates_dir=TEMPLATES_DIR)
     assert rendered, "render_all returned empty list"
 

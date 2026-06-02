@@ -304,6 +304,53 @@
       "type": "string",
       "description": "Command or tool used to convert primary deliverables to output format. Used as {CONVERSION_PIPELINE} in format-converter agent.",
       "examples": ["pandoc --from html --to latex", "pdflatex", "sphinx-build -b html"]
+    },
+    "mcp_hints": {
+      "type": "array",
+      "description": "Optional consumer-declared hints about external integrations that may warrant an MCP server. Each entry feeds the MCP-suitability detection rubric (agentteams.mcp_detect). Purely advisory: the rubric only recommends; it never auto-provisions a credentialed server. See references/mcp-auto-detection-report.md §5.",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["integration", "trust_tier"],
+        "properties": {
+          "integration": {
+            "type": "string",
+            "minLength": 1,
+            "description": "Name of the external system or capability (e.g., 'analytics-warehouse', 'jira')."
+          },
+          "stateful": {
+            "type": "boolean",
+            "description": "True if the integration has an auth/session lifecycle, connection pooling, or caching that materially benefits from a persistent server.",
+            "default": false
+          },
+          "used_by_components": {
+            "type": "array",
+            "items": { "type": "string" },
+            "description": "Component slugs that need this integration. Reuse across >=2 components is a positive signal."
+          },
+          "trust_tier": {
+            "type": "string",
+            "enum": ["first-party", "third-party-vetted", "third-party-untrusted"],
+            "description": "Self-declared trust level (REQUIRED so absence cannot silently default to the permissive case). Any third-party-* value routes the candidate to DEFER_TO_SECURITY_REVIEW."
+          },
+          "max_side_effect": {
+            "type": "string",
+            "enum": ["read", "write", "destructive"],
+            "description": "Most-privileged operation the integration needs. 'destructive' routes the candidate to DEFER_TO_SECURITY_REVIEW.",
+            "default": "read"
+          },
+          "large_dynamic_surface": {
+            "type": "boolean",
+            "description": "True if the operation set is large and changes over time. Only a positive signal when commits_lazy_disclosure is also true; otherwise an efficiency anti-pattern (report §4.1).",
+            "default": false
+          },
+          "commits_lazy_disclosure": {
+            "type": "boolean",
+            "description": "True if the integration commits to lazy/progressive tool disclosure. Required for large_dynamic_surface to count as a positive signal (report §5.1 tiebreaker).",
+            "default": false
+          }
+        }
+      }
     }
   },
   "additionalProperties": false

@@ -104,8 +104,13 @@ def _load_markdown(path: Path) -> dict[str, Any]:
         ## Components / Workstreams
         ## Style Rules
 
-    Also accepts key: value pairs at any point.
-    Falls back to returning {project_goal: full_text} if no headers found.
+    project_goal fallback (when no explicit "Project Goal"/"Goal" heading is
+    present): the body of the highest-priority overview-style heading
+    (Overview > Purpose > Summary/Abstract > About), else the first prose
+    paragraph of the document. The fallback never overrides an explicit goal,
+    is whitespace-collapsed and capped to 500 chars, and is ignored if shorter
+    than 10 chars (so a too-thin source fails validation rather than seeding a
+    junk goal). With no headings at all, the entire text becomes the goal.
     """
     text = path.read_text(encoding="utf-8")
     sections = _split_markdown_sections(text)
@@ -115,6 +120,10 @@ def _load_markdown(path: Path) -> dict[str, Any]:
         return {"project_goal": text.strip()}
 
     desc: dict[str, Any] = {}
+    # (rank, body) for overview-style headings; lowest rank wins. Ties keep the
+    # earliest in document order (dict preserves insertion order).
+    overview_candidates: list[tuple[int, str]] = []
+    _OVERVIEW_PRIORITY = (("overview", 0), ("purpose", 1), ("summary", 2), ("abstract", 2), ("about", 3))
 
     for heading, content in sections.items():
         heading_l = heading.lower().strip()
@@ -150,8 +159,71 @@ def _load_markdown(path: Path) -> dict[str, Any]:
             desc["components"] = _parse_components(body)
         elif "style rule" in heading_l:
             desc["style_rules"] = _parse_list(body)
+        else:
+            # Capture overview-style sections as ranked project_goal fallbacks;
+            # applied below ONLY when no explicit goal heading set project_goal.
+            for kw, rank in _OVERVIEW_PRIORITY:
+                if kw in heading_l:
+                    overview_candidates.append((rank, body))
+                    break
+
+    # Goal fallback (additive; never overrides an explicit goal). Lets agentteams
+    # ingest existing entry files (e.g. copilot-instructions.md with a
+    # "## Project Overview" section, or a title + lead paragraph) instead of
+    # failing validation. Prefer the highest-priority overview section, then the
+    # first prose paragraph. Whitespace-collapsed, capped, min-length-guarded.
+    if not desc.get("project_goal"):
+        overview_body = min(overview_candidates)[1] if overview_candidates else None
+        fallback = " ".join((overview_body or _first_paragraph(text)).split())
+        if len(fallback) >= 10:
+            desc["project_goal"] = fallback[:500]
 
     return desc
+
+
+# NB: sibling prose-extractor _extract_readme_goal (used by the directory-scan
+# path) applies its own badge filtering and 500-char cap; the two intentionally
+# differ in input assumptions. Keep their caps aligned if either changes.
+_SETEXT_OR_HR_RE = re.compile(r"^(={2,}|-{2,}|\*{2,}|_{2,})$")
+_LIST_MARKER_RE = re.compile(r"^([-*+]\s+|\d+[.)]\s+)")
+
+
+def _first_paragraph(text: str) -> str:
+    """Return the first prose paragraph of a Markdown document (a last-resort
+    project_goal fallback). Skips ATX/setext headings, blockquotes, table rows,
+    list items, horizontal rules, and fenced code; a setext underline or a line
+    immediately followed by one is treated as a heading. Stops at the first
+    paragraph break (blank line or block boundary) after prose begins."""
+    lines = text.splitlines()
+    para: list[str] = []
+    fence: str | None = None  # opening delimiter while inside a code fence
+    n = len(lines)
+    for i in range(n):
+        stripped = lines[i].strip()
+        if fence is None and (stripped.startswith("```") or stripped.startswith("~~~")):
+            fence = stripped[:3]
+            continue
+        if fence is not None:
+            if stripped.startswith(fence):  # only the matching delimiter closes it
+                fence = None
+            continue
+        if not stripped:
+            if para:
+                break
+            continue
+        next_stripped = lines[i + 1].strip() if i + 1 < n else ""
+        is_boundary = (
+            stripped.startswith(("#", ">", "|"))
+            or _SETEXT_OR_HR_RE.match(stripped)
+            or _LIST_MARKER_RE.match(stripped)
+            or (not para and bool(_SETEXT_OR_HR_RE.match(next_stripped)))  # setext heading text
+        )
+        if is_boundary:
+            if para:
+                break
+            continue
+        para.append(stripped)
+    return " ".join(para)
 
 
 def _split_markdown_sections(text: str) -> dict[str, str]:

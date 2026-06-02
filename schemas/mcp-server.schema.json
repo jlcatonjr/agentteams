@@ -1,0 +1,165 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "mcp-server.schema.json",
+  "title": "AgentTeams MCP Server Definition (framework-neutral, opt-in)",
+  "description": "Inert, host-agnostic definition of a Model Context Protocol server for a domain. Emitted ONLY when MCP host-features are enabled (claude:mcp or bridge:copilot-vscode-to-claude:mcp). Generator-owned; secrets are referenced by name, never inlined. This artifact provisions nothing on its own — credentialed activation (writing a live host config that wires real credentials) is a separate, operator-authorized step (see references/mcp-auto-detection-report.md §5.4). Excluded from drift by construction (never in output_files_map/template_hashes/file_hashes; .json so the .md snapshot suite is unaffected).",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "artifact_type",
+    "mcp_server_schema_version",
+    "server_id",
+    "domain",
+    "trust_tier",
+    "transport",
+    "tools",
+    "scope",
+    "progressive_disclosure",
+    "security_review"
+  ],
+  "properties": {
+    "artifact_type": {
+      "const": "mcp-server",
+      "description": "Top-level discriminator (NOT schema_version) so build-log readers never treat this as a baseline."
+    },
+    "mcp_server_schema_version": { "type": "string", "minLength": 1 },
+    "server_id": {
+      "type": "string",
+      "minLength": 1,
+      "pattern": "^[a-z0-9][a-z0-9-]*$",
+      "description": "Stable kebab-case identifier for this server within the project."
+    },
+    "domain": {
+      "type": "string",
+      "minLength": 1,
+      "description": "The capability domain this server serves (e.g., 'data-access', 'ticketing')."
+    },
+    "description": {
+      "type": "string",
+      "description": "Human-readable summary of what the server exposes."
+    },
+    "trust_tier": {
+      "type": "string",
+      "enum": ["first-party", "third-party-vetted", "third-party-untrusted"],
+      "description": "SELF-DECLARED trust level. The generator cannot verify this; it is operator-surfaced advisory metadata. third-party-* values force a DEFER_TO_SECURITY_REVIEW recommendation upstream and require security_review.required=true (see allOf below)."
+    },
+    "transport": {
+      "type": "string",
+      "enum": ["stdio", "http"],
+      "description": "MCP transport. When 'http', the auth object is required and should carry a url (see allOf below)."
+    },
+    "auth": {
+      "type": "object",
+      "additionalProperties": false,
+      "description": "Credential reference only — NEVER an inline secret. credential_ref is constrained to identifier/key shapes so a raw connection string or token cannot validate.",
+      "required": ["mechanism"],
+      "properties": {
+        "mechanism": {
+          "type": "string",
+          "enum": ["none", "env", "secret-store", "oauth"],
+          "description": "How credentials are supplied at activation. 'none' for unauthenticated local servers."
+        },
+        "credential_ref": {
+          "type": "string",
+          "minLength": 1,
+          "pattern": "^[A-Za-z][A-Za-z0-9_.:/-]*$",
+          "maxLength": 128,
+          "description": "Name of the env var or secret-store key (e.g., 'VK_PG_DSN' or 'store:prod/pg'). Pattern forbids whitespace and a raw 'scheme://user:pass@host' form. The value is resolved at activation, never stored here."
+        },
+        "url": {
+          "type": "string",
+          "format": "uri",
+          "description": "Endpoint for http transport. Required-by-convention when transport='http'."
+        }
+      }
+    },
+    "tools": {
+      "type": "array",
+      "description": "Tool surface this server exposes. Kept explicit so least-privilege scope and side-effect gating can be reasoned about before activation.",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["name", "side_effects"],
+        "properties": {
+          "name": { "type": "string", "minLength": 1 },
+          "description": { "type": "string" },
+          "input_schema": {
+            "type": "object",
+            "description": "JSON Schema for the tool's input (passthrough; structure not constrained here)."
+          },
+          "side_effects": {
+            "type": "string",
+            "enum": ["read", "write", "destructive"],
+            "description": "read = no mutation; write = reversible mutation (caution flag); destructive = delete/irreversible (forces DEFER_TO_SECURITY_REVIEW upstream and requires security_review.required=true via allOf below)."
+          }
+        }
+      }
+    },
+    "resources": {
+      "type": "array",
+      "items": { "type": "object" },
+      "description": "MCP resource primitives (readable data) exposed by the server. Passthrough; structure not constrained here."
+    },
+    "prompts": {
+      "type": "array",
+      "items": { "type": "object" },
+      "description": "MCP prompt primitives (server-supplied templates). Passthrough; structure not constrained here."
+    },
+    "scope": {
+      "type": "array",
+      "items": { "type": "string", "minLength": 1 },
+      "description": "Least-privilege binding: agent slugs permitted to use this server. An empty array means no agent is bound (definition only)."
+    },
+    "progressive_disclosure": {
+      "type": "string",
+      "enum": ["lazy", "eager"],
+      "description": "Tool-loading strategy controlling context cost (report §4.1). 'lazy' = tools discovered on demand; 'eager' = all tool definitions loaded upfront. A large/dynamic tool surface should be 'lazy' or it is an efficiency anti-pattern."
+    },
+    "security_review": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["required"],
+      "description": "Operator-surfaced advisory metadata (report §6.4). NOT a code-enforced emission block in the current pipeline; authorized_by/authorized_at are filled by the operator-authorization process, not by the generator. The allOf clauses below DO force 'required'=true for destructive/third-party servers, giving the report's hard-gate claim schema backing.",
+      "properties": {
+        "required": { "type": "boolean" },
+        "authorized_by": { "type": ["string", "null"] },
+        "authorized_at": { "type": ["string", "null"], "format": "date-time" }
+      }
+    }
+  },
+  "allOf": [
+    {
+      "$comment": "transport=http requires an auth object (carrying a url).",
+      "if": { "properties": { "transport": { "const": "http" } }, "required": ["transport"] },
+      "then": { "required": ["auth"] }
+    },
+    {
+      "$comment": "Hard gate (report §5.1): third-party trust forces security_review.required=true.",
+      "if": {
+        "properties": { "trust_tier": { "enum": ["third-party-vetted", "third-party-untrusted"] } },
+        "required": ["trust_tier"]
+      },
+      "then": {
+        "properties": { "security_review": { "properties": { "required": { "const": true } } } }
+      }
+    },
+    {
+      "$comment": "Hard gate (report §5.1): any destructive tool forces security_review.required=true.",
+      "if": {
+        "properties": {
+          "tools": {
+            "contains": {
+              "type": "object",
+              "properties": { "side_effects": { "const": "destructive" } },
+              "required": ["side_effects"]
+            }
+          }
+        },
+        "required": ["tools"]
+      },
+      "then": {
+        "properties": { "security_review": { "properties": { "required": { "const": true } } } }
+      }
+    }
+  ]
+}

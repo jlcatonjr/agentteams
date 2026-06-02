@@ -12,6 +12,7 @@ from pathlib import Path
 from typing import Any
 
 from agentteams._utils import _slugify
+from agentteams.mcp_detect import detect_mcp_candidates
 
 
 # ---------------------------------------------------------------------------
@@ -337,7 +338,7 @@ def build_manifest(description: dict[str, Any], *, framework: str = "copilot-vsc
     # Output file plan
     output_files = _plan_output_files(archetypes, tool_agents, reference_tools, components, framework)
 
-    return {
+    manifest = {
         "schema_version": "1.0",
         "project_name": project_name,
         "project_goal": project_goal,
@@ -371,6 +372,13 @@ def build_manifest(description: dict[str, Any], *, framework: str = "copilot-vsc
         # on the description being re-attached later in the update path.
         "memory_index_extra_dirs": description.get("memory_index_extra_dirs") or [],
     }
+    # MCP-suitability detection (report §5). Advisory only — populated solely
+    # when the description declares mcp_hints, so manifests for projects without
+    # MCP integrations are unchanged. Never auto-provisions a server.
+    mcp_candidates = detect_mcp_candidates(description)
+    if mcp_candidates:
+        manifest["mcp_candidates"] = [c.to_manifest_entry() for c in mcp_candidates]
+    return manifest
 
 
 # ---------------------------------------------------------------------------
@@ -892,6 +900,39 @@ def _format_agent_list(slugs: list[str]) -> str:
     return "\n" + "\n".join(formatted)
 
 
+def adopt_orphan_agents(manifest: dict[str, Any], orphan_slugs: list[str]) -> list[str]:
+    """Register pre-existing ("orphan") agent files into the team roster.
+
+    Adds each orphan slug to ``agent_slug_list`` and ``domain_agent_slugs`` (so
+    the orchestrator declares them as handoff targets) and re-renders the
+    matching placeholders. Records them under ``adopted_agents``. Deliberately
+    does NOT touch ``output_files`` — the adopted agents' own files are never
+    generated or overwritten, preserving their bespoke content.
+
+    Returns the slugs newly adopted (those not already in the roster).
+    """
+    existing = set(manifest.get("agent_slug_list", []))
+    newly = [s for s in orphan_slugs if s and s not in existing]
+    if not newly:
+        return []
+    # Add to the handoff roster only. Deliberately NOT added to
+    # domain_agent_slugs: bespoke adopted agents are not standard domain
+    # archetypes and carry no auto-generated routing/trigger metadata, so
+    # folding them into the domain-routing placeholder would mislabel them.
+    # _get_team_slugs unions adopted_agents so the adapter keeps them in the
+    # orchestrator's agents:/handoffs: lists regardless.
+    manifest["agent_slug_list"] = _dedupe_keep_order(
+        list(manifest.get("agent_slug_list", [])) + newly
+    )
+    manifest["adopted_agents"] = _dedupe_keep_order(
+        list(manifest.get("adopted_agents", [])) + newly
+    )
+    placeholders = manifest.setdefault("auto_resolved_placeholders", {})
+    # Placeholder key is UPPERCASE (resolve_placeholders matches {AGENT_SLUG_LIST}).
+    placeholders["AGENT_SLUG_LIST"] = _format_agent_list(manifest["agent_slug_list"])
+    return newly
+
+
 def _format_workstream_source_map(components: list[dict[str, Any]]) -> str:
     if not components:
         return "No components defined."
@@ -1149,6 +1190,14 @@ def _plan_output_files(
     files.append({
         "path": "references/security-vulnerability-watch.json",
         "template": f"{agents_dir}security-vulnerability-watch.json.template",
+        "type": "artifact",
+        "component_slug": None,
+    })
+
+    # AI bad-habits catalog (always — @code-hygiene CH-25 + @security screening)
+    files.append({
+        "path": "references/ai-bad-habits-watch.reference.md",
+        "template": f"{agents_dir}ai-bad-habits-watch.reference.template.md",
         "type": "artifact",
         "component_slug": None,
     })

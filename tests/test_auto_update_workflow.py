@@ -78,40 +78,36 @@ def test_workflow_applies_framework_update_label():
     )
 
 
-def test_workflow_auto_merges_its_own_pr():
-    """rc.4: the workflow runs `gh pr merge` immediately after creating
-    the PR. CI does not fire on GITHUB_TOKEN-created PRs (GitHub's
-    infinite-loop safeguard), so there is no CI gate to await.
+def test_workflow_does_not_auto_merge():
+    """Supervised flow: the workflow OPENS the PR and stops. It must NOT
+    auto-merge — the maintainer reviews and merges manually (guidance changes
+    require human review). Dedup matches the hash across ALL PR states so the
+    awaiting-review PR is found on later daily runs and not re-created.
     """
     text = WORKFLOW.read_text(encoding="utf-8")
-    assert 'gh pr merge "$pr_num" --merge --delete-branch' in text
+    assert "gh pr merge" not in text
+    assert "Opened PR (awaiting review)" in text
+    assert "gh pr list --state all" in text
 
 
 def test_workflow_emits_post_execution_step_summary():
-    """rc.4: GITHUB_STEP_SUMMARY captures the PR URL, hash, merge commit,
-    and the merged diff so each run log records exactly what landed on main.
+    """GITHUB_STEP_SUMMARY captures the PR URL, hash, branch, and diff scope so
+    each run log records exactly what was proposed this cycle (awaiting review).
     """
     text = WORKFLOW.read_text(encoding="utf-8")
     assert 'GITHUB_STEP_SUMMARY' in text
-    assert 'Auto-update execution report' in text
+    assert 'Auto-update proposal report' in text
     assert 'gh pr diff' in text
 
 
-def test_workflow_dispatches_ci_after_automerge():
-    """rc.5: after the auto-merge lands the commit on main, the workflow
-    must dispatch ci.yml against main. workflow_dispatch is exempt from
-    the GITHUB_TOKEN filter, so this restores the post-merge safety net
-    that the rc.4 CHANGELOG claimed but did not actually deliver.
+def test_workflow_no_post_merge_ci_dispatch():
+    """Supervised flow does not auto-merge, so there is no post-merge CI
+    dispatch — the maintainer's manual merge is a normal push to main and
+    triggers CI the usual way.
     """
     text = WORKFLOW.read_text(encoding="utf-8")
-    # The dispatch must come AFTER the merge (substring order check).
-    merge_idx = text.find('gh pr merge "$pr_num" --merge --delete-branch')
-    dispatch_idx = text.find('gh workflow run ci.yml --ref main')
-    assert merge_idx >= 0, "merge step missing"
-    assert dispatch_idx >= 0, "ci.yml dispatch step missing"
-    assert dispatch_idx > merge_idx, (
-        "CI dispatch must run AFTER the merge so it tests the merge commit"
-    )
+    assert "gh pr merge" not in text
+    assert "gh workflow run ci.yml --ref main" not in text
 
 
 def test_ci_workflow_accepts_dispatch():

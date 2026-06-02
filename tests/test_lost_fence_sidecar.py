@@ -82,6 +82,9 @@ def test_emit_all_writes_lost_fence_sidecar(tmp_path):
         output_dir=output_dir,
         merge=True,
         backup_path=backup_dir,
+        # Sidecar recovery is a "warn"-mode feature; the default "preserve"
+        # policy keeps the enriched body in place so nothing is lost.
+        shrink_policy="warn",
     )
 
     sidecar = backup_dir / f"{rel}.lost.content.md"

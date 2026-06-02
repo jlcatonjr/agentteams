@@ -233,6 +233,18 @@ def _build_parser() -> argparse.ArgumentParser:
         help="Used with --update: also delete agent files that are no longer part of the team.",
     )
     parser.add_argument(
+        "--adopt-orphans",
+        action="store_true",
+        dest="adopt_orphans",
+        help="Register pre-existing agent files that the generated taxonomy does "
+             "not produce (e.g. bespoke custom agents) into the team roster — the "
+             "orchestrator's handoff list and domain routing — WITHOUT generating "
+             "or overwriting their files. The opposite of --prune: integrate "
+             "orphans instead of removing them. Requires the orchestrator to be "
+             "(re)rendered, so use with --overwrite or --migrate (under --merge the "
+             "orchestrator front matter is preserved and adoption would not surface).",
+    )
+    parser.add_argument(
         "--check",
         action="store_true",
         help="Check for template drift and structural changes without writing any files "
@@ -521,13 +533,16 @@ def _build_parser() -> argparse.ArgumentParser:
     )
     parser.add_argument(
         "--shrink-policy",
-        choices=("warn", "halt", "allow"),
-        default="warn",
+        choices=("preserve", "warn", "halt", "allow"),
+        default="preserve",
         dest="shrink_policy",
         help=(
             "Behaviour when a fenced-region merge would lose concrete refs. "
-            "'warn' (default) logs and writes; 'halt' refuses the write and "
-            "lists the blocked file; 'allow' writes silently. Plan: "
+            "'preserve' (default) keeps the existing enriched body for that "
+            "fence and still updates non-shrinking fences (respectful, "
+            "non-destructive); 'warn' writes the smaller body and saves a "
+            ".lost.<sid>.md recovery sidecar; 'halt' refuses the whole-file "
+            "write and lists the blocked file; 'allow' writes silently. Plan: "
             "references/plans/T2-D5-shrink-policy-2026-05-25.plan.md"
         ),
     )
@@ -806,7 +821,7 @@ def _persist_shrink_events(args, result, manifest, output_dir: Path) -> None:
             f"- output_dir: `{output_dir}`",
             f"- backup_dir: `{backup_dir_str}`",
             f"- notices: {len(result.notices)}",
-            f"- shrink_policy: `{getattr(args, 'shrink_policy', 'warn')}`",
+            f"- shrink_policy: `{getattr(args, 'shrink_policy', 'preserve')}`",
             "",
         ]
         for notice in result.notices:
@@ -1126,6 +1141,34 @@ def main(argv: list[str] | None = None) -> int:
     print(f"  Output directory: {output_dir}")
 
     # -----------------------------------------------------------------------
+    # Step 4·adopt: --adopt-orphans — register pre-existing custom agent files
+    # into the roster before rendering, so the orchestrator declares them. Must
+    # run before _build_final_rendered. Never adds to output_files (their files
+    # are preserved, not regenerated). Effective only when the orchestrator is
+    # (re)rendered — i.e. with --overwrite/--migrate (see flag help).
+    # -----------------------------------------------------------------------
+    if getattr(args, "adopt_orphans", False) and output_dir.exists():
+        _suffix = ".agent.md"
+        # "Planned" = agent files this build will EMIT (from output_files), not
+        # the roster — so legitimately-generated-but-non-roster files
+        # (team-builder, content-enricher) are not mistaken for orphans.
+        _emitted = {
+            Path(f["path"]).name[: -len(_suffix)]
+            for f in manifest.get("output_files", [])
+            if isinstance(f, dict) and str(f.get("path", "")).endswith(_suffix)
+        }
+        _orphan_slugs = sorted(
+            p.name[: -len(_suffix)]
+            for p in output_dir.glob("*.agent.md")
+            if p.name[: -len(_suffix)] not in _emitted
+        )
+        _adopted = analyze.adopt_orphan_agents(manifest, _orphan_slugs)
+        if _adopted:
+            print(f"  Adopted {len(_adopted)} orphan agent(s) into roster: {', '.join(_adopted)}")
+        else:
+            print("  --adopt-orphans: no orphan agent files to adopt.")
+
+    # -----------------------------------------------------------------------
     # Step 4a: Handle --list-backups and --restore-backup (no rendering needed)
     # -----------------------------------------------------------------------
     if args.list_backups:
@@ -1224,6 +1267,15 @@ def main(argv: list[str] | None = None) -> int:
         skip_nvd=args.security_no_nvd,
     )
     manifest["auto_resolved_placeholders"].update(security_placeholders)
+
+    # AI bad-habits catalog placeholder (single wiring site — the main build
+    # path only; convert/interop/bridge copy references/ verbatim and never
+    # render this template). Static catalog, offline, network-free.
+    from agentteams import ai_bad_habits as _ai_bad_habits
+
+    manifest["auto_resolved_placeholders"].update(
+        _ai_bad_habits.build_catalog_placeholders()
+    )
 
     # Step 4d.2: Framework-watch placeholders (Claude Code etc.).
     # Offline by default so consumer repos do not need network; the
@@ -1521,9 +1573,12 @@ def main(argv: list[str] | None = None) -> int:
         _emitted_agent_names = {
             Path(p).name for p, _ in final_rendered if p.endswith(".agent.md")
         }
+        # Adopted orphans (--adopt-orphans) are deliberately not emitted but are
+        # now roster members — don't re-report them as orphaned.
+        _adopted_names = {f"{s}.agent.md" for s in manifest.get("adopted_agents", [])}
         _orphan_agents = sorted(
             f.name for f in output_dir.glob("*.agent.md")
-            if f.name not in _emitted_agent_names
+            if f.name not in _emitted_agent_names and f.name not in _adopted_names
         )
         if _orphan_agents:
             print(
@@ -1570,7 +1625,7 @@ def main(argv: list[str] | None = None) -> int:
             overwrite=args.overwrite,
             merge=not args.overwrite,
             yes=args.yes,
-            shrink_policy=getattr(args, "shrink_policy", "warn"),
+            shrink_policy=getattr(args, "shrink_policy", "preserve"),
             backup_path=backup_path,
         )
         emit.print_summary(result, manifest)
@@ -1786,7 +1841,7 @@ def main(argv: list[str] | None = None) -> int:
         overwrite=args.overwrite,
         merge=args.merge,
         yes=args.yes,
-        shrink_policy=getattr(args, "shrink_policy", "warn"),
+        shrink_policy=getattr(args, "shrink_policy", "preserve"),
         backup_path=backup_path,
     )
     emit.print_summary(result, manifest)
@@ -2195,6 +2250,22 @@ def _validate_option_combinations(parser: argparse.ArgumentParser, args: argpars
 
     if args.prune and not args.update:
         parser.error("--prune can only be used with --update")
+
+    if getattr(args, "adopt_orphans", False):
+        # Adoption rewrites the orchestrator front matter (agents: roster), which
+        # only happens on a full re-render. Under --merge front matter is
+        # preserved, so adoption would be a silent no-op — require overwrite/migrate.
+        if not (args.overwrite or args.migrate):
+            parser.error(
+                "--adopt-orphans requires --overwrite or --migrate "
+                "(under --merge the orchestrator front matter is preserved, so "
+                "adoption would not take effect)"
+            )
+        if args.prune:
+            parser.error(
+                "--adopt-orphans and --prune are mutually exclusive "
+                "(adopt integrates orphan agents; prune deletes them)"
+            )
 
     if args.convert_from and args.interop_from:
         parser.error("--convert-from and --interop-from are mutually exclusive")
