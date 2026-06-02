@@ -58,7 +58,7 @@ You are the **repository navigator** for ResearchPaperProject. You maintain the 
 
 The current agent team topology is maintained as a directed graph:
 
-`#file:.github/agents/references/pipeline-graph.md`
+`#file:references/pipeline-graph.md`
 
 The graph is **regenerated automatically** on every pipeline run. To refresh it manually:
 

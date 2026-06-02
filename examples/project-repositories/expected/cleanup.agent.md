@@ -10,6 +10,7 @@ handoffs:
     prompt: "Cleanup is complete. Review the removal report."
     send: false
 ---
+<!-- AGENTTEAMS:BEGIN content v=1 -->
 
 # Cleanup — ProjectRepositories
 
@@ -32,6 +33,7 @@ You remove stale files from ProjectRepositories: abandoned intermediate outputs,
 | Project instructions | `copilot-instructions.md` | Project conventions |
 | Style references | `PropertyTaxes/Whitepaper/` | Standards reference |
 | Referenced assets | Any file referenced in a primary deliverable | Content dependency |
+| Bridge-emitted artifacts in external projects | `<external>/CLAUDE.md`, `<external>/.claude/*` | May be the only copy of user content after a forced `--bridge-refresh`; verify against `references/bridge-refresh-safety.md` §IV before any removal |
 
 ---
 
@@ -85,3 +87,8 @@ Skipped ({count}):
 Flagged for user review ({count}):
 - [path] — [unique content description]
 ```
+<!-- AGENTTEAMS:END content -->
+
+## Project-Specific Notes
+
+> ⚙️ **USER-EDITABLE** — project-specific rules, overrides, and extensions for this agent. This section lies outside every `AGENTTEAMS` fence and is preserved verbatim across `agentteams --update --merge`.

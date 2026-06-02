@@ -1,5 +1,5 @@
 <!-- AGENTTEAMS:BEGIN content v=1 -->
-# Unix Philosophy — Code Hygiene Mapping ({PROJECT_NAME})
+# Unix Philosophy — Code Hygiene Mapping (ProjectRepositories)
 
 > **Purpose:** Document how code-hygiene rules align with principles from Unix system design and software architecture
 > **Applies to:** CH-01 through CH-24 rule interpretations
@@ -42,7 +42,7 @@ This principle advocates for **focused, single-purpose components** that excel a
 
 | Rule | Tier | Connection |
 |------|------|-----------|
-| **CH-03** — No Ad-Hoc Scripts in `{PRIMARY_OUTPUT_DIR}` | 2 | Source code contains only intentional, production-focused logic. Project-specific need for clean source boundaries. |
+| **CH-03** — No Ad-Hoc Scripts in `*/outputs/` | 2 | Source code contains only intentional, production-focused logic. Project-specific need for clean source boundaries. |
 | **CH-07** — Standard Module/Component Structure | 1 | Enforces consistent structure within each module. Each module has one clear purpose (e.g., `collector.py` does collection; `uploader.py` does uploading). |
 | **CH-08** — Common Utilities Over Inline Duplication | 1 | Extraction of repeated logic into shared utilities ensures each utility has one, clear responsibility. |
 | **CH-12** — Purposeful Package Init Files | 1 | Package init files must either re-export public API or be empty—no business logic. A single, clear purpose. |

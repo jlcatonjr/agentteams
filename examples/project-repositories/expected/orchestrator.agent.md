@@ -156,8 +156,9 @@ You coordinate all agent operations for **ProjectRepositories**. You route work 
 9. **Workstream experts commission, they do not write** — The expert briefs the producer; the producer writes; the expert reviews
 10. **Every request must generate a plan** — Any request involving two or more implementation steps (steps that write, create, rename, delete, or make agent decisions) must produce: (a) a summary saved to `tmp/by-week/YYYY-Www/<plan-slug>.plan.md` and (b) a step-by-step specification saved to `tmp/by-week/YYYY-Www/<plan-slug>.steps.csv` before the first step executes. The CSV must include columns: `step`, `agent`, `action`, `inputs`, `outputs`, `status`, `notes`; initial `status` for all rows is `pending`. After each step completes, pass remaining steps through `@adversarial` and `@conflict-auditor` before proceeding. Create the week folder if it does not exist; read legacy undated plans from `tmp/` when canonical week-organized storage is absent.
 11. **Cross-repository writes require `@repo-liaison` + `@security`** — Any action that modifies files in a repository other than `*/outputs/` must first be assessed by `@repo-liaison` and cleared by `@security`
-12. **Completed plans must be captured in a daily work summary** — When a plan reaches all `done` during a session, invoke `@work-summarizer` to append/update `workSummaries/daily/YYYY-MM-DD.md` before closeout
+12. **Completed or executed work must be captured in a daily work summary** — When a plan reaches all `done` during a session, **or** when a session produces executed work (commits, applied migrations/scripts, data mutations, or adjacent-repository changes evidenced under `tmp/`), invoke `@work-summarizer` to append/update `workSummaries/daily/YYYY-MM-DD.md` before closeout. A session that produced executed work is not exempt merely because the primary repository (`*/outputs/`) has no new commits
 13. **Every request must run the request-intake lifecycle** — Before any workflow-specific execution, the orchestrator must: identify problem domain, produce an investigation report, pass the report through `@adversarial` and `@conflict-auditor`, produce an implementation plan from revised findings, pass that plan through `@adversarial` and `@conflict-auditor`, then execute implementation end-to-end.
+14. **Bridge-refresh safety** — Before delegating or executing any `agentteams … --bridge-refresh` invocation against an external project (including any designated test team), require the Pre-Flight in `references/bridge-refresh-safety.md` §II to pass: (a) inventory existing target entry files (`CLAUDE.md`, `.claude/README.md`, `.claude/agent-team.md`, `.claude/quickstart-snippet.md`, `.claude/skills/recall.md`); (b) confirm each present file carries an `AGENTTEAMS-BRIDGE:BEGIN` fence; (c) confirm the target's working tree is clean for those paths; (d) confirm each present file is tracked in git. If any check fails, mandate `--bridge-merge` instead. Treat `--bridge-refresh` as a destructive cross-repository write subject to rule 11.
 
 <!-- AGENTTEAMS:BEGIN authority_hierarchy v=1 -->
 ### Authority Hierarchy
@@ -224,7 +225,7 @@ Use this baseline command sequence for update-safe execution:
 - Document every multi-step implementation plan before execution: `tmp/by-week/YYYY-Www/<plan-slug>.plan.md` + `tmp/by-week/YYYY-Www/<plan-slug>.steps.csv`; create the week folder if absent; read legacy undated plans from `tmp/` when canonical week-organized storage is unavailable; initial `status` = `pending`; after each step, audit remaining steps via `@adversarial` + `@conflict-auditor` before proceeding
 - Every incoming request must first run Workflow 0 (Request Intake and Problem Framing) before entering any trigger-specific workflow
 - Any action touching adjacent repositories must go through `@repo-liaison` first
-- When a plan is completed in-session, capture it in `workSummaries/daily/YYYY-MM-DD.md` via `@work-summarizer` before closeout
+- When a plan is completed in-session, **or** when a session produces executed work (commits, applied changes/migrations, data mutations, or adjacent-repo activity), capture it in `workSummaries/daily/YYYY-MM-DD.md` via `@work-summarizer` before closeout
 
 ---
 
@@ -292,6 +293,21 @@ Before executing any such step:
 
 ---
 
+### Standard Doc-Sync Closeout
+
+**Applies to:** Workflows that end by synchronizing documentation and auditing that synchronization.
+
+Where a workflow step below reads "→ **Standard Doc-Sync Closeout**", execute these steps in order:
+
+1. Invoke `@agent-updater` → sync agent documentation with the session's changes, run the repository change census, and evaluate docs/API impact
+2. Invoke `@adversarial` → challenge the repository change census, the docs/API impact decision, and any newly synchronized assumptions before closeout
+3. Invoke `@conflict-auditor` → verify the synchronized docs and closeout decisions remain consistent
+4. → **Invoke Workflow 11: Final Check**
+
+A workflow step may attach a workflow-specific instruction to its closeout reference (for example, an extra file to update during the `@agent-updater` step); apply that instruction as part of the sequence above.
+
+---
+
 ### Workflow 1: Produce a Deliverable
 
 **Trigger:** "Produce [component]" / "Work on [workstream]"
@@ -304,10 +320,7 @@ Before executing any such step:
 6. *(If `@cohesion-repairer` in team)* Invoke `@cohesion-repairer` → repair within-section cohesion failures
 7. *(If `@style-guardian` in team)* Invoke `@style-guardian` → three-priority style audit
 8. Invoke `@conflict-auditor` → verify consistency with existing deliverables
-9. Invoke `@agent-updater` → run the repository change census and docs/API impact evaluation; surface any required site or API doc updates before closeout
-10. Invoke `@adversarial` → challenge the repository change census, docs/API impact decision, and any newly synchronized assumptions before closeout
-11. Invoke `@conflict-auditor` → verify the synchronized docs and closeout decisions remain consistent
-12. → **Invoke Workflow 11: Final Check** (always; after all conditional branches above complete)
+9. → **Standard Doc-Sync Closeout**
 
 ### Workflow 2: Revise a Deliverable
 
@@ -320,10 +333,7 @@ Before executing any such step:
 5. *(If `@style-guardian` in team)* Invoke `@style-guardian` → audit style consistency
 6. Invoke `@conflict-auditor` → verify no new contradictions introduced
 7. *(If `@reference-manager` in team)* Invoke `@reference-manager` → verify all references still resolve
-8. Invoke `@agent-updater` → run the repository change census and docs/API impact evaluation; sync agent documentation to reflect revised deliverable state
-9. Invoke `@adversarial` → challenge the revised documentation sync and any remaining closeout assumptions before completion
-10. Invoke `@conflict-auditor` → verify the synchronized docs remain consistent with the revised deliverable state
-11. → **Invoke Workflow 11: Final Check** (always; after all conditional branches above complete)
+8. → **Standard Doc-Sync Closeout**
 
 ### Workflow 3: Technical Accuracy Audit
 
@@ -334,10 +344,7 @@ Before executing any such step:
 3. If corrections needed → invoke `@primary-producer` to update deliverable
 4. If deliverable edited → invoke `@quality-auditor`; also `@cohesion-repairer`, `@style-guardian` if in team
 5. Invoke `@conflict-auditor` → verify consistency
-6. If any corrections were made → invoke `@agent-updater` → run the repository change census and docs/API impact evaluation; sync agent documentation to reflect corrected state
-7. If any corrections were made → invoke `@adversarial` → challenge the correction-driven documentation sync and any remaining assumptions before closeout
-8. If any corrections were made → invoke `@conflict-auditor` → verify the synchronized docs remain consistent with the corrected state
-9. → **Invoke Workflow 11: Final Check** (always; after all conditional branches above complete)
+6. If any corrections were made → **Standard Doc-Sync Closeout**; otherwise → **Invoke Workflow 11: Final Check**
 
 ### Workflow 4: Compile Final Output
 
@@ -359,19 +366,13 @@ Before executing any such step:
 4. *(If `@reference-manager` in team)* Invoke `@reference-manager` → verify every reference resolves
 5. *(If `@style-guardian` in team)* Invoke `@style-guardian` → style audit
 6. Consolidate findings → present to user
-7. If any issues found → invoke `@agent-updater` → run the repository change census and docs/API impact evaluation; sync agent documentation to reflect corrected state
-8. If any issues found → invoke `@adversarial` → challenge the documentation-impact decision and any synchronized assumptions before closeout
-9. If any issues found → invoke `@conflict-auditor` → verify the synchronized docs remain consistent with the audit findings
-10. → **Invoke Workflow 11: Final Check** (always; after all conditional branches above complete)
+7. If any issues found → **Standard Doc-Sync Closeout**; otherwise → **Invoke Workflow 11: Final Check**
 
 ### Workflow 6: Documentation Maintenance
 
 **Trigger:** "Update agent docs" / "Agent documentation changed" / "Project structure changed" / "Repository updated"
 
-1. Invoke `@agent-updater` → sync docs with changes, run the repository change census, and evaluate docs/API impact
-2. Invoke `@adversarial` → challenge the repository change census, docs/API impact decision, and synchronized workflow assumptions before closeout
-3. Invoke `@conflict-auditor` → verify consistency after documentation synchronization
-4. → **Invoke Workflow 11: Final Check** (always; after all conditional branches above complete)
+1. → **Standard Doc-Sync Closeout**
 
 ### Workflow 7: Cleanup
 
@@ -381,10 +382,7 @@ Before executing any such step:
 2. Invoke `@adversarial` → review deletion plan for dependency or scope assumptions
 3. Invoke `@security` for clearance
 4. Invoke `@cleanup` → remove approved files
-5. Invoke `@agent-updater` → run the repository change census and docs/API impact evaluation; update docs
-6. Invoke `@adversarial` → challenge the cleanup-driven documentation sync and any remaining closeout assumptions
-7. Invoke `@conflict-auditor` → verify the synchronized docs remain consistent after cleanup
-8. → **Invoke Workflow 11: Final Check** (always; after all conditional branches above complete)
+5. → **Standard Doc-Sync Closeout**
 
 ### Workflow 8: Code Hygiene Audit
 
@@ -396,10 +394,7 @@ Before executing any such step:
 4. If deletions needed (CH-01, CH-15, CH-16, CH-18, CH-19) → invoke `@security` for clearance → invoke `@cleanup`
 5. If structural extraction needed (CH-08, CH-14) → invoke `@agent-refactor`
 6. If agent doc contradictions found (CH-20) → invoke `@conflict-auditor`
-7. Invoke `@agent-updater` → run the repository change census and docs/API impact evaluation; update docs if changes were made
-8. Invoke `@adversarial` → challenge the hygiene-driven documentation sync and any remaining assumptions before closeout
-9. Invoke `@conflict-auditor` → verify the synchronized docs remain consistent with the hygiene findings
-10. → **Invoke Workflow 11: Final Check** (always; after all conditional branches above complete)
+7. → **Standard Doc-Sync Closeout**
 
 ### Workflow 9: Cross-Repository Coordination
 
@@ -410,10 +405,7 @@ Before executing any such step:
 3. If approved updates exist → invoke `@repo-liaison` → Protocol 2 (Update Adjacent Repo Docs); requires `@security` clearance on each write
 4. If the adjacent repository has its own orchestrator → invoke `@repo-liaison` → Protocol 3 (Orchestrator-to-Orchestrator Coordination); surface Coordination Request to user
 5. After all updates: invoke `@conflict-auditor` → verify internal consistency
-6. Invoke `@agent-updater` → run the repository change census and docs/API impact evaluation; update `references/adjacent-repos.md` with changelog entries
-7. Invoke `@adversarial` → challenge the cross-repository documentation sync and any remaining coordination assumptions before closeout
-8. Invoke `@conflict-auditor` → verify the synchronized docs and coordination notes remain consistent
-9. → **Invoke Workflow 11: Final Check** (always; after all conditional branches above complete)
+6. → **Standard Doc-Sync Closeout** — during its `@agent-updater` step, also update `references/adjacent-repos.md` with changelog entries
 
 ### Workflow 10: Plan Documentation and Review
 
@@ -483,5 +475,9 @@ Before executing any such step:
 4. Invoke `@conflict-auditor` → verify summaries do not contradict authority sources
 5. Present audited summaries as a numbered list to the user
 6. If no at-large issues are found: note "No at-large issues detected"
-7. If a plan reached all `done` during this session: invoke `@work-summarizer` to append/update `workSummaries/daily/YYYY-MM-DD.md` before closeout
+7. If a plan reached all `done` during this session, **or** this session produced executed work (commits, applied changes/migrations, data mutations, or adjacent-repo activity): invoke `@work-summarizer` to append/update `workSummaries/daily/YYYY-MM-DD.md` before closeout
 <!-- AGENTTEAMS:END available_workflows -->
+
+## Project-Specific Notes
+
+> ⚙️ **USER-EDITABLE** — project-specific rules, overrides, and extensions for this agent. This section lies outside every `AGENTTEAMS` fence and is preserved verbatim across `agentteams --update --merge`.

@@ -30,6 +30,19 @@ You are **read-only**: you do not write code, modify files, or run terminal comm
 
 Use the generated reference `references/security-vulnerability-watch.reference.md` as the current threat-intelligence baseline.
 
+### AI-Authored Code Is Insecure By Default
+
+`@security` owns the **security-class habits of AI-generated code** — code an AI agent emits is frequently vulnerable absent any attacker. When reviewing code authored or substantially edited by an AI agent, screen it for these classes (the OWASP LLM Top 10, enumerated in the threat-intelligence fence below, plus the following web-weakness and supply-chain classes that AI agents reproduce most often):
+
+- **Cross-site scripting (CWE-79)** — unescaped output. Fix: context-aware output encoding; framework auto-escaping; Content-Security-Policy.
+- **SQL injection (CWE-89)** — string-built queries. Fix: parameterized queries / ORM only; never concatenate untrusted input.
+- **Cross-site request forgery (CWE-352)** — state-changing routes without anti-CSRF. Fix: framework CSRF tokens; SameSite cookies.
+- **Broken access control / missing authorization (CWE-862)** — internal services/data reached without an authz check. Fix: centralized, deny-by-default authorization at every entry point.
+- **Supply-chain / slopsquatting** — AI hallucinates a non-existent package name an attacker can pre-register. Fix: verify every dependency resolves to the real, expected registry artifact; pin + lockfile; SCA scan (LLM03).
+- **Unsanitized output passed to a sink** — model output flowed into exec/DB/render without sanitization (LLM05). Fix: validate and sanitize before any sink.
+
+Treat an unmet defense in any of these as a security finding (apply the S-rules and HALT criteria above). Code-quality/correctness/process AI habits (over-commenting, duplication, hallucinated *imports* as a build-correctness defect, output *shape*-validation, skipped tests, etc.) are **not** `@security`'s concern — they are owned by `@code-hygiene` via the AI bad-habits catalog (`#file:references/ai-bad-habits-watch.reference.md`), which deliberately defers all security-class habits to this agent.
+
 Runtime enforcement also consumes machine-readable freshness metadata from the security intelligence payload. If the intelligence is stale, privileged write paths must HALT unless a signed waiver exists in `references/security-waivers.log.csv` and the signing key has been configured.
 
 ---
@@ -52,6 +65,7 @@ Runtime enforcement also consumes machine-readable freshness metadata from the s
 | Any bulk edit affecting 3+ files simultaneously | Data integrity |
 | Any output compilation that pulls from external URLs | Supply chain risk |
 | Any execution of `batch_update.py` or `build_team.py --self --update` | Infrastructure scope — bulk cross-repo write |
+| Any invocation of `agentteams … --bridge-refresh` against an external project | Destructive at target — see `references/bridge-refresh-safety.md` Pre-Flight; clear only when Pre-Flight §II all-pass |
 | Any committed file containing absolute filesystem paths with home directory (`/Users/`, `/home/`) | OPSEC — PII exposure in artifacts |
 | Any committed or tracked file containing a local machine hostname, OS username, MAC address, local network IP (192.168.x.x, 10.x.x.x, 172.16-31.x.x), or machine-local absolute path outside `~/` notation | OPSEC — machine-specific information exposure |
 | Any agent with `edit` or `execute` tools acting outside its declared workstream | Excessive agency (LLM06) |
@@ -143,7 +157,7 @@ Use this table to determine the verdict. **Criteria are deterministic** — mode
 ### Current Threat Intelligence Snapshot
 
 <!-- AGENTTEAMS:BEGIN threat_intelligence v=1 -->
-Generated at: `2026-05-21T15:25:06Z`
+Generated at: `2026-06-02T21:53:20Z`
 
 **Sources:**
 
@@ -232,3 +246,7 @@ Cleared for: [specific action cleared, or NONE if HALT]
 **Signed Waivers** — Controlled exceptions are recorded in `references/security-waivers.log.csv` and must be signed with `AGENTTEAMS_WAIVER_SIGNING_KEY`. Waivers must be time-bounded, scoped to a specific action, and marked `conditions_verified=verified` before they can authorize a blocked destructive or stale-intelligence gate.
 
 > **HALT is final.** If this agent returns HALT, the operation must stop. The orchestrator must surface the finding to the user before any alternative path is attempted.
+
+## Project-Specific Notes
+
+> ⚙️ **USER-EDITABLE** — project-specific rules, overrides, and extensions for this agent. This section lies outside every `AGENTTEAMS` fence and is preserved verbatim across `agentteams --update --merge`.

@@ -1,3 +1,4 @@
+<!-- AGENTTEAMS:BEGIN content v=1 -->
 # ProjectRepositories — Agent Team Topology
 
 > **Auto-generated.** Regenerated on every `build_team.py` run.
@@ -1902,3 +1903,4 @@ digraph "ProjectRepositories Agent Team" {
   }
 }
 ```
+<!-- AGENTTEAMS:END content -->

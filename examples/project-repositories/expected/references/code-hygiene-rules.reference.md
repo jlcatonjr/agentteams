@@ -159,6 +159,38 @@ grep -rn "except:\|except Exception" */outputs/
 ```
 Each hit must be justified as an unavoidable external-failure boundary; otherwise it is a violation. Prefer a dictionary-driven dispatch or an explicit guard that raises.
 
+### CH-25 — Screen AI-Generated Code Against the Bad-Habits Catalog
+
+**Category:** AI-Generated Code
+**Severity:** High
+
+Code authored or substantially edited by an AI agent must be screened against
+the AI bad-habits catalog before integration into the main program path. The
+catalog (`references/ai-bad-habits-watch.reference.md`, entries `BH-01..BH-NN`)
+is a curated, version-controlled list of **code-quality, correctness, and
+process** habits specific to AI agents, each mapped to a corrective pattern
+(source of truth: `agentteams/ai_bad_habits.py`).
+
+**Security-class AI habits are out of scope here.** Insecure-by-default code
+(injection, secrets exposure, excessive agency, supply chain, unbounded
+consumption) is owned by `@security` (CWE / OWASP LLM & Web taxonomies +
+S-rules). The catalog deliberately does not duplicate them; route every security
+finding to `@security`.
+
+The catalog is **authoritative** for the habits it lists; where a `BH-` entry
+carries a verified cross-link to an existing `CH-` rule, that rule governs the
+detail. Where the cross-link is `—`, the catalog entry is itself the rule.
+
+**Enforcement check (illustrative):**
+```
+# A new/changed file authored by an agent must not introduce any BH-NN
+# code-quality/correctness/process habit whose corrective pattern is unmet.
+# Security-class concerns are escalated to @security, not catalogued here.
+```
+
+This rule does not duplicate `@security`'s domain (single-source-of-truth,
+[[CH-05]] / [[CH-14]]).
+
 <!-- Example:
 ### CH-21 — Project-Specific Rule Name
 

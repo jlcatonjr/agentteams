@@ -1,3 +1,4 @@
+<!-- AGENTTEAMS:BEGIN content v=1 -->
 # SETUP-REQUIRED.md
 
 The following **2 placeholder(s)** could not be automatically resolved
@@ -27,3 +28,4 @@ agent files and replace with the correct value.
 
 
 Once all items above are resolved, invoke `@conflict-auditor` to verify consistency.
+<!-- AGENTTEAMS:END content -->

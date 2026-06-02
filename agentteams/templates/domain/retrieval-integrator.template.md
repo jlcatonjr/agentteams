@@ -38,9 +38,9 @@ contract; consult them before validating any retrieval claim:
 
 **Retrieval contract references:**
 
-`#file:.github/agents/references/retrieval-integration.reference.md`
+`#file:references/retrieval-integration.reference.md`
 
-`#file:.github/agents/references/retrieval-trigger-contract.reference.md`
+`#file:references/retrieval-trigger-contract.reference.md`
 
 The integration reference holds retrieval mode, query and maintenance
 entrypoints, source of truth, and freshness. The trigger contract reference

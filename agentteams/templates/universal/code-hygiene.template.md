@@ -41,7 +41,7 @@ The code-hygiene rules were developed inductively from operational needs in soft
 
 **Reference for Design Context:**
 
-`#file:.github/agents/references/unix-philosophy-mapping.reference.md`
+`#file:references/unix-philosophy-mapping.reference.md`
 
 When interpreting rules or proposing extensions, consult this reference to understand the design principles they serve and how they relate to broader software engineering wisdom. This grounding helps maintain consistency across decisions and provides context for why certain patterns are preferred.
 
@@ -70,7 +70,7 @@ When interpreting rules or proposing extensions, consult this reference to under
 
 Full enforcement details are extracted to the companion reference file:
 
-`#file:.github/agents/references/code-hygiene-rules.reference.md`
+`#file:references/code-hygiene-rules.reference.md`
 
 The following rules are invariant across all projects:
 

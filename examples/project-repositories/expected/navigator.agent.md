@@ -61,7 +61,7 @@ You are the **repository navigator** for ProjectRepositories. You maintain the p
 
 The current agent team topology is maintained as a directed graph:
 
-`#file:.github/agents/references/pipeline-graph.md`
+`#file:references/pipeline-graph.md`
 
 The graph is **regenerated automatically** on every pipeline run. To refresh it manually:
 
@@ -82,6 +82,10 @@ python -m src.graph .github/agents/ --output .github/agents/references/pipeline-
 
 ---
 
+<!-- agentteams-lint: no-memory-index OK — the consultation protocol is
+     stated authoritatively as Invariant Rule 2 below rather than via the
+     canonical v=2 fence; @navigator IS the source of the protocol that
+     audit/validation templates' fences reference. -->
 ## Invariant Rules
 
 1. **Structural lookups never come from memory.** For *structural / current-file* queries ("where is `foo.py`?", "what files are in module Y?", "which agent owns workstream Z?"), always read the project map or search the file system. Do not consult the memory index for these — it is a history layer, not a structural index.
@@ -104,3 +108,7 @@ python -m src.graph .github/agents/ --output .github/agents/references/pipeline-
 3. **Regenerate the project map after structural changes** — new files, new directories, renamed files
 4. **You are read-oriented** — you do not modify deliverable content, agent docs, or source files
 5. **External repo paths are read-only** — navigate but never modify files outside the project
+
+## Project-Specific Notes
+
+> ⚙️ **USER-EDITABLE** — project-specific rules, overrides, and extensions for this agent. This section lies outside every `AGENTTEAMS` fence and is preserved verbatim across `agentteams --update --merge`.

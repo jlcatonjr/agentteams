@@ -1,3 +1,4 @@
+<!-- AGENTTEAMS:BEGIN content v=1 -->
 # Work Summary Tooling Reference
 
 ## Daily Window Commands
@@ -61,3 +62,4 @@ If no criterion matches, classify under **Other Transformations**.
 - Exclude `.github/agents/.agentteams-backups/` from evidence collection unless the request is explicitly forensic.
 - Keep summary generation scoped to this repository.
 - Run required adversarial and conflict audits after summary generation.
+<!-- AGENTTEAMS:END content -->

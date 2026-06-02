@@ -76,7 +76,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   flag accepts comma-separated `<namespace>:<feature>` tokens that gate
   opt-in emission paths. Default emission is unchanged when omitted.
   Public surface: `agentteams.host_features.parse_tokens`, `validate`,
-  `is_enabled`. See [API reference](api-reference/host-features.md).
+  `is_enabled`. See the API reference at `docs_src/api-reference/host-features.md`.
 - **Emission baselines (Phase 0).** New `--capture-baseline` /
   `--check-baseline` flags write a deterministic SHA-256 manifest of the
   output tree and diff against a stored one — used by the new
