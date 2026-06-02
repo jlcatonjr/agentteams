@@ -8,6 +8,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### added
 
+- **AI bad-habits watch.** New `agentteams.ai_bad_habits` catalog (`BH-01..BH-17`)
+  of bad coding habits common across AI agents, each mapped to a corrective
+  pattern and sourced only from maintained upstream catalogs (CWE Top 25, OWASP
+  Top 10 for LLM Applications, OWASP Web Top 10). Adds code-hygiene rule **CH-25**
+  (screen AI-authored/edited code), a per-consumer
+  `references/ai-bad-habits-watch.reference.md` generated like the security watch
+  (template + `build_catalog_placeholders` + `analyze.py` registration), a tracked
+  repo-root daily-watch artifact `references/ai-bad-habits-watch.md`, the
+  `scripts/research_ai_bad_habits.py` daily stage, and the supervised-PR
+  `.github/workflows/ai-bad-habits-watch.yml` (`awaiting-human`, no auto-merge;
+  `workflow_dispatch`-only until the first run is reviewed). Plans and
+  adversarial/conflict audits under `references/plans/`.
+
 - **PR management subsystem.** New agents `@pr-manager`, `@pr-notifier`, and
   `@pr-reminder`; Python module `agentteams.pr_management` (recipient-registry
   loader, gh-CLI wrappers, stale-PR scan with dedup, end-of-task

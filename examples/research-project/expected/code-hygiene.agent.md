@@ -108,6 +108,20 @@ Required project extensions for this repository:
 | CH-22 | Type Check Function/Class Inputs | Type Safety | High |
 | CH-23 | Fail Fast on Invalid Inputs | Defensive Programming | **Critical** |
 | CH-24 | Exception Handling Is a Last Resort; Encode Conditions Explicitly | Defensive Programming | **Critical** |
+| CH-25 | Screen AI-Generated Code Against the Bad-Habits Catalog | AI-Generated Code | High |
+
+**CH-25 — AI bad-habits screening.** When auditing code authored or substantially
+edited by an AI agent, screen it against the AI bad-habits catalog before
+clearing it for mainline integration:
+
+`#file:references/ai-bad-habits-watch.reference.md`
+
+The catalog (`BH-01..BH-NN`) is refreshed daily by the `ai-bad-habits-watch`
+workflow from maintained upstream sources (CWE Top 25, OWASP Top 10 for LLM
+Applications, OWASP Web Top 10). Security habits (`BH-01..BH-10`) escalate to
+`@security`; hygiene/process habits report per the catalog's verified `CH-`/`S-`
+cross-links (`—` means the catalog entry is itself the rule). Do not restate
+OWASP/CWE taxonomies in agent docs — reference the catalog ids only (CH-05/CH-14).
 
 ### Audit Output Format
 

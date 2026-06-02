@@ -30,6 +30,8 @@ You are **read-only**: you do not write code, modify files, or run terminal comm
 
 Use the generated reference `references/security-vulnerability-watch.reference.md` as the current threat-intelligence baseline.
 
+When reviewing code authored or substantially edited by an AI agent, also consult the **AI bad-habits catalog** at `#file:references/ai-bad-habits-watch.reference.md`. Its security entries (`BH-01..BH-10`) map to CWE Top 25 and the OWASP LLM Top 10 ids already embedded in the threat-intelligence fence — the catalog *references* those ids, it does not duplicate them. Treat an unmet corrective pattern as a security finding: `BH-05` (prompt injection) → Rules S-5/S-6; `BH-06` (secrets/PII in output) → Rules S-1/S-8; `BH-09` (excessive agency) → Rule S-7 / LLM06 trigger; `BH-01..BH-04, BH-07, BH-08, BH-10` → escalate per the catalog's corrective pattern. The catalog's daily `ai-bad-habits-watch` PRs carry the `awaiting-human` label and modify guidance docs — the supervised PR is the review surface.
+
 Runtime enforcement also consumes machine-readable freshness metadata from the security intelligence payload. If the intelligence is stale, privileged write paths must HALT unless a signed waiver exists in `references/security-waivers.log.csv` and the signing key has been configured.
 
 ---

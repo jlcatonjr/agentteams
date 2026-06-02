@@ -1194,6 +1194,14 @@ def _plan_output_files(
         "component_slug": None,
     })
 
+    # AI bad-habits catalog (always — @code-hygiene CH-25 + @security screening)
+    files.append({
+        "path": "references/ai-bad-habits-watch.reference.md",
+        "template": f"{agents_dir}ai-bad-habits-watch.reference.template.md",
+        "type": "artifact",
+        "component_slug": None,
+    })
+
     # Framework watch reference (always — daily-pipeline transmission target)
     files.append({
         "path": "references/framework-watch.reference.md",

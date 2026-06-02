@@ -159,6 +159,34 @@ grep -rn "except:\|except Exception" src/
 ```
 Each hit must be justified as an unavoidable external-failure boundary; otherwise it is a violation. Prefer a dictionary-driven dispatch or an explicit guard that raises.
 
+### CH-25 — Screen AI-Generated Code Against the Bad-Habits Catalog
+
+**Category:** AI-Generated Code
+**Severity:** High
+
+Code authored or substantially edited by an AI agent must be screened against
+the AI bad-habits catalog before integration into the main program path. The
+catalog (`references/ai-bad-habits-watch.reference.md`, entries
+`BH-01..BH-NN`) maps each habit to a corrective pattern and is refreshed daily
+from maintained
+upstream sources (CWE Top 25, OWASP Top 10 for LLM Applications, OWASP Web Top
+10) by `scripts/research_ai_bad_habits.py`.
+
+The catalog is **authoritative** for these habits; where a `BH-` entry carries a
+verified cross-link to an existing `CH-` or `S-` rule, that rule governs the
+detail. Where the cross-link is `—`, the catalog entry is itself the rule.
+
+**Enforcement check (illustrative):**
+```
+# A new/changed file authored by an agent must not introduce any BH-NN habit
+# whose corrective pattern is unmet. Security habits (BH-01..BH-10) escalate
+# to @security; hygiene/process habits route per the catalog cross-links.
+```
+
+This rule does not duplicate upstream taxonomies: OWASP LLM Top 10 names live in
+the `@security` threat-intelligence fence (single-source-of-truth, [[CH-05]] /
+[[CH-14]]); the catalog references the `LLMxx` ids only.
+
 <!-- Example:
 ### CH-21 — Project-Specific Rule Name
 

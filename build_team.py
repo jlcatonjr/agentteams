@@ -1268,6 +1268,15 @@ def main(argv: list[str] | None = None) -> int:
     )
     manifest["auto_resolved_placeholders"].update(security_placeholders)
 
+    # AI bad-habits catalog placeholder (single wiring site — the main build
+    # path only; convert/interop/bridge copy references/ verbatim and never
+    # render this template). Static catalog, offline, network-free.
+    from agentteams import ai_bad_habits as _ai_bad_habits
+
+    manifest["auto_resolved_placeholders"].update(
+        _ai_bad_habits.build_catalog_placeholders()
+    )
+
     # Step 4d.2: Framework-watch placeholders (Claude Code etc.).
     # Offline by default so consumer repos do not need network; the
     # daily-pipeline refreshes the snapshot via the research stage.
