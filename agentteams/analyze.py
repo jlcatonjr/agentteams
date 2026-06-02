@@ -1180,6 +1180,15 @@ def _plan_output_files(
         "component_slug": None,
     })
 
+    # Unix-philosophy mapping reference (always — @code-hygiene design-principle
+    # reference linked from code-hygiene.template.md's "Philosophical Alignment" section).
+    files.append({
+        "path": "references/unix-philosophy-mapping.reference.md",
+        "template": f"{domain_dir}unix-philosophy-mapping-reference.template.md",
+        "type": "reference",
+        "component_slug": None,
+    })
+
     # Security vulnerability watch references (always)
     files.append({
         "path": "references/security-vulnerability-watch.reference.md",

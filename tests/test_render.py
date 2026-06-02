@@ -191,6 +191,35 @@ def test_validate_cross_refs_skips_routing_table_rows():
     assert warnings == []
 
 
+def test_validate_cross_refs_file_ref_resolves():
+    # A `#file:references/...` token whose target is in the emitted set is clean.
+    rendered = [
+        ("code-hygiene.agent.md", "See `#file:references/code-hygiene-rules.reference.md`."),
+        ("references/code-hygiene-rules.reference.md", "Rules."),
+    ]
+    warnings = validate_cross_refs(rendered)
+    assert warnings == []
+
+
+def test_validate_cross_refs_dangling_file_ref_flagged():
+    # Regression for the unix-philosophy gap: a `#file:references/...` token with no
+    # matching emitted file must be flagged.
+    rendered = [
+        ("code-hygiene.agent.md", "See `#file:references/unix-philosophy-mapping.reference.md`."),
+    ]
+    warnings = validate_cross_refs(rendered)
+    assert any("unix-philosophy-mapping.reference.md" in w and "#file:" in w for w in warnings)
+
+
+def test_validate_cross_refs_file_ref_ignored_in_code_block():
+    # `#file:` tokens inside fenced code blocks are examples, not real references.
+    rendered = [
+        ("agent-refactor.agent.md", "```\n#file:references/does-not-exist.reference.md\n```"),
+    ]
+    warnings = validate_cross_refs(rendered)
+    assert warnings == []
+
+
 def test_validate_cross_refs_skips_applies_when_present_in_team_lines():
     rendered = [
         ("orchestrator.agent.md", "This applies when `@retrieval-integrator` is present in team."),
@@ -511,11 +540,11 @@ def _retrieval_integrator_template_text() -> str:
 def test_retrieval_integrator_template_references_contract_files():
     """retrieval-integrator agent must point to both generated retrieval reference files."""
     content = _retrieval_integrator_template_text()
-    assert "#file:.github/agents/references/retrieval-integration.reference.md" in content, (
+    assert "#file:references/retrieval-integration.reference.md" in content, (
         "retrieval-integrator.template.md must #file:-reference the retrieval integration "
         "reference"
     )
-    assert "#file:.github/agents/references/retrieval-trigger-contract.reference.md" in content, (
+    assert "#file:references/retrieval-trigger-contract.reference.md" in content, (
         "retrieval-integrator.template.md must #file:-reference the retrieval trigger "
         "contract reference"
     )

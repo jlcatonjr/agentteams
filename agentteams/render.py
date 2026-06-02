@@ -454,6 +454,12 @@ def validate_cross_refs(rendered_files: list[tuple[str, str]]) -> list[str]:
 
     warnings: list[str] = []
     agent_ref_re = re.compile(r"`@([a-z0-9\-]+)`")
+    # `#file:<path>` companion-reference tokens. Targets are agent-relative
+    # (bare `references/<name>`), so an emitted path `references/<name>` in
+    # all_paths is the resolution target. Only `references/` targets are
+    # validated here — `#file:` tokens may also point at source files, which
+    # are not part of the generated set and cannot be checked this way.
+    file_ref_re = re.compile(r"#file:([^\s`)]+)")
     # Lines whose content qualifies a reference as conditional / optional.
     # Patterns handled:
     #   *(If `@slug` in team)* ...  — guarded workflow step
@@ -475,6 +481,7 @@ def validate_cross_refs(rendered_files: list[tuple[str, str]]) -> list[str]:
 
     for output_path, content in rendered_files:
         seen: set[str] = set()  # deduplicate per (file, slug)
+        seen_files: set[str] = set()  # deduplicate per (file, #file: target)
         in_code_block = False
         for line in content.splitlines():
             # Track fenced code block state — refs inside code blocks are examples, not invocations
@@ -483,6 +490,17 @@ def validate_cross_refs(rendered_files: list[tuple[str, str]]) -> list[str]:
                 continue
             if in_code_block:
                 continue
+            # `#file:` companion-reference targets are validated even on lines
+            # that match the agent-routing conditional patterns below.
+            for fmatch in file_ref_re.finditer(line):
+                target = fmatch.group(1)
+                if "references/" not in target or target in seen_files:
+                    continue
+                if target not in all_paths:
+                    seen_files.add(target)
+                    warnings.append(
+                        f"{output_path}: #file:{target} does not resolve to a generated reference file"
+                    )
             # Skip routing table rows and conditional workflow markers
             if conditional_re.search(line):
                 continue
