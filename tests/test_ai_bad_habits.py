@@ -128,7 +128,10 @@ def test_propose_detects_missing_artifact(tmp_path: Path) -> None:
     assert {c["path"] for c in proposal["changes"]} == {ai_bad_habits.WATCH_REL}
 
 
-def test_apply_writes_allowlisted_path(tmp_path: Path) -> None:
+def test_apply_writes_allowlisted_path(monkeypatch, tmp_path: Path) -> None:
+    # Set the marker so apply runs regardless of the ambient CI env (GitHub
+    # Actions sets CI=true, which would otherwise trip the CI guard first).
+    monkeypatch.setenv("AGENTTEAMS_ALLOW_CI_APPLY", "1")
     repo = _repo(tmp_path)
     proposal = ai_bad_habits.propose_watch_patch(repo, offline=True)
     result = ai_bad_habits.apply_watch_patch(proposal, repo)
@@ -154,14 +157,18 @@ def test_apply_allows_in_ci_with_marker(monkeypatch, tmp_path: Path) -> None:
     assert ai_bad_habits.apply_watch_patch(proposal, repo)["applied"]
 
 
-def test_apply_rejects_path_outside_allowlist(tmp_path: Path) -> None:
+def test_apply_rejects_path_outside_allowlist(monkeypatch, tmp_path: Path) -> None:
+    # Marker set so we test the allow-list check, not the CI guard (which is
+    # checked first and would otherwise mask this in CI).
+    monkeypatch.setenv("AGENTTEAMS_ALLOW_CI_APPLY", "1")
     repo = _repo(tmp_path)
     bad = {"changes": [{"path": "build_team.py", "operation": "replace_file", "new_text": "x"}]}
     with pytest.raises(RuntimeError, match="outside allow-list"):
         ai_bad_habits.apply_watch_patch(bad, repo)
 
 
-def test_apply_rejects_unknown_operation(tmp_path: Path) -> None:
+def test_apply_rejects_unknown_operation(monkeypatch, tmp_path: Path) -> None:
+    monkeypatch.setenv("AGENTTEAMS_ALLOW_CI_APPLY", "1")
     repo = _repo(tmp_path)
     bad = {"changes": [{"path": ai_bad_habits.WATCH_REL, "operation": "delete", "new_text": ""}]}
     with pytest.raises(RuntimeError, match="unsupported operation"):
