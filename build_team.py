@@ -298,6 +298,21 @@ def _build_parser() -> argparse.ArgumentParser:
         ),
     )
     parser.add_argument(
+        "--no-add-fence-markers",
+        action="store_true",
+        dest="no_add_fence_markers",
+        help=(
+            "Opt OUT of the default behaviour where --update --merge (with "
+            "--yes) auto-retrofits AGENTTEAMS `content` fence markers onto "
+            "legacy (unfenced) files so their template region becomes mergeable "
+            "instead of being skipped. Each retrofit is backed up first and the "
+            "shrink-guard still suppresses material template shrinks, so the "
+            "legacy body is recoverable. Pass this flag to keep the conservative "
+            "skip-legacy behaviour (distinct from the standalone per-file "
+            "`--add-fence-markers PATH` retrofit)."
+        ),
+    )
+    parser.add_argument(
         "--scan-security",
         action="store_true",
         help="Scan generated agent files for security issues (PII, credentials, unresolved placeholders)",
@@ -1627,6 +1642,7 @@ def main(argv: list[str] | None = None) -> int:
             yes=args.yes,
             shrink_policy=getattr(args, "shrink_policy", "preserve"),
             backup_path=backup_path,
+            auto_fence_legacy=not getattr(args, "no_add_fence_markers", False),
         )
         emit.print_summary(result, manifest)
         _persist_shrink_events(args, result, manifest, output_dir)
@@ -1843,6 +1859,7 @@ def main(argv: list[str] | None = None) -> int:
         yes=args.yes,
         shrink_policy=getattr(args, "shrink_policy", "preserve"),
         backup_path=backup_path,
+        auto_fence_legacy=not getattr(args, "no_add_fence_markers", False),
     )
     emit.print_summary(result, manifest)
     _persist_shrink_events(args, result, manifest, output_dir)

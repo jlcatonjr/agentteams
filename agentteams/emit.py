@@ -73,6 +73,10 @@ class EmitResult:
     # from on-disk (True = template change was lost; False = harmless skip).
     skipped_legacy: list[str] = field(default_factory=list)
     skipped_legacy_drift: list[bool] = field(default_factory=list)
+    # Auto-fence-on-update: legacy files that were (or, in dry-run, would be)
+    # retrofitted with a `content` fence so their template region became
+    # mergeable this run instead of being skipped.
+    fence_injected: list[str] = field(default_factory=list)
     # T2.D5: paths whose merge was skipped because shrink_policy="halt"
     # detected a destructive shrink. Distinct from `skipped` (overwrite
     # declined) and `errors` (true failures) — these are intentional
@@ -844,6 +848,7 @@ def emit_all(
     yes: bool = False,
     shrink_policy: str = "preserve",
     backup_path: Path | None = None,
+    auto_fence_legacy: bool = False,
 ) -> EmitResult:
     """Write rendered files to output_dir.
 
@@ -923,6 +928,39 @@ def emit_all(
         normalized_content = _normalize_generated_content(rel_path, content)
         normalized_content = _ensure_project_notes_section(rel_path, normalized_content)
 
+        # Auto-fence-on-update: retrofit a `content` fence onto an eligible
+        # legacy (unfenced) file so its template region becomes mergeable this
+        # run instead of being skipped. Default-on at the CLI (build_team passes
+        # auto_fence_legacy=True unless --no-add-fence-markers); --yes-gated;
+        # never applied to machine-managed overwrite-fenced paths. Content-safe:
+        # the pre-injection backup retains the original legacy body (recoverable),
+        # and the shrink-guard below still suppresses material template shrinks.
+        auto_fenced_now = False
+        _auto_wrapped: str | None = None
+        if (
+            merge
+            and auto_fence_legacy
+            and yes
+            and target.exists()
+            and not _is_machine_managed_merge_overwrite_path(rel_path)
+        ):
+            try:
+                _pre_text = target.read_text(encoding="utf-8")
+            except OSError:
+                _pre_text = None
+            if _pre_text is not None and not _FENCE_BEGIN_RE.search(_pre_text):
+                from agentteams.fence_inject import _unique_fence_id, _wrap_body
+                _auto_wrapped = _wrap_body(_pre_text, _unique_fence_id(_pre_text))
+                auto_fenced_now = True
+                if dry_run:
+                    result.fence_injected.append(f"{target} (dry-run)")
+                else:
+                    if backup_path is not None:
+                        backup_path.mkdir(parents=True, exist_ok=True)
+                        shutil.copy2(target, backup_path / target.name)
+                    target.write_text(_auto_wrapped, encoding="utf-8")
+                    result.fence_injected.append(str(target))
+
         if dry_run:
             # Plan 1: compute the action accurately (mirror the real write
             # path's classification) and record a structured DryRunEntry.
@@ -934,6 +972,11 @@ def emit_all(
                     existing_text = target.read_text(encoding="utf-8")
             except OSError:
                 existing_text = None
+            # Dry-run fidelity: if the real run would auto-fence this legacy file,
+            # merge against the (in-memory) wrapped body so the reported action
+            # matches the live run instead of showing a legacy SKIP.
+            if auto_fenced_now and _auto_wrapped is not None:
+                existing_text = _auto_wrapped
 
             if merge and existing_text is not None:
                 mr = _merge_fenced_content(
@@ -1206,6 +1249,12 @@ def print_summary(result: EmitResult, manifest: dict[str, Any]) -> None:
     else:
         print(f"\nAgent team generated for {project!r} ({framework})")
         print(f"  Written:  {len(result.written)} file(s)")
+        if result.fence_injected:
+            print(
+                f"  Fence-retrofitted: {len(result.fence_injected)} legacy file(s) "
+                f"(AGENTTEAMS content fence added so template regions merge; "
+                f"originals backed up)"
+            )
         if result.merged:
             print(f"  Merged:   {len(result.merged)} file(s) (template regions updated, user content preserved)")
         if result.unchanged:

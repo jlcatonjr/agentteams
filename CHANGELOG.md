@@ -8,6 +8,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### changed
 
+- **`--update --merge` now auto-retrofits fence markers onto legacy files by
+  default.** Previously, files without `AGENTTEAMS` fence markers (legacy/
+  pre-fence agent docs) were SKIPped on update, so their template regions never
+  updated. Now, when run with `--yes`, `--update --merge` auto-wraps each
+  eligible legacy file's body in a `content` fence (backing the original up
+  first) so its template region merges — bringing long-stale downstream docs
+  current. It is **content-safe**: the pre-injection backup retains the original
+  body and the shrink-guard still suppresses material template shrinks (so richer
+  legacy content is preserved, recoverable, never silently lost). Opt out with
+  **`--no-add-fence-markers`** to keep the conservative skip-legacy behaviour.
+  `--yes`-gated (no file mutation without it). Distinct from the standalone
+  per-file `--add-fence-markers PATH` retrofit. Plan + adversarial audit under
+  `references/plans/`.
 - **`framework-auto-update.yml` converted from auto-merge to a supervised PR.**
   The daily framework-update workflow now opens an `awaiting-human` PR and stops
   — the maintainer reviews and merges manually (matching `advisory-pr` and
