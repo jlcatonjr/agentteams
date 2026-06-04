@@ -124,10 +124,10 @@ Any run of `--update` or `--update --merge` against a deployed agent team must f
 ### Post-Update
 
 1. **Capture diff** — For git repos, capture `git diff -- .github/agents/` after the run. For non-git repos, run `diff -r <backup_path> <agents_dir>` to compare backup vs current.
-2. **Analyse for outside-fence deletions** — Any removed line (`-` prefix in diff) that is NOT inside an `AGENTTEAMS:BEGIN/END` block is an outside-fence deletion. Classify the result:
-   - **OK** — No outside-fence deletions; diff contains only fenced-region changes
-   - **WARN** — One or more outside-fence deletions detected; requires human review of the specific lines before commit
-   - **ERROR** — `--update --merge` exited non-zero; write may be partial; restore from backup before proceeding
+2. **Analyse for real content loss** — A raw "deletion outside an `AGENTTEAMS:BEGIN/END` fence" is a noisy signal: fully-generated fenceless files (`pipeline-graph.md`, `ref-*.reference.md`, `SETUP-REQUIRED.md`, `build-log.json`) and volatile intel (`security-vulnerability-watch.*`, CVE rows) are regenerated wholesale every run and produce thousands of benign "outside-fence" deletions. Classify on the **authoritative** signals instead — deletions inside a `USER-EDITABLE` region and material shrink Notices (step 8):
+   - **OK** — No deletions inside any `USER-EDITABLE` region and no material shrink Notices; remaining diff is fenced-region/generated-file regeneration and intel churn.
+   - **WARN** — One or more `USER-EDITABLE`-region deletions or material shrink Notices; requires human review of the specific lines before commit.
+   - **ERROR** — the **merge itself** failed (descriptor/emit error; no agent files written). A **non-zero exit code is NOT automatically ERROR**: `--update --merge` writes every agent file first, then post-merge attestation artifacts; a crash in a post-merge step (e.g. an interpreter missing `jsonschema`) exits non-zero *after* a complete, non-destructive merge. Confirm via the content audit (and look for `!  … write failed (build-log healed)` notices) before treating a non-zero exit as failure or restoring from backup. See `references/systematic-update-lessons.md`.
 3. **WARN handling** — Do not commit a WARN repo without reviewing the specific deleted lines. Confirm each deletion is intentional (e.g., a placeholder that was properly resolved). Record sign-off in the run log.
 4. **Non-git backup verification** — After the run, confirm `find <agents_dir>/.agentteams-backups -maxdepth 1 -type d` shows a timestamped directory with a non-zero file count.
 5. **Results log** — Record repo, status (OK/WARN/ERROR), file count, lines added, lines deleted, outside-fence deletions, and backup path in a results CSV. Archive the previous CSV before overwriting.
@@ -180,7 +180,7 @@ These maintenance practices keep deployed teams compatible with `--update --merg
 
 ### 5) Recovery Rule
 
-- If update output is unexpected (outside-fence deletions, broad skip set, or non-zero exit), stop and restore from backup before attempting another run.
+- If the content audit is unexpected (a `USER-EDITABLE`-region deletion, a material shrink Notice, or a broad skip set), stop and restore from backup before attempting another run. A bare non-zero exit alone is **not** a restore trigger — diagnose it first (it is frequently a post-merge attestation crash over a complete, non-destructive merge); restore only if the merge itself failed or the content audit shows real loss.
 - Keep newest backup snapshots until verification and review complete; after commit, retain/prune backups per repository policy.
 
 ## Living Document Rules

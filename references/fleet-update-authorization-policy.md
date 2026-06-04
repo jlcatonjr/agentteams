@@ -56,7 +56,7 @@
   1. Pre-run backup will be created per target repo
   2. `--update --merge` (non-destructive mode) will be used
   3. Operator has reviewed dry-run output
-  4. WARN status entries reviewed and signed off before commit
+  4. Content audit (USER-EDITABLE deletions + material shrink notices) reviewed and signed off before commit — exit code is diagnostic only
 - No credentials/PII in fleet operation commands or logs
 - Requestor identity verified and authorized
 
@@ -123,7 +123,7 @@ User Request → Orchestrator
 **Condition:** Fleet operation complies with four exception pathway conditions.
 
 **Condition A: Pre-Run Backup Verified**
-- Requirement: Each target repo has `.backups/<timestamp>/` directory
+- Requirement: Each target repo has a `<output_dir>/.agentteams-backups/<timestamp>/` directory (= `.github/agents/.agentteams-backups/<timestamp>/` for the default copilot-vscode layout). The auto-backup is written **relative to the run's output dir — not** a top-level `.backups/`, and not hardcoded to `.github/agents/` for repos built with a non-default `--output`. A verification script MUST derive the path from each run's output dir.
 - Verification: Script checks backup existence before `--update` on each repo
 - Evidence: `tmp/by-week/2026-W19/fleet-update-backup-verification.txt` (per-repo status)
 
@@ -137,10 +137,10 @@ User Request → Orchestrator
 - Verification: Dry-run captured in `tmp/by-week/2026-W19/fleet-update-dry-run.txt`
 - Evidence: Operator sign-off in `tmp/by-week/2026-W19/fleet-update-operator-approval.txt` (format: date, approver name, signature)
 
-**Condition D: WARN Status Sign-Off**
-- Requirement: Any repos with WARN status are manually reviewed before commit
-- Verification: Results CSV captures WARN status; operator explicitly approves each WARN entry
-- Evidence: `tmp/by-week/2026-W19/fleet-update-operator-signoff.txt` (per-repo status, reviewed_by, timestamp)
+**Condition D: Content-Audit Sign-Off (not exit-code)**
+- Requirement: Per-repo status is derived from a **content audit**, not the process exit code. A non-zero exit is **not** a reliable failure signal: `--update --merge` writes every agent file first, then writes post-merge attestation artifacts (delivery-receipt, eval-suite, memory-index, model-routing); a failure in any post-merge step (e.g. a missing `jsonschema` in the chosen interpreter) exits non-zero **after the merge already succeeded non-destructively**. The authoritative safety signals are: zero deletions inside `USER-EDITABLE` regions, zero material shrink-guard notices, and no generated reference file shrinking. See [Systematic Update Lessons](systematic-update-lessons.md), Lessons 1 & 3.
+- Verification: Results CSV records, per repo, USER-EDITABLE deletion count and shrink-notice count (a raw exit code MAY be recorded for diagnostics but MUST NOT be the gate). Any repo with a non-zero USER-EDITABLE deletion count or a material shrink is manually reviewed before commit.
+- Evidence: `tmp/by-week/2026-W19/fleet-update-operator-signoff.txt` (per-repo content-audit status, reviewed_by, timestamp)
 
 **Success Criteria (PASS):** All four conditions verified with evidence.
 
@@ -156,10 +156,11 @@ User Request → Orchestrator
 
 **Review Checklist:**
 - [ ] Results CSV: all 38 repos processed (no missing rows)
-- [ ] Backup verification: all repos have backups before update
-- [ ] Update exit codes: no repos with ERROR status (exit code != 0)
-- [ ] WARN status repos: manually reviewed and approved (if any)
-- [ ] Diffs: reviewed for unexpected changes (security scan)
+- [ ] Backup verification: all repos have backups before update (`.github/agents/.agentteams-backups/<ts>/`)
+- [ ] **Content audit (not exit code):** zero `USER-EDITABLE`-region deletions and zero material shrink-guard notices across all repos. A non-zero process exit alone is NOT a HALT — it is frequently a post-merge attestation crash (e.g. interpreter lacking `jsonschema`) over a fully successful merge; investigate the cause, do not assume content loss. Prefer running through the `agentteams` console entry point so the attestation steps have their deps.
+- [ ] Any repo flagged by the content audit: manually reviewed and approved
+- [ ] Diffs: reviewed for unexpected changes (security scan); remember fenceless generated files (`pipeline-graph.md`, `ref-*.reference.md`, `SETUP-REQUIRED.md`) and volatile intel churn dominate the diff and are expected
+- [ ] Per-repo `pre-push` hook blocks surfaced and resolved at source (not blanket `--no-verify`)
 - [ ] Scope: registry and scope-boundary documents are current
 
 **Success Criteria:** Operator checks all items and signs off in `tmp/by-week/2026-W19/fleet-update-operator-signoff.txt`.
@@ -236,7 +237,7 @@ Status: PASS | CONDITIONAL PASS | HALT
 Condition A (Backup): [verified/pending/exception]
 Condition B (Non-Destructive Mode): [verified/pending/exception]
 Condition C (Dry-Run Review): [verified/pending/exception]
-Condition D (WARN Sign-Off): [verified/pending/exception]
+Condition D (Content-Audit Sign-Off; exit code is diagnostic only): [verified/pending/exception]
 
 Exceptions Approved: [list any Type B waivers]
 Conditions Verified: [date/timestamp]
@@ -253,10 +254,11 @@ Approver: [name, role]
 
 Review Checklist:
 - [ ] Results CSV: 38 rows complete
-- [ ] Backup Verification: all repos OK
-- [ ] Update Exit Codes: no errors
-- [ ] WARN Status Repos: [count], all reviewed
-- [ ] Diffs: security scan OK
+- [ ] Backup Verification: all repos OK (.github/agents/.agentteams-backups/<ts>/)
+- [ ] Content Audit: 0 USER-EDITABLE deletions, 0 material shrink notices (exit code is diagnostic only, NOT the gate)
+- [ ] Content-audit-flagged repos: [count], all reviewed
+- [ ] Diffs: security scan OK (fenceless generated files + intel churn expected)
+- [ ] Pre-push hook blocks: surfaced and resolved at source
 - [ ] Scope: adjacent-repos.md and scope-boundary.md current
 
 Approval: SIGNED by [operator name] @ TIMESTAMP
@@ -327,7 +329,7 @@ If this policy requires amendment (new condition, new authority, exception prece
 3. Obtain signatures from all authorities
 4. Update this document and publish new version with revision history
 
-**Current Version:** 1.0 (Fleet-Update-All-Repositories, 2026-W19)  
-**Last Updated:** 2026-05-08  
-**Next Review:** 2026-05-29 (end of 21-day cycle)
+**Current Version:** 1.1 (Fleet-Update-All-Repositories; revised 2026-06-04 after the 2026-W23 fleet run)  
+**Last Updated:** 2026-06-04 (exit-code semantics corrected; backup path made output-dir-relative; Condition D reframed to content-audit — see [Systematic Update Lessons](systematic-update-lessons.md))  
+**Next Review:** 2026-06-25 (end of 21-day cycle)
 

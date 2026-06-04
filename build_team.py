@@ -3214,6 +3214,30 @@ and the drift detector never reads it. See
 """
 
 
+def _require_jsonschema(error_cls: type, artifact: str):
+    """Import and return ``jsonschema``, or raise *error_cls* if it is absent.
+
+    A *missing* jsonschema module is an environment gap (e.g. the run was driven
+    by an interpreter without the dep), not a malformed artifact. Every artifact
+    writer below is wrapped by ``main()`` in a non-fatal
+    ``except (OSError, <error_cls>)`` handler, so converting the ``ImportError``
+    into the writer's own error type lets a fully successful, non-destructive
+    merge finish cleanly (exit 0) instead of aborting with a traceback *after*
+    the merge already wrote every file. The artifact is re-emitted on the next
+    ``--update`` once jsonschema is installed.
+    """
+    try:
+        import jsonschema
+        return jsonschema
+    except ImportError as exc:
+        raise error_cls(
+            f"jsonschema is not installed; cannot validate the {artifact}. "
+            "The merge itself is complete — install jsonschema (or run via the "
+            f"`agentteams` console entry point) to re-emit the {artifact} on the "
+            "next --update."
+        ) from exc
+
+
 class DeliveryReceiptError(RuntimeError):
     """Raised when the delivery receipt cannot be produced or fails schema
     validation (RA2). Callers treat this as non-fatal: the build-log heal
@@ -3263,8 +3287,10 @@ def _write_delivery_receipt(manifest: dict, output_dir: Path) -> Path:
         receipt["agentteams_version"] = str(_agentteams_version)
 
     # RA2: validate against the shipped schema before writing. A non-conforming
-    # receipt is a real defect we want surfaced — not silently written.
-    import jsonschema
+    # receipt is a real defect we want surfaced — not silently written. A
+    # missing jsonschema module degrades to a non-fatal DeliveryReceiptError
+    # (see _require_jsonschema) rather than crashing a completed merge.
+    jsonschema = _require_jsonschema(DeliveryReceiptError, "delivery receipt")
     schema_path = Path(__file__).resolve().parent / "schemas" / "delivery-receipt.schema.json"
     try:
         schema = json.loads(schema_path.read_text(encoding="utf-8"))
@@ -3311,7 +3337,7 @@ def _write_eval_suite(manifest: dict, output_dir: Path) -> Path:
 
     suite = build_eval_suite(manifest)
 
-    import jsonschema
+    jsonschema = _require_jsonschema(EvalSuiteError, "eval suite")
     schema_path = Path(__file__).resolve().parent / "schemas" / "eval-suite.schema.json"
     try:
         schema = json.loads(schema_path.read_text(encoding="utf-8"))
@@ -3357,7 +3383,7 @@ def _write_model_routing(manifest: dict, output_dir: Path) -> Path:
 
     contract = build_routing_contract(manifest)
 
-    import jsonschema
+    jsonschema = _require_jsonschema(ModelRoutingError, "model routing contract")
     schema_path = Path(__file__).resolve().parent / "schemas" / "model-routing.schema.json"
     try:
         schema = json.loads(schema_path.read_text(encoding="utf-8"))
@@ -3487,7 +3513,7 @@ def _validate_memory_index_schema(index: dict[str, object]) -> None:
     controlled ``MemoryIndexError`` instead of surfacing raw ``KeyError`` from
     downstream ranking logic.
     """
-    import jsonschema
+    jsonschema = _require_jsonschema(MemoryIndexError, "memory index")
 
     schema_path = Path(__file__).resolve().parent / "schemas" / "memory-index.schema.json"
     try:
@@ -3593,7 +3619,7 @@ def _write_memory_index(manifest: dict, output_dir: Path) -> Path:
         framework=manifest.get("framework", ""),
     )
 
-    import jsonschema
+    jsonschema = _require_jsonschema(MemoryIndexError, "memory index")
     schema_path = Path(__file__).resolve().parent / "schemas" / "memory-index.schema.json"
     try:
         schema = json.loads(schema_path.read_text(encoding="utf-8"))

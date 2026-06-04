@@ -12,6 +12,8 @@ Read this guide if you:
 
 For long-term infrastructure hygiene standards that keep teams compatible with `--update`, see [Update Compatibility Maintenance Guide](update-compatibility-maintenance-guide.md).
 
+If you are running `--update` across **many repositories at once** (a fleet update), read [Systematic Update Lessons](../references/systematic-update-lessons.md) first — it explains why a successful, non-destructive merge can report a non-zero exit and tens of thousands of "outside-fence deletions," and how to derive real safety status from a content audit instead.
+
 ---
 
 ## Core Concepts

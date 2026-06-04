@@ -12,9 +12,11 @@
 
 **Scope Criteria:** All repositories under `/Users/jamescaton/githubrepositories/` that contain a valid `_build-description.json` file at the project root or within a `.github/agents/` directory.
 
-**Total in Scope:** 38 repositories  
-**Discovery Method:** `find /Users/jamescaton/githubrepositories -type f -name '_build-description.json' | sort`  
-**Discovery Date:** 2026-05-08 (captured for this fleet update execution)  
+**Total in Scope:** ~38 canonical repositories (the literal count drifts as repos are added; do not treat "38" as a fixed gate — see the Discovery Stability Check in §III).  
+**Discovery Method:** `find /Users/jamescaton/githubrepositories -type f -name '_build-description.json' -not -path '*/.worktrees/*' -not -path '*/*.worktrees/*' -not -path '*/archive/*' | sort`  
+**Discovery Date:** 2026-05-08 (re-run 2026-06-04)
+
+> **Exclude worktree and archive copies.** A bare `find … -name '_build-description.json'` also matches `.worktrees/copilot-worktree-*` git-worktree copies and `archive/<repo>` snapshots, which inflated the 2026-06-04 discovery to ~40 paths. These are duplicates of an in-scope repo (a worktree shares the repo's history; an archive copy is out of maintenance) and fall under the existing exclusions in §V (items 1 & 4). The `-not -path` filters above drop them so the count reflects canonical repos only.
 
 **Scope Categories:**
 
@@ -175,7 +177,7 @@ If the fleet-update execution reveals scope issues (e.g., discovered repo cannot
 
 1. **For repos that succeeded but should not have:** No rollback needed; `--merge` mode preserves user content. Run `git diff` to review changes; commit only if intentional.
 
-2. **For repos that failed:** Backups exist (stored in each repo's `.backups/<timestamp>/`). Run `git restore` from backup (details in each repo's update log).
+2. **For repos that failed:** Backups exist (stored in each repo's `.github/agents/.agentteams-backups/<timestamp>/` — the auto-backup written under the output dir, not a top-level `.backups/`). Restore by copying the backed-up files back, or `git restore` if the repo is tracked. Note: a non-zero exit is usually a post-merge attestation crash over a successful merge — confirm with a content audit before treating a repo as "failed" (see [Systematic Update Lessons](systematic-update-lessons.md)).
 
 3. **For scope drift (repos added/removed during execution):** Update `references/adjacent-repos.md` and `tmp/by-week/2026-W19/fleet-update-scope-clarification.txt`. Re-run fleet-update in next cycle with corrected scope.
 
@@ -198,13 +200,13 @@ If the fleet-update execution reveals scope issues (e.g., discovered repo cannot
 ## VIII. Scope Sign-Off
 
 **Scope Approval Authority:** Orchestrator (AgentTeamsModule)  
-**Scope Authority Date:** 2026-05-08  
-**Scope Stability Expiration:** 2026-05-29 (21-day review cycle)  
+**Scope Authority Date:** 2026-05-08 (re-validated 2026-06-04)  
+**Scope Stability Expiration:** 2026-06-25 (21-day review cycle from the 2026-06-04 re-validation)  
 
 This scope boundary is valid for fleet-update execution on 2026-05-08. On or after 2026-05-29, scope must be re-audited and re-approved before proceeding with the next fleet-update cycle.
 
 ---
 
 **Document Version:** 1.0 (Fleet-Update-All-Repositories, 2026-W19)  
-**Last Updated:** 2026-05-08  
+**Last Updated:** 2026-06-04  
 **Maintenance:** `@repo-liaison` Protocol 4 after each fleet cycle

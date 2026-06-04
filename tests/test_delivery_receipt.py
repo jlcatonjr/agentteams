@@ -121,6 +121,49 @@ def test_write_delivery_receipt_produces_schema_valid_payload(tmp_path):
     assert payload["framework"] == "copilot-vscode"
 
 
+def test_require_jsonschema_missing_degrades_to_writer_error(monkeypatch):
+    """A missing jsonschema must surface as the writer's own (non-fatal) error
+    type — never a bare ImportError that would crash a completed merge.
+
+    Regression: in the original fleet run the interpreter lacked jsonschema, so
+    the post-merge ``import jsonschema`` raised ModuleNotFoundError, escaped the
+    ``except (OSError, DeliveryReceiptError)`` handler in ``main()``, and turned
+    a fully successful, non-destructive merge into an exit-1 traceback.
+    """
+    import sys
+
+    # Setting the module to None in sys.modules makes ``import jsonschema`` raise
+    # ImportError without uninstalling the real package.
+    monkeypatch.setitem(sys.modules, "jsonschema", None)
+    with pytest.raises(build_team.DeliveryReceiptError, match="jsonschema is not installed"):
+        build_team._require_jsonschema(build_team.DeliveryReceiptError, "delivery receipt")
+
+
+def test_write_delivery_receipt_missing_jsonschema_is_nonfatal(tmp_path, monkeypatch):
+    """End-to-end: with jsonschema absent the writer raises DeliveryReceiptError
+    (which ``main()`` swallows) and writes NO partial receipt file."""
+    import sys
+
+    monkeypatch.setitem(sys.modules, "jsonschema", None)
+    manifest = {
+        "project_name": "TestProject",
+        "framework": "copilot-vscode",
+        "components": [],
+        "selected_archetypes": [],
+        "agent_slug_list": [],
+        "governance_agents": [],
+        "output_files": [],
+        "tools": [],
+        "auto_resolved_placeholders": {},
+        "manual_required_placeholders": [],
+    }
+    output_dir = tmp_path / ".github" / "agents"
+    output_dir.mkdir(parents=True)
+    with pytest.raises(build_team.DeliveryReceiptError, match="jsonschema is not installed"):
+        build_team._write_delivery_receipt(manifest, output_dir)
+    assert not (output_dir / build_team.DELIVERY_RECEIPT_REL_PATH).exists()
+
+
 def test_write_delivery_receipt_artifact_type_is_not_schema_version(tmp_path):
     """Pins D3: discriminator MUST be ``artifact_type``, not ``schema_version``.
 

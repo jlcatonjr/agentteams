@@ -6,6 +6,41 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### fixed
+
+- **A missing `jsonschema` no longer crashes a completed `--update`.** The
+  post-merge attestation writers (`_write_delivery_receipt`, `_write_eval_suite`,
+  `_write_model_routing`, `_validate_memory_index_schema`, `_write_memory_index`)
+  did a hard `import jsonschema` *after* the merge had already written every
+  agent file. If the running interpreter lacked `jsonschema`, the resulting
+  `ModuleNotFoundError` escaped each writer's non-fatal handler in `main()` and
+  aborted the whole run with a traceback (exit 1) — turning a fully successful,
+  non-destructive merge into an apparent hard failure. This bit a 38-repo fleet
+  update where the batch ran under an interpreter without the dep. A new
+  `_require_jsonschema(error_cls, artifact)` helper now degrades a missing module
+  to the writer's own non-fatal error, so the merge completes (exit 0) and prints
+  `!  … write failed (build-log healed)`; the artifact is re-emitted on the next
+  `--update`. Regression tests in `tests/test_delivery_receipt.py`. See
+  `references/systematic-update-lessons.md`.
+
+### docs
+
+- **New `references/systematic-update-lessons.md`** — fleet (multi-repo) update
+  lessons: exit-code ≠ merge outcome, how to read bulk diffs (fenceless generated
+  files + intel churn dominate; the real signals are `USER-EDITABLE` deletions and
+  shrink-guard notices), `--merge` reverting consumer-side workarounds, and the
+  output-dir-relative backup path. Cross-linked from the update-lifecycle guide
+  and the fleet-update governance docs.
+- **Corrected fleet-update governance docs.** `fleet-update-authorization-policy.md`
+  and `fleet-update-scope-boundary.md`: exit-code-based HALT replaced with a
+  content audit (a non-zero exit is frequently a post-merge attestation crash over
+  a successful merge); backup path corrected to `<output_dir>/.agentteams-backups/`
+  (output-dir-relative, not a top-level `.backups/`); discovery command excludes
+  `.worktrees/`/`archive/` copies; Condition D and review dates reconciled. Fixed
+  `section-fencing-guide.md` to state the real default `--shrink-policy=preserve`
+  (was incorrectly "warn"). The `agent-updater` template's ERROR rung was rewritten
+  so a non-zero exit is no longer equated with a partial write / restore trigger.
+
 ### changed
 
 - **`--update --merge` now auto-retrofits fence markers onto legacy files by
