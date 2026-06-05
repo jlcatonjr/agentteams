@@ -56,6 +56,7 @@ import re
 import sys
 from datetime import UTC, datetime
 from pathlib import Path
+from typing import Any, Callable
 
 # Ensure the agentteams/ package is importable in dev mode (direct script invocation)
 _SCRIPT_DIR = Path(__file__).parent
@@ -657,7 +658,7 @@ def _build_parser() -> argparse.ArgumentParser:
 _DUAL_DESCRIPTOR_FIELDS = ("project_name", "primary_output_dir", "reference_db_path", "deliverables")
 
 
-def _check_dual_descriptor(args) -> None:
+def _check_dual_descriptor(args: argparse.Namespace) -> None:
     """Advisory check: warn when a consumer repo has both the user-supplied
     descriptor and a sibling `_build-description.json` that diverges on a
     small set of stable fields. Read-only; never modifies either file.
@@ -738,7 +739,11 @@ def _check_dual_descriptor(args) -> None:
         print(f"[WARN] could not persist dual-descriptor event: {exc}", file=sys.stderr)
 
 
-def _persist_orphan_events(orphans: list[str], manifest, output_dir: Path) -> None:
+def _persist_orphan_events(
+    orphans: list[str],
+    manifest: dict[str, Any],
+    output_dir: Path,
+) -> None:
     """F5: append the current orphan set to a daily-pipeline artefact.
 
     Delta-only on a (project_label, sorted_orphans) signature so the same
@@ -788,7 +793,12 @@ def _persist_orphan_events(orphans: list[str], manifest, output_dir: Path) -> No
         print(f"[WARN] could not persist orphan events: {exc}", file=sys.stderr)
 
 
-def _persist_shrink_events(args, result, manifest, output_dir: Path) -> None:
+def _persist_shrink_events(
+    args: argparse.Namespace,
+    result: emit.EmitResult,
+    manifest: dict[str, Any],
+    output_dir: Path,
+) -> None:
     """D5: append shrink notices from this run to a daily log under the
     agentteams source tree's gitignored tmp/. Delta-only — no notices means no write.
     Never raises; logging is a best-effort side effect.
@@ -1935,7 +1945,7 @@ def main(argv: list[str] | None = None) -> int:
 # Helpers
 # ---------------------------------------------------------------------------
 
-def _finalize_exit_code(result, args) -> int:
+def _finalize_exit_code(result: emit.EmitResult, args: argparse.Namespace) -> int:
     """Return the final exit code, applying optional fail-on-legacy-skip gate.
 
     A successful emit returns 0 by default. When ``--fail-on-legacy-skip`` is
@@ -2922,9 +2932,9 @@ def _action_matches(action_reviewed: str, action: str) -> bool:
 def _attempt_auto_correct(
     *,
     output_dir: Path,
-    manifest: dict,
-    audit_result,
-):
+    manifest: dict[str, Any],
+    audit_result: Any,
+) -> Any:
     """Invoke standalone Copilot CLI remediation and rerun the audit.
 
     Args:
@@ -2935,6 +2945,13 @@ def _attempt_auto_correct(
     Returns:
         The rerun audit result if remediation succeeded, otherwise the original audit result.
     """
+    # When a concrete audit type cannot be imported at module-load time,
+    # validate minimal shape at runtime before handing off.
+    assert isinstance(manifest, dict), "manifest must be a dict"
+    assert hasattr(audit_result, "has_errors") and hasattr(audit_result, "has_warnings"), (
+        "audit_result must expose has_errors/has_warnings"
+    )
+
     from agentteams import audit as _audit
     from agentteams import remediate as _remediate
 
@@ -3011,8 +3028,8 @@ def _resolve_strict_manual_mode(*, strict_arg: bool | None, self_update: bool) -
 
 
 def _build_final_rendered(
-    manifest: dict,
-    adapter,
+    manifest: dict[str, Any],
+    adapter: CopilotVSCodeAdapter | CopilotCLIAdapter | ClaudeAdapter,
     project_name: str,
 ) -> list[tuple[str, str]]:
     """Render templates and apply framework post-processing.
@@ -3064,7 +3081,7 @@ def _make_content_matches(
     output_dir: Path,
     rendered_by_path: dict[str, str],
     security_refresh_paths: set[str],
-):
+) -> Callable[[str], bool]:
     """Return a predicate: does a file's disk content match its rendered content?
 
     Files in ``security_refresh_paths`` always return False (they are
@@ -3214,7 +3231,7 @@ and the drift detector never reads it. See
 """
 
 
-def _require_jsonschema(error_cls: type, artifact: str):
+def _require_jsonschema(error_cls: type[Exception], artifact: str) -> Any:
     """Import and return ``jsonschema``, or raise *error_cls* if it is absent.
 
     A *missing* jsonschema module is an environment gap (e.g. the run was driven

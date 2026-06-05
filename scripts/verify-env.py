@@ -26,15 +26,16 @@ import re
 import shutil
 import subprocess
 import sys
-from typing import Tuple
+from typing import Callable, Tuple
 
 MIN_PYTHON: Tuple[int, int] = (3, 11)
 # git 2.23 introduced ``git switch`` / ``git restore`` and stabilised the
 # ``--literal-pathspecs`` interaction with ``-z`` that the pipeline relies on.
 MIN_GIT: Tuple[int, int] = (2, 23)
+CheckResult = dict[str, object]
 
 
-def _check_python(actual: Tuple[int, int] | None = None) -> dict:
+def _check_python(actual: Tuple[int, int] | None = None) -> CheckResult:
     have = actual if actual is not None else sys.version_info[:2]
     ok = have >= MIN_PYTHON
     return {
@@ -54,7 +55,10 @@ def _check_python(actual: Tuple[int, int] | None = None) -> dict:
 _GIT_VERSION_RE = re.compile(r"git version (\d+)\.(\d+)")
 
 
-def _detect_git_version(runner=subprocess.run) -> Tuple[int, int] | None:
+def _detect_git_version(
+    runner: Callable[..., subprocess.CompletedProcess[str]] = subprocess.run,
+) -> Tuple[int, int] | None:
+    assert callable(runner), "runner must be callable"
     if shutil.which("git") is None:
         return None
     try:
@@ -73,7 +77,7 @@ def _detect_git_version(runner=subprocess.run) -> Tuple[int, int] | None:
     return (int(match.group(1)), int(match.group(2)))
 
 
-def _check_git(version: Tuple[int, int] | None | object = ...) -> dict:
+def _check_git(version: Tuple[int, int] | None | object = ...) -> CheckResult:
     have = _detect_git_version() if version is ... else version
     if have is None:
         return {
@@ -102,11 +106,11 @@ def _check_git(version: Tuple[int, int] | None | object = ...) -> dict:
     }
 
 
-def run_checks() -> list[dict]:
+def run_checks() -> list[CheckResult]:
     return [_check_python(), _check_git()]
 
 
-def _format_human(checks: list[dict]) -> str:
+def _format_human(checks: list[CheckResult]) -> str:
     lines = []
     for c in checks:
         marker = "✓" if c["ok"] else "✗"
