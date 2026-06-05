@@ -28,7 +28,7 @@ from typing import Any
 # ---------------------------------------------------------------------------
 
 #: Required YAML front matter keys for every .agent.md file
-_REQUIRED_YAML_KEYS: tuple[str, ...] = ("name", "description", "tools", "model")
+_REQUIRED_YAML_KEYS: tuple[str, ...] = ("name", "description", "user-invokable", "tools", "model")
 
 #: Agents that must be present in every generated team
 _REQUIRED_AGENTS: frozenset[str] = frozenset({

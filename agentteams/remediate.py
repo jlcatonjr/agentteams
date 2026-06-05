@@ -78,7 +78,7 @@ def run_copilot_autocorrect(
         copilot_path,
         "-p",
         prompt,
-        "--allow-all-tools",
+        "--available-tools=read,edit",  # PoLA: restrict to minimum needed for file correction
         "--no-ask-user",
         "--no-custom-instructions",
         "--model",

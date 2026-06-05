@@ -107,7 +107,8 @@ def test_run_copilot_autocorrect_uses_standalone_copilot(tmp_path, monkeypatch):
     assert result.attempted
     assert captured["command"][0] == "/usr/local/bin/copilot"
     assert "-p" in captured["command"]
-    assert "--allow-all-tools" in captured["command"]
+    assert "--available-tools=read,edit" in captured["command"]
+    assert "--allow-all-tools" not in captured["command"]
     assert "--no-ask-user" in captured["command"]
     assert "--model" in captured["command"]
     prompt = captured["command"][captured["command"].index("-p") + 1]
