@@ -2321,6 +2321,8 @@ def _validate_option_combinations(parser: argparse.ArgumentParser, args: argpars
             parser.error("--fleet requires --update")
         if args.overwrite:
             parser.error("--fleet requires --merge (not --overwrite)")
+        if not args.merge:
+            parser.error("--fleet requires --merge (fleet mode is merge-only)")
         if getattr(args, "shrink_policy", "preserve") == "allow":
             parser.error("--fleet forbids --shrink-policy=allow (it can drop retrofitted user content)")
         _fleet_incompatible = [

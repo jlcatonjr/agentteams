@@ -273,3 +273,22 @@ def test_apply_flags_review_on_user_editable_deletion(tmp_path, monkeypatch):
     data = json.loads((report / "report.json").read_text())
     statuses = [t["status"] for w in data["workspaces"] for t in w["targets"]]
     assert "REVIEW" in statuses
+
+
+# ---------------------------------------------------------------------------
+# CLI validation contract (locks what the docs promise)
+# ---------------------------------------------------------------------------
+
+@pytest.mark.parametrize("argv", [
+    ["--fleet", "/tmp"],                                       # missing --update
+    ["--fleet", "/tmp", "--update"],                          # missing --merge (merge-only)
+    ["--fleet", "/tmp", "--update", "--overwrite"],          # --overwrite rejected
+    ["--fleet", "/tmp", "--update", "--merge", "--description", "x.json"],  # single-target rejected
+    ["--fleet", "/tmp", "--update", "--merge", "--prune"],    # destructive rejected
+])
+def test_fleet_cli_validation_rejects(argv):
+    import build_team
+    with pytest.raises(SystemExit) as exc:
+        build_team.main(argv)
+    assert exc.value.code == 2  # argparse parser.error() exit code
+

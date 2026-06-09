@@ -59,6 +59,7 @@ nav:
       - convert: api-reference/convert.md
       - interop: api-reference/interop.md
       - bridge: api-reference/bridge.md
+      - fleet: api-reference/fleet.md
       - drift: api-reference/drift.md
       - behavioral-drift: api-reference/behavioral-drift.md
       - scan: api-reference/scan.md

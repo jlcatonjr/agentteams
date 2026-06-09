@@ -26,6 +26,7 @@ Use this matrix when deciding which module/artifact to rely on for a specific op
 | Goal | Primary Module | Primary Artifact | Typical Trigger | Notes |
 |------|----------------|------------------|-----------------|-------|
 | Detect template/structure drift | `drift` | `references/build-log.json` | `--check`, `--update` | Structural + template fingerprint analysis |
+| Update many workspaces at once | `fleet` | `<DIR>/.agentteams-fleet/<run-id>/report.json` | `--fleet DIR --update --merge` | Git-commit snapshot per workspace + `git diff` content audit; non-destructive (merge-only); dry-run by default, `--yes` to apply |
 | Verify behavioral conformance | `eval_suite` + `behavioral_drift` | `references/eval-suite.json` + trajectory payload | Post-run behavioral validation | Neutral suite + runtime trajectory comparison |
 | Fast historical retrieval | `memory_index` | `references/memory-index.json` | `--refresh-index`, `--query-index` | Use lexical first, vector when thematic recall is needed |
 | Cost/capability routing policy | `model_routing` | `references/model-routing.json` | `--cost-routing` | Tier-role contract, concrete models resolved downstream |
@@ -144,7 +145,7 @@ The `universal/` template library includes the tier-1 Orchestrator template and 
 66. **`--auto-correct` Flag** — Invoke Copilot CLI to repair post-audit findings; reruns audit to confirm
 67. **`--scan-security` Flag** — Proactive scan for PII paths, credential patterns, unresolved placeholders
 68. **`available_workflows` Fenced Section** — Workflow documentation fenced so `--update --merge` propagates future changes while preserving project-specific rules
-69. **Update Deployment Protocol** — Documented multi-step update procedure: dry-run, backup verify, git diff capture, outside-fence analysis (OK/WARN/ERROR), WARN review gate
+69. **Update Deployment Protocol & Fleet Update (`--fleet DIR`)** — A documented multi-step update procedure (dry-run, backup verify, git diff capture, outside-fence analysis (OK/WARN/ERROR), WARN review gate), now **productized as the `--fleet` command** that runs it across **every** workspace under a directory: discovers `.github/agents/` and `.claude/` targets, snapshots each git workspace via a commit, applies `--update --merge` in-process, then classifies the `git diff` by content signals (shrink Notices, USER-EDITABLE deletions). Non-destructive (merge-only); dry-run by default, `--yes` to apply; report under `<DIR>/.agentteams-fleet/<run-id>/`. See [`fleet`](fleet.md).
 
 ---
 

@@ -22,6 +22,7 @@ This reference defines the **supported public API surface** (documented modules 
 | [`convert`](convert.md) | Direct format migration between framework outputs |
 | [`interop`](interop.md) | Canonical Agent Interface (CAI) interop pipeline |
 | [`bridge`](bridge.md) | Lightweight runtime compatibility bridge artifacts |
+| [`fleet`](fleet.md) | Multi-workspace `--update --merge` (`--fleet DIR`) with git snapshot + diff audit |
 | [`drift`](drift.md) | Detect template-to-instance drift for incremental updates |
 | [`behavioral-drift`](behavioral-drift.md) | Detect behavioral divergence in agent runs vs. specification |
 
