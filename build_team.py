@@ -648,6 +648,33 @@ def _build_parser() -> argparse.ArgumentParser:
             "exit non-zero on any diff. Lists added/removed/changed files."
         ),
     )
+
+    # -- Fleet update: run --update --merge across every workspace under a dir --
+    fleet_group = parser.add_argument_group("fleet update (multi-workspace)")
+    fleet_group.add_argument(
+        "--fleet",
+        metavar="DIR",
+        default=None,
+        help=(
+            "Update every agent-infrastructure workspace under DIR and its "
+            "subfolders with --update --merge. Discovers .github/agents/ and "
+            ".claude/ targets, snapshots each git workspace via a commit, applies "
+            "the merge, then analyses the diff. Default is a DRY-RUN preview; pass "
+            "--yes to apply. Non-destructive: merge-only; .claude is bridge-merged."
+        ),
+    )
+    fleet_group.add_argument(
+        "--fleet-frameworks",
+        choices=["github", "claude", "both"],
+        default="both",
+        help="Which infrastructures to update per workspace (default: both).",
+    )
+    fleet_group.add_argument(
+        "--fleet-report",
+        metavar="DIR",
+        default=None,
+        help="Directory for the fleet report (default: <DIR>/.agentteams-fleet/<run-id>/).",
+    )
     return parser
 
 
@@ -903,6 +930,15 @@ def main(argv: list[str] | None = None) -> int:
     except Exception as exc:
         print(f"Error: --target-host-features: {exc}", file=sys.stderr)
         return 1
+
+    # -----------------------------------------------------------------------
+    # --fleet: run --update --merge across every workspace under a parent dir.
+    # Re-enters this main() in-process per (workspace, target); the constructed
+    # argv never includes --fleet, so there is no recursion.
+    # -----------------------------------------------------------------------
+    if getattr(args, "fleet", None) is not None:
+        from agentteams import fleet as _fleet
+        return _fleet.run_fleet(args, parser)
 
     # -----------------------------------------------------------------------
     # --capture-baseline / --check-baseline: standalone baseline ops.
@@ -2277,6 +2313,32 @@ def _validate_option_combinations(parser: argparse.ArgumentParser, args: argpars
 
     if args.prune and not args.update:
         parser.error("--prune can only be used with --update")
+
+    if getattr(args, "fleet", None) is not None:
+        # Fleet mode is non-destructive by construction: merge-only, and every
+        # destructive or single-target mode is rejected.
+        if not args.update:
+            parser.error("--fleet requires --update")
+        if args.overwrite:
+            parser.error("--fleet requires --merge (not --overwrite)")
+        if getattr(args, "shrink_policy", "preserve") == "allow":
+            parser.error("--fleet forbids --shrink-policy=allow (it can drop retrofitted user content)")
+        _fleet_incompatible = [
+            ("self", "--self"), ("prune", "--prune"), ("migrate", "--migrate"),
+            ("revert_migration", "--revert-migration"), ("overwrite", "--overwrite"),
+            ("adopt_orphans", "--adopt-orphans"), ("bridge_from", "--bridge-from"),
+            ("bridge_refresh", "--bridge-refresh"), ("convert_from", "--convert-from"),
+            ("interop_from", "--interop-from"), ("refresh_index", "--refresh-index"),
+            ("query_index", "--query-index"), ("list_backups", "--list-backups"),
+            ("restore_backup", "--restore-backup"), ("description", "--description"),
+            ("project", "--project"), ("output", "--output"),
+            ("add_fence_markers", "--add-fence-markers"),
+            ("capture_baseline", "--capture-baseline"), ("check_baseline", "--check-baseline"),
+        ]
+        for attr, flag in _fleet_incompatible:
+            val = getattr(args, attr, None)
+            if val:
+                parser.error(f"--fleet cannot be combined with {flag} (it operates on many workspaces)")
 
     if getattr(args, "adopt_orphans", False):
         # Adoption rewrites the orchestrator front matter (agents: roster), which

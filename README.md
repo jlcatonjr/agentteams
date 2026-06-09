@@ -335,6 +335,12 @@ Options:
                        print quality-audit checklist
   --revert-migration   Undo a --migrate run: git reset --hard pre-fencing-snapshot
   --self               Operate on the module's own agent team
+  --fleet DIR          Run --update --merge across every workspace under DIR (and
+                       subfolders), covering .github/agents/ and .claude/. Git-commit
+                       snapshot + git-diff content audit per workspace; non-destructive
+                       (merge-only). Dry-run preview by default; pass --yes to apply.
+  --fleet-frameworks   github | claude | both (default: both)
+  --fleet-report DIR   Fleet report dir (default: <DIR>/.agentteams-fleet/<run-id>/)
   --version            Print version
 ```
 
@@ -370,6 +376,17 @@ To also delete agents that are no longer part of the taxonomy:
 ```bash
 agentteams --description brief.json --update --merge --prune
 ```
+
+### Update many workspaces at once (fleet)
+
+To bring **every** agent-infrastructure workspace under a directory in sync — covering both `.github/agents/` and `.claude/` — use `--fleet`. Each git workspace is snapshotted via a commit before applying, then the post-update `git diff` is analysed for real content loss (shrink Notices and `USER-EDITABLE` deletions). It is non-destructive (merge-only) and previews by default:
+
+```bash
+agentteams --fleet /path/to/parent --update --merge          # dry-run preview
+agentteams --fleet /path/to/parent --update --merge --yes     # apply
+```
+
+See the [CLI Reference](docs_src/cli-reference.md#fleet-update-multi-workspace) for the full fleet model and safety guarantees.
 
 ### Security scan
 

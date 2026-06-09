@@ -6,6 +6,37 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### added
+
+- **`--fleet DIR` — first-class multi-workspace fleet update.** Runs
+  `--update --merge` across every agent-infrastructure workspace under `DIR` and
+  its subfolders, covering both `.github/agents/` (copilot-vscode, direct) and
+  `.claude/` (bridge-**merge** for bridge consumers; direct `--framework claude`
+  for native Claude teams; ambiguous `.claude` is skipped for manual review).
+  Replaces the external `tmp/batch_update.py` and encodes the 2026-06-04 fleet
+  lessons (`references/systematic-update-lessons.md`):
+  - **In-process** (re-enters `main([...])` per target) — no subprocess, so the
+    exit-code/`jsonschema` ambiguity that made a successful fleet run look failed
+    is gone; per-target exceptions are isolated.
+  - **Git snapshot + diff safety:** before applying, each git workspace's
+    agent-infra state is committed as a `chore(fleet): pre-update snapshot` (or
+    HEAD when already clean) — the recoverable rollback point and diff base.
+    After applying, `git diff <snapshot>` is analysed and classified by the
+    **authoritative content signals** (shrink Notices, USER-EDITABLE-region
+    deletions), never the exit code. Per-workspace diffs + a `report.json`/
+    `summary.md` are written under `<DIR>/.agentteams-fleet/<run-id>/`.
+  - **Non-destructive by construction:** merge-only; `--overwrite`, `--prune`,
+    `--migrate`, `--bridge-refresh`, `--shrink-policy=allow`, and every
+    single-target/mode flag are rejected in fleet mode; `.claude` is never
+    bridge-refreshed. Descriptor resolution prefers `.agentteams/brief.json`
+    over the thin stub (stub-trap fix). Discovery prunes `node_modules`/`.git`/
+    `.worktrees`/`archive` and never recurses into `.github`/`.claude` internals.
+  - **Default is a dry-run preview**; pass `--yes` to apply. Flags:
+    `--fleet-frameworks {github,claude,both}`, `--fleet-report DIR`.
+  - Module `agentteams/fleet.py`; 15 tests in `tests/test_fleet.py`. Plan +
+    adversarial/conflict audit under
+    `references/plans/fleet-update-integration-2026-06-08.plan.md`.
+
 ### fixed
 
 - **A missing `jsonschema` no longer crashes a completed `--update`.** The

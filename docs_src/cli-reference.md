@@ -24,6 +24,7 @@ agentteams [--description PATH] [--project PATH] [--framework NAME]
            [--capture-baseline PATH] [--baseline-label LABEL] [--check-baseline PATH]
            [--security-offline] [--security-max-items N] [--security-no-nvd]
            [--migrate] [--revert-migration]
+           [--fleet DIR] [--fleet-frameworks {github,claude,both}] [--fleet-report DIR]
            [--version]
 ```
 
@@ -169,6 +170,7 @@ Global exclusions:
 - `--bridge-check`, `--bridge-refresh`, and `--bridge-merge` are mutually exclusive; at most one may be passed.
 - `--refresh-index` and `--query-index` are mutually exclusive.
 - `--query-k` must be `>= 1`.
+- `--fleet` requires `--update` and `--merge`, forbids `--shrink-policy=allow`, and is mutually exclusive with `--self`, `--project`, `--description`, `--output`, `--overwrite`, `--prune`, `--migrate`, `--revert-migration`, `--adopt-orphans`, `--bridge-from`, `--bridge-refresh`, `--convert-from`, `--interop-from`, `--refresh-index`, `--query-index`, `--list-backups`, `--restore-backup`, `--add-fence-markers`, `--capture-baseline`, and `--check-baseline` (it operates on many workspaces, each resolved independently).
 
 Excluded with `--convert-from`, `--interop-from`, or `--bridge-from`:
 - `--description`, `--project`, `--self`, `--no-scan`, `--update`, `--prune`, `--check`, `--refresh-index`, `--query-index`, `--scan-security`, `--post-audit`, `--auto-correct`, `--enrich`, `--merge`, `--migrate`, `--revert-migration`, `--list-backups`, `--restore-backup`
@@ -429,6 +431,40 @@ agentteams --revert-migration --project /path/to/project
 ```
 
 > **Note:** `--revert-migration` only resets the working tree and index. If you have already pushed the migrated commit to a remote, a force-push is required. That step is intentionally left to the user.
+
+---
+
+## Fleet Update (multi-workspace)
+
+Run `--update --merge` across **every** agent-infrastructure workspace under a parent directory (and its subfolders) in one command. Replaces ad-hoc batch scripts and encodes the fleet-update lessons in [`references/systematic-update-lessons.md`](https://github.com/jlcatonjr/agentteams/blob/main/references/systematic-update-lessons.md).
+
+```bash
+agentteams --fleet /path/to/parent --update --merge            # dry-run preview (no writes)
+agentteams --fleet /path/to/parent --update --merge --yes       # apply
+```
+
+How it works, per discovered workspace:
+
+1. **Discovery** — finds dirs containing `.github/agents/` and/or `.claude/`, pruning `node_modules`, `.git`, `.worktrees`, and `archive`, and never recursing into `.github`/`.claude` internals.
+2. **Snapshot (git commit)** — before applying, each git workspace's agent-infra state is committed as `chore(fleet): pre-update snapshot` (or left at `HEAD` when already clean). This is the recoverable rollback point and the diff base. (Non-git workspaces rely on the automatic `.agentteams-backups/` snapshot.)
+3. **In-process update** — re-enters the standard update path per target with `--update --merge` (copilot-vscode `.github/agents/`, or a native Claude team's `.claude/agents/`) or `--bridge-merge` (for bridge-consumer `.claude/`). No subprocess is spawned, so a successful merge is never misreported because of an interpreter/exit-code quirk; a failure in one target is isolated and the run continues.
+4. **Diff analysis** — after applying, `git diff <snapshot>` is classified by the **authoritative content signals** — shrink Notices and deletions inside `USER-EDITABLE` regions — **not** the process exit code. Per-workspace `.diff` files plus `report.json` and `summary.md` are written under `<DIR>/.agentteams-fleet/<run-id>/`.
+
+Statuses per `(workspace, target)`: `OK` (only fenced/generated regeneration), `REVIEW` (shrink Notice or USER-EDITABLE deletion — inspect the diff), `FAIL` (the merge itself errored), `SKIP` (ambiguous `.claude` with no bridge signal and no descriptor), `WOULD-UPDATE` (dry-run).
+
+**Safety:** fleet mode is non-destructive by construction. It is **merge-only** — `--overwrite`, `--prune`, `--migrate`, `--bridge-refresh`, and `--shrink-policy=allow` are rejected, and `.claude/` is only ever **bridge-merged**, never bridge-refreshed. Descriptor resolution prefers `.agentteams/brief.json` over the thin `_build-description.json` stub.
+
+### `--fleet DIR`
+
+Update every agent-infrastructure workspace under `DIR` and its subfolders. Requires `--update --merge`. Defaults to a dry-run preview; pass `--yes` to apply.
+
+### `--fleet-frameworks {github,claude,both}`
+
+Which infrastructures to update per workspace. Default: `both`.
+
+### `--fleet-report DIR`
+
+Directory for the fleet report. Default: `<DIR>/.agentteams-fleet/<run-id>/`.
 
 ---
 
