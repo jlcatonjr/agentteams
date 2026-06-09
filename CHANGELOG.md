@@ -13,7 +13,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   its subfolders, covering both `.github/agents/` (copilot-vscode, direct) and
   `.claude/` (bridge-**merge** for bridge consumers; direct `--framework claude`
   for native Claude teams; ambiguous `.claude` is skipped for manual review).
-  Replaces the external `tmp/batch_update.py` and encodes the 2026-06-04 fleet
+  Replaces the prior external batch-update script and encodes the 2026-06-04 fleet
   lessons (`references/systematic-update-lessons.md`):
   - **In-process** (re-enters `main([...])` per target) — no subprocess, so the
     exit-code/`jsonschema` ambiguity that made a successful fleet run look failed
