@@ -37,7 +37,7 @@ _LENGTH_EXCLUDE_PREFIXES = _EXCLUDE_PREFIXES + ("tests/",)
 MAX_MODULE_LINES = 1000
 LENGTH_ALLOWLIST: frozenset[str] = frozenset({
     # build_team.py left at Step D (now a 833-line shim); cli/app.py left at Step D2
-    # (1174 -> 286 after the generate pipeline moved to cli/generate.py, 939 lines).
+    # (1174 -> 263 after the generate pipeline moved to cli/generate.py, 939 lines).
     "agentteams/analyze.py",    # 1503 — accepted tracked debt (CH-07 allowlist; not split)
     "agentteams/emit.py",       # 1389 — accepted tracked debt (CH-07 allowlist; not split)
 })
