@@ -637,8 +637,13 @@ def _write_run_log(manifest: dict, result: emit.EmitResult, output_dir: Path, te
         "governance_agents": manifest.get("governance_agents", []),
         "manifest_fingerprint": _drift.compute_manifest_fingerprint(manifest),
         "fingerprint_algo_version": _drift.FINGERPRINT_ALGO_VERSION,
-        # v1.3 addition — per-file hashes for user-customization detection
-        "file_hashes": _compute_file_hashes(result.written + result.merged, output_dir),
+        # v1.3 addition — per-file hashes for user-customization detection.
+        # Include `unchanged` so the baseline covers the FULL output set, not just
+        # this run's write-set — otherwise an incremental --update (which writes
+        # few files) would leave `--verify-integrity` checking almost nothing.
+        "file_hashes": _compute_file_hashes(
+            result.written + result.merged + result.unchanged, output_dir
+        ),
     }
     log_path = output_dir / "references" / "build-log.json"
     log_path.parent.mkdir(parents=True, exist_ok=True)

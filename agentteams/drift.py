@@ -618,3 +618,66 @@ def detect_user_customizations(
             })
 
     return customized
+
+
+def verify_output_integrity(
+    agents_dir: Path,
+    *,
+    build_log: dict[str, Any] | None = None,
+) -> list[dict[str, str]]:
+    """Classify each build-recorded output file's current integrity (read-only).
+
+    Compares every file in ``build-log.json``'s ``file_hashes`` against its
+    current on-disk state and returns one entry per recorded file with keys
+    ``rel_path``, ``path``, ``status`` and ``note``. ``status`` is one of:
+
+    - ``OK``           — current 16-char SHA-256 matches the recorded hash.
+    - ``MODIFIED``     — content changed since build (a legitimate USER-EDITABLE
+      edit OR drift — undifferentiated, because a whole-file hash cannot say
+      *where* the change is). Advisory, not a failure.
+    - ``TRUNCATED``    — recorded file is now empty (size 0) though it was
+      non-empty at build — a strong corruption tell.
+    - ``MISSING``      — recorded file is absent (or unreadable).
+    - ``FENCE-BROKEN`` — content changed AND the file's ``AGENTTEAMS`` fences no
+      longer parse (unclosed/duplicate/mismatched) — a strong corruption tell.
+
+    Returns an empty list when the build-log / ``file_hashes`` is absent; the
+    caller treats that as ``UNKNOWN`` (cannot verify), not a failure.
+    """
+    try:
+        if build_log is None:
+            build_log = load_build_log(agents_dir)
+    except (FileNotFoundError, ValueError):
+        return []
+
+    file_hashes: dict[str, str] = build_log.get("file_hashes", {})
+    if not file_hashes:
+        return []
+
+    from agentteams import emit as _emit  # lazy import — avoid a drift<->emit cycle
+
+    results: list[dict[str, str]] = []
+    for rel_path, recorded_hash in file_hashes.items():
+        abs_path = (agents_dir / Path(rel_path)).resolve()
+        base = {"rel_path": rel_path, "path": str(abs_path)}
+        if not abs_path.exists():
+            results.append({**base, "status": "MISSING", "note": "recorded file is absent"})
+            continue
+        try:
+            data = abs_path.read_bytes()
+        except OSError as exc:
+            results.append({**base, "status": "MISSING", "note": f"unreadable: {exc}"})
+            continue
+        if len(data) == 0:
+            results.append({**base, "status": "TRUNCATED", "note": "file is empty (was non-empty at build)"})
+            continue
+        if hashlib.sha256(data).hexdigest()[:16] == recorded_hash:
+            results.append({**base, "status": "OK", "note": ""})
+            continue
+        fences = _emit._extract_fenced_regions(data.decode("utf-8", errors="replace"))
+        if isinstance(fences, str):
+            results.append({**base, "status": "FENCE-BROKEN", "note": f"fence parse error: {fences}"})
+        else:
+            results.append({**base, "status": "MODIFIED", "note": "content changed since build (edit or drift)"})
+
+    return results

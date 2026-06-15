@@ -811,6 +811,45 @@ def list_backups(output_dir: Path) -> list[tuple[str, Path, int]]:
     return entries
 
 
+def verify_backup(backup_path: Path) -> list[dict[str, str]]:
+    """Verify a backup's own integrity (read-only): each backed-up file's bytes
+    vs its recorded ``source_sha256`` in ``_manifest.json``.
+
+    Confirms the backup is *restorable* (catches backup bit-rot/tamper). Returns
+    one entry per recorded file with keys ``source_path``, ``status``
+    (``PASS`` / ``FAIL`` / ``MISSING``) and ``note``. Returns an empty list when
+    the backup has no ``_manifest.json`` (older backup; cannot verify). Note the
+    manifest stores the FULL sha256 (not the 16-char build-log form).
+    """
+    import json
+
+    manifest_path = backup_path / BACKUP_MANIFEST_NAME
+    try:
+        manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        return []
+
+    results: list[dict[str, str]] = []
+    for entry in manifest.get("files", []):
+        rel = entry.get("backup_path", "")
+        recorded = entry.get("source_sha256", "")
+        base = {"source_path": entry.get("source_path", rel), "backup_rel": rel}
+        copy_path = backup_path / rel
+        if not copy_path.exists():
+            results.append({**base, "status": "MISSING", "note": "backup copy absent"})
+            continue
+        try:
+            data = copy_path.read_bytes()
+        except OSError as exc:
+            results.append({**base, "status": "MISSING", "note": f"unreadable: {exc}"})
+            continue
+        if hashlib.sha256(data).hexdigest() == recorded:
+            results.append({**base, "status": "PASS", "note": ""})
+        else:
+            results.append({**base, "status": "FAIL", "note": "bytes do not match recorded source_sha256 (bit-rot/tamper)"})
+    return results
+
+
 def restore_backup(
     backup_path: Path,
     output_dir: Path,

@@ -20,6 +20,7 @@ agentteams [--description PATH] [--project PATH] [--framework NAME]
            [--strict-manual-placeholders] [--no-strict-manual-placeholders]
            [--no-backup] [--shrink-policy {warn,halt,allow}]
            [--list-backups] [--restore-backup TIMESTAMP]
+           [--verify-integrity] [--verify-backup [TIMESTAMP]]
            [--target-host-features TOKENS]
            [--capture-baseline PATH] [--baseline-label LABEL] [--check-baseline PATH]
            [--security-offline] [--security-max-items N] [--security-no-nvd]
@@ -371,6 +372,30 @@ List all available backups for the output directory (newest first) and exit. Pri
 ### `--restore-backup TIMESTAMP`
 
 Restore a specific backup into the output directory. `TIMESTAMP` is the directory name shown by `--list-backups` (e.g. `20250601-143022`). Use `latest` to restore the most recent backup.
+
+---
+
+## Integrity Verification
+
+Read-only checks that detect silent corruption of generated files and confirm a backup is restorable. Both resolve the output directory from `--output`/`--project` (else CWD) and require no `--description`.
+
+### `--verify-integrity`
+
+Classify every generated output file against the build-log `file_hashes` baseline and exit. Each recorded file is reported as one of:
+
+| Status | Meaning |
+|---|---|
+| `OK` | Current hash matches the build-time hash. |
+| `MODIFIED` | Content changed since the last build — a legitimate `USER-EDITABLE` edit **or** drift. Undifferentiated (a whole-file hash cannot say *where* it changed), so it is **advisory** and listed for review. |
+| `TRUNCATED` | A recorded file is now empty — a strong corruption signal. |
+| `MISSING` | A recorded file is absent (or unreadable). |
+| `FENCE-BROKEN` | Content changed **and** the file's `AGENTTEAMS` fences no longer parse (unclosed/duplicate/mismatched) — a strong corruption signal. |
+
+**Exit code:** non-zero on any `TRUNCATED` / `MISSING` / `FENCE-BROKEN`; `0` otherwise (`MODIFIED` does not fail). Unlike `--update` — where a non-zero exit can be a benign post-merge attestation crash — **`--verify-integrity`'s exit code IS the integrity verdict and must be heeded.** If no build-log baseline exists yet, it reports "cannot verify" and exits `0` (run `--update` to establish one).
+
+### `--verify-backup [TIMESTAMP]`
+
+Verify a backup's own integrity — each backed-up file's bytes against the `source_sha256` recorded in the backup's `_manifest.json` — confirming the backup is restorable (catches bit-rot/tamper). Defaults to the latest backup; pass a `TIMESTAMP` (as shown by `--list-backups`) for a specific one. Exits non-zero on any mismatch.
 
 ---
 

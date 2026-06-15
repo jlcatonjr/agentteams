@@ -15,7 +15,14 @@ from __future__ import annotations
 import sys
 from pathlib import Path
 
-from agentteams.cli.commands import _run_bridge, _run_convert, _run_interop, _run_verify_waivers
+from agentteams.cli.commands import (
+    _run_bridge,
+    _run_convert,
+    _run_interop,
+    _run_verify_backup,
+    _run_verify_integrity,
+    _run_verify_waivers,
+)
 from agentteams.cli.parser import _build_parser, _validate_option_combinations
 from agentteams.cli.render_pipeline import _resolve_strict_manual_mode
 # run_generate holds the generate/update/check pipeline; _finalize_exit_code is
@@ -110,6 +117,15 @@ def main(argv: list[str] | None = None) -> int:
     # -----------------------------------------------------------------------
     if getattr(args, "verify_waivers", False):
         return _run_verify_waivers(args)
+
+    # -----------------------------------------------------------------------
+    # --verify-integrity / --verify-backup: standalone read-only integrity
+    # checks (no description/generation needed). The exit code IS the verdict.
+    # -----------------------------------------------------------------------
+    if getattr(args, "verify_integrity", False):
+        return _run_verify_integrity(args)
+    if getattr(args, "verify_backup", None) is not None:
+        return _run_verify_backup(args)
 
     # -----------------------------------------------------------------------
     # --add-fence-markers: standalone file-retrofit (no description needed).

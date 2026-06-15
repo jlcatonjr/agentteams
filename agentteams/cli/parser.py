@@ -540,6 +540,34 @@ def _build_parser() -> argparse.ArgumentParser:
             "signatures; without it, rows report as unverifiable."
         ),
     )
+    parser.add_argument(
+        "--verify-integrity",
+        action="store_true",
+        dest="verify_integrity",
+        default=False,
+        help=(
+            "Read-only: classify every generated output file under --output/"
+            "--project (else CWD) against the build-log file_hashes baseline — "
+            "OK / MODIFIED / TRUNCATED / MISSING / FENCE-BROKEN. Detects silent "
+            "corruption. Exits non-zero on any TRUNCATED/MISSING/FENCE-BROKEN; "
+            "MODIFIED (a legitimate edit or drift) is advisory. Unlike --update, "
+            "this exit code IS the integrity gate."
+        ),
+    )
+    parser.add_argument(
+        "--verify-backup",
+        nargs="?",
+        const="latest",
+        default=None,
+        metavar="TIMESTAMP",
+        dest="verify_backup",
+        help=(
+            "Read-only: verify a backup is restorable — its bytes match the "
+            "recorded source_sha256 in _manifest.json. Defaults to the latest "
+            "backup; pass a TIMESTAMP for a specific one. Exits non-zero on any "
+            "bit-rot/tamper mismatch."
+        ),
+    )
 
     # -- Fleet update: run --update --merge across every workspace under a dir --
     fleet_group = parser.add_argument_group("fleet update (multi-workspace)")

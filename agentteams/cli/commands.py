@@ -61,6 +61,89 @@ def _run_verify_waivers(args: argparse.Namespace) -> int:
     return 1 if invalid else 0
 
 
+def _resolve_output_dir(args: argparse.Namespace) -> Path:
+    """Resolve the agents output dir for a standalone read-only command, mirroring
+    ``--verify-waivers``: ``--output`` → ``--project`` → CWD."""
+    if getattr(args, "output", None):
+        return Path(args.output).resolve()
+    if getattr(args, "project", None):
+        return Path(args.project).resolve()
+    return Path.cwd()
+
+
+def _run_verify_integrity(args: argparse.Namespace) -> int:
+    """``--verify-integrity``: read-only classification of every generated output
+    file against the build-log ``file_hashes`` baseline.
+
+    OK / MODIFIED / TRUNCATED / MISSING / FENCE-BROKEN. Exit 1 on any
+    TRUNCATED/MISSING/FENCE-BROKEN — unlike ``--update`` (where a non-zero exit
+    can be a benign post-merge crash), **this exit code IS the integrity verdict
+    and must be heeded.** MODIFIED is advisory (a legitimate USER-EDITABLE edit or
+    drift; exit 0, listed for review).
+    """
+    from collections import Counter
+
+    from agentteams import drift
+
+    output_dir = _resolve_output_dir(args)
+    results = drift.verify_output_integrity(output_dir)
+    if not results:
+        print(
+            f"No build-log file_hashes under {output_dir}/references/ — cannot verify "
+            "(run --update to establish a baseline)."
+        )
+        return 0
+
+    counts = dict(Counter(e["status"] for e in results))
+    suspect = [e for e in results if e["status"] in ("TRUNCATED", "MISSING", "FENCE-BROKEN")]
+    print(f"Integrity of {len(results)} file(s) in {output_dir}: {counts}")
+    for entry in (e for e in results if e["status"] == "MODIFIED"):
+        print(f"  [MODIFIED] {entry['rel_path']} (edit or drift — review)")
+    for entry in suspect:
+        print(f"  [{entry['status']}] {entry['rel_path']} — {entry['note']}", file=sys.stderr)
+    if suspect:
+        print(
+            f"\n{len(suspect)} file(s) need attention: re-run --update --merge to re-render a "
+            "fenced region, or --restore-backup for a truncation/missing.",
+            file=sys.stderr,
+        )
+        return 1
+    return 0
+
+
+def _run_verify_backup(args: argparse.Namespace) -> int:
+    """``--verify-backup [TS]``: read-only check that a backup is restorable — its
+    bytes match the recorded ``source_sha256`` in ``_manifest.json``. Exit 1 on any
+    FAIL/MISSING. Defaults to the latest backup."""
+    from agentteams import emit
+
+    output_dir = _resolve_output_dir(args)
+    backups = emit.list_backups(output_dir)
+    if not backups:
+        print(f"No backups found for {output_dir}", file=sys.stderr)
+        return 1
+    label = getattr(args, "verify_backup", None)
+    if label in (None, "latest"):
+        _, backup_path, _ = backups[0]
+    else:
+        matched = [(ts, p, c) for ts, p, c in backups if ts == label]
+        if not matched:
+            print(f"Backup not found: {label!r}", file=sys.stderr)
+            print(f"Available: {', '.join(ts for ts, _, _ in backups)}")
+            return 1
+        _, backup_path, _ = matched[0]
+
+    results = emit.verify_backup(backup_path)
+    if not results:
+        print(f"Backup {backup_path} has no _manifest.json — cannot verify integrity.")
+        return 0
+    failed = [e for e in results if e["status"] != "PASS"]
+    print(f"Backup {backup_path.name}: {len(results) - len(failed)}/{len(results)} file(s) verified.")
+    for entry in failed:
+        print(f"  [{entry['status']}] {entry['source_path']} — {entry['note']}", file=sys.stderr)
+    return 1 if failed else 0
+
+
 def _run_convert(
     source_dir: Path,
     target_framework: str,
