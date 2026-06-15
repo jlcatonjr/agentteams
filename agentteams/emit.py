@@ -13,14 +13,82 @@ Safety features:
 
 from __future__ import annotations
 
+import contextlib
 import hashlib
+import os
 import re
 import shutil
+import stat
 import sys
+import tempfile
 from dataclasses import dataclass, field
 from datetime import datetime
 from pathlib import Path
 from typing import Any
+
+
+# ---------------------------------------------------------------------------
+# Atomic write/copy helpers (remediation Plan 1)
+# ---------------------------------------------------------------------------
+# A reader or an interrupt must see either the complete old file or the complete
+# new file — never a half-written/truncated one. We write to a temp file in the
+# SAME directory (same filesystem, so os.replace is atomic) and rename onto the
+# destination. CH-24: no broad except — cleanup uses finally + suppress(OSError).
+
+
+def _target_mode(path: Path) -> int:
+    """Permission bits to apply to an atomically-written file.
+
+    Preserve the destination's current mode when it already exists; otherwise
+    use the umask-derived default ``0o666 & ~umask`` — matching ``open(.., 'w')``
+    — so atomic writes do not leave files at ``mkstemp``'s 0600.
+    """
+    try:
+        return stat.S_IMODE(path.stat().st_mode)
+    except OSError:
+        prev = os.umask(0)
+        os.umask(prev)
+        return 0o666 & ~prev
+
+
+def _atomic_write_text(path: Path, text: str, *, encoding: str = "utf-8") -> None:
+    """Write *text* to *path* atomically (temp-in-same-dir + os.replace + fsync)."""
+    path.parent.mkdir(parents=True, exist_ok=True)
+    mode = _target_mode(path)
+    fd, tmp_name = tempfile.mkstemp(dir=str(path.parent), prefix=f".{path.name}.", suffix=".tmp")
+    tmp = Path(tmp_name)
+    success = False
+    try:
+        with os.fdopen(fd, "w", encoding=encoding) as handle:
+            handle.write(text)
+            handle.flush()
+            os.fsync(handle.fileno())
+        os.chmod(tmp, mode)
+        os.replace(tmp, path)
+        success = True
+    finally:
+        if not success:
+            with contextlib.suppress(OSError):
+                tmp.unlink()
+
+
+def _atomic_copy(src: Path, dest: Path) -> None:
+    """Copy *src* onto *dest* atomically, preserving content + mode + mtime
+    (``shutil.copy2`` semantics). Used by restore so a crash mid-restore never
+    truncates a live file."""
+    dest.parent.mkdir(parents=True, exist_ok=True)
+    fd, tmp_name = tempfile.mkstemp(dir=str(dest.parent), prefix=f".{dest.name}.", suffix=".tmp")
+    os.close(fd)
+    tmp = Path(tmp_name)
+    success = False
+    try:
+        shutil.copy2(src, tmp)
+        os.replace(tmp, dest)
+        success = True
+    finally:
+        if not success:
+            with contextlib.suppress(OSError):
+                tmp.unlink()
 
 
 # ---------------------------------------------------------------------------
@@ -605,7 +673,7 @@ def _write_backup_manifest(
         "files": files,
     }
     out = backup_path / BACKUP_MANIFEST_NAME
-    out.write_text(_json.dumps(manifest, indent=2) + "\n", encoding="utf-8")
+    _atomic_write_text(out, _json.dumps(manifest, indent=2) + "\n")
     return out
 
 
@@ -795,8 +863,7 @@ def restore_backup(
     for rel in backup_rels:
         src = backup_path / rel
         dest = _restore_dest(output_dir, rel)
-        dest.parent.mkdir(parents=True, exist_ok=True)
-        shutil.copy2(src, dest)
+        _atomic_copy(src, dest)
         count += 1
 
     # Remove files that exist in output_dir but were absent from the backup
@@ -864,7 +931,7 @@ def _write_lost_fence_sidecars(
         sidecar = backup_path / f"{rel_path}.lost.{sid}.md"
         try:
             sidecar.parent.mkdir(parents=True, exist_ok=True)
-            sidecar.write_text(body, encoding="utf-8")
+            _atomic_write_text(sidecar, body)
         except OSError:
             continue
         try:
@@ -994,7 +1061,7 @@ def emit_all(
                     if backup_path is not None:
                         backup_path.mkdir(parents=True, exist_ok=True)
                         shutil.copy2(target, backup_path / target.name)
-                    target.write_text(_auto_wrapped, encoding="utf-8")
+                    _atomic_write_text(target, _auto_wrapped)
                     result.fence_injected.append(str(target))
 
         if dry_run:
@@ -1154,7 +1221,7 @@ def emit_all(
                         result.unchanged.append(str(target))
                     else:
                         try:
-                            target.write_text(normalized_content, encoding="utf-8")
+                            _atomic_write_text(target, normalized_content)
                             result.merged.append(str(target))
                         except OSError as exc:
                             result.errors.append(f"Failed to write {target}: {exc}")
@@ -1179,7 +1246,7 @@ def emit_all(
                     result.unchanged.append(str(target))
                 else:
                     try:
-                        target.write_text(migrated, encoding="utf-8")
+                        _atomic_write_text(target, migrated)
                         result.merged.append(str(target))
                         if merge_result.sections_orphaned:
                             print(
@@ -1201,7 +1268,7 @@ def emit_all(
             if target.exists() and target.read_text(encoding="utf-8") == normalized_content:
                 result.unchanged.append(str(target))
             else:
-                target.write_text(normalized_content, encoding="utf-8")
+                _atomic_write_text(target, normalized_content)
                 result.written.append(str(target))
         except OSError as exc:
             result.errors.append(f"Failed to write {target}: {exc}")

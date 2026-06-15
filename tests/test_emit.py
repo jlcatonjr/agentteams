@@ -746,3 +746,81 @@ def test_overwrite_unchanged_content_not_written(tmp_path):
     assert len(result.unchanged) == 1
     assert result.written == []
 
+
+
+# ---------------------------------------------------------------------------
+# Atomic writes (remediation Plan 1) — no truncation on crash-mid-write
+# ---------------------------------------------------------------------------
+
+import os as _os
+from agentteams import emit as _emit_mod
+from agentteams.emit import _atomic_write_text, _atomic_copy
+
+
+def _expected_new_mode() -> int:
+    prev = _os.umask(0)
+    _os.umask(prev)
+    return 0o666 & ~prev
+
+
+def test_atomic_write_text_new_file_normal_mode(tmp_path):
+    target = tmp_path / "n.md"
+    _atomic_write_text(target, "hello\n")
+    assert target.read_text() == "hello\n"
+    assert (target.stat().st_mode & 0o777) == _expected_new_mode()  # not 0600
+
+
+def test_atomic_write_text_preserves_existing_mode(tmp_path):
+    target = tmp_path / "e.md"
+    target.write_text("old\n")
+    _os.chmod(target, 0o640)
+    _atomic_write_text(target, "new content\n")
+    assert target.read_text() == "new content\n"
+    assert (target.stat().st_mode & 0o777) == 0o640  # preserved across the atomic replace
+
+
+def test_atomic_write_text_no_temp_litter_on_success(tmp_path):
+    _atomic_write_text(tmp_path / "ok.md", "x\n")
+    assert [p.name for p in tmp_path.glob(".*.tmp")] == []
+
+
+def test_atomic_write_text_leaves_original_intact_on_replace_failure(tmp_path, monkeypatch):
+    target = tmp_path / "f.md"
+    target.write_text("ORIGINAL\n")
+
+    def _boom(_src, _dst):
+        raise OSError("simulated crash during replace")
+
+    monkeypatch.setattr(_emit_mod.os, "replace", _boom)
+    with pytest.raises(OSError):
+        _atomic_write_text(target, "NEW — must never be half-written\n")
+    # The live file is untouched (the complete OLD content), never truncated...
+    assert target.read_text() == "ORIGINAL\n"
+    # ...and the temp file was cleaned up by the finally block.
+    assert [p.name for p in tmp_path.glob(".*.tmp")] == []
+
+
+def test_atomic_copy_preserves_content_and_is_clean(tmp_path):
+    src = tmp_path / "src.md"
+    src.write_text("payload\n")
+    dest = tmp_path / "sub" / "dest.md"
+    _atomic_copy(src, dest)
+    assert dest.read_text() == "payload\n"
+    assert [p.name for p in (tmp_path / "sub").glob(".*.tmp")] == []
+
+
+def test_restore_backup_is_atomic_on_replace_failure(tmp_path, monkeypatch):
+    # Establish a backup of the original, then change the live file.
+    (tmp_path / "a.agent.md").write_text("LIVE-ORIGINAL\n")
+    backup = backup_output_dir(tmp_path, reason="test")
+    (tmp_path / "a.agent.md").write_text("LIVE-CHANGED\n")
+
+    def _boom(_src, _dst):
+        raise OSError("simulated crash during restore replace")
+
+    monkeypatch.setattr(_emit_mod.os, "replace", _boom)
+    with pytest.raises(OSError):
+        restore_backup(backup.backup_path, tmp_path)
+    # The live file is never truncated — it keeps its complete current content.
+    assert (tmp_path / "a.agent.md").read_text() == "LIVE-CHANGED\n"
+    assert [p.name for p in tmp_path.glob(".*.tmp")] == []
