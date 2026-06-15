@@ -1629,6 +1629,34 @@
   
   
     <li class="md-nav__item">
+      <a href="../api-reference/fleet/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    fleet
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
       <a href="../api-reference/drift/" class="md-nav__link">
         
   
@@ -1777,6 +1805,34 @@
     
   
     security-refs
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../api-reference/framework-research/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    framework-research
   
 
     
@@ -2105,6 +2161,34 @@
   
   
     <li class="md-nav__item">
+      <a href="../api-reference/plan-steps-todo/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    plan-steps-todo
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
       <a href="../api-reference/liaison-logs/" class="md-nav__link">
         
   
@@ -2113,6 +2197,202 @@
     
   
     liaison-logs
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../api-reference/host-features/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    host-features
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../api-reference/baseline/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    baseline
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../api-reference/bridge-subagents/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    bridge-subagents
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../api-reference/hooks-emit/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    hooks-emit
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../api-reference/instructions-split/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    instructions-split
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../api-reference/schedule-emit/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    schedule-emit
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../api-reference/pr-management/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    pr-management
   
 
     
@@ -2628,6 +2908,8 @@
 <h3 id="merge-overwrote-my-custom-content">Merge overwrote my custom content<a class="headerlink" href="#merge-overwrote-my-custom-content" title="Permanent link">&para;</a></h3>
 <p><strong>Cause:</strong> Your content was placed inside a <code>FENCED</code> block.</p>
 <p><strong>Fix:</strong> Move custom content to below the <code>&lt;!-- AGENTTEAMS:END ... --&gt;</code> marker, into the USER-EDITABLE gap.</p>
+<p><strong>Recovery (W22 data-loss safety net):</strong> The <strong>default policy is <code>--shrink-policy=preserve</code></strong>: a fence whose new render is materially smaller than the existing body is <strong>not</strong> rewritten — the enriched body is kept, the shrink is suppressed, and a Notice is emitted. Nothing is lost and no sidecar is produced (non-shrinking fences in the same file still update normally). Under <code>--shrink-policy=warn</code> the smaller body <strong>is</strong> written, and as a safety net the full pre-merge body of every fence that triggered a shrink notice is persisted to a sidecar at <code>&lt;output_dir&gt;/.agentteams-backups/&lt;ts&gt;/&lt;rel_path&gt;.lost.&lt;sid&gt;.md</code>, with the Notice annotated <code>— recovery: &lt;sidecar-path&gt;</code>; to recover, copy the lost text from the sidecar into the USER-EDITABLE gap below the fence, then re-run. (<code>halt</code> aborts on a shrink; <code>allow</code> writes the smaller body silently with no sidecar.)</p>
+<p>Two fence ids are exempt from the shrink heuristic and never produce sidecars: <code>threat_intelligence</code> and <code>threat_data</code>. Those are refreshed each run from live CISA KEV / NVD / OSV feeds; CVE rotation is expected. The canonical history for live-feed fences is the cache JSON (<code>references/security-vulnerability-watch.json</code>).</p>
 <h3 id="merge-left-stale-generated-content">Merge left stale generated content<a class="headerlink" href="#merge-left-stale-generated-content" title="Permanent link">&para;</a></h3>
 <p><strong>Cause:</strong> The output file was created before fence markers were introduced (pre-fencing era file). It has no markers to match.</p>
 <p><strong>Fix:</strong> Run <code>--migrate</code> to add pre-fencing snapshots and prepare the file for fence-based updates. See the <a href="../migration-guide/">Migration Guide</a>.</p>

@@ -1411,6 +1411,34 @@
   
   
     <li class="md-nav__item">
+      <a href="../fleet/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    fleet
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
       <a href="../drift/" class="md-nav__link">
         
   
@@ -1559,6 +1587,34 @@
     
   
     security-refs
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../framework-research/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    framework-research
   
 
     
@@ -1887,6 +1943,34 @@
   
   
     <li class="md-nav__item">
+      <a href="../plan-steps-todo/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    plan-steps-todo
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
       <a href="../liaison-logs/" class="md-nav__link">
         
   
@@ -1895,6 +1979,202 @@
     
   
     liaison-logs
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../host-features/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    host-features
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../baseline/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    baseline
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../bridge-subagents/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    bridge-subagents
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../hooks-emit/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    hooks-emit
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../instructions-split/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    instructions-split
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../schedule-emit/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    schedule-emit
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../pr-management/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    pr-management
   
 
     
@@ -2421,8 +2701,8 @@
 </tr>
 <tr>
 <td><strong>Migration &amp; Update</strong></td>
-<td>8</td>
-<td><code>--migrate</code>, <code>--revert-migration</code>, <code>--enrich</code>, <code>--auto-correct</code>, <code>--scan-security</code>, security flags</td>
+<td>9</td>
+<td><code>--migrate</code>, <code>--revert-migration</code>, <code>--enrich</code>, <code>--auto-correct</code>, <code>--scan-security</code>, security flags, multi-workspace fleet update (<code>--fleet</code>)</td>
 </tr>
 <tr>
 <td><strong>Safety &amp; Backups</strong></td>
@@ -2461,7 +2741,7 @@
 </tr>
 </tbody>
 </table>
-<p><strong>Total:</strong> ~125 documented features across 12 capability areas.</p>
+<p><strong>Total:</strong> ~126 documented features across 12 capability areas.</p>
 <hr />
 <h2 id="artifact-selection-matrix">Artifact Selection Matrix<a class="headerlink" href="#artifact-selection-matrix" title="Permanent link">&para;</a></h2>
 <p>Use this matrix when deciding which module/artifact to rely on for a specific operational goal.</p>
@@ -2482,6 +2762,13 @@
 <td><code>references/build-log.json</code></td>
 <td><code>--check</code>, <code>--update</code></td>
 <td>Structural + template fingerprint analysis</td>
+</tr>
+<tr>
+<td>Update many workspaces at once</td>
+<td><code>fleet</code></td>
+<td><code>&lt;DIR&gt;/.agentteams-fleet/&lt;run-id&gt;/report.json</code></td>
+<td><code>--fleet DIR --update --merge</code></td>
+<td>Git-commit snapshot per workspace + <code>git diff</code> content audit; non-destructive (merge-only); dry-run by default, <code>--yes</code> to apply</td>
 </tr>
 <tr>
 <td>Verify behavioral conformance</td>
@@ -2543,7 +2830,7 @@
 <h3 id="core-pipeline-modules">Core Pipeline Modules<a class="headerlink" href="#core-pipeline-modules" title="Permanent link">&para;</a></h3>
 <ol>
 <li><strong><code>ingest</code> Module</strong> — Load and normalize project descriptions; parse JSON/Markdown; scan directories</li>
-<li><strong><code>analyze</code> Module</strong> — Classify project type; select archetypes (including contextual post-production auto-selection for any task domain and manual <code>selected_archetypes</code> override support); detect tool agents; build manifest</li>
+<li><strong><code>analyze</code> Module</strong> — Classify project type; select archetypes (including contextual post-production auto-selection for any task domain and manual <code>selected_archetypes</code> override support); detect operational tool docs; build manifest</li>
 <li><strong><code>render</code> Module</strong> — Resolve placeholders in templates; compute template hashes for drift detection</li>
 <li><strong><code>emit</code> Module</strong> — Write rendered files to disk with dry-run and overwrite-protection</li>
 <li><strong><code>drift</code> Module</strong> — Detect content drift (template hash comparison) and structural drift (team composition)</li>
@@ -2631,7 +2918,7 @@
 <li><strong><code>--auto-correct</code> Flag</strong> — Invoke Copilot CLI to repair post-audit findings; reruns audit to confirm</li>
 <li><strong><code>--scan-security</code> Flag</strong> — Proactive scan for PII paths, credential patterns, unresolved placeholders</li>
 <li><strong><code>available_workflows</code> Fenced Section</strong> — Workflow documentation fenced so <code>--update --merge</code> propagates future changes while preserving project-specific rules</li>
-<li><strong>Update Deployment Protocol</strong> — Documented multi-step update procedure: dry-run, backup verify, git diff capture, outside-fence analysis (OK/WARN/ERROR), WARN review gate</li>
+<li><strong>Update Deployment Protocol &amp; Fleet Update (<code>--fleet DIR</code>)</strong> — A documented multi-step update procedure (dry-run, backup verify, git diff capture, outside-fence analysis (OK/WARN/ERROR), WARN review gate), now <strong>productized as the <code>--fleet</code> command</strong> that runs it across <strong>every</strong> workspace under a directory: discovers <code>.github/agents/</code> and <code>.claude/</code> targets, snapshots each git workspace via a commit, applies <code>--update --merge</code> in-process, then classifies the <code>git diff</code> by content signals (shrink Notices, USER-EDITABLE deletions). Non-destructive (merge-only); dry-run by default, <code>--yes</code> to apply; report under <code>&lt;DIR&gt;/.agentteams-fleet/&lt;run-id&gt;/</code>. See <a href="../fleet/"><code>fleet</code></a>.</li>
 </ol>
 <hr />
 <h2 id="safety-backups">Safety &amp; Backups<a class="headerlink" href="#safety-backups" title="Permanent link">&para;</a></h2>
@@ -2649,7 +2936,7 @@
 <ol>
 <li><strong><code>@navigator</code></strong> — Project structure mapping, file location queries, dependency tracking (read-only)</li>
 <li><strong><code>@security</code></strong> — Highest-priority sentinel; clears destructive operations, credential exposure, and external writes (read-only)</li>
-<li><strong><code>@code-hygiene</code></strong> — Architecture auditor; file hygiene, duplication, script lifecycle, agent doc quality — CH-01 through CH-20+ (read-only)</li>
+<li><strong><code>@code-hygiene</code></strong> — Architecture auditor; file hygiene, duplication, script lifecycle, agent doc quality — invariant CH-01 through CH-20 plus project extension rules CH-21–CH-24 (Testing, Type Safety, Defensive Programming; CH-24: <code>try</code>/<code>except</code>/<code>finally</code> is a last resort — encode expected conditions in dictionaries/guards and fail hard, reinforcing CH-23 Fail Fast) (read-only)</li>
 <li><strong><code>@adversarial</code></strong> — Presupposition critic; challenges plans and hidden assumptions before execution (read-only)</li>
 <li><strong><code>@conflict-auditor</code></strong> — Detects logical inconsistencies across all output files; logs findings (read + log)</li>
 <li><strong><code>@conflict-resolution</code></strong> — Makes ACCEPT/REJECT/REVISE decisions on flagged conflicts (read + edit)</li>
@@ -2670,7 +2957,7 @@
 <li><strong>Workflow 5 — Consistency Review</strong> — <code>@adversarial</code> challenge → cross-file consistency audit → technical validation → <code>@agent-updater</code></li>
 <li><strong>Workflow 6 — Documentation Maintenance</strong> — Sync agent docs → refactor check → consistency audit</li>
 <li><strong>Workflow 7 — Cleanup</strong> — Identify stale artifacts → <code>@adversarial</code> review → <code>@security</code> clearance → delete → update docs</li>
-<li><strong>Workflow 8 — Code Hygiene Audit</strong> — CH-01–CH-20 audit → <code>@adversarial</code> guard before deletion plan → conditional cleanup/refactor</li>
+<li><strong>Workflow 8 — Code Hygiene Audit</strong> — CH-01–CH-24 audit (CH-01–CH-20 invariant + CH-21–CH-24 project extensions) → <code>@adversarial</code> guard before deletion plan → conditional cleanup/refactor</li>
 <li><strong>Workflow 9 — Cross-Repository Coordination</strong> — Impact assessment → approved updates → adjacent-repo writes (security-cleared) → consistency audit</li>
 <li><strong>Workflow 10 — Plan Documentation &amp; Review</strong> — Plan status scan → pre-execution truth check via <code>@technical-validator</code> → surface blocked steps</li>
 <li><strong>Workflow 10B — Work Summary Reporting</strong> — Generate daily/weekly/monthly summaries from plan artifacts and git history, then audit them</li>

@@ -1422,6 +1422,34 @@
   
   
     <li class="md-nav__item">
+      <a href="../fleet/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    fleet
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
       <a href="../drift/" class="md-nav__link">
         
   
@@ -1570,6 +1598,34 @@
     
   
     security-refs
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../framework-research/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    framework-research
   
 
     
@@ -1911,6 +1967,17 @@
 </li>
       
         <li class="md-nav__item">
+  <a href="#consultation-clause-memory_index_consultation-v2" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Consultation Clause (memory_index_consultation v=2)
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
   <a href="#schema-compatibility" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -2189,6 +2256,34 @@
   
   
     <li class="md-nav__item">
+      <a href="../plan-steps-todo/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    plan-steps-todo
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
       <a href="../liaison-logs/" class="md-nav__link">
         
   
@@ -2197,6 +2292,202 @@
     
   
     liaison-logs
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../host-features/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    host-features
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../baseline/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    baseline
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../bridge-subagents/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    bridge-subagents
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../hooks-emit/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    hooks-emit
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../instructions-split/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    instructions-split
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../schedule-emit/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    schedule-emit
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../pr-management/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    pr-management
   
 
     
@@ -2612,6 +2903,17 @@
 </li>
       
         <li class="md-nav__item">
+  <a href="#consultation-clause-memory_index_consultation-v2" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Consultation Clause (memory_index_consultation v=2)
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
   <a href="#schema-compatibility" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -2948,7 +3250,18 @@
 <li><strong>Absence safety</strong> (I5): Empty source list is valid; returns a skeleton index with zero documents</li>
 <li><strong>Stale detection</strong> (via <code>is_index_stale()</code>) — Query CLI auto-refreshes stale indexes; callers may still refresh proactively</li>
 <li><strong>Fallback protocol</strong> — <code>@navigator</code> consults this index first, then opens referenced files for detail, then falls back to filesystem search</li>
+<li><strong>Consumer-declared source dirs:</strong> <code>brief.json</code> may add a <code>memory_index_extra_dirs</code> list — project-relative directories (recursive <code>*.md</code> scan) or glob patterns (literal expansion). Absolute paths are rejected; traversal is rejected via <code>Path.resolve</code> + <code>relative_to</code>; symlink escapes are rejected via a post-glob <code>os.path.realpath</code> check. Resolved paths are threaded through <code>analyze.build_manifest</code> and <code>build_team._memory_index_sources</code> and merged with the default source set.</li>
 </ul>
+<hr />
+<h2 id="consultation-clause-memory_index_consultation-v2">Consultation Clause (<code>memory_index_consultation</code> v=2)<a class="headerlink" href="#consultation-clause-memory_index_consultation-v2" title="Permanent link">&para;</a></h2>
+<p>Audit / validation / research agents (<code>@conflict-auditor</code>, <code>@conflict-resolution</code>, <code>@quality-auditor</code>, <code>@technical-validator</code>, <code>@retrieval-integrator</code>, <code>@tool-doc-researcher</code>) carry a fenced <code>memory_index_consultation</code> clause that runs <code>agentteams --query-index</code> directly inside their workflow loop rather than round-tripping through <code>@navigator</code>.</p>
+<p><strong>v=2 thresholds (per-strategy):</strong></p>
+<ul>
+<li><strong>Lexical (default):</strong> reliable hit at score <code>≥ 3.0</code>. Single-term queries always go lexical-first.</li>
+<li><strong>Vector fallback:</strong> triggered on zero hits OR zero query-term overlap (single-term false-positive guard). Reliable at score <code>≥ 0.30</code>; cap typically <code>~0.42</code>.</li>
+<li><strong>Either strategy:</strong> <code>&lt; reliable</code> but <code>&gt; 0</code> → "candidate" — open the snippet's source file, never block on the index.</li>
+</ul>
+<p>Empirically: corpus expanded 69 → 198 docs on <code>collector-management</code>, lexical reliable rate 3/4 → 4/4, vector reliable 0/9 → 3/9 + 1 candidate.</p>
 <hr />
 <h2 id="schema-compatibility">Schema Compatibility<a class="headerlink" href="#schema-compatibility" title="Permanent link">&para;</a></h2>
 <p>The index is forward-compatible within major versions:</p>

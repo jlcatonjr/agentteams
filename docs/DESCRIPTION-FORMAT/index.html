@@ -1417,6 +1417,34 @@
   
   
     <li class="md-nav__item">
+      <a href="../api-reference/fleet/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    fleet
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
       <a href="../api-reference/drift/" class="md-nav__link">
         
   
@@ -1565,6 +1593,34 @@
     
   
     security-refs
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../api-reference/framework-research/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    framework-research
   
 
     
@@ -1893,6 +1949,34 @@
   
   
     <li class="md-nav__item">
+      <a href="../api-reference/plan-steps-todo/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    plan-steps-todo
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
       <a href="../api-reference/liaison-logs/" class="md-nav__link">
         
   
@@ -1901,6 +1985,202 @@
     
   
     liaison-logs
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../api-reference/host-features/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    host-features
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../api-reference/baseline/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    baseline
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../api-reference/bridge-subagents/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    bridge-subagents
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../api-reference/hooks-emit/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    hooks-emit
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../api-reference/instructions-split/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    instructions-split
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../api-reference/schedule-emit/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    schedule-emit
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../api-reference/pr-management/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    pr-management
   
 
     
@@ -2702,12 +2982,15 @@
 <a id="__codelineno-5-7" name="__codelineno-5-7" href="#__codelineno-5-7"></a><span class="p">}</span>
 </code></pre></div></p>
 <p><strong>Tool categories and their effects:</strong></p>
+<p>Tools are documents, never agents. Operational tools become a reference doc
+(Copilot) or a skill (Claude); library/framework tools become reference docs.</p>
 <table>
 <thead>
 <tr>
 <th>Category</th>
 <th>Default tier</th>
-<th>Override with <code>needs_specialist_agent</code></th>
+<th>Output (Copilot / Claude)</th>
+<th>Override</th>
 </tr>
 </thead>
 <tbody>
@@ -2715,46 +2998,43 @@
 <td><code>language</code></td>
 <td>Passive (listed only)</td>
 <td>—</td>
+<td>Set <code>true</code> for an operational doc</td>
 </tr>
 <tr>
 <td><code>framework</code></td>
-<td>Reference file</td>
-<td>Set <code>true</code> for full agent</td>
+<td>Reference</td>
+<td><code>references/ref-&lt;tool&gt;-reference.md</code> / same</td>
+<td>Set <code>true</code> for an operational doc</td>
 </tr>
 <tr>
 <td><code>library</code></td>
-<td>Reference file</td>
-<td>Set <code>true</code> for full agent</td>
+<td>Reference</td>
+<td><code>references/ref-&lt;tool&gt;-reference.md</code> / same</td>
+<td>Set <code>true</code> for an operational doc</td>
 </tr>
 <tr>
 <td><code>cli</code></td>
-<td>Reference file</td>
-<td>Set <code>true</code> for full agent</td>
+<td>Operational</td>
+<td><code>references/ref-&lt;tool&gt;-reference.md</code> / <code>.claude/skills/tool-&lt;tool&gt;.md</code></td>
+<td>Set <code>false</code> to downgrade</td>
 </tr>
 <tr>
 <td><code>database</code></td>
-<td>Specialist agent</td>
+<td>Operational</td>
+<td><code>references/ref-&lt;tool&gt;-reference.md</code> / <code>.claude/skills/tool-&lt;tool&gt;.md</code></td>
 <td>Set <code>false</code> to downgrade</td>
 </tr>
 <tr>
-<td><code>deployment</code></td>
-<td>Specialist agent</td>
-<td>Set <code>false</code> to downgrade</td>
-</tr>
-<tr>
-<td><code>pipeline</code></td>
-<td>Specialist agent</td>
-<td>Set <code>false</code> to downgrade</td>
-</tr>
-<tr>
-<td><code>compiler</code></td>
-<td>Specialist agent</td>
+<td><code>build-system</code></td>
+<td>Operational</td>
+<td><code>references/ref-&lt;tool&gt;-reference.md</code> / <code>.claude/skills/tool-&lt;tool&gt;.md</code></td>
 <td>Set <code>false</code> to downgrade</td>
 </tr>
 <tr>
 <td><code>other</code></td>
 <td>Passive</td>
-<td>Set <code>true</code> for full agent</td>
+<td>—</td>
+<td>Set <code>true</code> for an operational doc</td>
 </tr>
 </tbody>
 </table>
@@ -2816,7 +3096,7 @@
 <a id="__codelineno-8-14" name="__codelineno-8-14" href="#__codelineno-8-14"></a><span class="gu">## Tools</span>
 <a id="__codelineno-8-15" name="__codelineno-8-15" href="#__codelineno-8-15"></a><span class="k">-</span><span class="w"> </span>Python 3.11
 <a id="__codelineno-8-16" name="__codelineno-8-16" href="#__codelineno-8-16"></a><span class="k">-</span><span class="w"> </span>FastAPI (framework)
-<a id="__codelineno-8-17" name="__codelineno-8-17" href="#__codelineno-8-17"></a><span class="k">-</span><span class="w"> </span>PostgreSQL 15 (database, specialist agent required)
+<a id="__codelineno-8-17" name="__codelineno-8-17" href="#__codelineno-8-17"></a><span class="k">-</span><span class="w"> </span>PostgreSQL 15 (database, operational tool doc)
 <a id="__codelineno-8-18" name="__codelineno-8-18" href="#__codelineno-8-18"></a>
 <a id="__codelineno-8-19" name="__codelineno-8-19" href="#__codelineno-8-19"></a><span class="gu">## Style Rules</span>
 <a id="__codelineno-8-20" name="__codelineno-8-20" href="#__codelineno-8-20"></a><span class="k">-</span><span class="w"> </span>All public functions must have docstrings
@@ -2844,7 +3124,7 @@
 </tr>
 <tr>
 <td>Using <code>needs_specialist_agent: true</code> on <code>language</code> tools</td>
-<td>Generates an agent for "Python"</td>
+<td>Generates a tool doc for "Python"</td>
 <td>Set only on tools with real operational complexity</td>
 </tr>
 <tr>

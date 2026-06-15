@@ -989,7 +989,7 @@
   <a href="#creating-and-verifying-waivers" class="md-nav__link">
     <span class="md-ellipsis">
       
-        Creating and Verifying Waivers
+        Creating and verifying waivers
       
     </span>
   </a>
@@ -1869,6 +1869,34 @@
   
   
     <li class="md-nav__item">
+      <a href="../api-reference/fleet/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    fleet
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
       <a href="../api-reference/drift/" class="md-nav__link">
         
   
@@ -2017,6 +2045,34 @@
     
   
     security-refs
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../api-reference/framework-research/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    framework-research
   
 
     
@@ -2345,6 +2401,34 @@
   
   
     <li class="md-nav__item">
+      <a href="../api-reference/plan-steps-todo/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    plan-steps-todo
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
       <a href="../api-reference/liaison-logs/" class="md-nav__link">
         
   
@@ -2353,6 +2437,202 @@
     
   
     liaison-logs
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../api-reference/host-features/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    host-features
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../api-reference/baseline/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    baseline
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../api-reference/bridge-subagents/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    bridge-subagents
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../api-reference/hooks-emit/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    hooks-emit
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../api-reference/instructions-split/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    instructions-split
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../api-reference/schedule-emit/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    schedule-emit
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../api-reference/pr-management/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    pr-management
   
 
     
@@ -2661,7 +2941,7 @@
   <a href="#creating-and-verifying-waivers" class="md-nav__link">
     <span class="md-ellipsis">
       
-        Creating and Verifying Waivers
+        Creating and verifying waivers
       
     </span>
   </a>
@@ -3020,12 +3300,20 @@
 <a id="__codelineno-0-5" name="__codelineno-0-5" href="#__codelineno-0-5"></a>           - Waiver not expired (expires_at &gt; current_time) AND
 <a id="__codelineno-0-6" name="__codelineno-0-6" href="#__codelineno-0-6"></a>           - AGENTTEAMS_WAIVER_SIGNING_KEY is configured
 </code></pre></div>
-<p><strong>Complete Waiver Validation (ALL checks required):</strong>
-1. Waiver record exists in <code>references/security-waivers.log.csv</code>
-2. HMAC-SHA256 signature is valid: <code>HMAC-SHA256(row_without_signature) == waiver.hmac_signature</code>
-3. <strong>Expiration is checked:</strong> <code>current_time() &lt;= waiver.expires_at</code>
-4. Reason matches operation type (e.g., "air-gapped" for <code>--security-offline</code>)</p>
-<p>If <strong>ANY</strong> check fails → Block write, return detailed error message</p>
+<p><strong>Complete waiver validation (ALL checks required).</strong> These rules are enforced by
+<code>agentteams/cli/security_gate.py</code> (<code>_validate_security_waiver</code>), which is the
+authoritative source for the schema and signature documented below:
+1. A waiver record exists in <code>references/security-waivers.log.csv</code> with the full
+   11-column header (see <a href="#waiver-system">Waiver System</a>).
+2. <code>action_reviewed</code> matches the operation — the intel-freshness gate looks for
+   <code>security-intel-freshness</code>.
+3. <code>conditions_verified</code> is exactly <code>verified</code>.
+4. <code>approver</code>, <code>ticket_id</code>, and <code>reason_code</code> are all non-empty.
+5. <code>expires_at</code> is a valid ISO-8601 timestamp in the future.
+6. <code>max_uses &gt; 0</code> and <code>uses &lt; max_uses</code> (the gate increments <code>uses</code> on each spend).
+7. <code>AGENTTEAMS_WAIVER_SIGNING_KEY</code> is configured and the HMAC-SHA256 signature is
+   valid (payload below); the stored signature is compared case-insensitively.</p>
+<p>If <strong>ANY</strong> check fails → block the write and return a detailed error.</p>
 <p>The 24-hour window is automated:
 - First generation run fetches live data and records timestamp
 - All subsequent operations within 24h use cached snapshot
@@ -3048,42 +3336,66 @@
 </ol>
 <h3 id="waiver-lifecycle">Waiver Lifecycle<a class="headerlink" href="#waiver-lifecycle" title="Permanent link">&para;</a></h3>
 <p><strong>Prerequisites:</strong>
-- <code>AGENTTEAMS_WAIVER_SIGNING_KEY</code> environment variable configured (HMAC-SHA256 key)
-- Signed record in <code>references/security-waivers.log.csv</code></p>
-<p><strong>Format:</strong>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-1-1" name="__codelineno-1-1" href="#__codelineno-1-1"></a>issued_at,expires_at,reason,approver,hmac_signature
-<a id="__codelineno-1-2" name="__codelineno-1-2" href="#__codelineno-1-2"></a>2026-05-10T15:30:00Z,2026-05-11T15:30:00Z,scheduled-maintenance,security-lead@org,abc123...
+- <code>AGENTTEAMS_WAIVER_SIGNING_KEY</code> environment variable configured (the HMAC-SHA256 key).
+- A signed record in <code>references/security-waivers.log.csv</code>.</p>
+<p><strong>Schema (authoritative source: <code>agentteams/cli/security_gate.py</code>).</strong> The log is a CSV
+with <strong>11 columns</strong> — do not hand-copy a subset; the gate rejects any other header:</p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-1-1" name="__codelineno-1-1" href="#__codelineno-1-1"></a>timestamp,waiver_id,action_reviewed,expires_at,max_uses,uses,approver,ticket_id,reason_code,conditions_verified,signature
+<a id="__codelineno-1-2" name="__codelineno-1-2" href="#__codelineno-1-2"></a>2026-05-10T15:30:00Z,waiver-freshness-001,security-intel-freshness,2026-05-11T15:30:00Z,1,0,security-lead@org,SEC-1238,maintenance,verified,&lt;hex-signature&gt;
+</code></pre></div>
+<ul>
+<li><code>action_reviewed</code> — the gated action; the intel-freshness gate looks for <code>security-intel-freshness</code>.</li>
+<li><code>max_uses</code> / <code>uses</code> — the gate consumes one use per spend (requires <code>uses &lt; max_uses</code>).</li>
+<li><code>conditions_verified</code> — must be exactly <code>verified</code>.</li>
+<li><code>signature</code> — lowercase hex HMAC-SHA256 over the payload below.</li>
+</ul>
+<p><strong>HMAC payload.</strong> The signature signs <strong>9 pipe-joined fields</strong>, excluding <code>timestamp</code>
+and <code>signature</code>, in this exact order:</p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-2-1" name="__codelineno-2-1" href="#__codelineno-2-1"></a>waiver_id|action_reviewed|expires_at|max_uses|uses|approver|ticket_id|reason_code|conditions_verified
+</code></pre></div>
+<h3 id="creating-and-verifying-waivers">Creating and verifying waivers<a class="headerlink" href="#creating-and-verifying-waivers" title="Permanent link">&para;</a></h3>
+<blockquote>
+<p><strong>No <code>--create-waiver</code> command exists.</strong> Minting a waiver mints the security gate's
+escape credential, so it is intentionally a manual, key-holder-owned step (a
+maintainer-owned <code>--create-waiver</code> may be added later). The snippet below is
+<strong>reproducible by a careful key-holder, but it is a brittle stopgap</strong> — keep the
+signing key offline and prefer refreshing live intel where possible.</p>
+</blockquote>
+<p><strong>Mint a signed waiver (Python — mirrors <code>security_gate.py</code> exactly):</strong>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-3-1" name="__codelineno-3-1" href="#__codelineno-3-1"></a><span class="kn">import</span><span class="w"> </span><span class="nn">hashlib</span><span class="o">,</span><span class="w"> </span><span class="nn">hmac</span><span class="o">,</span><span class="w"> </span><span class="nn">os</span>
+<a id="__codelineno-3-2" name="__codelineno-3-2" href="#__codelineno-3-2"></a>
+<a id="__codelineno-3-3" name="__codelineno-3-3" href="#__codelineno-3-3"></a><span class="n">key</span> <span class="o">=</span> <span class="n">os</span><span class="o">.</span><span class="n">environ</span><span class="p">[</span><span class="s2">&quot;AGENTTEAMS_WAIVER_SIGNING_KEY&quot;</span><span class="p">]</span><span class="o">.</span><span class="n">encode</span><span class="p">(</span><span class="s2">&quot;utf-8&quot;</span><span class="p">)</span>
+<a id="__codelineno-3-4" name="__codelineno-3-4" href="#__codelineno-3-4"></a><span class="n">row</span> <span class="o">=</span> <span class="p">{</span>
+<a id="__codelineno-3-5" name="__codelineno-3-5" href="#__codelineno-3-5"></a>    <span class="s2">&quot;timestamp&quot;</span><span class="p">:</span> <span class="s2">&quot;2026-05-10T15:30:00Z&quot;</span><span class="p">,</span>
+<a id="__codelineno-3-6" name="__codelineno-3-6" href="#__codelineno-3-6"></a>    <span class="s2">&quot;waiver_id&quot;</span><span class="p">:</span> <span class="s2">&quot;waiver-freshness-001&quot;</span><span class="p">,</span>
+<a id="__codelineno-3-7" name="__codelineno-3-7" href="#__codelineno-3-7"></a>    <span class="s2">&quot;action_reviewed&quot;</span><span class="p">:</span> <span class="s2">&quot;security-intel-freshness&quot;</span><span class="p">,</span>
+<a id="__codelineno-3-8" name="__codelineno-3-8" href="#__codelineno-3-8"></a>    <span class="s2">&quot;expires_at&quot;</span><span class="p">:</span> <span class="s2">&quot;2026-05-11T15:30:00Z&quot;</span><span class="p">,</span>
+<a id="__codelineno-3-9" name="__codelineno-3-9" href="#__codelineno-3-9"></a>    <span class="s2">&quot;max_uses&quot;</span><span class="p">:</span> <span class="s2">&quot;1&quot;</span><span class="p">,</span>
+<a id="__codelineno-3-10" name="__codelineno-3-10" href="#__codelineno-3-10"></a>    <span class="s2">&quot;uses&quot;</span><span class="p">:</span> <span class="s2">&quot;0&quot;</span><span class="p">,</span>                       <span class="c1"># newly minted waivers start unspent</span>
+<a id="__codelineno-3-11" name="__codelineno-3-11" href="#__codelineno-3-11"></a>    <span class="s2">&quot;approver&quot;</span><span class="p">:</span> <span class="s2">&quot;security-lead@org&quot;</span><span class="p">,</span>
+<a id="__codelineno-3-12" name="__codelineno-3-12" href="#__codelineno-3-12"></a>    <span class="s2">&quot;ticket_id&quot;</span><span class="p">:</span> <span class="s2">&quot;SEC-1238&quot;</span><span class="p">,</span>
+<a id="__codelineno-3-13" name="__codelineno-3-13" href="#__codelineno-3-13"></a>    <span class="s2">&quot;reason_code&quot;</span><span class="p">:</span> <span class="s2">&quot;maintenance&quot;</span><span class="p">,</span>
+<a id="__codelineno-3-14" name="__codelineno-3-14" href="#__codelineno-3-14"></a>    <span class="s2">&quot;conditions_verified&quot;</span><span class="p">:</span> <span class="s2">&quot;verified&quot;</span><span class="p">,</span>
+<a id="__codelineno-3-15" name="__codelineno-3-15" href="#__codelineno-3-15"></a><span class="p">}</span>
+<a id="__codelineno-3-16" name="__codelineno-3-16" href="#__codelineno-3-16"></a><span class="n">fields</span> <span class="o">=</span> <span class="p">[</span><span class="s2">&quot;waiver_id&quot;</span><span class="p">,</span> <span class="s2">&quot;action_reviewed&quot;</span><span class="p">,</span> <span class="s2">&quot;expires_at&quot;</span><span class="p">,</span> <span class="s2">&quot;max_uses&quot;</span><span class="p">,</span> <span class="s2">&quot;uses&quot;</span><span class="p">,</span>
+<a id="__codelineno-3-17" name="__codelineno-3-17" href="#__codelineno-3-17"></a>          <span class="s2">&quot;approver&quot;</span><span class="p">,</span> <span class="s2">&quot;ticket_id&quot;</span><span class="p">,</span> <span class="s2">&quot;reason_code&quot;</span><span class="p">,</span> <span class="s2">&quot;conditions_verified&quot;</span><span class="p">]</span>
+<a id="__codelineno-3-18" name="__codelineno-3-18" href="#__codelineno-3-18"></a><span class="n">payload</span> <span class="o">=</span> <span class="s2">&quot;|&quot;</span><span class="o">.</span><span class="n">join</span><span class="p">(</span><span class="n">row</span><span class="p">[</span><span class="n">f</span><span class="p">]</span> <span class="k">for</span> <span class="n">f</span> <span class="ow">in</span> <span class="n">fields</span><span class="p">)</span>               <span class="c1"># 9 fields, pipe-joined</span>
+<a id="__codelineno-3-19" name="__codelineno-3-19" href="#__codelineno-3-19"></a><span class="n">row</span><span class="p">[</span><span class="s2">&quot;signature&quot;</span><span class="p">]</span> <span class="o">=</span> <span class="n">hmac</span><span class="o">.</span><span class="n">new</span><span class="p">(</span><span class="n">key</span><span class="p">,</span> <span class="n">payload</span><span class="o">.</span><span class="n">encode</span><span class="p">(</span><span class="s2">&quot;utf-8&quot;</span><span class="p">),</span> <span class="n">hashlib</span><span class="o">.</span><span class="n">sha256</span><span class="p">)</span><span class="o">.</span><span class="n">hexdigest</span><span class="p">()</span>
+<a id="__codelineno-3-20" name="__codelineno-3-20" href="#__codelineno-3-20"></a>
+<a id="__codelineno-3-21" name="__codelineno-3-21" href="#__codelineno-3-21"></a><span class="n">header</span> <span class="o">=</span> <span class="p">[</span><span class="s2">&quot;timestamp&quot;</span><span class="p">,</span> <span class="o">*</span><span class="n">fields</span><span class="p">,</span> <span class="s2">&quot;signature&quot;</span><span class="p">]</span>             <span class="c1"># 11-column order</span>
+<a id="__codelineno-3-22" name="__codelineno-3-22" href="#__codelineno-3-22"></a><span class="nb">print</span><span class="p">(</span><span class="s2">&quot;,&quot;</span><span class="o">.</span><span class="n">join</span><span class="p">(</span><span class="n">header</span><span class="p">))</span>
+<a id="__codelineno-3-23" name="__codelineno-3-23" href="#__codelineno-3-23"></a><span class="nb">print</span><span class="p">(</span><span class="s2">&quot;,&quot;</span><span class="o">.</span><span class="n">join</span><span class="p">(</span><span class="n">row</span><span class="p">[</span><span class="n">c</span><span class="p">]</span> <span class="k">for</span> <span class="n">c</span> <span class="ow">in</span> <span class="n">header</span><span class="p">))</span>                  <span class="c1"># append this row to the log</span>
 </code></pre></div></p>
-<p><strong>Signature verification:</strong>
-- HMAC-SHA256(row_without_signature, AGENTTEAMS_WAIVER_SIGNING_KEY)
-- On every write, agentteams verifies signature and expiration
-- If verification fails or waiver expired: block write</p>
-<h3 id="creating-and-verifying-waivers">Creating and Verifying Waivers<a class="headerlink" href="#creating-and-verifying-waivers" title="Permanent link">&para;</a></h3>
-<p><strong>Waiver Format &amp; Fields:</strong>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-2-1" name="__codelineno-2-1" href="#__codelineno-2-1"></a>issued_at,expires_at,reason,approver,hmac_signature
-<a id="__codelineno-2-2" name="__codelineno-2-2" href="#__codelineno-2-2"></a>2026-05-10T15:30:00Z,2026-05-11T15:30:00Z,scheduled-maintenance,security-lead@org,abc123def456...
-</code></pre></div></p>
-<p><strong>Automated Waiver Creation &amp; Signature:</strong>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-3-1" name="__codelineno-3-1" href="#__codelineno-3-1"></a><span class="c1"># Set your signing key</span>
-<a id="__codelineno-3-2" name="__codelineno-3-2" href="#__codelineno-3-2"></a><span class="nb">export</span><span class="w"> </span><span class="nv">AGENTTEAMS_WAIVER_SIGNING_KEY</span><span class="o">=</span><span class="s2">&quot;your-hmac-key&quot;</span>
-<a id="__codelineno-3-3" name="__codelineno-3-3" href="#__codelineno-3-3"></a>
-<a id="__codelineno-3-4" name="__codelineno-3-4" href="#__codelineno-3-4"></a><span class="c1"># Create new waiver (auto-signs with HMAC-SHA256)</span>
-<a id="__codelineno-3-5" name="__codelineno-3-5" href="#__codelineno-3-5"></a>agentteams<span class="w"> </span>--create-waiver<span class="w"> </span><span class="se">\</span>
-<a id="__codelineno-3-6" name="__codelineno-3-6" href="#__codelineno-3-6"></a><span class="w">  </span>--reason<span class="w"> </span><span class="s2">&quot;scheduled-maintenance&quot;</span><span class="w"> </span><span class="se">\</span>
-<a id="__codelineno-3-7" name="__codelineno-3-7" href="#__codelineno-3-7"></a><span class="w">  </span>--approver<span class="w"> </span><span class="s2">&quot;security-lead@org&quot;</span><span class="w"> </span><span class="se">\</span>
-<a id="__codelineno-3-8" name="__codelineno-3-8" href="#__codelineno-3-8"></a><span class="w">  </span>--expires-in<span class="w"> </span>24h<span class="w"> </span><span class="se">\</span>
-<a id="__codelineno-3-9" name="__codelineno-3-9" href="#__codelineno-3-9"></a><span class="w">  </span>&gt;&gt;<span class="w"> </span>references/security-waivers.log.csv
-<a id="__codelineno-3-10" name="__codelineno-3-10" href="#__codelineno-3-10"></a>
-<a id="__codelineno-3-11" name="__codelineno-3-11" href="#__codelineno-3-11"></a><span class="c1"># Verify all existing waivers (checks expiration + signatures)</span>
-<a id="__codelineno-3-12" name="__codelineno-3-12" href="#__codelineno-3-12"></a>agentteams<span class="w"> </span>--verify-waivers
-<a id="__codelineno-3-13" name="__codelineno-3-13" href="#__codelineno-3-13"></a><span class="c1"># Output: ✅ 3 waivers valid (1 expiring in 23h)</span>
-</code></pre></div></p>
-<p><strong>Manual Verification (if no automation available):</strong>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-4-1" name="__codelineno-4-1" href="#__codelineno-4-1"></a><span class="c1"># Compute HMAC-SHA256 for row (without signature field)</span>
-<a id="__codelineno-4-2" name="__codelineno-4-2" href="#__codelineno-4-2"></a><span class="nb">echo</span><span class="w"> </span>-n<span class="w"> </span><span class="s2">&quot;2026-05-10T15:30:00Z,2026-05-11T15:30:00Z,scheduled-maintenance,security-lead@org&quot;</span><span class="w"> </span><span class="p">|</span><span class="w"> </span><span class="se">\</span>
-<a id="__codelineno-4-3" name="__codelineno-4-3" href="#__codelineno-4-3"></a><span class="w">  </span>openssl<span class="w"> </span>dgst<span class="w"> </span>-sha256<span class="w"> </span>-hmac<span class="w"> </span><span class="s2">&quot;</span><span class="nv">$AGENTTEAMS_WAIVER_SIGNING_KEY</span><span class="s2">&quot;</span>
-<a id="__codelineno-4-4" name="__codelineno-4-4" href="#__codelineno-4-4"></a><span class="c1"># Output: abc123def456... (must match waiver.hmac_signature)</span>
-</code></pre></div></p>
+<p><strong>Verify existing waivers (read-only; never consumes a use):</strong>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-4-1" name="__codelineno-4-1" href="#__codelineno-4-1"></a><span class="nb">export</span><span class="w"> </span><span class="nv">AGENTTEAMS_WAIVER_SIGNING_KEY</span><span class="o">=</span><span class="s2">&quot;your-hmac-key&quot;</span>
+<a id="__codelineno-4-2" name="__codelineno-4-2" href="#__codelineno-4-2"></a>agentteams<span class="w"> </span>--verify-waivers<span class="w"> </span>--output<span class="w"> </span>/path/to/project
+<a id="__codelineno-4-3" name="__codelineno-4-3" href="#__codelineno-4-3"></a><span class="c1">#   [OK ] waiver-freshness-001 (action=security-intel-freshness)</span>
+<a id="__codelineno-4-4" name="__codelineno-4-4" href="#__codelineno-4-4"></a><span class="c1">#   1 waiver(s): 1 valid, 0 invalid.</span>
+</code></pre></div>
+<code>--verify-waivers</code> reports the signature, expiry, use-limit, and condition status of
+every waiver <strong>without minting or consuming one</strong> (exit non-zero if any is invalid).
+Without <code>AGENTTEAMS_WAIVER_SIGNING_KEY</code>, rows are reported invalid (unverifiable)
+rather than silently skipped.</p>
 <hr />
 <h2 id="cli-flags-for-security-control">CLI Flags for Security Control<a class="headerlink" href="#cli-flags-for-security-control" title="Permanent link">&para;</a></h2>
 <h3 id="fetch-control">Fetch Control<a class="headerlink" href="#fetch-control" title="Permanent link">&para;</a></h3>

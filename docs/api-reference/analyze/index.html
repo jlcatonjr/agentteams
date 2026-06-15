@@ -1602,6 +1602,34 @@
   
   
     <li class="md-nav__item">
+      <a href="../fleet/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    fleet
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
       <a href="../drift/" class="md-nav__link">
         
   
@@ -1750,6 +1778,34 @@
     
   
     security-refs
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../framework-research/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    framework-research
   
 
     
@@ -2078,6 +2134,34 @@
   
   
     <li class="md-nav__item">
+      <a href="../plan-steps-todo/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    plan-steps-todo
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
       <a href="../liaison-logs/" class="md-nav__link">
         
   
@@ -2086,6 +2170,202 @@
     
   
     liaison-logs
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../host-features/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    host-features
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../baseline/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    baseline
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../bridge-subagents/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    bridge-subagents
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../hooks-emit/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    hooks-emit
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../instructions-split/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    instructions-split
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../schedule-emit/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    schedule-emit
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../pr-management/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    pr-management
   
 
     
@@ -2492,18 +2772,18 @@
 <ul>
 <li><code>tool</code> (<code>dict[str, Any]</code>) — Tool dict with at minimum a <code>name</code> key.</li>
 </ul>
-<p><strong>Returns:</strong> <code>str</code> — <code>'specialist'</code> (gets a dedicated tool agent), <code>'reference'</code> (gets a reference file), or <code>'passive'</code> (no dedicated artifact).</p>
+<p><strong>Returns:</strong> <code>str</code> — <code>'specialist'</code> (operational tool doc: reference on Copilot, skill on Claude), <code>'reference'</code> (lightweight reference file), or <code>'passive'</code> (no dedicated artifact). Tools are never generated as agents.</p>
 <hr />
 <h3 id="detect_tool_agentstools"><code>detect_tool_agents(tools)</code><a class="headerlink" href="#detect_tool_agentstools" title="Permanent link">&para;</a></h3>
 <blockquote>
 <p><em>Source: <code>agentteams/analyze.py</code></em></p>
 </blockquote>
-<p>Return tool dicts classified as requiring a dedicated tool-specialist agent.</p>
+<p>Return specs for operational tool <em>documents</em> (reference docs / Claude skills). Name retained for backward compatibility; tools are never agents.</p>
 <p><strong>Args:</strong></p>
 <ul>
 <li><code>tools</code> (<code>list[dict[str, Any]]</code>) — List of tool dicts from the project description.</li>
 </ul>
-<p><strong>Returns:</strong> <code>list[dict[str, Any]]</code> — Specialist-tier tool agent specs (not raw input tool dicts), each including <code>slug</code>, <code>tool_name</code>, <code>tool_version</code>, <code>tool_category</code>, <code>config_files</code>, <code>invocation_command</code>, <code>invocation_target</code>, <code>docs_url</code>, <code>api_surface</code>, and <code>common_patterns</code>.</p>
+<p><strong>Returns:</strong> <code>list[dict[str, Any]]</code> — Operational tool-doc specs (not raw input tool dicts), each including <code>slug</code>, <code>tool_name</code>, <code>tool_version</code>, <code>tool_category</code>, <code>config_files</code>, <code>invocation_command</code>, <code>invocation_target</code>, <code>docs_url</code>, <code>api_surface</code>, and <code>common_patterns</code>.</p>
 <hr />
 <h3 id="detect_reference_toolstools"><code>detect_reference_tools(tools)</code><a class="headerlink" href="#detect_reference_toolstools" title="Permanent link">&para;</a></h3>
 <blockquote>
