@@ -144,6 +144,43 @@ def _run_verify_backup(args: argparse.Namespace) -> int:
     return 1 if failed else 0
 
 
+def _run_prune_backups(args: argparse.Namespace) -> int:
+    """``--prune-backups [KEEP]``: bound backup growth by deleting old timestamped
+    backups under ``.agentteams-backups/``, keeping the newest KEEP. The single
+    newest backup is never deleted (fail-safe), and ``--keep-within-days`` retains
+    anything younger than N days. With ``--dry-run`` nothing is deleted — the plan
+    is printed. Exit 0 (this is a maintenance op, not a verdict)."""
+    from agentteams import emit
+
+    output_dir = _resolve_output_dir(args)
+    keep_last = getattr(args, "prune_backups", None)
+    if keep_last is None:  # defensive: dispatch only reaches here when set
+        keep_last = emit.DEFAULT_BACKUP_KEEP_LAST
+    keep_within_days = getattr(args, "keep_within_days", None)
+    dry_run = bool(getattr(args, "dry_run", False))
+
+    result = emit.prune_backups(
+        output_dir,
+        keep_last=keep_last,
+        keep_within_days=keep_within_days,
+        dry_run=dry_run,
+    )
+    if not result.deleted and not result.kept:
+        print(f"No backups found under {output_dir}/.agentteams-backups/")
+        return 0
+
+    verb = "Would delete" if result.dry_run else "Deleted"
+    print(
+        f"Backups in {output_dir}: kept {len(result.kept)}, "
+        f"{verb.lower()} {len(result.deleted)} (keep_last={keep_last}"
+        + (f", keep_within_days={keep_within_days}" if keep_within_days is not None else "")
+        + ")."
+    )
+    for ts in result.deleted:
+        print(f"  {verb}: {ts}")
+    return 0
+
+
 def _run_convert(
     source_dir: Path,
     target_framework: str,

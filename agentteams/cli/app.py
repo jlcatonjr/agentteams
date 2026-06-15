@@ -12,6 +12,7 @@ build_team.py re-exports main/_finalize_exit_code/_deprecated_build_team_entry.
 
 from __future__ import annotations
 
+import os
 import sys
 from pathlib import Path
 
@@ -19,6 +20,7 @@ from agentteams.cli.commands import (
     _run_bridge,
     _run_convert,
     _run_interop,
+    _run_prune_backups,
     _run_verify_backup,
     _run_verify_integrity,
     _run_verify_waivers,
@@ -54,6 +56,12 @@ def main(argv: list[str] | None = None) -> int:
     parser = _build_parser()
     args = parser.parse_args(argv)
     _validate_option_combinations(parser, args)
+
+    # --backup-mirror overrides AGENTTEAMS_BACKUP_MIRROR for this run so the
+    # off-machine mirror (emit._mirror_backup) fires during any --update backup.
+    # Set before fleet dispatch so re-entrant per-workspace runs inherit it.
+    if getattr(args, "backup_mirror", None):
+        os.environ["AGENTTEAMS_BACKUP_MIRROR"] = args.backup_mirror
 
     # -----------------------------------------------------------------------
     # --target-host-features: parse early so emitters can read the list.
@@ -126,6 +134,14 @@ def main(argv: list[str] | None = None) -> int:
         return _run_verify_integrity(args)
     if getattr(args, "verify_backup", None) is not None:
         return _run_verify_backup(args)
+
+    # -----------------------------------------------------------------------
+    # --prune-backups: standalone retention sweep — bound backup growth by
+    # deleting old timestamped backups (never the newest). Maintenance op, not
+    # a verdict; honours --dry-run and --keep-within-days.
+    # -----------------------------------------------------------------------
+    if getattr(args, "prune_backups", None) is not None:
+        return _run_prune_backups(args)
 
     # -----------------------------------------------------------------------
     # --add-fence-markers: standalone file-retrofit (no description needed).

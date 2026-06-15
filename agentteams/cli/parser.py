@@ -12,6 +12,7 @@ from __future__ import annotations
 import argparse
 
 from agentteams import __version__
+from agentteams.emit import DEFAULT_BACKUP_KEEP_LAST
 from agentteams.frameworks.registry import FRAMEWORKS
 
 def _build_parser() -> argparse.ArgumentParser:
@@ -568,6 +569,49 @@ def _build_parser() -> argparse.ArgumentParser:
             "bit-rot/tamper mismatch."
         ),
     )
+    parser.add_argument(
+        "--prune-backups",
+        nargs="?",
+        type=int,
+        const=DEFAULT_BACKUP_KEEP_LAST,
+        default=None,
+        metavar="KEEP",
+        dest="prune_backups",
+        help=(
+            "Standalone: delete old timestamped backups under --output/--project "
+            f"(else CWD) .agentteams-backups/, keeping the newest KEEP (default "
+            f"{DEFAULT_BACKUP_KEEP_LAST}). The single newest backup is NEVER "
+            "deleted, even with KEEP 0. Combine with --keep-within-days to also "
+            "retain anything younger than N days, and --dry-run to preview. This "
+            "bounds backup growth; distinct from --prune (which removes stale "
+            "*agents*, not backups)."
+        ),
+    )
+    parser.add_argument(
+        "--keep-within-days",
+        type=int,
+        default=None,
+        metavar="DAYS",
+        dest="keep_within_days",
+        help=(
+            "Modifier for --prune-backups: in addition to the newest KEEP, retain "
+            "any backup younger than DAYS (a backup with an unparseable timestamp "
+            "is always kept, fail-safe)."
+        ),
+    )
+    parser.add_argument(
+        "--backup-mirror",
+        default=None,
+        metavar="DIR",
+        dest="backup_mirror",
+        help=(
+            "Modifier for --update: after a backup is written, also copy it to "
+            "DIR/<output-slug>/<timestamp>/ (e.g. a NAS or synced folder) so the "
+            "recovery net survives local disk loss. Best-effort and non-fatal — a "
+            "mirror failure warns but never breaks the update. Overrides the "
+            "AGENTTEAMS_BACKUP_MIRROR environment variable."
+        ),
+    )
 
     # -- Fleet update: run --update --merge across every workspace under a dir --
     fleet_group = parser.add_argument_group("fleet update (multi-workspace)")
@@ -614,6 +658,28 @@ def _validate_option_combinations(parser: argparse.ArgumentParser, args: argpars
 
     if args.prune and not args.update:
         parser.error("--prune can only be used with --update")
+
+    # CP-1: the standalone integrity/retention ops are mutually exclusive. Each
+    # is a terminal read-or-prune action with its own exit-code contract;
+    # combining them would silently run only the first in app.py dispatch order.
+    _standalone_ops = [
+        ("--verify-integrity", bool(getattr(args, "verify_integrity", False))),
+        ("--verify-backup", getattr(args, "verify_backup", None) is not None),
+        ("--prune-backups", getattr(args, "prune_backups", None) is not None),
+    ]
+    _active_ops = [flag for flag, on in _standalone_ops if on]
+    if len(_active_ops) > 1:
+        parser.error(
+            f"{' and '.join(_active_ops)} are mutually exclusive "
+            "(each is a standalone integrity/retention operation)"
+        )
+
+    # --keep-within-days is a modifier for --prune-backups; alone it does nothing.
+    if (
+        getattr(args, "keep_within_days", None) is not None
+        and getattr(args, "prune_backups", None) is None
+    ):
+        parser.error("--keep-within-days only applies with --prune-backups")
 
     if getattr(args, "fleet", None) is not None:
         # Fleet mode is non-destructive by construction: merge-only, and every

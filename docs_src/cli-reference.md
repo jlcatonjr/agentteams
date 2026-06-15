@@ -20,6 +20,7 @@ agentteams [--description PATH] [--project PATH] [--framework NAME]
            [--strict-manual-placeholders] [--no-strict-manual-placeholders]
            [--no-backup] [--shrink-policy {warn,halt,allow}]
            [--list-backups] [--restore-backup TIMESTAMP]
+           [--prune-backups [KEEP]] [--keep-within-days DAYS] [--backup-mirror DIR]
            [--verify-integrity] [--verify-backup [TIMESTAMP]]
            [--target-host-features TOKENS]
            [--capture-baseline PATH] [--baseline-label LABEL] [--check-baseline PATH]
@@ -372,6 +373,24 @@ List all available backups for the output directory (newest first) and exit. Pri
 ### `--restore-backup TIMESTAMP`
 
 Restore a specific backup into the output directory. `TIMESTAMP` is the directory name shown by `--list-backups` (e.g. `20250601-143022`). Use `latest` to restore the most recent backup.
+
+### `--prune-backups [KEEP]`
+
+Standalone retention sweep that bounds backup growth: delete old timestamped backups under `<output_dir>/.agentteams-backups/`, keeping the newest `KEEP` (default `10`). Resolves the output directory from `--output`/`--project` (else CWD) and needs no `--description`.
+
+- The **single newest backup is never deleted**, even with `--prune-backups 0` (you always retain at least one recovery point).
+- Combine with `--keep-within-days DAYS` to additionally retain anything younger than `DAYS` (union of the two rules). A backup whose age cannot be determined (unparseable name *and* unreadable mtime) is kept — the sweep is fail-safe toward retention.
+- Pair with `--dry-run` to preview the deletions without touching disk.
+
+Distinct from [`--prune`](#--prune), which removes stale *agent files* during an `--update`, not backups. Exit `0` (this is a maintenance op, not a verdict); mutually exclusive with `--verify-integrity` and `--verify-backup`.
+
+### `--keep-within-days DAYS`
+
+Modifier for `--prune-backups`: in addition to the newest `KEEP`, retain any backup younger than `DAYS`. Errors if passed without `--prune-backups`.
+
+### `--backup-mirror DIR`
+
+Modifier for `--update` (and the other write modes): after each automatic backup is written, also copy it to `DIR/<output-slug>/<timestamp>/` — e.g. a NAS, external drive, or synced folder — so the recovery net survives a local disk loss. The `<output-slug>` namespaces by output directory so many workspaces can mirror to one target without collision (this is also what makes `--fleet --backup-mirror` safe). Best-effort and **non-fatal**: a mirror failure warns on stderr but never breaks the primary operation. Overrides the `AGENTTEAMS_BACKUP_MIRROR` environment variable (set the variable to mirror without passing the flag every run).
 
 ---
 

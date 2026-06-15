@@ -562,6 +562,9 @@ def _merge_fenced_content(
 
 _BACKUP_DIR_NAME = ".agentteams-backups"
 
+#: Default number of most-recent backups prune_backups keeps (remediation Plan 3).
+DEFAULT_BACKUP_KEEP_LAST = 10
+
 
 @dataclass
 class BackupResult:
@@ -787,7 +790,30 @@ def backup_output_dir(
 
     result.backup_path = backup_path
     print(f"  ✓  Backup created: {backup_path} ({result.files_backed_up} file(s))")
+    _mirror_backup(output_dir, backup_path)
     return result
+
+
+def _mirror_backup(output_dir: Path, backup_path: Path) -> None:
+    """Best-effort off-machine copy of a just-created backup (remediation Plan 3).
+
+    If ``AGENTTEAMS_BACKUP_MIRROR`` is set (e.g. a NAS/external/synced folder), copy
+    *backup_path* to ``<mirror>/<output-dir-slug>/<timestamp>/`` so the recovery net
+    survives a local disk loss. Namespaced by an ``output_dir``-derived slug to avoid
+    collisions when mirroring many workspaces to one target. **Non-fatal**: a mirror
+    failure warns and never breaks the primary operation (mirroring a recovery copy
+    must not jeopardise it).
+    """
+    target = os.environ.get("AGENTTEAMS_BACKUP_MIRROR")
+    if not target:
+        return
+    slug = re.sub(r"[^A-Za-z0-9._-]+", "_", str(output_dir)).strip("_") or "root"
+    dest = Path(target) / slug / backup_path.name
+    try:
+        shutil.copytree(backup_path, dest, dirs_exist_ok=True)
+        print(f"  ✓  Backup mirrored: {dest}")
+    except OSError as exc:
+        print(f"  !  Backup mirror failed (non-fatal): {exc}", file=sys.stderr)
 
 
 def list_backups(output_dir: Path) -> list[tuple[str, Path, int]]:
@@ -848,6 +874,69 @@ def verify_backup(backup_path: Path) -> list[dict[str, str]]:
         else:
             results.append({**base, "status": "FAIL", "note": "bytes do not match recorded source_sha256 (bit-rot/tamper)"})
     return results
+
+
+@dataclass
+class PruneResult:
+    """Outcome of :func:`prune_backups`."""
+    deleted: list[str] = field(default_factory=list)   # timestamps deleted (or would-delete under dry_run)
+    kept: list[str] = field(default_factory=list)       # timestamps retained
+    dry_run: bool = False
+
+
+def _parse_backup_timestamp(name: str) -> datetime | None:
+    """Parse a backup dir name (``YYYYMMDD-HHMMSS[-N]``) to a datetime, else None.
+
+    The ``[:15]`` slice ignores the optional ``-N`` same-second collision suffix.
+    """
+    try:
+        return datetime.strptime(name[:15], "%Y%m%d-%H%M%S")
+    except ValueError:
+        return None
+
+
+def prune_backups(
+    output_dir: Path,
+    *,
+    keep_last: int = DEFAULT_BACKUP_KEEP_LAST,
+    keep_within_days: int | None = None,
+    dry_run: bool = False,
+) -> PruneResult:
+    """Delete old backups under *output_dir*, keeping the recovery net bounded.
+
+    Retain rule (union, fail-safe): a backup is KEPT if it is among the
+    ``keep_last`` newest **OR** (when *keep_within_days* is set) its timestamp is
+    within *keep_within_days* days. Everything else is deleted. The single
+    most-recent backup is **always** kept (even ``keep_last == 0``). A backup
+    whose age cannot be determined (unparseable name and no mtime) is KEPT
+    (fail-safe). ``dry_run`` reports would-delete without deleting.
+    """
+    result = PruneResult(dry_run=dry_run)
+    output_dir = output_dir.resolve()
+    backups = list_backups(output_dir)  # newest-first: [(ts_name, path, file_count)]
+    if not backups:
+        return result
+
+    now = datetime.now()
+    for idx, (ts_name, bpath, _count) in enumerate(backups):
+        keep = idx == 0 or idx < keep_last          # always-newest + keep_last window
+        if not keep and keep_within_days is not None:
+            parsed = _parse_backup_timestamp(ts_name)
+            if parsed is None:
+                try:
+                    parsed = datetime.fromtimestamp(bpath.stat().st_mtime)
+                except OSError:
+                    parsed = None
+            # indeterminate age → fail-safe keep; else keep if within the window
+            keep = parsed is None or (now - parsed).days <= keep_within_days
+
+        if keep:
+            result.kept.append(ts_name)
+        else:
+            if not dry_run:
+                shutil.rmtree(bpath, ignore_errors=True)
+            result.deleted.append(ts_name)
+    return result
 
 
 def restore_backup(

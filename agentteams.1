@@ -2,7 +2,7 @@
 .SH NAME
 agentteams \- Generate a complete agent team for any project.
 .SH SYNOPSIS
-.B agentteams [--description PATH] [--project PATH] [--framework NAME] [--output DIR] [--dry-run] [--json] [--overwrite] [--merge] [--yes] [--no-scan] [--cost-routing] [--update] [--prune] [--adopt-orphans] [--check] [--refresh-index] [--query-index TEXT] [--query-k N] [--query-strategy QUERY_STRATEGY] [--fail-on-legacy-skip] [--no-add-fence-markers] [--scan-security] [--check-budget] [--self] [--allow-external-self-output] [--post-audit] [--auto-correct] [--enrich] [--strict-manual-placeholders] [--no-strict-manual-placeholders STRICT_MANUAL_PLACEHOLDERS] [--security-offline] [--security-max-items N] [--security-no-nvd] [--migrate] [--convert-from DIR] [--interop-from DIR] [--interop-source-framework INTEROP_SOURCE_FRAMEWORK] [--interop-mode INTEROP_MODE] [--bridge-from DIR] [--bridge-source-framework BRIDGE_SOURCE_FRAMEWORK] [--bridge-check] [--bridge-refresh] [--bridge-merge] [--bridge-no-skills] [--revert-migration] [--version] [--no-backup] [--shrink-policy SHRINK_POLICY] [--list-backups] [--restore-backup TIMESTAMP] [--add-fence-markers PATH] [--in-place] [--target-host-features TOKENS] [--capture-baseline PATH] [--baseline-label LABEL] [--check-baseline PATH] [--verify-waivers] [--verify-integrity] [--verify-backup TIMESTAMP] [--fleet DIR] [--fleet-frameworks FLEET_FRAMEWORKS] [--fleet-report DIR]
+.B agentteams [--description PATH] [--project PATH] [--framework NAME] [--output DIR] [--dry-run] [--json] [--overwrite] [--merge] [--yes] [--no-scan] [--cost-routing] [--update] [--prune] [--adopt-orphans] [--check] [--refresh-index] [--query-index TEXT] [--query-k N] [--query-strategy QUERY_STRATEGY] [--fail-on-legacy-skip] [--no-add-fence-markers] [--scan-security] [--check-budget] [--self] [--allow-external-self-output] [--post-audit] [--auto-correct] [--enrich] [--strict-manual-placeholders] [--no-strict-manual-placeholders STRICT_MANUAL_PLACEHOLDERS] [--security-offline] [--security-max-items N] [--security-no-nvd] [--migrate] [--convert-from DIR] [--interop-from DIR] [--interop-source-framework INTEROP_SOURCE_FRAMEWORK] [--interop-mode INTEROP_MODE] [--bridge-from DIR] [--bridge-source-framework BRIDGE_SOURCE_FRAMEWORK] [--bridge-check] [--bridge-refresh] [--bridge-merge] [--bridge-no-skills] [--revert-migration] [--version] [--no-backup] [--shrink-policy SHRINK_POLICY] [--list-backups] [--restore-backup TIMESTAMP] [--add-fence-markers PATH] [--in-place] [--target-host-features TOKENS] [--capture-baseline PATH] [--baseline-label LABEL] [--check-baseline PATH] [--verify-waivers] [--verify-integrity] [--verify-backup TIMESTAMP] [--prune-backups KEEP] [--keep-within-days DAYS] [--backup-mirror DIR] [--fleet DIR] [--fleet-frameworks FLEET_FRAMEWORKS] [--fleet-report DIR]
 .SH DESCRIPTION
 .PP
 Generate a complete agent team for any project.
@@ -188,6 +188,15 @@ Read\-only: classify every generated output file under \-\-output/\-\-project (e
 .TP
 .B \-\-verify\-backup TIMESTAMP
 Read\-only: verify a backup is restorable — its bytes match the recorded source_sha256 in _manifest.json. Defaults to the latest backup; pass a TIMESTAMP for a specific one. Exits non\-zero on any bit\-rot/tamper mismatch.
+.TP
+.B \-\-prune\-backups KEEP
+Standalone: delete old timestamped backups under \-\-output/\-\-project (else CWD) .agentteams\-backups/, keeping the newest KEEP (default 10). The single newest backup is NEVER deleted, even with KEEP 0. Combine with \-\-keep\-within\-days to also retain anything younger than N days, and \-\-dry\-run to preview. This bounds backup growth; distinct from \-\-prune (which removes stale *agents*, not backups).
+.TP
+.B \-\-keep\-within\-days DAYS
+Modifier for \-\-prune\-backups: in addition to the newest KEEP, retain any backup younger than DAYS (a backup with an unparseable timestamp is always kept, fail\-safe).
+.TP
+.B \-\-backup\-mirror DIR
+Modifier for \-\-update: after a backup is written, also copy it to DIR/<output\-slug>/<timestamp>/ (e.g. a NAS or synced folder) so the recovery net survives local disk loss. Best\-effort and non\-fatal — a mirror failure warns but never breaks the update. Overrides the AGENTTEAMS_BACKUP_MIRROR environment variable.
 .TP
 .B \-\-fleet DIR
 Update every agent\-infrastructure workspace under DIR and its subfolders with \-\-update \-\-merge. Discovers .github/agents/ and .claude/ targets, snapshots each git workspace via a commit, applies the merge, then analyses the diff. Default is a DRY\-RUN preview; pass \-\-yes to apply. Non\-destructive: merge\-only; .claude is bridge\-merged.
