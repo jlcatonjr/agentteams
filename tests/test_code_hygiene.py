@@ -180,3 +180,40 @@ def test_framework_registry_has_single_source() -> None:
     assert definers == ["agentteams/frameworks/registry.py"], (
         f"Framework registry must be a single dict literal in registry.py; found definers: {definers}"
     )
+
+
+# Modules produced by the build_team decomposition refactor. CH-22 requires their
+# function signatures to stay fully type-annotated (the guard below enforces it).
+_REFACTOR_MODULES = (
+    "agentteams/cli/app.py",
+    "agentteams/cli/parser.py",
+    "agentteams/cli/render_pipeline.py",
+    "agentteams/cli/commands.py",
+    "agentteams/cli/artifacts.py",
+    "agentteams/cli/security_gate.py",
+    "agentteams/frameworks/registry.py",
+    "agentteams/errors.py",
+)
+
+
+def test_refactor_modules_are_fully_type_annotated() -> None:
+    """CH-22: every module-level function in the refactor's cli/* + registry + errors
+    modules must annotate its parameters (except self/cls) and its return type.
+    Coverage is currently 100%; this ratchet keeps new code from regressing it.
+    (Runtime CH-22 guards are used where misuse is plausible, e.g.
+    security_gate.set_migrate_exemption raising TypeError on a non-bool.)"""
+    gaps = []
+    for rel in _REFACTOR_MODULES:
+        tree = ast.parse((REPO_ROOT / rel).read_text(encoding="utf-8"), filename=rel)
+        for node in tree.body:
+            if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)):
+                unannotated = [
+                    a.arg for a in node.args.args
+                    if a.annotation is None and a.arg not in ("self", "cls")
+                ]
+                if unannotated or node.returns is None:
+                    gaps.append(
+                        f"{rel}:{node.lineno} {node.name} "
+                        f"(unannotated params={unannotated}, has_return={node.returns is not None})"
+                    )
+    assert not gaps, f"CH-22: refactor modules have unannotated signatures: {gaps}"
