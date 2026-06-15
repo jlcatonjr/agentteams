@@ -31,20 +31,13 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
 
-from agentteams.frameworks.base import FrameworkAdapter
-from agentteams.frameworks.claude import ClaudeAdapter
-from agentteams.frameworks.copilot_cli import CopilotCLIAdapter
-from agentteams.frameworks.copilot_vscode import CopilotVSCodeAdapter
+from agentteams.frameworks.base import FrameworkAdapter  # used in function signatures
 
 # ---------------------------------------------------------------------------
-# Registry
+# Registry — single source of truth is agentteams.frameworks.registry (CH-05)
 # ---------------------------------------------------------------------------
 
-_ADAPTERS: dict[str, type[FrameworkAdapter]] = {
-    "copilot-vscode": CopilotVSCodeAdapter,
-    "copilot-cli": CopilotCLIAdapter,
-    "claude": ClaudeAdapter,
-}
+from agentteams.frameworks.registry import FRAMEWORKS as _ADAPTERS
 
 # File name patterns that are treated as framework instructions files
 _INSTRUCTIONS_NAMES = {"copilot-instructions.md", "CLAUDE.md"}

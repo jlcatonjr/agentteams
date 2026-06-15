@@ -65,9 +65,13 @@ if str(_SCRIPT_DIR) not in sys.path:
 
 from agentteams import ingest, analyze, render, emit
 from agentteams import liaison_logs
+# Concrete adapter classes are imported for type annotations (e.g. the
+# _build_final_rendered signature); the framework-id -> adapter map itself is
+# the single source of truth in agentteams.frameworks.registry (CH-05).
 from agentteams.frameworks.copilot_vscode import CopilotVSCodeAdapter
 from agentteams.frameworks.copilot_cli import CopilotCLIAdapter
 from agentteams.frameworks.claude import ClaudeAdapter
+from agentteams.frameworks.registry import FRAMEWORKS
 
 try:
     from importlib.metadata import version as _pkg_version, PackageNotFoundError
@@ -78,12 +82,6 @@ try:
         __version__ = "0.0.0+local"
 except ImportError:  # pragma: no cover
     __version__ = "0.0.0+local"
-
-FRAMEWORKS = {
-    "copilot-vscode": CopilotVSCodeAdapter,
-    "copilot-cli": CopilotCLIAdapter,
-    "claude": ClaudeAdapter,
-}
 
 TEMPLATES_DIR = _SCRIPT_DIR / "agentteams" / "templates"
 

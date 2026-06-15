@@ -45,11 +45,18 @@ SWALLOW_BASELINE = 29           # except clause whose body is only pass/continue
 
 
 def _tracked_py_files() -> list[str]:
-    """Return tracked *.py paths (relative, POSIX) via git — fail loud if git absent."""
+    """Return tracked + untracked-non-ignored *.py paths (relative, POSIX) via git.
+
+    Includes untracked-but-not-gitignored files (``--others --exclude-standard``)
+    so a newly-added module is checked immediately, before it is staged — a new
+    oversized or broad-except-laden file must not slip past until commit. Fails
+    loud if git is absent (CH-23). ``-z`` + NUL split is filename-safe.
+    """
     out = subprocess.check_output(
-        ["git", "ls-files", "*.py"], cwd=REPO_ROOT, text=True
+        ["git", "ls-files", "-z", "--cached", "--others", "--exclude-standard", "*.py"],
+        cwd=REPO_ROOT, text=True,
     )
-    return [line for line in out.splitlines() if line]
+    return [line for line in out.split("\0") if line]
 
 
 def _in_scope(rel: str, exclude: tuple[str, ...]) -> bool:
@@ -129,4 +136,29 @@ def test_swallowed_exceptions_do_not_increase() -> None:
     assert swallow <= SWALLOW_BASELINE, (
         f"Swallowed-exception count rose to {swallow} (baseline {SWALLOW_BASELINE}). "
         "CH-24 forbids new swallow-and-continue handlers."
+    )
+
+
+def test_framework_registry_has_single_source() -> None:
+    """CH-05: the framework-id -> adapter map is defined as a dict literal in exactly one module."""
+    definers = []
+    for rel in _tracked_py_files():
+        if not _in_scope(rel, _EXCLUDE_PREFIXES) or rel.startswith("tests/"):
+            continue
+        tree = ast.parse((REPO_ROOT / rel).read_text(encoding="utf-8"), filename=rel)
+        for node in ast.walk(tree):
+            # Module-level `FRAMEWORKS`/`_ADAPTERS` assigned a *dict literal*
+            # (an `import ... as _ADAPTERS` alias is not an ast.Assign-with-Dict).
+            targets = []
+            if isinstance(node, ast.Assign):
+                targets = node.targets
+            elif isinstance(node, ast.AnnAssign) and node.value is not None:
+                targets = [node.target]
+            else:
+                continue
+            names = {t.id for t in targets if isinstance(t, ast.Name)}
+            if names & {"FRAMEWORKS", "_ADAPTERS"} and isinstance(node.value, ast.Dict):
+                definers.append(rel)
+    assert definers == ["agentteams/frameworks/registry.py"], (
+        f"Framework registry must be a single dict literal in registry.py; found definers: {definers}"
     )

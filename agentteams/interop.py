@@ -14,16 +14,8 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
-from agentteams.frameworks.base import FrameworkAdapter
-from agentteams.frameworks.claude import ClaudeAdapter
-from agentteams.frameworks.copilot_cli import CopilotCLIAdapter
-from agentteams.frameworks.copilot_vscode import CopilotVSCodeAdapter
-
-_ADAPTERS: dict[str, type[FrameworkAdapter]] = {
-    "copilot-vscode": CopilotVSCodeAdapter,
-    "copilot-cli": CopilotCLIAdapter,
-    "claude": ClaudeAdapter,
-}
+# Single source of truth for the framework-id -> adapter map (CH-05).
+from agentteams.frameworks.registry import FRAMEWORKS as _ADAPTERS
 
 _INSTRUCTIONS_NAMES = {"copilot-instructions.md", "CLAUDE.md"}
 _YAML_FRONT_MATTER_RE = re.compile(r"^---\s*\n.*?\n---\s*\n", re.DOTALL)
