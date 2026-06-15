@@ -82,6 +82,22 @@ _SECURITY_WAIVER_REQUIRED_COLUMNS: frozenset[str] = frozenset(
     }
 )
 
+# Ordered fields the waiver HMAC-SHA256 signs, pipe-joined (excludes `timestamp`
+# and `signature`). Single source of truth (CH-05) for both _validate_security_waiver
+# and _consume_security_waiver_use; the docs' manual-mint procedure is pinned to
+# this tuple by tests/test_security_waiver_docs.py.
+_WAIVER_SIGNATURE_FIELDS: tuple[str, ...] = (
+    "waiver_id",
+    "action_reviewed",
+    "expires_at",
+    "max_uses",
+    "uses",
+    "approver",
+    "ticket_id",
+    "reason_code",
+    "conditions_verified",
+)
+
 _SECURITY_INTEL_TTL_HOURS = 24
 
 
@@ -213,7 +229,11 @@ def _assert_security_intelligence_fresh(
     raise RuntimeError(
         "security intelligence is stale "
         f"(status={freshness['status']}, age_hours={freshness['age_hours']}, "
-        f"ttl_hours={freshness['ttl_hours']})"
+        f"ttl_hours={freshness['ttl_hours']}). "
+        "No 'security-intel-freshness' waiver was found. For air-gapped/offline runs, "
+        "add a signed waiver (see docs/security-hardening-guide; check it with "
+        "`agentteams --verify-waivers`). Note: --security-offline does NOT apply to "
+        "cross-framework operations (bridge/convert/interop) — they require live intel."
     )
 
 
@@ -284,19 +304,7 @@ def _consume_security_waiver_use(output_dir: Path, waiver: dict[str, str], *, ac
         except ValueError as exc:
             raise RuntimeError("waiver use counters are not numeric") from exc
         row["uses"] = str(uses_value + 1)
-        payload = "|".join(
-            [
-                row.get("waiver_id", "").strip(),
-                row.get("action_reviewed", "").strip(),
-                row.get("expires_at", "").strip(),
-                row.get("max_uses", "").strip(),
-                row.get("uses", "").strip(),
-                row.get("approver", "").strip(),
-                row.get("ticket_id", "").strip(),
-                row.get("reason_code", "").strip(),
-                row.get("conditions_verified", "").strip(),
-            ]
-        )
+        payload = "|".join(row.get(f, "").strip() for f in _WAIVER_SIGNATURE_FIELDS)
         row["signature"] = hmac.new(
             signing_key.encode("utf-8"),
             payload.encode("utf-8"),
@@ -392,19 +400,7 @@ def _validate_security_waiver(waiver: dict[str, str], *, action: str) -> None:
     if not signing_key:
         raise RuntimeError("waiver signing key is not configured")
 
-    payload = "|".join(
-        [
-            waiver.get("waiver_id", "").strip(),
-            waiver.get("action_reviewed", "").strip(),
-            waiver.get("expires_at", "").strip(),
-            waiver.get("max_uses", "").strip(),
-            waiver.get("uses", "").strip(),
-            approver,
-            ticket_id,
-            reason_code,
-            waiver.get("conditions_verified", "").strip(),
-        ]
-    )
+    payload = "|".join(waiver.get(f, "").strip() for f in _WAIVER_SIGNATURE_FIELDS)
     expected_signature = hmac.new(
         signing_key.encode("utf-8"),
         payload.encode("utf-8"),
@@ -412,6 +408,42 @@ def _validate_security_waiver(waiver: dict[str, str], *, action: str) -> None:
     ).hexdigest()
     if not hmac.compare_digest(expected_signature, waiver.get("signature", "").strip().lower()):
         raise RuntimeError("waiver signature verification failed")
+
+
+def verify_waivers(output_dir: Path) -> list[dict[str, str]]:
+    """Read-only report of every waiver in the waiver log.
+
+    Validates each row WITHOUT consuming it — never calls _consume_security_waiver_use
+    (which increments `uses` and rewrites the CSV). Returns one dict per row with keys
+    ``waiver_id``/``action``/``status``/``detail``. A missing log yields ``[]``. A row
+    that fails any check (signature, expiry, use-limit, conditions, or an unset signing
+    key) is reported ``status="invalid"`` with the reason in ``detail`` — never raised.
+    """
+    log_path = output_dir / "references" / "security-waivers.log.csv"
+    if not log_path.exists():
+        return []
+    try:
+        with log_path.open("r", encoding="utf-8", newline="") as fh:
+            rows = list(csv.DictReader(fh))
+    except (OSError, csv.Error) as exc:
+        raise RuntimeError(f"unable to read security waiver log: {exc}") from exc
+
+    results: list[dict[str, str]] = []
+    for row in rows:
+        normalized = {k: (v or "") for k, v in row.items()}
+        action = normalized.get("action_reviewed", "").strip()
+        try:
+            _validate_security_waiver(normalized, action=action)
+            status, detail = "valid", ""
+        except RuntimeError as exc:
+            status, detail = "invalid", str(exc)
+        results.append({
+            "waiver_id": normalized.get("waiver_id", "").strip(),
+            "action": action,
+            "status": status,
+            "detail": detail,
+        })
+    return results
 
 
 def _latest_security_decision(output_dir: Path, *, action: str) -> dict[str, str] | None:

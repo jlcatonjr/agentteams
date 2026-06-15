@@ -9,11 +9,57 @@ security_gate module (Step A), so moving these does not affect gate patching.
 
 from __future__ import annotations
 
+import argparse
 import sys
 from pathlib import Path
 
 from agentteams.cli import security_gate
 from agentteams.frameworks.registry import FRAMEWORKS
+
+
+def _run_verify_waivers(args: argparse.Namespace) -> int:
+    """``--verify-waivers``: read-only report of every waiver's validity (never consumes).
+
+    Resolves the project root from ``--output``/``--project`` (else CWD), reads
+    ``references/security-waivers.log.csv`` via ``security_gate.verify_waivers``, and
+    prints one line per waiver. Returns 0 when every waiver is valid (or none exist),
+    1 when any waiver is invalid. Reuses ``_validate_security_waiver`` only — it never
+    mints, consumes, or rewrites a waiver, so it adds no security surface. If the
+    signing key is unset, each row reports ``invalid`` with that reason rather than
+    crashing.
+    """
+    if getattr(args, "output", None):
+        output_dir = Path(args.output).resolve()
+    elif getattr(args, "project", None):
+        output_dir = Path(args.project).resolve()
+    else:
+        output_dir = Path.cwd()
+
+    log_path = output_dir / "references" / "security-waivers.log.csv"
+    try:
+        results = security_gate.verify_waivers(output_dir)
+    except RuntimeError as exc:
+        # CH-24: read-only CLI boundary — surface an unreadable/corrupt log as a
+        # friendly error + nonzero exit rather than an uncaught traceback.
+        print(f"Error: {exc}", file=sys.stderr)
+        return 1
+
+    if not results:
+        print(f"No security waivers found at {log_path}")
+        return 0
+
+    invalid = 0
+    for entry in results:
+        is_valid = entry["status"] == "valid"
+        mark = "OK " if is_valid else "BAD"
+        line = f"  [{mark}] {entry['waiver_id'] or '<no-id>'} (action={entry['action'] or '-'})"
+        if not is_valid:
+            invalid += 1
+            line += f" — {entry['detail']}"
+        print(line)
+    print(f"\n{len(results)} waiver(s): {len(results) - invalid} valid, {invalid} invalid.")
+    return 1 if invalid else 0
+
 
 def _run_convert(
     source_dir: Path,
@@ -49,6 +95,8 @@ def _run_convert(
 
         convert_security = _security_refs.build_security_placeholders(
             output_dir=target_dir,
+            # cross-framework external write: live security intel enforced;
+            # air-gapped uses a 'security-intel-freshness' waiver, not --security-offline.
             offline=False,
             max_items=1,
             tools=None,
@@ -133,6 +181,8 @@ def _run_interop(
 
         interop_security = _security_refs.build_security_placeholders(
             output_dir=target_dir,
+            # cross-framework external write: live security intel enforced;
+            # air-gapped uses a 'security-intel-freshness' waiver, not --security-offline.
             offline=False,
             max_items=1,
             tools=None,
@@ -235,6 +285,8 @@ def _run_bridge(
 
         bridge_security = _security_refs.build_security_placeholders(
             output_dir=output_root,
+            # cross-framework external write: live security intel enforced;
+            # air-gapped uses a 'security-intel-freshness' waiver, not --security-offline.
             offline=False,
             max_items=1,
             tools=None,

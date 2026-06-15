@@ -13,6 +13,7 @@ from build_team import (
     _assert_destructive_action_allowed,
     _assert_security_intelligence_fresh,
 )
+from agentteams.cli.security_gate import verify_waivers
 
 
 def _write_security_log(output_dir: Path, rows: list[list[str]]) -> None:
@@ -305,6 +306,26 @@ def test_security_intelligence_freshness_blocks_stale_payload(tmp_path):
 
     with pytest.raises(RuntimeError, match="stale"):
         _assert_security_intelligence_fresh(placeholders, output_dir=tmp_path)
+
+
+def test_stale_security_error_guides_to_waiver_and_offline_caveat(tmp_path):
+    """W1: the stale gate still fires (positive deny) AND the error guides the user to
+    the security-intel-freshness waiver / --verify-waivers, and notes --security-offline
+    does not apply to cross-framework operations."""
+    placeholders = {
+        "SECURITY_DATA_GENERATED_AT": "2026-05-08T10:00:00Z",
+        "SECURITY_CURRENT_THREATS_SUMMARY": "summary",
+        "SECURITY_PREVENTION_PLAYBOOK": "playbook",
+    }
+    with pytest.raises(RuntimeError) as exc_info:
+        _assert_security_intelligence_fresh(placeholders, output_dir=tmp_path)
+    msg = str(exc_info.value)
+    assert "stale" in msg  # positive deny: gate still fires on stale-with-no-waiver
+    assert "security-intel-freshness" in msg
+    assert "--verify-waivers" in msg
+    assert "--security-offline" in msg
+
+
 def test_security_intelligence_freshness_consumes_signed_waiver(tmp_path, monkeypatch):
     waiver_key = "test-waiver-key"
     monkeypatch.setenv("AGENTTEAMS_WAIVER_SIGNING_KEY", waiver_key)
@@ -334,6 +355,85 @@ def test_security_intelligence_freshness_consumes_signed_waiver(tmp_path, monkey
 
     with pytest.raises(RuntimeError, match="use limit"):
         _assert_security_intelligence_fresh(placeholders, output_dir=tmp_path)
+
+
+def _valid_freshness_waiver(key: str) -> dict[str, str]:
+    waiver = {
+        "timestamp": _past_iso(2),
+        "waiver_id": "waiver-freshness-001",
+        "action_reviewed": "security-intel-freshness",
+        "expires_at": _future_iso(2),
+        "max_uses": "1",
+        "uses": "0",
+        "approver": "security",
+        "ticket_id": "SEC-1238",
+        "reason_code": "maintenance",
+        "conditions_verified": "verified",
+        "signature": "",
+    }
+    waiver["signature"] = _waiver_signature(waiver, key)
+    return waiver
+
+
+def test_verify_waivers_missing_log_is_empty(tmp_path):
+    """P3: no waiver log -> empty report (not an error)."""
+    assert verify_waivers(tmp_path) == []
+
+
+def test_verify_waivers_reports_valid_and_never_consumes(tmp_path, monkeypatch):
+    """P3: a valid signed waiver reports status=valid AND verify_waivers does not
+    consume it — the on-disk `uses` stays 0 and the gate can still spend it."""
+    waiver_key = "test-waiver-key"
+    monkeypatch.setenv("AGENTTEAMS_WAIVER_SIGNING_KEY", waiver_key)
+    _write_security_waiver_log(tmp_path, [_valid_freshness_waiver(waiver_key)])
+    log_path = tmp_path / "references" / "security-waivers.log.csv"
+    before = log_path.read_text(encoding="utf-8")
+
+    # Run the read-only audit twice — neither call may mutate the log.
+    results = verify_waivers(tmp_path)
+    verify_waivers(tmp_path)
+
+    assert len(results) == 1
+    assert results[0]["status"] == "valid"
+    assert results[0]["waiver_id"] == "waiver-freshness-001"
+    assert results[0]["detail"] == ""
+    assert log_path.read_text(encoding="utf-8") == before  # never consumed/rewritten
+
+    # The (still-unspent) waiver is genuinely usable by the real gate afterwards.
+    placeholders = {
+        "SECURITY_DATA_GENERATED_AT": "2026-05-08T10:00:00Z",
+        "SECURITY_CURRENT_THREATS_SUMMARY": "summary",
+        "SECURITY_PREVENTION_PLAYBOOK": "playbook",
+    }
+    _assert_security_intelligence_fresh(placeholders, output_dir=tmp_path)
+
+
+def test_verify_waivers_flags_bad_signature(tmp_path, monkeypatch):
+    """P3: a tampered signature is reported invalid with a reason (never raised)."""
+    waiver_key = "test-waiver-key"
+    monkeypatch.setenv("AGENTTEAMS_WAIVER_SIGNING_KEY", waiver_key)
+    waiver = _valid_freshness_waiver(waiver_key)
+    waiver["signature"] = "deadbeef"  # tamper
+    _write_security_waiver_log(tmp_path, [waiver])
+
+    results = verify_waivers(tmp_path)
+
+    assert len(results) == 1
+    assert results[0]["status"] == "invalid"
+    assert "signature" in results[0]["detail"]
+
+
+def test_verify_waivers_without_signing_key_is_graceful(tmp_path, monkeypatch):
+    """P3: an unset signing key downgrades each row to invalid (no crash)."""
+    monkeypatch.delenv("AGENTTEAMS_WAIVER_SIGNING_KEY", raising=False)
+    # Sign with a key, then audit with no key configured.
+    _write_security_waiver_log(tmp_path, [_valid_freshness_waiver("some-key")])
+
+    results = verify_waivers(tmp_path)  # must not raise
+
+    assert len(results) == 1
+    assert results[0]["status"] == "invalid"
+    assert results[0]["detail"]  # carries the unset-key reason
 
 
 def test_action_matches_tokenized_action_names():

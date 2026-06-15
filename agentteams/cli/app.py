@@ -15,7 +15,7 @@ from __future__ import annotations
 import sys
 from pathlib import Path
 
-from agentteams.cli.commands import _run_bridge, _run_convert, _run_interop
+from agentteams.cli.commands import _run_bridge, _run_convert, _run_interop, _run_verify_waivers
 from agentteams.cli.parser import _build_parser, _validate_option_combinations
 from agentteams.cli.render_pipeline import _resolve_strict_manual_mode
 # run_generate holds the generate/update/check pipeline; _finalize_exit_code is
@@ -103,6 +103,13 @@ def main(argv: list[str] | None = None) -> int:
                 for p in d[k]:
                     print(f"     {k:8s} {p}")
             return 2
+
+    # -----------------------------------------------------------------------
+    # --verify-waivers: standalone read-only audit of the security waiver log.
+    # Never mints/consumes a waiver; skips the generation pipeline.
+    # -----------------------------------------------------------------------
+    if getattr(args, "verify_waivers", False):
+        return _run_verify_waivers(args)
 
     # -----------------------------------------------------------------------
     # --add-fence-markers: standalone file-retrofit (no description needed).

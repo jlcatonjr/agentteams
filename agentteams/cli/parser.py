@@ -526,6 +526,20 @@ def _build_parser() -> argparse.ArgumentParser:
             "exit non-zero on any diff. Lists added/removed/changed files."
         ),
     )
+    parser.add_argument(
+        "--verify-waivers",
+        action="store_true",
+        dest="verify_waivers",
+        default=False,
+        help=(
+            "Read-only: report the validity (signature, expiry, use-limit, "
+            "conditions) of every security waiver in "
+            "references/security-waivers.log.csv under --output/--project (else "
+            "CWD). Never mints or consumes a waiver. Exits non-zero if any waiver "
+            "is invalid. Requires AGENTTEAMS_WAIVER_SIGNING_KEY to verify "
+            "signatures; without it, rows report as unverifiable."
+        ),
+    )
 
     # -- Fleet update: run --update --merge across every workspace under a dir --
     fleet_group = parser.add_argument_group("fleet update (multi-workspace)")
