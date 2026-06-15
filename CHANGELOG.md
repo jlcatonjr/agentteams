@@ -38,6 +38,23 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### changed
 
+- **Repository filing conventions — stray plan docs no longer land at the root.**
+  Root cause: concurrent direct in-repo sessions follow the "every multi-step
+  request generates a plan" rule, but that rule's target (`tmp/by-week/…`) lived
+  only in the generated-team instructions — so a direct session defaulted its plan
+  to the cwd (repo root), and strays accumulated (plus an ignore-in-place
+  `.gitignore` band-aid). Fix: (1) new **`references/filing-conventions.md`**
+  states the canonical homes (`tmp/by-week/` active, `references/plans/` retained,
+  `references/` published, `docs_src/` user docs, `workSummaries/` summaries);
+  (2) root `CLAUDE.md` now carries the convention where in-repo sessions read it;
+  (3) new guard **`tests/test_root_doc_hygiene.py`** fails on any non-allowlisted
+  `*.md` at the root. Relocated 7 stray plans/reports
+  (`refactor-*`, `goose-integration-plan`, `continue-dev-integration-report`,
+  `CHANGES_2026-05-27`, `pypi-release-plan`) into `references/plans/`; removed the
+  `pypi-release-plan.md` `.gitignore` band-aid; un-tracked two legacy files under
+  `references/plans/` so the directory is uniformly local. (`security-waiver-remediation-plan.md`
+  temporarily allowlisted at root pending its owning session — see filing-conventions follow-ups.)
+
 - **Tools are documents, never agents.** Operational tools (databases, CLIs,
   build systems) previously generated full `tool-<slug>.agent.md` specialist
   *agents*. They now generate **documents**: Copilot targets emit

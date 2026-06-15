@@ -11,7 +11,7 @@
 - **Recommendation:** treat this as **documentation + tooling work, not a behavior fix.** Do not add a silent `--security-offline` bypass to the cross-framework paths; if the live-fetch requirement is ever relaxed (W3), keep it auditable. Fix the broken waiver docs/tooling (W2) — that is the genuinely actionable gap. The earlier flaky-test fix (monkeypatch) was correct.
 
 ## 2. The question
-After the build_team decomposition, an audit flagged that `_run_bridge` ignores `--security-offline` while the generate path honors it. The `refactor-remaining-plan.md` (I1) already called this "possibly intentional (bridges may require live intel)" and **deliberately declined to alter bridge security behavior**, choosing to surface it. This report resolves that open question: **artifact-to-fix, or intended behavior?**
+After the build_team decomposition, an audit flagged that `_run_bridge` ignores `--security-offline` while the generate path honors it. The `references/plans/refactor-remaining.plan.md` (I1) already called this "possibly intentional (bridges may require live intel)" and **deliberately declined to alter bridge security behavior**, choosing to surface it. This report resolves that open question: **artifact-to-fix, or intended behavior?**
 
 ## 3. Evidence — git archaeology (decisive; high confidence)
 | Fact | Commit | Meaning |
@@ -50,7 +50,7 @@ The load-bearing evidence for *intent* (as distinct from a consistent copy-paste
 ## 7. Confidence & reconciliation
 - **High confidence:** *not a refactor artifact* — git history is unambiguous (§3).
 - **Medium confidence:** *intentional by design* — inferred from the waiver mechanism + air-gapped docs (§4.1-4.2); no explicit design note exists (`b83ea9c`'s message is generic). The uniform triple is corroboration only, not proof.
-- **Reconciliation with the prior position:** `refactor-remaining-plan.md` (I1) had already labeled this "possibly intentional (bridges may require live intel)" and **declined to alter it unilaterally**, choosing to surface it. This report does not reverse a "fix it" decision — it **resolves the open question that plan deliberately left to investigation**, and confirms the plan's instinct to escalate rather than patch was correct.
+- **Reconciliation with the prior position:** `references/plans/refactor-remaining.plan.md` (I1) had already labeled this "possibly intentional (bridges may require live intel)" and **declined to alter it unilaterally**, choosing to surface it. This report does not reverse a "fix it" decision — it **resolves the open question that plan deliberately left to investigation**, and confirms the plan's instinct to escalate rather than patch was correct.
 - **Caveat:** the W3 strictness question is a policy call not resolvable from the code; recommendation #1 is conditional on it.
 
 ## 8. Audit findings & revisions (adversarial + conflict)

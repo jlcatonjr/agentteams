@@ -21,9 +21,6 @@ htmlcov/
 _build-description.json
 _intake-notes.md
 
-# Local planning docs — not for publication
-pypi-release-plan.md
-
 # Planning and step CSVs
 build-team-steps.csv
 tool-enrichment-steps.csv
@@ -47,7 +44,10 @@ tmp/
 # Contains execution dates, timestamps, and per-repo status; not for publication
 workSummaries/
 
-# Local cross-repo operation plans and snapshots — contain machine-specific paths and org/repo names
+# Canonical home for RETAINED local planning/operation docs (plans, feasibility
+# reports, investigations, change reports) — not for publication; may contain
+# machine-specific paths and org/repo names. See references/filing-conventions.md.
+# Plan documents must NEVER be written to the repo root (guard: tests/test_root_doc_hygiene.py).
 references/plans/
 
 # Structural or audit plan docs committed during development
