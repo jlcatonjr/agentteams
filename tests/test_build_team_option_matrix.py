@@ -691,6 +691,47 @@ def test_update_overwrite_triggers_security_gate(
     assert rc == 1  # gate invoked and blocked due to missing security clearance
 
 
+def test_migrate_exemption_skips_overwrite_gate_via_security_gate(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+):
+    """Step-A.5 regression guard: the --migrate overwrite-gate exemption is homed
+    in security_gate (not a build_team global), so main reads it from there. With
+    the exemption active the destructive overwrite gate is skipped; inactive, it
+    blocks. Without re-homing, moving main out of build_team would split the
+    reader from the writer and silently break this — a path no other test covers
+    with a real main."""
+    captured: dict = {}
+    _stub_core_pipeline(monkeypatch, "copilot-vscode", captured)
+    _stub_drift(monkeypatch)
+    # Isolate the destructive overwrite gate; the freshness gate is not under test.
+    monkeypatch.setattr(security_gate, "_assert_security_intelligence_fresh", lambda *_a, **_k: None)
+    # Generate --overwrite (no --update) hits the migrate-exempted gate, whose
+    # message is exactly "Security gate blocked overwrite:" (the --update gate's
+    # message is "...overwrite update:", which this precise prefix excludes).
+    args = [
+        "--description", "brief.json",
+        "--framework", "copilot-vscode",
+        "--output", str(tmp_path / ".github" / "agents"),
+        "--overwrite", "--security-offline",
+    ]
+    security_gate.set_migrate_exemption(True)
+    try:
+        build_team.main(args)
+    finally:
+        security_gate.set_migrate_exemption(False)
+    err_exempt = capsys.readouterr().err
+    build_team.main(args)  # exemption reset -> gate must block
+    err_blocked = capsys.readouterr().err
+    assert "Security gate blocked overwrite:" not in err_exempt, (
+        "exemption active but generate-overwrite gate still blocked"
+    )
+    assert "Security gate blocked overwrite:" in err_blocked, (
+        "exemption inactive but generate-overwrite gate did not block"
+    )
+
+
 # ---------------------------------------------------------------------------
 # Regression: bridge-check against a missing manifest must surface the
 # --bridge-refresh hint both in the written report and on stderr.

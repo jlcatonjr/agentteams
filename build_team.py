@@ -1343,16 +1343,16 @@ def main(argv: list[str] | None = None) -> int:
     # overwrite produces no spurious backup or log migration. A --migrate-driven
     # overwrite is exempt: --migrate supplies its own safety (the
     # pre-fencing-snapshot git tag + --revert-migration). The exemption is
-    # gated on _MIGRATE_GATE_EXEMPTION_ACTIVE — a module-level flag set ONLY
+    # gated on security_gate.migrate_exemption_active() — module state set ONLY
     # by _run_migrate around its main() re-invocation, so the bypass is not
     # reachable from the CLI.
-    if not args.dry_run and args.overwrite and not _MIGRATE_GATE_EXEMPTION_ACTIVE:
+    if not args.dry_run and args.overwrite and not security_gate.migrate_exemption_active():
         try:
             security_gate._assert_destructive_action_allowed(output_dir, action="overwrite")
         except RuntimeError as exc:
             print(f"Security gate blocked overwrite: {exc}", file=sys.stderr)
             return 1
-    elif not args.dry_run and args.overwrite and _MIGRATE_GATE_EXEMPTION_ACTIVE:
+    elif not args.dry_run and args.overwrite and security_gate.migrate_exemption_active():
         print(
             "  ℹ  Security-decision gate exempted for --migrate "
             "(rollback point is the 'pre-fencing-snapshot' tag).",
@@ -2447,12 +2447,6 @@ def _git(args: list[str], cwd: Path) -> tuple[int, str, str]:
 
 _MIGRATION_TAG = "pre-fencing-snapshot"
 
-# In-process flag exempting `--migrate`-driven --overwrite from the
-# destructive-action security gate. Set ONLY by _run_migrate around its
-# main() re-invocation (try/finally-scoped). Never exposed to the CLI — a
-# direct user invocation cannot reach the exemption path.
-_MIGRATE_GATE_EXEMPTION_ACTIVE = False
-
 
 def _run_migrate(project_dir: Path, original_argv: list[str]) -> int:
     """Create the pre-fencing snapshot tag, then run --overwrite.
@@ -2524,12 +2518,11 @@ def _run_migrate(project_dir: Path, original_argv: list[str]) -> int:
         new_argv.append("--yes")
 
     print("  Running --overwrite migration...\n")
-    global _MIGRATE_GATE_EXEMPTION_ACTIVE
-    _MIGRATE_GATE_EXEMPTION_ACTIVE = True
+    security_gate.set_migrate_exemption(True)
     try:
         rc_emit = main(new_argv)
     finally:
-        _MIGRATE_GATE_EXEMPTION_ACTIVE = False
+        security_gate.set_migrate_exemption(False)
 
     if rc_emit != 0:
         print(

@@ -18,6 +18,28 @@ import os
 from datetime import UTC, datetime
 from pathlib import Path
 
+# --- migrate destructive-gate exemption -----------------------------------
+# Homed here (not in build_team) so the WRITER (_run_migrate) and the READER
+# (main) share one source of truth even after main moves to cli/app.py. Set
+# ONLY by _run_migrate around its main() re-invocation — not reachable from the
+# CLI — so the bypass stays internal. (Audit: a build_team module global would
+# split reader/writer across modules when main moves and silently break this.)
+_migrate_exemption_active = False
+
+
+def set_migrate_exemption(active: bool) -> None:
+    """Enable/disable the --migrate overwrite-gate exemption (internal use only)."""
+    if not isinstance(active, bool):
+        raise TypeError(f"active must be bool, got {type(active).__name__}")
+    global _migrate_exemption_active
+    _migrate_exemption_active = active
+
+
+def migrate_exemption_active() -> bool:
+    """True when the internal --migrate destructive-gate exemption is active."""
+    return _migrate_exemption_active
+
+
 _SECURITY_DECISION_REQUIRED_COLUMNS: dict[str, frozenset[str]] = {
     "legacy": frozenset(
         {
