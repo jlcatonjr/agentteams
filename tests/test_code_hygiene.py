@@ -36,10 +36,10 @@ _LENGTH_EXCLUDE_PREFIXES = _EXCLUDE_PREFIXES + ("tests/",)
 # --- ratchets (verified 2026-06-15; only ever decrease) --------------------
 MAX_MODULE_LINES = 1000
 LENGTH_ALLOWLIST: frozenset[str] = frozenset({
-    # build_team.py left the allowlist at Step D (4086 -> 833, now a thin shim).
-    "agentteams/cli/app.py",    # 1174 — orchestrator entry; generate-pipeline extraction tracked (Step D2)
-    "agentteams/analyze.py",    # 1503 — tracked debt (later phase)
-    "agentteams/emit.py",       # 1389 — tracked debt (later phase)
+    # build_team.py left at Step D (now a 833-line shim); cli/app.py left at Step D2
+    # (1174 -> 286 after the generate pipeline moved to cli/generate.py, 939 lines).
+    "agentteams/analyze.py",    # 1503 — accepted tracked debt (CH-07 allowlist; not split)
+    "agentteams/emit.py",       # 1389 — accepted tracked debt (CH-07 allowlist; not split)
 })
 BROAD_EXCEPT_BASELINE = 11      # except Exception/BaseException/bare. Narrowed over the sweep
                                 # (Steps E + remaining-items I6: commands, render_pipeline, ingest,
@@ -188,6 +188,7 @@ def test_framework_registry_has_single_source() -> None:
 # function signatures to stay fully type-annotated (the guard below enforces it).
 _REFACTOR_MODULES = (
     "agentteams/cli/app.py",
+    "agentteams/cli/generate.py",
     "agentteams/cli/parser.py",
     "agentteams/cli/render_pipeline.py",
     "agentteams/cli/commands.py",
