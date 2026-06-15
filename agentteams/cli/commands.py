@@ -354,6 +354,9 @@ _BRIDGE_AGENTS_DIR_SUFFIXES: dict[str, tuple[tuple[str, ...], ...]] = {
     "copilot-vscode": ((".github", "agents"),),
     "copilot-cli": ((".github", "copilot"),),
     "claude": ((".claude", "agents"),),
+    # Goose bridge --output is the repo root (AGENTS.md lives there); normalize a
+    # mistakenly-passed .goose/recipes or .goose path back up to the root.
+    "goose": ((".goose", "recipes"), (".goose",)),
 }
 def _normalize_bridge_output_root(output: Path, target_framework: str) -> Path:
     """Strip a known agents-dir suffix from a bridge --output path.

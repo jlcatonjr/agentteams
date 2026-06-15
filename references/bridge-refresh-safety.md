@@ -10,13 +10,21 @@
 
 ## I. The Three Bridge Modes — Choosing Correctly
 
-| Mode | Flag | Behavior at target entry files (`CLAUDE.md`, `.claude/*.md`) | When to use |
+Target entry files by framework: **claude** → `CLAUDE.md`, `.claude/*.md`; **copilot-vscode** → `.github/copilot-instructions.md`, `.github/agents/bridge-orchestrator.agent.md`; **copilot-cli** → `.github/copilot-instructions.md`, `.github/copilot/*`; **goose** → `AGENTS.md`, `.goosehints`, `.goose/README.md`.
+
+| Mode | Flag | Behavior at target entry files | When to use |
 |---|---|---|---|
 | **Check** | `--bridge-check` | Read-only; produces a freshness report | Always safe; use to inspect state before any write |
-| **Merge** | `--bridge-merge` | Re-renders **only** content inside `<!-- AGENTTEAMS-BRIDGE:BEGIN region v=N -->…<!-- AGENTTEAMS-BRIDGE:END region -->` fences; files lacking any bridge fence are **skipped** with a notice in `bridge-merge.report.md` | The correct default for any project that already has user-authored content in CLAUDE.md or .claude/ |
+| **Merge** | `--bridge-merge` | Re-renders **only** content inside `<!-- AGENTTEAMS-BRIDGE:BEGIN region v=N -->…<!-- AGENTTEAMS-BRIDGE:END region -->` fences; files lacking any bridge fence are **skipped** with a notice in `bridge-merge.report.md` | The correct default for any project that already has user-authored content in an entry file |
 | **Refresh** | `--bridge-refresh` | **Overwrites** target entry files unconditionally | Only on first-time bridge generation, or when consumer entry files are known-disposable |
 
-**Default presumption:** for any external project, treat `--bridge-refresh` as destructive until proven otherwise. The "known-disposable" case is rare in practice — most projects accumulate user-authored guidance in CLAUDE.md within hours of first contact.
+> **There is NO default bridge mode.** `--bridge-check`, `--bridge-refresh`, and `--bridge-merge` are independent flags; a bare `--bridge-from` invocation runs in a generate mode that **creates any missing entry file** (and skips existing ones). To get the safe fenced-merge behavior you **must pass `--bridge-merge` explicitly**.
+
+**Default presumption:** for any external project, treat `--bridge-refresh` as destructive until proven otherwise. The "known-disposable" case is rare in practice — most projects accumulate user-authored guidance within hours of first contact.
+
+> **⚠ Goose target — `AGENTS.md` is a SHARED, multi-tool standard file.** Unlike `CLAUDE.md` (Claude-specific), `AGENTS.md` is read by Cursor, Codex, Codex-CLI, Cline, and others. Two extra hazards beyond the claude case:
+> - **First-time create in EVERY mode.** When `AGENTS.md` is absent, the bridge writes its fenced pointer **even under `--bridge-merge`** (the bridge emits a runtime notice when it does). Before bridging, confirm no other tool intends to author `AGENTS.md`.
+> - **`--bridge-refresh` overwrites the whole shared file** — including content other tools depend on. An existing **unfenced** `AGENTS.md` (or a Phase-1 *generated* `AGENTS.md` team brief, which is also unfenced) is safely **skipped** under `--bridge-merge` (`no-fence`), but **destroyed** under `--bridge-refresh`. The same applies to `.goosehints`.
 
 ---
 
@@ -27,12 +35,19 @@ The following checks **must all pass** before invoking `--bridge-refresh` agains
 ### Check 1 — Existing target entry files
 
 ```bash
+# claude target:
 for f in CLAUDE.md .claude/README.md .claude/agent-team.md .claude/quickstart-snippet.md .claude/skills/recall.md; do
+  [ -f "$target_project/$f" ] && echo "PRESENT: $f"
+done
+# goose target (AGENTS.md is SHARED across tools — treat its presence as high-risk):
+for f in AGENTS.md .goosehints .goose/README.md; do
   [ -f "$target_project/$f" ] && echo "PRESENT: $f"
 done
 ```
 
-If any file is PRESENT, proceed to Check 2.
+If any file is PRESENT, proceed to Check 2. For a goose target, a PRESENT `AGENTS.md`
+is especially likely to hold another tool's content — never `--bridge-refresh` it
+without Checks 2–4 all passing.
 
 ### Check 2 — Fence presence
 
@@ -85,6 +100,20 @@ agentteams --bridge-from <project>/.github/agents \
 ```
 
 Files lacking the bridge fence are skipped with a notice; user content is preserved.
+
+### Goose target (writes the SHARED AGENTS.md + .goosehints)
+
+```bash
+# Safe update — fenced regions only; an existing unfenced AGENTS.md is skipped:
+agentteams --bridge-from <project>/.github/agents \
+  --framework goose --bridge-merge --yes
+```
+
+For a goose target, prefer `--bridge-merge`. A bare invocation (no mode flag) will
+still **create** a missing `AGENTS.md`/`.goosehints` (the bridge emits a notice when
+it does) — that is the only write that happens regardless of mode. `--bridge-refresh`
+against an existing `AGENTS.md` overwrites the whole shared file: run Checks 1–4,
+back it up, and diff first.
 
 ### Forced refresh after Pre-Flight all-pass
 

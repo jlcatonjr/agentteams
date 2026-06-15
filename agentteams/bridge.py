@@ -98,7 +98,7 @@ def run_bridge(
     src_fw = source_framework or detect_framework(source_dir)
     if src_fw not in {"copilot-vscode", "copilot-cli", "claude"}:
         raise ValueError(f"Unknown source framework {src_fw!r}")
-    if target_framework not in {"copilot-vscode", "copilot-cli", "claude"}:
+    if target_framework not in {"copilot-vscode", "copilot-cli", "claude", "goose"}:
         raise ValueError(f"Unknown target framework {target_framework!r}")
 
     result = BridgeResult(dry_run=dry_run, check_only=check_only)
@@ -209,6 +209,14 @@ def run_bridge(
                 path.parent.mkdir(parents=True, exist_ok=True)
                 path.write_text(content, encoding="utf-8")
             result.written.append(str(path))
+            if target_framework == "goose" and path.name == "AGENTS.md":
+                # AGENTS.md is created in EVERY mode when absent (incl. --bridge-merge).
+                # Surface the shared-namespace plant — other tools also read AGENTS.md.
+                result.notices.append(
+                    f"Created shared AGENTS.md at {path}; other tools (Cursor/Codex/"
+                    "Cline) also read this file — confirm none of them owns it before "
+                    "committing. See references/bridge-refresh-safety.md."
+                )
             continue
 
         if merge_only:
@@ -567,6 +575,41 @@ def _render_target_files(
                 "# Claude Bridge\n\n"
                 + _wrap_fence(
                     "claude-bridge-readme",
+                    "Lightweight bridge; source files are canonical.\n",
+                ),
+            ),
+        ]
+
+    if target_framework == "goose":
+        goose_dir = root / ".goose"
+        # AGENTS.md is a SHARED, multi-tool standard file (Cursor/Codex/Cline also
+        # read it). It is emitted fenced so --bridge-merge updates only the fence
+        # and leaves an existing unfenced AGENTS.md untouched (no-fence -> skip).
+        # See references/bridge-refresh-safety.md before --bridge-refresh.
+        agents_entry_body = (
+            f"Use source framework `{source_framework}` as canonical agent infrastructure.\n"
+            f"Read `{rel_inventory}` and `{rel_quickstart}`.\n"
+            "Start with orchestrator routing.\n"
+        )
+        agents_md = (
+            "# Agent Team (Goose bridge)\n\n"
+            + _wrap_fence("goose-bridge-entry", agents_entry_body)
+        )
+        # .goosehints pulls the bridged AGENTS.md into Goose's prompt via @AGENTS.md
+        # (Goose's default CONTEXT_FILE_NAMES is ['.goosehints', 'AGENTS.md']).
+        goosehints = _wrap_fence(
+            "goose-bridge-hints",
+            "@AGENTS.md\n\n"
+            f"This project bridges the `{source_framework}` agent team; source files are canonical.\n",
+        )
+        return [
+            (root / "AGENTS.md", agents_md),
+            (root / ".goosehints", goosehints),
+            (
+                goose_dir / "README.md",
+                "# Goose Bridge\n\n"
+                + _wrap_fence(
+                    "goose-bridge-readme",
                     "Lightweight bridge; source files are canonical.\n",
                 ),
             ),

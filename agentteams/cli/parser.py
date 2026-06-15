@@ -373,8 +373,9 @@ def _build_parser() -> argparse.ArgumentParser:
         dest="bridge_refresh",
         help=(
             "Refresh bridge artifacts AND overwrite target-framework entry "
-            "files (CLAUDE.md, .claude/agent-team.md, etc.). Destructive at "
-            "the target — use --bridge-merge for non-destructive updates."
+            "files (e.g. CLAUDE.md, .claude/*, AGENTS.md, .goosehints). "
+            "Destructive at the target — note AGENTS.md is a SHARED multi-tool "
+            "file; use --bridge-merge for non-destructive updates."
         ),
     )
     parser.add_argument(

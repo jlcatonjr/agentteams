@@ -442,3 +442,194 @@ def test_bridge_skips_recall_skill_when_disabled(tmp_path: Path):
     )
     assert not (out_root / ".claude" / "skills" / "recall.md").exists()
 
+
+# --------------------------------------------------------------------------
+# Phase 2: Goose bridge TARGET (copilot/claude -> goose)
+# --------------------------------------------------------------------------
+
+_GOOSE_TARGET_FILES = ("AGENTS.md", ".goosehints", ".goose/README.md")
+_GOOSE_FENCE_REGIONS = ("goose-bridge-entry", "goose-bridge-hints", "goose-bridge-readme")
+
+
+@pytest.mark.parametrize("source_framework", ["copilot-vscode", "claude"])
+def test_bridge_goose_first_time_creates_exact_file_set(tmp_path: Path, source_framework: str):
+    """T1: first-time goose bridge writes exactly AGENTS.md/.goosehints/.goose/README.md,
+    each carrying its specific AGENTTEAMS-BRIDGE region, plus the pair-dir artifacts."""
+    source_dir = tmp_path / "src" / _source_rel(source_framework)
+    _build_source(source_framework, source_dir)
+    out_root = tmp_path / "out"
+
+    result = run_bridge(
+        source_dir=source_dir,
+        source_framework=source_framework,
+        target_framework="goose",
+        output_root=out_root,
+    )
+    assert result.success, f"errors: {result.errors}"
+
+    for rel, region in zip(_GOOSE_TARGET_FILES, _GOOSE_FENCE_REGIONS):
+        path = out_root / rel
+        assert path.exists(), f"missing {rel}"
+        body = path.read_text(encoding="utf-8")
+        assert f"AGENTTEAMS-BRIDGE:BEGIN {region}" in body
+    # .goosehints integrates the bridged brief via @AGENTS.md
+    assert "@AGENTS.md" in (out_root / ".goosehints").read_text(encoding="utf-8")
+    # pair-dir bridge-internal artifacts exist
+    pair_dir = out_root / "references" / "bridges" / f"{source_framework}-to-goose"
+    assert (pair_dir / "bridge-manifest.json").exists()
+    assert (pair_dir / "agent-inventory.md").exists()
+
+
+def test_bridge_goose_merge_updates_fence_preserves_outside(tmp_path: Path):
+    """T2: --bridge-merge re-renders only the fenced region of AGENTS.md."""
+    source_dir = tmp_path / "src" / ".github" / "agents"
+    _build_source("copilot-vscode", source_dir)
+    out_root = tmp_path / "out"
+    agents_md = out_root / "AGENTS.md"
+    agents_md.parent.mkdir(parents=True, exist_ok=True)
+    agents_md.write_text(
+        "# Agent Team (Goose bridge)\n\nKEEP THIS USER LINE\n\n"
+        "<!-- AGENTTEAMS-BRIDGE:BEGIN goose-bridge-entry v=1 -->\nSTALE BODY\n"
+        "<!-- AGENTTEAMS-BRIDGE:END goose-bridge-entry -->\n",
+        encoding="utf-8",
+    )
+    result = run_bridge(
+        source_dir=source_dir, source_framework="copilot-vscode",
+        target_framework="goose", output_root=out_root, merge_only=True,
+    )
+    after = agents_md.read_text(encoding="utf-8")
+    assert "KEEP THIS USER LINE" in after       # content outside the fence preserved
+    assert "STALE BODY" not in after            # fenced region re-rendered
+    assert str(agents_md) in result.written
+
+
+def test_bridge_goose_merge_skips_unfenced_agents_md(tmp_path: Path):
+    """T3 (SAFETY): an existing UNFENCED AGENTS.md (another tool's) is skipped under
+    --bridge-merge and left byte-identical. This is the load-bearing §5.1 guarantee."""
+    source_dir = tmp_path / "src" / ".github" / "agents"
+    _build_source("copilot-vscode", source_dir)
+    out_root = tmp_path / "out"
+    agents_md = out_root / "AGENTS.md"
+    agents_md.parent.mkdir(parents=True, exist_ok=True)
+    foreign = "# My Project\n\nAGENTS.md owned by another tool (Cursor/Codex).\n"
+    agents_md.write_text(foreign, encoding="utf-8")
+
+    result = run_bridge(
+        source_dir=source_dir, source_framework="copilot-vscode",
+        target_framework="goose", output_root=out_root, merge_only=True,
+    )
+    assert agents_md.read_text(encoding="utf-8") == foreign  # untouched
+    assert str(agents_md) in result.skipped
+
+
+def test_bridge_goose_refresh_overwrites(tmp_path: Path):
+    """T4: --bridge-refresh overwrites the shared AGENTS.md (the documented destructive path)."""
+    source_dir = tmp_path / "src" / ".github" / "agents"
+    _build_source("copilot-vscode", source_dir)
+    out_root = tmp_path / "out"
+    agents_md = out_root / "AGENTS.md"
+    agents_md.parent.mkdir(parents=True, exist_ok=True)
+    foreign = "# Another tool's AGENTS.md\n"
+    agents_md.write_text(foreign, encoding="utf-8")
+
+    run_bridge(
+        source_dir=source_dir, source_framework="copilot-vscode",
+        target_framework="goose", output_root=out_root, overwrite=True,
+    )
+    assert agents_md.read_text(encoding="utf-8") != foreign
+    assert "goose-bridge-entry" in agents_md.read_text(encoding="utf-8")
+
+
+def test_bridge_goose_first_time_create_emits_shared_notice(tmp_path: Path):
+    """T5: creating AGENTS.md (in any mode, here --bridge-merge into an empty repo)
+    emits the shared-multi-tool-file notice."""
+    source_dir = tmp_path / "src" / ".github" / "agents"
+    _build_source("copilot-vscode", source_dir)
+    out_root = tmp_path / "out"
+
+    result = run_bridge(
+        source_dir=source_dir, source_framework="copilot-vscode",
+        target_framework="goose", output_root=out_root, merge_only=True,
+    )
+    assert (out_root / "AGENTS.md").exists()  # created even under merge
+    assert any("shared AGENTS.md" in n for n in result.notices)
+
+
+def test_bridge_goose_merge_skips_unfenced_goosehints(tmp_path: Path):
+    """T6: a pre-existing unfenced .goosehints (as Phase-1 generate emits) is skipped
+    under --bridge-merge — the bridge hint is not added, the file is unchanged."""
+    source_dir = tmp_path / "src" / ".github" / "agents"
+    _build_source("copilot-vscode", source_dir)
+    out_root = tmp_path / "out"
+    hints = out_root / ".goosehints"
+    hints.parent.mkdir(parents=True, exist_ok=True)
+    generated = "@AGENTS.md\n\nGoose operational notes (generated by agentteams)\n"
+    hints.write_text(generated, encoding="utf-8")
+
+    result = run_bridge(
+        source_dir=source_dir, source_framework="copilot-vscode",
+        target_framework="goose", output_root=out_root, merge_only=True,
+    )
+    assert hints.read_text(encoding="utf-8") == generated
+    assert str(hints) in result.skipped
+
+
+def test_bridge_goose_check_mode(tmp_path: Path):
+    """T7: --bridge-check passes against a fresh manifest, fails after source drift."""
+    source_dir = tmp_path / "src" / ".github" / "agents"
+    _build_source("copilot-vscode", source_dir)
+    out_root = tmp_path / "out"
+    run_bridge(
+        source_dir=source_dir, source_framework="copilot-vscode",
+        target_framework="goose", output_root=out_root, overwrite=True,
+    )
+    fresh = run_bridge(
+        source_dir=source_dir, source_framework="copilot-vscode",
+        target_framework="goose", output_root=out_root, check_only=True,
+    )
+    assert fresh.check_ok
+    (source_dir / "orchestrator.agent.md").write_text(
+        _vscode_agent("orchestrator") + "\nDRIFT\n", encoding="utf-8")
+    stale = run_bridge(
+        source_dir=source_dir, source_framework="copilot-vscode",
+        target_framework="goose", output_root=out_root, check_only=True,
+    )
+    assert not stale.check_ok
+
+
+def test_bridge_goose_target_allowed(tmp_path: Path):
+    """T8: target_framework='goose' no longer raises ValueError."""
+    source_dir = tmp_path / "src" / ".github" / "agents"
+    _build_source("copilot-vscode", source_dir)
+    # Would raise "Unknown target framework 'goose'" before the allow-set edit.
+    result = run_bridge(
+        source_dir=source_dir, source_framework="copilot-vscode",
+        target_framework="goose", output_root=tmp_path / "out",
+    )
+    assert result.success
+
+
+def test_bridge_claude_target_file_set_unchanged_after_goose(tmp_path: Path):
+    """T9 (regression): the claude target still writes its full entry-file set after
+    the goose allow-set edit (the six-direction test only checks counts)."""
+    source_dir = tmp_path / "src" / ".github" / "agents"
+    _build_source("copilot-vscode", source_dir)
+    out_root = tmp_path / "out"
+    run_bridge(
+        source_dir=source_dir, source_framework="copilot-vscode",
+        target_framework="claude", output_root=out_root, overwrite=True,
+    )
+    for rel in ("CLAUDE.md", ".claude/agent-team.md", ".claude/quickstart-snippet.md", ".claude/README.md"):
+        assert (out_root / rel).exists(), f"claude target regressed: missing {rel}"
+
+
+def test_normalize_bridge_output_root_goose(tmp_path: Path):
+    """T10: a bridge --output ending in .goose/recipes or .goose normalizes to repo root."""
+    from agentteams.cli.commands import _normalize_bridge_output_root
+
+    root = tmp_path / "proj"
+    assert _normalize_bridge_output_root(root / ".goose" / "recipes", "goose") == root
+    assert _normalize_bridge_output_root(root / ".goose", "goose") == root
+    # A plain repo-root --output is left untouched.
+    assert _normalize_bridge_output_root(root, "goose") == root
+
