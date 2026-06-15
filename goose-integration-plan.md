@@ -232,3 +232,36 @@ This phase is a separate plan (and likely a separate set of `templates/builder/`
 
 ## 12. Bottom line
 Goose clears both gating bars (actively maintained; LF-governed via AAIF) and is a **better structural fit than continue.dev** because it natively models orchestrator→specialist delegation (`sub_recipes`) AND offers a **source-verified, faithful way to represent deeper nesting as references/tools** (`summon.load` + `@file`) rather than dropping it. So `GooseAdapter` is `native`-handoff at depth-1 and reference-based at depth-2+, with no loss of edges. The novel implementation work is (a) a markdown→recipe-YAML transform and (b) the depth-classification pass in §10.2; everything else reuses the verified adapter contract and the same touch points claude/copilot use. **Sequence:** Phase 1 adapter (this branch, tested locally before any commit) → Phase 2 bridge (with the §5.1 safety-doc extension as a hard precondition) → Phase 4 goose-native agents (§11).
+
+---
+
+## 13. Status review — what's landed vs. remaining (2026-06-15)
+
+State of `main` as of this review, verified against the code and **live-validated against Goose CLI v1.37.0** (installed locally).
+
+### Phase 1 — Adapter: DONE & VALIDATED ✓
+- `agentteams/frameworks/goose.py` (297 lines): all 6 required contract methods + `handoff_delivery_mode() = "native"`, `finalize_output_path`, `extra_output_files`, plus the depth-classification helpers (`_dedupe_by_agent`, `_team_slugs`, `_tool_name`).
+- Registered in the **single** registry `frameworks/registry.py` (CH-05); `interop.py`/`convert.py` import `FRAMEWORKS` from it, so goose auto-propagates — no separate `_ADAPTERS` edits needed (the plan's §4 "3× registration" is now 1× by design).
+- Schema enum `schemas/team-manifest.schema.json` includes `"goose"`; man page carries goose.
+- 16 adapter tests pass (`tests/test_frameworks.py -k oose`).
+- **Live acceptance gate (plan §8) MET:** generated the data-pipeline example with `--framework goose` → **28/28 recipes pass `goose recipe validate`** (exit 0). The orchestrator correctly emits `version: "1.0.0"` (pinned), the `summon` platform extension, and a `sub_recipes` list (identifier-safe `name` + `./<slug>.yaml` `path`). The depth-1 delegation topology (§10) renders exactly as designed.
+
+### Phase 1 — remaining gaps (small)
+1. **No goose builder template.** `analyze.py` `builder_templates` (~L1331) maps only copilot-vscode/copilot-cli/claude → `if framework in builder_templates:` means **goose teams generate without a `team-builder.agent.md`**. Decide explicitly: author `templates/builder/team-builder-goose.template.md` + add the selector entry, OR document that goose intentionally ships no builder agent (the goose-native builder is itself a Phase-4 item, §11).
+2. **`AGENTS.md`/`.goosehints` placement is fragile under an explicit flat `--output`.** The adapter emits these at `../../` relative to the conventional `.goose/recipes/` agents dir. When `--output` is the project root (the intended usage) this resolves correctly to repo root; when `--output` points at a flat directory, the two files land **outside** the output tree. Add a guard/test (or normalize like `_normalize_bridge_output_root` does for bridge) and document the intended `--output <project-root>` contract for goose.
+
+### Phase 2 — Bridge target: NOT STARTED
+- No `goose` in `bridge.py` (validation allow-set + `_render_target_files`), `interop.detect_framework()`, or `host_features.py`. No `test_bridge.py` goose pairs.
+- **HARD PRECONDITION (plan §5.1):** `AGENTS.md` is a *shared multi-tool standard file* (Cursor/Codex/Cline also read it). Before any goose `--bridge-refresh` ships, `references/bridge-refresh-safety.md` Pre-Flight checks must be extended to enumerate `AGENTS.md`/`.goosehints`/`.goose/`, and the goose bridge must default to **merge-only / unfenced-safe**, never blind-overwrite. This aligns with the just-merged waiver/CLAUDE.md safety posture (`--bridge-merge` is the safe default).
+
+### Phase 3 — Docs: NOT STARTED
+- `README.md` and `CHANGELOG.md` have **zero** goose mentions (capability table, default-dir list, usage). No `docs_src/api-reference/` goose page. (The man page was already regenerated for goose.)
+
+### Phase 4 — Goose-native agents: NOT STARTED (forward plan, §11).
+
+### Remaining live validation
+- `goose recipe validate` (structural) — **done, 28/28.**
+- `goose run --recipe orchestrator.yaml --no-session` (actual delegation) — **not yet run**; needs a configured provider/model + credentials. Recommended as the final Phase-1 sign-off once a provider is available.
+
+### Recommended next sequence
+Phase-1 gap #2 (output-path guard + test) and gap #1 (builder decision) are the only items blocking a clean "Phase 1 complete" claim — both small. Then Phase 2 bridge **gated on the §5.1 safety-doc extension**, then Phase 3 docs, then Phase 4 native agents. Bridge before docs is debatable; docs could ship first since the adapter is already live.
