@@ -6,6 +6,36 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### added
+
+- **Automatic past-day work-summary backfill + trigger.** Promotes the
+  collector-management-developed feature into the framework: every generated team
+  now gets a session-close sweep that fills *recent past active-day* daily-summary
+  gaps automatically (in addition to the existing today-capture). Three coordinated
+  pieces, with all semantics defined **once**:
+  - **New reference `references/work-summary-backfill.reference.md`** (universal
+    template, emitted for every team) — the single source of truth: the
+    `AUTO_BACKFILL_LOOKBACK_CAP_DAYS` named constant (default 14), canonical clock
+    (git author-date, repo-local TZ), the disjoint+exhaustive Rule-12 partition
+    (today vs strictly-prior), executed-work trigger gate, create-only scope,
+    honor-prior-skip fail-safe, idempotency/no-recursion, recommend-only overflow
+    forcing function, and the mandatory adversarial→conflict audit gate, plus the
+    request-driven Steps 1–7 (gap analysis, date attribution, evidence model,
+    validation, audit).
+  - **`@work-summarizer` Workflow D — Automatic Backfill Sweep** — implements the
+    obligation; defers all semantics to the reference; daily-only override of the
+    request-gated weekly/monthly gap-fill; runs at most once per session, no
+    recursion.
+  - **Orchestrator Past-Day Backfill Obligation (Constitutional Rule) + closeout
+    step 8** — at session close, when the session executed work, detect past
+    active-day gaps and invoke Workflow D (strictly-prior dates only; disjoint
+    from the Rule 12 today-capture). Step 8 is inside the `available_workflows`
+    fence so it propagates on `--update --merge`; the rule + Workflow D live in
+    unfenced regions (like Rule 12 / the Daily-Weekly-Monthly workflows) and
+    reach existing teams on a fresh render. Tests in
+    `tests/test_work_summary_backfill.py`; plan + adversarial/conflict audits under
+    `references/plans/work-summary-backfill-integration-2026-06-15.plan.md`.
+
 ### changed
 
 - **Tools are documents, never agents.** Operational tools (databases, CLIs,

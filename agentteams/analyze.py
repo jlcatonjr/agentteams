@@ -1285,6 +1285,12 @@ def _plan_output_files(
         "type": "reference",
         "component_slug": None,
     })
+    files.append({
+        "path": "references/work-summary-backfill.reference.md",
+        "template": f"{agents_dir}work-summary-backfill.reference.template.md",
+        "type": "reference",
+        "component_slug": None,
+    })
 
     if "retrieval-integrator" in archetypes:
         files.append({
