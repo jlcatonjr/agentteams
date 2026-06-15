@@ -746,6 +746,19 @@ def _validate_option_combinations(parser: argparse.ArgumentParser, args: argpars
                     f"target framework (copilot-vscode, copilot-cli, claude, goose)."
                 )
 
+    # interop-to-goose is refused: the canonical interop representation (CAI) drops
+    # the handoff graph (export_to_cai strips handoff blocks + sets handoffs=[]), so
+    # the Goose orchestrator would emit zero sub_recipes — a disconnected pile of
+    # recipes that is not a working team. --convert-from preserves handoffs (from the
+    # source agent content) and IS supported. (Bridge-to-goose has its own path.)
+    if getattr(args, "framework", None) == "goose" and getattr(args, "interop_from", None):
+        parser.error(
+            "--interop-from with --framework goose is not supported: the interop "
+            "representation drops the handoff graph Goose needs for sub_recipe "
+            "delegation, so the result would be unwired. Use "
+            "`--convert-from <team> --framework goose` instead (it preserves delegation)."
+        )
+
     if args.convert_from and args.interop_from:
         parser.error("--convert-from and --interop-from are mutually exclusive")
 

@@ -140,9 +140,22 @@ def convert_team(
     if not source_dir.is_dir():
         raise FileNotFoundError(f"Source directory not found: {source_dir}")
 
-    manifest: dict[str, Any] = project_manifest or {}
+    manifest: dict[str, Any] = dict(project_manifest or {})
     adapter: FrameworkAdapter = _ADAPTERS[target_framework]()
     result = ConvertResult(dry_run=dry_run)
+
+    # F4 — reconstruct the team roster so team-aware adapters (goose) can wire the
+    # orchestrator's sub_recipe delegation. goose._team_slugs reads manifest
+    # ``output_files`` for ``*.agent.md`` slugs, so synthesize that path shape from
+    # the source agent files regardless of the target framework's own extension.
+    # (Delegation also needs each agent's handoffs, which live in the source agent
+    # content — fully present for copilot-vscode sources; claude/copilot-cli strip
+    # handoffs at their own generation, so those sources convert to valid-but-flat
+    # recipes. That is a source-format limitation, not a conversion defect.)
+    team_slugs = _collect_source_slugs(source_dir)
+    manifest["output_files"] = list(manifest.get("output_files", [])) + [
+        {"path": f"{slug}.agent.md"} for slug in team_slugs
+    ]
 
     # Walk source directory shallowly first, then handle subdirs explicitly
     for entry in sorted(source_dir.iterdir()):
@@ -157,6 +170,18 @@ def convert_team(
     for candidate in sorted(parent_dir.iterdir()):
         if candidate.is_file() and candidate.name in _INSTRUCTIONS_NAMES:
             _convert_file(candidate, target_dir, adapter, manifest, dry_run, overwrite, result)
+
+    # F3 — emit framework sidecars not derived from a source file (goose's repo-root
+    # ``.goosehints`` integrator). Paths are relative to the agents dir, like emit.py.
+    for rel_path, content in adapter.extra_output_files(manifest):
+        dest = (target_dir / rel_path).resolve()
+        if dest.exists() and not overwrite:
+            result.skipped.append(str(dest))
+            continue
+        if not dry_run:
+            dest.parent.mkdir(parents=True, exist_ok=True)
+            dest.write_text(content, encoding="utf-8")
+        result.converted.append(str(dest))
 
     return result
 
@@ -248,17 +273,22 @@ def _convert_file(
         return
 
     if file_type == "instructions":
-        # Place the instructions file at the project root (parent of agents dir)
-        # using the name required by the target framework.
-        root_dir = target_dir.parent
-        instructions_name = _target_instructions_name(adapter)
-        dest = root_dir / instructions_name
+        # F1 — adapter-driven dest. ``finalize_output_path`` returns the instructions
+        # path RELATIVE TO THE AGENTS DIR for the target framework: claude →
+        # ``../CLAUDE.md``, copilot → ``../copilot-instructions.md`` (both equal the
+        # legacy ``target_dir.parent/<name>`` placement), goose → ``../../AGENTS.md``
+        # (the repo root, since ``.goose/recipes`` is two levels deep).
+        rel = adapter.finalize_output_path("../copilot-instructions.md", "instructions")
+        dest = (target_dir / rel).resolve()
         if dest.exists() and not overwrite:
             result.skipped.append(str(source_path))
             return
         content = source_path.read_text(encoding="utf-8")
+        # F2 — render through the adapter (e.g. goose strips front matter for AGENTS.md)
+        # instead of copying verbatim.
+        content = adapter.render_instructions_file(content, manifest)
         if not dry_run:
-            root_dir.mkdir(parents=True, exist_ok=True)
+            dest.parent.mkdir(parents=True, exist_ok=True)
             dest.write_text(content, encoding="utf-8")
         result.converted.append(str(dest))
         return
@@ -274,7 +304,12 @@ def _convert_file(
     try:
         content = source_path.read_text(encoding="utf-8")
         slug = source_path.stem.replace(".agent", "")
-        converted_content = adapter.render_agent_file(content, slug, manifest)
+        if file_type == "builder":
+            # F5 — frameworks whose agent files are not plain markdown (goose recipes)
+            # wrap the builder differently from a specialist agent.
+            converted_content = adapter.render_builder_file(content, manifest)
+        else:
+            converted_content = adapter.render_agent_file(content, slug, manifest)
     except Exception as exc:  # noqa: BLE001
         result.errors.append(f"{source_path}: {exc}")
         return
@@ -325,15 +360,15 @@ def _convert_subdir(
                 _convert_file(entry, nested_target, adapter, manifest, dry_run, overwrite, result)
 
 
-def _target_instructions_name(adapter: FrameworkAdapter) -> str:
-    """Return the instructions file name for the given adapter.
+def _collect_source_slugs(source_dir: Path) -> list[str]:
+    """Return the agent/builder slugs present in *source_dir* (F4 team roster).
 
-    Args:
-        adapter: Target framework adapter.
-
-    Returns:
-        File name string (e.g. ``"CLAUDE.md"`` or ``"copilot-instructions.md"``).
+    Uses :func:`_classify_source_file` so it works for both ``*.agent.md``
+    (copilot-vscode) and ``*.md`` (claude) sources. The slug is the filename stem
+    minus any ``.agent`` segment, matching the convention every adapter uses.
     """
-    if adapter.framework_id == "claude":
-        return "CLAUDE.md"
-    return "copilot-instructions.md"
+    slugs: list[str] = []
+    for entry in sorted(source_dir.iterdir()):
+        if entry.is_file() and _classify_source_file(entry) in {"agent", "builder"}:
+            slugs.append(entry.stem.replace(".agent", ""))
+    return slugs
