@@ -136,7 +136,7 @@ Optional source framework override for \-\-bridge\-from (auto\-detected when omi
 Check bridge freshness against source files without regenerating bridge artifacts.
 .TP
 .B \-\-bridge\-refresh
-Refresh bridge artifacts AND overwrite target\-framework entry files (CLAUDE.md, .claude/agent\-team.md, etc.). Destructive at the target — use \-\-bridge\-merge for non\-destructive updates.
+Refresh bridge artifacts AND overwrite target\-framework entry files (e.g. CLAUDE.md, .claude/*, AGENTS.md, .goosehints). Destructive at the target — note AGENTS.md is a SHARED multi\-tool file; use \-\-bridge\-merge for non\-destructive updates.
 .TP
 .B \-\-bridge\-merge
 Non\-destructive update: regenerate bridge\-internal artifacts, and for target\-framework entry files only re\-render content inside <!\-\- AGENTTEAMS\-BRIDGE:BEGIN ... \-\-> fences. Files lacking any bridge fence are skipped with notices in bridge\-merge.report.md. First\-time consumers should use \-\-bridge\-refresh.

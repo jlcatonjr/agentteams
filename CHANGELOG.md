@@ -53,6 +53,28 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
     `tests/test_work_summary_backfill.py`; plan + adversarial/conflict audits under
     `references/plans/work-summary-backfill-integration-2026-06-15.plan.md`.
 
+- **Data-safety hardening for the output tree — atomic writes, integrity
+  verification, and bounded + mirrored backups.** Three coordinated capabilities
+  that make generated output recoverable and tamper-evident:
+  - **Atomic agent-file writes.** Generated agent files, their sidecars, and
+    `--restore-backup` now write to a temp file and `os.replace` it into place, so
+    an interrupted run can never leave a half-written or truncated agent file.
+  - **Integrity verification (read-only).** `--verify-integrity` classifies every
+    generated file against the build-log `file_hashes` baseline as `OK` /
+    `MODIFIED` / `TRUNCATED` / `MISSING` / `FENCE-BROKEN`, exiting non-zero on
+    `TRUNCATED`/`MISSING`/`FENCE-BROKEN` (`MODIFIED` is advisory). `--verify-backup
+    [TIMESTAMP]` confirms a backup is restorable by checking each file's bytes
+    against the `source_sha256` in its `_manifest.json`. Unlike `--update`, these
+    exit codes ARE the verdict.
+  - **Backup retention + off-machine mirror.** `--prune-backups [KEEP]` bounds
+    `.agentteams-backups/` growth (default keep 10) and never deletes the single
+    newest backup (even `KEEP 0`); `--keep-within-days DAYS` unions an age rule, and
+    an indeterminate-age backup is kept (fail-safe). `--backup-mirror DIR` (or the
+    `AGENTTEAMS_BACKUP_MIRROR` env var) copies each backup to a second location
+    (e.g. a NAS or synced folder), best-effort and non-fatal, so the recovery net
+    survives local disk loss. Tests in `tests/test_verify.py` and
+    `tests/test_backup_retention.py`.
+
 ### changed
 
 - **Repository filing conventions — stray plan docs no longer land at the root.**
