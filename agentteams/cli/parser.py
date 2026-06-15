@@ -50,7 +50,9 @@ def _build_parser() -> argparse.ArgumentParser:
             "Output directory for agent files. "
             "Default: <project>/.github/agents/ (copilot-vscode), "
             "<project>/.github/copilot/ (copilot-cli), "
-            "<project>/.claude/agents/ (claude)."
+            "<project>/.claude/agents/ (claude), "
+            "<project>/.goose/recipes/ (goose), "
+            "<project>/.agents/ (agents-md; team brief also written to repo-root AGENTS.md)."
         ),
     )
     parser.add_argument(
@@ -725,6 +727,24 @@ def _validate_option_combinations(parser: argparse.ArgumentParser, args: argpars
                 "--adopt-orphans and --prune are mutually exclusive "
                 "(adopt integrates orphan agents; prune deletes them)"
             )
+
+    # agents-md is a generate-only AGENTS.md emitter. The convert/interop/bridge
+    # paths hardcode the instructions filename (copilot-instructions.md / CLAUDE.md)
+    # and would emit a mislabeled file for this target, so reject those combinations
+    # with a clear message rather than producing wrong output.
+    if getattr(args, "framework", None) == "agents-md":
+        for attr, flag in (
+            ("convert_from", "--convert-from"),
+            ("interop_from", "--interop-from"),
+            ("bridge_from", "--bridge-from"),
+        ):
+            if getattr(args, attr, None):
+                parser.error(
+                    f"--framework agents-md is a generate-only AGENTS.md emitter and "
+                    f"cannot be a {flag} target. Generate a team with "
+                    f"`--framework agents-md --description …`, or pick a convertible "
+                    f"target framework (copilot-vscode, copilot-cli, claude, goose)."
+                )
 
     if args.convert_from and args.interop_from:
         parser.error("--convert-from and --interop-from are mutually exclusive")

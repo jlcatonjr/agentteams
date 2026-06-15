@@ -1333,6 +1333,9 @@ def _plan_output_files(
         "copilot-cli": "builder/team-builder-copilot-cli.template.md",
         "claude": "builder/team-builder-claude.template.md",
         "goose": "builder/team-builder-goose.template.md",
+        # agents-md reuses the copilot-vscode builder source; AgentsMdAdapter
+        # .render_builder_file neutralizes it into a plain .agents/ Markdown file.
+        "agents-md": "builder/team-builder-copilot-vscode.template.md",
     }
     if framework in builder_templates:
         files.append({

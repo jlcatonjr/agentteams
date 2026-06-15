@@ -19,10 +19,10 @@ Project description file (.json or .md). Required unless \-\-self is used.
 Project directory to scan and use as base (overrides existing_project_path in description)
 .TP
 .B \-\-framework, \-f NAME
-Target framework: copilot\-vscode, copilot\-cli, claude, goose (default: copilot\-vscode)
+Target framework: copilot\-vscode, copilot\-cli, claude, goose, agents\-md (default: copilot\-vscode)
 .TP
 .B \-\-output, \-o DIR
-Output directory for agent files. Default: <project>/.github/agents/ (copilot\-vscode), <project>/.github/copilot/ (copilot\-cli), <project>/.claude/agents/ (claude).
+Output directory for agent files. Default: <project>/.github/agents/ (copilot\-vscode), <project>/.github/copilot/ (copilot\-cli), <project>/.claude/agents/ (claude), <project>/.goose/recipes/ (goose), <project>/.agents/ (agents\-md; team brief also written to repo\-root AGENTS.md).
 .TP
 .B \-\-dry\-run
 Show what would be generated without writing files
@@ -120,7 +120,7 @@ Convert an existing agent team from DIR to the target \-\-framework. Reads each 
 .B \-\-interop\-from DIR
 Run cross\-framework interop pipeline from an existing team directory. Uses Canonical Agent Interface (CAI) normalization before writing target output.
 .TP
-.B \-\-interop\-source\-framework {copilot\-vscode,copilot\-cli,claude,goose}
+.B \-\-interop\-source\-framework {copilot\-vscode,copilot\-cli,claude,goose,agents\-md}
 Optional source framework override for \-\-interop\-from (auto\-detected when omitted).
 .TP
 .B \-\-interop\-mode {direct,bundle}
@@ -129,7 +129,7 @@ Interop mode: direct conversion only, or bundle (conversion + interop artifacts)
 .B \-\-bridge\-from DIR
 Generate a lightweight interface bridge from an existing source team directory without regenerating source agent documentation.
 .TP
-.B \-\-bridge\-source\-framework {copilot\-vscode,copilot\-cli,claude,goose}
+.B \-\-bridge\-source\-framework {copilot\-vscode,copilot\-cli,claude,goose,agents\-md}
 Optional source framework override for \-\-bridge\-from (auto\-detected when omitted).
 .TP
 .B \-\-bridge\-check

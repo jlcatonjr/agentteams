@@ -75,6 +75,22 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
     survives local disk loss. Tests in `tests/test_verify.py` and
     `tests/test_backup_retention.py`.
 
+- **`--framework agents-md` — cross-tool `AGENTS.md` emitter.** A fifth target
+  that emits the team as the emerging `AGENTS.md` standard (AAIF / Linux
+  Foundation): a single framework-neutral repo-root `AGENTS.md` — the canonical
+  file read by ~10 AI coding tools at once (Continue, Cursor, Cline, OpenAI Codex,
+  Zed, Aider, Gemini CLI, …) — plus the full per-specialist team under `.agents/`
+  for humans and tooling. The published `AGENTS.md` is actively neutralized of
+  Copilot-specific branding/paths (no tool branding, no leaked template manifest;
+  `AGENTTEAMS` fences preserved so `--update --merge` re-renders only the fenced
+  regions), and routing is preserved in `references/runtime-handoffs.json`. It is
+  **generate-only** — not a `--convert-from`/`--interop-from`/`--bridge-from`
+  target (those paths hardcode the instructions filename); the CLI rejects those
+  combinations with a clear message. Note `--framework goose` also writes a
+  repo-root `AGENTS.md`; the shared ownership is documented in
+  `references/bridge-refresh-safety.md`. Adapter
+  `agentteams/frameworks/agents_md.py`; tests `tests/test_agents_md_framework.py`.
+
 ### changed
 
 - **Repository filing conventions — stray plan docs no longer land at the root.**
