@@ -60,6 +60,32 @@ def test_discover_framework_filter(tmp_path):
     assert gh == {"a"} and cl == {"b"}
 
 
+def test_discover_prunes_tmp_sandboxes(tmp_path):
+    _mk_agent(tmp_path / "a" / ".github" / "agents", "x.agent.md")
+    # throwaway snapshot/sandbox copies under tmp/ must not be discovered
+    _mk_agent(tmp_path / "a" / "tmp" / "snap" / ".github" / "agents", "x.agent.md")
+    _mk_agent(tmp_path / "tmp" / "by-week" / "wk" / ".claude" / "agents", "x.md")
+
+    names = {str(w.relative_to(tmp_path)) for w in fleet.discover_workspaces(tmp_path, "both")}
+    assert names == {"a"}
+
+
+def test_discover_skips_unreadable_dir_without_raising(tmp_path):
+    import os
+    import stat
+
+    _mk_agent(tmp_path / "a" / ".github" / "agents", "x.agent.md")
+    locked = tmp_path / "locked"
+    _mk_agent(locked / ".github" / "agents", "x.agent.md")
+    os.chmod(locked, 0o000)  # mode 000 — iterdir()/is_dir() would raise PermissionError
+    try:
+        ws = fleet.discover_workspaces(tmp_path, "both")  # must not raise
+        names = {w.name for w in ws}
+        assert "a" in names  # readable workspace still found
+    finally:
+        os.chmod(locked, stat.S_IRWXU)  # restore so pytest can clean up
+
+
 # ---------------------------------------------------------------------------
 # Descriptor resolution (stub-trap fix)
 # ---------------------------------------------------------------------------

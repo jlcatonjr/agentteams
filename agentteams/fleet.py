@@ -42,7 +42,7 @@ from pathlib import Path
 # artifact would be mis-discovered as its own workspace).
 _PRUNE_DIRS = {
     "node_modules", ".git", ".agentteams-backups", "__pycache__", ".venv", "venv",
-    ".github", ".claude",
+    ".github", ".claude", "tmp",
 }
 _PRUNE_SUBSTR = (".worktrees", "/archive/")
 
@@ -214,8 +214,11 @@ def discover_workspaces(parent: Path, frameworks: str = "both") -> list[Path]:
     found: set[Path] = set()
     parent = parent.resolve()
     for dirpath in [parent, *(_walk(parent))]:
-        gh = (dirpath / ".github" / "agents").is_dir()
-        cl = (dirpath / ".claude").is_dir()
+        try:
+            gh = (dirpath / ".github" / "agents").is_dir()
+            cl = (dirpath / ".claude").is_dir()
+        except (PermissionError, OSError):
+            continue  # unreadable dir (e.g. mode 000) — skip, never fatal
         if frameworks == "github":
             cl = False
         elif frameworks == "claude":
@@ -226,8 +229,15 @@ def discover_workspaces(parent: Path, frameworks: str = "both") -> list[Path]:
 
 
 def _walk(parent: Path):
-    for child in parent.iterdir():
-        if not child.is_dir() or child.is_symlink():
+    try:
+        children = list(parent.iterdir())
+    except (PermissionError, OSError):
+        return  # unreadable dir (e.g. mode 000) — skip subtree, never fatal
+    for child in children:
+        try:
+            if not child.is_dir() or child.is_symlink():
+                continue
+        except (PermissionError, OSError):
             continue
         name = child.name
         full = str(child)
