@@ -8,6 +8,7 @@ from pathlib import Path
 import pytest
 
 import build_team
+from agentteams.cli import security_gate
 from agentteams.emit import EmitResult
 from agentteams.memory_index import build_memory_index
 
@@ -482,7 +483,7 @@ def test_bridge_output_normalizes_agents_dir_suffix(
     suffix: tuple[str, ...],
     monkeypatch: pytest.MonkeyPatch,
 ):
-    monkeypatch.setattr(build_team, "_assert_security_intelligence_fresh", lambda *_a, **_k: None)
+    monkeypatch.setattr(security_gate, "_assert_security_intelligence_fresh", lambda *_a, **_k: None)
     src = _make_claude_source(tmp_path / "repo")
     bad_output = tmp_path / "repo" / Path(*suffix)
     rc = build_team.main(
@@ -514,12 +515,40 @@ def test_bridge_output_normalizes_agents_dir_suffix(
     assert not nested.exists()
 
 
+def test_security_freshness_gate_invoked_via_module_on_bridge_path(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+):
+    """Step-A routing guard: main must invoke the freshness gate THROUGH the
+    security_gate module. A spy installed via security_gate records the call;
+    if routing were broken/neutered, the spy would not fire. Combined with the
+    function-level deny tests (gate raises on stale input), this proves the
+    gate still fires after the call was routed through the module."""
+    invoked: list[bool] = []
+    monkeypatch.setattr(
+        security_gate,
+        "_assert_security_intelligence_fresh",
+        lambda *_a, **_k: invoked.append(True),
+    )
+    src = _make_claude_source(tmp_path / "repo")
+    rc = build_team.main(
+        [
+            "--bridge-from", str(src),
+            "--bridge-source-framework", "claude",
+            "--framework", "copilot-vscode",
+            "--output", str(tmp_path / "repo" / ".github" / "agents"),
+        ]
+    )
+    assert rc == 0
+    assert invoked, "freshness gate was not invoked through the security_gate module"
+
+
 def test_bridge_output_without_suffix_is_unchanged(
     tmp_path: Path,
     capsys: pytest.CaptureFixture[str],
     monkeypatch: pytest.MonkeyPatch,
 ):
-    monkeypatch.setattr(build_team, "_assert_security_intelligence_fresh", lambda *_a, **_k: None)
+    monkeypatch.setattr(security_gate, "_assert_security_intelligence_fresh", lambda *_a, **_k: None)
     src = _make_claude_source(tmp_path / "repo")
     output = tmp_path / "elsewhere"
     rc = build_team.main(
@@ -559,7 +588,7 @@ def test_self_with_external_output_dry_run_is_allowed(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
 ):
-    monkeypatch.setattr(build_team, "_assert_security_intelligence_fresh", lambda *_a, **_k: None)
+    monkeypatch.setattr(security_gate, "_assert_security_intelligence_fresh", lambda *_a, **_k: None)
     external = tmp_path / "foreign-repo" / ".github" / "agents"
     external.mkdir(parents=True)
     # Dry-run does not write so the guard must not fire.
@@ -614,7 +643,7 @@ def _stub_drift(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setattr(_drift_mod, "refine_manifest_promotion", lambda *_: None)
     monkeypatch.setattr(_drift_mod, "print_structural_diff_report", lambda _: None)
     # Stub the security-freshness gate so tests don't need a real security cache
-    monkeypatch.setattr(build_team, "_assert_security_intelligence_fresh", lambda *_a, **_k: None)
+    monkeypatch.setattr(security_gate, "_assert_security_intelligence_fresh", lambda *_a, **_k: None)
 
 
 def test_update_alone_bypasses_security_gate(

@@ -109,6 +109,7 @@ TEMPLATES_DIR = _SCRIPT_DIR / "agentteams" / "templates"
 # Security gate extracted to agentteams/cli/security_gate.py (CH-07). Re-exported
 # here so main's bare-name calls and tests (incl. monkeypatch targets) resolve
 # these names in build_team's namespace unchanged.
+from agentteams.cli import security_gate
 from agentteams.cli.security_gate import (
     _SECURITY_DECISION_REQUIRED_COLUMNS,
     _SECURITY_WAIVER_REQUIRED_COLUMNS,
@@ -718,7 +719,7 @@ def main(argv: list[str] | None = None) -> int:
             _, backup_path, _ = matched[0]
 
         try:
-            _assert_destructive_action_allowed(output_dir, action="restore-backup")
+            security_gate._assert_destructive_action_allowed(output_dir, action="restore-backup")
         except RuntimeError as exc:
             print(f"Security gate blocked restore-backup: {exc}", file=sys.stderr)
             return 1
@@ -813,7 +814,7 @@ def main(argv: list[str] | None = None) -> int:
 
     if not args.check and not args.dry_run:
         try:
-            _assert_security_intelligence_fresh(security_placeholders, output_dir=output_dir)
+            security_gate._assert_security_intelligence_fresh(security_placeholders, output_dir=output_dir)
         except RuntimeError as exc:
             print(f"Security gate blocked write path: {exc}", file=sys.stderr)
             return 1
@@ -911,7 +912,7 @@ def main(argv: list[str] | None = None) -> int:
         # above is read-only, so evaluating the gate here is safe.
         if not args.dry_run and args.overwrite:
             try:
-                _assert_destructive_action_allowed(output_dir, action="overwrite")
+                security_gate._assert_destructive_action_allowed(output_dir, action="overwrite")
             except RuntimeError as exc:
                 print(
                     f"Security gate blocked overwrite update: {exc}\n"
@@ -1347,7 +1348,7 @@ def main(argv: list[str] | None = None) -> int:
     # reachable from the CLI.
     if not args.dry_run and args.overwrite and not _MIGRATE_GATE_EXEMPTION_ACTIVE:
         try:
-            _assert_destructive_action_allowed(output_dir, action="overwrite")
+            security_gate._assert_destructive_action_allowed(output_dir, action="overwrite")
         except RuntimeError as exc:
             print(f"Security gate blocked overwrite: {exc}", file=sys.stderr)
             return 1
@@ -1522,7 +1523,7 @@ def _run_convert(
             tools=None,
             skip_nvd=True,
         )
-        _assert_security_intelligence_fresh(convert_security, output_dir=target_dir)
+        security_gate._assert_security_intelligence_fresh(convert_security, output_dir=target_dir)
 
     dry_label = " (dry-run)" if dry_run else ""
     print(
@@ -1606,7 +1607,7 @@ def _run_interop(
             tools=None,
             skip_nvd=True,
         )
-        _assert_security_intelligence_fresh(interop_security, output_dir=target_dir)
+        security_gate._assert_security_intelligence_fresh(interop_security, output_dir=target_dir)
 
     dry_label = " (dry-run)" if dry_run else ""
     print(
@@ -1718,7 +1719,7 @@ def _run_bridge(
             tools=None,
             skip_nvd=True,
         )
-        _assert_security_intelligence_fresh(bridge_security, output_dir=output_root)
+        security_gate._assert_security_intelligence_fresh(bridge_security, output_dir=output_root)
 
     dry_label = " (dry-run)" if dry_run else ""
     print(
@@ -1811,7 +1812,7 @@ def _prune_removed_files(
         return 0
 
     try:
-        _assert_destructive_action_allowed(output_dir, action="prune")
+        security_gate._assert_destructive_action_allowed(output_dir, action="prune")
     except RuntimeError as exc:
         print(f"  Security gate blocked prune: {exc}", file=sys.stderr)
         return 1
