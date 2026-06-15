@@ -52,7 +52,7 @@ Use this matrix when deciding which module/artifact to rely on for a specific op
 ### Core Pipeline Modules
 
 9. **`ingest` Module** — Load and normalize project descriptions; parse JSON/Markdown; scan directories
-10. **`analyze` Module** — Classify project type; select archetypes (including contextual post-production auto-selection for any task domain and manual `selected_archetypes` override support); detect tool agents; build manifest
+10. **`analyze` Module** — Classify project type; select archetypes (including contextual post-production auto-selection for any task domain and manual `selected_archetypes` override support); detect operational tool docs; build manifest
 11. **`render` Module** — Resolve placeholders in templates; compute template hashes for drift detection
 12. **`emit` Module** — Write rendered files to disk with dry-run and overwrite-protection
 13. **`drift` Module** — Detect content drift (template hash comparison) and structural drift (team composition)

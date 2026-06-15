@@ -26,7 +26,6 @@ agents:
   - reference-manager
   - output-compiler
   - visual-designer
-  - tool-sqlite
   - crisis-credit-allocation-expert
   - fed-response-dag-expert
   - prairie-prosperity-expert

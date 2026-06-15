@@ -69,8 +69,6 @@ flowchart LR
     class technical_validator domain
     tool_doc_researcher["Tool Documentation Researcher"]
     class tool_doc_researcher tool_specialist
-    tool_pandoc["CLI Tool Specialist"]
-    class tool_pandoc tool_specialist
     visual_designer["Visual Designer"]
     class visual_designer domain
     work_summarizer["Work Summarizer"]
@@ -200,11 +198,6 @@ flowchart LR
     module_doc_validator -.-> conflict_auditor
     tool_doc_researcher -->|"Update Brief and Generated Docs"| agent_updater
     tool_doc_researcher -->|"Return to Orchestrator"| orchestrator
-    tool_pandoc -->|"Validate Tool Output"| technical_validator
-    tool_pandoc -->|"Security Clearance for Config Change"| security
-    tool_pandoc -->|"Return to Orchestrator"| orchestrator
-    tool_pandoc -.-> technical_validator
-    tool_pandoc -.-> security
     ch01_introduction_expert -->|"Vet Brief Before Drafting"| adversarial
     ch01_introduction_expert -->|"Send to Primary Producer"| primary_producer
     ch01_introduction_expert -->|"Verify Citations"| reference_manager
@@ -269,7 +262,6 @@ flowchart LR
 | `team-builder` | governance | Yes | read, edit, search, execute, todo |
 | `technical-validator` | domain | No | read, search |
 | `tool-doc-researcher` | tool_specialist | No | read, search |
-| `tool-pandoc` | tool_specialist | No | read, edit, execute, search |
 | `visual-designer` | domain | No | read, edit, execute, search |
 | `work-summarizer` | domain | Yes | read, search, execute, edit, agent |
 
@@ -295,18 +287,17 @@ flowchart LR
 | `module-doc-author` | `module-doc-validator` | `conflict-auditor`, `module-doc-validator`, `orchestrator` |
 | `module-doc-validator` | `module-doc-author` | `conflict-auditor`, `module-doc-author`, `orchestrator` |
 | `navigator` | `orchestrator` | `orchestrator` |
-| `orchestrator` | `adversarial`, `agent-refactor`, `agent-updater`, `ch01-introduction-expert`, `ch02-literature-expert`, `cleanup`, `code-hygiene`, `cohesion-repairer`, `conflict-auditor`, `conflict-resolution`, `content-enricher`, `format-converter`, `git-operations`, `module-doc-author`, `module-doc-validator`, `navigator`, `output-compiler`, `primary-producer`, `quality-auditor`, `reference-manager`, `repo-liaison`, `security`, `style-guardian`, `technical-validator`, `tool-doc-researcher`, `tool-pandoc`, `visual-designer`, `work-summarizer` | `adversarial`, `agent-refactor`, `agent-updater`, `cleanup`, `code-hygiene`, `cohesion-repairer`, `conflict-auditor`, `conflict-resolution`, `format-converter`, `git-operations`, `navigator`, `output-compiler`, `primary-producer`, `quality-auditor`, `reference-manager`, `repo-liaison`, `security`, `style-guardian`, `technical-validator`, `visual-designer`, `work-summarizer` |
+| `orchestrator` | `adversarial`, `agent-refactor`, `agent-updater`, `ch01-introduction-expert`, `ch02-literature-expert`, `cleanup`, `code-hygiene`, `cohesion-repairer`, `conflict-auditor`, `conflict-resolution`, `content-enricher`, `format-converter`, `git-operations`, `module-doc-author`, `module-doc-validator`, `navigator`, `output-compiler`, `primary-producer`, `quality-auditor`, `reference-manager`, `repo-liaison`, `security`, `style-guardian`, `technical-validator`, `tool-doc-researcher`, `visual-designer`, `work-summarizer` | `adversarial`, `agent-refactor`, `agent-updater`, `cleanup`, `code-hygiene`, `cohesion-repairer`, `conflict-auditor`, `conflict-resolution`, `format-converter`, `git-operations`, `navigator`, `output-compiler`, `primary-producer`, `quality-auditor`, `reference-manager`, `repo-liaison`, `security`, `style-guardian`, `technical-validator`, `visual-designer`, `work-summarizer` |
 | `output-compiler` | `format-converter`, `orchestrator` | `format-converter`, `orchestrator`, `technical-validator` |
 | `primary-producer` | `ch01-introduction-expert`, `ch02-literature-expert`, `content-enricher`, `orchestrator`, `quality-auditor`, `style-guardian`, `technical-validator` | `cohesion-repairer`, `conflict-auditor`, `orchestrator`, `quality-auditor`, `style-guardian` |
 | `quality-auditor` | `cohesion-repairer`, `format-converter`, `orchestrator`, `primary-producer`, `visual-designer` | `cohesion-repairer`, `orchestrator`, `primary-producer`, `style-guardian` |
 | `reference-manager` | `ch01-introduction-expert`, `ch02-literature-expert`, `orchestrator`, `technical-validator` | `conflict-auditor`, `orchestrator` |
 | `repo-liaison` | `orchestrator` | `conflict-auditor`, `orchestrator`, `security` |
-| `security` | `code-hygiene`, `git-operations`, `orchestrator`, `repo-liaison`, `tool-pandoc` | `orchestrator` |
+| `security` | `code-hygiene`, `git-operations`, `orchestrator`, `repo-liaison` | `orchestrator` |
 | `style-guardian` | `cohesion-repairer`, `orchestrator`, `primary-producer`, `quality-auditor` | `orchestrator`, `primary-producer` |
 | `team-builder` | — | — |
-| `technical-validator` | `conflict-auditor`, `content-enricher`, `orchestrator`, `output-compiler`, `tool-pandoc`, `work-summarizer` | `conflict-auditor`, `orchestrator`, `primary-producer`, `reference-manager` |
+| `technical-validator` | `conflict-auditor`, `content-enricher`, `orchestrator`, `output-compiler`, `work-summarizer` | `conflict-auditor`, `orchestrator`, `primary-producer`, `reference-manager` |
 | `tool-doc-researcher` | — | `agent-updater`, `orchestrator` |
-| `tool-pandoc` | — | `orchestrator`, `security`, `technical-validator` |
 | `visual-designer` | `orchestrator` | `format-converter`, `orchestrator`, `quality-auditor` |
 | `work-summarizer` | `orchestrator` | `adversarial`, `conflict-auditor`, `orchestrator`, `technical-validator` |
 
@@ -349,7 +340,6 @@ digraph "ResearchPaperProject Agent Team" {
     "team-builder" [label="Team Builder", fillcolor="#e8e8ff"];
     "technical-validator" [label="Technical Validator", fillcolor="#e8ffe8"];
     "tool-doc-researcher" [label="Tool Documentation Researcher", fillcolor="#ffe8e8"];
-    "tool-pandoc" [label="CLI Tool Specialist", fillcolor="#ffe8e8"];
     "visual-designer" [label="Visual Designer", fillcolor="#e8ffe8"];
     "work-summarizer" [label="Work Summarizer", fillcolor="#e8ffe8"];
     "orchestrator" -> "primary-producer" [style=solid, label="Produce / Revise Deliverable"];
@@ -443,9 +433,6 @@ digraph "ResearchPaperProject Agent Team" {
     "module-doc-validator" -> "orchestrator" [style=solid, label="Return to Orchestrator"];
     "tool-doc-researcher" -> "agent-updater" [style=solid, label="Update Brief and Generated Docs"];
     "tool-doc-researcher" -> "orchestrator" [style=solid, label="Return to Orchestrator"];
-    "tool-pandoc" -> "technical-validator" [style=solid, label="Validate Tool Output"];
-    "tool-pandoc" -> "security" [style=solid, label="Security Clearance for Config Change"];
-    "tool-pandoc" -> "orchestrator" [style=solid, label="Return to Orchestrator"];
     "ch01-introduction-expert" -> "adversarial" [style=solid, label="Vet Brief Before Drafting"];
     "ch01-introduction-expert" -> "primary-producer" [style=solid, label="Send to Primary Producer"];
     "ch01-introduction-expert" -> "reference-manager" [style=solid, label="Verify Citations"];
@@ -734,17 +721,6 @@ digraph "ResearchPaperProject Agent Team" {
       "user_invokable": false,
       "tools": [
         "read",
-        "search"
-      ]
-    },
-    "tool-pandoc": {
-      "display_name": "CLI Tool Specialist",
-      "agent_type": "tool_specialist",
-      "user_invokable": false,
-      "tools": [
-        "read",
-        "edit",
-        "execute",
         "search"
       ]
     },
@@ -1524,36 +1500,6 @@ digraph "ResearchPaperProject Agent Team" {
       "label": "Return to Orchestrator"
     },
     {
-      "source": "tool-pandoc",
-      "target": "technical-validator",
-      "edge_type": "handoff",
-      "label": "Validate Tool Output"
-    },
-    {
-      "source": "tool-pandoc",
-      "target": "security",
-      "edge_type": "handoff",
-      "label": "Security Clearance for Config Change"
-    },
-    {
-      "source": "tool-pandoc",
-      "target": "orchestrator",
-      "edge_type": "handoff",
-      "label": "Return to Orchestrator"
-    },
-    {
-      "source": "tool-pandoc",
-      "target": "technical-validator",
-      "edge_type": "agents-list",
-      "label": null
-    },
-    {
-      "source": "tool-pandoc",
-      "target": "security",
-      "edge_type": "agents-list",
-      "label": null
-    },
-    {
       "source": "ch01-introduction-expert",
       "target": "adversarial",
       "edge_type": "handoff",
@@ -1803,11 +1749,6 @@ digraph "ResearchPaperProject Agent Team" {
     "tool-doc-researcher": [
       "agent-updater",
       "orchestrator"
-    ],
-    "tool-pandoc": [
-      "orchestrator",
-      "security",
-      "technical-validator"
     ],
     "ch01-introduction-expert": [
       "adversarial",

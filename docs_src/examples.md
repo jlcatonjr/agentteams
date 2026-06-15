@@ -25,7 +25,7 @@ A FastAPI backend with authentication and a task management API.
 - Orchestrator + 11 governance agents
 - Domain agents: `@work-summarizer`, `@primary-producer`, `@quality-auditor`, `@technical-validator`, `@format-converter`
 - Workstream experts: one per component (e.g. `@auth-module-expert`, `@tasks-api-expert`)
-- Specialist agents for FastAPI and PostgreSQL
+- Tool docs for FastAPI and PostgreSQL (reference / skill — not agents)
 - Framework instructions file wired to the full team (`.github/copilot-instructions.md` or `.claude/CLAUDE.md`)
 
 **To run this example:**
@@ -60,7 +60,7 @@ An ETL pipeline that ingests daily sales CSVs, transforms and loads them into a 
 **What gets generated:**
 
 - Full governance + domain agent set
-- Specialist agents for PostgreSQL and the ETL build system
+- Tool docs for PostgreSQL and the ETL build system (reference / skill — not agents)
 - Workstream experts scoped to each pipeline stage
 - Reference files for pandas and SQLAlchemy
 

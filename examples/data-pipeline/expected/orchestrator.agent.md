@@ -27,7 +27,6 @@ agents:
   - module-doc-author
   - module-doc-validator
   - tool-doc-researcher
-  - tool-postgresql
   - ingest-expert
   - transform-expert
   - load-expert

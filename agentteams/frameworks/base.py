@@ -50,6 +50,16 @@ class FrameworkAdapter(ABC):
     def render_instructions_file(self, content: str, manifest: dict[str, Any]) -> str:
         """Post-process rendered copilot-instructions content."""
 
+    def render_skill_file(self, content: str, slug: str, manifest: dict[str, Any]) -> str:
+        """Post-process a rendered operational tool-doc emitted as a skill.
+
+        Only frameworks with a first-class skill concept (Claude Code) emit
+        skill files; for every other framework operational tool docs are emitted
+        as reference documents and this method is never invoked. The default is
+        a no-op so all adapters satisfy the interface.
+        """
+        return content
+
     @abstractmethod
     def get_file_extension(self, file_type: str) -> str:
         """Return the file extension for a given file type.

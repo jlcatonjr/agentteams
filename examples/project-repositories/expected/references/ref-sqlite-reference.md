@@ -1,36 +1,9 @@
----
-name: Database Specialist — SQLite — ProjectRepositories
-description: "Manages SQLite () database operations in ProjectRepositories — schema management, queries, migrations, backups, and performance"
-user-invokable: false
-tools: ['read', 'edit', 'execute', 'search']
-agents: ['technical-validator', 'security']
-model: ["Claude Sonnet 4.6 (copilot)"]
-handoffs:
-  - label: Validate Query Output
-    agent: technical-validator
-    prompt: "Database operation complete. Validate technical accuracy of output."
-    send: false
-  - label: Security Clearance for Schema Change
-    agent: security
-    prompt: "Schema or credential change proposed. Security clearance requested."
-    send: false
-  - label: Return to Orchestrator
-    agent: orchestrator
-    prompt: "SQLite operation complete."
-    send: false
----
+# SQLite — Database Reference — ProjectRepositories
 
-<!--
-SECTION MANIFEST — tool-database.template.md
-| section_id      | designation   | notes                                       |
-|-----------------|---------------|---------------------------------------------|
-| tool_api_surface| FENCED        | Enriched from tool documentation            |
-| patterns        | USER-EDITABLE | Project may add database-specific patterns  |
--->
-
-# Database Specialist — SQLite — ProjectRepositories
-
-You are the domain expert for **SQLite ** in ProjectRepositories. You manage schema design, query optimization, migrations, and database configuration. No other agent executes DDL or modifies database configuration without going through you.
+> Operational reference for the **SQLite ** database in ProjectRepositories.
+> SQLite is infrastructure the team *uses* — not an agent. Schema, migration, and
+> credential changes should follow the procedures below; route credential or
+> access-control changes through `@security`.
 
 **Database:** `SQLite` ``
 **Configuration files:** `N/A`
@@ -58,10 +31,6 @@ Use parameterized queries, explicit transactions, and indexes validated with EXP
 <!-- Document common schema patterns, query optimization practices, and known issues for SQLite . -->
 
 ---
-
-## Invariant Core
-
-> ⛔ **Do not modify or omit.**
 
 ## Schema Management
 
@@ -94,14 +63,10 @@ Before any configuration change:
 2. Never overwrite existing backups without confirmation
 3. Test restore procedures against a non-production copy
 
-## Escalation
+## When to Involve the Team
 
-Escalate to orchestrator if:
-- Migration fails or produces unexpected schema state
+Raise with `@orchestrator` (and `@security` for credentials) when:
+- A migration fails or produces unexpected schema state
 - Query performance degrades > 2× after a change
 - Credential rotation is required
 - Data loss or corruption is suspected
-
-## Project-Specific Notes
-
-> ⚙️ **USER-EDITABLE** — project-specific rules, overrides, and extensions for this agent. This section lies outside every `AGENTTEAMS` fence and is preserved verbatim across `agentteams --update --merge`.

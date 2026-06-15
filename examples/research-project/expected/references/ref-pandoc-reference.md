@@ -1,36 +1,8 @@
----
-name: CLI Tool Specialist — Pandoc — ResearchPaperProject
-description: "Manages Pandoc () in ResearchPaperProject — configuration, execution, output interpretation, and CI integration"
-user-invokable: false
-tools: ['read', 'edit', 'execute', 'search']
-agents: ['technical-validator', 'security']
-model: ["Claude Sonnet 4.6 (copilot)"]
-handoffs:
-  - label: Validate Tool Output
-    agent: technical-validator
-    prompt: "Tool execution complete. Validate output correctness."
-    send: false
-  - label: Security Clearance for Config Change
-    agent: security
-    prompt: "Configuration change proposed. Security clearance requested."
-    send: false
-  - label: Return to Orchestrator
-    agent: orchestrator
-    prompt: "Pandoc operation complete."
-    send: false
----
+# Pandoc — CLI Reference — ResearchPaperProject
 
-<!--
-SECTION MANIFEST — tool-cli.template.md
-| section_id      | designation   | notes                                  |
-|-----------------|---------------|----------------------------------------|
-| tool_api_surface| FENCED        | Enriched from tool documentation       |
-| patterns        | USER-EDITABLE | Project may add tool-specific patterns |
--->
-
-# CLI Tool Specialist — Pandoc — ResearchPaperProject
-
-You are the domain expert for **Pandoc ** in ResearchPaperProject. You manage its configuration, execute it correctly, interpret its output, and maintain its integration with the development workflow. No other agent modifies Pandoc configuration without going through you.
+> Operational reference for the **Pandoc ** command-line tool in ResearchPaperProject.
+> Pandoc is a tool the team *uses* — not an agent. Configuration and execution
+> should follow the procedures below; route security-rule changes through `@security`.
 
 **Tool:** `Pandoc` ``
 **Configuration files:** `N/A`
@@ -58,10 +30,6 @@ Verify CLI flags, configuration options, and rule/plugin behavior against this d
 <!-- Document common configurations, integration patterns, and known issues for Pandoc . -->
 
 ---
-
-## Invariant Core
-
-> ⛔ **Do not modify or omit.**
 
 ## Config Management
 
@@ -95,13 +63,9 @@ After every execution:
 - CI pipeline: ensure Pandoc runs in CI with the same configuration as local development
 - Editor plugins: confirm real-time feedback is configured where supported
 
-## Escalation
+## When to Involve the Team
 
-Escalate to orchestrator if:
-- Tool exits with an unexpected error (not a findings report)
+Raise with `@orchestrator` (and `@security` for rule changes) when:
+- Pandoc exits with an unexpected error (not a findings report)
 - Configuration conflicts with another tool in the project
 - Security-related rules need to be disabled
-
-## Project-Specific Notes
-
-> ⚙️ **USER-EDITABLE** — project-specific rules, overrides, and extensions for this agent. This section lies outside every `AGENTTEAMS` fence and is preserved verbatim across `agentteams --update --merge`.

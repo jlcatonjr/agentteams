@@ -131,7 +131,7 @@
     },
     "tool_agents": {
       "type": "array",
-      "description": "List of tool-specific agents to generate (each becomes a separate agent file).",
+      "description": "Operational tool DOCUMENTS to generate (Copilot reference doc or Claude skill); never agents. Key name retained for backward compatibility.",
       "items": {
         "type": "object",
         "required": ["slug", "tool_name"],
@@ -284,7 +284,8 @@
           },
           "type": {
             "type": "string",
-            "enum": ["agent", "instructions", "reference", "setup-required", "builder", "graph", "artifact"]
+            "description": "Output artifact kind. 'skill' is a Claude operational tool doc written under .claude/skills/.",
+            "enum": ["agent", "instructions", "reference", "skill", "setup-required", "builder", "graph", "artifact"]
           },
           "fallback_template": {
             "type": "string",
@@ -293,6 +294,10 @@
           "component_slug": {
             "type": ["string", "null"],
             "description": "For workstream expert agents: the component slug this file serves."
+          },
+          "tool_slug": {
+            "type": "string",
+            "description": "For tool docs (reference/skill): the tool spec slug used to resolve {TOOL_*} placeholders. 'tool-<name>' resolves from tool_agents; 'ref-<name>' from reference_tools."
           }
         }
       }

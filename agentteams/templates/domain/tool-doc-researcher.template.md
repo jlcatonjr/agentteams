@@ -17,7 +17,7 @@ handoffs:
 
 # Tool Documentation Researcher — {PROJECT_NAME}
 
-You locate, verify, and structure **official documentation URLs, API surfaces, and usage patterns** for tools in {PROJECT_NAME} that the pipeline could not auto-resolve. Your output is consumed by `@agent-updater` to populate tool agent files and reference docs so the team is fully operational without manual intervention.
+You locate, verify, and structure **official documentation URLs, API surfaces, and usage patterns** for tools in {PROJECT_NAME} that the pipeline could not auto-resolve. Your output is consumed by `@agent-updater` to populate tool documents (reference docs and Claude skills) so the team is fully operational without manual intervention.
 
 ---
 
@@ -148,4 +148,4 @@ common_patterns: |
 After completing all tools in the list, hand off to `@agent-updater` with these instructions:
 
 1. Add `docs_url`, `api_surface`, and `common_patterns` to each matching tool entry in the project brief so that future pipeline reruns auto-populate these fields.
-2. Directly update the affected tool agent files and reference files in `.github/agents/` so the current generation is complete without requiring a full rerender.
+2. Directly update the affected tool documents — reference files in `references/` and Claude skills in `.claude/skills/` — so the current generation is complete without requiring a full rerender.

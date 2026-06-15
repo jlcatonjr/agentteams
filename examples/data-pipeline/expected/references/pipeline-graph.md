@@ -65,8 +65,6 @@ flowchart LR
     class technical_validator domain
     tool_doc_researcher["Tool Documentation Researcher"]
     class tool_doc_researcher tool_specialist
-    tool_postgresql["Database Specialist"]
-    class tool_postgresql tool_specialist
     transform_expert["Transform Module Expert"]
     class transform_expert workstream_expert
     visual_designer["Visual Designer"]
@@ -184,11 +182,6 @@ flowchart LR
     module_doc_validator -.-> conflict_auditor
     tool_doc_researcher -->|"Update Brief and Generated Docs"| agent_updater
     tool_doc_researcher -->|"Return to Orchestrator"| orchestrator
-    tool_postgresql -->|"Validate Query Output"| technical_validator
-    tool_postgresql -->|"Security Clearance for Schema Change"| security
-    tool_postgresql -->|"Return to Orchestrator"| orchestrator
-    tool_postgresql -.-> technical_validator
-    tool_postgresql -.-> security
     ingest_expert -->|"Vet Brief Before Drafting"| adversarial
     ingest_expert -->|"Send to Primary Producer"| primary_producer
     ingest_expert -->|"Return to Orchestrator"| orchestrator
@@ -257,7 +250,6 @@ flowchart LR
 | `team-builder` | governance | Yes | read, edit, search, execute, todo |
 | `technical-validator` | domain | No | read, search |
 | `tool-doc-researcher` | tool_specialist | No | read, search |
-| `tool-postgresql` | tool_specialist | No | read, edit, execute, search |
 | `transform-expert` | workstream_expert | No | read, search, agent |
 | `visual-designer` | domain | No | read, edit, execute, search |
 | `weekly-report-expert` | workstream_expert | No | read, search, agent |
@@ -285,16 +277,15 @@ flowchart LR
 | `module-doc-author` | `module-doc-validator` | `conflict-auditor`, `module-doc-validator`, `orchestrator` |
 | `module-doc-validator` | `module-doc-author` | `conflict-auditor`, `module-doc-author`, `orchestrator` |
 | `navigator` | `orchestrator` | `orchestrator` |
-| `orchestrator` | `adversarial`, `agent-refactor`, `agent-updater`, `cleanup`, `code-hygiene`, `cohesion-repairer`, `conflict-auditor`, `conflict-resolution`, `content-enricher`, `format-converter`, `git-operations`, `ingest-expert`, `load-expert`, `module-doc-author`, `module-doc-validator`, `navigator`, `output-compiler`, `primary-producer`, `quality-auditor`, `repo-liaison`, `security`, `technical-validator`, `tool-doc-researcher`, `tool-postgresql`, `transform-expert`, `visual-designer`, `weekly-report-expert`, `work-summarizer` | `adversarial`, `agent-refactor`, `agent-updater`, `cleanup`, `code-hygiene`, `cohesion-repairer`, `conflict-auditor`, `conflict-resolution`, `format-converter`, `git-operations`, `navigator`, `output-compiler`, `primary-producer`, `quality-auditor`, `repo-liaison`, `security`, `technical-validator`, `visual-designer`, `work-summarizer` |
+| `orchestrator` | `adversarial`, `agent-refactor`, `agent-updater`, `cleanup`, `code-hygiene`, `cohesion-repairer`, `conflict-auditor`, `conflict-resolution`, `content-enricher`, `format-converter`, `git-operations`, `ingest-expert`, `load-expert`, `module-doc-author`, `module-doc-validator`, `navigator`, `output-compiler`, `primary-producer`, `quality-auditor`, `repo-liaison`, `security`, `technical-validator`, `tool-doc-researcher`, `transform-expert`, `visual-designer`, `weekly-report-expert`, `work-summarizer` | `adversarial`, `agent-refactor`, `agent-updater`, `cleanup`, `code-hygiene`, `cohesion-repairer`, `conflict-auditor`, `conflict-resolution`, `format-converter`, `git-operations`, `navigator`, `output-compiler`, `primary-producer`, `quality-auditor`, `repo-liaison`, `security`, `technical-validator`, `visual-designer`, `work-summarizer` |
 | `output-compiler` | `format-converter`, `orchestrator` | `format-converter`, `orchestrator`, `technical-validator` |
 | `primary-producer` | `content-enricher`, `ingest-expert`, `load-expert`, `orchestrator`, `quality-auditor`, `technical-validator`, `transform-expert`, `weekly-report-expert` | `cohesion-repairer`, `conflict-auditor`, `orchestrator`, `quality-auditor` |
 | `quality-auditor` | `cohesion-repairer`, `format-converter`, `orchestrator`, `primary-producer`, `visual-designer` | `cohesion-repairer`, `orchestrator`, `primary-producer` |
 | `repo-liaison` | `orchestrator` | `conflict-auditor`, `orchestrator`, `security` |
-| `security` | `code-hygiene`, `git-operations`, `orchestrator`, `repo-liaison`, `tool-postgresql` | `orchestrator` |
+| `security` | `code-hygiene`, `git-operations`, `orchestrator`, `repo-liaison` | `orchestrator` |
 | `team-builder` | — | — |
-| `technical-validator` | `conflict-auditor`, `content-enricher`, `orchestrator`, `output-compiler`, `tool-postgresql`, `work-summarizer` | `conflict-auditor`, `orchestrator`, `primary-producer` |
+| `technical-validator` | `conflict-auditor`, `content-enricher`, `orchestrator`, `output-compiler`, `work-summarizer` | `conflict-auditor`, `orchestrator`, `primary-producer` |
 | `tool-doc-researcher` | — | `agent-updater`, `orchestrator` |
-| `tool-postgresql` | — | `orchestrator`, `security`, `technical-validator` |
 | `transform-expert` | — | `adversarial`, `orchestrator`, `primary-producer` |
 | `visual-designer` | `orchestrator` | `format-converter`, `orchestrator`, `quality-auditor` |
 | `weekly-report-expert` | — | `adversarial`, `orchestrator`, `primary-producer` |
@@ -337,7 +328,6 @@ digraph "SalesDataPipeline Agent Team" {
     "team-builder" [label="Team Builder", fillcolor="#e8e8ff"];
     "technical-validator" [label="Technical Validator", fillcolor="#e8ffe8"];
     "tool-doc-researcher" [label="Tool Documentation Researcher", fillcolor="#ffe8e8"];
-    "tool-postgresql" [label="Database Specialist", fillcolor="#ffe8e8"];
     "transform-expert" [label="Transform Module Expert", fillcolor="#fff8e8"];
     "visual-designer" [label="Visual Designer", fillcolor="#e8ffe8"];
     "weekly-report-expert" [label="Weekly Summary Report Expert", fillcolor="#fff8e8"];
@@ -423,9 +413,6 @@ digraph "SalesDataPipeline Agent Team" {
     "module-doc-validator" -> "orchestrator" [style=solid, label="Return to Orchestrator"];
     "tool-doc-researcher" -> "agent-updater" [style=solid, label="Update Brief and Generated Docs"];
     "tool-doc-researcher" -> "orchestrator" [style=solid, label="Return to Orchestrator"];
-    "tool-postgresql" -> "technical-validator" [style=solid, label="Validate Query Output"];
-    "tool-postgresql" -> "security" [style=solid, label="Security Clearance for Schema Change"];
-    "tool-postgresql" -> "orchestrator" [style=solid, label="Return to Orchestrator"];
     "ingest-expert" -> "adversarial" [style=solid, label="Vet Brief Before Drafting"];
     "ingest-expert" -> "primary-producer" [style=solid, label="Send to Primary Producer"];
     "ingest-expert" -> "orchestrator" [style=solid, label="Return to Orchestrator"];
@@ -698,17 +685,6 @@ digraph "SalesDataPipeline Agent Team" {
       "user_invokable": false,
       "tools": [
         "read",
-        "search"
-      ]
-    },
-    "tool-postgresql": {
-      "display_name": "Database Specialist",
-      "agent_type": "tool_specialist",
-      "user_invokable": false,
-      "tools": [
-        "read",
-        "edit",
-        "execute",
         "search"
       ]
     },
@@ -1412,36 +1388,6 @@ digraph "SalesDataPipeline Agent Team" {
       "label": "Return to Orchestrator"
     },
     {
-      "source": "tool-postgresql",
-      "target": "technical-validator",
-      "edge_type": "handoff",
-      "label": "Validate Query Output"
-    },
-    {
-      "source": "tool-postgresql",
-      "target": "security",
-      "edge_type": "handoff",
-      "label": "Security Clearance for Schema Change"
-    },
-    {
-      "source": "tool-postgresql",
-      "target": "orchestrator",
-      "edge_type": "handoff",
-      "label": "Return to Orchestrator"
-    },
-    {
-      "source": "tool-postgresql",
-      "target": "technical-validator",
-      "edge_type": "agents-list",
-      "label": null
-    },
-    {
-      "source": "tool-postgresql",
-      "target": "security",
-      "edge_type": "agents-list",
-      "label": null
-    },
-    {
       "source": "ingest-expert",
       "target": "adversarial",
       "edge_type": "handoff",
@@ -1713,11 +1659,6 @@ digraph "SalesDataPipeline Agent Team" {
     "tool-doc-researcher": [
       "agent-updater",
       "orchestrator"
-    ],
-    "tool-postgresql": [
-      "orchestrator",
-      "security",
-      "technical-validator"
     ],
     "ingest-expert": [
       "adversarial",

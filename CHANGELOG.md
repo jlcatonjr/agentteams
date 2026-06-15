@@ -6,6 +6,28 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### changed
+
+- **Tools are documents, never agents.** Operational tools (databases, CLIs,
+  build systems) previously generated full `tool-<slug>.agent.md` specialist
+  *agents*. They now generate **documents**: Copilot targets emit
+  `references/ref-<tool>-reference.md` (with full operational depth — config,
+  invocation, verification); Claude targets emit a skill at
+  `.claude/skills/tool-<tool>.md`. Library/framework tools remain lightweight
+  reference docs. Tool slugs are no longer added to the orchestrator's
+  `agents:` handoff roster (a tool is a resource, not a handoff target).
+  - New `domain/tool-*.doc.template.md` templates carry the operational body
+    without agent front matter / handoffs.
+  - Manifest `output_files` gain a `"skill"` type and a per-tool `tool_slug`;
+    the `tool_agents` manifest key and `detect_tool_agents()` name are retained
+    for backward compatibility (they now describe tool *docs*, not agents).
+  - **Migration:** legacy `tool-<slug>.agent.md` files are removed on
+    `--update --overwrite` (backed up first) and flagged with a notice under
+    `--update --merge`. Supersedes the earlier note that "specialist-tier tools
+    never emit a `references/{slug}-reference.md`".
+  - Backup/restore now preserves out-of-tree files (`../skills/*`, `../CLAUDE.md`)
+    under an `__external__/` prefix so they round-trip to the correct location.
+
 ### added
 
 - **`--fleet DIR` — first-class multi-workspace fleet update.** Runs

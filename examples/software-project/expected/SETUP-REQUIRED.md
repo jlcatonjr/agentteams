@@ -58,8 +58,8 @@ agent files and replace with the correct value.
 
 ## 6. `{TOOL_DOCS_URL}`
 
-**Found in:** `tool-postgresql.agent.md`
-**Context:** The specialist agent for 'PostgreSQL' is missing a official documentation URL. Add it to the tools[] entry in the project brief or extend the built-in tool metadata catalog.
+**Found in:** `references/ref-postgresql-reference.md`
+**Context:** The reference document for 'PostgreSQL' is missing a official documentation URL. Add it to the tools[] entry in the project brief or extend the built-in tool metadata catalog.
 
 **Action required:** Search for `{MANUAL:TOOL_DOCS_URL}` across all generated
 agent files and replace with the correct value.
@@ -68,8 +68,8 @@ agent files and replace with the correct value.
 
 ## 7. `{TOOL_API_SURFACE}`
 
-**Found in:** `tool-postgresql.agent.md`
-**Context:** The specialist agent for 'PostgreSQL' is missing a project-relevant API surface summary. Add it to the tools[] entry in the project brief or extend the built-in tool metadata catalog.
+**Found in:** `references/ref-postgresql-reference.md`
+**Context:** The reference document for 'PostgreSQL' is missing a project-relevant API surface summary. Add it to the tools[] entry in the project brief or extend the built-in tool metadata catalog.
 
 **Action required:** Search for `{MANUAL:TOOL_API_SURFACE}` across all generated
 agent files and replace with the correct value.
@@ -78,8 +78,8 @@ agent files and replace with the correct value.
 
 ## 8. `{TOOL_COMMON_PATTERNS}`
 
-**Found in:** `tool-postgresql.agent.md`
-**Context:** The specialist agent for 'PostgreSQL' is missing a tool-specific usage patterns and pitfalls. Add it to the tools[] entry in the project brief or extend the built-in tool metadata catalog.
+**Found in:** `references/ref-postgresql-reference.md`
+**Context:** The reference document for 'PostgreSQL' is missing a tool-specific usage patterns and pitfalls. Add it to the tools[] entry in the project brief or extend the built-in tool metadata catalog.
 
 **Action required:** Search for `{MANUAL:TOOL_COMMON_PATTERNS}` across all generated
 agent files and replace with the correct value.

@@ -82,7 +82,7 @@ Classify a single tool dict as `'specialist'`, `'reference'`, or `'passive'`.
 
 - `tool` (`dict[str, Any]`) — Tool dict with at minimum a `name` key.
 
-**Returns:** `str` — `'specialist'` (gets a dedicated tool agent), `'reference'` (gets a reference file), or `'passive'` (no dedicated artifact).
+**Returns:** `str` — `'specialist'` (operational tool doc: reference on Copilot, skill on Claude), `'reference'` (lightweight reference file), or `'passive'` (no dedicated artifact). Tools are never generated as agents.
 
 ---
 
@@ -90,13 +90,13 @@ Classify a single tool dict as `'specialist'`, `'reference'`, or `'passive'`.
 
 > *Source: `agentteams/analyze.py`*
 
-Return tool dicts classified as requiring a dedicated tool-specialist agent.
+Return specs for operational tool *documents* (reference docs / Claude skills). Name retained for backward compatibility; tools are never agents.
 
 **Args:**
 
 - `tools` (`list[dict[str, Any]]`) — List of tool dicts from the project description.
 
-**Returns:** `list[dict[str, Any]]` — Specialist-tier tool agent specs (not raw input tool dicts), each including `slug`, `tool_name`, `tool_version`, `tool_category`, `config_files`, `invocation_command`, `invocation_target`, `docs_url`, `api_surface`, and `common_patterns`.
+**Returns:** `list[dict[str, Any]]` — Operational tool-doc specs (not raw input tool dicts), each including `slug`, `tool_name`, `tool_version`, `tool_category`, `config_files`, `invocation_command`, `invocation_target`, `docs_url`, `api_surface`, and `common_patterns`.
 
 ---
 

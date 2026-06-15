@@ -252,24 +252,31 @@ To add a new domain archetype (e.g., `data-validator`):
 
 ## 5. Tool Classification Tiers
 
-When adding a tool entry to a project brief, the rendering engine classifies it into one of three tiers:
+Tools are resources agents **use** — they are never generated as agents. When
+adding a tool entry to a project brief, the rendering engine classifies it into
+one of three tiers, and the document type depends on the target framework:
 
-| Tier | Criteria | Output |
-|------|----------|--------|
-| **Specialist** | `needs_specialist_agent: true`, or category in `database`, `deployment`, `pipeline`, `compiler` | Full `.agent.md` specialist agent |
-| **Reference** | `needs_specialist_agent: false` (default), category in `framework`, `library`, `api`, `cli` | Lightweight `references/ref-{tool}-reference.md` |
-| **Passive** | `needs_specialist_agent: false`, category in `language`, `other` | Listed in copilot-instructions only |
+| Tier | Criteria | Copilot output | Claude output |
+|------|----------|----------------|---------------|
+| **Operational** | `needs_specialist_agent: true`, or category in `database`, `cli`, `build-system` | `references/ref-{tool}-reference.md` (operational depth) | `.claude/skills/tool-{tool}.md` (skill) |
+| **Reference** | `needs_specialist_agent: false` (default), category in `framework`, `library` | Lightweight `references/ref-{tool}-reference.md` | same |
+| **Passive** | `needs_specialist_agent: false`, category in `language`, `other` | Listed in instructions only | Listed in `CLAUDE.md` only |
 
-To override automatic classification, set `"needs_specialist_agent": true` in the tool definition.
+To force a tool into the operational tier, set `"needs_specialist_agent": true`.
 
-Specialist agents use the category-specific template:
-- `tool-database.template.md` — for `database` category
-- `tool-cli.template.md` — for `cli` and `deployment` category
-- `tool-build-system.template.md` — for `compiler` and `build` category
-- `tool-specific.template.md` — fallback for all other specialist categories
+Operational tool docs use the category-specific **`.doc` template** (no YAML
+front matter, no handoffs, no agent persona — the body is reused verbatim as a
+Copilot reference doc, or wrapped with skill front matter for Claude):
+- `tool-database.doc.template.md` — for `database` category
+- `tool-cli.doc.template.md` — for `cli` and `deployment` category
+- `tool-build-system.doc.template.md` — for `build-system`/`compiler`/`build` category
+- `tool-specific.doc.template.md` — fallback for all other operational categories
 
 Reference-tier tools generate a lightweight reference file (no YAML front matter, no agent persona) using:
 - `tool-reference.template.md` — all reference-tier tools; written to `references/ref-{tool}-reference.md`
+
+> Legacy `tool-{tool}.agent.md` files from earlier generations are migrated away
+> on `--update` (deleted under `--overwrite`, notice-only under `--merge`).
 
 ---
 

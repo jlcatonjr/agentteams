@@ -51,7 +51,7 @@ Ask for:
 ### Section 5: Technology Stack
 Ask for:
 - Tools, languages, or frameworks the project uses
-- Whether any tool is specialized enough to need a dedicated tool specialist agent
+- Whether any tool is operational enough to need a dedicated tool document (a skill, or a reference doc)
 
 ### Section 6: Reference and Citation
 Ask for:

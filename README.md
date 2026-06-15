@@ -257,7 +257,7 @@ Key fields:
 - `primary_output_dir` — where authored files live
 - `components` — one per workstream; each generates a dedicated expert agent
 - `authority_sources` — files agents treat as ground truth
-- `tools` — languages and frameworks; tools with `needs_specialist_agent: true` get their own agent
+- `tools` — languages and frameworks; operational tools get a dedicated reference/skill **document** (never an agent)
 
 Markdown brief format is also accepted — see [examples/research-project/brief.json](examples/research-project/brief.json) for reference.
 
@@ -285,7 +285,9 @@ Coordinates all workflows. Enforces security, consistency, and voice fidelity ru
 | `visual-designer` | Projects with diagrams or figures |
 | `module-doc-author` | Projects with `pip_package_name` or PyPI distribution |
 | `module-doc-validator` | Projects with `pip_package_name` or PyPI distribution |
-| `tool-specific` | Tools with `needs_specialist_agent: true` |
+
+> Tools are **not** agents. Operational tools (databases, CLIs, build systems)
+> become reference/skill **documents** — see [Tool Classification](#tool-classification).
 
 ### Tier 4: Workstream Experts
 One generated per component. Prepares Component Briefs, reviews drafts, issues ACCEPT/REVISE verdicts.
@@ -497,15 +499,20 @@ The protocol: run `--check` → re-render with `--update --merge` if drift found
 
 ## Tool Classification
 
-Tools declared in the brief are classified into three tiers:
+Tools are resources agents **use** — they are never generated as agents. Tools
+declared in the brief are classified into three tiers, and the document type
+depends on the target framework:
 
-| Tier | When | Output |
-|------|------|--------|
-| **Specialist agent** | `needs_specialist_agent: true` or category = `database`, `deployment`, `pipeline`, `compiler` | Full `.agent.md` with category-specific template |
-| **Reference file** | Default for `framework`, `library`, `api`, `cli` | `references/ref-{tool}-reference.md` |
-| **Passive** | `language`, `other` | Listed in `copilot-instructions.md` only |
+| Tier | When | Copilot output | Claude output |
+|------|------|----------------|---------------|
+| **Operational** | `needs_specialist_agent: true` or category = `database`, `cli`, `build-system` | `references/ref-{tool}-reference.md` (operational depth) | `.claude/skills/tool-{tool}.md` (skill) |
+| **Reference** | Default for `framework`, `library` | `references/ref-{tool}-reference.md` (lightweight) | `references/ref-{tool}-reference.md` |
+| **Passive** | `language`, `other` | Listed in `copilot-instructions.md` only | Listed in `CLAUDE.md` only |
 
-For Claude targets, passive tool context is listed in `CLAUDE.md`.
+Operational tool docs preserve config / invocation / verification procedures but
+carry no agent front matter, handoffs, or routing. Legacy `tool-*.agent.md`
+files from earlier generations are migrated away on `--update` (removed under
+`--overwrite`, flagged with a notice under `--merge`).
 
 The engine also parses dependency manifests (`requirements.txt`, `pyproject.toml`, `package.json`, `Cargo.toml`, `go.mod`) from the project directory to detect tools automatically.
 

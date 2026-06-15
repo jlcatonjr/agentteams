@@ -169,10 +169,10 @@ handoffs:
 │   │   ├── reference-manager.template.md
 │   │   ├── output-compiler.template.md
 │   │   ├── visual-designer.template.md
-│   │   ├── tool-specific.template.md        # Tool agent — generic fallback
-│   │   ├── tool-build-system.template.md    # Tool agent — build systems
-│   │   ├── tool-database.template.md        # Tool agent — databases
-│   │   ├── tool-cli.template.md             # Tool agent — CLI/deployment tools
+│   │   ├── tool-specific.doc.template.md    # Operational tool doc — generic fallback (ref doc / skill)
+│   │   ├── tool-build-system.doc.template.md # Operational tool doc — build systems
+│   │   ├── tool-database.doc.template.md    # Operational tool doc — databases
+│   │   ├── tool-cli.doc.template.md         # Operational tool doc — CLI/deployment tools
 │   │   └── tool-reference.template.md       # Reference-tier lightweight reference files
 │   ├── workstream-expert.template.md   # Instantiated once per project component
 │   └── copilot-instructions.template.md

@@ -29,7 +29,6 @@ agents:
   - module-doc-author
   - module-doc-validator
   - tool-doc-researcher
-  - tool-pandoc
   - ch01-introduction-expert
   - ch02-literature-expert
 model: ["Claude Opus 4.8 (copilot)"]

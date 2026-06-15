@@ -72,6 +72,10 @@ def _run_pipeline(brief_path: Path, tmp_path: Path, framework: str = "copilot-vs
             file_type = "builder"
         elif rel_path.startswith("references/") or "/references/" in rel_path:
             file_type = "reference"
+        elif rel_path.startswith("../skills/") or "/skills/" in rel_path:
+            from pathlib import Path as _Path
+            file_type = "skill"
+            content = adapter.render_skill_file(content, _Path(rel_path).stem, manifest)
         else:
             from pathlib import Path as _Path
             slug = _Path(rel_path).stem.replace(".agent", "")
@@ -1230,3 +1234,37 @@ def test_build_log_schema_v12(tmp_path):
     assert "manifest_fingerprint" in log
     assert log["agent_slug_list"] == ["orchestrator", "navigator"]
     assert log["governance_agents"] == ["navigator"]
+
+
+# ---------------------------------------------------------------------------
+# Tools as documents (not agents)
+# ---------------------------------------------------------------------------
+
+def test_claude_operational_tool_becomes_skill(tmp_path):
+    """A claude build emits an operational tool as a .claude/skills/ skill, not an agent."""
+    brief = EXAMPLES_DIR / "data-pipeline" / "brief.json"
+    if not brief.exists():
+        pytest.skip("data-pipeline example not found")
+    _run_pipeline(brief, tmp_path, framework="claude")
+    # Skill lands one level above the agents dir (../skills/), mirroring CLAUDE.md.
+    skill = tmp_path.parent / "skills" / "tool-postgresql.md"
+    assert skill.exists(), "operational tool must be emitted as a skill"
+    text = skill.read_text(encoding="utf-8")
+    assert text.startswith("---\nname: tool-postgresql\n")
+    assert "description:" in text.split("---", 2)[1]
+    # Never an agent.
+    assert not (tmp_path / "tool-postgresql.agent.md").exists()
+    assert not (tmp_path / "tool-postgresql.md").exists()
+
+
+def test_copilot_operational_tool_becomes_reference(tmp_path):
+    """A copilot build emits an operational tool as a reference doc, not an agent."""
+    brief = EXAMPLES_DIR / "data-pipeline" / "brief.json"
+    if not brief.exists():
+        pytest.skip("data-pipeline example not found")
+    _run_pipeline(brief, tmp_path, framework="copilot-vscode")
+    ref = tmp_path / "references" / "ref-postgresql-reference.md"
+    assert ref.exists(), "operational tool must be emitted as a reference doc"
+    assert not (tmp_path / "tool-postgresql.agent.md").exists()
+    # Reference docs carry no agent/skill front matter.
+    assert not ref.read_text(encoding="utf-8").startswith("---")

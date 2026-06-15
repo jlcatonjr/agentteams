@@ -40,7 +40,7 @@ Builds the **team manifest** from the description dict. Key decisions made in th
 
 - **Project type classification** — determines whether the project is software, writing, data-pipeline, research, or documentation
 - **Archetype selection** — picks the right domain agent mix from the template library
-- **Tool importance classification** — decides whether each tool gets a specialist agent, a reference file, or no dedicated agent
+- **Tool importance classification** — decides whether each tool gets an operational doc (reference/skill), a lightweight reference, or no dedicated artifact (tools are never agents)
 - **Authority hierarchy construction** — orders sources by rank for the agents to cite
 - **Placeholder resolution** — auto-fills all `{UPPER_SNAKE_CASE}` tokens; flags `{MANUAL:*}` tokens for human review
 

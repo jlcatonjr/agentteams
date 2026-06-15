@@ -203,17 +203,18 @@ Each tool:
 
 **Tool categories and their effects:**
 
-| Category | Default tier | Override with `needs_specialist_agent` |
-|----------|-------------|----------------------------------------|
-| `language` | Passive (listed only) | — |
-| `framework` | Reference file | Set `true` for full agent |
-| `library` | Reference file | Set `true` for full agent |
-| `cli` | Reference file | Set `true` for full agent |
-| `database` | Specialist agent | Set `false` to downgrade |
-| `deployment` | Specialist agent | Set `false` to downgrade |
-| `pipeline` | Specialist agent | Set `false` to downgrade |
-| `compiler` | Specialist agent | Set `false` to downgrade |
-| `other` | Passive | Set `true` for full agent |
+Tools are documents, never agents. Operational tools become a reference doc
+(Copilot) or a skill (Claude); library/framework tools become reference docs.
+
+| Category | Default tier | Output (Copilot / Claude) | Override |
+|----------|-------------|---------------------------|----------|
+| `language` | Passive (listed only) | — | Set `true` for an operational doc |
+| `framework` | Reference | `references/ref-<tool>-reference.md` / same | Set `true` for an operational doc |
+| `library` | Reference | `references/ref-<tool>-reference.md` / same | Set `true` for an operational doc |
+| `cli` | Operational | `references/ref-<tool>-reference.md` / `.claude/skills/tool-<tool>.md` | Set `false` to downgrade |
+| `database` | Operational | `references/ref-<tool>-reference.md` / `.claude/skills/tool-<tool>.md` | Set `false` to downgrade |
+| `build-system` | Operational | `references/ref-<tool>-reference.md` / `.claude/skills/tool-<tool>.md` | Set `false` to downgrade |
+| `other` | Passive | — | Set `true` for an operational doc |
 
 **Auto-detection:** If `--project` points to an existing directory, the engine also scans `requirements.txt`, `pyproject.toml`, `package.json`, `Cargo.toml`, and `go.mod` to supplement the tools list.
 
@@ -289,7 +290,7 @@ src/
 ## Tools
 - Python 3.11
 - FastAPI (framework)
-- PostgreSQL 15 (database, specialist agent required)
+- PostgreSQL 15 (database, operational tool doc)
 
 ## Style Rules
 - All public functions must have docstrings
@@ -308,7 +309,7 @@ The Markdown parser uses section headings to identify fields. Unrecognized secti
 | Mistake | Effect | Fix |
 |---------|--------|-----|
 | Omitting `components` | No workstream experts generated | Add one component per major deliverable |
-| Using `needs_specialist_agent: true` on `language` tools | Generates an agent for "Python" | Set only on tools with real operational complexity |
+| Using `needs_specialist_agent: true` on `language` tools | Generates a tool doc for "Python" | Set only on tools with real operational complexity |
 | Setting `reference_db_path` when no bib file exists | reference-manager agent generated but non-functional | Set to null if the bib file doesn't exist yet |
 | Component slugs with spaces | Invalid file names | Use hyphens: `auth-module`, not `auth module` |
 | Long `project_goal` | Agent files become verbose | Keep to 1–3 sentences; use `components` for detail |

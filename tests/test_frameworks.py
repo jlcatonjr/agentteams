@@ -601,3 +601,66 @@ def test_claude_adapter_get_agents_dir_is_path_object():
     adapter = ClaudeAdapter()
     result = adapter.get_agents_dir(Path("/some/project"))
     assert isinstance(result, Path)
+
+
+# ---------------------------------------------------------------------------
+# Tool docs as skills (Claude) vs reference docs (Copilot)
+# ---------------------------------------------------------------------------
+
+_TOOL_DOC_BODY = """\
+# PostgreSQL — Database Reference — TestProject
+
+> Operational reference for **PostgreSQL 15**.
+
+## Key API Surface
+
+<!-- AGENTTEAMS:BEGIN tool_api_surface v=1 -->
+SELECT, INSERT, CREATE TABLE
+<!-- AGENTTEAMS:END tool_api_surface -->
+
+## Schema Management
+
+1. Versioned migrations only
+"""
+
+_SKILL_MANIFEST = {
+    "project_name": "TestProject",
+    "framework": "claude",
+    "tool_agents": [{"slug": "tool-postgresql", "tool_name": "PostgreSQL"}],
+}
+
+
+def test_claude_render_skill_file_injects_front_matter():
+    """Claude skills get name + description front matter; body is preserved."""
+    out = ClaudeAdapter().render_skill_file(_TOOL_DOC_BODY, "tool-postgresql", _SKILL_MANIFEST)
+    assert out.startswith("---\n")
+    assert "name: tool-postgresql" in out
+    assert "description:" in out
+    assert "PostgreSQL" in out  # description derived from tool_name
+    # No agent-only keys leak into a skill.
+    fm = out.split("---", 2)[1]
+    assert "allowed-tools" not in fm
+    assert "handoffs" not in fm
+    # Operational body + fence preserved.
+    assert "## Schema Management" in out
+    assert "AGENTTEAMS:BEGIN tool_api_surface" in out
+
+
+def test_claude_render_skill_file_strips_stray_front_matter_and_handoffs():
+    """A stray agent front matter / handoff block is removed before re-wrapping."""
+    stray = (
+        "---\nname: Old Agent\nhandoffs:\n  - label: x\n    agent: y\n---\n"
+        "## Handoff Instructions\n- hand off to @z\n\n" + _TOOL_DOC_BODY
+    )
+    out = ClaudeAdapter().render_skill_file(stray, "tool-postgresql", _SKILL_MANIFEST)
+    assert "Old Agent" not in out
+    assert "Handoff Instructions" not in out
+    assert out.count("---\n") >= 2  # exactly one (new) front matter block at top
+    assert out.startswith("---\nname: tool-postgresql\n")
+
+
+def test_base_adapter_render_skill_file_is_noop_for_copilot():
+    """Copilot adapters never emit skills — default render_skill_file is identity."""
+    body = _TOOL_DOC_BODY
+    assert CopilotVSCodeAdapter().render_skill_file(body, "tool-postgresql", {}) == body
+    assert CopilotCLIAdapter().render_skill_file(body, "tool-postgresql", {}) == body

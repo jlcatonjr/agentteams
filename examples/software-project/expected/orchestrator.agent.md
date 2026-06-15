@@ -24,7 +24,6 @@ agents:
   - format-converter
   - output-compiler
   - tool-doc-researcher
-  - tool-postgresql
   - auth-module-expert
   - tasks-api-expert
 model: ["Claude Opus 4.8 (copilot)"]

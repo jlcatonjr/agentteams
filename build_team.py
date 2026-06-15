@@ -1218,10 +1218,14 @@ def main(argv: list[str] | None = None) -> int:
             for f in manifest.get("output_files", [])
             if isinstance(f, dict) and str(f.get("path", "")).endswith(_suffix)
         }
+        # Legacy tool-<slug>.agent.md files are migrated to docs/skills, not
+        # adopted as agents — never pull them back into the roster.
+        _tool_doc_slugs = {ta["slug"] for ta in manifest.get("tool_agents", [])}
         _orphan_slugs = sorted(
             p.name[: -len(_suffix)]
             for p in output_dir.glob("*.agent.md")
             if p.name[: -len(_suffix)] not in _emitted
+            and p.name[: -len(_suffix)] not in _tool_doc_slugs
         )
         _adopted = analyze.adopt_orphan_agents(manifest, _orphan_slugs)
         if _adopted:
@@ -1566,6 +1570,23 @@ def main(argv: list[str] | None = None) -> int:
                 )
             update_rendered.append((rel_path, content))
 
+        # Migrate away legacy tool-*.agent.md files: tools are now emitted as
+        # reference/skill documents, never agents. Runs before the converged
+        # early-exit (and before the orphan advisory) so migration happens even
+        # when there is no content drift. Overwrite deletes (after backup);
+        # merge leaves a notice.
+        _removed_tool_agents, _stale_notices = _remove_stale_tool_agents(
+            manifest, output_dir, framework_id,
+            overwrite=args.overwrite, dry_run=args.dry_run,
+        )
+        for _n in _stale_notices:
+            print(f"  ⚠  {_n}", file=sys.stderr)
+        if _removed_tool_agents and not args.dry_run:
+            print(
+                f"  ✓  Removed {len(_removed_tool_agents)} legacy tool-agent file(s) "
+                "(tools are now reference/skill documents)."
+            )
+
         if not update_rendered:
             # RA1: a converged team (manifest_changed but every fingerprint-only
             # promotion demoted, no real drift) must still heal its stale
@@ -1637,9 +1658,16 @@ def main(argv: list[str] | None = None) -> int:
         # Adopted orphans (--adopt-orphans) are deliberately not emitted but are
         # now roster members — don't re-report them as orphaned.
         _adopted_names = {f"{s}.agent.md" for s in manifest.get("adopted_agents", [])}
+        # Tool docs are never agents — exclude any tool-<slug>.agent.md whose tool
+        # is in the current team from the orphan scan (handled by migration above).
+        _tool_doc_agent_names = {
+            f"{ta['slug']}.agent.md" for ta in manifest.get("tool_agents", [])
+        }
         _orphan_agents = sorted(
             f.name for f in output_dir.glob("*.agent.md")
-            if f.name not in _emitted_agent_names and f.name not in _adopted_names
+            if f.name not in _emitted_agent_names
+            and f.name not in _adopted_names
+            and f.name not in _tool_doc_agent_names
         )
         if _orphan_agents:
             print(
@@ -3120,6 +3148,9 @@ def _build_final_rendered(
             content = adapter.render_agent_file(content, slug, manifest)
         elif file_type == "instructions":
             content = adapter.render_instructions_file(content, manifest)
+        elif file_type == "skill":
+            slug = Path(rel_path).stem
+            content = adapter.render_skill_file(content, slug, manifest)
         final_path = adapter.finalize_output_path(rel_path, file_type)
         final.append((final_path, content))
 
@@ -3170,6 +3201,82 @@ def _make_content_matches(
     return _matches
 
 
+def _stale_tool_agent_paths(
+    manifest: dict[str, Any],
+    output_dir: Path,
+    framework_id: str,
+) -> list[Path]:
+    """Return existing legacy tool-AGENT files for tools now emitted as docs.
+
+    Targets only the exact `tool-<slug>` agent file for each tool the current
+    team carries (copilot: `tool-<slug>.agent.md`; claude: `tool-<slug>.md` in
+    the agents dir) — never touches unrelated agents.
+    """
+    suffix = ".md" if framework_id == "claude" else ".agent.md"
+    paths: list[Path] = []
+    for ta in manifest.get("tool_agents", []):
+        slug = ta.get("slug", "")
+        if not slug:
+            continue
+        candidate = output_dir / f"{slug}{suffix}"
+        if candidate.is_file():
+            paths.append(candidate)
+    return paths
+
+
+def _remove_stale_tool_agents(
+    manifest: dict[str, Any],
+    output_dir: Path,
+    framework_id: str,
+    *,
+    overwrite: bool,
+    dry_run: bool,
+) -> tuple[list[str], list[str]]:
+    """Migrate legacy tool-*.agent.md files (tools are now docs/skills).
+
+    Overwrite mode backs the files up then deletes them; otherwise a notice is
+    returned and the file is left in place. Returns (removed_paths, notices).
+    """
+    stale = _stale_tool_agent_paths(manifest, output_dir, framework_id)
+    if not stale:
+        return [], []
+    if dry_run:
+        for p in stale:
+            print(f"[DRY RUN] REMOVE (legacy tool agent → now a doc) {p}")
+        return [str(p) for p in stale], []
+    if not overwrite:
+        return [], [
+            f"legacy tool agent {p.name} remains on disk — {p.stem} is now a tool "
+            f"document; re-run with --overwrite to remove it."
+            for p in stale
+        ]
+    # Overwrite: back up before deleting so any hand edits are recoverable.
+    rels: list[str] = []
+    for p in stale:
+        try:
+            rels.append(str(p.relative_to(output_dir)))
+        except ValueError:
+            rels.append(p.name)
+    try:
+        emit.backup_output_dir(
+            output_dir,
+            files_to_backup=rels,
+            reason="stale-tool-agent-removal",
+            framework=framework_id,
+        )
+    except Exception as exc:  # backup is best-effort; never block the migration
+        print(f"  !  stale tool-agent backup failed: {exc}", file=sys.stderr)
+    removed: list[str] = []
+    notices: list[str] = []
+    for p in stale:
+        try:
+            p.unlink()
+            removed.append(str(p))
+        except OSError as exc:
+            notices.append(f"could not remove legacy tool agent {p}: {exc}")
+    return removed, notices
+
+
 def _guess_file_type(rel_path: str) -> str:
     lower = rel_path.lower()
     if "copilot-instructions" in lower or rel_path.endswith("/CLAUDE.md") or rel_path == "../CLAUDE.md":
@@ -3178,6 +3285,8 @@ def _guess_file_type(rel_path: str) -> str:
         return "setup-required"
     if "team-builder" in rel_path:
         return "builder"
+    if rel_path.startswith("../skills/") or "/skills/" in rel_path:
+        return "skill"
     if rel_path.startswith("references/") or "/references/" in rel_path:
         return "reference"
     return "agent"

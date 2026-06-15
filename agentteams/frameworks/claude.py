@@ -68,6 +68,20 @@ class ClaudeAdapter(FrameworkAdapter):
     def render_instructions_file(self, content: str, manifest: dict[str, Any]) -> str:
         return content
 
+    def render_skill_file(self, content: str, slug: str, manifest: dict[str, Any]) -> str:
+        """Produce a Claude Code skill file from an operational tool-doc body.
+
+        Tool docs are authored without front matter (so the Copilot target can
+        reuse them verbatim as reference docs). For Claude we strip any stray
+        front matter / handoffs and prepend a minimal skill front matter block
+        (name + description) — the same flat-file shape as the recall and
+        todo-from-plan skills.
+        """
+        content = self._strip_yaml_front_matter(content)
+        content = self._strip_handoffs_section(content)
+        description = _skill_description(slug, manifest)
+        return _inject_skill_front_matter(content, slug, description).strip() + "\n"
+
     def get_file_extension(self, file_type: str) -> str:
         return ".md"
 
@@ -136,6 +150,34 @@ def _inject_claude_front_matter(content: str, name: str, description: str) -> st
     if description:
         lines.append(f'description: "{description}"')
     lines.append(f"allowed-tools: {_CLAUDE_DEFAULT_ALLOWED_TOOLS}")
+    lines.append("---")
+    lines.append("")
+    return "\n".join(lines) + content
+
+
+def _skill_description(slug: str, manifest: dict[str, Any]) -> str:
+    """Build a one-line skill description from the tool-doc spec, if present."""
+    tool_name = ""
+    for ta in manifest.get("tool_agents", []):
+        if ta.get("slug") == slug:
+            tool_name = ta.get("tool_name", "")
+            break
+    label = tool_name or FrameworkAdapter._slug_to_name(slug)
+    project = manifest.get("project_name", "")
+    suffix = f" in {project}" if project else ""
+    return (
+        f"{label} operational reference{suffix} — configuration, API surface, "
+        f"invocation, and verification. Consult when working with {label}."
+    )
+
+
+def _inject_skill_front_matter(content: str, slug: str, description: str) -> str:
+    """Prepend a Claude Code skill front matter block (name + description)."""
+    lines = ["---", f"name: {slug}"]
+    if description:
+        # Escape embedded double quotes so the YAML scalar stays well-formed.
+        safe = description.replace('"', '\\"')
+        lines.append(f'description: "{safe}"')
     lines.append("---")
     lines.append("")
     return "\n".join(lines) + content

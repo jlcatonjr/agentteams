@@ -205,12 +205,14 @@ def build_manifest(description: dict[str, Any], *, framework: str = "copilot-vsc
     # Workstream expert slugs
     workstream_expert_slugs = [f"{c['slug']}-expert" for c in components]
 
-    # Tool-specific agent slugs
-    tool_agent_slugs = [ta["slug"] for ta in tool_agents]
+    # Tool docs are reference/skill documents, NOT agents — they are never
+    # added to the orchestrator's `agents:` handoff roster. Including their
+    # slugs here would make the orchestrator advertise handoffs to `@tool-*`
+    # targets that no `.agent.md` backs, tripping audit AR_DANGLING_AGENT_SLUG.
 
-    # All domain agent slugs (always-included + archetypes + tool-specific)
+    # All domain agent slugs (always-included + archetypes only)
     domain_agent_slugs = _dedupe_keep_order(
-        ALWAYS_INCLUDED_DOMAIN_AGENTS + list(archetypes) + tool_agent_slugs
+        ALWAYS_INCLUDED_DOMAIN_AGENTS + list(archetypes)
     )
 
     # Full slug list for orchestrator
@@ -250,7 +252,7 @@ def build_manifest(description: dict[str, Any], *, framework: str = "copilot-vsc
         diagram_tools=diagram_tools,
         diagram_extension=diagram_extension,
         component_slug="<component-slug>",
-        unresolved_tool_list=_format_unresolved_tool_list(tool_agents, reference_tools),
+        unresolved_tool_list=_format_unresolved_tool_list(tool_agents, reference_tools, framework),
         retrieval_mode=retrieval_integration.get("mode", "none"),
         retrieval_query_entrypoints=_format_string_list(
             retrieval_integration.get("query_entrypoints", []),
@@ -332,7 +334,7 @@ def build_manifest(description: dict[str, Any], *, framework: str = "copilot-vsc
                     "suggestion": f"Provide the path to '{src['name']}'.",
                 })
 
-    manual_required.extend(_collect_tool_metadata_manual_required(tool_agents, reference_tools))
+    manual_required.extend(_collect_tool_metadata_manual_required(tool_agents, reference_tools, framework))
     manual_required.extend(_collect_component_manual_required(components))
 
     # Output file plan
@@ -596,17 +598,27 @@ def _merge_known_tool_metadata(tool: dict[str, Any]) -> dict[str, Any]:
 
 
 # ---------------------------------------------------------------------------
-# Tool agent detection
+# Tool doc detection
+#
+# NOTE: tools are never generated as agents. `detect_tool_agents` returns specs
+# for *operational tool documents* (Claude skills / Copilot reference docs).
+# The historical name and the `tool_agents` manifest key are retained for
+# backward compatibility (closed manifest schema, external consumers); the
+# OUTPUT is a doc, not an `.agent.md`. See `_plan_output_files`.
 # ---------------------------------------------------------------------------
 
 def detect_tool_agents(tools: list[dict[str, Any]]) -> list[dict[str, Any]]:
-    """Return tool agent specs for tools classified as specialist-tier.
+    """Return operational tool-doc specs for specialist-tier tools.
+
+    Specialist-tier tools (databases, CLIs, build systems, infra) become
+    operational documents — Claude skills or Copilot reference docs — never
+    agents. The spec slug stays ``tool-<name>`` to identify the tool.
 
     Args:
         tools: List of tool dicts from the project description.
 
     Returns:
-        List of tool agent spec dicts for specialist-tier tools.
+        List of tool-doc spec dicts for specialist-tier tools.
     """
     agents = []
     for tool in tools:
@@ -1052,6 +1064,7 @@ def _collect_manual_required(placeholder_map: dict[str, str]) -> list[dict[str, 
 def _collect_tool_metadata_manual_required(
     tool_agents: list[dict[str, Any]],
     reference_tools: list[dict[str, Any]],
+    framework: str = "copilot-vscode",
 ) -> list[dict[str, str]]:
     """Return setup items for tool metadata fields still missing after enrichment."""
     manual: list[dict[str, str]] = []
@@ -1068,8 +1081,16 @@ def _collect_tool_metadata_manual_required(
                 rel_path = f"references/{spec['slug']}-reference.md"
                 doc_label = "reference file"
             else:
-                rel_path = f"{spec['slug']}.agent.md"
-                doc_label = "specialist agent"
+                # Operational tool doc — a skill (Claude) or reference doc (Copilot),
+                # never an agent. Point setup items at the actual emitted path.
+                slug = spec["slug"]
+                base = slug[len("tool-"):] if slug.startswith("tool-") else slug
+                if framework == "claude":
+                    rel_path = f"../skills/{slug}.md"
+                    doc_label = "skill document"
+                else:
+                    rel_path = f"references/ref-{base}-reference.md"
+                    doc_label = "reference document"
 
             for field_name, placeholder, description in field_specs:
                 if spec.get(field_name):
@@ -1150,26 +1171,42 @@ def _plan_output_files(
             "component_slug": None,
         })
 
-    # Tool-specific agents (specialist tier) — use category template if available
+    # Operational tool docs (specialist tier). Tools are resources agents USE,
+    # never agents themselves. For Claude they become skill documents under
+    # `.claude/skills/`; for Copilot (no skills concept) they become reference
+    # documents under `references/`. Operational depth is preserved via the
+    # category-specific `.doc` templates (no agent front matter / handoffs).
     for ta in tool_agents:
         category = ta.get("tool_category", "other")
-        category_template = f"{domain_dir}tool-{category}.template.md"
-        fallback_template = f"{domain_dir}tool-specific.template.md"
+        category_template = f"{domain_dir}tool-{category}.doc.template.md"
+        fallback_template = f"{domain_dir}tool-specific.doc.template.md"
+        base = ta["slug"][len("tool-"):] if ta["slug"].startswith("tool-") else ta["slug"]
+        if framework == "claude":
+            # Flat skill layout, matching the existing recall/todo-from-plan
+            # skills. `../skills/` resolves to `.claude/skills/` (agents dir is
+            # `.claude/agents/`), mirroring how `../CLAUDE.md` is emitted.
+            doc_path = f"../skills/{ta['slug']}.md"
+            doc_type = "skill"
+        else:
+            doc_path = f"references/ref-{base}-reference.md"
+            doc_type = "reference"
         files.append({
-            "path": f"{ta['slug']}.agent.md",
+            "path": doc_path,
             "template": category_template,
             "fallback_template": fallback_template,
-            "type": "agent",
+            "type": doc_type,
             "component_slug": None,
+            "tool_slug": ta["slug"],
         })
 
-    # Reference files (reference tier)
+    # Reference files (reference tier — lightweight library/framework docs)
     for rt in reference_tools:
         files.append({
             "path": f"references/{rt['slug']}-reference.md",
             "template": f"{domain_dir}tool-reference.template.md",
             "type": "reference",
             "component_slug": None,
+            "tool_slug": rt["slug"],
         })
 
     # Code-hygiene companion reference file (always)
@@ -1418,12 +1455,14 @@ def _has_unknown_tool_metadata(
 def _format_unresolved_tool_list(
     tool_agents: list[dict[str, Any]],
     reference_tools: list[dict[str, Any]],
+    framework: str = "copilot-vscode",
 ) -> str:
     """Format a Markdown bullet list of tools with missing documentation metadata.
 
     Args:
-        tool_agents:    Specialist-tier tool agent specs from detect_tool_agents().
+        tool_agents:    Operational tool-doc specs from detect_tool_agents().
         reference_tools: Reference-tier tool specs from detect_reference_tools().
+        framework:      Target framework — determines the doc path shown.
 
     Returns:
         Markdown string listing each tool with its missing fields, or a 'none'
@@ -1436,8 +1475,13 @@ def _format_unresolved_tool_list(
         gaps = [label for field, label in fields_checked if not spec.get(field)]
         if gaps:
             slug = spec["slug"]
+            base = slug[len("tool-"):] if slug.startswith("tool-") else slug
+            if framework == "claude":
+                doc_ref = f"skill `.claude/skills/{slug}.md`"
+            else:
+                doc_ref = f"reference doc `references/ref-{base}-reference.md`"
             lines.append(
-                f"- **{spec['tool_name']}** (specialist agent `{slug}.agent.md`) "
+                f"- **{spec['tool_name']}** ({doc_ref}) "
                 f"— missing: {', '.join(gaps)}"
             )
 

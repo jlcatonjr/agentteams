@@ -239,16 +239,21 @@ def _build_placeholder_map_for_file(
         if component:
             mapping.update(_component_placeholder_map(component, manifest))
 
-    # Add tool-specific overrides for tool-specialist files
-    if file_spec.get("template", "").endswith("tool-specific.template.md") or \
-       "tool-" in file_spec.get("template", "").split("/")[-1]:
-        tool_slug = file_spec["path"].replace(".agent.md", "")
+    # Tool-doc placeholder overrides. The planned file carries an explicit
+    # `tool_slug` so we never have to parse it back out of the (framework-
+    # dependent) output path. Operational tool docs (skills / copilot reference
+    # docs) resolve from `tool_agents`; reference-tier docs from `reference_tools`.
+    tool_slug = file_spec.get("tool_slug")
+    if tool_slug and tool_slug.startswith("tool-"):
         tool_agent = _find_tool_agent(manifest, tool_slug)
         if tool_agent:
             mapping.update(_tool_placeholder_map(tool_agent))
-
-    # Add tool reference overrides for reference files
-    if file_spec.get("type") == "reference":
+    elif tool_slug:
+        ref_tool = _find_reference_tool(manifest, tool_slug)
+        if ref_tool:
+            mapping.update(_reference_tool_placeholder_map(ref_tool))
+    elif file_spec.get("type") == "reference":
+        # Legacy fallback for reference specs without an explicit tool_slug.
         ref_slug = file_spec["path"].replace("references/", "").replace("-reference.md", "")
         ref_tool = _find_reference_tool(manifest, ref_slug)
         if ref_tool:
@@ -307,16 +312,23 @@ def _component_placeholder_map(component: dict[str, Any], manifest: dict[str, An
     if not output_file:
         output_file = f"{primary_output_dir}{component['slug']}/{component['name'].lower().replace(' ', '-')}"
 
-    # Build tool references for this component
+    # Build tool references for this component. Tools are documents, never
+    # agents: operational tools surface as Claude skills or Copilot reference
+    # docs; library/framework tools as reference docs.
     comp_tools = component.get("tools", [])
     if comp_tools:
-        # Map tool names to their agent/reference slugs from the manifest
-        tool_lines = []
-        tool_agent_names = {ta["tool_name"]: ta["slug"] for ta in manifest.get("tool_agents", [])}
+        framework = manifest.get("framework", "")
+        tool_doc_slugs = {ta["tool_name"]: ta["slug"] for ta in manifest.get("tool_agents", [])}
         ref_tool_names = {rt["tool_name"]: rt["slug"] for rt in manifest.get("reference_tools", [])}
+        tool_lines = []
         for t in comp_tools:
-            if t in tool_agent_names:
-                tool_lines.append(f"- `@{tool_agent_names[t]}` (specialist agent)")
+            if t in tool_doc_slugs:
+                slug = tool_doc_slugs[t]  # tool-<base>
+                base = slug[len("tool-"):] if slug.startswith("tool-") else slug
+                if framework == "claude":
+                    tool_lines.append(f"- `{slug}` skill (`.claude/skills/{slug}.md`)")
+                else:
+                    tool_lines.append(f"- `references/ref-{base}-reference.md`")
             elif t in ref_tool_names:
                 tool_lines.append(f"- `references/{ref_tool_names[t]}-reference.md`")
             else:

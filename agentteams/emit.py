@@ -218,6 +218,10 @@ def _is_agent_doc(rel_path: str, content: str) -> bool:
     base = rel_path.rsplit("/", 1)[-1]
     if "references/" in rel_path:
         return False
+    # Skills (operational tool docs) carry front matter but are not agent
+    # personas — they must not get the "Project-Specific Notes" persona section.
+    if rel_path.startswith("../skills/") or "/skills/" in rel_path:
+        return False
     if base in {"copilot-instructions.md", "CLAUDE.md", "SETUP-REQUIRED.md"}:
         return False
     return bool(_YAML_FM_RE.match(content))
@@ -512,6 +516,31 @@ class BackupResult:
 BACKUP_MANIFEST_NAME = "_manifest.json"
 BACKUP_MANIFEST_SCHEMA_VERSION = "1.0"
 
+# Reserved subtree inside a backup for files that live OUTSIDE output_dir but
+# under its parent (e.g. ``../CLAUDE.md``, ``../skills/<tool>.md``). Storing them
+# under this prefix — keyed by their path relative to ``output_dir.parent`` —
+# lets restore map them back to the correct location instead of flattening them
+# into the agents dir.
+_EXTERNAL_BACKUP_PREFIX = "__external__"
+
+
+def _backup_rel(src: Path, output_dir: Path) -> Path:
+    """Return the in-backup relative path for *src* (handles out-of-tree files)."""
+    try:
+        return src.relative_to(output_dir)
+    except ValueError:
+        try:
+            return Path(_EXTERNAL_BACKUP_PREFIX) / src.relative_to(output_dir.parent)
+        except ValueError:
+            return Path(_EXTERNAL_BACKUP_PREFIX) / src.name
+
+
+def _restore_dest(output_dir: Path, rel: Path) -> Path:
+    """Map an in-backup relative path back to its on-disk destination."""
+    if rel.parts and rel.parts[0] == _EXTERNAL_BACKUP_PREFIX:
+        return output_dir.parent / Path(*rel.parts[1:])
+    return output_dir / rel
+
 
 def _write_backup_manifest(
     backup_path: Path,
@@ -607,6 +636,12 @@ def backup_output_dir(
     """
     result = BackupResult()
 
+    # Resolve symlinks once so `_backup_rel` compares like-for-like against the
+    # (already-resolved) source paths from `_resolve_path`. Without this, a
+    # symlinked output root (macOS /tmp→/private/tmp, symlinked $HOME, …) makes
+    # every in-tree file look out-of-tree and get mis-filed under __external__.
+    output_dir = output_dir.resolve()
+
     if not output_dir.exists():
         result.skipped = True
         return result
@@ -659,12 +694,9 @@ def backup_output_dir(
 
     file_pairs: list[tuple[Path, Path]] = []
     for src in paths:
-        try:
-            rel = src.relative_to(output_dir)
-        except ValueError:
-            # File is outside output_dir (e.g. ../copilot-instructions.md) —
-            # store with a safe flattened name
-            rel = Path(src.name)
+        # Out-of-tree files (../CLAUDE.md, ../skills/<tool>.md) are stored under
+        # the __external__ prefix so restore can map them back precisely.
+        rel = _backup_rel(src, output_dir)
         dest = backup_path / rel
         dest.parent.mkdir(parents=True, exist_ok=True)
         shutil.copy2(src, dest)
@@ -742,6 +774,10 @@ def restore_backup(
     if not backup_path.exists():
         raise FileNotFoundError(f"Backup not found: {backup_path}")
 
+    # Resolve symlinks so `_restore_dest` and the `remove_extra` scan operate on
+    # the same canonical root the backup was taken against (see backup_output_dir).
+    output_dir = output_dir.resolve()
+
     # Collect the set of relative paths present in the backup. Plan 2's
     # sidecar manifest (_manifest.json) is metadata ABOUT the backup, not
     # restored content — exclude it from the restore set.
@@ -758,7 +794,7 @@ def restore_backup(
     count = 0
     for rel in backup_rels:
         src = backup_path / rel
-        dest = output_dir / rel
+        dest = _restore_dest(output_dir, rel)
         dest.parent.mkdir(parents=True, exist_ok=True)
         shutil.copy2(src, dest)
         count += 1

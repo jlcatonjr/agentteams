@@ -316,7 +316,14 @@ def _build_component_fills(
             seen.add(pkg_lower)
 
             if pkg_lower in tool_agent_names:
-                tool_lines.append(f"- `@{tool_agent_names[pkg_lower]}` (specialist agent)")
+                # Operational tools are documents, never agents/handoff targets:
+                # Claude → skill, Copilot → reference doc (mirrors render.py).
+                slug = tool_agent_names[pkg_lower]
+                base = slug[len("tool-"):] if slug.startswith("tool-") else slug
+                if manifest.get("framework") == "claude":
+                    tool_lines.append(f"- `{slug}` skill (`.claude/skills/{slug}.md`)")
+                else:
+                    tool_lines.append(f"- `references/ref-{base}-reference.md`")
             elif pkg_lower in ref_tool_names:
                 tool_lines.append(
                     f"- `references/{ref_tool_names[pkg_lower]}-reference.md`"

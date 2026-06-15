@@ -282,22 +282,22 @@ def test_compute_template_hashes_fallback(tmp_path):
     """When category template is missing, fallback template hash is used."""
     tpl_dir = tmp_path / "templates" / "domain"
     tpl_dir.mkdir(parents=True)
-    fallback = tpl_dir / "tool-specific.template.md"
-    fallback.write_text("# Generic tool template", encoding="utf-8")
+    fallback = tpl_dir / "tool-specific.doc.template.md"
+    fallback.write_text("# Generic tool doc template", encoding="utf-8")
 
     manifest = {
         "output_files": [
             {
-                "path": "tool-postgresql.agent.md",
-                "template": "domain/tool-database.template.md",
-                "fallback_template": "domain/tool-specific.template.md",
-                "type": "agent",
+                "path": "references/ref-postgresql-reference.md",
+                "template": "domain/tool-database.doc.template.md",
+                "fallback_template": "domain/tool-specific.doc.template.md",
+                "type": "reference",
             },
         ]
     }
 
     hashes = compute_template_hashes(manifest, templates_dir=tmp_path / "templates")
-    assert "domain/tool-specific.template.md" in hashes
+    assert "domain/tool-specific.doc.template.md" in hashes
 
 
 # ---------------------------------------------------------------------------
@@ -500,16 +500,16 @@ def test_tool_reference_template_has_no_yaml_frontmatter():
 
 
 def test_tool_cli_template_uses_auto_resolved_api_surface():
-    """tool-cli.template.md must use {TOOL_API_SURFACE} not {MANUAL:TOOL_API_SURFACE}."""
+    """tool-cli.doc.template.md must use {TOOL_API_SURFACE} not {MANUAL:TOOL_API_SURFACE}."""
     templates_dir = Path(__file__).parent.parent / "agentteams" / "templates"
-    cli_template = templates_dir / "domain" / "tool-cli.template.md"
-    assert cli_template.exists(), "tool-cli.template.md not found"
+    cli_template = templates_dir / "domain" / "tool-cli.doc.template.md"
+    assert cli_template.exists(), "tool-cli.doc.template.md not found"
     content = cli_template.read_text(encoding="utf-8")
     assert "{TOOL_API_SURFACE}" in content, (
-        "tool-cli.template.md must contain {TOOL_API_SURFACE} placeholder"
+        "tool-cli.doc.template.md must contain {TOOL_API_SURFACE} placeholder"
     )
     assert "{MANUAL:TOOL_API_SURFACE}" not in content, (
-        "tool-cli.template.md must not contain literal {MANUAL:TOOL_API_SURFACE}"
+        "tool-cli.doc.template.md must not contain literal {MANUAL:TOOL_API_SURFACE}"
     )
 
 

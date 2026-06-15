@@ -28,8 +28,8 @@ agent files and replace with the correct value.
 
 ## 3. `{TOOL_DOCS_URL}`
 
-**Found in:** `tool-pandoc.agent.md`
-**Context:** The specialist agent for 'Pandoc' is missing a official documentation URL. Add it to the tools[] entry in the project brief or extend the built-in tool metadata catalog.
+**Found in:** `references/ref-pandoc-reference.md`
+**Context:** The reference document for 'Pandoc' is missing a official documentation URL. Add it to the tools[] entry in the project brief or extend the built-in tool metadata catalog.
 
 **Action required:** Search for `{MANUAL:TOOL_DOCS_URL}` across all generated
 agent files and replace with the correct value.
@@ -38,8 +38,8 @@ agent files and replace with the correct value.
 
 ## 4. `{TOOL_API_SURFACE}`
 
-**Found in:** `tool-pandoc.agent.md`
-**Context:** The specialist agent for 'Pandoc' is missing a project-relevant API surface summary. Add it to the tools[] entry in the project brief or extend the built-in tool metadata catalog.
+**Found in:** `references/ref-pandoc-reference.md`
+**Context:** The reference document for 'Pandoc' is missing a project-relevant API surface summary. Add it to the tools[] entry in the project brief or extend the built-in tool metadata catalog.
 
 **Action required:** Search for `{MANUAL:TOOL_API_SURFACE}` across all generated
 agent files and replace with the correct value.
@@ -48,8 +48,8 @@ agent files and replace with the correct value.
 
 ## 5. `{TOOL_COMMON_PATTERNS}`
 
-**Found in:** `tool-pandoc.agent.md`
-**Context:** The specialist agent for 'Pandoc' is missing a tool-specific usage patterns and pitfalls. Add it to the tools[] entry in the project brief or extend the built-in tool metadata catalog.
+**Found in:** `references/ref-pandoc-reference.md`
+**Context:** The reference document for 'Pandoc' is missing a tool-specific usage patterns and pitfalls. Add it to the tools[] entry in the project brief or extend the built-in tool metadata catalog.
 
 **Action required:** Search for `{MANUAL:TOOL_COMMON_PATTERNS}` across all generated
 agent files and replace with the correct value.

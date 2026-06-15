@@ -408,7 +408,11 @@ def test_detect_reference_tools_slugs():
 # ---------------------------------------------------------------------------
 
 def test_build_manifest_auto_promotes_database():
-    """A database tool without explicit needs_specialist_agent gets a specialist agent."""
+    """A database tool becomes an operational tool DOC, never an agent.
+
+    Tools are resources agents use — they must NOT appear in the orchestrator's
+    agents:/handoff roster (domain_agent_slugs / agent_slug_list).
+    """
     desc = {
         "project_goal": "Build a Python API with a PostgreSQL database.",
         "tools": [
@@ -417,10 +421,34 @@ def test_build_manifest_auto_promotes_database():
         ],
     }
     manifest = build_manifest(desc, framework="copilot-vscode")
-    assert "tool-postgresql" in manifest["domain_agent_slugs"]
+    # Tool docs are never roster agents.
+    assert "tool-postgresql" not in manifest["domain_agent_slugs"]
+    assert "tool-postgresql" not in manifest["agent_slug_list"]
+    # PostgreSQL is still detected as an operational tool doc (tool_agents key
+    # retained for back-compat) — but emitted as a reference doc, not .agent.md.
+    assert "PostgreSQL" in [t["tool_name"] for t in manifest["tool_agents"]]
+    pg_files = [f for f in manifest["output_files"] if "postgresql" in f["path"].lower()]
+    assert pg_files and all(not f["path"].endswith(".agent.md") for f in pg_files)
+    assert pg_files[0]["type"] == "reference"
+    assert pg_files[0]["path"] == "references/ref-postgresql-reference.md"
     # FastAPI should be in reference_tools not tool_agents
     ref_names = [r["tool_name"] for r in manifest["reference_tools"]]
     assert "FastAPI" in ref_names
+
+
+def test_build_manifest_database_becomes_skill_for_claude():
+    """For the Claude target, an operational tool becomes a skill document."""
+    desc = {
+        "project_goal": "Build a Python API with a PostgreSQL database.",
+        "tools": [{"name": "PostgreSQL", "version": "15", "category": "database"}],
+    }
+    manifest = build_manifest(desc, framework="claude")
+    pg_files = [f for f in manifest["output_files"] if "postgresql" in f["path"].lower()]
+    assert len(pg_files) == 1
+    assert pg_files[0]["type"] == "skill"
+    assert pg_files[0]["path"] == "../skills/tool-postgresql.md"
+    assert pg_files[0]["tool_slug"] == "tool-postgresql"
+    assert "tool-postgresql" not in manifest["agent_slug_list"]
 
 
 def test_build_manifest_reference_files_planned():
@@ -442,7 +470,7 @@ def test_build_manifest_reference_files_planned():
 
 
 def test_build_manifest_category_template_for_database():
-    """Database tools should use tool-database template with fallback."""
+    """Database tools should use the tool-database DOC template with fallback."""
     desc = {
         "project_goal": "Build an ETL pipeline with PostgreSQL database.",
         "tools": [{"name": "PostgreSQL", "version": "15", "category": "database"}],
@@ -450,8 +478,9 @@ def test_build_manifest_category_template_for_database():
     manifest = build_manifest(desc, framework="copilot-vscode")
     tool_files = [f for f in manifest["output_files"] if "postgresql" in f["path"]]
     assert len(tool_files) == 1
-    assert "tool-database" in tool_files[0]["template"]
-    assert tool_files[0]["fallback_template"] == "domain/tool-specific.template.md"
+    assert tool_files[0]["template"] == "domain/tool-database.doc.template.md"
+    assert tool_files[0]["fallback_template"] == "domain/tool-specific.doc.template.md"
+    assert tool_files[0]["tool_slug"] == "tool-postgresql"
 
 
 # ---------------------------------------------------------------------------
@@ -667,10 +696,15 @@ def test_format_unresolved_tool_list_specialist_missing_docs():
             "common_patterns": "Use indexes.",
         }
     ]
+    # Copilot default → reference doc path, never an agent file.
     result = _format_unresolved_tool_list(tool_agents, [])
     assert "CustomDB" in result
-    assert "tool-customdb.agent.md" in result
+    assert "references/ref-customdb-reference.md" in result
+    assert ".agent.md" not in result
     assert "docs URL" in result
+    # Claude → skill path.
+    claude_result = _format_unresolved_tool_list(tool_agents, [], "claude")
+    assert ".claude/skills/tool-customdb.md" in claude_result
 
 
 def test_format_unresolved_tool_list_reference_missing_api_surface():
@@ -988,7 +1022,8 @@ def test_format_unresolved_tool_list_specialist_with_gaps():
     }]
     result = _format_unresolved_tool_list(tool_agents, [])
     assert "Custom" in result
-    assert "tool-custom.agent.md" in result
+    assert "references/ref-custom-reference.md" in result
+    assert ".agent.md" not in result
     assert "docs URL" in result
     assert "API surface" in result
     assert "usage patterns" in result
