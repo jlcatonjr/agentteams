@@ -74,7 +74,9 @@ def _run_convert(
                 log = _json.load(fh)
             if isinstance(log.get("project_name"), str):
                 project_manifest["project_name"] = log["project_name"]
-        except Exception:  # noqa: BLE001
+        except (OSError, _json.JSONDecodeError):
+            # CH-24: optional build-log read for a fallback project_name; a
+            # missing/corrupt file is the known-recoverable case (use default).
             pass
 
     try:

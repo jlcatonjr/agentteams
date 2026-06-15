@@ -215,7 +215,7 @@ def _remove_stale_tool_agents(
             reason="stale-tool-agent-removal",
             framework=framework_id,
         )
-    except Exception as exc:  # backup is best-effort; never block the migration
+    except OSError as exc:  # CH-24: backup I/O is best-effort; never block the migration
         print(f"  !  stale tool-agent backup failed: {exc}", file=sys.stderr)
     removed: list[str] = []
     notices: list[str] = []
