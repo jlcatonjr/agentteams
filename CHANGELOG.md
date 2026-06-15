@@ -8,6 +8,23 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### added
 
+- **Goose (Block / AAIF) framework support.** Adds Goose as a first-class target
+  alongside Copilot and Claude:
+  - **Generate** (`--framework goose`): emits one Goose recipe per agent under
+    `.goose/recipes/<slug>.yaml`, an `orchestrator.yaml` that delegates to specialist
+    recipes via `sub_recipes` (deeper handoff edges become `summon` `load(...)`
+    references — Goose forbids nested delegation), the team brief as a repo-root
+    `AGENTS.md` plus a `.goosehints` integrator, and a runnable `team-builder.yaml`
+    recipe. Handoffs are encoded natively in the recipes (no `runtime-handoffs.json`
+    sidecar). All emitted recipes pass `goose recipe validate`.
+  - **Bridge target** (`copilot-vscode|copilot-cli|claude → goose`): writes fenced
+    `AGENTTEAMS-BRIDGE` pointer files (`AGENTS.md`, `.goosehints`, `.goose/README.md`)
+    so a Goose project reuses canonical source agents without regeneration. `AGENTS.md`
+    is a shared multi-tool file — `--bridge-merge` updates only the fenced region and
+    preserves an existing unfenced file; `--bridge-refresh` overwrites it (see
+    `references/bridge-refresh-safety.md`).
+  - Convert/interop **to** Goose are not yet supported (deferred).
+
 - **Automatic past-day work-summary backfill + trigger.** Promotes the
   collector-management-developed feature into the framework: every generated team
   now gets a session-close sweep that fills *recent past active-day* daily-summary

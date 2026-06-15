@@ -151,7 +151,7 @@ Templates in `templates/` are Markdown files with `{PLACEHOLDER}` tokens. The li
 | Governance | `universal/` (11 tier-2 governance agent templates) |
 | Domain | `domain/` (14 archetype templates + 6 tool templates, incl. `content-enricher` and `work-summarizer`) |
 | Workstream Expert | `workstream-expert.template.md` (one template, rendered per component) |
-| Builder | `builder/` (3 framework-specific team-builder templates) |
+| Builder | `builder/` (4 framework-specific team-builder templates) |
 
 In addition to the 11 always-included tier-2 governance templates, `universal/` also contains the tier-1 Orchestrator template.
 
@@ -163,15 +163,16 @@ See [Template Authoring](template-authoring.md) for placeholder conventions and 
 
 ## Framework Adapters
 
-The same template library targets three frameworks via adapters in `agentteams/frameworks/`:
+The same template library targets four frameworks via adapters in `agentteams/frameworks/`:
 
 | Framework | Agent Format | Entry Point |
 |-----------|-------------|-------------|
 | `copilot-vscode` | `.agent.md` with YAML front matter | VS Code Copilot agent panel |
 | `copilot-cli` | Plain `.md` system prompts | `gh copilot` CLI |
 | `claude` | Claude front matter `.md` + `CLAUDE.md` | Claude Projects |
+| `goose` | Recipe YAML (`.goose/recipes/*.yaml`) + repo-root `AGENTS.md`/`.goosehints` | `goose run --recipe` |
 
-Each adapter in `agentteams/frameworks/` knows the file naming conventions, front-matter schema, and handoff delivery mode for its target framework. VS Code Copilot keeps handoffs inline; frameworks that do not support the VS Code syntax can instead receive a sidecar `references/runtime-handoffs.json` manifest when extracted handoffs are present.
+Each adapter in `agentteams/frameworks/` knows the file naming conventions, front-matter schema, and handoff delivery mode for its target framework. VS Code Copilot keeps handoffs inline; frameworks that do not support the VS Code syntax can instead receive a sidecar `references/runtime-handoffs.json` manifest when extracted handoffs are present. Goose encodes handoffs natively inside each recipe (orchestrator `sub_recipes`; deeper edges become `summon` `load(...)`), so it emits no sidecar.
 
 ---
 

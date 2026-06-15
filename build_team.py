@@ -13,10 +13,11 @@ Usage:
 Options:
     --description  PATH   Project description file (.json or .md) [required]
     --project      PATH   Existing project directory to scan (overrides existing_project_path in description)
-    --framework    NAME   Target framework: copilot-vscode (default), copilot-cli, claude
+    --framework    NAME   Target framework: copilot-vscode (default), copilot-cli, claude, goose
     --output       DIR    Output directory for agent files (default: framework-specific agents
                           directory under <project>: .github/agents/ for copilot-vscode,
-                          .github/copilot/ for copilot-cli, .claude/agents/ for claude)
+                          .github/copilot/ for copilot-cli, .claude/agents/ for claude,
+                          .goose/recipes/ for goose)
     --dry-run             Show what would be generated without writing files
     --overwrite           Overwrite existing agent files without prompting
     --yes                 Non-interactive: answer yes to all prompts

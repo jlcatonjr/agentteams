@@ -4204,11 +4204,31 @@ and this project adheres to <a href="https://semver.org/spec/v2.0.0.html">Semant
 <h2 id="unreleased">[Unreleased]<a class="headerlink" href="#unreleased" title="Permanent link">&para;</a></h2>
 <h3 id="added">added<a class="headerlink" href="#added" title="Permanent link">&para;</a></h3>
 <ul>
-<li><strong>Automatic past-day work-summary backfill + trigger.</strong> Promotes the
+<li><strong>Goose (Block / AAIF) framework support.</strong> Adds Goose as a first-class target
+  alongside Copilot and Claude:</li>
+<li><strong>Generate</strong> (<code>--framework goose</code>): emits one Goose recipe per agent under
+    <code>.goose/recipes/&lt;slug&gt;.yaml</code>, an <code>orchestrator.yaml</code> that delegates to specialist
+    recipes via <code>sub_recipes</code> (deeper handoff edges become <code>summon</code> <code>load(...)</code>
+    references — Goose forbids nested delegation), the team brief as a repo-root
+    <code>AGENTS.md</code> plus a <code>.goosehints</code> integrator, and a runnable <code>team-builder.yaml</code>
+    recipe. Handoffs are encoded natively in the recipes (no <code>runtime-handoffs.json</code>
+    sidecar). All emitted recipes pass <code>goose recipe validate</code>.</li>
+<li><strong>Bridge target</strong> (<code>copilot-vscode|copilot-cli|claude → goose</code>): writes fenced
+    <code>AGENTTEAMS-BRIDGE</code> pointer files (<code>AGENTS.md</code>, <code>.goosehints</code>, <code>.goose/README.md</code>)
+    so a Goose project reuses canonical source agents without regeneration. <code>AGENTS.md</code>
+    is a shared multi-tool file — <code>--bridge-merge</code> updates only the fenced region and
+    preserves an existing unfenced file; <code>--bridge-refresh</code> overwrites it (see
+    <code>references/bridge-refresh-safety.md</code>).</li>
+<li>
+<p>Convert/interop <strong>to</strong> Goose are not yet supported (deferred).</p>
+</li>
+<li>
+<p><strong>Automatic past-day work-summary backfill + trigger.</strong> Promotes the
   collector-management-developed feature into the framework: every generated team
   now gets a session-close sweep that fills <em>recent past active-day</em> daily-summary
   gaps automatically (in addition to the existing today-capture). Three coordinated
-  pieces, with all semantics defined <strong>once</strong>:</li>
+  pieces, with all semantics defined <strong>once</strong>:</p>
+</li>
 <li><strong>New reference <code>references/work-summary-backfill.reference.md</code></strong> (universal
     template, emitted for every team) — the single source of truth: the
     <code>AUTO_BACKFILL_LOOKBACK_CAP_DAYS</code> named constant (default 14), canonical clock
@@ -4234,14 +4254,34 @@ and this project adheres to <a href="https://semver.org/spec/v2.0.0.html">Semant
 </ul>
 <h3 id="changed">changed<a class="headerlink" href="#changed" title="Permanent link">&para;</a></h3>
 <ul>
-<li><strong>Tools are documents, never agents.</strong> Operational tools (databases, CLIs,
+<li>
+<p><strong>Repository filing conventions — stray plan docs no longer land at the root.</strong>
+  Root cause: concurrent direct in-repo sessions follow the "every multi-step
+  request generates a plan" rule, but that rule's target (<code>tmp/by-week/…</code>) lived
+  only in the generated-team instructions — so a direct session defaulted its plan
+  to the cwd (repo root), and strays accumulated (plus an ignore-in-place
+  <code>.gitignore</code> band-aid). Fix: (1) new <strong><code>references/filing-conventions.md</code></strong>
+  states the canonical homes (<code>tmp/by-week/</code> active, <code>references/plans/</code> retained,
+  <code>references/</code> published, <code>docs_src/</code> user docs, <code>workSummaries/</code> summaries);
+  (2) root <code>CLAUDE.md</code> now carries the convention where in-repo sessions read it;
+  (3) new guard <strong><code>tests/test_root_doc_hygiene.py</code></strong> fails on any non-allowlisted
+  <code>*.md</code> at the root. Relocated 7 stray plans/reports
+  (<code>refactor-*</code>, <code>goose-integration-plan</code>, <code>continue-dev-integration-report</code>,
+  <code>CHANGES_2026-05-27</code>, <code>pypi-release-plan</code>) into <code>references/plans/</code>; removed the
+  <code>pypi-release-plan.md</code> <code>.gitignore</code> band-aid; un-tracked two legacy files under
+  <code>references/plans/</code> so the directory is uniformly local. (<code>security-waiver-remediation-plan.md</code>
+  temporarily allowlisted at root pending its owning session — see filing-conventions follow-ups.)</p>
+</li>
+<li>
+<p><strong>Tools are documents, never agents.</strong> Operational tools (databases, CLIs,
   build systems) previously generated full <code>tool-&lt;slug&gt;.agent.md</code> specialist
   <em>agents</em>. They now generate <strong>documents</strong>: Copilot targets emit
   <code>references/ref-&lt;tool&gt;-reference.md</code> (with full operational depth — config,
   invocation, verification); Claude targets emit a skill at
   <code>.claude/skills/tool-&lt;tool&gt;.md</code>. Library/framework tools remain lightweight
   reference docs. Tool slugs are no longer added to the orchestrator's
-  <code>agents:</code> handoff roster (a tool is a resource, not a handoff target).</li>
+  <code>agents:</code> handoff roster (a tool is a resource, not a handoff target).</p>
+</li>
 <li>New <code>domain/tool-*.doc.template.md</code> templates carry the operational body
     without agent front matter / handoffs.</li>
 <li>Manifest <code>output_files</code> gain a <code>"skill"</code> type and a per-tool <code>tool_slug</code>;

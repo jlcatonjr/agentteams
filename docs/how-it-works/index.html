@@ -2875,7 +2875,7 @@ This path reads existing agent files, preserves body prose, and rewrites framewo
 </tr>
 <tr>
 <td>Builder</td>
-<td><code>builder/</code> (3 framework-specific team-builder templates)</td>
+<td><code>builder/</code> (4 framework-specific team-builder templates)</td>
 </tr>
 </tbody>
 </table>
@@ -2884,7 +2884,7 @@ This path reads existing agent files, preserves body prose, and rewrites framewo
 <p>See <a href="../template-authoring/">Template Authoring</a> for placeholder conventions and authoring rules.</p>
 <hr />
 <h2 id="framework-adapters">Framework Adapters<a class="headerlink" href="#framework-adapters" title="Permanent link">&para;</a></h2>
-<p>The same template library targets three frameworks via adapters in <code>agentteams/frameworks/</code>:</p>
+<p>The same template library targets four frameworks via adapters in <code>agentteams/frameworks/</code>:</p>
 <table>
 <thead>
 <tr>
@@ -2909,9 +2909,14 @@ This path reads existing agent files, preserves body prose, and rewrites framewo
 <td>Claude front matter <code>.md</code> + <code>CLAUDE.md</code></td>
 <td>Claude Projects</td>
 </tr>
+<tr>
+<td><code>goose</code></td>
+<td>Recipe YAML (<code>.goose/recipes/*.yaml</code>) + repo-root <code>AGENTS.md</code>/<code>.goosehints</code></td>
+<td><code>goose run --recipe</code></td>
+</tr>
 </tbody>
 </table>
-<p>Each adapter in <code>agentteams/frameworks/</code> knows the file naming conventions, front-matter schema, and handoff delivery mode for its target framework. VS Code Copilot keeps handoffs inline; frameworks that do not support the VS Code syntax can instead receive a sidecar <code>references/runtime-handoffs.json</code> manifest when extracted handoffs are present.</p>
+<p>Each adapter in <code>agentteams/frameworks/</code> knows the file naming conventions, front-matter schema, and handoff delivery mode for its target framework. VS Code Copilot keeps handoffs inline; frameworks that do not support the VS Code syntax can instead receive a sidecar <code>references/runtime-handoffs.json</code> manifest when extracted handoffs are present. Goose encodes handoffs natively inside each recipe (orchestrator <code>sub_recipes</code>; deeper edges become <code>summon</code> <code>load(...)</code>), so it emits no sidecar.</p>
 <hr />
 <h2 id="using-a-coding-agent-to-run-the-pipeline">Using a Coding Agent to Run the Pipeline<a class="headerlink" href="#using-a-coding-agent-to-run-the-pipeline" title="Permanent link">&para;</a></h2>
 <p>The four-stage pipeline can be driven entirely by a coding agent. Instead of running CLI commands manually, you describe what you want in plain language and the agent drafts the brief, generates the team, resolves placeholders, and audits the result.</p>

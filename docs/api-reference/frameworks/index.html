@@ -2036,15 +2036,15 @@
 </li>
         
           <li class="md-nav__item">
-  <a href="#concrete-method" class="md-nav__link">
+  <a href="#concrete-methods" class="md-nav__link">
     <span class="md-ellipsis">
       
-        Concrete Method
+        Concrete Methods
       
     </span>
   </a>
   
-    <nav class="md-nav" aria-label="Concrete Method">
+    <nav class="md-nav" aria-label="Concrete Methods">
       <ul class="md-nav__list">
         
           <li class="md-nav__item">
@@ -2052,6 +2052,17 @@
     <span class="md-ellipsis">
       
         finalize_output_path(rel_path, file_type)
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#render_builder_filecontent-manifest" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        render_builder_file(content, manifest)
       
     </span>
   </a>
@@ -2095,6 +2106,17 @@
     <span class="md-ellipsis">
       
         ClaudeAdapter
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#gooseadapter" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        GooseAdapter
       
     </span>
   </a>
@@ -2760,15 +2782,15 @@
 </li>
         
           <li class="md-nav__item">
-  <a href="#concrete-method" class="md-nav__link">
+  <a href="#concrete-methods" class="md-nav__link">
     <span class="md-ellipsis">
       
-        Concrete Method
+        Concrete Methods
       
     </span>
   </a>
   
-    <nav class="md-nav" aria-label="Concrete Method">
+    <nav class="md-nav" aria-label="Concrete Methods">
       <ul class="md-nav__list">
         
           <li class="md-nav__item">
@@ -2776,6 +2798,17 @@
     <span class="md-ellipsis">
       
         finalize_output_path(rel_path, file_type)
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#render_builder_filecontent-manifest" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        render_builder_file(content, manifest)
       
     </span>
   </a>
@@ -2819,6 +2852,17 @@
     <span class="md-ellipsis">
       
         ClaudeAdapter
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#gooseadapter" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        GooseAdapter
       
     </span>
   </a>
@@ -2930,7 +2974,7 @@
 </ul>
 <p><strong>Returns:</strong> <code>Path</code></p>
 <hr />
-<h3 id="concrete-method">Concrete Method<a class="headerlink" href="#concrete-method" title="Permanent link">&para;</a></h3>
+<h3 id="concrete-methods">Concrete Methods<a class="headerlink" href="#concrete-methods" title="Permanent link">&para;</a></h3>
 <h4 id="finalize_output_pathrel_path-file_type"><code>finalize_output_path(rel_path, file_type)</code><a class="headerlink" href="#finalize_output_pathrel_path-file_type" title="Permanent link">&para;</a></h4>
 <p>Adjust an output path's extension for this framework. Default implementation: no-op.</p>
 <p><strong>Args:</strong></p>
@@ -2939,6 +2983,14 @@
 <li><code>file_type</code> (<code>str</code>) — Logical file type (<code>agent</code>, <code>builder</code>, <code>instructions</code>, etc.).</li>
 </ul>
 <p><strong>Returns:</strong> <code>str</code> — Path with adjusted extension.</p>
+<h4 id="render_builder_filecontent-manifest"><code>render_builder_file(content, manifest)</code><a class="headerlink" href="#render_builder_filecontent-manifest" title="Permanent link">&para;</a></h4>
+<p>Post-process the rendered team-builder meta-agent. <strong>Default implementation: identity</strong> (returns <code>content</code> unchanged), so Copilot/Claude emit the builder as a Markdown agent file. Frameworks whose agent files are not Markdown override this — <code>GooseAdapter</code> wraps the builder as a runnable recipe so it is not a stray <code>.md</code> in the agents directory.</p>
+<p><strong>Args:</strong></p>
+<ul>
+<li><code>content</code> (<code>str</code>) — Rendered builder template body.</li>
+<li><code>manifest</code> (<code>dict</code>) — Team manifest.</li>
+</ul>
+<p><strong>Returns:</strong> <code>str</code> — Framework-shaped builder content.</p>
 <hr />
 <h2 id="copilotvscodeadapter"><code>CopilotVSCodeAdapter</code><a class="headerlink" href="#copilotvscodeadapter" title="Permanent link">&para;</a></h2>
 <blockquote>
@@ -2996,8 +3048,27 @@
 <li>Performs framework-specific output shaping while preserving rendered prompt body intent.</li>
 </ul>
 <hr />
+<h2 id="gooseadapter"><code>GooseAdapter</code><a class="headerlink" href="#gooseadapter" title="Permanent link">&para;</a></h2>
+<blockquote>
+<p><em>Source: <code>agentteams/frameworks/goose.py</code></em></p>
+</blockquote>
+<p>Adapter for Block / AAIF Goose recipes.</p>
+<ul>
+<li><strong>framework_id:</strong> <code>'goose'</code></li>
+<li><strong>Output format:</strong> Goose recipe YAML (<code>.goose/recipes/*.yaml</code>), schema version <code>1.0.0</code></li>
+<li><strong>Handoffs:</strong> Native, encoded inline in the recipes — orchestrator handoffs become <code>sub_recipes</code> (with the <code>summon</code> platform extension); every deeper edge becomes a <code>summon</code> <code>load("&lt;slug&gt;")</code> reference (Goose forbids nested delegation). <strong>No</strong> <code>references/runtime-handoffs.json</code> sidecar.</li>
+<li><strong>Agents dir:</strong> <code>&lt;project&gt;/.goose/recipes/</code></li>
+<li><strong>Instructions:</strong> the team brief is written to the repo-root <code>AGENTS.md</code> (via <code>finalize_output_path</code>), and a <code>.goosehints</code> integrator (<code>@AGENTS.md</code> + operational notes) is emitted via <code>extra_output_files</code>.</li>
+</ul>
+<p>Transforms each rendered Markdown agent into a recipe (<code>title</code>/<code>description</code>/<code>instructions</code>/<code>extensions</code>/optional <code>sub_recipes</code>). The team-builder is wrapped as a runnable <code>team-builder.yaml</code> recipe via the <code>render_builder_file</code> hook. <code>get_file_extension('agent')</code> and <code>'builder'</code> both return <code>.yaml</code>.</p>
+<p><strong>Current behavior notes:</strong></p>
+<ul>
+<li><code>supports_handoffs()</code> is <code>True</code>; <code>handoff_delivery_mode()</code> is <code>'native'</code>.</li>
+<li>One delegation layer only (Goose constraint); deeper structure is preserved as in-context <code>summon</code> <code>load(...)</code> references, not nested delegations.</li>
+</ul>
+<hr />
 <h2 id="runtime-handoff-artifact-contract">Runtime Handoff Artifact Contract<a class="headerlink" href="#runtime-handoff-artifact-contract" title="Permanent link">&para;</a></h2>
-<p>Adapters using manifest-based handoff delivery (<code>CopilotCLIAdapter</code>, <code>ClaudeAdapter</code>) rely on extracted handoff metadata generated from rendered content and emitted as <code>references/runtime-handoffs.json</code> when handoffs exist. Native-handoff adapters (<code>CopilotVSCodeAdapter</code>) keep handoff semantics inline.</p>
+<p>Adapters using manifest-based handoff delivery (<code>CopilotCLIAdapter</code>, <code>ClaudeAdapter</code>) rely on extracted handoff metadata generated from rendered content and emitted as <code>references/runtime-handoffs.json</code> when handoffs exist. Native-handoff adapters (<code>CopilotVSCodeAdapter</code>, <code>GooseAdapter</code>) keep handoff semantics inline (for Goose, encoded directly in the recipes).</p>
 
 
 

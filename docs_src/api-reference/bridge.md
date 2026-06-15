@@ -91,6 +91,15 @@ Claude target with `emit_skills=True` (default) also emits at `output_root`:
 
 - `.claude/skills/recall.md` — wraps `agentteams --query-index` for in-session retrieval. **Not** under `references/bridges/...`; lives in the consumer's `.claude/skills/` directory.
 
+Goose target emits these fenced entry files at `output_root` (regions
+`goose-bridge-entry`/`-hints`/`-readme`):
+
+- `AGENTS.md` — repo-root pointer to the source inventory/quickstart. **Shared multi-tool file** (Cursor/Codex/Cline also read it) — see the warning below.
+- `.goosehints` — `@AGENTS.md` integrator so Goose's default context discovery loads the bridged brief.
+- `.goose/README.md` — bridge note.
+
+Goose is supported as a bridge **target** only (any of copilot-vscode/copilot-cli/claude → goose); bridging *from* a Goose project is not yet supported.
+
 ---
 
 ## Notes
@@ -109,6 +118,8 @@ Claude target with `emit_skills=True` (default) also emits at `output_root`:
 | Verifying source has not drifted from manifest | `--bridge-check` |
 
 > **Warning:** `--bridge-refresh` unconditionally overwrites `CLAUDE.md` and `.claude/*` at the consumer's `output_root` with terse stubs. If your team has rich entry files, use `--bridge-merge` for refreshes. Consumer-managed sections should live **outside** the `<!-- AGENTTEAMS-BRIDGE:BEGIN ... -->` fences so the merge logic preserves them.
+>
+> **Goose target — extra caution:** `AGENTS.md` is a **shared, multi-tool standard file** read by Cursor, Codex, Cline, and others. The bridge writes it (fenced) on first contact in *every* mode — including `--bridge-merge` — when it is absent, and `--bridge-refresh` overwrites the whole file. An existing **unfenced** `AGENTS.md` (another tool's) is safely skipped under `--bridge-merge`. Always prefer `--bridge-merge` for Goose and review `references/bridge-refresh-safety.md` (in the repo) before any `--bridge-refresh`.
 
 ## Fence Convention
 

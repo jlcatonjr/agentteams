@@ -2719,6 +2719,14 @@
 <ul>
 <li><code>.claude/skills/recall.md</code> — wraps <code>agentteams --query-index</code> for in-session retrieval. <strong>Not</strong> under <code>references/bridges/...</code>; lives in the consumer's <code>.claude/skills/</code> directory.</li>
 </ul>
+<p>Goose target emits these fenced entry files at <code>output_root</code> (regions
+<code>goose-bridge-entry</code>/<code>-hints</code>/<code>-readme</code>):</p>
+<ul>
+<li><code>AGENTS.md</code> — repo-root pointer to the source inventory/quickstart. <strong>Shared multi-tool file</strong> (Cursor/Codex/Cline also read it) — see the warning below.</li>
+<li><code>.goosehints</code> — <code>@AGENTS.md</code> integrator so Goose's default context discovery loads the bridged brief.</li>
+<li><code>.goose/README.md</code> — bridge note.</li>
+</ul>
+<p>Goose is supported as a bridge <strong>target</strong> only (any of copilot-vscode/copilot-cli/claude → goose); bridging <em>from</em> a Goose project is not yet supported.</p>
 <hr />
 <h2 id="notes">Notes<a class="headerlink" href="#notes" title="Permanent link">&para;</a></h2>
 <ol>
@@ -2755,6 +2763,7 @@
 </table>
 <blockquote>
 <p><strong>Warning:</strong> <code>--bridge-refresh</code> unconditionally overwrites <code>CLAUDE.md</code> and <code>.claude/*</code> at the consumer's <code>output_root</code> with terse stubs. If your team has rich entry files, use <code>--bridge-merge</code> for refreshes. Consumer-managed sections should live <strong>outside</strong> the <code>&lt;!-- AGENTTEAMS-BRIDGE:BEGIN ... --&gt;</code> fences so the merge logic preserves them.</p>
+<p><strong>Goose target — extra caution:</strong> <code>AGENTS.md</code> is a <strong>shared, multi-tool standard file</strong> read by Cursor, Codex, Cline, and others. The bridge writes it (fenced) on first contact in <em>every</em> mode — including <code>--bridge-merge</code> — when it is absent, and <code>--bridge-refresh</code> overwrites the whole file. An existing <strong>unfenced</strong> <code>AGENTS.md</code> (another tool's) is safely skipped under <code>--bridge-merge</code>. Always prefer <code>--bridge-merge</code> for Goose and review <code>references/bridge-refresh-safety.md</code> (in the repo) before any <code>--bridge-refresh</code>.</p>
 </blockquote>
 <h2 id="fence-convention">Fence Convention<a class="headerlink" href="#fence-convention" title="Permanent link">&para;</a></h2>
 <p>Target entry files emitted by the bridge contain <code>AGENTTEAMS-BRIDGE</code> fences (distinct from the <code>AGENTTEAMS</code> fences used by the agent-template emit pipeline):</p>

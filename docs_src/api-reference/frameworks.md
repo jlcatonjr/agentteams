@@ -109,7 +109,7 @@ Return the default agent file directory for a given project path.
 
 ---
 
-### Concrete Method
+### Concrete Methods
 
 #### `finalize_output_path(rel_path, file_type)`
 
@@ -121,6 +121,17 @@ Adjust an output path's extension for this framework. Default implementation: no
 - `file_type` (`str`) — Logical file type (`agent`, `builder`, `instructions`, etc.).
 
 **Returns:** `str` — Path with adjusted extension.
+
+#### `render_builder_file(content, manifest)`
+
+Post-process the rendered team-builder meta-agent. **Default implementation: identity** (returns `content` unchanged), so Copilot/Claude emit the builder as a Markdown agent file. Frameworks whose agent files are not Markdown override this — `GooseAdapter` wraps the builder as a runnable recipe so it is not a stray `.md` in the agents directory.
+
+**Args:**
+
+- `content` (`str`) — Rendered builder template body.
+- `manifest` (`dict`) — Team manifest.
+
+**Returns:** `str` — Framework-shaped builder content.
 
 ---
 
@@ -186,6 +197,27 @@ Strips VS Code YAML and inline handoff blocks, then injects Claude-compatible fr
 
 ---
 
+## `GooseAdapter`
+
+> *Source: `agentteams/frameworks/goose.py`*
+
+Adapter for Block / AAIF Goose recipes.
+
+- **framework_id:** `'goose'`
+- **Output format:** Goose recipe YAML (`.goose/recipes/*.yaml`), schema version `1.0.0`
+- **Handoffs:** Native, encoded inline in the recipes — orchestrator handoffs become `sub_recipes` (with the `summon` platform extension); every deeper edge becomes a `summon` `load("<slug>")` reference (Goose forbids nested delegation). **No** `references/runtime-handoffs.json` sidecar.
+- **Agents dir:** `<project>/.goose/recipes/`
+- **Instructions:** the team brief is written to the repo-root `AGENTS.md` (via `finalize_output_path`), and a `.goosehints` integrator (`@AGENTS.md` + operational notes) is emitted via `extra_output_files`.
+
+Transforms each rendered Markdown agent into a recipe (`title`/`description`/`instructions`/`extensions`/optional `sub_recipes`). The team-builder is wrapped as a runnable `team-builder.yaml` recipe via the `render_builder_file` hook. `get_file_extension('agent')` and `'builder'` both return `.yaml`.
+
+**Current behavior notes:**
+
+- `supports_handoffs()` is `True`; `handoff_delivery_mode()` is `'native'`.
+- One delegation layer only (Goose constraint); deeper structure is preserved as in-context `summon` `load(...)` references, not nested delegations.
+
+---
+
 ## Runtime Handoff Artifact Contract
 
-Adapters using manifest-based handoff delivery (`CopilotCLIAdapter`, `ClaudeAdapter`) rely on extracted handoff metadata generated from rendered content and emitted as `references/runtime-handoffs.json` when handoffs exist. Native-handoff adapters (`CopilotVSCodeAdapter`) keep handoff semantics inline.
+Adapters using manifest-based handoff delivery (`CopilotCLIAdapter`, `ClaudeAdapter`) rely on extracted handoff metadata generated from rendered content and emitted as `references/runtime-handoffs.json` when handoffs exist. Native-handoff adapters (`CopilotVSCodeAdapter`, `GooseAdapter`) keep handoff semantics inline (for Goose, encoded directly in the recipes).

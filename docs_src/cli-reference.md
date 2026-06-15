@@ -44,13 +44,14 @@ Existing project directory to scan. Overrides `existing_project_path` in the des
 
 ### `--framework NAME` / `-f NAME`
 
-Target agent framework. Choices: `copilot-vscode` (default), `copilot-cli`, `claude`.
+Target agent framework. Choices: `copilot-vscode` (default), `copilot-cli`, `claude`, `goose`.
 
 | Value | Format | Description |
 |-------|--------|-------------|
 | `copilot-vscode` | `.agent.md` with YAML front matter | VS Code Copilot agents with full handoff support |
 | `copilot-cli` | Plain `.md` | Copilot CLI system prompts; inline YAML and handoff sections stripped, with handoffs preserved in `references/runtime-handoffs.json` when present |
 | `claude` | Claude front matter `.md` | Claude Projects; output includes `CLAUDE.md` instructions and preserves handoffs in `references/runtime-handoffs.json` when present |
+| `goose` | Recipe YAML (`.goose/recipes/*.yaml`) | Block / AAIF Goose recipes; orchestrator delegates via `sub_recipes`, deeper edges become `summon` `load(...)`; team brief written to repo-root `AGENTS.md` + `.goosehints`. Handoffs are encoded natively in the recipes (no `runtime-handoffs.json` sidecar) |
 
 `references/runtime-handoffs.json` is a framework-neutral sidecar manifest emitted when extracted handoffs exist for frameworks that do not keep inline VS Code handoff syntax in the final agent file.
 
@@ -61,6 +62,7 @@ Output directory for generated agent files. Defaults by framework:
 - `copilot-vscode`: `<project>/.github/agents/`
 - `copilot-cli`: `<project>/.github/copilot/`
 - `claude`: `<project>/.claude/agents/`
+- `goose`: `<project>/.goose/recipes/` (team brief written to repo-root `AGENTS.md` + `.goosehints`)
 
 ### `--convert-from DIR`
 

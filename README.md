@@ -17,7 +17,7 @@ Given a project description (a `.json` or `.md` brief), the module:
 1. **Analyzes** the project goal, deliverables, tools, and components
 2. **Selects** the right agent archetypes from a 4-tier taxonomy
 3. **Renders** all agent files by filling in project-specific placeholders
-4. **Emits** ready-to-use agent files for VS Code Copilot, Copilot CLI, or Claude
+4. **Emits** ready-to-use agent files for VS Code Copilot, Copilot CLI, Claude, or Goose
 
 The generated team includes:
 - 1 **Orchestrator** agent — coordinates all workflows
@@ -25,7 +25,7 @@ The generated team includes:
 - 3–10 **Domain agents** — `@work-summarizer` (always included) plus project-appropriate archetypes
 - 1 **Workstream Expert** per project component — deep, component-specific knowledge
 - 1 **Team Builder agent** — framework-native agent that can regenerate or expand the team from within your framework
-- A framework instructions file — `.github/copilot-instructions.md` (Copilot VS Code / Copilot CLI) or `.claude/CLAUDE.md` (Claude)
+- A framework instructions file — `.github/copilot-instructions.md` (Copilot VS Code / Copilot CLI), `.claude/CLAUDE.md` (Claude), or a repo-root `AGENTS.md` + `.goosehints` (Goose)
 
 ---
 
@@ -114,6 +114,7 @@ Framework-specific default output directories:
 - `copilot-vscode` → `<project>/.github/agents/`
 - `copilot-cli` → `<project>/.github/copilot/`
 - `claude` → `<project>/.claude/agents/`
+- `goose` → `<project>/.goose/recipes/` (team brief written to repo-root `AGENTS.md` + `.goosehints`)
 
 ### 4. Review SETUP-REQUIRED.md
 
@@ -138,13 +139,15 @@ See the [Agent-Assisted Setup guide](https://jlcatonjr.github.io/agentteams/agen
 | `copilot-vscode` | `.agent.md` with YAML front matter | Native inline YAML | VS Code Copilot `.agent.md` |
 | `copilot-cli` | Plain `.md` system prompts | Runtime manifest when handoffs are present (`references/runtime-handoffs.json`) | CLI prompt `.md` |
 | `claude` | Claude Code front matter `.md` + `CLAUDE.md` instructions | Runtime manifest when handoffs are present (`references/runtime-handoffs.json`) | Claude Code system prompt |
+| `goose` | Recipe YAML (`.goose/recipes/*.yaml`) | Native inline (orchestrator `sub_recipes`; specialists `summon` `load`) | `team-builder.yaml` recipe |
 
-For `copilot-cli` and `claude`, inline handoff sections are still stripped from the emitted agent prompts. When AgentTeams extracts handoffs from the rendered source content, it preserves that routing metadata in `references/runtime-handoffs.json` so bridge layers or external tooling can consume the handoff contract without relying on VS Code-specific YAML.
+For `copilot-cli` and `claude`, inline handoff sections are still stripped from the emitted agent prompts. When AgentTeams extracts handoffs from the rendered source content, it preserves that routing metadata in `references/runtime-handoffs.json` so bridge layers or external tooling can consume the handoff contract without relying on VS Code-specific YAML. `goose` encodes handoffs natively inside each recipe (orchestrator → `sub_recipes`, deeper edges → `summon` `load(...)`), so it emits **no** `runtime-handoffs.json` sidecar.
 
 Default framework locations:
 - `copilot-vscode`: agents in `.github/agents/`, instructions in `.github/copilot-instructions.md`
 - `copilot-cli`: agents in `.github/copilot/`, instructions in `.github/copilot-instructions.md`
 - `claude`: agents in `.claude/agents/`, instructions in `.claude/CLAUDE.md`
+- `goose`: recipes in `.goose/recipes/`, team brief in repo-root `AGENTS.md` (+ `.goosehints` integrator)
 
 ## Three Build Paths
 
@@ -188,15 +191,20 @@ agentteams \
   --output /path/to/project
 ```
 
-This creates lightweight bridge artifacts and target entrypoint files (for example `CLAUDE.md` or `.github/copilot-instructions.md`) while keeping source files unchanged.
+This creates lightweight bridge artifacts and target entrypoint files (for example `CLAUDE.md`, `.github/copilot-instructions.md`, or a Goose `AGENTS.md`) while keeping source files unchanged.
 
-Bridge supports all six directional combinations:
+Bridge supports the six combinations among Copilot/Claude plus a Goose target from each:
 - `copilot-vscode -> copilot-cli`
 - `copilot-vscode -> claude`
 - `copilot-cli -> copilot-vscode`
 - `copilot-cli -> claude`
 - `claude -> copilot-vscode`
 - `claude -> copilot-cli`
+- `copilot-vscode -> goose`
+- `copilot-cli -> goose`
+- `claude -> goose`
+
+> **Goose target caution:** the Goose bridge writes a repo-root `AGENTS.md`, a **shared multi-tool file** (Cursor/Codex/Cline also read it). Use `--bridge-merge` (the safe, fenced-only update); `--bridge-refresh` overwrites the whole file. See [`references/bridge-refresh-safety.md`](references/bridge-refresh-safety.md).
 
 Bridge freshness validation:
 
@@ -302,7 +310,7 @@ agentteams --help
 Options:
   --description PATH   Project description (.json or .md) [required]
   --project     PATH   Project directory to scan
-  --framework   NAME   copilot-vscode (default) | copilot-cli | claude
+  --framework   NAME   copilot-vscode (default) | copilot-cli | claude | goose
   --output      DIR    Output directory (default: framework-specific agents dir under <project>)
   --convert-from DIR   Convert an existing team directory into the target --framework
   --interop-from DIR   Run CAI-based interop pipeline from an existing team directory
@@ -575,9 +583,9 @@ The output lists each file as `[DRY RUN] WRITE` (new) or `[DRY RUN] OVERWRITE` (
 
 ---
 
-### 4. Generate for Claude Code or Copilot CLI
+### 4. Generate for Claude Code, Copilot CLI, or Goose
 
-Use `--framework` to target a different runtime. All three produce the same agent team from the same brief.
+Use `--framework` to target a different runtime. All four produce the same agent team from the same brief.
 
 ```bash
 # Claude Code sub-agents (.claude/agents/*.md with Claude front matter)
@@ -585,6 +593,9 @@ agentteams --description brief.json --project ~/code/myproject --framework claud
 
 # GitHub Copilot CLI (plain Markdown system prompts)
 agentteams --description brief.json --project ~/code/myproject --framework copilot-cli
+
+# Goose recipes (.goose/recipes/*.yaml + repo-root AGENTS.md/.goosehints)
+agentteams --description brief.json --project ~/code/myproject --framework goose
 ```
 
 See [Framework Support](#framework-support) for output format differences.

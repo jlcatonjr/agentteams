@@ -78,11 +78,13 @@ Framework-specific defaults:
 - `copilot-vscode` -> `/path/to/your/project/.github/agents/`
 - `copilot-cli` -> `/path/to/your/project/.github/copilot/`
 - `claude` -> `/path/to/your/project/.claude/agents/`
+- `goose` -> `/path/to/your/project/.goose/recipes/`
 
 Instructions file defaults:
 
 - `copilot-vscode` and `copilot-cli` -> `.github/copilot-instructions.md`
 - `claude` -> `.claude/CLAUDE.md`
+- `goose` -> repo-root `AGENTS.md` (+ `.goosehints` integrator)
 
 ---
 

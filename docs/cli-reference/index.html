@@ -1291,6 +1291,78 @@
   
 </li>
         
+          <li class="md-nav__item">
+  <a href="#-prune-backups-keep" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        --prune-backups [KEEP]
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#-keep-within-days-days" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        --keep-within-days DAYS
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#-backup-mirror-dir" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        --backup-mirror DIR
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#integrity-verification" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Integrity Verification
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Integrity Verification">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#-verify-integrity" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        --verify-integrity
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#-verify-backup-timestamp" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        --verify-backup [TIMESTAMP]
+      
+    </span>
+  </a>
+  
+</li>
+        
       </ul>
     </nav>
   
@@ -3674,6 +3746,78 @@
   
 </li>
         
+          <li class="md-nav__item">
+  <a href="#-prune-backups-keep" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        --prune-backups [KEEP]
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#-keep-within-days-days" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        --keep-within-days DAYS
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#-backup-mirror-dir" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        --backup-mirror DIR
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#integrity-verification" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Integrity Verification
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Integrity Verification">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#-verify-integrity" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        --verify-integrity
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#-verify-backup-timestamp" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        --verify-backup [TIMESTAMP]
+      
+    </span>
+  </a>
+  
+</li>
+        
       </ul>
     </nav>
   
@@ -3894,12 +4038,14 @@
 <a id="__codelineno-0-11" name="__codelineno-0-11" href="#__codelineno-0-11"></a>           [--strict-manual-placeholders] [--no-strict-manual-placeholders]
 <a id="__codelineno-0-12" name="__codelineno-0-12" href="#__codelineno-0-12"></a>           [--no-backup] [--shrink-policy {warn,halt,allow}]
 <a id="__codelineno-0-13" name="__codelineno-0-13" href="#__codelineno-0-13"></a>           [--list-backups] [--restore-backup TIMESTAMP]
-<a id="__codelineno-0-14" name="__codelineno-0-14" href="#__codelineno-0-14"></a>           [--target-host-features TOKENS]
-<a id="__codelineno-0-15" name="__codelineno-0-15" href="#__codelineno-0-15"></a>           [--capture-baseline PATH] [--baseline-label LABEL] [--check-baseline PATH]
-<a id="__codelineno-0-16" name="__codelineno-0-16" href="#__codelineno-0-16"></a>           [--security-offline] [--security-max-items N] [--security-no-nvd]
-<a id="__codelineno-0-17" name="__codelineno-0-17" href="#__codelineno-0-17"></a>           [--migrate] [--revert-migration]
-<a id="__codelineno-0-18" name="__codelineno-0-18" href="#__codelineno-0-18"></a>           [--fleet DIR] [--fleet-frameworks {github,claude,both}] [--fleet-report DIR]
-<a id="__codelineno-0-19" name="__codelineno-0-19" href="#__codelineno-0-19"></a>           [--version]
+<a id="__codelineno-0-14" name="__codelineno-0-14" href="#__codelineno-0-14"></a>           [--prune-backups [KEEP]] [--keep-within-days DAYS] [--backup-mirror DIR]
+<a id="__codelineno-0-15" name="__codelineno-0-15" href="#__codelineno-0-15"></a>           [--verify-integrity] [--verify-backup [TIMESTAMP]]
+<a id="__codelineno-0-16" name="__codelineno-0-16" href="#__codelineno-0-16"></a>           [--target-host-features TOKENS]
+<a id="__codelineno-0-17" name="__codelineno-0-17" href="#__codelineno-0-17"></a>           [--capture-baseline PATH] [--baseline-label LABEL] [--check-baseline PATH]
+<a id="__codelineno-0-18" name="__codelineno-0-18" href="#__codelineno-0-18"></a>           [--security-offline] [--security-max-items N] [--security-no-nvd]
+<a id="__codelineno-0-19" name="__codelineno-0-19" href="#__codelineno-0-19"></a>           [--migrate] [--revert-migration]
+<a id="__codelineno-0-20" name="__codelineno-0-20" href="#__codelineno-0-20"></a>           [--fleet DIR] [--fleet-frameworks {github,claude,both}] [--fleet-report DIR]
+<a id="__codelineno-0-21" name="__codelineno-0-21" href="#__codelineno-0-21"></a>           [--version]
 </code></pre></div>
 <hr />
 <h2 id="options">Options<a class="headerlink" href="#options" title="Permanent link">&para;</a></h2>
@@ -3908,7 +4054,7 @@
 <h3 id="-project-path-p-path"><code>--project PATH</code> / <code>-p PATH</code><a class="headerlink" href="#-project-path-p-path" title="Permanent link">&para;</a></h3>
 <p>Existing project directory to scan. Overrides <code>existing_project_path</code> in the description file. When set, the directory tree is scanned to supplement missing description fields (README content, tools, structure).</p>
 <h3 id="-framework-name-f-name"><code>--framework NAME</code> / <code>-f NAME</code><a class="headerlink" href="#-framework-name-f-name" title="Permanent link">&para;</a></h3>
-<p>Target agent framework. Choices: <code>copilot-vscode</code> (default), <code>copilot-cli</code>, <code>claude</code>.</p>
+<p>Target agent framework. Choices: <code>copilot-vscode</code> (default), <code>copilot-cli</code>, <code>claude</code>, <code>goose</code>.</p>
 <table>
 <thead>
 <tr>
@@ -3933,6 +4079,11 @@
 <td>Claude front matter <code>.md</code></td>
 <td>Claude Projects; output includes <code>CLAUDE.md</code> instructions and preserves handoffs in <code>references/runtime-handoffs.json</code> when present</td>
 </tr>
+<tr>
+<td><code>goose</code></td>
+<td>Recipe YAML (<code>.goose/recipes/*.yaml</code>)</td>
+<td>Block / AAIF Goose recipes; orchestrator delegates via <code>sub_recipes</code>, deeper edges become <code>summon</code> <code>load(...)</code>; team brief written to repo-root <code>AGENTS.md</code> + <code>.goosehints</code>. Handoffs are encoded natively in the recipes (no <code>runtime-handoffs.json</code> sidecar)</td>
+</tr>
 </tbody>
 </table>
 <p><code>references/runtime-handoffs.json</code> is a framework-neutral sidecar manifest emitted when extracted handoffs exist for frameworks that do not keep inline VS Code handoff syntax in the final agent file.</p>
@@ -3942,6 +4093,7 @@
 <li><code>copilot-vscode</code>: <code>&lt;project&gt;/.github/agents/</code></li>
 <li><code>copilot-cli</code>: <code>&lt;project&gt;/.github/copilot/</code></li>
 <li><code>claude</code>: <code>&lt;project&gt;/.claude/agents/</code></li>
+<li><code>goose</code>: <code>&lt;project&gt;/.goose/recipes/</code> (team brief written to repo-root <code>AGENTS.md</code> + <code>.goosehints</code>)</li>
 </ul>
 <h3 id="-convert-from-dir"><code>--convert-from DIR</code><a class="headerlink" href="#-convert-from-dir" title="Permanent link">&para;</a></h3>
 <p>Convert an existing team from <code>DIR</code> into the target <code>--framework</code> instead of rendering from a brief.</p>
@@ -4182,6 +4334,56 @@ stderr.</p>
 <p>List all available backups for the output directory (newest first) and exit. Prints timestamp, path, and file count for each backup.</p>
 <h3 id="-restore-backup-timestamp"><code>--restore-backup TIMESTAMP</code><a class="headerlink" href="#-restore-backup-timestamp" title="Permanent link">&para;</a></h3>
 <p>Restore a specific backup into the output directory. <code>TIMESTAMP</code> is the directory name shown by <code>--list-backups</code> (e.g. <code>20250601-143022</code>). Use <code>latest</code> to restore the most recent backup.</p>
+<h3 id="-prune-backups-keep"><code>--prune-backups [KEEP]</code><a class="headerlink" href="#-prune-backups-keep" title="Permanent link">&para;</a></h3>
+<p>Standalone retention sweep that bounds backup growth: delete old timestamped backups under <code>&lt;output_dir&gt;/.agentteams-backups/</code>, keeping the newest <code>KEEP</code> (default <code>10</code>). Resolves the output directory from <code>--output</code>/<code>--project</code> (else CWD) and needs no <code>--description</code>.</p>
+<ul>
+<li>The <strong>single newest backup is never deleted</strong>, even with <code>--prune-backups 0</code> (you always retain at least one recovery point).</li>
+<li>Combine with <code>--keep-within-days DAYS</code> to additionally retain anything younger than <code>DAYS</code> (union of the two rules). A backup whose age cannot be determined (unparseable name <em>and</em> unreadable mtime) is kept — the sweep is fail-safe toward retention.</li>
+<li>Pair with <code>--dry-run</code> to preview the deletions without touching disk.</li>
+</ul>
+<p>Distinct from <a href="#--prune"><code>--prune</code></a>, which removes stale <em>agent files</em> during an <code>--update</code>, not backups. Exit <code>0</code> (this is a maintenance op, not a verdict); mutually exclusive with <code>--verify-integrity</code> and <code>--verify-backup</code>.</p>
+<h3 id="-keep-within-days-days"><code>--keep-within-days DAYS</code><a class="headerlink" href="#-keep-within-days-days" title="Permanent link">&para;</a></h3>
+<p>Modifier for <code>--prune-backups</code>: in addition to the newest <code>KEEP</code>, retain any backup younger than <code>DAYS</code>. Errors if passed without <code>--prune-backups</code>.</p>
+<h3 id="-backup-mirror-dir"><code>--backup-mirror DIR</code><a class="headerlink" href="#-backup-mirror-dir" title="Permanent link">&para;</a></h3>
+<p>Modifier for <code>--update</code> (and the other write modes): after each automatic backup is written, also copy it to <code>DIR/&lt;output-slug&gt;/&lt;timestamp&gt;/</code> — e.g. a NAS, external drive, or synced folder — so the recovery net survives a local disk loss. The <code>&lt;output-slug&gt;</code> namespaces by output directory so many workspaces can mirror to one target without collision (this is also what makes <code>--fleet --backup-mirror</code> safe). Best-effort and <strong>non-fatal</strong>: a mirror failure warns on stderr but never breaks the primary operation. Overrides the <code>AGENTTEAMS_BACKUP_MIRROR</code> environment variable (set the variable to mirror without passing the flag every run).</p>
+<hr />
+<h2 id="integrity-verification">Integrity Verification<a class="headerlink" href="#integrity-verification" title="Permanent link">&para;</a></h2>
+<p>Read-only checks that detect silent corruption of generated files and confirm a backup is restorable. Both resolve the output directory from <code>--output</code>/<code>--project</code> (else CWD) and require no <code>--description</code>.</p>
+<h3 id="-verify-integrity"><code>--verify-integrity</code><a class="headerlink" href="#-verify-integrity" title="Permanent link">&para;</a></h3>
+<p>Classify every generated output file against the build-log <code>file_hashes</code> baseline and exit. Each recorded file is reported as one of:</p>
+<table>
+<thead>
+<tr>
+<th>Status</th>
+<th>Meaning</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>OK</code></td>
+<td>Current hash matches the build-time hash.</td>
+</tr>
+<tr>
+<td><code>MODIFIED</code></td>
+<td>Content changed since the last build — a legitimate <code>USER-EDITABLE</code> edit <strong>or</strong> drift. Undifferentiated (a whole-file hash cannot say <em>where</em> it changed), so it is <strong>advisory</strong> and listed for review.</td>
+</tr>
+<tr>
+<td><code>TRUNCATED</code></td>
+<td>A recorded file is now empty — a strong corruption signal.</td>
+</tr>
+<tr>
+<td><code>MISSING</code></td>
+<td>A recorded file is absent (or unreadable).</td>
+</tr>
+<tr>
+<td><code>FENCE-BROKEN</code></td>
+<td>Content changed <strong>and</strong> the file's <code>AGENTTEAMS</code> fences no longer parse (unclosed/duplicate/mismatched) — a strong corruption signal.</td>
+</tr>
+</tbody>
+</table>
+<p><strong>Exit code:</strong> non-zero on any <code>TRUNCATED</code> / <code>MISSING</code> / <code>FENCE-BROKEN</code>; <code>0</code> otherwise (<code>MODIFIED</code> does not fail). Unlike <code>--update</code> — where a non-zero exit can be a benign post-merge attestation crash — <strong><code>--verify-integrity</code>'s exit code IS the integrity verdict and must be heeded.</strong> If no build-log baseline exists yet, it reports "cannot verify" and exits <code>0</code> (run <code>--update</code> to establish one).</p>
+<h3 id="-verify-backup-timestamp"><code>--verify-backup [TIMESTAMP]</code><a class="headerlink" href="#-verify-backup-timestamp" title="Permanent link">&para;</a></h3>
+<p>Verify a backup's own integrity — each backed-up file's bytes against the <code>source_sha256</code> recorded in the backup's <code>_manifest.json</code> — confirming the backup is restorable (catches bit-rot/tamper). Defaults to the latest backup; pass a <code>TIMESTAMP</code> (as shown by <code>--list-backups</code>) for a specific one. Exits non-zero on any mismatch.</p>
 <hr />
 <h2 id="security-intelligence-options">Security Intelligence Options<a class="headerlink" href="#security-intelligence-options" title="Permanent link">&para;</a></h2>
 <p>These flags control the live vulnerability feed used when rendering security-reference agent files.</p>
