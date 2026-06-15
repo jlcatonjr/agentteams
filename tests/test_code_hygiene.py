@@ -38,8 +38,10 @@ MAX_MODULE_LINES = 1000
 LENGTH_ALLOWLIST: frozenset[str] = frozenset({
     # build_team.py left at Step D (now a 833-line shim); cli/app.py left at Step D2
     # (1174 -> 263 after the generate pipeline moved to cli/generate.py, 939 lines).
-    "agentteams/analyze.py",    # 1503 — accepted tracked debt (CH-07 allowlist; not split)
-    "agentteams/emit.py",       # 1389 — accepted tracked debt (CH-07 allowlist; not split)
+    "agentteams/analyze.py",    # 1504 — accepted tracked debt (CH-07 allowlist; not split)
+    "agentteams/emit.py",       # 1584 — accepted tracked debt (CH-07 allowlist; not split).
+    # NOTE: emit.py is accreting (1389 -> 1584 after backup retention/mirror + verify).
+    # Standing revisit-trigger: split it the next time a feature must touch it heavily.
 })
 BROAD_EXCEPT_BASELINE = 11      # except Exception/BaseException/bare. Narrowed over the sweep
                                 # (Steps E + remaining-items I6: commands, render_pipeline, ingest,
