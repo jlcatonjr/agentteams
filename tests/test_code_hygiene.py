@@ -139,6 +139,20 @@ def test_swallowed_exceptions_do_not_increase() -> None:
     )
 
 
+def test_artifacts_schema_anchor_resolves_to_repo_schemas() -> None:
+    """Step C re-anchor guard: cli/artifacts.py uses Path(__file__).parents[2]/schemas
+    after the move; assert that resolves to the real repo-root schemas dir with the
+    four artifact schemas present (a wrong anchor would silently misvalidate)."""
+    from agentteams.cli import artifacts
+    schema_dir = Path(artifacts.__file__).resolve().parents[2] / "schemas"
+    assert schema_dir == (REPO_ROOT / "schemas").resolve(), schema_dir
+    for name in (
+        "delivery-receipt.schema.json", "eval-suite.schema.json",
+        "model-routing.schema.json", "memory-index.schema.json",
+    ):
+        assert (schema_dir / name).exists(), f"missing {name} at re-anchored path"
+
+
 def test_framework_registry_has_single_source() -> None:
     """CH-05: the framework-id -> adapter map is defined as a dict literal in exactly one module."""
     definers = []
