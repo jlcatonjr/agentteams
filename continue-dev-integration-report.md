@@ -209,4 +209,32 @@ Ranked on the most comparable hard signal available; cross-unit comparisons flag
 ---
 
 ## 8. Audit Findings
-*(populated after adversarial + conflict audits — see below)*
+
+This report was passed through two independent audits (separate auditors, neither allowed to edit the report): an **adversarial audit** (attack every load-bearing claim; re-verify against code and primary sources) and a **conflict audit** (find internal contradictions, source conflicts, and conflicts with agentteams' own architecture/safety). Findings below; corrections from them have been folded into §1–§7 above and are marked "(Audit correction/resolution)".
+
+### 8A. Adversarial audit — verdict: **report substantially holds**
+- **All codebase claims verified TRUE to the line.** The FrameworkAdapter contract (6 required members), Claude/Copilot adapter specifics, the registry-in-3-places claim (and there is no 4th), the §2.2 touch-point list, the bridge validation set (`bridge.py:99-102`), `_render_target_files()` (`bridge.py:527`), and the schema enum (`team-manifest.schema.json:39`) all check out. No invented touch-points.
+- **The "7500+ lines" trap was NOT inherited.** An upstream sub-investigation mis-stated `claude.py` as "7500+ lines"; the file is **185 lines** (the "7,580" is its *byte* size). The report never repeated the figure. Logged so it never propagates.
+- **continue.dev core claims confirmed** against primary docs: config.yaml schema and "no top-level agents/subagents/orchestration key"; single-assistant IDE model; subagent role beta/"internal only"; Apache-2.0. Ranking spot-checks exact to the digit (Cline 4,322,950; Gemini 4,530,597; Tabnine listing literally labeled "(Legacy)"); Roo shutdown 2026-05-15, Cody enterprise-only since 2025-07, Codex >5M WAU = whole family — all confirmed. AGENTS.md/AAIF is real (AAIF formed Dec 2025).
+- **MAJOR finding (folded in):** **Gemini Code Assist individual/Pro/Ultra tiers stop serving on 2026-06-18**, folding into "Antigravity." This undercut the original §6 "Gemini for reach" recommendation — corrected in §5.1 and §6 (lead with Cline instead).
+- **Minor (folded in):** "undocumented" softened (the `subagent` role now appears in Continue config material, though still beta/"internal only"); the monorepo "unresolved" hedge resolved to "effectively frozen — release tagging, not active dev."
+- **Could not independently re-verify (low stakes):** exact installs for Amazon Q / Kilo / Augment / Roo, the GitHub star counts, and the MKT-flagged Cursor/Windsurf DAU figures (already labeled soft in the report).
+- **Central conclusions survive:** (1) adapter mechanically feasible; (2) the real blocker is the missing multi-agent delegation; (3) recommended targets — with the one Gemini dent now corrected.
+
+### 8B. Conflict audit — 9 tensions; the load-bearing ones are now reconciled
+| # | Conflict | Status |
+|---|---|---|
+| **C1** | "Same manner as claude" mis-frames delivery: claude ships as adapter **and** bridge, and for this repo the **bridge is canonical** (`CLAUDE.md` routes through `copilot-vscode → claude`). "Ship adapter, defer bridge" is therefore *less* than how claude is used. | Reconciled in §6 Path A.3 |
+| **C2** | "Not worse in kind than the claude adapter" was self-cancelling — Claude Code recovers delegation at runtime; continue.dev documents no equivalent → degradation is **categorically deeper**. | Retracted; §1 rewritten |
+| **C3** | Report attributed a "`manifest`/`none`" posture to claude; claude is strictly `manifest`. For continue.dev the honest mode is `none` (no documented manifest consumer). | Corrected in §4.1, §6 |
+| **C4** | Monorepo "frozen" used as settled fact in §4.2 but flagged "unverified" in §3.5/§7. | Resolved to "effectively frozen" (§3.5) |
+| **C5** | Specialist file unit undefined (rule `.md` vs `config.yaml` block vs Cloud Agent `.md`) — directly undermines the "well-bounded / 6 methods" estimate. | Flagged as a **precondition** in §1 and §6 Path A.1 |
+| **C6** | "Mechanically feasible/well-bounded" vs "central value lost" — headline tension led the exec summary with feasibility and buried the loss. | Reframed to "mechanically bounded **but product-degraded**" (§1) |
+| **C7** | §5.1 ranks incomparable units (WAU vs lifetime installs vs DAU vs stars vs valuation) in one ordered list; **Codex double-counted** (family WAU at #1 *and* CLI stars at #11–16). | See note below; the "apples-to-apples installs cohort" in §5.1 is the trustworthy ranking |
+| **C8** | §6 recommended shipping continue.dev **and** said other targets are higher-leverage, "in parallel," without forcing the choice. | Reframed §6 as an explicit **Path A vs Path B** decision |
+| **C9** | A continue.dev bridge would add `config.yaml` as a destructive-overwrite surface **not covered** by `bridge-refresh-safety.md`'s claude-shaped Pre-Flight checks; Continue tells users to commit `config.yaml` "like code" → exactly the 2026-05-27 incident pattern. | Made a **precondition** in §6 Path A.4 |
+
+**On C7 (ranking methodology), acknowledged but not fully rewritten:** the single ordered list in §5.1 deliberately mixes units and flags each, but a reader can still mis-read "5M WAU > 4.53M installs" as like-for-like. **The defensible ranking is the active-VS-Code-install cohort only:** Gemini 4.53M > Cline 4.32M > Amazon Q 1.75M > Roo 1.74M(frozen) > Kilo 1.21M > Cody 0.85M(stale) > Augment 0.76M. Everything else (Codex family WAU, Cursor/Windsurf DAU & valuation, JetBrains cumulative downloads, Tabnine legacy listing) is a **different unit** and should be read as a separate "signals" annex, not as rungs on the same ladder. Codex should occupy **one** slot, not two.
+
+### 8C. The single most important unresolved decision (for the user)
+**Ship continue.dev specifically — knowing the adapter delivers a degraded, delegation-stripped integration — or redirect the same effort to an `AGENTS.md` emitter (which covers continue.dev *plus* ~9 other targets) and one true file-based multi-agent target (Kilo/Codex/Goose) that preserves agentteams' orchestrator model?** The audits did not resolve this because it is a product/strategy call, not a fact. §6 now lays it out as Path A vs Path B; this is the decision to make before any code is written.
