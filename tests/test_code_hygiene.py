@@ -36,7 +36,8 @@ _LENGTH_EXCLUDE_PREFIXES = _EXCLUDE_PREFIXES + ("tests/",)
 # --- ratchets (verified 2026-06-15; only ever decrease) --------------------
 MAX_MODULE_LINES = 1000
 LENGTH_ALLOWLIST: frozenset[str] = frozenset({
-    "build_team.py",            # 1943 (was 4086) — Step D will drop it under the ceiling
+    # build_team.py left the allowlist at Step D (4086 -> 833, now a thin shim).
+    "agentteams/cli/app.py",    # 1174 — orchestrator entry; generate-pipeline extraction tracked (Step D2)
     "agentteams/analyze.py",    # 1503 — tracked debt (later phase)
     "agentteams/emit.py",       # 1389 — tracked debt (later phase)
 })
