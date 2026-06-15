@@ -91,6 +91,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `references/bridge-refresh-safety.md`. Adapter
   `agentteams/frameworks/agents_md.py`; tests `tests/test_agents_md_framework.py`.
 
+- **`--convert-from … --framework goose` — Goose is now a conversion target
+  (Goose Phase 4).** Converting an existing team to Goose emits `.goose/recipes/*.yaml`,
+  a repo-root `AGENTS.md` (team brief, front matter stripped), and the `.goosehints`
+  integrator. The orchestrator's `sub_recipes` delegation wires from sources that keep
+  handoffs in their agent files (`copilot-vscode`); `claude`/`copilot-cli` sources strip
+  handoffs at their own generation, so they convert to valid but flat recipes (a
+  source-format limitation, not a conversion defect). Implemented as five general,
+  adapter-driven fixes in `convert.py` (instructions dest via `finalize_output_path`,
+  render-through-adapter, sidecar emission, team-roster reconstruction, builder routing)
+  — **no `goose.py` changes**. `--interop-from … --framework goose` is intentionally
+  **refused**: the CAI interop representation drops the handoff graph, so the result
+  would be unwired — use `--convert-from` for Goose. Tests in
+  `tests/test_goose_convert_interop.py`.
+
 ### changed
 
 - **Repository filing conventions — stray plan docs no longer land at the root.**
