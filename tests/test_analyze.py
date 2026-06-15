@@ -1,5 +1,5 @@
 """
-Tests for src/analyze.py
+Tests for agentteams/analyze.py
 """
 
 import pytest
