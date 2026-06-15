@@ -222,7 +222,7 @@ def _is_agent_doc(rel_path: str, content: str) -> bool:
     # personas — they must not get the "Project-Specific Notes" persona section.
     if rel_path.startswith("../skills/") or "/skills/" in rel_path:
         return False
-    if base in {"copilot-instructions.md", "CLAUDE.md", "SETUP-REQUIRED.md"}:
+    if base in {"copilot-instructions.md", "CLAUDE.md", "AGENTS.md", "SETUP-REQUIRED.md"}:
         return False
     return bool(_YAML_FM_RE.match(content))
 

@@ -18,14 +18,16 @@ from agentteams.frameworks.base import FrameworkAdapter
 from agentteams.frameworks.claude import ClaudeAdapter
 from agentteams.frameworks.copilot_cli import CopilotCLIAdapter
 from agentteams.frameworks.copilot_vscode import CopilotVSCodeAdapter
+from agentteams.frameworks.goose import GooseAdapter
 
 _ADAPTERS: dict[str, type[FrameworkAdapter]] = {
     "copilot-vscode": CopilotVSCodeAdapter,
     "copilot-cli": CopilotCLIAdapter,
     "claude": ClaudeAdapter,
+    "goose": GooseAdapter,
 }
 
-_INSTRUCTIONS_NAMES = {"copilot-instructions.md", "CLAUDE.md"}
+_INSTRUCTIONS_NAMES = {"copilot-instructions.md", "CLAUDE.md", "AGENTS.md"}
 _YAML_FRONT_MATTER_RE = re.compile(r"^---\s*\n.*?\n---\s*\n", re.DOTALL)
 
 

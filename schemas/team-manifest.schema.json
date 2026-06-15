@@ -36,7 +36,7 @@
     "framework": {
       "type": "string",
       "description": "Target agent framework.",
-      "enum": ["copilot-vscode", "copilot-cli", "claude"]
+      "enum": ["copilot-vscode", "copilot-cli", "claude", "goose"]
     },
     "primary_output_dir": {
       "type": "string"
