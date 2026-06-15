@@ -111,7 +111,8 @@ def _schema_validator() -> Any | None:
         schema_path = Path(__file__).resolve().parent.parent / "schemas" / "mcp-server.schema.json"
         schema = json.loads(schema_path.read_text(encoding="utf-8"))
         validator = Draft7Validator(schema)
-    except Exception:
+    except (OSError, ValueError):
+        # CH-24: bundled schema unreadable / invalid JSON -> degrade to no validation.
         validator = None
     _VALIDATOR_CACHE.append(validator)
     return validator

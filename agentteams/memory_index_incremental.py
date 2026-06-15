@@ -364,7 +364,8 @@ def try_incremental_sed_update(
 
     try:
         validate_index(mutated)
-    except Exception:
+    except Exception:  # noqa: BLE001 — CH-24: ANY validation failure must roll the
+        # mutation back (fail-safe); the incremental path then falls back to a full rebuild.
         _restore_backup(index_path)
         return IncrementalUpdateResult(False, "mutated_schema_invalid")
 

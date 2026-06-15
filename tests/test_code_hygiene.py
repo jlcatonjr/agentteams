@@ -41,9 +41,11 @@ LENGTH_ALLOWLIST: frozenset[str] = frozenset({
     "agentteams/analyze.py",    # 1503 — tracked debt (later phase)
     "agentteams/emit.py",       # 1389 — tracked debt (later phase)
 })
-BROAD_EXCEPT_BASELINE = 13      # except Exception/BaseException/bare; Step E narrowed 2 file-I/O
-                                # sites. Remaining are justified external/isolation/never-block
-                                # boundaries (CH-24-permitted: visible WARN, not silent swallow).
+BROAD_EXCEPT_BASELINE = 11      # except Exception/BaseException/bare. Narrowed over the sweep
+                                # (Steps E + remaining-items I6: commands, render_pipeline, ingest,
+                                # mcp_emit). The remaining 11 are justified external/isolation/
+                                # never-block/cleanup-reraise boundaries, each annotated with a
+                                # CH-24 rationale (visible WARN or re-raise, not silent swallow).
 SWALLOW_BASELINE = 29           # except clause whose body is only pass/continue (narrow catches =
                                 # known-recoverable external boundaries; the ratchet blocks new ones)
 

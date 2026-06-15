@@ -784,8 +784,15 @@ def test_bridge_check_missing_manifest_cli_hint(
 # are skipped because they already exist, recommending --bridge-refresh.
 # ---------------------------------------------------------------------------
 def test_bridge_generate_skip_notice_cli(
-    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+    tmp_path: Path,
+    capsys: pytest.CaptureFixture[str],
+    monkeypatch: pytest.MonkeyPatch,
 ):
+    # Deterministic: this exercises the bridge SKIP-NOTICE feature, not security
+    # intel. Bypass the freshness gate (as the sibling bridge tests do) so the
+    # test does not depend on a live security-intel fetch (was intermittently
+    # raising RuntimeError when the network/cache made intel "stale").
+    monkeypatch.setattr(security_gate, "_assert_security_intelligence_fresh", lambda *_a, **_k: None)
     source_dir = tmp_path / "src" / ".claude" / "agents"
     source_dir.mkdir(parents=True)
     (source_dir / "orchestrator.md").write_text(

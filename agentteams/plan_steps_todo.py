@@ -161,7 +161,7 @@ def update_status(csv_path: Path, step_id: str, new_status: str) -> bool:
         with os.fdopen(fd, "w", encoding="utf-8", newline="") as tmp_fh:
             tmp_fh.write(buf.getvalue())
         os.replace(tmp_path, csv_path)
-    except Exception:
+    except Exception:  # noqa: BLE001 — CH-24: cleanup-then-reraise (re-raises; hides nothing)
         if os.path.exists(tmp_path):
             os.unlink(tmp_path)
         raise

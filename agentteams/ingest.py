@@ -517,8 +517,8 @@ def parse_dependency_manifests(project_path: Path) -> list[dict[str, Any]]:
                     if name_lower not in seen:
                         seen.add(name_lower)
                         tools.append(dep)
-            except Exception:
-                continue  # Skip unparseable manifests
+            except (OSError, ValueError, KeyError):
+                continue  # CH-24: skip unreadable / malformed / missing-key manifests
 
     return tools
 

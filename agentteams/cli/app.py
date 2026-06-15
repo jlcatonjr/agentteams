@@ -77,7 +77,7 @@ def main(argv: list[str] | None = None) -> int:
     try:
         from agentteams.host_features import parse_tokens as _parse_host_features
         args.host_features = _parse_host_features(getattr(args, "target_host_features", None))
-    except Exception as exc:
+    except Exception as exc:  # noqa: BLE001 — CH-24: surface any --target-host-features parse error to the user
         print(f"Error: --target-host-features: {exc}", file=sys.stderr)
         return 1
 
