@@ -25,6 +25,8 @@ Target entry files by framework: **claude** → `CLAUDE.md`, `.claude/*.md`; **c
 > **⚠ Goose target — `AGENTS.md` is a SHARED, multi-tool standard file.** Unlike `CLAUDE.md` (Claude-specific), `AGENTS.md` is read by Cursor, Codex, Codex-CLI, Cline, and others. Two extra hazards beyond the claude case:
 > - **First-time create in EVERY mode.** When `AGENTS.md` is absent, the bridge writes its fenced pointer **even under `--bridge-merge`** (the bridge emits a runtime notice when it does). Before bridging, confirm no other tool intends to author `AGENTS.md`.
 > - **`--bridge-refresh` overwrites the whole shared file** — including content other tools depend on. An existing **unfenced** `AGENTS.md` (or a Phase-1 *generated* `AGENTS.md` team brief, which is also unfenced) is safely **skipped** under `--bridge-merge` (`no-fence`), but **destroyed** under `--bridge-refresh`. The same applies to `.goosehints`.
+>
+> **⚠ `--framework agents-md` is a SECOND in-repo writer of `AGENTS.md`.** The generate path `agentteams --framework agents-md` writes the team brief to repo-root `AGENTS.md` (fenced `AGENTTEAMS:*` regions) + per-specialist detail under `.agents/`. So a single repo can have `AGENTS.md` authored by (a) `--framework agents-md` (generate), (b) `--framework goose` (generate), and (c) a `… → goose` bridge — all the same path. They do not run together in one invocation, but if you switch targets in one repo, treat `AGENTS.md` as a shared-ownership file: prefer the fenced/merge paths, and back up before any overwrite. (The emitted `agents-md` `AGENTS.md` carries a one-line generated notice to this effect.)
 
 ---
 

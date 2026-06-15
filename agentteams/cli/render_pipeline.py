@@ -16,6 +16,7 @@ from pathlib import Path
 from typing import Any, Callable
 
 from agentteams import emit, render
+from agentteams.frameworks.agents_md import AgentsMdAdapter
 from agentteams.frameworks.claude import ClaudeAdapter
 from agentteams.frameworks.copilot_cli import CopilotCLIAdapter
 from agentteams.frameworks.copilot_vscode import CopilotVSCodeAdapter
@@ -73,7 +74,7 @@ def _resolve_strict_manual_mode(*, strict_arg: bool | None, self_update: bool) -
     return bool(self_update)
 def _build_final_rendered(
     manifest: dict[str, Any],
-    adapter: CopilotVSCodeAdapter | CopilotCLIAdapter | ClaudeAdapter | GooseAdapter,
+    adapter: CopilotVSCodeAdapter | CopilotCLIAdapter | ClaudeAdapter | GooseAdapter | AgentsMdAdapter,
     project_name: str,
 ) -> list[tuple[str, str]]:
     """Render templates and apply framework post-processing.
@@ -169,7 +170,7 @@ def _stale_tool_agent_paths(
     team carries (copilot: `tool-<slug>.agent.md`; claude: `tool-<slug>.md` in
     the agents dir) — never touches unrelated agents.
     """
-    suffix = ".md" if framework_id == "claude" else ".agent.md"
+    suffix = ".md" if framework_id in ("claude", "agents-md") else ".agent.md"
     paths: list[Path] = []
     for ta in manifest.get("tool_agents", []):
         slug = ta.get("slug", "")

@@ -13,6 +13,7 @@ import the registry.
 
 from __future__ import annotations
 
+from agentteams.frameworks.agents_md import AgentsMdAdapter
 from agentteams.frameworks.base import FrameworkAdapter
 from agentteams.frameworks.claude import ClaudeAdapter
 from agentteams.frameworks.copilot_cli import CopilotCLIAdapter
@@ -24,4 +25,5 @@ FRAMEWORKS: dict[str, type[FrameworkAdapter]] = {
     "copilot-cli": CopilotCLIAdapter,
     "claude": ClaudeAdapter,
     "goose": GooseAdapter,
+    "agents-md": AgentsMdAdapter,
 }
