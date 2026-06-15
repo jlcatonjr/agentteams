@@ -54,13 +54,21 @@ Is security intelligence ≤24 hours old?
            - AGENTTEAMS_WAIVER_SIGNING_KEY is configured
 ```
 
-**Complete Waiver Validation (ALL checks required):**
-1. Waiver record exists in `references/security-waivers.log.csv`
-2. HMAC-SHA256 signature is valid: `HMAC-SHA256(row_without_signature) == waiver.hmac_signature`
-3. **Expiration is checked:** `current_time() <= waiver.expires_at`
-4. Reason matches operation type (e.g., "air-gapped" for `--security-offline`)
+**Complete waiver validation (ALL checks required).** These rules are enforced by
+`agentteams/cli/security_gate.py` (`_validate_security_waiver`), which is the
+authoritative source for the schema and signature documented below:
+1. A waiver record exists in `references/security-waivers.log.csv` with the full
+   11-column header (see [Waiver System](#waiver-system)).
+2. `action_reviewed` matches the operation — the intel-freshness gate looks for
+   `security-intel-freshness`.
+3. `conditions_verified` is exactly `verified`.
+4. `approver`, `ticket_id`, and `reason_code` are all non-empty.
+5. `expires_at` is a valid ISO-8601 timestamp in the future.
+6. `max_uses > 0` and `uses < max_uses` (the gate increments `uses` on each spend).
+7. `AGENTTEAMS_WAIVER_SIGNING_KEY` is configured and the HMAC-SHA256 signature is
+   valid (payload below); the stored signature is compared case-insensitively.
 
-If **ANY** check fails → Block write, return detailed error message
+If **ANY** check fails → block the write and return a detailed error.
 
 The 24-hour window is automated:
 - First generation run fetches live data and records timestamp
@@ -92,52 +100,75 @@ Valid scenarios for signed waivers:
 ### Waiver Lifecycle
 
 **Prerequisites:**
-- `AGENTTEAMS_WAIVER_SIGNING_KEY` environment variable configured (HMAC-SHA256 key)
-- Signed record in `references/security-waivers.log.csv`
+- `AGENTTEAMS_WAIVER_SIGNING_KEY` environment variable configured (the HMAC-SHA256 key).
+- A signed record in `references/security-waivers.log.csv`.
 
-**Format:**
+**Schema (authoritative source: `agentteams/cli/security_gate.py`).** The log is a CSV
+with **11 columns** — do not hand-copy a subset; the gate rejects any other header:
+
 ```csv
-issued_at,expires_at,reason,approver,hmac_signature
-2026-05-10T15:30:00Z,2026-05-11T15:30:00Z,scheduled-maintenance,security-lead@org,abc123...
+timestamp,waiver_id,action_reviewed,expires_at,max_uses,uses,approver,ticket_id,reason_code,conditions_verified,signature
+2026-05-10T15:30:00Z,waiver-freshness-001,security-intel-freshness,2026-05-11T15:30:00Z,1,0,security-lead@org,SEC-1238,maintenance,verified,<hex-signature>
 ```
 
-**Signature verification:**
-- HMAC-SHA256(row_without_signature, AGENTTEAMS_WAIVER_SIGNING_KEY)
-- On every write, agentteams verifies signature and expiration
-- If verification fails or waiver expired: block write
+- `action_reviewed` — the gated action; the intel-freshness gate looks for `security-intel-freshness`.
+- `max_uses` / `uses` — the gate consumes one use per spend (requires `uses < max_uses`).
+- `conditions_verified` — must be exactly `verified`.
+- `signature` — lowercase hex HMAC-SHA256 over the payload below.
 
-### Creating and Verifying Waivers
+**HMAC payload.** The signature signs **9 pipe-joined fields**, excluding `timestamp`
+and `signature`, in this exact order:
 
-**Waiver Format & Fields:**
-```csv
-issued_at,expires_at,reason,approver,hmac_signature
-2026-05-10T15:30:00Z,2026-05-11T15:30:00Z,scheduled-maintenance,security-lead@org,abc123def456...
+```
+waiver_id|action_reviewed|expires_at|max_uses|uses|approver|ticket_id|reason_code|conditions_verified
 ```
 
-**Automated Waiver Creation & Signature:**
+### Creating and verifying waivers
+
+> **No `--create-waiver` command exists.** Minting a waiver mints the security gate's
+> escape credential, so it is intentionally a manual, key-holder-owned step (a
+> maintainer-owned `--create-waiver` may be added later). The snippet below is
+> **reproducible by a careful key-holder, but it is a brittle stopgap** — keep the
+> signing key offline and prefer refreshing live intel where possible.
+
+**Mint a signed waiver (Python — mirrors `security_gate.py` exactly):**
+```python
+import hashlib, hmac, os
+
+key = os.environ["AGENTTEAMS_WAIVER_SIGNING_KEY"].encode("utf-8")
+row = {
+    "timestamp": "2026-05-10T15:30:00Z",
+    "waiver_id": "waiver-freshness-001",
+    "action_reviewed": "security-intel-freshness",
+    "expires_at": "2026-05-11T15:30:00Z",
+    "max_uses": "1",
+    "uses": "0",                       # newly minted waivers start unspent
+    "approver": "security-lead@org",
+    "ticket_id": "SEC-1238",
+    "reason_code": "maintenance",
+    "conditions_verified": "verified",
+}
+fields = ["waiver_id", "action_reviewed", "expires_at", "max_uses", "uses",
+          "approver", "ticket_id", "reason_code", "conditions_verified"]
+payload = "|".join(row[f] for f in fields)               # 9 fields, pipe-joined
+row["signature"] = hmac.new(key, payload.encode("utf-8"), hashlib.sha256).hexdigest()
+
+header = ["timestamp", *fields, "signature"]             # 11-column order
+print(",".join(header))
+print(",".join(row[c] for c in header))                  # append this row to the log
+```
+
+**Verify existing waivers (read-only; never consumes a use):**
 ```bash
-# Set your signing key
 export AGENTTEAMS_WAIVER_SIGNING_KEY="your-hmac-key"
-
-# Create new waiver (auto-signs with HMAC-SHA256)
-agentteams --create-waiver \
-  --reason "scheduled-maintenance" \
-  --approver "security-lead@org" \
-  --expires-in 24h \
-  >> references/security-waivers.log.csv
-
-# Verify all existing waivers (checks expiration + signatures)
-agentteams --verify-waivers
-# Output: ✅ 3 waivers valid (1 expiring in 23h)
+agentteams --verify-waivers --output /path/to/project
+#   [OK ] waiver-freshness-001 (action=security-intel-freshness)
+#   1 waiver(s): 1 valid, 0 invalid.
 ```
-
-**Manual Verification (if no automation available):**
-```bash
-# Compute HMAC-SHA256 for row (without signature field)
-echo -n "2026-05-10T15:30:00Z,2026-05-11T15:30:00Z,scheduled-maintenance,security-lead@org" | \
-  openssl dgst -sha256 -hmac "$AGENTTEAMS_WAIVER_SIGNING_KEY"
-# Output: abc123def456... (must match waiver.hmac_signature)
-```
+`--verify-waivers` reports the signature, expiry, use-limit, and condition status of
+every waiver **without minting or consuming one** (exit non-zero if any is invalid).
+Without `AGENTTEAMS_WAIVER_SIGNING_KEY`, rows are reported invalid (unverifiable)
+rather than silently skipped.
 
 ---
 
