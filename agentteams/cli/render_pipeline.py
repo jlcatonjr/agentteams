@@ -103,6 +103,10 @@ def _build_final_rendered(
         elif file_type == "skill":
             slug = Path(rel_path).stem
             content = adapter.render_skill_file(content, slug, manifest)
+        elif file_type == "builder":
+            # Default hook is identity (copilot/claude keep the markdown builder);
+            # adapters with non-markdown agents (Goose) wrap it as a runnable recipe.
+            content = adapter.render_builder_file(content, manifest)
         final_path = adapter.finalize_output_path(rel_path, file_type)
         final.append((final_path, content))
 

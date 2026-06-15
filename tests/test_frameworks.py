@@ -833,3 +833,40 @@ class TestGooseAdapter:
         out = self.adapter.render_instructions_file(content, GOOSE_MANIFEST)
         assert "name: x" not in out
         assert "# Team" in out
+
+    # --- builder → runnable recipe (Phase-1 item 1) ---
+
+    def test_get_file_extension_builder_is_yaml(self):
+        # The team-builder must emit as a recipe, not a stray .md in .goose/recipes.
+        assert self.adapter.get_file_extension("builder") == ".yaml"
+
+    def test_render_builder_file_emits_recipe(self):
+        content = (
+            "---\nname: team-builder\ndescription: Build a team\n---\n\n"
+            "# Team Builder\n\nConduct the intake then run build_team."
+        )
+        out = self.adapter.render_builder_file(content, GOOSE_MANIFEST)
+        assert out.startswith('version: "1.0.0"')
+        assert "title:" in out
+        assert "instructions: |" in out
+        assert "name: developer" in out          # can write files / run build_team
+        assert "sub_recipes:" not in out         # builder is not the orchestrator
+        assert "# Team Builder" in out           # body preserved in instructions block
+
+    def test_builder_finalizes_to_yaml_path(self):
+        # _guess_file_type routes team-builder.agent.md → "builder"; goose maps it to .yaml.
+        assert self.adapter.finalize_output_path("team-builder.agent.md", "builder") == "team-builder.yaml"
+
+    # --- AGENTS.md / .goosehints placement is correct relative to the agents dir
+    #     (Phase-1 item 2: the ../../ paths land at the repo root by design — the
+    #     same contract claude uses for CLAUDE.md; a flat --output is misuse) ---
+
+    def test_instructions_and_goosehints_resolve_to_repo_root(self):
+        agents_dir = Path("/project/.goose/recipes")  # == get_agents_dir(/project)
+        assert self.adapter.get_agents_dir(Path("/project")) == agents_dir
+
+        instr = self.adapter.finalize_output_path("../copilot-instructions.md", "instructions")
+        assert (agents_dir / instr).resolve() == Path("/project/AGENTS.md")
+
+        hints_path, _ = self.adapter.extra_output_files(GOOSE_MANIFEST)[0]
+        assert (agents_dir / hints_path).resolve() == Path("/project/.goosehints")

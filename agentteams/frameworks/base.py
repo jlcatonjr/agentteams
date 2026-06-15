@@ -60,6 +60,17 @@ class FrameworkAdapter(ABC):
         """
         return content
 
+    def render_builder_file(self, content: str, manifest: dict[str, Any]) -> str:
+        """Post-process the rendered team-builder meta-agent for this framework.
+
+        The default is identity: copilot/claude emit the builder as a markdown
+        agent file unchanged. Frameworks whose agent files are NOT markdown (e.g.
+        Goose, whose agents are recipe YAML) override this to wrap the builder in
+        the framework's agent structure so it is runnable, not a stray markdown
+        file in the agents directory.
+        """
+        return content
+
     def extra_output_files(self, manifest: dict[str, Any]) -> list[tuple[str, str]]:
         """Return additional (rel_path, content) files to emit for this framework.
 

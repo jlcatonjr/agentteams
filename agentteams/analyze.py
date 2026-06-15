@@ -1332,6 +1332,7 @@ def _plan_output_files(
         "copilot-vscode": "builder/team-builder-copilot-vscode.template.md",
         "copilot-cli": "builder/team-builder-copilot-cli.template.md",
         "claude": "builder/team-builder-claude.template.md",
+        "goose": "builder/team-builder-goose.template.md",
     }
     if framework in builder_templates:
         files.append({

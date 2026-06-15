@@ -124,8 +124,27 @@ class GooseAdapter(FrameworkAdapter):
         """The team brief becomes AGENTS.md verbatim (strip any stray front matter)."""
         return self._strip_yaml_front_matter(content)
 
+    def render_builder_file(self, content: str, manifest: dict[str, Any]) -> str:
+        """Wrap the team-builder meta-agent as a runnable Goose recipe.
+
+        Goose agents are recipe YAML, so the builder cannot ship as a stray
+        markdown file in ``.goose/recipes/``. It is a standalone recipe (no
+        ``sub_recipes`` — it is not the orchestrator) with the ``developer``
+        extension so it can write the description file and invoke build_team.
+        Run it with ``goose run --recipe .goose/recipes/team-builder.yaml``.
+        """
+        name, description = _extract_name_description(content, "team-builder", manifest)
+        body = self._strip_yaml_front_matter(content)
+        body = self._strip_handoffs_section(body).strip() or description or name
+        return _emit_recipe(
+            title=name or "Team Builder",
+            description=description,
+            instructions=body,
+            extensions=["developer"],
+        )
+
     def get_file_extension(self, file_type: str) -> str:
-        if file_type == "agent":
+        if file_type in {"agent", "builder"}:
             return ".yaml"
         return ".md"
 
