@@ -17,9 +17,11 @@ from agentteams.frameworks.base import FrameworkAdapter
 from agentteams.frameworks.claude import ClaudeAdapter
 from agentteams.frameworks.copilot_cli import CopilotCLIAdapter
 from agentteams.frameworks.copilot_vscode import CopilotVSCodeAdapter
+from agentteams.frameworks.goose import GooseAdapter
 
 FRAMEWORKS: dict[str, type[FrameworkAdapter]] = {
     "copilot-vscode": CopilotVSCodeAdapter,
     "copilot-cli": CopilotCLIAdapter,
     "claude": ClaudeAdapter,
+    "goose": GooseAdapter,
 }

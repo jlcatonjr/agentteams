@@ -8,6 +8,7 @@ import pytest
 from agentteams.frameworks.copilot_vscode import CopilotVSCodeAdapter
 from agentteams.frameworks.copilot_cli import CopilotCLIAdapter
 from agentteams.frameworks.claude import ClaudeAdapter
+from agentteams.frameworks.goose import GooseAdapter
 
 
 # ---------------------------------------------------------------------------
@@ -664,3 +665,171 @@ def test_base_adapter_render_skill_file_is_noop_for_copilot():
     body = _TOOL_DOC_BODY
     assert CopilotVSCodeAdapter().render_skill_file(body, "tool-postgresql", {}) == body
     assert CopilotCLIAdapter().render_skill_file(body, "tool-postgresql", {}) == body
+
+
+# ===========================================================================
+# GooseAdapter
+# ===========================================================================
+
+# Manifest whose roster contains navigator + security, so handoffs to them are
+# recognized as valid team targets.
+GOOSE_MANIFEST = {
+    "project_name": "TestProject",
+    "framework": "goose",
+    "output_files": [
+        {"path": "navigator.agent.md"},
+        {"path": "security.agent.md"},
+    ],
+}
+
+# Same roster minus security — used to prove non-team targets are dropped.
+GOOSE_MANIFEST_NO_SECURITY = {
+    "project_name": "TestProject",
+    "framework": "goose",
+    "output_files": [{"path": "navigator.agent.md"}],
+}
+
+# An agent that hands off to navigator in BOTH the YAML block and the body —
+# Goose must collapse it to a single reference.
+GOOSE_DUP_HANDOFF_CONTENT = """\
+---
+name: Quality Auditor — TestProject
+description: "Audit deliverables"
+handoffs:
+    - label: File lookup
+        agent: navigator
+        prompt: "Inspect the files."
+        send: false
+---
+
+# Quality Auditor
+
+Audit body.
+
+## Handoff Instructions
+
+- Hand off to `@navigator` for file lookups.
+"""
+
+
+class TestGooseAdapter:
+
+    def setup_method(self):
+        self.adapter = GooseAdapter()
+
+    # --- Identity ---
+
+    def test_framework_id(self):
+        assert self.adapter.framework_id == "goose"
+
+    def test_supports_handoffs(self):
+        assert self.adapter.supports_handoffs() is True
+
+    def test_handoff_delivery_mode_native(self):
+        # Handoffs are encoded into recipes, not a sidecar manifest.
+        assert self.adapter.handoff_delivery_mode() == "native"
+
+    def test_get_file_extension(self):
+        assert self.adapter.get_file_extension("agent") == ".yaml"
+        assert self.adapter.get_file_extension("instructions") == ".md"
+
+    def test_get_agents_dir(self):
+        assert self.adapter.get_agents_dir(Path("/project")) == Path("/project/.goose/recipes")
+
+    # --- Path finalization ---
+
+    def test_finalize_output_path_instructions_to_agents_md(self):
+        result = self.adapter.finalize_output_path("../copilot-instructions.md", "instructions")
+        assert result == "../../AGENTS.md"
+
+    def test_finalize_output_path_agent_to_yaml(self):
+        result = self.adapter.finalize_output_path("quality-auditor.agent.md", "agent")
+        assert result == "quality-auditor.yaml"
+
+    # --- .goosehints integrator ---
+
+    def test_extra_output_files_emits_goosehints(self):
+        extras = self.adapter.extra_output_files(GOOSE_MANIFEST)
+        assert len(extras) == 1
+        path, content = extras[0]
+        assert path == "../../.goosehints"
+        # Integrates AGENTS.md via the @file content-include.
+        assert content.startswith("@AGENTS.md")
+
+    # --- render_agent_file: orchestrator → sub_recipes (delegation) ---
+
+    def test_orchestrator_builds_sub_recipes(self):
+        result = self.adapter.render_agent_file(
+            CONTENT_WITH_YAML_HANDOFFS, "orchestrator", GOOSE_MANIFEST
+        )
+        assert "sub_recipes:" in result
+        assert 'name: "navigator"' in result
+        assert 'path: "./navigator.yaml"' in result
+        assert 'path: "./security.yaml"' in result
+
+    def test_orchestrator_declares_summon_extension(self):
+        result = self.adapter.render_agent_file(
+            CONTENT_WITH_YAML_HANDOFFS, "orchestrator", GOOSE_MANIFEST
+        )
+        assert "name: summon" in result
+        assert "name: developer" in result
+
+    def test_orchestrator_is_valid_recipe_shape(self):
+        result = self.adapter.render_agent_file(
+            CONTENT_WITH_YAML_HANDOFFS, "orchestrator", GOOSE_MANIFEST
+        )
+        assert result.startswith('version: "1.0.0"\n')
+        assert "title: " in result
+        assert "instructions: |" in result
+        assert "# Orchestrator" in result  # body preserved as instructions
+        assert result.endswith("\n")
+
+    def test_orchestrator_filters_non_team_handoff_targets(self):
+        result = self.adapter.render_agent_file(
+            CONTENT_WITH_YAML_HANDOFFS, "orchestrator", GOOSE_MANIFEST_NO_SECURITY
+        )
+        assert "./navigator.yaml" in result
+        assert "./security.yaml" not in result
+
+    # --- render_agent_file: specialist → load() references (no delegation) ---
+
+    def test_specialist_uses_load_references_not_sub_recipes(self):
+        result = self.adapter.render_agent_file(
+            CONTENT_WITH_YAML_HANDOFFS, "quality-auditor", GOOSE_MANIFEST
+        )
+        assert "sub_recipes:" not in result
+        assert 'load("navigator")' in result
+        assert 'load("security")' in result
+        assert "## Delegation & references (Goose)" in result
+        assert "name: summon" in result  # summon needed for load
+
+    def test_specialist_without_handoffs_has_no_summon_or_load(self):
+        result = self.adapter.render_agent_file(
+            FULL_YAML_CONTENT, "navigator", GOOSE_MANIFEST
+        )
+        assert "sub_recipes:" not in result
+        assert "load(" not in result
+        assert "name: summon" not in result
+        assert "name: developer" in result  # developer is always present
+
+    # --- one reference per target agent (dedupe across YAML + body) ---
+
+    def test_handoffs_deduped_by_agent(self):
+        # Specialist form: navigator appears in YAML block AND body → one load().
+        spec = self.adapter.render_agent_file(
+            GOOSE_DUP_HANDOFF_CONTENT, "quality-auditor", GOOSE_MANIFEST
+        )
+        assert spec.count('load("navigator")') == 1
+        # Orchestrator form: navigator appears once as a sub_recipe.
+        orch = self.adapter.render_agent_file(
+            GOOSE_DUP_HANDOFF_CONTENT, "orchestrator", GOOSE_MANIFEST
+        )
+        assert orch.count('path: "./navigator.yaml"') == 1
+
+    # --- render_instructions_file strips stray front matter ---
+
+    def test_render_instructions_file_strips_front_matter(self):
+        content = "---\nname: x\n---\n\n# Team\n\nBrief."
+        out = self.adapter.render_instructions_file(content, GOOSE_MANIFEST)
+        assert "name: x" not in out
+        assert "# Team" in out

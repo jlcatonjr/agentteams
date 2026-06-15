@@ -60,6 +60,16 @@ class FrameworkAdapter(ABC):
         """
         return content
 
+    def extra_output_files(self, manifest: dict[str, Any]) -> list[tuple[str, str]]:
+        """Return additional (rel_path, content) files to emit for this framework.
+
+        Default: none. Frameworks that need framework-specific sidecar files not
+        derived from a template (e.g. Goose's ``.goosehints`` integrator) override
+        this. Paths are relative to the agents output directory, like every other
+        emitted path.
+        """
+        return []
+
     @abstractmethod
     def get_file_extension(self, file_type: str) -> str:
         """Return the file extension for a given file type.

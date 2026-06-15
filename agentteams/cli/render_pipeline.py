@@ -19,6 +19,7 @@ from agentteams import emit, render
 from agentteams.frameworks.claude import ClaudeAdapter
 from agentteams.frameworks.copilot_cli import CopilotCLIAdapter
 from agentteams.frameworks.copilot_vscode import CopilotVSCodeAdapter
+from agentteams.frameworks.goose import GooseAdapter
 
 TEMPLATES_DIR = Path(__file__).resolve().parents[1] / "templates"
 
@@ -72,7 +73,7 @@ def _resolve_strict_manual_mode(*, strict_arg: bool | None, self_update: bool) -
     return bool(self_update)
 def _build_final_rendered(
     manifest: dict[str, Any],
-    adapter: CopilotVSCodeAdapter | CopilotCLIAdapter | ClaudeAdapter,
+    adapter: CopilotVSCodeAdapter | CopilotCLIAdapter | ClaudeAdapter | GooseAdapter,
     project_name: str,
 ) -> list[tuple[str, str]]:
     """Render templates and apply framework post-processing.
@@ -104,6 +105,11 @@ def _build_final_rendered(
             content = adapter.render_skill_file(content, slug, manifest)
         final_path = adapter.finalize_output_path(rel_path, file_type)
         final.append((final_path, content))
+
+    # Framework-specific sidecar files not derived from a template
+    # (e.g. Goose's .goosehints integrator). Default is none.
+    for extra_path, extra_content in adapter.extra_output_files(manifest):
+        final.append((extra_path, extra_content))
 
     if runtime_handoff_agents:
         final.append((
