@@ -94,6 +94,12 @@ LOCAL_CATALOG: tuple[dict[str, Any], ...] = (
      "habit": "'Make it better' refinement loops accumulate flaws",
      "cross_links": (),
      "fix": "Re-review and re-test after every iteration, not just at the end"},
+    {"id": "BH-10", "category": "hygiene",
+     "habit": "Wholesale file rewrites / reformatting untouched regions when a scoped edit suffices",
+     "cross_links": ("CH-28",),
+     "fix": "Make the smallest change that satisfies the task; never reformat or "
+            "restructure unrelated lines in the same edit (CH-28). Required guards/"
+            "cleanups (CH-10/CH-22/CH-23/CH-24) and sanctioned refactors still apply."},
 )
 
 _CATEGORY_LABELS = {

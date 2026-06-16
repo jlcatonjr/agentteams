@@ -59,7 +59,10 @@ When interpreting rules or proposing extensions, consult this reference to under
 | New file added to `{PRIMARY_OUTPUT_DIR}` | CH-03 (no ad-hoc in source) | — |
 | Shared utility modified | CH-08, CH-13 | — |
 | New `try`/`except`/`finally` block added | CH-23, CH-24 | Report only; correction by `@primary-producer` |
-| Refactoring task requested | CH-07, CH-08 | Delegate to `@agent-refactor` |
+| Refactoring task requested | CH-07, CH-08 | Delegate to `@agent-refactor` (CH-28 advisory; sanctioned CH-07/CH-08 refactors are exempt) |
+| Recurring work implemented as a re-run script | CH-27 | Report; recommend promotion to a long-lived utility |
+| Diff disproportionate to a small, scoped task | CH-28 | Report only (advisory) |
+| Agent `tools:` grant not justified by the agent's procedures | CH-26 | Report only |
 | Agent files contain inline data >10 lines | CH-08, CH-14 | Delegate to `@agent-refactor` |
 | Agent doc contradictions found | CH-20 | Delegate to `@conflict-auditor`; alert `@agent-refactor` |
 | Investigation or debug session ends | CH-16, CH-19 | — |
@@ -108,6 +111,9 @@ Required project extensions for this repository:
 | CH-23 | Fail Fast on Invalid Inputs | Defensive Programming | **Critical** |
 | CH-24 | Exception Handling Is a Last Resort; Encode Conditions Explicitly | Defensive Programming | **Critical** |
 | CH-25 | Screen AI-Generated Code Against the Bad-Habits Catalog | AI-Generated Code | High |
+| CH-26 | Agent Tool Declarations Follow Least Authority (PoLA) | Agent Governance | High |
+| CH-27 | Prefer Long-Lived Utilities Over Ad-Hoc Scripts | Modularity / Reuse | Medium |
+| CH-28 | Prefer Minimal, Scoped Edits | Change Discipline | Medium (advisory) |
 
 **CH-25 — AI bad-habits screening.** When auditing code authored or substantially
 edited by an AI agent, screen it against the AI bad-habits catalog before
@@ -122,6 +128,27 @@ cross-links (`—` means the catalog entry is itself the rule). **Security-class
 habits are out of scope** — insecure-by-default code is owned by `@security`
 (CWE / OWASP LLM & Web + S-rules); route those findings there, do not duplicate
 the security taxonomies here (CH-05/CH-14).
+
+**CH-26 — Least authority for tool grants.** Each agent's `tools:` field must list
+only the tools its declared function requires; excess grants are a violation even
+if never exercised. Full enforcement detail is in the companion reference file.
+
+**CH-27 — Long-lived utilities over ad-hoc scripts.** When a feature is likely to
+be used again, its creation/manipulation must live in a durable, reusable utility,
+not a throwaway script — *and not a script merely tagged `RECURRING`/`UTILITY` yet
+re-authored each time*. This is the affirmative duty that CH-02 (tag→execute→delete)
+and CH-03 (no ad-hoc scripts in source) do not state. It does **not** lower CH-08's
+3-occurrence extraction threshold or mandate abstracting genuinely single-use
+helpers. Report-only; triggers no `@cleanup` deletion.
+
+**CH-28 — Minimal, scoped edits (advisory).** A change should touch only the lines
+its task requires; do not rewrite or reformat untouched regions. **Constraints
+first:** CH-28 never excuses skipping a *required* change — dead-code removal
+(CH-10), correctness guards (CH-23/CH-24), or type checks (CH-22) are mandatory
+even when they add lines — and it never blocks *sanctioned, scoped* refactors
+(CH-07/CH-08) or `@agent-refactor`'s mandate. It targets only incidental scope
+creep. Advisory: reported, never blocking, no deletion; its check is illustrative,
+exactly as CH-24/CH-25 are.
 
 ### Audit Output Format
 
@@ -165,3 +192,6 @@ Overall: 18/20 checks passing
 - **CH-22 is mandatory in this repository.** Function/class inputs must be type-checked so only meaningful input types are accepted.
 - **CH-23 is mandatory in this repository.** Invalid inputs must raise explicit errors and must never fail silently.
 - **CH-24 is mandatory in this repository.** `try`/`except`/`finally` is a last resort, reserved for genuinely unavoidable external failures (I/O, network, third-party calls). Prefer encoding expected conditions in dictionaries / lookup tables / explicit guards and failing hard on the unexpected, so a broken program surfaces immediately instead of being masked by broad exception handling.
+- **CH-26 is mandatory in this repository.** Agent `tools:` declarations follow the Principle of Least Authority — only the minimally required tools, even if extra grants are never exercised.
+- **CH-27 is mandatory in this repository.** Recurring, foreseeably-reused work must be promoted to a long-lived utility rather than re-implemented as an ad-hoc (or merely re-run) script. It does not lower CH-08's 3-occurrence threshold (cross-link, not duplication).
+- **CH-28 is advisory in this repository.** Prefer the smallest diff that satisfies the task; never expand scope into unrelated lines. Required changes (CH-10/CH-22/CH-23/CH-24) and sanctioned refactors (CH-07/CH-08, `@agent-refactor`) are always exempt — CH-28 never overrides them.

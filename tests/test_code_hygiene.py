@@ -208,6 +208,36 @@ _REFACTOR_MODULES = (
 )
 
 
+_UNIVERSAL_CH = REPO_ROOT / "agentteams/templates/universal/code-hygiene.template.md"
+_DOMAIN_CH = REPO_ROOT / "agentteams/templates/domain/code-hygiene-rules-reference.template.md"
+
+
+def test_extension_rules_present_in_both_templates() -> None:
+    """Parity guard: CH-26/CH-27/CH-28 must appear in BOTH the universal agent
+    template and the domain enforcement reference, so the agent summary and the
+    enforcement catalog never drift apart (the same CH-20 hazard the rules guard)."""
+    universal = _UNIVERSAL_CH.read_text(encoding="utf-8")
+    domain = _DOMAIN_CH.read_text(encoding="utf-8")
+    for rule in ("CH-26", "CH-27", "CH-28"):
+        assert rule in universal, f"{rule} missing from {_UNIVERSAL_CH.name}"
+        assert rule in domain, f"{rule} missing from {_DOMAIN_CH.name}"
+
+
+def test_ch28_constraints_sentence_present() -> None:
+    """CH-28 is only safe (no CH-20 contradiction with CH-10/CH-22/CH-23/CH-24 or
+    the refactor agents) because it front-loads the constraint that required
+    changes and sanctioned refactors override it. Guard that sentence so a future
+    trim cannot silently reintroduce the contradiction."""
+    universal = _UNIVERSAL_CH.read_text(encoding="utf-8")
+    domain = _DOMAIN_CH.read_text(encoding="utf-8")
+    # The "required changes still apply even when they add lines" constraint must
+    # be stated verbatim somewhere; the universal template carries it un-wrapped.
+    assert "even when they add lines" in " ".join(universal.split())
+    # Both templates must cite the rules CH-28 defers to, so the exemption is explicit.
+    for ref in ("CH-10", "CH-22", "CH-23", "CH-24", "CH-07", "CH-08"):
+        assert ref in domain, f"CH-28 constraint must reference {ref} in {_DOMAIN_CH.name}"
+
+
 def test_refactor_modules_are_fully_type_annotated() -> None:
     """CH-22: every module-level function in the refactor's cli/* + registry + errors
     modules must annotate its parameters (except self/cls) and its return type.
