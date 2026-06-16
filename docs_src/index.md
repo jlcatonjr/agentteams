@@ -11,7 +11,7 @@ Given a project description (a `.json` or `.md` brief), the module:
 1. **Analyzes** the project goal, deliverables, tools, and components
 2. **Selects** the right agent archetypes from a 4-tier taxonomy
 3. **Renders** all agent files by filling in project-specific placeholders
-4. **Emits** ready-to-use agent files for VS Code Copilot, Copilot CLI, or Claude
+4. **Emits** ready-to-use agent files for VS Code Copilot, Copilot CLI, Claude, Block / AAIF **Goose**, or the cross-tool **AGENTS.md** standard
 
 The generated team includes:
 
@@ -20,7 +20,7 @@ The generated team includes:
 - 3–10 **Domain agents** — `@work-summarizer` plus project-appropriate archetypes
 - 1 **Workstream Expert** per project component — deep, component-specific knowledge
 - 1 **Team Builder agent** — framework-native agent that can regenerate or expand the team
-- A framework instructions file — `.github/copilot-instructions.md` (Copilot VS Code / Copilot CLI) or `.claude/CLAUDE.md` (Claude)
+- A framework instructions file — `.github/copilot-instructions.md` (Copilot VS Code / Copilot CLI), `.claude/CLAUDE.md` (Claude), or a repo-root `AGENTS.md` (Goose / `agents-md`)
 
 ---
 
@@ -56,18 +56,28 @@ Short reads (about five paragraphs each) explaining how core module components f
 | `copilot-vscode` | `.agent.md` with YAML front matter | Native inline YAML | VS Code Copilot `.agent.md` |
 | `copilot-cli` | Plain `.md` system prompts | Runtime manifest when handoffs are present (`references/runtime-handoffs.json`) | CLI prompt `.md` |
 | `claude` | Claude front matter `.md` + `CLAUDE.md` instructions | Runtime manifest when handoffs are present (`references/runtime-handoffs.json`) | `CLAUDE.md` system prompt |
+| `goose` | Block / AAIF Goose recipe YAML (`.goose/recipes/*.yaml`) | Native — orchestrator handoffs become `sub_recipes`, deeper edges become `summon` `load(...)` (no sidecar) | Runnable `team-builder.yaml` recipe |
+| `agents-md` | Cross-tool **AGENTS.md** standard (plain `.md`) | Routing preserved in `references/runtime-handoffs.json` | `.agents/team-builder.md` |
 
-For `copilot-cli` and `claude`, AgentTeams strips inline handoff sections from the visible prompt files but emits `references/runtime-handoffs.json` when handoffs are extracted, so routing metadata remains available to bridge layers and other runtime tooling.
+For `copilot-cli`, `claude`, and `agents-md`, AgentTeams strips inline handoff sections from the visible prompt files but emits `references/runtime-handoffs.json` when handoffs are extracted, so routing metadata remains available to bridge layers and other runtime tooling. `copilot-vscode` and `goose` keep handoff semantics inline (for Goose, encoded directly in the recipes).
+
+**Goose** (`--framework goose`) emits one recipe per agent plus a team brief at the repo-root `AGENTS.md` and a `.goosehints` integrator; the orchestrator delegates to specialist recipes via `sub_recipes`. It is supported for **generate**, **convert** (`--convert-from … --framework goose`), and **bridge** (`--bridge-from … --framework goose`); **interop-to-Goose is not yet supported** (the canonical interop representation drops the handoff graph — use `--convert-from`). See the [framework feature-support matrix](cli-reference.md#feature-support-by-framework).
+
+**`agents-md`** (`--framework agents-md`) emits a single framework-neutral repo-root `AGENTS.md` — the canonical file read by ~10 AI coding tools (Continue, Cursor, Cline, Codex, Zed, Aider, …) — plus per-specialist detail under `.agents/`. It is **generate-only**.
 
 Default framework locations:
 - `copilot-vscode`: `.github/agents/`
 - `copilot-cli`: `.github/copilot/`
 - `claude`: `.claude/agents/`
+- `goose`: `.goose/recipes/` (team brief at repo-root `AGENTS.md` + `.goosehints`)
+- `agents-md`: `.agents/` (canonical brief at repo-root `AGENTS.md`)
 
 Framework instructions locations:
 - `copilot-vscode`: `.github/copilot-instructions.md`
 - `copilot-cli`: `.github/copilot-instructions.md`
 - `claude`: `.claude/CLAUDE.md`
+- `goose`: repo-root `AGENTS.md` (+ `.goosehints`)
+- `agents-md`: repo-root `AGENTS.md`
 
 Three build paths:
 - Path A: fresh generation from a brief (`--description`)
