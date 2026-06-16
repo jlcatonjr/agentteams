@@ -434,3 +434,27 @@ def test_chained_a_to_b_to_c_not_worse_than_direct_a_to_c(
     chained_token_counts = _token_counts(chained_text, critical_tokens)
     for token in critical_tokens:
         assert chained_token_counts[token] >= direct_token_counts[token]
+
+
+def test_export_to_cai_excludes_reference_and_backup_md(tmp_path):
+    """export_to_cai must not slurp non-agent .md files (reference docs, skills,
+    or backup copies) as agents — only the real flat agent files."""
+    from agentteams.interop import export_to_cai
+
+    agents_dir = tmp_path / ".github" / "agents"
+    _build_source("copilot-vscode", agents_dir)  # writes orchestrator.agent.md
+
+    # Decoys that the recursive rglob would otherwise pick up as agents:
+    refs = agents_dir / "references"
+    refs.mkdir()
+    (refs / "pipeline-graph.md").write_text("# Pipeline\n\nnot an agent\n", encoding="utf-8")
+    (refs / "ref-pandas-reference.md").write_text("# pandas\n\nnot an agent\n", encoding="utf-8")
+    backup = agents_dir / ".agentteams-backups" / "20260615-000000"
+    backup.mkdir(parents=True)
+    (backup / "orchestrator.agent.md").write_text(_vscode_agent("orchestrator"), encoding="utf-8")
+
+    cai = export_to_cai(agents_dir, source_framework="copilot-vscode")
+    slugs = sorted(a["slug"] for a in cai["agents"])
+    assert slugs == ["orchestrator"], f"expected only the real agent, got {slugs}"
+    # the decoy filenames must not appear as agents under any slug form
+    assert not any("pipeline" in s or "reference" in s or "pandas" in s for s in slugs)

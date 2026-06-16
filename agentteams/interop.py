@@ -18,6 +18,10 @@ from typing import Any
 from agentteams.frameworks.registry import FRAMEWORKS as _ADAPTERS
 
 _INSTRUCTIONS_NAMES = {"copilot-instructions.md", "CLAUDE.md"}
+# Subdirectories under (or beside) an agents dir whose .md files are NOT agents:
+# reference docs, Claude skills (a sibling dir), and backup copies of agents.
+# Mirror of convert._PASSTHROUGH_DIRS (kept in sync deliberately — see convert.py).
+_NON_AGENT_DIRS = {"references", "skills", ".agentteams-backups"}
 _YAML_FRONT_MATTER_RE = re.compile(r"^---\s*\n.*?\n---\s*\n", re.DOTALL)
 
 
@@ -84,6 +88,10 @@ def export_to_cai(source_dir: Path, source_framework: str | None = None) -> dict
         if entry.is_dir():
             continue
         rel = entry.relative_to(source_dir)
+        if rel.parts and rel.parts[0] in _NON_AGENT_DIRS:
+            # reference docs / skills / backup copies — never agents (rglob recurses,
+            # so without this every references/*.md became a bogus CAI agent)
+            continue
         name = entry.name
         if name in _INSTRUCTIONS_NAMES:
             instructions_name = name

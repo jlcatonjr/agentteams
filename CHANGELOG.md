@@ -105,6 +105,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   would be unwired — use `--convert-from` for Goose. Tests in
   `tests/test_goose_convert_interop.py`.
 
+### fixed
+
+- **`--interop-from` no longer emits reference docs (or backup copies) as bogus
+  agents.** `export_to_cai` walked the source tree recursively and treated every
+  `.md` it found as an agent, so `references/*.md` (and, when present, agent copies
+  under `.agentteams-backups/`) were exported as ~13–14 spurious "agents" per team.
+  The export now skips non-agent subdirectories (`references`, `skills`,
+  `.agentteams-backups`), mirroring `convert.py`'s passthrough handling, so interop
+  emits only the real agents. Test in `tests/test_interop.py`.
+
 ### changed
 
 - **Repository filing conventions — stray plan docs no longer land at the root.**
