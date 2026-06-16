@@ -35,7 +35,7 @@ Args:
 
 1. `source_dir` (`Path`): source agent directory.
 2. `target_dir` (`Path`): destination agent directory.
-3. `target_framework` (`str`): one of `copilot-vscode`, `copilot-cli`, `claude`.
+3. `target_framework` (`str`): one of `copilot-vscode`, `copilot-cli`, `claude`, or `goose`. (`agents-md` is generate-only and is not a valid convert target.)
 4. `project_manifest` (`dict | None`): optional context for adapter rendering.
 5. `dry_run` (`bool`): simulate write operations.
 6. `overwrite` (`bool`): overwrite existing files when true.
@@ -54,5 +54,15 @@ Raises:
 ## Notes
 
 1. Preserves body prose while rewriting framework wrappers/front matter.
-2. Converts instructions file naming between `copilot-instructions.md` and `CLAUDE.md`.
-3. Copies passthrough assets such as `SETUP-REQUIRED.md` and `references/`.
+2. The instructions file is placed at the adapter's `finalize_output_path` location — `copilot-instructions.md`, `CLAUDE.md`, or, for `goose`, the repo-root `AGENTS.md` (front matter stripped) — and rendered through the target adapter's `render_instructions_file`.
+3. Emits any adapter sidecars via `extra_output_files` — e.g. `goose`'s repo-root `.goosehints` integrator.
+4. Copies passthrough assets such as `SETUP-REQUIRED.md` and `references/`.
+
+### Goose target (`--framework goose`)
+
+Converting an existing team to Goose emits one recipe per agent under `.goose/recipes/*.yaml`, plus the repo-root `AGENTS.md` + `.goosehints`. The orchestrator's `sub_recipes` delegation is reconstructed from each agent's handoffs:
+
+- **`copilot-vscode` sources** keep handoffs inline in their agent files, so delegation wires fully (identical to a native `--framework goose` generation).
+- **`claude` / `copilot-cli` sources** strip handoffs at their own generation (handoffs live in `references/runtime-handoffs.json`), so they currently convert to valid but **flat (un-delegated)** recipes. Recovering that delegation from the sidecar is planned (see the handoff-recovery work).
+
+`convert_team` synthesizes the team roster into `manifest["output_files"]` so the Goose adapter's `_team_slugs` can resolve delegation targets.

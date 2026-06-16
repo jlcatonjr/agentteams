@@ -133,6 +133,16 @@ Post-process the rendered team-builder meta-agent. **Default implementation: ide
 
 **Returns:** `str` — Framework-shaped builder content.
 
+#### `extra_output_files(manifest)`
+
+Return additional `(rel_path, content)` files the framework emits that are not derived from a template. **Default implementation: empty list.** `GooseAdapter` overrides this to emit the repo-root `.goosehints` integrator alongside `AGENTS.md`. These files are emitted by the generate path **and** by `convert_team`, so a converted Goose team also gets its `.goosehints`.
+
+**Args:**
+
+- `manifest` (`dict[str, Any]`) — Team manifest.
+
+**Returns:** `list[tuple[str, str]]` — `(rel_path, content)` pairs, relative to the agents directory.
+
 ---
 
 ## `CopilotVSCodeAdapter`

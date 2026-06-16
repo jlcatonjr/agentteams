@@ -38,9 +38,11 @@ Returns one of:
 2. `copilot-cli`
 3. `claude`
 
+`detect_framework` does not auto-detect `goose` or `agents-md`; those are never inferred as interop **sources** (pass `--interop-source-framework` only for the three above).
+
 ### `export_to_cai(source_dir, source_framework=None)`
 
-Exports source team files to CAI payload.
+Exports source team files to CAI payload. Non-agent subdirectories — `references`, `skills`, and `.agentteams-backups` — are skipped, so reference docs and backup copies are never mistaken for agents.
 
 Returns CAI object with keys including:
 
@@ -75,3 +77,4 @@ Bundle artifacts are emitted under `references/interop/<source>-to-<target>/`.
 1. CAI path is intended for deterministic cross-framework transport.
 2. Bundle mode emits routing/instructions manifests for external consumers.
 3. Framework wrappers are normalized while preserving semantic markdown payload.
+4. **`goose` is not a supported interop target.** The CLI refuses `--interop-from … --framework goose`: the CAI representation does not carry the handoff graph Goose needs for `sub_recipes` delegation, so the result would be unwired. Use [`--convert-from … --framework goose`](convert.md) instead (it preserves delegation from the source agent files). Enabling interop-to-Goose, by preserving handoffs through the CAI, is planned.
