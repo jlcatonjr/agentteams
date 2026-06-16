@@ -75,12 +75,17 @@ Use this matrix when deciding which module/artifact to rely on for a specific op
 24. **`claude` Adapter** — Claude Code front matter `.md` + `CLAUDE.md`; outputs to `.claude/agents/`
 25. **Framework-Agnostic Interface** — Extensible adapter base class for adding new frameworks
 
+Two additional first-class adapters extend this set:
+
+- **`goose` Adapter** — Block / AAIF Goose recipe YAML (`.goose/recipes/*.yaml`, schema `1.0.0`); orchestrator delegation encoded natively as `sub_recipes` (deeper edges become `summon` `load(...)`); team brief written to the repo-root `AGENTS.md` plus a `.goosehints` integrator. Also a valid `--convert-from` and `--bridge-from` **target** (not an interop target). See [`frameworks`](frameworks.md).
+- **`agents-md` Adapter** — Cross-tool **AGENTS.md** standard (AAIF / Linux Foundation); emits a single framework-neutral repo-root `AGENTS.md` (read by ~10 AI coding tools) plus per-specialist detail under `.agents/`. **Generate-only** (not a convert/interop/bridge target).
+
 ### CLI
 
 26. **`agentteams` / `build_team.py` CLI** — Command-line interface wiring all pipeline stages
 27. **`--description`** — Path to project brief (`.json` or `.md`)
 28. **`--project`** — Target project directory
-29. **`--framework`** — Output framework: `copilot-vscode`, `copilot-cli`, or `claude`
+29. **`--framework`** — Output framework: `copilot-vscode`, `copilot-cli`, `claude`, `goose`, or `agents-md`
 30. **`--dry-run`** — Preview output without writing files
 31. **`--overwrite`** — Allow overwriting existing agent files
 32. **`--self`** — Self-maintenance: regenerate the module's own agent team
@@ -218,12 +223,12 @@ Workflows are step sequences embedded in the generated Orchestrator agent. Every
 
 ## Interoperability
 
-113. **`convert` Module** — Direct format migration between framework outputs (`copilot-vscode` ↔ `copilot-cli` ↔ `claude`)
-114. **`--convert-from` Flag** — Convert an existing agent team to a different framework format
+113. **`convert` Module** — Direct format migration between framework outputs (`copilot-vscode` ↔ `copilot-cli` ↔ `claude`), and to `goose` (emits recipes + repo-root `AGENTS.md` + `.goosehints`; delegation wired from `copilot-vscode` sources, flat from `claude`/`copilot-cli`)
+114. **`--convert-from` Flag** — Convert an existing agent team to a different framework format (targets: `copilot-vscode`, `copilot-cli`, `claude`, `goose`)
 115. **File Classification** — Auto-detect file role (agent, instruction, reference) for correct translation
-116. **`interop` Module** — Canonical Agent Interface (CAI) normalization and compatibility pipeline
+116. **`interop` Module** — Canonical Agent Interface (CAI) normalization and compatibility pipeline (`copilot-vscode` / `copilot-cli` / `claude` targets; `goose` is refused — the CAI does not carry the handoff graph Goose needs, so use `--convert-from` instead)
 117. **`--interop-from` Flag** — Run the CAI interop pipeline against an existing team
-118. **`bridge` Module** — Lightweight runtime compatibility bridge; generate bridge artifacts without regenerating sources
+118. **`bridge` Module** — Lightweight runtime compatibility bridge; generate bridge artifacts without regenerating sources (targets include `goose` — writes fenced `AGENTS.md` / `.goosehints` / `.goose/README.md` pointers)
 119. **`--bridge-from` Flag** — Generate bridge artifacts from a source canonical team
 120. **Runtime Handoff Manifest** — `references/runtime-handoffs.json`; emitted when handoffs are extracted from non-VS Code adapters, consumed by bridge layers and external tooling
 
