@@ -8,8 +8,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### added
 
-- **Goose (Block / AAIF) framework support.** Adds Goose as a first-class target
-  alongside Copilot and Claude:
+- **Goose (Block / AAIF) framework support (beta).** Adds Goose as a target
+  alongside Copilot and Claude. **Beta:** generate/convert/bridge are supported and
+  validated against the Goose CLI; interop-to-Goose is not yet supported and the
+  `goose` adapter API is not yet covered by the stability policy (`STABILITY.md`).
   - **Generate** (`--framework goose`): emits one Goose recipe per agent under
     `.goose/recipes/<slug>.yaml`, an `orchestrator.yaml` that delegates to specialist
     recipes via `sub_recipes` (deeper handoff edges become `summon` `load(...)`

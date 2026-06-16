@@ -17,7 +17,7 @@ Given a project description (a `.json` or `.md` brief), the module:
 1. **Analyzes** the project goal, deliverables, tools, and components
 2. **Selects** the right agent archetypes from a 4-tier taxonomy
 3. **Renders** all agent files by filling in project-specific placeholders
-4. **Emits** ready-to-use agent files for VS Code Copilot, Copilot CLI, Claude, or Goose
+4. **Emits** ready-to-use agent files for VS Code Copilot, Copilot CLI, Claude, or Goose *(beta)*
 
 The generated team includes:
 - 1 **Orchestrator** agent — coordinates all workflows
@@ -139,7 +139,9 @@ See the [Agent-Assisted Setup guide](https://jlcatonjr.github.io/agentteams/agen
 | `copilot-vscode` | `.agent.md` with YAML front matter | Native inline YAML | VS Code Copilot `.agent.md` |
 | `copilot-cli` | Plain `.md` system prompts | Runtime manifest when handoffs are present (`references/runtime-handoffs.json`) | CLI prompt `.md` |
 | `claude` | Claude Code front matter `.md` + `CLAUDE.md` instructions | Runtime manifest when handoffs are present (`references/runtime-handoffs.json`) | Claude Code system prompt |
-| `goose` | Recipe YAML (`.goose/recipes/*.yaml`) | Native inline (orchestrator `sub_recipes`; specialists `summon` `load`) | `team-builder.yaml` recipe |
+| `goose` **(beta)** | Recipe YAML (`.goose/recipes/*.yaml`) | Native inline (orchestrator `sub_recipes`; specialists `summon` `load`) | `team-builder.yaml` recipe |
+
+> **Goose support is in beta.** Generate, convert, and bridge are supported and validated against the Goose CLI; interop-to-Goose is not yet supported, and converting from `claude`/`copilot-cli` sources currently yields flat (un-delegated) recipes pending handoff-recovery work. The `goose` adapter API is not yet covered by the [stability policy](STABILITY.md).
 
 For `copilot-cli` and `claude`, inline handoff sections are still stripped from the emitted agent prompts. When AgentTeams extracts handoffs from the rendered source content, it preserves that routing metadata in `references/runtime-handoffs.json` so bridge layers or external tooling can consume the handoff contract without relying on VS Code-specific YAML. `goose` encodes handoffs natively inside each recipe (orchestrator → `sub_recipes`, deeper edges → `summon` `load(...)`), so it emits **no** `runtime-handoffs.json` sidecar.
 

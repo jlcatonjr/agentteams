@@ -77,7 +77,7 @@ Use this matrix when deciding which module/artifact to rely on for a specific op
 
 Two additional first-class adapters extend this set:
 
-- **`goose` Adapter** — Block / AAIF Goose recipe YAML (`.goose/recipes/*.yaml`, schema `1.0.0`); orchestrator delegation encoded natively as `sub_recipes` (deeper edges become `summon` `load(...)`); team brief written to the repo-root `AGENTS.md` plus a `.goosehints` integrator. Also a valid `--convert-from` and `--bridge-from` **target** (not an interop target). See [`frameworks`](frameworks.md).
+- **`goose` Adapter** *(beta)* — Block / AAIF Goose recipe YAML (`.goose/recipes/*.yaml`, schema `1.0.0`); orchestrator delegation encoded natively as `sub_recipes` (deeper edges become `summon` `load(...)`); team brief written to the repo-root `AGENTS.md` plus a `.goosehints` integrator. Also a valid `--convert-from` and `--bridge-from` **target** (not an interop target). **Beta** — generate/convert/bridge supported, interop planned; adapter API not yet under the stability contract. See [`frameworks`](frameworks.md).
 - **`agents-md` Adapter** — Cross-tool **AGENTS.md** standard (AAIF / Linux Foundation); emits a single framework-neutral repo-root `AGENTS.md` (read by ~10 AI coding tools) plus per-specialist detail under `.agents/`. **Generate-only** (not a convert/interop/bridge target).
 
 ### CLI

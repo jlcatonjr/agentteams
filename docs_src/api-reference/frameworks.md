@@ -211,6 +211,9 @@ Strips VS Code YAML and inline handoff blocks, then injects Claude-compatible fr
 
 > *Source: `agentteams/frameworks/goose.py`*
 
+!!! note "Beta"
+    The `GooseAdapter` is in **beta**: generate, convert, and bridge are supported and validated against the Goose CLI, but interop-to-Goose is not yet supported and convert from `claude`/`copilot-cli` sources currently yields flat recipes. Its API and emitted-artifact shapes are **not yet covered** by the [stability policy](https://github.com/jlcatonjr/agentteams/blob/main/STABILITY.md) and may change in a minor release.
+
 Adapter for Block / AAIF Goose recipes.
 
 - **framework_id:** `'goose'`

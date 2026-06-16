@@ -58,7 +58,10 @@ Raises:
 3. Emits any adapter sidecars via `extra_output_files` — e.g. `goose`'s repo-root `.goosehints` integrator.
 4. Copies passthrough assets such as `SETUP-REQUIRED.md` and `references/`.
 
-### Goose target (`--framework goose`)
+### Goose target (`--framework goose`) — beta
+
+!!! note "Beta"
+    Goose is a **beta** convert target; its emitted-artifact shapes are not yet covered by the [stability policy](https://github.com/jlcatonjr/agentteams/blob/main/STABILITY.md).
 
 Converting an existing team to Goose emits one recipe per agent under `.goose/recipes/*.yaml`, plus the repo-root `AGENTS.md` + `.goosehints`. The orchestrator's `sub_recipes` delegation is reconstructed from each agent's handoffs:
 

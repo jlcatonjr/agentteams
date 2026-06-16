@@ -56,12 +56,15 @@ Short reads (about five paragraphs each) explaining how core module components f
 | `copilot-vscode` | `.agent.md` with YAML front matter | Native inline YAML | VS Code Copilot `.agent.md` |
 | `copilot-cli` | Plain `.md` system prompts | Runtime manifest when handoffs are present (`references/runtime-handoffs.json`) | CLI prompt `.md` |
 | `claude` | Claude front matter `.md` + `CLAUDE.md` instructions | Runtime manifest when handoffs are present (`references/runtime-handoffs.json`) | `CLAUDE.md` system prompt |
-| `goose` | Block / AAIF Goose recipe YAML (`.goose/recipes/*.yaml`) | Native — orchestrator handoffs become `sub_recipes`, deeper edges become `summon` `load(...)` (no sidecar) | Runnable `team-builder.yaml` recipe |
+| `goose` **(beta)** | Block / AAIF Goose recipe YAML (`.goose/recipes/*.yaml`) | Native — orchestrator handoffs become `sub_recipes`, deeper edges become `summon` `load(...)` (no sidecar) | Runnable `team-builder.yaml` recipe |
 | `agents-md` | Cross-tool **AGENTS.md** standard (plain `.md`) | Routing preserved in `references/runtime-handoffs.json` | `.agents/team-builder.md` |
 
 For `copilot-cli`, `claude`, and `agents-md`, AgentTeams strips inline handoff sections from the visible prompt files but emits `references/runtime-handoffs.json` when handoffs are extracted, so routing metadata remains available to bridge layers and other runtime tooling. `copilot-vscode` and `goose` keep handoff semantics inline (for Goose, encoded directly in the recipes).
 
-**Goose** (`--framework goose`) emits one recipe per agent plus a team brief at the repo-root `AGENTS.md` and a `.goosehints` integrator; the orchestrator delegates to specialist recipes via `sub_recipes`. It is supported for **generate**, **convert** (`--convert-from … --framework goose`), and **bridge** (`--bridge-from … --framework goose`); **interop-to-Goose is not yet supported** (the canonical interop representation drops the handoff graph — use `--convert-from`). See the [framework feature-support matrix](cli-reference.md#feature-support-by-framework).
+!!! note "Goose support is in beta"
+    Goose support works and is validated against the Goose CLI, but is still maturing: **interop-to-Goose is not yet supported**, converting from `claude`/`copilot-cli` sources currently yields flat (un-delegated) recipes, and the `goose` adapter API is **not yet covered by the [stability policy](https://github.com/jlcatonjr/agentteams/blob/main/STABILITY.md)** (it may change in a minor release). See the [framework feature-support matrix](cli-reference.md#feature-support-by-framework).
+
+**Goose** (`--framework goose`) emits one recipe per agent plus a team brief at the repo-root `AGENTS.md` and a `.goosehints` integrator; the orchestrator delegates to specialist recipes via `sub_recipes`. It is supported for **generate**, **convert** (`--convert-from … --framework goose`), and **bridge** (`--bridge-from … --framework goose`); interop-to-Goose is planned (the canonical interop representation drops the handoff graph — use `--convert-from`).
 
 **`agents-md`** (`--framework agents-md`) emits a single framework-neutral repo-root `AGENTS.md` — the canonical file read by ~10 AI coding tools (Continue, Cursor, Cline, Codex, Zed, Aider, …) — plus per-specialist detail under `.agents/`. It is **generate-only**.
 

@@ -78,7 +78,10 @@ Framework-specific defaults:
 - `copilot-vscode` -> `/path/to/your/project/.github/agents/`
 - `copilot-cli` -> `/path/to/your/project/.github/copilot/`
 - `claude` -> `/path/to/your/project/.claude/agents/`
-- `goose` -> `/path/to/your/project/.goose/recipes/`
+- `goose` **(beta)** -> `/path/to/your/project/.goose/recipes/`
+
+!!! note "Goose is in beta"
+    The `goose` framework supports generate, convert, and bridge (interop is not yet supported) and its adapter API is not yet covered by the [stability policy](https://github.com/jlcatonjr/agentteams/blob/main/STABILITY.md). See the [feature-support matrix](cli-reference.md#feature-support-by-framework).
 
 Instructions file defaults:
 

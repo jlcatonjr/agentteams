@@ -26,6 +26,15 @@ The supported import surface is everything documented under
 - `agentteams.frameworks.{copilot_vscode, copilot_cli, claude}`
 - `build_team.main`, `build_team.__version__`
 
+> **Beta frameworks.** The `goose` and `agents-md` framework adapters
+> (`agentteams.frameworks.{goose, agents_md}`) are in **beta**: they are shipped,
+> tested, and usable, but their adapter API and emitted-artifact shapes are **not
+> yet covered by the SemVer contract above** and may change in a minor release while
+> the integration matures. For `goose` specifically, generate / convert / bridge are
+> supported (interop-to-Goose is not yet supported, and convert from `claude` /
+> `copilot-cli` sources currently yields flat, un-delegated recipes pending
+> handoff-recovery work). They graduate to the stable contract once those gaps close.
+
 Symbols not documented in `docs_src/api-reference/` are **internal** and may
 change without notice — including modules whose name starts with `_`,
 functions starting with `_`, and any helper not listed in the reference docs.
