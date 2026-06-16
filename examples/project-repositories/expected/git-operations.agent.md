@@ -42,6 +42,7 @@ You execute and govern Git and GitHub workflows for ProjectRepositories. Use thi
 4. Respect repository merge policy and branch protection/rulesets before choosing merge method.
 5. After any tracked-content change, hand off to `@agent-updater` for census and docs/API impact review.
 6. **Bridge-refresh safety.** Before any `agentteams … --bridge-refresh` invocation against an external project, run the Pre-Flight in `references/bridge-refresh-safety.md` §II (existing target files, fence presence, working-tree cleanliness, tracked-vs-untracked). If any check fails, switch to `--bridge-merge`. `--bridge-refresh` is **destructive** at the target and unconditionally overwrites `CLAUDE.md` and `.claude/*` entry files; the precaution is binding on every invocation including designated test teams.
+7. **CI/CD deployment verification.** *Applies only when this session pushed or merged AND the target repository has GitHub Actions (`.github/workflows/`) AND `gh` is available — otherwise skip cleanly and report `N/A`.* A push or merge to a protected/deploy branch **triggers** new Actions runs (CI **and** deployment workflows such as Pages/release/publish); pre-merge required status checks (which gate the merge) are **not** the same as these post-merge triggered runs. After the push/merge, identify the triggered run(s) for the new HEAD, wait for completion, and confirm `conclusion == success` **before reporting the operation complete** — a push/merge is **not done** while its triggered CI/CD is red. On failure: read the failed logs, diagnose, and fix (escalating to `@security`/orchestrator as needed), iterating until green; use `gh run rerun` only for a confirmed transient flake. If a fix requires pushing to a repository other than `*/outputs/`, re-enter Invariant rule 5's hand-off and orchestrator Rule 11 (`@repo-liaison` + `@security`) for that cross-repo write. Procedure: `references/github-workflows-merge.reference.md` → *Post-Merge / Post-Push CI/CD Deployment Verification*.
 
 ## Required GitHub Policy Alignment
 
@@ -57,6 +58,7 @@ After each operation, report:
 - Commit hash(es)
 - Conflict status
 - Post-operation repository status
+- CI/CD status — triggered run id + conclusion (`success` / `failure` + remediation), or `N/A — no push/merge or no workflows`
 - Docs/API evaluation status (`REQUIRED`, `REVIEW`, `NONE`, or `pending @agent-updater`)
 <!-- AGENTTEAMS:END content -->
 
