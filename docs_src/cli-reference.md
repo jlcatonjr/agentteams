@@ -56,6 +56,33 @@ Target agent framework. Choices: `copilot-vscode` (default), `copilot-cli`, `cla
 
 `references/runtime-handoffs.json` is a framework-neutral sidecar manifest emitted when extracted handoffs exist for frameworks that do not keep inline VS Code handoff syntax in the final agent file.
 
+#### Feature support by framework
+
+`--framework` selects the **target** of each pipeline. Not every framework is a valid target for every pipeline:
+
+| Framework | Generate | Convert target | Interop target | Bridge target |
+|-----------|:--------:|:--------------:|:--------------:|:-------------:|
+| `copilot-vscode` | ✓ | ✓ | ✓ | ✓ |
+| `copilot-cli` | ✓ | ✓ | ✓ | ✓ |
+| `claude` | ✓ | ✓ | ✓ | ✓ |
+| `goose` | ✓ | ✓ <sup>1</sup> | ✗ *(planned)* <sup>2</sup> | ✓ |
+| `agents-md` | ✓ | ✗ <sup>3</sup> | ✗ <sup>3</sup> | ✗ <sup>3</sup> |
+
+**✓** available · **✗** not a valid target (by design) · **✗ *(planned)*** not yet developed
+
+- **Generate** — `--framework X --description …` (or `--self`).
+- **Convert target** — `--convert-from <team> --framework X` (format migration).
+- **Interop target** — `--interop-from <team> --framework X` (CAI pipeline).
+- **Bridge target** — `--bridge-from <team> --framework X` (lightweight pointer artifacts).
+
+<sup>1</sup> `goose` convert wires full orchestrator delegation (`sub_recipes`) from `copilot-vscode` sources (which keep handoffs inline in their agent files). `claude` / `copilot-cli` sources strip handoffs at their own generation, so they currently convert to valid but **flat (un-delegated)** recipes; recovering that delegation from the `runtime-handoffs.json` sidecar is part of the planned handoff-recovery work.
+
+<sup>2</sup> `--interop-from … --framework goose` is **not yet developed**: the canonical interop (CAI) representation drops the handoff graph Goose needs for `sub_recipes` delegation, so the result would be unwired. Use `--convert-from … --framework goose` instead. Enabling interop-to-goose (by preserving handoffs through the CAI) is planned.
+
+<sup>3</sup> `agents-md` is **generate-only** by design — it emits the cross-tool `AGENTS.md` standard and is intentionally not a convert/interop/bridge target.
+
+Auto-detected **source** frameworks (for `--convert-from` / `--interop-from` / `--bridge-from` without an explicit `--*-source-framework`) are `copilot-vscode`, `copilot-cli`, and `claude`; `goose` and `agents-md` are not auto-detected as sources.
+
 ### `--output DIR` / `-o DIR`
 
 Output directory for generated agent files. Defaults by framework:
