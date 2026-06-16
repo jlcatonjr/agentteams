@@ -51,7 +51,7 @@ Target agent framework. Choices: `copilot-vscode` (default), `copilot-cli`, `cla
 | `copilot-vscode` | `.agent.md` with YAML front matter | VS Code Copilot agents with full handoff support |
 | `copilot-cli` | Plain `.md` | Copilot CLI system prompts; inline YAML and handoff sections stripped, with handoffs preserved in `references/runtime-handoffs.json` when present |
 | `claude` | Claude front matter `.md` | Claude Projects; output includes `CLAUDE.md` instructions and preserves handoffs in `references/runtime-handoffs.json` when present |
-| `goose` | Recipe YAML (`.goose/recipes/*.yaml`) | Block / AAIF Goose recipes; orchestrator delegates via `sub_recipes`, deeper edges become `summon` `load(...)`; team brief written to repo-root `AGENTS.md` + `.goosehints`. Handoffs are encoded natively in the recipes (no `runtime-handoffs.json` sidecar) |
+| `goose` **(beta)** | Recipe YAML (`.goose/recipes/*.yaml`) | Block / AAIF Goose recipes; orchestrator delegates via `sub_recipes`, deeper edges become `summon` `load(...)`; team brief written to repo-root `AGENTS.md` + `.goosehints`. Handoffs are encoded natively in the recipes (no `runtime-handoffs.json` sidecar). **Beta** — see the feature-support matrix below |
 | `agents-md` | Plain `.md` | Cross-tool **AGENTS.md** standard (AAIF / Linux Foundation). Emits a single framework-neutral repo-root `AGENTS.md` — the canonical file read by ~10 tools (Continue, Cursor, Cline, Codex, Zed, Aider, …) — plus per-specialist detail under `.agents/`. Routing preserved in `references/runtime-handoffs.json`. **Generate-only** (not a `--convert-from`/`--interop-from`/`--bridge-from` target). |
 
 `references/runtime-handoffs.json` is a framework-neutral sidecar manifest emitted when extracted handoffs exist for frameworks that do not keep inline VS Code handoff syntax in the final agent file.
@@ -65,10 +65,12 @@ Target agent framework. Choices: `copilot-vscode` (default), `copilot-cli`, `cla
 | `copilot-vscode` | ✓ | ✓ | ✓ | ✓ |
 | `copilot-cli` | ✓ | ✓ | ✓ | ✓ |
 | `claude` | ✓ | ✓ | ✓ | ✓ |
-| `goose` | ✓ | ✓ <sup>1</sup> | ✗ *(planned)* <sup>2</sup> | ✓ |
+| `goose` **(beta)** | ✓ | ✓ <sup>1</sup> | ✗ *(planned)* <sup>2</sup> | ✓ |
 | `agents-md` | ✓ | ✗ <sup>3</sup> | ✗ <sup>3</sup> | ✗ <sup>3</sup> |
 
 **✓** available · **✗** not a valid target (by design) · **✗ *(planned)*** not yet developed
+
+> **`goose` is in beta** — generate/convert/bridge are validated against the Goose CLI, but the integration is still maturing (interop and full delegation from `claude`/`copilot-cli` convert sources are in development) and the `goose` adapter API is not yet covered by the [stability policy](https://github.com/jlcatonjr/agentteams/blob/main/STABILITY.md).
 
 - **Generate** — `--framework X --description …` (or `--self`).
 - **Convert target** — `--convert-from <team> --framework X` (format migration).
