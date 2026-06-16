@@ -107,6 +107,21 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   would be unwired — use `--convert-from` for Goose. Tests in
   `tests/test_goose_convert_interop.py`.
 
+- **Generated teams now verify post-merge CI/CD deployment.** Every generated
+  `@git-operations` agent gains a binding invariant: when a session pushes or merges
+  to a repository with GitHub Actions, it must confirm the **triggered** Actions run(s)
+  — CI **and** deployment workflows (Pages/release/publish) — complete with
+  `conclusion == success` before reporting the operation done, and diagnose/fix
+  (`gh run view --log-failed` → fix → re-push) until green. This is distinct from the
+  pre-merge required status checks that gate the merge. The procedure is documented in
+  the `github-workflows-merge.reference` (*Post-Merge / Post-Push CI/CD Deployment
+  Verification*), the orchestrator's **Workflow 11: Final Check** gains a matching
+  closeout gate (fenced, so it reaches existing teams on `--update --merge`), and the
+  git-operations Output Contract surfaces a CI/CD-status line. The obligation is
+  conditional (skips cleanly when no push/merge occurred or the repo has no workflows)
+  and routes cross-repo re-pushes through Rule 11 (`@repo-liaison` + `@security`). Tests
+  in `tests/test_cicd_deployment_verification.py`.
+
 ### fixed
 
 - **`--interop-from` no longer emits reference docs (or backup copies) as bogus
