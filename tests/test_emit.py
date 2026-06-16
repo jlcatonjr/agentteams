@@ -791,7 +791,8 @@ def test_atomic_write_text_leaves_original_intact_on_replace_failure(tmp_path, m
     def _boom(_src, _dst):
         raise OSError("simulated crash during replace")
 
-    monkeypatch.setattr(_emit_mod.os, "replace", _boom)
+    # os.replace now executes in agentteams.atomicio (extracted from emit, CH-07).
+    monkeypatch.setattr("agentteams.atomicio.os.replace", _boom)
     with pytest.raises(OSError):
         _atomic_write_text(target, "NEW — must never be half-written\n")
     # The live file is untouched (the complete OLD content), never truncated...
@@ -818,7 +819,8 @@ def test_restore_backup_is_atomic_on_replace_failure(tmp_path, monkeypatch):
     def _boom(_src, _dst):
         raise OSError("simulated crash during restore replace")
 
-    monkeypatch.setattr(_emit_mod.os, "replace", _boom)
+    # os.replace now executes in agentteams.atomicio (extracted from emit, CH-07).
+    monkeypatch.setattr("agentteams.atomicio.os.replace", _boom)
     with pytest.raises(OSError):
         restore_backup(backup.backup_path, tmp_path)
     # The live file is never truncated — it keeps its complete current content.
