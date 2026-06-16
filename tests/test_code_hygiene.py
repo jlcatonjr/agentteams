@@ -38,12 +38,13 @@ MAX_MODULE_LINES = 1000
 LENGTH_ALLOWLIST: frozenset[str] = frozenset({
     # build_team.py left at Step D (now a 833-line shim); cli/app.py left at Step D2
     # (1174 -> 263 after the generate pipeline moved to cli/generate.py, 939 lines).
-    "agentteams/analyze.py",    # 1507 — accepted tracked debt (CH-07 allowlist; not split)
+    "agentteams/analyze.py",    # 1276 — accepted tracked debt (CH-07 allowlist; not split)
     "agentteams/emit.py",       # 1080 — accepted tracked debt (CH-07 allowlist; not split).
-    # The backup subsystem (was driving emit.py's accretion to 1584) was extracted to
-    # agentteams/backup.py + agentteams/atomicio.py (CH-07), bringing emit.py 1584 -> 1080.
-    # Getting under the 1000 ceiling would need a second carve (fence/merge -> fences.py);
-    # deferred. analyze.py still pending its own carve (_plan_output_files -> output_plan.py).
+    # Both were reduced by CH-07 carves: emit.py 1584 -> 1080 (backup subsystem ->
+    # agentteams/backup.py + atomicio.py); analyze.py 1507 -> 1276 (_plan_output_files ->
+    # agentteams/output_plan.py). Getting under the 1000 ceiling would need a second carve
+    # each (emit: fence/merge -> fences.py; analyze: _format_*/_default_* -> manifest_format.py);
+    # deferred — proven to work but a larger blast radius.
 })
 BROAD_EXCEPT_BASELINE = 11      # except Exception/BaseException/bare. Narrowed over the sweep
                                 # (Steps E + remaining-items I6: commands, render_pipeline, ingest,
@@ -203,6 +204,7 @@ _REFACTOR_MODULES = (
     # CH-07 module extractions (keep the annotation ratchet honest on new modules)
     "agentteams/atomicio.py",
     "agentteams/backup.py",
+    "agentteams/output_plan.py",
 )
 
 
