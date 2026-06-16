@@ -124,6 +124,21 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### fixed
 
+- **`@work-summarizer` now reliably triggers at session close.** The daily
+  work-summary capture was a *soft* step buried at the end of Workflow 11, reachable
+  only when a session traversed a numbered workflow — so ad-hoc/direct sessions that
+  executed work could close without ever invoking it. It is now a **blocking closeout
+  gate** (same altitude as the `@security` / `@code-hygiene` / CI-CD gates) inside the
+  fenced `available_workflows` region, so it **propagates to existing teams on
+  `--update --merge`**: any session that executed work (git commits/merges, applied
+  scripts, data mutations, adjacent-repo activity) cannot close until today's summary
+  records it; read-only sessions skip cleanly. Final Check now also runs at the close of
+  **any** executed-work session — including direct/ad-hoc requests that entered no
+  numbered workflow — and runs the capture **after** the CI/CD gate so fix-commits are
+  recorded. `@work-summarizer` is now explicitly **git-first**: a commit-bearing day is
+  never treated as "planning-only", even when no plan artifact exists. Tests in
+  `tests/test_work_summary_gate.py`.
+
 - **`--interop-from` no longer emits reference docs (or backup copies) as bogus
   agents.** `export_to_cai` walked the source tree recursively and treated every
   `.md` it found as an agent, so `references/*.md` (and, when present, agent copies

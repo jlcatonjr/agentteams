@@ -31,7 +31,10 @@ def test_orchestrator_template_routes_and_tracks_work_summaries() -> None:
     assert "Daily/weekly/monthly work summary reporting" in text
     assert "tmp/by-week/YYYY-Www/<plan-slug>.plan.md" in text
     assert "### Workflow 10B: Work Summary Reporting" in text
-    assert "If a plan reached all `done` during this session" in text
+    # Daily today-capture is a blocking closeout gate covering plan-complete AND executed-work
+    # sessions (the old soft "If a plan reached all `done`…" wording was strengthened).
+    assert "Daily work-summary capture (closeout gate)" in text
+    assert "a plan reaching all `done` also qualifies" in text
 
 
 def test_copilot_instructions_template_matches_work_summary_plan_contract() -> None:
