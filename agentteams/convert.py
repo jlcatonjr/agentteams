@@ -169,6 +169,10 @@ def convert_team(
     parent_dir = source_dir.parent
     for candidate in sorted(parent_dir.iterdir()):
         if candidate.is_file() and candidate.name in _INSTRUCTIONS_NAMES:
+            # W3: capture source instructions content once so adapters (GooseAdapter)
+            # can propagate the project-specific authority_hierarchy into generated files.
+            if "_source_instructions_content" not in manifest:
+                manifest["_source_instructions_content"] = candidate.read_text(encoding="utf-8")
             _convert_file(candidate, target_dir, adapter, manifest, dry_run, overwrite, result)
 
     # F3 — emit framework sidecars not derived from a source file (goose's repo-root

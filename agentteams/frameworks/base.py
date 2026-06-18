@@ -96,6 +96,17 @@ class FrameworkAdapter(ABC):
     def get_agents_dir(self, project_path: Path) -> Path:
         """Return the default agent file directory for a given project path."""
 
+    def normalize_output_path(self, output: Path) -> Path:
+        """Normalize a user-supplied --output path for this framework.
+
+        Called when the user passes --output explicitly in the generate pipeline.
+        The default is identity (the path is used as-is as the agents directory).
+        Frameworks whose agents directory is nested under a conventional path
+        (e.g. Goose's .goose/recipes/) override this to detect when the user
+        passed the project root and derive the agents dir from it.
+        """
+        return output
+
     def handoff_delivery_mode(self) -> str:
         """Return how this framework receives handoff semantics.
 
