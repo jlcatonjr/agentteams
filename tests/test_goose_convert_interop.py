@@ -137,3 +137,30 @@ def test_interop_to_other_frameworks_still_allowed(tmp_path):
     # the refusal is goose-specific; interop to claude must still validate cleanly.
     _validate(["--interop-from", str(tmp_path), "--framework", "claude",
                "--output", str(tmp_path / "o")])
+
+
+# ---------------------------------------------------------------------------
+# CLI normalize_output_path regression: --convert-from + --output <root>
+# ---------------------------------------------------------------------------
+
+def test_convert_to_goose_via_cli_routes_recipes_to_dot_goose(copilot_source, tmp_path):
+    """--convert-from --framework goose --output <root> must place recipes in .goose/recipes/.
+
+    Regression: commands._run_convert previously assigned target_dir = output directly
+    (bypassing normalize_output_path), placing recipe YAML files at the project root.
+    """
+    proj_root = tmp_path / "proj"
+    proj_root.mkdir()
+    rc = build_team.main([
+        "--convert-from", str(copilot_source),
+        "--framework", "goose",
+        "--output", str(proj_root),
+        "--yes",
+    ])
+    assert rc == 0
+    recipes_dir = proj_root / ".goose" / "recipes"
+    assert recipes_dir.is_dir(), ".goose/recipes/ must be created by normalize_output_path"
+    yaml_files = list(recipes_dir.glob("*.yaml"))
+    assert yaml_files, "recipe YAML files must land inside .goose/recipes/, not at project root"
+    root_yaml = list(proj_root.glob("*.yaml"))
+    assert root_yaml == [], f"recipe YAML must NOT appear at project root: {root_yaml}"

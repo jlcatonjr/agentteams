@@ -202,13 +202,14 @@ def _run_convert(
     """
     from agentteams.convert import convert_team
 
+    adapter = FRAMEWORKS[target_framework]()
     if output is not None:
-        target_dir = output
+        # Apply framework-specific path normalization (e.g. Goose appends .goose/recipes).
+        target_dir = adapter.normalize_output_path(output)
     else:
         # Auto-derive: use source parent as project root, place agents under framework dir
         project_root = source_dir.parent.parent  # e.g. /repo from /repo/.github/agents
-        adapter_cls = FRAMEWORKS[target_framework]
-        target_dir = adapter_cls().get_agents_dir(project_root)
+        target_dir = adapter.get_agents_dir(project_root)
 
     if not dry_run:
         from agentteams import security_refs as _security_refs
