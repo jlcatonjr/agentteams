@@ -306,3 +306,191 @@ goose session list              # show all saved sessions
 goose recipe list               # list recipes in configured recipe directories
 goose recipe validate recipe.yaml   # validate a single recipe file
 ```
+
+---
+
+---
+
+# Part 2 — Goose VS Code Extension
+
+The VS Code extension wraps the same goose CLI via ACP (Agent Client Protocol), adding an inline chat panel, code-selection shortcuts, and Code Lens actions. Requires VS Code ≥ 1.95.0 and goose CLI ≥ 1.16.0 pre-installed. Install from the Marketplace: search **"VS Code Goose"** (publisher: Block).
+
+> **Status:** Marked experimental; UI details may change across releases.
+
+---
+
+## Opening the Panel
+
+| Action | How |
+|---|---|
+| Open Goose sidebar panel | Click the Goose icon in the Activity Bar (left sidebar) |
+| Focus panel via Command Palette | `Cmd+Shift+P` → type `Goose` |
+| Send selected code to Goose | Select code → `Cmd+Shift+G` (macOS) / `Ctrl+Shift+G` (Windows/Linux) |
+| Ask Goose about a specific line | Click **"Ask goose"** Code Lens that appears above any line in the editor |
+| Quick fix via Goose | Right-click on code → **Send to goose** (or choose a quick fix suggestion) |
+
+The chat panel opens in the sidebar. All responses, tool calls, and history stay in that panel for the session.
+
+---
+
+## Attaching Files to a Message
+
+Type `@` in the chat input to search and attach workspace files as context. Attached files appear as chips above the input and their full contents are sent to the model.
+
+```
+@ src/auth.py  →  attaches the whole file
+```
+
+Multiple attachments in one message:
+
+```
+@src/auth.py @tests/test_auth.py  Review for missing edge cases.
+```
+
+You can also attach a specific line range by appending it after the filename in the chip (exact syntax depends on extension version; check the chip UI after attaching).
+
+**Alternative — send selected code directly:**
+
+1. Select lines in the editor
+2. Press `Cmd+Shift+G` / `Ctrl+Shift+G`
+3. Goose receives the selection as inline context with its file path and line range
+
+---
+
+## Loading an Agent Role (Recipe)
+
+There is no "Load Recipe" button in the extension UI. The recommended approach is to start the session from the terminal with a recipe pre-loaded, then continue in the extension panel:
+
+```bash
+# Start a recipe session — the VS Code extension panel picks up the active session
+goose run --recipe .goose/recipes/orchestrator.yaml --interactive
+```
+
+Alternatively, instruct Goose to read the recipe file itself at the start of your chat:
+
+```
+Read .goose/recipes/orchestrator.yaml and adopt the Orchestrator role for this session.
+```
+
+This is exactly what the **Session Startup block** in `.goosehints` automates — see below.
+
+---
+
+## .goosehints and the VS Code Extension
+
+`.goosehints` (placed at the project root) is **automatically read on every Goose interaction**, including in the VS Code extension. It provides persistent project context without any manual action.
+
+It differs from sessions:
+
+| | `.goosehints` | Session history |
+|---|---|---|
+| Scope | Every interaction, all sessions | One named conversation |
+| Contents | Static instructions, project context | Full message history |
+| Loaded automatically? | Yes — always | Yes — when resumed |
+| Survives new sessions? | Yes | Only if session is named and resumed |
+
+**Tip for agentteams projects:** The `.goosehints` Session Startup block tells Goose to self-read `orchestrator.yaml` at the top of every session — including VS Code sessions. You get Orchestrator behavior in the extension panel without any setup prompt.
+
+Example `.goosehints` pattern agentteams generates:
+
+```markdown
+@AGENTS.md
+
+### Session Startup (Mandatory)
+
+At the start of every session in MyProject, before responding to any user request:
+
+1. Read `.goose/recipes/orchestrator.yaml` using your file tool
+2. Adopt the Orchestrator identity and routing logic from that file
+```
+
+---
+
+## Routing to Sub-Agents in the Extension
+
+The same routing prompts that work in `goose session` work in the VS Code chat panel:
+
+```
+Route this to @git-operations: commit all staged changes with a descriptive message.
+```
+
+```
+Ask @security to review @src/payments.py before we proceed.
+```
+
+```
+Hand off to @conflict-auditor — we've modified 3 files this session.
+```
+
+To explicitly summon a sub-recipe (requires the `summon` extension to be active):
+
+```
+summon load("primary-producer")
+Draft the introduction from the brief at @tmp/intro-brief.md
+```
+
+If the orchestrator recipe was loaded (via `.goosehints` or a CLI `--recipe` start), sub-recipe routing happens through its `sub_recipes` delegation table automatically.
+
+---
+
+## Session Management in VS Code
+
+Sessions created in the extension panel persist across VS Code restarts. You can manage them from the integrated terminal:
+
+```bash
+goose session list                        # see all sessions with timestamps
+goose session --resume                    # resume the most recent session
+goose session --resume --name my-session  # resume a specific named session
+goose session --resume --fork             # fork session (keep history, fresh branch)
+goose session remove --name old-session   # delete a session
+```
+
+Start a named session directly in the extension by opening a terminal and running:
+
+```bash
+goose session --name research-2026-06-18
+```
+
+The extension panel will reflect the active session.
+
+---
+
+## Provider and Extension Configuration
+
+Provider selection is done once via CLI:
+
+```bash
+goose configure   # interactive setup: choose provider (anthropic, openai, etc.) and model
+```
+
+This writes `~/.config/goose/config.yaml`, which the VS Code extension reads automatically.
+
+To add tool extensions for an extension-panel session, start from the terminal with flags:
+
+```bash
+goose session --with-builtin developer    # file read/write + shell access
+goose session --with-builtin summon       # sub-agent delegation
+goose session --with-extension "npx -y @modelcontextprotocol/server-filesystem /my/dir"
+```
+
+To override the model for a one-off VS Code session:
+
+```bash
+goose session --name fast-check \
+  --with-builtin developer \
+  -- --model claude-haiku-4-5-20251001    # model override (CLI passthrough)
+```
+
+---
+
+## VS Code Extension vs CLI — When to Use Each
+
+| Scenario | VS Code Extension | CLI |
+|---|---|---|
+| Exploring code in the open editor | Preferred — Code Lens + `@` attach | Possible |
+| Long multi-file editing session | Preferred — persistent panel, history | Possible |
+| CI / scripted automation | Not applicable | Required |
+| Loading a specific recipe role | Use CLI to start, continue in panel | Full support |
+| Named sessions with history | Both (manage via CLI) | Full support |
+| Passing `--params` to a recipe | Not available in panel | `--params KEY=VAL` |
+| Quiet/JSON output capture | Not applicable | `--quiet --output-format json` |
