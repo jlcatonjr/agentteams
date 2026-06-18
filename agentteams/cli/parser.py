@@ -405,6 +405,17 @@ def _build_parser() -> argparse.ArgumentParser:
         ),
     )
     parser.add_argument(
+        "--recipe-check",
+        action="store_true",
+        dest="recipe_check",
+        help=(
+            "Validate generated Goose recipe YAML files in the --output directory "
+            "(or .goose/recipes/ by default). Checks: version string, no model: key, "
+            "non-empty instructions, sub_recipe path resolution. Writes "
+            "recipe-check.report.md. Requires --framework goose."
+        ),
+    )
+    parser.add_argument(
         "--revert-migration",
         action="store_true",
         dest="revert_migration",
@@ -632,9 +643,14 @@ def _build_parser() -> argparse.ArgumentParser:
     )
     fleet_group.add_argument(
         "--fleet-frameworks",
-        choices=["github", "claude", "both"],
+        choices=["github", "claude", "goose", "both", "all"],
         default="both",
-        help="Which infrastructures to update per workspace (default: both).",
+        help=(
+            "Which infrastructures to update per workspace (default: both). "
+            "`both` = copilot-vscode + claude (backward-compatible). "
+            "`all` = copilot-vscode + claude + goose. "
+            "`goose` = Goose workspaces only."
+        ),
     )
     fleet_group.add_argument(
         "--fleet-report",
@@ -776,6 +792,9 @@ def _validate_option_combinations(parser: argparse.ArgumentParser, args: argpars
 
     if args.bridge_refresh and not args.bridge_from:
         parser.error("--bridge-refresh requires --bridge-from." + _BRIDGE_USAGE_HINT)
+
+    if getattr(args, "recipe_check", False) and getattr(args, "framework", None) != "goose":
+        parser.error("--recipe-check requires --framework goose")
 
     if args.refresh_index and args.query_index:
         parser.error("--refresh-index and --query-index are mutually exclusive")

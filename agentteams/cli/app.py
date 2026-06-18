@@ -271,6 +271,21 @@ def main(argv: list[str] | None = None) -> int:
         )
 
     # -----------------------------------------------------------------------
+    # --recipe-check: standalone Goose recipe YAML structural validation
+    # -----------------------------------------------------------------------
+    if getattr(args, "recipe_check", False):
+        from agentteams.cli.recipe_check import run_recipe_check
+        from agentteams.frameworks.goose import GooseAdapter
+        if args.output:
+            recipes_dir = GooseAdapter().normalize_output_path(Path(args.output).resolve())
+        else:
+            recipes_dir = Path(".goose/recipes").resolve()
+        if not recipes_dir.is_dir():
+            print(f"Error: recipes directory not found: {recipes_dir}", file=sys.stderr)
+            return 1
+        return run_recipe_check(recipes_dir)
+
+    # -----------------------------------------------------------------------
     # --bridge-from: lightweight bridge interface generation/check
     # -----------------------------------------------------------------------
     if args.bridge_from:

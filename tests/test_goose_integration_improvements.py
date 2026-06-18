@@ -16,7 +16,12 @@ from pathlib import Path
 import pytest
 
 from agentteams.convert import convert_team
-from agentteams.frameworks.goose import GooseAdapter, _emit_recipe, _goosehints_content
+from agentteams.frameworks.goose import (
+    GooseAdapter,
+    _emit_recipe,
+    _goosehints_content,
+    _validate_recipe_yaml,
+)
 
 
 # ---------------------------------------------------------------------------
@@ -404,3 +409,125 @@ class TestW7GoosehintsSessionStartup:
         content = _goosehints_content("MyCustomProject")
         assert "MyCustomProject" in content
         assert "Session Startup" in content
+
+
+# ---------------------------------------------------------------------------
+# Plan 2 — _validate_recipe_yaml structural checker
+# ---------------------------------------------------------------------------
+
+_VALID_RECIPE = '''\
+version: "1.0.0"
+title: "Alpha"
+description: "Alpha agent"
+instructions: |
+  Do alpha work.
+extensions:
+  - type: builtin
+    name: developer
+    bundled: true
+    timeout: 300
+'''
+
+
+class TestRecipeYamlValidation:
+    """_validate_recipe_yaml detects structural violations in recipe YAML strings."""
+
+    def test_valid_recipe_passes(self):
+        assert _validate_recipe_yaml(_VALID_RECIPE) == []
+
+    def test_wrong_version_flagged(self):
+        bad = _VALID_RECIPE.replace('version: "1.0.0"', 'version: "2.0.0"')
+        violations = _validate_recipe_yaml(bad)
+        assert any("version" in v for v in violations)
+
+    def test_missing_version_flagged(self):
+        bad = "\n".join(
+            line for line in _VALID_RECIPE.splitlines() if not line.startswith("version:")
+        )
+        violations = _validate_recipe_yaml(bad)
+        assert any("version" in v for v in violations)
+
+    def test_model_key_flagged(self):
+        bad = _VALID_RECIPE + "model: claude-sonnet-4-6\n"
+        violations = _validate_recipe_yaml(bad)
+        assert any("model" in v for v in violations)
+
+    def test_missing_title_flagged(self):
+        bad = "\n".join(
+            line for line in _VALID_RECIPE.splitlines() if not line.startswith("title:")
+        )
+        violations = _validate_recipe_yaml(bad)
+        assert any("title" in v for v in violations)
+
+    def test_missing_instructions_flagged(self):
+        bad = "\n".join(
+            line for line in _VALID_RECIPE.splitlines()
+            if not line.startswith("instructions:")
+        )
+        violations = _validate_recipe_yaml(bad)
+        assert any("instructions" in v for v in violations)
+
+    def test_sub_recipe_missing_path_flagged(self, tmp_path):
+        recipe_with_missing = (
+            _VALID_RECIPE
+            + 'sub_recipes:\n'
+            '  - name: "missing"\n'
+            '    path: "./nonexistent.yaml"\n'
+        )
+        violations = _validate_recipe_yaml(recipe_with_missing, recipes_dir=tmp_path)
+        assert any("nonexistent.yaml" in v for v in violations)
+
+    def test_sub_recipe_resolved_path_passes(self, tmp_path):
+        (tmp_path / "real.yaml").write_text('version: "1.0.0"\n', encoding="utf-8")
+        recipe_with_real = (
+            _VALID_RECIPE
+            + 'sub_recipes:\n'
+            '  - name: "real"\n'
+            '    path: "./real.yaml"\n'
+        )
+        violations = _validate_recipe_yaml(recipe_with_real, recipes_dir=tmp_path)
+        assert violations == []
+
+    def test_emit_recipe_passes_its_own_validation(self):
+        """Every YAML string produced by _emit_recipe must be structurally valid."""
+        yaml = _emit_recipe(
+            title="Test Agent",
+            description="Does test things.",
+            instructions="Do the test work.",
+            extensions=["developer"],
+        )
+        assert _validate_recipe_yaml(yaml) == []
+
+    def test_emit_recipe_with_sub_recipes_passes(self, tmp_path):
+        """_emit_recipe output with sub_recipes passes validation when paths exist."""
+        (tmp_path / "alpha.yaml").write_text('version: "1.0.0"\n', encoding="utf-8")
+        yaml = _emit_recipe(
+            title="Orchestrator",
+            description="Routes work.",
+            instructions="Route requests.",
+            extensions=["developer", "summon"],
+            sub_recipes=[{"name": "alpha", "path": "./alpha.yaml", "description": "Alpha"}],
+        )
+        assert _validate_recipe_yaml(yaml, recipes_dir=tmp_path) == []
+
+
+# ---------------------------------------------------------------------------
+# Plan 3 — Orphan detection uses framework-specific extension
+# ---------------------------------------------------------------------------
+
+class TestOrphanDetectionExtension:
+    """GooseAdapter.get_file_extension('agent') returns .yaml for orphan discovery."""
+
+    def test_goose_adapter_agent_extension_is_yaml(self):
+        adapter = GooseAdapter()
+        assert adapter.get_file_extension("agent") == ".yaml"
+
+    def test_recipe_check_quickstart_mentions_recipe_check_command(self):
+        from agentteams.bridge import _render_quickstart
+        snippet = _render_quickstart("copilot-vscode", "goose")
+        assert "--recipe-check" in snippet
+
+    def test_quickstart_mentions_convert_from_alternative(self):
+        from agentteams.bridge import _render_quickstart
+        snippet = _render_quickstart("copilot-vscode", "goose")
+        assert "--convert-from" in snippet

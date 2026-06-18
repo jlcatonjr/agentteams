@@ -42,7 +42,7 @@ from pathlib import Path
 # artifact would be mis-discovered as its own workspace).
 _PRUNE_DIRS = {
     "node_modules", ".git", ".agentteams-backups", "__pycache__", ".venv", "venv",
-    ".github", ".claude", "tmp",
+    ".github", ".claude", ".goose", "tmp",
 }
 _PRUNE_SUBSTR = (".worktrees", "/archive/")
 
@@ -120,6 +120,9 @@ def _agent_paths(ws: Path) -> list[str]:
         ".github/copilot-instructions.md",
         ".claude",
         "CLAUDE.md",
+        ".goose/recipes",
+        ".goosehints",
+        "AGENTS.md",
     ):
         if (ws / rel).exists():
             rels.append(rel)
@@ -209,21 +212,43 @@ def _claude_kind(ws: Path) -> str:
     return "ambiguous"
 
 
+def _goose_kind(ws: Path) -> str:
+    """Classify a .goose target: 'bridge', 'direct', or 'none'."""
+    if not (ws / ".goose" / "recipes").is_dir():
+        return "none"
+    bridges = ws / "references" / "bridges"
+    if bridges.exists():
+        for mf in bridges.rglob("bridge-manifest.json"):
+            with contextlib.suppress(OSError, ValueError):
+                data = json.loads(mf.read_text(encoding="utf-8"))
+                if data.get("target_framework") == "goose":
+                    return "bridge"
+    if (ws / ".goose" / "recipes" / "orchestrator.yaml").exists():
+        return "direct"
+    return "none"
+
+
 def discover_workspaces(parent: Path, frameworks: str = "both") -> list[Path]:
-    """Find every workspace (dir with .github/agents/ and/or .claude/) under parent."""
+    """Find every workspace (dir with agent infrastructure) under parent."""
     found: set[Path] = set()
     parent = parent.resolve()
     for dirpath in [parent, *(_walk(parent))]:
         try:
             gh = (dirpath / ".github" / "agents").is_dir()
             cl = (dirpath / ".claude").is_dir()
+            gs = (dirpath / ".goose" / "recipes").is_dir()
         except (PermissionError, OSError):
             continue  # unreadable dir (e.g. mode 000) — skip, never fatal
         if frameworks == "github":
-            cl = False
+            cl = gs = False
         elif frameworks == "claude":
-            gh = False
-        if gh or cl:
+            gh = gs = False
+        elif frameworks == "goose":
+            gh = cl = False
+        elif frameworks == "both":   # legacy: copilot + claude only
+            gs = False
+        # "all" includes all three frameworks
+        if gh or cl or gs:
             found.add(dirpath)
     return sorted(found)
 
@@ -390,6 +415,26 @@ def _target_argv(target: str, ws: Path, descriptor: Path | None, dry_run: bool,
             "--output", str(ws),
             "--yes",
         ]
+    elif target == "goose-direct":
+        if descriptor is None:
+            return None
+        argv = [
+            "--description", str(descriptor),
+            "--output", str(ws),       # normalize_output_path appends .goose/recipes
+            "--framework", "goose",
+            "--update", "--merge", "--yes",
+            "--shrink-policy", shrink_policy,
+        ]
+        if descriptor.name == "brief.json":
+            argv.append("--no-scan")
+    elif target == "goose-bridge":
+        argv = [
+            "--bridge-from", str(ws / ".github" / "agents"),
+            "--framework", "goose",
+            "--bridge-merge",
+            "--output", str(ws),
+            "--yes",
+        ]
     else:
         return None
     if dry_run:
@@ -403,9 +448,9 @@ def _target_argv(target: str, ws: Path, descriptor: Path | None, dry_run: bool,
 
 def _plan_targets(ws: Path, frameworks: str) -> list[str]:
     targets: list[str] = []
-    if frameworks in ("both", "github") and (ws / ".github" / "agents").is_dir():
+    if frameworks in ("both", "all", "github") and (ws / ".github" / "agents").is_dir():
         targets.append("github")
-    if frameworks in ("both", "claude"):
+    if frameworks in ("both", "all", "claude"):
         kind = _claude_kind(ws)
         if kind == "bridge":
             targets.append("claude-bridge")
@@ -413,6 +458,12 @@ def _plan_targets(ws: Path, frameworks: str) -> list[str]:
             targets.append("claude-direct")
         elif kind == "ambiguous":
             targets.append("claude-ambiguous")
+    if frameworks in ("all", "goose"):
+        kind = _goose_kind(ws)
+        if kind == "bridge":
+            targets.append("goose-bridge")
+        elif kind == "direct":
+            targets.append("goose-direct")
     return targets
 
 

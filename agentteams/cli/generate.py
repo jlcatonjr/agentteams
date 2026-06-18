@@ -127,23 +127,31 @@ def run_generate(args: argparse.Namespace, strict_manual_placeholders: bool) -> 
     # (re)rendered — i.e. with --overwrite/--migrate (see flag help).
     # -----------------------------------------------------------------------
     if getattr(args, "adopt_orphans", False) and output_dir.exists():
-        _suffix = ".agent.md"
+        # Source manifest always uses .agent.md paths; slugs are extension-independent.
+        _src_suffix = ".agent.md"
         # "Planned" = agent files this build will EMIT (from output_files), not
         # the roster — so legitimately-generated-but-non-roster files
         # (team-builder, content-enricher) are not mistaken for orphans.
-        _emitted = {
-            Path(f["path"]).name[: -len(_suffix)]
+        _emitted_slugs = {
+            Path(f["path"]).name[: -len(_src_suffix)]
             for f in manifest.get("output_files", [])
-            if isinstance(f, dict) and str(f.get("path", "")).endswith(_suffix)
+            if isinstance(f, dict) and str(f.get("path", "")).endswith(_src_suffix)
         }
         # Legacy tool-<slug>.agent.md files are migrated to docs/skills, not
         # adopted as agents — never pull them back into the roster.
         _tool_doc_slugs = {ta["slug"] for ta in manifest.get("tool_agents", [])}
+        # Use the framework's actual agent file extension for on-disk discovery.
+        _agent_ext = adapter.get_file_extension("agent")
         _orphan_slugs = sorted(
-            p.name[: -len(_suffix)]
-            for p in output_dir.glob("*.agent.md")
-            if p.name[: -len(_suffix)] not in _emitted
-            and p.name[: -len(_suffix)] not in _tool_doc_slugs
+            p.name[: -len(_agent_ext)]
+            for p in output_dir.glob(f"*{_agent_ext}")
+            if p.name[: -len(_agent_ext)] not in _emitted_slugs
+            and p.name[: -len(_agent_ext)] not in _tool_doc_slugs
+            # For Goose: skip non-recipe YAML files (require version: "1.0.0").
+            and (
+                _agent_ext != ".yaml"
+                or 'version: "1.0.0"' in p.read_text(encoding="utf-8", errors="ignore")
+            )
         )
         _adopted = analyze.adopt_orphan_agents(manifest, _orphan_slugs)
         if _adopted:

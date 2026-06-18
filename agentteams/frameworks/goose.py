@@ -50,6 +50,13 @@ _ORCHESTRATOR_PROBE_PROMPT = (
     "name the correct workflow and the first agent you would route to."
 )
 
+# Regex patterns for structural recipe validation (_validate_recipe_yaml).
+_RECIPE_VERSION_RE = re.compile(r'^version:\s*"1\.0\.0"', re.MULTILINE)
+_RECIPE_MODEL_KEY_RE = re.compile(r"^\s*model:", re.MULTILINE)
+_RECIPE_TITLE_RE = re.compile(r'^title:\s*".+?"', re.MULTILINE)
+_RECIPE_INSTRUCTIONS_RE = re.compile(r"^instructions:\s*\|", re.MULTILINE)
+_RECIPE_SUB_PATH_RE = re.compile(r'path:\s*"([^"]+)"')
+
 # Regex to locate AGENTTEAMS authority_hierarchy HTML-comment fences in body text.
 # These appear in copilot-instructions.md and may appear in orchestrator bodies.
 _AUTH_HIER_FENCE_RE = re.compile(
@@ -116,6 +123,29 @@ def _goosehints_content(project_name: str) -> str:
         "`goose run --recipe .goose/recipes/orchestrator.yaml` is the alternative that pre-loads\n"
         "automatically without the startup read.\n"
     )
+
+
+def _validate_recipe_yaml(yaml_text: str, recipes_dir: Path | None = None) -> list[str]:
+    """Return structural violations found in a Goose recipe YAML string.
+
+    Uses regex-only parsing — the codebase intentionally avoids a YAML dependency.
+    Pass ``recipes_dir`` to also resolve ``sub_recipes`` path references on disk.
+    """
+    violations: list[str] = []
+    if not _RECIPE_VERSION_RE.search(yaml_text):
+        violations.append('missing or wrong version: field (expected version: "1.0.0")')
+    if _RECIPE_MODEL_KEY_RE.search(yaml_text):
+        violations.append("forbidden model: key (Goose infers model from session config)")
+    if not _RECIPE_TITLE_RE.search(yaml_text):
+        violations.append("missing or empty title: field")
+    if not _RECIPE_INSTRUCTIONS_RE.search(yaml_text):
+        violations.append("missing instructions: literal block scalar (instructions: |)")
+    if recipes_dir is not None:
+        for path_val in _RECIPE_SUB_PATH_RE.findall(yaml_text):
+            resolved = (recipes_dir / path_val).resolve()
+            if not resolved.exists():
+                violations.append(f"sub_recipe path not found: {path_val}")
+    return violations
 
 
 class GooseAdapter(FrameworkAdapter):

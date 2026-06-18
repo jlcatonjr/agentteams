@@ -318,3 +318,94 @@ def test_fleet_cli_validation_rejects(argv):
         build_team.main(argv)
     assert exc.value.code == 2  # argparse parser.error() exit code
 
+
+# ---------------------------------------------------------------------------
+# Goose workspace discovery
+# ---------------------------------------------------------------------------
+
+def test_discover_finds_goose_workspace(tmp_path):
+    """A dir with .goose/recipes/ is found when frameworks='goose'."""
+    recipes = tmp_path / "ws" / ".goose" / "recipes"
+    recipes.mkdir(parents=True)
+    (recipes / "orchestrator.yaml").write_text('version: "1.0.0"\n', encoding="utf-8")
+    found = {w.name for w in fleet.discover_workspaces(tmp_path, "goose")}
+    assert found == {"ws"}
+
+
+def test_discover_goose_excluded_from_both(tmp_path):
+    """Goose workspaces are NOT included with frameworks='both' (backward compat)."""
+    recipes = tmp_path / "ws" / ".goose" / "recipes"
+    recipes.mkdir(parents=True)
+    (recipes / "orchestrator.yaml").write_text('version: "1.0.0"\n', encoding="utf-8")
+    found = fleet.discover_workspaces(tmp_path, "both")
+    assert found == []
+
+
+def test_discover_all_includes_goose(tmp_path):
+    """frameworks='all' discovers .github/agents, .claude, and .goose/recipes."""
+    _mk_agent(tmp_path / "a" / ".github" / "agents", "x.agent.md")
+    _mk_agent(tmp_path / "b" / ".claude" / "agents", "x.md")
+    (tmp_path / "c" / ".goose" / "recipes").mkdir(parents=True)
+    (tmp_path / "c" / ".goose" / "recipes" / "orchestrator.yaml").write_text(
+        'version: "1.0.0"\n', encoding="utf-8"
+    )
+    found = {w.name for w in fleet.discover_workspaces(tmp_path, "all")}
+    assert found == {"a", "b", "c"}
+
+
+def test_fleet_prunes_goose_dir(tmp_path):
+    """Fleet walker does not recurse into .goose/ subdirectories."""
+    ws = tmp_path / "ws"
+    # Real workspace at ws
+    _mk_agent(ws / ".github" / "agents", "x.agent.md")
+    # A .goose/ dir inside ws that contains a nested .github/agents/ — must NOT be detected.
+    nested = ws / ".goose" / "recipes" / ".github" / "agents"
+    nested.mkdir(parents=True)
+    (nested / "y.agent.md").write_text("agent\n", encoding="utf-8")
+    found = fleet.discover_workspaces(tmp_path, "both")
+    assert len(found) == 1 and found[0].name == "ws"
+
+
+def test_goose_kind_direct(tmp_path):
+    """_goose_kind returns 'direct' when orchestrator.yaml exists."""
+    ws = tmp_path / "ws"
+    recipes = ws / ".goose" / "recipes"
+    recipes.mkdir(parents=True)
+    (recipes / "orchestrator.yaml").write_text('version: "1.0.0"\n', encoding="utf-8")
+    assert fleet._goose_kind(ws) == "direct"
+
+
+def test_goose_kind_bridge(tmp_path):
+    """_goose_kind returns 'bridge' when bridge-manifest.json targets goose."""
+    ws = tmp_path / "ws"
+    (ws / ".goose" / "recipes").mkdir(parents=True)
+    (ws / ".goose" / "recipes" / "orchestrator.yaml").write_text("v: 1\n", encoding="utf-8")
+    pair = ws / "references" / "bridges" / "copilot-vscode-to-goose"
+    pair.mkdir(parents=True)
+    (pair / "bridge-manifest.json").write_text(
+        '{"target_framework": "goose"}', encoding="utf-8"
+    )
+    assert fleet._goose_kind(ws) == "bridge"
+
+
+def test_plan_targets_goose(tmp_path):
+    """_plan_targets returns goose-direct for a Goose-only workspace with frameworks='goose'."""
+    ws = tmp_path / "ws"
+    recipes = ws / ".goose" / "recipes"
+    recipes.mkdir(parents=True)
+    (recipes / "orchestrator.yaml").write_text('version: "1.0.0"\n', encoding="utf-8")
+    assert fleet._plan_targets(ws, "goose") == ["goose-direct"]
+
+
+def test_target_argv_goose_direct(tmp_path):
+    """_target_argv for goose-direct produces --framework goose --output <ws> argv."""
+    ws = tmp_path / "ws"
+    desc = ws / ".agentteams" / "brief.json"
+    desc.parent.mkdir(parents=True)
+    desc.write_text("{}", encoding="utf-8")
+    argv = fleet._target_argv("goose-direct", ws, desc, dry_run=False, shrink_policy="preserve")
+    assert "--framework" in argv
+    assert "goose" in argv
+    assert "--output" in argv
+    assert str(ws) in argv
+

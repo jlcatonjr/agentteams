@@ -515,9 +515,10 @@ def _render_quickstart(source_framework: str, target_framework: str) -> str:
             "`--bridge-check` verifies that source `.agent.md` files match their\n"
             "SHA-256 hashes recorded at bridge-generation time. It does NOT validate\n"
             "generated recipe YAML files, `.goosehints` enrichment, or AGENTS.md content.\n"
-            "To manually verify recipe integrity: confirm all `sub_recipes` paths in\n"
-            "`orchestrator.yaml` resolve to existing `.yaml` files, no recipe contains a\n"
-            "`model:` key, and all recipes carry `version: \"1.0.0\"`.\n"
+            "To validate recipe structure: `agentteams --framework goose --recipe-check --output <recipes-dir>`\n"
+            "checks version string, no model: key, sub_recipe path resolution, and non-empty instructions.\n"
+            "For full recipe generation (alternative to bridge): "
+            "`agentteams --convert-from .github/agents --framework goose --output .goose/recipes`\n"
         )
     return (
         "# Bridge Quickstart Snippet\n\n"
