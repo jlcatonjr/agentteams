@@ -167,6 +167,9 @@ _FENCE_BEGIN_RE = re.compile(
 _FENCE_END_RE = re.compile(
     r"<!-- AGENTTEAMS:END (?P<sid>[a-z][a-z0-9_]*) -->",
 )
+# W2: detect AGENTTEAMS-BRIDGE fences (written by --bridge-refresh) so the
+# --merge path can emit a targeted notice instead of the generic "legacy file" warning.
+_BRIDGE_FENCE_BEGIN_RE = re.compile(r"<!--\s*AGENTTEAMS-BRIDGE:BEGIN\s+")
 _YAML_FM_RE = re.compile(r"^(---\n.+?\n---\n)", re.DOTALL)
 
 _MACHINE_MANAGED_MERGE_OVERWRITE_PATHS: frozenset[str] = frozenset([
@@ -434,11 +437,21 @@ def _merge_fenced_content(
         return result
 
     if not existing_regions:
-        result.parse_errors.append(
-            "No fence markers detected — legacy file. "
-            "Use --overwrite to replace unconditionally, or add "
-            "AGENTTEAMS fence markers manually."
-        )
+        # W2: distinguish a truly unfenced legacy file from one written by
+        # --bridge-refresh (AGENTTEAMS-BRIDGE namespace).  The latter needs a
+        # targeted notice rather than the generic "legacy file" warning.
+        if _BRIDGE_FENCE_BEGIN_RE.search(existing_on_disk):
+            result.parse_errors.append(
+                "No AGENTTEAMS fence markers detected — file contains AGENTTEAMS-BRIDGE "
+                "fences (written by --bridge-refresh). Run --bridge-refresh to regenerate, "
+                "or add AGENTTEAMS fence markers to enable --merge updates."
+            )
+        else:
+            result.parse_errors.append(
+                "No fence markers detected — legacy file. "
+                "Use --overwrite to replace unconditionally, or add "
+                "AGENTTEAMS fence markers manually."
+            )
         return result
 
     # Parse new render

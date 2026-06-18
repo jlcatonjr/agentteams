@@ -107,7 +107,10 @@ def run_generate(args: argparse.Namespace, strict_manual_placeholders: bool) -> 
     # Step 4: Resolve output directory
     # -----------------------------------------------------------------------
     if args.output:
-        output_dir = Path(args.output).resolve()
+        # W1: let the adapter normalize --output so framework-specific nested
+        # agents dirs (e.g. Goose's .goose/recipes/) are derived correctly when
+        # the user passes a project root (including `--output .`).
+        output_dir = adapter.normalize_output_path(Path(args.output).resolve())
     elif description.get("existing_project_path"):
         project_path = Path(description["existing_project_path"])
         output_dir = adapter.get_agents_dir(project_path)

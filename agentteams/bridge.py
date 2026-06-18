@@ -228,10 +228,24 @@ def run_bridge(
                 result.written.append(str(path))
                 merge_report_lines.append(f"- merged: {path}")
             elif status == "no-fence":
+                # W2: distinguish between a truly unmanaged file and one that was
+                # written by --bridge-refresh (AGENTTEAMS-BRIDGE namespace).  The
+                # latter silently skipped before; now emit an actionable notice.
+                if _FENCE_BEGIN_RE.search(existing):
+                    result.notices.append(
+                        f"Notice: {path} contains AGENTTEAMS-BRIDGE fences (written by "
+                        "--bridge-refresh) but no AGENTTEAMS fences recognized by --merge. "
+                        "Run --bridge-refresh to regenerate, or add AGENTTEAMS fence markers "
+                        "to enable future --merge updates."
+                    )
+                    merge_report_lines.append(
+                        f"- skipped (AGENTTEAMS-BRIDGE fence present but no AGENTTEAMS fence; see notices): {path}"
+                    )
+                else:
+                    merge_report_lines.append(
+                        f"- skipped (no AGENTTEAMS-BRIDGE fence in existing file): {path}"
+                    )
                 result.skipped.append(str(path))
-                merge_report_lines.append(
-                    f"- skipped (no AGENTTEAMS-BRIDGE fence in existing file): {path}"
-                )
             else:
                 result.skipped.append(str(path))
                 merge_report_lines.append(f"- skipped ({status}): {path}")
@@ -491,6 +505,20 @@ def _render_inventory_md(rows: list[dict[str, str]]) -> str:
 
 
 def _render_quickstart(source_framework: str, target_framework: str) -> str:
+    goose_check_note = ""
+    if target_framework == "goose":
+        # W5: clarify that --bridge-check only validates source-side hashes, not
+        # generated recipe YAML content.  Users sometimes assume bridge-check covers
+        # the full output; this callout prevents false confidence.
+        goose_check_note = (
+            "\n## Bridge check scope\n\n"
+            "`--bridge-check` verifies that source `.agent.md` files match their\n"
+            "SHA-256 hashes recorded at bridge-generation time. It does NOT validate\n"
+            "generated recipe YAML files, `.goosehints` enrichment, or AGENTS.md content.\n"
+            "To manually verify recipe integrity: confirm all `sub_recipes` paths in\n"
+            "`orchestrator.yaml` resolve to existing `.yaml` files, no recipe contains a\n"
+            "`model:` key, and all recipes carry `version: \"1.0.0\"`.\n"
+        )
     return (
         "# Bridge Quickstart Snippet\n\n"
         "Use this as your first prompt:\n\n"
@@ -505,6 +533,7 @@ def _render_quickstart(source_framework: str, target_framework: str) -> str:
         "plans, CHANGELOG). See references/bridges/<src>-to-<target>/domain-boundary.md\n"
         "for the boundary vs project-level retrieval contracts.\n"
         "```\n"
+        + goose_check_note
     )
 
 
