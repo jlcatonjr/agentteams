@@ -28,6 +28,9 @@ def test_git_operations_agent_has_cicd_deployment_invariant():
     assert "triggered" in body                     # post-merge triggered runs, not pre-merge gates
     assert "gh run" in body or "github-workflows-merge.reference" in body
     assert "not done" in body or "before reporting the operation complete" in body
+    # Tooling preference: git + REST API are primary; gh is only a fallback.
+    assert "GitHub REST API" in body
+    assert "Prefer the `git` CLI" in body
     # Output contract surfaces a CI/CD status line.
     assert "CI/CD status" in body
 
@@ -37,7 +40,12 @@ def test_reference_has_post_merge_deployment_verification_section():
     assert "Post-Merge / Post-Push CI/CD Deployment Verification" in ref
     # Must be delineated from pre-merge required status checks (no blur).
     assert "Distinct from pre-merge required status checks" in ref
-    assert "gh run view" in ref and "--log-failed" in ref          # the failure-debug loop
+    # Prefer git + the REST API; gh is an explicit optional fallback (never a dependency).
+    assert "prefer `git` and the REST API over `gh`" in ref
+    assert "api.github.com/repos/" in ref                          # REST is the primary path
+    assert "git rev-parse HEAD" in ref                             # git-first run discovery
+    assert "`gh` fallback:" in ref                                 # gh demoted to fallback
+    assert "gh run view <run-id> --log-failed" in ref             # the failure-debug fallback
     assert "gh run list" in ref
 
 
