@@ -102,6 +102,8 @@ from agentteams.cli.commands import (
     _run_convert,
     _run_interop,
     _run_bridge,
+    _run_stale_check,
+    _run_stale_restore,
 )
 # Render/merge helpers extracted to agentteams/cli/render_pipeline.py (CH-07);
 # re-exported so main and tests resolve them in build_team's namespace.

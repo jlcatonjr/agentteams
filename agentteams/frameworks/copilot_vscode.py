@@ -41,6 +41,9 @@ class CopilotVSCodeAdapter(FrameworkAdapter):
     def get_agents_dir(self, project_path: Path) -> Path:
         return project_path / ".github" / "agents"
 
+    def vscode_tasks_rel_path(self) -> str | None:
+        return "../../.vscode/tasks.json"
+
 
 # ---------------------------------------------------------------------------
 # YAML front matter helpers

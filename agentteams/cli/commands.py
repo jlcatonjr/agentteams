@@ -111,6 +111,70 @@ def _run_verify_integrity(args: argparse.Namespace) -> int:
     return 0
 
 
+def _run_stale_check(args: argparse.Namespace) -> int:
+    """``--stale-check``: read-only staleness scan of the resolved scan root.
+
+    Resolves the scan root from ``--output``/``--project`` (else CWD), walks down it
+    (auto-discovering generation provenance beneath), and reports stale agent docs and
+    code/scripts across reliability tiers. Exit 1 on any Tier-1 (blocking) finding; 0
+    otherwise. Never edits files. With ``--stale-remediate`` it also prints a guided
+    (suggestion-only) remediation plan.
+    """
+    from agentteams import stale_detector
+
+    root = _resolve_output_dir(args)
+    if not root.exists():
+        print(f"Error: stale-check target does not exist: {root}", file=sys.stderr)
+        return 1
+    try:
+        report = stale_detector.scan_staleness(
+            root, include_git=not bool(getattr(args, "stale_no_git", False))
+        )
+    except (OSError, ValueError) as exc:
+        # CH-24: read-only CLI boundary — surface, don't traceback.
+        print(f"Error: {exc}", file=sys.stderr)
+        return 1
+    stale_detector.print_staleness_report(report)
+    if bool(getattr(args, "stale_remediate", False)):
+        # --yes promotes the preview into an applied, snapshot-protected revision pass.
+        from agentteams import stale_remediate
+        apply = bool(getattr(args, "yes", False))
+        result = stale_remediate.apply_fixes(report, root, apply=apply)
+        stale_remediate.print_fix_result(result)
+        if apply:
+            # exit 3 = remediation attempted but blocking items remain (manual/routed).
+            return 3 if result.n_unresolved > 0 else 0
+    return stale_detector.exit_code(report)
+
+
+def _run_stale_restore(args: argparse.Namespace) -> int:
+    """``--stale-restore [TS]``: recover files from a --stale-remediate safety snapshot
+    under .agentteams-backups/stale-fix-<TS>/ (default: the latest). The recovery path
+    for a revision that went wrong; verifies each backup's sha256 before writing."""
+    from agentteams import stale_remediate
+
+    root = _resolve_output_dir(args)
+    ts = getattr(args, "stale_restore", None)
+    if ts in (None, "latest"):
+        snap = stale_remediate.latest_snapshot(root)
+    else:
+        cand = root / ".agentteams-backups" / f"stale-fix-{ts}"
+        snap = cand if cand.is_dir() else None
+    if snap is None:
+        print(f"Error: no stale-fix snapshot found under {root}/.agentteams-backups/",
+              file=sys.stderr)
+        return 1
+    try:
+        restored = stale_remediate.restore_snapshot(root, snap)
+    except (OSError, ValueError) as exc:
+        print(f"Error: {exc}", file=sys.stderr)
+        return 1
+    print(f"Restored {len(restored)} file(s) from {snap}:")
+    for rel in restored:
+        print(f"  {rel}")
+    return 0
+
+
 def _run_verify_backup(args: argparse.Namespace) -> int:
     """``--verify-backup [TS]``: read-only check that a backup is restorable — its
     bytes match the recorded ``source_sha256`` in ``_manifest.json``. Exit 1 on any

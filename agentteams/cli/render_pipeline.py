@@ -15,8 +15,9 @@ import sys
 from pathlib import Path
 from typing import Any, Callable
 
-from agentteams import emit, render
+from agentteams import emit, render, vscode_tasks
 from agentteams.frameworks.agents_md import AgentsMdAdapter
+from agentteams.frameworks.base import FrameworkAdapter
 from agentteams.frameworks.claude import ClaudeAdapter
 from agentteams.frameworks.copilot_cli import CopilotCLIAdapter
 from agentteams.frameworks.copilot_vscode import CopilotVSCodeAdapter
@@ -72,10 +73,50 @@ def _resolve_strict_manual_mode(*, strict_arg: bool | None, self_update: bool) -
     if strict_arg is not None:
         return bool(strict_arg)
     return bool(self_update)
+def _emit_vscode_tasks(
+    manifest: dict[str, Any],
+    adapter: FrameworkAdapter,
+    output_dir: Path | None,
+) -> tuple[str, str] | None:
+    """Return (rel_path, content) for .vscode/tasks.json, or None if disabled.
+
+    Sentinel-merges with any existing file so user-authored tasks are preserved.
+    Raises ValueError (surfaced to stderr) if the existing JSON is malformed.
+    """
+    rel_path = adapter.vscode_tasks_rel_path()
+    if rel_path is None:
+        return None
+    if manifest.get("no_vscode_tasks"):
+        return None
+
+    if output_dir is not None:
+        # resolved = <project_root>/.vscode/tasks.json — parent.parent is the project root.
+        resolved = (output_dir / rel_path).resolve()
+        project_root = resolved.parent.parent
+        existing_path: Path | None = resolved
+    else:
+        project_root = None
+        existing_path = None
+
+    commands = vscode_tasks.discover_project_commands(project_root) if project_root is not None else []
+    content = vscode_tasks.render_tasks_json(commands)
+
+    if existing_path is not None:
+        try:
+            content = vscode_tasks.sentinel_merge(existing_path, content)
+        except ValueError as exc:
+            print(f"  !  {exc}", file=sys.stderr)
+            return None
+
+    return (rel_path, content)
+
+
 def _build_final_rendered(
     manifest: dict[str, Any],
     adapter: CopilotVSCodeAdapter | CopilotCLIAdapter | ClaudeAdapter | GooseAdapter | AgentsMdAdapter,
     project_name: str,
+    *,
+    output_dir: Path | None = None,
 ) -> list[tuple[str, str]]:
     """Render templates and apply framework post-processing.
 
@@ -115,6 +156,11 @@ def _build_final_rendered(
     # (e.g. Goose's .goosehints integrator). Default is none.
     for extra_path, extra_content in adapter.extra_output_files(manifest):
         final.append((extra_path, extra_content))
+
+    # Centralized .vscode/tasks.json generation for frameworks that opt in.
+    tasks_result = _emit_vscode_tasks(manifest, adapter, output_dir)
+    if tasks_result is not None:
+        final.append(tasks_result)
 
     if runtime_handoff_agents:
         final.append((

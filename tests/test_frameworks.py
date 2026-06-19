@@ -101,6 +101,9 @@ class TestCopilotVSCodeAdapter:
     def test_supports_handoffs(self):
         assert self.adapter.supports_handoffs() is True
 
+    def test_vscode_tasks_rel_path(self):
+        assert self.adapter.vscode_tasks_rel_path() == "../../.vscode/tasks.json"
+
     def test_get_file_extension_agent(self):
         assert self.adapter.get_file_extension("agent") == ".agent.md"
 
@@ -361,6 +364,9 @@ class TestCopilotCLIAdapter:
     def test_supports_handoffs(self):
         assert self.adapter.supports_handoffs() is False
 
+    def test_vscode_tasks_rel_path(self):
+        assert self.adapter.vscode_tasks_rel_path() is None
+
     def test_handoff_delivery_mode(self):
         assert self.adapter.handoff_delivery_mode() == "manifest"
 
@@ -445,6 +451,9 @@ class TestClaudeAdapter:
 
     def test_supports_handoffs(self):
         assert self.adapter.supports_handoffs() is False
+
+    def test_vscode_tasks_rel_path(self):
+        assert self.adapter.vscode_tasks_rel_path() == "../../.vscode/tasks.json"
 
     def test_handoff_delivery_mode(self):
         assert self.adapter.handoff_delivery_mode() == "manifest"
@@ -724,6 +733,9 @@ class TestGooseAdapter:
 
     def test_supports_handoffs(self):
         assert self.adapter.supports_handoffs() is True
+
+    def test_vscode_tasks_rel_path(self):
+        assert self.adapter.vscode_tasks_rel_path() == "../../.vscode/tasks.json"
 
     def test_handoff_delivery_mode_native(self):
         # Handoffs are encoded into recipes, not a sidecar manifest.

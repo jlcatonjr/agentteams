@@ -269,6 +269,9 @@ class GooseAdapter(FrameworkAdapter):
     def get_agents_dir(self, project_path: Path) -> Path:
         return project_path / ".goose" / "recipes"
 
+    def vscode_tasks_rel_path(self) -> str | None:
+        return "../../.vscode/tasks.json"
+
     def normalize_output_path(self, output: Path) -> Path:
         """Normalize a user-supplied --output path for the Goose framework.
 

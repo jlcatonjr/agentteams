@@ -21,6 +21,8 @@ from agentteams.cli.commands import (
     _run_convert,
     _run_interop,
     _run_prune_backups,
+    _run_stale_check,
+    _run_stale_restore,
     _run_verify_backup,
     _run_verify_integrity,
     _run_verify_waivers,
@@ -142,6 +144,19 @@ def main(argv: list[str] | None = None) -> int:
     # -----------------------------------------------------------------------
     if getattr(args, "prune_backups", None) is not None:
         return _run_prune_backups(args)
+
+    # -----------------------------------------------------------------------
+    # --stale-check: standalone read-only staleness scan (docs + code/scripts).
+    # The exit code IS the verdict (0 clean / 1 blocking). Never edits files.
+    # -----------------------------------------------------------------------
+    if getattr(args, "stale_check", False):
+        return _run_stale_check(args)
+
+    # -----------------------------------------------------------------------
+    # --stale-restore: recover files from a --stale-remediate --yes snapshot.
+    # -----------------------------------------------------------------------
+    if getattr(args, "stale_restore", None) is not None:
+        return _run_stale_restore(args)
 
     # -----------------------------------------------------------------------
     # --add-fence-markers: standalone file-retrofit (no description needed).

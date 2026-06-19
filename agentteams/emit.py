@@ -174,6 +174,9 @@ _YAML_FM_RE = re.compile(r"^(---\n.+?\n---\n)", re.DOTALL)
 
 _MACHINE_MANAGED_MERGE_OVERWRITE_PATHS: frozenset[str] = frozenset([
     "references/security-vulnerability-watch.json",
+    # Sentinel-merge handled in vscode_tasks.py before this path reaches emit;
+    # emit must overwrite (not fence-merge) so stale JSON is fully replaced.
+    "../../.vscode/tasks.json",
 ])
 
 # Fences whose body is refreshed each run from an upstream live feed

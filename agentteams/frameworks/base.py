@@ -81,6 +81,17 @@ class FrameworkAdapter(ABC):
         """
         return []
 
+    def vscode_tasks_rel_path(self) -> str | None:
+        """Return the path to .vscode/tasks.json relative to this framework's agents dir.
+
+        Default ``None`` disables tasks.json generation for this framework.
+        Override in adapters whose agents dir is exactly two levels deep from the
+        project root (e.g. ``.github/agents/``, ``.claude/agents/``, ``.goose/recipes/``).
+        AgentsMdAdapter must NOT override — its agents dir is one level deep and
+        ``../../`` would resolve above the project root.
+        """
+        return None
+
     @abstractmethod
     def get_file_extension(self, file_type: str) -> str:
         """Return the file extension for a given file type.

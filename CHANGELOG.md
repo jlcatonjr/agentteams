@@ -8,6 +8,46 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### added
 
+- **Stale detector/remediator (`--stale-check`).** Additive minor change (new flags +
+  the exit-3 contract enter the SemVer surface per `STABILITY.md`). A standalone,
+  read-only scan of `--output`/`--project` (else CWD) that reports stale agent docs and
+  code/scripts across reliability tiers:
+  - **Tier-1 (blocking, exit 1):** `VCS_CONFLICT_MARKER` (a complete, ordered git
+    merge-conflict triad, fenced-code and setext-underline aware), `BROKEN_REF` (a
+    markdown-link target absent on disk), and provenance-gated `INTEGRITY` (reuses
+    `drift.verify_output_integrity` for every discovered `references/build-log.json`)
+    and `SOURCE_DRIFT` (bridge source divergence, gated on source presence).
+  - **Tier-2 (advisory):** `STALE_VS_CODE` — git-recency: referenced code committed in a
+    commit strictly *after* the doc's last commit, with a substantive (whitespace-filtered)
+    diff. Self-disables on non-git/shallow repos and skips uncommitted paths.
+  - **Tier-0 (INFO):** `PROVENANCE_ABSENT`, `BRIDGE_SOURCE_UNAVAILABLE` (a consumer repo
+    whose bridge `source_dir` is not present on this machine).
+  - The file set comes from `git ls-files` in a work-tree (excludes gitignored `tmp/`,
+    backups, local `references/plans/`) plus an explicit `examples/` fixture skip.
+  - `--stale-remediate` prints a **guided remediation plan**; adding `--yes` promotes it
+    into an **applied, backup-protected revision pass**: it takes a sha256-verified safety
+    snapshot of every file it will touch into `.agentteams-backups/stale-fix-<ts>/` BEFORE
+    writing, then performs only safe deterministic revisions — broken-reference repair
+    (relocating a link to a moved file, never inside a fenced/USER-EDITABLE region) and
+    bridge re-merge for `SOURCE_DRIFT` (the canonical fence-aware writer). `INTEGRITY` is
+    routed (the exact `--update --merge` command is printed, not auto-run); conflict markers
+    are never auto-resolved. Exit 3 when blocking items remain after an apply.
+  - `--stale-restore [TS]` recovers files from a stale-fix snapshot (default: latest),
+    verifying each backup's sha256 before writing — the recovery path for a revision that
+    went wrong. `--stale-no-git` skips the Tier-2 git-recency signal. The man page documents
+    exit 1/2/3. Methods report, plan, and adversarial+conflict audits under
+    `references/plans/stale-detector-*`.
+  - **`.agentteams-stale-ignore`** (gitignore-style file at the scan root) suppresses
+    known-acceptable findings — cross-repo links, captured/read-only packages, archival
+    docs. Matches the referrer file or (for a broken ref) the target; supports exact paths,
+    directory prefixes, and `*` globs. **Never suppresses `VCS_CONFLICT_MARKER`.** Suppressed
+    findings are counted (`suppressed: N`), never silent; note suppression can flip a Tier-1
+    exit `1` to `0`. (Evolvable input config, not a frozen format.)
+  - The revision phase now **warns** when a safety snapshot is written into a repo where
+    `.agentteams-backups/` is not gitignored (it never auto-edits `.gitignore`).
+  - The write/revision phase moved to a new module `agentteams/stale_remediate.py`
+    (`stale_detector.py` stays detection-only — CH-07 module-size discipline).
+
 - **Goose (Block / AAIF) framework support (beta).** Adds Goose as a target
   alongside Copilot and Claude. **Beta:** generate/convert/bridge are supported and
   validated against the Goose CLI; interop-to-Goose is not yet supported and the
