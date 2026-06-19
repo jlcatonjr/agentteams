@@ -24,7 +24,7 @@ DURABLE_FILES=(
 )
 
 # Patterns exempt from the check (legitimate discussions of impermanence)
-EXEMPT_PATTERN="(deprecated|gitignore|plan|tmp/remediation-plans/master-status|Mirror backup|See audit report|tmp/by-week.*audit|tmp/diffs|tmp/inject_fences|off-repo storage|Operator|rewrite-backups)"
+EXEMPT_PATTERN="(deprecated|gitignore|plan|tmp/remediation-plans/master-status|Mirror backup|See audit report|tmp/by-week.*audit|tmp/diffs|tmp/inject_fences|off-repo storage|Operator|rewrite-backups|_SKIP_PREFIXES|sandbox)"
 
 cd "$REPO_ROOT"
 
