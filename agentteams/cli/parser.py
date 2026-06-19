@@ -180,6 +180,18 @@ def _build_parser() -> argparse.ArgumentParser:
         ),
     )
     parser.add_argument(
+        "--no-vscode-tasks",
+        action="store_true",
+        dest="no_vscode_tasks",
+        help=(
+            "Suppress generation of .vscode/tasks.json. By default, agentteams "
+            "emits a tasks.json at the project root containing discovered project "
+            "commands (npm scripts, Makefile PHONY targets, etc.) and agentteams "
+            "meta-tasks. Pass this flag for repositories that manage tasks.json "
+            "manually."
+        ),
+    )
+    parser.add_argument(
         "--no-add-fence-markers",
         action="store_true",
         dest="no_add_fence_markers",
@@ -584,6 +596,30 @@ def _build_parser() -> argparse.ArgumentParser:
         ),
     )
     parser.add_argument(
+        "--stale-check", action="store_true", dest="stale_check", default=False,
+        help="Read-only: scan --output/--project (else CWD) for stale agent docs and "
+             "code/scripts (VCS conflict markers, broken references, git-recency "
+             "divergence, provenance-gated generated-file integrity). Exits non-zero "
+             "on any Tier-1 (blocking) finding. Never edits files.",
+    )
+    parser.add_argument(
+        "--stale-remediate", action="store_true", dest="stale_remediate", default=False,
+        help="Modifier for --stale-check: also print a guided remediation plan "
+             "(suggestions only; does NOT edit files, unlike --auto-correct).",
+    )
+    parser.add_argument(
+        "--stale-no-git", action="store_true", dest="stale_no_git", default=False,
+        help="Modifier for --stale-check: skip the Tier-2 git-recency signal "
+             "(hermetic/CI or non-git targets).",
+    )
+    parser.add_argument(
+        "--stale-restore", nargs="?", const="latest", default=None, metavar="TS",
+        dest="stale_restore",
+        help="Standalone: restore files from a --stale-remediate --yes safety snapshot "
+             "(.agentteams-backups/stale-fix-<TS>/; default: latest). Recovery path for a "
+             "revision that went wrong.",
+    )
+    parser.add_argument(
         "--prune-backups",
         nargs="?",
         type=int,
@@ -685,13 +721,21 @@ def _validate_option_combinations(parser: argparse.ArgumentParser, args: argpars
         ("--verify-integrity", bool(getattr(args, "verify_integrity", False))),
         ("--verify-backup", getattr(args, "verify_backup", None) is not None),
         ("--prune-backups", getattr(args, "prune_backups", None) is not None),
+        ("--stale-check", bool(getattr(args, "stale_check", False))),
+        ("--stale-restore", getattr(args, "stale_restore", None) is not None),
     ]
     _active_ops = [flag for flag, on in _standalone_ops if on]
     if len(_active_ops) > 1:
         parser.error(
             f"{' and '.join(_active_ops)} are mutually exclusive "
-            "(each is a standalone integrity/retention operation)"
+            "(each is a standalone, dispatch-shadowing integrity/retention operation)"
         )
+
+    # --stale-remediate / --stale-no-git are modifiers for --stale-check.
+    if getattr(args, "stale_remediate", False) and not getattr(args, "stale_check", False):
+        parser.error("--stale-remediate requires --stale-check")
+    if getattr(args, "stale_no_git", False) and not getattr(args, "stale_check", False):
+        parser.error("--stale-no-git requires --stale-check")
 
     # --keep-within-days is a modifier for --prune-backups; alone it does nothing.
     if (
@@ -722,6 +766,7 @@ def _validate_option_combinations(parser: argparse.ArgumentParser, args: argpars
             ("project", "--project"), ("output", "--output"),
             ("add_fence_markers", "--add-fence-markers"),
             ("capture_baseline", "--capture-baseline"), ("check_baseline", "--check-baseline"),
+            ("stale_check", "--stale-check"),
         ]
         for attr, flag in _fleet_incompatible:
             val = getattr(args, attr, None)

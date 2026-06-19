@@ -95,6 +95,7 @@ def run_generate(args: argparse.Namespace, strict_manual_placeholders: bool) -> 
     manifest["host_features"] = list(getattr(args, "host_features", []) or [])
     if manifest["host_features"]:
         print(f"  Host features: {', '.join(manifest['host_features'])}")
+    manifest["no_vscode_tasks"] = bool(getattr(args, "no_vscode_tasks", False))
 
     project_name = manifest["project_name"]
     project_type = manifest["project_type"]
@@ -357,7 +358,7 @@ def run_generate(args: argparse.Namespace, strict_manual_placeholders: bool) -> 
 
     # Apply framework-specific post-processing; runtime-handoffs and pipeline
     # graph (Step 5c) are appended by _build_final_rendered.
-    final_rendered = _build_final_rendered(manifest, adapter, project_name)
+    final_rendered = _build_final_rendered(manifest, adapter, project_name, output_dir=output_dir)
 
     # -----------------------------------------------------------------------
     # Step 5b: Handle --update (structural + content drift, manual preservation)
@@ -495,6 +496,17 @@ def run_generate(args: argparse.Namespace, strict_manual_placeholders: bool) -> 
                     existing_path.read_text(encoding="utf-8"), content
                 )
             update_rendered.append((rel_path, content))
+
+        # Sidecar files (e.g. .vscode/tasks.json) are not tracked by the
+        # structural drift detector and are therefore absent from update_paths.
+        # Include them whenever their rendered content differs from disk.
+        _already_included = {p for p, _ in update_rendered}
+        for _sc_path, _sc_content in final_rendered:
+            if _sc_path in _already_included or _sc_path in update_paths:
+                continue
+            _sc_disk = emit._resolve_path(output_dir, _sc_path)
+            if not _sc_disk.exists() or _sc_disk.read_text(encoding="utf-8") != _sc_content:
+                update_rendered.append((_sc_path, _sc_content))
 
         # Migrate away legacy tool-*.agent.md files: tools are now emitted as
         # reference/skill documents, never agents. Runs before the converged

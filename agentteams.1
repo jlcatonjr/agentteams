@@ -2,7 +2,7 @@
 .SH NAME
 agentteams \- Generate a complete agent team for any project.
 .SH SYNOPSIS
-.B agentteams [--description PATH] [--project PATH] [--framework NAME] [--output DIR] [--dry-run] [--json] [--overwrite] [--merge] [--yes] [--no-scan] [--cost-routing] [--update] [--prune] [--adopt-orphans] [--check] [--refresh-index] [--query-index TEXT] [--query-k N] [--query-strategy QUERY_STRATEGY] [--fail-on-legacy-skip] [--no-add-fence-markers] [--scan-security] [--check-budget] [--self] [--allow-external-self-output] [--post-audit] [--auto-correct] [--enrich] [--strict-manual-placeholders] [--no-strict-manual-placeholders STRICT_MANUAL_PLACEHOLDERS] [--security-offline] [--security-max-items N] [--security-no-nvd] [--migrate] [--convert-from DIR] [--interop-from DIR] [--interop-source-framework INTEROP_SOURCE_FRAMEWORK] [--interop-mode INTEROP_MODE] [--bridge-from DIR] [--bridge-source-framework BRIDGE_SOURCE_FRAMEWORK] [--bridge-check] [--bridge-refresh] [--bridge-merge] [--bridge-no-skills] [--recipe-check] [--revert-migration] [--version] [--no-backup] [--shrink-policy SHRINK_POLICY] [--list-backups] [--restore-backup TIMESTAMP] [--add-fence-markers PATH] [--in-place] [--target-host-features TOKENS] [--capture-baseline PATH] [--baseline-label LABEL] [--check-baseline PATH] [--verify-waivers] [--verify-integrity] [--verify-backup TIMESTAMP] [--prune-backups KEEP] [--keep-within-days DAYS] [--backup-mirror DIR] [--fleet DIR] [--fleet-frameworks FLEET_FRAMEWORKS] [--fleet-report DIR]
+.B agentteams [--description PATH] [--project PATH] [--framework NAME] [--output DIR] [--dry-run] [--json] [--overwrite] [--merge] [--yes] [--no-scan] [--cost-routing] [--update] [--prune] [--adopt-orphans] [--check] [--refresh-index] [--query-index TEXT] [--query-k N] [--query-strategy QUERY_STRATEGY] [--fail-on-legacy-skip] [--no-vscode-tasks] [--no-add-fence-markers] [--scan-security] [--check-budget] [--self] [--allow-external-self-output] [--post-audit] [--auto-correct] [--enrich] [--strict-manual-placeholders] [--no-strict-manual-placeholders STRICT_MANUAL_PLACEHOLDERS] [--security-offline] [--security-max-items N] [--security-no-nvd] [--migrate] [--convert-from DIR] [--interop-from DIR] [--interop-source-framework INTEROP_SOURCE_FRAMEWORK] [--interop-mode INTEROP_MODE] [--bridge-from DIR] [--bridge-source-framework BRIDGE_SOURCE_FRAMEWORK] [--bridge-check] [--bridge-refresh] [--bridge-merge] [--bridge-no-skills] [--recipe-check] [--revert-migration] [--version] [--no-backup] [--shrink-policy SHRINK_POLICY] [--list-backups] [--restore-backup TIMESTAMP] [--add-fence-markers PATH] [--in-place] [--target-host-features TOKENS] [--capture-baseline PATH] [--baseline-label LABEL] [--check-baseline PATH] [--verify-waivers] [--verify-integrity] [--verify-backup TIMESTAMP] [--stale-check] [--stale-remediate] [--stale-no-git] [--stale-restore TS] [--prune-backups KEEP] [--keep-within-days DAYS] [--backup-mirror DIR] [--fleet DIR] [--fleet-frameworks FLEET_FRAMEWORKS] [--fleet-report DIR]
 .SH DESCRIPTION
 .PP
 Generate a complete agent team for any project.
@@ -71,6 +71,9 @@ Query strategy for \-\-query\-index: 'lexical' (BM25, default) or 'vector' (cosi
 .TP
 .B \-\-fail\-on\-legacy\-skip
 Exit with non\-zero status if \-\-merge skipped any files due to missing fence markers (legacy files). Use in CI to enforce that template updates always propagate to downstream repositories.
+.TP
+.B \-\-no\-vscode\-tasks
+Suppress generation of .vscode/tasks.json. By default, agentteams emits a tasks.json at the project root containing discovered project commands (npm scripts, Makefile PHONY targets, etc.) and agentteams meta\-tasks. Pass this flag for repositories that manage tasks.json manually.
 .TP
 .B \-\-no\-add\-fence\-markers
 Opt OUT of the default behaviour where \-\-update \-\-merge (with \-\-yes) auto\-retrofits AGENTTEAMS `content` fence markers onto legacy (unfenced) files so their template region becomes mergeable instead of being skipped. Each retrofit is backed up first and the shrink\-guard still suppresses material template shrinks, so the legacy body is recoverable. Pass this flag to keep the conservative skip\-legacy behaviour (distinct from the standalone per\-file `\-\-add\-fence\-markers PATH` retrofit).
@@ -192,6 +195,18 @@ Read\-only: classify every generated output file under \-\-output/\-\-project (e
 .B \-\-verify\-backup TIMESTAMP
 Read\-only: verify a backup is restorable — its bytes match the recorded source_sha256 in _manifest.json. Defaults to the latest backup; pass a TIMESTAMP for a specific one. Exits non\-zero on any bit\-rot/tamper mismatch.
 .TP
+.B \-\-stale\-check
+Read\-only: scan \-\-output/\-\-project (else CWD) for stale agent docs and code/scripts (VCS conflict markers, broken references, git\-recency divergence, provenance\-gated generated\-file integrity). Exits non\-zero on any Tier\-1 (blocking) finding. Never edits files.
+.TP
+.B \-\-stale\-remediate
+Modifier for \-\-stale\-check: also print a guided remediation plan (suggestions only; does NOT edit files, unlike \-\-auto\-correct).
+.TP
+.B \-\-stale\-no\-git
+Modifier for \-\-stale\-check: skip the Tier\-2 git\-recency signal (hermetic/CI or non\-git targets).
+.TP
+.B \-\-stale\-restore TS
+Standalone: restore files from a \-\-stale\-remediate \-\-yes safety snapshot (.agentteams\-backups/stale\-fix\-<TS>/; default: latest). Recovery path for a revision that went wrong.
+.TP
 .B \-\-prune\-backups KEEP
 Standalone: delete old timestamped backups under \-\-output/\-\-project (else CWD) .agentteams\-backups/, keeping the newest KEEP (default 10). The single newest backup is NEVER deleted, even with KEEP 0. Combine with \-\-keep\-within\-days to also retain anything younger than N days, and \-\-dry\-run to preview. This bounds backup growth; distinct from \-\-prune (which removes stale *agents*, not backups).
 .TP
@@ -215,7 +230,13 @@ Directory for the fleet report (default: <DIR>/.agentteams\-fleet/<run\-id>/).
 Success.
 .TP
 .B 1
-Error: validation failure, file not found, drift detected (with \fB--check\fR), or security issues (with \fB--scan-security\fR).
+Error: validation failure, file not found, drift detected (with \fB--check\fR), security issues (with \fB--scan-security\fR), or a Tier-1 (blocking) finding (with \fB--stale-check\fR).
+.TP
+.B 2
+Baseline drift detected (with \fB--check-baseline\fR).
+.TP
+.B 3
+Reserved: remediation attempted but unresolved (with \fB--stale-check --stale-remediate\fR).
 .SH EXAMPLES
 .PP
 Generate a VS Code Copilot agent team:

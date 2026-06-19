@@ -82,7 +82,17 @@ def generate_man_page(parser: argparse.ArgumentParser) -> str:
     lines.append(
         "Error: validation failure, file not found, "
         "drift detected (with \\fB--check\\fR), "
-        "or security issues (with \\fB--scan-security\\fR)."
+        "security issues (with \\fB--scan-security\\fR), "
+        "or a Tier-1 (blocking) finding (with \\fB--stale-check\\fR)."
+    )
+    lines.append(".TP")
+    lines.append(".B 2")
+    lines.append("Baseline drift detected (with \\fB--check-baseline\\fR).")
+    lines.append(".TP")
+    lines.append(".B 3")
+    lines.append(
+        "Reserved: remediation attempted but unresolved "
+        "(with \\fB--stale-check --stale-remediate\\fR)."
     )
 
     # EXAMPLES
