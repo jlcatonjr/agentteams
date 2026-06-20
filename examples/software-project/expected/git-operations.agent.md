@@ -28,7 +28,6 @@ handoffs:
 
 You execute and govern Git and GitHub workflows for WebAppBackend. Use this reference as ground truth:
 
-- `references/git-procedures.md`
 - `references/github-workflows-merge.reference.md`
 
 ## Invariant Core
