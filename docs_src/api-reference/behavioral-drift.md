@@ -82,8 +82,8 @@ Compare a recorded execution trajectory against the behavioral specification in 
 **Finding Details:**
 
 Each Finding in the return list has:
-- `code`: One of the BEHAVIOR_* constants
-- `severity`: `"HARD"` (always; behavioral divergence is critical)
+- `code`: One of the BEHAVIOR_* constants, or `PAYLOAD_UNTYPED` (reused from `audit_handoff_chain`)
+- `severity`: The four `BEHAVIOR_*` codes are always `"HARD"` (behavioral divergence is critical). The reused `PAYLOAD_UNTYPED` code carries the dated WARN→HARD severity instead: `"WARN"` before the `2026-07-01` cutoff and `"HARD"` on or after it (see `handoff_payloads._payload_untyped_severity`).
 - `message`: Human-readable explanation
 
 **Behavior:**

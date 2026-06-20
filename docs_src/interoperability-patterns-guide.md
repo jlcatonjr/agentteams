@@ -107,8 +107,9 @@ Bridge artifacts appear in `references/bridges/copilot-vscode-to-claude/`:
 |---|---|
 | `bridge-manifest.json` | Source-to-target agent resolution map |
 | `agent-inventory.md` | Human-readable list of agents accessible through the bridge |
-| `quickstart-snippet.md` | CLAUDE.md snippet for users to add to their project |
+| `quickstart-snippet.md` | Framework-neutral first-prompt snippet for the bridged target runtime |
 | `entrypoint.md` | Canonical entry point for Claude routing through bridge |
+| `domain-boundary.md` | Clarifies the memory-index vector-mode boundary vs project-level retrieval-integrator contracts |
 
 Source agent documentation is never modified. The bridge references it by path.
 

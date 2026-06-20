@@ -55,11 +55,14 @@ Writes all rendered files to the target framework directory:
 - `copilot-vscode` -> `.github/agents/`
 - `copilot-cli` -> `.github/copilot/`
 - `claude` -> `.claude/agents/`
+- `goose` **(beta)** -> `.goose/recipes/`
+- `agents-md` -> `.agents/`
 
 Also writes framework instructions at the parent of the framework agents directory:
 
 - `copilot-vscode` and `copilot-cli` -> `.github/copilot-instructions.md`
 - `claude` -> `.claude/CLAUDE.md`
+- `goose` and `agents-md` -> repo-root `AGENTS.md`
 
 It also generates `SETUP-REQUIRED.md` for unresolved manual placeholders, and runs post-generation audit/security scan when requested.
 
@@ -149,7 +152,7 @@ Templates in `templates/` are Markdown files with `{PLACEHOLDER}` tokens. The li
 |------|-----------|
 | Orchestrator | `universal/orchestrator.template.md` |
 | Governance | `universal/` (11 tier-2 governance agent templates) |
-| Domain | `domain/` (14 archetype templates + 6 tool templates, incl. `content-enricher` and `work-summarizer`) |
+| Domain | `domain/` (15 archetype templates + 6 tool templates, incl. `content-enricher` and `work-summarizer`) |
 | Workstream Expert | `workstream-expert.template.md` (one template, rendered per component) |
 | Builder | `builder/` (4 framework-specific team-builder templates) |
 
@@ -163,7 +166,7 @@ See [Template Authoring](template-authoring.md) for placeholder conventions and 
 
 ## Framework Adapters
 
-The same template library targets four frameworks via adapters in `agentteams/frameworks/`:
+The same template library targets five frameworks via adapters in `agentteams/frameworks/`:
 
 | Framework | Agent Format | Entry Point |
 |-----------|-------------|-------------|
@@ -171,6 +174,7 @@ The same template library targets four frameworks via adapters in `agentteams/fr
 | `copilot-cli` | Plain `.md` system prompts | `gh copilot` CLI |
 | `claude` | Claude front matter `.md` + `CLAUDE.md` | Claude Projects |
 | `goose` **(beta)** | Recipe YAML (`.goose/recipes/*.yaml`) + repo-root `AGENTS.md`/`.goosehints` | `goose run --recipe` |
+| `agents-md` | Cross-tool `AGENTS.md` standard (plain `.md`) + `.agents/` | Any AGENTS.md-aware tool |
 
 Each adapter in `agentteams/frameworks/` knows the file naming conventions, front-matter schema, and handoff delivery mode for its target framework. VS Code Copilot keeps handoffs inline; frameworks that do not support the VS Code syntax can instead receive a sidecar `references/runtime-handoffs.json` manifest when extracted handoffs are present. Goose encodes handoffs natively inside each recipe (orchestrator `sub_recipes`; deeper edges become `summon` `load(...)`), so it emits no sidecar. **Goose support is in beta** (generate/convert/bridge; interop is not yet supported) and its adapter API is not yet under the [stability policy](https://github.com/jlcatonjr/agentteams/blob/main/STABILITY.md).
 

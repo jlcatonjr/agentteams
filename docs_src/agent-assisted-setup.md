@@ -31,7 +31,7 @@ Start by asking the agent to interview you and produce a `brief.json`. The agent
 I want to create an AI agent team for my project using the agentteams module.
 Interview me with the minimum number of questions needed to fill out a
 project description brief (brief.json). Ask one question at a time.
-When you have enough information, write the brief to .github/agents/_build-description.json.
+When you have enough information, write the brief to .agentteams/brief.json.
 ```
 
 The agent will ask about:
@@ -49,7 +49,7 @@ If your project already has a README, have the agent extract the description aut
 
 ```
 Read the README.md in this project and write a agentteams project description brief
-to .github/agents/_build-description.json. Use the project name, goal, deliverables,
+to .agentteams/brief.json. Use the project name, goal, deliverables,
 and component list from the README. Ask me only if something critical is missing.
 ```
 
@@ -83,7 +83,7 @@ Once the brief is written, ask the agent to run the generation command.
 ### Prompt — Generate and review
 
 ```
-Run agentteams with the brief at .github/agents/_build-description.json,
+Run agentteams with the brief at .agentteams/brief.json,
 targeting this project directory, using the copilot-vscode framework.
 Use --dry-run first so I can review what will be generated, then run for real
 with --merge --yes after I approve.
@@ -94,14 +94,14 @@ The agent will run:
 ```bash
 # Preview
 agentteams \
-  --description .github/agents/_build-description.json \
+  --description .agentteams/brief.json \
   --framework copilot-vscode \
   --project . \
   --dry-run
 
 # Then, after your approval:
 agentteams \
-  --description .github/agents/_build-description.json \
+  --description .agentteams/brief.json \
   --framework copilot-vscode \
   --project . \
   --merge --yes
@@ -110,7 +110,7 @@ agentteams \
 ### Prompt — Generate with full audit in one step
 
 ```
-Generate the agent team from .github/agents/_build-description.json for this project.
+Generate the agent team from .agentteams/brief.json for this project.
 Use --post-audit so the audit runs immediately. Use --security-offline to skip the
 live vulnerability feed. Summarize the audit findings when done.
 ```
@@ -167,7 +167,7 @@ The agent runs:
 
 ```bash
 agentteams \
-  --description .github/agents/_build-description.json \
+  --description .agentteams/brief.json \
   --project . \
   --post-audit \
   --security-offline
@@ -198,7 +198,7 @@ The agent runs:
 
 ```bash
 agentteams \
-  --description .github/agents/_build-description.json \
+  --description .agentteams/brief.json \
   --framework copilot-vscode \
   --project . \
   --merge --yes
@@ -213,11 +213,11 @@ with slug "webhooks-api", then run --update so a new @webhooks-api-expert
 agent is generated without touching the existing agents.
 ```
 
-The agent will edit the `_build-description.json` to add the component entry, then run:
+The agent will edit the `.agentteams/brief.json` to add the component entry, then run:
 
 ```bash
 agentteams \
-  --description .github/agents/_build-description.json \
+  --description .agentteams/brief.json \
   --project . \
   --update --yes
 ```
@@ -236,7 +236,7 @@ The agent will produce a step like:
 - name: Check agent team drift
   run: |
     agentteams \
-      --description .github/agents/_build-description.json \
+      --description .agentteams/brief.json \
       --project . \
       --check
 ```
@@ -259,7 +259,7 @@ The agent runs:
 
 ```bash
 agentteams \
-  --description .github/agents/_build-description.json \
+  --description .agentteams/brief.json \
   --framework copilot-vscode \
   --project . \
   --migrate
@@ -275,8 +275,8 @@ Quick-copy prompts for common tasks.
 
 | Task | Prompt |
 |------|--------|
-| Draft a brief from scratch | `Interview me and write a agentteams brief to .github/agents/_build-description.json` |
-| Draft a brief from README | `Read README.md and write a agentteams brief to .github/agents/_build-description.json` |
+| Draft a brief from scratch | `Interview me and write a agentteams brief to .agentteams/brief.json` |
+| Draft a brief from README | `Read README.md and write a agentteams brief to .agentteams/brief.json` |
 | Generate (preview first) | `Run agentteams --dry-run on the brief, then --merge --yes after I approve` |
 | Generate with audit | `Run agentteams --post-audit --security-offline and summarize findings` |
 | Fill SETUP-REQUIRED.md | `Read SETUP-REQUIRED.md and propose values for each pending placeholder from project context` |

@@ -43,7 +43,7 @@ Each `(workspace, target)` row is one of:
 | `SKIP` | Ambiguous `.claude/` (no bridge signal and no resolvable descriptor) — left for manual review. |
 | `WOULD-UPDATE` | Dry-run preview only. |
 
-> **Note on the `target` field when parsing `report.json`:** updated rows use `target = "github"`, `"claude-direct"`, or `"claude-bridge"`. A `SKIP` row for an ambiguous `.claude/` carries `target = "claude"` (it could not be classified). Filter for these explicitly so manual-review rows are not dropped.
+> **Note on the `target` field when parsing `report.json`:** updated rows use one of `target = "github"`, `"claude-direct"`, `"claude-bridge"`, `"goose-direct"`, or `"goose-bridge"`. A `SKIP` row for an ambiguous `.claude/` carries `target = "claude"` (it could not be classified). Filter for these explicitly so manual-review rows are not dropped.
 
 ### Safety guarantees
 
@@ -57,7 +57,7 @@ Fleet mode is **non-destructive by construction**: it is merge-only, and `--over
 
 > *Source: `agentteams/fleet.py`*
 
-Outcome of updating one target (`"github"`, `"claude-direct"`, or `"claude-bridge"`) within a workspace.
+Outcome of updating one target (`"github"`, `"claude-direct"`, `"claude-bridge"`, `"goose-direct"`, or `"goose-bridge"`) within a workspace.
 
 **Attributes:**
 
@@ -94,7 +94,7 @@ Aggregate result for one workspace.
 
 > *Source: `agentteams/fleet.py`*
 
-Return the sorted list of workspace directories under `parent` (recursively) that contain `.github/agents/` and/or `.claude/`. `frameworks` (`"github"` | `"claude"` | `"both"`) filters which infrastructure qualifies a directory. Prunes `node_modules`, `.git`, `.worktrees`, and `archive`, and never recurses into `.github`/`.claude` internals.
+Return the sorted list of workspace directories under `parent` (recursively) that contain `.github/agents/` and/or `.claude/` (and, for `goose`/`all`, a Goose-bridged workspace). `frameworks` (`"github"` | `"claude"` | `"goose"` | `"both"` | `"all"`) filters which infrastructure qualifies a directory: `"both"` is the legacy default (copilot + claude only); `"all"` adds Goose. Prunes `node_modules`, `.git`, `.worktrees`, and `archive`, and never recurses into `.github`/`.claude` internals.
 
 **Returns:** `list[Path]`
 

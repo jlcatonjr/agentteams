@@ -133,7 +133,7 @@ agentteams \
 
 ## Directional Coverage
 
-All three frameworks are supported in all six directional pairings:
+These three round-trippable frameworks are supported in all six directional pairings:
 
 1. `copilot-vscode -> copilot-cli`
 2. `copilot-vscode -> claude`
@@ -141,6 +141,8 @@ All three frameworks are supported in all six directional pairings:
 4. `copilot-cli -> claude`
 5. `claude -> copilot-vscode`
 6. `claude -> copilot-cli`
+
+The framework set is larger than these three: `goose` is also a one-way convert/bridge **target** (`--convert-from … --framework goose`, `--bridge-from … --framework goose`), and `agents-md` is **generate-only**. Neither is a round-trip interop source — see the [CLI Reference](cli-reference.md#feature-support-by-framework) feature-support matrix and the per-mode API pages for their coverage.
 
 ---
 

@@ -195,7 +195,9 @@ This is read-only access for context. It does not grant edit or bash permissions
 
 ### Full autonomous (no prompts, use with care)
 
-Set `claudeCode.initialPermissionMode: "auto"` in VS Code settings, or use `--permission-mode auto` for a session. No `deny` rules needed unless blocking specific operations.
+> **Caution — use with care.** Auto-approval runs actions without confirmation; reserve it for throwaway/sandboxed workspaces. Unlike `bypassPermissions`, `deny` rules still apply in `auto` mode, so keep minimal deny guardrails (e.g. `Bash(rm *)`, `Bash(sudo *)`, `Bash(git push --force *)`) even here.
+
+Set `claudeCode.initialPermissionMode: "auto"` in VS Code settings, or use `--permission-mode auto` for a session. Keep the minimal `deny` guardrails above to block specific dangerous operations.
 
 ### Locked down (human approves everything)
 

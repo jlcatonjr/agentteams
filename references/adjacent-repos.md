@@ -28,40 +28,42 @@ Each entry documents:
 
 | repo_path | agent_infra_path | relationship | orchestrator | update_scope | approval_gate | last_audit | notes |
 |---|---|---|---|---|---|---|---|
-| /Users/jamescaton/githubrepositories/agentteams | .github/agents | primary | yes | full_update | orchestrator | 2026-05-08 | Canonical AgentTeamsModule repository |
-| /Users/jamescaton/githubrepositories/VisualKnowledge | .github/agents | primary | no | full_update | orchestrator | 2026-05-08 | Large software project with agent infrastructure |
-| /Users/jamescaton/githubrepositories/copilot-vscode | .github/agents | primary | no | full_update | orchestrator | 2026-05-08 | Framework target (copilot-vscode bridge) |
-| /Users/jamescaton/githubrepositories/copilot-cli | .github/agents | primary | no | full_update | orchestrator | 2026-05-08 | Framework target (copilot-cli bridge) |
-| /Users/jamescaton/githubrepositories/claude-agent | .github/agents | primary | no | full_update | orchestrator | 2026-05-08 | Framework target (claude bridge) |
-| /Users/jamescaton/githubrepositories/smart-contracts | .github/agents | secondary | no | full_update | orchestrator | 2026-05-08 | Blockchain project with agent infrastructure |
-| /Users/jamescaton/githubrepositories/llm-training | .github/agents | secondary | no | full_update | orchestrator | 2026-05-08 | ML project with agent infrastructure |
-| /Users/jamescaton/githubrepositories/distributed-systems | .github/agents | secondary | no | full_update | orchestrator | 2026-05-08 | Systems engineering with agent infrastructure |
+| ~/githubrepositories/agentteams | .github/agents | primary | yes | full_update | orchestrator | 2026-05-08 | Canonical AgentTeamsModule repository |
+| ~/githubrepositories/VisualKnowledge | .github/agents | primary | no | full_update | orchestrator | 2026-05-08 | Large software project with agent infrastructure |
+| ~/githubrepositories/copilot-vscode | .github/agents | primary | no | full_update | orchestrator | 2026-05-08 | Framework target (copilot-vscode bridge) |
+| ~/githubrepositories/copilot-cli | .github/agents | primary | no | full_update | orchestrator | 2026-05-08 | Framework target (copilot-cli bridge) |
+| ~/githubrepositories/claude-agent | .github/agents | primary | no | full_update | orchestrator | 2026-05-08 | Framework target (claude bridge) |
+| ~/githubrepositories/smart-contracts | .github/agents | secondary | no | full_update | orchestrator | 2026-05-08 | Blockchain project with agent infrastructure |
+| ~/githubrepositories/llm-training | .github/agents | secondary | no | full_update | orchestrator | 2026-05-08 | ML project with agent infrastructure |
+| ~/githubrepositories/distributed-systems | .github/agents | secondary | no | full_update | orchestrator | 2026-05-08 | Systems engineering with agent infrastructure |
 
 ### Data & Research Projects
 
 | repo_path | agent_infra_path | relationship | orchestrator | update_scope | approval_gate | last_audit | notes |
 |---|---|---|---|---|---|---|---|
-| /Users/jamescaton/githubrepositories/learn-python-for-stats-and-econ | .github/agents | secondary | no | full_update | orchestrator | 2026-05-08 | Educational project with agent infrastructure |
-| /Users/jamescaton/githubrepositories/data-pipeline | .github/agents | secondary | no | full_update | orchestrator | 2026-05-08 | Data engineering with agent infrastructure |
-| /Users/jamescaton/githubrepositories/research-project-1 | .github/agents | secondary | no | full_update | orchestrator | 2026-05-08 | Academic research with agent infrastructure |
+| ~/githubrepositories/learn-python-for-stats-and-econ | .github/agents | secondary | no | full_update | orchestrator | 2026-05-08 | Educational project with agent infrastructure |
+| ~/githubrepositories/data-pipeline | .github/agents | secondary | no | full_update | orchestrator | 2026-05-08 | Data engineering with agent infrastructure |
+| ~/githubrepositories/research-project-1 | .github/agents | secondary | no | full_update | orchestrator | 2026-05-08 | Academic research with agent infrastructure |
 
 ### Vendor & Archived
 
 | repo_path | agent_infra_path | relationship | orchestrator | update_scope | approval_gate | last_audit | notes |
 |---|---|---|---|---|---|---|---|
-| /Users/jamescaton/githubrepositories/vendor-code | .github/agents | vendor | no | security_only | orchestrator | 2026-05-08 | Third-party code; minimal agent infrastructure |
-| /Users/jamescaton/githubrepositories/archived-project | .github/agents | archive | no | manual_review | orchestrator | 2026-05-08 | Archived; updates require explicit approval |
+| ~/githubrepositories/vendor-code | .github/agents | vendor | no | security_only | orchestrator | 2026-05-08 | Third-party code; minimal agent infrastructure |
+| ~/githubrepositories/archived-project | .github/agents | archive | no | manual_review | orchestrator | 2026-05-08 | Archived; updates require explicit approval |
 
 ---
 
 ## Summary Statistics
 
-- **Total repos registered:** 38
+- **Total repos registered (enumerated below):** 13
 - **Orchestrator present:** 1 (agentteams)
-- **Update scope: full_update:** 36
+- **Update scope: full_update:** 11
 - **Update scope: security_only:** 1 (vendor)
 - **Update scope: manual_review:** 1 (archived)
 - **Last fleet audit:** 2026-05-08 (fleet-update-all-repositories)
+
+> The 13 rows above are the **named, individually-tracked** repositories. The broader 2026-W19 fleet discovery enumerated ~38 in-scope repos under `~/githubrepositories/` (see `references/fleet-update-scope-boundary.md` §I); only the named representatives plus the vendor/archived exceptions are tracked by row here. The remaining in-scope repos are governed by the `full_update` default and are not individually listed.
 
 ---
 
@@ -71,7 +73,7 @@ Each entry documents:
 
 2. **Approval Gates:** All repos are approved for `--update --merge --yes` via orchestrator pre-flight. Exceptions (vendor, archived) must be handled via manual_review gate.
 
-3. **Excluded Repos:** 31 repositories in /Users/jamescaton/githubrepositories/ lack `_build-description.json` and are explicitly excluded from this fleet. See `tmp/by-week/2026-W19/fleet-update-scope-clarification.txt` for list.
+3. **Excluded Repos:** 31 repositories under `~/githubrepositories/` lack a build descriptor and are explicitly excluded from this fleet. See `tmp/by-week/2026-W19/fleet-update-scope-clarification.txt` for the list. (These 31 are *excluded* and are distinct from the 13 tracked rows above and the ~38 in-scope repos in the scope-boundary doc.)
 
 4. **Next Registry Maintenance:** After fleet-update completes, `@repo-liaison` Protocol 4 will refresh audit dates and capture any discovered new repositories or scope changes.
 

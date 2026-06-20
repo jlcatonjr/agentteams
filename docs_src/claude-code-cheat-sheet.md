@@ -474,7 +474,7 @@ Sessions in the extension persist across VS Code restarts.
 - **Browse history:** Click the "Session history" button in the panel header → search or select any past session.
 - **Remote sessions:** The "Remote" tab shows cloud sessions from claude.ai (requires subscription).
 - **Multiple tabs:** Open additional conversations with `Cmd+Shift+Esc` — each tab is independent.
-- **Named sessions from CLI:** Start `goose session --name my-session` in the terminal; the extension panel picks up the active session.
+- **Resume sessions from CLI:** Run `claude --resume` (picker) or `claude --continue` in the terminal; the extension panel picks up the active session.
 
 Manage sessions from the integrated terminal:
 

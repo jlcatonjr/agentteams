@@ -26,7 +26,7 @@ governs what action is safe.
 | Tier | Code | Meaning |
 |---|---|---|
 | **1 — blocking** | `VCS_CONFLICT_MARKER` | A complete, ordered git merge-conflict triad (`<<<<<<< … ======= … >>>>>>>`). Setext underlines and fenced example blocks are excluded. |
-| **1 — blocking** | `BROKEN_REF` | A markdown-link target that resolves to no file on disk. |
+| **1 — blocking** | `BROKEN_REF` | A markdown-link target *without an anchor* that resolves to no file on disk. (An *anchored* broken link is Tier-2 — see below.) |
 | **1 — blocking** | `INTEGRITY` | A generated file is `FENCE-BROKEN` / `TRUNCATED` / `MISSING` (reuses the `--verify-integrity` check for every discovered `build-log.json`). |
 | **1 — blocking** | `SOURCE_DRIFT` | A bridge's source agents diverged from the recorded manifest snapshot (only when the source is present on this machine). |
 | **2 — advisory** | `STALE_VS_CODE` | Referenced code changed in a commit **after** the doc's last commit (substantive, whitespace-filtered diff). The doc *may* describe outdated behavior. |

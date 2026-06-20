@@ -2,9 +2,15 @@
 
 Generated agent teams ship with a **delivery receipt** under
 `.github/agents/references/delivery-receipt.json`. The receipt is a small,
-schema-validated attestation that an `agentteams build_team --update` run
+schema-validated attestation that an `agentteams --update` run
 completed successfully against a known team identity. It is **not** a baseline
 — it does not influence drift detection or subsequent updates.
+
+> **Note.** The receipt path is framework-relative. For `copilot-vscode` the
+> agents dir is `.github/agents/`, so the receipt lives at
+> `.github/agents/references/delivery-receipt.json` (used in the examples
+> below). For `claude`, `goose`, and `agents-md` the agents dir differs, so the
+> receipt generalizes to `<agents-dir>/references/delivery-receipt.json`.
 
 This guide explains how the receipt is written, how to read it, and how to use
 it to verify a delivery.
@@ -95,7 +101,7 @@ jq -r .fingerprint_algo_version "$LOG"
 ```
 
 If the algo versions differ, the fingerprints are not comparable — run
-`agentteams build_team --update` once to migrate the baseline (the "heal"
+`agentteams --update` once to migrate the baseline (the "heal"
 behavior), then re-verify.
 
 ---
@@ -147,7 +153,7 @@ This guarantees:
 1. A delivery was made (receipt exists).
 2. The build-log has not been rewritten since delivery (fingerprints match).
 
-For full drift verification, follow with `agentteams build_team --check`.
+For full drift verification, follow with `agentteams --check`.
 
 ---
 
@@ -160,7 +166,7 @@ is:
 1. **Snapshot first.** Take a read-only snapshot of the downstream repo's
    current `.github/agents/` (or `.claude/`) tree. Do not edit yet.
 2. **Throwaway dry-run.** In a scratch clone of the downstream repo, run
-   `agentteams build_team --update --dry-run --project <path>`. Inspect the
+   `agentteams --update --dry-run --project <path>`. Inspect the
    stdout diff and the *unwritten* receipt path. No file is mutated.
 3. **Classify the diff.** Distinguish two failure modes:
    - **Real drift** — generator output changed (template fix, schema bump).

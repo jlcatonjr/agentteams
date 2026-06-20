@@ -27,6 +27,8 @@ import json
 from dataclasses import dataclass, field
 from pathlib import Path
 
+from agentteams.atomicio import _atomic_write_text
+
 # (slug, cron, description) — cron format: minute hour dom month dow.
 _DEFAULT_ROUTINES: list[tuple[str, str, str]] = [
     (
@@ -122,8 +124,7 @@ def emit_schedule_artifact(
     }
     content = json.dumps(payload, indent=2, sort_keys=True) + "\n"
     if not dry_run:
-        out_path.parent.mkdir(parents=True, exist_ok=True)
-        out_path.write_text(content, encoding="utf-8")
+        _atomic_write_text(out_path, content)
     result.written.append(str(out_path))
     return result
 

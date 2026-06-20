@@ -73,7 +73,7 @@ TEAM BUILDER INTAKE
 Once all responses are collected:
 
 ### Step 1: Write description file
-Save collected responses to `_build-description.json` in the project's root or `.github/agents/` directory. Use this structure:
+Save collected responses to `.agentteams/brief.json` (the canonical consumer descriptor for an external project). Note: `_build-description.json` is the thin stub reserved for `--self` builds of the agentteams repo only — do not use it for an external project. Use this structure:
 
 ```json
 {
@@ -93,7 +93,7 @@ Save collected responses to `_build-description.json` in the project's root or `
 ### Step 2: Invoke build pipeline
 ```bash
 python build_team.py \
-  --description _build-description.json \
+  --description .agentteams/brief.json \
   --framework copilot-vscode \
   --project <project path from answer 5> \
   --output <project path>/.github/agents

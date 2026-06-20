@@ -32,6 +32,8 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
 
+from agentteams.atomicio import _atomic_write_text
+
 _MCP_FEATURE_TOKENS = (
     "claude:mcp",
     "bridge:copilot-vscode-to-claude:mcp",
@@ -111,8 +113,11 @@ def _schema_validator() -> Any | None:
         schema_path = Path(__file__).resolve().parent.parent / "schemas" / "mcp-server.schema.json"
         schema = json.loads(schema_path.read_text(encoding="utf-8"))
         validator = Draft7Validator(schema)
-    except (OSError, ValueError):
-        # CH-24: bundled schema unreadable / invalid JSON -> degrade to no validation.
+    except (OSError, ValueError, ImportError):
+        # CH-24: bundled schema unreadable / invalid JSON, OR jsonschema not
+        # installed (ImportError/ModuleNotFoundError) -> degrade to no validation,
+        # as the docstring promises (jsonschema is a declared dep, so this is a
+        # minimal/air-gapped-environment safety net, not the normal path).
         validator = None
     _VALIDATOR_CACHE.append(validator)
     return validator
@@ -206,8 +211,9 @@ def emit_mcp_artifact(
     }
     content = json.dumps(payload, indent=2, sort_keys=True) + "\n"
     if not dry_run:
-        out_path.parent.mkdir(parents=True, exist_ok=True)
-        out_path.write_text(content, encoding="utf-8")
+        # Atomic + symlink-safe: this file carries operator authorization records,
+        # so never clobber through a symlink or leave a half-written file.
+        _atomic_write_text(out_path, content)
     result.written.append(str(out_path))
     return result
 

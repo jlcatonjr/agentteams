@@ -2,7 +2,7 @@
 
 **Purpose:** Hard-won lessons for running `agentteams --update --merge` across many repositories at once, and for *interpreting the results correctly* so a successful, non-destructive merge is never mistaken for a failure (or vice versa).
 
-**Origin:** 2026-06-04 fleet update of ~38 local consumer repos under `/Users/jamescaton/githubrepositories/`. Every repo reported "ERROR" and tens of thousands of "outside-fence deletions"; a content audit of that run found **zero** user-authored content destroyed. The headline numbers were artifacts. This document exists so the next operator does not waste an hour re-deriving that.
+**Origin:** 2026-06-04 fleet update of ~38 local consumer repos under `~/githubrepositories/`. Every repo reported "ERROR" and tens of thousands of "outside-fence deletions"; a content audit of that run found **zero** user-authored content destroyed. The headline numbers were artifacts. This document exists so the next operator does not waste an hour re-deriving that.
 
 > **Scope of the "no content lost" finding.** It is an *observation of the 2026-06-04 run under its flags* — `--update --merge` with the **default `--shrink-policy=preserve`** and **no `--prune`/`--overwrite`** — not a property of the tool under all flags. `--shrink-policy=warn`/`allow` will write a smaller body (warn keeps a `.lost.<sid>.md` recovery sidecar; allow does not), `--overwrite` replaces whole files, and `--prune` deletes orphaned agents. The audit signals below tell you whether *this* run was safe; the guarantee holds only while those default flags do.
 

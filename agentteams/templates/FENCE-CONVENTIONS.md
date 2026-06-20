@@ -102,9 +102,10 @@ Given a newly-rendered file and an existing on-disk file:
 
 | Situation | Behavior |
 |---|---|
-| Legacy file (no fence markers) | `--merge` emits `MergeResult.parse_errors` entry; file is skipped. Use `--migrate` for a one-step safe migration: it tags the current state as `pre-fencing-snapshot`, then runs `--overwrite`. Use `--revert-migration` to undo. |
+| Legacy file (no fence markers) | The default `--update --merge --yes` **auto-retrofits** a `content` fence onto the unfenced body (a `.bak` backup is written first), so future merges can update it in place. Opt out with `--no-add-fence-markers` to leave the file untouched. (`--migrate` remains available for an explicit `pre-fencing-snapshot`-tagged `--overwrite`; `--revert-migration` undoes it.) |
 | Duplicate `section_id` in a single file | Parse error; merge is aborted for that file. Record in `MergeResult.parse_errors`. |
 | Unclosed fence (BEGIN with no matching END) | Parse error; merge is aborted for that file. Record in `MergeResult.parse_errors`. |
+| END marker with no matching BEGIN | Orphan END is ignored; the file is treated as unfenced (no parse error). |
 | Mismatched `section_id` on END marker | Parse error; merge is aborted for that file. |
 | `v=` value differs between on-disk and new render | Accepted without error in v=1. Future versions may define migration logic. |
 | File is new (does not exist on disk) | Written fresh; no merge needed. |

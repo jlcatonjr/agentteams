@@ -81,9 +81,12 @@ class PlanStep:
         # only — TodoWrite tolerates any string and the orchestrator can
         # refine if needed.
         active = self.step_title
-        if active and active.split()[0].lower() not in {"running", "writing", "fixing"}:
-            first = active.split()[0]
-            active = f"{first}ing {' '.join(active.split()[1:])}".strip() if first.isalpha() else active
+        # Guard on the token list, not on truthiness: a whitespace-only title is
+        # truthy but yields no tokens, so active.split()[0] would IndexError.
+        parts = active.split()
+        if parts and parts[0].lower() not in {"running", "writing", "fixing"}:
+            first = parts[0]
+            active = f"{first}ing {' '.join(parts[1:])}".strip() if first.isalpha() else active
         return {
             "content": content,
             "activeForm": active,

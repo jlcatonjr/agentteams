@@ -10,10 +10,10 @@
 
 ### Included Repositories
 
-**Scope Criteria:** All repositories under `/Users/jamescaton/githubrepositories/` that contain a valid `_build-description.json` file at the project root or within a `.github/agents/` directory.
+**Scope Criteria:** All repositories under `~/githubrepositories/` that contain a valid `_build-description.json` file at the project root or within a `.github/agents/` directory.
 
 **Total in Scope:** ~38 canonical repositories (the literal count drifts as repos are added; do not treat "38" as a fixed gate — see the Discovery Stability Check in §III).  
-**Discovery Method:** `find /Users/jamescaton/githubrepositories -type f -name '_build-description.json' -not -path '*/.worktrees/*' -not -path '*/*.worktrees/*' -not -path '*/archive/*' | sort`  
+**Discovery Method:** `find ~/githubrepositories -type f -name '_build-description.json' -not -path '*/.worktrees/*' -not -path '*/*.worktrees/*' -not -path '*/archive/*' | sort`  
 **Discovery Date:** 2026-05-08 (re-run 2026-06-04)
 
 > **Exclude worktree and archive copies.** A bare `find … -name '_build-description.json'` also matches `.worktrees/copilot-worktree-*` git-worktree copies and `archive/<repo>` snapshots, which inflated the 2026-06-04 discovery to ~40 paths. These are duplicates of an in-scope repo (a worktree shares the repo's history; an archive copy is out of maintenance) and fall under the existing exclusions in §V (items 1 & 4). The `-not -path` filters above drop them so the count reflects canonical repos only.
@@ -30,7 +30,7 @@
 
 ### Explicitly Excluded Repositories
 
-**Scope Criteria:** Repositories under `/Users/jamescaton/githubrepositories/` that do **NOT** contain `_build-description.json`.
+**Scope Criteria:** Repositories under `~/githubrepositories/` that do **NOT** contain `_build-description.json`.
 
 **Total Excluded:** 31 repositories  
 **Exclusion Reason:** No agent team descriptor available; update would fail with "descriptor not found" error. Excluded repos are not invalid—they simply have not yet adopted agent team infrastructure.
@@ -39,9 +39,9 @@
 
 | Repo Path | Reason | Update Path |
 |---|---|---|
-| `/Users/jamescaton/githubrepositories/legacy-monolithic-app` | No `_build-description.json` present | Manual agent team setup required first |
-| `/Users/jamescaton/githubrepositories/fork-of-external-lib` | Mirror repo; no descriptor | Explicitly excluded to avoid drift with upstream |
-| `/Users/jamescaton/githubrepositories/archived-2023` | Archived project; no descriptor | Out of maintenance; no updates planned |
+| `~/githubrepositories/legacy-monolithic-app` | No `_build-description.json` present | Manual agent team setup required first |
+| `~/githubrepositories/fork-of-external-lib` | Mirror repo; no descriptor | Explicitly excluded to avoid drift with upstream |
+| `~/githubrepositories/archived-2023` | Archived project; no descriptor | Out of maintenance; no updates planned |
 | (27 others) | Various (unmaintained, pre-agent-team adoption, vendor code) | Clarification: Full list stored in `tmp/by-week/2026-W19/fleet-update-scope-clarification.txt` |
 
 ---
@@ -56,9 +56,9 @@
 - Repos with descriptor in non-standard path → **Out of scope** (requires manual discovery and path normalization)
 
 **Secondary Boundary:** Directory authorization
-- Only repositories within `/Users/jamescaton/githubrepositories/` are in scope
-- Repositories in other parent directories (e.g., `/Users/jamescaton/personal-projects/`) are explicitly excluded
-- Cross-user repositories (`/Users/other-user/...`) are explicitly excluded
+- Only repositories within `~/githubrepositories/` are in scope
+- Repositories in other parent directories (e.g., `~/personal-projects/`) are explicitly excluded
+- Cross-user repositories (under another user's home, e.g. `/Users/<other-user>/...`) are explicitly excluded
 
 **Tertiary Boundary:** Update mode constraints
 - All in-scope repos use `--update --merge --yes` mode (non-destructive, section-fence preservation)
@@ -165,9 +165,9 @@ The following scenarios are **explicitly out of scope** for this fleet-update:
 
 3. **Vendor code with agent infrastructure:** Repo contains vendor code but has been modified with agent team infrastructure. → Included IF descriptor is present; update_scope in adjacent-repos.md is "security_only" or "manual_review" to prevent inadvertent modifications.
 
-4. **Repositories in other parent directories:** E.g., `/Users/jamescaton/archive/old-projects/some-repo/`. → Explicitly excluded; parent directory boundary is `/Users/jamescaton/githubrepositories/` only.
+4. **Repositories in other parent directories:** E.g., `~/archive/old-projects/some-repo/`. → Explicitly excluded; parent directory boundary is `~/githubrepositories/` only.
 
-5. **Cross-user repositories:** E.g., `/Users/other-collaborator/githubrepositories/shared-project/`. → Explicitly excluded; cross-user coordination requires explicit approval and `@repo-liaison` handoff.
+5. **Cross-user repositories:** E.g., another user's home such as `/Users/<other-collaborator>/githubrepositories/shared-project/`. → Explicitly excluded; cross-user coordination requires explicit approval and `@repo-liaison` handoff.
 
 ---
 
@@ -203,7 +203,7 @@ If the fleet-update execution reveals scope issues (e.g., discovered repo cannot
 **Scope Authority Date:** 2026-05-08 (re-validated 2026-06-04)  
 **Scope Stability Expiration:** 2026-06-25 (21-day review cycle from the 2026-06-04 re-validation)  
 
-This scope boundary is valid for fleet-update execution on 2026-05-08. On or after 2026-05-29, scope must be re-audited and re-approved before proceeding with the next fleet-update cycle.
+This scope boundary is valid for fleet-update execution as of the 2026-06-04 re-validation. On or after **2026-06-25** (the Scope Stability Expiration in §VIII, matching the Next Review date in `references/fleet-update-authorization-policy.md`), scope must be re-audited and re-approved before proceeding with the next fleet-update cycle.
 
 ---
 

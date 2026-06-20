@@ -30,7 +30,7 @@ class ScheduleEmissionResult:
 ```python
 build_routines(source_dir: Path) -> tuple[list[dict[str, str]], list[str]]
 ```
-Return `(active_routines, omitted_slugs)`. Each routine dict has keys `name`, `cron`, `agent`, `description`, `tier`, `bridge`. `tier` is always `"cheap"` (see `model_routing._ALWAYS_CHEAP_SLUGS`); `bridge` is always `"copilot-vscode-to-claude"`.
+Return `(active_routines, omitted_slugs)`. Each routine dict has keys `name`, `cron`, `agent`, `description`, `tier`, `bridge`. `tier` is the literal string `"cheap"` (hardcoded in `build_routines` for every routine — it is **not** looked up from `model_routing._ALWAYS_CHEAP_SLUGS`, which does not contain the routine slugs); `bridge` is always `"copilot-vscode-to-claude"`.
 
 ```python
 emit_schedule_artifact(
@@ -45,4 +45,6 @@ Write the schedules JSON to `<output_root>/.claude/schedules.agentteams.json`. P
 
 ## Relationship to `model_routing`
 
-Routines run on the cheap tier regardless of governance-agents membership. `model_routing.agent_tier()` is extended with an `_ALWAYS_CHEAP_SLUGS` set that includes the four routine slugs above plus the bridge's per-action lookup roles (`critic`, `retrieval-policy`, `navigator`, `reference-manager`, `memory-index-query`) — so the Phase 3 PreToolUse critic and Phase 6 retrieval policy stay affordable.
+Routines run on the cheap tier regardless of governance-agents membership. This is set directly: `build_routines` writes the literal `tier: "cheap"` on every routine dict — the routine slugs are **not** members of `model_routing._ALWAYS_CHEAP_SLUGS`.
+
+Separately, `model_routing.agent_tier()` consults its own `_ALWAYS_CHEAP_SLUGS` set, which contains only the bridge's per-action lookup roles (`critic`, `retrieval-policy`, `navigator`, `reference-manager`, `memory-index-query`) — so the Phase 3 PreToolUse critic and Phase 6 retrieval policy stay affordable. The two cheap-tier mechanisms are independent and the routine slugs above do not appear in `_ALWAYS_CHEAP_SLUGS`.

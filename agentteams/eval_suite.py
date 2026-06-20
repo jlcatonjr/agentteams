@@ -76,10 +76,16 @@ def build_eval_suite(manifest: dict[str, Any]) -> dict[str, Any]:
             },
         })
 
+    seen_slugs: set[str] = set()
     for comp in components:
         slug = comp.get("slug")
-        if not slug:
+        if not slug or slug in seen_slugs:
+            # Skip blank or duplicate slugs: a repeated slug would emit colliding
+            # scenario ids (handoff-<slug>, governance-<slug>-triad-and-return)
+            # that the eval-suite schema does not reject, silently producing a
+            # malformed suite with duplicate @task names downstream.
             continue
+        seen_slugs.add(slug)
         expert = f"{slug}-expert"
         upstreams = [
             f"{ref}-expert"

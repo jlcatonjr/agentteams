@@ -55,9 +55,9 @@ agentteams \
 ### Phase 1 — Defaults Scan
 
 Scans rendered file content for:
-- `{MANUAL:...}` tokens that remain unresolved
-- `{UPPER_SNAKE_CASE}` tokens that should have been auto-resolved but weren't
-- Empty tool metadata fields (`docs_url`, `api_surface`, `common_patterns`)
+- `{MANUAL:...}` tokens that remain unresolved (categorized `MANUAL_PLACEHOLDER`, or `TOOL_METADATA` when the token sits in a file under `references/`)
+- Underdeveloped sections — empty, comment-only, or all-boilerplate bodies (categorized `GENERIC_SECTION`)
+- Packages imported in the project source (when `--project` is given) that have no reference file (categorized `MISSING_TOOL_REF`)
 
 Results are written to `references/defaults-audit.csv`.
 
@@ -103,7 +103,7 @@ After enrichment, `references/defaults-audit.csv` contains one row per finding:
 | `section` | Nearest section heading for context |
 | `context_snippet` | Nearby file content |
 | `auto_suggestion` | Suggested value (when available) |
-| `status` | `pending`, `auto_filled`, `ai_filled`, or `skipped` |
+| `status` | `pending`, `auto_filled`, or `ai_filled` |
 
 Review this file after enrichment to confirm suggestions are appropriate and to identify findings that remain `pending`.
 

@@ -94,9 +94,13 @@ def _should_select_post_production_auditor(text: str) -> bool:
 
 
 def _contains_keyword(text: str, keyword: str) -> bool:
-    """Return True if keyword appears as a standalone word or phrase.
+    """Return True if keyword appears as a standalone word (or its plural).
 
-    This avoids substring collisions such as matching "sync" inside "async".
+    Word-boundary matching avoids substring collisions such as matching "sync"
+    inside "async", "doc" inside "docker", or "pip" inside "pipeline". A trailing
+    English plural (-s/-es) is tolerated so "chapter" still matches "chapters" and
+    "module" matches "modules" — a plural is the same word, whereas "docker" is
+    not an inflection of "doc".
     """
     if not isinstance(text, str):
         raise TypeError("text must be str")
@@ -107,7 +111,7 @@ def _contains_keyword(text: str, keyword: str) -> bool:
         return False
     # Accept optional hyphen/space variants for phrase matching.
     normalized = re.escape(keyword).replace(r"\ ", r"[-\s]+")
-    pattern = rf"(?<![a-z0-9]){normalized}(?![a-z0-9])"
+    pattern = rf"(?<![a-z0-9]){normalized}(?:es|s)?(?![a-z0-9])"
     return re.search(pattern, text) is not None
 
 #: Always-included governance agent slugs (tier 2)
@@ -401,12 +405,14 @@ def classify_project_type(description: dict[str, Any]) -> str:
     research_kw = {"research", "hypothesis", "experiment", "citation", "bibliography", "academic", "study"}
     doc_kw = {"documentation", "docs", "readme", "wiki", "manual", "guide"}
 
+    # Word-boundary matching (not bare substring `in`) so short keywords like
+    # "go"/"api" don't spuriously match inside "mango"/"rapid" and misclassify.
     scores = {
-        "writing": sum(1 for kw in writing_kw if kw in text),
-        "software": sum(1 for kw in software_kw if kw in text),
-        "data-pipeline": sum(1 for kw in data_kw if kw in text),
-        "research": sum(1 for kw in research_kw if kw in text),
-        "documentation": sum(1 for kw in doc_kw if kw in text),
+        "writing": sum(1 for kw in writing_kw if _contains_keyword(text, kw)),
+        "software": sum(1 for kw in software_kw if _contains_keyword(text, kw)),
+        "data-pipeline": sum(1 for kw in data_kw if _contains_keyword(text, kw)),
+        "research": sum(1 for kw in research_kw if _contains_keyword(text, kw)),
+        "documentation": sum(1 for kw in doc_kw if _contains_keyword(text, kw)),
     }
 
     if all(v == 0 for v in scores.values()):
@@ -435,7 +441,9 @@ def select_archetypes(description: dict[str, Any]) -> list[str]:
     for keywords, archetype in _ARCHETYPE_TRIGGERS:
         if archetype in seen:
             continue
-        if keywords == ["*"] or any(kw in text for kw in keywords):
+        # Word-boundary matching to honor the documented "boundary-aware" contract
+        # (e.g. trigger "doc" must not match inside "docker", "pip" inside "pipeline").
+        if keywords == ["*"] or any(_contains_keyword(text, kw) for kw in keywords):
             selected.append(archetype)
             seen.add(archetype)
 
@@ -561,18 +569,18 @@ def classify_tool_importance(tool: dict[str, Any]) -> str:
     Returns:
         One of 'specialist', 'reference', or 'passive'.
     """
-    # Explicit override always wins
+    # An explicit `needs_specialist_agent: true` forces the specialist tier.
+    # `false` (and absence) fall back to the category/name heuristics below — a
+    # `false` value does not force a non-specialist tier.
     if tool.get("needs_specialist_agent") is True:
         return "specialist"
-    if tool.get("needs_specialist_agent") is False:
-        return _classify_without_override(tool)
 
     return _classify_without_override(tool)
 
 
 def _classify_without_override(tool: dict[str, Any]) -> str:
     """Classify a tool by its category and name when no explicit override."""
-    name_lower = tool.get("name", "").lower()
+    name_lower = (tool.get("name") or "").lower()
     category = tool.get("category", "other")
 
     # Specialist tier: databases, infra, CI, build-systems
@@ -630,7 +638,11 @@ def detect_tool_agents(tools: list[dict[str, Any]]) -> list[dict[str, Any]]:
         tier = classify_tool_importance(tool)
         if tier != "specialist":
             continue
-        name = tool["name"]
+        # A category-classified tool may lack a name; .get is used in the tier
+        # check above, so read it tolerantly here too rather than KeyError.
+        name = (tool.get("name") or "").strip()
+        if not name:
+            continue
         slug = f"tool-{_slugify(name)}"
         category = tool.get("category", "other")
         agents.append({
@@ -663,9 +675,12 @@ def detect_reference_tools(tools: list[dict[str, Any]]) -> list[dict[str, Any]]:
         tier = classify_tool_importance(tool)
         if tier != "reference":
             continue
+        name = (tool.get("name") or "").strip()
+        if not name:
+            continue
         refs.append({
-            "slug": f"ref-{_slugify(tool['name'])}",
-            "tool_name": tool["name"],
+            "slug": f"ref-{_slugify(name)}",
+            "tool_name": name,
             "tool_version": tool.get("version", ""),
             "tool_category": tool.get("category", "other"),
             "config_files": tool.get("config_files", []),

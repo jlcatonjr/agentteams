@@ -117,7 +117,7 @@ cd agentteams
 pip install -e .
 ```
 
-Requires Python 3.11+. No external runtime dependencies (stdlib only).
+Requires Python 3.11+. One runtime dependency (`jsonschema`); otherwise stdlib.
 
 ---
 

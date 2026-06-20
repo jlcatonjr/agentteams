@@ -35,8 +35,8 @@ Aggregated result of a post-generation audit.
 **Attributes:**
 
 - `static_findings` (`list[AuditFinding]`) — Findings from static structural checks.
-- `agent_refactor_findings` (`list[AuditFinding]`) — Findings from agent-refactor checks (CH-14 inline data, etc.).
-- `code_hygiene_findings` (`list[AuditFinding]`) — Findings from code hygiene checks (CH-20 contradictions, etc.).
+- `agent_refactor_findings` (`list[AuditFinding]`) — Findings from agent-refactor (spec-compliance) checks: invariant-core, return-handoff, read-only tool declarations, and dangling agent slugs.
+- `code_hygiene_findings` (`list[AuditFinding]`) — Findings from code-hygiene checks: CH-14 (inline data blocks) and CH-20 (duplicate descriptions).
 - `ai_report` (`str | None`) — Raw text of the AI-powered audit report, or `None` if not run.
 - `ai_available` (`bool`) — `True` if the `copilot` CLI was detected and available.
 
@@ -50,7 +50,7 @@ Aggregated result of a post-generation audit.
 
 ## Functions
 
-### `run_post_audit(output_dir, manifest, *, run_ai=True)`
+### `run_post_audit(output_dir, manifest, *, rendered_files=None, ai_audit=True)`
 
 > *Source: `agentteams/audit.py`*
 
@@ -60,7 +60,8 @@ Run a post-generation audit on the agent files in `output_dir`.
 
 - `output_dir` (`Path`) — Path to the `.github/agents/` directory.
 - `manifest` (`dict[str, Any]`) — Team manifest from `analyze.build_manifest()`.
-- `run_ai` (`bool`, keyword-only) — If `True` and `copilot` CLI is available, run the AI-powered review. Default: `True`.
+- `rendered_files` (`list[tuple[str, str]] | None`, keyword-only) — Optional in-memory list of `(rel_path, content)` from `render_all()`. When provided, the audit uses it instead of re-reading from disk (avoids a stale-read race). Default: `None`.
+- `ai_audit` (`bool`, keyword-only) — If `True` and `copilot` CLI is available, run the AI-powered review. Default: `True`.
 
 **Returns:** `AuditResult`
 

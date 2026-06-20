@@ -244,8 +244,9 @@ def _build_parser() -> argparse.ArgumentParser:
         help=(
             "Run a post-generation audit after emit. Performs static checks "
             "(unresolved placeholders, YAML integrity, required-agent coverage) "
-            "and, if the `gh` CLI is authenticated, an AI-powered conflict and "
-            "presupposition review via GitHub Models (Auto model selection)."
+            "and, if the standalone `copilot` CLI is available and authenticated, "
+            "an AI-powered conflict and presupposition review via GitHub Models "
+            "(Auto model selection)."
         ),
     )
     parser.add_argument(

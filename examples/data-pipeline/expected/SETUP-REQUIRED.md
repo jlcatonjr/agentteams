@@ -1,7 +1,7 @@
 <!-- AGENTTEAMS:BEGIN content v=1 -->
 # SETUP-REQUIRED.md
 
-The following **11 placeholder(s)** could not be automatically resolved
+The following **16 placeholder(s)** could not be automatically resolved
 for project **SalesDataPipeline** and require manual attention.
 
 ---
@@ -56,7 +56,57 @@ agent files and replace with the correct value.
 
 ---
 
-## 6. `{TOOL_DOCS_URL}`
+## 6. `{TRIGGER_CONTRACT_VERSION}`
+
+**Found in:** `multiple`
+**Context:** The placeholder {TRIGGER_CONTRACT_VERSION} could not be auto-resolved.
+
+**Action required:** Search for `{MANUAL:TRIGGER_CONTRACT_VERSION}` across all generated
+agent files and replace with the correct value.
+
+---
+
+## 7. `{BULK_MUTATION_THRESHOLD}`
+
+**Found in:** `multiple`
+**Context:** The placeholder {BULK_MUTATION_THRESHOLD} could not be auto-resolved.
+
+**Action required:** Search for `{MANUAL:BULK_MUTATION_THRESHOLD}` across all generated
+agent files and replace with the correct value.
+
+---
+
+## 8. `{SOURCE_OF_TRUTH_SPEC}`
+
+**Found in:** `multiple`
+**Context:** The placeholder {SOURCE_OF_TRUTH_SPEC} could not be auto-resolved.
+
+**Action required:** Search for `{MANUAL:SOURCE_OF_TRUTH_SPEC}` across all generated
+agent files and replace with the correct value.
+
+---
+
+## 9. `{DUPLICATE_CLUSTER_CAP}`
+
+**Found in:** `multiple`
+**Context:** The placeholder {DUPLICATE_CLUSTER_CAP} could not be auto-resolved.
+
+**Action required:** Search for `{MANUAL:DUPLICATE_CLUSTER_CAP}` across all generated
+agent files and replace with the correct value.
+
+---
+
+## 10. `{AUDIT_SLUG}`
+
+**Found in:** `multiple`
+**Context:** The placeholder {AUDIT_SLUG} could not be auto-resolved.
+
+**Action required:** Search for `{MANUAL:AUDIT_SLUG}` across all generated
+agent files and replace with the correct value.
+
+---
+
+## 11. `{TOOL_DOCS_URL}`
 
 **Found in:** `references/ref-postgresql-reference.md`
 **Context:** The reference document for 'PostgreSQL' is missing a official documentation URL. Add it to the tools[] entry in the project brief or extend the built-in tool metadata catalog.
@@ -66,7 +116,7 @@ agent files and replace with the correct value.
 
 ---
 
-## 7. `{TOOL_API_SURFACE}`
+## 12. `{TOOL_API_SURFACE}`
 
 **Found in:** `references/ref-postgresql-reference.md`
 **Context:** The reference document for 'PostgreSQL' is missing a project-relevant API surface summary. Add it to the tools[] entry in the project brief or extend the built-in tool metadata catalog.
@@ -76,7 +126,7 @@ agent files and replace with the correct value.
 
 ---
 
-## 8. `{TOOL_COMMON_PATTERNS}`
+## 13. `{TOOL_COMMON_PATTERNS}`
 
 **Found in:** `references/ref-postgresql-reference.md`
 **Context:** The reference document for 'PostgreSQL' is missing a tool-specific usage patterns and pitfalls. Add it to the tools[] entry in the project brief or extend the built-in tool metadata catalog.
@@ -86,7 +136,7 @@ agent files and replace with the correct value.
 
 ---
 
-## 9. `{TOOL_DOCS_URL}`
+## 14. `{TOOL_DOCS_URL}`
 
 **Found in:** `references/ref-sqlalchemy-reference.md`
 **Context:** The reference file for 'SQLAlchemy' is missing a official documentation URL. Add it to the tools[] entry in the project brief or extend the built-in tool metadata catalog.
@@ -96,7 +146,7 @@ agent files and replace with the correct value.
 
 ---
 
-## 10. `{TOOL_API_SURFACE}`
+## 15. `{TOOL_API_SURFACE}`
 
 **Found in:** `references/ref-sqlalchemy-reference.md`
 **Context:** The reference file for 'SQLAlchemy' is missing a project-relevant API surface summary. Add it to the tools[] entry in the project brief or extend the built-in tool metadata catalog.
@@ -106,7 +156,7 @@ agent files and replace with the correct value.
 
 ---
 
-## 11. `{TOOL_COMMON_PATTERNS}`
+## 16. `{TOOL_COMMON_PATTERNS}`
 
 **Found in:** `references/ref-sqlalchemy-reference.md`
 **Context:** The reference file for 'SQLAlchemy' is missing a tool-specific usage patterns and pitfalls. Add it to the tools[] entry in the project brief or extend the built-in tool metadata catalog.

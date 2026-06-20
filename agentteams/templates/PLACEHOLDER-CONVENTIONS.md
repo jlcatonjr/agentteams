@@ -85,6 +85,6 @@ Every template section must be designated either **FENCED** (module-owned, updat
 
 1. Placeholder names are UPPER_SNAKE_CASE
 2. Every placeholder must appear in at least one template
-3. Auto-resolved placeholders must map to a field in `team-manifest.schema.json`
+3. Auto-resolved placeholders must be emitted by one of the placeholder-map builders — `analyze._build_placeholder_map` (in `agentteams/analyze.py`), `render._component_placeholder_map`/`render._tool_placeholder_map`, `ai_bad_habits.build_catalog_placeholders`, `framework_research.build_framework_placeholders`, or `security_refs.build_security_placeholders`. Note: `team-manifest.schema.json`'s `auto_resolved_placeholders` is a free-form object with **no enumerated properties**, so it does not constrain placeholder names — the builders above are the source of truth.
 4. Manual placeholders must have a description in `SETUP-REQUIRED.md` generation logic
 5. Nested placeholders are not supported — `{FOO_{BAR}}` is invalid

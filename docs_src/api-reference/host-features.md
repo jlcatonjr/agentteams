@@ -19,7 +19,7 @@ Validate a single `<ns>:<feature>` token. The namespace may itself contain a col
 ```python
 is_enabled(features: Iterable[str], namespace: str, feature: str) -> bool
 ```
-Return `True` iff `<namespace>:<feature>` is present in the active set. Used by every feature-gated emitter as the single check point.
+Return `True` iff `<namespace>:<feature>` is present in the active set. Provided as a convenience membership check; note that, in practice, the feature-gated emitters do **not** call `is_enabled` — they perform their own literal membership tests against the active feature list (e.g. `mcp_emit.mcp_enabled`). It is not a single enforced check point.
 
 ```python
 class HostFeatureError(ValueError): ...
@@ -36,7 +36,9 @@ Raised by `parse_tokens` / `validate` for any malformed token.
 | `bridge:copilot-vscode-to-claude:schedule` | Emit `.claude/schedules.agentteams.json` (see [`schedule_emit`](schedule-emit.md)). |
 | `bridge:copilot-vscode-to-claude:todo-projection` | Emit `.claude/skills/todo-from-plan.md` (see [`plan_steps_todo`](plan-steps-todo.md)). |
 
-Unknown tokens are *valid syntactically* but produce no emission — emitters check `is_enabled` and silently no-op when the flag they look for is absent.
+> **Namespace scope:** this table lists only the tokens in the `bridge:copilot-vscode-to-claude:*` namespace that have a wired-up effect today. `validate` / `parse_tokens` accept any syntactically valid `<ns>:<feature>` token (the namespace may itself contain colons), so tokens in other namespaces — e.g. `claude:*` — also pass validation. They simply produce no emission unless an emitter is looking for them.
+
+Unknown tokens are *valid syntactically* but produce no emission — emitters perform their own membership test against the active feature list and silently no-op when the flag they look for is absent.
 
 ## Example
 

@@ -6,7 +6,7 @@ Thank you for your interest in contributing to Agent Teams Module. This guide co
 
 ## Development Setup
 
-No external runtime dependencies are required — Agent Teams Module uses only the Python 3.11+ stdlib. The only dev dependency is `pytest`.
+Agent Teams Module has one runtime dependency (`jsonschema`); otherwise it uses only the Python 3.11+ stdlib. The only dev dependency is `pytest`.
 
 ```bash
 git clone https://github.com/jlcatonjr/agentteams

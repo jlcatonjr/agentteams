@@ -111,10 +111,15 @@ fi
 
 targets=("copilot-cli" "claude")
 
+# Use --bridge-merge, NOT --bridge-refresh: OUTPUT_ROOT is the agentteams repo root,
+# whose CLAUDE.md is hand-authored and carries no AGENTTEAMS-BRIDGE fences. Per the
+# binding references/bridge-refresh-safety.md invariant, --bridge-refresh would
+# unconditionally overwrite that file; --bridge-merge refreshes only fenced (managed)
+# regions and preserves the unfenced hand-authored entry file.
 for target in "${targets[@]}"; do
   run_noncritical \
-    "Bridge refresh: copilot-vscode -> ${target}" \
-    python build_team.py --bridge-from "$SOURCE_DIR" --framework "$target" --output "$OUTPUT_ROOT" --bridge-refresh
+    "Bridge merge: copilot-vscode -> ${target}" \
+    python build_team.py --bridge-from "$SOURCE_DIR" --framework "$target" --output "$OUTPUT_ROOT" --bridge-merge
 
   run_noncritical \
     "Bridge check: copilot-vscode -> ${target}" \

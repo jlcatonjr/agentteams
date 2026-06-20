@@ -26,6 +26,8 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
 
+from agentteams.atomicio import _atomic_write_text
+
 # Hook-event mapping. Keyed by canonical copilot-vscode agent slug; value
 # is a list of (event, matcher) pairs the slug should be notified about.
 # ``matcher`` follows Claude's PreToolUse/PostToolUse pattern (regex over
@@ -149,8 +151,7 @@ def emit_hooks_artifacts(
             result.skipped.append(str(path))
             continue
         if not dry_run:
-            path.parent.mkdir(parents=True, exist_ok=True)
-            path.write_text(content, encoding="utf-8")
+            _atomic_write_text(path, content)
             try:
                 path.chmod(mode)
             except OSError:

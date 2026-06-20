@@ -24,8 +24,7 @@ agents:
   - format-converter
   - output-compiler
   - visual-designer
-  - module-doc-author
-  - module-doc-validator
+  - post-production-auditor
   - tool-doc-researcher
   - ingest-expert
   - transform-expert

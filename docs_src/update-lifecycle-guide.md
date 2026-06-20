@@ -38,6 +38,8 @@ Each build records a manifest fingerprint and a `fingerprint_algo_version` in `b
 | Check only | `--check` | No |
 | Merge (default) | `--update` | Yes — inside fenced sections only |
 | Merge (explicit) | `--update --merge` | Yes — inside fenced sections only |
+
+> Merge is the default for a single-target `--update`, but [`--fleet`](cli-reference.md#fleet-update-multi-workspace) **requires** `--update --merge` explicitly (it rejects a bare `--update`).
 | Full regeneration | `--update --overwrite` | Yes — entire file (requires security clearance) |
 
 ---

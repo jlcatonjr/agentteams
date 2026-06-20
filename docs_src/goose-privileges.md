@@ -127,6 +127,8 @@ This is more targeted than disabling the extension entirely — useful when you 
 
 ### Read-only (no writes, no shell)
 
+> **Caution:** with `GOOSE_MODE: auto`, read-only is enforced *solely* by the `available_tools` allowlist — there is no prompt and no deny rule, so a single missing or mistyped entry silently grants autonomous writes/shell. Prefer a non-autonomous mode (`smart_approve` or `approve`) for read-only work, and/or add `never_allow` on `text_editor`/`shell` as defense-in-depth so a typo cannot grant silent writes.
+
 ```yaml
 GOOSE_MODE: auto
 extensions:
@@ -154,7 +156,9 @@ extensions:
     bundled: true
 ```
 
-### Fully autonomous (no prompts)
+### Fully autonomous (no prompts) — use with care
+
+> **Caution — use with care.** `GOOSE_MODE: auto` runs edits, shell commands, and extension calls immediately with no confirmation. This profile is not a safety boundary; reserve it for throwaway/sandboxed workspaces. To constrain it, add `never_allow` on dangerous tools (e.g. `shell`) or trim `available_tools`.
 
 ```yaml
 GOOSE_MODE: auto
@@ -173,9 +177,9 @@ extensions:
 GOOSE_MODE: chat
 ```
 
-### Shell blocked, file access permitted
+### Shell gated (prompts before shell), file access permitted
 
-Set `GOOSE_MODE: smart_approve` (which flags shell commands as sensitive) or use `available_tools` to exclude shell tools explicitly.
+Set `GOOSE_MODE: smart_approve` (which *prompts* before shell commands — it does not block them; the user can still approve any command). To actually *block* shell, use `available_tools` to exclude shell tools explicitly, or set `never_allow` on `shell`.
 
 ---
 

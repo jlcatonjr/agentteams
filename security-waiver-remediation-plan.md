@@ -1,7 +1,9 @@
 # Plan: Next steps from the bridge-offline investigation (W1 + W2)
 
 **Date:** 2026-06-15 · **Branch:** `refactor/code-hygiene` (== main) · **Protocol:** commit-and-push (no PRs); behavior-preserving where possible; security-sensitive changes pass independent clearance before merge-to-main.
-**Status:** DRAFT → audited (§Audit).
+**Status:** ✅ **COMPLETE / RESOLVED** — all actionable items (W1, W2, M1–M4) are implemented and verified in code as of the 2026-06-20 audit; W3 remains a deferred maintainer policy call by design. Retained as a historical record.
+
+> **Resolution summary (verified against code, 2026-06-20):** `verify_waivers` exists and is wired (`agentteams/cli/security_gate.py`, `parser.py`/`app.py`/`commands.py`); the HMAC payload is single-sourced via `_WAIVER_SIGNATURE_FIELDS` (no more hand-copied duplication); the doc-drift guard `tests/test_security_waiver_docs.py` is present; `docs_src/security-hardening-guide.md` carries the correct **11-column** schema and **pipe-joined 9-field** HMAC with an accurate manual-mint snippet; the regenerated `docs/security-hardening-guide/index.html` is in sync (no fictional 5-column / comma-joined content remains). The phased plan below is preserved for provenance; the per-phase "FIX" / "must-fix" framing is now satisfied, not pending.
 
 ## 1. Scope — the actionable findings from `bridge-offline-investigation.md`
 The investigation concluded the bridge `offline=False` is intentional (live-fetch policy), with three weaknesses. Two are actionable now; one is a maintainer policy call we will NOT decide unilaterally.

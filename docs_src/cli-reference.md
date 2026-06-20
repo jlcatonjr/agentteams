@@ -11,22 +11,26 @@ agentteams [--description PATH] [--project PATH] [--framework NAME]
            [--output DIR] [--convert-from DIR] [--interop-from DIR]
            [--interop-source-framework NAME] [--interop-mode MODE]
            [--bridge-from DIR] [--bridge-source-framework NAME]
-           [--bridge-check] [--bridge-refresh]
-           [--dry-run] [--overwrite] [--merge] [--yes]
-           [--no-scan] [--update] [--prune] [--check]
+           [--bridge-check] [--bridge-refresh] [--bridge-merge] [--bridge-no-skills]
+           [--dry-run] [--json] [--overwrite] [--merge] [--yes]
+           [--no-scan] [--cost-routing] [--update] [--prune] [--adopt-orphans] [--check]
            [--refresh-index] [--query-index TEXT] [--query-k N] [--query-strategy {lexical,vector}]
-           [--fail-on-legacy-skip]
-           [--scan-security] [--self] [--post-audit] [--auto-correct] [--enrich]
+           [--fail-on-legacy-skip] [--no-vscode-tasks] [--no-add-fence-markers]
+           [--scan-security] [--check-budget] [--self] [--allow-external-self-output]
+           [--post-audit] [--auto-correct] [--enrich]
            [--strict-manual-placeholders] [--no-strict-manual-placeholders]
-           [--no-backup] [--shrink-policy {warn,halt,allow}]
+           [--no-backup] [--shrink-policy {preserve,warn,halt,allow}]
            [--list-backups] [--restore-backup TIMESTAMP]
+           [--add-fence-markers PATH] [--in-place]
            [--prune-backups [KEEP]] [--keep-within-days DAYS] [--backup-mirror DIR]
-           [--verify-integrity] [--verify-backup [TIMESTAMP]]
+           [--verify-waivers] [--verify-integrity] [--verify-backup [TIMESTAMP]]
+           [--stale-check] [--stale-remediate] [--stale-no-git] [--stale-restore TS]
+           [--recipe-check]
            [--target-host-features TOKENS]
            [--capture-baseline PATH] [--baseline-label LABEL] [--check-baseline PATH]
            [--security-offline] [--security-max-items N] [--security-no-nvd]
            [--migrate] [--revert-migration]
-           [--fleet DIR] [--fleet-frameworks {github,claude,both}] [--fleet-report DIR]
+           [--fleet DIR] [--fleet-frameworks {github,claude,goose,both,all}] [--fleet-report DIR]
            [--version]
 ```
 
@@ -215,6 +219,10 @@ Excluded with `--convert-from`, `--interop-from`, or `--bridge-from`:
 
 Show what would be generated without writing any files. Useful for previewing output before committing.
 
+### `--json`
+
+With `--dry-run`: emit the per-file action plan as a single JSON document on stdout. No-op without `--dry-run`.
+
 ### `--overwrite`
 
 Overwrite existing agent files without prompting. Default behavior: prompt for each existing file.
@@ -231,6 +239,10 @@ Non-interactive mode: answer yes to all prompts automatically.
 
 Disable project directory scanning even when `existing_project_path` or `--project` is set.
 
+### `--cost-routing`
+
+OFF by default. When set, emit `references/model-routing.json` — a framework-neutral per-agent model-tier contract (governance agents → `cheap`, producers/experts → `primary`). Generated agent files are unchanged either way; this only adds the opt-in contract artifact.
+
 ### `--update`
 
 Re-render drifted agent files and emit newly added agents without touching unchanged files. Preserves manually filled `{MANUAL:*}` values from existing files. Agents removed from the taxonomy are reported but not deleted (use `--prune` to also remove them).
@@ -242,6 +254,10 @@ On a successful (non-dry-run) `--update`, AgentTeams writes a delivery receipt t
 ### `--prune`
 
 Used with `--update`: also delete agent files that are no longer part of the team taxonomy.
+
+### `--adopt-orphans`
+
+Register pre-existing agent files that the generated taxonomy does not produce (e.g. bespoke custom agents) into the team roster — the orchestrator's handoff list and domain routing — **without** generating or overwriting their files. The opposite of `--prune`: integrate orphans instead of removing them. Requires the orchestrator to be (re)rendered, so use with `--overwrite` or `--migrate` (under `--merge` the orchestrator front matter is preserved and adoption would not surface).
 
 ### `--check`
 
@@ -281,13 +297,29 @@ Without this flag, legacy skips are reported in the end-of-run summary but the e
 - `agentteams --add-fence-markers <path> [--in-place]` — retrofit AGENTTEAMS fence markers so the next `--merge` run updates the file.
 - `agentteams ... --overwrite` — replace unconditionally (will discard any local edits to those files; use only after backup).
 
+### `--no-vscode-tasks`
+
+Suppress generation of `.vscode/tasks.json`. By default, `agentteams` emits a `tasks.json` at the project root containing discovered project commands (npm scripts, Makefile PHONY targets, etc.) and `agentteams` meta-tasks. Pass this flag for repositories that manage `tasks.json` manually.
+
+### `--no-add-fence-markers`
+
+Opt **out** of the default behaviour where `--update --merge` (with `--yes`) auto-retrofits AGENTTEAMS `content` fence markers onto legacy (unfenced) files so their template region becomes mergeable instead of being skipped. Each retrofit is backed up first and the shrink-guard still suppresses material template shrinks, so the legacy body is recoverable. Pass this flag to keep the conservative skip-legacy behaviour (distinct from the standalone per-file `--add-fence-markers PATH` retrofit).
+
 ### `--scan-security`
 
 Scan generated agent files for security issues: PII paths (absolute paths containing usernames), credential patterns (API keys, tokens, passwords), and unresolved `{MANUAL:*}` or `{UPPER_SNAKE_CASE}` placeholders.
 
+### `--check-budget`
+
+Audit live `.agent.md` files for token-budget overrun and prompt-cache prefix volatility. Read-only. Exits `1` on fail-class findings; `0` on warn-class only. Routes remediation to `@agent-refactor`.
+
 ### `--self`
 
 Operate on the module's own agent team using `.github/agents/_build-description.json`. Equivalent to running `agentteams` with the module's internal description file.
+
+### `--allow-external-self-output`
+
+Permit `--self` to write self-maintenance artifacts to an `--output` path outside the AgentTeams module source tree. Required to prevent accidental writes into consumer repositories.
 
 ### `--post-audit`
 
@@ -326,13 +358,17 @@ By default, `--overwrite`, `--merge`, and `--update` all take an automatic backu
 
 Skip the automatic backup. The write proceeds without creating a backup.
 
-### `--shrink-policy {warn,halt,allow}`
+### `--shrink-policy {preserve,warn,halt,allow}`
 
 *(T2.D5)* Controls behaviour when a fenced-region merge would lose
 concrete references (paths, identifiers, CVE IDs, list items) from
 the on-disk fence body relative to the freshly rendered content.
 
-- `warn` (default, back-compatible): log the shrink notice into the
+- `preserve` (default): keep the existing enriched body for that
+  fence (the shrink is suppressed and a Notice is emitted) while
+  still updating every non-shrinking fence in the file. Respectful
+  and non-destructive — nothing is lost and no sidecar is produced.
+- `warn` (back-compatible): log the shrink notice into the
   emit notices stream and proceed with the smaller content. The
   notice is also appended to
   `tmp/daily-pipeline/shrink-events/<date>.md` (gitignored) with
@@ -350,9 +386,9 @@ the on-disk fence body relative to the freshly rendered content.
   legitimate upstream-driven shrink (e.g., a retired CVE feed
   entry).
 
-Consumer-repo invocations of `build_team.py` continue to default to
-`warn`. The flag is plumbed into both emit code paths (the
-`--update` branch and the post-emit main path).
+All invocations of `build_team.py` default to `preserve`. The flag
+is plumbed into both emit code paths (the `--update` branch and the
+post-emit main path).
 
 Under `warn`, the full pre-merge body of every shrunken fence is
 written to `<backup>/<rel_path>.lost.<sid>.md` (the backup is taken
@@ -431,6 +467,10 @@ Modifier for `--update` (and the other write modes): after each automatic backup
 ## Integrity Verification
 
 Read-only checks that detect silent corruption of generated files and confirm a backup is restorable. Both resolve the output directory from `--output`/`--project` (else CWD) and require no `--description`.
+
+### `--verify-waivers`
+
+Read-only: report the validity (signature, expiry, use-limit, conditions) of every security waiver in `references/security-waivers.log.csv` under `--output`/`--project` (else CWD). Never mints or consumes a waiver. Exits non-zero if any waiver is invalid. Requires `AGENTTEAMS_WAIVER_SIGNING_KEY` to verify signatures; without it, rows report as unverifiable.
 
 ### `--verify-integrity`
 
@@ -512,6 +552,28 @@ agentteams --revert-migration --project /path/to/project
 
 ---
 
+## Stale Detection & Revision
+
+Read-only scan (and optional guided/applied revision) for stale agent docs and code. See the [Stale Detection Guide](stale-detection-guide.md) for tiers, suppression, and recovery.
+
+### `--stale-check`
+
+Read-only: scan `--output`/`--project` (else CWD) for stale agent docs and code/scripts (VCS conflict markers, broken references, git-recency divergence, provenance-gated generated-file integrity). Exits non-zero on any Tier-1 (blocking) finding. Never edits files.
+
+### `--stale-remediate`
+
+Modifier for `--stale-check`: also print a guided remediation plan (suggestions only; does **not** edit files, unlike `--auto-correct`). Adding `--yes` promotes it into an applied, backup-protected revision pass; exit `3` signals "revision applied, but blocking items still need manual/routed handling."
+
+### `--stale-no-git`
+
+Modifier for `--stale-check`: skip the Tier-2 git-recency signal (hermetic/CI or non-git targets).
+
+### `--stale-restore TS`
+
+Standalone: restore files from a `--stale-remediate --yes` safety snapshot (`.agentteams-backups/stale-fix-<TS>/`; default: latest). Recovery path for a revision that went wrong. Verifies each backup's sha256 before writing and refuses if a backup is corrupt.
+
+---
+
 ## Fleet Update (multi-workspace)
 
 Run `--update --merge` across **every** agent-infrastructure workspace under a parent directory (and its subfolders) in one command. Replaces ad-hoc batch scripts and encodes the fleet-update lessons in [`references/systematic-update-lessons.md`](https://github.com/jlcatonjr/agentteams/blob/main/references/systematic-update-lessons.md).
@@ -536,9 +598,14 @@ Statuses per `(workspace, target)`: `OK` (only fenced/generated regeneration), `
 
 Update every agent-infrastructure workspace under `DIR` and its subfolders. Requires `--update --merge`. Defaults to a dry-run preview; pass `--yes` to apply.
 
-### `--fleet-frameworks {github,claude,both}`
+### `--fleet-frameworks {github,claude,goose,both,all}`
 
 Which infrastructures to update per workspace. Default: `both`.
+
+- `both` (default) — copilot-vscode (`.github/agents/`) + claude (`.claude/`), backward-compatible.
+- `all` — adds goose to `both` (copilot-vscode + claude + goose).
+- `goose` — Goose workspaces only.
+- `github` / `claude` — restrict to that single infrastructure.
 
 ### `--fleet-report DIR`
 
@@ -547,6 +614,10 @@ Directory for the fleet report. Default: `<DIR>/.agentteams-fleet/<run-id>/`.
 ---
 
 ## Other Options
+
+### `--recipe-check`
+
+Validate generated Goose recipe YAML files in the `--output` directory (or `.goose/recipes/` by default). Checks: version string, no `model:` key, non-empty instructions, `sub_recipe` path resolution. Writes `recipe-check.report.md` and exits `1` on FAIL. Requires `--framework goose`.
 
 ### `--version`
 
@@ -559,4 +630,6 @@ Print the version and exit.
 | Code | Meaning |
 |------|---------|
 | `0` | Success |
-| `1` | Error (validation failure, file not found, drift detected with `--check`, security issues with `--scan-security`) |
+| `1` | Error (validation failure, file not found, drift detected with `--check`, security issues with `--scan-security`, or a Tier-1 blocking finding with `--stale-check`) |
+| `2` | Baseline drift detected (with `--check-baseline`) |
+| `3` | Remediation attempted but unresolved (with `--stale-check --stale-remediate`) |

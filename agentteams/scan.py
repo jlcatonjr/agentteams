@@ -20,18 +20,27 @@ from pathlib import Path
 # Patterns
 # ---------------------------------------------------------------------------
 
-#: Absolute paths with username components (macOS, Linux, Windows)
+#: Absolute paths with username components (macOS, Linux, Windows).
+#: The trailing path segment is optional so a *bare* home dir (e.g.
+#: ``/Users/alice`` with no child path) is still flagged as username PII.
 _PII_PATH_RE = re.compile(
-    r"(/Users/[a-zA-Z][a-zA-Z0-9._-]+/"
-    r"|/home/[a-zA-Z][a-zA-Z0-9._-]+/"
-    r"|[A-Z]:\\Users\\[a-zA-Z][a-zA-Z0-9._-]+\\)"
+    r"(/Users/[a-zA-Z][a-zA-Z0-9._-]+"
+    r"|/home/[a-zA-Z][a-zA-Z0-9._-]+"
+    r"|[A-Z]:\\Users\\[a-zA-Z][a-zA-Z0-9._-]+)"
 )
 
-#: Common credential patterns
+#: Common credential patterns. Prefixed-token formats are matched explicitly
+#: (the generic entropy detector below misses them when they sit on a line with
+#: no secret-context keyword).
 _CREDENTIAL_PATTERNS: list[tuple[str, re.Pattern[str]]] = [
     ("API key", re.compile(r"(?:api[_-]?key|apikey)\s*[:=]\s*['\"]?[a-zA-Z0-9_\-]{20,}", re.IGNORECASE)),
     ("Bearer token", re.compile(r"Bearer\s+[a-zA-Z0-9_\-\.]{20,}")),
     ("AWS access key", re.compile(r"AKIA[0-9A-Z]{16}")),
+    ("GitHub token", re.compile(r"gh[pousr]_[A-Za-z0-9]{36,}")),
+    ("GitHub fine-grained PAT", re.compile(r"github_pat_[A-Za-z0-9_]{60,}")),
+    ("Slack token", re.compile(r"xox[baprs]-[A-Za-z0-9-]{10,}")),
+    ("Stripe secret key", re.compile(r"sk_(?:live|test)_[A-Za-z0-9]{16,}")),
+    ("JWT", re.compile(r"eyJ[A-Za-z0-9_-]{10,}\.[A-Za-z0-9_-]{10,}\.[A-Za-z0-9_-]{6,}")),
     ("Private key header", re.compile(r"-----BEGIN\s+(RSA\s+)?PRIVATE\s+KEY-----")),
     ("Password assignment", re.compile(r"(?:password|passwd|pwd)\s*[:=]\s*['\"][^'\"]{4,}", re.IGNORECASE)),
     ("Connection string", re.compile(r"(?:postgres|mysql|mongodb)://[^\s]+:[^\s]+@", re.IGNORECASE)),
