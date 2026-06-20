@@ -106,8 +106,8 @@ def export_to_cai(source_dir: Path, source_framework: str | None = None) -> dict
             agents.append(
                 {
                     "slug": slug,
-                    "name": _first_heading_or_title(content, slug),
-                    "description": "",
+                    "name": _frontmatter_value(content, "name") or _first_heading_or_title(content, slug),
+                    "description": _frontmatter_value(content, "description"),
                     "body_markdown": body.strip() + "\n",
                     "capabilities": {},
                     "handoffs": [],
@@ -164,6 +164,20 @@ def import_from_cai(
             continue
 
         body = str(agent.get("body_markdown", "")).strip() + "\n"
+        # Re-attach the CAI name/description as front matter so adapters that
+        # derive them from front matter (claude / copilot-vscode / goose) preserve
+        # the metadata instead of falling back to a slug-derived name. copilot-cli
+        # strips all front matter by design, so its output stays body-only.
+        cai_name = str(agent.get("name", "")).strip()
+        cai_desc = str(agent.get("description", "")).strip()
+        if cai_name or cai_desc:
+            header = ["---"]
+            if cai_name:
+                header.append(f"name: {cai_name}")
+            if cai_desc:
+                header.append(f'description: "{cai_desc.replace(chr(34), chr(39))}"')
+            header.append("---")
+            body = "\n".join(header) + "\n\n" + body
         rendered = adapter.render_agent_file(body, slug, manifest)
         if not dry_run:
             dest.parent.mkdir(parents=True, exist_ok=True)
@@ -298,3 +312,19 @@ def _first_heading_or_title(content: str, slug: str) -> str:
         if line.startswith("#"):
             return line.lstrip("#").strip()
     return slug.replace("-", " ").title()
+
+
+def _frontmatter_value(content: str, key: str) -> str:
+    """Extract a single-line scalar value for *key* from the YAML front matter.
+
+    Returns "" when there is no front matter or no such key. Surrounding quotes
+    are stripped. Used so CAI export captures the agent's real name/description
+    (not just the first heading) for round-trip fidelity.
+    """
+    fm = _YAML_FRONT_MATTER_RE.match(content)
+    if not fm:
+        return ""
+    m = re.search(rf"^{re.escape(key)}:\s*(.+?)\s*$", fm.group(0), re.MULTILINE)
+    if not m:
+        return ""
+    return m.group(1).strip().strip('"').strip("'")

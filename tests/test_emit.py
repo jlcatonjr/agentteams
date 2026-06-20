@@ -826,3 +826,24 @@ def test_restore_backup_is_atomic_on_replace_failure(tmp_path, monkeypatch):
     # The live file is never truncated — it keeps its complete current content.
     assert (tmp_path / "a.agent.md").read_text() == "LIVE-CHANGED\n"
     assert [p.name for p in tmp_path.glob(".*.tmp")] == []
+
+
+def test_resolve_path_containment_guard(tmp_path):
+    """C6/G02-A2: _resolve_path permits the real up-to-two-levels-up generation
+    targets but rejects deeper traversal / absolute escapes."""
+    from agentteams.atomicio import _resolve_path
+
+    agents = tmp_path / "repo" / ".github" / "agents"
+    agents.mkdir(parents=True)
+
+    # In-bounds: in-tree, one level up (../CLAUDE.md), two levels up (../../.vscode).
+    assert _resolve_path(agents, "orchestrator.agent.md") == (agents / "orchestrator.agent.md").resolve()
+    assert _resolve_path(agents, "../CLAUDE.md").name == "CLAUDE.md"
+    assert _resolve_path(agents, "../../.vscode/tasks.json").name == "tasks.json"
+    assert _resolve_path(agents, "../../AGENTS.md").name == "AGENTS.md"
+
+    # Out-of-bounds: deeper ../ traversal and absolute paths are rejected.
+    with pytest.raises(ValueError):
+        _resolve_path(agents, "../../../../etc/passwd")
+    with pytest.raises(ValueError):
+        _resolve_path(agents, "/etc/passwd")

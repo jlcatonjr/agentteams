@@ -556,6 +556,51 @@ def test_write_memory_index_incremental_sed_single_doc_success_without_full_rebu
     assert hits
 
 
+def test_incremental_update_vector_norm_sq_matches_full_rebuild(tmp_path):
+    """An incremental sed update must produce the same vector_norm_sq as a full
+    rebuild (regression for the dropped-norm drift; C2/G07-A2)."""
+    from agentteams.memory_index_incremental import try_incremental_sed_update
+
+    docs = tmp_path / "workSummaries"
+    docs.mkdir()
+    a = docs / "a.md"
+    b = docs / "b.md"
+    c = docs / "c.md"
+    a.write_text("# A\n\nalpha beta gamma delta epsilon\n", encoding="utf-8")
+    b.write_text("# B\n\nbeta gamma error handling retries\n", encoding="utf-8")
+    c.write_text("# C\n\ngamma delta theta iota kappa\n", encoding="utf-8")
+    sources = [a, b, c]
+
+    initial = build_memory_index(sources, project_name="P", framework="claude")
+    idx_path = tmp_path / "memory-index.json"
+    idx_path.write_text(json.dumps(initial, indent=2) + "\n", encoding="utf-8")
+
+    # Same term set, changed frequency -> eligible incremental patch.
+    a.write_text("# A\n\nalpha alpha beta gamma delta epsilon\n", encoding="utf-8")
+    current = json.loads(idx_path.read_text(encoding="utf-8"))
+    res = try_incremental_sed_update(
+        index_path=idx_path,
+        index=current,
+        sources=sources,
+        project_name="P",
+        framework="claude",
+        validate_index=lambda _idx: None,
+    )
+    assert res.applied, f"incremental should apply, got {res.reason}"
+
+    after_incremental = json.loads(idx_path.read_text(encoding="utf-8"))
+    full_rebuild = build_memory_index(sources, project_name="P", framework="claude")
+
+    inc_norms = {d["path"]: d.get("vector_norm_sq") for d in after_incremental["documents"]}
+    reb_norms = {d["path"]: d.get("vector_norm_sq") for d in full_rebuild["documents"]}
+    assert set(inc_norms) == set(reb_norms)
+    for path, inc_norm in inc_norms.items():
+        assert inc_norm is not None, f"{path}: incremental left vector_norm_sq null"
+        assert abs(inc_norm - reb_norms[path]) < 1e-9, (
+            f"{path}: incremental norm {inc_norm} != rebuild {reb_norms[path]}"
+        )
+
+
 def test_write_memory_index_incremental_sed_falls_back_on_term_set_change(
     tmp_path, monkeypatch
 ):

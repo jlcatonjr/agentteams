@@ -633,3 +633,35 @@ def test_normalize_bridge_output_root_goose(tmp_path: Path):
     # A plain repo-root --output is left untouched.
     assert _normalize_bridge_output_root(root, "goose") == root
 
+
+def test_bridge_merge_backs_up_existing_targets(tmp_path: Path):
+    """C3/G08-A1: a merge/overwrite over existing target entry files must create a
+    pre-write .agentteams-backups snapshot (no backup on first-time create)."""
+    source_dir = tmp_path / "src" / ".github" / "agents"
+    _build_source("copilot-vscode", source_dir)
+    out_root = tmp_path / "out"
+    backups = out_root / ".agentteams-backups"
+
+    # First-time create: nothing pre-existing → no backup expected.
+    run_bridge(
+        source_dir=source_dir,
+        source_framework="copilot-vscode",
+        target_framework="claude",
+        output_root=out_root,
+        dry_run=False,
+    )
+    assert not backups.exists(), "first-time bridge create should not back up (nothing existed)"
+
+    # Merge over the now-existing target files → a backup snapshot must appear.
+    run_bridge(
+        source_dir=source_dir,
+        source_framework="copilot-vscode",
+        target_framework="claude",
+        output_root=out_root,
+        dry_run=False,
+        merge_only=True,
+    )
+    assert backups.exists(), "bridge merge over existing targets must create a backup"
+    snapshots = [p for p in backups.iterdir() if p.is_dir()]
+    assert snapshots, "expected at least one timestamped backup snapshot"
+

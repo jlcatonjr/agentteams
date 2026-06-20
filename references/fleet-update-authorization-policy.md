@@ -102,6 +102,17 @@ User Request → Orchestrator
 
 ## III. Conditional Execution Gates
 
+> **Enforcement model.** Gates 1–3 below are **out-of-band human / orchestrator
+> controls** — they are governance obligations on the operator and the
+> orchestrator, *not* checks the `agentteams` CLI performs at runtime. The tool
+> mechanically enforces only: `--fleet` requires `--update` **and** `--merge`
+> (bare `--update` is rejected), `--yes` is required to apply (otherwise dry-run/
+> preview), and the fleet flag-exclusivity guard (`--overwrite` / `--prune` /
+> `--migrate` / `--bridge-refresh` / `--shrink-policy=allow` / single-target flags
+> are refused with `--fleet`). A pre-write `.agentteams-backups` snapshot (or, on
+> git workspaces, a pre-update snapshot commit) provides recovery. Satisfying
+> Gates 1–3 is the operator's responsibility; the CLI does not verify them.
+
 ### Gate 1: @repo-liaison Impact Assessment (REQUIRED)
 
 **Condition:** All in-scope repos appear in `references/adjacent-repos.md` with complete governance attributes.

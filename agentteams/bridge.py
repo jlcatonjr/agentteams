@@ -29,6 +29,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
+from agentteams import backup
 from agentteams.interop import detect_framework
 
 _INSTRUCTIONS_NAMES = {"copilot-instructions.md", "CLAUDE.md"}
@@ -199,6 +200,24 @@ def run_bridge(
             path.parent.mkdir(parents=True, exist_ok=True)
             path.write_text(content, encoding="utf-8")
         result.written.append(str(path))
+
+    # Back up existing target entry files before any merge/overwrite write. The
+    # merge path is fence-scoped (non-destructive) and overwrite is destructive,
+    # but either way a recoverable copy must exist — fleet advertises
+    # `.agentteams-backups` recovery for (non-git) bridge consumers, so produce it.
+    if (overwrite or merge_only) and not dry_run:
+        _to_backup = [
+            str(path.relative_to(output_root))
+            for path, _ in target_files
+            if path.exists() and path.is_relative_to(output_root)
+        ]
+        if _to_backup:
+            backup.backup_output_dir(
+                output_root,
+                files_to_backup=_to_backup,
+                reason=f"bridge-{'overwrite' if overwrite else 'merge'}",
+                framework=target_framework,
+            )
 
     # Target-framework entry files: dispatched by mode.
     merge_report_lines: list[str] = []
