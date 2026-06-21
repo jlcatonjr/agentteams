@@ -19,11 +19,11 @@ from pathlib import Path
 from agentteams import analyze, emit, ingest, liaison_logs, render
 from agentteams.cli import security_gate
 from agentteams.cli.artifacts import (
+    _emit_mcp_servers_if_enabled,
     _run_query_index,
     _run_refresh_index,
     _write_delivery_receipt,
     _write_eval_suite,
-    _write_mcp_servers,
     _write_memory_index,
     _write_model_routing,
 )
@@ -949,37 +949,6 @@ def run_generate(args: argparse.Namespace, strict_manual_placeholders: bool) -> 
         _emit_mcp_servers_if_enabled(manifest, project_root)
 
     return _finalize_exit_code(result, args)
-
-
-def _emit_mcp_servers_if_enabled(manifest: dict, project_root: Path) -> None:
-    """Emit the inert MCP server artifact when an MCP host-feature token is on.
-
-    Opt-in mirror of the ``_write_model_routing`` gate: fires only when
-    ``mcp_enabled(host_features)`` AND the manifest carries operator-specified
-    ``mcp_servers[]``. Best-effort like the sibling artifact writers — never
-    raises into the build. Surfaces what was written, which servers still need
-    operator security authorization before activation, and any non-conformant
-    servers that were skipped.
-    """
-    from agentteams.mcp_emit import mcp_enabled
-
-    features = manifest.get("host_features", []) or []
-    if not mcp_enabled(features) or not manifest.get("mcp_servers"):
-        return
-    try:
-        res = _write_mcp_servers(manifest, project_root)
-    except OSError as exc:
-        print(f"  !  MCP server artifact write failed: {exc}", file=sys.stderr)
-        return
-    for path in res.written:
-        print(f"  ✓  Emitted inert MCP server definitions: {path}")
-    if res.activation_blocked:
-        print(
-            "  ⚠  MCP servers needing operator security authorization before "
-            f"activation: {', '.join(res.activation_blocked)}"
-        )
-    for err in res.errors:
-        print(f"  !  MCP server skipped (non-conformant): {err}", file=sys.stderr)
 
 
 def _finalize_exit_code(result: emit.EmitResult, args: argparse.Namespace) -> int:

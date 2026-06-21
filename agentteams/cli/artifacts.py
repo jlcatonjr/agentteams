@@ -10,6 +10,7 @@ from __future__ import annotations
 
 import json
 import os
+import sys
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
@@ -233,6 +234,37 @@ def _write_mcp_servers(manifest: dict, project_root: Path) -> "MCPEmissionResult
         features=manifest.get("host_features", []) or [],
         output_root=project_root,
     )
+
+
+def _emit_mcp_servers_if_enabled(manifest: dict, project_root: Path) -> None:
+    """Emit the inert MCP server artifact when an MCP host-feature token is on.
+
+    Opt-in mirror of the ``_write_model_routing`` gate: fires only when
+    ``mcp_enabled(host_features)`` AND the manifest carries operator-specified
+    ``mcp_servers[]``. Best-effort like the sibling artifact writers — never
+    raises into the build. Surfaces what was written, which servers still need
+    operator security authorization before activation, and any non-conformant
+    servers that were skipped.
+    """
+    from agentteams.mcp_emit import mcp_enabled
+
+    features = manifest.get("host_features", []) or []
+    if not mcp_enabled(features) or not manifest.get("mcp_servers"):
+        return
+    try:
+        res = _write_mcp_servers(manifest, project_root)
+    except OSError as exc:
+        print(f"  !  MCP server artifact write failed: {exc}", file=sys.stderr)
+        return
+    for path in res.written:
+        print(f"  ✓  Emitted inert MCP server definitions: {path}")
+    if res.activation_blocked:
+        print(
+            "  ⚠  MCP servers needing operator security authorization before "
+            f"activation: {', '.join(res.activation_blocked)}"
+        )
+    for err in res.errors:
+        print(f"  !  MCP server skipped (non-conformant): {err}", file=sys.stderr)
 MEMORY_INDEX_REL_PATH = "references/memory-index.json"
 MEMORY_INDEX_EXTRA_DOC_NAMES = ("CHANGELOG.md", "README.md", "build-team-plan.md")
 def _memory_index_sources(manifest: dict, output_dir: Path) -> list[Path]:
