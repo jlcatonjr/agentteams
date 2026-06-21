@@ -351,6 +351,11 @@
           }
         }
       }
+    },
+    "mcp_servers": {
+      "type": "array",
+      "description": "Optional operator-SPECIFIED MCP server definitions to emit for this team (each conforms to mcp-server.schema.json). This is the input for automating *specified* servers (vs. mcp_hints, which only feeds the BUILD/USE/DEFER detection rubric). Purely declarative: entries are copied to the team-manifest's mcp_servers[] and emitted as the INERT .claude/mcp-servers.agentteams.json only when an MCP host-feature token is enabled (claude:mcp or bridge:copilot-vscode-to-claude:mcp). Provisions nothing on its own; credentialed activation remains a separate operator step. See references/mcp-auto-detection-report.md §5.4/§6.",
+      "items": { "$ref": "mcp-server.schema.json" }
     }
   },
   "additionalProperties": false

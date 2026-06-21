@@ -23,6 +23,7 @@ from agentteams.cli.artifacts import (
     _run_refresh_index,
     _write_delivery_receipt,
     _write_eval_suite,
+    _write_mcp_servers,
     _write_memory_index,
     _write_model_routing,
 )
@@ -111,12 +112,16 @@ def run_generate(args: argparse.Namespace, strict_manual_placeholders: bool) -> 
         # W1: let the adapter normalize --output so framework-specific nested
         # agents dirs (e.g. Goose's .goose/recipes/) are derived correctly when
         # the user passes a project root (including `--output .`).
-        output_dir = adapter.normalize_output_path(Path(args.output).resolve())
+        # project_root is the pre-normalization path (the operator's project root),
+        # used as the base for the project-root .claude/ MCP artifact.
+        project_root = Path(args.output).resolve()
+        output_dir = adapter.normalize_output_path(project_root)
     elif description.get("existing_project_path"):
-        project_path = Path(description["existing_project_path"])
-        output_dir = adapter.get_agents_dir(project_path)
+        project_root = Path(description["existing_project_path"])
+        output_dir = adapter.get_agents_dir(project_root)
     else:
-        output_dir = adapter.get_agents_dir(Path.cwd())
+        project_root = Path.cwd()
+        output_dir = adapter.get_agents_dir(project_root)
 
     print(f"  Output directory: {output_dir}")
 
@@ -563,6 +568,7 @@ def run_generate(args: argparse.Namespace, strict_manual_placeholders: bool) -> 
                             f"  !  Model-routing write failed: {exc}",
                             file=sys.stderr,
                         )
+                _emit_mcp_servers_if_enabled(manifest, project_root)
                 print(
                     "  ✓  Healed build-log baseline (no material drift; "
                     "fingerprint refreshed)."
@@ -724,6 +730,7 @@ def run_generate(args: argparse.Namespace, strict_manual_placeholders: bool) -> 
                         f"  !  Model-routing write failed: {exc}",
                         file=sys.stderr,
                     )
+            _emit_mcp_servers_if_enabled(manifest, project_root)
             if heal_converged:
                 print(
                     "  ✓  Healed build-log baseline (no material drift; "
@@ -939,8 +946,40 @@ def run_generate(args: argparse.Namespace, strict_manual_placeholders: bool) -> 
                     f"  !  Model-routing write failed: {exc}",
                     file=sys.stderr,
                 )
+        _emit_mcp_servers_if_enabled(manifest, project_root)
 
     return _finalize_exit_code(result, args)
+
+
+def _emit_mcp_servers_if_enabled(manifest: dict, project_root: Path) -> None:
+    """Emit the inert MCP server artifact when an MCP host-feature token is on.
+
+    Opt-in mirror of the ``_write_model_routing`` gate: fires only when
+    ``mcp_enabled(host_features)`` AND the manifest carries operator-specified
+    ``mcp_servers[]``. Best-effort like the sibling artifact writers — never
+    raises into the build. Surfaces what was written, which servers still need
+    operator security authorization before activation, and any non-conformant
+    servers that were skipped.
+    """
+    from agentteams.mcp_emit import mcp_enabled
+
+    features = manifest.get("host_features", []) or []
+    if not mcp_enabled(features) or not manifest.get("mcp_servers"):
+        return
+    try:
+        res = _write_mcp_servers(manifest, project_root)
+    except OSError as exc:
+        print(f"  !  MCP server artifact write failed: {exc}", file=sys.stderr)
+        return
+    for path in res.written:
+        print(f"  ✓  Emitted inert MCP server definitions: {path}")
+    if res.activation_blocked:
+        print(
+            "  ⚠  MCP servers needing operator security authorization before "
+            f"activation: {', '.join(res.activation_blocked)}"
+        )
+    for err in res.errors:
+        print(f"  !  MCP server skipped (non-conformant): {err}", file=sys.stderr)
 
 
 def _finalize_exit_code(result: emit.EmitResult, args: argparse.Namespace) -> int:

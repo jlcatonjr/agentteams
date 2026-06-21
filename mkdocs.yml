@@ -87,6 +87,8 @@ nav:
       - hooks-emit: api-reference/hooks-emit.md
       - instructions-split: api-reference/instructions-split.md
       - schedule-emit: api-reference/schedule-emit.md
+      - mcp-detect: api-reference/mcp-detect.md
+      - mcp-emit: api-reference/mcp-emit.md
       - pr-management: api-reference/pr-management.md
   - Template Authoring: template-authoring.md
   - Description Format: DESCRIPTION-FORMAT.md

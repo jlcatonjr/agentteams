@@ -12,7 +12,7 @@ import json
 import os
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 from agentteams.errors import (
     DeliveryReceiptError,
@@ -20,6 +20,9 @@ from agentteams.errors import (
     MemoryIndexError,
     ModelRoutingError,
 )
+
+if TYPE_CHECKING:
+    from agentteams.mcp_emit import MCPEmissionResult
 
 def _compute_file_hashes(written_abs_paths: list[str], output_dir: Path) -> dict[str, str]:
     """Return a mapping of relative path → 16-char SHA-256 hex for written files.
@@ -203,6 +206,33 @@ def _write_model_routing(manifest: dict, output_dir: Path) -> Path:
     contract_path.parent.mkdir(parents=True, exist_ok=True)
     contract_path.write_text(json.dumps(contract, indent=2) + "\n", encoding="utf-8")
     return contract_path
+
+
+def _write_mcp_servers(manifest: dict, project_root: Path) -> "MCPEmissionResult":
+    """Emit the INERT ``.claude/mcp-servers.agentteams.json`` (opt-in).
+
+    Called only when an MCP host-feature token is enabled and the manifest carries
+    operator-SPECIFIED ``mcp_servers[]`` (report §5.4/§6). Unlike the sibling
+    writers, the output base is the PROJECT ROOT (not the agents ``output_dir``)
+    because this is a Claude-Code-host config location, deliberately NOT named
+    ``.mcp.json`` — it provisions nothing.
+
+    Reuses ``agentteams.mcp_emit.emit_mcp_artifact``, which validates each server
+    against ``schemas/mcp-server.schema.json``, refuses inline-secret-shaped
+    ``credential_ref`` values, records ``activation_status`` fail-closed, and
+    defaults ``overwrite=False`` so operator authorization records are never
+    clobbered on re-run (the refresh-vs-never-clobber rule, report §6.4). Returns
+    the ``MCPEmissionResult`` so the caller can surface written/blocked/errors.
+    Drift-excluded by construction (``.json``; never in
+    output_files_map/template_hashes/file_hashes).
+    """
+    from agentteams.mcp_emit import emit_mcp_artifact
+
+    return emit_mcp_artifact(
+        servers=manifest.get("mcp_servers", []) or [],
+        features=manifest.get("host_features", []) or [],
+        output_root=project_root,
+    )
 MEMORY_INDEX_REL_PATH = "references/memory-index.json"
 MEMORY_INDEX_EXTRA_DOC_NAMES = ("CHANGELOG.md", "README.md", "build-team-plan.md")
 def _memory_index_sources(manifest: dict, output_dir: Path) -> list[Path]:

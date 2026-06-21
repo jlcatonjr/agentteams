@@ -388,6 +388,14 @@ def build_manifest(description: dict[str, Any], *, framework: str = "copilot-vsc
     mcp_candidates = detect_mcp_candidates(description)
     if mcp_candidates:
         manifest["mcp_candidates"] = [c.to_manifest_entry() for c in mcp_candidates]
+    # Specified-server automation (report §5.4/§6): copy operator-DECLARED server
+    # definitions through to the manifest verbatim. Populated solely when the
+    # description declares mcp_servers, so manifests without specified servers are
+    # unchanged. Each entry is validated against mcp-server.schema.json at emission
+    # (mcp_emit._inert_problems); inert here — nothing is provisioned.
+    declared_servers = description.get("mcp_servers")
+    if isinstance(declared_servers, list) and declared_servers:
+        manifest["mcp_servers"] = list(declared_servers)
     return manifest
 
 
