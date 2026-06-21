@@ -191,9 +191,10 @@ def run_bridge(
     # `developer` (CLI) extension by default and, opt-in, the operator-selected MCP
     # servers wired as extensions. Servers are read from the SOURCE project's inert
     # `.claude/mcp-servers.agentteams.json` (the cache-split precedent reads the source
-    # root the same way). The recipe is YAML (no AGENTTEAMS-BRIDGE fence): absent →
-    # written in any mode; present → preserved under --bridge-merge, overwritten under
-    # --bridge-refresh.
+    # root the same way). It is appended to `bridge_files` (NOT target_files) so it is
+    # a bridge-OWNED generated artifact: regenerated on every --bridge-merge/-refresh
+    # so newly-selected servers propagate on re-bridge (do not hand-edit — use the
+    # convert/direct recipes for customization). Written below by the bridge_files loop.
     if target_framework == "goose":
         import json as _json
 
@@ -226,7 +227,7 @@ def run_bridge(
             mcp_servers=servers,
             mcp_enabled=mcp_on,
         )
-        target_files.append(
+        bridge_files.append(
             (output_root / ".goose" / "recipes" / "bridge-orchestrator.yaml", recipe_yaml)
         )
         for note in recipe_notes:

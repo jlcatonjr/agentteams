@@ -120,8 +120,9 @@ read from the SOURCE project's `.claude/mcp-servers.agentteams.json`. Only
 **orchestrator-scoped, first-party, read-only** servers are wired onto the single
 bridge recipe; specialist-scoped, third-party, write/destructive, or review-required
 servers are surfaced as `# agentteams MCP:` comments (use the direct/convert path for
-full per-agent MCP). The recipe is YAML (no `AGENTTEAMS-BRIDGE` fence): `--bridge-refresh`
-regenerates it, `--bridge-merge` preserves an existing one.
+full per-agent MCP). The recipe is a bridge-OWNED generated artifact, regenerated on
+every `--bridge-merge`/`--bridge-refresh` so newly-selected servers propagate on
+re-bridge (do not hand-edit it — use the convert/direct recipes for customization).
 
 **Inert artifact, active consumer.** Reading the inert `.claude/mcp-servers.agentteams.json`
 to wire a runnable extension is the schema-sanctioned step *for a first-party

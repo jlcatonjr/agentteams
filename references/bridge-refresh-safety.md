@@ -42,9 +42,9 @@ for f in CLAUDE.md .claude/README.md .claude/agent-team.md .claude/quickstart-sn
   [ -f "$target_project/$f" ] && echo "PRESENT: $f"
 done
 # goose target (AGENTS.md is SHARED across tools — treat its presence as high-risk):
-# .goose/recipes/bridge-orchestrator.yaml is a generated YAML recipe (no AGENTTEAMS
-# fence possible): --bridge-refresh OVERWRITES it; --bridge-merge PRESERVES an
-# existing one. Back up before refresh if it carries hand edits.
+# .goose/recipes/bridge-orchestrator.yaml is a bridge-OWNED generated recipe:
+# regenerated on every --bridge-merge AND --bridge-refresh (so newly-selected MCP
+# servers propagate). Do not hand-edit it; use the convert/direct recipes to customize.
 for f in AGENTS.md .goosehints .goose/README.md .goose/recipes/bridge-orchestrator.yaml; do
   [ -f "$target_project/$f" ] && echo "PRESENT: $f"
 done

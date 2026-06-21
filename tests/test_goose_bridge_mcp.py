@@ -129,13 +129,18 @@ def test_no_token_does_not_read_artifact(tmp_path):
 
 # --- merge / refresh mechanics -----------------------------------------------
 
-def test_merge_preserves_edited_recipe(tmp_path):
+def test_merge_regenerates_recipe_so_new_servers_propagate(tmp_path):
+    """The bridge recipe is a bridge-OWNED generated artifact: --bridge-merge
+    regenerates it, so a server added after the first bridge is wired on re-bridge."""
     _make_source(tmp_path)
-    _bridge(tmp_path)
-    recipe_path = tmp_path / _RECIPE_REL
-    recipe_path.write_text("version: \"1.0.0\"\ntitle: \"edited\"\ninstructions: |\n  mine\n", encoding="utf-8")
-    _bridge(tmp_path, merge_only=True)              # merge must NOT clobber
-    assert "edited" in recipe_path.read_text()
+    _bridge(tmp_path)                               # first bridge: developer-only
+    assert "type: stdio" not in (tmp_path / _RECIPE_REL).read_text()
+    # operator now selects a server + opts in, then re-bridges with --bridge-merge
+    claude = tmp_path / ".claude"; claude.mkdir(exist_ok=True)
+    (claude / "mcp-servers.agentteams.json").write_text(
+        json.dumps({"servers": [_server()], "activation_status": {}}), encoding="utf-8")
+    _bridge(tmp_path, host_features=["bridge:copilot-vscode-to-goose:mcp"], merge_only=True)
+    assert 'name: "vk_pg"' in (tmp_path / _RECIPE_REL).read_text()   # regenerated + wired
 
 
 def test_refresh_overwrites_recipe(tmp_path):
