@@ -20,6 +20,7 @@ _VALID_NAMESPACES = frozenset(
         "claude",
         "copilot-vscode",
         "copilot-cli",
+        "goose",
         "bridge:copilot-vscode-to-claude",
         "bridge:copilot-vscode-to-copilot-cli",
         "bridge:copilot-cli-to-claude",
@@ -30,6 +31,11 @@ _KNOWN_FEATURES: dict[str, frozenset[str]] = {
     "claude": frozenset({"hooks", "subagents", "schedule", "mcp", "critic", "cache-split", "todo-projection"}),
     "copilot-vscode": frozenset({"chat-modes", "inline-yaml-handoffs"}),
     "copilot-cli": frozenset({"manifest-routing"}),
+    # goose: only `mcp` so far — wires operator-specified mcp_servers[] into recipes
+    # as opt-in extensions (Goose already grants CLI via the `developer` builtin, so
+    # this is never a default). The `goose` namespace lands here ahead of the goose
+    # bridge phase (goose-integration.plan §5); bridge `goose:` tokens are still owed.
+    "goose": frozenset({"mcp"}),
     "bridge:copilot-vscode-to-claude": frozenset(
         {"subagents", "hooks", "schedule", "mcp", "critic", "cache-split", "todo-projection"}
     ),

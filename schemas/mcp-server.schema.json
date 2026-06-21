@@ -48,6 +48,16 @@
       "enum": ["stdio", "http"],
       "description": "MCP transport. When 'http', the auth object is required and should carry a url (see allOf below)."
     },
+    "command": {
+      "type": "string",
+      "minLength": 1,
+      "description": "Launch command for a stdio server (e.g., 'uvx', 'npx', 'python'). Optional; required-by-convention to render a runnable stdio extension (e.g. a Goose recipe extension). NOT a secret. Ignored for http transport."
+    },
+    "args": {
+      "type": "array",
+      "items": { "type": "string" },
+      "description": "Arguments passed to 'command' for a stdio server (e.g., ['mcp-server-postgres']). NOT secrets — credentials are referenced via auth.credential_ref / env vars, never inlined here."
+    },
     "auth": {
       "type": "object",
       "additionalProperties": false,

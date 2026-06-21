@@ -79,3 +79,32 @@ Non-conforming entries are skipped into `result.errors`.
 The artifact is `.json` and is excluded from drift by construction — it is never
 recorded in `output_files_map`/`template_hashes`/`file_hashes`, and the `.md`
 snapshot suite is unaffected.
+
+## Goose target (recipe extensions, opt-in)
+
+For the Goose framework, the same `mcp_servers[]` are wired directly into the
+generated recipes as native `extensions`, gated on the **`goose:mcp`** host-feature
+token (`--target-host-features goose:mcp`). This is opt-in and default-off: Goose
+already grants shell/CLI access via the builtin `developer` extension, so a default
+Goose build is byte-identical to the `developer`-only baseline.
+
+Wiring a server makes it *runnable* (an activation step), so the bar is stricter
+than the inert Claude artifact — only **first-party, read-only** servers (all tools
+`side_effects: read`, no `security_review.required`) scoped to an agent are
+auto-wired; third-party / write / destructive / review-required servers are skipped
+and surfaced as `# agentteams MCP: <id> not wired (<reason>)` comments in the recipe.
+
+Mapping (`agentteams/frameworks/goose.py`):
+
+| mcp-server.schema field | Goose recipe extension |
+|---|---|
+| `transport: stdio` + `command` + `args` | `type: stdio`, `cmd`, `args` |
+| `transport: http` + `auth.url` | `type: streamable_http`, `uri` |
+| `auth.mechanism: env` + `credential_ref` | `env_keys: [<credential_ref>]` (by reference; never inline) |
+| `scope: [<agent-slug>]` | extension added only to that agent's recipe (least privilege) |
+
+`stdio` servers need a `command` and `http` servers need `auth.url` to be runnable;
+absent them, the server is skipped + surfaced (never silently dropped). Generated
+recipes are validated by `goose recipe validate` locally and by the in-process
+forbidden-shape guards in `_validate_recipe_yaml` (no `envs:`, no `type: sse`, no
+`context:`) in CI.
