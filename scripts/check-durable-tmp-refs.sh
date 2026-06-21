@@ -27,8 +27,8 @@ DURABLE_FILES=(
 # Includes skip/exclude declarations that name tmp/ as something to AVOID — those
 # are the opposite of a durable→tmp/ dependency (the rule this lint enforces):
 #   _SKIP_PREFIXES — a skip-list tuple that excludes tmp/ from a scan
-#   sandboxes      — docstrings noting tmp/ sandboxes are excluded from findings
-EXEMPT_PATTERN="(deprecated|gitignore|plan|tmp/remediation-plans/master-status|Mirror backup|See audit report|tmp/by-week.*audit|tmp/diffs|tmp/inject_fences|off-repo storage|Operator|rewrite-backups|_SKIP_PREFIXES|sandboxes)"
+#   sandbox        — docstrings noting tmp/ "sandboxes" are excluded from findings
+EXEMPT_PATTERN="(deprecated|gitignore|plan|tmp/remediation-plans/master-status|Mirror backup|See audit report|tmp/by-week.*audit|tmp/diffs|tmp/inject_fences|off-repo storage|Operator|rewrite-backups|_SKIP_PREFIXES|sandbox)"
 
 cd "$REPO_ROOT"
 
