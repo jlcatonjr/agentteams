@@ -24,6 +24,9 @@ _VALID_NAMESPACES = frozenset(
         "bridge:copilot-vscode-to-claude",
         "bridge:copilot-vscode-to-copilot-cli",
         "bridge:copilot-cli-to-claude",
+        "bridge:copilot-vscode-to-goose",
+        "bridge:claude-to-goose",
+        "bridge:copilot-cli-to-goose",
     }
 )
 
@@ -41,6 +44,12 @@ _KNOWN_FEATURES: dict[str, frozenset[str]] = {
     ),
     "bridge:copilot-vscode-to-copilot-cli": frozenset({"manifest-routing"}),
     "bridge:copilot-cli-to-claude": frozenset({"subagents", "hooks"}),
+    # goose-target bridges: `mcp` wires selected MCP servers into the emitted
+    # bridge-orchestrator recipe (opt-in). The `developer` (CLI) extension is always
+    # emitted by the bridge recipe regardless of this token.
+    "bridge:copilot-vscode-to-goose": frozenset({"mcp"}),
+    "bridge:claude-to-goose": frozenset({"mcp"}),
+    "bridge:copilot-cli-to-goose": frozenset({"mcp"}),
 }
 
 

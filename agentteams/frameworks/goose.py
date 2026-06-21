@@ -484,6 +484,73 @@ def _mcp_recipe_extensions(
     return extensions, notes
 
 
+def build_bridge_recipe(
+    *,
+    source_framework: str,
+    rel_inventory: str,
+    rel_quickstart: str,
+    mcp_servers: list[dict[str, Any]],
+    mcp_enabled: bool,
+) -> tuple[str, list[str]]:
+    """Build the goose-target bridge entry recipe (`bridge-orchestrator.yaml`).
+
+    Always declares the ``developer`` builtin so a bridged Goose project has CLI
+    access by default (req 1). When ``mcp_enabled`` (the
+    ``bridge:<src>-to-goose:mcp`` token), additionally wires the operator-selected
+    servers whose ``scope`` includes ``"orchestrator"`` as recipe extensions (req 2),
+    reusing the same fail-closed mapper as the direct path (`_goose_extension_for` →
+    first-party read-only only). Servers scoped only to specialists, or non-wirable
+    ones, are surfaced as ``# agentteams MCP`` comments — the pointer bridge has no
+    per-specialist recipes, so they cannot be wired here (use direct/convert for
+    full per-agent MCP). Returns ``(recipe_yaml, skip_notes)``.
+
+    The recipe is an ENTRY point: it guarantees the extensions at session start and
+    instructs the agent to treat the source framework's files as canonical and route
+    orchestrator-first — it does not natively delegate (no ``sub_recipes``); routing
+    is prompt-level, identical to the ``.goosehints`` pointer.
+    """
+    instructions = (
+        f"You are the orchestrator entry point for a team bridged from "
+        f"`{source_framework}`.\n"
+        f"Canonical agent definitions live in the source framework's files — read "
+        f"`{rel_inventory}` and `{rel_quickstart}`, adopt the orchestrator identity "
+        f"and constitutional rules, and route work orchestrator-first.\n"
+        "Do not bypass the orchestrator for multi-step, destructive, or cross-repo work."
+    )
+    mcp_exts: list[dict[str, Any]] = []
+    notes: list[str] = []
+    if mcp_enabled:
+        for server in mcp_servers or []:
+            if not isinstance(server, dict):
+                continue
+            scope = server.get("scope") or []
+            sid = server.get("server_id", "<unknown>")
+            if "orchestrator" not in scope:
+                notes.append(
+                    f"{sid} not wired (scope={scope or 'none'}; the bridge recipe wires "
+                    "orchestrator-scoped servers only — use direct/convert for specialists)"
+                )
+                continue
+            ext, reason = _goose_extension_for(server)
+            if ext is not None:
+                mcp_exts.append(ext)
+            else:
+                notes.append(f"{sid} not wired ({reason})")
+    recipe = _emit_recipe(
+        title=f"Bridge Orchestrator ({source_framework} → goose)",
+        description=(
+            f"Entry recipe for the {source_framework}-bridged team; guarantees the "
+            "developer (CLI) extension and any opted-in MCP server extensions."
+        ),
+        instructions=instructions,
+        extensions=["developer"],
+        prompt=_ORCHESTRATOR_PROBE_PROMPT,
+        mcp_extensions=mcp_exts,
+        mcp_notes=notes,
+    )
+    return recipe, notes
+
+
 def _extract_name_description(
     content: str,
     agent_slug: str,

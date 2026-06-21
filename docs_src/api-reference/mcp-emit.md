@@ -108,3 +108,25 @@ absent them, the server is skipped + surfaced (never silently dropped). Generate
 recipes are validated by `goose recipe validate` locally and by the in-process
 forbidden-shape guards in `_validate_recipe_yaml` (no `envs:`, no `type: sse`, no
 `context:`) in CI.
+
+### Goose bridges
+
+A goose-target bridge (`copilot-vscode/claude/copilot-cli → goose`) emits a single
+entry recipe `.goose/recipes/bridge-orchestrator.yaml` (`bridge.py`,
+`goose.build_bridge_recipe`). It **always** declares the `developer` (CLI) extension
+so a bridged project has CLI access by default, and — opt-in via
+`--target-host-features bridge:<source>-to-goose:mcp` — wires the selected servers
+read from the SOURCE project's `.claude/mcp-servers.agentteams.json`. Only
+**orchestrator-scoped, first-party, read-only** servers are wired onto the single
+bridge recipe; specialist-scoped, third-party, write/destructive, or review-required
+servers are surfaced as `# agentteams MCP:` comments (use the direct/convert path for
+full per-agent MCP). The recipe is YAML (no `AGENTTEAMS-BRIDGE` fence): `--bridge-refresh`
+regenerates it, `--bridge-merge` preserves an existing one.
+
+**Inert artifact, active consumer.** Reading the inert `.claude/mcp-servers.agentteams.json`
+to wire a runnable extension is the schema-sanctioned step *for a first-party
+read-only server* (the `command` field is documented as "required-by-convention to
+render a runnable stdio extension", and report §5.4 names `first-party`/`read` as the
+auto-activation candidate). It is distinct from the credentialed-secret activation the
+emitter's inert posture forbids — the bridge never inlines secrets (`env_keys` by
+reference) and never wires write/destructive/third-party servers.

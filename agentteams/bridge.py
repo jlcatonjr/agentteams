@@ -187,6 +187,51 @@ def run_bridge(
             (output_root / ".claude" / "skills" / "recall.md", _render_recall_skill()),
         )
 
+    # Goose target: emit a bridge-orchestrator recipe so the bridged project has the
+    # `developer` (CLI) extension by default and, opt-in, the operator-selected MCP
+    # servers wired as extensions. Servers are read from the SOURCE project's inert
+    # `.claude/mcp-servers.agentteams.json` (the cache-split precedent reads the source
+    # root the same way). The recipe is YAML (no AGENTTEAMS-BRIDGE fence): absent →
+    # written in any mode; present → preserved under --bridge-merge, overwritten under
+    # --bridge-refresh.
+    if target_framework == "goose":
+        import json as _json
+
+        from agentteams.frameworks.goose import build_bridge_recipe
+
+        mcp_token = f"bridge:{src_fw}-to-goose:mcp"
+        mcp_on = mcp_token in _features_early
+        servers: list = []
+        if mcp_on:
+            artifact = source_dir.parent.parent / ".claude" / "mcp-servers.agentteams.json"
+            if artifact.exists():
+                try:
+                    servers = _json.loads(artifact.read_text(encoding="utf-8")).get("servers", []) or []
+                except (OSError, ValueError):
+                    result.notices.append(
+                        f"{mcp_token} set but {artifact} was unreadable; bridge recipe "
+                        "emitted with developer (CLI) only."
+                    )
+            else:
+                result.notices.append(
+                    f"{mcp_token} set but {artifact} not found; bridge recipe emitted "
+                    "with developer (CLI) only. Build the source with an MCP host-feature "
+                    "token to persist selected servers."
+                )
+        rel_pair = pair_dir.relative_to(output_root)
+        recipe_yaml, recipe_notes = build_bridge_recipe(
+            source_framework=src_fw,
+            rel_inventory=str(rel_pair / "agent-inventory.md"),
+            rel_quickstart=str(rel_pair / "quickstart-snippet.md"),
+            mcp_servers=servers,
+            mcp_enabled=mcp_on,
+        )
+        target_files.append(
+            (output_root / ".goose" / "recipes" / "bridge-orchestrator.yaml", recipe_yaml)
+        )
+        for note in recipe_notes:
+            result.notices.append(f"Goose bridge recipe: {note}")
+
     # Bridge-internal artifacts: refresh and merge both regenerate these.
     # (Skip and overwrite policies do not apply to bridge-owned files.)
     for path, content in bridge_files:
@@ -538,6 +583,13 @@ def _render_quickstart(source_framework: str, target_framework: str) -> str:
             "checks version string, no model: key, sub_recipe path resolution, and non-empty instructions.\n"
             "For full recipe generation (alternative to bridge): "
             "`agentteams --convert-from .github/agents --framework goose --output .goose/recipes`\n"
+            "\n## CLI + MCP entry recipe\n\n"
+            "The bridge emits `.goose/recipes/bridge-orchestrator.yaml` — run it with\n"
+            "`goose run --recipe .goose/recipes/bridge-orchestrator.yaml` to start the\n"
+            "bridged team WITH the `developer` (CLI) extension by default. Pass\n"
+            "`--target-host-features bridge:<source>-to-goose:mcp` and build the source\n"
+            "with an MCP token first to also wire the selected (first-party, read-only,\n"
+            "orchestrator-scoped) MCP servers into that recipe.\n"
         )
     return (
         "# Bridge Quickstart Snippet\n\n"
