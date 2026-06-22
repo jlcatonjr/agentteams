@@ -12,8 +12,10 @@ This reference defines the **supported public API surface** (documented modules 
 |--------|------|
 | [`ingest`](ingest.md) | Load and normalize project description files |
 | [`analyze`](analyze.md) | Classify project type, select archetypes (including contextual post-production selection), build team manifest |
+| [`manifest_format`](manifest-format.md) | Manifest field derivation/formatting helpers (_format_*/_default_*/_collect_*) — carved from analyze |
 | [`render`](render.md) | Resolve templates and produce rendered agent file content |
 | [`emit`](emit.md) | Write rendered agent files to disk safely |
+| [`fences`](fences.md) | Section-fencing internals (regexes, MergeResult, fenced merge, shrink detection) — carved from emit |
 
 ## Core Support Modules
 

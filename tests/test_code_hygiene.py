@@ -38,8 +38,6 @@ MAX_MODULE_LINES = 1000
 LENGTH_ALLOWLIST: frozenset[str] = frozenset({
     # build_team.py left at Step D (now a 833-line shim); cli/app.py left at Step D2
     # (1174 -> 263 after the generate pipeline moved to cli/generate.py, 939 lines).
-    "agentteams/analyze.py",    # 1276 — accepted tracked debt (CH-07 allowlist; not split)
-    "agentteams/emit.py",       # 1080 — accepted tracked debt (CH-07 allowlist; not split).
     # Both were reduced by CH-07 carves: emit.py 1584 -> 1080 (backup subsystem ->
     # agentteams/backup.py + atomicio.py); analyze.py 1507 -> 1276 (_plan_output_files ->
     # agentteams/output_plan.py). Getting under the 1000 ceiling would need a second carve

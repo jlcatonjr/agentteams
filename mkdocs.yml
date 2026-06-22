@@ -60,8 +60,10 @@ nav:
       - Overview: api-reference/index.md
       - ingest: api-reference/ingest.md
       - analyze: api-reference/analyze.md
+      - manifest-format: api-reference/manifest-format.md
       - render: api-reference/render.md
       - emit: api-reference/emit.md
+      - fences: api-reference/fences.md
       - convert: api-reference/convert.md
       - interop: api-reference/interop.md
       - bridge: api-reference/bridge.md
