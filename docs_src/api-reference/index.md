@@ -71,6 +71,8 @@ This reference defines the **supported public API surface** (documented modules 
 | [`host_features`](host-features.md) | Parse / validate `<ns>:<feature>` opt-in subselector tokens for emission gating |
 | [`baseline`](baseline.md) | Deterministic SHA-256 emission baselines (capture / diff) used by regression tests |
 | [`bridge_subagents`](bridge-subagents.md) | Per-agent Claude subagent stub emitter (bridge:copilot-vscode-to-claude:subagents) |
+| [`bridge_subagents_goose`](bridge-subagents-goose.md) | Per-agent Goose stub-recipe emitter (bridge:`<src>`-to-goose:subagents) |
+| [`bridge_sources`](bridge-sources.md) | Source-team inventory, file collection, hashing + bridge-freshness check (framework-aware) |
 | [`hooks_emit`](hooks-emit.md) | Claude hooks settings + recursion-bounded guard emitter (bridge:copilot-vscode-to-claude:hooks) |
 | [`instructions_split`](instructions-split.md) | Cache-aware CLAUDE.md layout: preamble + boundary + dynamic stanza (bridge:copilot-vscode-to-claude:cache-split) |
 | [`schedule_emit`](schedule-emit.md) | `/schedule` routine spec emitter (bridge:copilot-vscode-to-claude:schedule) |

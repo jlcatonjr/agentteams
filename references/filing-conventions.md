@@ -88,11 +88,9 @@ directory is uniformly local.
 
 ### Known follow-ups
 
-- **`security-waiver-remediation-plan.md`** (root) — left in place because a live
-  session owned it during remediation; **temporarily allowlisted** in
-  `tests/test_root_doc_hygiene.py`. Move it to
-  `references/plans/security-waiver-remediation.plan.md` and remove the temporary
-  allowlist entry once that session is done.
+- **`security-waiver-remediation-plan.md`** — **resolved**: relocated to
+  `references/plans/security-waiver-remediation.plan.md` (retained-local) and the
+  temporary `tests/test_root_doc_hygiene.py` allowlist entry removed.
 - **`docs_src/structural-update-plan.md`** — tracked, in the MkDocs nav, *and*
   carries a (now-ineffective) `.gitignore` line. Decide: publish it (drop the
   ignore line) or relocate it to `references/plans/`. Left untouched here.

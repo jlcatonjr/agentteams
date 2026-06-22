@@ -43,13 +43,11 @@ ALLOWED_ROOT_MD = {
     "AGENTS.md",
 }
 
-# TEMPORARY: a live concurrent session owned this plan during the 2026-06-15
-# filing remediation, so it was left in place. Relocate it to
-# references/plans/security-waiver-remediation.plan.md and delete this entry once
-# that session is finished. See references/filing-conventions.md "Known follow-ups".
-TEMP_ALLOWED_ROOT_MD = {
-    "security-waiver-remediation-plan.md",
-}
+# Temporary allowances for root *.md owned by an in-flight session (relocate to
+# references/plans/ once the session is done). Empty: the 2026-06-15 filing
+# remediation's security-waiver-remediation-plan.md has been relocated to
+# references/plans/security-waiver-remediation.plan.md.
+TEMP_ALLOWED_ROOT_MD: set[str] = set()
 
 
 def test_no_stray_plan_docs_at_repo_root() -> None:
