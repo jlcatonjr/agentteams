@@ -195,6 +195,47 @@ goose session
 ```
 On OpenRouter, prefix with `goose-or` (e.g. `goose-or run --recipe …`).
 
+### 5b. Verified delegation (the last Phase-1 sign-off)
+
+A generated **direct-build** orchestrator carries a `sub_recipes:` block (the
+bridge entry recipe is a pointer with none), so its recipe is the one that
+exercises native delegation. To verify end-to-end that the orchestrator actually
+routes/delegates — not just that the recipe validates — run its W6 probe prompt
+non-interactively against a real provider:
+
+```sh
+# requires a configured OpenRouter key (export OPENROUTER_API_KEY=… or goose-or)
+GOOSE_MODE=chat goose-or run \
+  --recipe .goose/recipes/orchestrator.yaml --no-session --max-turns 4
+```
+
+PASS = the orchestrator states its role and, for "produce a deliverable for this
+team", names the correct **workflow** (Workflow 1: Produce a Deliverable) and the
+**first agent** it routes to (`@primary-producer`, the `primary_producer`
+sub_recipe) — observable delegation to a named child session.
+
+**Judge the OUTPUT, not the exit code, and distinguish the two error classes:**
+
+| Class | goose exit | Meaning |
+|---|---|---|
+| **Missing key** (no `OPENROUTER_API_KEY`) | **1** | Fails at config-resolution, *before any LLM call* — a setup problem, not a delegation result. |
+| **Provider error** past config-resolution (`not a valid model` / 400, `401`/unauthorized, hit `--max-turns`) | **0** | goose exits 0 even on these — classify by output (model / auth / inconclusive), never the exit code. |
+
+The repeatable check is `tests/test_goose_live_delegation.py`. It is
+**skip-by-default**: a mandatory `@pytest.mark.skipif` skips it whenever
+`OPENROUTER_API_KEY` is not resolvable (env or `GOOSE_OPENROUTER_ENV_FILE`) — and
+when `goose` is absent — so CI / a keyless repo stay offline-green. With a key it
+runs the probe above and asserts delegation; a model/auth fault or a max-turns
+miss is treated as environment/transient (skip), not a wiring regression. The key
+is resolved by reference and passed only into the goose subprocess — never logged
+or serialized.
+
+> **Verified 2026-06-22** against `openrouter` / `qwen/qwen3.6-35b-a3b`:
+> `tests/test_goose_live_delegation.py` PASSED (109s) — the generated orchestrator
+> ran on OpenRouter and delegated to the named `primary_producer` sub_recipe. This
+> closes the master integration plan's final Phase-1 sign-off (the previously
+> "not yet run" live delegation).
+
 ---
 
 ## 6. Validate & troubleshoot
