@@ -2,7 +2,7 @@
 .SH NAME
 agentteams \- Generate a complete agent team for any project.
 .SH SYNOPSIS
-.B agentteams [--description PATH] [--project PATH] [--framework NAME] [--output DIR] [--dry-run] [--json] [--overwrite] [--merge] [--yes] [--no-scan] [--cost-routing] [--update] [--prune] [--adopt-orphans] [--check] [--refresh-index] [--query-index TEXT] [--query-k N] [--query-strategy QUERY_STRATEGY] [--fail-on-legacy-skip] [--no-vscode-tasks] [--no-add-fence-markers] [--scan-security] [--check-budget] [--self] [--allow-external-self-output] [--post-audit] [--auto-correct] [--enrich] [--strict-manual-placeholders] [--no-strict-manual-placeholders] [--security-offline] [--security-max-items N] [--security-no-nvd] [--migrate] [--convert-from DIR] [--interop-from DIR] [--interop-source-framework INTEROP_SOURCE_FRAMEWORK] [--interop-mode INTEROP_MODE] [--bridge-from DIR] [--bridge-source-framework BRIDGE_SOURCE_FRAMEWORK] [--bridge-check] [--bridge-refresh] [--bridge-merge] [--bridge-no-skills] [--recipe-check] [--revert-migration] [--version] [--no-backup] [--shrink-policy SHRINK_POLICY] [--list-backups] [--restore-backup TIMESTAMP] [--add-fence-markers PATH] [--in-place] [--target-host-features TOKENS] [--capture-baseline PATH] [--baseline-label LABEL] [--check-baseline PATH] [--verify-waivers] [--verify-integrity] [--verify-backup TIMESTAMP] [--stale-check] [--stale-remediate] [--stale-no-git] [--stale-restore TS] [--prune-backups KEEP] [--keep-within-days DAYS] [--backup-mirror DIR] [--fleet DIR] [--fleet-frameworks FLEET_FRAMEWORKS] [--fleet-report DIR]
+.B agentteams [--description PATH] [--project PATH] [--framework NAME] [--output DIR] [--dry-run] [--json] [--overwrite] [--merge] [--yes] [--no-scan] [--cost-routing] [--update] [--prune] [--adopt-orphans] [--check] [--refresh-index] [--query-index TEXT] [--query-k N] [--query-strategy QUERY_STRATEGY] [--fail-on-legacy-skip] [--no-vscode-tasks] [--no-add-fence-markers] [--scan-security] [--check-budget] [--self] [--allow-external-self-output] [--post-audit] [--auto-correct] [--enrich] [--strict-manual-placeholders] [--no-strict-manual-placeholders] [--security-offline] [--security-max-items N] [--security-no-nvd] [--migrate] [--convert-from DIR] [--interop-from DIR] [--interop-source-framework INTEROP_SOURCE_FRAMEWORK] [--interop-mode INTEROP_MODE] [--bridge-from DIR] [--bridge-source-framework BRIDGE_SOURCE_FRAMEWORK] [--bridge-check] [--bridge-refresh] [--bridge-merge] [--bridge-no-skills] [--recipe-check] [--revert-migration] [--version] [--no-backup] [--shrink-policy SHRINK_POLICY] [--list-backups] [--restore-backup TIMESTAMP] [--add-fence-markers PATH] [--in-place] [--target-host-features TOKENS] [--capture-baseline PATH] [--baseline-label LABEL] [--check-baseline PATH] [--verify-waivers] [--verify-integrity] [--verify-backup TIMESTAMP] [--stale-check] [--stale-remediate] [--stale-no-git] [--stale-restore TS] [--prune-backups KEEP] [--keep-within-days DAYS] [--backup-mirror DIR] [--fleet DIR] [--fleet-frameworks FLEET_FRAMEWORKS] [--fleet-report DIR] [--goose-source NAME] [--goose-model ID] [--goose-show] [--goose-config PATH]
 .SH DESCRIPTION
 .PP
 Generate a complete agent team for any project.
@@ -224,6 +224,18 @@ Which infrastructures to update per workspace (default: both). `both` = copilot\
 .TP
 .B \-\-fleet\-report DIR
 Directory for the fleet report (default: <DIR>/.agentteams\-fleet/<run\-id>/).
+.TP
+.B \-\-goose\-source NAME
+Switch Goose's provider in config.yaml (e.g. ollama, openrouter). Applies that source's default model unless \-\-goose\-model is given.
+.TP
+.B \-\-goose\-model ID
+Set Goose's model in config.yaml (with \-\-goose\-source: that source's model; alone: the current provider's model).
+.TP
+.B \-\-goose\-show
+Show the resolved config.yaml path, current provider/model, any masking env override, and the known sources.
+.TP
+.B \-\-goose\-config PATH
+Override the goose config.yaml path (else resolved via goose info / XDG).
 .SH EXIT STATUS
 .TP
 .B 0

@@ -51,6 +51,11 @@ nav:
       - Cross-Repository Coordination: cross-repository-coordination-guide.md
       - Working with Your Generated Team: working-with-your-generated-team-guide.md
       - Verification Environment: verification-environment.md
+  - Goose:
+      - System Prep & Source/Model Switch: goose-system-prep.md
+      - Cheat Sheet: goose-cheat-sheet.md
+      - Cloud Providers: goose-cloud-providers.md
+      - Privileges: goose-privileges.md
   - API Reference:
       - Overview: api-reference/index.md
       - ingest: api-reference/ingest.md

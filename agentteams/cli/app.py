@@ -286,6 +286,17 @@ def main(argv: list[str] | None = None) -> int:
         )
 
     # -----------------------------------------------------------------------
+    # --goose-source/--goose-model/--goose-show: standalone Goose config switch
+    # -----------------------------------------------------------------------
+    if (
+        getattr(args, "goose_source", None)
+        or getattr(args, "goose_model", None)
+        or getattr(args, "goose_show", False)
+    ):
+        from agentteams.cli.goose_switch import run_goose_switch
+        return run_goose_switch(args)
+
+    # -----------------------------------------------------------------------
     # --recipe-check: standalone Goose recipe YAML structural validation
     # -----------------------------------------------------------------------
     if getattr(args, "recipe_check", False):
