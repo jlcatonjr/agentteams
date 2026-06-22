@@ -244,7 +244,7 @@ _CONTROL_EVIDENCE_ROWS: list[dict[str, str]] = [
         "control_id": "CTRL-10",
         "layer": "continuous control drift",
         "test_id": "scripts/run_daily_security_maintenance.sh",
-        "enforcement_point": "daily security maintenance pipeline",
+        "enforcement_point": "daily security maintenance pipeline (.github/workflows/security-maintenance.yml; scheduled 09:00 EDT + workflow_dispatch fallback)",
         "status": "implemented",
     },
 ]
