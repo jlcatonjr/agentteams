@@ -21,6 +21,7 @@ agents:
   - quality-auditor
   - cohesion-repairer
   - style-guardian
+  - technical-validator
   - format-converter
   - reference-manager
   - output-compiler
@@ -46,6 +47,10 @@ handoffs:
   - label: Enforce Style / Standards
     agent: style-guardian
     prompt: "A deliverable is ready for style audit. Provide the file path."
+    send: false
+  - label: Validate Technical Accuracy
+    agent: technical-validator
+    prompt: "Audit technical accuracy of claims, code, or specifications in a deliverable. Provide the file path."
     send: false
   - label: Convert / Transform Output
     agent: format-converter

@@ -3,9 +3,13 @@ name: Work Summarizer — ResearchPaperProject
 description: "Synthesizes daily, weekly, and monthly work summaries from canonical plan artifacts and git evidence for ResearchPaperProject; supports append-first daily capture, legacy tmp/ fallback, and required adversarial/conflict audits"
 user-invokable: true
 tools: ['read', 'search', 'execute', 'edit', 'agent']
-agents: ['adversarial', 'conflict-auditor']
+agents: ['technical-validator', 'adversarial', 'conflict-auditor']
 model: ["Claude Sonnet 4.6 (copilot)"]
 handoffs:
+  - label: Verify Summary Accuracy
+    agent: technical-validator
+    prompt: "Work summary drafted. Verify factual claims (paths, hashes, counts) against on-disk state and git history."
+    send: false
   - label: Run Adversarial Audit
     agent: adversarial
     prompt: "Work summary drafted. Run a presupposition and cascade-risk audit before finalization."
@@ -20,6 +24,7 @@ handoffs:
     send: false
 ---
 <!-- AGENTTEAMS:BEGIN content v=1 -->
+
 # Work Summarizer — ResearchPaperProject
 
 You produce evidence-backed daily, weekly, and monthly work summaries for this repository.

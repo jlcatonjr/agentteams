@@ -61,9 +61,10 @@ _ARCHETYPE_TRIGGERS: list[tuple[list[str], str]] = [
     (["chapter", "essay", "paper", "book", "documentation", "doc", "report", "writing"], "cohesion-repairer"),
     # style-guardian: any project with a style reference or writing output
     (["style", "voice", "tone", "brand", "editorial", "chapter", "essay", "paper"], "style-guardian"),
-    # technical-validator: code, data, or technical projects
+    # technical-validator: code/data/technical projects AND academic/research work, whose
+    # deliverables make verifiable claims against authority sources (its core job).
     (["python", "javascript", "rust", "go", "java", "code", "api", "function", "module", "script",
-      "pipeline", "data", "sql", "database", "csv", "json", "yaml"], "technical-validator"),
+      "pipeline", "data", "sql", "database", "csv", "json", "yaml", "academic", "thesis"], "technical-validator"),
     # format-converter: any project producing a compiled output
     (["latex", "pdf", "pandoc", "html", "markdown", "compile", "build", "convert", "manuscript"], "format-converter"),
     # reference-manager: any project with citations or bibliography

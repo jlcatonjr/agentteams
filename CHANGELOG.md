@@ -164,6 +164,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### fixed
 
+- **`technical-validator` now selected for academic/research projects.** Added
+  `academic`/`thesis` to the `technical-validator` archetype trigger in
+  `analyze.py`. Research deliverables make verifiable claims against authority
+  sources — exactly what `technical-validator` checks — but the `research-project`
+  example shipped without it, leaving the universal orchestrator/content-enricher
+  handoffs to `@technical-validator` dangling (9 cross-ref warnings). Regenerated
+  the `research-project` example snapshot (adds `technical-validator.agent.md`; no
+  other example's selection or snapshot changes). Audited (adversarial + conflict).
 - **Adversarial + conflict audit pass across scripts and docs.** Two-track audit
   (presupposition critique + drift/contradiction detection) over the package and
   documentation, with revisions: fixed a CI-red `check-durable-tmp-refs.sh`

@@ -3,12 +3,16 @@ name: Output Compiler — ResearchPaperProject
 description: "Assembles all converted components into a final deliverable package for ResearchPaperProject — dependency check, ordering, build manifest"
 user-invokable: false
 tools: ['read', 'edit', 'execute']
-agents: ['format-converter']
+agents: ['format-converter', 'technical-validator']
 model: ["Claude Sonnet 4.6 (copilot)"]
 handoffs:
   - label: Convert Missing Components
     agent: format-converter
     prompt: "Component needs conversion before assembly. Convert first."
+    send: false
+  - label: Validate Technical Accuracy
+    agent: technical-validator
+    prompt: "Validate technical accuracy before final assembly."
     send: false
   - label: Return to Orchestrator
     agent: orchestrator
@@ -16,6 +20,7 @@ handoffs:
     send: false
 ---
 <!-- AGENTTEAMS:BEGIN content v=1 -->
+
 # Output Compiler — ResearchPaperProject
 
 You assemble all converted components into the final deliverable package for ResearchPaperProject.

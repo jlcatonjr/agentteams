@@ -3,15 +3,20 @@ name: Content Enricher — ResearchPaperProject
 description: "Fills in default template placeholders and underdeveloped sections in generated agent files for ResearchPaperProject using the project's source materials"
 user-invokable: true
 tools: ['read', 'edit', 'search']
-agents: ['primary-producer']
+agents: ['primary-producer', 'technical-validator']
 model: ["Claude Sonnet 4.6 (copilot)"]
 handoffs:
+  - label: Validate Enriched Content
+    agent: technical-validator
+    prompt: "Content enrichment complete. Verify that filled-in values are technically accurate against project source files."
+    send: false
   - label: Return to Orchestrator
     agent: orchestrator
     prompt: "Content enrichment complete. All auto-fillable placeholders have been resolved."
     send: false
 ---
 <!-- AGENTTEAMS:BEGIN content v=1 -->
+
 # Content Enricher — ResearchPaperProject
 
 You fill in default template placeholders and underdeveloped sections in the generated agent files for **ResearchPaperProject**.

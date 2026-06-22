@@ -3,7 +3,7 @@ name: Conflict Auditor — ResearchPaperProject
 description: "Detects logical conflicts across deliverables, agent documentation, reference files, and source material in ResearchPaperProject"
 user-invokable: false
 tools: ['read', 'search']
-agents: ['conflict-resolution', 'agent-updater']
+agents: ['conflict-resolution', 'agent-updater', 'technical-validator']
 model: ["Claude Sonnet 4.6 (copilot)"]
 handoffs:
   - label: Return to Orchestrator
@@ -18,8 +18,12 @@ handoffs:
     agent: conflict-resolution
     prompt: "Conflicts have been identified and logged. Make ACCEPT/REJECT/REVISE decisions."
     send: false
+  - label: Verify Source Drift
+    agent: technical-validator
+    prompt: "SOURCE_DRIFT conflict detected. Verify deliverable description against current source file on disk."
     send: false
 ---
+
 <!--
 SECTION MANIFEST — conflict-auditor.template.md
 | section_id                 | designation   | notes                              |
