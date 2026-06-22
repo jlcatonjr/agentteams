@@ -45,6 +45,8 @@ def detect_framework(source_dir: Path) -> str:
     parts = set(source_dir.parts)
     if ".claude" in parts:
         return "claude"
+    if ".goose" in parts:           # .goose/recipes — a Goose-native source team
+        return "goose"
     if ".github" in parts and "copilot" in parts:
         return "copilot-cli"
 

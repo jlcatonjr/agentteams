@@ -45,11 +45,13 @@ _KNOWN_FEATURES: dict[str, frozenset[str]] = {
     "bridge:copilot-vscode-to-copilot-cli": frozenset({"manifest-routing"}),
     "bridge:copilot-cli-to-claude": frozenset({"subagents", "hooks"}),
     # goose-target bridges: `mcp` wires selected MCP servers into the emitted
-    # bridge-orchestrator recipe (opt-in). The `developer` (CLI) extension is always
-    # emitted by the bridge recipe regardless of this token.
-    "bridge:copilot-vscode-to-goose": frozenset({"mcp"}),
-    "bridge:claude-to-goose": frozenset({"mcp"}),
-    "bridge:copilot-cli-to-goose": frozenset({"mcp"}),
+    # bridge-orchestrator recipe (opt-in). `subagents` additionally emits one thin
+    # stub recipe per source agent into .goose/recipes/ (pointers to the canonical
+    # source; opt-in, default off). The `developer` (CLI) extension is always
+    # emitted by the bridge recipe regardless of these tokens.
+    "bridge:copilot-vscode-to-goose": frozenset({"mcp", "subagents"}),
+    "bridge:claude-to-goose": frozenset({"mcp", "subagents"}),
+    "bridge:copilot-cli-to-goose": frozenset({"mcp", "subagents"}),
 }
 
 

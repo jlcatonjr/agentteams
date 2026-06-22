@@ -16,6 +16,25 @@ from typing import Any
 
 _INSTRUCTIONS_NAMES = {"copilot-instructions.md", "CLAUDE.md"}
 
+# Goose-source recipe metadata (hand-built YAML; regex parse, no YAML dep).
+_RECIPE_TITLE_RE = re.compile(r"^title:\s*(.+?)\s*$", re.MULTILINE)
+_RECIPE_DESC_RE = re.compile(r"^description:\s*(.+?)\s*$", re.MULTILINE)
+_RECIPE_PROMPT_RE = re.compile(r"^prompt:", re.MULTILINE)
+
+
+def _parse_recipe_meta(text: str) -> tuple[str, str, str]:
+    """Return (title, description, invokable) from a Goose recipe YAML.
+
+    ``invokable`` is "yes" for entry recipes — those with ``sub_recipes:`` (an
+    orchestrator) or a ``prompt:`` (a non-interactive entry) — else "no".
+    """
+    t = _RECIPE_TITLE_RE.search(text)
+    d = _RECIPE_DESC_RE.search(text)
+    title = t.group(1).strip().strip('"') if t else ""
+    desc = d.group(1).strip().strip('"') if d else ""
+    invokable = "yes" if ("sub_recipes:" in text or _RECIPE_PROMPT_RE.search(text)) else "no"
+    return title, desc, invokable
+
 
 def _extract_inventory(source_dir: Path, source_framework: str) -> list[dict[str, str]]:
     rows: list[dict[str, str]] = []
@@ -26,6 +45,23 @@ def _extract_inventory(source_dir: Path, source_framework: str) -> list[dict[str
         name = file.name
         if name in _INSTRUCTIONS_NAMES or name == "SETUP-REQUIRED.md":
             continue
+
+        if source_framework == "goose":
+            if not name.endswith(".yaml"):
+                continue
+            text = file.read_text(encoding="utf-8")
+            title, desc, invokable = _parse_recipe_meta(text)
+            display_name = title or _slug_to_name(name[: -len(".yaml")])
+            rows.append(
+                {
+                    "display_name": display_name,
+                    "invokable": invokable,
+                    "role": desc,
+                    "source_file": str(file),
+                }
+            )
+            continue
+
         if source_framework == "copilot-vscode" and not name.endswith(".agent.md"):
             continue
         if source_framework != "copilot-vscode" and not name.endswith(".md"):
@@ -49,14 +85,17 @@ def _extract_inventory(source_dir: Path, source_framework: str) -> list[dict[str
     return rows
 
 
-def _collect_source_files(source_dir: Path) -> list[Path]:
+def _collect_source_files(source_dir: Path, source_framework: str = "copilot-vscode") -> list[Path]:
+    # Hash only the source framework's agent-definition files: markdown for
+    # claude/copilot (`.md`, incl. `.agent.md`), recipe YAML for a Goose source
+    # (`.yaml`). This excludes build-tool artifacts (`_build-description.json`,
+    # a `.json`), OS/editor junk (`.DS_Store`), and any other file that would
+    # otherwise enter the manifest and trip `--bridge-check` on changes unrelated
+    # to the agent team — for every source framework.
+    ext = ".yaml" if source_framework == "goose" else ".md"
     files: list[Path] = []
     for p in sorted(source_dir.iterdir()):
-        # Hash only markdown source definitions (agent + instruction files). This
-        # excludes build-tool artifacts (`_build-description.json`), OS/editor junk
-        # (`.DS_Store`), and any other non-`.md` file that would otherwise enter the
-        # manifest and trip `--bridge-check` on changes unrelated to the agent team.
-        if p.is_file() and p.name.endswith(".md") and p.name != "SETUP-REQUIRED.md":
+        if p.is_file() and p.name.endswith(ext) and p.name != "SETUP-REQUIRED.md":
             files.append(p)
     for name in sorted(_INSTRUCTIONS_NAMES):
         parent_candidate = source_dir.parent / name

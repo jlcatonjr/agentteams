@@ -110,14 +110,19 @@ def run_bridge(
         raise FileNotFoundError(f"Source directory not found: {source_dir}")
 
     src_fw = source_framework or detect_framework(source_dir)
-    if src_fw not in {"copilot-vscode", "copilot-cli", "claude"}:
+    if src_fw not in {"copilot-vscode", "copilot-cli", "claude", "goose"}:
         raise ValueError(f"Unknown source framework {src_fw!r}")
     if target_framework not in {"copilot-vscode", "copilot-cli", "claude", "goose"}:
         raise ValueError(f"Unknown target framework {target_framework!r}")
+    if src_fw == "goose" and target_framework == "goose":
+        raise ValueError(
+            "goose-to-goose bridge is meaningless; bridge a Goose source to "
+            "claude/copilot-vscode/copilot-cli."
+        )
 
     result = BridgeResult(dry_run=dry_run, check_only=check_only)
     inventory = _extract_inventory(source_dir, src_fw)
-    source_files = _collect_source_files(source_dir)
+    source_files = _collect_source_files(source_dir, src_fw)
     source_hashes = _compute_hash_rows(source_files, source_dir)
 
     pair_dir = output_root / "references" / "bridges" / f"{src_fw}-to-{target_framework}"
@@ -392,6 +397,32 @@ def run_bridge(
                 f"Collapsed {len(stub_result.experts_collapsed)} workstream-expert "
                 f"agent(s) into a single parametric stub: "
                 f"{', '.join(stub_result.experts_collapsed)}"
+            )
+
+    # P3: emit Goose subagent-stub recipes (one per source agent) into
+    # .goose/recipes/. Opt-in via bridge:<src>-to-goose:subagents; default off so
+    # the pointer bridge stays byte-identical. Reserved/bridge-owned slugs are
+    # skipped and existing recipes are never overwritten (see bridge_subagents_goose).
+    if (
+        target_framework == "goose"
+        and f"bridge:{src_fw}-to-goose:subagents" in features
+    ):
+        from agentteams.bridge_subagents_goose import emit_goose_subagent_stubs
+
+        goose_stub_result = emit_goose_subagent_stubs(
+            source_dir=source_dir,
+            output_root=output_root,
+            source_framework=src_fw,
+            dry_run=dry_run,
+        )
+        result.written.extend(goose_stub_result.written)
+        result.skipped.extend(goose_stub_result.skipped)
+        result.errors.extend(goose_stub_result.errors)
+        if goose_stub_result.written:
+            result.notices.append(
+                f"Emitted {len(goose_stub_result.written)} Goose subagent-stub "
+                "recipe(s) into .goose/recipes/ (opt-in pointers to canonical source "
+                "agents; use --convert-from for full per-agent recipes)."
             )
 
     # Phase 1: emit the todo-from-plan skill so the bridged orchestrator

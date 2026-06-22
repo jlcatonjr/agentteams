@@ -153,6 +153,28 @@ For full OpenRouter model validation, run `python scripts/goose-openrouter-prefl
 
 ---
 
+## 3c. Bridge a Goose team to/from other frameworks
+
+Goose is a first-class bridge **source and target** — a `.goose/recipes/` team can be
+bridged to claude/copilot, and any source can be bridged to Goose.
+
+```sh
+# Bridge a Goose-native team OUT to Claude (auto-detected from the .goose/recipes path):
+agentteams --bridge-from <project>/.goose/recipes --framework claude --output <target> --bridge-merge
+
+# Per-agent stub recipes (opt-in): one thin .goose/recipes/<slug>.yaml per source agent,
+# each a pointer to the canonical source. Default off; reserved/owned slugs are skipped and
+# existing recipes are never overwritten. (For full per-agent recipes, use --convert-from.)
+agentteams --bridge-from <project>/.github/agents --framework goose --output <target> \
+  --bridge-merge --target-host-features bridge:copilot-vscode-to-goose:subagents
+```
+
+The Goose-source inventory is read from each recipe's `title:`/`description:`; only `.yaml`
+recipes are hashed for `--bridge-check` (build artifacts and junk are excluded, same as the
+markdown-source path).
+
+---
+
 ## 4. MCP servers (for teams built with MCP)
 
 agentteams wires operator-specified MCP servers into Goose recipes **opt-in**:
