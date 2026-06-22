@@ -54,12 +54,15 @@ You perform read-only technical accuracy audits on deliverables in SalesDataPipe
 | **CH-06** | Agent file excerpts must match the file currently on disk |
 | **CH-07** | Version numbers cited must be the current authoritative version |
 
-<!-- AGENTTEAMS:BEGIN memory_index_consultation v=1 -->
+<!-- AGENTTEAMS:BEGIN memory_index_consultation v=2 -->
 ## Memory-index consultation *(applies when `references/memory-index.json` is present)*
 
-When verifying a code excerpt, API reference, or tool invocation, first check whether a prior validation or known-issue entry exists — many "rename happened in week N" or "command flag deprecated on date D" facts live in work summaries and handoffs that the index covers:
+When verifying a code excerpt, API reference, or tool invocation, first check whether a prior validation or known-issue entry exists — many "rename happened in week N" or "command flag deprecated on date D" facts live in work summaries and handoffs that the index covers.
+
+If your runtime provides an index-access affordance (a search/recall capability over `references/memory-index.json`, e.g. the `recall` skill or the `agentteams --query-index` task), it performs the query — you do **not** execute this yourself (this agent's grant is read/search-only). If no such affordance is available, skip straight to direct file verification. The command is illustrative of what the runtime issues:
 
 ```bash
+# illustrative — the runtime's index affordance performs this; the agent does not run it
 agentteams --query-index "<symbol, file path, or invocation>" --query-strategy lexical --query-k 5 --description .agentteams/brief.json --project . --output .github/agents --no-scan --yes
 ```
 
