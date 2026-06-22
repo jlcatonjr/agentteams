@@ -135,6 +135,20 @@ def run_bridge(
         "bridge_version": "1",
     }
 
+    # Empty-inventory guard (generate path only — check_only returned above). A
+    # bridge with zero agents has nothing to route to and is almost always the
+    # result of a wrong --bridge-from (e.g. the repo root instead of the agents
+    # dir). Surface it loudly rather than shipping a non-functional bridge silently.
+    # Kept a notice, not a hard error: a legitimately nascent team may have no
+    # agents yet, and failing would break a previously-passing input (STABILITY.md).
+    if len(inventory) == 0:
+        result.notices.append(
+            f"Empty bridge inventory: no agents found in source dir {source_dir} — "
+            f"the generated bridge has nothing to route to. Re-run with "
+            f"--bridge-from pointing at the agents directory (e.g. "
+            f"<project>/.github/agents for copilot-vscode sources)."
+        )
+
     # Bridge-internal artifacts: always regenerated regardless of mode.
     bridge_files: list[tuple[Path, str]] = []
     bridge_files.append((manifest_path, json.dumps(manifest, indent=2) + "\n"))
@@ -472,7 +486,11 @@ def _extract_inventory(source_dir: Path, source_framework: str) -> list[dict[str
 def _collect_source_files(source_dir: Path) -> list[Path]:
     files: list[Path] = []
     for p in sorted(source_dir.iterdir()):
-        if p.is_file() and p.name != "SETUP-REQUIRED.md":
+        # Hash only markdown source definitions (agent + instruction files). This
+        # excludes build-tool artifacts (`_build-description.json`), OS/editor junk
+        # (`.DS_Store`), and any other non-`.md` file that would otherwise enter the
+        # manifest and trip `--bridge-check` on changes unrelated to the agent team.
+        if p.is_file() and p.name.endswith(".md") and p.name != "SETUP-REQUIRED.md":
             files.append(p)
     for name in sorted(_INSTRUCTIONS_NAMES):
         parent_candidate = source_dir.parent / name
@@ -530,9 +548,22 @@ def _run_bridge_check(*, manifest_path: Path, source_hash_rows: list[dict[str, s
     missing_paths = sorted(set(expected.keys()) - set(actual.keys()))
     extra_paths = sorted(set(actual.keys()) - set(expected.keys()))
 
-    ok = not stale_paths and not missing_paths and not extra_paths
+    # A 0-agent manifest is a broken bridge (almost always a wrong --bridge-from):
+    # fail the freshness check so a non-functional bridge cannot pass silently even
+    # when its source hashes are self-consistent.
+    empty_inventory = manifest.get("inventory_count") == 0
+
+    ok = not stale_paths and not missing_paths and not extra_paths and not empty_inventory
 
     lines = ["# Bridge Check Report", "", f"Result: {'PASS' if ok else 'FAIL'}", ""]
+    if empty_inventory:
+        lines.append("## Empty Inventory")
+        lines.append(
+            "- bridge-manifest.json records inventory_count: 0 — the bridge has no "
+            "agents to route to. Regenerate with --bridge-from pointing at the agents "
+            "directory (e.g. <project>/.github/agents)."
+        )
+        lines.append("")
     if stale_paths:
         lines.append("## Changed Source Files")
         lines.extend([f"- {p}" for p in stale_paths])

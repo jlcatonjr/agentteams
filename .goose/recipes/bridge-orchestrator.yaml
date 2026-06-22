@@ -1,0 +1,13 @@
+version: "1.0.0"
+title: "Bridge Orchestrator (copilot-vscode → goose)"
+description: "Entry recipe for the copilot-vscode-bridged team; guarantees the developer (CLI) extension and any opted-in MCP server extensions."
+prompt: "State your role. For the request 'produce a deliverable for this team', name the correct workflow and the first agent you would route to."
+instructions: |
+  You are the orchestrator entry point for a team bridged from `copilot-vscode`.
+  Canonical agent definitions live in the source framework's files — read `references/bridges/copilot-vscode-to-goose/agent-inventory.md` and `references/bridges/copilot-vscode-to-goose/quickstart-snippet.md`, adopt the orchestrator identity and constitutional rules, and route work orchestrator-first.
+  Do not bypass the orchestrator for multi-step, destructive, or cross-repo work.
+extensions:
+  - type: builtin
+    name: developer
+    bundled: true
+    timeout: 300

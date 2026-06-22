@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import json
 from pathlib import Path
 
 import pytest
@@ -665,3 +666,113 @@ def test_bridge_merge_backs_up_existing_targets(tmp_path: Path):
     snapshots = [p for p in backups.iterdir() if p.is_dir()]
     assert snapshots, "expected at least one timestamped backup snapshot"
 
+
+
+# ---------------------------------------------------------------------------
+# Empty-inventory guard (R1) and markdown-only source hashing (R2)
+# Regression coverage for the 2026-06-22 goose-bridge remediation. See
+# references/plans/goose-bridge-remediation-2026-06-22.plan.md.
+# ---------------------------------------------------------------------------
+
+
+def test_empty_inventory_emits_notice_on_generate(tmp_path: Path):
+    """A source dir with no agent files yields a 0-agent bridge → loud notice (R1a)."""
+    source_dir = tmp_path / "src" / ".github" / "agents"
+    source_dir.mkdir(parents=True)  # deliberately empty: no *.agent.md files
+
+    result = run_bridge(
+        source_dir=source_dir,
+        source_framework="copilot-vscode",
+        target_framework="goose",
+        output_root=tmp_path / "out",
+        dry_run=False,
+        overwrite=True,
+        check_only=False,
+    )
+
+    # Generation still succeeds (notice, not a hard error — STABILITY.md).
+    assert result.success, f"errors: {result.errors}"
+    assert any("Empty bridge inventory" in n for n in result.notices), result.notices
+    assert any(".github/agents" in n for n in result.notices), result.notices
+
+
+def test_populated_inventory_emits_no_empty_notice(tmp_path: Path):
+    """The R1a notice fires strictly on len(inventory) == 0 (guards notices==[] tests)."""
+    source_dir = tmp_path / "src" / ".github" / "agents"
+    _build_source("copilot-vscode", source_dir)  # one orchestrator agent
+
+    result = run_bridge(
+        source_dir=source_dir,
+        source_framework="copilot-vscode",
+        target_framework="goose",
+        output_root=tmp_path / "out",
+        dry_run=False,
+        overwrite=True,
+        check_only=False,
+    )
+    assert result.success
+    assert not any("Empty bridge inventory" in n for n in result.notices), result.notices
+
+
+def test_bridge_check_fails_on_empty_inventory(tmp_path: Path):
+    """--bridge-check must FAIL a 0-inventory manifest even when hashes are consistent (R1b)."""
+    source_dir = tmp_path / "src" / ".github" / "agents"
+    source_dir.mkdir(parents=True)  # empty source
+    out_root = tmp_path / "out"
+
+    generated = run_bridge(
+        source_dir=source_dir,
+        source_framework="copilot-vscode",
+        target_framework="claude",
+        output_root=out_root,
+        dry_run=False,
+        overwrite=True,
+        check_only=False,
+    )
+    assert generated.success  # generation succeeds with the empty-inventory notice
+
+    checked = run_bridge(
+        source_dir=source_dir,
+        source_framework="copilot-vscode",
+        target_framework="claude",
+        output_root=out_root,
+        dry_run=False,
+        overwrite=False,
+        check_only=True,
+    )
+    assert not checked.success
+    assert checked.check_ok is False
+    text = Path(checked.check_report_path).read_text(encoding="utf-8")
+    assert "FAIL" in text
+    assert "Empty Inventory" in text
+
+
+def test_source_hashes_exclude_non_markdown_junk(tmp_path: Path):
+    """Build artifacts and OS junk must not enter the manifest hash set (R2)."""
+    source_dir = tmp_path / "src" / ".github" / "agents"
+    _build_source("copilot-vscode", source_dir)
+    # The real-world offenders: a gitignored build-tool artifact and macOS junk.
+    (source_dir / "_build-description.json").write_text('{"project_name": "Demo"}', encoding="utf-8")
+    (source_dir / ".DS_Store").write_bytes(b"\x00junk")
+
+    out_root = tmp_path / "out"
+    result = run_bridge(
+        source_dir=source_dir,
+        source_framework="copilot-vscode",
+        target_framework="claude",
+        output_root=out_root,
+        dry_run=False,
+        overwrite=True,
+        check_only=False,
+    )
+    assert result.success
+
+    manifest = json.loads(
+        (out_root / "references" / "bridges" / "copilot-vscode-to-claude" / "bridge-manifest.json")
+        .read_text(encoding="utf-8")
+    )
+    paths = [row["path"] for row in manifest["source_hashes"]]
+    assert not any("_build-description.json" in p for p in paths), paths
+    assert not any(".DS_Store" in p for p in paths), paths
+    # Sanity: the genuine agent definition IS still hashed.
+    assert any(p.endswith("orchestrator.agent.md") for p in paths), paths
