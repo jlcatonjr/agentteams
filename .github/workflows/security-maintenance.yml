@@ -1,6 +1,8 @@
-name: Manual AgentTeams Security Maintenance (Fallback)
+name: AgentTeams Security Maintenance (Daily + Manual Fallback)
 
 on:
+  schedule:
+    - cron: '0 13 * * *'  # 09:00 EDT (UTC-4) / 08:00 EST (UTC-5), daily
   workflow_dispatch:
 
 permissions:
