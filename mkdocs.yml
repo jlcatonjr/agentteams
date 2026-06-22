@@ -94,6 +94,7 @@ nav:
       - schedule-emit: api-reference/schedule-emit.md
       - mcp-detect: api-reference/mcp-detect.md
       - mcp-emit: api-reference/mcp-emit.md
+      - goose-config: api-reference/goose-config.md
       - pr-management: api-reference/pr-management.md
   - Template Authoring: template-authoring.md
   - Description Format: DESCRIPTION-FORMAT.md
