@@ -1,0 +1,325 @@
+{
+  "version": "2.0.0",
+  "tasks": [
+    {
+      "label": "install: editable + test deps",
+      "type": "shell",
+      "command": "pip install -e \".[test]\"",
+      "group": { "kind": "build", "isDefault": true },
+      "presentation": { "reveal": "always", "panel": "shared", "clear": true },
+      "problemMatcher": [],
+      "detail": "Install agentteams in editable mode with pytest + pyyaml (CI: pip install -e .[test])."
+    },
+    {
+      "label": "install: editable (runtime only)",
+      "type": "shell",
+      "command": "pip install -e .",
+      "group": "build",
+      "presentation": { "reveal": "always", "panel": "shared" },
+      "problemMatcher": [],
+      "detail": "Install the runtime package only (no test extras)."
+    },
+    {
+      "label": "test: full suite",
+      "type": "shell",
+      "command": "python -m pytest tests/ -v",
+      "group": { "kind": "test", "isDefault": true },
+      "presentation": { "reveal": "always", "panel": "shared", "clear": true },
+      "problemMatcher": [],
+      "detail": "Run the full test suite verbosely (README: python -m pytest tests/ -v)."
+    },
+    {
+      "label": "test: quiet",
+      "type": "shell",
+      "command": "python -m pytest tests/ -q",
+      "group": "test",
+      "presentation": { "reveal": "always", "panel": "shared" },
+      "problemMatcher": [],
+      "detail": "Run the full test suite with minimal output."
+    },
+    {
+      "label": "test: current file",
+      "type": "shell",
+      "command": "python -m pytest \"${file}\" -v",
+      "group": "test",
+      "presentation": { "reveal": "always", "panel": "shared" },
+      "problemMatcher": [],
+      "detail": "Run pytest against the file currently open in the editor."
+    },
+    {
+      "label": "test: root doc hygiene",
+      "type": "shell",
+      "command": "python -m pytest tests/test_root_doc_hygiene.py -v",
+      "group": "test",
+      "presentation": { "reveal": "always", "panel": "shared" },
+      "problemMatcher": [],
+      "detail": "Enforces filing conventions: no stray plans/reports in the repo root (CLAUDE.md)."
+    },
+    {
+      "label": "verify: environment preflight",
+      "type": "shell",
+      "command": "python scripts/verify-env.py",
+      "group": "test",
+      "presentation": { "reveal": "always", "panel": "shared" },
+      "problemMatcher": [],
+      "detail": "Preflight check of the local development environment (CI: scripts/verify-env.py)."
+    },
+    {
+      "label": "verify: API <-> docs parity",
+      "type": "shell",
+      "command": "python scripts/check_api_doc_parity.py",
+      "group": "test",
+      "presentation": { "reveal": "always", "panel": "shared" },
+      "problemMatcher": [],
+      "detail": "Read-only check that the API reference covers every module (no drift)."
+    },
+    {
+      "label": "verify: durable -> tmp reference guard",
+      "type": "shell",
+      "command": "bash scripts/check-durable-tmp-refs.sh",
+      "group": "test",
+      "presentation": { "reveal": "always", "panel": "shared" },
+      "problemMatcher": [],
+      "detail": "RSR1 lint guard: fail when tracked source/CHANGELOG cite gitignored tmp/ paths as durable."
+    },
+    {
+      "label": "agentteams: self update (preview)",
+      "type": "shell",
+      "command": "agentteams --self --update --dry-run",
+      "group": "none",
+      "presentation": { "reveal": "always", "panel": "shared" },
+      "problemMatcher": [],
+      "detail": "Preview what a self-maintenance update would change, without writing."
+    },
+    {
+      "label": "agentteams: self update (apply)",
+      "type": "shell",
+      "command": "agentteams --self --update --merge --yes",
+      "group": "none",
+      "presentation": { "reveal": "always", "panel": "shared" },
+      "problemMatcher": [],
+      "detail": "Non-destructive merge-only self update (the core of daily security maintenance)."
+    },
+    {
+      "label": "agentteams: self regenerate meta-team",
+      "type": "shell",
+      "command": "agentteams --self",
+      "group": "none",
+      "presentation": { "reveal": "always", "panel": "shared" },
+      "problemMatcher": [],
+      "detail": "Regenerate this module's own meta-agent team (README: Self-maintenance)."
+    },
+    {
+      "label": "agentteams: help",
+      "type": "shell",
+      "command": "agentteams --help",
+      "group": "none",
+      "presentation": { "reveal": "always", "panel": "shared" },
+      "problemMatcher": [],
+      "detail": "Show all flags and usage."
+    },
+    {
+      "label": "agentteams: version",
+      "type": "shell",
+      "command": "agentteams --version",
+      "group": "none",
+      "presentation": { "reveal": "always", "panel": "shared" },
+      "problemMatcher": [],
+      "detail": "Confirm the installed version."
+    },
+    {
+      "label": "agentteams: check drift (brief)",
+      "type": "shell",
+      "command": "agentteams --description \"${input:descriptionFile}\" --check",
+      "group": "test",
+      "presentation": { "reveal": "always", "panel": "shared" },
+      "problemMatcher": [],
+      "detail": "Exit 0 = no drift, exit 1 = structural/knowledge drift detected."
+    },
+    {
+      "label": "agentteams: update (merge, brief)",
+      "type": "shell",
+      "command": "agentteams --description \"${input:descriptionFile}\" --update --merge",
+      "group": "none",
+      "presentation": { "reveal": "always", "panel": "shared" },
+      "problemMatcher": [],
+      "detail": "Re-render drifted files / emit new agents, preserving manual values."
+    },
+    {
+      "label": "agentteams: scan security (brief)",
+      "type": "shell",
+      "command": "agentteams --description \"${input:descriptionFile}\" --scan-security",
+      "group": "test",
+      "presentation": { "reveal": "always", "panel": "shared" },
+      "problemMatcher": [],
+      "detail": "Scan deployed agent files for PII, credentials, and unresolved placeholders."
+    },
+    {
+      "label": "agentteams: fleet update (preview)",
+      "type": "shell",
+      "command": "agentteams --fleet \"${input:fleetRoot}\" --update --merge",
+      "group": "none",
+      "presentation": { "reveal": "always", "panel": "shared" },
+      "problemMatcher": [],
+      "detail": "Dry-run preview of a multi-workspace merge update under a parent directory."
+    },
+    {
+      "label": "agentteams: fleet update (apply)",
+      "type": "shell",
+      "command": "agentteams --fleet \"${input:fleetRoot}\" --update --merge --yes",
+      "group": "none",
+      "presentation": { "reveal": "always", "panel": "shared" },
+      "problemMatcher": [],
+      "detail": "Apply the multi-workspace merge update (non-destructive, snapshots each workspace first)."
+    },
+    {
+      "label": "bridge: merge (safe, fenced-only)",
+      "type": "shell",
+      "command": "agentteams --bridge-from \"${input:bridgeSource}\" --framework \"${input:bridgeFramework}\" --output \"${input:bridgeOutput}\" --bridge-merge",
+      "group": "none",
+      "presentation": { "reveal": "always", "panel": "shared" },
+      "problemMatcher": [],
+      "detail": "Refresh only fenced (managed) bridge regions. Safe default; never use --bridge-refresh on shared files."
+    },
+    {
+      "label": "bridge: check freshness",
+      "type": "shell",
+      "command": "agentteams --bridge-from \"${input:bridgeSource}\" --framework \"${input:bridgeFramework}\" --output \"${input:bridgeOutput}\" --bridge-check",
+      "group": "test",
+      "presentation": { "reveal": "always", "panel": "shared" },
+      "problemMatcher": [],
+      "detail": "Validate bridge artifacts against source files (cannot be combined with --bridge-refresh)."
+    },
+    {
+      "label": "docs: serve (live preview)",
+      "type": "shell",
+      "command": "mkdocs serve",
+      "group": "none",
+      "presentation": { "reveal": "always", "panel": "dedicated", "focus": true },
+      "problemMatcher": [],
+      "detail": "Serve the MkDocs site locally with live reload."
+    },
+    {
+      "label": "docs: build site",
+      "type": "shell",
+      "command": "mkdocs build --site-dir _site",
+      "group": "build",
+      "presentation": { "reveal": "always", "panel": "shared" },
+      "problemMatcher": [],
+      "detail": "Build the static docs site (CI: .github/workflows/docs.yml)."
+    },
+    {
+      "label": "docs: install toolchain",
+      "type": "shell",
+      "command": "pip install \"mkdocs==1.6.1\" \"mkdocs-material==9.7.6\" pymdown-extensions",
+      "group": "build",
+      "presentation": { "reveal": "always", "panel": "shared" },
+      "problemMatcher": [],
+      "detail": "Install the pinned MkDocs toolchain used by the docs workflow."
+    },
+    {
+      "label": "man: regenerate agentteams.1",
+      "type": "shell",
+      "command": "python -m agentteams.man > agentteams.1",
+      "group": "build",
+      "presentation": { "reveal": "always", "panel": "shared" },
+      "problemMatcher": [],
+      "detail": "Regenerate the man page from the module."
+    },
+    {
+      "label": "man: verify up-to-date",
+      "type": "shell",
+      "command": "python -m agentteams.man > /tmp/agentteams-check.1 && diff /tmp/agentteams-check.1 agentteams.1",
+      "group": "test",
+      "presentation": { "reveal": "always", "panel": "shared" },
+      "problemMatcher": [],
+      "detail": "Fail if the committed man page drifts from the generated output (CI check)."
+    },
+    {
+      "label": "maintenance: daily security (self only)",
+      "type": "shell",
+      "command": "bash scripts/run_daily_security_maintenance.sh",
+      "group": "none",
+      "presentation": { "reveal": "always", "panel": "shared" },
+      "problemMatcher": [],
+      "detail": "Scoped to agentteams repo root: self update + security scan + regression tests + drift check."
+    },
+    {
+      "label": "maintenance: daily bridge (self only)",
+      "type": "shell",
+      "command": "bash scripts/run_daily_bridge_maintenance.sh",
+      "group": "none",
+      "presentation": { "reveal": "always", "panel": "shared" },
+      "problemMatcher": [],
+      "detail": "Scoped to agentteams repo root: bridge merge + freshness checks for maintained pairs."
+    },
+    {
+      "label": "pipeline: daily digest",
+      "type": "shell",
+      "command": "python scripts/daily_pipeline_digest.py",
+      "group": "none",
+      "presentation": { "reveal": "always", "panel": "shared" },
+      "problemMatcher": [],
+      "detail": "Aggregate the daily-pipeline quality digest."
+    },
+    {
+      "label": "research: claude-code docs (propose)",
+      "type": "shell",
+      "command": "python scripts/research_claude_code_docs.py --propose",
+      "group": "none",
+      "presentation": { "reveal": "always", "panel": "shared" },
+      "problemMatcher": [],
+      "detail": "Upstream research stage for Claude Code sub-agents; --propose drafts, --apply commits."
+    },
+    {
+      "label": "research: ai bad-habits (propose)",
+      "type": "shell",
+      "command": "python scripts/research_ai_bad_habits.py --propose",
+      "group": "none",
+      "presentation": { "reveal": "always", "panel": "shared" },
+      "problemMatcher": [],
+      "detail": "AI bad-habits catalog sync; --propose drafts, --apply commits."
+    },
+    {
+      "label": "Goose: Bridge Orchestrator",
+      "type": "shell",
+      "command": "goose run --recipe .goose/recipes/bridge-orchestrator.yaml",
+      "group": "none",
+      "presentation": { "reveal": "always", "panel": "dedicated", "focus": true },
+      "problemMatcher": [],
+      "detail": "Launch the Goose bridge orchestrator recipe in its own terminal."
+    }
+  ],
+  "inputs": [
+    {
+      "id": "descriptionFile",
+      "type": "promptString",
+      "description": "Path to the agentteams brief/description JSON",
+      "default": "brief.json"
+    },
+    {
+      "id": "fleetRoot",
+      "type": "promptString",
+      "description": "Parent directory containing agent-infrastructure workspaces",
+      "default": "."
+    },
+    {
+      "id": "bridgeSource",
+      "type": "promptString",
+      "description": "Source team agents directory (passed to --bridge-from)"
+    },
+    {
+      "id": "bridgeFramework",
+      "type": "pickString",
+      "description": "Target framework for the bridge",
+      "options": ["claude", "copilot-cli", "copilot-vscode", "goose"],
+      "default": "claude"
+    },
+    {
+      "id": "bridgeOutput",
+      "type": "promptString",
+      "description": "Output root for bridge artifacts",
+      "default": "."
+    }
+  ]
+}
