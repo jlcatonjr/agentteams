@@ -9,7 +9,9 @@ def test_daily_bridge_maintenance_script_contains_required_phases():
 
     text = script.read_text(encoding="utf-8")
     assert "Refusing to run outside agentteams repository root" in text
-    assert "targets=(\"copilot-cli\" \"claude\")" in text
+    # Goose was added to the daily maintenance loop (plan P4); the bridge is
+    # otherwise manually maintained and drifts after --self --update.
+    assert "targets=(\"copilot-cli\" \"claude\" \"goose\")" in text
     assert "--bridge-refresh" in text
     assert "--bridge-check" in text
     assert "Primary source bridge directory missing; using fallback" in text
