@@ -423,7 +423,33 @@ def build_manifest(description: dict[str, Any], *, framework: str = "copilot-vsc
     recipe_parameters = _normalize_recipe_parameters(description.get("recipe_parameters"))
     if recipe_parameters:
         manifest["recipe_parameters"] = recipe_parameters
+    # Phase-4b goose-native (opt-in): copy a declared Goose recipe response schema
+    # through to the manifest. Added only when valid, so manifests without one are
+    # byte-identical.
+    recipe_response = _normalize_recipe_response(description.get("recipe_response"))
+    if recipe_response:
+        manifest["recipe_response"] = recipe_response
     return manifest
+
+
+def _normalize_recipe_response(raw: Any) -> dict[str, Any] | None:
+    """Normalize a brief's ``recipe_response`` into a Goose recipe response schema.
+
+    Phase-4b goose-native (opt-in). Goose stores ``response.json_schema`` as a raw
+    value with no load-time validity check, so the only guard against a silently
+    useless block is here. Returns ``None`` (→ no ``response:`` emitted) unless
+    ``raw`` is a non-empty dict carrying a non-empty string ``type``. Tolerates the
+    common double-wrap ``{"json_schema": {...}}`` by unwrapping when the top level
+    has no ``type``. Otherwise lenient — goose validates the schema's internals.
+    """
+    if not isinstance(raw, dict) or not raw:
+        return None
+    schema = raw
+    if "type" not in schema and isinstance(schema.get("json_schema"), dict):
+        schema = schema["json_schema"]  # tolerate {"json_schema": {...}} double-wrap
+    if not isinstance(schema.get("type"), str) or not schema["type"]:
+        return None
+    return schema
 
 
 _RECIPE_PARAM_INPUT_TYPES = frozenset(

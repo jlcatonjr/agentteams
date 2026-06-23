@@ -30,6 +30,7 @@ intentionally avoids a YAML dependency and parses front matter with regex).
 
 from __future__ import annotations
 
+import json
 import re
 from pathlib import Path
 from typing import Any
@@ -59,6 +60,9 @@ _RECIPE_SUB_PATH_RE = re.compile(r'path:\s*"([^"]+)"')
 # Phase-4a: a `parameters:` block (when present) must list `- key:` entries.
 _RECIPE_PARAMETERS_RE = re.compile(r"^parameters:\s*$", re.MULTILINE)
 _RECIPE_PARAM_KEY_RE = re.compile(r'^\s+-\s+key:\s*"', re.MULTILINE)
+# Phase-4b: a `response:` block (when present) must carry a non-empty `json_schema:`.
+_RECIPE_RESPONSE_RE = re.compile(r"^response:\s*$", re.MULTILINE)
+_RECIPE_JSON_SCHEMA_RE = re.compile(r"^\s+json_schema:\s*\S", re.MULTILINE)
 
 # Forbidden-shape guards for emitted recipes (goose-integration.plan §6.5 gotchas).
 # These have no other validator backing, so a typo would otherwise pass silently.
@@ -163,6 +167,8 @@ def _validate_recipe_yaml(yaml_text: str, recipes_dir: Path | None = None) -> li
         violations.append("forbidden context: field (not a recipe field)")
     if _RECIPE_PARAMETERS_RE.search(yaml_text) and not _RECIPE_PARAM_KEY_RE.search(yaml_text):
         violations.append("parameters: block present but lists no '- key:' entries")
+    if _RECIPE_RESPONSE_RE.search(yaml_text) and not _RECIPE_JSON_SCHEMA_RE.search(yaml_text):
+        violations.append("response: block present but has no non-empty json_schema: value")
     if recipes_dir is not None:
         for path_val in _RECIPE_SUB_PATH_RE.findall(yaml_text):
             resolved = (recipes_dir / path_val).resolve()
@@ -234,6 +240,9 @@ class GooseAdapter(FrameworkAdapter):
                     f"{p['key']}={{{{ {p['key']} }}}}" for p in recipe_parameters
                 )
                 prompt = f"{prompt}\n\nRuntime inputs: {refs}"
+            # Phase-4b (opt-in): emit a declared response json_schema so goose
+            # validates the orchestrator's final output against it.
+            recipe_response = manifest.get("recipe_response") or None
             return _emit_recipe(
                 title=name,
                 description=description,
@@ -243,6 +252,7 @@ class GooseAdapter(FrameworkAdapter):
                 # W6: probe prompt enables non-interactive `goose run --recipe` in CI.
                 prompt=prompt,
                 parameters=recipe_parameters,
+                response=recipe_response,
                 mcp_extensions=mcp_exts,
                 mcp_notes=mcp_notes,
             )
@@ -635,6 +645,7 @@ def _emit_recipe(
     sub_recipes: list[dict[str, str]] | None = None,
     prompt: str | None = None,
     parameters: list[dict[str, str]] | None = None,
+    response: dict[str, Any] | None = None,
     mcp_extensions: list[dict[str, Any]] | None = None,
     mcp_notes: list[str] | None = None,
 ) -> str:
@@ -650,6 +661,11 @@ def _emit_recipe(
     scalar double-quoted so special chars cannot break the hand-built YAML. Callers
     that reference the keys via ``{{ key }}`` (e.g. the orchestrator prompt) keep the
     Goose params↔template coupling valid. Defaults to None → byte-identical baseline.
+
+    Phase-4b: ``response`` (opt-in), when truthy, is a JSON Schema emitted as a
+    `response:` block whose ``json_schema:`` value is single-line compact JSON (valid
+    YAML, since YAML is a JSON superset) so goose validates the agent's final output.
+    Defaults to None → byte-identical baseline.
 
     ``mcp_extensions`` (opt-in) are operator-specified MCP servers rendered as
     ``stdio``/``streamable_http`` extensions after the builtin/platform ones; every
@@ -682,6 +698,14 @@ def _emit_recipe(
                 lines.append(f"    default: {_yaml_dq(p['default'])}")
             if p.get("description"):
                 lines.append(f"    description: {_yaml_dq(p['description'])}")
+    if response:
+        # YAML is a JSON superset, so the arbitrary-depth JSON Schema is emitted as a
+        # single-line compact flow mapping (json.dumps). Being mid-line, none of its
+        # keys can column-0 match the _RECIPE_FORBIDDEN_* guards. sort_keys → stable.
+        lines.append("response:")
+        lines.append(
+            f"  json_schema: {json.dumps(response, sort_keys=True, separators=(',', ':'))}"
+        )
     lines.append("extensions:")
     for ext in extensions:
         if ext == "developer":
