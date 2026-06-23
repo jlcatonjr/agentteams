@@ -362,6 +362,30 @@
       "type": "object",
       "additionalProperties": true,
       "description": "Optional Goose recipe response schema (Phase-4b goose-native). A JSON Schema ({type:object, properties, required, ...}); when present, emitted as a `response:` block (json_schema) on the generated Goose ORCHESTRATOR recipe so goose validates the team's final output against it. Goose-only; ignored by other frameworks. Opt-in: absent → recipes byte-identical."
+    },
+    "recipe_retry": {
+      "type": "object",
+      "additionalProperties": false,
+      "description": "Optional Goose recipe retry config (Phase-4c goose-native). When present (and carrying ≥1 valid check), emitted as a `retry:` block on the generated Goose ORCHESTRATOR recipe: goose re-runs until the shell `checks` pass. Safety: `max_retries` is clamped to 1-10 (default 3) and a bounded `timeout_seconds` (1-3600, default 300) is always emitted. Goose-only; ignored by other frameworks. Opt-in: absent → recipes byte-identical.",
+      "properties": {
+        "max_retries": { "type": "integer", "description": "Max retry attempts (clamped to 1-10; default 3)." },
+        "timeout_seconds": { "type": "integer", "description": "Per-check command timeout in seconds (clamped to 1-3600; default 300)." },
+        "on_failure_timeout_seconds": { "type": "integer", "description": "Timeout for the on_failure command (optional)." },
+        "checks": {
+          "type": "array",
+          "description": "Shell checks defining success; ALL must pass.",
+          "items": {
+            "type": "object",
+            "required": ["command"],
+            "additionalProperties": false,
+            "properties": {
+              "type": { "type": "string", "enum": ["shell"], "description": "Check type (only 'shell' supported)." },
+              "command": { "type": "string", "description": "Shell command; non-zero exit = check failed." }
+            }
+          }
+        },
+        "on_failure": { "type": "string", "description": "Shell command run when checks fail (optional)." }
+      }
     }
   },
   "additionalProperties": false

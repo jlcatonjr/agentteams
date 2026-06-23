@@ -18,6 +18,11 @@ from agentteams.output_plan import _plan_output_files  # noqa: F401,E402
 from agentteams._utils import _slugify
 from agentteams.mcp_detect import detect_mcp_candidates
 
+from agentteams.recipe_fields import (  # noqa: E402,F401 (carved CH-07; re-exported)
+    _normalize_recipe_parameters,
+    _normalize_recipe_response,
+    _normalize_recipe_retry,
+)
 from agentteams.manifest_format import (  # noqa: E402,F401 (carved CH-07; re-exported)
     _MANUAL_TOKEN_FULLMATCH_RE,
     _build_placeholder_map,
@@ -429,83 +434,13 @@ def build_manifest(description: dict[str, Any], *, framework: str = "copilot-vsc
     recipe_response = _normalize_recipe_response(description.get("recipe_response"))
     if recipe_response:
         manifest["recipe_response"] = recipe_response
+    # Phase-4c goose-native (opt-in): copy a declared Goose recipe retry config
+    # through to the manifest. Added only when it has ≥1 valid check, so manifests
+    # without one are byte-identical.
+    recipe_retry = _normalize_recipe_retry(description.get("recipe_retry"))
+    if recipe_retry:
+        manifest["recipe_retry"] = recipe_retry
     return manifest
-
-
-def _normalize_recipe_response(raw: Any) -> dict[str, Any] | None:
-    """Normalize a brief's ``recipe_response`` into a Goose recipe response schema.
-
-    Phase-4b goose-native (opt-in). Goose stores ``response.json_schema`` as a raw
-    value with no load-time validity check, so the only guard against a silently
-    useless block is here. Returns ``None`` (→ no ``response:`` emitted) unless
-    ``raw`` is a non-empty dict carrying a non-empty string ``type``. Tolerates the
-    common double-wrap ``{"json_schema": {...}}`` by unwrapping when the top level
-    has no ``type``. Otherwise lenient — goose validates the schema's internals.
-    """
-    if not isinstance(raw, dict) or not raw:
-        return None
-    schema = raw
-    if "type" not in schema and isinstance(schema.get("json_schema"), dict):
-        schema = schema["json_schema"]  # tolerate {"json_schema": {...}} double-wrap
-    if not isinstance(schema.get("type"), str) or not schema["type"]:
-        return None
-    return schema
-
-
-_RECIPE_PARAM_INPUT_TYPES = frozenset(
-    {"string", "number", "boolean", "date", "file", "select"}
-)
-
-
-def _normalize_recipe_parameters(raw: Any) -> list[dict[str, str]]:
-    """Normalize a brief's ``recipe_parameters`` into validated Goose recipe params.
-
-    Phase-4a goose-native (opt-in). Drops malformed entries (missing/blank string
-    ``key``); defaults ``input_type=string`` and ``requirement=optional``. Enforces
-    two Goose hard rules: optional non-file params MUST carry a ``default`` ("" when
-    unset), and ``file`` params cannot have a default (so they are coerced to
-    ``required``). Returns ``[]`` when ``raw`` is absent or not a list, so manifests
-    for briefs that declare none are unchanged.
-    """
-    if not isinstance(raw, list):
-        return []
-    params: list[dict[str, str]] = []
-    for item in raw:
-        if not isinstance(item, dict):
-            continue
-        key = item.get("key")
-        if not isinstance(key, str) or not key.strip():
-            continue
-        input_type = item.get("input_type")
-        if input_type not in _RECIPE_PARAM_INPUT_TYPES:
-            input_type = "string"
-        requirement = item.get("requirement")
-        if requirement not in ("required", "optional"):
-            requirement = "optional"
-        param: dict[str, str] = {
-            "key": key.strip(),
-            "input_type": input_type,
-            "requirement": requirement,
-        }
-        description = item.get("description")
-        if isinstance(description, str) and description.strip():
-            param["description"] = description.strip()
-        default = item.get("default")
-        if input_type == "file":
-            # Goose forbids defaults on file params; optional+file is contradictory.
-            param["requirement"] = "required"
-        elif default is not None:
-            if isinstance(default, bool):
-                param["default"] = "true" if default else "false"
-            elif isinstance(default, str):
-                param["default"] = default
-            else:
-                param["default"] = str(default)
-        elif requirement == "optional":
-            # Goose requires optional params to declare a default.
-            param["default"] = ""
-        params.append(param)
-    return params
 
 
 # ---------------------------------------------------------------------------
