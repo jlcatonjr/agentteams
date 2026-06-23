@@ -377,6 +377,30 @@
       "type": "object",
       "additionalProperties": true,
       "description": "Optional Goose recipe response schema (Phase-4b goose-native). A JSON Schema ({type:object, properties, required, ...}) declaring the team's structured output; for --framework goose it is copied to the team-manifest and emitted as a `response:` block (json_schema) on the ORCHESTRATOR recipe so goose validates the final output against it. Goose-only; ignored by other frameworks. Opt-in: absent → recipes byte-identical."
+    },
+    "recipe_retry": {
+      "type": "object",
+      "additionalProperties": false,
+      "description": "Optional Goose recipe retry config (Phase-4c goose-native). Declares self-validation for the generated Goose team: for --framework goose it is copied to the team-manifest and emitted as a `retry:` block on the ORCHESTRATOR recipe so goose re-runs until the shell `checks` pass. Safety: `max_retries` is clamped to 1-10 (default 3) and a bounded `timeout_seconds` (1-3600, default 300) is always emitted (never an unbounded retry). Requires ≥1 valid check or it is dropped. Goose-only; ignored by other frameworks. Opt-in: absent → recipes byte-identical.",
+      "properties": {
+        "max_retries": { "type": "integer", "description": "Max retry attempts (clamped to 1-10; default 3)." },
+        "timeout_seconds": { "type": "integer", "description": "Per-check command timeout in seconds (clamped to 1-3600; default 300)." },
+        "on_failure_timeout_seconds": { "type": "integer", "description": "Timeout for the on_failure command (optional)." },
+        "checks": {
+          "type": "array",
+          "description": "Shell checks defining success; ALL must pass.",
+          "items": {
+            "type": "object",
+            "required": ["command"],
+            "additionalProperties": false,
+            "properties": {
+              "type": { "type": "string", "enum": ["shell"], "description": "Check type (only 'shell' supported)." },
+              "command": { "type": "string", "description": "Shell command; non-zero exit = check failed." }
+            }
+          }
+        },
+        "on_failure": { "type": "string", "description": "Shell command run when checks fail (optional)." }
+      }
     }
   },
   "additionalProperties": false

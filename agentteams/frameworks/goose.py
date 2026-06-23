@@ -63,6 +63,10 @@ _RECIPE_PARAM_KEY_RE = re.compile(r'^\s+-\s+key:\s*"', re.MULTILINE)
 # Phase-4b: a `response:` block (when present) must carry a non-empty `json_schema:`.
 _RECIPE_RESPONSE_RE = re.compile(r"^response:\s*$", re.MULTILINE)
 _RECIPE_JSON_SCHEMA_RE = re.compile(r"^\s+json_schema:\s*\S", re.MULTILINE)
+# Phase-4c: a `retry:` block (when present) must carry `max_retries:` and ≥1 check `command:`.
+_RECIPE_RETRY_RE = re.compile(r"^retry:\s*$", re.MULTILINE)
+_RECIPE_MAX_RETRIES_RE = re.compile(r"^\s+max_retries:\s*\d", re.MULTILINE)
+_RECIPE_RETRY_CMD_RE = re.compile(r'^\s+command:\s*"', re.MULTILINE)
 
 # Forbidden-shape guards for emitted recipes (goose-integration.plan §6.5 gotchas).
 # These have no other validator backing, so a typo would otherwise pass silently.
@@ -169,6 +173,10 @@ def _validate_recipe_yaml(yaml_text: str, recipes_dir: Path | None = None) -> li
         violations.append("parameters: block present but lists no '- key:' entries")
     if _RECIPE_RESPONSE_RE.search(yaml_text) and not _RECIPE_JSON_SCHEMA_RE.search(yaml_text):
         violations.append("response: block present but has no non-empty json_schema: value")
+    if _RECIPE_RETRY_RE.search(yaml_text) and not (
+        _RECIPE_MAX_RETRIES_RE.search(yaml_text) and _RECIPE_RETRY_CMD_RE.search(yaml_text)
+    ):
+        violations.append("retry: block present but missing max_retries: or a check command:")
     if recipes_dir is not None:
         for path_val in _RECIPE_SUB_PATH_RE.findall(yaml_text):
             resolved = (recipes_dir / path_val).resolve()
@@ -243,6 +251,9 @@ class GooseAdapter(FrameworkAdapter):
             # Phase-4b (opt-in): emit a declared response json_schema so goose
             # validates the orchestrator's final output against it.
             recipe_response = manifest.get("recipe_response") or None
+            # Phase-4c (opt-in): emit a bounded retry block so goose re-runs the
+            # orchestrator until the declared shell checks pass.
+            recipe_retry = manifest.get("recipe_retry") or None
             return _emit_recipe(
                 title=name,
                 description=description,
@@ -253,6 +264,7 @@ class GooseAdapter(FrameworkAdapter):
                 prompt=prompt,
                 parameters=recipe_parameters,
                 response=recipe_response,
+                retry=recipe_retry,
                 mcp_extensions=mcp_exts,
                 mcp_notes=mcp_notes,
             )
@@ -646,6 +658,7 @@ def _emit_recipe(
     prompt: str | None = None,
     parameters: list[dict[str, str]] | None = None,
     response: dict[str, Any] | None = None,
+    retry: dict[str, Any] | None = None,
     mcp_extensions: list[dict[str, Any]] | None = None,
     mcp_notes: list[str] | None = None,
 ) -> str:
@@ -666,6 +679,10 @@ def _emit_recipe(
     `response:` block whose ``json_schema:`` value is single-line compact JSON (valid
     YAML, since YAML is a JSON superset) so goose validates the agent's final output.
     Defaults to None → byte-identical baseline.
+
+    Phase-4c: ``retry`` (opt-in), when truthy, is a normalized dict emitted as a
+    `retry:` block (bounded ``max_retries`` + ``timeout_seconds`` + shell ``checks``)
+    so goose re-runs until the checks pass. Defaults to None → byte-identical baseline.
 
     ``mcp_extensions`` (opt-in) are operator-specified MCP servers rendered as
     ``stdio``/``streamable_http`` extensions after the builtin/platform ones; every
@@ -706,6 +723,20 @@ def _emit_recipe(
         lines.append(
             f"  json_schema: {json.dumps(response, sort_keys=True, separators=(',', ':'))}"
         )
+    if retry:
+        # Hand-built (flat): ints unquoted, command/on_failure strings via _yaml_dq
+        # (which collapses newlines + escapes quotes → no YAML-structure breakout).
+        lines.append("retry:")
+        lines.append(f"  max_retries: {int(retry['max_retries'])}")
+        lines.append(f"  timeout_seconds: {int(retry['timeout_seconds'])}")
+        if "on_failure_timeout_seconds" in retry:
+            lines.append(f"  on_failure_timeout_seconds: {int(retry['on_failure_timeout_seconds'])}")
+        lines.append("  checks:")
+        for check in retry["checks"]:
+            lines.append(f"    - type: {_yaml_dq(check.get('type', 'shell'))}")
+            lines.append(f"      command: {_yaml_dq(check['command'])}")
+        if retry.get("on_failure"):
+            lines.append(f"  on_failure: {_yaml_dq(retry['on_failure'])}")
     lines.append("extensions:")
     for ext in extensions:
         if ext == "developer":
