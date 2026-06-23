@@ -56,6 +56,9 @@ _RECIPE_MODEL_KEY_RE = re.compile(r"^\s*model:", re.MULTILINE)
 _RECIPE_TITLE_RE = re.compile(r'^title:\s*".+?"', re.MULTILINE)
 _RECIPE_INSTRUCTIONS_RE = re.compile(r"^instructions:\s*\|", re.MULTILINE)
 _RECIPE_SUB_PATH_RE = re.compile(r'path:\s*"([^"]+)"')
+# Phase-4a: a `parameters:` block (when present) must list `- key:` entries.
+_RECIPE_PARAMETERS_RE = re.compile(r"^parameters:\s*$", re.MULTILINE)
+_RECIPE_PARAM_KEY_RE = re.compile(r'^\s+-\s+key:\s*"', re.MULTILINE)
 
 # Forbidden-shape guards for emitted recipes (goose-integration.plan §6.5 gotchas).
 # These have no other validator backing, so a typo would otherwise pass silently.
@@ -158,6 +161,8 @@ def _validate_recipe_yaml(yaml_text: str, recipes_dir: Path | None = None) -> li
         violations.append("forbidden type: sse (use streamable_http; sse is deprecated)")
     if _RECIPE_FORBIDDEN_CONTEXT_RE.search(yaml_text):
         violations.append("forbidden context: field (not a recipe field)")
+    if _RECIPE_PARAMETERS_RE.search(yaml_text) and not _RECIPE_PARAM_KEY_RE.search(yaml_text):
+        violations.append("parameters: block present but lists no '- key:' entries")
     if recipes_dir is not None:
         for path_val in _RECIPE_SUB_PATH_RE.findall(yaml_text):
             resolved = (recipes_dir / path_val).resolve()
@@ -219,6 +224,16 @@ class GooseAdapter(FrameworkAdapter):
                 })
             if sub_recipes:
                 extensions.append("summon")
+            # Phase-4a (opt-in): emit declared recipe parameters on the orchestrator
+            # (the team entry point) and reference each key in a controlled prompt
+            # suffix so the Goose params<->{{ template }} coupling stays valid.
+            recipe_parameters = manifest.get("recipe_parameters") or None
+            prompt = _ORCHESTRATOR_PROBE_PROMPT
+            if recipe_parameters:
+                refs = "; ".join(
+                    f"{p['key']}={{{{ {p['key']} }}}}" for p in recipe_parameters
+                )
+                prompt = f"{prompt}\n\nRuntime inputs: {refs}"
             return _emit_recipe(
                 title=name,
                 description=description,
@@ -226,7 +241,8 @@ class GooseAdapter(FrameworkAdapter):
                 extensions=extensions,
                 sub_recipes=sub_recipes or None,
                 # W6: probe prompt enables non-interactive `goose run --recipe` in CI.
-                prompt=_ORCHESTRATOR_PROBE_PROMPT,
+                prompt=prompt,
+                parameters=recipe_parameters,
                 mcp_extensions=mcp_exts,
                 mcp_notes=mcp_notes,
             )
@@ -618,6 +634,7 @@ def _emit_recipe(
     extensions: list[str],
     sub_recipes: list[dict[str, str]] | None = None,
     prompt: str | None = None,
+    parameters: list[dict[str, str]] | None = None,
     mcp_extensions: list[dict[str, Any]] | None = None,
     mcp_notes: list[str] | None = None,
 ) -> str:
@@ -626,6 +643,13 @@ def _emit_recipe(
     W6: The optional `prompt` field, when provided, is emitted after `description`
     and enables non-interactive `goose run --recipe` execution in CI pipelines
     (the --recipe and --text flags are mutually exclusive in Goose CLI).
+
+    Phase-4a: ``parameters`` (opt-in), when non-empty, is emitted as a `parameters:`
+    block (Goose recipe runtime inputs). Each entry is a normalized dict with `key`,
+    `input_type`, `requirement`, optional `default`, optional `description` — every
+    scalar double-quoted so special chars cannot break the hand-built YAML. Callers
+    that reference the keys via ``{{ key }}`` (e.g. the orchestrator prompt) keep the
+    Goose params↔template coupling valid. Defaults to None → byte-identical baseline.
 
     ``mcp_extensions`` (opt-in) are operator-specified MCP servers rendered as
     ``stdio``/``streamable_http`` extensions after the builtin/platform ones; every
@@ -648,6 +672,16 @@ def _emit_recipe(
     for note in mcp_notes or []:
         # Column-0 comment terminates the instructions block scalar; Goose ignores it.
         lines.append(f"# agentteams MCP: {note}")
+    if parameters:
+        lines.append("parameters:")
+        for p in parameters:
+            lines.append(f"  - key: {_yaml_dq(p['key'])}")
+            lines.append(f"    input_type: {_yaml_dq(p.get('input_type', 'string'))}")
+            lines.append(f"    requirement: {_yaml_dq(p.get('requirement', 'optional'))}")
+            if "default" in p:
+                lines.append(f"    default: {_yaml_dq(p['default'])}")
+            if p.get("description"):
+                lines.append(f"    description: {_yaml_dq(p['description'])}")
     lines.append("extensions:")
     for ext in extensions:
         if ext == "developer":
