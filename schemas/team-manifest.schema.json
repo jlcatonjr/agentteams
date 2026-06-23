@@ -341,6 +341,22 @@
       "type": "array",
       "description": "MCP server definitions (each conforms to mcp-server.schema.json) accepted for emission. Populated only when MCP host-features are enabled.",
       "items": { "$ref": "mcp-server.schema.json" }
+    },
+    "recipe_parameters": {
+      "type": "array",
+      "description": "Optional Goose recipe parameters (Phase-4a goose-native). When non-empty, emitted as a `parameters:` block on the generated Goose ORCHESTRATOR recipe and referenced via `{{ key }}` so the recipe accepts `goose run --recipe orchestrator.yaml --params key=value`. Goose-only; ignored by other frameworks. Opt-in: absent/empty → recipes byte-identical to baseline.",
+      "items": {
+        "type": "object",
+        "required": ["key"],
+        "additionalProperties": false,
+        "properties": {
+          "key": { "type": "string", "description": "Parameter name; referenced as {{ key }}." },
+          "input_type": { "type": "string", "enum": ["string", "number", "boolean", "date", "file", "select"], "description": "Goose parameter input_type (default: string)." },
+          "requirement": { "type": "string", "enum": ["required", "optional"], "description": "Goose requirement (default: optional). Optional non-file params receive a default; file params are coerced to required (goose forbids file defaults)." },
+          "default": { "type": ["string", "number", "boolean"], "description": "Default for optional non-file params (file params cannot have a default)." },
+          "description": { "type": "string" }
+        }
+      }
     }
   },
   "additionalProperties": false
