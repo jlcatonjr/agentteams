@@ -18,6 +18,10 @@ from agentteams.output_plan import _plan_output_files  # noqa: F401,E402
 from agentteams._utils import _slugify
 from agentteams.mcp_detect import detect_mcp_candidates
 
+from agentteams.recipe_fields import (  # noqa: E402,F401 (carved CH-07; re-exported)
+    _normalize_recipe_parameters,
+    _normalize_recipe_response,
+)
 from agentteams.manifest_format import (  # noqa: E402,F401 (carved CH-07; re-exported)
     _MANUAL_TOKEN_FULLMATCH_RE,
     _build_placeholder_map,
@@ -423,63 +427,13 @@ def build_manifest(description: dict[str, Any], *, framework: str = "copilot-vsc
     recipe_parameters = _normalize_recipe_parameters(description.get("recipe_parameters"))
     if recipe_parameters:
         manifest["recipe_parameters"] = recipe_parameters
+    # Phase-4b goose-native (opt-in): copy a declared Goose recipe response schema
+    # through to the manifest. Added only when valid, so manifests without one are
+    # byte-identical.
+    recipe_response = _normalize_recipe_response(description.get("recipe_response"))
+    if recipe_response:
+        manifest["recipe_response"] = recipe_response
     return manifest
-
-
-_RECIPE_PARAM_INPUT_TYPES = frozenset(
-    {"string", "number", "boolean", "date", "file", "select"}
-)
-
-
-def _normalize_recipe_parameters(raw: Any) -> list[dict[str, str]]:
-    """Normalize a brief's ``recipe_parameters`` into validated Goose recipe params.
-
-    Phase-4a goose-native (opt-in). Drops malformed entries (missing/blank string
-    ``key``); defaults ``input_type=string`` and ``requirement=optional``. Enforces
-    two Goose hard rules: optional non-file params MUST carry a ``default`` ("" when
-    unset), and ``file`` params cannot have a default (so they are coerced to
-    ``required``). Returns ``[]`` when ``raw`` is absent or not a list, so manifests
-    for briefs that declare none are unchanged.
-    """
-    if not isinstance(raw, list):
-        return []
-    params: list[dict[str, str]] = []
-    for item in raw:
-        if not isinstance(item, dict):
-            continue
-        key = item.get("key")
-        if not isinstance(key, str) or not key.strip():
-            continue
-        input_type = item.get("input_type")
-        if input_type not in _RECIPE_PARAM_INPUT_TYPES:
-            input_type = "string"
-        requirement = item.get("requirement")
-        if requirement not in ("required", "optional"):
-            requirement = "optional"
-        param: dict[str, str] = {
-            "key": key.strip(),
-            "input_type": input_type,
-            "requirement": requirement,
-        }
-        description = item.get("description")
-        if isinstance(description, str) and description.strip():
-            param["description"] = description.strip()
-        default = item.get("default")
-        if input_type == "file":
-            # Goose forbids defaults on file params; optional+file is contradictory.
-            param["requirement"] = "required"
-        elif default is not None:
-            if isinstance(default, bool):
-                param["default"] = "true" if default else "false"
-            elif isinstance(default, str):
-                param["default"] = default
-            else:
-                param["default"] = str(default)
-        elif requirement == "optional":
-            # Goose requires optional params to declare a default.
-            param["default"] = ""
-        params.append(param)
-    return params
 
 
 # ---------------------------------------------------------------------------

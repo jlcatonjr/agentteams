@@ -60,16 +60,22 @@ goldens against the updated templates** (per the handoff's golden-regen rule).
   no behavior change when a brief declares none. Emit declared workstream/brief
   inputs as recipe `parameters`. Source from `manifest` (component slugs, brief
   fields). Guard: add a `parameters:`-shape check; ensure no forbidden-key overlap.
-- **4b — `response` json_schema for typed auditors.** Emit a `response.json_schema`
-  for the read-only auditor archetypes so findings are machine-consumable. Guard:
-  validate the json_schema block shape.
-- **4c — `retry` with success-criteria.** For validation agents, emit `retry` with
-  a `checks` command (e.g. the project's test/recipe-check command). Guard: validate
-  `max_retries`/`checks` shape; cap `max_retries` to avoid runaway loops.
-- **4d — per-agent extension scoping + fleet/recipe-check parity.** Map each agent's
-  declared `tools:` to a minimal `extensions` set (parity with the claude
-  `allowed-tools` least-privilege mapping); extend `recipe-check`/fleet to cover the
-  new fields.
+- **4b — `response` json_schema (orchestrator-level; SHIPPED).** Emit a
+  `response.json_schema` (opt-in `recipe_response` brief field) on the **orchestrator**
+  recipe so goose validates the team's structured final output. Guard: validate the
+  `response:`/`json_schema:` shape. (Per-auditor/per-agent `response` — typed findings
+  from the read-only auditor archetypes — is deferred to **4d**, consistent with 4a's
+  orchestrator-only opt-in pattern.)
+- **4c — `retry` with success-criteria (orchestrator-level; SHIPPED).** Emit `retry`
+  (opt-in `recipe_retry` brief field) on the **orchestrator** with shell `checks`
+  (e.g. the project's test/recipe-check command). Guard: validate `max_retries`/`checks`
+  shape; **cap `max_retries` and inject a bounded `timeout_seconds`** (never emit an
+  unbounded retry). (Per-validator/per-agent retry deferred to 4d.)
+- **4d — per-agent extension scoping + per-agent response/retry + fleet/recipe-check
+  parity.** Map each agent's declared `tools:` to a minimal `extensions` set (parity
+  with the claude `allowed-tools` least-privilege mapping); push `response`/`retry`
+  down to the relevant auditor/validator recipes; extend `recipe-check`/fleet to cover
+  the new fields.
 
 ## 5. Recommended first slice
 
