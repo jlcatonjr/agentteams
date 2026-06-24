@@ -87,6 +87,7 @@ nav:
       - handoff_payloads: api-reference/handoff_payloads.md
       - plan_steps: api-reference/plan_steps.md
       - plan-steps-todo: api-reference/plan-steps-todo.md
+      - parallel-plan: api-reference/parallel-plan.md
       - liaison-logs: api-reference/liaison-logs.md
       - host-features: api-reference/host-features.md
       - baseline: api-reference/baseline.md
