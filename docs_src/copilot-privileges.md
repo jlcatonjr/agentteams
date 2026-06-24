@@ -120,7 +120,7 @@ The terminal tool runs any shell command, so approvals are per-command rather th
 ```
 
 - `true` — auto-approve; runs without confirmation
-- `false` — always require manual approval, even when permission level is `bypassApprovals`
+- `false` — require manual approval under non-bypass permission levels (`default`). **Not a reliable safety boundary under `autopilot`/`bypassApprovals`:** per the warning above, those modes bypass all per-tool, terminal, and URL approval settings, so a `false` denial here cannot be relied on to block a dangerous command. To hard-block dangerous commands, do not use `autopilot`/`bypassApprovals` — use a non-bypass permission level (`default`) so the `false` rules apply.
 - Patterns wrapped in `/` are treated as regular expressions matched against the command or subcommand
 
 **Block file writes outside the workspace** (experimental):
@@ -314,7 +314,9 @@ In repositories using the agentteams `copilot-vscode` framework, each agent role
 
 ## Common Privilege Profiles
 
-### Fully autonomous (no prompts)
+### Fully autonomous (no prompts) — use with care
+
+> **Caution — use with care.** Under `autopilot` the per-tool/terminal/URL approval settings are bypassed (see the warning above), so this profile is not a safety boundary. The blanket entries below are broad: `python3: true` auto-approves arbitrary code execution (e.g. `python3 -c '...'`), and `git: true` auto-approves `git push`, `git push --force`, and `git reset --hard`. Prefer scoped patterns (e.g. `python3 -m pytest`, `/^git (status|log|diff|show\b.*)$/`) and reserve this profile for throwaway/sandboxed workspaces.
 
 ```json
 {
@@ -351,10 +353,12 @@ Use `chat.permissions.default: "default"` and deny edits and terminal at the too
 
 ### Block specific dangerous commands, allow safe ones
 
+> **Caution:** the `false` denials below only block under non-bypass permission levels (`chat.permissions.default: "default"`). They are bypassed by `autopilot`/`bypassApprovals` (see [Terminal Command Approval](#terminal-command-approval)), so do not rely on this profile while a bypass mode is active.
+
 ```json
 {
   "chat.tools.terminal.autoApprove": {
-    "/^git (status|log|diff|show)$/": true,
+    "/^git (status|log|diff|show\\b.*)$/": true,
     "npm test": true,
     "python3 -m pytest": true,
     "rm": false,

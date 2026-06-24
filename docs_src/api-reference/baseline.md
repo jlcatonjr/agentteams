@@ -47,5 +47,5 @@ agentteams --check-baseline tests/baselines/myteam-copilot-vscode.json \
 ## Notes
 
 - Hashing skips symlinks (no `realpath` follow).
-- Excluded path components (default: `.git`, `.agentteams-backups`, `__pycache__`, `.DS_Store`) are skipped at any depth.
+- Excluded path components (default: `__pycache__`, `.git`, `.pytest_cache`, `.mypy_cache`, `.ruff_cache`, `node_modules`, `.DS_Store`) are skipped at any depth.
 - The manifest's `root` is recorded as an absolute POSIX path — useful for forensics, not for portable diffing. Per-file `path` entries are root-relative.

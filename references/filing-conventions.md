@@ -39,6 +39,11 @@ deliberately-canonical artifacts:
 - **`bridge-offline-investigation.md`** — a deliberately-audited investigation
   kept at root by maintainer decision (commit `9716b47`). The lone allowlisted
   investigation; revisit whether it should move to `references/plans/`.
+- **`AGENTS.md`** — the SHARED, multi-tool standard entry file. When this project
+  is bridged or generated for Goose (or the `agents-md` framework) it is written
+  to the repo root by design (Goose reads it via `CONTEXT_FILE_NAMES`). It is a
+  bridge-owned, fenced canonical entry file, not a stray document. See
+  [bridge-refresh-safety.md](bridge-refresh-safety.md).
 
 Any other `*.md` at the root fails the guard.
 
@@ -83,11 +88,9 @@ directory is uniformly local.
 
 ### Known follow-ups
 
-- **`security-waiver-remediation-plan.md`** (root) — left in place because a live
-  session owned it during remediation; **temporarily allowlisted** in
-  `tests/test_root_doc_hygiene.py`. Move it to
-  `references/plans/security-waiver-remediation.plan.md` and remove the temporary
-  allowlist entry once that session is done.
+- **`security-waiver-remediation-plan.md`** — **resolved**: relocated to
+  `references/plans/security-waiver-remediation.plan.md` (retained-local) and the
+  temporary `tests/test_root_doc_hygiene.py` allowlist entry removed.
 - **`docs_src/structural-update-plan.md`** — tracked, in the MkDocs nav, *and*
   carries a (now-ineffective) `.gitignore` line. Decide: publish it (drop the
   ignore line) or relocate it to `references/plans/`. Left untouched here.

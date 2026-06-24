@@ -24,6 +24,10 @@ DURABLE_FILES=(
 )
 
 # Patterns exempt from the check (legitimate discussions of impermanence)
+# Includes skip/exclude declarations that name tmp/ as something to AVOID — those
+# are the opposite of a durable→tmp/ dependency (the rule this lint enforces):
+#   _SKIP_PREFIXES — a skip-list tuple that excludes tmp/ from a scan
+#   sandbox        — docstrings noting tmp/ "sandboxes" are excluded from findings
 EXEMPT_PATTERN="(deprecated|gitignore|plan|tmp/remediation-plans/master-status|Mirror backup|See audit report|tmp/by-week.*audit|tmp/diffs|tmp/inject_fences|off-repo storage|Operator|rewrite-backups|_SKIP_PREFIXES|sandbox)"
 
 cd "$REPO_ROOT"
@@ -44,7 +48,9 @@ while IFS= read -r file; do
     if grep -Hn 'tmp/' "$file" 2>/dev/null | grep -v -E "$EXEMPT_PATTERN" > "$TEMP_FOUND"; then
         echo "❌ $file: references gitignored tmp/ path (not in durable storage)" >&2
         cat "$TEMP_FOUND" | sed 's/^/    /' >&2
-        ((VIOLATIONS++))
+        # set -e safe: ((VIOLATIONS++)) returns the pre-increment value (0 → exit 1),
+        # which would abort the loop on the first violation and truncate the report.
+        VIOLATIONS=$((VIOLATIONS + 1))
     fi
 done < <(
     # Build the file list dynamically

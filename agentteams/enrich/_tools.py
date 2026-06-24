@@ -568,7 +568,9 @@ def scan_project_imports(project_path: Path) -> dict[str, str]:
             nb = json.loads(nb_path.read_text(encoding="utf-8", errors="ignore"))
             for cell in nb.get("cells", []):
                 if cell.get("cell_type") == "code":
-                    _process("".join(cell.get("source", [])))
+                    # `or []`, not a default arg: a JSON `null` source returns None
+                    # from .get (key present), and "".join(None) raises TypeError.
+                    _process("".join(cell.get("source") or []))
         except (json.JSONDecodeError, OSError):
             pass
 

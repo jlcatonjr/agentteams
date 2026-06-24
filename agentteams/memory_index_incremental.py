@@ -13,6 +13,7 @@ from __future__ import annotations
 
 import hashlib
 import json
+import math
 import subprocess
 from dataclasses import dataclass
 from datetime import UTC, datetime
@@ -104,7 +105,11 @@ def _format_doc_inner_lines(doc: dict[str, Any]) -> list[str]:
         lines.append(f"        {json.dumps(paragraph)}{suffix}")
     lines.append("      ],")
     lines.append(f'      "source_hash": {json.dumps(doc["source_hash"])},')
-    lines.append(f'      "source_mtime": {doc["source_mtime"]}')
+    lines.append(f'      "source_mtime": {doc["source_mtime"]},')
+    # Emit vector_norm_sq so the incremental artifact matches a full rebuild
+    # (build_memory_index always sets it). json.dumps gives the canonical float
+    # repr that round-trips to the same value the parity guard compares.
+    lines.append(f'      "vector_norm_sq": {json.dumps(doc.get("vector_norm_sq", 0.0))}')
     return lines
 
 
@@ -286,6 +291,22 @@ def try_incremental_sed_update(
                 entry["tf"] = new_tf[term]
         entries.sort(key=lambda e: e.get("doc_id", -1))
         updated["postings"][term] = entries
+
+    # Recompute the changed doc's vector_norm_sq exactly as build_memory_index
+    # (memory_index.py:257-266). The term SET is unchanged (gated above), so every
+    # term's df and the corpus N are identical to a full rebuild; only the changed
+    # doc's tf changed, so only its norm changes. Omitting this left the changed
+    # doc with a stale norm the `mutated != updated` guard could not catch.
+    n_docs_for_norm = int(updated.get("N", 0)) or len(updated["documents"])
+    norm_sq = 0.0
+    for term, tf_val in new_tf.items():
+        df = len(updated["postings"].get(term, []))
+        if df <= 0:
+            continue
+        idf = math.log(1.0 + (n_docs_for_norm - df + 0.5) / (df + 0.5))
+        w = tf_val * idf
+        norm_sq += w * w
+    new_doc["vector_norm_sq"] = norm_sq
 
     n_docs = int(updated.get("N", 0))
     old_len = int(old_doc.get("length", 0))

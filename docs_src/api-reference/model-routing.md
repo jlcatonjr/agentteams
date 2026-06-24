@@ -139,7 +139,7 @@ python build_team.py --description brief.json --cost-routing
 The routing contract is typically consumed by:
 
 1. **VS Code Copilot** — Map tier roles to concrete model strings in settings
-2. **Claude API** — Route governance agents to Claude 3.5 Haiku; domain agents to Claude 3.5 Sonnet
+2. **Claude API** — Route governance agents to a cheaper model (e.g. Claude Haiku 4.5, `claude-haiku-4-5`); domain agents to a stronger one (e.g. Claude Sonnet 4.6, `claude-sonnet-4-6`). *Illustrative only — `model_routing.py` emits tier roles, never concrete model strings; the adapter chooses the model.*
 3. **Cost analysis tools** — Compute expected token costs per tier
 4. **Policy enforcement** — Ensure sensitive agents (auditors, security) stay on premium tiers
 
@@ -151,11 +151,14 @@ The contract does **not** specify concrete models; that's the runtime/adapter's 
 
 ### Runtime model selection map
 
+> The concrete model ids below are **illustrative only** and may be stale. `model_routing.py` emits tier *roles* and never any model string — the runtime/adapter owns the tier→model mapping. Substitute whatever models your runtime uses (e.g. for Claude: `claude-haiku-4-5` for `cheap`, `claude-sonnet-4-6` or `claude-opus-4-8` for `primary`).
+
 ```python
 from agentteams.model_routing import build_routing_contract
 
 routing = build_routing_contract(manifest)
 
+# Illustrative mapping only — choose models for your own runtime.
 tier_to_model = {
     "cheap": "gpt-4.1-mini",
     "primary": "gpt-5.3-codex",
@@ -189,10 +192,12 @@ This pattern keeps behavioral verification (`eval-suite`) and cost/capability po
 
 ## Tier Semantics
 
-| Tier | Semantic | Typical Agents | Model Guidance |
+> Model names in the guidance column are **illustrative only** and may be stale — `model_routing.py` assigns tier roles, not models. The runtime/adapter maps roles to whatever models it uses.
+
+| Tier | Semantic | Typical Agents | Model Guidance (illustrative) |
 |------|----------|---|---|
-| `primary` | Default; full capability | orchestrator, primary-producer, domain experts | Latest/largest models (e.g., GPT-4, Claude 3 Sonnet) |
-| `cheap` | Read-only, structured | governance agents (auditors, validators, hygiene checkers) | Smaller/faster models (e.g., GPT-3.5, Claude 3 Haiku) |
+| `primary` | Default; full capability | orchestrator, primary-producer, domain experts | Latest/largest models (e.g. Claude Sonnet 4.6 / Claude Opus 4.8) |
+| `cheap` | Read-only, structured | governance agents (auditors, validators, hygiene checkers) | Smaller/faster models (e.g. Claude Haiku 4.5) |
 | `fallback` | Reserved | (none currently) | Minimal fallback models or cached responses |
 
 ---

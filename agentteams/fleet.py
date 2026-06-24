@@ -566,9 +566,11 @@ def run_fleet(args, parser) -> int:
                     df.write_text(diff_text, encoding="utf-8")
                     wr.diff_file = str(df)
             else:
-                # Non-git: rely on emit's .agentteams-backups (created by the update).
+                # Non-git: recovery is the pre-write .agentteams-backups snapshot,
+                # created by emit (direct targets) and by run_bridge (bridge
+                # targets) before any overwrite/merge of an existing file.
                 tr.status = "OK" if rc == 0 else "REVIEW"
-                tr.detail = "non-git workspace — recovery via .agentteams-backups"
+                tr.detail = "non-git workspace — recovery via .agentteams-backups (pre-write snapshot)"
             print(f"    {target}: {tr.status}  (+{tr.added_lines}/-{tr.removed_lines}, "
                   f"{len(tr.shrink_notices)} shrink, {len(tr.user_editable_deletions)} UE-del)")
             wr.targets.append(tr)

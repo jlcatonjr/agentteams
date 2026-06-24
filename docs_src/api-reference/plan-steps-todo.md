@@ -1,6 +1,6 @@
 # `plan_steps_todo`
 
-CSV plan-steps ↔ Claude TodoWrite projection. The canonical plan-steps CSV remains the audit-bearing plan-of-record; this module projects it into TodoWrite-shaped dicts for runtime visibility in Claude. Status writeback is **append-only** and mutates only the `status` column — every other column is preserved byte-for-byte via atomic write.
+CSV plan-steps ↔ Claude TodoWrite projection. The canonical plan-steps CSV remains the audit-bearing plan-of-record; this module projects it into TodoWrite-shaped dicts for runtime visibility in Claude. Status writeback is **append-only** and mutates only the `status` column — every other column's values and the column order are preserved (the CSV is re-serialized with minimal quoting) via atomic write.
 
 Opt-in (for the bridge skill artifact) via [`--target-host-features bridge:copilot-vscode-to-claude:todo-projection`](host-features.md). The module is importable regardless of the host-feature flag; the flag only gates emission of the `.claude/skills/todo-from-plan.md` skill file.
 
@@ -48,7 +48,7 @@ Convenience: read CSV and return TodoWrite-shaped dicts with `content`, `activeF
 ```python
 update_status(csv_path: Path, step_id: str, new_status: str) -> bool
 ```
-Mutate the `status` column for a single step, preserving header order and all other columns. Atomic via `os.replace`. Returns `True` if updated; `False` if `step_id` not found. Raises `ValueError` for unknown statuses.
+Mutate the `status` column for a single step, preserving header order and all other column values. The file is re-serialized with minimal quoting, so it is not necessarily byte-identical to the original. Atomic via `os.replace`. Returns `True` if updated; `False` if `step_id` not found. Raises `ValueError` for unknown statuses.
 
 ```python
 detect_divergence(
@@ -67,4 +67,4 @@ Return the contents of the `todo-from-plan.md` skill file. Pure function — no 
 
 - The **CSV is canonical.** Structural changes (adding/removing/renaming steps) must go through the CSV; the projection picks them up on the next read.
 - The **TodoWrite projection is read-mostly.** The only writeback is `update_status`. All other TodoWrite fields are recomputed on every projection.
-- Whitespace and column order in the CSV are preserved across writebacks — `update_status` round-trips header + every other row byte-for-byte.
+- Column order and all non-`status` values in the CSV are preserved across writebacks — `update_status` re-serializes the header and every other row with minimal quoting (values and column order preserved, not necessarily byte-identical).

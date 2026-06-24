@@ -38,9 +38,9 @@ Cannot be auto-resolved. Collected into `SETUP-REQUIRED.md` for the user to fill
 ### Rules
 
 1. Placeholder names must be `UPPER_SNAKE_CASE`
-2. Every auto-resolved placeholder must map to a field produced by `_build_placeholder_map()` in `src/analyze.py`
+2. Every auto-resolved placeholder must be produced by one of the placeholder-map builders: `analyze._build_placeholder_map` in `agentteams/analyze.py`, `render._component_placeholder_map`/`render._tool_placeholder_map`, `ai_bad_habits.build_catalog_placeholders`, `framework_research.build_framework_placeholders`, or `security_refs.build_security_placeholders`
 3. Never use `{UPPER_SNAKE_CASE}` for a value that cannot be auto-resolved — use `{MANUAL:}` instead
-4. Do not introduce new auto-resolved placeholders without also adding them to `PLACEHOLDER-CONVENTIONS.md` and `src/analyze.py`
+4. Do not introduce new auto-resolved placeholders without also adding them to `PLACEHOLDER-CONVENTIONS.md` and the appropriate placeholder-map builder (most commonly `_build_placeholder_map` in `agentteams/analyze.py`)
 
 ---
 
@@ -87,12 +87,14 @@ Repositories with agent files that pre-date fencing have no `AGENTTEAMS:BEGIN/EN
 
 ```bash
 # One command to implement (safe, reversible):
-agentteams --description .github/agents/_build-description.json \
+agentteams --description .agentteams/brief.json \
            --framework copilot-vscode --project /path/to/repo --migrate
 
 # One command to revert (before or after pushing):
 agentteams --revert-migration --project /path/to/repo
 ```
+
+The consumer descriptor for an external project is always `.agentteams/brief.json`. The thin `_build-description.json` stub is reserved for `--self` builds only (see `references/SELF-BUILD-DESCRIPTOR.md`).
 
 `--migrate` creates a `pre-fencing-snapshot` git tag, then runs `--overwrite`. After migration, review `git diff pre-fencing-snapshot HEAD` to restore any project-specific content to the `USER-EDITABLE` zone, then switch to `--merge` for all future updates.
 
@@ -220,6 +222,15 @@ fenced region, and the ⛔ banner restates its immutability — but the **fence*
 not the heading, is the authoritative boundary. Automated refactor/cleanup
 agents must not alter fenced content.
 
+**Default fencing is automatic.** `emit` wraps the *entire* agent body in one
+`content` fence by default, so a template need not individually fence its
+`## Invariant Core` section to get a merge-safe boundary — the whole emitted file
+is the FENCED region. A per-section manifest plus explicit `AGENTTEAMS:BEGIN/END`
+markers (§1a) is therefore an **optional refinement**: use it when you want some
+sections fenced and others left as `USER-EDITABLE` within the same file. When the
+template declares its own fences, those govern instead of the default whole-body
+wrap.
+
 Team-owned content lives **outside** every fence: the `## Project-Specific
 Notes` section present in all agent files (§3.1) and, for the orchestrator, its
 `project_rules` gap. This is the supported, merge-safe home for project-specific
@@ -234,14 +245,14 @@ To add a new domain archetype (e.g., `data-validator`):
 1. **Write the template** → `templates/domain/data-validator.template.md`  
    Follow the structure in an existing template (e.g., `technical-validator.template.md`).
 
-2. **Register the archetype selector rule** → `src/analyze.py`  
+2. **Register the archetype selector rule** → `agentteams/analyze.py`  
    In `select_archetypes()`, add a condition that includes `"data-validator"` in the returned list when appropriate:
    ```python
    if project_type in ("data-pipeline",) and tools_include("validator"):
        archetypes.append("data-validator")
    ```
 
-3. **Register the output file** → `src/analyze.py`  
+3. **Register the output file** → `agentteams/analyze.py`  
    In `_plan_output_files()`, the file is registered automatically if the template name matches `{slug}.template.md`. Verify by running `--dry-run`.
 
 4. **Update PLACEHOLDER-CONVENTIONS.md** if new placeholders are introduced.
@@ -342,16 +353,16 @@ Claude Code front matter keys written by the adapter:
 |-------|--------|-------|
 | `name` | Extracted from VS Code `name:` key | Falls back to slug-derived name |
 | `description` | Extracted from VS Code `description:` key | Omitted if blank |
-| `allowed-tools` | Fixed default | `Bash, Read, Write, Edit` |
+| `allowed-tools` | **Mapped** from the VS Code `tools:` list | `read`→`Read`; `search`→`Grep, Glob`; `edit`→`Edit, Write`; `execute`→`Bash`; `todo`→`TodoWrite`; `agent`→`Task`. Falls back to `Bash, Read, Write, Edit` only when the agent declares no `tools:` block. This preserves per-agent least privilege — a read-only governance agent (`tools: ['read', 'search']`) gets `Read, Grep, Glob`, not write/shell. |
 
-VS Code keys **not** passed through: `user-invokable`, `tools`, `agents`, `model`, `handoffs`.
+VS Code keys **not** passed through verbatim: `user-invokable`, `agents`, `model`, `handoffs`. The `tools:` list is **mapped** to `allowed-tools` (see above), not dropped.
 
-Example Claude Code output:
+Example Claude Code output (for a `navigator` whose VS Code `tools: ['read', 'search', 'execute']`):
 ```yaml
 ---
 name: Navigator — MyProject
 description: "Navigate the project structure and locate files."
-allowed-tools: Bash, Read, Write, Edit
+allowed-tools: Read, Grep, Glob, Bash
 ---
 
 # Navigator

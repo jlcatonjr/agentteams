@@ -35,6 +35,7 @@ from dataclasses import dataclass
 from datetime import datetime, timezone
 from pathlib import Path
 
+from agentteams.atomicio import _atomic_write_text
 from agentteams.emit import _FENCE_BEGIN_RE, _YAML_FM_RE
 
 DEFAULT_RETROFIT_FENCE_ID = "content"
@@ -140,11 +141,9 @@ def inject_fence_markers(
     wrapped = _wrap_body(text, sid)
 
     if mode == "sidecar":
-        out = p.with_suffix(p.suffix + ".fenced.md" if not p.name.endswith(".md")
-                            else "")
         # Use a derived name to avoid clobbering the original.
         out = p.with_name(p.stem + ".fenced.md") if p.suffix == ".md" else p.with_name(p.name + ".fenced.md")
-        out.write_text(wrapped, encoding="utf-8")
+        _atomic_write_text(out, wrapped)
         return InjectResult(output_path=out, injected=True, fence_id=sid)
 
     # in-place: backup first, then rewrite.
@@ -153,7 +152,9 @@ def inject_fence_markers(
     backup_dir.mkdir(parents=True, exist_ok=True)
     backup_target = backup_dir / p.name
     shutil.copy2(p, backup_target)
-    p.write_text(wrapped, encoding="utf-8")
+    # Atomic rewrite (temp-in-same-dir + os.replace), matching emit.py — a crash
+    # mid-write must not truncate the live source file (backup above is the net).
+    _atomic_write_text(p, wrapped)
     return InjectResult(
         output_path=p, injected=True, backup_path=backup_target, fence_id=sid,
     )

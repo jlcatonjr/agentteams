@@ -2,14 +2,14 @@
 .SH NAME
 agentteams \- Generate a complete agent team for any project.
 .SH SYNOPSIS
-.B agentteams [--description PATH] [--project PATH] [--framework NAME] [--output DIR] [--dry-run] [--json] [--overwrite] [--merge] [--yes] [--no-scan] [--cost-routing] [--update] [--prune] [--adopt-orphans] [--check] [--refresh-index] [--query-index TEXT] [--query-k N] [--query-strategy QUERY_STRATEGY] [--fail-on-legacy-skip] [--no-vscode-tasks] [--no-add-fence-markers] [--scan-security] [--check-budget] [--self] [--allow-external-self-output] [--post-audit] [--auto-correct] [--enrich] [--strict-manual-placeholders] [--no-strict-manual-placeholders STRICT_MANUAL_PLACEHOLDERS] [--security-offline] [--security-max-items N] [--security-no-nvd] [--migrate] [--convert-from DIR] [--interop-from DIR] [--interop-source-framework INTEROP_SOURCE_FRAMEWORK] [--interop-mode INTEROP_MODE] [--bridge-from DIR] [--bridge-source-framework BRIDGE_SOURCE_FRAMEWORK] [--bridge-check] [--bridge-refresh] [--bridge-merge] [--bridge-no-skills] [--recipe-check] [--revert-migration] [--version] [--no-backup] [--shrink-policy SHRINK_POLICY] [--list-backups] [--restore-backup TIMESTAMP] [--add-fence-markers PATH] [--in-place] [--target-host-features TOKENS] [--capture-baseline PATH] [--baseline-label LABEL] [--check-baseline PATH] [--verify-waivers] [--verify-integrity] [--verify-backup TIMESTAMP] [--stale-check] [--stale-remediate] [--stale-no-git] [--stale-restore TS] [--prune-backups KEEP] [--keep-within-days DAYS] [--backup-mirror DIR] [--fleet DIR] [--fleet-frameworks FLEET_FRAMEWORKS] [--fleet-report DIR]
+.B agentteams [--description PATH] [--project PATH] [--framework NAME] [--output DIR] [--dry-run] [--json] [--overwrite] [--merge] [--yes] [--no-scan] [--cost-routing] [--update] [--prune] [--adopt-orphans] [--check] [--refresh-index] [--query-index TEXT] [--query-k N] [--query-strategy QUERY_STRATEGY] [--fail-on-legacy-skip] [--no-vscode-tasks] [--no-add-fence-markers] [--scan-security] [--check-budget] [--self] [--allow-external-self-output] [--post-audit] [--auto-correct] [--enrich] [--strict-manual-placeholders] [--no-strict-manual-placeholders] [--security-offline] [--security-max-items N] [--security-no-nvd] [--migrate] [--convert-from DIR] [--interop-from DIR] [--interop-source-framework INTEROP_SOURCE_FRAMEWORK] [--interop-mode INTEROP_MODE] [--bridge-from DIR] [--bridge-source-framework BRIDGE_SOURCE_FRAMEWORK] [--bridge-check] [--bridge-refresh] [--bridge-merge] [--bridge-no-skills] [--recipe-check] [--revert-migration] [--version] [--no-backup] [--shrink-policy SHRINK_POLICY] [--list-backups] [--restore-backup TIMESTAMP] [--add-fence-markers PATH] [--in-place] [--target-host-features TOKENS] [--capture-baseline PATH] [--baseline-label LABEL] [--check-baseline PATH] [--verify-waivers] [--verify-integrity] [--verify-backup TIMESTAMP] [--stale-check] [--stale-remediate] [--stale-no-git] [--stale-restore TS] [--prune-backups KEEP] [--keep-within-days DAYS] [--backup-mirror DIR] [--fleet DIR] [--fleet-frameworks FLEET_FRAMEWORKS] [--fleet-report DIR] [--goose-source NAME] [--goose-model ID] [--goose-show] [--goose-config PATH]
 .SH DESCRIPTION
 .PP
 Generate a complete agent team for any project.
 .PP
 Given a project description file (.json or .md), agentteams analyzes the project goal, selects the right 4\-tier agent team, renders all agent files from templates, and writes them to the target project's .github/agents/ directory.
 .PP
-The generated team includes an orchestrator, ten governance agents, domain agents appropriate for the deliverable type, and one workstream expert per project component.
+The generated team includes an orchestrator, eleven governance agents, domain agents appropriate for the deliverable type, and one workstream expert per project component.
 .SH OPTIONS
 .TP
 .B \-\-description, \-d PATH
@@ -91,7 +91,7 @@ Operate on the module's own agent team using .github/agents/_build\-description.
 Permit \-\-self to write self\-maintenance artifacts to an \-\-output path outside the AgentTeamsModule source tree. Required to prevent accidental writes into consumer repositories.
 .TP
 .B \-\-post\-audit
-Run a post\-generation audit after emit. Performs static checks (unresolved placeholders, YAML integrity, required\-agent coverage) and, if the `gh` CLI is authenticated, an AI\-powered conflict and presupposition review via GitHub Models (Auto model selection).
+Run a post\-generation audit after emit. Performs static checks (unresolved placeholders, YAML integrity, required\-agent coverage) and, if the standalone `copilot` CLI is available and authenticated, an AI\-powered conflict and presupposition review via GitHub Models (Auto model selection).
 .TP
 .B \-\-auto\-correct
 After \-\-post\-audit finds issues, invoke the standalone `copilot` CLI in non\-interactive mode to repair generated team files, then rerun the audit.
@@ -224,6 +224,18 @@ Which infrastructures to update per workspace (default: both). `both` = copilot\
 .TP
 .B \-\-fleet\-report DIR
 Directory for the fleet report (default: <DIR>/.agentteams\-fleet/<run\-id>/).
+.TP
+.B \-\-goose\-source NAME
+Switch Goose's provider in config.yaml (e.g. ollama, openrouter). Applies that source's default model unless \-\-goose\-model is given.
+.TP
+.B \-\-goose\-model ID
+Set Goose's model in config.yaml (with \-\-goose\-source: that source's model; alone: the current provider's model).
+.TP
+.B \-\-goose\-show
+Show the resolved config.yaml path, current provider/model, any masking env override, and the known sources.
+.TP
+.B \-\-goose\-config PATH
+Override the goose config.yaml path (else resolved via goose info / XDG).
 .SH EXIT STATUS
 .TP
 .B 0

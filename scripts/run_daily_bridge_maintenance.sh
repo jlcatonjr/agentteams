@@ -109,12 +109,24 @@ if ! compgen -G "$SOURCE_DIR/*.agent.md" >/dev/null; then
   exit 2
 fi
 
-targets=("copilot-cli" "claude")
+targets=("copilot-cli" "claude" "goose")
 
+# Use --bridge-merge, NOT --bridge-refresh: OUTPUT_ROOT is the agentteams repo root,
+# whose CLAUDE.md is hand-authored and carries no AGENTTEAMS-BRIDGE fences. Per the
+# binding references/bridge-refresh-safety.md invariant, --bridge-refresh would
+# unconditionally overwrite that file; --bridge-merge refreshes only fenced (managed)
+# regions and preserves the unfenced hand-authored entry file.
+#
+# The goose target writes the SHARED, multi-tool repo-root AGENTS.md + .goosehints
+# (also read by Cursor/Codex/Cline). Under --bridge-merge these are re-rendered
+# fenced-region-only (AGENTTEAMS-BRIDGE markers), so the daily run never clobbers
+# another tool's AGENTS.md content. NEVER use --bridge-refresh for the goose target
+# (it would overwrite the whole shared file). Both files are already fenced in this
+# repo, so no first-create occurs. See references/bridge-refresh-safety.md §"Goose target".
 for target in "${targets[@]}"; do
   run_noncritical \
-    "Bridge refresh: copilot-vscode -> ${target}" \
-    python build_team.py --bridge-from "$SOURCE_DIR" --framework "$target" --output "$OUTPUT_ROOT" --bridge-refresh
+    "Bridge merge: copilot-vscode -> ${target}" \
+    python build_team.py --bridge-from "$SOURCE_DIR" --framework "$target" --output "$OUTPUT_ROOT" --bridge-merge
 
   run_noncritical \
     "Bridge check: copilot-vscode -> ${target}" \

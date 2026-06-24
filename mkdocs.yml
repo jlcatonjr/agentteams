@@ -51,12 +51,19 @@ nav:
       - Cross-Repository Coordination: cross-repository-coordination-guide.md
       - Working with Your Generated Team: working-with-your-generated-team-guide.md
       - Verification Environment: verification-environment.md
+  - Goose:
+      - System Prep & Source/Model Switch: goose-system-prep.md
+      - Cheat Sheet: goose-cheat-sheet.md
+      - Cloud Providers: goose-cloud-providers.md
+      - Privileges: goose-privileges.md
   - API Reference:
       - Overview: api-reference/index.md
       - ingest: api-reference/ingest.md
       - analyze: api-reference/analyze.md
+      - manifest-format: api-reference/manifest-format.md
       - render: api-reference/render.md
       - emit: api-reference/emit.md
+      - fences: api-reference/fences.md
       - convert: api-reference/convert.md
       - interop: api-reference/interop.md
       - bridge: api-reference/bridge.md
@@ -84,9 +91,14 @@ nav:
       - host-features: api-reference/host-features.md
       - baseline: api-reference/baseline.md
       - bridge-subagents: api-reference/bridge-subagents.md
+      - bridge-subagents-goose: api-reference/bridge-subagents-goose.md
+      - bridge-sources: api-reference/bridge-sources.md
       - hooks-emit: api-reference/hooks-emit.md
       - instructions-split: api-reference/instructions-split.md
       - schedule-emit: api-reference/schedule-emit.md
+      - mcp-detect: api-reference/mcp-detect.md
+      - mcp-emit: api-reference/mcp-emit.md
+      - goose-config: api-reference/goose-config.md
       - pr-management: api-reference/pr-management.md
   - Template Authoring: template-authoring.md
   - Description Format: DESCRIPTION-FORMAT.md

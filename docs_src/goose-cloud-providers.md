@@ -8,7 +8,7 @@ How to connect Goose to cloud-hosted models instead of (or alongside) a local Ol
 
 | Situation | Recommendation |
 |---|---|
-| Need the strongest available model | OpenRouter → `anthropic/claude-opus-4` or `google/gemini-2.5-pro` |
+| Need the strongest available model | OpenRouter → `anthropic/claude-opus-4.1` or `google/gemini-2.5-pro` (exact availability varies by provider — see the model tables below) |
 | Cost-optimised, high throughput | OpenRouter → `deepseek/deepseek-r1-0528` or `qwen/qwen3-coder` |
 | Direct Anthropic billing | `anthropic` provider |
 | Enterprise / org key management | `azure_openai`, `aws_bedrock`, or `databricks` |

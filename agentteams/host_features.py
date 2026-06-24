@@ -20,9 +20,13 @@ _VALID_NAMESPACES = frozenset(
         "claude",
         "copilot-vscode",
         "copilot-cli",
+        "goose",
         "bridge:copilot-vscode-to-claude",
         "bridge:copilot-vscode-to-copilot-cli",
         "bridge:copilot-cli-to-claude",
+        "bridge:copilot-vscode-to-goose",
+        "bridge:claude-to-goose",
+        "bridge:copilot-cli-to-goose",
     }
 )
 
@@ -30,11 +34,24 @@ _KNOWN_FEATURES: dict[str, frozenset[str]] = {
     "claude": frozenset({"hooks", "subagents", "schedule", "mcp", "critic", "cache-split", "todo-projection", "parallelize"}),
     "copilot-vscode": frozenset({"chat-modes", "inline-yaml-handoffs"}),
     "copilot-cli": frozenset({"manifest-routing"}),
+    # goose: only `mcp` so far — wires operator-specified mcp_servers[] into recipes
+    # as opt-in extensions (Goose already grants CLI via the `developer` builtin, so
+    # this is never a default). The `goose` namespace lands here ahead of the goose
+    # bridge phase (goose-integration.plan §5); bridge `goose:` tokens are still owed.
+    "goose": frozenset({"mcp"}),
     "bridge:copilot-vscode-to-claude": frozenset(
         {"subagents", "hooks", "schedule", "mcp", "critic", "cache-split", "todo-projection", "parallelize"}
     ),
     "bridge:copilot-vscode-to-copilot-cli": frozenset({"manifest-routing"}),
     "bridge:copilot-cli-to-claude": frozenset({"subagents", "hooks"}),
+    # goose-target bridges: `mcp` wires selected MCP servers into the emitted
+    # bridge-orchestrator recipe (opt-in). `subagents` additionally emits one thin
+    # stub recipe per source agent into .goose/recipes/ (pointers to the canonical
+    # source; opt-in, default off). The `developer` (CLI) extension is always
+    # emitted by the bridge recipe regardless of these tokens.
+    "bridge:copilot-vscode-to-goose": frozenset({"mcp", "subagents"}),
+    "bridge:claude-to-goose": frozenset({"mcp", "subagents"}),
+    "bridge:copilot-cli-to-goose": frozenset({"mcp", "subagents"}),
 }
 
 

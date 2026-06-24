@@ -12,8 +12,10 @@ This reference defines the **supported public API surface** (documented modules 
 |--------|------|
 | [`ingest`](ingest.md) | Load and normalize project description files |
 | [`analyze`](analyze.md) | Classify project type, select archetypes (including contextual post-production selection), build team manifest |
+| [`manifest_format`](manifest-format.md) | Manifest field derivation/formatting helpers (_format_*/_default_*/_collect_*) — carved from analyze |
 | [`render`](render.md) | Resolve templates and produce rendered agent file content |
 | [`emit`](emit.md) | Write rendered agent files to disk safely |
+| [`fences`](fences.md) | Section-fencing internals (regexes, MergeResult, fenced merge, shrink detection) — carved from emit |
 
 ## Core Support Modules
 
@@ -71,9 +73,12 @@ This reference defines the **supported public API surface** (documented modules 
 | [`host_features`](host-features.md) | Parse / validate `<ns>:<feature>` opt-in subselector tokens for emission gating |
 | [`baseline`](baseline.md) | Deterministic SHA-256 emission baselines (capture / diff) used by regression tests |
 | [`bridge_subagents`](bridge-subagents.md) | Per-agent Claude subagent stub emitter (bridge:copilot-vscode-to-claude:subagents) |
+| [`bridge_subagents_goose`](bridge-subagents-goose.md) | Per-agent Goose stub-recipe emitter (bridge:`<src>`-to-goose:subagents) |
+| [`bridge_sources`](bridge-sources.md) | Source-team inventory, file collection, hashing + bridge-freshness check (framework-aware) |
 | [`hooks_emit`](hooks-emit.md) | Claude hooks settings + recursion-bounded guard emitter (bridge:copilot-vscode-to-claude:hooks) |
 | [`instructions_split`](instructions-split.md) | Cache-aware CLAUDE.md layout: preamble + boundary + dynamic stanza (bridge:copilot-vscode-to-claude:cache-split) |
 | [`schedule_emit`](schedule-emit.md) | `/schedule` routine spec emitter (bridge:copilot-vscode-to-claude:schedule) |
+| [`goose_config`](goose-config.md) | Locate + safely mutate Goose's `config.yaml` for source/model switching (no key handling) |
 
 ## PR Management
 

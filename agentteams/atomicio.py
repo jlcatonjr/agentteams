@@ -78,7 +78,21 @@ def _atomic_copy(src: Path, dest: Path) -> None:
                 tmp.unlink()
 
 def _resolve_path(output_dir: Path, rel_path: str) -> Path:
-    """Resolve a relative path that may start with '../'."""
-    # Paths like '../copilot-instructions.md' should go one level above agents dir
-    clean = Path(rel_path)
-    return (output_dir / clean).resolve()
+    """Resolve a relative path that may start with '../', with a containment guard.
+
+    Generated layouts legitimately reach up to two levels above the agents dir
+    (``../copilot-instructions.md``/``../CLAUDE.md``, ``../../.vscode/tasks.json``,
+    goose ``../../AGENTS.md`` / ``../../.goosehints``), so the allowed boundary is
+    ``output_dir.parent.parent``. A path that resolves outside that boundary (an
+    absolute path, or deeper ``../`` traversal) is rejected — defense-in-depth so a
+    future descriptor-derived path can't silently become an arbitrary-file
+    overwrite. Callers still own the provenance of ``rel_path``.
+    """
+    resolved = (output_dir / Path(rel_path)).resolve()
+    boundary = output_dir.resolve().parent.parent
+    if not resolved.is_relative_to(boundary):
+        raise ValueError(
+            f"resolved path {resolved} escapes the allowed boundary {boundary} "
+            f"(output_dir={output_dir}, rel_path={rel_path!r})"
+        )
+    return resolved

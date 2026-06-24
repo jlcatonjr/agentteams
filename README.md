@@ -17,7 +17,7 @@ Given a project description (a `.json` or `.md` brief), the module:
 1. **Analyzes** the project goal, deliverables, tools, and components
 2. **Selects** the right agent archetypes from a 4-tier taxonomy
 3. **Renders** all agent files by filling in project-specific placeholders
-4. **Emits** ready-to-use agent files for VS Code Copilot, Copilot CLI, Claude, or Goose *(beta)*
+4. **Emits** ready-to-use agent files for VS Code Copilot, Copilot CLI, Claude, Goose *(beta)*, or the cross-tool AGENTS.md standard *(beta)*
 
 The generated team includes:
 - 1 **Orchestrator** agent — coordinates all workflows
@@ -59,7 +59,7 @@ Short reads (about five paragraphs each) explaining how core module components f
 
 ### 1. Install
 
-Clone the repository (no external dependencies — stdlib Python 3.11+):
+Clone the repository (one runtime dependency, `jsonschema`; otherwise stdlib Python 3.11+):
 
 ```bash
 git clone https://github.com/jlcatonjr/agentteams
@@ -296,6 +296,10 @@ Coordinates all workflows. Enforces security, consistency, and voice fidelity ru
 | `module-doc-author` | Projects with `pip_package_name` or PyPI distribution |
 | `module-doc-validator` | Projects with `pip_package_name` or PyPI distribution |
 
+> This table lists a representative subset. Additional selectable archetypes
+> (e.g. `content-enricher`, `retrieval-integrator`) are documented in
+> [How It Works](https://jlcatonjr.github.io/agentteams/how-it-works/).
+
 > Tools are **not** agents. Operational tools (databases, CLIs, build systems)
 > become reference/skill **documents** — see [Tool Classification](#tool-classification).
 
@@ -351,7 +355,7 @@ Options:
                        subfolders), covering .github/agents/ and .claude/. Git-commit
                        snapshot + git-diff content audit per workspace; non-destructive
                        (merge-only). Dry-run preview by default; pass --yes to apply.
-  --fleet-frameworks   github | claude | both (default: both)
+  --fleet-frameworks   github | claude | goose | both | all (default: both)
   --fleet-report DIR   Fleet report dir (default: <DIR>/.agentteams-fleet/<run-id>/)
   --version            Print version
 ```
@@ -381,7 +385,7 @@ When the module is updated (e.g., a new governance agent is added), run `--updat
 agentteams --description brief.json --update --merge
 ```
 
-Use bare `--update` only when you intentionally want full-file overwrite behavior on existing files.
+Bare `--update` merges by default (re-renders only template-fenced regions, preserving user-authored content outside fence markers — the same as `--update --merge`). Use `--update --overwrite` only when you intentionally want full-file overwrite behavior on existing files.
 
 To also delete agents that are no longer part of the taxonomy:
 
@@ -475,7 +479,7 @@ Templates ship with `AGENTTEAMS:BEGIN/END` fence markers around every template-o
 | `--overwrite` | Full-file replacement — best for first-time generation |
 | `--merge` | Updates fenced sections only; preserves everything outside markers |
 | `--update --merge` | Canonical safe update mode: re-render drifted files + emit new agents while preserving user-authored content outside fences |
-| `--update` | Incremental update with overwrite semantics for existing files; use only when intentional |
+| `--update` | Incremental update that merges by default (fenced regions only, preserving content outside markers); pass `--update --overwrite` for full-file replacement |
 | `--migrate` | Retrofits fence markers onto a legacy team in one step |
 
 See [templates/FENCE-CONVENTIONS.md](agentteams/templates/FENCE-CONVENTIONS.md) for the full specification.
@@ -690,7 +694,7 @@ agentteams --description brief.json --project ~/code/myproject --overwrite --yes
 
 ### 7. Post-generation audit
 
-Run static checks (unresolved placeholders, YAML integrity, required-agent coverage) immediately after generation. If the `gh` CLI is authenticated, also runs an AI-powered conflict and presupposition review via GitHub Models.
+Run static checks (unresolved placeholders, YAML integrity, required-agent coverage) immediately after generation. If the standalone `copilot` CLI is available and authenticated, also runs an AI-powered conflict and presupposition review via GitHub Models.
 
 ```bash
 agentteams --description brief.json --project ~/code/myproject --post-audit --yes
@@ -868,9 +872,9 @@ agentteams/
 │   ├── remediate.py           # Auto-correction
 │   ├── graph.py               # Agent topology graph
 │   ├── templates/             # All agent templates (shipped with package)
-│   │   ├── universal/         # Governance agent templates (10)
+│   │   ├── universal/         # Governance agent templates (11)
 │   │   ├── domain/            # Domain archetype templates
-│   │   ├── builder/           # Team Builder agent templates (3)
+│   │   ├── builder/           # Team Builder agent templates (4)
 │   │   ├── workstream-expert.template.md
 │   │   ├── copilot-instructions.template.md
 │   │   ├── PLACEHOLDER-CONVENTIONS.md
@@ -879,7 +883,10 @@ agentteams/
 │       ├── base.py            # Abstract adapter
 │       ├── copilot_vscode.py  # VS Code Copilot adapter
 │       ├── copilot_cli.py     # Copilot CLI adapter
-│       └── claude.py          # Claude Code adapter
+│       ├── claude.py          # Claude Code adapter
+│       ├── goose.py           # Goose adapter
+│       ├── agents_md.py       # AGENTS.md adapter
+│       └── registry.py        # Framework registry
 ├── schemas/
 │   ├── project-description.schema.json
 │   └── team-manifest.schema.json

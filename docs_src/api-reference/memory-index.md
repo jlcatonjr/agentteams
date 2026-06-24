@@ -15,7 +15,7 @@ Used by `@navigator`, `@adversarial`, and `@work-summarizer` to retrieve relevan
 - **Robust to absence** — Empty source list → empty but valid index (no error)
 - **Graceful degradation** — Per-paragraph passage scoring (I2, I9) with backward-compatible snippet fallback
 - **Explicit contract metadata** — Build/runtime ownership, fallback policy, and vector runtime mode are encoded in the index payload
-- **Deterministic** — Same source set always yields same scores; suitable for testing and reproducible workflows
+- **Deterministic** — A full rebuild (`build_memory_index`) over the same source set always yields the same scores; suitable for testing and reproducible workflows. The feature-flagged incremental update path recomputes `vector_norm_sq` for the changed document, so it produces the same per-document values a full rebuild would (only the `built_at` / `index_build_id` metadata differs).
 
 ---
 
@@ -315,7 +315,7 @@ Audit / validation / research agents (`@conflict-auditor`, `@conflict-resolution
 **v=2 thresholds (per-strategy):**
 
 - **Lexical (default):** reliable hit at score `≥ 3.0`. Single-term queries always go lexical-first.
-- **Vector fallback:** triggered on zero hits OR zero query-term overlap (single-term false-positive guard). Reliable at score `≥ 0.30`; cap typically `~0.42`.
+- **Vector fallback:** triggered on zero hits OR zero query-term overlap (single-term false-positive guard). Reliable at score `≥ 0.30`. This floor is corpus-specific guidance, not a mathematical cap — cosine ∈ [0,1] and high values (`≥ 0.5`, up to `1.0`) are legitimate when query terms concentrate in a focused or short document, so do not treat `≥ 0.5` as anomalous.
 - **Either strategy:** `< reliable` but `> 0` → "candidate" — open the snippet's source file, never block on the index.
 
 Empirically: corpus expanded 69 → 198 docs on `collector-management`, lexical reliable rate 3/4 → 4/4, vector reliable 0/9 → 3/9 + 1 candidate.

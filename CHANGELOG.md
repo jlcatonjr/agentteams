@@ -195,6 +195,46 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### fixed
 
+- **`technical-validator` now selected for academic/research projects.** Added
+  `academic`/`thesis` to the `technical-validator` archetype trigger in
+  `analyze.py`. Research deliverables make verifiable claims against authority
+  sources — exactly what `technical-validator` checks — but the `research-project`
+  example shipped without it, leaving the universal orchestrator/content-enricher
+  handoffs to `@technical-validator` dangling (9 cross-ref warnings). Regenerated
+  the `research-project` example snapshot (adds `technical-validator.agent.md`; no
+  other example's selection or snapshot changes). Audited (adversarial + conflict).
+- **Adversarial + conflict audit pass across scripts and docs.** Two-track audit
+  (presupposition critique + drift/contradiction detection) over the package and
+  documentation, with revisions: fixed a CI-red `check-durable-tmp-refs.sh`
+  false-positive and its `set -e` increment-abort; changed the daily bridge
+  maintenance script from `--bridge-refresh` to `--bridge-merge` (it was
+  clobbering the hand-authored root `CLAUDE.md`, violating `bridge-refresh-safety.md`);
+  switched `analyze.py` archetype/type keyword matching to word-boundary (kills
+  `doc`→`docker` / `pip`→`pipeline` false-positive archetypes) with plural
+  tolerance; guarded a notebook `source:null` `TypeError`; routed `mcp_emit` /
+  `hooks_emit` / `schedule_emit` / `fence_inject` writes through `atomicio`
+  (atomic + symlink-safe); added GitHub/Slack/Stripe/JWT credential patterns and
+  bare-home-dir PII detection to `scan.py`; deduped eval-suite component slugs;
+  fixed the man-page `store_false` synopsis and governance-agent count and
+  corrected `--post-audit` to name the `copilot` CLI (not `gh`); mapped per-agent
+  `tools:` to Claude `allowed-tools` so read-only governance agents are no longer
+  granted `Bash`/`Write`/`Edit`; corrected the memory-index "cosine cap ~0.42"
+  guidance, the `copilot-privileges` bypass contradiction, and substantial
+  api-reference drift (`security-refs`, `audit`, `baseline`, `bridge-subagents`,
+  `emit`, `fleet`, `handoff_payloads`, `schedule-emit`, …); and regenerated the
+  example snapshots to reflect the corrected archetype selection.
+- **Memory-index incremental update now matches a full rebuild.** The sed-based
+  incremental path dropped each changed document's `vector_norm_sq`; it is now
+  recomputed (identical to `build_memory_index`), so the on-disk artifact equals a
+  full rebuild and the parity guard is meaningful.
+- **Bridge merge/overwrite backs up existing target entry files** before writing
+  (`.agentteams-backups` pre-write snapshot), making fleet's non-git recovery
+  detail truthful.
+- **Interop preserves agent name/description across the CAI round-trip** for
+  `claude`/`copilot-vscode`/`goose` targets (`copilot-cli` stays body-only by
+  design).
+- **`atomicio._resolve_path` rejects path traversal** beyond the two-levels-up
+  generation depth (defense-in-depth against an arbitrary-file overwrite).
 - **`@work-summarizer` now reliably triggers at session close.** The daily
   work-summary capture was a *soft* step buried at the end of Workflow 11, reachable
   only when a session traversed a numbered workflow — so ad-hoc/direct sessions that

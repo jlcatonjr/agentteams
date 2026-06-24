@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import json
 from pathlib import Path
 
 import pytest
@@ -633,6 +634,238 @@ def test_normalize_bridge_output_root_goose(tmp_path: Path):
     # A plain repo-root --output is left untouched.
     assert _normalize_bridge_output_root(root, "goose") == root
 
+
+def test_bridge_merge_backs_up_existing_targets(tmp_path: Path):
+    """C3/G08-A1: a merge/overwrite over existing target entry files must create a
+    pre-write .agentteams-backups snapshot (no backup on first-time create)."""
+    source_dir = tmp_path / "src" / ".github" / "agents"
+    _build_source("copilot-vscode", source_dir)
+    out_root = tmp_path / "out"
+    backups = out_root / ".agentteams-backups"
+
+    # First-time create: nothing pre-existing → no backup expected.
+    run_bridge(
+        source_dir=source_dir,
+        source_framework="copilot-vscode",
+        target_framework="claude",
+        output_root=out_root,
+        dry_run=False,
+    )
+    assert not backups.exists(), "first-time bridge create should not back up (nothing existed)"
+
+    # Merge over the now-existing target files → a backup snapshot must appear.
+    run_bridge(
+        source_dir=source_dir,
+        source_framework="copilot-vscode",
+        target_framework="claude",
+        output_root=out_root,
+        dry_run=False,
+        merge_only=True,
+    )
+    assert backups.exists(), "bridge merge over existing targets must create a backup"
+    snapshots = [p for p in backups.iterdir() if p.is_dir()]
+    assert snapshots, "expected at least one timestamped backup snapshot"
+
+
+
+# ---------------------------------------------------------------------------
+# Empty-inventory guard (R1) and markdown-only source hashing (R2)
+# Regression coverage for the 2026-06-22 goose-bridge remediation. See
+# references/plans/goose-bridge-remediation-2026-06-22.plan.md.
+# ---------------------------------------------------------------------------
+
+
+def test_empty_inventory_emits_notice_on_generate(tmp_path: Path):
+    """A source dir with no agent files yields a 0-agent bridge → loud notice (R1a)."""
+    source_dir = tmp_path / "src" / ".github" / "agents"
+    source_dir.mkdir(parents=True)  # deliberately empty: no *.agent.md files
+
+    result = run_bridge(
+        source_dir=source_dir,
+        source_framework="copilot-vscode",
+        target_framework="goose",
+        output_root=tmp_path / "out",
+        dry_run=False,
+        overwrite=True,
+        check_only=False,
+    )
+
+    # Generation still succeeds (notice, not a hard error — STABILITY.md).
+    assert result.success, f"errors: {result.errors}"
+    assert any("Empty bridge inventory" in n for n in result.notices), result.notices
+    assert any(".github/agents" in n for n in result.notices), result.notices
+
+
+def test_populated_inventory_emits_no_empty_notice(tmp_path: Path):
+    """The R1a notice fires strictly on len(inventory) == 0 (guards notices==[] tests)."""
+    source_dir = tmp_path / "src" / ".github" / "agents"
+    _build_source("copilot-vscode", source_dir)  # one orchestrator agent
+
+    result = run_bridge(
+        source_dir=source_dir,
+        source_framework="copilot-vscode",
+        target_framework="goose",
+        output_root=tmp_path / "out",
+        dry_run=False,
+        overwrite=True,
+        check_only=False,
+    )
+    assert result.success
+    assert not any("Empty bridge inventory" in n for n in result.notices), result.notices
+
+
+def test_bridge_check_fails_on_empty_inventory(tmp_path: Path):
+    """--bridge-check must FAIL a 0-inventory manifest even when hashes are consistent (R1b)."""
+    source_dir = tmp_path / "src" / ".github" / "agents"
+    source_dir.mkdir(parents=True)  # empty source
+    out_root = tmp_path / "out"
+
+    generated = run_bridge(
+        source_dir=source_dir,
+        source_framework="copilot-vscode",
+        target_framework="claude",
+        output_root=out_root,
+        dry_run=False,
+        overwrite=True,
+        check_only=False,
+    )
+    assert generated.success  # generation succeeds with the empty-inventory notice
+
+    checked = run_bridge(
+        source_dir=source_dir,
+        source_framework="copilot-vscode",
+        target_framework="claude",
+        output_root=out_root,
+        dry_run=False,
+        overwrite=False,
+        check_only=True,
+    )
+    assert not checked.success
+    assert checked.check_ok is False
+    text = Path(checked.check_report_path).read_text(encoding="utf-8")
+    assert "FAIL" in text
+    assert "Empty Inventory" in text
+
+
+def test_source_hashes_exclude_non_markdown_junk(tmp_path: Path):
+    """Build artifacts and OS junk must not enter the manifest hash set (R2)."""
+    source_dir = tmp_path / "src" / ".github" / "agents"
+    _build_source("copilot-vscode", source_dir)
+    # The real-world offenders: a gitignored build-tool artifact and macOS junk.
+    (source_dir / "_build-description.json").write_text('{"project_name": "Demo"}', encoding="utf-8")
+    (source_dir / ".DS_Store").write_bytes(b"\x00junk")
+
+    out_root = tmp_path / "out"
+    result = run_bridge(
+        source_dir=source_dir,
+        source_framework="copilot-vscode",
+        target_framework="claude",
+        output_root=out_root,
+        dry_run=False,
+        overwrite=True,
+        check_only=False,
+    )
+    assert result.success
+
+    manifest = json.loads(
+        (out_root / "references" / "bridges" / "copilot-vscode-to-claude" / "bridge-manifest.json")
+        .read_text(encoding="utf-8")
+    )
+    paths = [row["path"] for row in manifest["source_hashes"]]
+    assert not any("_build-description.json" in p for p in paths), paths
+    assert not any(".DS_Store" in p for p in paths), paths
+    # Sanity: the genuine agent definition IS still hashed.
+    assert any(p.endswith("orchestrator.agent.md") for p in paths), paths
+
+
+# ---------------------------------------------------------------------------
+# Goose-as-SOURCE bridging (plan P2): detect, recipe-yaml inventory,
+# framework-aware hashing (both directions), goose->claude bridge.
+# ---------------------------------------------------------------------------
+
+from agentteams.bridge_sources import _collect_source_files, _extract_inventory  # noqa: E402
+from agentteams.interop import detect_framework  # noqa: E402
+
+_RECIPE = (
+    'version: "1.0.0"\n'
+    'title: "{title}"\n'
+    'description: "{desc}"\n'
+    '{entry}'
+    'instructions: |\n'
+    '  Body for {title}.\n'
+    'extensions:\n'
+    '  - type: builtin\n'
+    '    name: developer\n'
+    '    bundled: true\n'
+    '    timeout: 300\n'
+)
+
+
+def _goose_source(tmp_path: Path) -> Path:
+    recipes = tmp_path / "proj" / ".goose" / "recipes"
+    recipes.mkdir(parents=True)
+    (recipes / "orchestrator.yaml").write_text(
+        _RECIPE.format(title="Orchestrator — Demo", desc="Coordinates", entry='prompt: "go"\n'),
+        encoding="utf-8")
+    (recipes / "cleanup.yaml").write_text(
+        _RECIPE.format(title="Cleanup — Demo", desc="Removes stale files", entry=""), encoding="utf-8")
+    (recipes / "_build-description.json").write_text("{}", encoding="utf-8")  # junk, must not hash
+    return recipes
+
+
+def test_detect_framework_goose():
+    # path-based (.goose in parts) does not require the dir to exist
+    assert detect_framework(Path("/x/.goose/recipes")) == "goose"
+
+
+def test_goose_source_collect_and_inventory(tmp_path: Path):
+    recipes = _goose_source(tmp_path)
+    # framework-aware hashing: goose -> .yaml only, junk .json excluded
+    collected = sorted(p.name for p in _collect_source_files(recipes, "goose"))
+    assert collected == ["cleanup.yaml", "orchestrator.yaml"]
+    assert "_build-description.json" not in collected
+    # recipe-yaml inventory: titles, roles, invokability, orchestrator first
+    inv = _extract_inventory(recipes, "goose")
+    assert [r["display_name"] for r in inv] == ["Orchestrator — Demo", "Cleanup — Demo"]
+    assert inv[0]["invokable"] == "yes" and inv[1]["invokable"] == "no"
+    assert inv[1]["role"] == "Removes stale files"
+
+
+def test_collect_source_files_both_directions(tmp_path: Path):
+    # The task-2 hardening must survive for non-goose sources.
+    md = tmp_path / "agents"
+    md.mkdir()
+    (md / "orchestrator.agent.md").write_text("# o\n", encoding="utf-8")
+    (md / "_build-description.json").write_text("{}", encoding="utf-8")
+    (md / ".DS_Store").write_bytes(b"junk")
+    names = sorted(p.name for p in _collect_source_files(md, "copilot-vscode"))
+    assert names == ["orchestrator.agent.md"]  # md hashed, json + DS_Store excluded
+
+
+def test_goose_to_claude_bridge_check(tmp_path: Path):
+    recipes = _goose_source(tmp_path)
+    out = tmp_path / "out"
+    gen = run_bridge(source_dir=recipes, target_framework="claude", output_root=out, overwrite=True)
+    assert gen.success
+    import json as _json
+    manifest = _json.loads(
+        (out / "references" / "bridges" / "goose-to-claude" / "bridge-manifest.json").read_text())
+    assert manifest["source_framework"] == "goose" and manifest["inventory_count"] == 2
+    assert all(r["path"].endswith(".yaml") for r in manifest["source_hashes"])
+    # fresh -> PASS
+    chk = run_bridge(source_dir=recipes, target_framework="claude", output_root=out, check_only=True)
+    assert chk.check_ok is True
+    # mutate -> FAIL
+    (recipes / "cleanup.yaml").write_text((recipes / "cleanup.yaml").read_text() + "\n# x\n", encoding="utf-8")
+    chk2 = run_bridge(source_dir=recipes, target_framework="claude", output_root=out, check_only=True)
+    assert chk2.check_ok is False
+
+
+def test_goose_to_goose_forbidden(tmp_path: Path):
+    recipes = _goose_source(tmp_path)
+    with pytest.raises(ValueError, match="goose-to-goose"):
+        run_bridge(source_dir=recipes, source_framework="goose", target_framework="goose",
+                   output_root=tmp_path / "out", overwrite=True)
 
 
 def test_bridge_emits_parallelize_skill_when_feature_enabled(tmp_path: Path):

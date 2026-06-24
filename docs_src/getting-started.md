@@ -8,7 +8,7 @@ AgentTeams is not yet published to PyPI. Install directly from GitHub:
 pip install git+https://github.com/jlcatonjr/agentteams.git
 ```
 
-Requires **Python 3.11 or later**. No external runtime dependencies — the module uses only the Python standard library.
+Requires **Python 3.11 or later**. One runtime dependency (`jsonschema`); otherwise the module uses only the Python standard library.
 
 For local development, clone and install in editable mode:
 
@@ -158,7 +158,7 @@ If your repository has existing agent files generated before fencing was introdu
 
 ```bash
 agentteams \
-  --description .github/agents/_build-description.json \
+  --description brief.json \
   --framework copilot-vscode \
   --project /path/to/project \
   --migrate
@@ -186,7 +186,7 @@ Once migrated, never use `--overwrite` again. Use `--merge` instead:
 
 ```bash
 agentteams \
-  --description .github/agents/_build-description.json \
+  --description brief.json \
   --framework copilot-vscode \
   --project /path/to/project \
   --merge --yes

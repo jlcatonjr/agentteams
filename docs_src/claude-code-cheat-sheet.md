@@ -133,7 +133,7 @@ Type `/` in the interactive session to see all available commands.
 |---|---|
 | `/plan` | Switch to plan mode (Claude describes changes before making them) |
 | `/loop [interval]` | Re-run the current prompt on a schedule (`/loop 5m`) |
-| `/goal <condition>` | Run autonomously until a condition is true (`/goal "tests pass"`) |
+| `/goal <condition>` | Set an objective to work toward (`/goal "tests pass"`); pair with `/loop` to keep iterating autonomously until the goal validates |
 | `/background` | Detach session to run without blocking your terminal |
 | `/batch <prompt>` | Decompose a large task and run parts in parallel worktrees |
 | `/tasks` | Show background tasks and subagent progress |
@@ -311,40 +311,38 @@ Hooks run shell commands at lifecycle events — enforce coding standards, forma
 | `PreToolUse` | Before any tool call (Bash, Edit, Read, MCP, etc.) |
 | `PostToolUse` | After a tool succeeds |
 | `UserPromptSubmit` | Before Claude processes a user prompt |
-| `SessionStart` | Session begins |
-| `Stop` | Session ends |
-| `FileChanged` | A file is modified |
-| `PreCompact` / `PostCompact` | Context compaction |
+| `SessionStart` | Session begins or resumes |
+| `Stop` | Claude finishes responding (the main agent's turn ends — per-turn, not session end) |
+| `SessionEnd` | The session terminates |
+| `FileChanged` | A watched file changes on disk |
+| `PreCompact` / `PostCompact` | Before / after context compaction |
 
 ### Example hook config
 
 ```json
 {
-  "hooks": [
-    {
-      "event": "PreToolUse",
-      "matcher": {
-        "tool": "Bash",
-        "if": "args.command matches 'rm -rf'"
-      },
-      "handler": {
-        "type": "command",
-        "command": "echo 'rm -rf is blocked' && exit 2"
+  "hooks": {
+    "PreToolUse": [
+      {
+        "matcher": "Bash",
+        "hooks": [
+          { "type": "command", "command": "cmd=$(jq -r '.tool_input.command'); case \"$cmd\" in *'rm -rf'*) echo 'rm -rf is blocked' >&2; exit 2 ;; esac" }
+        ]
       }
-    },
-    {
-      "event": "PostToolUse",
-      "matcher": { "tool": "Edit" },
-      "handler": {
-        "type": "command",
-        "command": "prettier --write ${CLAUDE_TOOL_RESULT_VALUE.path}"
+    ],
+    "PostToolUse": [
+      {
+        "matcher": "Edit|Write",
+        "hooks": [
+          { "type": "command", "command": "jq -r '.tool_input.file_path' | xargs -r prettier --write 2>/dev/null || true" }
+        ]
       }
-    }
-  ]
+    ]
+  }
 }
 ```
 
-View configured hooks in a session with `/hooks`.
+Hooks are keyed by **event name**; `matcher` is a tool-name pattern (string), and each match holds a `hooks` array. The hook reads the event as **JSON on stdin** (`tool_name`, `tool_input`, …) — there is no result-template variable. **Exit 2 blocks** the call (stderr goes to Claude); exit 0 allows it; exit 1 does not block. View configured hooks in a session with `/hooks`.
 
 ---
 
@@ -474,7 +472,7 @@ Sessions in the extension persist across VS Code restarts.
 - **Browse history:** Click the "Session history" button in the panel header → search or select any past session.
 - **Remote sessions:** The "Remote" tab shows cloud sessions from claude.ai (requires subscription).
 - **Multiple tabs:** Open additional conversations with `Cmd+Shift+Esc` — each tab is independent.
-- **Named sessions from CLI:** Start `goose session --name my-session` in the terminal; the extension panel picks up the active session.
+- **Resume sessions from CLI:** Run `claude --resume` (picker) or `claude --continue` in the terminal; the extension panel picks up the active session.
 
 Manage sessions from the integrated terminal:
 

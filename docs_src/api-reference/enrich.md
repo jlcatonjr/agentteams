@@ -28,8 +28,8 @@ A single default-value (underdeveloped template) finding.
 - `line_no` (`int`) — 1-based line number of the finding in the agent file.
 - `section` (`str`) — Nearest `##` section heading above the finding, or `''` if in front matter.
 - `context_snippet` (`str`) — 1–2 lines of surrounding context.
-- `status` (`str`) — `'pending'`, `'auto_filled'`, or `'ai_filled'` (set by `auto_enrich` or `ai_enrich`).
-- `auto_suggestion` (`str | None`) — Suggested replacement value, if one was computed.
+- `status` (`str`) — `'pending'`, `'auto_filled'`, or `'ai_filled'` (set by `auto_enrich` or `ai_enrich`). Defaults to `'pending'`.
+- `auto_suggestion` (`str`) — Suggested replacement value inferred from project context; empty string (`""`) when none was computed.
 
 ---
 
@@ -83,7 +83,7 @@ Called after `auto_enrich` to handle tokens that rule-based logic could not reso
 **Args:**
 
 - `findings` (`list[DefaultFinding]`) — Findings list (pending items will be targeted).
-- `file_map` (`dict[str, str]`) — Current rendered file map (will be updated in place).
+- `file_map` (`dict[str, str]`) — Current rendered file map. Not mutated — a new enriched map is returned (the input copy is left unchanged; `findings` statuses, by contrast, are updated in place).
 - `manifest` (`dict[str, Any]`) — Team manifest.
 - `project_path` (`Path | None`, keyword-only) — Absolute path to the project repo root; passed to the CLI for additional context. Default: `None`.
 - `copilot_path` (`str | None`, keyword-only) — Absolute path to the `copilot` executable. When `None`, auto-detected via `shutil.which`. Default: `None`.
@@ -174,4 +174,4 @@ Build a metadata catalog for a list of packages, combining the built-in static c
 - `packages` (`list[str]`) — PyPI package names to look up.
 - `fetch_pypi` (`bool`, keyword-only) — If `True`, fetch live metadata from PyPI for packages not in the static catalog. Default: `True`.
 
-**Returns:** `dict[str, dict[str, str]]` — Keyed by normalized package name; values contain `docs_url`, `api_surface`, and `common_patterns`.
+**Returns:** `dict[str, dict[str, str]]` — Keyed by the package names exactly as supplied in `packages` (no normalization of the key); values contain `docs_url`, `api_surface`, and `common_patterns`.

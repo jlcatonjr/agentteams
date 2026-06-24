@@ -36,9 +36,21 @@ from .base import FrameworkAdapter
 # Claude Code front matter constants
 # ---------------------------------------------------------------------------
 
-# Default tool list mapped to Claude Code tool names.
-# VS Code tools: read→Read, edit→Edit, search→(Grep/Glob), execute→Bash
+# Fallback tool list when an agent declares no VS Code `tools:` block.
 _CLAUDE_DEFAULT_ALLOWED_TOOLS = "Bash, Read, Write, Edit"
+
+# VS Code Copilot tool → Claude Code allowed-tools. Per-agent scoping matters:
+# read-only governance/audit agents (tools: ['read','search']) must NOT receive
+# Bash/Write/Edit, or their template-declared read-only invariant becomes false
+# in generated Claude teams (least-privilege regression).
+_VSCODE_TO_CLAUDE_TOOLS: dict[str, tuple[str, ...]] = {
+    "read": ("Read",),
+    "search": ("Grep", "Glob"),
+    "edit": ("Edit", "Write"),
+    "execute": ("Bash",),
+    "todo": ("TodoWrite",),
+    "agent": ("Task",),
+}
 
 # Required keys for a well-formed Claude Code sub-agent front matter block
 _CLAUDE_REQUIRED_KEYS = {"name", "description"}
@@ -60,9 +72,11 @@ class ClaudeAdapter(FrameworkAdapter):
         4. Prepend a Claude Code-compatible front matter block.
         """
         name, description = _extract_name_description(content, agent_slug, manifest)
+        # Map the per-agent tool scope BEFORE the VS Code front matter is stripped.
+        allowed_tools = _map_allowed_tools(content)
         content = self._strip_yaml_front_matter(content)
         content = self._strip_handoffs_section(content)
-        content = _inject_claude_front_matter(content, name, description)
+        content = _inject_claude_front_matter(content, name, description, allowed_tools)
         return content.strip() + "\n"
 
     def render_instructions_file(self, content: str, manifest: dict[str, Any]) -> str:
@@ -114,6 +128,30 @@ _YAML_FRONT_MATTER_RE = re.compile(r"^---\s*\n(.*?)\n---\s*\n", re.DOTALL)
 # Matches a single-line YAML scalar: key: value (with optional surrounding quotes)
 _YAML_SCALAR_RE = re.compile(r'^([a-zA-Z][a-zA-Z0-9_-]*)\s*:\s*"?([^"\n]+)"?\s*$', re.MULTILINE)
 
+# Captures an inline-list `tools: ['read', 'search']` line in the VS Code front matter.
+_YAML_TOOLS_RE = re.compile(r"^tools:\s*\[([^\]]*)\]\s*$", re.MULTILINE)
+
+
+def _map_allowed_tools(content: str) -> str:
+    """Map an agent's VS Code ``tools:`` list to a Claude ``allowed-tools`` value.
+
+    Falls back to the blanket default only when no recognizable ``tools:`` block
+    is present, so an agent authored without a tool scope keeps working.
+    """
+    fm = _YAML_FRONT_MATTER_RE.match(content)
+    if not fm:
+        return _CLAUDE_DEFAULT_ALLOWED_TOOLS
+    tools_match = _YAML_TOOLS_RE.search(fm.group(1))
+    if not tools_match:
+        return _CLAUDE_DEFAULT_ALLOWED_TOOLS
+    vscode_tools = [item.strip().strip("'\"") for item in tools_match.group(1).split(",") if item.strip()]
+    mapped: list[str] = []
+    for vt in vscode_tools:
+        for claude_tool in _VSCODE_TO_CLAUDE_TOOLS.get(vt.lower(), ()):
+            if claude_tool not in mapped:
+                mapped.append(claude_tool)
+    return ", ".join(mapped) if mapped else _CLAUDE_DEFAULT_ALLOWED_TOOLS
+
 
 def _extract_name_description(
     content: str,
@@ -147,12 +185,17 @@ def _extract_name_description(
     return name, description
 
 
-def _inject_claude_front_matter(content: str, name: str, description: str) -> str:
+def _inject_claude_front_matter(
+    content: str,
+    name: str,
+    description: str,
+    allowed_tools: str = _CLAUDE_DEFAULT_ALLOWED_TOOLS,
+) -> str:
     """Prepend a Claude Code-compatible YAML front matter block to content."""
     lines = ["---", f"name: {name}"]
     if description:
         lines.append(f'description: "{description}"')
-    lines.append(f"allowed-tools: {_CLAUDE_DEFAULT_ALLOWED_TOOLS}")
+    lines.append(f"allowed-tools: {allowed_tools}")
     lines.append("---")
     lines.append("")
     return "\n".join(lines) + content

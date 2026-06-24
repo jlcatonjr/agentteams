@@ -80,7 +80,9 @@ Ask for:
 
 ### Step 1: Write description file
 Use the `developer` extension to save the collected information as
-`_build-description.json` (in the project root or `.goose/recipes/`):
+`.agentteams/brief.json` (the canonical consumer descriptor for an external
+project). Note: `_build-description.json` is the thin stub reserved for `--self`
+builds of the agentteams repo only — do not use it for an external project.
 
 ```json
 {
@@ -117,7 +119,7 @@ Present the summary to the user and ask: "I'm ready to generate your agent team.
 Run:
 ```bash
 python build_team.py \
-  --description _build-description.json \
+  --description .agentteams/brief.json \
   --framework goose \
   --project <existing_project_path> \
   --output <existing_project_path>/.goose/recipes

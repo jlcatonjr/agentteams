@@ -15,9 +15,11 @@ Opt-in via [`--target-host-features bridge:copilot-vscode-to-claude:subagents`](
 ```python
 @dataclass
 class StubEmissionResult:
-    written: list[str]          # paths actually written (or, in dry_run, would be written)
-    skipped: list[str]          # paths skipped because overwrite=False and the file existed
-    collapsed_experts: int      # count of *-expert agents folded into the parametric stub
+    written: list[str]            # paths actually written (or, in dry_run, would be written)
+    skipped: list[str]            # paths skipped because overwrite=False and the file existed
+    errors: list[str]             # error messages for any failed emission
+    experts_collapsed: list[str]  # slugs of *-expert agents folded into the parametric stub
+    # property: success -> len(errors) == 0
 ```
 
 ```python
@@ -43,7 +45,7 @@ detect_stub_drift(
     output_root: Path,
 ) -> list[dict[str, str]]
 ```
-Walk emitted stubs and compare each one's recorded `source_sha256` against the current source file's SHA-256. Return a list of `{slug, source_rel, recorded_sha, current_sha, status}` dicts where `status` is one of `"ok"`, `"drift"`, `"missing-source"`, or `"missing-stub"`.
+Walk emitted stubs and compare each one's recorded `source_sha256` against the current source file's SHA-256. Returns **one record per stub whose source changed** — there is no per-stub `status` field and "ok" stubs are not included. Each record is `{slug, stub_path, source_path, recorded_sha, current_sha}`. When the source file is missing, the record is still emitted with `current_sha` set to the literal string `"<missing>"`. An empty list means no drift.
 
 ## Caveats
 

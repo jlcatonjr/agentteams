@@ -139,9 +139,12 @@ def _build_synopsis(parser: argparse.ArgumentParser) -> str:
         if isinstance(action, argparse._VersionAction):
             parts.append("[--version]")
             continue
-        if isinstance(action, argparse._StoreTrueAction):
-            opt = action.option_strings[0] if action.option_strings else ""
-            parts.append(f"[{opt}]")
+        if action.option_strings and getattr(action, "nargs", None) == 0:
+            # store_true / store_false / store_const consume no value (nargs == 0):
+            # render as a bare flag, never "[--flag METAVAR]". (A store_false flag
+            # such as --no-strict-manual-placeholders previously fell through to the
+            # metavar branch and printed a phantom value-argument.)
+            parts.append(f"[{action.option_strings[0]}]")
         elif action.option_strings:
             opt = action.option_strings[0]
             metavar = action.metavar or action.dest.upper()
@@ -196,7 +199,7 @@ def _get_epilog_description(parser: argparse.ArgumentParser) -> list[str]:
             ".github/agents/ directory."
         ),
         (
-            "The generated team includes an orchestrator, ten governance agents, "
+            "The generated team includes an orchestrator, eleven governance agents, "
             "domain agents appropriate for the deliverable type, and one workstream "
             "expert per project component."
         ),

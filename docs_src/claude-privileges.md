@@ -195,7 +195,9 @@ This is read-only access for context. It does not grant edit or bash permissions
 
 ### Full autonomous (no prompts, use with care)
 
-Set `claudeCode.initialPermissionMode: "auto"` in VS Code settings, or use `--permission-mode auto` for a session. No `deny` rules needed unless blocking specific operations.
+> **Caution — use with care.** Auto-approval runs actions without confirmation; reserve it for throwaway/sandboxed workspaces. Unlike `bypassPermissions`, `deny` rules still apply in `auto` mode, so keep minimal deny guardrails (e.g. `Bash(rm *)`, `Bash(sudo *)`, `Bash(git push --force *)`) even here.
+
+Set `claudeCode.initialPermissionMode: "auto"` in VS Code settings, or use `--permission-mode auto` for a session. Keep the minimal `deny` guardrails above to block specific dangerous operations.
 
 ### Locked down (human approves everything)
 
@@ -217,33 +219,41 @@ Combined with `claudeCode.initialPermissionMode: "plan"` to require human review
 For enforcement logic that patterns can't express (e.g., "allow `npm install` only if `package.json` was modified"), use hooks:
 
 ```json
-// .claude/settings.json
+// .claude/settings.json — hooks are keyed by event name. `matcher` is a
+// tool-name pattern (a string, e.g. "Bash" or "Edit|Write"); each match carries
+// a `hooks` array of command entries. Each hook receives the event as JSON on
+// stdin (fields include `tool_name`, `tool_input`, and — for PostToolUse —
+// `tool_output`); read what you need from that JSON. There is no result-
+// template variable.
 {
-  "hooks": [
-    {
-      "event": "PreToolUse",
-      "matcher": {
-        "tool": "Bash",
-        "if": "args.command matches 'npm install'"
-      },
-      "handler": {
-        "type": "command",
-        "command": "git diff --name-only HEAD | grep -q package.json || (echo 'npm install requires package.json change' && exit 2)"
+  "hooks": {
+    "PreToolUse": [
+      {
+        "matcher": "Bash",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "cmd=$(jq -r '.tool_input.command'); case \"$cmd\" in *'npm install'*) git diff --name-only HEAD | grep -q package.json || { echo 'npm install requires a package.json change' >&2; exit 2; } ;; esac"
+          }
+        ]
       }
-    },
-    {
-      "event": "PostToolUse",
-      "matcher": { "tool": "Edit" },
-      "handler": {
-        "type": "command",
-        "command": "prettier --write ${CLAUDE_TOOL_RESULT_VALUE.path} 2>/dev/null || true"
+    ],
+    "PostToolUse": [
+      {
+        "matcher": "Edit|Write",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "jq -r '.tool_input.file_path' | xargs -r prettier --write 2>/dev/null || true"
+          }
+        ]
       }
-    }
-  ]
+    ]
+  }
 }
 ```
 
-Exit code 2 from a hook handler blocks the tool call and surfaces the message to Claude.
+A hook **exiting with code 2** blocks the tool call and surfaces its stderr to Claude. Exit 0 allows the call (and may emit a JSON decision on stdout for finer control); other non-zero exits are non-blocking errors (notably, **exit 1 does not block**).
 
 ---
 
@@ -253,6 +263,8 @@ To run with no CLAUDE.md, no MCP servers, no hooks, and no memory — useful for
 
 ```bash
 claude --safe-mode
+# Equivalent for non-interactive/CI launches:
+CLAUDE_CODE_SAFE_MODE=1 claude -p "…"
 ```
 
 This does not change any config files. It applies for that session only.

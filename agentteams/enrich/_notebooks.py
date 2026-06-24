@@ -28,7 +28,9 @@ def _extract_notebook_sections(notebook_path: Path) -> list[str]:
     for cell in nb.get("cells", []):
         if cell.get("cell_type") != "markdown":
             continue
-        src = "".join(cell.get("source", []))
+        # `or []`: a JSON `null` source returns None (key present), and
+        # "".join(None) would raise TypeError that the callers don't catch.
+        src = "".join(cell.get("source") or [])
         for line in src.splitlines():
             m = _HEADING_LINE_RE.match(line)
             if m:
@@ -57,7 +59,7 @@ def _extract_notebook_imports(notebook_path: Path) -> set[str]:
     for cell in nb.get("cells", []):
         if cell.get("cell_type") != "code":
             continue
-        src = "".join(cell.get("source", []))
+        src = "".join(cell.get("source") or [])
         for m in _import_re.finditer(src):
             pkg = (m.group(1) or m.group(2) or "").split(".")[0]
             if pkg:

@@ -117,7 +117,11 @@ The merge engine:
 5. Writes backup files before any change (unless `--no-backup` is set)
 6. Appends newly introduced fenced sections when the target file is already fence-managed and missing those sections
 
-Files with no fence markers at all are treated as legacy/unmanaged for merge. In that case, `--merge` skips the file and reports a merge error for that path (except select machine-managed file exceptions).
+### Auto-fence on update (default)
+
+By default, `--update --merge` (with `--yes`) **auto-retrofits** a `content` fence onto legacy (unfenced) files so their template region becomes mergeable on the same run instead of being skipped. Each retrofit is backed up first and the shrink-guard still suppresses material template shrinks, so the legacy body is recoverable. Pass `--no-add-fence-markers` to opt out and keep the conservative skip-legacy behaviour described below:
+
+> Files with no fence markers at all are treated as legacy/unmanaged for merge. With `--no-add-fence-markers`, `--merge` skips the file and reports a merge error for that path (except select machine-managed file exceptions).
 
 ---
 
@@ -179,4 +183,4 @@ Two fence ids are exempt from the shrink heuristic and never produce sidecars: `
 
 **Cause:** The template was updated to add a new fenced section, but the output file predates that section.
 
-**Fix:** Review the diff. In current merge behavior, new fenced sections are appended when the output file already has valid fence markers. If the file has no fences at all, use `--overwrite` or run `--migrate` first.
+**Fix:** Review the diff. In current merge behavior, new fenced sections are appended when the output file already has valid fence markers. If the file has no fences at all, the default `--update --merge --yes` auto-retrofits a `content` fence on the same run (see [Auto-fence on update](#auto-fence-on-update-default)); pass `--no-add-fence-markers` to opt out, in which case use `--overwrite` or run `--migrate` first.

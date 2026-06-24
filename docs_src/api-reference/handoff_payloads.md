@@ -89,7 +89,7 @@ Recursively remove the keys `description`, `title`, `$comment`, and `examples` f
 
 Validate `payload` against `schema` with depth, cycle, and wallclock bounds (V5 mitigation).
 
-The function first runs `_assert_bounded_schema` to reject schemas deeper than `MAX_DEPTH` or containing self-referential cycles. It then validates inside a `multiprocessing.get_context("spawn")` subprocess so a slow or malicious schema cannot block the parent. If the subprocess exceeds `timeout` seconds, it is terminated and `SchemaInvalid` is raised.
+The function first runs `_assert_bounded_schema` to reject schemas deeper than `MAX_DEPTH` or containing self-referential cycles. It then validates inside a subprocess from `multiprocessing.get_context("fork" if "fork" in available_start_methods else "spawn")` — `fork` is preferred (it avoids re-importing `__main__`), falling back to `spawn` only on platforms without `fork` (e.g. Windows) — so a slow or malicious schema cannot block the parent. If the subprocess exceeds `timeout` seconds, it is terminated and `SchemaInvalid` is raised.
 
 **Args:**
 
@@ -102,7 +102,7 @@ The function first runs `_assert_bounded_schema` to reject schemas deeper than `
 
 **Raises:** `SchemaInvalid` for depth/cycle violations, validator errors, timeout, or empty worker results.
 
-> **Note — Worker callable pickling.** The spawn multiprocessing context pickles the worker callable, which means custom workers (used only by tests) must be top-level module functions, not closures or local functions. The default worker is `_validate_worker` inside this module.
+> **Note — Worker callable pickling (spawn fallback only).** This caveat applies only when the `spawn` fallback is used (platforms without `fork`, e.g. Windows): `spawn` pickles the worker callable, so custom workers (used only by tests) must be top-level module functions, not closures or local functions. Under the preferred `fork` context the child inherits the callable and no pickling occurs, but tests should still use top-level functions for portability. The default worker is `_validate_worker` inside this module.
 
 ---
 

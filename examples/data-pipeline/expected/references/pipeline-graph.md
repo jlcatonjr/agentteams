@@ -41,16 +41,14 @@ flowchart LR
     class ingest_expert workstream_expert
     load_expert["Load Module Expert"]
     class load_expert workstream_expert
-    module_doc_author["Module Doc Author"]
-    class module_doc_author domain
-    module_doc_validator["Module Doc Validator"]
-    class module_doc_validator domain
     navigator["Navigator"]
     class navigator governance
     orchestrator["Orchestrator"]
     class orchestrator governance
     output_compiler["Output Compiler"]
     class output_compiler domain
+    post_production_auditor["Post-Production Auditor"]
+    class post_production_auditor unknown
     primary_producer["Primary Producer"]
     class primary_producer domain
     quality_auditor["Quality Auditor"]
@@ -170,16 +168,16 @@ flowchart LR
     visual_designer -->|"Return to Orchestrator"| orchestrator
     visual_designer -.-> format_converter
     visual_designer -.-> quality_auditor
-    module_doc_author -->|"Validate Documentation Accuracy"| module_doc_validator
-    module_doc_author -->|"Conflict Audit"| conflict_auditor
-    module_doc_author -->|"Return to Orchestrator"| orchestrator
-    module_doc_author -.-> module_doc_validator
-    module_doc_author -.-> conflict_auditor
-    module_doc_validator -->|"Route Corrections to Module Doc Author"| module_doc_author
-    module_doc_validator -->|"Log Conflict"| conflict_auditor
-    module_doc_validator -->|"Return to Orchestrator"| orchestrator
-    module_doc_validator -.-> module_doc_author
-    module_doc_validator -.-> conflict_auditor
+    post_production_auditor -->|"Return to Orchestrator"| orchestrator
+    post_production_auditor -->|"Adversarial Review"| adversarial
+    post_production_auditor -->|"Conflict Audit"| conflict_auditor
+    post_production_auditor -->|"Technical Validation"| technical_validator
+    post_production_auditor -->|"Security Review"| security
+    post_production_auditor -.-> orchestrator
+    post_production_auditor -.-> adversarial
+    post_production_auditor -.-> conflict_auditor
+    post_production_auditor -.-> technical_validator
+    post_production_auditor -.-> security
     tool_doc_researcher -->|"Update Brief and Generated Docs"| agent_updater
     tool_doc_researcher -->|"Return to Orchestrator"| orchestrator
     ingest_expert -->|"Vet Brief Before Drafting"| adversarial
@@ -238,11 +236,10 @@ flowchart LR
 | `git-operations` | governance | Yes | read, execute, search |
 | `ingest-expert` | workstream_expert | No | read, search, agent |
 | `load-expert` | workstream_expert | No | read, search, agent |
-| `module-doc-author` | domain | No | read, edit, search |
-| `module-doc-validator` | domain | No | read, search |
 | `navigator` | governance | No | read, search, execute |
 | `orchestrator` | governance | Yes | read, edit, search, execute, todo, agent |
 | `output-compiler` | domain | No | read, edit, execute |
+| `post-production-auditor` | unknown | No | read, search, execute |
 | `primary-producer` | domain | No | read, edit, search |
 | `quality-auditor` | domain | No | read, search |
 | `repo-liaison` | governance | No | read, edit, search, execute, agent |
@@ -261,30 +258,29 @@ flowchart LR
 
 | Agent | Receives from | Hands off to |
 | --- | --- | --- |
-| `adversarial` | `agent-updater`, `ingest-expert`, `load-expert`, `orchestrator`, `transform-expert`, `weekly-report-expert`, `work-summarizer` | `conflict-auditor`, `orchestrator` |
+| `adversarial` | `agent-updater`, `ingest-expert`, `load-expert`, `orchestrator`, `post-production-auditor`, `transform-expert`, `weekly-report-expert`, `work-summarizer` | `conflict-auditor`, `orchestrator` |
 | `agent-refactor` | `agent-updater`, `code-hygiene`, `orchestrator` | `conflict-auditor`, `orchestrator` |
 | `agent-updater` | `conflict-auditor`, `conflict-resolution`, `git-operations`, `orchestrator`, `tool-doc-researcher` | `adversarial`, `agent-refactor`, `conflict-auditor`, `orchestrator` |
 | `cleanup` | `code-hygiene`, `orchestrator` | `orchestrator` |
 | `code-hygiene` | `orchestrator` | `agent-refactor`, `cleanup`, `conflict-auditor`, `orchestrator`, `security` |
 | `cohesion-repairer` | `orchestrator`, `primary-producer`, `quality-auditor` | `orchestrator`, `quality-auditor` |
-| `conflict-auditor` | `adversarial`, `agent-refactor`, `agent-updater`, `code-hygiene`, `module-doc-author`, `module-doc-validator`, `orchestrator`, `primary-producer`, `repo-liaison`, `technical-validator`, `work-summarizer` | `agent-updater`, `conflict-resolution`, `orchestrator`, `technical-validator` |
+| `conflict-auditor` | `adversarial`, `agent-refactor`, `agent-updater`, `code-hygiene`, `orchestrator`, `post-production-auditor`, `primary-producer`, `repo-liaison`, `technical-validator`, `work-summarizer` | `agent-updater`, `conflict-resolution`, `orchestrator`, `technical-validator` |
 | `conflict-resolution` | `conflict-auditor`, `git-operations`, `orchestrator` | `agent-updater`, `orchestrator` |
 | `content-enricher` | — | `orchestrator`, `primary-producer`, `technical-validator` |
 | `format-converter` | `orchestrator`, `output-compiler`, `visual-designer` | `orchestrator`, `output-compiler`, `quality-auditor` |
 | `git-operations` | `orchestrator` | `agent-updater`, `conflict-resolution`, `orchestrator`, `security` |
 | `ingest-expert` | — | `adversarial`, `orchestrator`, `primary-producer` |
 | `load-expert` | — | `adversarial`, `orchestrator`, `primary-producer` |
-| `module-doc-author` | `module-doc-validator` | `conflict-auditor`, `module-doc-validator`, `orchestrator` |
-| `module-doc-validator` | `module-doc-author` | `conflict-auditor`, `module-doc-author`, `orchestrator` |
 | `navigator` | `orchestrator` | `orchestrator` |
-| `orchestrator` | `adversarial`, `agent-refactor`, `agent-updater`, `cleanup`, `code-hygiene`, `cohesion-repairer`, `conflict-auditor`, `conflict-resolution`, `content-enricher`, `format-converter`, `git-operations`, `ingest-expert`, `load-expert`, `module-doc-author`, `module-doc-validator`, `navigator`, `output-compiler`, `primary-producer`, `quality-auditor`, `repo-liaison`, `security`, `technical-validator`, `tool-doc-researcher`, `transform-expert`, `visual-designer`, `weekly-report-expert`, `work-summarizer` | `adversarial`, `agent-refactor`, `agent-updater`, `cleanup`, `code-hygiene`, `cohesion-repairer`, `conflict-auditor`, `conflict-resolution`, `format-converter`, `git-operations`, `navigator`, `output-compiler`, `primary-producer`, `quality-auditor`, `repo-liaison`, `security`, `technical-validator`, `visual-designer`, `work-summarizer` |
+| `orchestrator` | `adversarial`, `agent-refactor`, `agent-updater`, `cleanup`, `code-hygiene`, `cohesion-repairer`, `conflict-auditor`, `conflict-resolution`, `content-enricher`, `format-converter`, `git-operations`, `ingest-expert`, `load-expert`, `navigator`, `output-compiler`, `post-production-auditor`, `primary-producer`, `quality-auditor`, `repo-liaison`, `security`, `technical-validator`, `tool-doc-researcher`, `transform-expert`, `visual-designer`, `weekly-report-expert`, `work-summarizer` | `adversarial`, `agent-refactor`, `agent-updater`, `cleanup`, `code-hygiene`, `cohesion-repairer`, `conflict-auditor`, `conflict-resolution`, `format-converter`, `git-operations`, `navigator`, `output-compiler`, `primary-producer`, `quality-auditor`, `repo-liaison`, `security`, `technical-validator`, `visual-designer`, `work-summarizer` |
 | `output-compiler` | `format-converter`, `orchestrator` | `format-converter`, `orchestrator`, `technical-validator` |
+| `post-production-auditor` | — | `adversarial`, `conflict-auditor`, `orchestrator`, `security`, `technical-validator` |
 | `primary-producer` | `content-enricher`, `ingest-expert`, `load-expert`, `orchestrator`, `quality-auditor`, `technical-validator`, `transform-expert`, `weekly-report-expert` | `cohesion-repairer`, `conflict-auditor`, `orchestrator`, `quality-auditor` |
 | `quality-auditor` | `cohesion-repairer`, `format-converter`, `orchestrator`, `primary-producer`, `visual-designer` | `cohesion-repairer`, `orchestrator`, `primary-producer` |
 | `repo-liaison` | `orchestrator` | `conflict-auditor`, `orchestrator`, `security` |
-| `security` | `code-hygiene`, `git-operations`, `orchestrator`, `repo-liaison` | `orchestrator` |
+| `security` | `code-hygiene`, `git-operations`, `orchestrator`, `post-production-auditor`, `repo-liaison` | `orchestrator` |
 | `team-builder` | — | — |
-| `technical-validator` | `conflict-auditor`, `content-enricher`, `orchestrator`, `output-compiler`, `work-summarizer` | `conflict-auditor`, `orchestrator`, `primary-producer` |
+| `technical-validator` | `conflict-auditor`, `content-enricher`, `orchestrator`, `output-compiler`, `post-production-auditor`, `work-summarizer` | `conflict-auditor`, `orchestrator`, `primary-producer` |
 | `tool-doc-researcher` | — | `agent-updater`, `orchestrator` |
 | `transform-expert` | — | `adversarial`, `orchestrator`, `primary-producer` |
 | `visual-designer` | `orchestrator` | `format-converter`, `orchestrator`, `quality-auditor` |
@@ -316,11 +312,10 @@ digraph "SalesDataPipeline Agent Team" {
     "git-operations" [label="Git Operations", fillcolor="#e8e8ff"];
     "ingest-expert" [label="Ingest Module Expert", fillcolor="#fff8e8"];
     "load-expert" [label="Load Module Expert", fillcolor="#fff8e8"];
-    "module-doc-author" [label="Module Doc Author", fillcolor="#e8ffe8"];
-    "module-doc-validator" [label="Module Doc Validator", fillcolor="#e8ffe8"];
     "navigator" [label="Navigator", fillcolor="#e8e8ff"];
     "orchestrator" [label="Orchestrator", fillcolor="#e8e8ff"];
     "output-compiler" [label="Output Compiler", fillcolor="#e8ffe8"];
+    "post-production-auditor" [label="Post-Production Auditor", fillcolor="#f5f5f5"];
     "primary-producer" [label="Primary Producer", fillcolor="#e8ffe8"];
     "quality-auditor" [label="Quality Auditor", fillcolor="#e8ffe8"];
     "repo-liaison" [label="Repo Liaison", fillcolor="#e8e8ff"];
@@ -405,12 +400,11 @@ digraph "SalesDataPipeline Agent Team" {
     "visual-designer" -> "format-converter" [style=solid, label="Convert Figure Format"];
     "visual-designer" -> "quality-auditor" [style=solid, label="Quality Check Figure"];
     "visual-designer" -> "orchestrator" [style=solid, label="Return to Orchestrator"];
-    "module-doc-author" -> "module-doc-validator" [style=solid, label="Validate Documentation Accuracy"];
-    "module-doc-author" -> "conflict-auditor" [style=solid, label="Conflict Audit"];
-    "module-doc-author" -> "orchestrator" [style=solid, label="Return to Orchestrator"];
-    "module-doc-validator" -> "module-doc-author" [style=solid, label="Route Corrections to Module Doc Author"];
-    "module-doc-validator" -> "conflict-auditor" [style=solid, label="Log Conflict"];
-    "module-doc-validator" -> "orchestrator" [style=solid, label="Return to Orchestrator"];
+    "post-production-auditor" -> "orchestrator" [style=solid, label="Return to Orchestrator"];
+    "post-production-auditor" -> "adversarial" [style=solid, label="Adversarial Review"];
+    "post-production-auditor" -> "conflict-auditor" [style=solid, label="Conflict Audit"];
+    "post-production-auditor" -> "technical-validator" [style=solid, label="Technical Validation"];
+    "post-production-auditor" -> "security" [style=solid, label="Security Review"];
     "tool-doc-researcher" -> "agent-updater" [style=solid, label="Update Brief and Generated Docs"];
     "tool-doc-researcher" -> "orchestrator" [style=solid, label="Return to Orchestrator"];
     "ingest-expert" -> "adversarial" [style=solid, label="Vet Brief Before Drafting"];
@@ -566,25 +560,6 @@ digraph "SalesDataPipeline Agent Team" {
         "agent"
       ]
     },
-    "module-doc-author": {
-      "display_name": "Module Doc Author",
-      "agent_type": "domain",
-      "user_invokable": false,
-      "tools": [
-        "read",
-        "edit",
-        "search"
-      ]
-    },
-    "module-doc-validator": {
-      "display_name": "Module Doc Validator",
-      "agent_type": "domain",
-      "user_invokable": false,
-      "tools": [
-        "read",
-        "search"
-      ]
-    },
     "navigator": {
       "display_name": "Navigator",
       "agent_type": "governance",
@@ -615,6 +590,16 @@ digraph "SalesDataPipeline Agent Team" {
       "tools": [
         "read",
         "edit",
+        "execute"
+      ]
+    },
+    "post-production-auditor": {
+      "display_name": "Post-Production Auditor",
+      "agent_type": "unknown",
+      "user_invokable": false,
+      "tools": [
+        "read",
+        "search",
         "execute"
       ]
     },
@@ -1316,62 +1301,62 @@ digraph "SalesDataPipeline Agent Team" {
       "label": null
     },
     {
-      "source": "module-doc-author",
-      "target": "module-doc-validator",
+      "source": "post-production-auditor",
+      "target": "orchestrator",
       "edge_type": "handoff",
-      "label": "Validate Documentation Accuracy"
+      "label": "Return to Orchestrator"
     },
     {
-      "source": "module-doc-author",
+      "source": "post-production-auditor",
+      "target": "adversarial",
+      "edge_type": "handoff",
+      "label": "Adversarial Review"
+    },
+    {
+      "source": "post-production-auditor",
       "target": "conflict-auditor",
       "edge_type": "handoff",
       "label": "Conflict Audit"
     },
     {
-      "source": "module-doc-author",
+      "source": "post-production-auditor",
+      "target": "technical-validator",
+      "edge_type": "handoff",
+      "label": "Technical Validation"
+    },
+    {
+      "source": "post-production-auditor",
+      "target": "security",
+      "edge_type": "handoff",
+      "label": "Security Review"
+    },
+    {
+      "source": "post-production-auditor",
       "target": "orchestrator",
-      "edge_type": "handoff",
-      "label": "Return to Orchestrator"
-    },
-    {
-      "source": "module-doc-author",
-      "target": "module-doc-validator",
       "edge_type": "agents-list",
       "label": null
     },
     {
-      "source": "module-doc-author",
+      "source": "post-production-auditor",
+      "target": "adversarial",
+      "edge_type": "agents-list",
+      "label": null
+    },
+    {
+      "source": "post-production-auditor",
       "target": "conflict-auditor",
       "edge_type": "agents-list",
       "label": null
     },
     {
-      "source": "module-doc-validator",
-      "target": "module-doc-author",
-      "edge_type": "handoff",
-      "label": "Route Corrections to Module Doc Author"
-    },
-    {
-      "source": "module-doc-validator",
-      "target": "conflict-auditor",
-      "edge_type": "handoff",
-      "label": "Log Conflict"
-    },
-    {
-      "source": "module-doc-validator",
-      "target": "orchestrator",
-      "edge_type": "handoff",
-      "label": "Return to Orchestrator"
-    },
-    {
-      "source": "module-doc-validator",
-      "target": "module-doc-author",
+      "source": "post-production-auditor",
+      "target": "technical-validator",
       "edge_type": "agents-list",
       "label": null
     },
     {
-      "source": "module-doc-validator",
-      "target": "conflict-auditor",
+      "source": "post-production-auditor",
+      "target": "security",
       "edge_type": "agents-list",
       "label": null
     },
@@ -1646,15 +1631,12 @@ digraph "SalesDataPipeline Agent Team" {
       "orchestrator",
       "quality-auditor"
     ],
-    "module-doc-author": [
+    "post-production-auditor": [
+      "adversarial",
       "conflict-auditor",
-      "module-doc-validator",
-      "orchestrator"
-    ],
-    "module-doc-validator": [
-      "conflict-auditor",
-      "module-doc-author",
-      "orchestrator"
+      "orchestrator",
+      "security",
+      "technical-validator"
     ],
     "tool-doc-researcher": [
       "agent-updater",

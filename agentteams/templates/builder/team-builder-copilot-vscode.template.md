@@ -80,13 +80,13 @@ Ask:
 
 Once intake is complete:
 
-1. Write a structured project description file to `.github/agents/_build-description.json` using the collected information
+1. Write a structured project description file to `.agentteams/brief.json` (the canonical consumer descriptor for an external project) using the collected information. Note: `_build-description.json` is the thin stub reserved for `--self` builds of the agentteams repo only — do not use it for an external project.
 2. Confirm the description with the user: "I'm about to generate your agent team with these settings: [summary]. Shall I proceed?"
 3. If confirmed, invoke the build pipeline:
 
 ```bash
 python build_team.py \
-  --description .github/agents/_build-description.json \
+  --description .agentteams/brief.json \
   --framework copilot-vscode \
   --project . \
   --output .github/agents

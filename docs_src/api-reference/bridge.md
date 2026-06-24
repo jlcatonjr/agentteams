@@ -21,6 +21,8 @@ Fields:
 5. `check_only`: whether run was check mode
 6. `check_ok`: bridge freshness verdict
 7. `check_report_path`: report path when check mode runs
+8. `manifest_missing` (`bool`): in check mode, `True` when the bridge manifest file does not exist at the expected path (default `False`)
+9. `notices` (`list[str]`): human-readable per-file notices accumulated during the run — e.g. merge-mode files skipped because they lack an `AGENTTEAMS-BRIDGE` fence (default empty)
 
 Property:
 

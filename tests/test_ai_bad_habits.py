@@ -130,7 +130,7 @@ def test_apply_rejects_unknown_operation(monkeypatch, tmp_path: Path) -> None:
 
 # --- catalog integrity (allocation invariants) ------------------------------
 
-_VALID_CH = {f"CH-{n:02d}" for n in range(1, 26)}
+_VALID_CH = {f"CH-{n:02d}" for n in range(1, 29)}
 _ALLOWED_CATEGORIES = {"hygiene", "correctness", "process"}
 
 
@@ -157,6 +157,7 @@ def test_known_corrective_mappings() -> None:
     assert by_id["BH-04"]["cross_links"] == ("CH-08",)   # dup code
     assert by_id["BH-05"]["cross_links"] == ("CH-21",)   # tests omitted
     assert by_id["BH-07"]["cross_links"] == ("CH-23",)   # output shape-validation
+    assert by_id["BH-10"]["cross_links"] == ("CH-28",)   # wholesale-rewrite -> minimal edits
     # The two correctness entries keep only the quality angle and point security
     # readers at @security.
     assert "@security" in by_id["BH-06"]["fix"]           # hallucinated deps
@@ -165,9 +166,9 @@ def test_known_corrective_mappings() -> None:
 
 def test_bh_ids_unique_and_contiguous() -> None:
     ids = [e["id"] for e in ai_bad_habits.LOCAL_CATALOG]
-    assert len(ids) == len(set(ids)) == 9
+    assert len(ids) == len(set(ids)) == 10
     nums = sorted(int(i.split("-")[1]) for i in ids)
-    assert nums == list(range(1, 10))
+    assert nums == list(range(1, 11))
 
 
 def test_catalog_placeholder_resolves_with_no_unresolved_token() -> None:
@@ -175,7 +176,7 @@ def test_catalog_placeholder_resolves_with_no_unresolved_token() -> None:
     assert set(ph) == {"AI_BAD_HABITS_CATALOG"}
     body = ph["AI_BAD_HABITS_CATALOG"]
     assert "{AI_BAD_HABITS_CATALOG}" not in body
-    assert "BH-01" in body and "BH-09" in body
+    assert "BH-01" in body and "BH-09" in body and "BH-10" in body
     assert "Corrective pattern" in body
     assert "Tracked upstream sources" not in body
 

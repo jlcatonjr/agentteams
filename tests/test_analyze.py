@@ -299,8 +299,9 @@ def test_classify_tool_importance_explicit_specialist():
     assert classify_tool_importance(tool) == "specialist"
 
 
-def test_classify_tool_importance_explicit_false_overrides_category():
-    """Explicit False still allows auto-classification by category."""
+def test_classify_tool_importance_explicit_false_defers_to_category():
+    """Explicit False is the default no-op (not a non-specialist override): the
+    tool still auto-classifies by category, so a database tool stays specialist."""
     tool = {"name": "PostgreSQL", "category": "database", "needs_specialist_agent": False}
     assert classify_tool_importance(tool) == "specialist"
 

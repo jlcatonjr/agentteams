@@ -103,7 +103,10 @@ def convert_team(
     front matter and optional handoff sections are transformed.
 
     Non-agent files (``SETUP-REQUIRED.md``, the ``references/`` subdirectory)
-    are copied unchanged.
+    are copied unchanged. Without ``overwrite`` an existing passthrough
+    ``references/`` is left untouched (skipped); with ``overwrite=True`` it is
+    fully replaced by the source copy (stale target-only files are removed) —
+    the intended "clean re-render" semantics of ``--overwrite``.
 
     The instructions file (``copilot-instructions.md`` or ``CLAUDE.md``) is
     handled separately: it is placed at the *parent* of *target_dir* (i.e.,
@@ -350,6 +353,11 @@ def _convert_subdir(
             result.skipped.append(str(source_subdir))
             return
         if not dry_run:
+            # Under explicit --overwrite, the passthrough dir is fully replaced
+            # (stale target-only files are removed) — this is intended "clean
+            # re-render" semantics, asserted by
+            # test_learnpython_generation.test_path_b_..._replaces_existing_directory.
+            # Without --overwrite the dir is skipped (left untouched) above.
             if dest_subdir.exists():
                 shutil.rmtree(dest_subdir)
             shutil.copytree(source_subdir, dest_subdir)

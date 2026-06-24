@@ -69,8 +69,6 @@ flowchart LR
     class technical_validator domain
     tool_doc_researcher["Tool Documentation Researcher"]
     class tool_doc_researcher tool_specialist
-    visual_designer["Visual Designer"]
-    class visual_designer domain
     work_summarizer["Work Summarizer"]
     class work_summarizer domain
     orchestrator -->|"Produce / Revise Deliverable"| primary_producer
@@ -81,7 +79,6 @@ flowchart LR
     orchestrator -->|"Convert / Transform Output"| format_converter
     orchestrator -->|"Manage References / Dependencies"| reference_manager
     orchestrator -->|"Compile Final Output"| output_compiler
-    orchestrator -->|"Generate / Revise Diagram"| visual_designer
     orchestrator -->|"Navigate Project"| navigator
     orchestrator -->|"Security Review"| security
     orchestrator -->|"Code Hygiene Audit"| code_hygiene
@@ -181,11 +178,6 @@ flowchart LR
     output_compiler -->|"Return to Orchestrator"| orchestrator
     output_compiler -.-> format_converter
     output_compiler -.-> technical_validator
-    visual_designer -->|"Convert Figure Format"| format_converter
-    visual_designer -->|"Quality Check Figure"| quality_auditor
-    visual_designer -->|"Return to Orchestrator"| orchestrator
-    visual_designer -.-> format_converter
-    visual_designer -.-> quality_auditor
     module_doc_author -->|"Validate Documentation Accuracy"| module_doc_validator
     module_doc_author -->|"Conflict Audit"| conflict_auditor
     module_doc_author -->|"Return to Orchestrator"| orchestrator
@@ -262,7 +254,6 @@ flowchart LR
 | `team-builder` | governance | Yes | read, edit, search, execute, todo |
 | `technical-validator` | domain | No | read, search |
 | `tool-doc-researcher` | tool_specialist | No | read, search |
-| `visual-designer` | domain | No | read, edit, execute, search |
 | `work-summarizer` | domain | Yes | read, search, execute, edit, agent |
 
 ---
@@ -282,15 +273,15 @@ flowchart LR
 | `conflict-auditor` | `adversarial`, `agent-refactor`, `agent-updater`, `code-hygiene`, `module-doc-author`, `module-doc-validator`, `orchestrator`, `primary-producer`, `reference-manager`, `repo-liaison`, `technical-validator`, `work-summarizer` | `agent-updater`, `conflict-resolution`, `orchestrator`, `technical-validator` |
 | `conflict-resolution` | `conflict-auditor`, `git-operations`, `orchestrator` | `agent-updater`, `orchestrator` |
 | `content-enricher` | — | `orchestrator`, `primary-producer`, `technical-validator` |
-| `format-converter` | `orchestrator`, `output-compiler`, `visual-designer` | `orchestrator`, `output-compiler`, `quality-auditor` |
+| `format-converter` | `orchestrator`, `output-compiler` | `orchestrator`, `output-compiler`, `quality-auditor` |
 | `git-operations` | `orchestrator` | `agent-updater`, `conflict-resolution`, `orchestrator`, `security` |
 | `module-doc-author` | `module-doc-validator` | `conflict-auditor`, `module-doc-validator`, `orchestrator` |
 | `module-doc-validator` | `module-doc-author` | `conflict-auditor`, `module-doc-author`, `orchestrator` |
 | `navigator` | `orchestrator` | `orchestrator` |
-| `orchestrator` | `adversarial`, `agent-refactor`, `agent-updater`, `ch01-introduction-expert`, `ch02-literature-expert`, `cleanup`, `code-hygiene`, `cohesion-repairer`, `conflict-auditor`, `conflict-resolution`, `content-enricher`, `format-converter`, `git-operations`, `module-doc-author`, `module-doc-validator`, `navigator`, `output-compiler`, `primary-producer`, `quality-auditor`, `reference-manager`, `repo-liaison`, `security`, `style-guardian`, `technical-validator`, `tool-doc-researcher`, `visual-designer`, `work-summarizer` | `adversarial`, `agent-refactor`, `agent-updater`, `cleanup`, `code-hygiene`, `cohesion-repairer`, `conflict-auditor`, `conflict-resolution`, `format-converter`, `git-operations`, `navigator`, `output-compiler`, `primary-producer`, `quality-auditor`, `reference-manager`, `repo-liaison`, `security`, `style-guardian`, `technical-validator`, `visual-designer`, `work-summarizer` |
+| `orchestrator` | `adversarial`, `agent-refactor`, `agent-updater`, `ch01-introduction-expert`, `ch02-literature-expert`, `cleanup`, `code-hygiene`, `cohesion-repairer`, `conflict-auditor`, `conflict-resolution`, `content-enricher`, `format-converter`, `git-operations`, `module-doc-author`, `module-doc-validator`, `navigator`, `output-compiler`, `primary-producer`, `quality-auditor`, `reference-manager`, `repo-liaison`, `security`, `style-guardian`, `technical-validator`, `tool-doc-researcher`, `work-summarizer` | `adversarial`, `agent-refactor`, `agent-updater`, `cleanup`, `code-hygiene`, `cohesion-repairer`, `conflict-auditor`, `conflict-resolution`, `format-converter`, `git-operations`, `navigator`, `output-compiler`, `primary-producer`, `quality-auditor`, `reference-manager`, `repo-liaison`, `security`, `style-guardian`, `technical-validator`, `work-summarizer` |
 | `output-compiler` | `format-converter`, `orchestrator` | `format-converter`, `orchestrator`, `technical-validator` |
 | `primary-producer` | `ch01-introduction-expert`, `ch02-literature-expert`, `content-enricher`, `orchestrator`, `quality-auditor`, `style-guardian`, `technical-validator` | `cohesion-repairer`, `conflict-auditor`, `orchestrator`, `quality-auditor`, `style-guardian` |
-| `quality-auditor` | `cohesion-repairer`, `format-converter`, `orchestrator`, `primary-producer`, `visual-designer` | `cohesion-repairer`, `orchestrator`, `primary-producer`, `style-guardian` |
+| `quality-auditor` | `cohesion-repairer`, `format-converter`, `orchestrator`, `primary-producer` | `cohesion-repairer`, `orchestrator`, `primary-producer`, `style-guardian` |
 | `reference-manager` | `ch01-introduction-expert`, `ch02-literature-expert`, `orchestrator`, `technical-validator` | `conflict-auditor`, `orchestrator` |
 | `repo-liaison` | `orchestrator` | `conflict-auditor`, `orchestrator`, `security` |
 | `security` | `code-hygiene`, `git-operations`, `orchestrator`, `repo-liaison` | `orchestrator` |
@@ -298,7 +289,6 @@ flowchart LR
 | `team-builder` | — | — |
 | `technical-validator` | `conflict-auditor`, `content-enricher`, `orchestrator`, `output-compiler`, `work-summarizer` | `conflict-auditor`, `orchestrator`, `primary-producer`, `reference-manager` |
 | `tool-doc-researcher` | — | `agent-updater`, `orchestrator` |
-| `visual-designer` | `orchestrator` | `format-converter`, `orchestrator`, `quality-auditor` |
 | `work-summarizer` | `orchestrator` | `adversarial`, `conflict-auditor`, `orchestrator`, `technical-validator` |
 
 ---
@@ -340,7 +330,6 @@ digraph "ResearchPaperProject Agent Team" {
     "team-builder" [label="Team Builder", fillcolor="#e8e8ff"];
     "technical-validator" [label="Technical Validator", fillcolor="#e8ffe8"];
     "tool-doc-researcher" [label="Tool Documentation Researcher", fillcolor="#ffe8e8"];
-    "visual-designer" [label="Visual Designer", fillcolor="#e8ffe8"];
     "work-summarizer" [label="Work Summarizer", fillcolor="#e8ffe8"];
     "orchestrator" -> "primary-producer" [style=solid, label="Produce / Revise Deliverable"];
     "orchestrator" -> "quality-auditor" [style=solid, label="Audit Quality"];
@@ -350,7 +339,6 @@ digraph "ResearchPaperProject Agent Team" {
     "orchestrator" -> "format-converter" [style=solid, label="Convert / Transform Output"];
     "orchestrator" -> "reference-manager" [style=solid, label="Manage References / Dependencies"];
     "orchestrator" -> "output-compiler" [style=solid, label="Compile Final Output"];
-    "orchestrator" -> "visual-designer" [style=solid, label="Generate / Revise Diagram"];
     "orchestrator" -> "navigator" [style=solid, label="Navigate Project"];
     "orchestrator" -> "security" [style=solid, label="Security Review"];
     "orchestrator" -> "code-hygiene" [style=solid, label="Code Hygiene Audit"];
@@ -422,9 +410,6 @@ digraph "ResearchPaperProject Agent Team" {
     "output-compiler" -> "format-converter" [style=solid, label="Convert Missing Components"];
     "output-compiler" -> "technical-validator" [style=solid, label="Validate Technical Accuracy"];
     "output-compiler" -> "orchestrator" [style=solid, label="Return to Orchestrator"];
-    "visual-designer" -> "format-converter" [style=solid, label="Convert Figure Format"];
-    "visual-designer" -> "quality-auditor" [style=solid, label="Quality Check Figure"];
-    "visual-designer" -> "orchestrator" [style=solid, label="Return to Orchestrator"];
     "module-doc-author" -> "module-doc-validator" [style=solid, label="Validate Documentation Accuracy"];
     "module-doc-author" -> "conflict-auditor" [style=solid, label="Conflict Audit"];
     "module-doc-author" -> "orchestrator" [style=solid, label="Return to Orchestrator"];
@@ -724,17 +709,6 @@ digraph "ResearchPaperProject Agent Team" {
         "search"
       ]
     },
-    "visual-designer": {
-      "display_name": "Visual Designer",
-      "agent_type": "domain",
-      "user_invokable": false,
-      "tools": [
-        "read",
-        "edit",
-        "execute",
-        "search"
-      ]
-    },
     "work-summarizer": {
       "display_name": "Work Summarizer",
       "agent_type": "domain",
@@ -796,12 +770,6 @@ digraph "ResearchPaperProject Agent Team" {
       "target": "output-compiler",
       "edge_type": "handoff",
       "label": "Compile Final Output"
-    },
-    {
-      "source": "orchestrator",
-      "target": "visual-designer",
-      "edge_type": "handoff",
-      "label": "Generate / Revise Diagram"
     },
     {
       "source": "orchestrator",
@@ -1398,36 +1366,6 @@ digraph "ResearchPaperProject Agent Team" {
       "label": null
     },
     {
-      "source": "visual-designer",
-      "target": "format-converter",
-      "edge_type": "handoff",
-      "label": "Convert Figure Format"
-    },
-    {
-      "source": "visual-designer",
-      "target": "quality-auditor",
-      "edge_type": "handoff",
-      "label": "Quality Check Figure"
-    },
-    {
-      "source": "visual-designer",
-      "target": "orchestrator",
-      "edge_type": "handoff",
-      "label": "Return to Orchestrator"
-    },
-    {
-      "source": "visual-designer",
-      "target": "format-converter",
-      "edge_type": "agents-list",
-      "label": null
-    },
-    {
-      "source": "visual-designer",
-      "target": "quality-auditor",
-      "edge_type": "agents-list",
-      "label": null
-    },
-    {
       "source": "module-doc-author",
       "target": "module-doc-validator",
       "edge_type": "handoff",
@@ -1629,7 +1567,6 @@ digraph "ResearchPaperProject Agent Team" {
       "security",
       "style-guardian",
       "technical-validator",
-      "visual-designer",
       "work-summarizer"
     ],
     "navigator": [
@@ -1730,11 +1667,6 @@ digraph "ResearchPaperProject Agent Team" {
       "format-converter",
       "orchestrator",
       "technical-validator"
-    ],
-    "visual-designer": [
-      "format-converter",
-      "orchestrator",
-      "quality-auditor"
     ],
     "module-doc-author": [
       "conflict-auditor",

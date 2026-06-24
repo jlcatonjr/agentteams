@@ -22,10 +22,7 @@ Only present when `emit_all(..., dry_run=True)`. Serves as an extension point fo
 
 **Attributes:**
 
-- `entries` (`list[DryRunEntry]`) — List of planned write actions, each with:
-  - `action` (`str`) — One of `'write'`, `'merge'`, `'skip'`, `'error'`
-  - `fence_actions` (`list[dict[str, Any]]`) — Details of fenced-section merge actions (if `action == 'merge'`)
-  - `delta_bytes` (`int`) — Estimated byte delta for the operation
+- `entries` (`list[DryRunEntry]`) — List of planned write actions. See `DryRunEntry` below for the per-row fields and the canonical `action` vocabulary.
 
 - `notices` (`list[str]`) — Human-readable notices for Plan 3 extension (e.g., shrink alerts). Empty by default.
 
@@ -83,6 +80,7 @@ Result for a single fenced-content merge operation.
 - `sections_replaced` (`list[str]`) — Section IDs whose content was replaced from the newly rendered file.
 - `sections_added` (`list[str]`) — Section IDs present in the new render but absent in the existing file.
 - `sections_orphaned` (`list[str]`) — Section IDs present in existing file but absent in new render.
+- `sections_preserved` (`list[str]`) — Section IDs whose new render would have shrunk the existing body and were therefore kept unchanged under `shrink_policy="preserve"` (the default). Non-shrinking fences are still updated; no content is lost.
 - `parse_errors` (`list[str]`) — Parse-related error messages from fenced-region extraction/validation.
 - `unchanged` (`list[str]`) — Section IDs that were identical in both files (no write needed).
 - `merged_content` (`str`) — Final merged file content. Empty string when parse fails.
@@ -99,7 +97,7 @@ Result for a single fenced-content merge operation.
 
 ### `BackupResult`
 
-> *Source: `agentteams/emit.py`*
+> *Source: `agentteams/backup.py` (re-exported from `agentteams/emit.py`)*
 
 Result of a backup operation.
 
@@ -114,7 +112,7 @@ Result of a backup operation.
 
 ## Functions
 
-### `emit_all(rendered_files, *, output_dir, dry_run=False, overwrite=False, merge=False, yes=False, shrink_policy="warn", backup_path=None)`
+### `emit_all(rendered_files, *, output_dir, dry_run=False, overwrite=False, merge=False, yes=False, shrink_policy="preserve", backup_path=None)`
 
 > *Source: `agentteams/emit.py`*
 
@@ -129,7 +127,8 @@ Write rendered files to `output_dir`.
 - `merge` (`bool`, keyword-only) — If `True`, update only fenced template regions in existing files, preserving user-authored content. Default: `False`.
 - `yes` (`bool`, keyword-only) — If `True`, answer `'yes'` to all interactive prompts. Default: `False`.
 - `shrink_policy` (`str`, keyword-only) — *(T2.D5)* Behaviour when a fenced-region merge would lose concrete references (paths, identifiers, list items). One of:
-    - `"warn"` (default, back-compatible): log the shrink notice into `EmitResult.notices` and proceed with the smaller content.
+    - `"preserve"` (default): keep the existing enriched body for any fence the new render would shrink, while still applying template updates to non-shrinking fences. Respectful and non-destructive — no content is lost and the write is not blocked. Preserved fences are recorded in `MergeResult.sections_preserved`.
+    - `"warn"`: log the shrink notice into `EmitResult.notices` and proceed with the smaller content (recoverable via the `.lost.<sid>.md` sidecar when `backup_path` is set).
     - `"halt"`: log the notice, refuse the write, and append the path to `EmitResult.shrink_blocked`. Use to enforce strict fence-content preservation for self-team daily runs.
     - `"allow"`: suppress notices and write the smaller content silently. Use for one-time recovery when a previous halt was over-cautious.
 
@@ -177,7 +176,7 @@ Print the structured dry-run plan recorded on `EmitResult.dry_run_report`.
 
 ### `backup_output_dir(output_dir, *, files_to_backup=None, dry_run=False)`
 
-> *Source: `agentteams/emit.py`*
+> *Source: `agentteams/backup.py` (re-exported from `agentteams/emit.py`)*
 
 Copy existing agent files to a timestamped backup directory before a write.
 
@@ -195,7 +194,7 @@ The backup is placed at `<output_dir>/.agentteams-backups/YYYYMMDD-HHMMSS/`. If 
 
 ### `list_backups(output_dir)`
 
-> *Source: `agentteams/emit.py`*
+> *Source: `agentteams/backup.py` (re-exported from `agentteams/emit.py`)*
 
 Return all available backups for `output_dir`, newest first.
 
@@ -209,7 +208,7 @@ Return all available backups for `output_dir`, newest first.
 
 ### `restore_backup(backup_path, output_dir, *, remove_extra=False)`
 
-> *Source: `agentteams/emit.py`*
+> *Source: `agentteams/backup.py` (re-exported from `agentteams/emit.py`)*
 
 Restore files from a backup directory into `output_dir`, overwriting current content.
 

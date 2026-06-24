@@ -138,7 +138,7 @@ reference Markdown files only — never mutates
 
 - `repo_root` (`Path`) — agentteams repository root.
 
-**Returns:** dict with `schema_version: "1.1"`, `generated_at`,
+**Returns:** dict with `schema_version: "1.2"`, `generated_at`,
 `snapshot_generated_on`, `frameworks` (list of framework ids
 covered), and `changes` — a list of one change per affected expert
 reference. Each change is:

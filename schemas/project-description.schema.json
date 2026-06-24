@@ -351,6 +351,27 @@
           }
         }
       }
+    },
+    "mcp_servers": {
+      "type": "array",
+      "description": "Optional operator-SPECIFIED MCP server definitions to emit for this team (each conforms to mcp-server.schema.json). This is the input for automating *specified* servers (vs. mcp_hints, which only feeds the BUILD/USE/DEFER detection rubric). Purely declarative: entries are copied to the team-manifest's mcp_servers[] and emitted as the INERT .claude/mcp-servers.agentteams.json only when an MCP host-feature token is enabled (claude:mcp or bridge:copilot-vscode-to-claude:mcp). Provisions nothing on its own; credentialed activation remains a separate operator step. See references/mcp-auto-detection-report.md §5.4/§6.",
+      "items": { "$ref": "mcp-server.schema.json" }
+    },
+    "recipe_parameters": {
+      "type": "array",
+      "description": "Optional Goose recipe parameters (Phase-4a goose-native). Declares typed runtime inputs for the generated Goose team: copied to the team-manifest and, for --framework goose, emitted as a `parameters:` block on the ORCHESTRATOR recipe (referenced via {{ key }}) so it accepts `goose run --recipe orchestrator.yaml --params key=value`. Goose-only; ignored by other frameworks. Opt-in: absent/empty → recipes byte-identical.",
+      "items": {
+        "type": "object",
+        "required": ["key"],
+        "additionalProperties": false,
+        "properties": {
+          "key": { "type": "string", "description": "Parameter name; referenced as {{ key }}." },
+          "input_type": { "type": "string", "enum": ["string", "number", "boolean", "date", "file", "select"], "description": "Goose parameter input_type (default: string)." },
+          "requirement": { "type": "string", "enum": ["required", "optional"], "description": "Goose requirement (default: optional). Optional non-file params receive a default; file params are coerced to required (goose forbids file defaults)." },
+          "default": { "type": ["string", "number", "boolean"], "description": "Default for optional non-file params (file params cannot have a default)." },
+          "description": { "type": "string" }
+        }
+      }
     }
   },
   "additionalProperties": false

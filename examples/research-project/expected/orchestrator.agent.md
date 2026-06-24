@@ -25,7 +25,6 @@ agents:
   - format-converter
   - reference-manager
   - output-compiler
-  - visual-designer
   - module-doc-author
   - module-doc-validator
   - tool-doc-researcher
@@ -64,10 +63,6 @@ handoffs:
   - label: Compile Final Output
     agent: output-compiler
     prompt: "Assemble and compile the final deliverable from all sources."
-    send: false
-  - label: Generate / Revise Diagram
-    agent: visual-designer
-    prompt: "Generate or revise a diagram. Describe what is needed."
     send: false
   - label: Navigate Project
     agent: navigator
@@ -118,7 +113,6 @@ handoffs:
     prompt: "Run a git operation: commit and push, pull/merge/rebase, resolve conflicts, or recover a file. Describe the operation needed."
     send: false
 ---
-
 <!--
 SECTION MANIFEST — orchestrator.template.md
 | section_id                  | designation        | notes                                     |

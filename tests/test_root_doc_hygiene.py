@@ -35,15 +35,19 @@ ALLOWED_ROOT_MD = {
     "build-team-plan.md",
     # bridge-offline-investigation.md kept at root by maintainer decision (commit 9716b47).
     "bridge-offline-investigation.md",
+    # AGENTS.md is the SHARED, multi-tool standard entry file written to the repo
+    # root by design when this project is bridged/generated for Goose (and the
+    # agents-md framework) — Goose reads it via CONTEXT_FILE_NAMES. It is a
+    # bridge-owned, fenced canonical root doc, not a stray plan/report.
+    # See references/bridge-refresh-safety.md and references/filing-conventions.md.
+    "AGENTS.md",
 }
 
-# TEMPORARY: a live concurrent session owned this plan during the 2026-06-15
-# filing remediation, so it was left in place. Relocate it to
-# references/plans/security-waiver-remediation.plan.md and delete this entry once
-# that session is finished. See references/filing-conventions.md "Known follow-ups".
-TEMP_ALLOWED_ROOT_MD = {
-    "security-waiver-remediation-plan.md",
-}
+# Temporary allowances for root *.md owned by an in-flight session (relocate to
+# references/plans/ once the session is done). Empty: the 2026-06-15 filing
+# remediation's security-waiver-remediation-plan.md has been relocated to
+# references/plans/security-waiver-remediation.plan.md.
+TEMP_ALLOWED_ROOT_MD: set[str] = set()
 
 
 def test_no_stray_plan_docs_at_repo_root() -> None:

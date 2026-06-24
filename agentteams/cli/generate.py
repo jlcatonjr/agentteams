@@ -19,6 +19,7 @@ from pathlib import Path
 from agentteams import analyze, emit, ingest, liaison_logs, render
 from agentteams.cli import security_gate
 from agentteams.cli.artifacts import (
+    _emit_mcp_servers_if_enabled,
     _run_query_index,
     _run_refresh_index,
     _write_delivery_receipt,
@@ -111,12 +112,16 @@ def run_generate(args: argparse.Namespace, strict_manual_placeholders: bool) -> 
         # W1: let the adapter normalize --output so framework-specific nested
         # agents dirs (e.g. Goose's .goose/recipes/) are derived correctly when
         # the user passes a project root (including `--output .`).
-        output_dir = adapter.normalize_output_path(Path(args.output).resolve())
+        # project_root is the pre-normalization path (the operator's project root),
+        # used as the base for the project-root .claude/ MCP artifact.
+        project_root = Path(args.output).resolve()
+        output_dir = adapter.normalize_output_path(project_root)
     elif description.get("existing_project_path"):
-        project_path = Path(description["existing_project_path"])
-        output_dir = adapter.get_agents_dir(project_path)
+        project_root = Path(description["existing_project_path"])
+        output_dir = adapter.get_agents_dir(project_root)
     else:
-        output_dir = adapter.get_agents_dir(Path.cwd())
+        project_root = Path.cwd()
+        output_dir = adapter.get_agents_dir(project_root)
 
     print(f"  Output directory: {output_dir}")
 
@@ -214,7 +219,10 @@ def run_generate(args: argparse.Namespace, strict_manual_placeholders: bool) -> 
         }
         report = scan.scan_directory(output_dir, expected_agent_names=expected or None)
         scan.print_scan_report(report)
-        return 1 if report.has_issues else 0
+        # Only HIGH findings block CI — medium/low are informational warnings.
+        # Medium "high-entropy token" findings commonly appear in generated
+        # markdown prose (script paths, workflow names) and are false positives.
+        return 1 if report.high_count > 0 else 0
 
     # -----------------------------------------------------------------------
     # Step 4b.2: Handle --check-budget (3.1 + 3.4 efficiency lints)
@@ -563,6 +571,7 @@ def run_generate(args: argparse.Namespace, strict_manual_placeholders: bool) -> 
                             f"  !  Model-routing write failed: {exc}",
                             file=sys.stderr,
                         )
+                _emit_mcp_servers_if_enabled(manifest, project_root)
                 print(
                     "  ✓  Healed build-log baseline (no material drift; "
                     "fingerprint refreshed)."
@@ -724,6 +733,7 @@ def run_generate(args: argparse.Namespace, strict_manual_placeholders: bool) -> 
                         f"  !  Model-routing write failed: {exc}",
                         file=sys.stderr,
                     )
+            _emit_mcp_servers_if_enabled(manifest, project_root)
             if heal_converged:
                 print(
                     "  ✓  Healed build-log baseline (no material drift; "
@@ -939,6 +949,7 @@ def run_generate(args: argparse.Namespace, strict_manual_placeholders: bool) -> 
                     f"  !  Model-routing write failed: {exc}",
                     file=sys.stderr,
                 )
+        _emit_mcp_servers_if_enabled(manifest, project_root)
 
     return _finalize_exit_code(result, args)
 

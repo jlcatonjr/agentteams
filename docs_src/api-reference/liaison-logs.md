@@ -49,7 +49,7 @@ Result of a `migrate_inline_logs()` operation.
 
 **Properties:**
 
-- `rows_moved` (`int`) — Total rows moved across all logs
+- `rows_moved` (`int`) — Total rows moved across the changelog and coordination logs (`changelog_rows_moved + coord_log_rows_moved`). The security-decisions log is not part of inline-log migration, so it never contributes here.
 - `success` (`bool`) — `True` if no errors occurred
 
 ---

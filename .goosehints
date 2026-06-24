@@ -1,0 +1,5 @@
+<!-- AGENTTEAMS-BRIDGE:BEGIN goose-bridge-hints v=1 -->
+@AGENTS.md
+
+This project bridges the `copilot-vscode` agent team; source files are canonical.
+<!-- AGENTTEAMS-BRIDGE:END goose-bridge-hints -->

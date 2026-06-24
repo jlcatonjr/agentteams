@@ -123,3 +123,70 @@ def test_emit_stubs_empty_source_dir_noop(tmp_path: Path):
     result = bs.emit_subagent_stubs(source_dir=src, output_root=tmp_path)
     assert result.written == []
     assert result.skipped == []
+
+
+# ---------------------------------------------------------------------------
+# Goose subagent-stub recipes (plan P3) — opt-in parity with the claude path.
+# ---------------------------------------------------------------------------
+
+from agentteams import bridge_subagents_goose as bsg  # noqa: E402
+from agentteams import host_features as hf  # noqa: E402
+from agentteams.frameworks.goose import _validate_recipe_yaml  # noqa: E402
+
+
+def test_goose_subagents_token_registered():
+    # Must not raise HostFeatureError for any goose-bridge namespace.
+    for ns in ("copilot-vscode", "claude", "copilot-cli"):
+        hf.validate(f"bridge:{ns}-to-goose:subagents")
+
+
+def test_goose_stubs_one_valid_recipe_per_agent_reserved_skipped(tmp_path: Path):
+    src = tmp_path / ".github" / "agents"
+    _src_agent(src, "orchestrator")        # reserved -> skipped
+    _src_agent(src, "team-builder")        # reserved -> skipped
+    _src_agent(src, "cleanup")
+    _src_agent(src, "security")
+    (src / "_build-description.json").write_text("{}", encoding="utf-8")  # not an agent
+
+    result = bsg.emit_goose_subagent_stubs(source_dir=src, output_root=tmp_path)
+    recipes = tmp_path / ".goose" / "recipes"
+    written = sorted(p.name for p in recipes.glob("*.yaml"))
+    assert written == ["cleanup.yaml", "security.yaml"]   # reserved + non-agent excluded
+    # every emitted stub is a structurally valid Goose recipe
+    for p in recipes.glob("*.yaml"):
+        assert _validate_recipe_yaml(p.read_text(encoding="utf-8")) == [], p.name
+    assert any("orchestrator" in s for s in result.skipped)
+
+
+def test_goose_stubs_never_overwrite_existing_recipe(tmp_path: Path):
+    src = tmp_path / ".github" / "agents"
+    _src_agent(src, "cleanup")
+    recipes = tmp_path / ".goose" / "recipes"
+    recipes.mkdir(parents=True)
+    sentinel = "version: \"1.0.0\"\ntitle: \"hand authored\"\n# DO NOT TOUCH\n"
+    (recipes / "cleanup.yaml").write_text(sentinel, encoding="utf-8")
+
+    result = bsg.emit_goose_subagent_stubs(source_dir=src, output_root=tmp_path)
+    assert (recipes / "cleanup.yaml").read_text(encoding="utf-8") == sentinel  # untouched
+    assert any("cleanup.yaml" in s for s in result.skipped)
+
+
+def test_goose_bridge_stubs_opt_in_default_off(tmp_path: Path):
+    from agentteams.bridge import run_bridge
+    src = tmp_path / "proj" / ".github" / "agents"
+    _src_agent(src, "orchestrator")
+    _src_agent(src, "cleanup")
+    (src.parent / "copilot-instructions.md").write_text("# Instructions\n", encoding="utf-8")
+
+    # Default: no token -> no per-agent stub recipes (only the bridge-owned one).
+    run_bridge(source_dir=src, source_framework="copilot-vscode", target_framework="goose",
+               output_root=tmp_path / "off", overwrite=True)
+    off = sorted(p.name for p in (tmp_path / "off" / ".goose" / "recipes").glob("*.yaml"))
+    assert off == ["bridge-orchestrator.yaml"]
+
+    # Opt-in token -> a stub for the non-reserved agent appears.
+    run_bridge(source_dir=src, source_framework="copilot-vscode", target_framework="goose",
+               output_root=tmp_path / "on", overwrite=True,
+               host_features=["bridge:copilot-vscode-to-goose:subagents"])
+    on = sorted(p.name for p in (tmp_path / "on" / ".goose" / "recipes").glob("*.yaml"))
+    assert on == ["bridge-orchestrator.yaml", "cleanup.yaml"]

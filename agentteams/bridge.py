@@ -29,9 +29,23 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
+from agentteams import backup
 from agentteams.interop import detect_framework
+from agentteams.bridge_sources import (  # noqa: F401  (carved for CH-07; re-exported)
+    _INSTRUCTIONS_NAMES,
+    _collect_source_files,
+    _compute_hash_rows,
+    _extract_inventory,
+    _first_heading,
+    _first_non_heading_line,
+    _is_invokable,
+    _parse_front_matter,
+    _render_inventory_md,
+    _run_bridge_check,
+    _slug_from_name,
+    _slug_to_name,
+)
 
-_INSTRUCTIONS_NAMES = {"copilot-instructions.md", "CLAUDE.md"}
 
 _FENCE_BEGIN_RE = re.compile(
     r"<!--\s*AGENTTEAMS-BRIDGE:BEGIN\s+(?P<region>[A-Za-z0-9_-]+)\s+v=(?P<ver>\d+)\s*-->",
@@ -96,14 +110,19 @@ def run_bridge(
         raise FileNotFoundError(f"Source directory not found: {source_dir}")
 
     src_fw = source_framework or detect_framework(source_dir)
-    if src_fw not in {"copilot-vscode", "copilot-cli", "claude"}:
+    if src_fw not in {"copilot-vscode", "copilot-cli", "claude", "goose"}:
         raise ValueError(f"Unknown source framework {src_fw!r}")
     if target_framework not in {"copilot-vscode", "copilot-cli", "claude", "goose"}:
         raise ValueError(f"Unknown target framework {target_framework!r}")
+    if src_fw == "goose" and target_framework == "goose":
+        raise ValueError(
+            "goose-to-goose bridge is meaningless; bridge a Goose source to "
+            "claude/copilot-vscode/copilot-cli."
+        )
 
     result = BridgeResult(dry_run=dry_run, check_only=check_only)
     inventory = _extract_inventory(source_dir, src_fw)
-    source_files = _collect_source_files(source_dir)
+    source_files = _collect_source_files(source_dir, src_fw)
     source_hashes = _compute_hash_rows(source_files, source_dir)
 
     pair_dir = output_root / "references" / "bridges" / f"{src_fw}-to-{target_framework}"
@@ -133,6 +152,20 @@ def run_bridge(
         "inventory_count": len(inventory),
         "bridge_version": "1",
     }
+
+    # Empty-inventory guard (generate path only — check_only returned above). A
+    # bridge with zero agents has nothing to route to and is almost always the
+    # result of a wrong --bridge-from (e.g. the repo root instead of the agents
+    # dir). Surface it loudly rather than shipping a non-functional bridge silently.
+    # Kept a notice, not a hard error: a legitimately nascent team may have no
+    # agents yet, and failing would break a previously-passing input (STABILITY.md).
+    if len(inventory) == 0:
+        result.notices.append(
+            f"Empty bridge inventory: no agents found in source dir {source_dir} — "
+            f"the generated bridge has nothing to route to. Re-run with "
+            f"--bridge-from pointing at the agents directory (e.g. "
+            f"<project>/.github/agents for copilot-vscode sources)."
+        )
 
     # Bridge-internal artifacts: always regenerated regardless of mode.
     bridge_files: list[tuple[Path, str]] = []
@@ -186,6 +219,52 @@ def run_bridge(
             (output_root / ".claude" / "skills" / "recall.md", _render_recall_skill()),
         )
 
+    # Goose target: emit a bridge-orchestrator recipe so the bridged project has the
+    # `developer` (CLI) extension by default and, opt-in, the operator-selected MCP
+    # servers wired as extensions. Servers are read from the SOURCE project's inert
+    # `.claude/mcp-servers.agentteams.json` (the cache-split precedent reads the source
+    # root the same way). It is appended to `bridge_files` (NOT target_files) so it is
+    # a bridge-OWNED generated artifact: regenerated on every --bridge-merge/-refresh
+    # so newly-selected servers propagate on re-bridge (do not hand-edit — use the
+    # convert/direct recipes for customization). Written below by the bridge_files loop.
+    if target_framework == "goose":
+        import json as _json
+
+        from agentteams.frameworks.goose import build_bridge_recipe
+
+        mcp_token = f"bridge:{src_fw}-to-goose:mcp"
+        mcp_on = mcp_token in _features_early
+        servers: list = []
+        if mcp_on:
+            artifact = source_dir.parent.parent / ".claude" / "mcp-servers.agentteams.json"
+            if artifact.exists():
+                try:
+                    servers = _json.loads(artifact.read_text(encoding="utf-8")).get("servers", []) or []
+                except (OSError, ValueError):
+                    result.notices.append(
+                        f"{mcp_token} set but {artifact} was unreadable; bridge recipe "
+                        "emitted with developer (CLI) only."
+                    )
+            else:
+                result.notices.append(
+                    f"{mcp_token} set but {artifact} not found; bridge recipe emitted "
+                    "with developer (CLI) only. Build the source with an MCP host-feature "
+                    "token to persist selected servers."
+                )
+        rel_pair = pair_dir.relative_to(output_root)
+        recipe_yaml, recipe_notes = build_bridge_recipe(
+            source_framework=src_fw,
+            rel_inventory=str(rel_pair / "agent-inventory.md"),
+            rel_quickstart=str(rel_pair / "quickstart-snippet.md"),
+            mcp_servers=servers,
+            mcp_enabled=mcp_on,
+        )
+        bridge_files.append(
+            (output_root / ".goose" / "recipes" / "bridge-orchestrator.yaml", recipe_yaml)
+        )
+        for note in recipe_notes:
+            result.notices.append(f"Goose bridge recipe: {note}")
+
     # Bridge-internal artifacts: refresh and merge both regenerate these.
     # (Skip and overwrite policies do not apply to bridge-owned files.)
     for path, content in bridge_files:
@@ -199,6 +278,24 @@ def run_bridge(
             path.parent.mkdir(parents=True, exist_ok=True)
             path.write_text(content, encoding="utf-8")
         result.written.append(str(path))
+
+    # Back up existing target entry files before any merge/overwrite write. The
+    # merge path is fence-scoped (non-destructive) and overwrite is destructive,
+    # but either way a recoverable copy must exist — fleet advertises
+    # `.agentteams-backups` recovery for (non-git) bridge consumers, so produce it.
+    if (overwrite or merge_only) and not dry_run:
+        _to_backup = [
+            str(path.relative_to(output_root))
+            for path, _ in target_files
+            if path.exists() and path.is_relative_to(output_root)
+        ]
+        if _to_backup:
+            backup.backup_output_dir(
+                output_root,
+                files_to_backup=_to_backup,
+                reason=f"bridge-{'overwrite' if overwrite else 'merge'}",
+                framework=target_framework,
+            )
 
     # Target-framework entry files: dispatched by mode.
     merge_report_lines: list[str] = []
@@ -302,6 +399,32 @@ def run_bridge(
                 f"{', '.join(stub_result.experts_collapsed)}"
             )
 
+    # P3: emit Goose subagent-stub recipes (one per source agent) into
+    # .goose/recipes/. Opt-in via bridge:<src>-to-goose:subagents; default off so
+    # the pointer bridge stays byte-identical. Reserved/bridge-owned slugs are
+    # skipped and existing recipes are never overwritten (see bridge_subagents_goose).
+    if (
+        target_framework == "goose"
+        and f"bridge:{src_fw}-to-goose:subagents" in features
+    ):
+        from agentteams.bridge_subagents_goose import emit_goose_subagent_stubs
+
+        goose_stub_result = emit_goose_subagent_stubs(
+            source_dir=source_dir,
+            output_root=output_root,
+            source_framework=src_fw,
+            dry_run=dry_run,
+        )
+        result.written.extend(goose_stub_result.written)
+        result.skipped.extend(goose_stub_result.skipped)
+        result.errors.extend(goose_stub_result.errors)
+        if goose_stub_result.written:
+            result.notices.append(
+                f"Emitted {len(goose_stub_result.written)} Goose subagent-stub "
+                "recipe(s) into .goose/recipes/ (opt-in pointers to canonical source "
+                "agents; use --convert-from for full per-agent recipes)."
+            )
+
     # Phase 1: emit the todo-from-plan skill so the bridged orchestrator
     # can project the canonical plan-steps CSV into TodoWrite on activation.
     if (
@@ -392,138 +515,6 @@ def run_bridge(
     return result
 
 
-def _extract_inventory(source_dir: Path, source_framework: str) -> list[dict[str, str]]:
-    rows: list[dict[str, str]] = []
-
-    for file in sorted(source_dir.iterdir()):
-        if not file.is_file():
-            continue
-        name = file.name
-        if name in _INSTRUCTIONS_NAMES or name == "SETUP-REQUIRED.md":
-            continue
-        if source_framework == "copilot-vscode" and not name.endswith(".agent.md"):
-            continue
-        if source_framework != "copilot-vscode" and not name.endswith(".md"):
-            continue
-
-        text = file.read_text(encoding="utf-8")
-        meta, body = _parse_front_matter(text)
-        display_name = str(meta.get("name") or _first_heading(body) or _slug_to_name(_slug_from_name(name)))
-        role = str(meta.get("description") or _first_non_heading_line(body) or "")
-        invokable = "yes" if _is_invokable(meta.get("user-invokable")) else "no"
-        rows.append(
-            {
-                "display_name": display_name,
-                "invokable": invokable,
-                "role": role,
-                "source_file": str(file),
-            }
-        )
-
-    rows.sort(key=lambda r: (0 if "orchestrator" in r["source_file"] else 1, r["display_name"].lower()))
-    return rows
-
-
-def _collect_source_files(source_dir: Path) -> list[Path]:
-    files: list[Path] = []
-    for p in sorted(source_dir.iterdir()):
-        if p.is_file() and p.name != "SETUP-REQUIRED.md":
-            files.append(p)
-    for name in sorted(_INSTRUCTIONS_NAMES):
-        parent_candidate = source_dir.parent / name
-        if parent_candidate.exists():
-            files.append(parent_candidate)
-    return files
-
-
-def _compute_hash_rows(files: list[Path], source_dir: Path) -> list[dict[str, str]]:
-    rows: list[dict[str, str]] = []
-    for p in files:
-        try:
-            rel = str(p.relative_to(source_dir.parent))
-        except ValueError:
-            rel = str(p.name)
-        rows.append(
-            {
-                "path": rel,
-                "sha256": hashlib.sha256(p.read_bytes()).hexdigest(),
-            }
-        )
-    return rows
-
-
-def _run_bridge_check(*, manifest_path: Path, source_hash_rows: list[dict[str, str]]) -> tuple[bool, str]:
-    if not manifest_path.exists():
-        report = (
-            "# Bridge Check Report\n\n"
-            "Result: FAIL\n\n"
-            "- bridge-manifest.json is missing.\n"
-            "- No bridge has been generated yet. Run with --bridge-refresh "
-            "(omit --bridge-check) to generate the initial bridge artifacts, "
-            "then re-run --bridge-check to validate them.\n"
-        )
-        return False, report
-
-    try:
-        manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
-    except json.JSONDecodeError:
-        report = (
-            "# Bridge Check Report\n\n"
-            "Result: FAIL\n\n"
-            "- bridge-manifest.json is not valid JSON.\n"
-        )
-        return False, report
-
-    expected = {row["path"]: row["sha256"] for row in manifest.get("source_hashes", [])}
-    actual = {row["path"]: row["sha256"] for row in source_hash_rows}
-
-    stale_paths: list[str] = []
-    for path, sha in actual.items():
-        if expected.get(path) != sha:
-            stale_paths.append(path)
-
-    missing_paths = sorted(set(expected.keys()) - set(actual.keys()))
-    extra_paths = sorted(set(actual.keys()) - set(expected.keys()))
-
-    ok = not stale_paths and not missing_paths and not extra_paths
-
-    lines = ["# Bridge Check Report", "", f"Result: {'PASS' if ok else 'FAIL'}", ""]
-    if stale_paths:
-        lines.append("## Changed Source Files")
-        lines.extend([f"- {p}" for p in stale_paths])
-        lines.append("")
-    if missing_paths:
-        lines.append("## Missing Source Files")
-        lines.extend([f"- {p}" for p in missing_paths])
-        lines.append("")
-    if extra_paths:
-        lines.append("## New Source Files")
-        lines.extend([f"- {p}" for p in extra_paths])
-        lines.append("")
-    if ok:
-        lines.append("- Bridge artifacts are fresh and consistent with source files.")
-
-    return ok, "\n".join(lines) + "\n"
-
-
-def _render_inventory_md(rows: list[dict[str, str]]) -> str:
-    lines = [
-        "# Agent Team Bridge Inventory",
-        "",
-        "Lightweight compatibility inventory generated from source canonical files.",
-        "",
-        "| Agent | Invokable | Role | Source file |",
-        "|---|---|---|---|",
-    ]
-    for row in rows:
-        role = row["role"].replace("|", "\\|")
-        lines.append(
-            f"| {row['display_name']} | {row['invokable']} | {role} | `{row['source_file']}` |"
-        )
-    lines.append("")
-    return "\n".join(lines)
-
-
 def _render_quickstart(source_framework: str, target_framework: str) -> str:
     goose_check_note = ""
     if target_framework == "goose":
@@ -539,6 +530,13 @@ def _render_quickstart(source_framework: str, target_framework: str) -> str:
             "checks version string, no model: key, sub_recipe path resolution, and non-empty instructions.\n"
             "For full recipe generation (alternative to bridge): "
             "`agentteams --convert-from .github/agents --framework goose --output .goose/recipes`\n"
+            "\n## CLI + MCP entry recipe\n\n"
+            "The bridge emits `.goose/recipes/bridge-orchestrator.yaml` — run it with\n"
+            "`goose run --recipe .goose/recipes/bridge-orchestrator.yaml` to start the\n"
+            "bridged team WITH the `developer` (CLI) extension by default. Pass\n"
+            "`--target-host-features bridge:<source>-to-goose:mcp` and build the source\n"
+            "with an MCP token first to also wire the selected (first-party, read-only,\n"
+            "orchestrator-scoped) MCP servers into that recipe.\n"
         )
     return (
         "# Bridge Quickstart Snippet\n\n"
@@ -822,66 +820,3 @@ def _extract_fence_regions(text: str) -> dict[str, str]:
         block = text[match.start() : end_idx + len(end_marker)]
         regions[region_id] = block
     return regions
-
-
-def _parse_front_matter(text: str) -> tuple[dict[str, Any], str]:
-    if not text.startswith("---\n"):
-        return {}, text
-    parts = text.split("\n---\n", 1)
-    if len(parts) != 2:
-        return {}, text
-    raw = parts[0][4:]
-    body = parts[1]
-    data: dict[str, Any] = {}
-    for line in raw.splitlines():
-        m = re.match(r"^([A-Za-z][A-Za-z0-9_-]*)\s*:\s*(.*)$", line.strip())
-        if not m:
-            continue
-        key = m.group(1)
-        value = m.group(2).strip().strip('"\'')
-        if value.lower() in {"true", "false"}:
-            data[key] = value.lower() == "true"
-        else:
-            data[key] = value
-    return data, body
-
-
-def _first_heading(text: str) -> str:
-    for line in text.splitlines():
-        s = line.strip()
-        if s.startswith("#"):
-            return re.sub(r"^#{1,6}\s+", "", s)
-    return ""
-
-
-def _first_non_heading_line(text: str) -> str:
-    for line in text.splitlines():
-        s = line.strip()
-        if not s:
-            continue
-        if s.startswith("#"):
-            continue
-        if s.startswith("-"):
-            continue
-        return s
-    return ""
-
-
-def _slug_from_name(name: str) -> str:
-    if name.endswith(".agent.md"):
-        return name[: -len(".agent.md")]
-    if name.endswith(".md"):
-        return name[: -len(".md")]
-    return name
-
-
-def _slug_to_name(slug: str) -> str:
-    return " ".join(word.capitalize() for word in slug.replace("_", "-").split("-"))
-
-
-def _is_invokable(v: Any) -> bool:
-    if isinstance(v, bool):
-        return v
-    if isinstance(v, str):
-        return v.strip().lower() == "true"
-    return False
