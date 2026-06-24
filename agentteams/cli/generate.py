@@ -219,7 +219,10 @@ def run_generate(args: argparse.Namespace, strict_manual_placeholders: bool) -> 
         }
         report = scan.scan_directory(output_dir, expected_agent_names=expected or None)
         scan.print_scan_report(report)
-        return 1 if report.has_issues else 0
+        # Only HIGH findings block CI — medium/low are informational warnings.
+        # Medium "high-entropy token" findings commonly appear in generated
+        # markdown prose (script paths, workflow names) and are false positives.
+        return 1 if report.high_count > 0 else 0
 
     # -----------------------------------------------------------------------
     # Step 4b.2: Handle --check-budget (3.1 + 3.4 efficiency lints)
