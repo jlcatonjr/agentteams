@@ -1,0 +1,254 @@
+{
+  "project_name": "AgentTeamsModule",
+  "project_goal": "A Python module that automatically generates complete, coordinated AI agent teams for any project from a single description file. The module provides a 4-tier agent taxonomy (orchestrator, governance, domain, workstream expert), a template library, a rendering pipeline, and framework adapters for VS Code Copilot, Copilot CLI, and Claude.",
+  "deliverables": [
+    "Python pipeline modules (ingest, analyze, render, emit)",
+    "Agent template library (.template.md files)",
+    "JSON schemas for project description and team manifest",
+    "Framework adapters (copilot-vscode, copilot-cli, claude)",
+    "CLI entry point (build_team.py)",
+    "Example project briefs",
+    "Test suite"
+  ],
+  "output_format": "Python 3.11 modules",
+  "primary_output_dir": "src/",
+  "build_output_dir": "dist/",
+  "figures_dir": "docs/figures/",
+  "existing_project_path": ".",
+  "authority_sources": [
+    {
+      "name": "Template library",
+      "path": "templates/",
+      "scope": "agent file structure, placeholder conventions, agent taxonomy patterns",
+      "rank": 1
+    },
+    {
+      "name": "JSON schemas",
+      "path": "schemas/",
+      "scope": "input/output contract accuracy (project-description.schema.json, team-manifest.schema.json)",
+      "rank": 2
+    },
+    {
+      "name": "Python source pipeline",
+      "path": "src/",
+      "scope": "pipeline logic, placeholder resolution, framework adapter behavior",
+      "rank": 3
+    },
+    {
+      "name": "PLACEHOLDER-CONVENTIONS.md",
+      "path": "templates/PLACEHOLDER-CONVENTIONS.md",
+      "scope": "placeholder syntax rules (auto-resolved and manual-required token formats)",
+      "rank": 4
+    },
+    {
+      "name": "Implementation plan",
+      "path": "build-team-plan.md",
+      "scope": "architectural decisions, agent taxonomy, module design rationale",
+      "rank": 5
+    }
+  ],
+  "conversion_pipeline": "python -m build",
+  "pip_package_name": "agentteams",
+  "doc_site_config_file": "mkdocs.yml",
+  "style_reference": null,
+  "reference_db_path": null,
+  "reference_key_convention": "AuthorYear",
+  "memory_index_extra_dirs": [
+    "agentteams/templates",
+    "examples"
+  ],
+  "tools": [
+    {
+      "name": "Python",
+      "version": "3.11",
+      "category": "language"
+    },
+    {
+      "name": "pytest",
+      "category": "library",
+      "version": "8",
+      "docs_url": "https://docs.pytest.org/en/stable/",
+      "api_surface": "- **Test discovery** — files matching `test_*.py` or `*_test.py`; functions prefixed `test_`\n- **`pytest.fixture(scope=...)`** — `\"function\"` (default), `\"class\"`, `\"module\"`, `\"session\"`\n- **`pytest.mark`** — `@pytest.mark.parametrize(argnames, argvalues)`, `@pytest.mark.skip`, `@pytest.mark.skipif`, `@pytest.mark.xfail`\n- **`monkeypatch`** — `.setattr()`, `.setenv()`, `.delenv()`, `.setitem()`, `.chdir()`\n- **`tmp_path`** — `pathlib.Path` fixture scoped to the test function\n- **`capsys` / `capfd`** — capture stdout/stderr; `.readouterr()` returns `(out, err)`\n- **`conftest.py`** — project-wide fixtures; auto-used by all tests in the directory\n- **Exit codes** — 0: all passed, 1: some failed, 2: interrupted, 3: internal error, 4: bad usage, 5: no tests",
+      "common_patterns": "- **Fixtures over setUp/tearDown** — pytest fixtures are composable and scopeable; prefer them over `unittest.TestCase` methods\n- **`parametrize` flattens test matrices** — `@pytest.mark.parametrize(\"a,b,expected\", [...])` generates one test per row; ID is auto-derived\n- **`conftest.py` for shared fixtures** — never duplicate fixtures across test files; put project-wide fixtures in `tests/conftest.py`\n- **`tmp_path` not `tempfile`** — `tmp_path` is auto-cleaned and returns a `pathlib.Path`; no teardown needed\n- **`monkeypatch` scope** — only valid within the test function; never use it in session-scoped fixtures unless you understand the implications\n- **`-x` stops on first failure** — use during development; CI should run without `-x` to see all failures\n- **`-q` for clean output** — `python -m pytest tests/ -q` suppresses verbose per-test output in CI logs"
+    },
+    {
+      "name": "JSON Schema",
+      "category": "library",
+      "version": "draft-2020-12",
+      "docs_url": "https://json-schema.org/understanding-json-schema/",
+      "api_surface": "- **Type keywords** — `\"type\": \"object\"|\"array\"|\"string\"|\"number\"|\"integer\"|\"boolean\"|\"null\"`\n- **Object keywords** — `\"properties\"`, `\"required\"`, `\"additionalProperties\"`, `\"patternProperties\"`, `\"minProperties\"`, `\"maxProperties\"`\n- **Array keywords** — `\"items\"`, `\"prefixItems\"` (draft-2020-12), `\"minItems\"`, `\"maxItems\"`, `\"uniqueItems\"`, `\"contains\"`\n- **String keywords** — `\"minLength\"`, `\"maxLength\"`, `\"pattern\"` (ECMA regex), `\"format\"` (informational by default)\n- **Number keywords** — `\"minimum\"`, `\"maximum\"`, `\"exclusiveMinimum\"`, `\"exclusiveMaximum\"`, `\"multipleOf\"`\n- **Schema composition** — `\"allOf\"`, `\"anyOf\"`, `\"oneOf\"`, `\"not\"`, `\"if\"/\"then\"/\"else\"`\n- **Reuse** — `\"$defs\"` (draft-2019+; replaces `\"definitions\"`), `\"$ref\": \"#/$defs/MyType\"`\n- **Meta-data** — `\"title\"`, `\"description\"`, `\"default\"`, `\"examples\"`, `\"deprecated\"`\n- **Draft declaration** — `\"$schema\": \"https://json-schema.org/draft/2020-12/schema\"`",
+      "common_patterns": "- **`\"additionalProperties\": false`** — locks the schema; combine with `\"required\"` to enforce the full object shape\n- **`\"$defs\"` for reusable types** — define shared sub-schemas in `\"$defs\"` and reference with `\"$ref\": \"#/$defs/TypeName\"`; avoids duplication\n- **`\"oneOf\"` vs `\"anyOf\"`** — `oneOf` means exactly one sub-schema matches (XOR); `anyOf` means at least one; prefer `anyOf` for union types\n- **Draft-2020-12 `\"prefixItems\"`** — replaces draft-07 `\"items\"` for positional tuple schemas; `\"items\"` in 2020-12 matches only items beyond the prefix\n- **`\"format\"` is annotation-only by default** — `\"format\": \"uri\"` does not validate unless the validator is explicitly configured to enforce formats\n- **`\"required\"` is independent of `\"properties\"`** — a property can appear in `\"properties\"` without being in `\"required\"`; omit it to make it optional\n- **Keep `\"$ref\"` chains shallow** — circular refs are valid but require a validator that handles them; keep definitions one level deep in `\"$defs\"`"
+    }
+  ],
+  "style_rules": [
+    "stdlib-only: no external dependencies in src/ (pytest is dev-only)",
+    "All public functions must have docstrings with Args/Returns/Raises",
+    "Type annotations required on all public function signatures",
+    "Templates use `{UPPER_SNAKE_CASE}` for auto-resolved placeholders and `{MANUAL:UPPER_SNAKE_CASE}` for human-required",
+    "Agent templates must include YAML front matter with required keys: name, description, user-invokable, tools, model",
+    "Every agent template must contain an Invariant Core section marked with the stop-sign emoji"
+  ],
+  "components": [
+    {
+      "slug": "template-library",
+      "name": "Template Library",
+      "number": 1,
+      "output_file": "templates/",
+      "description": "The complete library of .template.md files across universal/, domain/, builder/, and root-level templates. Each template encodes one agent archetype with parameterized placeholders.",
+      "sections": [
+        "Universal governance templates (9 templates)",
+        "Domain archetype templates (10 templates)",
+        "Builder agent templates (3 templates, per-framework)",
+        "Workstream expert template",
+        "Copilot-instructions template",
+        "PLACEHOLDER-CONVENTIONS.md"
+      ],
+      "sources": [
+        "build-team-plan.md",
+        "templates/PLACEHOLDER-CONVENTIONS.md"
+      ],
+      "cross_refs": [
+        "pipeline-core",
+        "schemas"
+      ],
+      "quality_criteria": [
+        "Every template has valid YAML front matter with all required keys",
+        "Every template has an Invariant Core section",
+        "All {PLACEHOLDER} tokens are documented in PLACEHOLDER-CONVENTIONS.md",
+        "Templates are self-consistent: agent slugs in handoffs resolve to existing templates",
+        "No hardcoded project-specific values — everything parameterized"
+      ]
+    },
+    {
+      "slug": "pipeline-core",
+      "name": "Pipeline Core (ingest → analyze → render → emit)",
+      "number": 2,
+      "output_file": "src/",
+      "description": "The four-stage Python processing pipeline: ingest.py parses descriptions, analyze.py builds manifests, render.py resolves templates, emit.py writes files to disk.",
+      "sections": [
+        "ingest.py: JSON and Markdown parsing, directory scanning, validation",
+        "analyze.py: project classification, archetype selection, manifest generation",
+        "render.py: placeholder resolution, cross-reference validation, SETUP-REQUIRED generation",
+        "emit.py: safe file writing, dry-run, overwrite protection, summary report"
+      ],
+      "sources": [
+        "schemas/project-description.schema.json",
+        "schemas/team-manifest.schema.json"
+      ],
+      "cross_refs": [
+        "template-library",
+        "framework-adapters",
+        "schemas"
+      ],
+      "quality_criteria": [
+        "All public functions have docstrings with Args/Returns/Raises",
+        "validate() catches all required-field and format errors before processing",
+        "No external dependencies — stdlib only",
+        "Dry-run mode produces zero side effects",
+        "Overwrite protection never silently overwrites existing files"
+      ]
+    },
+    {
+      "slug": "framework-adapters",
+      "name": "Framework Adapters",
+      "number": 3,
+      "output_file": "agentteams/frameworks/",
+      "description": "Abstract base class and three concrete adapters that adjust agent file format for VS Code Copilot (.agent.md with YAML), Copilot CLI (plain Markdown), and Claude (CLAUDE.md format).",
+      "sections": [
+        "base.py: FrameworkAdapter ABC",
+        "copilot_vscode.py: YAML front matter, handoffs support",
+        "copilot_cli.py: strip YAML/handoffs for CLI format",
+        "claude.py: plain Markdown for Claude Projects"
+      ],
+      "sources": [
+        "build-team-plan.md"
+      ],
+      "cross_refs": [
+        "pipeline-core",
+        "template-library"
+      ],
+      "quality_criteria": [
+        "copilot-vscode adapter preserves all YAML front matter keys",
+        "copilot-cli adapter strips all YAML and handoff blocks cleanly",
+        "claude adapter produces valid CLAUDE.md-compatible output",
+        "All adapters implement the full FrameworkAdapter interface"
+      ]
+    },
+    {
+      "slug": "schemas",
+      "name": "JSON Schemas",
+      "number": 4,
+      "output_file": "schemas/",
+      "description": "JSON Schema definitions for the project description input format and the internal team manifest. These are the contracts between pipeline stages.",
+      "sections": [
+        "project-description.schema.json: input specification",
+        "team-manifest.schema.json: internal manifest specification"
+      ],
+      "sources": [
+        "build-team-plan.md"
+      ],
+      "cross_refs": [
+        "pipeline-core"
+      ],
+      "quality_criteria": [
+        "All required fields are marked in the schema",
+        "Enum values match actual code behavior in analyze.py",
+        "Examples in schema are valid against the schema itself",
+        "Schema descriptions match template placeholder documentation"
+      ]
+    },
+    {
+      "slug": "cli-and-examples",
+      "name": "CLI Entry Point and Examples",
+      "number": 5,
+      "output_file": "build_team.py",
+      "description": "The build_team.py CLI that wires together all pipeline stages, plus the three example project briefs (research, software, data-pipeline) used for integration testing.",
+      "sections": [
+        "build_team.py: argparse, 9-step pipeline, run log",
+        "examples/research-project/brief.json",
+        "examples/software-project/brief.json",
+        "examples/data-pipeline/brief.json"
+      ],
+      "sources": [
+        "build-team-plan.md"
+      ],
+      "cross_refs": [
+        "pipeline-core",
+        "framework-adapters",
+        "schemas"
+      ],
+      "quality_criteria": [
+        "All CLI flags documented in --help",
+        "Non-zero exit code on any error",
+        "Dry-run produces identical file list to real run",
+        "Each example brief is valid against project-description.schema.json",
+        "Each example produces a working team when run through the full pipeline"
+      ]
+    },
+    {
+      "slug": "test-suite",
+      "name": "Test Suite",
+      "number": 6,
+      "output_file": "tests/",
+      "description": "Unit tests for each pipeline module plus integration tests that run the full pipeline against all example briefs and all framework adapters.",
+      "sections": [
+        "test_ingest.py: JSON loading, Markdown parsing, validation, slugify",
+        "test_analyze.py: classification, archetype selection, tool agents, manifest",
+        "test_render.py: placeholder resolution, manual tokens, cross-refs",
+        "test_emit.py: file writing, dry-run, overwrite, path resolution",
+        "test_integration.py: full pipeline on all examples and frameworks"
+      ],
+      "sources": [],
+      "cross_refs": [
+        "pipeline-core",
+        "cli-and-examples"
+      ],
+      "quality_criteria": [
+        "All 157 tests pass",
+        "Integration tests cover all 3 example briefs",
+        "Integration tests cover all 3 frameworks",
+        "No test requires external dependencies or network access"
+      ]
+    }
+  ]
+}
