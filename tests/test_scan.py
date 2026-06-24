@@ -157,6 +157,25 @@ def test_report_severity_counts():
     assert report.low_count == 1
 
 
+def test_medium_only_findings_do_not_raise_high_count():
+    """Medium-severity findings (entropy false positives) must not set high_count.
+
+    The --scan-security exit code uses high_count > 0, so medium findings
+    (e.g. moderate-entropy tokens in generated markdown prose) must be
+    informational-only and must not block CI.
+    """
+    report = ScanReport(scanned_files=2)
+    report.findings = [
+        ScanFinding("a.agent.md", 10, "credential", "medium", "High-entropy token detected", "snip"),
+        ScanFinding("b.agent.md", 20, "credential", "medium", "High-entropy token detected", "snip"),
+    ]
+    assert report.medium_count == 2
+    assert report.high_count == 0
+    assert report.has_issues  # findings exist
+    # --scan-security uses `high_count > 0` as exit-1 predicate
+    assert not (report.high_count > 0)
+
+
 # ---------------------------------------------------------------------------
 # Additional credential patterns
 # ---------------------------------------------------------------------------

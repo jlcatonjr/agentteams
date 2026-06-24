@@ -222,6 +222,8 @@ def print_scan_report(report: ScanReport) -> None:
         return
 
     print(f"  Findings: {report.high_count} high, {report.medium_count} medium, {report.low_count} low")
+    if report.high_count == 0:
+        print("  (medium/low findings are informational — only high-severity findings are blocking)")
     print()
 
     # Group by file
