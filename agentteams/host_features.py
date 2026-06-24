@@ -27,11 +27,11 @@ _VALID_NAMESPACES = frozenset(
 )
 
 _KNOWN_FEATURES: dict[str, frozenset[str]] = {
-    "claude": frozenset({"hooks", "subagents", "schedule", "mcp", "critic", "cache-split", "todo-projection"}),
+    "claude": frozenset({"hooks", "subagents", "schedule", "mcp", "critic", "cache-split", "todo-projection", "parallelize"}),
     "copilot-vscode": frozenset({"chat-modes", "inline-yaml-handoffs"}),
     "copilot-cli": frozenset({"manifest-routing"}),
     "bridge:copilot-vscode-to-claude": frozenset(
-        {"subagents", "hooks", "schedule", "mcp", "critic", "cache-split", "todo-projection"}
+        {"subagents", "hooks", "schedule", "mcp", "critic", "cache-split", "todo-projection", "parallelize"}
     ),
     "bridge:copilot-vscode-to-copilot-cli": frozenset({"manifest-routing"}),
     "bridge:copilot-cli-to-claude": frozenset({"subagents", "hooks"}),

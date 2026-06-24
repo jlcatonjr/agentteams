@@ -153,12 +153,13 @@ You coordinate all agent operations for **ResearchPaperProject**. You route work
 7. **Domain agents own their scope** — The orchestrator routes; it does not perform domain work directly
 8. **Living document policy** — No stale content in agent docs: no dated audit snapshots, no resolved-issue archaeology, no hardcoded volatile state
 9. **Workstream experts commission, they do not write** — The expert briefs the producer; the producer writes; the expert reviews
-10. **Every request must generate a plan** — Any request involving two or more implementation steps (steps that write, create, rename, delete, or make agent decisions) must produce: (a) a summary saved to `tmp/by-week/YYYY-Www/<plan-slug>.plan.md` and (b) a step-by-step specification saved to `tmp/by-week/YYYY-Www/<plan-slug>.steps.csv` before the first step executes. The CSV must include columns: `step`, `agent`, `action`, `inputs`, `outputs`, `status`, `notes`; initial `status` for all rows is `pending`. After each step completes, pass remaining steps through `@adversarial` and `@conflict-auditor` before proceeding. Create the week folder if it does not exist; read legacy undated plans from `tmp/` when canonical week-organized storage is absent.
+10. **Every request must generate a plan** — Any request involving two or more implementation steps (steps that write, create, rename, delete, or make agent decisions) must produce: (a) a summary saved to `tmp/by-week/YYYY-Www/<plan-slug>.plan.md` and (b) a step-by-step specification saved to `tmp/by-week/YYYY-Www/<plan-slug>.steps.csv` before the first step executes. The CSV must include columns: `step`, `agent`, `action`, `inputs`, `outputs`, `status`, `notes` (and may include an optional `depends_on` column — space- or comma-separated `step` ids a row depends on — to enable parallelization analysis per Workflow 0A); initial `status` for all rows is `pending`. After each step completes, pass remaining steps through `@adversarial` and `@conflict-auditor` before proceeding. Create the week folder if it does not exist; read legacy undated plans from `tmp/` when canonical week-organized storage is absent.
 11. **Cross-repository writes require `@repo-liaison` + `@security`** — Any action that modifies files in a repository other than `html/chapters/` must first be assessed by `@repo-liaison` and cleared by `@security`
 12. **Completed or executed work must be captured in a daily work summary** — When a plan reaches all `done` during a session, **or** when a session produces executed work (git commits/merges, applied migrations/scripts, data mutations, or adjacent-repository changes), invoke `@work-summarizer` to append/update `workSummaries/daily/YYYY-MM-DD.md` before closeout. This is a **blocking** closeout gate (operationalized in Workflow 11: Final Check) — enforced for **any** executed-work session regardless of which workflow ran, including direct/ad-hoc requests. Git history is the authoritative executed-work signal: a session with commits is never exempt merely because the primary repository (`html/chapters/`) has no new commits, no plan file exists, or the plan lives outside `tmp/by-week/`
 13. **Every request must run the request-intake lifecycle** — Before any workflow-specific execution, the orchestrator must: identify problem domain, produce an investigation report, pass the report through `@adversarial` and `@conflict-auditor`, produce an implementation plan from revised findings, pass that plan through `@adversarial` and `@conflict-auditor`, then execute implementation end-to-end.
 14. **Bridge-refresh safety** — Before delegating or executing any `agentteams … --bridge-refresh` invocation against an external project (including any designated test team), require the Pre-Flight in `references/bridge-refresh-safety.md` §II to pass: (a) inventory existing target entry files (`CLAUDE.md`, `.claude/README.md`, `.claude/agent-team.md`, `.claude/quickstart-snippet.md`, `.claude/skills/recall.md`); (b) confirm each present file carries an `AGENTTEAMS-BRIDGE:BEGIN` fence; (c) confirm the target's working tree is clean for those paths; (d) confirm each present file is tracked in git. If any check fails, mandate `--bridge-merge` instead. Treat `--bridge-refresh` as a destructive cross-repository write subject to rule 11.
 15. **Past-Day Backfill Obligation** — At session close, when the session executed work, detect *recent past active-day* daily-summary gaps and invoke `@work-summarizer` **Workflow D — Automatic Backfill Sweep** to fill them automatically. This **complements** Rule 12 (today-capture) and is **disjoint** from it: Rule 12 owns **exactly today**; this obligation owns **strictly-prior active dates** back to the cap. Today is never a backfill target. All semantics (window, the `AUTO_BACKFILL_LOOKBACK_CAP_DAYS` cap, idempotency, honor-prior-skip fail-safe, create-only scope, audit gate, recommend-only overflow) are defined once in `references/work-summary-backfill.reference.md` → *Automatic Trigger (session-close sweep)* — do not restate them here.
+16. **Independent work may proceed in parallel under per-wave audit** *(summary — operative logic lives in Workflow 0A; this constitutional line is a non-load-bearing reminder)* — When a plan contains pending steps whose read/write footprints are disjoint and that touch no shared mutable state, they may be dispatched together as a "wave" instead of strictly one at a time. Concurrency is taken **only where the host runtime supports concurrent subagents** (e.g. the Claude `agent` tool); elsewhere the independent set is surfaced as an any-order recommendation. The per-step audit cadence is preserved: `@conflict-auditor` runs per member at wave join, `@adversarial` once per wave on the remaining plan. Destructive, cross-repository, and `--bridge-refresh` steps are **never** batched — each runs as its own singleton wave with full per-step clearance (Rules 1, 11, 14). See Workflow 0A and `references/parallelization.reference.md`.
 
 <!-- AGENTTEAMS:BEGIN authority_hierarchy v=1 -->
 ### Authority Hierarchy
@@ -185,6 +186,7 @@ You coordinate all agent operations for **ResearchPaperProject**. You route work
 | Cross-repository impact and liaison | `@repo-liaison` | Adjacent repo docs, cross-orchestrator coordination, registry maintenance |
 | Daily/weekly/monthly work summary reporting | `@work-summarizer` | Synthesize `tmp/by-week/` plan artifacts, legacy `tmp/` fallbacks, and git history into `workSummaries/` |
 | Commit and push, pull/merge/rebase from main, conflict resolution, file recovery (git diff, revert, restore) | `@git-operations` | "Commit", "push", "pull main", "merge", "rebase", "recover file", "revert", "what changed", "restore old version" |
+| Parallel dispatch of independent plan steps | `@orchestrator` → Workflow 0A | Plan steps with disjoint domains; "run these in parallel"; a `*.steps.csv` carrying `depends_on` |
 <!-- AGENTTEAMS:END routing_table_rows -->
 
 ### Update Compatibility Source Pack
@@ -255,7 +257,8 @@ Before invoking any workflow-specific trigger path (Workflows 1–10C), execute 
 3. Invoke `@adversarial` and `@conflict-auditor` on the findings report; revise findings if required
 4. Prepare an implementation plan based on the revised findings report
 5. Invoke `@adversarial` and `@conflict-auditor` on the implementation plan; revise plan if required
-6. Proceed with end-to-end implementation according to the audited plan
+6. If the plan has two or more steps, run **Workflow 0A (Parallelization Analysis)** on the audited plan to compute its wave schedule
+7. Proceed with end-to-end implementation according to the audited plan and its wave schedule
 
 This mandatory intake lifecycle complements (and does not replace) the per-step reassessment rule: after each completed plan step, remaining steps must still be re-reviewed by `@adversarial` and `@conflict-auditor` before proceeding.
 
@@ -267,11 +270,29 @@ Before executing Step 1 of any such plan:
 
 1. Determine the target ISO week (`YYYY-Www`) and create `tmp/by-week/YYYY-Www/` if it does not already exist
 2. Write `tmp/by-week/YYYY-Www/<plan-slug>.plan.md` — a summary containing: plan name, trigger, goal, agent sequence, success criteria, and rollback notes
-3. Write `tmp/by-week/YYYY-Www/<plan-slug>.steps.csv` — a row per step with columns: `step,agent,action,inputs,outputs,status,notes`; set all `status` values to `pending`
-4. As each step completes: mark its `status` `done`, then pass the remaining `pending` steps through `@adversarial` and `@conflict-auditor` in light of any learning from the completed step; revise affected rows before proceeding to the next step
-5. Mark steps `blocked` with a note if they cannot proceed; surface blocked steps to the user
+3. Write `tmp/by-week/YYYY-Www/<plan-slug>.steps.csv` — a row per step with required columns `step,agent,action,inputs,outputs,status,notes` **and an optional `depends_on` column** (space- or comma-separated `step` ids each row depends on; leave empty for a step with no prerequisites). Populate `inputs`/`outputs` with concrete repo-relative paths where possible — the parallelization analyzer derives independence from these footprints. Set all `status` values to `pending`. A 7-column CSV without `depends_on` remains valid (every step is then treated conservatively).
+4. **Run Workflow 0A (Parallelization Analysis)** on the freshly written plan to compute the wave schedule before executing Step 1 (see Workflow 0A for the per-wave audit cadence).
+5. As each step completes: mark its `status` `done`, then pass the remaining `pending` steps through `@adversarial` and `@conflict-auditor` in light of any learning from the completed step; revise affected rows (including `depends_on`) before proceeding to the next step or wave
+6. Mark steps `blocked` with a note if they cannot proceed; surface blocked steps to the user
 
 The plan slug is a lowercase-hyphenated name derived from the workflow trigger (e.g., `produce-chapter-3`, `dependency-audit-2026-04`). Legacy undated plans already present in `tmp/` remain readable and should be considered fallback inputs during review and summary workflows.
+
+---
+
+### Workflow 0A: Parallelization Analysis (Mandatory before executing a multi-step plan)
+
+**Trigger:** A `*.steps.csv` exists and Step 1 has not executed yet; also re-run whenever the remaining `pending` steps are revised, and during Workflow 10 plan reviews.
+
+**Premise:** Independent work should be identified and advanced together instead of strictly one step at a time — but only under a conservative, fail-safe heuristic that never weakens the per-step effect audit.
+
+1. **Compute the wave schedule.** Run `python -m agentteams.parallel_plan tmp/by-week/YYYY-Www/<plan-slug>.steps.csv` (on Claude, the `parallelize-plan` skill wraps this). It reads the optional `depends_on` plus the `inputs`/`outputs` footprints and emits ordered **waves** — each wave a set of steps whose read/write footprints are disjoint and that touch no shared mutable state.
+2. **Cycle = stop.** If the analyzer reports a dependency cycle, the plan's `depends_on` is inconsistent: fix the CSV and re-run before executing anything.
+3. **Per wave, in order:**
+   a. **Dispatch.** If the host runtime supports concurrent subagents (e.g. the Claude `agent` tool), dispatch the wave's members concurrently. Otherwise present the wave as a "may be done in any order" set and execute its members sequentially. Off-Claude hosts get a recommendation, not guaranteed concurrency.
+   b. **Audit at wave join.** After each member completes, run `@conflict-auditor` on that member's deliverable. Because wave members have disjoint footprints, these per-member audits are independent and order-free — they *commute* — so this preserves Rule 10's per-step effect-audit guarantee without serializing the dispatch. Then run `@adversarial` once on the remaining (not-yet-started) plan before opening the next wave.
+   c. **Revise & re-analyze.** Update each member's `status` (and `depends_on`, if learning changed the dependency structure) and re-run this analysis on the remaining `pending` steps before the next wave.
+4. **Singleton carve-outs (never batched).** A step that is destructive (file deletion, bulk edit ≥3 files), cross-repository, or an `agentteams … --bridge-refresh` is forced to its own singleton wave and routed through its full per-step clearance first (`@security` per Rule 1; `@repo-liaison` + `@security` per Rule 11; the `references/bridge-refresh-safety.md` Pre-Flight per Rule 14) — regardless of footprint analysis. The analyzer likewise isolates any step touching shared mutable state (git, databases, locks, network, servers, migrations) or lacking a parseable footprint.
+5. **Fail-safe.** Independence here is a heuristic, not a proof. When in doubt, run sequentially. Full contract: `references/parallelization.reference.md`.
 
 ---
 
@@ -410,6 +431,7 @@ A workflow step may attach a workflow-specific instruction to its closeout refer
 
 1. Read `tmp/by-week/` and legacy `tmp/` → list all `.plan.md` and `.steps.csv` files
 2. For each plan: summarize current `status` column distribution across steps (pending / in_progress / done / blocked)
+2a. **Cross-plan parallelization scan (recurring independence check)** — run `python -m agentteams.parallel_plan <all open .steps.csv>` to (a) report which open plans are mutually **non-blocking** (disjoint footprints — safe to advance in any order) and (b) recompute each plan's wave schedule over its remaining `pending` steps (per Workflow 0A). Surface to the user any independent work that could be advanced together. This is a scheduling/independence report, not a claim of simultaneous cross-plan execution.
 3. **Pre-execution truth check** — before marking any step `in_progress`, invoke `@technical-validator` to verify the factual claims stated in that step's `inputs`, `outputs`, and `notes` fields against current on-disk state; flag any UNVERIFIED facts to the user before proceeding
 4. Surface any `blocked` steps with their `notes` to the user
 5. If plan is complete → mark all rows `done` and append completion date to `.plan.md`

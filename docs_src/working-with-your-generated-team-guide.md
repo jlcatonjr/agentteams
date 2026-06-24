@@ -50,18 +50,29 @@ The ISO week folder (`YYYY-Www`) is created automatically if it does not exist.
 
 ### Steps CSV Format
 
-Each row in the steps file has these columns:
+Each row in the steps file has these required columns, plus an optional `depends_on`:
 
 ```
-step,agent,action,inputs,outputs,status,notes
+step,agent,action,inputs,outputs,status,notes[,depends_on]
 ```
 
 | Column | Values |
 |---|---|
 | `status` | `pending`, `in_progress`, `done`, `blocked` |
 | `notes` | Additional context, blockers, or deviation notes |
+| `depends_on` *(optional)* | Space- or comma-separated `step` ids this row depends on. Empty = no prerequisite. Enables parallelization analysis. |
 
-After each step completes, the orchestrator updates `status` to `done` and runs the remaining `pending` rows through `@adversarial` and `@conflict-auditor` before proceeding to the next step.
+After each step completes, the orchestrator updates `status` to `done` and runs the remaining `pending` rows through `@adversarial` and `@conflict-auditor` before proceeding to the next step (or wave).
+
+### Parallel Execution of Independent Steps
+
+If you add the optional `depends_on` column and fill `inputs`/`outputs` with concrete repo-relative paths, the orchestrator can identify steps whose domains are **independent** and dispatch them together as a **wave** instead of strictly one at a time (Workflow 0A — Parallelization Analysis). Compute the schedule yourself with:
+
+```
+python -m agentteams.parallel_plan tmp/by-week/YYYY-Www/<plan-slug>.steps.csv
+```
+
+Independence is conservative and fail-safe: steps share a wave only when their read/write footprints are disjoint and neither touches shared mutable state (git, databases, locks, the network, migrations). Destructive, cross-repository, and `--bridge-refresh` steps always run alone. Actual concurrency happens only where the host runtime supports concurrent subagents (e.g. Claude's `agent` tool); elsewhere the independent set is surfaced as an "any-order" recommendation. The per-step `@conflict-auditor` cadence is preserved (run per member at wave join). Full contract: `references/parallelization.reference.md`.
 
 ### Reviewing Plan Status
 

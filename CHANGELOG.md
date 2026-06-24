@@ -8,6 +8,37 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### added
 
+- **Parallel execution of independent plan steps (Workflow 0A).** Every team
+  agentteams creates or `--update --merge`-updates now inherently identifies plan
+  steps whose domains are independent and dispatches them as parallel **waves**
+  instead of strictly one at a time — under a conservative, fail-safe heuristic.
+  - New module `agentteams/parallel_plan.py` + CLI
+    (`python -m agentteams.parallel_plan <steps.csv> [...] [--json]`): reads the
+    runtime-schema plan-steps CSV with an **optional, additive `depends_on`
+    column**, builds the dependency DAG (declared edges plus footprint-implied
+    read-after-write / write-write edges), detects cycles as blocking errors, and
+    emits ordered waves. Independence requires disjoint read **and** write
+    footprints (path equality or directory/file containment) and no contact with a
+    shared-mutable-state denylist (git, databases, locks, network, servers,
+    migrations); steps with empty/unparseable footprints fail safe to singletons.
+    Also reports cross-plan *any-order* (non-blocking) sets — a scheduling note,
+    not simultaneous execution.
+  - The orchestrator gains, inside the merge-propagated `available_workflows`
+    fence: **Workflow 0A (Parallelization Analysis)** (per-wave dispatch with
+    `@conflict-auditor` run per member at wave join — preserving the per-step
+    effect-audit guarantee — and `@adversarial` once per wave; destructive /
+    cross-repo / `--bridge-refresh` steps forced to singleton waves with full
+    per-step clearance), an optional `depends_on` in the Pre-Execution
+    Requirement, a recurring cross-plan independence scan in Workflow 10, and a
+    routing row. A non-load-bearing constitutional summary (Rule 16) is added for
+    new teams.
+  - Always-emitted `references/parallelization.reference.md` documents the
+    contract for **all** frameworks; a `parallelize-plan` Claude **skill** is
+    emitted via the bridge (copilot-vscode→claude) gated by a new
+    `parallelize` host feature. The optional column is **backward compatible**: a
+    7-column CSV stays valid and is treated conservatively. Report, plan, and
+    adversarial+conflict audits under
+    `references/plans/parallel-independent-plan-execution.report.md`.
 - **Stale detector/remediator (`--stale-check`).** Additive minor change (new flags +
   the exit-3 contract enter the SemVer surface per `STABILITY.md`). A standalone,
   read-only scan of `--output`/`--project` (else CWD) that reports stale agent docs and

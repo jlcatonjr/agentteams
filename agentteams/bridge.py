@@ -320,6 +320,26 @@ def run_bridge(
                 skill_path.write_text(_render_todo_skill(), encoding="utf-8")
             result.written.append(str(skill_path))
 
+    # Emit the parallelize-plan skill so the bridged orchestrator can derive
+    # fail-safe parallel waves from a plan-steps CSV's optional depends_on
+    # (Workflow 0A). The reference doc + CLI reach every team unconditionally;
+    # this skill is the Claude-only deterministic affordance.
+    if (
+        target_framework == "claude"
+        and src_fw == "copilot-vscode"
+        and "bridge:copilot-vscode-to-claude:parallelize" in features
+    ):
+        from agentteams.parallel_plan import render_skill as _render_parallelize_skill
+
+        skill_path = output_root / ".claude" / "skills" / "parallelize-plan.md"
+        if skill_path.exists() and not (overwrite or merge_only):
+            result.skipped.append(str(skill_path))
+        else:
+            if not dry_run:
+                skill_path.parent.mkdir(parents=True, exist_ok=True)
+                skill_path.write_text(_render_parallelize_skill(), encoding="utf-8")
+            result.written.append(str(skill_path))
+
     # Phase 3: emit Claude hooks example + recursion-guarded guard script.
     # Opt-in; emits .claude/settings.agentteams.example.json (user merges
     # into their own settings.json) and .claude/hook-guard.sh.

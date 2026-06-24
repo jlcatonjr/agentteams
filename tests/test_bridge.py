@@ -633,3 +633,37 @@ def test_normalize_bridge_output_root_goose(tmp_path: Path):
     # A plain repo-root --output is left untouched.
     assert _normalize_bridge_output_root(root, "goose") == root
 
+
+
+def test_bridge_emits_parallelize_skill_when_feature_enabled(tmp_path: Path):
+    source_dir = tmp_path / "src" / ".github" / "agents"
+    _build_source("copilot-vscode", source_dir)
+    result = run_bridge(
+        source_dir=source_dir,
+        source_framework="copilot-vscode",
+        target_framework="claude",
+        output_root=tmp_path / "out",
+        overwrite=True,
+        host_features=["bridge:copilot-vscode-to-claude:parallelize"],
+    )
+    assert result.success, f"errors: {result.errors}"
+    skill = tmp_path / "out" / ".claude" / "skills" / "parallelize-plan.md"
+    assert skill.exists()
+    body = skill.read_text(encoding="utf-8")
+    assert "name: parallelize-plan" in body
+    assert "parallel_plan" in body
+
+
+def test_bridge_omits_parallelize_skill_by_default(tmp_path: Path):
+    source_dir = tmp_path / "src" / ".github" / "agents"
+    _build_source("copilot-vscode", source_dir)
+    result = run_bridge(
+        source_dir=source_dir,
+        source_framework="copilot-vscode",
+        target_framework="claude",
+        output_root=tmp_path / "out",
+        overwrite=True,
+    )
+    assert result.success, f"errors: {result.errors}"
+    skill = tmp_path / "out" / ".claude" / "skills" / "parallelize-plan.md"
+    assert not skill.exists()  # opt-in via host feature only

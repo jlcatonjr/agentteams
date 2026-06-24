@@ -175,6 +175,16 @@ def _plan_output_files(
         "component_slug": None,
     })
 
+    # Parallelization reference (always — @orchestrator Workflow 0A support;
+    # documents the independence heuristic + parallel_plan analyzer for all
+    # frameworks, including those with no skills concept).
+    files.append({
+        "path": "references/parallelization.reference.md",
+        "template": f"{agents_dir}parallelization.reference.template.md",
+        "type": "reference",
+        "component_slug": None,
+    })
+
     if "retrieval-integrator" in archetypes:
         files.append({
             "path": "references/retrieval-integration.reference.md",
