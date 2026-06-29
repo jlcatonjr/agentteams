@@ -772,6 +772,63 @@ def test_select_archetypes_module_doc_not_included_for_generic_project():
     assert "module-doc-validator" not in archetypes
 
 
+# --- module-doc false-positive guard: weak words must NOT trigger -----------
+# Regression for the module-doc archetype false-positive (Tracers handoff P2b):
+# a single weak keyword used to force both pip-doc agents onto non-packaging
+# projects. The decisive set is now package-exclusive (pypi/mkdocs/sphinx/
+# readthedocs/sdist), so the inputs below must select neither agent.
+@pytest.mark.parametrize(
+    "goal",
+    [
+        # "knowledge distribution" — the academic-paper false positive (research-project)
+        "Surveys existing work on knowledge distribution and institutional design.",
+        # report distribution / installer — the Tracers class
+        "Distribute report packages to clients; then run the installer.",
+        # a CONSUMER of an API legitimately documents an api reference + changelog
+        "Consume the Galaxy API; document the api reference and keep a changelog.",
+        # "wheel" idiom must not trigger via the artifact sense
+        "Release version two; no need to reinvent the wheel.",
+        # "pip" must not leak via plural "pipes"
+        "An ETL pipeline that pipes data through transformation stages.",
+    ],
+)
+def test_select_archetypes_module_doc_not_triggered_by_weak_keywords(goal):
+    archetypes = select_archetypes({"project_goal": goal})
+    assert "module-doc-author" not in archetypes
+    assert "module-doc-validator" not in archetypes
+
+
+@pytest.mark.parametrize(
+    "goal",
+    [
+        "Host the documentation on readthedocs.",
+        "Generate API docs with sphinx.",
+        "Publish the docs site with mkdocs.",
+        "Build an sdist for the release.",
+    ],
+)
+def test_select_archetypes_module_doc_triggered_by_decisive_tooling(goal):
+    """Each package-exclusive token is decisive on its own (and selects the pair)."""
+    archetypes = select_archetypes({"project_goal": goal})
+    assert "module-doc-author" in archetypes
+    assert "module-doc-validator" in archetypes
+
+
+@pytest.mark.parametrize(
+    "goal",
+    [
+        "Distribute a pip package to PyPI.",          # decisive: pypi
+        "Build a simple ETL workflow for CSV data.",  # neither
+        "Generate API docs with sphinx.",             # decisive: sphinx
+        "An ETL pipeline that pipes data.",           # neither (no leak)
+    ],
+)
+def test_select_archetypes_module_doc_author_validator_always_paired(goal):
+    """The author and validator are always both-present or both-absent — never a half-pair."""
+    archetypes = select_archetypes({"project_goal": goal})
+    assert ("module-doc-author" in archetypes) == ("module-doc-validator" in archetypes)
+
+
 def test_select_archetypes_post_production_auditor_for_operation_plus_verification_non_data():
     desc = {
         "project_goal": "Execute a production release migration and verify final state against acceptance criteria."

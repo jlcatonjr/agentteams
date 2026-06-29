@@ -13,8 +13,6 @@
     "reference-manager",
     "output-compiler",
     "visual-designer",
-    "module-doc-author",
-    "module-doc-validator",
     "tool-doc-researcher"
   ],
   "components": [
@@ -44,8 +42,6 @@
     "research-project/expected/reference-manager.agent.md",
     "research-project/expected/output-compiler.agent.md",
     "research-project/expected/visual-designer.agent.md",
-    "research-project/expected/module-doc-author.agent.md",
-    "research-project/expected/module-doc-validator.agent.md",
     "research-project/expected/tool-doc-researcher.agent.md",
     "research-project/expected/tool-pandoc.agent.md",
     "research-project/expected/references/ref-bibtex-reference.md",
@@ -88,8 +84,6 @@
     "domain/reference-manager.template.md": "f7538df16abbbba8",
     "domain/output-compiler.template.md": "fd90f3a13765386a",
     "domain/visual-designer.template.md": "cae39ee7b6d167f4",
-    "domain/module-doc-author.template.md": "1a252bf38222bcd3",
-    "domain/module-doc-validator.template.md": "1c0a4b65b200562f",
     "domain/tool-doc-researcher.template.md": "ed54707800500bed",
     "domain/tool-cli.template.md": "49dc4c644d8696e1",
     "domain/tool-reference.template.md": "cf44c4bf906ba8b8",
@@ -239,18 +233,6 @@
       "component_slug": null
     },
     {
-      "path": "module-doc-author.agent.md",
-      "template": "domain/module-doc-author.template.md",
-      "type": "agent",
-      "component_slug": null
-    },
-    {
-      "path": "module-doc-validator.agent.md",
-      "template": "domain/module-doc-validator.template.md",
-      "type": "agent",
-      "component_slug": null
-    },
-    {
       "path": "tool-doc-researcher.agent.md",
       "template": "domain/tool-doc-researcher.template.md",
       "type": "agent",
@@ -377,8 +359,6 @@
     "reference-manager",
     "output-compiler",
     "visual-designer",
-    "module-doc-author",
-    "module-doc-validator",
     "tool-doc-researcher",
     "tool-pandoc",
     "ch01-introduction-expert",
@@ -422,8 +402,6 @@
     "reference-manager.agent.md": "aff89cc16985924a",
     "output-compiler.agent.md": "1abfc7d512294562",
     "visual-designer.agent.md": "c593c565f982f5b3",
-    "module-doc-author.agent.md": "bc664664556cca60",
-    "module-doc-validator.agent.md": "b3f6bb0df5c8cfa1",
     "tool-doc-researcher.agent.md": "622a0acca2be0d99",
     "tool-pandoc.agent.md": "eefe3609f9025376",
     "references/ref-bibtex-reference.md": "ff095b2e0db2bce5",

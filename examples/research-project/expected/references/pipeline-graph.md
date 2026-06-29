@@ -41,10 +41,6 @@ flowchart LR
     class format_converter domain
     git_operations["Git Operations"]
     class git_operations governance
-    module_doc_author["Module Doc Author"]
-    class module_doc_author domain
-    module_doc_validator["Module Doc Validator"]
-    class module_doc_validator domain
     navigator["Navigator"]
     class navigator governance
     orchestrator["Orchestrator"]
@@ -178,16 +174,6 @@ flowchart LR
     output_compiler -->|"Return to Orchestrator"| orchestrator
     output_compiler -.-> format_converter
     output_compiler -.-> technical_validator
-    module_doc_author -->|"Validate Documentation Accuracy"| module_doc_validator
-    module_doc_author -->|"Conflict Audit"| conflict_auditor
-    module_doc_author -->|"Return to Orchestrator"| orchestrator
-    module_doc_author -.-> module_doc_validator
-    module_doc_author -.-> conflict_auditor
-    module_doc_validator -->|"Route Corrections to Module Doc Author"| module_doc_author
-    module_doc_validator -->|"Log Conflict"| conflict_auditor
-    module_doc_validator -->|"Return to Orchestrator"| orchestrator
-    module_doc_validator -.-> module_doc_author
-    module_doc_validator -.-> conflict_auditor
     tool_doc_researcher -->|"Update Brief and Generated Docs"| agent_updater
     tool_doc_researcher -->|"Return to Orchestrator"| orchestrator
     ch01_introduction_expert -->|"Vet Brief Before Drafting"| adversarial
@@ -240,8 +226,6 @@ flowchart LR
 | `content-enricher` | domain | Yes | read, edit, search |
 | `format-converter` | domain | No | read, edit, execute |
 | `git-operations` | governance | Yes | read, execute, search |
-| `module-doc-author` | domain | No | read, edit, search |
-| `module-doc-validator` | domain | No | read, search |
 | `navigator` | governance | No | read, search, execute |
 | `orchestrator` | governance | Yes | read, edit, search, execute, todo, agent |
 | `output-compiler` | domain | No | read, edit, execute |
@@ -270,15 +254,13 @@ flowchart LR
 | `cleanup` | `code-hygiene`, `orchestrator` | `orchestrator` |
 | `code-hygiene` | `orchestrator` | `agent-refactor`, `cleanup`, `conflict-auditor`, `orchestrator`, `security` |
 | `cohesion-repairer` | `orchestrator`, `primary-producer`, `quality-auditor` | `orchestrator`, `quality-auditor`, `style-guardian` |
-| `conflict-auditor` | `adversarial`, `agent-refactor`, `agent-updater`, `code-hygiene`, `module-doc-author`, `module-doc-validator`, `orchestrator`, `primary-producer`, `reference-manager`, `repo-liaison`, `technical-validator`, `work-summarizer` | `agent-updater`, `conflict-resolution`, `orchestrator`, `technical-validator` |
+| `conflict-auditor` | `adversarial`, `agent-refactor`, `agent-updater`, `code-hygiene`, `orchestrator`, `primary-producer`, `reference-manager`, `repo-liaison`, `technical-validator`, `work-summarizer` | `agent-updater`, `conflict-resolution`, `orchestrator`, `technical-validator` |
 | `conflict-resolution` | `conflict-auditor`, `git-operations`, `orchestrator` | `agent-updater`, `orchestrator` |
 | `content-enricher` | — | `orchestrator`, `primary-producer`, `technical-validator` |
 | `format-converter` | `orchestrator`, `output-compiler` | `orchestrator`, `output-compiler`, `quality-auditor` |
 | `git-operations` | `orchestrator` | `agent-updater`, `conflict-resolution`, `orchestrator`, `security` |
-| `module-doc-author` | `module-doc-validator` | `conflict-auditor`, `module-doc-validator`, `orchestrator` |
-| `module-doc-validator` | `module-doc-author` | `conflict-auditor`, `module-doc-author`, `orchestrator` |
 | `navigator` | `orchestrator` | `orchestrator` |
-| `orchestrator` | `adversarial`, `agent-refactor`, `agent-updater`, `ch01-introduction-expert`, `ch02-literature-expert`, `cleanup`, `code-hygiene`, `cohesion-repairer`, `conflict-auditor`, `conflict-resolution`, `content-enricher`, `format-converter`, `git-operations`, `module-doc-author`, `module-doc-validator`, `navigator`, `output-compiler`, `primary-producer`, `quality-auditor`, `reference-manager`, `repo-liaison`, `security`, `style-guardian`, `technical-validator`, `tool-doc-researcher`, `work-summarizer` | `adversarial`, `agent-refactor`, `agent-updater`, `cleanup`, `code-hygiene`, `cohesion-repairer`, `conflict-auditor`, `conflict-resolution`, `format-converter`, `git-operations`, `navigator`, `output-compiler`, `primary-producer`, `quality-auditor`, `reference-manager`, `repo-liaison`, `security`, `style-guardian`, `technical-validator`, `work-summarizer` |
+| `orchestrator` | `adversarial`, `agent-refactor`, `agent-updater`, `ch01-introduction-expert`, `ch02-literature-expert`, `cleanup`, `code-hygiene`, `cohesion-repairer`, `conflict-auditor`, `conflict-resolution`, `content-enricher`, `format-converter`, `git-operations`, `navigator`, `output-compiler`, `primary-producer`, `quality-auditor`, `reference-manager`, `repo-liaison`, `security`, `style-guardian`, `technical-validator`, `tool-doc-researcher`, `work-summarizer` | `adversarial`, `agent-refactor`, `agent-updater`, `cleanup`, `code-hygiene`, `cohesion-repairer`, `conflict-auditor`, `conflict-resolution`, `format-converter`, `git-operations`, `navigator`, `output-compiler`, `primary-producer`, `quality-auditor`, `reference-manager`, `repo-liaison`, `security`, `style-guardian`, `technical-validator`, `work-summarizer` |
 | `output-compiler` | `format-converter`, `orchestrator` | `format-converter`, `orchestrator`, `technical-validator` |
 | `primary-producer` | `ch01-introduction-expert`, `ch02-literature-expert`, `content-enricher`, `orchestrator`, `quality-auditor`, `style-guardian`, `technical-validator` | `cohesion-repairer`, `conflict-auditor`, `orchestrator`, `quality-auditor`, `style-guardian` |
 | `quality-auditor` | `cohesion-repairer`, `format-converter`, `orchestrator`, `primary-producer` | `cohesion-repairer`, `orchestrator`, `primary-producer`, `style-guardian` |
@@ -316,8 +298,6 @@ digraph "ResearchPaperProject Agent Team" {
     "content-enricher" [label="Content Enricher", fillcolor="#e8ffe8"];
     "format-converter" [label="Format Converter", fillcolor="#e8ffe8"];
     "git-operations" [label="Git Operations", fillcolor="#e8e8ff"];
-    "module-doc-author" [label="Module Doc Author", fillcolor="#e8ffe8"];
-    "module-doc-validator" [label="Module Doc Validator", fillcolor="#e8ffe8"];
     "navigator" [label="Navigator", fillcolor="#e8e8ff"];
     "orchestrator" [label="Orchestrator", fillcolor="#e8e8ff"];
     "output-compiler" [label="Output Compiler", fillcolor="#e8ffe8"];
@@ -410,12 +390,6 @@ digraph "ResearchPaperProject Agent Team" {
     "output-compiler" -> "format-converter" [style=solid, label="Convert Missing Components"];
     "output-compiler" -> "technical-validator" [style=solid, label="Validate Technical Accuracy"];
     "output-compiler" -> "orchestrator" [style=solid, label="Return to Orchestrator"];
-    "module-doc-author" -> "module-doc-validator" [style=solid, label="Validate Documentation Accuracy"];
-    "module-doc-author" -> "conflict-auditor" [style=solid, label="Conflict Audit"];
-    "module-doc-author" -> "orchestrator" [style=solid, label="Return to Orchestrator"];
-    "module-doc-validator" -> "module-doc-author" [style=solid, label="Route Corrections to Module Doc Author"];
-    "module-doc-validator" -> "conflict-auditor" [style=solid, label="Log Conflict"];
-    "module-doc-validator" -> "orchestrator" [style=solid, label="Return to Orchestrator"];
     "tool-doc-researcher" -> "agent-updater" [style=solid, label="Update Brief and Generated Docs"];
     "tool-doc-researcher" -> "orchestrator" [style=solid, label="Return to Orchestrator"];
     "ch01-introduction-expert" -> "adversarial" [style=solid, label="Vet Brief Before Drafting"];
@@ -564,25 +538,6 @@ digraph "ResearchPaperProject Agent Team" {
       "tools": [
         "read",
         "execute",
-        "search"
-      ]
-    },
-    "module-doc-author": {
-      "display_name": "Module Doc Author",
-      "agent_type": "domain",
-      "user_invokable": false,
-      "tools": [
-        "read",
-        "edit",
-        "search"
-      ]
-    },
-    "module-doc-validator": {
-      "display_name": "Module Doc Validator",
-      "agent_type": "domain",
-      "user_invokable": false,
-      "tools": [
-        "read",
         "search"
       ]
     },
@@ -1366,66 +1321,6 @@ digraph "ResearchPaperProject Agent Team" {
       "label": null
     },
     {
-      "source": "module-doc-author",
-      "target": "module-doc-validator",
-      "edge_type": "handoff",
-      "label": "Validate Documentation Accuracy"
-    },
-    {
-      "source": "module-doc-author",
-      "target": "conflict-auditor",
-      "edge_type": "handoff",
-      "label": "Conflict Audit"
-    },
-    {
-      "source": "module-doc-author",
-      "target": "orchestrator",
-      "edge_type": "handoff",
-      "label": "Return to Orchestrator"
-    },
-    {
-      "source": "module-doc-author",
-      "target": "module-doc-validator",
-      "edge_type": "agents-list",
-      "label": null
-    },
-    {
-      "source": "module-doc-author",
-      "target": "conflict-auditor",
-      "edge_type": "agents-list",
-      "label": null
-    },
-    {
-      "source": "module-doc-validator",
-      "target": "module-doc-author",
-      "edge_type": "handoff",
-      "label": "Route Corrections to Module Doc Author"
-    },
-    {
-      "source": "module-doc-validator",
-      "target": "conflict-auditor",
-      "edge_type": "handoff",
-      "label": "Log Conflict"
-    },
-    {
-      "source": "module-doc-validator",
-      "target": "orchestrator",
-      "edge_type": "handoff",
-      "label": "Return to Orchestrator"
-    },
-    {
-      "source": "module-doc-validator",
-      "target": "module-doc-author",
-      "edge_type": "agents-list",
-      "label": null
-    },
-    {
-      "source": "module-doc-validator",
-      "target": "conflict-auditor",
-      "edge_type": "agents-list",
-      "label": null
-    },
-    {
       "source": "tool-doc-researcher",
       "target": "agent-updater",
       "edge_type": "handoff",
@@ -1667,16 +1562,6 @@ digraph "ResearchPaperProject Agent Team" {
       "format-converter",
       "orchestrator",
       "technical-validator"
-    ],
-    "module-doc-author": [
-      "conflict-auditor",
-      "module-doc-validator",
-      "orchestrator"
-    ],
-    "module-doc-validator": [
-      "conflict-auditor",
-      "module-doc-author",
-      "orchestrator"
     ],
     "tool-doc-researcher": [
       "agent-updater",

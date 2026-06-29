@@ -73,10 +73,11 @@ _ARCHETYPE_TRIGGERS: list[tuple[list[str], str]] = [
     (["chapter", "module", "component", "part", "section", "assemble", "compile", "build", "bundle"], "output-compiler"),
     # visual-designer: projects with figures, diagrams, or visual output
     (["figure", "diagram", "chart", "graph", "visualization", "image", "illustration", "dot", "graphviz"], "visual-designer"),
-    # module-doc-author: projects distributing a pip package or producing API documentation
-    (["pip", "pypi", "package", "distribution", "install", "api reference", "changelog", "mkdocs", "sphinx", "readthedocs"], "module-doc-author"),
-    # module-doc-validator: always paired with module-doc-author
-    (["pip", "pypi", "package", "distribution", "install", "api reference", "changelog", "mkdocs", "sphinx", "readthedocs"], "module-doc-validator"),
+    # NOTE: module-doc-author/module-doc-validator are NOT keyword-triggered here.
+    # They are gated behind _should_select_module_doc() (a tight, package-exclusive
+    # decisive set) and added as a guaranteed pair in select_archetypes(), so a single
+    # weak word like "package"/"distribution"/"install" can no longer force the pip-doc
+    # agents onto API-consuming or report-generating projects.
 ]
 
 _POST_PRODUCTION_OPERATION_KEYWORDS: tuple[str, ...] = (
@@ -95,6 +96,39 @@ _POST_PRODUCTION_LEGACY_KEYWORDS: tuple[str, ...] = (
     "pipeline", "etl", "collector",
 )
 
+
+
+#: Module-doc archetype selection — a tight, package-exclusive decisive set.
+#: Any single occurrence is decisive; these tokens are uttered essentially only by
+#: projects that publish a distributable package or produce API documentation, which
+#: is exactly module-doc-author's charter. Deliberately excludes the weak words that
+#: caused false positives (bare "pip"/"package"/"distribution"/"install"/"api
+#: reference"/"changelog"/"wheel" — e.g. "knowledge distribution", a consumed API's
+#: "api reference", or "reinventing the wheel").
+_MODULE_DOC_KEYWORDS: tuple[str, ...] = (
+    "pypi", "mkdocs", "sphinx", "readthedocs", "sdist",
+)
+
+#: module-doc-author and module-doc-validator are always selected as a pair (the
+#: validator has no purpose without the author). Kept as a tuple so select_archetypes
+#: can add both from a single code path — a structural guarantee against half-pairs.
+_MODULE_DOC_ARCHETYPES: tuple[str, ...] = (
+    "module-doc-author", "module-doc-validator",
+)
+
+
+def _should_select_module_doc(text: str) -> bool:
+    """Return True when project text indicates a distributable-package or API-docs surface.
+
+    A single occurrence of any token in :data:`_MODULE_DOC_KEYWORDS` is decisive. Unlike
+    the previous single-keyword trigger list, bare ``package`` / ``distribution`` /
+    ``install`` / ``api reference`` / ``changelog`` no longer select the pip-doc agents,
+    so projects that merely consume an API, ship reports, or mention "knowledge
+    distribution" are not forced to carry (and manually deactivate) module-doc agents.
+    """
+    if not isinstance(text, str):
+        raise TypeError("text must be str")
+    return any(_contains_keyword(text, kw) for kw in _MODULE_DOC_KEYWORDS)
 
 
 def _should_select_post_production_auditor(text: str) -> bool:
@@ -537,6 +571,14 @@ def select_archetypes(description: dict[str, Any]) -> list[str]:
         if keywords == ["*"] or any(_contains_keyword(text, kw) for kw in keywords):
             selected.append(archetype)
             seen.add(archetype)
+
+    # module-doc-author + module-doc-validator: gated behind a tight package-exclusive
+    # decisive set (not the weak keyword list that caused false positives). Added as a
+    # guaranteed pair from this single code path so a half-pair cannot occur.
+    if _MODULE_DOC_ARCHETYPES[0] not in seen and _should_select_module_doc(text):
+        for slug in _MODULE_DOC_ARCHETYPES:
+            selected.append(slug)
+            seen.add(slug)
 
     # post-production-auditor: outcome-verification trigger for any domain,
     # guarded by contextual co-occurrence to avoid broad false positives.
