@@ -25,8 +25,6 @@ agents:
   - format-converter
   - reference-manager
   - output-compiler
-  - module-doc-author
-  - module-doc-validator
   - tool-doc-researcher
   - ch01-introduction-expert
   - ch02-literature-expert

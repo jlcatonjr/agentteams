@@ -201,7 +201,7 @@
     },
     "pip_package_name": {
       "type": "string",
-      "description": "PyPI package name for pip distribution (e.g., 'agentteams'). When present, triggers module-doc-author and module-doc-validator archetypes and enables --doc-check / --doc-update flags.",
+      "description": "PyPI package name for pip distribution (e.g., 'agentteams'). Supplies the package name used by the module-doc-author/validator agents when they are selected, and enables --doc-check / --doc-update flags. Selection of those agents is driven by packaging/docs signals in the project description (pypi, sphinx, mkdocs, readthedocs, sdist).",
       "pattern": "^[a-z0-9][a-z0-9._-]*[a-z0-9]$"
     },
     "doc_site_tool": {

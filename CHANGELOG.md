@@ -195,6 +195,32 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### fixed
 
+- **`module-doc-author`/`module-doc-validator` no longer false-trigger on weak
+  keywords.** The two archetypes were selected whenever the project description
+  contained any one of `pip / pypi / package / distribution / install / api
+  reference / changelog / mkdocs / sphinx / readthedocs`. Single weak words caused
+  spurious selection: an API-*consuming* reporting tool (the downstream Tracers team,
+  per its `handoff-tracking-infra-remediation.md` P2b) and even agentteams' own
+  `research-project` example — an academic LaTeX paper that matched solely on
+  "distribution" inside *"knowledge distribution"* — were forced to carry (and
+  manually deactivate) the pip-doc agents. Replaced the two loose `_ARCHETYPE_TRIGGERS`
+  rows with `_should_select_module_doc()`, gated on a tight, package-exclusive decisive
+  set (`pypi`, `mkdocs`, `sphinx`, `readthedocs`, `sdist`); the pair is now added from a
+  single code path so a half-pair (author without validator) cannot occur. Pure-noun
+  packaging descriptions naming none of those tokens are an accepted miss, recoverable
+  via `selected_archetypes` / `--update`. Regenerated the `research-project` snapshot
+  (removes `module-doc-author.agent.md` + `module-doc-validator.agent.md`; orchestrator
+  roster + pipeline-graph re-rendered) and corrected its root `copilot-instructions.md`
+  roster. Drive-by: removed pre-existing **phantom** `module-doc` entries from
+  `examples/data-pipeline/expected/references/build-log.json` (listed agents the live
+  pipeline already did not emit — committed at `83fe30b`, masked because the snapshot
+  test excludes `build-log.json`). Corrected the stale `pip_package_name` schema prose
+  that claimed the field "triggers" the archetypes (it never did — it only supplies a
+  placeholder name). New `test_analyze.py` cases cover the five false-positive classes,
+  the decisive-token positives, and the both-present-or-both-absent pairing invariant.
+  Audited (`@adversarial` CONDITIONAL → conditions applied; `@conflict-auditor` 3
+  conflicts → all resolved).
+
 - **`technical-validator` now selected for academic/research projects.** Added
   `academic`/`thesis` to the `technical-validator` archetype trigger in
   `analyze.py`. Research deliverables make verifiable claims against authority

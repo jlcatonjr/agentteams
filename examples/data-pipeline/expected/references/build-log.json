@@ -11,8 +11,6 @@
     "format-converter",
     "output-compiler",
     "visual-designer",
-    "module-doc-author",
-    "module-doc-validator",
     "tool-doc-researcher"
   ],
   "components": [
@@ -42,8 +40,6 @@
     "data-pipeline/expected/format-converter.agent.md",
     "data-pipeline/expected/output-compiler.agent.md",
     "data-pipeline/expected/visual-designer.agent.md",
-    "data-pipeline/expected/module-doc-author.agent.md",
-    "data-pipeline/expected/module-doc-validator.agent.md",
     "data-pipeline/expected/tool-doc-researcher.agent.md",
     "data-pipeline/expected/tool-postgresql.agent.md",
     "data-pipeline/expected/references/ref-pandas-reference.md",
@@ -87,8 +83,6 @@
     "domain/format-converter.template.md": "ecf8c801f1d66dab",
     "domain/output-compiler.template.md": "fd90f3a13765386a",
     "domain/visual-designer.template.md": "cae39ee7b6d167f4",
-    "domain/module-doc-author.template.md": "1a252bf38222bcd3",
-    "domain/module-doc-validator.template.md": "1c0a4b65b200562f",
     "domain/tool-doc-researcher.template.md": "ed54707800500bed",
     "domain/tool-database.template.md": "7016d9a333e41305",
     "domain/tool-reference.template.md": "cf44c4bf906ba8b8",
@@ -222,18 +216,6 @@
     {
       "path": "visual-designer.agent.md",
       "template": "domain/visual-designer.template.md",
-      "type": "agent",
-      "component_slug": null
-    },
-    {
-      "path": "module-doc-author.agent.md",
-      "template": "domain/module-doc-author.template.md",
-      "type": "agent",
-      "component_slug": null
-    },
-    {
-      "path": "module-doc-validator.agent.md",
-      "template": "domain/module-doc-validator.template.md",
       "type": "agent",
       "component_slug": null
     },
@@ -380,8 +362,6 @@
     "format-converter",
     "output-compiler",
     "visual-designer",
-    "module-doc-author",
-    "module-doc-validator",
     "tool-doc-researcher",
     "tool-postgresql",
     "ingest-expert",
@@ -425,8 +405,6 @@
     "format-converter.agent.md": "6b98ae49a9fe2a57",
     "output-compiler.agent.md": "4079391616497386",
     "visual-designer.agent.md": "f00782465006cd53",
-    "module-doc-author.agent.md": "0887c6f6602603fc",
-    "module-doc-validator.agent.md": "f9f7a6a8b43d4bf9",
     "tool-doc-researcher.agent.md": "39284f981523c00c",
     "tool-postgresql.agent.md": "182871fd3eb823d5",
     "references/ref-pandas-reference.md": "4e6fc0886823e8f4",
