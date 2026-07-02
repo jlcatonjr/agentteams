@@ -21,6 +21,7 @@ from agentteams.mcp_detect import detect_mcp_candidates
 from agentteams.recipe_fields import (  # noqa: E402,F401 (carved CH-07; re-exported)
     _normalize_recipe_parameters,
     _normalize_recipe_response,
+    _normalize_recipe_retry,
 )
 from agentteams.manifest_format import (  # noqa: E402,F401 (carved CH-07; re-exported)
     _MANUAL_TOKEN_FULLMATCH_RE,
@@ -467,6 +468,12 @@ def build_manifest(description: dict[str, Any], *, framework: str = "copilot-vsc
     recipe_response = _normalize_recipe_response(description.get("recipe_response"))
     if recipe_response:
         manifest["recipe_response"] = recipe_response
+    # Phase-4c goose-native (opt-in): copy a declared Goose recipe retry config
+    # through to the manifest. Added only when it has ≥1 valid check, so manifests
+    # without one are byte-identical.
+    recipe_retry = _normalize_recipe_retry(description.get("recipe_retry"))
+    if recipe_retry:
+        manifest["recipe_retry"] = recipe_retry
     return manifest
 
 
