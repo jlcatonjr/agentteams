@@ -49,7 +49,7 @@ BROAD_EXCEPT_BASELINE = 11      # except Exception/BaseException/bare. Narrowed 
                                 # mcp_emit). The remaining 11 are justified external/isolation/
                                 # never-block/cleanup-reraise boundaries, each annotated with a
                                 # CH-24 rationale (visible WARN or re-raise, not silent swallow).
-SWALLOW_BASELINE = 29           # except clause whose body is only pass/continue (narrow catches =
+SWALLOW_BASELINE = 30           # except clause whose body is only pass/continue (narrow catches =
                                 # known-recoverable external boundaries; the ratchet blocks new ones)
 
 

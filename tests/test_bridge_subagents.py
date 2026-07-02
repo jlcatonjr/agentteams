@@ -7,12 +7,14 @@ from pathlib import Path
 from agentteams import bridge_subagents as bs
 
 
-def _src_agent(dir_path: Path, slug: str, description: str = "") -> Path:
+def _src_agent(dir_path: Path, slug: str, description: str = "", tools: str | None = None) -> Path:
     desc = description or f"description for {slug}"
+    tools_line = f"tools: {tools}\n" if tools else ""
     body = (
         "---\n"
         f"name: {slug}\n"
         f"description: {desc}\n"
+        f"{tools_line}"
         "user-invokable: false\n"
         "---\n\n"
         f"# {slug}\n\nCanonical {slug} agent body.\n"
@@ -123,6 +125,60 @@ def test_emit_stubs_empty_source_dir_noop(tmp_path: Path):
     result = bs.emit_subagent_stubs(source_dir=src, output_root=tmp_path)
     assert result.written == []
     assert result.skipped == []
+
+
+# ---------------------------------------------------------------------------
+# allowed-tools emission from source tools: field.
+# ---------------------------------------------------------------------------
+
+
+def test_parse_tools_list_python_list_syntax():
+    assert bs._parse_tools_list("['read', 'edit']") == ["read", "edit"]
+    assert bs._parse_tools_list("") == []
+    assert bs._parse_tools_list("not-a-list") == []
+    assert bs._parse_tools_list("[]") == []
+
+
+def test_tools_to_allowed_full_work_summarizer_set():
+    raw = "['read', 'search', 'execute', 'edit', 'agent']"
+    assert bs._tools_to_allowed(raw) == ["Read", "Grep", "Glob", "Bash", "Edit", "Write", "Task"]
+
+
+def test_tools_to_allowed_deduplicates():
+    raw = "['edit', 'edit', 'read']"
+    assert bs._tools_to_allowed(raw) == ["Edit", "Write", "Read"]
+
+
+def test_tools_to_allowed_empty_returns_empty():
+    assert bs._tools_to_allowed("[]") == []
+    assert bs._tools_to_allowed("") == []
+
+
+def test_emit_stubs_maps_tools_to_allowed_tools(tmp_path: Path):
+    """tools: in source front matter → allowed-tools: in Claude stub."""
+    src = tmp_path / ".github" / "agents"
+    _src_agent(src, "work-summarizer", tools="['read', 'search', 'execute', 'edit', 'agent']")
+    bs.emit_subagent_stubs(source_dir=src, output_root=tmp_path)
+    stub = (tmp_path / ".claude" / "agents" / "work-summarizer.md").read_text(encoding="utf-8")
+    assert "allowed-tools: Read, Grep, Glob, Bash, Edit, Write, Task" in stub
+
+
+def test_emit_stubs_no_tools_no_allowed_tools(tmp_path: Path):
+    """No tools: in source → no allowed-tools: in stub (backward compat)."""
+    src = tmp_path / ".github" / "agents"
+    _src_agent(src, "orchestrator")
+    bs.emit_subagent_stubs(source_dir=src, output_root=tmp_path)
+    stub = (tmp_path / ".claude" / "agents" / "orchestrator.md").read_text(encoding="utf-8")
+    assert "allowed-tools" not in stub
+
+
+def test_emit_stubs_edit_only_includes_edit_and_write(tmp_path: Path):
+    """edit tool maps to both Edit and Write."""
+    src = tmp_path / ".github" / "agents"
+    _src_agent(src, "cleanup", tools="['read', 'edit']")
+    bs.emit_subagent_stubs(source_dir=src, output_root=tmp_path)
+    stub = (tmp_path / ".claude" / "agents" / "cleanup.md").read_text(encoding="utf-8")
+    assert "allowed-tools: Read, Edit, Write" in stub
 
 
 # ---------------------------------------------------------------------------

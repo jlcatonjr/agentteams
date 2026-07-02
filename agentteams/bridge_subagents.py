@@ -24,11 +24,48 @@ Design constraints
 
 from __future__ import annotations
 
+import ast
 import hashlib
 import re
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Iterable
+
+# Mapping from copilot-vscode tools declaration to Claude allowed-tools names.
+# Source: AUTHORING-GUIDE.md tool-mapping table.
+_TOOLS_MAP: dict[str, list[str]] = {
+    "read":    ["Read"],
+    "search":  ["Grep", "Glob"],
+    "edit":    ["Edit", "Write"],
+    "execute": ["Bash"],
+    "todo":    ["TodoWrite"],
+    "agent":   ["Task"],
+}
+
+
+def _parse_tools_list(raw: str) -> list[str]:
+    """Parse a tools: front-matter value like \"['read', 'edit']\" into a list."""
+    raw = raw.strip()
+    try:
+        parsed = ast.literal_eval(raw)
+        if isinstance(parsed, list):
+            return [str(t) for t in parsed]
+    except (ValueError, SyntaxError):
+        pass
+    return []
+
+
+def _tools_to_allowed(tools_raw: str) -> list[str]:
+    """Map source agent tools list to Claude allowed-tools names, deduplicated and ordered."""
+    names = _parse_tools_list(tools_raw)
+    seen: set[str] = set()
+    result: list[str] = []
+    for t in names:
+        for ct in _TOOLS_MAP.get(t.lower(), []):
+            if ct not in seen:
+                seen.add(ct)
+                result.append(ct)
+    return result
 
 _FRONT_MATTER_RE = re.compile(r"^---\s*\n(?P<body>.*?)\n---\s*\n", re.DOTALL)
 _SOURCE_SUFFIX = ".agent.md"
@@ -122,6 +159,7 @@ def _render_subagent_stub(
     source_abs_path: Path,
     source_rel_path: str,
     source_sha256: str,
+    tools_raw: str | None = None,
 ) -> str:
     """Render a complete Claude subagent stub file."""
     fm_lines = [
@@ -131,9 +169,12 @@ def _render_subagent_stub(
         f"source: {source_rel_path}",
         f"source_sha256: {source_sha256}",
         "bridge: copilot-vscode-to-claude",
-        "---",
-        "",
     ]
+    if tools_raw:
+        allowed = _tools_to_allowed(tools_raw)
+        if allowed:
+            fm_lines.append(f"allowed-tools: {', '.join(allowed)}")
+    fm_lines += ["---", ""]
     body = _stub_body(
         source_abs_path=source_abs_path,
         source_rel_path=source_rel_path,
@@ -243,6 +284,7 @@ def emit_subagent_stubs(
             source_abs_path=src,
             source_rel_path=source_rel,
             source_sha256=sha,
+            tools_raw=meta.get("tools"),
         )
         out_path = target_dir / f"{slug}.md"
         if out_path.exists() and not overwrite:
@@ -327,6 +369,8 @@ def detect_stub_drift(
 
 __all__ = [
     "StubEmissionResult",
+    "_parse_tools_list",
+    "_tools_to_allowed",
     "collect_source_agents",
     "detect_stub_drift",
     "emit_subagent_stubs",
