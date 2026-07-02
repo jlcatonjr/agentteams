@@ -372,6 +372,11 @@
           "description": { "type": "string" }
         }
       }
+    },
+    "recipe_response": {
+      "type": "object",
+      "additionalProperties": true,
+      "description": "Optional Goose recipe response schema (Phase-4b goose-native). A JSON Schema ({type:object, properties, required, ...}) declaring the team's structured output; for --framework goose it is copied to the team-manifest and emitted as a `response:` block (json_schema) on the ORCHESTRATOR recipe so goose validates the final output against it. Goose-only; ignored by other frameworks. Opt-in: absent → recipes byte-identical."
     }
   },
   "additionalProperties": false
