@@ -734,6 +734,8 @@ def run_generate(args: argparse.Namespace, strict_manual_placeholders: bool) -> 
                         file=sys.stderr,
                     )
             _emit_mcp_servers_if_enabled(manifest, project_root)
+            from agentteams import git_hooks as _git_hooks
+            _git_hooks.maybe_install_git_hooks(args, project_root)
             if heal_converged:
                 print(
                     "  ✓  Healed build-log baseline (no material drift; "
@@ -950,6 +952,8 @@ def run_generate(args: argparse.Namespace, strict_manual_placeholders: bool) -> 
                     file=sys.stderr,
                 )
         _emit_mcp_servers_if_enabled(manifest, project_root)
+        from agentteams import git_hooks as _git_hooks
+        _git_hooks.maybe_install_git_hooks(args, project_root)
 
     return _finalize_exit_code(result, args)
 

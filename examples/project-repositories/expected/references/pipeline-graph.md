@@ -71,173 +71,173 @@ flowchart LR
     class visualize_energy_data_expert workstream_expert
     work_summarizer["Work Summarizer"]
     class work_summarizer domain
-    orchestrator -->|"Produce / Revise Deliverable"| primary_producer
-    orchestrator -->|"Audit Quality"| quality_auditor
-    orchestrator -->|"Repair Cohesion"| cohesion_repairer
-    orchestrator -->|"Validate Technical Accuracy"| technical_validator
-    orchestrator -->|"Convert / Transform Output"| format_converter
-    orchestrator -->|"Manage References / Dependencies"| reference_manager
-    orchestrator -->|"Compile Final Output"| output_compiler
-    orchestrator -->|"Generate / Revise Diagram"| visual_designer
-    orchestrator -->|"Navigate Project"| navigator
-    orchestrator -->|"Security Review"| security
-    orchestrator -->|"Code Hygiene Audit"| code_hygiene
-    orchestrator -->|"Adversarial Review"| adversarial
-    orchestrator -->|"Conflict Audit"| conflict_auditor
-    orchestrator -->|"Resolve Conflicts"| conflict_resolution
-    orchestrator -->|"Clean Up Artifacts"| cleanup
-    orchestrator -->|"Update Agent Docs"| agent_updater
-    orchestrator -->|"Refactor Agent Docs"| agent_refactor
-    orchestrator -->|"Cross-Repository Liaison"| repo_liaison
-    orchestrator -->|"Summarize Work Period"| work_summarizer
-    orchestrator -->|"Git Operations"| git_operations
-    orchestrator -.-> navigator
-    orchestrator -.-> security
-    orchestrator -.-> code_hygiene
-    orchestrator -.-> adversarial
-    orchestrator -.-> conflict_auditor
-    orchestrator -.-> conflict_resolution
-    orchestrator -.-> cleanup
-    orchestrator -.-> agent_updater
-    orchestrator -.-> agent_refactor
-    orchestrator -.-> repo_liaison
-    orchestrator -.-> git_operations
-    orchestrator -.-> work_summarizer
-    orchestrator -.-> primary_producer
-    orchestrator -.-> quality_auditor
-    orchestrator -.-> cohesion_repairer
-    orchestrator -.-> technical_validator
-    orchestrator -.-> format_converter
-    orchestrator -.-> reference_manager
-    orchestrator -.-> output_compiler
-    orchestrator -.-> visual_designer
-    orchestrator -.-> crisis_credit_allocation_expert
-    orchestrator -.-> fed_response_dag_expert
-    orchestrator -.-> prairie_prosperity_expert
-    orchestrator -.-> sugarscape_expert
-    orchestrator -.-> visualize_energy_data_expert
-    navigator -->|"Return to Orchestrator"| orchestrator
-    security -->|"Return to Orchestrator"| orchestrator
-    code_hygiene -->|"Security Clearance (for Deletions)"| security
-    code_hygiene -->|"Cleanup Agent"| cleanup
-    code_hygiene -->|"Agent Refactor (Structural Violations)"| agent_refactor
-    code_hygiene -->|"Log Conflict"| conflict_auditor
-    code_hygiene -->|"Return to Orchestrator"| orchestrator
-    adversarial -->|"Return to Orchestrator"| orchestrator
     adversarial -->|"Audit for Conflicts"| conflict_auditor
-    conflict_auditor -->|"Return to Orchestrator"| orchestrator
-    conflict_auditor -->|"Update Agent Docs"| agent_updater
-    conflict_auditor -->|"Resolve Conflicts"| conflict_resolution
-    conflict_auditor -->|"Verify Source Drift"| technical_validator
-    conflict_auditor -.-> conflict_resolution
-    conflict_auditor -.-> agent_updater
-    conflict_auditor -.-> technical_validator
-    conflict_resolution -->|"Return to Orchestrator"| orchestrator
-    conflict_resolution -->|"Update Agent Docs"| agent_updater
-    cleanup -->|"Return to Orchestrator"| orchestrator
-    agent_updater -->|"Refactor Agent Docs"| agent_refactor
-    agent_updater -->|"Run Adversarial Review"| adversarial
-    agent_updater -->|"Run Conflict Audit"| conflict_auditor
-    agent_updater -->|"Return to Orchestrator"| orchestrator
-    agent_updater -.-> adversarial
-    agent_updater -.-> conflict_auditor
-    agent_updater -.-> agent_refactor
+    adversarial -->|"Return to Orchestrator"| orchestrator
     agent_refactor -->|"Run Conflict Audit"| conflict_auditor
     agent_refactor -->|"Return to Orchestrator"| orchestrator
     agent_refactor -.-> conflict_auditor
-    repo_liaison -->|"Return to Orchestrator"| orchestrator
-    repo_liaison -->|"Security Review for Cross-Repo Write"| security
-    repo_liaison -->|"Conflict Audit After Cross-Repo Change"| conflict_auditor
-    git_operations -->|"Return to Orchestrator"| orchestrator
-    git_operations -->|"Security Review"| security
-    git_operations -->|"Conflict Resolution"| conflict_resolution
-    git_operations -->|"Update Agent Docs"| agent_updater
-    work_summarizer -->|"Verify Summary Accuracy"| technical_validator
-    work_summarizer -->|"Run Adversarial Audit"| adversarial
-    work_summarizer -->|"Run Conflict Audit"| conflict_auditor
-    work_summarizer -->|"Return to Orchestrator"| orchestrator
-    work_summarizer -.-> technical_validator
-    work_summarizer -.-> adversarial
-    work_summarizer -.-> conflict_auditor
-    primary_producer -->|"Cohesion Audit"| cohesion_repairer
-    primary_producer -->|"Quality Audit"| quality_auditor
-    primary_producer -->|"Conflict Audit"| conflict_auditor
-    primary_producer -->|"Return to Orchestrator"| orchestrator
-    primary_producer -.-> cohesion_repairer
-    primary_producer -.-> quality_auditor
-    primary_producer -.-> conflict_auditor
-    quality_auditor -->|"Route Corrections to Primary Producer"| primary_producer
-    quality_auditor -->|"Route Cohesion Failures"| cohesion_repairer
-    quality_auditor -->|"Return to Orchestrator"| orchestrator
-    quality_auditor -.-> primary_producer
-    quality_auditor -.-> cohesion_repairer
-    cohesion_repairer -->|"Quality Re-Check"| quality_auditor
+    agent_updater -->|"Run Adversarial Review"| adversarial
+    agent_updater -->|"Refactor Agent Docs"| agent_refactor
+    agent_updater -->|"Run Conflict Audit"| conflict_auditor
+    agent_updater -->|"Return to Orchestrator"| orchestrator
+    agent_updater -.-> adversarial
+    agent_updater -.-> agent_refactor
+    agent_updater -.-> conflict_auditor
+    cleanup -->|"Return to Orchestrator"| orchestrator
+    code_hygiene -->|"Agent Refactor (Structural Violations)"| agent_refactor
+    code_hygiene -->|"Cleanup Agent"| cleanup
+    code_hygiene -->|"Log Conflict"| conflict_auditor
+    code_hygiene -->|"Return to Orchestrator"| orchestrator
+    code_hygiene -->|"Security Clearance (for Deletions)"| security
     cohesion_repairer -->|"Return to Orchestrator"| orchestrator
+    cohesion_repairer -->|"Quality Re-Check"| quality_auditor
     cohesion_repairer -.-> quality_auditor
-    technical_validator -->|"Route Corrections to Primary Producer"| primary_producer
-    technical_validator -->|"Route Reference Issues"| reference_manager
-    technical_validator -->|"Log Conflict"| conflict_auditor
-    technical_validator -->|"Return to Orchestrator"| orchestrator
-    technical_validator -.-> primary_producer
-    technical_validator -.-> reference_manager
-    technical_validator -.-> conflict_auditor
+    conflict_auditor -->|"Update Agent Docs"| agent_updater
+    conflict_auditor -->|"Resolve Conflicts"| conflict_resolution
+    conflict_auditor -->|"Return to Orchestrator"| orchestrator
+    conflict_auditor -->|"Verify Source Drift"| technical_validator
+    conflict_auditor -.-> agent_updater
+    conflict_auditor -.-> conflict_resolution
+    conflict_auditor -.-> technical_validator
+    conflict_resolution -->|"Update Agent Docs"| agent_updater
+    conflict_resolution -->|"Return to Orchestrator"| orchestrator
+    content_enricher -->|"Return to Orchestrator"| orchestrator
+    content_enricher -->|"Validate Enriched Content"| technical_validator
+    content_enricher -.-> primary_producer
+    content_enricher -.-> technical_validator
+    crisis_credit_allocation_expert -->|"Vet Brief Before Drafting"| adversarial
+    crisis_credit_allocation_expert -->|"Return to Orchestrator"| orchestrator
+    crisis_credit_allocation_expert -->|"Send to Primary Producer"| primary_producer
+    crisis_credit_allocation_expert -->|"Verify Citations"| reference_manager
+    crisis_credit_allocation_expert -.-> adversarial
+    crisis_credit_allocation_expert -.-> primary_producer
+    crisis_credit_allocation_expert -.-> reference_manager
+    fed_response_dag_expert -->|"Vet Brief Before Drafting"| adversarial
+    fed_response_dag_expert -->|"Return to Orchestrator"| orchestrator
+    fed_response_dag_expert -->|"Send to Primary Producer"| primary_producer
+    fed_response_dag_expert -->|"Verify Citations"| reference_manager
+    fed_response_dag_expert -.-> adversarial
+    fed_response_dag_expert -.-> primary_producer
+    fed_response_dag_expert -.-> reference_manager
+    format_converter -->|"Return to Orchestrator"| orchestrator
     format_converter -->|"Pass to Output Compiler"| output_compiler
     format_converter -->|"Quality Check After Conversion"| quality_auditor
-    format_converter -->|"Return to Orchestrator"| orchestrator
     format_converter -.-> output_compiler
     format_converter -.-> quality_auditor
+    git_operations -->|"Update Agent Docs"| agent_updater
+    git_operations -->|"Conflict Resolution"| conflict_resolution
+    git_operations -->|"Return to Orchestrator"| orchestrator
+    git_operations -->|"Security Review"| security
+    navigator -->|"Return to Orchestrator"| orchestrator
+    orchestrator -->|"Adversarial Review"| adversarial
+    orchestrator -->|"Refactor Agent Docs"| agent_refactor
+    orchestrator -->|"Update Agent Docs"| agent_updater
+    orchestrator -->|"Clean Up Artifacts"| cleanup
+    orchestrator -->|"Code Hygiene Audit"| code_hygiene
+    orchestrator -->|"Repair Cohesion"| cohesion_repairer
+    orchestrator -->|"Conflict Audit"| conflict_auditor
+    orchestrator -->|"Resolve Conflicts"| conflict_resolution
+    orchestrator -->|"Convert / Transform Output"| format_converter
+    orchestrator -->|"Git Operations"| git_operations
+    orchestrator -->|"Navigate Project"| navigator
+    orchestrator -->|"Compile Final Output"| output_compiler
+    orchestrator -->|"Produce / Revise Deliverable"| primary_producer
+    orchestrator -->|"Audit Quality"| quality_auditor
+    orchestrator -->|"Manage References / Dependencies"| reference_manager
+    orchestrator -->|"Cross-Repository Liaison"| repo_liaison
+    orchestrator -->|"Security Review"| security
+    orchestrator -->|"Validate Technical Accuracy"| technical_validator
+    orchestrator -->|"Generate / Revise Diagram"| visual_designer
+    orchestrator -->|"Summarize Work Period"| work_summarizer
+    orchestrator -.-> adversarial
+    orchestrator -.-> agent_refactor
+    orchestrator -.-> agent_updater
+    orchestrator -.-> cleanup
+    orchestrator -.-> code_hygiene
+    orchestrator -.-> cohesion_repairer
+    orchestrator -.-> conflict_auditor
+    orchestrator -.-> conflict_resolution
+    orchestrator -.-> crisis_credit_allocation_expert
+    orchestrator -.-> fed_response_dag_expert
+    orchestrator -.-> format_converter
+    orchestrator -.-> git_operations
+    orchestrator -.-> navigator
+    orchestrator -.-> output_compiler
+    orchestrator -.-> prairie_prosperity_expert
+    orchestrator -.-> primary_producer
+    orchestrator -.-> quality_auditor
+    orchestrator -.-> reference_manager
+    orchestrator -.-> repo_liaison
+    orchestrator -.-> security
+    orchestrator -.-> sugarscape_expert
+    orchestrator -.-> technical_validator
+    orchestrator -.-> visual_designer
+    orchestrator -.-> visualize_energy_data_expert
+    orchestrator -.-> work_summarizer
+    output_compiler -->|"Convert Missing Components"| format_converter
+    output_compiler -->|"Return to Orchestrator"| orchestrator
+    output_compiler -->|"Validate Technical Accuracy"| technical_validator
+    output_compiler -.-> format_converter
+    output_compiler -.-> technical_validator
+    prairie_prosperity_expert -->|"Vet Brief Before Drafting"| adversarial
+    prairie_prosperity_expert -->|"Return to Orchestrator"| orchestrator
+    prairie_prosperity_expert -->|"Send to Primary Producer"| primary_producer
+    prairie_prosperity_expert -->|"Verify Citations"| reference_manager
+    prairie_prosperity_expert -.-> adversarial
+    prairie_prosperity_expert -.-> primary_producer
+    prairie_prosperity_expert -.-> reference_manager
+    primary_producer -->|"Cohesion Audit"| cohesion_repairer
+    primary_producer -->|"Conflict Audit"| conflict_auditor
+    primary_producer -->|"Return to Orchestrator"| orchestrator
+    primary_producer -->|"Quality Audit"| quality_auditor
+    primary_producer -.-> cohesion_repairer
+    primary_producer -.-> conflict_auditor
+    primary_producer -.-> quality_auditor
+    quality_auditor -->|"Route Cohesion Failures"| cohesion_repairer
+    quality_auditor -->|"Return to Orchestrator"| orchestrator
+    quality_auditor -->|"Route Corrections to Primary Producer"| primary_producer
+    quality_auditor -.-> cohesion_repairer
+    quality_auditor -.-> primary_producer
     reference_manager -->|"Run Conflict Audit"| conflict_auditor
     reference_manager -->|"Return to Orchestrator"| orchestrator
     reference_manager -.-> conflict_auditor
-    output_compiler -->|"Convert Missing Components"| format_converter
-    output_compiler -->|"Validate Technical Accuracy"| technical_validator
-    output_compiler -->|"Return to Orchestrator"| orchestrator
-    output_compiler -.-> format_converter
-    output_compiler -.-> technical_validator
-    visual_designer -->|"Convert Figure Format"| format_converter
-    visual_designer -->|"Quality Check Figure"| quality_auditor
-    visual_designer -->|"Return to Orchestrator"| orchestrator
-    visual_designer -.-> format_converter
-    visual_designer -.-> quality_auditor
-    crisis_credit_allocation_expert -->|"Vet Brief Before Drafting"| adversarial
-    crisis_credit_allocation_expert -->|"Send to Primary Producer"| primary_producer
-    crisis_credit_allocation_expert -->|"Verify Citations"| reference_manager
-    crisis_credit_allocation_expert -->|"Return to Orchestrator"| orchestrator
-    crisis_credit_allocation_expert -.-> primary_producer
-    crisis_credit_allocation_expert -.-> adversarial
-    crisis_credit_allocation_expert -.-> reference_manager
-    fed_response_dag_expert -->|"Vet Brief Before Drafting"| adversarial
-    fed_response_dag_expert -->|"Send to Primary Producer"| primary_producer
-    fed_response_dag_expert -->|"Verify Citations"| reference_manager
-    fed_response_dag_expert -->|"Return to Orchestrator"| orchestrator
-    fed_response_dag_expert -.-> primary_producer
-    fed_response_dag_expert -.-> adversarial
-    fed_response_dag_expert -.-> reference_manager
-    prairie_prosperity_expert -->|"Vet Brief Before Drafting"| adversarial
-    prairie_prosperity_expert -->|"Send to Primary Producer"| primary_producer
-    prairie_prosperity_expert -->|"Verify Citations"| reference_manager
-    prairie_prosperity_expert -->|"Return to Orchestrator"| orchestrator
-    prairie_prosperity_expert -.-> primary_producer
-    prairie_prosperity_expert -.-> adversarial
-    prairie_prosperity_expert -.-> reference_manager
+    repo_liaison -->|"Conflict Audit After Cross-Repo Change"| conflict_auditor
+    repo_liaison -->|"Return to Orchestrator"| orchestrator
+    repo_liaison -->|"Security Review for Cross-Repo Write"| security
+    security -->|"Return to Orchestrator"| orchestrator
     sugarscape_expert -->|"Vet Brief Before Drafting"| adversarial
+    sugarscape_expert -->|"Return to Orchestrator"| orchestrator
     sugarscape_expert -->|"Send to Primary Producer"| primary_producer
     sugarscape_expert -->|"Verify Citations"| reference_manager
-    sugarscape_expert -->|"Return to Orchestrator"| orchestrator
-    sugarscape_expert -.-> primary_producer
     sugarscape_expert -.-> adversarial
+    sugarscape_expert -.-> primary_producer
     sugarscape_expert -.-> reference_manager
+    technical_validator -->|"Log Conflict"| conflict_auditor
+    technical_validator -->|"Return to Orchestrator"| orchestrator
+    technical_validator -->|"Route Corrections to Primary Producer"| primary_producer
+    technical_validator -->|"Route Reference Issues"| reference_manager
+    technical_validator -.-> conflict_auditor
+    technical_validator -.-> primary_producer
+    technical_validator -.-> reference_manager
+    visual_designer -->|"Convert Figure Format"| format_converter
+    visual_designer -->|"Return to Orchestrator"| orchestrator
+    visual_designer -->|"Quality Check Figure"| quality_auditor
+    visual_designer -.-> format_converter
+    visual_designer -.-> quality_auditor
     visualize_energy_data_expert -->|"Vet Brief Before Drafting"| adversarial
+    visualize_energy_data_expert -->|"Return to Orchestrator"| orchestrator
     visualize_energy_data_expert -->|"Send to Primary Producer"| primary_producer
     visualize_energy_data_expert -->|"Verify Citations"| reference_manager
-    visualize_energy_data_expert -->|"Return to Orchestrator"| orchestrator
-    visualize_energy_data_expert -.-> primary_producer
     visualize_energy_data_expert -.-> adversarial
+    visualize_energy_data_expert -.-> primary_producer
     visualize_energy_data_expert -.-> reference_manager
-    content_enricher -->|"Validate Enriched Content"| technical_validator
-    content_enricher -->|"Return to Orchestrator"| orchestrator
-    content_enricher -.-> primary_producer
-    content_enricher -.-> technical_validator
+    work_summarizer -->|"Run Adversarial Audit"| adversarial
+    work_summarizer -->|"Run Conflict Audit"| conflict_auditor
+    work_summarizer -->|"Return to Orchestrator"| orchestrator
+    work_summarizer -->|"Verify Summary Accuracy"| technical_validator
+    work_summarizer -.-> adversarial
+    work_summarizer -.-> conflict_auditor
+    work_summarizer -.-> technical_validator
 ```
 
 ---
@@ -246,10 +246,10 @@ flowchart LR
 
 | Colour | Agent Type |
 | --- | --- |
-| ![governance](https://via.placeholder.com/12/e8e8ff/e8e8ff) Blue | Governance |
-| ![domain](https://via.placeholder.com/12/e8ffe8/e8ffe8) Green | Domain |
-| ![workstream_expert](https://via.placeholder.com/12/fff8e8/fff8e8) Yellow | Workstream Expert |
-| ![tool_specialist](https://via.placeholder.com/12/ffe8e8/ffe8e8) Red | Tool Specialist |
+| <svg width="12" height="12"><rect width="12" height="12" fill="#e8e8ff" stroke="#6666cc"/></svg> Blue-lavender | Governance |
+| <svg width="12" height="12"><rect width="12" height="12" fill="#e8ffe8" stroke="#66aa66"/></svg> Green | Domain |
+| <svg width="12" height="12"><rect width="12" height="12" fill="#fff8e8" stroke="#ccaa44"/></svg> Yellow | Workstream Expert |
+| <svg width="12" height="12"><rect width="12" height="12" fill="#ffe8e8" stroke="#cc6666"/></svg> Red-pink | Tool Specialist |
 
 ---
 
@@ -361,111 +361,111 @@ digraph "ProjectRepositories Agent Team" {
     "visual-designer" [label="Visual Designer", fillcolor="#e8ffe8"];
     "visualize-energy-data-expert" [label="Visualize Energy Data Expert", fillcolor="#fff8e8"];
     "work-summarizer" [label="Work Summarizer", fillcolor="#e8ffe8"];
-    "orchestrator" -> "primary-producer" [style=solid, label="Produce / Revise Deliverable"];
-    "orchestrator" -> "quality-auditor" [style=solid, label="Audit Quality"];
-    "orchestrator" -> "cohesion-repairer" [style=solid, label="Repair Cohesion"];
-    "orchestrator" -> "technical-validator" [style=solid, label="Validate Technical Accuracy"];
-    "orchestrator" -> "format-converter" [style=solid, label="Convert / Transform Output"];
-    "orchestrator" -> "reference-manager" [style=solid, label="Manage References / Dependencies"];
-    "orchestrator" -> "output-compiler" [style=solid, label="Compile Final Output"];
-    "orchestrator" -> "visual-designer" [style=solid, label="Generate / Revise Diagram"];
-    "orchestrator" -> "navigator" [style=solid, label="Navigate Project"];
-    "orchestrator" -> "security" [style=solid, label="Security Review"];
-    "orchestrator" -> "code-hygiene" [style=solid, label="Code Hygiene Audit"];
+    "adversarial" -> "conflict-auditor" [style=solid, label="Audit for Conflicts"];
+    "adversarial" -> "orchestrator" [style=solid, label="Return to Orchestrator"];
+    "agent-refactor" -> "conflict-auditor" [style=solid, label="Run Conflict Audit"];
+    "agent-refactor" -> "orchestrator" [style=solid, label="Return to Orchestrator"];
+    "agent-updater" -> "adversarial" [style=solid, label="Run Adversarial Review"];
+    "agent-updater" -> "agent-refactor" [style=solid, label="Refactor Agent Docs"];
+    "agent-updater" -> "conflict-auditor" [style=solid, label="Run Conflict Audit"];
+    "agent-updater" -> "orchestrator" [style=solid, label="Return to Orchestrator"];
+    "cleanup" -> "orchestrator" [style=solid, label="Return to Orchestrator"];
+    "code-hygiene" -> "agent-refactor" [style=solid, label="Agent Refactor (Structural Violations)"];
+    "code-hygiene" -> "cleanup" [style=solid, label="Cleanup Agent"];
+    "code-hygiene" -> "conflict-auditor" [style=solid, label="Log Conflict"];
+    "code-hygiene" -> "orchestrator" [style=solid, label="Return to Orchestrator"];
+    "code-hygiene" -> "security" [style=solid, label="Security Clearance (for Deletions)"];
+    "cohesion-repairer" -> "orchestrator" [style=solid, label="Return to Orchestrator"];
+    "cohesion-repairer" -> "quality-auditor" [style=solid, label="Quality Re-Check"];
+    "conflict-auditor" -> "agent-updater" [style=solid, label="Update Agent Docs"];
+    "conflict-auditor" -> "conflict-resolution" [style=solid, label="Resolve Conflicts"];
+    "conflict-auditor" -> "orchestrator" [style=solid, label="Return to Orchestrator"];
+    "conflict-auditor" -> "technical-validator" [style=solid, label="Verify Source Drift"];
+    "conflict-resolution" -> "agent-updater" [style=solid, label="Update Agent Docs"];
+    "conflict-resolution" -> "orchestrator" [style=solid, label="Return to Orchestrator"];
+    "content-enricher" -> "orchestrator" [style=solid, label="Return to Orchestrator"];
+    "content-enricher" -> "technical-validator" [style=solid, label="Validate Enriched Content"];
+    "content-enricher" -> "primary-producer" [style=dashed];
+    "crisis-credit-allocation-expert" -> "adversarial" [style=solid, label="Vet Brief Before Drafting"];
+    "crisis-credit-allocation-expert" -> "orchestrator" [style=solid, label="Return to Orchestrator"];
+    "crisis-credit-allocation-expert" -> "primary-producer" [style=solid, label="Send to Primary Producer"];
+    "crisis-credit-allocation-expert" -> "reference-manager" [style=solid, label="Verify Citations"];
+    "fed-response-dag-expert" -> "adversarial" [style=solid, label="Vet Brief Before Drafting"];
+    "fed-response-dag-expert" -> "orchestrator" [style=solid, label="Return to Orchestrator"];
+    "fed-response-dag-expert" -> "primary-producer" [style=solid, label="Send to Primary Producer"];
+    "fed-response-dag-expert" -> "reference-manager" [style=solid, label="Verify Citations"];
+    "format-converter" -> "orchestrator" [style=solid, label="Return to Orchestrator"];
+    "format-converter" -> "output-compiler" [style=solid, label="Pass to Output Compiler"];
+    "format-converter" -> "quality-auditor" [style=solid, label="Quality Check After Conversion"];
+    "git-operations" -> "agent-updater" [style=solid, label="Update Agent Docs"];
+    "git-operations" -> "conflict-resolution" [style=solid, label="Conflict Resolution"];
+    "git-operations" -> "orchestrator" [style=solid, label="Return to Orchestrator"];
+    "git-operations" -> "security" [style=solid, label="Security Review"];
+    "navigator" -> "orchestrator" [style=solid, label="Return to Orchestrator"];
     "orchestrator" -> "adversarial" [style=solid, label="Adversarial Review"];
+    "orchestrator" -> "agent-refactor" [style=solid, label="Refactor Agent Docs"];
+    "orchestrator" -> "agent-updater" [style=solid, label="Update Agent Docs"];
+    "orchestrator" -> "cleanup" [style=solid, label="Clean Up Artifacts"];
+    "orchestrator" -> "code-hygiene" [style=solid, label="Code Hygiene Audit"];
+    "orchestrator" -> "cohesion-repairer" [style=solid, label="Repair Cohesion"];
     "orchestrator" -> "conflict-auditor" [style=solid, label="Conflict Audit"];
     "orchestrator" -> "conflict-resolution" [style=solid, label="Resolve Conflicts"];
-    "orchestrator" -> "cleanup" [style=solid, label="Clean Up Artifacts"];
-    "orchestrator" -> "agent-updater" [style=solid, label="Update Agent Docs"];
-    "orchestrator" -> "agent-refactor" [style=solid, label="Refactor Agent Docs"];
-    "orchestrator" -> "repo-liaison" [style=solid, label="Cross-Repository Liaison"];
-    "orchestrator" -> "work-summarizer" [style=solid, label="Summarize Work Period"];
+    "orchestrator" -> "format-converter" [style=solid, label="Convert / Transform Output"];
     "orchestrator" -> "git-operations" [style=solid, label="Git Operations"];
+    "orchestrator" -> "navigator" [style=solid, label="Navigate Project"];
+    "orchestrator" -> "output-compiler" [style=solid, label="Compile Final Output"];
+    "orchestrator" -> "primary-producer" [style=solid, label="Produce / Revise Deliverable"];
+    "orchestrator" -> "quality-auditor" [style=solid, label="Audit Quality"];
+    "orchestrator" -> "reference-manager" [style=solid, label="Manage References / Dependencies"];
+    "orchestrator" -> "repo-liaison" [style=solid, label="Cross-Repository Liaison"];
+    "orchestrator" -> "security" [style=solid, label="Security Review"];
+    "orchestrator" -> "technical-validator" [style=solid, label="Validate Technical Accuracy"];
+    "orchestrator" -> "visual-designer" [style=solid, label="Generate / Revise Diagram"];
+    "orchestrator" -> "work-summarizer" [style=solid, label="Summarize Work Period"];
     "orchestrator" -> "crisis-credit-allocation-expert" [style=dashed];
     "orchestrator" -> "fed-response-dag-expert" [style=dashed];
     "orchestrator" -> "prairie-prosperity-expert" [style=dashed];
     "orchestrator" -> "sugarscape-expert" [style=dashed];
     "orchestrator" -> "visualize-energy-data-expert" [style=dashed];
-    "navigator" -> "orchestrator" [style=solid, label="Return to Orchestrator"];
-    "security" -> "orchestrator" [style=solid, label="Return to Orchestrator"];
-    "code-hygiene" -> "security" [style=solid, label="Security Clearance (for Deletions)"];
-    "code-hygiene" -> "cleanup" [style=solid, label="Cleanup Agent"];
-    "code-hygiene" -> "agent-refactor" [style=solid, label="Agent Refactor (Structural Violations)"];
-    "code-hygiene" -> "conflict-auditor" [style=solid, label="Log Conflict"];
-    "code-hygiene" -> "orchestrator" [style=solid, label="Return to Orchestrator"];
-    "adversarial" -> "orchestrator" [style=solid, label="Return to Orchestrator"];
-    "adversarial" -> "conflict-auditor" [style=solid, label="Audit for Conflicts"];
-    "conflict-auditor" -> "orchestrator" [style=solid, label="Return to Orchestrator"];
-    "conflict-auditor" -> "agent-updater" [style=solid, label="Update Agent Docs"];
-    "conflict-auditor" -> "conflict-resolution" [style=solid, label="Resolve Conflicts"];
-    "conflict-auditor" -> "technical-validator" [style=solid, label="Verify Source Drift"];
-    "conflict-resolution" -> "orchestrator" [style=solid, label="Return to Orchestrator"];
-    "conflict-resolution" -> "agent-updater" [style=solid, label="Update Agent Docs"];
-    "cleanup" -> "orchestrator" [style=solid, label="Return to Orchestrator"];
-    "agent-updater" -> "agent-refactor" [style=solid, label="Refactor Agent Docs"];
-    "agent-updater" -> "adversarial" [style=solid, label="Run Adversarial Review"];
-    "agent-updater" -> "conflict-auditor" [style=solid, label="Run Conflict Audit"];
-    "agent-updater" -> "orchestrator" [style=solid, label="Return to Orchestrator"];
-    "agent-refactor" -> "conflict-auditor" [style=solid, label="Run Conflict Audit"];
-    "agent-refactor" -> "orchestrator" [style=solid, label="Return to Orchestrator"];
+    "output-compiler" -> "format-converter" [style=solid, label="Convert Missing Components"];
+    "output-compiler" -> "orchestrator" [style=solid, label="Return to Orchestrator"];
+    "output-compiler" -> "technical-validator" [style=solid, label="Validate Technical Accuracy"];
+    "prairie-prosperity-expert" -> "adversarial" [style=solid, label="Vet Brief Before Drafting"];
+    "prairie-prosperity-expert" -> "orchestrator" [style=solid, label="Return to Orchestrator"];
+    "prairie-prosperity-expert" -> "primary-producer" [style=solid, label="Send to Primary Producer"];
+    "prairie-prosperity-expert" -> "reference-manager" [style=solid, label="Verify Citations"];
+    "primary-producer" -> "cohesion-repairer" [style=solid, label="Cohesion Audit"];
+    "primary-producer" -> "conflict-auditor" [style=solid, label="Conflict Audit"];
+    "primary-producer" -> "orchestrator" [style=solid, label="Return to Orchestrator"];
+    "primary-producer" -> "quality-auditor" [style=solid, label="Quality Audit"];
+    "quality-auditor" -> "cohesion-repairer" [style=solid, label="Route Cohesion Failures"];
+    "quality-auditor" -> "orchestrator" [style=solid, label="Return to Orchestrator"];
+    "quality-auditor" -> "primary-producer" [style=solid, label="Route Corrections to Primary Producer"];
+    "reference-manager" -> "conflict-auditor" [style=solid, label="Run Conflict Audit"];
+    "reference-manager" -> "orchestrator" [style=solid, label="Return to Orchestrator"];
+    "repo-liaison" -> "conflict-auditor" [style=solid, label="Conflict Audit After Cross-Repo Change"];
     "repo-liaison" -> "orchestrator" [style=solid, label="Return to Orchestrator"];
     "repo-liaison" -> "security" [style=solid, label="Security Review for Cross-Repo Write"];
-    "repo-liaison" -> "conflict-auditor" [style=solid, label="Conflict Audit After Cross-Repo Change"];
-    "git-operations" -> "orchestrator" [style=solid, label="Return to Orchestrator"];
-    "git-operations" -> "security" [style=solid, label="Security Review"];
-    "git-operations" -> "conflict-resolution" [style=solid, label="Conflict Resolution"];
-    "git-operations" -> "agent-updater" [style=solid, label="Update Agent Docs"];
-    "work-summarizer" -> "technical-validator" [style=solid, label="Verify Summary Accuracy"];
+    "security" -> "orchestrator" [style=solid, label="Return to Orchestrator"];
+    "sugarscape-expert" -> "adversarial" [style=solid, label="Vet Brief Before Drafting"];
+    "sugarscape-expert" -> "orchestrator" [style=solid, label="Return to Orchestrator"];
+    "sugarscape-expert" -> "primary-producer" [style=solid, label="Send to Primary Producer"];
+    "sugarscape-expert" -> "reference-manager" [style=solid, label="Verify Citations"];
+    "technical-validator" -> "conflict-auditor" [style=solid, label="Log Conflict"];
+    "technical-validator" -> "orchestrator" [style=solid, label="Return to Orchestrator"];
+    "technical-validator" -> "primary-producer" [style=solid, label="Route Corrections to Primary Producer"];
+    "technical-validator" -> "reference-manager" [style=solid, label="Route Reference Issues"];
+    "visual-designer" -> "format-converter" [style=solid, label="Convert Figure Format"];
+    "visual-designer" -> "orchestrator" [style=solid, label="Return to Orchestrator"];
+    "visual-designer" -> "quality-auditor" [style=solid, label="Quality Check Figure"];
+    "visualize-energy-data-expert" -> "adversarial" [style=solid, label="Vet Brief Before Drafting"];
+    "visualize-energy-data-expert" -> "orchestrator" [style=solid, label="Return to Orchestrator"];
+    "visualize-energy-data-expert" -> "primary-producer" [style=solid, label="Send to Primary Producer"];
+    "visualize-energy-data-expert" -> "reference-manager" [style=solid, label="Verify Citations"];
     "work-summarizer" -> "adversarial" [style=solid, label="Run Adversarial Audit"];
     "work-summarizer" -> "conflict-auditor" [style=solid, label="Run Conflict Audit"];
     "work-summarizer" -> "orchestrator" [style=solid, label="Return to Orchestrator"];
-    "primary-producer" -> "cohesion-repairer" [style=solid, label="Cohesion Audit"];
-    "primary-producer" -> "quality-auditor" [style=solid, label="Quality Audit"];
-    "primary-producer" -> "conflict-auditor" [style=solid, label="Conflict Audit"];
-    "primary-producer" -> "orchestrator" [style=solid, label="Return to Orchestrator"];
-    "quality-auditor" -> "primary-producer" [style=solid, label="Route Corrections to Primary Producer"];
-    "quality-auditor" -> "cohesion-repairer" [style=solid, label="Route Cohesion Failures"];
-    "quality-auditor" -> "orchestrator" [style=solid, label="Return to Orchestrator"];
-    "cohesion-repairer" -> "quality-auditor" [style=solid, label="Quality Re-Check"];
-    "cohesion-repairer" -> "orchestrator" [style=solid, label="Return to Orchestrator"];
-    "technical-validator" -> "primary-producer" [style=solid, label="Route Corrections to Primary Producer"];
-    "technical-validator" -> "reference-manager" [style=solid, label="Route Reference Issues"];
-    "technical-validator" -> "conflict-auditor" [style=solid, label="Log Conflict"];
-    "technical-validator" -> "orchestrator" [style=solid, label="Return to Orchestrator"];
-    "format-converter" -> "output-compiler" [style=solid, label="Pass to Output Compiler"];
-    "format-converter" -> "quality-auditor" [style=solid, label="Quality Check After Conversion"];
-    "format-converter" -> "orchestrator" [style=solid, label="Return to Orchestrator"];
-    "reference-manager" -> "conflict-auditor" [style=solid, label="Run Conflict Audit"];
-    "reference-manager" -> "orchestrator" [style=solid, label="Return to Orchestrator"];
-    "output-compiler" -> "format-converter" [style=solid, label="Convert Missing Components"];
-    "output-compiler" -> "technical-validator" [style=solid, label="Validate Technical Accuracy"];
-    "output-compiler" -> "orchestrator" [style=solid, label="Return to Orchestrator"];
-    "visual-designer" -> "format-converter" [style=solid, label="Convert Figure Format"];
-    "visual-designer" -> "quality-auditor" [style=solid, label="Quality Check Figure"];
-    "visual-designer" -> "orchestrator" [style=solid, label="Return to Orchestrator"];
-    "crisis-credit-allocation-expert" -> "adversarial" [style=solid, label="Vet Brief Before Drafting"];
-    "crisis-credit-allocation-expert" -> "primary-producer" [style=solid, label="Send to Primary Producer"];
-    "crisis-credit-allocation-expert" -> "reference-manager" [style=solid, label="Verify Citations"];
-    "crisis-credit-allocation-expert" -> "orchestrator" [style=solid, label="Return to Orchestrator"];
-    "fed-response-dag-expert" -> "adversarial" [style=solid, label="Vet Brief Before Drafting"];
-    "fed-response-dag-expert" -> "primary-producer" [style=solid, label="Send to Primary Producer"];
-    "fed-response-dag-expert" -> "reference-manager" [style=solid, label="Verify Citations"];
-    "fed-response-dag-expert" -> "orchestrator" [style=solid, label="Return to Orchestrator"];
-    "prairie-prosperity-expert" -> "adversarial" [style=solid, label="Vet Brief Before Drafting"];
-    "prairie-prosperity-expert" -> "primary-producer" [style=solid, label="Send to Primary Producer"];
-    "prairie-prosperity-expert" -> "reference-manager" [style=solid, label="Verify Citations"];
-    "prairie-prosperity-expert" -> "orchestrator" [style=solid, label="Return to Orchestrator"];
-    "sugarscape-expert" -> "adversarial" [style=solid, label="Vet Brief Before Drafting"];
-    "sugarscape-expert" -> "primary-producer" [style=solid, label="Send to Primary Producer"];
-    "sugarscape-expert" -> "reference-manager" [style=solid, label="Verify Citations"];
-    "sugarscape-expert" -> "orchestrator" [style=solid, label="Return to Orchestrator"];
-    "visualize-energy-data-expert" -> "adversarial" [style=solid, label="Vet Brief Before Drafting"];
-    "visualize-energy-data-expert" -> "primary-producer" [style=solid, label="Send to Primary Producer"];
-    "visualize-energy-data-expert" -> "reference-manager" [style=solid, label="Verify Citations"];
-    "visualize-energy-data-expert" -> "orchestrator" [style=solid, label="Return to Orchestrator"];
-    "content-enricher" -> "technical-validator" [style=solid, label="Validate Enriched Content"];
-    "content-enricher" -> "orchestrator" [style=solid, label="Return to Orchestrator"];
-    "content-enricher" -> "primary-producer" [style=dashed];
+    "work-summarizer" -> "technical-validator" [style=solid, label="Verify Summary Accuracy"];
 }
 ```
 
@@ -764,64 +764,376 @@ digraph "ProjectRepositories Agent Team" {
   },
   "edges": [
     {
-      "source": "orchestrator",
-      "target": "primary-producer",
+      "source": "adversarial",
+      "target": "conflict-auditor",
       "edge_type": "handoff",
-      "label": "Produce / Revise Deliverable"
+      "label": "Audit for Conflicts"
     },
     {
-      "source": "orchestrator",
+      "source": "adversarial",
+      "target": "orchestrator",
+      "edge_type": "handoff",
+      "label": "Return to Orchestrator"
+    },
+    {
+      "source": "agent-refactor",
+      "target": "conflict-auditor",
+      "edge_type": "handoff",
+      "label": "Run Conflict Audit"
+    },
+    {
+      "source": "agent-refactor",
+      "target": "orchestrator",
+      "edge_type": "handoff",
+      "label": "Return to Orchestrator"
+    },
+    {
+      "source": "agent-refactor",
+      "target": "conflict-auditor",
+      "edge_type": "agents-list",
+      "label": null
+    },
+    {
+      "source": "agent-updater",
+      "target": "adversarial",
+      "edge_type": "handoff",
+      "label": "Run Adversarial Review"
+    },
+    {
+      "source": "agent-updater",
+      "target": "agent-refactor",
+      "edge_type": "handoff",
+      "label": "Refactor Agent Docs"
+    },
+    {
+      "source": "agent-updater",
+      "target": "conflict-auditor",
+      "edge_type": "handoff",
+      "label": "Run Conflict Audit"
+    },
+    {
+      "source": "agent-updater",
+      "target": "orchestrator",
+      "edge_type": "handoff",
+      "label": "Return to Orchestrator"
+    },
+    {
+      "source": "agent-updater",
+      "target": "adversarial",
+      "edge_type": "agents-list",
+      "label": null
+    },
+    {
+      "source": "agent-updater",
+      "target": "agent-refactor",
+      "edge_type": "agents-list",
+      "label": null
+    },
+    {
+      "source": "agent-updater",
+      "target": "conflict-auditor",
+      "edge_type": "agents-list",
+      "label": null
+    },
+    {
+      "source": "cleanup",
+      "target": "orchestrator",
+      "edge_type": "handoff",
+      "label": "Return to Orchestrator"
+    },
+    {
+      "source": "code-hygiene",
+      "target": "agent-refactor",
+      "edge_type": "handoff",
+      "label": "Agent Refactor (Structural Violations)"
+    },
+    {
+      "source": "code-hygiene",
+      "target": "cleanup",
+      "edge_type": "handoff",
+      "label": "Cleanup Agent"
+    },
+    {
+      "source": "code-hygiene",
+      "target": "conflict-auditor",
+      "edge_type": "handoff",
+      "label": "Log Conflict"
+    },
+    {
+      "source": "code-hygiene",
+      "target": "orchestrator",
+      "edge_type": "handoff",
+      "label": "Return to Orchestrator"
+    },
+    {
+      "source": "code-hygiene",
+      "target": "security",
+      "edge_type": "handoff",
+      "label": "Security Clearance (for Deletions)"
+    },
+    {
+      "source": "cohesion-repairer",
+      "target": "orchestrator",
+      "edge_type": "handoff",
+      "label": "Return to Orchestrator"
+    },
+    {
+      "source": "cohesion-repairer",
       "target": "quality-auditor",
       "edge_type": "handoff",
-      "label": "Audit Quality"
+      "label": "Quality Re-Check"
     },
     {
-      "source": "orchestrator",
-      "target": "cohesion-repairer",
+      "source": "cohesion-repairer",
+      "target": "quality-auditor",
+      "edge_type": "agents-list",
+      "label": null
+    },
+    {
+      "source": "conflict-auditor",
+      "target": "agent-updater",
       "edge_type": "handoff",
-      "label": "Repair Cohesion"
+      "label": "Update Agent Docs"
     },
     {
-      "source": "orchestrator",
+      "source": "conflict-auditor",
+      "target": "conflict-resolution",
+      "edge_type": "handoff",
+      "label": "Resolve Conflicts"
+    },
+    {
+      "source": "conflict-auditor",
+      "target": "orchestrator",
+      "edge_type": "handoff",
+      "label": "Return to Orchestrator"
+    },
+    {
+      "source": "conflict-auditor",
       "target": "technical-validator",
       "edge_type": "handoff",
-      "label": "Validate Technical Accuracy"
+      "label": "Verify Source Drift"
     },
     {
-      "source": "orchestrator",
-      "target": "format-converter",
+      "source": "conflict-auditor",
+      "target": "agent-updater",
+      "edge_type": "agents-list",
+      "label": null
+    },
+    {
+      "source": "conflict-auditor",
+      "target": "conflict-resolution",
+      "edge_type": "agents-list",
+      "label": null
+    },
+    {
+      "source": "conflict-auditor",
+      "target": "technical-validator",
+      "edge_type": "agents-list",
+      "label": null
+    },
+    {
+      "source": "conflict-resolution",
+      "target": "agent-updater",
       "edge_type": "handoff",
-      "label": "Convert / Transform Output"
+      "label": "Update Agent Docs"
     },
     {
-      "source": "orchestrator",
+      "source": "conflict-resolution",
+      "target": "orchestrator",
+      "edge_type": "handoff",
+      "label": "Return to Orchestrator"
+    },
+    {
+      "source": "content-enricher",
+      "target": "orchestrator",
+      "edge_type": "handoff",
+      "label": "Return to Orchestrator"
+    },
+    {
+      "source": "content-enricher",
+      "target": "technical-validator",
+      "edge_type": "handoff",
+      "label": "Validate Enriched Content"
+    },
+    {
+      "source": "content-enricher",
+      "target": "primary-producer",
+      "edge_type": "agents-list",
+      "label": null
+    },
+    {
+      "source": "content-enricher",
+      "target": "technical-validator",
+      "edge_type": "agents-list",
+      "label": null
+    },
+    {
+      "source": "crisis-credit-allocation-expert",
+      "target": "adversarial",
+      "edge_type": "handoff",
+      "label": "Vet Brief Before Drafting"
+    },
+    {
+      "source": "crisis-credit-allocation-expert",
+      "target": "orchestrator",
+      "edge_type": "handoff",
+      "label": "Return to Orchestrator"
+    },
+    {
+      "source": "crisis-credit-allocation-expert",
+      "target": "primary-producer",
+      "edge_type": "handoff",
+      "label": "Send to Primary Producer"
+    },
+    {
+      "source": "crisis-credit-allocation-expert",
       "target": "reference-manager",
       "edge_type": "handoff",
-      "label": "Manage References / Dependencies"
+      "label": "Verify Citations"
     },
     {
-      "source": "orchestrator",
+      "source": "crisis-credit-allocation-expert",
+      "target": "adversarial",
+      "edge_type": "agents-list",
+      "label": null
+    },
+    {
+      "source": "crisis-credit-allocation-expert",
+      "target": "primary-producer",
+      "edge_type": "agents-list",
+      "label": null
+    },
+    {
+      "source": "crisis-credit-allocation-expert",
+      "target": "reference-manager",
+      "edge_type": "agents-list",
+      "label": null
+    },
+    {
+      "source": "fed-response-dag-expert",
+      "target": "adversarial",
+      "edge_type": "handoff",
+      "label": "Vet Brief Before Drafting"
+    },
+    {
+      "source": "fed-response-dag-expert",
+      "target": "orchestrator",
+      "edge_type": "handoff",
+      "label": "Return to Orchestrator"
+    },
+    {
+      "source": "fed-response-dag-expert",
+      "target": "primary-producer",
+      "edge_type": "handoff",
+      "label": "Send to Primary Producer"
+    },
+    {
+      "source": "fed-response-dag-expert",
+      "target": "reference-manager",
+      "edge_type": "handoff",
+      "label": "Verify Citations"
+    },
+    {
+      "source": "fed-response-dag-expert",
+      "target": "adversarial",
+      "edge_type": "agents-list",
+      "label": null
+    },
+    {
+      "source": "fed-response-dag-expert",
+      "target": "primary-producer",
+      "edge_type": "agents-list",
+      "label": null
+    },
+    {
+      "source": "fed-response-dag-expert",
+      "target": "reference-manager",
+      "edge_type": "agents-list",
+      "label": null
+    },
+    {
+      "source": "format-converter",
+      "target": "orchestrator",
+      "edge_type": "handoff",
+      "label": "Return to Orchestrator"
+    },
+    {
+      "source": "format-converter",
       "target": "output-compiler",
       "edge_type": "handoff",
-      "label": "Compile Final Output"
+      "label": "Pass to Output Compiler"
     },
     {
-      "source": "orchestrator",
-      "target": "visual-designer",
+      "source": "format-converter",
+      "target": "quality-auditor",
       "edge_type": "handoff",
-      "label": "Generate / Revise Diagram"
+      "label": "Quality Check After Conversion"
     },
     {
-      "source": "orchestrator",
-      "target": "navigator",
+      "source": "format-converter",
+      "target": "output-compiler",
+      "edge_type": "agents-list",
+      "label": null
+    },
+    {
+      "source": "format-converter",
+      "target": "quality-auditor",
+      "edge_type": "agents-list",
+      "label": null
+    },
+    {
+      "source": "git-operations",
+      "target": "agent-updater",
       "edge_type": "handoff",
-      "label": "Navigate Project"
+      "label": "Update Agent Docs"
     },
     {
-      "source": "orchestrator",
+      "source": "git-operations",
+      "target": "conflict-resolution",
+      "edge_type": "handoff",
+      "label": "Conflict Resolution"
+    },
+    {
+      "source": "git-operations",
+      "target": "orchestrator",
+      "edge_type": "handoff",
+      "label": "Return to Orchestrator"
+    },
+    {
+      "source": "git-operations",
       "target": "security",
       "edge_type": "handoff",
       "label": "Security Review"
+    },
+    {
+      "source": "navigator",
+      "target": "orchestrator",
+      "edge_type": "handoff",
+      "label": "Return to Orchestrator"
+    },
+    {
+      "source": "orchestrator",
+      "target": "adversarial",
+      "edge_type": "handoff",
+      "label": "Adversarial Review"
+    },
+    {
+      "source": "orchestrator",
+      "target": "agent-refactor",
+      "edge_type": "handoff",
+      "label": "Refactor Agent Docs"
+    },
+    {
+      "source": "orchestrator",
+      "target": "agent-updater",
+      "edge_type": "handoff",
+      "label": "Update Agent Docs"
+    },
+    {
+      "source": "orchestrator",
+      "target": "cleanup",
+      "edge_type": "handoff",
+      "label": "Clean Up Artifacts"
     },
     {
       "source": "orchestrator",
@@ -831,9 +1143,9 @@ digraph "ProjectRepositories Agent Team" {
     },
     {
       "source": "orchestrator",
-      "target": "adversarial",
+      "target": "cohesion-repairer",
       "edge_type": "handoff",
-      "label": "Adversarial Review"
+      "label": "Repair Cohesion"
     },
     {
       "source": "orchestrator",
@@ -849,33 +1161,9 @@ digraph "ProjectRepositories Agent Team" {
     },
     {
       "source": "orchestrator",
-      "target": "cleanup",
+      "target": "format-converter",
       "edge_type": "handoff",
-      "label": "Clean Up Artifacts"
-    },
-    {
-      "source": "orchestrator",
-      "target": "agent-updater",
-      "edge_type": "handoff",
-      "label": "Update Agent Docs"
-    },
-    {
-      "source": "orchestrator",
-      "target": "agent-refactor",
-      "edge_type": "handoff",
-      "label": "Refactor Agent Docs"
-    },
-    {
-      "source": "orchestrator",
-      "target": "repo-liaison",
-      "edge_type": "handoff",
-      "label": "Cross-Repository Liaison"
-    },
-    {
-      "source": "orchestrator",
-      "target": "work-summarizer",
-      "edge_type": "handoff",
-      "label": "Summarize Work Period"
+      "label": "Convert / Transform Output"
     },
     {
       "source": "orchestrator",
@@ -886,12 +1174,84 @@ digraph "ProjectRepositories Agent Team" {
     {
       "source": "orchestrator",
       "target": "navigator",
+      "edge_type": "handoff",
+      "label": "Navigate Project"
+    },
+    {
+      "source": "orchestrator",
+      "target": "output-compiler",
+      "edge_type": "handoff",
+      "label": "Compile Final Output"
+    },
+    {
+      "source": "orchestrator",
+      "target": "primary-producer",
+      "edge_type": "handoff",
+      "label": "Produce / Revise Deliverable"
+    },
+    {
+      "source": "orchestrator",
+      "target": "quality-auditor",
+      "edge_type": "handoff",
+      "label": "Audit Quality"
+    },
+    {
+      "source": "orchestrator",
+      "target": "reference-manager",
+      "edge_type": "handoff",
+      "label": "Manage References / Dependencies"
+    },
+    {
+      "source": "orchestrator",
+      "target": "repo-liaison",
+      "edge_type": "handoff",
+      "label": "Cross-Repository Liaison"
+    },
+    {
+      "source": "orchestrator",
+      "target": "security",
+      "edge_type": "handoff",
+      "label": "Security Review"
+    },
+    {
+      "source": "orchestrator",
+      "target": "technical-validator",
+      "edge_type": "handoff",
+      "label": "Validate Technical Accuracy"
+    },
+    {
+      "source": "orchestrator",
+      "target": "visual-designer",
+      "edge_type": "handoff",
+      "label": "Generate / Revise Diagram"
+    },
+    {
+      "source": "orchestrator",
+      "target": "work-summarizer",
+      "edge_type": "handoff",
+      "label": "Summarize Work Period"
+    },
+    {
+      "source": "orchestrator",
+      "target": "adversarial",
       "edge_type": "agents-list",
       "label": null
     },
     {
       "source": "orchestrator",
-      "target": "security",
+      "target": "agent-refactor",
+      "edge_type": "agents-list",
+      "label": null
+    },
+    {
+      "source": "orchestrator",
+      "target": "agent-updater",
+      "edge_type": "agents-list",
+      "label": null
+    },
+    {
+      "source": "orchestrator",
+      "target": "cleanup",
       "edge_type": "agents-list",
       "label": null
     },
@@ -903,7 +1263,7 @@ digraph "ProjectRepositories Agent Team" {
     },
     {
       "source": "orchestrator",
-      "target": "adversarial",
+      "target": "cohesion-repairer",
       "edge_type": "agents-list",
       "label": null
     },
@@ -916,90 +1276,6 @@ digraph "ProjectRepositories Agent Team" {
     {
       "source": "orchestrator",
       "target": "conflict-resolution",
-      "edge_type": "agents-list",
-      "label": null
-    },
-    {
-      "source": "orchestrator",
-      "target": "cleanup",
-      "edge_type": "agents-list",
-      "label": null
-    },
-    {
-      "source": "orchestrator",
-      "target": "agent-updater",
-      "edge_type": "agents-list",
-      "label": null
-    },
-    {
-      "source": "orchestrator",
-      "target": "agent-refactor",
-      "edge_type": "agents-list",
-      "label": null
-    },
-    {
-      "source": "orchestrator",
-      "target": "repo-liaison",
-      "edge_type": "agents-list",
-      "label": null
-    },
-    {
-      "source": "orchestrator",
-      "target": "git-operations",
-      "edge_type": "agents-list",
-      "label": null
-    },
-    {
-      "source": "orchestrator",
-      "target": "work-summarizer",
-      "edge_type": "agents-list",
-      "label": null
-    },
-    {
-      "source": "orchestrator",
-      "target": "primary-producer",
-      "edge_type": "agents-list",
-      "label": null
-    },
-    {
-      "source": "orchestrator",
-      "target": "quality-auditor",
-      "edge_type": "agents-list",
-      "label": null
-    },
-    {
-      "source": "orchestrator",
-      "target": "cohesion-repairer",
-      "edge_type": "agents-list",
-      "label": null
-    },
-    {
-      "source": "orchestrator",
-      "target": "technical-validator",
-      "edge_type": "agents-list",
-      "label": null
-    },
-    {
-      "source": "orchestrator",
-      "target": "format-converter",
-      "edge_type": "agents-list",
-      "label": null
-    },
-    {
-      "source": "orchestrator",
-      "target": "reference-manager",
-      "edge_type": "agents-list",
-      "label": null
-    },
-    {
-      "source": "orchestrator",
-      "target": "output-compiler",
-      "edge_type": "agents-list",
-      "label": null
-    },
-    {
-      "source": "orchestrator",
-      "target": "visual-designer",
       "edge_type": "agents-list",
       "label": null
     },
@@ -1017,7 +1293,61 @@ digraph "ProjectRepositories Agent Team" {
     },
     {
       "source": "orchestrator",
+      "target": "format-converter",
+      "edge_type": "agents-list",
+      "label": null
+    },
+    {
+      "source": "orchestrator",
+      "target": "git-operations",
+      "edge_type": "agents-list",
+      "label": null
+    },
+    {
+      "source": "orchestrator",
+      "target": "navigator",
+      "edge_type": "agents-list",
+      "label": null
+    },
+    {
+      "source": "orchestrator",
+      "target": "output-compiler",
+      "edge_type": "agents-list",
+      "label": null
+    },
+    {
+      "source": "orchestrator",
       "target": "prairie-prosperity-expert",
+      "edge_type": "agents-list",
+      "label": null
+    },
+    {
+      "source": "orchestrator",
+      "target": "primary-producer",
+      "edge_type": "agents-list",
+      "label": null
+    },
+    {
+      "source": "orchestrator",
+      "target": "quality-auditor",
+      "edge_type": "agents-list",
+      "label": null
+    },
+    {
+      "source": "orchestrator",
+      "target": "reference-manager",
+      "edge_type": "agents-list",
+      "label": null
+    },
+    {
+      "source": "orchestrator",
+      "target": "repo-liaison",
+      "edge_type": "agents-list",
+      "label": null
+    },
+    {
+      "source": "orchestrator",
+      "target": "security",
       "edge_type": "agents-list",
       "label": null
     },
@@ -1029,183 +1359,195 @@ digraph "ProjectRepositories Agent Team" {
     },
     {
       "source": "orchestrator",
+      "target": "technical-validator",
+      "edge_type": "agents-list",
+      "label": null
+    },
+    {
+      "source": "orchestrator",
+      "target": "visual-designer",
+      "edge_type": "agents-list",
+      "label": null
+    },
+    {
+      "source": "orchestrator",
       "target": "visualize-energy-data-expert",
       "edge_type": "agents-list",
       "label": null
     },
     {
-      "source": "navigator",
+      "source": "orchestrator",
+      "target": "work-summarizer",
+      "edge_type": "agents-list",
+      "label": null
+    },
+    {
+      "source": "output-compiler",
+      "target": "format-converter",
+      "edge_type": "handoff",
+      "label": "Convert Missing Components"
+    },
+    {
+      "source": "output-compiler",
       "target": "orchestrator",
       "edge_type": "handoff",
       "label": "Return to Orchestrator"
     },
     {
-      "source": "security",
-      "target": "orchestrator",
-      "edge_type": "handoff",
-      "label": "Return to Orchestrator"
-    },
-    {
-      "source": "code-hygiene",
-      "target": "security",
-      "edge_type": "handoff",
-      "label": "Security Clearance (for Deletions)"
-    },
-    {
-      "source": "code-hygiene",
-      "target": "cleanup",
-      "edge_type": "handoff",
-      "label": "Cleanup Agent"
-    },
-    {
-      "source": "code-hygiene",
-      "target": "agent-refactor",
-      "edge_type": "handoff",
-      "label": "Agent Refactor (Structural Violations)"
-    },
-    {
-      "source": "code-hygiene",
-      "target": "conflict-auditor",
-      "edge_type": "handoff",
-      "label": "Log Conflict"
-    },
-    {
-      "source": "code-hygiene",
-      "target": "orchestrator",
-      "edge_type": "handoff",
-      "label": "Return to Orchestrator"
-    },
-    {
-      "source": "adversarial",
-      "target": "orchestrator",
-      "edge_type": "handoff",
-      "label": "Return to Orchestrator"
-    },
-    {
-      "source": "adversarial",
-      "target": "conflict-auditor",
-      "edge_type": "handoff",
-      "label": "Audit for Conflicts"
-    },
-    {
-      "source": "conflict-auditor",
-      "target": "orchestrator",
-      "edge_type": "handoff",
-      "label": "Return to Orchestrator"
-    },
-    {
-      "source": "conflict-auditor",
-      "target": "agent-updater",
-      "edge_type": "handoff",
-      "label": "Update Agent Docs"
-    },
-    {
-      "source": "conflict-auditor",
-      "target": "conflict-resolution",
-      "edge_type": "handoff",
-      "label": "Resolve Conflicts"
-    },
-    {
-      "source": "conflict-auditor",
+      "source": "output-compiler",
       "target": "technical-validator",
       "edge_type": "handoff",
-      "label": "Verify Source Drift"
+      "label": "Validate Technical Accuracy"
     },
     {
-      "source": "conflict-auditor",
-      "target": "conflict-resolution",
+      "source": "output-compiler",
+      "target": "format-converter",
       "edge_type": "agents-list",
       "label": null
     },
     {
-      "source": "conflict-auditor",
-      "target": "agent-updater",
-      "edge_type": "agents-list",
-      "label": null
-    },
-    {
-      "source": "conflict-auditor",
+      "source": "output-compiler",
       "target": "technical-validator",
       "edge_type": "agents-list",
       "label": null
     },
     {
-      "source": "conflict-resolution",
-      "target": "orchestrator",
-      "edge_type": "handoff",
-      "label": "Return to Orchestrator"
-    },
-    {
-      "source": "conflict-resolution",
-      "target": "agent-updater",
-      "edge_type": "handoff",
-      "label": "Update Agent Docs"
-    },
-    {
-      "source": "cleanup",
-      "target": "orchestrator",
-      "edge_type": "handoff",
-      "label": "Return to Orchestrator"
-    },
-    {
-      "source": "agent-updater",
-      "target": "agent-refactor",
-      "edge_type": "handoff",
-      "label": "Refactor Agent Docs"
-    },
-    {
-      "source": "agent-updater",
+      "source": "prairie-prosperity-expert",
       "target": "adversarial",
       "edge_type": "handoff",
-      "label": "Run Adversarial Review"
+      "label": "Vet Brief Before Drafting"
     },
     {
-      "source": "agent-updater",
-      "target": "conflict-auditor",
-      "edge_type": "handoff",
-      "label": "Run Conflict Audit"
-    },
-    {
-      "source": "agent-updater",
+      "source": "prairie-prosperity-expert",
       "target": "orchestrator",
       "edge_type": "handoff",
       "label": "Return to Orchestrator"
     },
     {
-      "source": "agent-updater",
+      "source": "prairie-prosperity-expert",
+      "target": "primary-producer",
+      "edge_type": "handoff",
+      "label": "Send to Primary Producer"
+    },
+    {
+      "source": "prairie-prosperity-expert",
+      "target": "reference-manager",
+      "edge_type": "handoff",
+      "label": "Verify Citations"
+    },
+    {
+      "source": "prairie-prosperity-expert",
       "target": "adversarial",
       "edge_type": "agents-list",
       "label": null
     },
     {
-      "source": "agent-updater",
-      "target": "conflict-auditor",
+      "source": "prairie-prosperity-expert",
+      "target": "primary-producer",
       "edge_type": "agents-list",
       "label": null
     },
     {
-      "source": "agent-updater",
-      "target": "agent-refactor",
+      "source": "prairie-prosperity-expert",
+      "target": "reference-manager",
       "edge_type": "agents-list",
       "label": null
     },
     {
-      "source": "agent-refactor",
+      "source": "primary-producer",
+      "target": "cohesion-repairer",
+      "edge_type": "handoff",
+      "label": "Cohesion Audit"
+    },
+    {
+      "source": "primary-producer",
       "target": "conflict-auditor",
       "edge_type": "handoff",
-      "label": "Run Conflict Audit"
+      "label": "Conflict Audit"
     },
     {
-      "source": "agent-refactor",
+      "source": "primary-producer",
       "target": "orchestrator",
       "edge_type": "handoff",
       "label": "Return to Orchestrator"
     },
     {
-      "source": "agent-refactor",
+      "source": "primary-producer",
+      "target": "quality-auditor",
+      "edge_type": "handoff",
+      "label": "Quality Audit"
+    },
+    {
+      "source": "primary-producer",
+      "target": "cohesion-repairer",
+      "edge_type": "agents-list",
+      "label": null
+    },
+    {
+      "source": "primary-producer",
       "target": "conflict-auditor",
       "edge_type": "agents-list",
       "label": null
+    },
+    {
+      "source": "primary-producer",
+      "target": "quality-auditor",
+      "edge_type": "agents-list",
+      "label": null
+    },
+    {
+      "source": "quality-auditor",
+      "target": "cohesion-repairer",
+      "edge_type": "handoff",
+      "label": "Route Cohesion Failures"
+    },
+    {
+      "source": "quality-auditor",
+      "target": "orchestrator",
+      "edge_type": "handoff",
+      "label": "Return to Orchestrator"
+    },
+    {
+      "source": "quality-auditor",
+      "target": "primary-producer",
+      "edge_type": "handoff",
+      "label": "Route Corrections to Primary Producer"
+    },
+    {
+      "source": "quality-auditor",
+      "target": "cohesion-repairer",
+      "edge_type": "agents-list",
+      "label": null
+    },
+    {
+      "source": "quality-auditor",
+      "target": "primary-producer",
+      "edge_type": "agents-list",
+      "label": null
+    },
+    {
+      "source": "reference-manager",
+      "target": "conflict-auditor",
+      "edge_type": "handoff",
+      "label": "Run Conflict Audit"
+    },
+    {
+      "source": "reference-manager",
+      "target": "orchestrator",
+      "edge_type": "handoff",
+      "label": "Return to Orchestrator"
+    },
+    {
+      "source": "reference-manager",
+      "target": "conflict-auditor",
+      "edge_type": "agents-list",
+      "label": null
+    },
+    {
+      "source": "repo-liaison",
+      "target": "conflict-auditor",
+      "edge_type": "handoff",
+      "label": "Conflict Audit After Cross-Repo Change"
     },
     {
       "source": "repo-liaison",
@@ -1220,40 +1562,166 @@ digraph "ProjectRepositories Agent Team" {
       "label": "Security Review for Cross-Repo Write"
     },
     {
-      "source": "repo-liaison",
-      "target": "conflict-auditor",
-      "edge_type": "handoff",
-      "label": "Conflict Audit After Cross-Repo Change"
-    },
-    {
-      "source": "git-operations",
+      "source": "security",
       "target": "orchestrator",
       "edge_type": "handoff",
       "label": "Return to Orchestrator"
     },
     {
-      "source": "git-operations",
-      "target": "security",
+      "source": "sugarscape-expert",
+      "target": "adversarial",
       "edge_type": "handoff",
-      "label": "Security Review"
+      "label": "Vet Brief Before Drafting"
     },
     {
-      "source": "git-operations",
-      "target": "conflict-resolution",
+      "source": "sugarscape-expert",
+      "target": "orchestrator",
       "edge_type": "handoff",
-      "label": "Conflict Resolution"
+      "label": "Return to Orchestrator"
     },
     {
-      "source": "git-operations",
-      "target": "agent-updater",
+      "source": "sugarscape-expert",
+      "target": "primary-producer",
       "edge_type": "handoff",
-      "label": "Update Agent Docs"
+      "label": "Send to Primary Producer"
     },
     {
-      "source": "work-summarizer",
-      "target": "technical-validator",
+      "source": "sugarscape-expert",
+      "target": "reference-manager",
       "edge_type": "handoff",
-      "label": "Verify Summary Accuracy"
+      "label": "Verify Citations"
+    },
+    {
+      "source": "sugarscape-expert",
+      "target": "adversarial",
+      "edge_type": "agents-list",
+      "label": null
+    },
+    {
+      "source": "sugarscape-expert",
+      "target": "primary-producer",
+      "edge_type": "agents-list",
+      "label": null
+    },
+    {
+      "source": "sugarscape-expert",
+      "target": "reference-manager",
+      "edge_type": "agents-list",
+      "label": null
+    },
+    {
+      "source": "technical-validator",
+      "target": "conflict-auditor",
+      "edge_type": "handoff",
+      "label": "Log Conflict"
+    },
+    {
+      "source": "technical-validator",
+      "target": "orchestrator",
+      "edge_type": "handoff",
+      "label": "Return to Orchestrator"
+    },
+    {
+      "source": "technical-validator",
+      "target": "primary-producer",
+      "edge_type": "handoff",
+      "label": "Route Corrections to Primary Producer"
+    },
+    {
+      "source": "technical-validator",
+      "target": "reference-manager",
+      "edge_type": "handoff",
+      "label": "Route Reference Issues"
+    },
+    {
+      "source": "technical-validator",
+      "target": "conflict-auditor",
+      "edge_type": "agents-list",
+      "label": null
+    },
+    {
+      "source": "technical-validator",
+      "target": "primary-producer",
+      "edge_type": "agents-list",
+      "label": null
+    },
+    {
+      "source": "technical-validator",
+      "target": "reference-manager",
+      "edge_type": "agents-list",
+      "label": null
+    },
+    {
+      "source": "visual-designer",
+      "target": "format-converter",
+      "edge_type": "handoff",
+      "label": "Convert Figure Format"
+    },
+    {
+      "source": "visual-designer",
+      "target": "orchestrator",
+      "edge_type": "handoff",
+      "label": "Return to Orchestrator"
+    },
+    {
+      "source": "visual-designer",
+      "target": "quality-auditor",
+      "edge_type": "handoff",
+      "label": "Quality Check Figure"
+    },
+    {
+      "source": "visual-designer",
+      "target": "format-converter",
+      "edge_type": "agents-list",
+      "label": null
+    },
+    {
+      "source": "visual-designer",
+      "target": "quality-auditor",
+      "edge_type": "agents-list",
+      "label": null
+    },
+    {
+      "source": "visualize-energy-data-expert",
+      "target": "adversarial",
+      "edge_type": "handoff",
+      "label": "Vet Brief Before Drafting"
+    },
+    {
+      "source": "visualize-energy-data-expert",
+      "target": "orchestrator",
+      "edge_type": "handoff",
+      "label": "Return to Orchestrator"
+    },
+    {
+      "source": "visualize-energy-data-expert",
+      "target": "primary-producer",
+      "edge_type": "handoff",
+      "label": "Send to Primary Producer"
+    },
+    {
+      "source": "visualize-energy-data-expert",
+      "target": "reference-manager",
+      "edge_type": "handoff",
+      "label": "Verify Citations"
+    },
+    {
+      "source": "visualize-energy-data-expert",
+      "target": "adversarial",
+      "edge_type": "agents-list",
+      "label": null
+    },
+    {
+      "source": "visualize-energy-data-expert",
+      "target": "primary-producer",
+      "edge_type": "agents-list",
+      "label": null
+    },
+    {
+      "source": "visualize-energy-data-expert",
+      "target": "reference-manager",
+      "edge_type": "agents-list",
+      "label": null
     },
     {
       "source": "work-summarizer",
@@ -1276,8 +1744,8 @@ digraph "ProjectRepositories Agent Team" {
     {
       "source": "work-summarizer",
       "target": "technical-validator",
-      "edge_type": "agents-list",
-      "label": null
+      "edge_type": "handoff",
+      "label": "Verify Summary Accuracy"
     },
     {
       "source": "work-summarizer",
@@ -1292,481 +1760,82 @@ digraph "ProjectRepositories Agent Team" {
       "label": null
     },
     {
-      "source": "primary-producer",
-      "target": "cohesion-repairer",
-      "edge_type": "handoff",
-      "label": "Cohesion Audit"
-    },
-    {
-      "source": "primary-producer",
-      "target": "quality-auditor",
-      "edge_type": "handoff",
-      "label": "Quality Audit"
-    },
-    {
-      "source": "primary-producer",
-      "target": "conflict-auditor",
-      "edge_type": "handoff",
-      "label": "Conflict Audit"
-    },
-    {
-      "source": "primary-producer",
-      "target": "orchestrator",
-      "edge_type": "handoff",
-      "label": "Return to Orchestrator"
-    },
-    {
-      "source": "primary-producer",
-      "target": "cohesion-repairer",
-      "edge_type": "agents-list",
-      "label": null
-    },
-    {
-      "source": "primary-producer",
-      "target": "quality-auditor",
-      "edge_type": "agents-list",
-      "label": null
-    },
-    {
-      "source": "primary-producer",
-      "target": "conflict-auditor",
-      "edge_type": "agents-list",
-      "label": null
-    },
-    {
-      "source": "quality-auditor",
-      "target": "primary-producer",
-      "edge_type": "handoff",
-      "label": "Route Corrections to Primary Producer"
-    },
-    {
-      "source": "quality-auditor",
-      "target": "cohesion-repairer",
-      "edge_type": "handoff",
-      "label": "Route Cohesion Failures"
-    },
-    {
-      "source": "quality-auditor",
-      "target": "orchestrator",
-      "edge_type": "handoff",
-      "label": "Return to Orchestrator"
-    },
-    {
-      "source": "quality-auditor",
-      "target": "primary-producer",
-      "edge_type": "agents-list",
-      "label": null
-    },
-    {
-      "source": "quality-auditor",
-      "target": "cohesion-repairer",
-      "edge_type": "agents-list",
-      "label": null
-    },
-    {
-      "source": "cohesion-repairer",
-      "target": "quality-auditor",
-      "edge_type": "handoff",
-      "label": "Quality Re-Check"
-    },
-    {
-      "source": "cohesion-repairer",
-      "target": "orchestrator",
-      "edge_type": "handoff",
-      "label": "Return to Orchestrator"
-    },
-    {
-      "source": "cohesion-repairer",
-      "target": "quality-auditor",
-      "edge_type": "agents-list",
-      "label": null
-    },
-    {
-      "source": "technical-validator",
-      "target": "primary-producer",
-      "edge_type": "handoff",
-      "label": "Route Corrections to Primary Producer"
-    },
-    {
-      "source": "technical-validator",
-      "target": "reference-manager",
-      "edge_type": "handoff",
-      "label": "Route Reference Issues"
-    },
-    {
-      "source": "technical-validator",
-      "target": "conflict-auditor",
-      "edge_type": "handoff",
-      "label": "Log Conflict"
-    },
-    {
-      "source": "technical-validator",
-      "target": "orchestrator",
-      "edge_type": "handoff",
-      "label": "Return to Orchestrator"
-    },
-    {
-      "source": "technical-validator",
-      "target": "primary-producer",
-      "edge_type": "agents-list",
-      "label": null
-    },
-    {
-      "source": "technical-validator",
-      "target": "reference-manager",
-      "edge_type": "agents-list",
-      "label": null
-    },
-    {
-      "source": "technical-validator",
-      "target": "conflict-auditor",
-      "edge_type": "agents-list",
-      "label": null
-    },
-    {
-      "source": "format-converter",
-      "target": "output-compiler",
-      "edge_type": "handoff",
-      "label": "Pass to Output Compiler"
-    },
-    {
-      "source": "format-converter",
-      "target": "quality-auditor",
-      "edge_type": "handoff",
-      "label": "Quality Check After Conversion"
-    },
-    {
-      "source": "format-converter",
-      "target": "orchestrator",
-      "edge_type": "handoff",
-      "label": "Return to Orchestrator"
-    },
-    {
-      "source": "format-converter",
-      "target": "output-compiler",
-      "edge_type": "agents-list",
-      "label": null
-    },
-    {
-      "source": "format-converter",
-      "target": "quality-auditor",
-      "edge_type": "agents-list",
-      "label": null
-    },
-    {
-      "source": "reference-manager",
-      "target": "conflict-auditor",
-      "edge_type": "handoff",
-      "label": "Run Conflict Audit"
-    },
-    {
-      "source": "reference-manager",
-      "target": "orchestrator",
-      "edge_type": "handoff",
-      "label": "Return to Orchestrator"
-    },
-    {
-      "source": "reference-manager",
-      "target": "conflict-auditor",
-      "edge_type": "agents-list",
-      "label": null
-    },
-    {
-      "source": "output-compiler",
-      "target": "format-converter",
-      "edge_type": "handoff",
-      "label": "Convert Missing Components"
-    },
-    {
-      "source": "output-compiler",
-      "target": "technical-validator",
-      "edge_type": "handoff",
-      "label": "Validate Technical Accuracy"
-    },
-    {
-      "source": "output-compiler",
-      "target": "orchestrator",
-      "edge_type": "handoff",
-      "label": "Return to Orchestrator"
-    },
-    {
-      "source": "output-compiler",
-      "target": "format-converter",
-      "edge_type": "agents-list",
-      "label": null
-    },
-    {
-      "source": "output-compiler",
-      "target": "technical-validator",
-      "edge_type": "agents-list",
-      "label": null
-    },
-    {
-      "source": "visual-designer",
-      "target": "format-converter",
-      "edge_type": "handoff",
-      "label": "Convert Figure Format"
-    },
-    {
-      "source": "visual-designer",
-      "target": "quality-auditor",
-      "edge_type": "handoff",
-      "label": "Quality Check Figure"
-    },
-    {
-      "source": "visual-designer",
-      "target": "orchestrator",
-      "edge_type": "handoff",
-      "label": "Return to Orchestrator"
-    },
-    {
-      "source": "visual-designer",
-      "target": "format-converter",
-      "edge_type": "agents-list",
-      "label": null
-    },
-    {
-      "source": "visual-designer",
-      "target": "quality-auditor",
-      "edge_type": "agents-list",
-      "label": null
-    },
-    {
-      "source": "crisis-credit-allocation-expert",
-      "target": "adversarial",
-      "edge_type": "handoff",
-      "label": "Vet Brief Before Drafting"
-    },
-    {
-      "source": "crisis-credit-allocation-expert",
-      "target": "primary-producer",
-      "edge_type": "handoff",
-      "label": "Send to Primary Producer"
-    },
-    {
-      "source": "crisis-credit-allocation-expert",
-      "target": "reference-manager",
-      "edge_type": "handoff",
-      "label": "Verify Citations"
-    },
-    {
-      "source": "crisis-credit-allocation-expert",
-      "target": "orchestrator",
-      "edge_type": "handoff",
-      "label": "Return to Orchestrator"
-    },
-    {
-      "source": "crisis-credit-allocation-expert",
-      "target": "primary-producer",
-      "edge_type": "agents-list",
-      "label": null
-    },
-    {
-      "source": "crisis-credit-allocation-expert",
-      "target": "adversarial",
-      "edge_type": "agents-list",
-      "label": null
-    },
-    {
-      "source": "crisis-credit-allocation-expert",
-      "target": "reference-manager",
-      "edge_type": "agents-list",
-      "label": null
-    },
-    {
-      "source": "fed-response-dag-expert",
-      "target": "adversarial",
-      "edge_type": "handoff",
-      "label": "Vet Brief Before Drafting"
-    },
-    {
-      "source": "fed-response-dag-expert",
-      "target": "primary-producer",
-      "edge_type": "handoff",
-      "label": "Send to Primary Producer"
-    },
-    {
-      "source": "fed-response-dag-expert",
-      "target": "reference-manager",
-      "edge_type": "handoff",
-      "label": "Verify Citations"
-    },
-    {
-      "source": "fed-response-dag-expert",
-      "target": "orchestrator",
-      "edge_type": "handoff",
-      "label": "Return to Orchestrator"
-    },
-    {
-      "source": "fed-response-dag-expert",
-      "target": "primary-producer",
-      "edge_type": "agents-list",
-      "label": null
-    },
-    {
-      "source": "fed-response-dag-expert",
-      "target": "adversarial",
-      "edge_type": "agents-list",
-      "label": null
-    },
-    {
-      "source": "fed-response-dag-expert",
-      "target": "reference-manager",
-      "edge_type": "agents-list",
-      "label": null
-    },
-    {
-      "source": "prairie-prosperity-expert",
-      "target": "adversarial",
-      "edge_type": "handoff",
-      "label": "Vet Brief Before Drafting"
-    },
-    {
-      "source": "prairie-prosperity-expert",
-      "target": "primary-producer",
-      "edge_type": "handoff",
-      "label": "Send to Primary Producer"
-    },
-    {
-      "source": "prairie-prosperity-expert",
-      "target": "reference-manager",
-      "edge_type": "handoff",
-      "label": "Verify Citations"
-    },
-    {
-      "source": "prairie-prosperity-expert",
-      "target": "orchestrator",
-      "edge_type": "handoff",
-      "label": "Return to Orchestrator"
-    },
-    {
-      "source": "prairie-prosperity-expert",
-      "target": "primary-producer",
-      "edge_type": "agents-list",
-      "label": null
-    },
-    {
-      "source": "prairie-prosperity-expert",
-      "target": "adversarial",
-      "edge_type": "agents-list",
-      "label": null
-    },
-    {
-      "source": "prairie-prosperity-expert",
-      "target": "reference-manager",
-      "edge_type": "agents-list",
-      "label": null
-    },
-    {
-      "source": "sugarscape-expert",
-      "target": "adversarial",
-      "edge_type": "handoff",
-      "label": "Vet Brief Before Drafting"
-    },
-    {
-      "source": "sugarscape-expert",
-      "target": "primary-producer",
-      "edge_type": "handoff",
-      "label": "Send to Primary Producer"
-    },
-    {
-      "source": "sugarscape-expert",
-      "target": "reference-manager",
-      "edge_type": "handoff",
-      "label": "Verify Citations"
-    },
-    {
-      "source": "sugarscape-expert",
-      "target": "orchestrator",
-      "edge_type": "handoff",
-      "label": "Return to Orchestrator"
-    },
-    {
-      "source": "sugarscape-expert",
-      "target": "primary-producer",
-      "edge_type": "agents-list",
-      "label": null
-    },
-    {
-      "source": "sugarscape-expert",
-      "target": "adversarial",
-      "edge_type": "agents-list",
-      "label": null
-    },
-    {
-      "source": "sugarscape-expert",
-      "target": "reference-manager",
-      "edge_type": "agents-list",
-      "label": null
-    },
-    {
-      "source": "visualize-energy-data-expert",
-      "target": "adversarial",
-      "edge_type": "handoff",
-      "label": "Vet Brief Before Drafting"
-    },
-    {
-      "source": "visualize-energy-data-expert",
-      "target": "primary-producer",
-      "edge_type": "handoff",
-      "label": "Send to Primary Producer"
-    },
-    {
-      "source": "visualize-energy-data-expert",
-      "target": "reference-manager",
-      "edge_type": "handoff",
-      "label": "Verify Citations"
-    },
-    {
-      "source": "visualize-energy-data-expert",
-      "target": "orchestrator",
-      "edge_type": "handoff",
-      "label": "Return to Orchestrator"
-    },
-    {
-      "source": "visualize-energy-data-expert",
-      "target": "primary-producer",
-      "edge_type": "agents-list",
-      "label": null
-    },
-    {
-      "source": "visualize-energy-data-expert",
-      "target": "adversarial",
-      "edge_type": "agents-list",
-      "label": null
-    },
-    {
-      "source": "visualize-energy-data-expert",
-      "target": "reference-manager",
-      "edge_type": "agents-list",
-      "label": null
-    },
-    {
-      "source": "content-enricher",
-      "target": "technical-validator",
-      "edge_type": "handoff",
-      "label": "Validate Enriched Content"
-    },
-    {
-      "source": "content-enricher",
-      "target": "orchestrator",
-      "edge_type": "handoff",
-      "label": "Return to Orchestrator"
-    },
-    {
-      "source": "content-enricher",
-      "target": "primary-producer",
-      "edge_type": "agents-list",
-      "label": null
-    },
-    {
-      "source": "content-enricher",
+      "source": "work-summarizer",
       "target": "technical-validator",
       "edge_type": "agents-list",
       "label": null
     }
   ],
   "adjacency": {
+    "adversarial": [
+      "conflict-auditor",
+      "orchestrator"
+    ],
+    "agent-refactor": [
+      "conflict-auditor",
+      "orchestrator"
+    ],
+    "agent-updater": [
+      "adversarial",
+      "agent-refactor",
+      "conflict-auditor",
+      "orchestrator"
+    ],
+    "cleanup": [
+      "orchestrator"
+    ],
+    "code-hygiene": [
+      "agent-refactor",
+      "cleanup",
+      "conflict-auditor",
+      "orchestrator",
+      "security"
+    ],
+    "cohesion-repairer": [
+      "orchestrator",
+      "quality-auditor"
+    ],
+    "conflict-auditor": [
+      "agent-updater",
+      "conflict-resolution",
+      "orchestrator",
+      "technical-validator"
+    ],
+    "conflict-resolution": [
+      "agent-updater",
+      "orchestrator"
+    ],
+    "content-enricher": [
+      "orchestrator",
+      "primary-producer",
+      "technical-validator"
+    ],
+    "crisis-credit-allocation-expert": [
+      "adversarial",
+      "orchestrator",
+      "primary-producer",
+      "reference-manager"
+    ],
+    "fed-response-dag-expert": [
+      "adversarial",
+      "orchestrator",
+      "primary-producer",
+      "reference-manager"
+    ],
+    "format-converter": [
+      "orchestrator",
+      "output-compiler",
+      "quality-auditor"
+    ],
+    "git-operations": [
+      "agent-updater",
+      "conflict-resolution",
+      "orchestrator",
+      "security"
+    ],
+    "navigator": [
+      "orchestrator"
+    ],
     "orchestrator": [
       "adversarial",
       "agent-refactor",
@@ -1794,62 +1863,16 @@ digraph "ProjectRepositories Agent Team" {
       "visualize-energy-data-expert",
       "work-summarizer"
     ],
-    "navigator": [
-      "orchestrator"
-    ],
-    "security": [
-      "orchestrator"
-    ],
-    "code-hygiene": [
-      "agent-refactor",
-      "cleanup",
-      "conflict-auditor",
-      "orchestrator",
-      "security"
-    ],
-    "adversarial": [
-      "conflict-auditor",
-      "orchestrator"
-    ],
-    "conflict-auditor": [
-      "agent-updater",
-      "conflict-resolution",
+    "output-compiler": [
+      "format-converter",
       "orchestrator",
       "technical-validator"
     ],
-    "conflict-resolution": [
-      "agent-updater",
-      "orchestrator"
-    ],
-    "cleanup": [
-      "orchestrator"
-    ],
-    "agent-updater": [
+    "prairie-prosperity-expert": [
       "adversarial",
-      "agent-refactor",
-      "conflict-auditor",
-      "orchestrator"
-    ],
-    "agent-refactor": [
-      "conflict-auditor",
-      "orchestrator"
-    ],
-    "repo-liaison": [
-      "conflict-auditor",
       "orchestrator",
-      "security"
-    ],
-    "git-operations": [
-      "agent-updater",
-      "conflict-resolution",
-      "orchestrator",
-      "security"
-    ],
-    "work-summarizer": [
-      "adversarial",
-      "conflict-auditor",
-      "orchestrator",
-      "technical-validator"
+      "primary-producer",
+      "reference-manager"
     ],
     "primary-producer": [
       "cohesion-repairer",
@@ -1862,52 +1885,17 @@ digraph "ProjectRepositories Agent Team" {
       "orchestrator",
       "primary-producer"
     ],
-    "cohesion-repairer": [
-      "orchestrator",
-      "quality-auditor"
-    ],
-    "technical-validator": [
-      "conflict-auditor",
-      "orchestrator",
-      "primary-producer",
-      "reference-manager"
-    ],
-    "format-converter": [
-      "orchestrator",
-      "output-compiler",
-      "quality-auditor"
-    ],
     "reference-manager": [
       "conflict-auditor",
       "orchestrator"
     ],
-    "output-compiler": [
-      "format-converter",
+    "repo-liaison": [
+      "conflict-auditor",
       "orchestrator",
-      "technical-validator"
+      "security"
     ],
-    "visual-designer": [
-      "format-converter",
-      "orchestrator",
-      "quality-auditor"
-    ],
-    "crisis-credit-allocation-expert": [
-      "adversarial",
-      "orchestrator",
-      "primary-producer",
-      "reference-manager"
-    ],
-    "fed-response-dag-expert": [
-      "adversarial",
-      "orchestrator",
-      "primary-producer",
-      "reference-manager"
-    ],
-    "prairie-prosperity-expert": [
-      "adversarial",
-      "orchestrator",
-      "primary-producer",
-      "reference-manager"
+    "security": [
+      "orchestrator"
     ],
     "sugarscape-expert": [
       "adversarial",
@@ -1915,16 +1903,28 @@ digraph "ProjectRepositories Agent Team" {
       "primary-producer",
       "reference-manager"
     ],
+    "team-builder": [],
+    "technical-validator": [
+      "conflict-auditor",
+      "orchestrator",
+      "primary-producer",
+      "reference-manager"
+    ],
+    "visual-designer": [
+      "format-converter",
+      "orchestrator",
+      "quality-auditor"
+    ],
     "visualize-energy-data-expert": [
       "adversarial",
       "orchestrator",
       "primary-producer",
       "reference-manager"
     ],
-    "team-builder": [],
-    "content-enricher": [
+    "work-summarizer": [
+      "adversarial",
+      "conflict-auditor",
       "orchestrator",
-      "primary-producer",
       "technical-validator"
     ]
   }

@@ -63,134 +63,134 @@ flowchart LR
     class tool_doc_researcher tool_specialist
     work_summarizer["Work Summarizer"]
     class work_summarizer domain
-    orchestrator -->|"Produce / Revise Deliverable"| primary_producer
-    orchestrator -->|"Audit Quality"| quality_auditor
-    orchestrator -->|"Repair Cohesion"| cohesion_repairer
-    orchestrator -->|"Validate Technical Accuracy"| technical_validator
-    orchestrator -->|"Convert / Transform Output"| format_converter
-    orchestrator -->|"Compile Final Output"| output_compiler
-    orchestrator -->|"Navigate Project"| navigator
-    orchestrator -->|"Security Review"| security
-    orchestrator -->|"Code Hygiene Audit"| code_hygiene
-    orchestrator -->|"Adversarial Review"| adversarial
-    orchestrator -->|"Conflict Audit"| conflict_auditor
-    orchestrator -->|"Resolve Conflicts"| conflict_resolution
-    orchestrator -->|"Clean Up Artifacts"| cleanup
-    orchestrator -->|"Update Agent Docs"| agent_updater
-    orchestrator -->|"Refactor Agent Docs"| agent_refactor
-    orchestrator -->|"Cross-Repository Liaison"| repo_liaison
-    orchestrator -->|"Summarize Work Period"| work_summarizer
-    orchestrator -->|"Git Operations"| git_operations
-    orchestrator -.-> navigator
-    orchestrator -.-> security
-    orchestrator -.-> code_hygiene
-    orchestrator -.-> adversarial
-    orchestrator -.-> conflict_auditor
-    orchestrator -.-> conflict_resolution
-    orchestrator -.-> cleanup
-    orchestrator -.-> agent_updater
-    orchestrator -.-> agent_refactor
-    orchestrator -.-> repo_liaison
-    orchestrator -.-> git_operations
-    orchestrator -.-> work_summarizer
-    orchestrator -.-> primary_producer
-    orchestrator -.-> quality_auditor
-    orchestrator -.-> cohesion_repairer
-    orchestrator -.-> technical_validator
-    orchestrator -.-> format_converter
-    orchestrator -.-> output_compiler
-    orchestrator -.-> tool_doc_researcher
-    orchestrator -.-> auth_module_expert
-    orchestrator -.-> tasks_api_expert
-    navigator -->|"Return to Orchestrator"| orchestrator
-    security -->|"Return to Orchestrator"| orchestrator
-    code_hygiene -->|"Security Clearance (for Deletions)"| security
-    code_hygiene -->|"Cleanup Agent"| cleanup
-    code_hygiene -->|"Agent Refactor (Structural Violations)"| agent_refactor
-    code_hygiene -->|"Log Conflict"| conflict_auditor
-    code_hygiene -->|"Return to Orchestrator"| orchestrator
-    adversarial -->|"Return to Orchestrator"| orchestrator
     adversarial -->|"Audit for Conflicts"| conflict_auditor
-    conflict_auditor -->|"Return to Orchestrator"| orchestrator
-    conflict_auditor -->|"Update Agent Docs"| agent_updater
-    conflict_auditor -->|"Resolve Conflicts"| conflict_resolution
-    conflict_auditor -->|"Verify Source Drift"| technical_validator
-    conflict_auditor -.-> conflict_resolution
-    conflict_auditor -.-> agent_updater
-    conflict_auditor -.-> technical_validator
-    conflict_resolution -->|"Return to Orchestrator"| orchestrator
-    conflict_resolution -->|"Update Agent Docs"| agent_updater
-    cleanup -->|"Return to Orchestrator"| orchestrator
-    agent_updater -->|"Refactor Agent Docs"| agent_refactor
-    agent_updater -->|"Run Adversarial Review"| adversarial
-    agent_updater -->|"Run Conflict Audit"| conflict_auditor
-    agent_updater -->|"Return to Orchestrator"| orchestrator
-    agent_updater -.-> adversarial
-    agent_updater -.-> conflict_auditor
-    agent_updater -.-> agent_refactor
+    adversarial -->|"Return to Orchestrator"| orchestrator
     agent_refactor -->|"Run Conflict Audit"| conflict_auditor
     agent_refactor -->|"Return to Orchestrator"| orchestrator
     agent_refactor -.-> conflict_auditor
-    repo_liaison -->|"Return to Orchestrator"| orchestrator
-    repo_liaison -->|"Security Review for Cross-Repo Write"| security
-    repo_liaison -->|"Conflict Audit After Cross-Repo Change"| conflict_auditor
+    agent_updater -->|"Run Adversarial Review"| adversarial
+    agent_updater -->|"Refactor Agent Docs"| agent_refactor
+    agent_updater -->|"Run Conflict Audit"| conflict_auditor
+    agent_updater -->|"Return to Orchestrator"| orchestrator
+    agent_updater -.-> adversarial
+    agent_updater -.-> agent_refactor
+    agent_updater -.-> conflict_auditor
+    auth_module_expert -->|"Vet Brief Before Drafting"| adversarial
+    auth_module_expert -->|"Return to Orchestrator"| orchestrator
+    auth_module_expert -->|"Send to Primary Producer"| primary_producer
+    auth_module_expert -.-> adversarial
+    auth_module_expert -.-> primary_producer
+    cleanup -->|"Return to Orchestrator"| orchestrator
+    code_hygiene -->|"Agent Refactor (Structural Violations)"| agent_refactor
+    code_hygiene -->|"Cleanup Agent"| cleanup
+    code_hygiene -->|"Log Conflict"| conflict_auditor
+    code_hygiene -->|"Return to Orchestrator"| orchestrator
+    code_hygiene -->|"Security Clearance (for Deletions)"| security
+    cohesion_repairer -->|"Return to Orchestrator"| orchestrator
+    cohesion_repairer -->|"Quality Re-Check"| quality_auditor
+    cohesion_repairer -.-> quality_auditor
+    conflict_auditor -->|"Update Agent Docs"| agent_updater
+    conflict_auditor -->|"Resolve Conflicts"| conflict_resolution
+    conflict_auditor -->|"Return to Orchestrator"| orchestrator
+    conflict_auditor -->|"Verify Source Drift"| technical_validator
+    conflict_auditor -.-> agent_updater
+    conflict_auditor -.-> conflict_resolution
+    conflict_auditor -.-> technical_validator
+    conflict_resolution -->|"Update Agent Docs"| agent_updater
+    conflict_resolution -->|"Return to Orchestrator"| orchestrator
+    content_enricher -->|"Return to Orchestrator"| orchestrator
+    content_enricher -->|"Validate Enriched Content"| technical_validator
+    content_enricher -.-> primary_producer
+    content_enricher -.-> technical_validator
+    format_converter -->|"Return to Orchestrator"| orchestrator
+    format_converter -->|"Pass to Output Compiler"| output_compiler
+    format_converter -->|"Quality Check After Conversion"| quality_auditor
+    format_converter -.-> output_compiler
+    format_converter -.-> quality_auditor
+    git_operations -->|"Update Agent Docs"| agent_updater
+    git_operations -->|"Conflict Resolution"| conflict_resolution
     git_operations -->|"Return to Orchestrator"| orchestrator
     git_operations -->|"Security Review"| security
-    git_operations -->|"Conflict Resolution"| conflict_resolution
-    git_operations -->|"Update Agent Docs"| agent_updater
-    work_summarizer -->|"Verify Summary Accuracy"| technical_validator
+    navigator -->|"Return to Orchestrator"| orchestrator
+    orchestrator -->|"Adversarial Review"| adversarial
+    orchestrator -->|"Refactor Agent Docs"| agent_refactor
+    orchestrator -->|"Update Agent Docs"| agent_updater
+    orchestrator -->|"Clean Up Artifacts"| cleanup
+    orchestrator -->|"Code Hygiene Audit"| code_hygiene
+    orchestrator -->|"Repair Cohesion"| cohesion_repairer
+    orchestrator -->|"Conflict Audit"| conflict_auditor
+    orchestrator -->|"Resolve Conflicts"| conflict_resolution
+    orchestrator -->|"Convert / Transform Output"| format_converter
+    orchestrator -->|"Git Operations"| git_operations
+    orchestrator -->|"Navigate Project"| navigator
+    orchestrator -->|"Compile Final Output"| output_compiler
+    orchestrator -->|"Produce / Revise Deliverable"| primary_producer
+    orchestrator -->|"Audit Quality"| quality_auditor
+    orchestrator -->|"Cross-Repository Liaison"| repo_liaison
+    orchestrator -->|"Security Review"| security
+    orchestrator -->|"Validate Technical Accuracy"| technical_validator
+    orchestrator -->|"Summarize Work Period"| work_summarizer
+    orchestrator -.-> adversarial
+    orchestrator -.-> agent_refactor
+    orchestrator -.-> agent_updater
+    orchestrator -.-> auth_module_expert
+    orchestrator -.-> cleanup
+    orchestrator -.-> code_hygiene
+    orchestrator -.-> cohesion_repairer
+    orchestrator -.-> conflict_auditor
+    orchestrator -.-> conflict_resolution
+    orchestrator -.-> format_converter
+    orchestrator -.-> git_operations
+    orchestrator -.-> navigator
+    orchestrator -.-> output_compiler
+    orchestrator -.-> primary_producer
+    orchestrator -.-> quality_auditor
+    orchestrator -.-> repo_liaison
+    orchestrator -.-> security
+    orchestrator -.-> tasks_api_expert
+    orchestrator -.-> technical_validator
+    orchestrator -.-> tool_doc_researcher
+    orchestrator -.-> work_summarizer
+    output_compiler -->|"Convert Missing Components"| format_converter
+    output_compiler -->|"Return to Orchestrator"| orchestrator
+    output_compiler -->|"Validate Technical Accuracy"| technical_validator
+    output_compiler -.-> format_converter
+    output_compiler -.-> technical_validator
+    primary_producer -->|"Cohesion Audit"| cohesion_repairer
+    primary_producer -->|"Conflict Audit"| conflict_auditor
+    primary_producer -->|"Return to Orchestrator"| orchestrator
+    primary_producer -->|"Quality Audit"| quality_auditor
+    primary_producer -.-> cohesion_repairer
+    primary_producer -.-> conflict_auditor
+    primary_producer -.-> quality_auditor
+    quality_auditor -->|"Route Cohesion Failures"| cohesion_repairer
+    quality_auditor -->|"Return to Orchestrator"| orchestrator
+    quality_auditor -->|"Route Corrections to Primary Producer"| primary_producer
+    quality_auditor -.-> cohesion_repairer
+    quality_auditor -.-> primary_producer
+    repo_liaison -->|"Conflict Audit After Cross-Repo Change"| conflict_auditor
+    repo_liaison -->|"Return to Orchestrator"| orchestrator
+    repo_liaison -->|"Security Review for Cross-Repo Write"| security
+    security -->|"Return to Orchestrator"| orchestrator
+    tasks_api_expert -->|"Vet Brief Before Drafting"| adversarial
+    tasks_api_expert -->|"Return to Orchestrator"| orchestrator
+    tasks_api_expert -->|"Send to Primary Producer"| primary_producer
+    tasks_api_expert -.-> adversarial
+    tasks_api_expert -.-> primary_producer
+    technical_validator -->|"Log Conflict"| conflict_auditor
+    technical_validator -->|"Return to Orchestrator"| orchestrator
+    technical_validator -->|"Route Corrections to Primary Producer"| primary_producer
+    technical_validator -.-> conflict_auditor
+    technical_validator -.-> primary_producer
+    tool_doc_researcher -->|"Update Brief and Generated Docs"| agent_updater
+    tool_doc_researcher -->|"Return to Orchestrator"| orchestrator
     work_summarizer -->|"Run Adversarial Audit"| adversarial
     work_summarizer -->|"Run Conflict Audit"| conflict_auditor
     work_summarizer -->|"Return to Orchestrator"| orchestrator
-    work_summarizer -.-> technical_validator
+    work_summarizer -->|"Verify Summary Accuracy"| technical_validator
     work_summarizer -.-> adversarial
     work_summarizer -.-> conflict_auditor
-    primary_producer -->|"Cohesion Audit"| cohesion_repairer
-    primary_producer -->|"Quality Audit"| quality_auditor
-    primary_producer -->|"Conflict Audit"| conflict_auditor
-    primary_producer -->|"Return to Orchestrator"| orchestrator
-    primary_producer -.-> cohesion_repairer
-    primary_producer -.-> quality_auditor
-    primary_producer -.-> conflict_auditor
-    quality_auditor -->|"Route Corrections to Primary Producer"| primary_producer
-    quality_auditor -->|"Route Cohesion Failures"| cohesion_repairer
-    quality_auditor -->|"Return to Orchestrator"| orchestrator
-    quality_auditor -.-> primary_producer
-    quality_auditor -.-> cohesion_repairer
-    cohesion_repairer -->|"Quality Re-Check"| quality_auditor
-    cohesion_repairer -->|"Return to Orchestrator"| orchestrator
-    cohesion_repairer -.-> quality_auditor
-    technical_validator -->|"Route Corrections to Primary Producer"| primary_producer
-    technical_validator -->|"Log Conflict"| conflict_auditor
-    technical_validator -->|"Return to Orchestrator"| orchestrator
-    technical_validator -.-> primary_producer
-    technical_validator -.-> conflict_auditor
-    format_converter -->|"Pass to Output Compiler"| output_compiler
-    format_converter -->|"Quality Check After Conversion"| quality_auditor
-    format_converter -->|"Return to Orchestrator"| orchestrator
-    format_converter -.-> output_compiler
-    format_converter -.-> quality_auditor
-    output_compiler -->|"Convert Missing Components"| format_converter
-    output_compiler -->|"Validate Technical Accuracy"| technical_validator
-    output_compiler -->|"Return to Orchestrator"| orchestrator
-    output_compiler -.-> format_converter
-    output_compiler -.-> technical_validator
-    tool_doc_researcher -->|"Update Brief and Generated Docs"| agent_updater
-    tool_doc_researcher -->|"Return to Orchestrator"| orchestrator
-    auth_module_expert -->|"Vet Brief Before Drafting"| adversarial
-    auth_module_expert -->|"Send to Primary Producer"| primary_producer
-    auth_module_expert -->|"Return to Orchestrator"| orchestrator
-    auth_module_expert -.-> primary_producer
-    auth_module_expert -.-> adversarial
-    tasks_api_expert -->|"Vet Brief Before Drafting"| adversarial
-    tasks_api_expert -->|"Send to Primary Producer"| primary_producer
-    tasks_api_expert -->|"Return to Orchestrator"| orchestrator
-    tasks_api_expert -.-> primary_producer
-    tasks_api_expert -.-> adversarial
-    content_enricher -->|"Validate Enriched Content"| technical_validator
-    content_enricher -->|"Return to Orchestrator"| orchestrator
-    content_enricher -.-> primary_producer
-    content_enricher -.-> technical_validator
+    work_summarizer -.-> technical_validator
 ```
 
 ---
@@ -302,89 +302,89 @@ digraph "WebAppBackend Agent Team" {
     "technical-validator" [label="Technical Validator", fillcolor="#e8ffe8"];
     "tool-doc-researcher" [label="Tool Documentation Researcher", fillcolor="#ffe8e8"];
     "work-summarizer" [label="Work Summarizer", fillcolor="#e8ffe8"];
-    "orchestrator" -> "primary-producer" [style=solid, label="Produce / Revise Deliverable"];
-    "orchestrator" -> "quality-auditor" [style=solid, label="Audit Quality"];
-    "orchestrator" -> "cohesion-repairer" [style=solid, label="Repair Cohesion"];
-    "orchestrator" -> "technical-validator" [style=solid, label="Validate Technical Accuracy"];
-    "orchestrator" -> "format-converter" [style=solid, label="Convert / Transform Output"];
-    "orchestrator" -> "output-compiler" [style=solid, label="Compile Final Output"];
-    "orchestrator" -> "navigator" [style=solid, label="Navigate Project"];
-    "orchestrator" -> "security" [style=solid, label="Security Review"];
-    "orchestrator" -> "code-hygiene" [style=solid, label="Code Hygiene Audit"];
-    "orchestrator" -> "adversarial" [style=solid, label="Adversarial Review"];
-    "orchestrator" -> "conflict-auditor" [style=solid, label="Conflict Audit"];
-    "orchestrator" -> "conflict-resolution" [style=solid, label="Resolve Conflicts"];
-    "orchestrator" -> "cleanup" [style=solid, label="Clean Up Artifacts"];
-    "orchestrator" -> "agent-updater" [style=solid, label="Update Agent Docs"];
-    "orchestrator" -> "agent-refactor" [style=solid, label="Refactor Agent Docs"];
-    "orchestrator" -> "repo-liaison" [style=solid, label="Cross-Repository Liaison"];
-    "orchestrator" -> "work-summarizer" [style=solid, label="Summarize Work Period"];
-    "orchestrator" -> "git-operations" [style=solid, label="Git Operations"];
-    "orchestrator" -> "tool-doc-researcher" [style=dashed];
-    "orchestrator" -> "auth-module-expert" [style=dashed];
-    "orchestrator" -> "tasks-api-expert" [style=dashed];
-    "navigator" -> "orchestrator" [style=solid, label="Return to Orchestrator"];
-    "security" -> "orchestrator" [style=solid, label="Return to Orchestrator"];
-    "code-hygiene" -> "security" [style=solid, label="Security Clearance (for Deletions)"];
-    "code-hygiene" -> "cleanup" [style=solid, label="Cleanup Agent"];
-    "code-hygiene" -> "agent-refactor" [style=solid, label="Agent Refactor (Structural Violations)"];
-    "code-hygiene" -> "conflict-auditor" [style=solid, label="Log Conflict"];
-    "code-hygiene" -> "orchestrator" [style=solid, label="Return to Orchestrator"];
-    "adversarial" -> "orchestrator" [style=solid, label="Return to Orchestrator"];
     "adversarial" -> "conflict-auditor" [style=solid, label="Audit for Conflicts"];
-    "conflict-auditor" -> "orchestrator" [style=solid, label="Return to Orchestrator"];
-    "conflict-auditor" -> "agent-updater" [style=solid, label="Update Agent Docs"];
-    "conflict-auditor" -> "conflict-resolution" [style=solid, label="Resolve Conflicts"];
-    "conflict-auditor" -> "technical-validator" [style=solid, label="Verify Source Drift"];
-    "conflict-resolution" -> "orchestrator" [style=solid, label="Return to Orchestrator"];
-    "conflict-resolution" -> "agent-updater" [style=solid, label="Update Agent Docs"];
-    "cleanup" -> "orchestrator" [style=solid, label="Return to Orchestrator"];
-    "agent-updater" -> "agent-refactor" [style=solid, label="Refactor Agent Docs"];
-    "agent-updater" -> "adversarial" [style=solid, label="Run Adversarial Review"];
-    "agent-updater" -> "conflict-auditor" [style=solid, label="Run Conflict Audit"];
-    "agent-updater" -> "orchestrator" [style=solid, label="Return to Orchestrator"];
+    "adversarial" -> "orchestrator" [style=solid, label="Return to Orchestrator"];
     "agent-refactor" -> "conflict-auditor" [style=solid, label="Run Conflict Audit"];
     "agent-refactor" -> "orchestrator" [style=solid, label="Return to Orchestrator"];
-    "repo-liaison" -> "orchestrator" [style=solid, label="Return to Orchestrator"];
-    "repo-liaison" -> "security" [style=solid, label="Security Review for Cross-Repo Write"];
-    "repo-liaison" -> "conflict-auditor" [style=solid, label="Conflict Audit After Cross-Repo Change"];
+    "agent-updater" -> "adversarial" [style=solid, label="Run Adversarial Review"];
+    "agent-updater" -> "agent-refactor" [style=solid, label="Refactor Agent Docs"];
+    "agent-updater" -> "conflict-auditor" [style=solid, label="Run Conflict Audit"];
+    "agent-updater" -> "orchestrator" [style=solid, label="Return to Orchestrator"];
+    "auth-module-expert" -> "adversarial" [style=solid, label="Vet Brief Before Drafting"];
+    "auth-module-expert" -> "orchestrator" [style=solid, label="Return to Orchestrator"];
+    "auth-module-expert" -> "primary-producer" [style=solid, label="Send to Primary Producer"];
+    "cleanup" -> "orchestrator" [style=solid, label="Return to Orchestrator"];
+    "code-hygiene" -> "agent-refactor" [style=solid, label="Agent Refactor (Structural Violations)"];
+    "code-hygiene" -> "cleanup" [style=solid, label="Cleanup Agent"];
+    "code-hygiene" -> "conflict-auditor" [style=solid, label="Log Conflict"];
+    "code-hygiene" -> "orchestrator" [style=solid, label="Return to Orchestrator"];
+    "code-hygiene" -> "security" [style=solid, label="Security Clearance (for Deletions)"];
+    "cohesion-repairer" -> "orchestrator" [style=solid, label="Return to Orchestrator"];
+    "cohesion-repairer" -> "quality-auditor" [style=solid, label="Quality Re-Check"];
+    "conflict-auditor" -> "agent-updater" [style=solid, label="Update Agent Docs"];
+    "conflict-auditor" -> "conflict-resolution" [style=solid, label="Resolve Conflicts"];
+    "conflict-auditor" -> "orchestrator" [style=solid, label="Return to Orchestrator"];
+    "conflict-auditor" -> "technical-validator" [style=solid, label="Verify Source Drift"];
+    "conflict-resolution" -> "agent-updater" [style=solid, label="Update Agent Docs"];
+    "conflict-resolution" -> "orchestrator" [style=solid, label="Return to Orchestrator"];
+    "content-enricher" -> "orchestrator" [style=solid, label="Return to Orchestrator"];
+    "content-enricher" -> "technical-validator" [style=solid, label="Validate Enriched Content"];
+    "content-enricher" -> "primary-producer" [style=dashed];
+    "format-converter" -> "orchestrator" [style=solid, label="Return to Orchestrator"];
+    "format-converter" -> "output-compiler" [style=solid, label="Pass to Output Compiler"];
+    "format-converter" -> "quality-auditor" [style=solid, label="Quality Check After Conversion"];
+    "git-operations" -> "agent-updater" [style=solid, label="Update Agent Docs"];
+    "git-operations" -> "conflict-resolution" [style=solid, label="Conflict Resolution"];
     "git-operations" -> "orchestrator" [style=solid, label="Return to Orchestrator"];
     "git-operations" -> "security" [style=solid, label="Security Review"];
-    "git-operations" -> "conflict-resolution" [style=solid, label="Conflict Resolution"];
-    "git-operations" -> "agent-updater" [style=solid, label="Update Agent Docs"];
-    "work-summarizer" -> "technical-validator" [style=solid, label="Verify Summary Accuracy"];
+    "navigator" -> "orchestrator" [style=solid, label="Return to Orchestrator"];
+    "orchestrator" -> "adversarial" [style=solid, label="Adversarial Review"];
+    "orchestrator" -> "agent-refactor" [style=solid, label="Refactor Agent Docs"];
+    "orchestrator" -> "agent-updater" [style=solid, label="Update Agent Docs"];
+    "orchestrator" -> "cleanup" [style=solid, label="Clean Up Artifacts"];
+    "orchestrator" -> "code-hygiene" [style=solid, label="Code Hygiene Audit"];
+    "orchestrator" -> "cohesion-repairer" [style=solid, label="Repair Cohesion"];
+    "orchestrator" -> "conflict-auditor" [style=solid, label="Conflict Audit"];
+    "orchestrator" -> "conflict-resolution" [style=solid, label="Resolve Conflicts"];
+    "orchestrator" -> "format-converter" [style=solid, label="Convert / Transform Output"];
+    "orchestrator" -> "git-operations" [style=solid, label="Git Operations"];
+    "orchestrator" -> "navigator" [style=solid, label="Navigate Project"];
+    "orchestrator" -> "output-compiler" [style=solid, label="Compile Final Output"];
+    "orchestrator" -> "primary-producer" [style=solid, label="Produce / Revise Deliverable"];
+    "orchestrator" -> "quality-auditor" [style=solid, label="Audit Quality"];
+    "orchestrator" -> "repo-liaison" [style=solid, label="Cross-Repository Liaison"];
+    "orchestrator" -> "security" [style=solid, label="Security Review"];
+    "orchestrator" -> "technical-validator" [style=solid, label="Validate Technical Accuracy"];
+    "orchestrator" -> "work-summarizer" [style=solid, label="Summarize Work Period"];
+    "orchestrator" -> "auth-module-expert" [style=dashed];
+    "orchestrator" -> "tasks-api-expert" [style=dashed];
+    "orchestrator" -> "tool-doc-researcher" [style=dashed];
+    "output-compiler" -> "format-converter" [style=solid, label="Convert Missing Components"];
+    "output-compiler" -> "orchestrator" [style=solid, label="Return to Orchestrator"];
+    "output-compiler" -> "technical-validator" [style=solid, label="Validate Technical Accuracy"];
+    "primary-producer" -> "cohesion-repairer" [style=solid, label="Cohesion Audit"];
+    "primary-producer" -> "conflict-auditor" [style=solid, label="Conflict Audit"];
+    "primary-producer" -> "orchestrator" [style=solid, label="Return to Orchestrator"];
+    "primary-producer" -> "quality-auditor" [style=solid, label="Quality Audit"];
+    "quality-auditor" -> "cohesion-repairer" [style=solid, label="Route Cohesion Failures"];
+    "quality-auditor" -> "orchestrator" [style=solid, label="Return to Orchestrator"];
+    "quality-auditor" -> "primary-producer" [style=solid, label="Route Corrections to Primary Producer"];
+    "repo-liaison" -> "conflict-auditor" [style=solid, label="Conflict Audit After Cross-Repo Change"];
+    "repo-liaison" -> "orchestrator" [style=solid, label="Return to Orchestrator"];
+    "repo-liaison" -> "security" [style=solid, label="Security Review for Cross-Repo Write"];
+    "security" -> "orchestrator" [style=solid, label="Return to Orchestrator"];
+    "tasks-api-expert" -> "adversarial" [style=solid, label="Vet Brief Before Drafting"];
+    "tasks-api-expert" -> "orchestrator" [style=solid, label="Return to Orchestrator"];
+    "tasks-api-expert" -> "primary-producer" [style=solid, label="Send to Primary Producer"];
+    "technical-validator" -> "conflict-auditor" [style=solid, label="Log Conflict"];
+    "technical-validator" -> "orchestrator" [style=solid, label="Return to Orchestrator"];
+    "technical-validator" -> "primary-producer" [style=solid, label="Route Corrections to Primary Producer"];
+    "tool-doc-researcher" -> "agent-updater" [style=solid, label="Update Brief and Generated Docs"];
+    "tool-doc-researcher" -> "orchestrator" [style=solid, label="Return to Orchestrator"];
     "work-summarizer" -> "adversarial" [style=solid, label="Run Adversarial Audit"];
     "work-summarizer" -> "conflict-auditor" [style=solid, label="Run Conflict Audit"];
     "work-summarizer" -> "orchestrator" [style=solid, label="Return to Orchestrator"];
-    "primary-producer" -> "cohesion-repairer" [style=solid, label="Cohesion Audit"];
-    "primary-producer" -> "quality-auditor" [style=solid, label="Quality Audit"];
-    "primary-producer" -> "conflict-auditor" [style=solid, label="Conflict Audit"];
-    "primary-producer" -> "orchestrator" [style=solid, label="Return to Orchestrator"];
-    "quality-auditor" -> "primary-producer" [style=solid, label="Route Corrections to Primary Producer"];
-    "quality-auditor" -> "cohesion-repairer" [style=solid, label="Route Cohesion Failures"];
-    "quality-auditor" -> "orchestrator" [style=solid, label="Return to Orchestrator"];
-    "cohesion-repairer" -> "quality-auditor" [style=solid, label="Quality Re-Check"];
-    "cohesion-repairer" -> "orchestrator" [style=solid, label="Return to Orchestrator"];
-    "technical-validator" -> "primary-producer" [style=solid, label="Route Corrections to Primary Producer"];
-    "technical-validator" -> "conflict-auditor" [style=solid, label="Log Conflict"];
-    "technical-validator" -> "orchestrator" [style=solid, label="Return to Orchestrator"];
-    "format-converter" -> "output-compiler" [style=solid, label="Pass to Output Compiler"];
-    "format-converter" -> "quality-auditor" [style=solid, label="Quality Check After Conversion"];
-    "format-converter" -> "orchestrator" [style=solid, label="Return to Orchestrator"];
-    "output-compiler" -> "format-converter" [style=solid, label="Convert Missing Components"];
-    "output-compiler" -> "technical-validator" [style=solid, label="Validate Technical Accuracy"];
-    "output-compiler" -> "orchestrator" [style=solid, label="Return to Orchestrator"];
-    "tool-doc-researcher" -> "agent-updater" [style=solid, label="Update Brief and Generated Docs"];
-    "tool-doc-researcher" -> "orchestrator" [style=solid, label="Return to Orchestrator"];
-    "auth-module-expert" -> "adversarial" [style=solid, label="Vet Brief Before Drafting"];
-    "auth-module-expert" -> "primary-producer" [style=solid, label="Send to Primary Producer"];
-    "auth-module-expert" -> "orchestrator" [style=solid, label="Return to Orchestrator"];
-    "tasks-api-expert" -> "adversarial" [style=solid, label="Vet Brief Before Drafting"];
-    "tasks-api-expert" -> "primary-producer" [style=solid, label="Send to Primary Producer"];
-    "tasks-api-expert" -> "orchestrator" [style=solid, label="Return to Orchestrator"];
-    "content-enricher" -> "technical-validator" [style=solid, label="Validate Enriched Content"];
-    "content-enricher" -> "orchestrator" [style=solid, label="Return to Orchestrator"];
-    "content-enricher" -> "primary-producer" [style=dashed];
+    "work-summarizer" -> "technical-validator" [style=solid, label="Verify Summary Accuracy"];
 }
 ```
 
@@ -641,52 +641,322 @@ digraph "WebAppBackend Agent Team" {
   },
   "edges": [
     {
-      "source": "orchestrator",
+      "source": "adversarial",
+      "target": "conflict-auditor",
+      "edge_type": "handoff",
+      "label": "Audit for Conflicts"
+    },
+    {
+      "source": "adversarial",
+      "target": "orchestrator",
+      "edge_type": "handoff",
+      "label": "Return to Orchestrator"
+    },
+    {
+      "source": "agent-refactor",
+      "target": "conflict-auditor",
+      "edge_type": "handoff",
+      "label": "Run Conflict Audit"
+    },
+    {
+      "source": "agent-refactor",
+      "target": "orchestrator",
+      "edge_type": "handoff",
+      "label": "Return to Orchestrator"
+    },
+    {
+      "source": "agent-refactor",
+      "target": "conflict-auditor",
+      "edge_type": "agents-list",
+      "label": null
+    },
+    {
+      "source": "agent-updater",
+      "target": "adversarial",
+      "edge_type": "handoff",
+      "label": "Run Adversarial Review"
+    },
+    {
+      "source": "agent-updater",
+      "target": "agent-refactor",
+      "edge_type": "handoff",
+      "label": "Refactor Agent Docs"
+    },
+    {
+      "source": "agent-updater",
+      "target": "conflict-auditor",
+      "edge_type": "handoff",
+      "label": "Run Conflict Audit"
+    },
+    {
+      "source": "agent-updater",
+      "target": "orchestrator",
+      "edge_type": "handoff",
+      "label": "Return to Orchestrator"
+    },
+    {
+      "source": "agent-updater",
+      "target": "adversarial",
+      "edge_type": "agents-list",
+      "label": null
+    },
+    {
+      "source": "agent-updater",
+      "target": "agent-refactor",
+      "edge_type": "agents-list",
+      "label": null
+    },
+    {
+      "source": "agent-updater",
+      "target": "conflict-auditor",
+      "edge_type": "agents-list",
+      "label": null
+    },
+    {
+      "source": "auth-module-expert",
+      "target": "adversarial",
+      "edge_type": "handoff",
+      "label": "Vet Brief Before Drafting"
+    },
+    {
+      "source": "auth-module-expert",
+      "target": "orchestrator",
+      "edge_type": "handoff",
+      "label": "Return to Orchestrator"
+    },
+    {
+      "source": "auth-module-expert",
       "target": "primary-producer",
       "edge_type": "handoff",
-      "label": "Produce / Revise Deliverable"
+      "label": "Send to Primary Producer"
     },
     {
-      "source": "orchestrator",
+      "source": "auth-module-expert",
+      "target": "adversarial",
+      "edge_type": "agents-list",
+      "label": null
+    },
+    {
+      "source": "auth-module-expert",
+      "target": "primary-producer",
+      "edge_type": "agents-list",
+      "label": null
+    },
+    {
+      "source": "cleanup",
+      "target": "orchestrator",
+      "edge_type": "handoff",
+      "label": "Return to Orchestrator"
+    },
+    {
+      "source": "code-hygiene",
+      "target": "agent-refactor",
+      "edge_type": "handoff",
+      "label": "Agent Refactor (Structural Violations)"
+    },
+    {
+      "source": "code-hygiene",
+      "target": "cleanup",
+      "edge_type": "handoff",
+      "label": "Cleanup Agent"
+    },
+    {
+      "source": "code-hygiene",
+      "target": "conflict-auditor",
+      "edge_type": "handoff",
+      "label": "Log Conflict"
+    },
+    {
+      "source": "code-hygiene",
+      "target": "orchestrator",
+      "edge_type": "handoff",
+      "label": "Return to Orchestrator"
+    },
+    {
+      "source": "code-hygiene",
+      "target": "security",
+      "edge_type": "handoff",
+      "label": "Security Clearance (for Deletions)"
+    },
+    {
+      "source": "cohesion-repairer",
+      "target": "orchestrator",
+      "edge_type": "handoff",
+      "label": "Return to Orchestrator"
+    },
+    {
+      "source": "cohesion-repairer",
       "target": "quality-auditor",
       "edge_type": "handoff",
-      "label": "Audit Quality"
+      "label": "Quality Re-Check"
     },
     {
-      "source": "orchestrator",
-      "target": "cohesion-repairer",
+      "source": "cohesion-repairer",
+      "target": "quality-auditor",
+      "edge_type": "agents-list",
+      "label": null
+    },
+    {
+      "source": "conflict-auditor",
+      "target": "agent-updater",
       "edge_type": "handoff",
-      "label": "Repair Cohesion"
+      "label": "Update Agent Docs"
     },
     {
-      "source": "orchestrator",
+      "source": "conflict-auditor",
+      "target": "conflict-resolution",
+      "edge_type": "handoff",
+      "label": "Resolve Conflicts"
+    },
+    {
+      "source": "conflict-auditor",
+      "target": "orchestrator",
+      "edge_type": "handoff",
+      "label": "Return to Orchestrator"
+    },
+    {
+      "source": "conflict-auditor",
       "target": "technical-validator",
       "edge_type": "handoff",
-      "label": "Validate Technical Accuracy"
+      "label": "Verify Source Drift"
     },
     {
-      "source": "orchestrator",
-      "target": "format-converter",
+      "source": "conflict-auditor",
+      "target": "agent-updater",
+      "edge_type": "agents-list",
+      "label": null
+    },
+    {
+      "source": "conflict-auditor",
+      "target": "conflict-resolution",
+      "edge_type": "agents-list",
+      "label": null
+    },
+    {
+      "source": "conflict-auditor",
+      "target": "technical-validator",
+      "edge_type": "agents-list",
+      "label": null
+    },
+    {
+      "source": "conflict-resolution",
+      "target": "agent-updater",
       "edge_type": "handoff",
-      "label": "Convert / Transform Output"
+      "label": "Update Agent Docs"
     },
     {
-      "source": "orchestrator",
+      "source": "conflict-resolution",
+      "target": "orchestrator",
+      "edge_type": "handoff",
+      "label": "Return to Orchestrator"
+    },
+    {
+      "source": "content-enricher",
+      "target": "orchestrator",
+      "edge_type": "handoff",
+      "label": "Return to Orchestrator"
+    },
+    {
+      "source": "content-enricher",
+      "target": "technical-validator",
+      "edge_type": "handoff",
+      "label": "Validate Enriched Content"
+    },
+    {
+      "source": "content-enricher",
+      "target": "primary-producer",
+      "edge_type": "agents-list",
+      "label": null
+    },
+    {
+      "source": "content-enricher",
+      "target": "technical-validator",
+      "edge_type": "agents-list",
+      "label": null
+    },
+    {
+      "source": "format-converter",
+      "target": "orchestrator",
+      "edge_type": "handoff",
+      "label": "Return to Orchestrator"
+    },
+    {
+      "source": "format-converter",
       "target": "output-compiler",
       "edge_type": "handoff",
-      "label": "Compile Final Output"
+      "label": "Pass to Output Compiler"
     },
     {
-      "source": "orchestrator",
-      "target": "navigator",
+      "source": "format-converter",
+      "target": "quality-auditor",
       "edge_type": "handoff",
-      "label": "Navigate Project"
+      "label": "Quality Check After Conversion"
     },
     {
-      "source": "orchestrator",
+      "source": "format-converter",
+      "target": "output-compiler",
+      "edge_type": "agents-list",
+      "label": null
+    },
+    {
+      "source": "format-converter",
+      "target": "quality-auditor",
+      "edge_type": "agents-list",
+      "label": null
+    },
+    {
+      "source": "git-operations",
+      "target": "agent-updater",
+      "edge_type": "handoff",
+      "label": "Update Agent Docs"
+    },
+    {
+      "source": "git-operations",
+      "target": "conflict-resolution",
+      "edge_type": "handoff",
+      "label": "Conflict Resolution"
+    },
+    {
+      "source": "git-operations",
+      "target": "orchestrator",
+      "edge_type": "handoff",
+      "label": "Return to Orchestrator"
+    },
+    {
+      "source": "git-operations",
       "target": "security",
       "edge_type": "handoff",
       "label": "Security Review"
+    },
+    {
+      "source": "navigator",
+      "target": "orchestrator",
+      "edge_type": "handoff",
+      "label": "Return to Orchestrator"
+    },
+    {
+      "source": "orchestrator",
+      "target": "adversarial",
+      "edge_type": "handoff",
+      "label": "Adversarial Review"
+    },
+    {
+      "source": "orchestrator",
+      "target": "agent-refactor",
+      "edge_type": "handoff",
+      "label": "Refactor Agent Docs"
+    },
+    {
+      "source": "orchestrator",
+      "target": "agent-updater",
+      "edge_type": "handoff",
+      "label": "Update Agent Docs"
+    },
+    {
+      "source": "orchestrator",
+      "target": "cleanup",
+      "edge_type": "handoff",
+      "label": "Clean Up Artifacts"
     },
     {
       "source": "orchestrator",
@@ -696,9 +966,9 @@ digraph "WebAppBackend Agent Team" {
     },
     {
       "source": "orchestrator",
-      "target": "adversarial",
+      "target": "cohesion-repairer",
       "edge_type": "handoff",
-      "label": "Adversarial Review"
+      "label": "Repair Cohesion"
     },
     {
       "source": "orchestrator",
@@ -714,33 +984,9 @@ digraph "WebAppBackend Agent Team" {
     },
     {
       "source": "orchestrator",
-      "target": "cleanup",
+      "target": "format-converter",
       "edge_type": "handoff",
-      "label": "Clean Up Artifacts"
-    },
-    {
-      "source": "orchestrator",
-      "target": "agent-updater",
-      "edge_type": "handoff",
-      "label": "Update Agent Docs"
-    },
-    {
-      "source": "orchestrator",
-      "target": "agent-refactor",
-      "edge_type": "handoff",
-      "label": "Refactor Agent Docs"
-    },
-    {
-      "source": "orchestrator",
-      "target": "repo-liaison",
-      "edge_type": "handoff",
-      "label": "Cross-Repository Liaison"
-    },
-    {
-      "source": "orchestrator",
-      "target": "work-summarizer",
-      "edge_type": "handoff",
-      "label": "Summarize Work Period"
+      "label": "Convert / Transform Output"
     },
     {
       "source": "orchestrator",
@@ -751,12 +997,78 @@ digraph "WebAppBackend Agent Team" {
     {
       "source": "orchestrator",
       "target": "navigator",
+      "edge_type": "handoff",
+      "label": "Navigate Project"
+    },
+    {
+      "source": "orchestrator",
+      "target": "output-compiler",
+      "edge_type": "handoff",
+      "label": "Compile Final Output"
+    },
+    {
+      "source": "orchestrator",
+      "target": "primary-producer",
+      "edge_type": "handoff",
+      "label": "Produce / Revise Deliverable"
+    },
+    {
+      "source": "orchestrator",
+      "target": "quality-auditor",
+      "edge_type": "handoff",
+      "label": "Audit Quality"
+    },
+    {
+      "source": "orchestrator",
+      "target": "repo-liaison",
+      "edge_type": "handoff",
+      "label": "Cross-Repository Liaison"
+    },
+    {
+      "source": "orchestrator",
+      "target": "security",
+      "edge_type": "handoff",
+      "label": "Security Review"
+    },
+    {
+      "source": "orchestrator",
+      "target": "technical-validator",
+      "edge_type": "handoff",
+      "label": "Validate Technical Accuracy"
+    },
+    {
+      "source": "orchestrator",
+      "target": "work-summarizer",
+      "edge_type": "handoff",
+      "label": "Summarize Work Period"
+    },
+    {
+      "source": "orchestrator",
+      "target": "adversarial",
       "edge_type": "agents-list",
       "label": null
     },
     {
       "source": "orchestrator",
-      "target": "security",
+      "target": "agent-refactor",
+      "edge_type": "agents-list",
+      "label": null
+    },
+    {
+      "source": "orchestrator",
+      "target": "agent-updater",
+      "edge_type": "agents-list",
+      "label": null
+    },
+    {
+      "source": "orchestrator",
+      "target": "auth-module-expert",
+      "edge_type": "agents-list",
+      "label": null
+    },
+    {
+      "source": "orchestrator",
+      "target": "cleanup",
       "edge_type": "agents-list",
       "label": null
     },
@@ -768,7 +1080,7 @@ digraph "WebAppBackend Agent Team" {
     },
     {
       "source": "orchestrator",
-      "target": "adversarial",
+      "target": "cohesion-repairer",
       "edge_type": "agents-list",
       "label": null
     },
@@ -786,25 +1098,7 @@ digraph "WebAppBackend Agent Team" {
     },
     {
       "source": "orchestrator",
-      "target": "cleanup",
-      "edge_type": "agents-list",
-      "label": null
-    },
-    {
-      "source": "orchestrator",
-      "target": "agent-updater",
-      "edge_type": "agents-list",
-      "label": null
-    },
-    {
-      "source": "orchestrator",
-      "target": "agent-refactor",
-      "edge_type": "agents-list",
-      "label": null
-    },
-    {
-      "source": "orchestrator",
-      "target": "repo-liaison",
+      "target": "format-converter",
       "edge_type": "agents-list",
       "label": null
     },
@@ -816,7 +1110,13 @@ digraph "WebAppBackend Agent Team" {
     },
     {
       "source": "orchestrator",
-      "target": "work-summarizer",
+      "target": "navigator",
+      "edge_type": "agents-list",
+      "label": null
+    },
+    {
+      "source": "orchestrator",
+      "target": "output-compiler",
       "edge_type": "agents-list",
       "label": null
     },
@@ -834,25 +1134,25 @@ digraph "WebAppBackend Agent Team" {
     },
     {
       "source": "orchestrator",
-      "target": "cohesion-repairer",
+      "target": "repo-liaison",
+      "edge_type": "agents-list",
+      "label": null
+    },
+    {
+      "source": "orchestrator",
+      "target": "security",
+      "edge_type": "agents-list",
+      "label": null
+    },
+    {
+      "source": "orchestrator",
+      "target": "tasks-api-expert",
       "edge_type": "agents-list",
       "label": null
     },
     {
       "source": "orchestrator",
       "target": "technical-validator",
-      "edge_type": "agents-list",
-      "label": null
-    },
-    {
-      "source": "orchestrator",
-      "target": "format-converter",
-      "edge_type": "agents-list",
-      "label": null
-    },
-    {
-      "source": "orchestrator",
-      "target": "output-compiler",
       "edge_type": "agents-list",
       "label": null
     },
@@ -864,189 +1164,117 @@ digraph "WebAppBackend Agent Team" {
     },
     {
       "source": "orchestrator",
-      "target": "auth-module-expert",
+      "target": "work-summarizer",
       "edge_type": "agents-list",
       "label": null
     },
     {
-      "source": "orchestrator",
-      "target": "tasks-api-expert",
-      "edge_type": "agents-list",
-      "label": null
+      "source": "output-compiler",
+      "target": "format-converter",
+      "edge_type": "handoff",
+      "label": "Convert Missing Components"
     },
     {
-      "source": "navigator",
+      "source": "output-compiler",
       "target": "orchestrator",
       "edge_type": "handoff",
       "label": "Return to Orchestrator"
     },
     {
-      "source": "security",
-      "target": "orchestrator",
-      "edge_type": "handoff",
-      "label": "Return to Orchestrator"
-    },
-    {
-      "source": "code-hygiene",
-      "target": "security",
-      "edge_type": "handoff",
-      "label": "Security Clearance (for Deletions)"
-    },
-    {
-      "source": "code-hygiene",
-      "target": "cleanup",
-      "edge_type": "handoff",
-      "label": "Cleanup Agent"
-    },
-    {
-      "source": "code-hygiene",
-      "target": "agent-refactor",
-      "edge_type": "handoff",
-      "label": "Agent Refactor (Structural Violations)"
-    },
-    {
-      "source": "code-hygiene",
-      "target": "conflict-auditor",
-      "edge_type": "handoff",
-      "label": "Log Conflict"
-    },
-    {
-      "source": "code-hygiene",
-      "target": "orchestrator",
-      "edge_type": "handoff",
-      "label": "Return to Orchestrator"
-    },
-    {
-      "source": "adversarial",
-      "target": "orchestrator",
-      "edge_type": "handoff",
-      "label": "Return to Orchestrator"
-    },
-    {
-      "source": "adversarial",
-      "target": "conflict-auditor",
-      "edge_type": "handoff",
-      "label": "Audit for Conflicts"
-    },
-    {
-      "source": "conflict-auditor",
-      "target": "orchestrator",
-      "edge_type": "handoff",
-      "label": "Return to Orchestrator"
-    },
-    {
-      "source": "conflict-auditor",
-      "target": "agent-updater",
-      "edge_type": "handoff",
-      "label": "Update Agent Docs"
-    },
-    {
-      "source": "conflict-auditor",
-      "target": "conflict-resolution",
-      "edge_type": "handoff",
-      "label": "Resolve Conflicts"
-    },
-    {
-      "source": "conflict-auditor",
+      "source": "output-compiler",
       "target": "technical-validator",
       "edge_type": "handoff",
-      "label": "Verify Source Drift"
+      "label": "Validate Technical Accuracy"
     },
     {
-      "source": "conflict-auditor",
-      "target": "conflict-resolution",
+      "source": "output-compiler",
+      "target": "format-converter",
       "edge_type": "agents-list",
       "label": null
     },
     {
-      "source": "conflict-auditor",
-      "target": "agent-updater",
-      "edge_type": "agents-list",
-      "label": null
-    },
-    {
-      "source": "conflict-auditor",
+      "source": "output-compiler",
       "target": "technical-validator",
       "edge_type": "agents-list",
       "label": null
     },
     {
-      "source": "conflict-resolution",
+      "source": "primary-producer",
+      "target": "cohesion-repairer",
+      "edge_type": "handoff",
+      "label": "Cohesion Audit"
+    },
+    {
+      "source": "primary-producer",
+      "target": "conflict-auditor",
+      "edge_type": "handoff",
+      "label": "Conflict Audit"
+    },
+    {
+      "source": "primary-producer",
       "target": "orchestrator",
       "edge_type": "handoff",
       "label": "Return to Orchestrator"
     },
     {
-      "source": "conflict-resolution",
-      "target": "agent-updater",
+      "source": "primary-producer",
+      "target": "quality-auditor",
       "edge_type": "handoff",
-      "label": "Update Agent Docs"
+      "label": "Quality Audit"
     },
     {
-      "source": "cleanup",
+      "source": "primary-producer",
+      "target": "cohesion-repairer",
+      "edge_type": "agents-list",
+      "label": null
+    },
+    {
+      "source": "primary-producer",
+      "target": "conflict-auditor",
+      "edge_type": "agents-list",
+      "label": null
+    },
+    {
+      "source": "primary-producer",
+      "target": "quality-auditor",
+      "edge_type": "agents-list",
+      "label": null
+    },
+    {
+      "source": "quality-auditor",
+      "target": "cohesion-repairer",
+      "edge_type": "handoff",
+      "label": "Route Cohesion Failures"
+    },
+    {
+      "source": "quality-auditor",
       "target": "orchestrator",
       "edge_type": "handoff",
       "label": "Return to Orchestrator"
     },
     {
-      "source": "agent-updater",
-      "target": "agent-refactor",
+      "source": "quality-auditor",
+      "target": "primary-producer",
       "edge_type": "handoff",
-      "label": "Refactor Agent Docs"
+      "label": "Route Corrections to Primary Producer"
     },
     {
-      "source": "agent-updater",
-      "target": "adversarial",
-      "edge_type": "handoff",
-      "label": "Run Adversarial Review"
-    },
-    {
-      "source": "agent-updater",
-      "target": "conflict-auditor",
-      "edge_type": "handoff",
-      "label": "Run Conflict Audit"
-    },
-    {
-      "source": "agent-updater",
-      "target": "orchestrator",
-      "edge_type": "handoff",
-      "label": "Return to Orchestrator"
-    },
-    {
-      "source": "agent-updater",
-      "target": "adversarial",
+      "source": "quality-auditor",
+      "target": "cohesion-repairer",
       "edge_type": "agents-list",
       "label": null
     },
     {
-      "source": "agent-updater",
-      "target": "conflict-auditor",
+      "source": "quality-auditor",
+      "target": "primary-producer",
       "edge_type": "agents-list",
       "label": null
     },
     {
-      "source": "agent-updater",
-      "target": "agent-refactor",
-      "edge_type": "agents-list",
-      "label": null
-    },
-    {
-      "source": "agent-refactor",
+      "source": "repo-liaison",
       "target": "conflict-auditor",
       "edge_type": "handoff",
-      "label": "Run Conflict Audit"
-    },
-    {
-      "source": "agent-refactor",
-      "target": "orchestrator",
-      "edge_type": "handoff",
-      "label": "Return to Orchestrator"
-    },
-    {
-      "source": "agent-refactor",
-      "target": "conflict-auditor",
-      "edge_type": "agents-list",
-      "label": null
+      "label": "Conflict Audit After Cross-Repo Change"
     },
     {
       "source": "repo-liaison",
@@ -1061,40 +1289,82 @@ digraph "WebAppBackend Agent Team" {
       "label": "Security Review for Cross-Repo Write"
     },
     {
-      "source": "repo-liaison",
-      "target": "conflict-auditor",
-      "edge_type": "handoff",
-      "label": "Conflict Audit After Cross-Repo Change"
-    },
-    {
-      "source": "git-operations",
+      "source": "security",
       "target": "orchestrator",
       "edge_type": "handoff",
       "label": "Return to Orchestrator"
     },
     {
-      "source": "git-operations",
-      "target": "security",
+      "source": "tasks-api-expert",
+      "target": "adversarial",
       "edge_type": "handoff",
-      "label": "Security Review"
+      "label": "Vet Brief Before Drafting"
     },
     {
-      "source": "git-operations",
-      "target": "conflict-resolution",
+      "source": "tasks-api-expert",
+      "target": "orchestrator",
       "edge_type": "handoff",
-      "label": "Conflict Resolution"
+      "label": "Return to Orchestrator"
     },
     {
-      "source": "git-operations",
+      "source": "tasks-api-expert",
+      "target": "primary-producer",
+      "edge_type": "handoff",
+      "label": "Send to Primary Producer"
+    },
+    {
+      "source": "tasks-api-expert",
+      "target": "adversarial",
+      "edge_type": "agents-list",
+      "label": null
+    },
+    {
+      "source": "tasks-api-expert",
+      "target": "primary-producer",
+      "edge_type": "agents-list",
+      "label": null
+    },
+    {
+      "source": "technical-validator",
+      "target": "conflict-auditor",
+      "edge_type": "handoff",
+      "label": "Log Conflict"
+    },
+    {
+      "source": "technical-validator",
+      "target": "orchestrator",
+      "edge_type": "handoff",
+      "label": "Return to Orchestrator"
+    },
+    {
+      "source": "technical-validator",
+      "target": "primary-producer",
+      "edge_type": "handoff",
+      "label": "Route Corrections to Primary Producer"
+    },
+    {
+      "source": "technical-validator",
+      "target": "conflict-auditor",
+      "edge_type": "agents-list",
+      "label": null
+    },
+    {
+      "source": "technical-validator",
+      "target": "primary-producer",
+      "edge_type": "agents-list",
+      "label": null
+    },
+    {
+      "source": "tool-doc-researcher",
       "target": "agent-updater",
       "edge_type": "handoff",
-      "label": "Update Agent Docs"
+      "label": "Update Brief and Generated Docs"
     },
     {
-      "source": "work-summarizer",
-      "target": "technical-validator",
+      "source": "tool-doc-researcher",
+      "target": "orchestrator",
       "edge_type": "handoff",
-      "label": "Verify Summary Accuracy"
+      "label": "Return to Orchestrator"
     },
     {
       "source": "work-summarizer",
@@ -1117,8 +1387,8 @@ digraph "WebAppBackend Agent Team" {
     {
       "source": "work-summarizer",
       "target": "technical-validator",
-      "edge_type": "agents-list",
-      "label": null
+      "edge_type": "handoff",
+      "label": "Verify Summary Accuracy"
     },
     {
       "source": "work-summarizer",
@@ -1133,283 +1403,75 @@ digraph "WebAppBackend Agent Team" {
       "label": null
     },
     {
-      "source": "primary-producer",
-      "target": "cohesion-repairer",
-      "edge_type": "handoff",
-      "label": "Cohesion Audit"
-    },
-    {
-      "source": "primary-producer",
-      "target": "quality-auditor",
-      "edge_type": "handoff",
-      "label": "Quality Audit"
-    },
-    {
-      "source": "primary-producer",
-      "target": "conflict-auditor",
-      "edge_type": "handoff",
-      "label": "Conflict Audit"
-    },
-    {
-      "source": "primary-producer",
-      "target": "orchestrator",
-      "edge_type": "handoff",
-      "label": "Return to Orchestrator"
-    },
-    {
-      "source": "primary-producer",
-      "target": "cohesion-repairer",
-      "edge_type": "agents-list",
-      "label": null
-    },
-    {
-      "source": "primary-producer",
-      "target": "quality-auditor",
-      "edge_type": "agents-list",
-      "label": null
-    },
-    {
-      "source": "primary-producer",
-      "target": "conflict-auditor",
-      "edge_type": "agents-list",
-      "label": null
-    },
-    {
-      "source": "quality-auditor",
-      "target": "primary-producer",
-      "edge_type": "handoff",
-      "label": "Route Corrections to Primary Producer"
-    },
-    {
-      "source": "quality-auditor",
-      "target": "cohesion-repairer",
-      "edge_type": "handoff",
-      "label": "Route Cohesion Failures"
-    },
-    {
-      "source": "quality-auditor",
-      "target": "orchestrator",
-      "edge_type": "handoff",
-      "label": "Return to Orchestrator"
-    },
-    {
-      "source": "quality-auditor",
-      "target": "primary-producer",
-      "edge_type": "agents-list",
-      "label": null
-    },
-    {
-      "source": "quality-auditor",
-      "target": "cohesion-repairer",
-      "edge_type": "agents-list",
-      "label": null
-    },
-    {
-      "source": "cohesion-repairer",
-      "target": "quality-auditor",
-      "edge_type": "handoff",
-      "label": "Quality Re-Check"
-    },
-    {
-      "source": "cohesion-repairer",
-      "target": "orchestrator",
-      "edge_type": "handoff",
-      "label": "Return to Orchestrator"
-    },
-    {
-      "source": "cohesion-repairer",
-      "target": "quality-auditor",
-      "edge_type": "agents-list",
-      "label": null
-    },
-    {
-      "source": "technical-validator",
-      "target": "primary-producer",
-      "edge_type": "handoff",
-      "label": "Route Corrections to Primary Producer"
-    },
-    {
-      "source": "technical-validator",
-      "target": "conflict-auditor",
-      "edge_type": "handoff",
-      "label": "Log Conflict"
-    },
-    {
-      "source": "technical-validator",
-      "target": "orchestrator",
-      "edge_type": "handoff",
-      "label": "Return to Orchestrator"
-    },
-    {
-      "source": "technical-validator",
-      "target": "primary-producer",
-      "edge_type": "agents-list",
-      "label": null
-    },
-    {
-      "source": "technical-validator",
-      "target": "conflict-auditor",
-      "edge_type": "agents-list",
-      "label": null
-    },
-    {
-      "source": "format-converter",
-      "target": "output-compiler",
-      "edge_type": "handoff",
-      "label": "Pass to Output Compiler"
-    },
-    {
-      "source": "format-converter",
-      "target": "quality-auditor",
-      "edge_type": "handoff",
-      "label": "Quality Check After Conversion"
-    },
-    {
-      "source": "format-converter",
-      "target": "orchestrator",
-      "edge_type": "handoff",
-      "label": "Return to Orchestrator"
-    },
-    {
-      "source": "format-converter",
-      "target": "output-compiler",
-      "edge_type": "agents-list",
-      "label": null
-    },
-    {
-      "source": "format-converter",
-      "target": "quality-auditor",
-      "edge_type": "agents-list",
-      "label": null
-    },
-    {
-      "source": "output-compiler",
-      "target": "format-converter",
-      "edge_type": "handoff",
-      "label": "Convert Missing Components"
-    },
-    {
-      "source": "output-compiler",
-      "target": "technical-validator",
-      "edge_type": "handoff",
-      "label": "Validate Technical Accuracy"
-    },
-    {
-      "source": "output-compiler",
-      "target": "orchestrator",
-      "edge_type": "handoff",
-      "label": "Return to Orchestrator"
-    },
-    {
-      "source": "output-compiler",
-      "target": "format-converter",
-      "edge_type": "agents-list",
-      "label": null
-    },
-    {
-      "source": "output-compiler",
-      "target": "technical-validator",
-      "edge_type": "agents-list",
-      "label": null
-    },
-    {
-      "source": "tool-doc-researcher",
-      "target": "agent-updater",
-      "edge_type": "handoff",
-      "label": "Update Brief and Generated Docs"
-    },
-    {
-      "source": "tool-doc-researcher",
-      "target": "orchestrator",
-      "edge_type": "handoff",
-      "label": "Return to Orchestrator"
-    },
-    {
-      "source": "auth-module-expert",
-      "target": "adversarial",
-      "edge_type": "handoff",
-      "label": "Vet Brief Before Drafting"
-    },
-    {
-      "source": "auth-module-expert",
-      "target": "primary-producer",
-      "edge_type": "handoff",
-      "label": "Send to Primary Producer"
-    },
-    {
-      "source": "auth-module-expert",
-      "target": "orchestrator",
-      "edge_type": "handoff",
-      "label": "Return to Orchestrator"
-    },
-    {
-      "source": "auth-module-expert",
-      "target": "primary-producer",
-      "edge_type": "agents-list",
-      "label": null
-    },
-    {
-      "source": "auth-module-expert",
-      "target": "adversarial",
-      "edge_type": "agents-list",
-      "label": null
-    },
-    {
-      "source": "tasks-api-expert",
-      "target": "adversarial",
-      "edge_type": "handoff",
-      "label": "Vet Brief Before Drafting"
-    },
-    {
-      "source": "tasks-api-expert",
-      "target": "primary-producer",
-      "edge_type": "handoff",
-      "label": "Send to Primary Producer"
-    },
-    {
-      "source": "tasks-api-expert",
-      "target": "orchestrator",
-      "edge_type": "handoff",
-      "label": "Return to Orchestrator"
-    },
-    {
-      "source": "tasks-api-expert",
-      "target": "primary-producer",
-      "edge_type": "agents-list",
-      "label": null
-    },
-    {
-      "source": "tasks-api-expert",
-      "target": "adversarial",
-      "edge_type": "agents-list",
-      "label": null
-    },
-    {
-      "source": "content-enricher",
-      "target": "technical-validator",
-      "edge_type": "handoff",
-      "label": "Validate Enriched Content"
-    },
-    {
-      "source": "content-enricher",
-      "target": "orchestrator",
-      "edge_type": "handoff",
-      "label": "Return to Orchestrator"
-    },
-    {
-      "source": "content-enricher",
-      "target": "primary-producer",
-      "edge_type": "agents-list",
-      "label": null
-    },
-    {
-      "source": "content-enricher",
+      "source": "work-summarizer",
       "target": "technical-validator",
       "edge_type": "agents-list",
       "label": null
     }
   ],
   "adjacency": {
+    "adversarial": [
+      "conflict-auditor",
+      "orchestrator"
+    ],
+    "agent-refactor": [
+      "conflict-auditor",
+      "orchestrator"
+    ],
+    "agent-updater": [
+      "adversarial",
+      "agent-refactor",
+      "conflict-auditor",
+      "orchestrator"
+    ],
+    "auth-module-expert": [
+      "adversarial",
+      "orchestrator",
+      "primary-producer"
+    ],
+    "cleanup": [
+      "orchestrator"
+    ],
+    "code-hygiene": [
+      "agent-refactor",
+      "cleanup",
+      "conflict-auditor",
+      "orchestrator",
+      "security"
+    ],
+    "cohesion-repairer": [
+      "orchestrator",
+      "quality-auditor"
+    ],
+    "conflict-auditor": [
+      "agent-updater",
+      "conflict-resolution",
+      "orchestrator",
+      "technical-validator"
+    ],
+    "conflict-resolution": [
+      "agent-updater",
+      "orchestrator"
+    ],
+    "content-enricher": [
+      "orchestrator",
+      "primary-producer",
+      "technical-validator"
+    ],
+    "format-converter": [
+      "orchestrator",
+      "output-compiler",
+      "quality-auditor"
+    ],
+    "git-operations": [
+      "agent-updater",
+      "conflict-resolution",
+      "orchestrator",
+      "security"
+    ],
+    "navigator": [
+      "orchestrator"
+    ],
     "orchestrator": [
       "adversarial",
       "agent-refactor",
@@ -1433,60 +1495,8 @@ digraph "WebAppBackend Agent Team" {
       "tool-doc-researcher",
       "work-summarizer"
     ],
-    "navigator": [
-      "orchestrator"
-    ],
-    "security": [
-      "orchestrator"
-    ],
-    "code-hygiene": [
-      "agent-refactor",
-      "cleanup",
-      "conflict-auditor",
-      "orchestrator",
-      "security"
-    ],
-    "adversarial": [
-      "conflict-auditor",
-      "orchestrator"
-    ],
-    "conflict-auditor": [
-      "agent-updater",
-      "conflict-resolution",
-      "orchestrator",
-      "technical-validator"
-    ],
-    "conflict-resolution": [
-      "agent-updater",
-      "orchestrator"
-    ],
-    "cleanup": [
-      "orchestrator"
-    ],
-    "agent-updater": [
-      "adversarial",
-      "agent-refactor",
-      "conflict-auditor",
-      "orchestrator"
-    ],
-    "agent-refactor": [
-      "conflict-auditor",
-      "orchestrator"
-    ],
-    "repo-liaison": [
-      "conflict-auditor",
-      "orchestrator",
-      "security"
-    ],
-    "git-operations": [
-      "agent-updater",
-      "conflict-resolution",
-      "orchestrator",
-      "security"
-    ],
-    "work-summarizer": [
-      "adversarial",
-      "conflict-auditor",
+    "output-compiler": [
+      "format-converter",
       "orchestrator",
       "technical-validator"
     ],
@@ -1501,33 +1511,13 @@ digraph "WebAppBackend Agent Team" {
       "orchestrator",
       "primary-producer"
     ],
-    "cohesion-repairer": [
-      "orchestrator",
-      "quality-auditor"
-    ],
-    "technical-validator": [
+    "repo-liaison": [
       "conflict-auditor",
       "orchestrator",
-      "primary-producer"
+      "security"
     ],
-    "format-converter": [
-      "orchestrator",
-      "output-compiler",
-      "quality-auditor"
-    ],
-    "output-compiler": [
-      "format-converter",
-      "orchestrator",
-      "technical-validator"
-    ],
-    "tool-doc-researcher": [
-      "agent-updater",
+    "security": [
       "orchestrator"
-    ],
-    "auth-module-expert": [
-      "adversarial",
-      "orchestrator",
-      "primary-producer"
     ],
     "tasks-api-expert": [
       "adversarial",
@@ -1535,9 +1525,19 @@ digraph "WebAppBackend Agent Team" {
       "primary-producer"
     ],
     "team-builder": [],
-    "content-enricher": [
+    "technical-validator": [
+      "conflict-auditor",
       "orchestrator",
-      "primary-producer",
+      "primary-producer"
+    ],
+    "tool-doc-researcher": [
+      "agent-updater",
+      "orchestrator"
+    ],
+    "work-summarizer": [
+      "adversarial",
+      "conflict-auditor",
+      "orchestrator",
       "technical-validator"
     ]
   }

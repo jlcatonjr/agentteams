@@ -193,6 +193,40 @@ def _build_parser() -> argparse.ArgumentParser:
         ),
     )
     parser.add_argument(
+        "--refresh-graph",
+        action="store_true",
+        dest="refresh_graph",
+        help=(
+            "Standalone: regenerate references/pipeline-graph.md from the agent "
+            "files on disk (.github/agents/ or .claude/agents/) and exit. Writes "
+            "only when the topology changed. Offline, no --description needed. "
+            "This is what the installed pre-commit hook calls; resolve the target "
+            "tree from --output/--project (default: current directory)."
+        ),
+    )
+    parser.add_argument(
+        "--install-git-hooks",
+        action="store_true",
+        dest="install_git_hooks",
+        help=(
+            "Standalone: install (or sentinel-merge) a pre-commit hook that "
+            "refreshes references/pipeline-graph.md whenever agent files are part "
+            "of a commit, then exit. Idempotent; preserves any pre-existing hook "
+            "body. Target repo resolved from --output/--project (default: CWD)."
+        ),
+    )
+    parser.add_argument(
+        "--no-git-hooks",
+        action="store_true",
+        dest="no_git_hooks",
+        help=(
+            "Opt OUT of the default behaviour where a successful generate/update "
+            "auto-installs the pipeline-graph pre-commit hook into the target git "
+            "repository. Pass this flag for repositories that manage git hooks "
+            "manually or run in environments where hooks are undesirable."
+        ),
+    )
+    parser.add_argument(
         "--no-add-fence-markers",
         action="store_true",
         dest="no_add_fence_markers",

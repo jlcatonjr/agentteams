@@ -199,6 +199,36 @@ def main(argv: list[str] | None = None) -> int:
         return 0
 
     # -----------------------------------------------------------------------
+    # --refresh-graph / --install-git-hooks: standalone commit-map ops.
+    # No --description or generation pipeline needed; operate on an existing
+    # tree. Resolve the target repo from --output, else --project, else CWD
+    # (same precedence as --capture-baseline).
+    # -----------------------------------------------------------------------
+    if getattr(args, "refresh_graph", False):
+        from agentteams import git_hooks as _git_hooks
+        repo_root = Path(args.output or args.project or ".").resolve()
+        result = _git_hooks.refresh_pipeline_graph(repo_root, dry_run=args.dry_run)
+        if result.agents_dir is None:
+            print(f"  ℹ  No agent files under {repo_root}; nothing to map.")
+            return 0
+        verb = "Would update" if (result.changed and args.dry_run) else (
+            "Updated" if result.changed else "Already current"
+        )
+        print(f"  ✓  pipeline-graph: {verb} ({result.agent_count} agents) → {result.graph_path}")
+        return 0
+
+    if getattr(args, "install_git_hooks", False):
+        from agentteams import git_hooks as _git_hooks
+        repo_root = Path(args.output or args.project or ".").resolve()
+        try:
+            result = _git_hooks.install_pre_commit_hook(repo_root)
+        except FileNotFoundError as exc:
+            print(f"Error: {exc}", file=sys.stderr)
+            return 1
+        print(f"  ✓  pre-commit hook {result.action}: {result.hook_path}")
+        return 0
+
+    # -----------------------------------------------------------------------
     # --self: redirect to the module's own build description
     # -----------------------------------------------------------------------
     if args.self_update:

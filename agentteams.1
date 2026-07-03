@@ -2,7 +2,7 @@
 .SH NAME
 agentteams \- Generate a complete agent team for any project.
 .SH SYNOPSIS
-.B agentteams [--description PATH] [--project PATH] [--framework NAME] [--output DIR] [--dry-run] [--json] [--overwrite] [--merge] [--yes] [--no-scan] [--cost-routing] [--update] [--prune] [--adopt-orphans] [--check] [--refresh-index] [--query-index TEXT] [--query-k N] [--query-strategy QUERY_STRATEGY] [--fail-on-legacy-skip] [--no-vscode-tasks] [--no-add-fence-markers] [--scan-security] [--check-budget] [--self] [--allow-external-self-output] [--post-audit] [--auto-correct] [--enrich] [--strict-manual-placeholders] [--no-strict-manual-placeholders] [--security-offline] [--security-max-items N] [--security-no-nvd] [--migrate] [--convert-from DIR] [--interop-from DIR] [--interop-source-framework INTEROP_SOURCE_FRAMEWORK] [--interop-mode INTEROP_MODE] [--bridge-from DIR] [--bridge-source-framework BRIDGE_SOURCE_FRAMEWORK] [--bridge-check] [--bridge-refresh] [--bridge-merge] [--bridge-no-skills] [--recipe-check] [--revert-migration] [--version] [--no-backup] [--shrink-policy SHRINK_POLICY] [--list-backups] [--restore-backup TIMESTAMP] [--add-fence-markers PATH] [--in-place] [--target-host-features TOKENS] [--capture-baseline PATH] [--baseline-label LABEL] [--check-baseline PATH] [--verify-waivers] [--verify-integrity] [--verify-backup TIMESTAMP] [--stale-check] [--stale-remediate] [--stale-no-git] [--stale-restore TS] [--prune-backups KEEP] [--keep-within-days DAYS] [--backup-mirror DIR] [--fleet DIR] [--fleet-frameworks FLEET_FRAMEWORKS] [--fleet-report DIR] [--goose-source NAME] [--goose-model ID] [--goose-show] [--goose-config PATH]
+.B agentteams [--description PATH] [--project PATH] [--framework NAME] [--output DIR] [--dry-run] [--json] [--overwrite] [--merge] [--yes] [--no-scan] [--cost-routing] [--update] [--prune] [--adopt-orphans] [--check] [--refresh-index] [--query-index TEXT] [--query-k N] [--query-strategy QUERY_STRATEGY] [--fail-on-legacy-skip] [--no-vscode-tasks] [--refresh-graph] [--install-git-hooks] [--no-git-hooks] [--no-add-fence-markers] [--scan-security] [--check-budget] [--self] [--allow-external-self-output] [--post-audit] [--auto-correct] [--enrich] [--strict-manual-placeholders] [--no-strict-manual-placeholders] [--security-offline] [--security-max-items N] [--security-no-nvd] [--migrate] [--convert-from DIR] [--interop-from DIR] [--interop-source-framework INTEROP_SOURCE_FRAMEWORK] [--interop-mode INTEROP_MODE] [--bridge-from DIR] [--bridge-source-framework BRIDGE_SOURCE_FRAMEWORK] [--bridge-check] [--bridge-refresh] [--bridge-merge] [--bridge-no-skills] [--recipe-check] [--revert-migration] [--version] [--no-backup] [--shrink-policy SHRINK_POLICY] [--list-backups] [--restore-backup TIMESTAMP] [--add-fence-markers PATH] [--in-place] [--target-host-features TOKENS] [--capture-baseline PATH] [--baseline-label LABEL] [--check-baseline PATH] [--verify-waivers] [--verify-integrity] [--verify-backup TIMESTAMP] [--stale-check] [--stale-remediate] [--stale-no-git] [--stale-restore TS] [--prune-backups KEEP] [--keep-within-days DAYS] [--backup-mirror DIR] [--fleet DIR] [--fleet-frameworks FLEET_FRAMEWORKS] [--fleet-report DIR] [--fleet-allow-no-verify] [--goose-source NAME] [--goose-model ID] [--goose-show] [--goose-config PATH]
 .SH DESCRIPTION
 .PP
 Generate a complete agent team for any project.
@@ -74,6 +74,15 @@ Exit with non\-zero status if \-\-merge skipped any files due to missing fence m
 .TP
 .B \-\-no\-vscode\-tasks
 Suppress generation of .vscode/tasks.json. By default, agentteams emits a tasks.json at the project root containing discovered project commands (npm scripts, Makefile PHONY targets, etc.) and agentteams meta\-tasks. Pass this flag for repositories that manage tasks.json manually.
+.TP
+.B \-\-refresh\-graph
+Standalone: regenerate references/pipeline\-graph.md from the agent files on disk (.github/agents/ or .claude/agents/) and exit. Writes only when the topology changed. Offline, no \-\-description needed. This is what the installed pre\-commit hook calls; resolve the target tree from \-\-output/\-\-project (default: current directory).
+.TP
+.B \-\-install\-git\-hooks
+Standalone: install (or sentinel\-merge) a pre\-commit hook that refreshes references/pipeline\-graph.md whenever agent files are part of a commit, then exit. Idempotent; preserves any pre\-existing hook body. Target repo resolved from \-\-output/\-\-project (default: CWD).
+.TP
+.B \-\-no\-git\-hooks
+Opt OUT of the default behaviour where a successful generate/update auto\-installs the pipeline\-graph pre\-commit hook into the target git repository. Pass this flag for repositories that manage git hooks manually or run in environments where hooks are undesirable.
 .TP
 .B \-\-no\-add\-fence\-markers
 Opt OUT of the default behaviour where \-\-update \-\-merge (with \-\-yes) auto\-retrofits AGENTTEAMS `content` fence markers onto legacy (unfenced) files so their template region becomes mergeable instead of being skipped. Each retrofit is backed up first and the shrink\-guard still suppresses material template shrinks, so the legacy body is recoverable. Pass this flag to keep the conservative skip\-legacy behaviour (distinct from the standalone per\-file `\-\-add\-fence\-markers PATH` retrofit).
@@ -224,6 +233,9 @@ Which infrastructures to update per workspace (default: both). `both` = copilot\
 .TP
 .B \-\-fleet\-report DIR
 Directory for the fleet report (default: <DIR>/.agentteams\-fleet/<run\-id>/).
+.TP
+.B \-\-fleet\-allow\-no\-verify
+Allow snapshot commits to bypass pre\-commit hooks (\-\-no\-verify / core.hooksPath=/dev/null). Off by default — hooks run normally and a warning is printed if a hook blocks the snapshot. Use this flag only when workspace hooks are known\-safe to skip (e.g., a commit\-signing hook that would reject the ephemeral internal snapshot commit).
 .TP
 .B \-\-goose\-source NAME
 Switch Goose's provider in config.yaml (e.g. ollama, openrouter). Applies that source's default model unless \-\-goose\-model is given.

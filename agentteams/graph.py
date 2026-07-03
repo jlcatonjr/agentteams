@@ -111,10 +111,14 @@ class TeamGraph:
     def adjacency(self) -> dict[str, list[str]]:
         """Return a dict mapping each slug to its list of direct successors.
 
+        Keys are emitted in sorted slug order so the serialised adjacency (JSON
+        block) is independent of the input ``file_map`` iteration order — the
+        same determinism guarantee as :meth:`ordered_edges`.
+
         Returns:
             Adjacency dict where values are sorted lists of target slugs.
         """
-        adj: dict[str, list[str]] = {slug: [] for slug in self.nodes}
+        adj: dict[str, list[str]] = {slug: [] for slug in sorted(self.nodes)}
         for edge in self.edges:
             if edge.source in adj:
                 if edge.target not in adj[edge.source]:
@@ -126,10 +130,12 @@ class TeamGraph:
     def reverse_adjacency(self) -> dict[str, list[str]]:
         """Return a dict mapping each slug to its list of direct predecessors.
 
+        Keys are emitted in sorted slug order (see :meth:`adjacency`).
+
         Returns:
             Reverse adjacency dict where values are sorted lists of source slugs.
         """
-        radj: dict[str, list[str]] = {slug: [] for slug in self.nodes}
+        radj: dict[str, list[str]] = {slug: [] for slug in sorted(self.nodes)}
         for edge in self.edges:
             if edge.target in radj:
                 if edge.source not in radj[edge.target]:
@@ -141,6 +147,34 @@ class TeamGraph:
     # ------------------------------------------------------------------
     # Serialisation
     # ------------------------------------------------------------------
+
+    def ordered_edges(self) -> list[GraphEdge]:
+        """Return edges in a deterministic, source-grouped order.
+
+        Edge emission order must not depend on the iteration order of the input
+        ``file_map`` — otherwise the same team renders two different (but
+        equivalent) graphs depending on whether it was built from the in-memory
+        render pipeline (``dict(final)``, render order) or from disk
+        (``rglob``, filesystem order). The commit-triggered refresh
+        (:mod:`agentteams.git_hooks`) builds from disk, so without a stable
+        order it would rewrite ``references/pipeline-graph.md`` with meaningless
+        edge reorderings on every commit and never agree with ``--update``.
+
+        Sort key: source slug, then edge kind (handoffs before agents-list),
+        then target slug, then label. This keeps each source's out-edges grouped
+        (as before) while making both the grouping and within-group order fully
+        deterministic.
+        """
+        _kind_rank = {"handoff": 0, "agents-list": 1}
+        return sorted(
+            self.edges,
+            key=lambda e: (
+                e.source,
+                _kind_rank.get(e.edge_type, 9),
+                e.target,
+                e.label or "",
+            ),
+        )
 
     def to_json(self) -> str:
         """Serialise the graph to a JSON adjacency list.
@@ -167,7 +201,7 @@ class TeamGraph:
                         "edge_type": e.edge_type,
                         "label": e.label,
                     }
-                    for e in self.edges
+                    for e in self.ordered_edges()
                 ],
                 "adjacency": self.adjacency(),
             },
@@ -203,7 +237,7 @@ class TeamGraph:
 
         # Edge declarations — deduplicate by (source, target, type)
         seen: set[tuple[str, str, str]] = set()
-        for edge in self.edges:
+        for edge in self.ordered_edges():
             key = (edge.source, edge.target, edge.edge_type)
             if key in seen:
                 continue
@@ -248,7 +282,7 @@ class TeamGraph:
             )
 
         seen: set[tuple[str, str]] = set()
-        for edge in self.edges:
+        for edge in self.ordered_edges():
             pair = (edge.source, edge.target)
             if pair in seen:
                 continue
@@ -744,8 +778,11 @@ def _mermaid_id(slug: str) -> str:
 # CLI entry point
 # ---------------------------------------------------------------------------
 
-def _load_from_disk(agents_dir: Path) -> dict[str, str]:
+def load_from_disk(agents_dir: Path) -> dict[str, str]:
     """Load all .agent.md files from an agents directory.
+
+    Shared by the CLI entry point and the commit-triggered refresh
+    (:mod:`agentteams.git_hooks`).
 
     Args:
         agents_dir: Path to the .github/agents/ directory.
@@ -757,12 +794,47 @@ def _load_from_disk(agents_dir: Path) -> dict[str, str]:
     if not agents_dir.exists():
         return file_map
     for path in agents_dir.rglob("*.agent.md"):
-        rel = str(path.relative_to(agents_dir))
+        rel_parts = path.relative_to(agents_dir).parts
+        # Skip dot-prefixed subdirectories (e.g. `.agentteams-backups/`): they
+        # hold timestamped copies of prior agents and would otherwise be parsed
+        # as live nodes, polluting the graph with stale/ghost agents. The file's
+        # own name is never dot-prefixed for real agents, so only intermediate
+        # directory components are checked.
+        if any(part.startswith(".") for part in rel_parts[:-1]):
+            continue
         try:
-            file_map[rel] = path.read_text(encoding="utf-8")
+            file_map["/".join(rel_parts)] = path.read_text(encoding="utf-8")
         except OSError:
             pass
     return file_map
+
+
+# Backward-compatible private alias (pre-existing callers / tests).
+_load_from_disk = load_from_disk
+
+
+def infer_project_name(file_map: dict[str, str]) -> str:
+    """Infer a project name from agent ``name:`` fields.
+
+    Agent names follow ``<Role> — <Project>`` (em dash) or ``<Role> - <Project>``
+    (hyphen); the trailing segment is the project name. Returns ``""`` when no
+    agent carries a splittable name. Shared by the CLI entry point and the
+    commit-triggered refresh in :mod:`agentteams.git_hooks` so both derive the
+    same heading.
+    """
+    for content in file_map.values():
+        yaml_block, _ = _split_yaml(content)
+        if not yaml_block:
+            continue
+        m = _NAME_RE.search(yaml_block)
+        if not m:
+            continue
+        raw = m.group(1).strip().strip("'\"")
+        if " — " in raw:
+            return raw.split(" — ", 1)[1].strip()
+        if " - " in raw:
+            return raw.split(" - ", 1)[1].strip()
+    return ""
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -823,18 +895,7 @@ def main(argv: list[str] | None = None) -> int:
     project_name = args.project_name
     # Try to infer project name from a name: field if not provided
     if not project_name:
-        for content in file_map.values():
-            yaml_block, _ = _split_yaml(content)
-            if yaml_block:
-                m = _NAME_RE.search(yaml_block)
-                if m:
-                    raw = m.group(1).strip().strip("'\"")
-                    if " — " in raw:
-                        project_name = raw.split(" — ", 1)[1].strip()
-                        break
-                    if " - " in raw:
-                        project_name = raw.split(" - ", 1)[1].strip()
-                        break
+        project_name = infer_project_name(file_map)
 
     graph = build_graph(file_map, project_name=project_name)
 
