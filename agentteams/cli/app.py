@@ -208,13 +208,26 @@ def main(argv: list[str] | None = None) -> int:
         from agentteams import git_hooks as _git_hooks
         repo_root = Path(args.output or args.project or ".").resolve()
         result = _git_hooks.refresh_pipeline_graph(repo_root, dry_run=args.dry_run)
-        if result.agents_dir is None:
+        if result.source is None:
             print(f"  ℹ  No agent files under {repo_root}; nothing to map.")
             return 0
         verb = "Would update" if (result.changed and args.dry_run) else (
             "Updated" if result.changed else "Already current"
         )
-        print(f"  ✓  pipeline-graph: {verb} ({result.agent_count} agents) → {result.graph_path}")
+        print(f"  ✓  pipeline-graph: {verb} ({result.count} agents) → {result.out_path}")
+        return 0
+
+    if getattr(args, "refresh_architecture", False):
+        from agentteams import git_hooks as _git_hooks
+        repo_root = Path(args.output or args.project or ".").resolve()
+        result = _git_hooks.refresh_architecture_graph(repo_root, dry_run=args.dry_run)
+        if result.source is None:
+            print(f"  ℹ  No importable Python package under {repo_root}; nothing to map.")
+            return 0
+        verb = "Would update" if (result.changed and args.dry_run) else (
+            "Updated" if result.changed else "Already current"
+        )
+        print(f"  ✓  architecture-graph: {verb} ({result.count} modules) → {result.out_path}")
         return 0
 
     if getattr(args, "install_git_hooks", False):

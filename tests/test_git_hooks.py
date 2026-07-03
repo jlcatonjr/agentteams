@@ -52,7 +52,7 @@ def test_refresh_creates_graph_when_missing(tmp_path):
     repo = _make_repo(tmp_path)
     result = gh.refresh_pipeline_graph(repo)
     assert result.wrote and result.changed
-    assert result.agent_count == 24
+    assert result.count == 24
     assert (repo / "references" / "pipeline-graph.md").is_file()
 
 
@@ -87,7 +87,7 @@ def test_refresh_no_agent_files_is_graceful(tmp_path):
     repo.mkdir()
     result = gh.refresh_pipeline_graph(repo)
     assert not result.changed and not result.wrote
-    assert result.agents_dir is None
+    assert result.source is None
     assert "no agent files" in result.reason
 
 
@@ -130,7 +130,7 @@ def test_refresh_prefers_github_over_claude_agents(tmp_path):
     claude.mkdir(parents=True)
     shutil.copy(_EXAMPLE_AGENTS / "orchestrator.agent.md", claude / "orchestrator.agent.md")
     result = gh.refresh_pipeline_graph(repo)
-    assert result.agents_dir == (repo / ".github" / "agents").resolve()
+    assert result.source == (repo / ".github" / "agents").resolve()
 
 
 # ---------------------------------------------------------------------------
@@ -178,6 +178,68 @@ def test_load_from_disk_skips_dot_dirs(tmp_path):
 
 
 # ---------------------------------------------------------------------------
+# Architecture-map refresh
+# ---------------------------------------------------------------------------
+
+def _make_pkg_repo(tmp_path: Path) -> Path:
+    """A git repo with a small importable package to map."""
+    repo = tmp_path / "pkgrepo"
+    pkg = repo / "mypkg"
+    pkg.mkdir(parents=True)
+    (pkg / "__init__.py").write_text("")
+    (pkg / "core.py").write_text("import os\nimport json\n")
+    (pkg / "api.py").write_text("from mypkg import core\nimport sys\n")
+    (pkg / "util.py").write_text("from . import core\nimport requests\n")
+    if _has_git():
+        _git(repo, "init", "-q")
+    return repo
+
+
+def test_refresh_architecture_creates_map(tmp_path):
+    repo = _make_pkg_repo(tmp_path)
+    result = gh.refresh_architecture_graph(repo)
+    assert result.wrote and result.changed
+    assert result.count == 4  # __init__, core, api, util
+    out = repo / "references" / "architecture-graph.md"
+    assert out.is_file()
+    text = out.read_text()
+    assert "Repository Architecture Map" in text
+    assert "mypkg.core" in text
+
+
+def test_refresh_architecture_is_idempotent(tmp_path):
+    repo = _make_pkg_repo(tmp_path)
+    gh.refresh_architecture_graph(repo)
+    second = gh.refresh_architecture_graph(repo)
+    assert not second.changed and not second.wrote
+
+
+def test_refresh_architecture_fence_wrapped(tmp_path):
+    repo = _make_pkg_repo(tmp_path)
+    gh.refresh_architecture_graph(repo)
+    text = (repo / "references" / "architecture-graph.md").read_text()
+    assert text.startswith("<!-- AGENTTEAMS:BEGIN content v=1 -->")
+    assert text.rstrip().endswith("<!-- AGENTTEAMS:END content -->")
+
+
+def test_refresh_architecture_detects_external_deps(tmp_path):
+    repo = _make_pkg_repo(tmp_path)
+    gh.refresh_architecture_graph(repo)
+    text = (repo / "references" / "architecture-graph.md").read_text()
+    assert "requests" in text          # third-party, listed
+    assert "`os`" not in text          # stdlib, excluded from external deps
+
+
+def test_refresh_architecture_no_package_is_graceful(tmp_path):
+    repo = tmp_path / "nopkg"
+    repo.mkdir()
+    (repo / "loose.py").write_text("x = 1\n")  # no __init__.py anywhere
+    result = gh.refresh_architecture_graph(repo)
+    assert not result.changed and result.source is None
+    assert "no importable package" in result.reason
+
+
+# ---------------------------------------------------------------------------
 # Hook block rendering
 # ---------------------------------------------------------------------------
 
@@ -191,9 +253,17 @@ def test_hook_block_has_sentinels_and_baked_path():
 
 def test_hook_block_fires_only_on_staged_agent_files():
     block = gh._render_hook_block("/x")
-    # The grep guard restricts the refresh to commits touching agent files.
+    # The grep guard restricts the topology refresh to commits touching agents.
     assert r"grep -qE '(^|/)agents/.*\.agent\.md$'" in block
     assert "--cached --name-only" in block
+
+
+def test_hook_block_has_architecture_guard():
+    block = gh._render_hook_block("/x")
+    # A second guard refreshes the architecture map on any staged .py change.
+    assert r"grep -qE '\.py$'" in block
+    assert "--refresh-architecture" in block
+    assert "architecture-graph.md" in block
 
 
 def test_merge_hook_creates_fresh_when_absent():

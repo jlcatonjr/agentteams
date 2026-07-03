@@ -49,8 +49,11 @@ BROAD_EXCEPT_BASELINE = 11      # except Exception/BaseException/bare. Narrowed 
                                 # mcp_emit). The remaining 11 are justified external/isolation/
                                 # never-block/cleanup-reraise boundaries, each annotated with a
                                 # CH-24 rationale (visible WARN or re-raise, not silent swallow).
-SWALLOW_BASELINE = 30           # except clause whose body is only pass/continue (narrow catches =
-                                # known-recoverable external boundaries; the ratchet blocks new ones)
+SWALLOW_BASELINE = 31           # except clause whose body is only pass/continue (narrow catches =
+                                # known-recoverable external boundaries; the ratchet blocks new ones).
+                                # 30→31: architecture.py skips files that fail ast.parse (SyntaxError/
+                                # ValueError) — a best-effort module mapper must tolerate an
+                                # unparseable source file rather than abort the whole map.
 
 
 def _tracked_py_files() -> list[str]:

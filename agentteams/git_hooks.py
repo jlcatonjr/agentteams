@@ -38,8 +38,9 @@ from pathlib import Path
 
 from agentteams import emit, graph as _graph
 
-# Path within a project of the generated topology map.
-GRAPH_REL_PATH = "references/pipeline-graph.md"
+# Paths within a project of the generated maps.
+GRAPH_REL_PATH = "references/pipeline-graph.md"          # agent topology
+ARCH_REL_PATH = "references/architecture-graph.md"       # module architecture
 
 # Canonical agent-source directories, in preference order. The first that exists
 # and contains ``*.agent.md`` files is mapped.
@@ -57,13 +58,13 @@ _H1_RE = re.compile(r"^# (?P<name>.+?) — Agent Team Topology\s*$", re.MULTILIN
 
 @dataclass
 class RefreshResult:
-    """Outcome of a :func:`refresh_pipeline_graph` call."""
+    """Outcome of a map-refresh call (agent topology or module architecture)."""
 
-    changed: bool          # graph content differs from what was on disk
+    changed: bool          # map content differs from what was on disk
     wrote: bool            # a write actually happened (False in dry-run / no-op)
-    graph_path: Path
-    agents_dir: Path | None
-    agent_count: int
+    out_path: Path         # the map file
+    source: Path | None    # agents dir / package dir the map was built from
+    count: int             # items mapped (agents, or modules)
     reason: str = ""       # human-readable note (e.g. "no agent files")
 
 
@@ -132,35 +133,78 @@ def refresh_pipeline_graph(
     src_dir = agents_dir if agents_dir is not None else _resolve_agents_dir(repo_root)
     if src_dir is None or not src_dir.is_dir():
         return RefreshResult(
-            changed=False, wrote=False, graph_path=graph_path,
-            agents_dir=src_dir, agent_count=0, reason="no agent files found",
+            changed=False, wrote=False, out_path=graph_path,
+            source=src_dir, count=0, reason="no agent files found",
         )
 
     file_map = _graph.load_from_disk(src_dir)
     if not file_map:
         return RefreshResult(
-            changed=False, wrote=False, graph_path=graph_path,
-            agents_dir=src_dir, agent_count=0, reason="no agent files found",
+            changed=False, wrote=False, out_path=graph_path,
+            source=src_dir, count=0, reason="no agent files found",
         )
 
     project_name = _project_name_for(repo_root, file_map)
     raw = _graph.generate_graph_document(file_map, project_name=project_name)
     new_content = emit._normalize_generated_content(GRAPH_REL_PATH, raw)
 
-    old_content = graph_path.read_text(encoding="utf-8") if graph_path.is_file() else None
-    changed = old_content != new_content
-
-    wrote = False
-    if changed and not dry_run:
-        graph_path.parent.mkdir(parents=True, exist_ok=True)
-        graph_path.write_text(new_content, encoding="utf-8")
-        wrote = True
-
+    changed, wrote = _write_if_changed(graph_path, new_content, dry_run=dry_run)
     return RefreshResult(
-        changed=changed, wrote=wrote, graph_path=graph_path,
-        agents_dir=src_dir, agent_count=len(file_map),
+        changed=changed, wrote=wrote, out_path=graph_path,
+        source=src_dir, count=len(file_map),
         reason="updated" if changed else "already current",
     )
+
+
+def refresh_architecture_graph(
+    repo_root: Path,
+    *,
+    package_dir: Path | None = None,
+    dry_run: bool = False,
+) -> RefreshResult:
+    """Regenerate ``references/architecture-graph.md`` from the repo's package.
+
+    Maps the module import-dependency graph of the repo's primary Python package
+    (auto-detected unless ``package_dir`` is given). Like the topology refresh,
+    the output is deterministic and written only when it changed. No-op (with a
+    ``reason``) when the repo has no importable package.
+    """
+    from agentteams import architecture as _arch
+
+    repo_root = repo_root.resolve()
+    out_path = repo_root / ARCH_REL_PATH
+    pkg = package_dir if package_dir is not None else _arch.discover_package_root(repo_root)
+    if pkg is None:
+        return RefreshResult(
+            changed=False, wrote=False, out_path=out_path,
+            source=None, count=0, reason="no importable package found",
+        )
+
+    graph = _arch.build_architecture(repo_root, pkg)
+    if not graph.nodes:
+        return RefreshResult(
+            changed=False, wrote=False, out_path=out_path,
+            source=pkg, count=0, reason="no modules found",
+        )
+
+    new_content = emit._normalize_generated_content(ARCH_REL_PATH, graph.to_markdown_document())
+    changed, wrote = _write_if_changed(out_path, new_content, dry_run=dry_run)
+    return RefreshResult(
+        changed=changed, wrote=wrote, out_path=out_path,
+        source=pkg, count=len(graph.nodes),
+        reason="updated" if changed else "already current",
+    )
+
+
+def _write_if_changed(path: Path, content: str, *, dry_run: bool) -> tuple[bool, bool]:
+    """Write ``content`` to ``path`` only when it differs. Returns (changed, wrote)."""
+    old = path.read_text(encoding="utf-8") if path.is_file() else None
+    changed = old != content
+    if changed and not dry_run:
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_text(content, encoding="utf-8")
+        return True, True
+    return changed, False
 
 
 # ---------------------------------------------------------------------------
@@ -207,25 +251,37 @@ def _resolve_hooks_dir(repo_root: Path) -> Path:
 def _render_hook_block(agentteams_path: str) -> str:
     """Render the sentinel-delimited refresh block for a pre-commit hook.
 
+    Two independent, guarded refreshes, each staging its own map:
+
+    - agent files staged  → refresh references/pipeline-graph.md (agent topology)
+    - ``*.py`` files staged → refresh references/architecture-graph.md (module map)
+
     The block is non-blocking (``|| true``): a refresh failure never aborts a
-    commit. It fires only when a staged file is an agent file, so unrelated
-    commits pay no cost.
+    commit, and each guard fires only when relevant files are staged, so
+    unrelated commits pay no cost.
     """
+    pp = f'PYTHONPATH="{agentteams_path}${{PYTHONPATH:+:$PYTHONPATH}}"'
     return (
         f"{_HOOK_BEGIN}\n"
-        "# Auto-installed by `agentteams --install-git-hooks`. Regenerates\n"
-        "# references/pipeline-graph.md when agent files are part of the commit\n"
-        "# and stages the result. Non-blocking: never fails a commit. Remove this\n"
-        "# block (or re-run agentteams --update with --no-git-hooks) to disable.\n"
+        "# Auto-installed by `agentteams --install-git-hooks`. Regenerates the\n"
+        "# repository maps (references/pipeline-graph.md from agent files;\n"
+        "# references/architecture-graph.md from package .py files) when they are\n"
+        "# part of the commit and stages the result. Non-blocking: never fails a\n"
+        "# commit. Remove this block (or agentteams --update --no-git-hooks) to disable.\n"
         'if command -v git >/dev/null 2>&1 && command -v python3 >/dev/null 2>&1; then\n'
         '    _at_root="$(git rev-parse --show-toplevel 2>/dev/null)"\n'
-        '    if [ -n "$_at_root" ] && \\\n'
-        '       git diff --cached --name-only --diff-filter=ACMR 2>/dev/null \\\n'
-        "         | grep -qE '(^|/)agents/.*\\.agent\\.md$'; then\n"
-        f'        PYTHONPATH="{agentteams_path}${{PYTHONPATH:+:$PYTHONPATH}}" \\\n'
-        '            python3 -m agentteams.git_hooks --refresh --repo "$_at_root" >/dev/null 2>&1 \\\n'
-        '            && git -C "$_at_root" add references/pipeline-graph.md >/dev/null 2>&1 \\\n'
-        '            || true\n'
+        '    _staged="$(git diff --cached --name-only --diff-filter=ACMR 2>/dev/null)"\n'
+        '    if [ -n "$_at_root" ]; then\n'
+        "        if printf '%s\\n' \"$_staged\" | grep -qE '(^|/)agents/.*\\.agent\\.md$'; then\n"
+        f'            {pp} \\\n'
+        '                python3 -m agentteams.git_hooks --refresh --repo "$_at_root" >/dev/null 2>&1 \\\n'
+        '                && git -C "$_at_root" add references/pipeline-graph.md >/dev/null 2>&1 || true\n'
+        "        fi\n"
+        "        if printf '%s\\n' \"$_staged\" | grep -qE '\\.py$'; then\n"
+        f'            {pp} \\\n'
+        '                python3 -m agentteams.git_hooks --refresh-architecture --repo "$_at_root" >/dev/null 2>&1 \\\n'
+        '                && git -C "$_at_root" add references/architecture-graph.md >/dev/null 2>&1 || true\n'
+        "        fi\n"
         "    fi\n"
         "fi\n"
         f"{_HOOK_END}\n"
@@ -243,12 +299,16 @@ def _merge_hook_content(existing: str | None, block: str) -> str:
     if not existing:
         return "#!/bin/sh\n" + block
 
-    if _HOOK_BEGIN in existing and _HOOK_END in existing:
-        pattern = re.compile(
-            re.escape(_HOOK_BEGIN) + r".*?" + re.escape(_HOOK_END) + r"\n?",
-            re.DOTALL,
-        )
-        return pattern.sub(block, existing, count=1)
+    begin = existing.find(_HOOK_BEGIN)
+    end = existing.find(_HOOK_END, begin + 1) if begin != -1 else -1
+    if begin != -1 and end != -1:
+        # Pure string splice — NOT re.sub — so backslash sequences in `block`
+        # (e.g. the hook's own `printf '%s\n'` / `\.py` regex) are never
+        # reinterpreted as regex-replacement escapes.
+        after = end + len(_HOOK_END)
+        if after < len(existing) and existing[after] == "\n":
+            after += 1
+        return existing[:begin] + block + existing[after:]
 
     body = existing if existing.endswith("\n") else existing + "\n"
     return body + "\n" + block
@@ -362,6 +422,8 @@ def main(argv: list[str] | None = None) -> int:
     )
     parser.add_argument("--refresh", action="store_true",
                         help="Regenerate references/pipeline-graph.md from agent files on disk.")
+    parser.add_argument("--refresh-architecture", action="store_true", dest="refresh_architecture",
+                        help="Regenerate references/architecture-graph.md from the package's .py files.")
     parser.add_argument("--repo", metavar="DIR", default=".",
                         help="Repository root (default: current directory).")
     parser.add_argument("--dry-run", action="store_true",
@@ -370,19 +432,25 @@ def main(argv: list[str] | None = None) -> int:
                         help="Print a one-line result summary.")
     args = parser.parse_args(argv)
 
-    if not args.refresh:
-        parser.error("nothing to do: pass --refresh")
+    if not args.refresh and not args.refresh_architecture:
+        parser.error("nothing to do: pass --refresh and/or --refresh-architecture")
 
     repo_root = Path(args.repo).resolve()
-    try:
-        result = refresh_pipeline_graph(repo_root, dry_run=args.dry_run)
-    except OSError as exc:
-        print(f"graph refresh failed: {exc}", file=sys.stderr)
-        return 1
+    jobs = []
+    if args.refresh:
+        jobs.append(("pipeline-graph", "agents", refresh_pipeline_graph))
+    if args.refresh_architecture:
+        jobs.append(("architecture-graph", "modules", refresh_architecture_graph))
 
-    if args.verbose:
-        verb = "would update" if (result.changed and args.dry_run) else result.reason
-        print(f"pipeline-graph: {verb} ({result.agent_count} agents) -> {result.graph_path}")
+    for label, unit, fn in jobs:
+        try:
+            result = fn(repo_root, dry_run=args.dry_run)
+        except OSError as exc:
+            print(f"{label} refresh failed: {exc}", file=sys.stderr)
+            return 1
+        if args.verbose:
+            verb = "would update" if (result.changed and args.dry_run) else result.reason
+            print(f"{label}: {verb} ({result.count} {unit}) -> {result.out_path}")
     return 0
 
 

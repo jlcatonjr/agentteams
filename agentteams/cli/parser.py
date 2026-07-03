@@ -205,6 +205,18 @@ def _build_parser() -> argparse.ArgumentParser:
         ),
     )
     parser.add_argument(
+        "--refresh-architecture",
+        action="store_true",
+        dest="refresh_architecture",
+        help=(
+            "Standalone: regenerate references/architecture-graph.md — a "
+            "module-dependency map of the repository's own Python package "
+            "(auto-detected) built from its import statements — and exit. Writes "
+            "only when the module graph changed. Offline, no --description needed. "
+            "Refreshed by the same pre-commit hook on any staged .py change."
+        ),
+    )
+    parser.add_argument(
         "--install-git-hooks",
         action="store_true",
         dest="install_git_hooks",
