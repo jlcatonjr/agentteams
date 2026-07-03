@@ -3,9 +3,11 @@
 The team topology graph (``references/pipeline-graph.md``) is regenerated on
 every ``agentteams --update``. Between updates it can go stale whenever an agent
 file is edited by hand and committed. This module closes that gap with a
-``pre-commit`` hook that regenerates the graph from the *staged* agent files and
-stages the result into the same commit — so the committed graph is always in
-step with the committed agents.
+``pre-commit`` hook that, when a commit touches agent files, regenerates the
+graph from the **working tree** and stages the result into the same commit — so
+the committed graph tracks the committed agents. (Like most format-on-commit
+hooks it reflects the working tree, not a partial index; with fully-staged
+changes — the common case — the two coincide.)
 
 Two public capabilities, exposed on the CLI as ``--refresh-graph`` and
 ``--install-git-hooks`` (and auto-installed by ``--update`` unless
@@ -230,22 +232,42 @@ def _resolve_hooks_dir(repo_root: Path) -> Path:
     worktrees), falling back to ``<repo>/.git/hooks`` for environments without a
     git binary.
     """
-    fallback = (repo_root / ".git" / "hooks").resolve()
     try:
         out = subprocess.run(
             ["git", "-C", str(repo_root), "rev-parse", "--git-path", "hooks"],
             capture_output=True, text=True, timeout=15,
         )
     except (OSError, subprocess.SubprocessError):
-        # No usable git binary — fall back to the conventional hooks path
-        # (explicit return, not a swallow-and-continue).
-        return fallback
+        # No usable git binary — resolve the hooks dir ourselves (explicit
+        # return, not a swallow-and-continue).
+        return _hooks_dir_fallback(repo_root)
     if out.returncode == 0 and out.stdout.strip():
         hp = Path(out.stdout.strip())
         if not hp.is_absolute():
             hp = repo_root / hp
         return hp.resolve()
-    return fallback
+    return _hooks_dir_fallback(repo_root)
+
+
+def _hooks_dir_fallback(repo_root: Path) -> Path:
+    """Resolve ``<gitdir>/hooks`` without git, honouring a ``.git`` *file*.
+
+    In a linked worktree or submodule ``.git`` is a ``gitdir: <path>`` pointer
+    file, not a directory, so the naive ``.git/hooks`` is invalid; parse the
+    pointer to find the real git dir.
+    """
+    dot_git = repo_root / ".git"
+    if dot_git.is_file():
+        try:
+            text = dot_git.read_text(encoding="utf-8").strip()
+        except OSError:
+            text = ""
+        if text.startswith("gitdir:"):
+            gd = Path(text[len("gitdir:"):].strip())
+            if not gd.is_absolute():
+                gd = (repo_root / gd).resolve()
+            return gd / "hooks"
+    return (dot_git / "hooks").resolve()
 
 
 def _render_hook_block(agentteams_path: str) -> str:
@@ -261,18 +283,25 @@ def _render_hook_block(agentteams_path: str) -> str:
     unrelated commits pay no cost.
     """
     pp = f'PYTHONPATH="{agentteams_path}${{PYTHONPATH:+:$PYTHONPATH}}"'
+    # `_at_rc=$?` captures the exit status of whatever ran before this block (a
+    # pre-existing hook whose body was preserved by the sentinel merge), and the
+    # closing `exit $_at_rc` restores it — so appending this block can never mask
+    # a prior hook's failing status (e.g. a `npm test` guard). The merge always
+    # keeps this block LAST, so the exit is safe.
     return (
         f"{_HOOK_BEGIN}\n"
+        "_at_rc=$?\n"
         "# Auto-installed by `agentteams --install-git-hooks`. Regenerates the\n"
         "# repository maps (references/pipeline-graph.md from agent files;\n"
-        "# references/architecture-graph.md from package .py files) when they are\n"
-        "# part of the commit and stages the result. Non-blocking: never fails a\n"
-        "# commit. Remove this block (or agentteams --update --no-git-hooks) to disable.\n"
+        "# references/architecture-graph.md from package .py files) that are part\n"
+        "# of the commit, from the working tree, and stages the result. Non-blocking:\n"
+        "# never changes the commit's success. Remove this block (or\n"
+        "# agentteams --update --no-git-hooks) to disable.\n"
         'if command -v git >/dev/null 2>&1 && command -v python3 >/dev/null 2>&1; then\n'
         '    _at_root="$(git rev-parse --show-toplevel 2>/dev/null)"\n'
         '    _staged="$(git diff --cached --name-only --diff-filter=ACMR 2>/dev/null)"\n'
         '    if [ -n "$_at_root" ]; then\n'
-        "        if printf '%s\\n' \"$_staged\" | grep -qE '(^|/)agents/.*\\.agent\\.md$'; then\n"
+        "        if printf '%s\\n' \"$_staged\" | grep -qE '(^|/)\\.(github|claude)/agents/[^/]*\\.agent\\.md$'; then\n"
         f'            {pp} \\\n'
         '                python3 -m agentteams.git_hooks --refresh --repo "$_at_root" >/dev/null 2>&1 \\\n'
         '                && git -C "$_at_root" add references/pipeline-graph.md >/dev/null 2>&1 || true\n'
@@ -284,34 +313,50 @@ def _render_hook_block(agentteams_path: str) -> str:
         "        fi\n"
         "    fi\n"
         "fi\n"
+        "exit $_at_rc\n"
         f"{_HOOK_END}\n"
     )
 
 
+def _strip_all_blocks(text: str) -> str:
+    """Remove every agentteams sentinel block from ``text``, self-repairing.
+
+    Complete BEGIN…END pairs are excised. A trailing orphan BEGIN with no END
+    (a truncated/corrupted install) is dropped from the BEGIN to end-of-file, so
+    a re-install never leaves an unbalanced ``if`` that would break every commit.
+    Duplicate blocks are all removed, so only one is ever re-appended.
+    """
+    out = text
+    while True:
+        begin = out.find(_HOOK_BEGIN)
+        if begin == -1:
+            return out
+        end = out.find(_HOOK_END, begin + len(_HOOK_BEGIN))
+        if end == -1:
+            return out[:begin]
+        after = end + len(_HOOK_END)
+        if after < len(out) and out[after] == "\n":
+            after += 1
+        out = out[:begin] + out[after:]
+
+
 def _merge_hook_content(existing: str | None, block: str) -> str:
-    """Insert or replace the agentteams block within an existing pre-commit hook.
+    """Insert/replace the agentteams block, keeping it LAST and self-repairing.
 
     - No existing hook → a fresh ``#!/bin/sh`` script containing the block.
-    - Existing hook without our block → the block is appended after the body.
-    - Existing hook with our block → the block is replaced in place (idempotent
-      re-install, e.g. to update the baked PYTHONPATH).
+    - Existing hook → all prior agentteams blocks (complete, duplicated, or a
+      truncated orphan) are stripped and one block is appended after the
+      preserved body. Idempotent: re-running with the same baked path is a no-op.
+      Uses pure string ops (never ``re.sub``) so backslash sequences in ``block``
+      are preserved verbatim.
     """
     if not existing:
         return "#!/bin/sh\n" + block
-
-    begin = existing.find(_HOOK_BEGIN)
-    end = existing.find(_HOOK_END, begin + 1) if begin != -1 else -1
-    if begin != -1 and end != -1:
-        # Pure string splice — NOT re.sub — so backslash sequences in `block`
-        # (e.g. the hook's own `printf '%s\n'` / `\.py` regex) are never
-        # reinterpreted as regex-replacement escapes.
-        after = end + len(_HOOK_END)
-        if after < len(existing) and existing[after] == "\n":
-            after += 1
-        return existing[:begin] + block + existing[after:]
-
-    body = existing if existing.endswith("\n") else existing + "\n"
-    return body + "\n" + block
+    cleaned = _strip_all_blocks(existing)
+    if not cleaned.strip():
+        return "#!/bin/sh\n" + block
+    body = cleaned if cleaned.endswith("\n") else cleaned + "\n"
+    return body + block
 
 
 def install_pre_commit_hook(
@@ -394,8 +439,25 @@ def maybe_install_git_hooks(args, project_root: Path) -> None:
     repo_root = resolve_repo_root(args, project_root)
     if not (repo_root / ".git").exists():
         return
+    # Guard against a global core.hooksPath: auto-installing into a hooks dir
+    # OUTSIDE this repo would silently run the hook for every repository. Skip
+    # (with a note) on auto-install; an explicit --install-git-hooks still honours
+    # the operator's configured path.
+    hooks_dir = _resolve_hooks_dir(repo_root)
     try:
-        res = install_pre_commit_hook(repo_root)
+        _inside_repo = hooks_dir.is_relative_to(repo_root)
+    except AttributeError:  # pragma: no cover - Python < 3.9
+        _inside_repo = str(hooks_dir).startswith(str(repo_root))
+    if not _inside_repo:
+        print(
+            f"  ℹ  Skipping auto-install of the pre-commit hook: git hooks resolve "
+            f"outside this repo ({hooks_dir}) — likely a global core.hooksPath. "
+            f"Run `agentteams --install-git-hooks` explicitly to install there.",
+            file=sys.stderr,
+        )
+        return
+    try:
+        res = install_pre_commit_hook(repo_root, hooks_dir=hooks_dir)
     except (OSError, FileNotFoundError) as exc:  # never block a build on hooks
         print(f"  !  Git hook install skipped: {exc}", file=sys.stderr)
         return
@@ -445,8 +507,11 @@ def main(argv: list[str] | None = None) -> int:
     for label, unit, fn in jobs:
         try:
             result = fn(repo_root, dry_run=args.dry_run)
-        except OSError as exc:
-            print(f"{label} refresh failed: {exc}", file=sys.stderr)
+        except (OSError, ImportError, ValueError) as exc:
+            # CLI boundary: report cleanly rather than dumping a traceback. Narrow
+            # set — file I/O (OSError) and the architecture build's parse/resolve
+            # failures (ValueError/ImportError) — not a blanket catch.
+            print(f"{label} refresh failed: {type(exc).__name__}: {exc}", file=sys.stderr)
             return 1
         if args.verbose:
             verb = "would update" if (result.changed and args.dry_run) else result.reason

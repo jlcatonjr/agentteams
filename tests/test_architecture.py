@@ -104,6 +104,89 @@ def test_maps_agentteams_itself():
     assert "```mermaid" in doc
 
 
+def test_relative_imports_in_init_resolve_correctly(tmp_path):
+    """Regression: relative re-exports in __init__.py must not be dropped or
+    turned into phantom external deps (the __package__ off-by-one bug)."""
+    repo = tmp_path / "repo"
+    pkg = repo / "pkg"
+    (pkg / "sub").mkdir(parents=True)
+    (pkg / "__init__.py").write_text("from . import core\nfrom .sub import leaf\n")
+    (pkg / "core.py").write_text("x = 1\n")
+    (pkg / "sub" / "__init__.py").write_text("")
+    (pkg / "sub" / "leaf.py").write_text("y = 2\n")
+    g = arch.build_architecture(repo, pkg)
+    assert ("pkg", "pkg.core") in g.edges
+    assert ("pkg", "pkg.sub.leaf") in g.edges
+    assert g.all_external() == []          # no phantom "sub" external dep
+
+
+def test_relative_import_never_external(tmp_path):
+    repo = tmp_path / "repo"
+    pkg = repo / "pkg"
+    pkg.mkdir(parents=True)
+    (pkg / "__init__.py").write_text("")
+    # relative import of a name that isn't a submodule → internal edge, not external
+    (pkg / "a.py").write_text("from . import notamodule\n")
+    g = arch.build_architecture(repo, pkg)
+    assert g.all_external() == []
+
+
+def test_iter_module_files_ignores_ancestor_dir_names(tmp_path):
+    """Regression: a checkout under a dir named 'templates' must not empty the map."""
+    repo = tmp_path / "templates" / "myrepo"     # 'templates' is an ANCESTOR
+    pkg = repo / "pkg"
+    pkg.mkdir(parents=True)
+    (pkg / "__init__.py").write_text("")
+    (pkg / "core.py").write_text("import os\n")
+    g = arch.build_architecture(repo, pkg)
+    assert len(g.nodes) == 2                # __init__ + core, not zero
+
+
+def test_mixed_from_import_records_package_edge(tmp_path):
+    repo = tmp_path / "repo"
+    pkg = repo / "pkg"
+    pkg.mkdir(parents=True)
+    (pkg / "__init__.py").write_text("DEFAULT = 1\n")
+    (pkg / "sub.py").write_text("x = 1\n")
+    # `sub` is a submodule; `DEFAULT` is a name in pkg's __init__.
+    (pkg / "api.py").write_text("from pkg import sub, DEFAULT\n")
+    g = arch.build_architecture(repo, pkg)
+    assert ("pkg.api", "pkg.sub") in g.edges     # submodule edge
+    assert ("pkg.api", "pkg") in g.edges         # package-__init__ edge (was dropped)
+
+
+def test_repo_local_vs_third_party_external(tmp_path):
+    repo = tmp_path / "repo"
+    pkg = repo / "pkg"
+    pkg.mkdir(parents=True)
+    (repo / "sibling.py").write_text("z = 1\n")   # repo-local, outside pkg
+    (pkg / "__init__.py").write_text("")
+    (pkg / "core.py").write_text("import sibling\nimport requests\n")
+    g = arch.build_architecture(repo, pkg)
+    assert g.all_external() == ["requests"]       # third-party only
+    assert g.all_repo_local() == ["sibling"]      # repo-local separated
+
+
+def test_discover_prefers_largest_package_over_alphabetical(tmp_path):
+    repo = tmp_path / "myproj"
+    (repo / "alpha").mkdir(parents=True)
+    (repo / "alpha" / "__init__.py").write_text("")
+    zebra = repo / "zebra"
+    zebra.mkdir()
+    for n in ("__init__", "a", "b", "c"):
+        (zebra / f"{n}.py").write_text("")
+    # 'alpha' sorts first but 'zebra' is the real product package (more modules).
+    assert arch.discover_package_root(repo) == zebra
+
+
+def test_discover_supports_src_layout(tmp_path):
+    repo = tmp_path / "repo"
+    pkg = repo / "src" / "mypkg"
+    pkg.mkdir(parents=True)
+    (pkg / "__init__.py").write_text("")
+    assert arch.discover_package_root(repo) == pkg
+
+
 def test_cli_json_and_markdown(tmp_path, capsys):
     repo = _mkpkg(tmp_path)
     rc = arch.main([str(repo), "--format", "json"])

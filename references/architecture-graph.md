@@ -5,8 +5,8 @@
 
 - Modules mapped: **86**
 - Packages: **5**
-- Internal import edges: **144**
-- Distinct external dependencies: **2**
+- Internal import edges: **147**
+- Distinct external dependencies: **1**
 
 ---
 
@@ -29,6 +29,7 @@ flowchart LR
     agentteams_frameworks["agentteams.frameworks"]
     class agentteams_frameworks sub
     agentteams --> agentteams_cli
+    agentteams --> agentteams_enrich
     agentteams --> agentteams_frameworks
     agentteams_cli --> agentteams
     agentteams_cli --> agentteams_frameworks
@@ -41,7 +42,7 @@ flowchart LR
 
 | Package | Modules | Depends on |
 | --- | --- | --- |
-| `agentteams` | 61 | `agentteams.cli`, `agentteams.frameworks` |
+| `agentteams` | 61 | `agentteams.cli`, `agentteams.enrich`, `agentteams.frameworks` |
 | `agentteams.cli` | 10 | `agentteams`, `agentteams.frameworks` |
 | `agentteams.enrich` | 6 | — |
 | `agentteams.eval_adapters` | 2 | — |
@@ -53,7 +54,7 @@ flowchart LR
 
 | Module | Imports (internal) | Imported by |
 | --- | --- | --- |
-| `agentteams` | — | `agentteams.backup`, `agentteams.cli.artifacts`, `agentteams.cli.parser`, `agentteams.enrich`, `agentteams.git_hooks` |
+| `agentteams` | — | `agentteams.backup`, `agentteams.cli.artifacts`, `agentteams.cli.parser`, `agentteams.git_hooks` |
 | `agentteams._utils` | — | `agentteams.analyze`, `agentteams.graph`, `agentteams.ingest` |
 | `agentteams.advisory` | — | — |
 | `agentteams.ai_bad_habits` | — | `agentteams.cli.generate` |
@@ -83,13 +84,13 @@ flowchart LR
 | `agentteams.convert` | `agentteams.frameworks.base`, `agentteams.frameworks.registry` | `agentteams.cli.commands` |
 | `agentteams.drift` | `agentteams.emit` | `agentteams.cli.artifacts`, `agentteams.cli.commands`, `agentteams.cli.generate`, `agentteams.stale_detector` |
 | `agentteams.emit` | `agentteams.atomicio`, `agentteams.backup`, `agentteams.fence_inject`, `agentteams.fences` | `agentteams.cli.commands`, `agentteams.cli.generate`, `agentteams.cli.parser`, `agentteams.cli.render_pipeline`, `agentteams.drift`, `agentteams.fence_inject`, `agentteams.git_hooks` |
-| `agentteams.enrich` | `agentteams` | `agentteams.cli.generate` |
-| `agentteams.enrich._audit` | `agentteams.enrich._fills`, `agentteams.enrich._models`, `agentteams.enrich._tools` | — |
-| `agentteams.enrich._enrich` | `agentteams.enrich._fills`, `agentteams.enrich._models`, `agentteams.enrich._notebooks`, `agentteams.enrich._tools` | — |
+| `agentteams.enrich` | `agentteams.enrich._audit`, `agentteams.enrich._enrich`, `agentteams.enrich._models`, `agentteams.enrich._tools` | `agentteams.cli.generate` |
+| `agentteams.enrich._audit` | `agentteams.enrich._fills`, `agentteams.enrich._models`, `agentteams.enrich._tools` | `agentteams.enrich` |
+| `agentteams.enrich._enrich` | `agentteams.enrich._fills`, `agentteams.enrich._models`, `agentteams.enrich._notebooks`, `agentteams.enrich._tools` | `agentteams.enrich` |
 | `agentteams.enrich._fills` | — | `agentteams.enrich._audit`, `agentteams.enrich._enrich` |
-| `agentteams.enrich._models` | — | `agentteams.enrich._audit`, `agentteams.enrich._enrich`, `agentteams.enrich._notebooks` |
+| `agentteams.enrich._models` | — | `agentteams.enrich`, `agentteams.enrich._audit`, `agentteams.enrich._enrich`, `agentteams.enrich._notebooks` |
 | `agentteams.enrich._notebooks` | `agentteams.enrich._models`, `agentteams.enrich._tools` | `agentteams.enrich._enrich` |
-| `agentteams.enrich._tools` | — | `agentteams.enrich._audit`, `agentteams.enrich._enrich`, `agentteams.enrich._notebooks` |
+| `agentteams.enrich._tools` | — | `agentteams.enrich`, `agentteams.enrich._audit`, `agentteams.enrich._enrich`, `agentteams.enrich._notebooks` |
 | `agentteams.errors` | — | `agentteams.cli.artifacts`, `agentteams.cli.generate` |
 | `agentteams.eval_adapters` | — | — |
 | `agentteams.eval_adapters.inspect_ai` | — | — |
@@ -144,7 +145,11 @@ flowchart LR
 
 ## External Dependencies
 
-`build_team`, `jsonschema`
+Third-party (non-stdlib) top-level packages imported by the mapped package:
+
+`jsonschema`
+
+**Repo-local (outside the mapped package):** `build_team`
 
 ---
 
@@ -161,6 +166,7 @@ digraph "agentteams architecture" {
     "agentteams.eval_adapters" [fillcolor="#eef6ee"];
     "agentteams.frameworks" [fillcolor="#eef6ee"];
     "agentteams" -> "agentteams.cli";
+    "agentteams" -> "agentteams.enrich";
     "agentteams" -> "agentteams.frameworks";
     "agentteams.cli" -> "agentteams";
     "agentteams.cli" -> "agentteams.frameworks";
@@ -181,28 +187,32 @@ digraph "agentteams architecture" {
       "path": "agentteams/__init__.py",
       "is_package": true,
       "imports_internal": [],
-      "external": []
+      "external": [],
+      "repo_local": []
     },
     "agentteams._utils": {
       "package": "agentteams",
       "path": "agentteams/_utils.py",
       "is_package": false,
       "imports_internal": [],
-      "external": []
+      "external": [],
+      "repo_local": []
     },
     "agentteams.advisory": {
       "package": "agentteams",
       "path": "agentteams/advisory.py",
       "is_package": false,
       "imports_internal": [],
-      "external": []
+      "external": [],
+      "repo_local": []
     },
     "agentteams.ai_bad_habits": {
       "package": "agentteams",
       "path": "agentteams/ai_bad_habits.py",
       "is_package": false,
       "imports_internal": [],
-      "external": []
+      "external": [],
+      "repo_local": []
     },
     "agentteams.analyze": {
       "package": "agentteams",
@@ -215,28 +225,32 @@ digraph "agentteams architecture" {
         "agentteams.output_plan",
         "agentteams.recipe_fields"
       ],
-      "external": []
+      "external": [],
+      "repo_local": []
     },
     "agentteams.architecture": {
       "package": "agentteams",
       "path": "agentteams/architecture.py",
       "is_package": false,
       "imports_internal": [],
-      "external": []
+      "external": [],
+      "repo_local": []
     },
     "agentteams.atomicio": {
       "package": "agentteams",
       "path": "agentteams/atomicio.py",
       "is_package": false,
       "imports_internal": [],
-      "external": []
+      "external": [],
+      "repo_local": []
     },
     "agentteams.audit": {
       "package": "agentteams",
       "path": "agentteams/audit.py",
       "is_package": false,
       "imports_internal": [],
-      "external": []
+      "external": [],
+      "repo_local": []
     },
     "agentteams.backup": {
       "package": "agentteams",
@@ -247,14 +261,16 @@ digraph "agentteams architecture" {
         "agentteams.atomicio",
         "agentteams.liaison_logs"
       ],
-      "external": []
+      "external": [],
+      "repo_local": []
     },
     "agentteams.baseline": {
       "package": "agentteams",
       "path": "agentteams/baseline.py",
       "is_package": false,
       "imports_internal": [],
-      "external": []
+      "external": [],
+      "repo_local": []
     },
     "agentteams.behavioral_drift": {
       "package": "agentteams",
@@ -263,7 +279,8 @@ digraph "agentteams architecture" {
       "imports_internal": [
         "agentteams.handoff_payloads"
       ],
-      "external": []
+      "external": [],
+      "repo_local": []
     },
     "agentteams.bridge": {
       "package": "agentteams",
@@ -282,21 +299,24 @@ digraph "agentteams architecture" {
         "agentteams.plan_steps_todo",
         "agentteams.schedule_emit"
       ],
-      "external": []
+      "external": [],
+      "repo_local": []
     },
     "agentteams.bridge_sources": {
       "package": "agentteams",
       "path": "agentteams/bridge_sources.py",
       "is_package": false,
       "imports_internal": [],
-      "external": []
+      "external": [],
+      "repo_local": []
     },
     "agentteams.bridge_subagents": {
       "package": "agentteams",
       "path": "agentteams/bridge_subagents.py",
       "is_package": false,
       "imports_internal": [],
-      "external": []
+      "external": [],
+      "repo_local": []
     },
     "agentteams.bridge_subagents_goose": {
       "package": "agentteams",
@@ -306,21 +326,24 @@ digraph "agentteams architecture" {
         "agentteams.bridge_subagents",
         "agentteams.frameworks.goose"
       ],
-      "external": []
+      "external": [],
+      "repo_local": []
     },
     "agentteams.budget": {
       "package": "agentteams",
       "path": "agentteams/budget.py",
       "is_package": false,
       "imports_internal": [],
-      "external": []
+      "external": [],
+      "repo_local": []
     },
     "agentteams.cli": {
       "package": "agentteams",
       "path": "agentteams/cli/__init__.py",
       "is_package": true,
       "imports_internal": [],
-      "external": []
+      "external": [],
+      "repo_local": []
     },
     "agentteams.cli.app": {
       "package": "agentteams.cli",
@@ -340,7 +363,8 @@ digraph "agentteams architecture" {
         "agentteams.git_hooks",
         "agentteams.host_features"
       ],
-      "external": [
+      "external": [],
+      "repo_local": [
         "build_team"
       ]
     },
@@ -360,7 +384,8 @@ digraph "agentteams architecture" {
       ],
       "external": [
         "jsonschema"
-      ]
+      ],
+      "repo_local": []
     },
     "agentteams.cli.commands": {
       "package": "agentteams.cli",
@@ -378,7 +403,8 @@ digraph "agentteams architecture" {
         "agentteams.stale_detector",
         "agentteams.stale_remediate"
       ],
-      "external": []
+      "external": [],
+      "repo_local": []
     },
     "agentteams.cli.generate": {
       "package": "agentteams.cli",
@@ -406,7 +432,8 @@ digraph "agentteams architecture" {
         "agentteams.scan",
         "agentteams.security_refs"
       ],
-      "external": [
+      "external": [],
+      "repo_local": [
         "build_team"
       ]
     },
@@ -417,7 +444,8 @@ digraph "agentteams architecture" {
       "imports_internal": [
         "agentteams.goose_config"
       ],
-      "external": []
+      "external": [],
+      "repo_local": []
     },
     "agentteams.cli.parser": {
       "package": "agentteams.cli",
@@ -430,14 +458,16 @@ digraph "agentteams architecture" {
         "agentteams.emit",
         "agentteams.frameworks.registry"
       ],
-      "external": []
+      "external": [],
+      "repo_local": []
     },
     "agentteams.cli.parser_validate": {
       "package": "agentteams.cli",
       "path": "agentteams/cli/parser_validate.py",
       "is_package": false,
       "imports_internal": [],
-      "external": []
+      "external": [],
+      "repo_local": []
     },
     "agentteams.cli.recipe_check": {
       "package": "agentteams.cli",
@@ -446,7 +476,8 @@ digraph "agentteams architecture" {
       "imports_internal": [
         "agentteams.frameworks.goose"
       ],
-      "external": []
+      "external": [],
+      "repo_local": []
     },
     "agentteams.cli.render_pipeline": {
       "package": "agentteams.cli",
@@ -464,14 +495,16 @@ digraph "agentteams architecture" {
         "agentteams.render",
         "agentteams.vscode_tasks"
       ],
-      "external": []
+      "external": [],
+      "repo_local": []
     },
     "agentteams.cli.security_gate": {
       "package": "agentteams.cli",
       "path": "agentteams/cli/security_gate.py",
       "is_package": false,
       "imports_internal": [],
-      "external": []
+      "external": [],
+      "repo_local": []
     },
     "agentteams.convert": {
       "package": "agentteams",
@@ -481,7 +514,8 @@ digraph "agentteams architecture" {
         "agentteams.frameworks.base",
         "agentteams.frameworks.registry"
       ],
-      "external": []
+      "external": [],
+      "repo_local": []
     },
     "agentteams.drift": {
       "package": "agentteams",
@@ -490,7 +524,8 @@ digraph "agentteams architecture" {
       "imports_internal": [
         "agentteams.emit"
       ],
-      "external": []
+      "external": [],
+      "repo_local": []
     },
     "agentteams.emit": {
       "package": "agentteams",
@@ -502,16 +537,21 @@ digraph "agentteams architecture" {
         "agentteams.fence_inject",
         "agentteams.fences"
       ],
-      "external": []
+      "external": [],
+      "repo_local": []
     },
     "agentteams.enrich": {
       "package": "agentteams",
       "path": "agentteams/enrich/__init__.py",
       "is_package": true,
       "imports_internal": [
-        "agentteams"
+        "agentteams.enrich._audit",
+        "agentteams.enrich._enrich",
+        "agentteams.enrich._models",
+        "agentteams.enrich._tools"
       ],
-      "external": []
+      "external": [],
+      "repo_local": []
     },
     "agentteams.enrich._audit": {
       "package": "agentteams.enrich",
@@ -522,7 +562,8 @@ digraph "agentteams architecture" {
         "agentteams.enrich._models",
         "agentteams.enrich._tools"
       ],
-      "external": []
+      "external": [],
+      "repo_local": []
     },
     "agentteams.enrich._enrich": {
       "package": "agentteams.enrich",
@@ -534,21 +575,24 @@ digraph "agentteams architecture" {
         "agentteams.enrich._notebooks",
         "agentteams.enrich._tools"
       ],
-      "external": []
+      "external": [],
+      "repo_local": []
     },
     "agentteams.enrich._fills": {
       "package": "agentteams.enrich",
       "path": "agentteams/enrich/_fills.py",
       "is_package": false,
       "imports_internal": [],
-      "external": []
+      "external": [],
+      "repo_local": []
     },
     "agentteams.enrich._models": {
       "package": "agentteams.enrich",
       "path": "agentteams/enrich/_models.py",
       "is_package": false,
       "imports_internal": [],
-      "external": []
+      "external": [],
+      "repo_local": []
     },
     "agentteams.enrich._notebooks": {
       "package": "agentteams.enrich",
@@ -558,49 +602,56 @@ digraph "agentteams architecture" {
         "agentteams.enrich._models",
         "agentteams.enrich._tools"
       ],
-      "external": []
+      "external": [],
+      "repo_local": []
     },
     "agentteams.enrich._tools": {
       "package": "agentteams.enrich",
       "path": "agentteams/enrich/_tools.py",
       "is_package": false,
       "imports_internal": [],
-      "external": []
+      "external": [],
+      "repo_local": []
     },
     "agentteams.errors": {
       "package": "agentteams",
       "path": "agentteams/errors.py",
       "is_package": false,
       "imports_internal": [],
-      "external": []
+      "external": [],
+      "repo_local": []
     },
     "agentteams.eval_adapters": {
       "package": "agentteams",
       "path": "agentteams/eval_adapters/__init__.py",
       "is_package": true,
       "imports_internal": [],
-      "external": []
+      "external": [],
+      "repo_local": []
     },
     "agentteams.eval_adapters.inspect_ai": {
       "package": "agentteams.eval_adapters",
       "path": "agentteams/eval_adapters/inspect_ai.py",
       "is_package": false,
       "imports_internal": [],
-      "external": []
+      "external": [],
+      "repo_local": []
     },
     "agentteams.eval_adapters.openai_evals": {
       "package": "agentteams.eval_adapters",
       "path": "agentteams/eval_adapters/openai_evals.py",
       "is_package": false,
       "imports_internal": [],
-      "external": []
+      "external": [],
+      "repo_local": []
     },
     "agentteams.eval_suite": {
       "package": "agentteams",
       "path": "agentteams/eval_suite.py",
       "is_package": false,
       "imports_internal": [],
-      "external": []
+      "external": [],
+      "repo_local": []
     },
     "agentteams.fence_inject": {
       "package": "agentteams",
@@ -610,7 +661,8 @@ digraph "agentteams architecture" {
         "agentteams.atomicio",
         "agentteams.emit"
       ],
-      "external": []
+      "external": [],
+      "repo_local": []
     },
     "agentteams.fences": {
       "package": "agentteams",
@@ -619,14 +671,16 @@ digraph "agentteams architecture" {
       "imports_internal": [
         "agentteams.atomicio"
       ],
-      "external": []
+      "external": [],
+      "repo_local": []
     },
     "agentteams.fleet": {
       "package": "agentteams",
       "path": "agentteams/fleet.py",
       "is_package": false,
       "imports_internal": [],
-      "external": [
+      "external": [],
+      "repo_local": [
         "build_team"
       ]
     },
@@ -635,14 +689,16 @@ digraph "agentteams architecture" {
       "path": "agentteams/framework_research.py",
       "is_package": false,
       "imports_internal": [],
-      "external": []
+      "external": [],
+      "repo_local": []
     },
     "agentteams.frameworks": {
       "package": "agentteams",
       "path": "agentteams/frameworks/__init__.py",
       "is_package": true,
       "imports_internal": [],
-      "external": []
+      "external": [],
+      "repo_local": []
     },
     "agentteams.frameworks.agents_md": {
       "package": "agentteams.frameworks",
@@ -652,7 +708,8 @@ digraph "agentteams architecture" {
         "agentteams.frameworks.base",
         "agentteams.yaml_frontmatter"
       ],
-      "external": []
+      "external": [],
+      "repo_local": []
     },
     "agentteams.frameworks.base": {
       "package": "agentteams.frameworks",
@@ -661,7 +718,8 @@ digraph "agentteams architecture" {
       "imports_internal": [
         "agentteams.yaml_frontmatter"
       ],
-      "external": []
+      "external": [],
+      "repo_local": []
     },
     "agentteams.frameworks.claude": {
       "package": "agentteams.frameworks",
@@ -671,7 +729,8 @@ digraph "agentteams architecture" {
         "agentteams.frameworks.base",
         "agentteams.yaml_frontmatter"
       ],
-      "external": []
+      "external": [],
+      "repo_local": []
     },
     "agentteams.frameworks.copilot_cli": {
       "package": "agentteams.frameworks",
@@ -680,7 +739,8 @@ digraph "agentteams architecture" {
       "imports_internal": [
         "agentteams.frameworks.base"
       ],
-      "external": []
+      "external": [],
+      "repo_local": []
     },
     "agentteams.frameworks.copilot_vscode": {
       "package": "agentteams.frameworks",
@@ -690,7 +750,8 @@ digraph "agentteams architecture" {
         "agentteams.frameworks.base",
         "agentteams.yaml_frontmatter"
       ],
-      "external": []
+      "external": [],
+      "repo_local": []
     },
     "agentteams.frameworks.goose": {
       "package": "agentteams.frameworks",
@@ -700,7 +761,8 @@ digraph "agentteams architecture" {
         "agentteams.frameworks.base",
         "agentteams.yaml_frontmatter"
       ],
-      "external": []
+      "external": [],
+      "repo_local": []
     },
     "agentteams.frameworks.registry": {
       "package": "agentteams.frameworks",
@@ -714,7 +776,8 @@ digraph "agentteams architecture" {
         "agentteams.frameworks.copilot_vscode",
         "agentteams.frameworks.goose"
       ],
-      "external": []
+      "external": [],
+      "repo_local": []
     },
     "agentteams.git_hooks": {
       "package": "agentteams",
@@ -726,14 +789,16 @@ digraph "agentteams architecture" {
         "agentteams.emit",
         "agentteams.graph"
       ],
-      "external": []
+      "external": [],
+      "repo_local": []
     },
     "agentteams.goose_config": {
       "package": "agentteams",
       "path": "agentteams/goose_config.py",
       "is_package": false,
       "imports_internal": [],
-      "external": []
+      "external": [],
+      "repo_local": []
     },
     "agentteams.graph": {
       "package": "agentteams",
@@ -742,7 +807,8 @@ digraph "agentteams architecture" {
       "imports_internal": [
         "agentteams._utils"
       ],
-      "external": []
+      "external": [],
+      "repo_local": []
     },
     "agentteams.handoff_payloads": {
       "package": "agentteams",
@@ -751,7 +817,8 @@ digraph "agentteams architecture" {
       "imports_internal": [],
       "external": [
         "jsonschema"
-      ]
+      ],
+      "repo_local": []
     },
     "agentteams.hooks_emit": {
       "package": "agentteams",
@@ -760,14 +827,16 @@ digraph "agentteams architecture" {
       "imports_internal": [
         "agentteams.atomicio"
       ],
-      "external": []
+      "external": [],
+      "repo_local": []
     },
     "agentteams.host_features": {
       "package": "agentteams",
       "path": "agentteams/host_features.py",
       "is_package": false,
       "imports_internal": [],
-      "external": []
+      "external": [],
+      "repo_local": []
     },
     "agentteams.ingest": {
       "package": "agentteams",
@@ -776,14 +845,16 @@ digraph "agentteams architecture" {
       "imports_internal": [
         "agentteams._utils"
       ],
-      "external": []
+      "external": [],
+      "repo_local": []
     },
     "agentteams.instructions_split": {
       "package": "agentteams",
       "path": "agentteams/instructions_split.py",
       "is_package": false,
       "imports_internal": [],
-      "external": []
+      "external": [],
+      "repo_local": []
     },
     "agentteams.interop": {
       "package": "agentteams",
@@ -793,21 +864,24 @@ digraph "agentteams architecture" {
         "agentteams.frameworks.registry",
         "agentteams.yaml_frontmatter"
       ],
-      "external": []
+      "external": [],
+      "repo_local": []
     },
     "agentteams.liaison_logs": {
       "package": "agentteams",
       "path": "agentteams/liaison_logs.py",
       "is_package": false,
       "imports_internal": [],
-      "external": []
+      "external": [],
+      "repo_local": []
     },
     "agentteams.man": {
       "package": "agentteams",
       "path": "agentteams/man.py",
       "is_package": false,
       "imports_internal": [],
-      "external": [
+      "external": [],
+      "repo_local": [
         "build_team"
       ]
     },
@@ -816,14 +890,16 @@ digraph "agentteams architecture" {
       "path": "agentteams/manifest_format.py",
       "is_package": false,
       "imports_internal": [],
-      "external": []
+      "external": [],
+      "repo_local": []
     },
     "agentteams.mcp_detect": {
       "package": "agentteams",
       "path": "agentteams/mcp_detect.py",
       "is_package": false,
       "imports_internal": [],
-      "external": []
+      "external": [],
+      "repo_local": []
     },
     "agentteams.mcp_emit": {
       "package": "agentteams",
@@ -834,14 +910,16 @@ digraph "agentteams architecture" {
       ],
       "external": [
         "jsonschema"
-      ]
+      ],
+      "repo_local": []
     },
     "agentteams.memory_index": {
       "package": "agentteams",
       "path": "agentteams/memory_index.py",
       "is_package": false,
       "imports_internal": [],
-      "external": []
+      "external": [],
+      "repo_local": []
     },
     "agentteams.memory_index_incremental": {
       "package": "agentteams",
@@ -850,14 +928,16 @@ digraph "agentteams architecture" {
       "imports_internal": [
         "agentteams.memory_index"
       ],
-      "external": []
+      "external": [],
+      "repo_local": []
     },
     "agentteams.model_routing": {
       "package": "agentteams",
       "path": "agentteams/model_routing.py",
       "is_package": false,
       "imports_internal": [],
-      "external": []
+      "external": [],
+      "repo_local": []
     },
     "agentteams.output_plan": {
       "package": "agentteams",
@@ -866,63 +946,72 @@ digraph "agentteams architecture" {
       "imports_internal": [
         "agentteams.analyze"
       ],
-      "external": []
+      "external": [],
+      "repo_local": []
     },
     "agentteams.parallel_plan": {
       "package": "agentteams",
       "path": "agentteams/parallel_plan.py",
       "is_package": false,
       "imports_internal": [],
-      "external": []
+      "external": [],
+      "repo_local": []
     },
     "agentteams.plan_steps": {
       "package": "agentteams",
       "path": "agentteams/plan_steps.py",
       "is_package": false,
       "imports_internal": [],
-      "external": []
+      "external": [],
+      "repo_local": []
     },
     "agentteams.plan_steps_todo": {
       "package": "agentteams",
       "path": "agentteams/plan_steps_todo.py",
       "is_package": false,
       "imports_internal": [],
-      "external": []
+      "external": [],
+      "repo_local": []
     },
     "agentteams.pr_management": {
       "package": "agentteams",
       "path": "agentteams/pr_management.py",
       "is_package": false,
       "imports_internal": [],
-      "external": []
+      "external": [],
+      "repo_local": []
     },
     "agentteams.recipe_fields": {
       "package": "agentteams",
       "path": "agentteams/recipe_fields.py",
       "is_package": false,
       "imports_internal": [],
-      "external": []
+      "external": [],
+      "repo_local": []
     },
     "agentteams.remediate": {
       "package": "agentteams",
       "path": "agentteams/remediate.py",
       "is_package": false,
       "imports_internal": [],
-      "external": []
+      "external": [],
+      "repo_local": []
     },
     "agentteams.render": {
       "package": "agentteams",
       "path": "agentteams/render.py",
       "is_package": false,
       "imports_internal": [],
-      "external": []
+      "external": [],
+      "repo_local": []
     },
     "agentteams.scan": {
       "package": "agentteams",
       "path": "agentteams/scan.py",
       "is_package": false,
       "imports_internal": [],
-      "external": []
+      "external": [],
+      "repo_local": []
     },
     "agentteams.schedule_emit": {
       "package": "agentteams",
@@ -931,14 +1020,16 @@ digraph "agentteams architecture" {
       "imports_internal": [
         "agentteams.atomicio"
       ],
-      "external": []
+      "external": [],
+      "repo_local": []
     },
     "agentteams.security_refs": {
       "package": "agentteams",
       "path": "agentteams/security_refs.py",
       "is_package": false,
       "imports_internal": [],
-      "external": []
+      "external": [],
+      "repo_local": []
     },
     "agentteams.stale_detector": {
       "package": "agentteams",
@@ -949,7 +1040,8 @@ digraph "agentteams architecture" {
         "agentteams.drift",
         "agentteams.fleet"
       ],
-      "external": []
+      "external": [],
+      "repo_local": []
     },
     "agentteams.stale_remediate": {
       "package": "agentteams",
@@ -960,27 +1052,34 @@ digraph "agentteams architecture" {
         "agentteams.fleet",
         "agentteams.stale_detector"
       ],
-      "external": []
+      "external": [],
+      "repo_local": []
     },
     "agentteams.vscode_tasks": {
       "package": "agentteams",
       "path": "agentteams/vscode_tasks.py",
       "is_package": false,
       "imports_internal": [],
-      "external": []
+      "external": [],
+      "repo_local": []
     },
     "agentteams.yaml_frontmatter": {
       "package": "agentteams",
       "path": "agentteams/yaml_frontmatter.py",
       "is_package": false,
       "imports_internal": [],
-      "external": []
+      "external": [],
+      "repo_local": []
     }
   },
   "package_edges": [
     {
       "source": "agentteams",
       "target": "agentteams.cli"
+    },
+    {
+      "source": "agentteams",
+      "target": "agentteams.enrich"
     },
     {
       "source": "agentteams",
@@ -1386,7 +1485,19 @@ digraph "agentteams architecture" {
     },
     {
       "source": "agentteams.enrich",
-      "target": "agentteams"
+      "target": "agentteams.enrich._audit"
+    },
+    {
+      "source": "agentteams.enrich",
+      "target": "agentteams.enrich._enrich"
+    },
+    {
+      "source": "agentteams.enrich",
+      "target": "agentteams.enrich._models"
+    },
+    {
+      "source": "agentteams.enrich",
+      "target": "agentteams.enrich._tools"
     },
     {
       "source": "agentteams.enrich._audit",
@@ -1578,8 +1689,10 @@ digraph "agentteams architecture" {
     }
   ],
   "external_dependencies": [
-    "build_team",
     "jsonschema"
+  ],
+  "repo_local_dependencies": [
+    "build_team"
   ]
 }
 ```

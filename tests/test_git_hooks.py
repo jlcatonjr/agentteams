@@ -253,8 +253,9 @@ def test_hook_block_has_sentinels_and_baked_path():
 
 def test_hook_block_fires_only_on_staged_agent_files():
     block = gh._render_hook_block("/x")
-    # The grep guard restricts the topology refresh to commits touching agents.
-    assert r"grep -qE '(^|/)agents/.*\.agent\.md$'" in block
+    # The guard is scoped to the canonical .github/agents or .claude/agents dirs
+    # (not e.g. docs/agents/), restricting the topology refresh to real agents.
+    assert r"grep -qE '(^|/)\.(github|claude)/agents/[^/]*\.agent\.md$'" in block
     assert "--cached --name-only" in block
 
 
@@ -264,6 +265,45 @@ def test_hook_block_has_architecture_guard():
     assert r"grep -qE '\.py$'" in block
     assert "--refresh-architecture" in block
     assert "architecture-graph.md" in block
+
+
+def test_hook_block_preserves_prior_exit_status():
+    # The block must capture $? on entry and restore it on exit so appending it
+    # after a pre-existing hook cannot mask that hook's failing status.
+    block = gh._render_hook_block("/x")
+    assert block.split("\n")[1] == "_at_rc=$?"     # first line after BEGIN
+    assert "exit $_at_rc" in block
+
+
+def test_merge_repairs_orphan_begin_without_end():
+    # A truncated install (BEGIN, no END) must not leave an unbalanced `if`.
+    corrupt = "#!/bin/sh\necho keep\n" + gh._HOOK_BEGIN + "\nif true; then\n"
+    merged = gh._merge_hook_content(corrupt, gh._render_hook_block("/x"))
+    assert merged.count(gh._HOOK_BEGIN) == 1
+    assert merged.count(gh._HOOK_END) == 1
+    assert "echo keep" in merged
+    assert "if true; then\n# <<<" not in merged   # orphan body removed
+
+
+def test_merge_dedups_multiple_blocks():
+    twice = gh._merge_hook_content("#!/bin/sh\n", gh._render_hook_block("/OLDPATH1"))
+    twice = twice + "\n" + gh._render_hook_block("/OLDPATH2")   # two blocks now
+    assert twice.count(gh._HOOK_BEGIN) == 2
+    merged = gh._merge_hook_content(twice, gh._render_hook_block("/NEWPATH"))
+    assert merged.count(gh._HOOK_BEGIN) == 1
+    assert "/NEWPATH" in merged
+    assert "/OLDPATH1" not in merged and "/OLDPATH2" not in merged
+
+
+def test_hooks_dir_fallback_parses_git_file_pointer(tmp_path):
+    # Worktree/submodule: .git is a "gitdir: <path>" file, not a directory.
+    repo = tmp_path / "wt"
+    repo.mkdir()
+    real_gitdir = tmp_path / "realgit" / "worktrees" / "wt"
+    real_gitdir.mkdir(parents=True)
+    (repo / ".git").write_text(f"gitdir: {real_gitdir}\n")
+    hd = gh._hooks_dir_fallback(repo)
+    assert hd == real_gitdir / "hooks"
 
 
 def test_merge_hook_creates_fresh_when_absent():
@@ -326,6 +366,23 @@ def test_install_raises_for_non_git_dir(tmp_path):
     plain.mkdir()
     with pytest.raises(FileNotFoundError):
         gh.install_pre_commit_hook(plain, agentteams_path="/x")
+
+
+@pytest.mark.skipif(not _has_git(), reason="git not available")
+def test_auto_install_skips_global_hookspath(tmp_path, monkeypatch, capsys):
+    """A hooks dir OUTSIDE the repo (global core.hooksPath) must not auto-install."""
+    repo = _make_repo(tmp_path)
+    outside = tmp_path / "global-hooks"
+    outside.mkdir()
+    monkeypatch.setattr(gh, "_resolve_hooks_dir", lambda _r: outside)
+
+    class _Args:
+        no_git_hooks = False
+        project = str(repo)
+
+    gh.maybe_install_git_hooks(_Args(), repo)
+    assert not (outside / "pre-commit").exists()
+    assert "outside this repo" in capsys.readouterr().err
 
 
 # ---------------------------------------------------------------------------

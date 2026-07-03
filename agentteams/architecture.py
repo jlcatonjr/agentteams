@@ -63,6 +63,8 @@ class ArchitectureGraph:
     edges: set[tuple[str, str]] = field(default_factory=set)
     # module → set of external (third-party) top-level package names
     external: dict[str, set[str]] = field(default_factory=dict)
+    # module → set of repo-local top-level names OUTSIDE the mapped package
+    repo_local: dict[str, set[str]] = field(default_factory=dict)
 
     # -- derived views ----------------------------------------------------
 
@@ -101,9 +103,16 @@ class ArchitectureGraph:
         return radj
 
     def all_external(self) -> list[str]:
-        """Sorted union of external top-level dependency names."""
+        """Sorted union of external (third-party) top-level dependency names."""
         out: set[str] = set()
         for deps in self.external.values():
+            out |= deps
+        return sorted(out)
+
+    def all_repo_local(self) -> list[str]:
+        """Sorted union of repo-local top-level names outside the mapped package."""
+        out: set[str] = set()
+        for deps in self.repo_local.values():
             out |= deps
         return sorted(out)
 
@@ -143,6 +152,7 @@ class ArchitectureGraph:
 
     def to_json(self) -> str:
         """Full module-level JSON (nodes, edges, adjacency, external deps)."""
+        adj = self.module_adjacency()  # compute once (was rebuilt per module)
         return json.dumps(
             {
                 "root_package": self.root_package,
@@ -151,8 +161,9 @@ class ArchitectureGraph:
                         "package": node.package,
                         "path": node.rel_path,
                         "is_package": node.is_package,
-                        "imports_internal": self.module_adjacency().get(name, []),
+                        "imports_internal": adj.get(name, []),
                         "external": sorted(self.external.get(name, set())),
+                        "repo_local": sorted(self.repo_local.get(name, set())),
                     }
                     for name, node in sorted(self.nodes.items())
                 },
@@ -163,6 +174,7 @@ class ArchitectureGraph:
                     {"source": s, "target": t} for s, t in sorted(self.edges)
                 ],
                 "external_dependencies": self.all_external(),
+                "repo_local_dependencies": self.all_repo_local(),
             },
             indent=2,
         )
@@ -226,14 +238,25 @@ class ArchitectureGraph:
             lines.append(f"| `{name}` | {outgoing} | {incoming} |")
 
         externals = self.all_external()
+        repo_local = self.all_repo_local()
         lines += [
             "",
             "---",
             "",
             "## External Dependencies",
             "",
+            "Third-party (non-stdlib) top-level packages imported by the mapped package:",
+            "",
             (", ".join(f"`{e}`" for e in externals) if externals
              else "_None detected (standard library only)._"),
+        ]
+        if repo_local:
+            lines += [
+                "",
+                "**Repo-local (outside the mapped package):** "
+                + ", ".join(f"`{e}`" for e in repo_local),
+            ]
+        lines += [
             "",
             "---",
             "",
@@ -263,28 +286,59 @@ def _node_id(dotted: str) -> str:
     return dotted.replace(".", "_").replace("-", "_")
 
 
+_NON_PACKAGE_NAMES = {"tests", "test", "docs", "doc", "examples", "scripts", "src"}
+
+
+def _package_candidates(parent: Path) -> list[Path]:
+    """Importable package dirs directly under ``parent`` (excludes tests/docs/…)."""
+    try:
+        children = list(parent.iterdir())
+    except OSError:
+        return []
+    return [
+        d for d in children
+        if d.is_dir()
+        and d.name not in _EXCLUDE_DIRS
+        and d.name not in _NON_PACKAGE_NAMES
+        and not d.name.startswith(".")
+        and (d / "__init__.py").is_file()
+    ]
+
+
+def _module_file_count(package_dir: Path) -> int:
+    return len(_iter_module_files(package_dir))
+
+
 def discover_package_root(repo_root: Path) -> Path | None:
     """Return the repo's primary importable package directory, or None.
 
-    A package directory is a top-level child of ``repo_root`` that contains an
-    ``__init__.py``. When several exist, prefer one whose name matches the repo
-    directory name; otherwise the first in sorted order. ``tests`` and other
-    excluded names are never chosen.
+    Looks at top-level children of ``repo_root`` and, for src-layout repos, under
+    ``src/``. A package is a directory containing ``__init__.py`` (``tests``,
+    ``docs``, ``examples`` and the ``scripts`` glue dir are never chosen). When
+    several qualify, prefer one whose name matches the repo directory (with
+    ``-``→``_`` normalisation for zip-download/hyphenated repo names); otherwise
+    the one with the **most modules** (the product package), breaking ties
+    alphabetically. Falls back to a ``scripts`` package only when nothing else
+    qualifies, so a repo whose only package is ``scripts/`` is still mapped.
     """
-    candidates = sorted(
-        d for d in repo_root.iterdir()
-        if d.is_dir()
-        and d.name not in _EXCLUDE_DIRS
-        and d.name != "tests"
-        and not d.name.startswith(".")
-        and (d / "__init__.py").is_file()
-    )
+    candidates = _package_candidates(repo_root)
+    src = repo_root / "src"
+    if src.is_dir():
+        candidates += _package_candidates(src)
     if not candidates:
+        # Last resort: a glue `scripts/` package (excluded above) rather than
+        # returning nothing at all.
+        scripts = repo_root / "scripts"
+        if scripts.is_dir() and (scripts / "__init__.py").is_file():
+            return scripts
         return None
+
+    repo_norm = repo_root.name.replace("-", "_")
     for c in candidates:
-        if c.name == repo_root.name:
+        if c.name in (repo_root.name, repo_norm):
             return c
-    return candidates[0]
+    # Most modules wins (the product package); alphabetical tiebreak.
+    return min(candidates, key=lambda d: (-_module_file_count(d), d.name))
 
 
 def _module_name(rel_path: Path) -> tuple[str, bool]:
@@ -300,10 +354,16 @@ def _module_name(rel_path: Path) -> tuple[str, bool]:
 
 
 def _iter_module_files(package_dir: Path) -> list[Path]:
-    """All mappable ``.py`` files under ``package_dir`` (excludes _EXCLUDE_DIRS)."""
+    """All mappable ``.py`` files under ``package_dir`` (excludes _EXCLUDE_DIRS).
+
+    Exclusion is tested only on path components *below* ``package_dir`` — never
+    on absolute ancestors — so a checkout located under a directory that happens
+    to be named e.g. ``templates`` does not empty the entire map.
+    """
     out: list[Path] = []
     for path in package_dir.rglob("*.py"):
-        if any(part in _EXCLUDE_DIRS for part in path.parts):
+        rel_parts = path.relative_to(package_dir).parts
+        if any(part in _EXCLUDE_DIRS for part in rel_parts):
             continue
         out.append(path)
     return sorted(out)
@@ -319,16 +379,21 @@ def _deepest_internal(dotted: str, internal: set[str]) -> str | None:
     return None
 
 
-def _resolve_from_base(current: str, level: int, module: str | None) -> str:
+def _resolve_from_base(current: str, level: int, module: str | None, is_package: bool) -> str:
     """Resolve the base module of a relative ``from ... import``.
 
-    ``current`` is the importing module's dotted name. ``level`` is the number
-    of leading dots. Returns the absolute base package/module the import targets.
+    ``current`` is the importing module's dotted name, ``level`` the number of
+    leading dots, ``is_package`` True when ``current`` is a package ``__init__``.
+    Mirrors CPython's ``__package__`` semantics: for a regular module ``a.b.c``
+    the single-dot anchor is its package ``a.b``; for a **package** ``a.b`` (its
+    ``__init__``) the single-dot anchor is ``a.b`` itself. Getting this wrong
+    lands every relative re-export in an ``__init__`` one level too shallow.
     """
     parts = current.split(".")
-    base = parts[:-1]                 # package of the current module
+    base = parts if is_package else parts[:-1]     # __package__ of the importer
     if level > 1:
-        base = base[: -(level - 1)] if level - 1 <= len(base) else []
+        drop = level - 1
+        base = base[:-drop] if drop <= len(base) else []
     if module:
         return ".".join([*base, *module.split(".")])
     return ".".join(base)
@@ -356,11 +421,12 @@ def build_architecture(repo_root: Path, package_dir: Path) -> ArchitectureGraph:
         )
     internal = set(graph.nodes)
     stdlib = getattr(sys, "stdlib_module_names", frozenset())
+    repo_local = _repo_local_top_levels(repo_root, root_pkg)
 
     # Pass 2: extract import edges.
     for f in files:
         rel = f.relative_to(repo_root)
-        current, _ = _module_name(rel)
+        current, current_is_pkg = _module_name(rel)
         if current not in graph.nodes:
             continue
         try:
@@ -371,25 +437,57 @@ def build_architecture(repo_root: Path, package_dir: Path) -> ArchitectureGraph:
         for node in ast.walk(tree):
             if isinstance(node, ast.Import):
                 for alias in node.names:
-                    _record_target(graph, current, alias.name, internal, stdlib, root_pkg)
+                    _record_target(graph, current, alias.name, internal, stdlib, root_pkg, repo_local)
             elif isinstance(node, ast.ImportFrom):
+                is_relative = bool(node.level and node.level > 0)
                 base = (
-                    _resolve_from_base(current, node.level, node.module)
-                    if node.level and node.level > 0
+                    _resolve_from_base(current, node.level, node.module, current_is_pkg)
+                    if is_relative
                     else (node.module or "")
                 )
                 if not base:
                     continue
-                # Each imported name may itself be a submodule.
-                matched_submodule = False
+                # Each imported name may itself be a submodule; names that are
+                # not submodules depend on `base`'s __init__/module.
+                any_nonsubmodule = False
                 for alias in node.names:
                     sub = f"{base}.{alias.name}"
                     if sub in internal:
                         _add_internal_edge(graph, current, sub)
-                        matched_submodule = True
-                if not matched_submodule:
-                    _record_target(graph, current, base, internal, stdlib, root_pkg)
+                    else:
+                        any_nonsubmodule = True
+                if any_nonsubmodule:
+                    if is_relative:
+                        # Relative imports are intra-package by definition — only
+                        # ever an internal edge, never an external dependency.
+                        target = _deepest_internal(base, internal)
+                        if target:
+                            _add_internal_edge(graph, current, target)
+                    else:
+                        _record_target(graph, current, base, internal, stdlib, root_pkg, repo_local)
     return graph
+
+
+def _repo_local_top_levels(repo_root: Path, root_pkg: str) -> set[str]:
+    """Top-level importable names living in the repo but OUTSIDE the mapped package.
+
+    A top-level ``build_team.py`` (or a sibling package) imported by the mapped
+    package is repo-local, not a third-party PyPI dependency; distinguishing the
+    two keeps the external-dependency list honest.
+    """
+    out: set[str] = set()
+    try:
+        children = list(repo_root.iterdir())
+    except OSError:
+        return out
+    for p in children:
+        if p.name == root_pkg or p.name.startswith("."):
+            continue
+        if p.suffix == ".py" and p.is_file():
+            out.add(p.stem)
+        elif p.is_dir() and (p / "__init__.py").is_file():
+            out.add(p.name)
+    return out
 
 
 def _add_internal_edge(graph: ArchitectureGraph, src: str, dst: str) -> None:
@@ -404,15 +502,20 @@ def _record_target(
     internal: set[str],
     stdlib: frozenset[str],
     root_pkg: str,
+    repo_local: set[str],
 ) -> None:
-    """Classify one imported dotted name as an internal edge or external dep."""
+    """Classify one imported dotted name: internal edge, repo-local, or external."""
     top = dotted.split(".", 1)[0]
     if top == root_pkg:
         target = _deepest_internal(dotted, internal)
         if target:
             _add_internal_edge(graph, current, target)
         return
-    if top and top not in stdlib:
+    if not top or top in stdlib:
+        return
+    if top in repo_local:
+        graph.repo_local.setdefault(current, set()).add(top)
+    else:
         graph.external.setdefault(current, set()).add(top)
 
 
