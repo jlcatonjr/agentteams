@@ -1,13 +1,13 @@
 {
   "schema_version": "1.0",
-  "generated_at": "2026-06-22T11:04:05.869926+00:00",
+  "generated_at": "2026-06-23T19:57:53.836905+00:00",
   "source_framework": "copilot-vscode",
   "target_framework": "goose",
   "source_dir": "/Users/jamescaton/githubrepositories/agentteams/.github/agents",
   "source_hashes": [
     {
       "path": "agents/adversarial.agent.md",
-      "sha256": "3505e71310d98019e3de12daba7f45ed8dc8fdf374b08463196e91a53cdb5798"
+      "sha256": "266c9c0c735bde7871fea84dc45801e1e2e639e839a6338bb15c47fdbcc08e04"
     },
     {
       "path": "agents/agent-refactor.agent.md",
@@ -31,7 +31,7 @@
     },
     {
       "path": "agents/code-hygiene.agent.md",
-      "sha256": "9282be3c1894f487a8a995018e23aad15e75d92e365cd5bfad79fdcd920452e8"
+      "sha256": "0da57aa5f1a202cd599d9e97cd43e2cb0fd9e5c040ec89622f2bfcd3912213fd"
     },
     {
       "path": "agents/cohesion-repairer.agent.md",
@@ -39,11 +39,11 @@
     },
     {
       "path": "agents/conflict-auditor.agent.md",
-      "sha256": "72c8c233d1a9d5aaa75bea75768a964cc6a22cd44f98ca47ea63ed6db266024e"
+      "sha256": "3d69ea108d6ada19b91e6384c20fe2f622d69f5a9df056db7bcb17fb237c10a2"
     },
     {
       "path": "agents/conflict-resolution.agent.md",
-      "sha256": "d738d5e7c30038a25e735855763a1d85528a0498d7c068b69ad29b791a9777e6"
+      "sha256": "33d3253cae554d1366def7bda6ebd9dc4872980a8c99b383dfe236466b6e6cae"
     },
     {
       "path": "agents/content-enricher.agent.md",
@@ -62,20 +62,12 @@
       "sha256": "a0b7238257913c6e7f45b7d3732bbb201797e703d6a7445265286313f151ba75"
     },
     {
-      "path": "agents/module-doc-author.agent.md",
-      "sha256": "2cc77165bd25040efba5e3ffca2cc2e340e5d3a8a8ac7f90622dc09d83e7d5c9"
-    },
-    {
-      "path": "agents/module-doc-validator.agent.md",
-      "sha256": "bfd91a9ac4f945e9b96deef27eeb4268b75eb7652efe8ca019dd6ade90433260"
-    },
-    {
       "path": "agents/navigator.agent.md",
       "sha256": "1c720eb7a537f1ca6167629a89268fdcfaf13997c4dc47040e735b95bb699cfb"
     },
     {
       "path": "agents/orchestrator.agent.md",
-      "sha256": "f241fba7417b96f15099b843b9d4eb4cdc8d2ac5c7bda52cfc603a9c566d551b"
+      "sha256": "fc341f842edb3080faee203e46cd683b4e2e257e6dadd16c8d5f722ad265d517"
     },
     {
       "path": "agents/output-compiler.agent.md",
@@ -103,7 +95,7 @@
     },
     {
       "path": "agents/quality-auditor.agent.md",
-      "sha256": "a82098be90000f6f5e6556f2e44fbce062b99c600758058e8195604257ff62d7"
+      "sha256": "6b602c3d56d7f357c7bde5345aff9ee6abc178a00149b0e662504bdaab5177cf"
     },
     {
       "path": "agents/reference-manager.agent.md",
@@ -115,7 +107,7 @@
     },
     {
       "path": "agents/retrieval-integrator.agent.md",
-      "sha256": "ab64cad9318c90e0f3b9c9ee606311cd00cf434bd3581796ff841b7e13ae0909"
+      "sha256": "073b700d3118b79c37db742f79abf9a67207f9f257b7f7e7254bf1652e7857ab"
     },
     {
       "path": "agents/schemas-expert.agent.md",
@@ -123,7 +115,7 @@
     },
     {
       "path": "agents/security.agent.md",
-      "sha256": "e687642749fccaba2f12c096a4e98e31f1bd902b6e4cf71dc9f254de6ca581c6"
+      "sha256": "3c0eb55f8a4635ca8d587b0592b7a1a6d3206e76cfbff182db38fc384e119b9f"
     },
     {
       "path": "agents/team-builder.agent.md",
@@ -131,7 +123,7 @@
     },
     {
       "path": "agents/technical-validator.agent.md",
-      "sha256": "76d58c92b973c30a8fd9d999e484ef1b6b42096bcc231073507d9819f96cd875"
+      "sha256": "19324bbccbcfc389099770d30f8da4811424affee6c65c6537dfd4a6294e1b77"
     },
     {
       "path": "agents/template-library-expert.agent.md",
@@ -150,6 +142,6 @@
       "sha256": "28aa6667f79eefc110da63836d0c7601c4c6c67b5387a248f2d676d6e6483149"
     }
   ],
-  "inventory_count": 35,
+  "inventory_count": 33,
   "bridge_version": "1"
 }

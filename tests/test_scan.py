@@ -365,3 +365,53 @@ def test_scan_directory_skips_agentteams_backups(tmp_path):
     assert any("live.agent.md" in p for p in flagged_paths)
     assert not any(".agentteams-backups" in p for p in flagged_paths)
 
+
+# ---------------------------------------------------------------------------
+# SEC-01: Entropy detector false-positive regression tests
+# ---------------------------------------------------------------------------
+
+def test_entropy_fp_path_slug_with_downstream_digit():
+    """SEC-01: A path-like string (>=24 chars, all letters+slashes) must NOT
+    trigger the entropy detector when a digit appears later on the same line.
+
+    Root cause: the old (?=.*\\d) lookahead scanned the full remaining line,
+    so 'github/workflows/security' (25 chars, no digit) was flagged because
+    '09' in a trailing timestamp satisfied (?=.*\\d).
+    """
+    # Mimics the real false-positive line from security-vulnerability-watch.json
+    content = "github/workflows/security-maintenance.yml; scheduled 09:00 EDT"
+    findings = scan_content(content)
+    cred = [f for f in findings if f.category == "credential"]
+    assert not cred, (
+        f"Path slug with downstream digit should not trigger entropy detector: {cred}"
+    )
+
+
+def test_entropy_fp_all_digit_token_with_downstream_letter():
+    """SEC-01: A 24-digit all-numeric token must NOT trigger the entropy
+    detector when a letter appears later on the same line.
+
+    Root cause: the old (?=.*[A-Za-z]) lookahead scanned the full remaining
+    line, so a truncated numeric checksum was flagged because any letter
+    elsewhere on the line satisfied the lookahead.
+
+    Note: the separator before the token must not be in [A-Za-z0-9+/=] so
+    that the token itself is isolated as all-digit (colon+space works).
+    """
+    content = "checksum: 012345678901234567890123 verified by admin"
+    findings = scan_content(content)
+    cred = [f for f in findings if f.category == "credential"]
+    assert not cred, (
+        f"All-digit token with downstream letter should not trigger entropy detector: {cred}"
+    )
+
+
+def test_entropy_genuine_mixed_token_still_flagged():
+    """SEC-01: A genuine 24-char mixed alphanumeric token must still be
+    detected even after the lookahead fix.
+    """
+    content = "client_secret = AbCdEfGhIjKlMnOpQrStUv12"
+    findings = scan_content(content)
+    cred = [f for f in findings if f.category == "credential"]
+    assert cred, "Genuine mixed-alphanumeric secret token should still be flagged"
+

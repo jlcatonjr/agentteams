@@ -14,6 +14,7 @@ from agentteams.vscode_tasks import (
     ProjectCommand,
     _assign_group_defaults,
     _classify_group,
+    _find_tasks_close_bracket,
     _from_goose_recipes,
     _from_makefile,
     _from_package_json,
@@ -144,15 +145,81 @@ class TestFromMakefile:
         labels = {c.label for c in cmds}
         assert labels == {"make: test", "make: build", "make: lint"}
 
-    def test_phony_only_not_all_targets(self, tmp_path):
+    def test_non_phony_rule_headers_are_included(self, tmp_path):
+        """Makefile with no .PHONY still yields tasks for rule-header targets."""
         (tmp_path / "Makefile").write_text(
-            ".PHONY: test\ntest:\n\tpytest\nhidden-target:\n\techo hi\n",
+            "build:\n\tgcc main.c -o app\n\ntest:\n\tpytest\n\nlint:\n\truff check .\n",
             encoding="utf-8",
         )
         cmds = _from_makefile(tmp_path)
         labels = {c.label for c in cmds}
-        assert labels == {"make: test"}
-        assert "make: hidden-target" not in labels
+        assert labels == {"make: build", "make: test", "make: lint"}
+
+    def test_rule_headers_union_with_phony(self, tmp_path):
+        """Targets in .PHONY and additional rule-header-only targets are all included."""
+        (tmp_path / "Makefile").write_text(
+            ".PHONY: test\ntest:\n\tpytest\ninstall:\n\tpip install .\n",
+            encoding="utf-8",
+        )
+        cmds = _from_makefile(tmp_path)
+        labels = {c.label for c in cmds}
+        assert "make: test" in labels
+        assert "make: install" in labels
+
+    def test_no_duplicates_when_target_is_both_phony_and_rule_header(self, tmp_path):
+        """A target in .PHONY that also has an explicit rule header appears once."""
+        (tmp_path / "Makefile").write_text(
+            ".PHONY: build\nbuild:\n\tgcc main.c\n",
+            encoding="utf-8",
+        )
+        cmds = _from_makefile(tmp_path)
+        labels = [c.label for c in cmds]
+        assert labels.count("make: build") == 1
+
+    def test_duplicate_rule_headers_appear_only_once(self, tmp_path):
+        """A target defined more than once (e.g. inside ifeq/else blocks) is emitted once."""
+        (tmp_path / "Makefile").write_text(
+            "ifeq ($(OS),Windows)\nbuild:\n\tcl main.c\nelse\nbuild:\n\tgcc main.c\nendif\n",
+            encoding="utf-8",
+        )
+        cmds = _from_makefile(tmp_path)
+        labels = [c.label for c in cmds]
+        assert labels.count("make: build") == 1
+
+    def test_rule_header_with_inline_comment_is_included(self, tmp_path):
+        """Rule headers followed by an inline comment are still discovered."""
+        (tmp_path / "Makefile").write_text(
+            "deploy: # push to prod\n\t./deploy.sh\n",
+            encoding="utf-8",
+        )
+        cmds = _from_makefile(tmp_path)
+        assert any(c.label == "make: deploy" for c in cmds)
+
+    def test_rule_header_with_prerequisites_is_excluded(self, tmp_path):
+        """Targets with prerequisites on the same line are not discovered (safe default)."""
+        (tmp_path / "Makefile").write_text(
+            "all: build test\nbuild:\n\tgcc main.c\ntest:\n\tpytest\n",
+            encoding="utf-8",
+        )
+        cmds = _from_makefile(tmp_path)
+        labels = {c.label for c in cmds}
+        # 'all' carries prerequisites so it does not match _RULE_HEADER_RE
+        assert "make: all" not in labels
+        # standalone targets are captured
+        assert "make: build" in labels
+        assert "make: test" in labels
+
+    def test_non_phony_targets_classified_by_group(self, tmp_path):
+        """Group assignment works for targets discovered via rule headers."""
+        (tmp_path / "Makefile").write_text(
+            "build:\n\tgcc\ntest:\n\tpytest\ndeploy:\n\t./ship.sh\n",
+            encoding="utf-8",
+        )
+        cmds = _from_makefile(tmp_path)
+        by_label = {c.label: c for c in cmds}
+        assert by_label["make: build"].group == "build"
+        assert by_label["make: test"].group == "test"
+        assert by_label["make: deploy"].group == "none"
 
     def test_rejects_shell_expansion_names(self, tmp_path):
         (tmp_path / "Makefile").write_text(
@@ -377,7 +444,9 @@ class TestFromGooseRecipes:
         rd = tmp_path / ".goose" / "recipes"
         self._make_recipe(rd, "orchestrator", "Orchestrator — X")
         cmd = _from_goose_recipes(tmp_path)[0]
-        assert cmd.command == "goose run --recipe .goose/recipes/orchestrator.yaml"
+        assert ".goose/recipes/orchestrator.yaml" in cmd.command
+        assert "goose-or run --recipe" in cmd.command
+        assert "goose-backend.sh" in cmd.command
 
     def test_uses_dedicated_panel(self, tmp_path):
         rd = tmp_path / ".goose" / "recipes"
@@ -475,6 +544,216 @@ class TestRenderTasksJson:
         data = json.loads(content)
         occurrences = sum(1 for t in data["tasks"] if t["label"] == meta_label)
         assert occurrences == 1
+
+
+# ---------------------------------------------------------------------------
+# _find_tasks_close_bracket
+# ---------------------------------------------------------------------------
+
+class TestFindTasksCloseBracket:
+    """Unit tests for the forward-scanning helper that locates the tasks ] ."""
+
+    def test_simple_tasks_array(self):
+        raw = '{\n  "version": "2.0.0",\n  "tasks": [\n  ]\n}'
+        idx = _find_tasks_close_bracket(raw)
+        assert idx != -1
+        assert raw[idx] == "]"
+        # The character after the ] should be a newline (not the outer })
+        assert raw[idx + 1] == "\n"
+
+    def test_task_with_nested_args_array(self):
+        """A ] inside an args sub-array or a trailing comment must not be returned.
+
+        The raw string is intentionally constructed so that raw.rfind(']') would
+        return the ] inside the trailing JSONC comment (a later position than the
+        structural tasks ]), confirming that _find_tasks_close_bracket does not
+        regress to rfind-equivalent behaviour.
+        """
+        raw = (
+            '{\n  "tasks": [\n'
+            '    {"label": "x", "args": ["--filter=[unit]"]}\n'
+            '  ]\n'
+            '  // refs: https://example.com/path[0]\n'
+            '}'
+        )
+        idx = _find_tasks_close_bracket(raw)
+        assert idx != -1
+        assert raw[idx] == "]"
+        # The comment follows the structural tasks ] — confirming we stopped at
+        # the right position, not at the ] inside the args string or the one
+        # inside the trailing comment (which rfind would have returned instead).
+        assert "// refs" in raw[idx + 1:]
+        assert raw[idx + 1:].strip().startswith("//")
+
+    def test_inputs_array_after_tasks(self):
+        """Returns tasks ] even when an 'inputs' array follows with its own ]."""
+        raw = (
+            '{\n'
+            '  "tasks": [\n    {"label": "a"}\n  ],\n'
+            '  "inputs": [\n    {"id": "x", "options": ["y", "z"]}\n  ]\n'
+            '}'
+        )
+        idx = _find_tasks_close_bracket(raw)
+        assert idx != -1
+        assert raw[idx] == "]"
+        # After the tasks ] there is still ",\n  \"inputs\"..." in the file
+        remaining = raw[idx + 1:]
+        assert '"inputs"' in remaining
+
+    def test_jsonc_comment_with_bracket_after_tasks(self):
+        """A // comment containing ] after the tasks array is ignored."""
+        raw = (
+            '{\n'
+            '  "tasks": [\n    {"label": "x"}\n  ]\n'
+            '  // trailing comment with ] bracket\n'
+            '}'
+        )
+        idx = _find_tasks_close_bracket(raw)
+        assert idx != -1
+        assert raw[idx] == "]"
+        # The comment must come after our chosen position
+        remaining = raw[idx + 1:]
+        assert "// trailing comment" in remaining
+
+    def test_block_comment_with_bracket_inside_tasks(self):
+        """A /* */ comment inside the tasks array containing ] is skipped."""
+        raw = (
+            '{\n'
+            '  "tasks": [\n'
+            '    /* section: foo[0] */\n'
+            '    {"label": "x"}\n'
+            '  ]\n'
+            '}'
+        )
+        idx = _find_tasks_close_bracket(raw)
+        assert idx != -1
+        assert raw[idx] == "]"
+        assert raw[idx + 1] == "\n"  # structural ] at end of tasks array
+
+    def test_tasks_key_inside_string_value_is_ignored(self):
+        """A literal string containing 'tasks' must not mislead the scanner."""
+        raw = (
+            '{\n'
+            '  "description": "run tasks: [a, b]",\n'
+            '  "tasks": [\n    {"label": "real"}\n  ]\n'
+            '}'
+        )
+        idx = _find_tasks_close_bracket(raw)
+        assert idx != -1
+        # The returned ] must be the structural close of the real tasks array,
+        # not the one inside the "description" string.
+        before = raw[:idx]
+        assert '"label": "real"' in before
+
+    def test_returns_minus_one_when_no_tasks_key(self):
+        raw = '{\n  "version": "2.0.0"\n}'
+        assert _find_tasks_close_bracket(raw) == -1
+
+    def test_returns_minus_one_on_empty_string(self):
+        assert _find_tasks_close_bracket("") == -1
+
+
+# ---------------------------------------------------------------------------
+# _merge_jsonc (integration)
+# ---------------------------------------------------------------------------
+
+class TestMergeJsonc:
+    """Integration tests that exercise _merge_jsonc end-to-end."""
+
+    def _make_new_content(self) -> str:
+        """Minimal new_content with one AGENTTEAMS task."""
+        return json.dumps({
+            "version": "2.0.0",
+            "tasks": [{
+                "label": "agentteams: update agents",
+                "type": "shell",
+                "command": "agentteams --update --merge",
+                "group": "none",
+                "presentation": {"reveal": "always", "panel": "shared"},
+                "problemMatcher": [],
+                "detail": "AGENTTEAMS",
+            }],
+        }, indent=2) + "\n"
+
+    def test_merge_jsonc_with_inputs_section_produces_valid_json(self):
+        raw = (
+            '{\n'
+            '  "version": "2.0.0",\n'
+            '  "tasks": [\n'
+            '    {\n'
+            '      "label": "user task",\n'
+            '      "type": "shell",\n'
+            '      "command": "echo hi",\n'
+            '      "problemMatcher": []\n'
+            '    }\n'
+            '  ],\n'
+            '  "inputs": [\n'
+            '    {\n'
+            '      "id": "target",\n'
+            '      "type": "promptString",\n'
+            '      "description": "Build target",\n'
+            '      "options": ["debug", "release"]\n'
+            '    }\n'
+            '  ]\n'
+            '}'
+        )
+        existing = json.loads(raw)
+        result = _merge_jsonc(existing, raw, self._make_new_content())
+        # Must be parseable as JSON
+        parsed = json.loads(result)
+        labels = {t["label"] for t in parsed["tasks"]}
+        # User task preserved
+        assert "user task" in labels
+        # AGENTTEAMS task appended
+        assert "agentteams: update agents" in labels
+        # inputs section intact
+        assert "inputs" in parsed
+        assert parsed["inputs"][0]["id"] == "target"
+
+    def test_merge_jsonc_task_with_bracket_in_command_produces_valid_json(self):
+        raw = (
+            '{\n'
+            '  "version": "2.0.0",\n'
+            '  "tasks": [\n'
+            '    {\n'
+            '      "label": "glob task",\n'
+            '      "type": "shell",\n'
+            '      "command": "grep foo[bar] .",\n'
+            '      "args": ["--include=[*.py]"],\n'
+            '      "problemMatcher": []\n'
+            '    }\n'
+            '  ]\n'
+            '}'
+        )
+        existing = json.loads(raw)
+        result = _merge_jsonc(existing, raw, self._make_new_content())
+        parsed = json.loads(result)
+        labels = {t["label"] for t in parsed["tasks"]}
+        assert "glob task" in labels
+        assert "agentteams: update agents" in labels
+
+    def test_merge_jsonc_with_comment_containing_bracket_after_tasks(self):
+        raw = (
+            '{\n'
+            '  "version": "2.0.0",\n'
+            '  "tasks": [\n'
+            '    {\n'
+            '      "label": "my task",\n'
+            '      "type": "shell",\n'
+            '      "command": "make build",\n'
+            '      "problemMatcher": []\n'
+            '    }\n'
+            '  ]\n'
+            '  // see: https://example.com/tasks[0]\n'
+            '}'
+        )
+        existing = json.loads(_strip_jsonc_comments(raw))
+        result = _merge_jsonc(existing, raw, self._make_new_content())
+        # Strip comments before parsing to validate JSON structure
+        parsed = json.loads(_strip_jsonc_comments(result))
+        labels = {t["label"] for t in parsed["tasks"]}
+        assert "my task" in labels
+        assert "agentteams: update agents" in labels
 
 
 # ---------------------------------------------------------------------------
@@ -609,6 +888,43 @@ class TestSentinelMerge:
         new_content = render_tasks_json([])
         result = sentinel_merge(existing, new_content)
         assert result == new_content
+
+    def test_jsonc_with_inputs_array_produces_valid_and_complete_json(self, tmp_path):
+        """sentinel_merge on a JSONC file with 'inputs' must not corrupt it."""
+        existing = tmp_path / "tasks.json"
+        existing.write_text(
+            '{\n'
+            '  // VS Code tasks — hand-authored\n'
+            '  "version": "2.0.0",\n'
+            '  "tasks": [\n'
+            '    {\n'
+            '      "label": "my task",\n'
+            '      "type": "shell",\n'
+            '      "command": "echo ${input:target}",\n'
+            '      "problemMatcher": []\n'
+            '    }\n'
+            '  ],\n'
+            '  "inputs": [\n'
+            '    {\n'
+            '      "id": "target",\n'
+            '      "type": "promptString",\n'
+            '      "description": "Enter target",\n'
+            '      "default": "debug"\n'
+            '    }\n'
+            '  ]\n'
+            '}',
+            encoding="utf-8",
+        )
+        new_content = render_tasks_json([])
+        result = sentinel_merge(existing, new_content)
+        # After stripping comments the result must parse as valid JSON.
+        parsed = json.loads(_strip_jsonc_comments(result))
+        task_labels = {t["label"] for t in parsed["tasks"]}
+        assert "my task" in task_labels
+        assert "agentteams: update agents" in task_labels
+        # inputs section must be preserved and structurally intact
+        assert "inputs" in parsed
+        assert parsed["inputs"][0]["id"] == "target"
 
 
 # ---------------------------------------------------------------------------

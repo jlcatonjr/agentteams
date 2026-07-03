@@ -164,6 +164,80 @@ def test_snapshot_dirty_agent_paths_creates_commit(tmp_path):
     assert _git(repo, "status", "--porcelain", "--", ".github/agents").stdout.strip() == ""
 
 
+def test_snapshot_hook_blocks_falls_back_to_head(tmp_path):
+    """When a hook rejects the commit and allow_no_verify=False, snapshot falls
+    back to HEAD and unstages the staged files."""
+    repo = tmp_path / "r"
+    _mk_agent(repo / ".github" / "agents", "x.agent.md")
+    _init_repo(repo)
+
+    # Install a blocking pre-commit hook.
+    hooks_dir = repo / ".git" / "hooks"
+    hooks_dir.mkdir(exist_ok=True)
+    hook = hooks_dir / "pre-commit"
+    hook.write_text("#!/bin/sh\necho 'hook: blocked'\nexit 1\n", encoding="utf-8")
+    hook.chmod(0o755)
+
+    # Dirty the agent file so a snapshot commit would be attempted.
+    (repo / ".github" / "agents" / "x.agent.md").write_text("changed\n", encoding="utf-8")
+    head_before = _git(repo, "rev-parse", "HEAD").stdout.strip()
+
+    ref, committed = fleet._git_snapshot(repo, allow_no_verify=False)
+
+    assert committed is False, "Hook-blocked commit should not be marked committed"
+    assert ref == head_before, "Ref should fall back to HEAD"
+    # Staged changes must be unstaged (working tree left intact, but index clean).
+    staged = _git(repo, "diff", "--cached", "--name-only").stdout.strip()
+    assert staged == "", "Staged files should be unstaged after hook failure"
+
+
+def test_snapshot_allow_no_verify_bypasses_hook(tmp_path):
+    """With allow_no_verify=True, a blocking hook is skipped and a commit is made."""
+    repo = tmp_path / "r"
+    _mk_agent(repo / ".github" / "agents", "x.agent.md")
+    _init_repo(repo)
+
+    hooks_dir = repo / ".git" / "hooks"
+    hooks_dir.mkdir(exist_ok=True)
+    hook = hooks_dir / "pre-commit"
+    hook.write_text("#!/bin/sh\necho 'hook: blocked'\nexit 1\n", encoding="utf-8")
+    hook.chmod(0o755)
+
+    (repo / ".github" / "agents" / "x.agent.md").write_text("changed\n", encoding="utf-8")
+    head_before = _git(repo, "rev-parse", "HEAD").stdout.strip()
+
+    ref, committed = fleet._git_snapshot(repo, allow_no_verify=True)
+
+    assert committed is True, "Snapshot commit should succeed when hook bypass is explicit"
+    assert ref != head_before
+    staged = _git(repo, "diff", "--cached", "--name-only").stdout.strip()
+    assert staged == ""
+
+
+def test_run_fleet_passes_allow_no_verify_to_snapshot(tmp_path, monkeypatch):
+    """The --fleet-allow-no-verify flag is forwarded from args to _git_snapshot."""
+    ws = tmp_path / "ws"
+    _mk_agent(ws / ".github" / "agents", "_build-description.json", "{}")
+    _mk_agent(ws / ".github" / "agents", "a.agent.md", "x\n")
+    _init_repo(ws)
+    # Dirty the workspace so snapshot tries to commit.
+    (ws / ".github" / "agents" / "a.agent.md").write_text("changed\n", encoding="utf-8")
+
+    captured = {}
+
+    def fake_snapshot(path, *, allow_no_verify=False):
+        captured["allow_no_verify"] = allow_no_verify
+        # Behave as if the commit succeeded.
+        head = _git(path, "rev-parse", "HEAD").stdout.strip()
+        return head, False
+
+    monkeypatch.setattr(fleet, "_git_snapshot", fake_snapshot)
+    monkeypatch.setattr(fleet, "_run_main", lambda argv: (0, "ok"))
+
+    fleet.run_fleet(_Args(fleet=str(tmp_path), yes=True, fleet_allow_no_verify=True), parser=None)
+    assert captured.get("allow_no_verify") is True
+
+
 # ---------------------------------------------------------------------------
 # USER-EDITABLE deletion detection
 # ---------------------------------------------------------------------------
@@ -223,6 +297,7 @@ class _Args:
         self.yes = kw.get("yes", False)
         self.dry_run = kw.get("dry_run", False)
         self.shrink_policy = kw.get("shrink_policy", "preserve")
+        self.fleet_allow_no_verify = kw.get("fleet_allow_no_verify", False)  # NEW
 
 
 def test_dry_run_writes_report_and_no_changes(tmp_path, monkeypatch):
@@ -386,6 +461,64 @@ def test_goose_kind_bridge(tmp_path):
         '{"target_framework": "goose"}', encoding="utf-8"
     )
     assert fleet._goose_kind(ws) == "bridge"
+
+
+def test_goose_kind_direct_via_navigator_yaml(tmp_path):
+    """_goose_kind returns 'direct' for a workspace with navigator.yaml (not orchestrator.yaml)."""
+    ws = tmp_path / "ws"
+    recipes = ws / ".goose" / "recipes"
+    recipes.mkdir(parents=True)
+    (recipes / "navigator.yaml").write_text('version: "1.0.0"\n', encoding="utf-8")
+    assert fleet._goose_kind(ws) == "direct"
+
+
+def test_goose_kind_direct_via_custom_entry_yaml(tmp_path):
+    """_goose_kind returns 'direct' for any non-orchestrator YAML entry recipe."""
+    ws = tmp_path / "ws"
+    recipes = ws / ".goose" / "recipes"
+    recipes.mkdir(parents=True)
+    (recipes / "team-lead.yaml").write_text("name: team-lead\n", encoding="utf-8")
+    assert fleet._goose_kind(ws) == "direct"
+
+
+def test_goose_kind_none_when_only_bridge_fenced_yamls(tmp_path):
+    """_goose_kind returns 'none' when all YAMLs in recipes/ carry the bridge fence
+    and there is no bridge-manifest.json (partial/broken bridge install, no descriptor)."""
+    ws = tmp_path / "ws"
+    recipes = ws / ".goose" / "recipes"
+    recipes.mkdir(parents=True)
+    (recipes / "orchestrator.yaml").write_text(
+        "# AGENTTEAMS-BRIDGE:BEGIN\nversion: '1'\n# AGENTTEAMS-BRIDGE:END\n",
+        encoding="utf-8",
+    )
+    assert fleet._goose_kind(ws) == "none"
+
+
+def test_goose_kind_none_when_bridge_fenced_yamls_and_descriptor(tmp_path):
+    """_goose_kind returns 'none' when all YAMLs are bridge-fenced and a generic
+    _build-description.json descriptor is present (source-side of a partial bridge install)."""
+    ws = tmp_path / "ws"
+    recipes = ws / ".goose" / "recipes"
+    recipes.mkdir(parents=True)
+    (recipes / "orchestrator.yaml").write_text(
+        "# AGENTTEAMS-BRIDGE:BEGIN\nversion: '1'\n# AGENTTEAMS-BRIDGE:END\n",
+        encoding="utf-8",
+    )
+    # Generic descriptor present in every GitHub/Copilot workspace — must not
+    # trigger 'direct'.
+    agents_dir = ws / ".github" / "agents"
+    agents_dir.mkdir(parents=True)
+    (agents_dir / "_build-description.json").write_text("{}", encoding="utf-8")
+    assert fleet._goose_kind(ws) == "none"
+
+
+def test_plan_targets_goose_navigator(tmp_path):
+    """_plan_targets returns ['goose-direct'] for a workspace with navigator.yaml."""
+    ws = tmp_path / "ws"
+    recipes = ws / ".goose" / "recipes"
+    recipes.mkdir(parents=True)
+    (recipes / "navigator.yaml").write_text('version: "1.0.0"\n', encoding="utf-8")
+    assert fleet._plan_targets(ws, "goose") == ["goose-direct"]
 
 
 def test_plan_targets_goose(tmp_path):

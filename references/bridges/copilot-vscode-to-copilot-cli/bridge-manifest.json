@@ -1,139 +1,147 @@
 {
   "schema_version": "1.0",
-  "generated_at": "2026-05-08T18:09:10.624266+00:00",
+  "generated_at": "2026-06-23T19:57:41.590825+00:00",
   "source_framework": "copilot-vscode",
   "target_framework": "copilot-cli",
-  "source_dir": ".github/agents",
+  "source_dir": "/Users/jamescaton/githubrepositories/agentteams/.github/agents",
   "source_hashes": [
     {
-      "path": "agents/_build-description.json",
-      "sha256": "86161560ae2444017f4a697985ed3fc347f5d9683b0dee1540e51fdfe759bea3"
-    },
-    {
       "path": "agents/adversarial.agent.md",
-      "sha256": "c1488681f07d4b85f1c483fe9d607c25226a6e4d9c68f7400ada1186dd24d24d"
+      "sha256": "266c9c0c735bde7871fea84dc45801e1e2e639e839a6338bb15c47fdbcc08e04"
     },
     {
       "path": "agents/agent-refactor.agent.md",
-      "sha256": "97b922a1c40e65b43ac990a0b6b3ef98c8cdee42c4551950ad09294893f7addd"
+      "sha256": "1eff67584db051b7b2d8045dd0f1f6cd3999f73c4ef12da9a6ff973db05ce63f"
     },
     {
       "path": "agents/agent-updater.agent.md",
-      "sha256": "a3dd7e0d950a08ccc52c2ce3b9915f5405d571bd96a259147cb674106b547c91"
+      "sha256": "d9c84979a0d0147b7d9bfd210cc94d744976cf02b4f41986db69d4552a3ab416"
+    },
+    {
+      "path": "agents/api-conformity-tracker.agent.md",
+      "sha256": "a59d572636e2abf0c64dc3b4cde06eed2e44456890f4213aba5253c9bc121a2c"
     },
     {
       "path": "agents/cleanup.agent.md",
-      "sha256": "69d9c45e63320ccf1f019de7b3d85c14f89fe2da46d92e7c4e8f7d44015e8f56"
+      "sha256": "56956c6e0066bc529c061d47dda7cc0d63dc96353697d0f656f06a4006fb45d8"
     },
     {
       "path": "agents/cli-and-examples-expert.agent.md",
-      "sha256": "e6ac7f7bd7db94fc393879bb54176ba760377a426053410a1d52833f26a05fc6"
+      "sha256": "a736c51c269cc0bd0d66d568be76f5e31f0c9210210842a7e1b9bf0a710586de"
     },
     {
       "path": "agents/code-hygiene.agent.md",
-      "sha256": "023dd28e430297133146dd7d8bf82837eaf818178d76334e0cf93ee853de3b0b"
+      "sha256": "0da57aa5f1a202cd599d9e97cd43e2cb0fd9e5c040ec89622f2bfcd3912213fd"
+    },
+    {
+      "path": "agents/cohesion-repairer.agent.md",
+      "sha256": "4f1db5c189108c4386cd6ece9fa6cd9c7add562bfc84baf3ca0876793e5c0c43"
     },
     {
       "path": "agents/conflict-auditor.agent.md",
-      "sha256": "459edb6d0b3813be9acca18a1555a94d0933afc27ff15e3b8c716a77d867806b"
+      "sha256": "3d69ea108d6ada19b91e6384c20fe2f622d69f5a9df056db7bcb17fb237c10a2"
     },
     {
       "path": "agents/conflict-resolution.agent.md",
-      "sha256": "06c222fdecf10b2a4fe705a591dbe953281b93618c62690d416643db7e6286c4"
+      "sha256": "33d3253cae554d1366def7bda6ebd9dc4872980a8c99b383dfe236466b6e6cae"
     },
     {
       "path": "agents/content-enricher.agent.md",
-      "sha256": "7823247ee511d3e528d52b2c44ff6dba9e036f036138f5a40fd1e83cf77f71b3"
+      "sha256": "8bc4b3f860230cba1556e7996d8eae5b447f8b2dd2a43d7b657cc2a04f380946"
     },
     {
       "path": "agents/format-converter.agent.md",
-      "sha256": "f5361e9f3e97cd23cc687d8842c3d6b7f1a213a9cc9adfee67f5016b7680223a"
+      "sha256": "62eb49015972396d906c881fd7737711e413feb39e03a724125e735d78dd5a4f"
     },
     {
       "path": "agents/framework-adapters-expert.agent.md",
-      "sha256": "a31801a3748c95a6782fbbb7436875c59c8fb83092fee98bd2589ab7c8ed400d"
+      "sha256": "194cf91f3ff2e8ca3fa294b3041c787c80248fd8b6b6b07e1ae6e7546d1aab44"
     },
     {
       "path": "agents/git-operations.agent.md",
-      "sha256": "171215c78494bb8af4455d88a3c1e226cecfa3821625a6dc948ec9bba1b5d5ea"
-    },
-    {
-      "path": "agents/module-doc-author.agent.md",
-      "sha256": "1c97092685fa557b6b453a47a51c85adc383d7b672a67582378911a6cce08b4e"
-    },
-    {
-      "path": "agents/module-doc-expert.agent.md",
-      "sha256": "bcc5628978b2439bd532833cf0bc4f47ca11ac986259f292c67b4ce5910163f7"
-    },
-    {
-      "path": "agents/module-doc-validator.agent.md",
-      "sha256": "b46efa7921bb8cb4c4b42dd76ce2709a4aa1f5451ce18eba1bef2ecf0705481c"
+      "sha256": "a0b7238257913c6e7f45b7d3732bbb201797e703d6a7445265286313f151ba75"
     },
     {
       "path": "agents/navigator.agent.md",
-      "sha256": "9d1c6545b8f0f458c301aed86baa8912b4b2fbc5fbaeae808eebeca3fbac14b2"
+      "sha256": "1c720eb7a537f1ca6167629a89268fdcfaf13997c4dc47040e735b95bb699cfb"
     },
     {
       "path": "agents/orchestrator.agent.md",
-      "sha256": "9f50f217251eee1e9c0aa3b6baaa7b1848a822e9c7604b70c63aea870aabcfa5"
+      "sha256": "fc341f842edb3080faee203e46cd683b4e2e257e6dadd16c8d5f722ad265d517"
     },
     {
       "path": "agents/output-compiler.agent.md",
-      "sha256": "3c3a8521a44f6f408c5905e463372fb2be74353c6b4f1bafc94fa0f126bd66fd"
+      "sha256": "1b35c664431b21ddda2df0df6668e6cce398815c2ab2b6911511626d6d1e9ea8"
     },
     {
       "path": "agents/pipeline-core-expert.agent.md",
-      "sha256": "bbfa77e37e82b4382c8fd599267d178bcc0cc665efee3c2bb65f56da47d44d64"
+      "sha256": "e728575ef41c9c9225419005b56fe5aa378657265335892d7d5b184b4d931af1"
+    },
+    {
+      "path": "agents/pr-manager.agent.md",
+      "sha256": "65088f0f6e22df1d5a2fff43b7f47ec0f7025fe3dc52a55d2f1fe83a80e02efe"
+    },
+    {
+      "path": "agents/pr-notifier.agent.md",
+      "sha256": "597ecf6a9f2a93717cdb8326dab2184952c7f3a8679e1d6e4357dac07eef38c3"
+    },
+    {
+      "path": "agents/pr-reminder.agent.md",
+      "sha256": "2f99ba1e16f89e55ca6c56477fc9f7ae4fadc7ebf8730904883311763be3ceeb"
     },
     {
       "path": "agents/primary-producer.agent.md",
-      "sha256": "829e6b27ba6a6172a900228985874d5988c2e3b846deb4f6dd2084547711568a"
+      "sha256": "c4d93d442acaea4c9f076344272938444bae18de0cfce38f45686d5c78dd1729"
     },
     {
       "path": "agents/quality-auditor.agent.md",
-      "sha256": "2c672ce6db789bc98c793e9e492955d181bac35173ebe44c322762ce989e067a"
+      "sha256": "6b602c3d56d7f357c7bde5345aff9ee6abc178a00149b0e662504bdaab5177cf"
     },
     {
       "path": "agents/reference-manager.agent.md",
-      "sha256": "5d036e958883d39093c713c4ca819a41bad200dcf0beb06acd2748bb3202e1c6"
+      "sha256": "1c6a8e7ae74e7c5df48bd0e644d7039b0ad809536e2e38623f742e73e7da0e48"
     },
     {
       "path": "agents/repo-liaison.agent.md",
-      "sha256": "441a6f9b507f54fa9e4b422be0e42a686179e55eecde61568bb6f7bd3750baf1"
+      "sha256": "56dae8f5e934b52231004f42d712dd2f73d27e496e2f3e9853d033b4bf5641c5"
+    },
+    {
+      "path": "agents/retrieval-integrator.agent.md",
+      "sha256": "073b700d3118b79c37db742f79abf9a67207f9f257b7f7e7254bf1652e7857ab"
     },
     {
       "path": "agents/schemas-expert.agent.md",
-      "sha256": "7bbd0c79d2296347371ef07aa039010f659df5e847fe9e90e0434aade7ac3eb0"
+      "sha256": "7bcc226e1c81dad58ce405dd3afa827da4eba387110cf8cdc1952811bdb85c8c"
     },
     {
       "path": "agents/security.agent.md",
-      "sha256": "4f715dccbf6b70240e1c86dfe7baea5bc1c17615a023f999957a3af159b988a0"
+      "sha256": "3c0eb55f8a4635ca8d587b0592b7a1a6d3206e76cfbff182db38fc384e119b9f"
     },
     {
       "path": "agents/team-builder.agent.md",
-      "sha256": "d8e0be9ad37a45fc1f62f1bef8f5f421f63ad40bae565f65697277228cf2eb78"
+      "sha256": "2c0000df132d01010cb9f2f43dd3fd13edf91e9d4d094d1b66cf71d2ac96b5d8"
     },
     {
       "path": "agents/technical-validator.agent.md",
-      "sha256": "b8cc6c717dad5f90734ba232e3c510dc5e57004fb147506d103c0e9500809244"
+      "sha256": "19324bbccbcfc389099770d30f8da4811424affee6c65c6537dfd4a6294e1b77"
     },
     {
       "path": "agents/template-library-expert.agent.md",
-      "sha256": "4dc69f7d0c304ac7c68a9a63ad6f836b1ccbd15b5d026188093404d353e87ad1"
+      "sha256": "e84cb6fbf6d564c1a381e07c503265787e38fda5c390e27c0fffd4943d9420ff"
     },
     {
       "path": "agents/test-suite-expert.agent.md",
-      "sha256": "df98af1aec2143d03bfb76a5c39e3fc6e7918afb2dac01530ae9a6b9636bd4df"
+      "sha256": "91c1ec5817b0e86d07f142fac44ee6db3620a69c10816713b87c6c7aba2114fb"
     },
     {
       "path": "agents/work-summarizer.agent.md",
-      "sha256": "686dca84d4be2e374e9cc25025f0a6d163e049b52e063db216ab1516bce6d676"
+      "sha256": "29acfad46bc418dd8e71e21804c728290ba2ebe07f1f4cd0d8c9827bdcd89a0a"
     },
     {
       "path": "copilot-instructions.md",
-      "sha256": "3975dce79ad3cdf577d5952c0804d48337fb3e1dbd12ab3cc7688c106d85e675"
+      "sha256": "28aa6667f79eefc110da63836d0c7601c4c6c67b5387a248f2d676d6e6483149"
     }
   ],
-  "inventory_count": 30,
+  "inventory_count": 33,
   "bridge_version": "1"
 }

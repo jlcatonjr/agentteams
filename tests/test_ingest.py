@@ -11,6 +11,7 @@ from agentteams.ingest import (
     validate,
     _slugify,
     _load_markdown,
+    _detect_primary_output_dir,
     parse_dependency_manifests,
     _parse_requirements_txt,
     _parse_package_json,
@@ -411,6 +412,90 @@ def test_parse_dependency_manifests_dedup(tmp_path):
     assert flask_count == 1
 
 
+def test_parse_dependency_manifests_subpackage_requirements_txt(tmp_path):
+    """Monorepo sub-package requirements.txt at depth 2 must be parsed."""
+    pkg_dir = tmp_path / "packages" / "foo"
+    pkg_dir.mkdir(parents=True)
+    (pkg_dir / "requirements.txt").write_text("django==4.2.0\n", encoding="utf-8")
+
+    tools = parse_dependency_manifests(tmp_path)
+    names = [t["name"] for t in tools]
+    assert "django" in names
+
+
+def test_parse_dependency_manifests_subpackage_package_json(tmp_path):
+    """Monorepo sub-package package.json at depth 2 must be parsed."""
+    ui_dir = tmp_path / "packages" / "ui"
+    ui_dir.mkdir(parents=True)
+    (ui_dir / "package.json").write_text(
+        json.dumps({"dependencies": {"vue": "^3.0.0"}}), encoding="utf-8"
+    )
+
+    tools = parse_dependency_manifests(tmp_path)
+    names = [t["name"] for t in tools]
+    assert "vue" in names
+
+
+def test_parse_dependency_manifests_depth_limit_not_exceeded(tmp_path):
+    """Manifests at depth 3 must not be found with the default max_depth=2."""
+    deep_dir = tmp_path / "a" / "b" / "c"   # depth 3
+    deep_dir.mkdir(parents=True)
+    (deep_dir / "requirements.txt").write_text("hidden-dep==1.0.0\n", encoding="utf-8")
+
+    tools = parse_dependency_manifests(tmp_path)  # default max_depth=2
+    names = [t["name"] for t in tools]
+    assert "hidden-dep" not in names
+
+
+def test_parse_dependency_manifests_dedup_root_and_subpackage(tmp_path):
+    """flask listed in both root and a sub-package manifest must appear once."""
+    (tmp_path / "requirements.txt").write_text("flask==2.3.0\n", encoding="utf-8")
+    sub_dir = tmp_path / "packages" / "api"
+    sub_dir.mkdir(parents=True)
+    (sub_dir / "requirements.txt").write_text("flask==3.0.0\n", encoding="utf-8")
+
+    tools = parse_dependency_manifests(tmp_path)
+    flask_entries = [t for t in tools if t["name"].lower() == "flask"]
+    assert len(flask_entries) == 1
+
+
+def test_parse_dependency_manifests_depth2_boundary_inclusive(tmp_path):
+    """Manifests exactly at max_depth=2 must be found (boundary is inclusive)."""
+    pkg_dir = tmp_path / "packages" / "bar"   # depth 2
+    pkg_dir.mkdir(parents=True)
+    (pkg_dir / "requirements.txt").write_text("celery==5.3.0\n", encoding="utf-8")
+
+    tools = parse_dependency_manifests(tmp_path, max_depth=2)
+    names = [t["name"] for t in tools]
+    assert "celery" in names
+
+
+def test_parse_dependency_manifests_max_depth_zero_root_only(tmp_path):
+    """max_depth=0 must find only the root manifest, not any subdirectory."""
+    (tmp_path / "requirements.txt").write_text("flask\n", encoding="utf-8")
+    sub_dir = tmp_path / "packages" / "foo"
+    sub_dir.mkdir(parents=True)
+    (sub_dir / "requirements.txt").write_text("django\n", encoding="utf-8")
+
+    tools = parse_dependency_manifests(tmp_path, max_depth=0)
+    names = [t["name"] for t in tools]
+    assert "flask" in names
+    assert "django" not in names
+
+
+def test_parse_dependency_manifests_node_modules_excluded(tmp_path):
+    """package.json files inside node_modules must not be surfaced."""
+    nm_dir = tmp_path / "node_modules" / "react"
+    nm_dir.mkdir(parents=True)
+    (nm_dir / "package.json").write_text(
+        json.dumps({"dependencies": {"react": "^18.0.0"}}), encoding="utf-8"
+    )
+
+    tools = parse_dependency_manifests(tmp_path)
+    names = [t["name"] for t in tools]
+    assert "react" not in names
+
+
 # ---------------------------------------------------------------------------
 # Expanded tool signatures (R-2)
 # ---------------------------------------------------------------------------
@@ -443,6 +528,127 @@ def test_detect_tools_docker_compose_yaml(tmp_path):
     )
     tool_names = [t["name"] for t in result.get("tools", [])]
     assert "Docker Compose" in tool_names
+
+
+def test_detect_tools_uv(tmp_path):
+    (tmp_path / "uv.lock").write_text("", encoding="utf-8")
+    result = load(
+        _write_brief(tmp_path, {"project_goal": "Test project.", "existing_project_path": str(tmp_path)}),
+        scan_project=True,
+    )
+    tool_names = [t["name"] for t in result.get("tools", [])]
+    assert "uv" in tool_names
+    assert any(t["name"] == "uv" and t.get("category") == "build-system" for t in result.get("tools", []))
+
+
+def test_detect_tools_pyenv_python_version(tmp_path):
+    (tmp_path / ".python-version").write_text("3.12.0\n", encoding="utf-8")
+    result = load(
+        _write_brief(tmp_path, {"project_goal": "Test project.", "existing_project_path": str(tmp_path)}),
+        scan_project=True,
+    )
+    tool_names = [t["name"] for t in result.get("tools", [])]
+    assert "pyenv" in tool_names
+    assert any(t["name"] == "pyenv" and t.get("category") == "language" for t in result.get("tools", []))
+
+
+def test_detect_tools_yarn(tmp_path):
+    (tmp_path / "yarn.lock").write_text("# yarn lockfile v1\n", encoding="utf-8")
+    result = load(
+        _write_brief(tmp_path, {"project_goal": "Test project.", "existing_project_path": str(tmp_path)}),
+        scan_project=True,
+    )
+    tool_names = [t["name"] for t in result.get("tools", [])]
+    assert "Yarn" in tool_names
+    assert any(t["name"] == "Yarn" and t.get("category") == "build-system" for t in result.get("tools", []))
+
+
+def test_detect_tools_pnpm(tmp_path):
+    (tmp_path / "pnpm-lock.yaml").write_text("lockfileVersion: '6.0'\n", encoding="utf-8")
+    result = load(
+        _write_brief(tmp_path, {"project_goal": "Test project.", "existing_project_path": str(tmp_path)}),
+        scan_project=True,
+    )
+    tool_names = [t["name"] for t in result.get("tools", [])]
+    assert "pnpm" in tool_names
+    assert any(t["name"] == "pnpm" and t.get("category") == "build-system" for t in result.get("tools", []))
+
+
+def test_detect_tools_bun(tmp_path):
+    (tmp_path / "bun.lockb").write_bytes(b"")  # binary file; empty bytes is fine
+    result = load(
+        _write_brief(tmp_path, {"project_goal": "Test project.", "existing_project_path": str(tmp_path)}),
+        scan_project=True,
+    )
+    tool_names = [t["name"] for t in result.get("tools", [])]
+    assert "Bun" in tool_names
+    assert any(t["name"] == "Bun" and t.get("category") == "build-system" for t in result.get("tools", []))
+
+
+def test_detect_tools_bun_lock_text(tmp_path):
+    (tmp_path / "bun.lock").write_text("", encoding="utf-8")  # text-format lock (Bun >= 1.1)
+    result = load(
+        _write_brief(tmp_path, {"project_goal": "Test project.", "existing_project_path": str(tmp_path)}),
+        scan_project=True,
+    )
+    tool_names = [t["name"] for t in result.get("tools", [])]
+    assert "Bun" in tool_names
+    assert any(t["name"] == "Bun" and t.get("category") == "build-system" for t in result.get("tools", []))
+
+
+def test_detect_tools_swift(tmp_path):
+    (tmp_path / "Package.swift").write_text("// swift-tools-version:5.9\n", encoding="utf-8")
+    result = load(
+        _write_brief(tmp_path, {"project_goal": "Test project.", "existing_project_path": str(tmp_path)}),
+        scan_project=True,
+    )
+    tool_names = [t["name"] for t in result.get("tools", [])]
+    assert "Swift" in tool_names
+    assert any(t["name"] == "Swift" and t.get("category") == "language" for t in result.get("tools", []))
+
+
+def test_detect_tools_kotlin_gradle(tmp_path):
+    (tmp_path / "build.gradle.kts").write_text("plugins { kotlin(\"jvm\") version \"1.9.0\" }\n", encoding="utf-8")
+    result = load(
+        _write_brief(tmp_path, {"project_goal": "Test project.", "existing_project_path": str(tmp_path)}),
+        scan_project=True,
+    )
+    tool_names = [t["name"] for t in result.get("tools", [])]
+    assert "Kotlin (Gradle)" in tool_names
+    assert any(t["name"] == "Kotlin (Gradle)" and t.get("category") == "build-system" for t in result.get("tools", []))
+
+
+def test_detect_tools_mise(tmp_path):
+    (tmp_path / ".mise.toml").write_text("[tools]\npython = \"3.12\"\n", encoding="utf-8")
+    result = load(
+        _write_brief(tmp_path, {"project_goal": "Test project.", "existing_project_path": str(tmp_path)}),
+        scan_project=True,
+    )
+    tool_names = [t["name"] for t in result.get("tools", [])]
+    assert "mise" in tool_names
+    assert any(t["name"] == "mise" and t.get("category") == "cli" for t in result.get("tools", []))
+
+
+def test_detect_tools_mise_toml_nodot(tmp_path):
+    (tmp_path / "mise.toml").write_text("[tools]\npython = \"3.12\"\n", encoding="utf-8")
+    result = load(
+        _write_brief(tmp_path, {"project_goal": "Test project.", "existing_project_path": str(tmp_path)}),
+        scan_project=True,
+    )
+    tool_names = [t["name"] for t in result.get("tools", [])]
+    assert "mise" in tool_names
+    assert any(t["name"] == "mise" and t.get("category") == "cli" for t in result.get("tools", []))
+
+
+def test_detect_tools_asdf_tool_versions(tmp_path):
+    (tmp_path / ".tool-versions").write_text("python 3.12.0\nnode 20.0.0\n", encoding="utf-8")
+    result = load(
+        _write_brief(tmp_path, {"project_goal": "Test project.", "existing_project_path": str(tmp_path)}),
+        scan_project=True,
+    )
+    tool_names = [t["name"] for t in result.get("tools", [])]
+    assert "asdf" in tool_names
+    assert any(t["name"] == "asdf" and t.get("category") == "cli" for t in result.get("tools", []))
 
 
 def _write_brief(tmp_path, desc):
@@ -513,3 +719,77 @@ def test_scan_skips_retrieval_integration_when_none_detected(tmp_path):
     }
     result = load(_write_brief(tmp_path, brief), scan_project=True)
     assert "retrieval_integration" not in result
+
+
+# ---------------------------------------------------------------------------
+# _detect_primary_output_dir (MAP-07)
+# ---------------------------------------------------------------------------
+
+def test_detect_primary_output_dir_excludes_src(tmp_path):
+    (tmp_path / "src").mkdir()
+    assert _detect_primary_output_dir(tmp_path) is None
+
+
+def test_detect_primary_output_dir_excludes_lib(tmp_path):
+    (tmp_path / "lib").mkdir()
+    assert _detect_primary_output_dir(tmp_path) is None
+
+
+def test_detect_primary_output_dir_excludes_docs(tmp_path):
+    (tmp_path / "docs").mkdir()
+    assert _detect_primary_output_dir(tmp_path) is None
+
+
+def test_detect_primary_output_dir_picks_dist(tmp_path):
+    (tmp_path / "dist").mkdir()
+    assert _detect_primary_output_dir(tmp_path) == "dist/"
+
+
+def test_detect_primary_output_dir_picks_build(tmp_path):
+    (tmp_path / "build").mkdir()
+    assert _detect_primary_output_dir(tmp_path) == "build/"
+
+
+def test_detect_primary_output_dir_picks__site(tmp_path):
+    (tmp_path / "_site").mkdir()
+    assert _detect_primary_output_dir(tmp_path) == "_site/"
+
+
+def test_detect_primary_output_dir_picks_site(tmp_path):
+    (tmp_path / "site").mkdir()
+    assert _detect_primary_output_dir(tmp_path) == "site/"
+
+
+def test_detect_primary_output_dir_picks_public(tmp_path):
+    (tmp_path / "public").mkdir()
+    assert _detect_primary_output_dir(tmp_path) == "public/"
+
+
+def test_detect_primary_output_dir_dist_beats_public(tmp_path):
+    (tmp_path / "dist").mkdir()
+    (tmp_path / "public").mkdir()
+    assert _detect_primary_output_dir(tmp_path) == "dist/"
+
+
+def test_detect_primary_output_dir_returns_none_for_empty(tmp_path):
+    assert _detect_primary_output_dir(tmp_path) is None
+
+
+def test_detect_primary_output_dir_src_and_dist_prefers_dist(tmp_path):
+    (tmp_path / "src").mkdir()
+    (tmp_path / "dist").mkdir()
+    assert _detect_primary_output_dir(tmp_path) == "dist/"
+
+
+def test_scan_does_not_set_primary_output_dir_to_src(tmp_path):
+    (tmp_path / "src").mkdir()
+    (tmp_path / "requirements.txt").write_text("flask==3.0.0\n", encoding="utf-8")
+    brief = {
+        "project_goal": "A Python web application.",
+        "existing_project_path": str(tmp_path),
+    }
+    brief_path = tmp_path / "_brief.json"
+    brief_path.write_text(json.dumps(brief), encoding="utf-8")
+    result = load(brief_path, scan_project=True)
+    assert result.get("primary_output_dir") != "src/"
+    assert result.get("primary_output_dir") is None

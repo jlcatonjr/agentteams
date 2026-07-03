@@ -163,3 +163,36 @@ This precaution binds:
 ## VII. Audit Anchor
 
 If a future bridge-refresh causes information loss, the audit MUST link back to this document and identify which Pre-Flight check failed (or was skipped). A check that was skipped without recorded justification is a process failure separate from the loss itself.
+
+---
+
+## VIII. Fleet Snapshot Commits and Pre-Commit Hooks
+
+The fleet update (`agentteams --fleet … --yes`) creates a
+`chore(fleet): pre-update snapshot` commit in each git workspace before
+writing any changes. This snapshot is the rollback target and diff base.
+
+**Default behavior (no special flag):** the snapshot commit runs with your
+workspace's pre-commit hooks active (no `--no-verify`). If a hook blocks
+the commit, fleet prints a warning to stderr, skips the snapshot (falls back
+to HEAD as the ref), and continues with the update. The fallback means dirty
+state is not captured in a dedicated commit, so `git diff HEAD` after the
+run may be noisier than usual.
+
+**`--fleet-allow-no-verify` (explicit opt-in):** passes `--no-verify` and
+`-c core.hooksPath=/dev/null` to the snapshot commit, bypassing all
+pre-commit hooks. Use this only when:
+- Workspace hooks are known to reject well-formed internal commits (e.g., a
+  commit-signing hook that requires a GPG key not available in the fleet
+  run's environment).
+- You have verified that no security-gate hook (PII scan, branch-protection
+  check) is active in the workspace.
+
+**Risk:** `--fleet-allow-no-verify` silently evades any security gate encoded
+in pre-commit hooks. Treat it as a privileged flag: require explicit operator
+authorization before use, and record the workspace names and justification in
+the closeout work summary.
+
+**Audit anchor:** any fleet run that passes `--fleet-allow-no-verify` should
+be logged. If a security incident is later traced to a snapshot commit, this
+section is the starting point for the audit trail.

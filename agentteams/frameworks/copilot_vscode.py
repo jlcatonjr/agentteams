@@ -14,6 +14,7 @@ from pathlib import Path
 from typing import Any
 
 from .base import FrameworkAdapter
+from agentteams.yaml_frontmatter import parse_yaml_front_matter as _parse_yaml_front_matter
 
 
 class CopilotVSCodeAdapter(FrameworkAdapter):
@@ -48,8 +49,6 @@ class CopilotVSCodeAdapter(FrameworkAdapter):
 # ---------------------------------------------------------------------------
 # YAML front matter helpers
 # ---------------------------------------------------------------------------
-
-_YAML_FRONT_MATTER_RE = re.compile(r"^---\s*\n(.*?)\n---\s*\n", re.DOTALL)
 
 # Required YAML keys for VS Code Copilot agent files
 _REQUIRED_YAML_KEYS = {"name", "description", "user-invokable", "tools", "model"}
@@ -186,8 +185,8 @@ def _split_handoff_entries(block: str) -> list[str]:
 
 def _ensure_yaml_front_matter(content: str, agent_slug: str, manifest: dict[str, Any]) -> str:
     """Verify YAML front matter is present and has required keys; add defaults if not."""
-    match = _YAML_FRONT_MATTER_RE.match(content)
-    if not match:
+    yaml_text, body_text = _parse_yaml_front_matter(content)
+    if yaml_text is None:
         # No front matter — prepend minimal YAML
         project_name = manifest.get("project_name", "Project")
         agent_name = FrameworkAdapter._slug_to_name(agent_slug)
@@ -202,8 +201,7 @@ def _ensure_yaml_front_matter(content: str, agent_slug: str, manifest: dict[str,
         )
         return front_matter + content
 
-    yaml_body = match.group(1)
-    body_text = content[match.end():]
+    yaml_body = yaml_text
     changed = False
 
     # Filter agents: list and handoffs: entries to only include generated team members

@@ -18,6 +18,7 @@ from __future__ import annotations
 
 import datetime as _dt
 import json
+import os
 import re
 import urllib.error
 import urllib.request
@@ -26,7 +27,18 @@ from typing import Any
 
 CLAUDE_DOC_URL = "https://docs.anthropic.com/en/docs/claude-code/sub-agents"
 SNAPSHOT_REL = "tmp/daily-pipeline/framework-research/latest.json"  # gitignored — operator-local
-STALE_DAYS = 7
+try:
+    STALE_DAYS = int(os.environ.get("AGENTTEAMS_STALE_DAYS", "7"))
+except ValueError:
+    raise ValueError(
+        "AGENTTEAMS_STALE_DAYS must be a positive integer, "
+        f"got {os.environ.get('AGENTTEAMS_STALE_DAYS')!r}"
+    ) from None
+if STALE_DAYS < 1:
+    raise ValueError(
+        "AGENTTEAMS_STALE_DAYS must be a positive integer, "
+        f"got {STALE_DAYS!r}"
+    )
 
 EXPECTED_FRONT_MATTER_KEYS = ["name", "description", "tools", "model"]
 EXPECTED_LOCATIONS = [".claude/agents", "CLAUDE.md"]
@@ -445,8 +457,6 @@ def apply_module_patch(proposal: dict[str, Any], repo_root: Path) -> dict[str, A
     Allow-listed operations only. The caller is responsible for
     git-committing on success and running the relevant tests.
     """
-    import os
-
     if os.environ.get("CI") and not os.environ.get("AGENTTEAMS_ALLOW_CI_APPLY"):
         raise RuntimeError(
             "apply_module_patch refuses to run in CI without an explicit "

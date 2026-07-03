@@ -38,9 +38,8 @@ from pathlib import Path
 from typing import Any
 
 from .base import FrameworkAdapter
+from agentteams.yaml_frontmatter import parse_yaml_front_matter as _parse_yaml_front_matter
 
-# Captures the raw YAML body between the opening and closing --- delimiters.
-_YAML_FRONT_MATTER_RE = re.compile(r"^---\s*\n(.*?)\n---\s*\n", re.DOTALL)
 # Matches a single-line YAML scalar: key: value (with optional surrounding quotes).
 _YAML_SCALAR_RE = re.compile(r'^([a-zA-Z][a-zA-Z0-9_-]*)\s*:\s*"?([^"\n]+)"?\s*$', re.MULTILINE)
 # The instructions template opens with a non-YAML "SECTION MANIFEST" HTML comment;
@@ -150,9 +149,9 @@ def _extract_name_description(
     slug-derived fallback when absent."""
     name = ""
     description = ""
-    match = _YAML_FRONT_MATTER_RE.match(content)
-    if match:
-        for key_match in _YAML_SCALAR_RE.finditer(match.group(1)):
+    yaml_text, _ = _parse_yaml_front_matter(content)
+    if yaml_text is not None:
+        for key_match in _YAML_SCALAR_RE.finditer(yaml_text):
             key = key_match.group(1).strip()
             val = key_match.group(2).strip().strip("\"'")
             if key == "name" and not name:

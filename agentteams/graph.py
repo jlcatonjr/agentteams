@@ -32,6 +32,8 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
 
+from agentteams._utils import _split_yaml_front_matter  # shared YAML splitter (MAP-17)
+
 
 # ---------------------------------------------------------------------------
 # Data structures
@@ -57,8 +59,8 @@ class AgentNode:
     Attributes:
         slug:          Machine-readable identifier derived from filename.
         display_name:  Human-readable name from YAML ``name:`` field.
-        agent_type:    Categorical type: governance, domain, workstream-expert,
-                       tool-specialist, or unknown.
+        agent_type:    Categorical type: governance, domain, workstream_expert,
+                       tool_specialist, or unknown.
         user_invokable: True if the agent can be invoked directly by a user.
         tools:         Declared tool list from YAML.
     """
@@ -187,8 +189,8 @@ class TeamGraph:
         lines += [
             "    classDef governance fill:#e8e8ff,stroke:#6666cc,color:#000",
             "    classDef domain    fill:#e8ffe8,stroke:#66aa66,color:#000",
-            "    classDef expert    fill:#fff8e8,stroke:#ccaa44,color:#000",
-            "    classDef tool      fill:#ffe8e8,stroke:#cc6666,color:#000",
+            "    classDef workstream_expert fill:#fff8e8,stroke:#ccaa44,color:#000",
+            "    classDef tool_specialist   fill:#ffe8e8,stroke:#cc6666,color:#000",
             "    classDef unknown   fill:#f5f5f5,stroke:#999,color:#000",
         ]
 
@@ -294,10 +296,10 @@ class TeamGraph:
             "",
             "| Colour | Agent Type |",
             "| --- | --- |",
-            "| ![governance](https://via.placeholder.com/12/e8e8ff/e8e8ff) Blue | Governance |",
-            "| ![domain](https://via.placeholder.com/12/e8ffe8/e8ffe8) Green | Domain |",
-            "| ![expert](https://via.placeholder.com/12/fff8e8/fff8e8) Yellow | Workstream Expert |",
-            "| ![tool](https://via.placeholder.com/12/ffe8e8/ffe8e8) Red | Tool Specialist |",
+            '| <svg width="12" height="12"><rect width="12" height="12" fill="#e8e8ff" stroke="#6666cc"/></svg> Blue-lavender | Governance |',
+            '| <svg width="12" height="12"><rect width="12" height="12" fill="#e8ffe8" stroke="#66aa66"/></svg> Green | Domain |',
+            '| <svg width="12" height="12"><rect width="12" height="12" fill="#fff8e8" stroke="#ccaa44"/></svg> Yellow | Workstream Expert |',
+            '| <svg width="12" height="12"><rect width="12" height="12" fill="#ffe8e8" stroke="#cc6666"/></svg> Red-pink | Tool Specialist |',
             "",
             "---",
             "",
@@ -359,14 +361,23 @@ class TeamGraph:
 # Graph construction
 # ---------------------------------------------------------------------------
 
-#: YAML 'agents: [slug, ...]' — single-line list form
-_AGENTS_LIST_RE = re.compile(r"""['"]([\w][\w-]*)['"]\s*[,\]]""")
+#: Matches the 'handoffs:' top-level key on its own line (block YAML sequence)
+_HANDOFFS_SECTION_RE = re.compile(r"^handoffs:\s*$", re.MULTILINE)
 
-#: 'agent: slug' (inside a handoffs block)
-_HANDOFF_AGENT_RE = re.compile(r"^\s{2,}agent:\s*['\"]?([\w][\w-]*)['\"]?", re.MULTILINE)
+#: Marks the start of each YAML sequence item within a handoffs block.
+#: Uses \s{2,} rather than exactly two spaces so that 3- or 4-space-indented
+#: files (not currently in the corpus but valid YAML) are handled correctly.
+_HANDOFF_ITEM_BOUNDARY_RE = re.compile(r"^\s{2,}- ", re.MULTILINE)
 
-#: 'label: "..."' or 'label: unquoted text' (inside a handoffs YAML sequence item)
-_HANDOFF_LABEL_RE = re.compile(r"^\s+-\s+label:\s*['\"]?([^'\"\n]+)['\"]?\s*$", re.MULTILINE)
+#: Matches 'agent: slug' at the START of a line within a handoff item chunk.
+#: The ^ anchor (with re.MULTILINE) prevents a false match when 'agent:' appears
+#: embedded inside a prompt or send value on the same line as another key.
+_HANDOFF_AGENT_KEY_RE = re.compile(r"^\s*(?:-\s+)?agent:\s*['\"]?([\w][\w-]*)['\"]?", re.MULTILINE)
+
+#: Matches 'label: text' at the START of a line within a handoff item chunk.
+#: The ^ anchor prevents a false match when 'label:' appears embedded inside a
+#: prompt or send value on the same line as another key.
+_HANDOFF_LABEL_KEY_RE = re.compile(r"^\s*(?:-\s+)?label:\s*['\"]?([^'\"\n]+?)['\"]?\s*$", re.MULTILINE)
 
 #: 'name: "<role> — <project>"'
 _NAME_RE = re.compile(r"^name:\s*['\"]?(.+?)['\"]?\s*$", re.MULTILINE)
@@ -376,12 +387,6 @@ _DESC_RE = re.compile(r'^description:\s*["\']?(.+?)["\']?\s*$', re.MULTILINE)
 
 #: 'user-invokable: true/false'
 _INVOKABLE_RE = re.compile(r"^user-invokable:\s*(true|false)", re.MULTILINE | re.IGNORECASE)
-
-#: 'tools: [...]'
-_TOOLS_RE = re.compile(r"tools\s*:\s*\[([^\]]*)\]")
-
-#: 'agents: [...]' (the whole list line, not individual slugs)
-_AGENTS_BLOCK_LINE_RE = re.compile(r"^agents:", re.MULTILINE)
 
 
 def build_graph(
@@ -441,13 +446,12 @@ def build_graph(
         if yaml_block is None:
             continue
 
-        # Handoff edges: walk handoffs block, pairing label + agent slug
-        handoff_agents = _HANDOFF_AGENT_RE.findall(yaml_block)
-        handoff_labels = _HANDOFF_LABEL_RE.findall(yaml_block)
-        for i, target in enumerate(handoff_agents):
+        # Handoff edges: parse each handoff item as a unit so that label: and
+        # agent: are correctly paired regardless of key order, and so that items
+        # with no label: do not skew labels for subsequent items.
+        for target, label in _parse_handoff_blocks(yaml_block):
             if target not in graph.nodes:
                 continue
-            label = handoff_labels[i] if i < len(handoff_labels) else None
             graph.edges.append(GraphEdge(
                 source=slug,
                 target=target,
@@ -455,23 +459,16 @@ def build_graph(
                 label=label,
             ))
 
-        # agents-list edges: slugs declared in 'agents: [...]'
-        agents_block_match = _AGENTS_BLOCK_LINE_RE.search(yaml_block)
-        if agents_block_match:
-            # Find the inline list portion starting from 'agents:'
-            tail = yaml_block[agents_block_match.start():]
-            # Collect all quoted slugs until the first non-list line
-            end_of_list = re.search(r"\n[a-z]", tail)
-            list_text = tail[:end_of_list.start()] if end_of_list else tail
-            for target in _AGENTS_LIST_RE.findall(list_text):
-                if target not in graph.nodes or target == slug:
-                    continue
-                graph.edges.append(GraphEdge(
-                    source=slug,
-                    target=target,
-                    edge_type="agents-list",
-                    label=None,
-                ))
+        # agents-list edges: slugs declared in 'agents:' (inline or block form)
+        for target in _extract_yaml_sequence(yaml_block, "agents"):
+            if target not in graph.nodes or target == slug:
+                continue
+            graph.edges.append(GraphEdge(
+                source=slug,
+                target=target,
+                edge_type="agents-list",
+                label=None,
+            ))
 
     return graph
 
@@ -502,18 +499,18 @@ def generate_graph_document(
 def _split_yaml(content: str) -> tuple[str | None, str]:
     """Split file content into YAML front matter and body.
 
+    Delegates to ``_utils._split_yaml_front_matter``, which uses a line-by-line
+    scan to locate the closing ``---`` delimiter only at column 0.  This prevents
+    the false-positive split that occurred when ``---`` appeared inside a YAML
+    scalar value (e.g. ``description: 'foo---bar'``).  See MAP-17.
+
     Args:
         content: Full file text.
 
     Returns:
         Tuple of (yaml_block, body). yaml_block is None if no front matter.
     """
-    if not content.startswith("---"):
-        return None, content
-    end = content.find("---", 3)
-    if end == -1:
-        return None, content
-    return content[3:end], content[end + 3:]
+    return _split_yaml_front_matter(content)
 
 
 def _extract_name(yaml_block: str, fallback_slug: str) -> str:
@@ -553,8 +550,74 @@ def _extract_user_invokable(yaml_block: str) -> bool:
     return m.group(1).lower() == "true"
 
 
+def _extract_yaml_sequence(yaml_block: str, key: str) -> list[str]:
+    """Return items from a YAML sequence key, handling inline and block forms.
+
+    Inline form::
+
+        key: [item1, 'item2', "item3"]
+
+    Block form::
+
+        key:
+          - item1
+          - 'item2'
+          - "item3"
+
+    Block termination: scanning stops at the first newline that is followed by
+    a non-whitespace, non-carriage-return, non-dash character — i.e., the next
+    top-level YAML key.  This prevents capturing sub-keys (``label:``,
+    ``agent:``) from subsequent YAML blocks.  The explicit ``\\r`` exclusion
+    handles CRLF files: ``\\r`` falls inside ``\\s``, so without it the
+    terminator would stall on ``\\r\\nkey:`` sequences and allow block_text to
+    grow to the entire remaining tail.
+
+    Args:
+        yaml_block: YAML front-matter text (content between the ``---`` fences).
+        key:        YAML key name to look up (e.g. ``"tools"`` or ``"agents"``).
+
+    Returns:
+        List of item strings with surrounding quotes stripped.  Empty list if
+        the key is absent or the sequence contains no items.
+    """
+    # -- Inline form: key: [item1, item2] ------------------------------------
+    inline_re = re.compile(
+        r"^" + re.escape(key) + r"\s*:\s*\[([^\]]*)\]",
+        re.MULTILINE,
+    )
+    m = inline_re.search(yaml_block)
+    if m:
+        return [t.strip().strip("'\"") for t in m.group(1).split(",") if t.strip()]
+
+    # -- Block form: key:\n  - item1\n  - item2 ------------------------------
+    key_re = re.compile(
+        r"^" + re.escape(key) + r"\s*:\s*$",
+        re.MULTILINE,
+    )
+    m = key_re.search(yaml_block)
+    if not m:
+        return []
+
+    # tail begins at the character immediately after the key line (the \n).
+    tail = yaml_block[m.end():]
+
+    # Terminate at the next top-level YAML line: a newline followed by any
+    # character that is neither whitespace nor a dash.  This correctly skips
+    # sequence items ("  - …") and sub-key lines ("    agent: …") while
+    # stopping at the next root key ("handoffs:", "name:", etc.).
+    end_match = re.search(r"\n(?=[^\s\r-])", tail)
+    block_text = tail[: end_match.start()] if end_match else tail
+
+    # Match only bare dash-prefixed items (no sub-key content after the name).
+    # Pattern: optional whitespace, dash, whitespace, optional quote,
+    #          word-and-hyphen slug, optional closing quote, end-of-line.
+    # The \s*$ ensures we do NOT match "  - label: foo" (colon after slug).
+    item_re = re.compile(r"^\s+-\s+['\"]?([\w][\w-]*)['\"]?\s*$", re.MULTILINE)
+    return item_re.findall(block_text)
+
+
 def _extract_tools(yaml_block: str) -> list[str]:
-    """Extract the tools list from YAML.
+    """Extract the tools list from YAML (inline bracket or block dash form).
 
     Args:
         yaml_block: YAML front matter text.
@@ -562,10 +625,75 @@ def _extract_tools(yaml_block: str) -> list[str]:
     Returns:
         List of tool name strings.
     """
-    m = _TOOLS_RE.search(yaml_block)
-    if not m:
+    return _extract_yaml_sequence(yaml_block, "tools")
+
+
+def _extract_agents_list(yaml_block: str) -> list[str]:
+    """Extract agent slugs from the agents: field (inline or block YAML).
+
+    Handles both forms::
+
+        agents: ['slug1', 'slug2']        (quoted inline)
+        agents: [slug1, slug2]            (unquoted inline)
+        agents:                           (block YAML)
+          - slug1
+          - slug2
+
+    This is a named convenience wrapper around :func:`_extract_yaml_sequence`
+    for callers that only need the ``agents:`` field.
+
+    Args:
+        yaml_block: YAML front matter text.
+
+    Returns:
+        List of agent slugs in declaration order.
+    """
+    return _extract_yaml_sequence(yaml_block, "agents")
+
+
+def _parse_handoff_blocks(yaml_block: str) -> list[tuple[str, str | None]]:
+    """Parse the ``handoffs:`` YAML block into ``(agent_slug, label)`` pairs.
+
+    Handles ``label:`` appearing before OR after ``agent:`` within the same
+    item block.  An item with no ``label:`` key yields ``None`` for the label
+    without affecting the labels of subsequent items.
+
+    Args:
+        yaml_block: YAML front matter text.
+
+    Returns:
+        List of ``(agent_slug, label_or_None)`` tuples, one per handoff item
+        that contains a valid ``agent:`` key.  Items with no ``agent:`` key are
+        skipped.
+    """
+    # Isolate the handoffs: section (everything after "handoffs:\n" until the
+    # next top-level YAML key or end of block).
+    section_match = _HANDOFFS_SECTION_RE.search(yaml_block)
+    if not section_match:
         return []
-    return [t.strip().strip("'\"") for t in m.group(1).split(",") if t.strip()]
+    section_text = yaml_block[section_match.end():]
+    next_toplevel = re.search(r"\n[A-Za-z]", section_text)
+    if next_toplevel:
+        section_text = section_text[: next_toplevel.start()]
+
+    # Find the start position of every "  - " item within the section.
+    item_starts = [m.start() for m in _HANDOFF_ITEM_BOUNDARY_RE.finditer(section_text)]
+    if not item_starts:
+        return []
+
+    results: list[tuple[str, str | None]] = []
+    for idx, start in enumerate(item_starts):
+        end = item_starts[idx + 1] if idx + 1 < len(item_starts) else len(section_text)
+        chunk = section_text[start:end]
+
+        agent_m = _HANDOFF_AGENT_KEY_RE.search(chunk)
+        if not agent_m:
+            continue  # skip items that have no agent: key
+        label_m = _HANDOFF_LABEL_KEY_RE.search(chunk)
+        label = label_m.group(1).strip() if label_m else None
+        results.append((agent_m.group(1), label))
+
+    return results
 
 
 def _classify_agent_type(slug: str) -> str:

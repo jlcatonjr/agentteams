@@ -100,6 +100,9 @@ def _from_package_json(project_path: Path) -> list[ProjectCommand]:
 
 
 _PHONY_RE = re.compile(r"^\.PHONY\s*:\s*(.+)$", re.MULTILINE)
+_RULE_HEADER_RE = re.compile(
+    r"^([A-Za-z][A-Za-z0-9_-]*):\s*(?:#.*)?$", re.MULTILINE
+)
 
 
 def _from_makefile(project_path: Path) -> list[ProjectCommand]:
@@ -110,17 +113,39 @@ def _from_makefile(project_path: Path) -> list[ProjectCommand]:
         text = p.read_text(encoding="utf-8")
     except (OSError, UnicodeDecodeError):
         return []
+
+    seen: set[str] = set()
     commands: list[ProjectCommand] = []
+
+    # Pass 1 — explicit .PHONY declarations (existing behaviour).
     for m in _PHONY_RE.finditer(text):
         for name in m.group(1).split():
             name = name.strip()
-            if not name or not _safe_name(name):
+            if not name or not _safe_name(name) or name in seen:
                 continue
+            seen.add(name)
             commands.append(ProjectCommand(
                 label=f"make: {name}",
                 command=f"make {name}",
                 group=_classify_group(name),
             ))
+
+    # Pass 2 — rule headers not already covered by .PHONY.
+    for m in _RULE_HEADER_RE.finditer(text):
+        name = m.group(1)
+        # _safe_name is defensive-only here: every name captured by
+        # _RULE_HEADER_RE is of the form [A-Za-z][A-Za-z0-9_-]*, which is a
+        # strict subset of _safe_name's allowed set.  The check always passes
+        # but is kept to guard against future regex loosening.
+        if name in seen or not _safe_name(name):
+            continue
+        seen.add(name)
+        commands.append(ProjectCommand(
+            label=f"make: {name}",
+            command=f"make {name}",
+            group=_classify_group(name),
+        ))
+
     return commands
 
 
@@ -253,9 +278,11 @@ _GOOSE_PRESENTATION = {"reveal": "always", "panel": "dedicated", "focus": True}
 def _from_goose_recipes(project_path: Path) -> list[ProjectCommand]:
     """Discover Goose recipe YAML files and generate launch tasks.
 
-    Each recipe becomes a `Goose: <Title>` task using ``goose run --recipe``.
-    Recipes use ``panel: dedicated`` so Goose's interactive session gets its
-    own terminal rather than sharing the shared output panel.
+    Each recipe becomes a ``Goose: <Title>`` task. The command sources
+    ``~/.config/goose/goose-backend.sh`` before invoking ``goose-or``, which
+    scopes OPENROUTER_API_KEY to a single goose run without leaving the key in
+    the parent shell. Recipes use ``panel: dedicated`` so Goose's interactive
+    session gets its own terminal.
     """
     recipes_dir = project_path / ".goose" / "recipes"
     if not recipes_dir.is_dir():
@@ -266,9 +293,14 @@ def _from_goose_recipes(project_path: Path) -> list[ProjectCommand]:
         if stem in _GOOSE_SKIP_STEMS or not _safe_name(stem):
             continue
         label = _goose_label(recipe, stem)
+        recipe_rel = f".goose/recipes/{recipe.name}"
+        command = (
+            f"zsh -c '. ~/.config/goose/goose-backend.sh"
+            f" && goose-or run --recipe {recipe_rel}'"
+        )
         commands.append(ProjectCommand(
             label=f"Goose: {label}",
-            command=f"goose run --recipe .goose/recipes/{recipe.name}",
+            command=command,
             group="none",
             presentation=_GOOSE_PRESENTATION,
         ))
@@ -436,12 +468,123 @@ def _merge_standard_json(existing: dict[str, Any], new_content: str) -> str:
     return json.dumps(merged, indent=2, ensure_ascii=False) + "\n"
 
 
+def _find_tasks_close_bracket(raw: str) -> int:
+    """Find the index of the ] that closes the top-level 'tasks' array.
+
+    Performs a forward scan of raw JSONC text, properly tracking string
+    boundaries (including \\ escape sequences) and // / /* */ comment regions,
+    to find the ] that matches the opening [ of the "tasks" value at depth 1
+    of the outer object.  Returns -1 if the tasks array cannot be located.
+
+    This replaces raw.rfind(']'), which fails when:
+      - an "inputs" or other array follows the tasks array (last ] is wrong)
+      - a JSONC comment after the tasks ] contains ] (last ] is inside comment)
+    """
+    n = len(raw)
+
+    def _advance_string(pos: int) -> int:
+        """Return index just past the closing \" of the string starting at pos."""
+        pos += 1  # skip opening "
+        while pos < n:
+            c = raw[pos]
+            if c == "\\":
+                pos += 2  # skip escaped character
+            elif c == '"':
+                return pos + 1
+            else:
+                pos += 1
+        return pos
+
+    def _advance_line_comment(pos: int) -> int:
+        """Return index of the character after the end of a // comment."""
+        while pos < n and raw[pos] != "\n":
+            pos += 1
+        return pos
+
+    def _advance_block_comment(pos: int) -> int:
+        """Return index just past the closing */ of a block comment."""
+        pos += 2  # skip /*
+        while pos < n - 1:
+            if raw[pos] == "*" and raw[pos + 1] == "/":
+                return pos + 2
+            pos += 1
+        return n  # unterminated block comment — consumed to EOF
+
+    brace_depth = 0
+    i = 0
+
+    while i < n:
+        c = raw[i]
+
+        # Skip // and /* */ comments — they are not JSON structure.
+        if c == "/" and i + 1 < n:
+            if raw[i + 1] == "/":
+                i = _advance_line_comment(i + 2)
+                continue
+            if raw[i + 1] == "*":
+                i = _advance_block_comment(i)
+                continue
+
+        if c == '"':
+            if brace_depth == 1:
+                # At top level of the outer object — this might be the "tasks" key.
+                key_end = _advance_string(i)
+                if raw[i:key_end] == '"tasks"':
+                    # Consume whitespace and ':'.
+                    j = key_end
+                    while j < n and raw[j] in " \t\r\n":
+                        j += 1
+                    if j < n and raw[j] == ":":
+                        j += 1
+                        while j < n and raw[j] in " \t\r\n":
+                            j += 1
+                        if j < n and raw[j] == "[":
+                            # Track bracket depth to find the matching ].
+                            arr_depth = 0
+                            while j < n:
+                                ch = raw[j]
+                                if ch == '"':
+                                    j = _advance_string(j)
+                                    continue
+                                if ch == "/" and j + 1 < n:
+                                    if raw[j + 1] == "/":
+                                        j = _advance_line_comment(j + 2)
+                                        continue
+                                    if raw[j + 1] == "*":
+                                        j = _advance_block_comment(j)
+                                        continue
+                                if ch == "[":
+                                    arr_depth += 1
+                                elif ch == "]":
+                                    arr_depth -= 1
+                                    if arr_depth == 0:
+                                        return j
+                                j += 1
+                            return -1  # unmatched opening [
+                i = key_end
+                continue
+            else:
+                i = _advance_string(i)
+                continue
+
+        if c == "{":
+            brace_depth += 1
+        elif c == "}":
+            brace_depth -= 1
+
+        i += 1
+
+    return -1
+
+
 def _merge_jsonc(existing: dict[str, Any], raw: str, new_content: str) -> str:
     """Append new AGENTTEAMS tasks to a JSONC file, preserving original structure.
 
     Rather than re-serialising (which would destroy comments, ``inputs`` blocks,
-    and hand-crafted formatting), this function splices the new task JSON into the
-    raw file string immediately before the closing ``]`` of the tasks array.
+    and hand-crafted formatting), this function locates the structural closing
+    ``]`` of the tasks array via ``_find_tasks_close_bracket`` — a forward scan
+    that tracks string boundaries and JSONC comments — and splices new task JSON
+    immediately before it.
 
     On the second run the file is parsed again (with comments stripped), the
     sentinel labels are found, and ``tasks_to_add`` is empty — so the raw string
@@ -468,10 +611,11 @@ def _merge_jsonc(existing: dict[str, Any], raw: str, new_content: str) -> str:
 
     insertion = ",\n\n" + ",\n\n".join(chunks)
 
-    # Splice before the last `]` in the file.  For any well-structured tasks.json
-    # the last `]` is the one that closes the tasks array (it comes after the final
-    # task object and before the outer `}`).
-    close_pos = raw.rfind("]")
+    # Splice before the structural ] that closes the tasks array.
+    # _find_tasks_close_bracket scans forward with full string and comment
+    # awareness, so ] characters inside task values, nested arrays, or
+    # JSONC comments after the tasks block cannot mislead it.
+    close_pos = _find_tasks_close_bracket(raw)
     if close_pos == -1:
         return raw  # Structure not recognised — leave untouched.
 

@@ -30,6 +30,7 @@ from pathlib import Path
 from typing import Any
 
 from .base import FrameworkAdapter
+from agentteams.yaml_frontmatter import parse_yaml_front_matter as _parse_yaml_front_matter
 
 
 # ---------------------------------------------------------------------------
@@ -122,9 +123,6 @@ class ClaudeAdapter(FrameworkAdapter):
 # Claude Code front matter helpers
 # ---------------------------------------------------------------------------
 
-# Captures the raw YAML body between the opening and closing --- delimiters
-_YAML_FRONT_MATTER_RE = re.compile(r"^---\s*\n(.*?)\n---\s*\n", re.DOTALL)
-
 # Matches a single-line YAML scalar: key: value (with optional surrounding quotes)
 _YAML_SCALAR_RE = re.compile(r'^([a-zA-Z][a-zA-Z0-9_-]*)\s*:\s*"?([^"\n]+)"?\s*$', re.MULTILINE)
 
@@ -138,10 +136,10 @@ def _map_allowed_tools(content: str) -> str:
     Falls back to the blanket default only when no recognizable ``tools:`` block
     is present, so an agent authored without a tool scope keeps working.
     """
-    fm = _YAML_FRONT_MATTER_RE.match(content)
-    if not fm:
+    yaml_text, _ = _parse_yaml_front_matter(content)
+    if yaml_text is None:
         return _CLAUDE_DEFAULT_ALLOWED_TOOLS
-    tools_match = _YAML_TOOLS_RE.search(fm.group(1))
+    tools_match = _YAML_TOOLS_RE.search(yaml_text)
     if not tools_match:
         return _CLAUDE_DEFAULT_ALLOWED_TOOLS
     vscode_tools = [item.strip().strip("'\"") for item in tools_match.group(1).split(",") if item.strip()]
@@ -166,9 +164,8 @@ def _extract_name_description(
     name = ""
     description = ""
 
-    match = _YAML_FRONT_MATTER_RE.match(content)
-    if match:
-        yaml_body = match.group(1)
+    yaml_body, _ = _parse_yaml_front_matter(content)
+    if yaml_body is not None:
         for key_match in _YAML_SCALAR_RE.finditer(yaml_body):
             key = key_match.group(1).strip()
             val = key_match.group(2).strip().strip('"\'')

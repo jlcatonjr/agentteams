@@ -68,6 +68,7 @@ def _tools_to_allowed(tools_raw: str) -> list[str]:
     return result
 
 _FRONT_MATTER_RE = re.compile(r"^---\s*\n(?P<body>.*?)\n---\s*\n", re.DOTALL)
+_BLOCK_LIST_LINE_RE = re.compile(r"^\s*-\s+(.+)")
 _SOURCE_SUFFIX = ".agent.md"
 
 # Slugs treated as workstream experts (collapsed into a parametric stub).
@@ -99,21 +100,75 @@ def _file_sha256(path: Path) -> str:
 
 
 def _parse_front_matter(text: str) -> tuple[dict[str, str], str]:
-    """Very small YAML-flat parser. We only need `name` and `description`.
+    """Very small YAML-flat parser. Handles ``key: value`` on individual lines
+    and block-style sequences (``key:`` followed by indented ``- item`` lines).
 
-    Avoids a YAML dep. Handles ``key: value`` on individual lines; ignores
-    blocks/sequences (they aren't used by agentteams agent files).
+    Avoids a YAML dep. The block-sequence path handles ``tools:`` authored in
+    block style, which is legal YAML and produced by editors and agent files
+    created outside agentteams tooling.  Block-style items are converted to a
+    Python list literal (``['read', 'edit']``) so that ``_parse_tools_list()``
+    can process them unchanged via ``ast.literal_eval``.
+
+    Inline flow-sequence style (``tools: ['read', 'edit']``) is unaffected.
     """
     m = _FRONT_MATTER_RE.match(text)
     if not m:
         return {}, text
     meta: dict[str, str] = {}
-    for line in m.group("body").splitlines():
+    lines = m.group("body").splitlines()
+    i = 0
+    while i < len(lines):
+        line = lines[i]
         if ":" not in line:
+            i += 1
             continue
         key, _, val = line.partition(":")
-        meta[key.strip()] = val.strip().strip("'").strip('"')
+        val = val.strip().strip("'").strip('"')
+        if not val:
+            # Possibly a block-style sequence key. Consume all subsequent
+            # indented list lines (``  - item``) and convert to a Python list
+            # literal so that _parse_tools_list() can handle the result
+            # without modification.
+            items: list[str] = []
+            j = i + 1
+            while j < len(lines):
+                bm = _BLOCK_LIST_LINE_RE.match(lines[j])
+                if bm:
+                    items.append(bm.group(1).strip().strip("'").strip('"'))
+                    j += 1
+                else:
+                    break
+            if items:
+                val = repr(items)
+                i = j
+            else:
+                i += 1
+        else:
+            i += 1
+        meta[key.strip()] = val
     return meta, text[m.end():]
+
+
+def _union_tools_from_sources(sources: Iterable[Path]) -> list[str]:
+    """Return the ordered union of Claude allowed-tool names from a set of source agent files.
+
+    Reads each file's front matter, extracts the ``tools:`` field (if present),
+    maps it through ``_tools_to_allowed``, and merges results preserving first-seen
+    order while deduplicating.
+    """
+    seen: set[str] = set()
+    result: list[str] = []
+    for src in sources:
+        text = src.read_text(encoding="utf-8")
+        meta, _ = _parse_front_matter(text)
+        raw = meta.get("tools", "")
+        if not raw:
+            continue
+        for ct in _tools_to_allowed(raw):
+            if ct not in seen:
+                seen.add(ct)
+                result.append(ct)
+    return result
 
 
 def _slug_from_source(name: str) -> str:
@@ -183,7 +238,9 @@ def _render_subagent_stub(
     return "\n".join(fm_lines) + body
 
 
-def _render_workstream_expert_stub(*, expert_count: int, source_dir_rel: str) -> str:
+def _render_workstream_expert_stub(
+    *, expert_count: int, source_dir_rel: str, tools_union: list[str] | None = None
+) -> str:
     """Render the single parametric workstream-expert stub.
 
     Replaces the N individual ``*-expert.md`` stubs with one subagent that
@@ -197,9 +254,10 @@ def _render_workstream_expert_stub(*, expert_count: int, source_dir_rel: str) ->
         f"source_dir: {source_dir_rel}",
         f"collapsed_experts: {expert_count}",
         "bridge: copilot-vscode-to-claude",
-        "---",
-        "",
     ]
+    if tools_union:
+        fm_lines.append(f"allowed-tools: {', '.join(tools_union)}")
+    fm_lines += ["---", ""]
     body = (
         "# Workstream Expert (parametric, bridged)\n\n"
         "This subagent stands in for N component-specific Workstream Expert agents in "
@@ -303,8 +361,11 @@ def emit_subagent_stubs(
             source_dir_rel = source_dir.as_posix()
         expert_slugs = sorted(_slug_from_source(e.name) for e in experts)
         result.experts_collapsed = expert_slugs
+        tools_union = _union_tools_from_sources(experts)
         stub_content = _render_workstream_expert_stub(
-            expert_count=len(experts), source_dir_rel=source_dir_rel,
+            expert_count=len(experts),
+            source_dir_rel=source_dir_rel,
+            tools_union=tools_union,
         )
         out_path = target_dir / "workstream-expert.md"
         if out_path.exists() and not overwrite:
@@ -371,6 +432,7 @@ __all__ = [
     "StubEmissionResult",
     "_parse_tools_list",
     "_tools_to_allowed",
+    "_union_tools_from_sources",
     "collect_source_agents",
     "detect_stub_drift",
     "emit_subagent_stubs",

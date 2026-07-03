@@ -32,6 +32,7 @@ import io
 import json
 import re
 import subprocess
+import sys
 from dataclasses import dataclass, field, asdict
 from datetime import datetime, timezone
 from pathlib import Path
@@ -129,12 +130,17 @@ def _agent_paths(ws: Path) -> list[str]:
     return rels
 
 
-def _git_snapshot(ws: Path) -> tuple[str | None, bool]:
+def _git_snapshot(ws: Path, *, allow_no_verify: bool = False) -> tuple[str | None, bool]:
     """Commit the current agent-infra state as a recoverable snapshot.
 
     Returns (snapshot_ref, committed). If the agent paths are already clean, the
     current HEAD is the snapshot (committed=False). If dirty, a snapshot commit
     is created over just the agent-infra paths (committed=True).
+
+    By default hooks run normally. Pass allow_no_verify=True (exposed via the
+    --fleet-allow-no-verify CLI flag) to bypass hooks with --no-verify and
+    core.hooksPath=/dev/null — use only when workspace hooks are known-safe to
+    skip (e.g., a signing hook that would reject an ephemeral internal commit).
     """
     paths = _agent_paths(ws)
     if not paths:
@@ -148,14 +154,30 @@ def _git_snapshot(ws: Path) -> tuple[str | None, bool]:
     # Stage only the agent-infra paths and commit a snapshot (does not touch
     # unrelated working-tree changes elsewhere in the repo).
     _git(ws, "add", "--", *paths)
-    commit = _git(
-        ws, "-c", "core.hooksPath=/dev/null", "commit", "--no-verify", "-m",
-        "chore(fleet): pre-update snapshot",
-    )
+    if allow_no_verify:
+        commit = _git(
+            ws, "-c", "core.hooksPath=/dev/null", "commit", "--no-verify",
+            "-m", "chore(fleet): pre-update snapshot",
+        )
+    else:
+        commit = _git(ws, "commit", "-m", "chore(fleet): pre-update snapshot")
     if commit.returncode != 0:
-        # Nothing to commit (e.g. only ignored files) → fall back to HEAD.
+        # Determine why the commit failed: if the staged files are still staged,
+        # a hook blocked the write; if nothing is staged, there was nothing to
+        # commit (race or empty diff).  This is more reliable than inspecting
+        # stderr text, which varies by locale and git version.
+        still_staged = _git(ws, "diff", "--cached", "--name-only", "--", *paths).stdout.strip()
+        if not allow_no_verify and still_staged:
+            print(
+                f"    [WARN] snapshot: pre-commit hook blocked the snapshot commit in {ws}; "
+                "falling back to HEAD (dirty state not captured). "
+                "Pass --fleet-allow-no-verify to bypass hooks for this run.",
+                file=sys.stderr,
+            )
+        _git(ws, "restore", "--staged", "--", *paths)
         head = _git(ws, "rev-parse", "HEAD")
         return (head.stdout.strip() or None, False)
+
     head = _git(ws, "rev-parse", "HEAD")
     return (head.stdout.strip() or None, True)
 
@@ -223,8 +245,16 @@ def _goose_kind(ws: Path) -> str:
                 data = json.loads(mf.read_text(encoding="utf-8"))
                 if data.get("target_framework") == "goose":
                     return "bridge"
-    if (ws / ".goose" / "recipes" / "orchestrator.yaml").exists():
-        return "direct"
+    # Any YAML in recipes/ that does not carry a bridge fence is a direct
+    # team entry point.  (Bridge signal was already checked above; this
+    # handles non-orchestrator entry recipes such as navigator.yaml.)
+    recipes_dir = ws / ".goose" / "recipes"
+    for yaml_file in sorted(recipes_dir.glob("*.yaml")):
+        with contextlib.suppress(OSError):
+            if _BRIDGE_FENCE not in yaml_file.read_text(
+                encoding="utf-8", errors="ignore"
+            ):
+                return "direct"
     return "none"
 
 
@@ -477,6 +507,7 @@ def run_fleet(args, parser) -> int:
     frameworks = getattr(args, "fleet_frameworks", "both")
     apply = bool(getattr(args, "yes", False)) and not getattr(args, "dry_run", False)
     shrink_policy = getattr(args, "shrink_policy", "preserve") or "preserve"
+    allow_no_verify = bool(getattr(args, "fleet_allow_no_verify", False))
     run_id = datetime.now(timezone.utc).strftime("%Y%m%d-%H%M%S")
     report_root = Path(getattr(args, "fleet_report", None) or (parent / ".agentteams-fleet")) / run_id
 
@@ -504,7 +535,7 @@ def run_fleet(args, parser) -> int:
         # Snapshot once per workspace before any apply.
         snap_ref = None
         if apply and is_git:
-            snap_ref, committed = _git_snapshot(ws)
+            snap_ref, committed = _git_snapshot(ws, allow_no_verify=allow_no_verify)
             wr.snapshot_ref, wr.snapshot_committed = snap_ref, committed
             print(f"    snapshot: {snap_ref[:10] if snap_ref else '—'}"
                   f"{' (commit created)' if committed else ' (HEAD; clean)'}")

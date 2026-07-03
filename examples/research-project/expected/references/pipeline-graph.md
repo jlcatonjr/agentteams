@@ -12,8 +12,8 @@
 flowchart LR
     classDef governance fill:#e8e8ff,stroke:#6666cc,color:#000
     classDef domain    fill:#e8ffe8,stroke:#66aa66,color:#000
-    classDef expert    fill:#fff8e8,stroke:#ccaa44,color:#000
-    classDef tool      fill:#ffe8e8,stroke:#cc6666,color:#000
+    classDef workstream_expert fill:#fff8e8,stroke:#ccaa44,color:#000
+    classDef tool_specialist   fill:#ffe8e8,stroke:#cc6666,color:#000
     classDef unknown   fill:#f5f5f5,stroke:#999,color:#000
     adversarial["Adversarial"]
     class adversarial governance
@@ -87,6 +87,29 @@ flowchart LR
     orchestrator -->|"Cross-Repository Liaison"| repo_liaison
     orchestrator -->|"Summarize Work Period"| work_summarizer
     orchestrator -->|"Git Operations"| git_operations
+    orchestrator -.-> navigator
+    orchestrator -.-> security
+    orchestrator -.-> code_hygiene
+    orchestrator -.-> adversarial
+    orchestrator -.-> conflict_auditor
+    orchestrator -.-> conflict_resolution
+    orchestrator -.-> cleanup
+    orchestrator -.-> agent_updater
+    orchestrator -.-> agent_refactor
+    orchestrator -.-> repo_liaison
+    orchestrator -.-> git_operations
+    orchestrator -.-> work_summarizer
+    orchestrator -.-> primary_producer
+    orchestrator -.-> quality_auditor
+    orchestrator -.-> cohesion_repairer
+    orchestrator -.-> style_guardian
+    orchestrator -.-> technical_validator
+    orchestrator -.-> format_converter
+    orchestrator -.-> reference_manager
+    orchestrator -.-> output_compiler
+    orchestrator -.-> tool_doc_researcher
+    orchestrator -.-> ch01_introduction_expert
+    orchestrator -.-> ch02_literature_expert
     navigator -->|"Return to Orchestrator"| orchestrator
     security -->|"Return to Orchestrator"| orchestrator
     code_hygiene -->|"Security Clearance (for Deletions)"| security
@@ -202,10 +225,10 @@ flowchart LR
 
 | Colour | Agent Type |
 | --- | --- |
-| ![governance](https://via.placeholder.com/12/e8e8ff/e8e8ff) Blue | Governance |
-| ![domain](https://via.placeholder.com/12/e8ffe8/e8ffe8) Green | Domain |
-| ![expert](https://via.placeholder.com/12/fff8e8/fff8e8) Yellow | Workstream Expert |
-| ![tool](https://via.placeholder.com/12/ffe8e8/ffe8e8) Red | Tool Specialist |
+| <svg width="12" height="12"><rect width="12" height="12" fill="#e8e8ff" stroke="#6666cc"/></svg> Blue-lavender | Governance |
+| <svg width="12" height="12"><rect width="12" height="12" fill="#e8ffe8" stroke="#66aa66"/></svg> Green | Domain |
+| <svg width="12" height="12"><rect width="12" height="12" fill="#fff8e8" stroke="#ccaa44"/></svg> Yellow | Workstream Expert |
+| <svg width="12" height="12"><rect width="12" height="12" fill="#ffe8e8" stroke="#cc6666"/></svg> Red-pink | Tool Specialist |
 
 ---
 
@@ -249,8 +272,8 @@ flowchart LR
 | `adversarial` | `agent-updater`, `ch01-introduction-expert`, `ch02-literature-expert`, `orchestrator`, `work-summarizer` | `conflict-auditor`, `orchestrator` |
 | `agent-refactor` | `agent-updater`, `code-hygiene`, `orchestrator` | `conflict-auditor`, `orchestrator` |
 | `agent-updater` | `conflict-auditor`, `conflict-resolution`, `git-operations`, `orchestrator`, `tool-doc-researcher` | `adversarial`, `agent-refactor`, `conflict-auditor`, `orchestrator` |
-| `ch01-introduction-expert` | — | `adversarial`, `orchestrator`, `primary-producer`, `reference-manager` |
-| `ch02-literature-expert` | — | `adversarial`, `orchestrator`, `primary-producer`, `reference-manager` |
+| `ch01-introduction-expert` | `orchestrator` | `adversarial`, `orchestrator`, `primary-producer`, `reference-manager` |
+| `ch02-literature-expert` | `orchestrator` | `adversarial`, `orchestrator`, `primary-producer`, `reference-manager` |
 | `cleanup` | `code-hygiene`, `orchestrator` | `orchestrator` |
 | `code-hygiene` | `orchestrator` | `agent-refactor`, `cleanup`, `conflict-auditor`, `orchestrator`, `security` |
 | `cohesion-repairer` | `orchestrator`, `primary-producer`, `quality-auditor` | `orchestrator`, `quality-auditor`, `style-guardian` |
@@ -260,7 +283,7 @@ flowchart LR
 | `format-converter` | `orchestrator`, `output-compiler` | `orchestrator`, `output-compiler`, `quality-auditor` |
 | `git-operations` | `orchestrator` | `agent-updater`, `conflict-resolution`, `orchestrator`, `security` |
 | `navigator` | `orchestrator` | `orchestrator` |
-| `orchestrator` | `adversarial`, `agent-refactor`, `agent-updater`, `ch01-introduction-expert`, `ch02-literature-expert`, `cleanup`, `code-hygiene`, `cohesion-repairer`, `conflict-auditor`, `conflict-resolution`, `content-enricher`, `format-converter`, `git-operations`, `navigator`, `output-compiler`, `primary-producer`, `quality-auditor`, `reference-manager`, `repo-liaison`, `security`, `style-guardian`, `technical-validator`, `tool-doc-researcher`, `work-summarizer` | `adversarial`, `agent-refactor`, `agent-updater`, `cleanup`, `code-hygiene`, `cohesion-repairer`, `conflict-auditor`, `conflict-resolution`, `format-converter`, `git-operations`, `navigator`, `output-compiler`, `primary-producer`, `quality-auditor`, `reference-manager`, `repo-liaison`, `security`, `style-guardian`, `technical-validator`, `work-summarizer` |
+| `orchestrator` | `adversarial`, `agent-refactor`, `agent-updater`, `ch01-introduction-expert`, `ch02-literature-expert`, `cleanup`, `code-hygiene`, `cohesion-repairer`, `conflict-auditor`, `conflict-resolution`, `content-enricher`, `format-converter`, `git-operations`, `navigator`, `output-compiler`, `primary-producer`, `quality-auditor`, `reference-manager`, `repo-liaison`, `security`, `style-guardian`, `technical-validator`, `tool-doc-researcher`, `work-summarizer` | `adversarial`, `agent-refactor`, `agent-updater`, `ch01-introduction-expert`, `ch02-literature-expert`, `cleanup`, `code-hygiene`, `cohesion-repairer`, `conflict-auditor`, `conflict-resolution`, `format-converter`, `git-operations`, `navigator`, `output-compiler`, `primary-producer`, `quality-auditor`, `reference-manager`, `repo-liaison`, `security`, `style-guardian`, `technical-validator`, `tool-doc-researcher`, `work-summarizer` |
 | `output-compiler` | `format-converter`, `orchestrator` | `format-converter`, `orchestrator`, `technical-validator` |
 | `primary-producer` | `ch01-introduction-expert`, `ch02-literature-expert`, `content-enricher`, `orchestrator`, `quality-auditor`, `style-guardian`, `technical-validator` | `cohesion-repairer`, `conflict-auditor`, `orchestrator`, `quality-auditor`, `style-guardian` |
 | `quality-auditor` | `cohesion-repairer`, `format-converter`, `orchestrator`, `primary-producer` | `cohesion-repairer`, `orchestrator`, `primary-producer`, `style-guardian` |
@@ -270,7 +293,7 @@ flowchart LR
 | `style-guardian` | `cohesion-repairer`, `orchestrator`, `primary-producer`, `quality-auditor` | `orchestrator`, `primary-producer` |
 | `team-builder` | — | — |
 | `technical-validator` | `conflict-auditor`, `content-enricher`, `orchestrator`, `output-compiler`, `work-summarizer` | `conflict-auditor`, `orchestrator`, `primary-producer`, `reference-manager` |
-| `tool-doc-researcher` | — | `agent-updater`, `orchestrator` |
+| `tool-doc-researcher` | `orchestrator` | `agent-updater`, `orchestrator` |
 | `work-summarizer` | `orchestrator` | `adversarial`, `conflict-auditor`, `orchestrator`, `technical-validator` |
 
 ---
@@ -331,6 +354,9 @@ digraph "ResearchPaperProject Agent Team" {
     "orchestrator" -> "repo-liaison" [style=solid, label="Cross-Repository Liaison"];
     "orchestrator" -> "work-summarizer" [style=solid, label="Summarize Work Period"];
     "orchestrator" -> "git-operations" [style=solid, label="Git Operations"];
+    "orchestrator" -> "tool-doc-researcher" [style=dashed];
+    "orchestrator" -> "ch01-introduction-expert" [style=dashed];
+    "orchestrator" -> "ch02-literature-expert" [style=dashed];
     "navigator" -> "orchestrator" [style=solid, label="Return to Orchestrator"];
     "security" -> "orchestrator" [style=solid, label="Return to Orchestrator"];
     "code-hygiene" -> "security" [style=solid, label="Security Clearance (for Deletions)"];
@@ -797,6 +823,144 @@ digraph "ResearchPaperProject Agent Team" {
       "target": "git-operations",
       "edge_type": "handoff",
       "label": "Git Operations"
+    },
+    {
+      "source": "orchestrator",
+      "target": "navigator",
+      "edge_type": "agents-list",
+      "label": null
+    },
+    {
+      "source": "orchestrator",
+      "target": "security",
+      "edge_type": "agents-list",
+      "label": null
+    },
+    {
+      "source": "orchestrator",
+      "target": "code-hygiene",
+      "edge_type": "agents-list",
+      "label": null
+    },
+    {
+      "source": "orchestrator",
+      "target": "adversarial",
+      "edge_type": "agents-list",
+      "label": null
+    },
+    {
+      "source": "orchestrator",
+      "target": "conflict-auditor",
+      "edge_type": "agents-list",
+      "label": null
+    },
+    {
+      "source": "orchestrator",
+      "target": "conflict-resolution",
+      "edge_type": "agents-list",
+      "label": null
+    },
+    {
+      "source": "orchestrator",
+      "target": "cleanup",
+      "edge_type": "agents-list",
+      "label": null
+    },
+    {
+      "source": "orchestrator",
+      "target": "agent-updater",
+      "edge_type": "agents-list",
+      "label": null
+    },
+    {
+      "source": "orchestrator",
+      "target": "agent-refactor",
+      "edge_type": "agents-list",
+      "label": null
+    },
+    {
+      "source": "orchestrator",
+      "target": "repo-liaison",
+      "edge_type": "agents-list",
+      "label": null
+    },
+    {
+      "source": "orchestrator",
+      "target": "git-operations",
+      "edge_type": "agents-list",
+      "label": null
+    },
+    {
+      "source": "orchestrator",
+      "target": "work-summarizer",
+      "edge_type": "agents-list",
+      "label": null
+    },
+    {
+      "source": "orchestrator",
+      "target": "primary-producer",
+      "edge_type": "agents-list",
+      "label": null
+    },
+    {
+      "source": "orchestrator",
+      "target": "quality-auditor",
+      "edge_type": "agents-list",
+      "label": null
+    },
+    {
+      "source": "orchestrator",
+      "target": "cohesion-repairer",
+      "edge_type": "agents-list",
+      "label": null
+    },
+    {
+      "source": "orchestrator",
+      "target": "style-guardian",
+      "edge_type": "agents-list",
+      "label": null
+    },
+    {
+      "source": "orchestrator",
+      "target": "technical-validator",
+      "edge_type": "agents-list",
+      "label": null
+    },
+    {
+      "source": "orchestrator",
+      "target": "format-converter",
+      "edge_type": "agents-list",
+      "label": null
+    },
+    {
+      "source": "orchestrator",
+      "target": "reference-manager",
+      "edge_type": "agents-list",
+      "label": null
+    },
+    {
+      "source": "orchestrator",
+      "target": "output-compiler",
+      "edge_type": "agents-list",
+      "label": null
+    },
+    {
+      "source": "orchestrator",
+      "target": "tool-doc-researcher",
+      "edge_type": "agents-list",
+      "label": null
+    },
+    {
+      "source": "orchestrator",
+      "target": "ch01-introduction-expert",
+      "edge_type": "agents-list",
+      "label": null
+    },
+    {
+      "source": "orchestrator",
+      "target": "ch02-literature-expert",
+      "edge_type": "agents-list",
+      "label": null
     },
     {
       "source": "navigator",
@@ -1446,6 +1610,8 @@ digraph "ResearchPaperProject Agent Team" {
       "adversarial",
       "agent-refactor",
       "agent-updater",
+      "ch01-introduction-expert",
+      "ch02-literature-expert",
       "cleanup",
       "code-hygiene",
       "cohesion-repairer",
@@ -1462,6 +1628,7 @@ digraph "ResearchPaperProject Agent Team" {
       "security",
       "style-guardian",
       "technical-validator",
+      "tool-doc-researcher",
       "work-summarizer"
     ],
     "navigator": [

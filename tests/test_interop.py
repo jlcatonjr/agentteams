@@ -8,7 +8,8 @@ import re
 
 import pytest
 
-from agentteams.interop import detect_framework, run_interop
+from agentteams.interop import detect_framework, export_to_cai, import_from_cai, run_interop
+from agentteams.interop import _strip_framework_wrappers, _frontmatter_value
 
 
 def _vscode_agent(slug: str) -> str:
@@ -138,6 +139,20 @@ def _semantic_line_set(text: str) -> set[str]:
 
 def _token_counts(text: str, tokens: list[str]) -> dict[str, int]:
     return {token: text.count(token) for token in tokens}
+
+
+def _extract_agent_body(cai: dict, slug: str) -> str:
+    """Return the body_markdown for the named agent from a CAI document.
+
+    Raises AssertionError if the slug is not found, so test failures are
+    immediately actionable rather than silently returning an empty string.
+    """
+    for agent in cai.get("agents", []):
+        if agent["slug"] == slug:
+            return agent["body_markdown"]
+    raise AssertionError(
+        f"Slug {slug!r} not found in CAI agents: {[a['slug'] for a in cai.get('agents', [])]}"
+    )
 
 
 @pytest.mark.parametrize(
@@ -439,8 +454,6 @@ def test_chained_a_to_b_to_c_not_worse_than_direct_a_to_c(
 def test_export_to_cai_excludes_reference_and_backup_md(tmp_path):
     """export_to_cai must not slurp non-agent .md files (reference docs, skills,
     or backup copies) as agents — only the real flat agent files."""
-    from agentteams.interop import export_to_cai
-
     agents_dir = tmp_path / ".github" / "agents"
     _build_source("copilot-vscode", agents_dir)  # writes orchestrator.agent.md
 
@@ -458,3 +471,164 @@ def test_export_to_cai_excludes_reference_and_backup_md(tmp_path):
     assert slugs == ["orchestrator"], f"expected only the real agent, got {slugs}"
     # the decoy filenames must not appear as agents under any slug form
     assert not any("pipeline" in s or "reference" in s or "pandas" in s for s in slugs)
+
+
+@pytest.mark.parametrize(
+    "source_framework,middle_framework",
+    [
+        ("copilot-vscode", "claude"),
+        ("copilot-vscode", "copilot-cli"),
+        ("claude", "copilot-vscode"),
+        ("claude", "copilot-cli"),
+        ("copilot-cli", "copilot-vscode"),
+        ("copilot-cli", "claude"),
+    ],
+    ids=[
+        "copilot-vscode->claude->copilot-vscode",
+        "copilot-vscode->copilot-cli->copilot-vscode",
+        "claude->copilot-vscode->claude",
+        "claude->copilot-cli->claude",
+        "copilot-cli->copilot-vscode->copilot-cli",
+        "copilot-cli->claude->copilot-cli",
+    ],
+)
+def test_interop_round_trip_body_fidelity(
+    tmp_path: Path,
+    source_framework: str,
+    middle_framework: str,
+):
+    """Full round-trip A->B->A preserves body_markdown at the CAI layer.
+
+    This is the test called out in MAP-16: compare the final re-imported
+    body_markdown against the *original source* body_markdown, not against
+    a re-processed intermediate.  Silent losses in _strip_framework_wrappers,
+    _strip_handoffs_section, or front-matter reconstruction are caught here
+    before they reach the indirect chained-vs-direct comparisons.
+    """
+    slug = "orchestrator"
+
+    # --- Build source tree ---
+    source_dir = tmp_path / "rt" / "source" / _agents_rel(source_framework)
+    _build_source(source_framework, source_dir)
+
+    # --- Leg 0: capture original body_markdown from CAI export of source ---
+    cai_original = export_to_cai(source_dir, source_framework=source_framework)
+    original_body = _extract_agent_body(cai_original, slug)
+
+    # Sanity-check: the source body must contain the sentinel tokens we care about.
+    # If this fires it means _build_source changed and the test must be updated.
+    for sentinel in ("Body line one.", "KEEP_ME_ALWAYS", "KEEP_BULLET"):
+        assert sentinel in original_body, (
+            f"Sentinel {sentinel!r} missing from source body_markdown — "
+            "check _build_source() for this framework"
+        )
+
+    # --- Leg 1: source -> middle framework ---
+    mid_dir = tmp_path / "rt" / "mid" / _agents_rel(middle_framework)
+    mid_dir.mkdir(parents=True, exist_ok=True)
+    result = import_from_cai(
+        cai_original,
+        target_framework=middle_framework,
+        target_dir=mid_dir,
+        dry_run=False,
+        overwrite=True,
+    )
+    assert result.success, f"Leg 1 errors: {result.errors}"
+
+    # --- Leg 2: middle framework -> source framework (back again) ---
+    cai_mid = export_to_cai(mid_dir, source_framework=middle_framework)
+    final_dir = tmp_path / "rt" / "final" / _agents_rel(source_framework)
+    final_dir.mkdir(parents=True, exist_ok=True)
+    result = import_from_cai(
+        cai_mid,
+        target_framework=source_framework,
+        target_dir=final_dir,
+        dry_run=False,
+        overwrite=True,
+    )
+    assert result.success, f"Leg 2 errors: {result.errors}"
+
+    # --- Leg 3: re-export the final result to CAI to read its body_markdown ---
+    cai_final = export_to_cai(final_dir, source_framework=source_framework)
+    final_body = _extract_agent_body(cai_final, slug)
+
+    # --- Primary assertion: body_markdown is identical after full round-trip ---
+    assert final_body == original_body, (
+        f"Round-trip body loss detected: {source_framework} -> {middle_framework} -> {source_framework}\n"
+        f"--- original body_markdown ---\n{original_body}\n"
+        f"--- final body_markdown ---\n{final_body}\n"
+        f"--- diff: missing lines ---\n"
+        + "\n".join(
+            f"  MISSING: {line!r}"
+            for line in original_body.splitlines()
+            if line and line not in final_body
+        )
+    )
+
+
+class TestStripFrameworkWrappersEmbeddedDashes:
+    """MAP-06 regression: embedded '---' in a block scalar must not cause partial stripping."""
+
+    def test_eof_terminated_front_matter_stripped(self):
+        """Regression (MAP-06): old regex misses closing '---' at EOF without trailing newline.
+        Old code returned the full content unchanged; new code must strip the front matter."""
+        content = "---\nname: foo\n---"  # no trailing newline
+        result = _strip_framework_wrappers(content)
+        assert "name: foo" not in result
+        assert result == ""
+
+    def test_block_scalar_with_dash_separator_fully_stripped(self):
+        content = (
+            "---\n"
+            "name: my-agent\n"
+            "description: |\n"
+            "  See section:\n"
+            "  ---\n"
+            "  Details follow.\n"
+            "---\n"
+            "# Real body\n"
+            "Body line.\n"
+        )
+        result = _strip_framework_wrappers(content)
+        assert "# Real body" in result
+        assert "Body line." in result
+        # The partial front matter that old code would have left behind
+        assert "description: |" not in result
+        assert "name: my-agent" not in result
+
+    def test_mid_line_dashes_not_treated_as_closing_delimiter(self):
+        """MAP-17 mid-line case via _strip_framework_wrappers (mirrors test_graph.py coverage)."""
+        content = "---\nname: foo---bar\ndesc: ok\n---\n# Body\n"
+        result = _strip_framework_wrappers(content)
+        # After stripping, the body is all that remains — front matter keys must not appear
+        assert "name: foo---bar" not in result
+        assert "# Body" in result
+
+    def test_no_front_matter_returns_content_unchanged(self):
+        content = "# Plain markdown\n\nNo front matter.\n"
+        assert _strip_framework_wrappers(content) == content
+
+
+class TestFrontmatterValueEmbeddedDashes:
+    """MAP-06 regression: _frontmatter_value must read keys declared after an embedded '---'."""
+
+    def test_eof_terminated_front_matter_returns_value(self):
+        """Regression (MAP-06): old regex returned '' for all keys when no trailing newline."""
+        content = "---\nname: correct-name\n---"  # no trailing newline
+        assert _frontmatter_value(content, "name") == "correct-name"
+
+    def test_name_key_after_block_scalar_with_embedded_dash(self):
+        # 'name' is declared AFTER a block scalar that contains '---'
+        # Old code would return "" because the regex closed at the embedded '---'.
+        content = (
+            "---\n"
+            "description: |\n"
+            "  ---\n"
+            "name: correct-name\n"
+            "---\n"
+            "# Body\n"
+        )
+        assert _frontmatter_value(content, "name") == "correct-name"
+
+    def test_returns_empty_when_no_front_matter(self):
+        assert _frontmatter_value("# No front matter\n", "name") == ""

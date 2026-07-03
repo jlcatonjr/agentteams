@@ -241,3 +241,83 @@ def test_splice_no_blank_line_accumulation():
         f"blank-line accumulation:\n{thrice!r}"
     # And the body content stays exactly once.
     assert thrice.count("New content.") == 1
+
+
+# --- MAP-19: STALE_DAYS env-var override ---
+
+def test_stale_days_default(monkeypatch):
+    """MAP-19: STALE_DAYS must default to 7 when env var is unset."""
+    import importlib
+    monkeypatch.delenv("AGENTTEAMS_STALE_DAYS", raising=False)
+    importlib.reload(fr)
+    assert fr.STALE_DAYS == 7
+    # No explicit cleanup reload needed: reloading here already leaves
+    # fr.STALE_DAYS = 7, which is the default. Asymmetry with Test B is
+    # intentional — Test B sets a non-default value and must restore it.
+
+
+def test_stale_days_env_var_override(monkeypatch):
+    """MAP-19: AGENTTEAMS_STALE_DAYS env var must override the hardcoded 7."""
+    import importlib
+    monkeypatch.setenv("AGENTTEAMS_STALE_DAYS", "14")
+    importlib.reload(fr)
+    try:
+        assert fr.STALE_DAYS == 14
+    finally:
+        # Unconditional cleanup — restore default so other tests are not
+        # affected even if the assertion above fails.
+        monkeypatch.delenv("AGENTTEAMS_STALE_DAYS", raising=False)
+        importlib.reload(fr)
+
+
+def test_staleness_banner_respects_stale_days(monkeypatch):
+    """MAP-19: _staleness_banner must use the current STALE_DAYS value,
+    not a cached literal. A snapshot 8 days old should be quiet at
+    STALE_DAYS=9 but noisy at STALE_DAYS=7.
+    """
+    import datetime as dt
+
+    eight_days_ago = (
+        dt.datetime.now(dt.timezone.utc) - dt.timedelta(days=8)
+    ).strftime("%Y-%m-%dT%H:%M:%SZ")
+    snapshot = {"generated_at": eight_days_ago}
+
+    # With STALE_DAYS=9: snapshot is 8 days old → no banner.
+    monkeypatch.setattr(fr, "STALE_DAYS", 9)
+    assert fr._staleness_banner(snapshot) == ""
+
+    # With STALE_DAYS=7: snapshot is 8 days old → banner fires.
+    monkeypatch.setattr(fr, "STALE_DAYS", 7)
+    banner = fr._staleness_banner(snapshot)
+    assert "STALE DATA" in banner
+    assert "threshold 7 days" in banner
+
+
+def test_stale_days_non_numeric_raises(monkeypatch):
+    """MAP-19: A non-numeric AGENTTEAMS_STALE_DAYS must raise ValueError at
+    import time with a message that names the env var so operators can trace
+    the crash. Covers strings like 'abc' and floats like '7.5'."""
+    import importlib
+    for bad_value in ("abc", "7.5", ""):
+        monkeypatch.setenv("AGENTTEAMS_STALE_DAYS", bad_value)
+        try:
+            with pytest.raises(ValueError, match="AGENTTEAMS_STALE_DAYS"):
+                importlib.reload(fr)
+        finally:
+            monkeypatch.delenv("AGENTTEAMS_STALE_DAYS", raising=False)
+            importlib.reload(fr)
+
+
+def test_stale_days_non_positive_raises(monkeypatch):
+    """MAP-19: AGENTTEAMS_STALE_DAYS=0 or a negative value must be rejected.
+    Zero makes every snapshot appear stale (age >= 0 is always true);
+    negative values do the same."""
+    import importlib
+    for bad_value in ("0", "-1", "-7"):
+        monkeypatch.setenv("AGENTTEAMS_STALE_DAYS", bad_value)
+        try:
+            with pytest.raises(ValueError, match="AGENTTEAMS_STALE_DAYS"):
+                importlib.reload(fr)
+        finally:
+            monkeypatch.delenv("AGENTTEAMS_STALE_DAYS", raising=False)
+            importlib.reload(fr)

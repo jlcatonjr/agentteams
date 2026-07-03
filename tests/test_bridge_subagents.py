@@ -182,6 +182,166 @@ def test_emit_stubs_edit_only_includes_edit_and_write(tmp_path: Path):
 
 
 # ---------------------------------------------------------------------------
+# MAP-05: block-style tools: in source front matter must produce allowed-tools:
+# ---------------------------------------------------------------------------
+
+_BLOCK_STYLE_AGENT = """\
+---
+name: {slug}
+description: {slug} agent
+tools:
+  - read
+  - edit
+user-invokable: false
+---
+
+# {slug}
+
+Canonical {slug} body.
+"""
+
+
+def test_parse_front_matter_block_style_tools_returns_list_literal():
+    """_parse_front_matter parses block-style tools: into a Python list literal."""
+    text = "---\nname: x\ntools:\n  - read\n  - edit\n---\nbody\n"
+    meta, body = bs._parse_front_matter(text)
+    assert meta["name"] == "x"
+    # The value must be a string that _parse_tools_list can evaluate.
+    parsed = bs._parse_tools_list(meta["tools"])
+    assert parsed == ["read", "edit"]
+
+
+def test_parse_front_matter_inline_style_unaffected():
+    """Inline flow-sequence tools: continues to work after the block-style fix."""
+    text = "---\nname: x\ntools: ['read', 'edit']\n---\nbody\n"
+    meta, _ = bs._parse_front_matter(text)
+    parsed = bs._parse_tools_list(meta["tools"])
+    assert parsed == ["read", "edit"]
+
+
+def test_parse_front_matter_block_style_mixed_with_scalar_keys():
+    """Scalar keys before and after a block-style key are parsed correctly."""
+    text = (
+        "---\n"
+        "name: mixed-agent\n"
+        "tools:\n"
+        "  - execute\n"
+        "  - search\n"
+        "user-invokable: false\n"
+        "---\nbody\n"
+    )
+    meta, _ = bs._parse_front_matter(text)
+    assert meta["name"] == "mixed-agent"
+    assert meta["user-invokable"] == "false"
+    assert bs._parse_tools_list(meta["tools"]) == ["execute", "search"]
+
+
+def test_emit_stubs_block_style_tools_emits_allowed_tools(tmp_path: Path):
+    """Agent file with block-style tools: -> allowed-tools: in Claude stub."""
+    src = tmp_path / ".github" / "agents"
+    src.mkdir(parents=True)
+    agent_text = _BLOCK_STYLE_AGENT.format(slug="work-summarizer")
+    (src / "work-summarizer.agent.md").write_text(agent_text, encoding="utf-8")
+    bs.emit_subagent_stubs(source_dir=src, output_root=tmp_path)
+    stub = (tmp_path / ".claude" / "agents" / "work-summarizer.md").read_text(
+        encoding="utf-8"
+    )
+    # read -> Read; edit -> Edit, Write
+    assert "allowed-tools: Read, Edit, Write" in stub
+
+
+def test_emit_stubs_block_style_tools_quoted_items(tmp_path: Path):
+    """Block-style tools with quoted item values (YAML string scalars) are parsed correctly."""
+    src = tmp_path / ".github" / "agents"
+    src.mkdir(parents=True)
+    agent_text = (
+        "---\n"
+        "name: quoted-tools-agent\n"
+        "description: agent with quoted block items\n"
+        "tools:\n"
+        "  - 'read'\n"
+        "  - 'execute'\n"
+        "user-invokable: false\n"
+        "---\n\n"
+        "# Agent body\n"
+    )
+    (src / "quoted-tools-agent.agent.md").write_text(agent_text, encoding="utf-8")
+    bs.emit_subagent_stubs(source_dir=src, output_root=tmp_path)
+    stub = (tmp_path / ".claude" / "agents" / "quoted-tools-agent.md").read_text(
+        encoding="utf-8"
+    )
+    # read -> Read; execute -> Bash
+    assert "allowed-tools: Read, Bash" in stub
+
+
+# ---------------------------------------------------------------------------
+# MAP-13: parametric workstream-expert stub must emit allowed-tools.
+# ---------------------------------------------------------------------------
+
+
+def test_expert_stub_emits_union_of_tools(tmp_path: Path):
+    """allowed-tools in parametric stub = union of all collapsed expert tools."""
+    src = tmp_path / ".github" / "agents"
+    _src_agent(src, "auth-module-expert", tools="['read', 'edit']")
+    _src_agent(src, "tasks-api-expert", tools="['read', 'execute', 'search']")
+    bs.emit_subagent_stubs(source_dir=src, output_root=tmp_path)
+    stub = (tmp_path / ".claude" / "agents" / "workstream-expert.md").read_text(
+        encoding="utf-8"
+    )
+    # Union of read+edit and read+execute+search, deduplicated, ordered first-seen.
+    # read -> Read; edit -> Edit, Write; execute -> Bash; search -> Grep, Glob
+    assert "allowed-tools: Read, Edit, Write, Bash, Grep, Glob" in stub
+
+
+def test_expert_stub_no_tools_field_emits_no_allowed_tools(tmp_path: Path):
+    """Expert source files with no tools: field → no allowed-tools: in stub."""
+    src = tmp_path / ".github" / "agents"
+    _src_agent(src, "auth-module-expert")   # no tools= kwarg -> no tools: line
+    _src_agent(src, "billing-expert")
+    bs.emit_subagent_stubs(source_dir=src, output_root=tmp_path)
+    stub = (tmp_path / ".claude" / "agents" / "workstream-expert.md").read_text(
+        encoding="utf-8"
+    )
+    assert "allowed-tools" not in stub
+
+
+def test_expert_stub_deduplicates_overlapping_tools(tmp_path: Path):
+    """Overlapping tool declarations across experts produce each Claude tool name once."""
+    src = tmp_path / ".github" / "agents"
+    _src_agent(src, "alpha-expert", tools="['read', 'edit']")
+    _src_agent(src, "beta-expert",  tools="['edit', 'read']")   # exact overlap
+    _src_agent(src, "gamma-expert", tools="['execute']")
+    bs.emit_subagent_stubs(source_dir=src, output_root=tmp_path)
+    stub = (tmp_path / ".claude" / "agents" / "workstream-expert.md").read_text(
+        encoding="utf-8"
+    )
+    line = next(l for l in stub.splitlines() if l.startswith("allowed-tools:"))
+    tools = [t.strip() for t in line.split(":", 1)[1].split(",")]
+    # No duplicates.
+    assert tools == list(dict.fromkeys(tools))
+    # All expected tools present.
+    assert set(tools) == {"Read", "Edit", "Write", "Bash"}
+
+
+def test_expert_stub_partial_tools_field_covers_superset(tmp_path: Path):
+    """Expert files where only some have a tools: field — stub still covers all declared tools."""
+    src = tmp_path / ".github" / "agents"
+    _src_agent(src, "auth-module-expert", tools="['read', 'edit']")
+    _src_agent(src, "reporting-expert")   # no tools: field — should be silently skipped
+    _src_agent(src, "tasks-api-expert",  tools="['execute']")
+    bs.emit_subagent_stubs(source_dir=src, output_root=tmp_path)
+    stub = (tmp_path / ".claude" / "agents" / "workstream-expert.md").read_text(
+        encoding="utf-8"
+    )
+    # read+edit -> Read, Edit, Write; execute -> Bash
+    # The expert with no tools: field must not suppress the other experts' tools.
+    assert "allowed-tools:" in stub
+    line = next(l for l in stub.splitlines() if l.startswith("allowed-tools:"))
+    tools = {t.strip() for t in line.split(":", 1)[1].split(",")}
+    assert tools == {"Read", "Edit", "Write", "Bash"}
+
+
+# ---------------------------------------------------------------------------
 # Goose subagent-stub recipes (plan P3) — opt-in parity with the claude path.
 # ---------------------------------------------------------------------------
 

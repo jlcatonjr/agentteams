@@ -51,8 +51,8 @@ _CREDENTIAL_PATTERNS: list[tuple[str, re.Pattern[str]]] = [
 _HIGH_ENTROPY_TOKEN_RE = re.compile(
     r"(?<![A-Za-z0-9+/=])"
     r"(?=[A-Za-z0-9+/=]{24,}(?![A-Za-z0-9+/=]))"
-    r"(?=.*[A-Za-z])"
-    r"(?=.*\d)"
+    r"(?=[A-Za-z0-9+/=]*[A-Za-z])"
+    r"(?=[A-Za-z0-9+/=]*\d)"
     r"[A-Za-z0-9+/=]{24,}"
 )
 
@@ -258,6 +258,7 @@ _OPERATIONAL_JSON_NAMES = frozenset({
     "memory-index.json",
     "eval-suite.json",
     "doc-hashes.json",
+    "security-vulnerability-watch.json",
 })
 
 

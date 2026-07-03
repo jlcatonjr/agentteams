@@ -696,6 +696,19 @@ def _build_parser() -> argparse.ArgumentParser:
         default=None,
         help="Directory for the fleet report (default: <DIR>/.agentteams-fleet/<run-id>/).",
     )
+    fleet_group.add_argument(
+        "--fleet-allow-no-verify",
+        action="store_true",
+        default=False,
+        dest="fleet_allow_no_verify",
+        help=(
+            "Allow snapshot commits to bypass pre-commit hooks (--no-verify / "
+            "core.hooksPath=/dev/null). Off by default — hooks run normally and a "
+            "warning is printed if a hook blocks the snapshot. Use this flag only "
+            "when workspace hooks are known-safe to skip (e.g., a commit-signing "
+            "hook that would reject the ephemeral internal snapshot commit)."
+        ),
+    )
     add_goose_arguments(parser)
     return parser
 

@@ -16,13 +16,13 @@ from typing import Any
 
 # Single source of truth for the framework-id -> adapter map (CH-05).
 from agentteams.frameworks.registry import FRAMEWORKS as _ADAPTERS
+from agentteams.yaml_frontmatter import parse_yaml_front_matter as _parse_yaml_front_matter
 
 _INSTRUCTIONS_NAMES = {"copilot-instructions.md", "CLAUDE.md"}
 # Subdirectories under (or beside) an agents dir whose .md files are NOT agents:
 # reference docs, Claude skills (a sibling dir), and backup copies of agents.
 # Mirror of convert._PASSTHROUGH_DIRS (kept in sync deliberately — see convert.py).
 _NON_AGENT_DIRS = {"references", "skills", ".agentteams-backups"}
-_YAML_FRONT_MATTER_RE = re.compile(r"^---\s*\n.*?\n---\s*\n", re.DOTALL)
 
 
 @dataclass
@@ -298,7 +298,7 @@ def _slug_from_filename(name: str) -> str:
 
 
 def _strip_framework_wrappers(content: str) -> str:
-    body = _YAML_FRONT_MATTER_RE.sub("", content, count=1)
+    _, body = _parse_yaml_front_matter(content)
     body = _strip_handoffs_section(body)
     return body
 
@@ -323,10 +323,10 @@ def _frontmatter_value(content: str, key: str) -> str:
     are stripped. Used so CAI export captures the agent's real name/description
     (not just the first heading) for round-trip fidelity.
     """
-    fm = _YAML_FRONT_MATTER_RE.match(content)
-    if not fm:
+    yaml_text, _ = _parse_yaml_front_matter(content)
+    if yaml_text is None:
         return ""
-    m = re.search(rf"^{re.escape(key)}:\s*(.+?)\s*$", fm.group(0), re.MULTILINE)
+    m = re.search(rf"^{re.escape(key)}:\s*(.+?)\s*$", yaml_text, re.MULTILINE)
     if not m:
         return ""
     return m.group(1).strip().strip('"').strip("'")

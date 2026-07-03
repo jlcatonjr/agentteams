@@ -46,8 +46,7 @@ functions share.
 
 > *Source: `agentteams/framework_research.py`*
 
-`7` — threshold past which the rendered reference shows a STALE
-banner.
+Default `7`; override via `AGENTTEAMS_STALE_DAYS` environment variable. A non-numeric value raises `ValueError` at import time. Threshold past which the rendered reference shows a STALE banner.
 
 ### `ALLOWED_EXPERT_REFS`
 

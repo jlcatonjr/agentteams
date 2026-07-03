@@ -398,7 +398,13 @@ _TOOL_SIGNATURES: list[tuple[str, str, str]] = [
     ("pyproject.toml", "Python", "language"),
     ("setup.py", "Python", "language"),
     ("Pipfile", "Python", "language"),
+    ("uv.lock", "uv", "build-system"),
+    (".python-version", "pyenv", "language"),
     ("package.json", "Node.js", "language"),
+    ("yarn.lock", "Yarn", "build-system"),
+    ("pnpm-lock.yaml", "pnpm", "build-system"),
+    ("bun.lockb", "Bun", "build-system"),
+    ("bun.lock", "Bun", "build-system"),
     ("Cargo.toml", "Rust", "language"),
     ("go.mod", "Go", "language"),
     ("tsconfig.json", "TypeScript", "language"),
@@ -407,9 +413,11 @@ _TOOL_SIGNATURES: list[tuple[str, str, str]] = [
     ("composer.json", "PHP", "language"),
     ("*.tex", "LaTeX", "language"),
     ("*.bib", "BibTeX", "library"),
+    ("Package.swift", "Swift", "language"),
     # --- Build systems ---
     ("pom.xml", "Java (Maven)", "build-system"),
     ("build.gradle", "Java (Gradle)", "build-system"),
+    ("build.gradle.kts", "Kotlin (Gradle)", "build-system"),
     ("Makefile", "Make", "build-system"),
     ("CMakeLists.txt", "CMake", "build-system"),
     ("webpack.config.*", "Webpack", "build-system"),
@@ -443,6 +451,10 @@ _TOOL_SIGNATURES: list[tuple[str, str, str]] = [
     ("*.graphql", "GraphQL", "library"),
     (".eslintrc*", "ESLint", "library"),
     (".prettierrc*", "Prettier", "library"),
+    # --- Version / toolchain managers ---
+    (".mise.toml", "mise", "cli"),
+    ("mise.toml", "mise", "cli"),
+    (".tool-versions", "asdf", "cli"),
 ]
 
 
@@ -476,7 +488,7 @@ def _detect_tools(project_path: Path) -> list[dict[str, Any]]:
 
 
 def _detect_primary_output_dir(project_path: Path) -> str | None:
-    candidates = ["src", "lib", "html", "docs", "reports", "output"]
+    candidates = ["dist", "build", "html", "reports", "output", "_site", "site", "public"]
     for candidate in candidates:
         if (project_path / candidate).is_dir():
             return f"{candidate}/"
@@ -487,11 +499,14 @@ def _detect_primary_output_dir(project_path: Path) -> str | None:
 # Dependency manifest parsing
 # ---------------------------------------------------------------------------
 
-def parse_dependency_manifests(project_path: Path) -> list[dict[str, Any]]:
+def parse_dependency_manifests(project_path: Path, *, max_depth: int = 2) -> list[dict[str, Any]]:
     """Parse dependency manifests and return discovered library/framework tools.
 
     Args:
         project_path: Root of the project directory.
+        max_depth:    How many directory levels below ``project_path`` to search
+                      for manifest files (depth 0 = project root only; default 2
+                      includes root and two levels of subdirectories).
 
     Returns:
         List of tool dicts with name, version (if available), and category.
@@ -508,8 +523,7 @@ def parse_dependency_manifests(project_path: Path) -> list[dict[str, Any]]:
     ]
 
     for filename, parser in parsers:
-        manifest_path = project_path / filename
-        if manifest_path.exists():
+        for manifest_path in _find_manifests(project_path, filename, max_depth):
             try:
                 text = manifest_path.read_text(encoding="utf-8", errors="replace")
                 for dep in parser(text):
@@ -633,6 +647,32 @@ def _walk_depth(path: Path, max_depth: int = 3) -> list[Path]:
             dirs.clear()
         for fname in files:
             results.append(Path(root) / fname)
+    return results
+
+
+_PRUNE_DIRS = {"node_modules", ".git", "__pycache__", ".venv", "venv", ".tox", "dist", "build", "vendor"}
+
+
+def _find_manifests(project_path: Path, filename: str, max_depth: int) -> list[Path]:
+    """Return all files named ``filename`` found within ``max_depth`` directory
+    levels of ``project_path`` (inclusive of root through depth ``max_depth``).
+
+    Uses the same traversal contract as ``_walk_depth``: ``max_depth=0`` returns
+    only the project root, ``max_depth=2`` (the default for manifest discovery)
+    includes root, immediate subdirectories, and one level further
+    (e.g. ``packages/foo/package.json``).
+
+    Well-known non-source directories (``node_modules``, ``.venv``, ``vendor``,
+    etc.) are pruned before descent to prevent installed-package pollution.
+    """
+    results: list[Path] = []
+    for root, dirs, files in os.walk(project_path):
+        depth = len(Path(root).relative_to(project_path).parts)
+        dirs[:] = [d for d in dirs if d not in _PRUNE_DIRS]  # must come BEFORE depth clear
+        if depth >= max_depth:
+            dirs.clear()  # do not descend further; current level still yielded
+        if filename in files:
+            results.append(Path(root) / filename)
     return results
 
 

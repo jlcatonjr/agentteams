@@ -12,12 +12,12 @@ from abc import ABC, abstractmethod
 from pathlib import Path
 from typing import Any
 
+from agentteams.yaml_frontmatter import parse_yaml_front_matter as _parse_yaml_front_matter
+
 # ---------------------------------------------------------------------------
 # Shared stripping helpers (used by CLI and Claude adapters)
 # ---------------------------------------------------------------------------
 
-_YAML_FRONT_MATTER_RE = re.compile(r"^---\s*\n.*?\n---\s*\n", re.DOTALL)
-_YAML_FRONT_MATTER_CAPTURE_RE = re.compile(r"^---\s*\n(.*?)\n---\s*\n", re.DOTALL)
 _BODY_HANDOFFS_SECTION_RE = re.compile(
     r"^## Handoff Instructions\s*$\n(?P<body>.*?)(?=^##\s+|\Z)",
     re.MULTILINE | re.DOTALL,
@@ -135,9 +135,8 @@ class FrameworkAdapter(ABC):
         format emitted by AgentTeams templates.
         """
         handoffs: list[dict[str, Any]] = []
-        match = _YAML_FRONT_MATTER_CAPTURE_RE.match(content)
-        if match:
-            yaml_body = match.group(1)
+        yaml_body, _ = _parse_yaml_front_matter(content)
+        if yaml_body is not None:
             lines = yaml_body.splitlines()
             idx = 0
             while idx < len(lines):
@@ -236,7 +235,8 @@ class FrameworkAdapter(ABC):
     @staticmethod
     def _strip_yaml_front_matter(content: str) -> str:
         """Remove YAML front matter block from agent content."""
-        return _YAML_FRONT_MATTER_RE.sub("", content, count=1)
+        _, body = _parse_yaml_front_matter(content)
+        return body
 
     @staticmethod
     def _strip_handoffs_section(content: str) -> str:
