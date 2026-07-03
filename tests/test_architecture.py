@@ -187,6 +187,32 @@ def test_discover_supports_src_layout(tmp_path):
     assert arch.discover_package_root(repo) == pkg
 
 
+def test_absolute_import_into_excluded_dir_records_no_edge(tmp_path):
+    """Regression: an absolute import that resolves into an excluded dir must not
+    collapse to a misdirected edge on the package root; it records no edge."""
+    repo = tmp_path / "repo"
+    pkg = repo / "pkg"
+    (pkg / "templates").mkdir(parents=True)          # excluded from mapping
+    (pkg / "__init__.py").write_text("")
+    (pkg / "templates" / "base.py").write_text("x = 1\n")
+    (pkg / "codegen.py").write_text("import pkg.templates.base\n")
+    g = arch.build_architecture(repo, pkg)
+    assert "pkg.templates.base" not in g.nodes       # excluded → not a node
+    assert ("pkg.codegen", "pkg") not in g.edges     # no collapse-to-root edge
+    assert not any(s == "pkg.codegen" for s, _ in g.edges)
+
+
+def test_absolute_import_of_real_module_still_records_exact_edge(tmp_path):
+    repo = tmp_path / "repo"
+    pkg = repo / "pkg"
+    pkg.mkdir(parents=True)
+    (pkg / "__init__.py").write_text("")
+    (pkg / "core.py").write_text("x = 1\n")
+    (pkg / "user.py").write_text("import pkg.core\n")
+    g = arch.build_architecture(repo, pkg)
+    assert ("pkg.user", "pkg.core") in g.edges       # exact edge preserved
+
+
 def test_cli_json_and_markdown(tmp_path, capsys):
     repo = _mkpkg(tmp_path)
     rc = arch.main([str(repo), "--format", "json"])

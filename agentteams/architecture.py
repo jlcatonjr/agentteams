@@ -507,9 +507,15 @@ def _record_target(
     """Classify one imported dotted name: internal edge, repo-local, or external."""
     top = dotted.split(".", 1)[0]
     if top == root_pkg:
-        target = _deepest_internal(dotted, internal)
-        if target:
-            _add_internal_edge(graph, current, target)
+        # Exact match only. An absolute import that resolves to a known module
+        # gets its edge; one that does NOT resolve exactly (e.g. it reaches into
+        # an excluded dir such as templates/, or a namespace dir with no
+        # __init__.py) records no edge — rather than collapsing up to the nearest
+        # existing ancestor, which fabricates a misdirected dependency on the
+        # package root. Every real package/module is an exact node, so legitimate
+        # edges are preserved; only the misleading collapse is removed.
+        if dotted in internal:
+            _add_internal_edge(graph, current, dotted)
         return
     if not top or top in stdlib:
         return

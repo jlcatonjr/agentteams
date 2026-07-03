@@ -302,14 +302,18 @@ def _render_hook_block(agentteams_path: str) -> str:
         '    _staged="$(git diff --cached --name-only --diff-filter=ACMR 2>/dev/null)"\n'
         '    if [ -n "$_at_root" ]; then\n'
         "        if printf '%s\\n' \"$_staged\" | grep -qE '(^|/)\\.(github|claude)/agents/[^/]*\\.agent\\.md$'; then\n"
-        f'            {pp} \\\n'
-        '                python3 -m agentteams.git_hooks --refresh --repo "$_at_root" >/dev/null 2>&1 \\\n'
-        '                && git -C "$_at_root" add references/pipeline-graph.md >/dev/null 2>&1 || true\n'
+        f'            if {pp} python3 -m agentteams.git_hooks --refresh --repo "$_at_root" >/dev/null 2>&1; then\n'
+        '                git -C "$_at_root" add references/pipeline-graph.md >/dev/null 2>&1 || true\n'
+        "            else\n"
+        '                echo "agentteams: pipeline-graph refresh failed; references/pipeline-graph.md may be stale (run: agentteams --refresh-graph)" >&2\n'
+        "            fi\n"
         "        fi\n"
         "        if printf '%s\\n' \"$_staged\" | grep -qE '\\.py$'; then\n"
-        f'            {pp} \\\n'
-        '                python3 -m agentteams.git_hooks --refresh-architecture --repo "$_at_root" >/dev/null 2>&1 \\\n'
-        '                && git -C "$_at_root" add references/architecture-graph.md >/dev/null 2>&1 || true\n'
+        f'            if {pp} python3 -m agentteams.git_hooks --refresh-architecture --repo "$_at_root" >/dev/null 2>&1; then\n'
+        '                git -C "$_at_root" add references/architecture-graph.md >/dev/null 2>&1 || true\n'
+        "            else\n"
+        '                echo "agentteams: architecture-graph refresh failed; references/architecture-graph.md may be stale (run: agentteams --refresh-architecture)" >&2\n'
+        "            fi\n"
         "        fi\n"
         "    fi\n"
         "fi\n"

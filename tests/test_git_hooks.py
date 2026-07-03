@@ -267,6 +267,18 @@ def test_hook_block_has_architecture_guard():
     assert "architecture-graph.md" in block
 
 
+def test_hook_block_warns_on_refresh_failure():
+    # A failed refresh must surface an actionable stderr warning instead of
+    # silently leaving the map stale — but without asserting a specific cause.
+    block = gh._render_hook_block("/x")
+    assert 'echo "agentteams: pipeline-graph refresh failed' in block
+    assert 'echo "agentteams: architecture-graph refresh failed' in block
+    assert ">&2" in block                # warning goes to stderr
+    assert "--refresh-graph" in block     # tells the user how to refresh manually
+    # still non-blocking: the block restores the prior exit status
+    assert "exit $_at_rc" in block
+
+
 def test_hook_block_preserves_prior_exit_status():
     # The block must capture $? on entry and restore it on exit so appending it
     # after a pre-existing hook cannot mask that hook's failing status.
