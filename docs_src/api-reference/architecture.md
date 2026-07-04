@@ -5,8 +5,10 @@ Repository module-dependency (architecture) map — the code-side sibling of
 
 Parses the `import` statements of a Python package via `ast` and builds a
 directed dependency graph of the package's own modules. Two views: a
-**package-level** Mermaid/DOT diagram (inter-package edges only, for a readable
-high-level architecture) and **module-level** detail (full per-module adjacency
+**package-level** diagram — a standalone deterministic **SVG** (referenced by the
+Markdown document, with the Mermaid/DOT source kept under a `<details>` block),
+inter-package edges only, for a readable high-level architecture — and
+**module-level** detail (full per-module adjacency
 in the JSON block and Markdown dependency table, plus an external-dependency
 summary).
 

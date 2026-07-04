@@ -35,6 +35,8 @@ import sys
 from dataclasses import dataclass, field
 from pathlib import Path
 
+from agentteams import svg_render
+
 # Directory names never treated as part of the mapped package.
 _EXCLUDE_DIRS = {"__pycache__", "templates", ".git", ".agentteams-backups"}
 
@@ -179,6 +181,43 @@ class ArchitectureGraph:
             indent=2,
         )
 
+    def to_svg(self) -> str:
+        """Package-dependency diagram as a standalone, deterministic SVG document."""
+        palette = {
+            "root": ("#e8eefb", "#1b3fa0"),
+            "sub": ("#eef6ee", "#3f8f4f"),
+        }
+        nodes = [
+            svg_render.SvgNode(
+                id=pkg, label=pkg,
+                kind="root" if pkg == self.root_package else "sub",
+            )
+            for pkg in self.packages()
+        ]
+        edges = [svg_render.SvgEdge(src=s, dst=t) for s, t in self.package_edges()]
+        return svg_render.render_svg(
+            nodes, edges, palette=palette,
+            title=f"{self.root_package} — Architecture",
+        )
+
+    def to_module_svg(self) -> str:
+        """Module-level dependency diagram — every module, coloured by package."""
+        palette = svg_render.auto_palette(self.packages())
+        prefix = self.root_package + "."
+        nodes = [
+            svg_render.SvgNode(
+                id=name,
+                label=name[len(prefix):] if name.startswith(prefix) else name,
+                kind=node.package,
+            )
+            for name, node in sorted(self.nodes.items())
+        ]
+        edges = [svg_render.SvgEdge(src=s, dst=t) for s, t in sorted(self.edges)]
+        return svg_render.render_svg(
+            nodes, edges, palette=palette,
+            title=f"{self.root_package} — Module Dependencies",
+        )
+
     def to_markdown_document(self) -> str:
         """Assemble the full architecture document."""
         adj = self.module_adjacency()
@@ -202,9 +241,7 @@ class ArchitectureGraph:
             "",
             "Inter-package import dependencies (module-level detail in the tables below).",
             "",
-            "```mermaid",
-            self.to_mermaid(),
-            "```",
+            f"![{self.root_package} package dependency diagram](architecture-graph.svg)",
             "",
             "---",
             "",
@@ -224,6 +261,14 @@ class ArchitectureGraph:
             lines.append(f"| `{pkg}` | {pkg_counts.get(pkg, 0)} | {deps} |")
 
         lines += [
+            "",
+            "---",
+            "",
+            "## Module Dependency Diagram",
+            "",
+            "Every module, coloured by package (full adjacency in the table below).",
+            "",
+            f"![{self.root_package} module dependencies](architecture-modules.svg)",
             "",
             "---",
             "",
@@ -260,11 +305,20 @@ class ArchitectureGraph:
             "",
             "---",
             "",
-            "## DOT Source",
+            "## Diagram Source",
+            "",
+            "<details>",
+            "<summary>Mermaid &amp; DOT source for the diagram above</summary>",
+            "",
+            "```mermaid",
+            self.to_mermaid(),
+            "```",
             "",
             "```dot",
             self.to_dot(),
             "```",
+            "",
+            "</details>",
             "",
             "---",
             "",
@@ -542,6 +596,34 @@ def generate_architecture_document(
     return graph.to_markdown_document()
 
 
+def generate_architecture_svg(
+    repo_root: Path, package_dir: Path | None = None
+) -> str | None:
+    """Build the graph and return the package-dependency SVG (or None if no package)."""
+    repo_root = repo_root.resolve()
+    pkg = package_dir or discover_package_root(repo_root)
+    if pkg is None:
+        return None
+    graph = build_architecture(repo_root, pkg)
+    if not graph.nodes:
+        return None
+    return graph.to_svg()
+
+
+def generate_architecture_module_svg(
+    repo_root: Path, package_dir: Path | None = None
+) -> str | None:
+    """Build the graph and return the module-level SVG (or None if no package)."""
+    repo_root = repo_root.resolve()
+    pkg = package_dir or discover_package_root(repo_root)
+    if pkg is None:
+        return None
+    graph = build_architecture(repo_root, pkg)
+    if not graph.nodes:
+        return None
+    return graph.to_module_svg()
+
+
 # ---------------------------------------------------------------------------
 # CLI entry point
 # ---------------------------------------------------------------------------
@@ -556,7 +638,7 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("repo_root", metavar="REPO_ROOT", help="Repository root.")
     parser.add_argument("--package", default=None,
                         help="Package directory to map (default: auto-detect).")
-    parser.add_argument("--format", choices=["markdown", "mermaid", "dot", "json"],
+    parser.add_argument("--format", choices=["markdown", "mermaid", "dot", "json", "svg"],
                         default="markdown", help="Output format (default: markdown).")
     parser.add_argument("--output", "-o", default=None,
                         help="Write to FILE instead of stdout.")
@@ -582,6 +664,8 @@ def main(argv: list[str] | None = None) -> int:
         output = "```mermaid\n" + graph.to_mermaid() + "\n```"
     elif args.format == "dot":
         output = graph.to_dot()
+    elif args.format == "svg":
+        output = graph.to_svg()
     else:
         output = graph.to_json()
 

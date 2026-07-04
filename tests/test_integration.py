@@ -102,12 +102,22 @@ def _run_pipeline(brief_path: Path, tmp_path: Path, framework: str = "copilot-vs
             ) + "\n",
         ))
 
-    # Generate team topology graph (mirrors build_team.py step 5c)
+    # Generate team topology graph — md + companion svg (mirrors render_pipeline.py)
     from agentteams import graph as _graph
-    graph_content = _graph.generate_graph_document(
-        dict(final_rendered), project_name=manifest.get("project_name", "")
-    )
-    final_rendered.append(("references/pipeline-graph.md", graph_content))
+    _graph_fmap = dict(final_rendered)
+    _graph_name = manifest.get("project_name", "")
+    final_rendered.append((
+        "references/pipeline-graph.md",
+        _graph.generate_graph_document(_graph_fmap, project_name=_graph_name),
+    ))
+    final_rendered.append((
+        "references/pipeline-graph.svg",
+        _graph.generate_graph_svg(_graph_fmap, project_name=_graph_name),
+    ))
+    final_rendered.append((
+        "references/pipeline-handoffs.svg",
+        _graph.generate_graph_handoff_svg(_graph_fmap, project_name=_graph_name),
+    ))
 
     result = emit.emit_all(final_rendered, output_dir=tmp_path, dry_run=False, overwrite=True, yes=True)
     assert result.success, f"emit failed: {result.errors}"
@@ -360,7 +370,7 @@ def test_snapshot_comparison(tmp_path, example):
     # Exclude files that contain live network data (threat intel, CVE feeds) — non-deterministic
     _live_data_files = {"security-vulnerability-watch.reference.md", "security.agent.md"}
     expected_files = sorted(
-        f for f in expected_dir.rglob("*.md")
+        f for f in list(expected_dir.rglob("*.md")) + list(expected_dir.rglob("*.svg"))
         if "build-log" not in f.name
         and f.name not in _live_data_files
         and ".agentteams-backups" not in f.parts

@@ -20,6 +20,8 @@ from agentteams import graph as _graph
 EXAMPLES = Path(__file__).parent.parent / "examples"
 _EXAMPLE_AGENTS = EXAMPLES / "software-project" / "expected"
 _EXAMPLE_GRAPH = _EXAMPLE_AGENTS / "references" / "pipeline-graph.md"
+_EXAMPLE_GRAPH_SVG = _EXAMPLE_AGENTS / "references" / "pipeline-graph.svg"
+_EXAMPLE_GRAPH_HANDOFF_SVG = _EXAMPLE_AGENTS / "references" / "pipeline-handoffs.svg"
 
 
 def _has_git() -> bool:
@@ -77,8 +79,10 @@ def test_refresh_reproduces_pipeline_golden_byte_for_byte(tmp_path):
     repo = _make_repo(tmp_path)
     (repo / "references").mkdir(exist_ok=True)
     shutil.copy(_EXAMPLE_GRAPH, repo / "references" / "pipeline-graph.md")
+    shutil.copy(_EXAMPLE_GRAPH_SVG, repo / "references" / "pipeline-graph.svg")
+    shutil.copy(_EXAMPLE_GRAPH_HANDOFF_SVG, repo / "references" / "pipeline-handoffs.svg")
     result = gh.refresh_pipeline_graph(repo)
-    # Golden is the pipeline output; refresh must not want to change it.
+    # Golden is the pipeline output (md + svg); refresh must not want to change either.
     assert not result.changed, "hook refresh diverges from --update output"
 
 

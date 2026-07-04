@@ -4,7 +4,7 @@ Directed graph inference for agent team topology.
 
 Parses generated agent files (from in-memory rendered content or disk) to build a directed graph of the agent team. Each node is an agent; each edge is a declared connection via YAML `handoffs:` or `agents:` list entries.
 
-Outputs Mermaid flowchart, DOT (Graphviz) source, JSON adjacency list, and human-readable Markdown document. The graph document is regenerated automatically on every `build_team.py` run and written to `references/pipeline-graph.md`.
+Outputs a standalone **SVG** diagram plus Mermaid flowchart, DOT (Graphviz) source, JSON adjacency list, and a human-readable Markdown document. The Markdown document (`references/pipeline-graph.md`) references the sibling SVG (`references/pipeline-graph.svg`) as its primary diagram and keeps the Mermaid/DOT source in a collapsed `<details>` block. Both are regenerated automatically on every `build_team.py` run.
 
 > *Source: `agentteams/graph.py`*
 
@@ -87,9 +87,15 @@ Render the graph as a Graphviz DOT source file.
 
 **Returns:** `str` — DOT digraph source as a plain string.
 
+#### `to_svg()`
+
+Render the graph as a standalone, deterministic SVG document (stdlib layered layout with barycenter crossing reduction; no Graphviz/Mermaid runtime dependency). This is the primary diagram referenced by the Markdown document; it is byte-identical for identical input so the pre-commit hook never churns it.
+
+**Returns:** `str` — SVG XML as a plain string.
+
 #### `to_markdown_document()`
 
-Render a full Markdown document containing the Mermaid graph, a legend, and agent tables. Written to `references/pipeline-graph.md` on every `build_team.py` run.
+Render a full Markdown document that references the standalone SVG diagram (`pipeline-graph.svg`), plus a legend and agent tables, and retains the Mermaid/DOT source under a collapsed `<details>` block. Written to `references/pipeline-graph.md` on every `build_team.py` run.
 
 **Returns:** `str` — Complete Markdown document as a string.
 

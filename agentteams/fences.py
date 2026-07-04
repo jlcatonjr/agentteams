@@ -79,6 +79,13 @@ _MACHINE_MANAGED_MERGE_OVERWRITE_PATHS: frozenset[str] = frozenset([
     # Sentinel-merge handled in vscode_tasks.py before this path reaches emit;
     # emit must overwrite (not fence-merge) so stale JSON is fully replaced.
     "../../.vscode/tasks.json",
+    # Generated SVG diagrams are raw XML (no AGENTTEAMS content fence); emit must
+    # overwrite them wholesale — auto-fencing would inject a comment before <?xml>
+    # (invalid XML) and merge would skip them as unmanaged (stale forever).
+    "references/pipeline-graph.svg",
+    "references/pipeline-handoffs.svg",
+    "references/architecture-graph.svg",
+    "references/architecture-modules.svg",
 ])
 
 # Fences whose body is refreshed each run from an upstream live feed

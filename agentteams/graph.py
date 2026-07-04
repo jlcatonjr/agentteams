@@ -33,6 +33,16 @@ from pathlib import Path
 from typing import Any
 
 from agentteams._utils import _split_yaml_front_matter  # shared YAML splitter (MAP-17)
+from agentteams import svg_render
+
+#: Agent-type → (fill, stroke) palette shared by the topology SVGs.
+_SVG_PALETTE = {
+    "governance": ("#e8e8ff", "#6666cc"),
+    "domain": ("#e8ffe8", "#66aa66"),
+    "workstream_expert": ("#fff8e8", "#ccaa44"),
+    "tool_specialist": ("#ffe8e8", "#cc6666"),
+    "unknown": ("#f5f5f5", "#999999"),
+}
 
 
 # ---------------------------------------------------------------------------
@@ -260,13 +270,7 @@ class TeamGraph:
         Returns:
             DOT source as a plain string.
         """
-        _TYPE_COLORS = {
-            "governance": "#e8e8ff",
-            "domain": "#e8ffe8",
-            "workstream_expert": "#fff8e8",
-            "tool_specialist": "#ffe8e8",
-            "unknown": "#f5f5f5",
-        }
+        _TYPE_COLORS = {k: v[0] for k, v in _SVG_PALETTE.items()}
         lines = [
             f'digraph "{self.project_name} Agent Team" {{',
             "    rankdir=LR;",
@@ -296,8 +300,42 @@ class TeamGraph:
         lines.append("}")
         return "\n".join(lines)
 
+    def _svg_spec(self, *, handoff_only: bool = False):
+        """Build the (nodes, edges) SVG spec; optionally handoff edges only."""
+        nodes = [
+            svg_render.SvgNode(id=slug, label=node.display_name, kind=node.agent_type)
+            for slug, node in sorted(self.nodes.items())
+        ]
+        seen: set[tuple[str, str]] = set()
+        edges: list[svg_render.SvgEdge] = []
+        for edge in self.ordered_edges():
+            if handoff_only and edge.edge_type != "handoff":
+                continue
+            pair = (edge.source, edge.target)
+            if pair in seen:
+                continue
+            seen.add(pair)
+            edges.append(svg_render.SvgEdge(src=edge.source, dst=edge.target))
+        return nodes, edges
+
+    def to_svg(self) -> str:
+        """Full agent-topology diagram (handoff + agents-list edges) as SVG."""
+        nodes, edges = self._svg_spec()
+        return svg_render.render_svg(
+            nodes, edges, palette=_SVG_PALETTE,
+            title=f"{self.project_name} — Agent Team Topology",
+        )
+
+    def to_handoff_svg(self) -> str:
+        """Handoff-only control-flow backbone (agents-list edges omitted) as SVG."""
+        nodes, edges = self._svg_spec(handoff_only=True)
+        return svg_render.render_svg(
+            nodes, edges, palette=_SVG_PALETTE,
+            title=f"{self.project_name} — Handoff Backbone",
+        )
+
     def to_markdown_document(self) -> str:
-        """Render a full Markdown document containing the Mermaid graph and tables.
+        """Render a full Markdown document referencing the SVG diagram and tables.
 
         The document is written to ``references/pipeline-graph.md`` by the
         pipeline and kept up-to-date on every build.  The navigator references
@@ -320,9 +358,11 @@ class TeamGraph:
             "",
             "## Team Topology Graph",
             "",
-            "```mermaid",
-            self.to_mermaid(),
-            "```",
+            f"![{self.project_name} agent team topology](pipeline-graph.svg)",
+            "",
+            "The handoff-only control-flow backbone (agents-list edges omitted):",
+            "",
+            f"![{self.project_name} handoff backbone](pipeline-handoffs.svg)",
             "",
             "---",
             "",
@@ -370,14 +410,20 @@ class TeamGraph:
             "",
             "---",
             "",
-            "## DOT Source",
+            "## Diagram Source",
             "",
-            "Save the block below as `pipeline-graph.dot` and run",
-            "`dot -Tsvg pipeline-graph.dot -o pipeline-graph.svg` to produce an SVG.",
+            "<details>",
+            "<summary>Mermaid &amp; DOT source for the topology diagram above</summary>",
+            "",
+            "```mermaid",
+            self.to_mermaid(),
+            "```",
             "",
             "```dot",
             self.to_dot(),
             "```",
+            "",
+            "</details>",
             "",
             "---",
             "",
@@ -524,6 +570,24 @@ def generate_graph_document(
     """
     graph = build_graph(file_map, project_name=project_name)
     return graph.to_markdown_document()
+
+
+def generate_graph_svg(
+    file_map: dict[str, str],
+    project_name: str = "",
+) -> str:
+    """Build the graph and return the full agent-topology SVG document."""
+    graph = build_graph(file_map, project_name=project_name)
+    return graph.to_svg()
+
+
+def generate_graph_handoff_svg(
+    file_map: dict[str, str],
+    project_name: str = "",
+) -> str:
+    """Build the graph and return the handoff-only backbone SVG document."""
+    graph = build_graph(file_map, project_name=project_name)
+    return graph.to_handoff_svg()
 
 
 # ---------------------------------------------------------------------------
@@ -865,7 +929,7 @@ def main(argv: list[str] | None = None) -> int:
     )
     parser.add_argument(
         "--format",
-        choices=["markdown", "mermaid", "dot", "json"],
+        choices=["markdown", "mermaid", "dot", "json", "svg"],
         default="markdown",
         help="Output format (default: markdown — full document).",
     )
@@ -908,6 +972,8 @@ def main(argv: list[str] | None = None) -> int:
         output = graph.to_dot()
     elif fmt == "json":
         output = graph.to_json()
+    elif fmt == "svg":
+        output = graph.to_svg()
     else:
         output = graph.to_markdown_document()
 

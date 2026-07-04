@@ -173,9 +173,18 @@ def _build_final_rendered(
             }, indent=2) + "\n",
         ))
 
+    graph_file_map = dict(final)
     final.append((
         "references/pipeline-graph.md",
-        _graph.generate_graph_document(dict(final), project_name=project_name),
+        _graph.generate_graph_document(graph_file_map, project_name=project_name),
+    ))
+    final.append((
+        "references/pipeline-graph.svg",
+        _graph.generate_graph_svg(graph_file_map, project_name=project_name),
+    ))
+    final.append((
+        "references/pipeline-handoffs.svg",
+        _graph.generate_graph_handoff_svg(graph_file_map, project_name=project_name),
     ))
     return final
 def _make_content_matches(

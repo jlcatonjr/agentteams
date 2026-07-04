@@ -253,6 +253,19 @@ def _plan_output_files(
         "type": "graph",
         "component_slug": None,
     })
+    # Companion SVG diagrams referenced by the graph .md (raw XML, no content fence)
+    files.append({
+        "path": "references/pipeline-graph.svg",
+        "template": "",
+        "type": "graph-svg",
+        "component_slug": None,
+    })
+    files.append({
+        "path": "references/pipeline-handoffs.svg",
+        "template": "",
+        "type": "graph-svg",
+        "component_slug": None,
+    })
 
     # Content enricher — user-invokable agent for filling MANUAL placeholders
     files.append({

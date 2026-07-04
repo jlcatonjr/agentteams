@@ -8,6 +8,96 @@
 
 ## Team Topology Graph
 
+![ResearchPaperProject agent team topology](pipeline-graph.svg)
+
+The handoff-only control-flow backbone (agents-list edges omitted):
+
+![ResearchPaperProject handoff backbone](pipeline-handoffs.svg)
+
+---
+
+## Node Legend
+
+| Colour | Agent Type |
+| --- | --- |
+| <svg width="12" height="12"><rect width="12" height="12" fill="#e8e8ff" stroke="#6666cc"/></svg> Blue-lavender | Governance |
+| <svg width="12" height="12"><rect width="12" height="12" fill="#e8ffe8" stroke="#66aa66"/></svg> Green | Domain |
+| <svg width="12" height="12"><rect width="12" height="12" fill="#fff8e8" stroke="#ccaa44"/></svg> Yellow | Workstream Expert |
+| <svg width="12" height="12"><rect width="12" height="12" fill="#ffe8e8" stroke="#cc6666"/></svg> Red-pink | Tool Specialist |
+
+---
+
+## Agent Roster
+
+| Agent | Type | User-Invokable | Tools |
+| --- | --- | --- | --- |
+| `adversarial` | governance | Yes | read, search |
+| `agent-refactor` | governance | No | edit, search, agent |
+| `agent-updater` | governance | No | edit, search, execute, agent |
+| `ch01-introduction-expert` | workstream_expert | No | read, search, agent |
+| `ch02-literature-expert` | workstream_expert | No | read, search, agent |
+| `cleanup` | governance | No | edit, search, execute |
+| `code-hygiene` | governance | No | read, search |
+| `cohesion-repairer` | domain | No | read, edit |
+| `conflict-auditor` | governance | No | read, search |
+| `conflict-resolution` | governance | No | edit, search, read |
+| `content-enricher` | domain | Yes | read, edit, search |
+| `format-converter` | domain | No | read, edit, execute |
+| `git-operations` | governance | Yes | read, execute, search |
+| `navigator` | governance | No | read, search, execute |
+| `orchestrator` | governance | Yes | read, edit, search, execute, todo, agent |
+| `output-compiler` | domain | No | read, edit, execute |
+| `primary-producer` | domain | No | read, edit, search |
+| `quality-auditor` | domain | No | read, search |
+| `reference-manager` | domain | No | read, edit, search |
+| `repo-liaison` | governance | No | read, edit, search, execute, agent |
+| `security` | governance | No | read, search |
+| `style-guardian` | domain | No | read, edit, search |
+| `team-builder` | governance | Yes | read, edit, search, execute, todo |
+| `technical-validator` | domain | No | read, search |
+| `tool-doc-researcher` | tool_specialist | No | read, search |
+| `work-summarizer` | domain | Yes | read, search, execute, edit, agent |
+
+---
+
+## Adjacency List
+
+| Agent | Receives from | Hands off to |
+| --- | --- | --- |
+| `adversarial` | `agent-updater`, `ch01-introduction-expert`, `ch02-literature-expert`, `orchestrator`, `work-summarizer` | `conflict-auditor`, `orchestrator` |
+| `agent-refactor` | `agent-updater`, `code-hygiene`, `orchestrator` | `conflict-auditor`, `orchestrator` |
+| `agent-updater` | `conflict-auditor`, `conflict-resolution`, `git-operations`, `orchestrator`, `tool-doc-researcher` | `adversarial`, `agent-refactor`, `conflict-auditor`, `orchestrator` |
+| `ch01-introduction-expert` | `orchestrator` | `adversarial`, `orchestrator`, `primary-producer`, `reference-manager` |
+| `ch02-literature-expert` | `orchestrator` | `adversarial`, `orchestrator`, `primary-producer`, `reference-manager` |
+| `cleanup` | `code-hygiene`, `orchestrator` | `orchestrator` |
+| `code-hygiene` | `orchestrator` | `agent-refactor`, `cleanup`, `conflict-auditor`, `orchestrator`, `security` |
+| `cohesion-repairer` | `orchestrator`, `primary-producer`, `quality-auditor` | `orchestrator`, `quality-auditor`, `style-guardian` |
+| `conflict-auditor` | `adversarial`, `agent-refactor`, `agent-updater`, `code-hygiene`, `orchestrator`, `primary-producer`, `reference-manager`, `repo-liaison`, `technical-validator`, `work-summarizer` | `agent-updater`, `conflict-resolution`, `orchestrator`, `technical-validator` |
+| `conflict-resolution` | `conflict-auditor`, `git-operations`, `orchestrator` | `agent-updater`, `orchestrator` |
+| `content-enricher` | — | `orchestrator`, `primary-producer`, `technical-validator` |
+| `format-converter` | `orchestrator`, `output-compiler` | `orchestrator`, `output-compiler`, `quality-auditor` |
+| `git-operations` | `orchestrator` | `agent-updater`, `conflict-resolution`, `orchestrator`, `security` |
+| `navigator` | `orchestrator` | `orchestrator` |
+| `orchestrator` | `adversarial`, `agent-refactor`, `agent-updater`, `ch01-introduction-expert`, `ch02-literature-expert`, `cleanup`, `code-hygiene`, `cohesion-repairer`, `conflict-auditor`, `conflict-resolution`, `content-enricher`, `format-converter`, `git-operations`, `navigator`, `output-compiler`, `primary-producer`, `quality-auditor`, `reference-manager`, `repo-liaison`, `security`, `style-guardian`, `technical-validator`, `tool-doc-researcher`, `work-summarizer` | `adversarial`, `agent-refactor`, `agent-updater`, `ch01-introduction-expert`, `ch02-literature-expert`, `cleanup`, `code-hygiene`, `cohesion-repairer`, `conflict-auditor`, `conflict-resolution`, `format-converter`, `git-operations`, `navigator`, `output-compiler`, `primary-producer`, `quality-auditor`, `reference-manager`, `repo-liaison`, `security`, `style-guardian`, `technical-validator`, `tool-doc-researcher`, `work-summarizer` |
+| `output-compiler` | `format-converter`, `orchestrator` | `format-converter`, `orchestrator`, `technical-validator` |
+| `primary-producer` | `ch01-introduction-expert`, `ch02-literature-expert`, `content-enricher`, `orchestrator`, `quality-auditor`, `style-guardian`, `technical-validator` | `cohesion-repairer`, `conflict-auditor`, `orchestrator`, `quality-auditor`, `style-guardian` |
+| `quality-auditor` | `cohesion-repairer`, `format-converter`, `orchestrator`, `primary-producer` | `cohesion-repairer`, `orchestrator`, `primary-producer`, `style-guardian` |
+| `reference-manager` | `ch01-introduction-expert`, `ch02-literature-expert`, `orchestrator`, `technical-validator` | `conflict-auditor`, `orchestrator` |
+| `repo-liaison` | `orchestrator` | `conflict-auditor`, `orchestrator`, `security` |
+| `security` | `code-hygiene`, `git-operations`, `orchestrator`, `repo-liaison` | `orchestrator` |
+| `style-guardian` | `cohesion-repairer`, `orchestrator`, `primary-producer`, `quality-auditor` | `orchestrator`, `primary-producer` |
+| `team-builder` | — | — |
+| `technical-validator` | `conflict-auditor`, `content-enricher`, `orchestrator`, `output-compiler`, `work-summarizer` | `conflict-auditor`, `orchestrator`, `primary-producer`, `reference-manager` |
+| `tool-doc-researcher` | `orchestrator` | `agent-updater`, `orchestrator` |
+| `work-summarizer` | `orchestrator` | `adversarial`, `conflict-auditor`, `orchestrator`, `technical-validator` |
+
+---
+
+## Diagram Source
+
+<details>
+<summary>Mermaid &amp; DOT source for the topology diagram above</summary>
+
 ```mermaid
 flowchart LR
     classDef governance fill:#e8e8ff,stroke:#6666cc,color:#000
@@ -219,90 +309,6 @@ flowchart LR
     work_summarizer -.-> technical_validator
 ```
 
----
-
-## Node Legend
-
-| Colour | Agent Type |
-| --- | --- |
-| <svg width="12" height="12"><rect width="12" height="12" fill="#e8e8ff" stroke="#6666cc"/></svg> Blue-lavender | Governance |
-| <svg width="12" height="12"><rect width="12" height="12" fill="#e8ffe8" stroke="#66aa66"/></svg> Green | Domain |
-| <svg width="12" height="12"><rect width="12" height="12" fill="#fff8e8" stroke="#ccaa44"/></svg> Yellow | Workstream Expert |
-| <svg width="12" height="12"><rect width="12" height="12" fill="#ffe8e8" stroke="#cc6666"/></svg> Red-pink | Tool Specialist |
-
----
-
-## Agent Roster
-
-| Agent | Type | User-Invokable | Tools |
-| --- | --- | --- | --- |
-| `adversarial` | governance | Yes | read, search |
-| `agent-refactor` | governance | No | edit, search, agent |
-| `agent-updater` | governance | No | edit, search, execute, agent |
-| `ch01-introduction-expert` | workstream_expert | No | read, search, agent |
-| `ch02-literature-expert` | workstream_expert | No | read, search, agent |
-| `cleanup` | governance | No | edit, search, execute |
-| `code-hygiene` | governance | No | read, search |
-| `cohesion-repairer` | domain | No | read, edit |
-| `conflict-auditor` | governance | No | read, search |
-| `conflict-resolution` | governance | No | edit, search, read |
-| `content-enricher` | domain | Yes | read, edit, search |
-| `format-converter` | domain | No | read, edit, execute |
-| `git-operations` | governance | Yes | read, execute, search |
-| `navigator` | governance | No | read, search, execute |
-| `orchestrator` | governance | Yes | read, edit, search, execute, todo, agent |
-| `output-compiler` | domain | No | read, edit, execute |
-| `primary-producer` | domain | No | read, edit, search |
-| `quality-auditor` | domain | No | read, search |
-| `reference-manager` | domain | No | read, edit, search |
-| `repo-liaison` | governance | No | read, edit, search, execute, agent |
-| `security` | governance | No | read, search |
-| `style-guardian` | domain | No | read, edit, search |
-| `team-builder` | governance | Yes | read, edit, search, execute, todo |
-| `technical-validator` | domain | No | read, search |
-| `tool-doc-researcher` | tool_specialist | No | read, search |
-| `work-summarizer` | domain | Yes | read, search, execute, edit, agent |
-
----
-
-## Adjacency List
-
-| Agent | Receives from | Hands off to |
-| --- | --- | --- |
-| `adversarial` | `agent-updater`, `ch01-introduction-expert`, `ch02-literature-expert`, `orchestrator`, `work-summarizer` | `conflict-auditor`, `orchestrator` |
-| `agent-refactor` | `agent-updater`, `code-hygiene`, `orchestrator` | `conflict-auditor`, `orchestrator` |
-| `agent-updater` | `conflict-auditor`, `conflict-resolution`, `git-operations`, `orchestrator`, `tool-doc-researcher` | `adversarial`, `agent-refactor`, `conflict-auditor`, `orchestrator` |
-| `ch01-introduction-expert` | `orchestrator` | `adversarial`, `orchestrator`, `primary-producer`, `reference-manager` |
-| `ch02-literature-expert` | `orchestrator` | `adversarial`, `orchestrator`, `primary-producer`, `reference-manager` |
-| `cleanup` | `code-hygiene`, `orchestrator` | `orchestrator` |
-| `code-hygiene` | `orchestrator` | `agent-refactor`, `cleanup`, `conflict-auditor`, `orchestrator`, `security` |
-| `cohesion-repairer` | `orchestrator`, `primary-producer`, `quality-auditor` | `orchestrator`, `quality-auditor`, `style-guardian` |
-| `conflict-auditor` | `adversarial`, `agent-refactor`, `agent-updater`, `code-hygiene`, `orchestrator`, `primary-producer`, `reference-manager`, `repo-liaison`, `technical-validator`, `work-summarizer` | `agent-updater`, `conflict-resolution`, `orchestrator`, `technical-validator` |
-| `conflict-resolution` | `conflict-auditor`, `git-operations`, `orchestrator` | `agent-updater`, `orchestrator` |
-| `content-enricher` | — | `orchestrator`, `primary-producer`, `technical-validator` |
-| `format-converter` | `orchestrator`, `output-compiler` | `orchestrator`, `output-compiler`, `quality-auditor` |
-| `git-operations` | `orchestrator` | `agent-updater`, `conflict-resolution`, `orchestrator`, `security` |
-| `navigator` | `orchestrator` | `orchestrator` |
-| `orchestrator` | `adversarial`, `agent-refactor`, `agent-updater`, `ch01-introduction-expert`, `ch02-literature-expert`, `cleanup`, `code-hygiene`, `cohesion-repairer`, `conflict-auditor`, `conflict-resolution`, `content-enricher`, `format-converter`, `git-operations`, `navigator`, `output-compiler`, `primary-producer`, `quality-auditor`, `reference-manager`, `repo-liaison`, `security`, `style-guardian`, `technical-validator`, `tool-doc-researcher`, `work-summarizer` | `adversarial`, `agent-refactor`, `agent-updater`, `ch01-introduction-expert`, `ch02-literature-expert`, `cleanup`, `code-hygiene`, `cohesion-repairer`, `conflict-auditor`, `conflict-resolution`, `format-converter`, `git-operations`, `navigator`, `output-compiler`, `primary-producer`, `quality-auditor`, `reference-manager`, `repo-liaison`, `security`, `style-guardian`, `technical-validator`, `tool-doc-researcher`, `work-summarizer` |
-| `output-compiler` | `format-converter`, `orchestrator` | `format-converter`, `orchestrator`, `technical-validator` |
-| `primary-producer` | `ch01-introduction-expert`, `ch02-literature-expert`, `content-enricher`, `orchestrator`, `quality-auditor`, `style-guardian`, `technical-validator` | `cohesion-repairer`, `conflict-auditor`, `orchestrator`, `quality-auditor`, `style-guardian` |
-| `quality-auditor` | `cohesion-repairer`, `format-converter`, `orchestrator`, `primary-producer` | `cohesion-repairer`, `orchestrator`, `primary-producer`, `style-guardian` |
-| `reference-manager` | `ch01-introduction-expert`, `ch02-literature-expert`, `orchestrator`, `technical-validator` | `conflict-auditor`, `orchestrator` |
-| `repo-liaison` | `orchestrator` | `conflict-auditor`, `orchestrator`, `security` |
-| `security` | `code-hygiene`, `git-operations`, `orchestrator`, `repo-liaison` | `orchestrator` |
-| `style-guardian` | `cohesion-repairer`, `orchestrator`, `primary-producer`, `quality-auditor` | `orchestrator`, `primary-producer` |
-| `team-builder` | — | — |
-| `technical-validator` | `conflict-auditor`, `content-enricher`, `orchestrator`, `output-compiler`, `work-summarizer` | `conflict-auditor`, `orchestrator`, `primary-producer`, `reference-manager` |
-| `tool-doc-researcher` | `orchestrator` | `agent-updater`, `orchestrator` |
-| `work-summarizer` | `orchestrator` | `adversarial`, `conflict-auditor`, `orchestrator`, `technical-validator` |
-
----
-
-## DOT Source
-
-Save the block below as `pipeline-graph.dot` and run
-`dot -Tsvg pipeline-graph.dot -o pipeline-graph.svg` to produce an SVG.
-
 ```dot
 digraph "ResearchPaperProject Agent Team" {
     rankdir=LR;
@@ -431,6 +437,8 @@ digraph "ResearchPaperProject Agent Team" {
     "work-summarizer" -> "technical-validator" [style=solid, label="Verify Summary Accuracy"];
 }
 ```
+
+</details>
 
 ---
 

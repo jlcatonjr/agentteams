@@ -3,9 +3,9 @@
 
 > **Auto-generated.** Regenerated on every commit that touches the `agentteams` package. Do not edit manually — changes will be overwritten.
 
-- Modules mapped: **86**
+- Modules mapped: **87**
 - Packages: **5**
-- Internal import edges: **147**
+- Internal import edges: **149**
 - Distinct external dependencies: **1**
 
 ---
@@ -14,27 +14,7 @@
 
 Inter-package import dependencies (module-level detail in the tables below).
 
-```mermaid
-flowchart LR
-    classDef root fill:#e8eefb,stroke:#1b3fa0,color:#000
-    classDef sub  fill:#eef6ee,stroke:#3f8f4f,color:#000
-    agentteams["agentteams"]
-    class agentteams root
-    agentteams_cli["agentteams.cli"]
-    class agentteams_cli sub
-    agentteams_enrich["agentteams.enrich"]
-    class agentteams_enrich sub
-    agentteams_eval_adapters["agentteams.eval_adapters"]
-    class agentteams_eval_adapters sub
-    agentteams_frameworks["agentteams.frameworks"]
-    class agentteams_frameworks sub
-    agentteams --> agentteams_cli
-    agentteams --> agentteams_enrich
-    agentteams --> agentteams_frameworks
-    agentteams_cli --> agentteams
-    agentteams_cli --> agentteams_frameworks
-    agentteams_frameworks --> agentteams
-```
+![agentteams package dependency diagram](architecture-graph.svg)
 
 ---
 
@@ -42,11 +22,19 @@ flowchart LR
 
 | Package | Modules | Depends on |
 | --- | --- | --- |
-| `agentteams` | 61 | `agentteams.cli`, `agentteams.enrich`, `agentteams.frameworks` |
+| `agentteams` | 62 | `agentteams.cli`, `agentteams.enrich`, `agentteams.frameworks` |
 | `agentteams.cli` | 10 | `agentteams`, `agentteams.frameworks` |
 | `agentteams.enrich` | 6 | — |
 | `agentteams.eval_adapters` | 2 | — |
 | `agentteams.frameworks` | 7 | `agentteams` |
+
+---
+
+## Module Dependency Diagram
+
+Every module, coloured by package (full adjacency in the table below).
+
+![agentteams module dependencies](architecture-modules.svg)
 
 ---
 
@@ -59,7 +47,7 @@ flowchart LR
 | `agentteams.advisory` | — | — |
 | `agentteams.ai_bad_habits` | — | `agentteams.cli.generate` |
 | `agentteams.analyze` | `agentteams._utils`, `agentteams.manifest_format`, `agentteams.mcp_detect`, `agentteams.output_plan`, `agentteams.recipe_fields` | `agentteams.cli.generate`, `agentteams.output_plan` |
-| `agentteams.architecture` | — | `agentteams.git_hooks` |
+| `agentteams.architecture` | `agentteams.svg_render` | `agentteams.git_hooks` |
 | `agentteams.atomicio` | — | `agentteams.backup`, `agentteams.emit`, `agentteams.fence_inject`, `agentteams.fences`, `agentteams.hooks_emit`, `agentteams.mcp_emit`, `agentteams.schedule_emit` |
 | `agentteams.audit` | — | `agentteams.cli.generate` |
 | `agentteams.backup` | `agentteams`, `agentteams.atomicio`, `agentteams.liaison_logs` | `agentteams.bridge`, `agentteams.emit` |
@@ -110,7 +98,7 @@ flowchart LR
 | `agentteams.frameworks.registry` | `agentteams.frameworks.agents_md`, `agentteams.frameworks.base`, `agentteams.frameworks.claude`, `agentteams.frameworks.copilot_cli`, `agentteams.frameworks.copilot_vscode`, `agentteams.frameworks.goose` | `agentteams.cli.commands`, `agentteams.cli.generate`, `agentteams.cli.parser`, `agentteams.convert`, `agentteams.interop` |
 | `agentteams.git_hooks` | `agentteams`, `agentteams.architecture`, `agentteams.emit`, `agentteams.graph` | `agentteams.cli.app`, `agentteams.cli.generate` |
 | `agentteams.goose_config` | — | `agentteams.cli.goose_switch` |
-| `agentteams.graph` | `agentteams._utils` | `agentteams.cli.generate`, `agentteams.cli.render_pipeline`, `agentteams.git_hooks` |
+| `agentteams.graph` | `agentteams._utils`, `agentteams.svg_render` | `agentteams.cli.generate`, `agentteams.cli.render_pipeline`, `agentteams.git_hooks` |
 | `agentteams.handoff_payloads` | — | `agentteams.behavioral_drift` |
 | `agentteams.hooks_emit` | `agentteams.atomicio` | `agentteams.bridge` |
 | `agentteams.host_features` | — | `agentteams.cli.app` |
@@ -138,6 +126,7 @@ flowchart LR
 | `agentteams.security_refs` | — | `agentteams.cli.commands`, `agentteams.cli.generate` |
 | `agentteams.stale_detector` | `agentteams.bridge`, `agentteams.drift`, `agentteams.fleet` | `agentteams.cli.commands`, `agentteams.stale_remediate` |
 | `agentteams.stale_remediate` | `agentteams.cli.commands`, `agentteams.fleet`, `agentteams.stale_detector` | `agentteams.cli.commands` |
+| `agentteams.svg_render` | — | `agentteams.architecture`, `agentteams.graph` |
 | `agentteams.vscode_tasks` | — | `agentteams.cli.render_pipeline` |
 | `agentteams.yaml_frontmatter` | — | `agentteams.frameworks.agents_md`, `agentteams.frameworks.base`, `agentteams.frameworks.claude`, `agentteams.frameworks.copilot_vscode`, `agentteams.frameworks.goose`, `agentteams.interop` |
 
@@ -153,7 +142,32 @@ Third-party (non-stdlib) top-level packages imported by the mapped package:
 
 ---
 
-## DOT Source
+## Diagram Source
+
+<details>
+<summary>Mermaid &amp; DOT source for the diagram above</summary>
+
+```mermaid
+flowchart LR
+    classDef root fill:#e8eefb,stroke:#1b3fa0,color:#000
+    classDef sub  fill:#eef6ee,stroke:#3f8f4f,color:#000
+    agentteams["agentteams"]
+    class agentteams root
+    agentteams_cli["agentteams.cli"]
+    class agentteams_cli sub
+    agentteams_enrich["agentteams.enrich"]
+    class agentteams_enrich sub
+    agentteams_eval_adapters["agentteams.eval_adapters"]
+    class agentteams_eval_adapters sub
+    agentteams_frameworks["agentteams.frameworks"]
+    class agentteams_frameworks sub
+    agentteams --> agentteams_cli
+    agentteams --> agentteams_enrich
+    agentteams --> agentteams_frameworks
+    agentteams_cli --> agentteams
+    agentteams_cli --> agentteams_frameworks
+    agentteams_frameworks --> agentteams
+```
 
 ```dot
 digraph "agentteams architecture" {
@@ -173,6 +187,8 @@ digraph "agentteams architecture" {
     "agentteams.frameworks" -> "agentteams";
 }
 ```
+
+</details>
 
 ---
 
@@ -232,7 +248,9 @@ digraph "agentteams architecture" {
       "package": "agentteams",
       "path": "agentteams/architecture.py",
       "is_package": false,
-      "imports_internal": [],
+      "imports_internal": [
+        "agentteams.svg_render"
+      ],
       "external": [],
       "repo_local": []
     },
@@ -805,7 +823,8 @@ digraph "agentteams architecture" {
       "path": "agentteams/graph.py",
       "is_package": false,
       "imports_internal": [
-        "agentteams._utils"
+        "agentteams._utils",
+        "agentteams.svg_render"
       ],
       "external": [],
       "repo_local": []
@@ -1055,6 +1074,14 @@ digraph "agentteams architecture" {
       "external": [],
       "repo_local": []
     },
+    "agentteams.svg_render": {
+      "package": "agentteams",
+      "path": "agentteams/svg_render.py",
+      "is_package": false,
+      "imports_internal": [],
+      "external": [],
+      "repo_local": []
+    },
     "agentteams.vscode_tasks": {
       "package": "agentteams",
       "path": "agentteams/vscode_tasks.py",
@@ -1118,6 +1145,10 @@ digraph "agentteams architecture" {
     {
       "source": "agentteams.analyze",
       "target": "agentteams.recipe_fields"
+    },
+    {
+      "source": "agentteams.architecture",
+      "target": "agentteams.svg_render"
     },
     {
       "source": "agentteams.backup",
@@ -1630,6 +1661,10 @@ digraph "agentteams architecture" {
     {
       "source": "agentteams.graph",
       "target": "agentteams._utils"
+    },
+    {
+      "source": "agentteams.graph",
+      "target": "agentteams.svg_render"
     },
     {
       "source": "agentteams.hooks_emit",

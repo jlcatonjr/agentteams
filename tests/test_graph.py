@@ -941,10 +941,15 @@ class TestTeamGraphSerialisation:
         graph = self._simple_graph()
         doc = graph.to_markdown_document()
         assert "## Team Topology Graph" in doc
-        assert "```mermaid" in doc
+        # The diagram is now a reference to the standalone SVG, not an inline block.
+        assert "](pipeline-graph.svg)" in doc
         assert "## Agent Roster" in doc
         assert "## Adjacency List" in doc
-        assert "## DOT Source" in doc
+        # Mermaid + DOT source is retained under a collapsed <details> block.
+        assert "## Diagram Source" in doc
+        assert "<details>" in doc
+        assert "```mermaid" in doc
+        assert "```dot" in doc
         assert "## JSON Adjacency" in doc
 
     def test_markdown_contains_auto_generated_warning(self):

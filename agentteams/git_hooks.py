@@ -41,8 +41,12 @@ from pathlib import Path
 from agentteams import emit, graph as _graph
 
 # Paths within a project of the generated maps.
-GRAPH_REL_PATH = "references/pipeline-graph.md"          # agent topology
-ARCH_REL_PATH = "references/architecture-graph.md"       # module architecture
+GRAPH_REL_PATH = "references/pipeline-graph.md"          # agent topology (md)
+GRAPH_SVG_REL_PATH = "references/pipeline-graph.svg"     # agent topology (svg, full)
+GRAPH_HANDOFF_SVG_REL_PATH = "references/pipeline-handoffs.svg"   # handoff backbone (svg)
+ARCH_REL_PATH = "references/architecture-graph.md"       # module architecture (md)
+ARCH_SVG_REL_PATH = "references/architecture-graph.svg"  # architecture (svg, package level)
+ARCH_MODULE_SVG_REL_PATH = "references/architecture-modules.svg"  # architecture (svg, module level)
 
 # Canonical agent-source directories, in preference order. The first that exists
 # and contains ``*.agent.md`` files is mapped.
@@ -149,12 +153,23 @@ def refresh_pipeline_graph(
     project_name = _project_name_for(repo_root, file_map)
     raw = _graph.generate_graph_document(file_map, project_name=project_name)
     new_content = emit._normalize_generated_content(GRAPH_REL_PATH, raw)
-
     changed, wrote = _write_if_changed(graph_path, new_content, dry_run=dry_run)
+
+    # Companion SVG diagram (raw XML, not fence-normalised); regenerated
+    # independently so a stale/absent svg is fixed even when the .md is current.
+    svg_path = repo_root / GRAPH_SVG_REL_PATH
+    svg = _graph.generate_graph_svg(file_map, project_name=project_name)
+    svg_changed, svg_wrote = _write_if_changed(svg_path, svg, dry_run=dry_run)
+
+    handoff_path = repo_root / GRAPH_HANDOFF_SVG_REL_PATH
+    handoff = _graph.generate_graph_handoff_svg(file_map, project_name=project_name)
+    h_changed, h_wrote = _write_if_changed(handoff_path, handoff, dry_run=dry_run)
+
+    any_changed = changed or svg_changed or h_changed
     return RefreshResult(
-        changed=changed, wrote=wrote, out_path=graph_path,
+        changed=any_changed, wrote=wrote or svg_wrote or h_wrote, out_path=graph_path,
         source=src_dir, count=len(file_map),
-        reason="updated" if changed else "already current",
+        reason="updated" if any_changed else "already current",
     )
 
 
@@ -191,10 +206,18 @@ def refresh_architecture_graph(
 
     new_content = emit._normalize_generated_content(ARCH_REL_PATH, graph.to_markdown_document())
     changed, wrote = _write_if_changed(out_path, new_content, dry_run=dry_run)
+
+    svg_path = repo_root / ARCH_SVG_REL_PATH
+    svg_changed, svg_wrote = _write_if_changed(svg_path, graph.to_svg(), dry_run=dry_run)
+
+    mod_path = repo_root / ARCH_MODULE_SVG_REL_PATH
+    mod_changed, mod_wrote = _write_if_changed(mod_path, graph.to_module_svg(), dry_run=dry_run)
+
+    any_changed = changed or svg_changed or mod_changed
     return RefreshResult(
-        changed=changed, wrote=wrote, out_path=out_path,
+        changed=any_changed, wrote=wrote or svg_wrote or mod_wrote, out_path=out_path,
         source=pkg, count=len(graph.nodes),
-        reason="updated" if changed else "already current",
+        reason="updated" if any_changed else "already current",
     )
 
 
@@ -303,14 +326,14 @@ def _render_hook_block(agentteams_path: str) -> str:
         '    if [ -n "$_at_root" ]; then\n'
         "        if printf '%s\\n' \"$_staged\" | grep -qE '(^|/)\\.(github|claude)/agents/[^/]*\\.agent\\.md$'; then\n"
         f'            if {pp} python3 -m agentteams.git_hooks --refresh --repo "$_at_root" >/dev/null 2>&1; then\n'
-        '                git -C "$_at_root" add references/pipeline-graph.md >/dev/null 2>&1 || true\n'
+        '                git -C "$_at_root" add references/pipeline-graph.md references/pipeline-graph.svg references/pipeline-handoffs.svg >/dev/null 2>&1 || true\n'
         "            else\n"
         '                echo "agentteams: pipeline-graph refresh failed; references/pipeline-graph.md may be stale (run: agentteams --refresh-graph)" >&2\n'
         "            fi\n"
         "        fi\n"
         "        if printf '%s\\n' \"$_staged\" | grep -qE '\\.py$'; then\n"
         f'            if {pp} python3 -m agentteams.git_hooks --refresh-architecture --repo "$_at_root" >/dev/null 2>&1; then\n'
-        '                git -C "$_at_root" add references/architecture-graph.md >/dev/null 2>&1 || true\n'
+        '                git -C "$_at_root" add references/architecture-graph.md references/architecture-graph.svg references/architecture-modules.svg >/dev/null 2>&1 || true\n'
         "            else\n"
         '                echo "agentteams: architecture-graph refresh failed; references/architecture-graph.md may be stale (run: agentteams --refresh-architecture)" >&2\n'
         "            fi\n"

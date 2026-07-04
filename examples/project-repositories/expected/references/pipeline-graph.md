@@ -8,6 +8,100 @@
 
 ## Team Topology Graph
 
+![ProjectRepositories agent team topology](pipeline-graph.svg)
+
+The handoff-only control-flow backbone (agents-list edges omitted):
+
+![ProjectRepositories handoff backbone](pipeline-handoffs.svg)
+
+---
+
+## Node Legend
+
+| Colour | Agent Type |
+| --- | --- |
+| <svg width="12" height="12"><rect width="12" height="12" fill="#e8e8ff" stroke="#6666cc"/></svg> Blue-lavender | Governance |
+| <svg width="12" height="12"><rect width="12" height="12" fill="#e8ffe8" stroke="#66aa66"/></svg> Green | Domain |
+| <svg width="12" height="12"><rect width="12" height="12" fill="#fff8e8" stroke="#ccaa44"/></svg> Yellow | Workstream Expert |
+| <svg width="12" height="12"><rect width="12" height="12" fill="#ffe8e8" stroke="#cc6666"/></svg> Red-pink | Tool Specialist |
+
+---
+
+## Agent Roster
+
+| Agent | Type | User-Invokable | Tools |
+| --- | --- | --- | --- |
+| `adversarial` | governance | Yes | read, search |
+| `agent-refactor` | governance | No | edit, search, agent |
+| `agent-updater` | governance | No | edit, search, execute, agent |
+| `cleanup` | governance | No | edit, search, execute |
+| `code-hygiene` | governance | No | read, search |
+| `cohesion-repairer` | domain | No | read, edit |
+| `conflict-auditor` | governance | No | read, search |
+| `conflict-resolution` | governance | No | edit, search, read |
+| `content-enricher` | domain | Yes | read, edit, search |
+| `crisis-credit-allocation-expert` | workstream_expert | No | read, search, agent |
+| `fed-response-dag-expert` | workstream_expert | No | read, search, agent |
+| `format-converter` | domain | No | read, edit, execute |
+| `git-operations` | governance | Yes | read, execute, search |
+| `navigator` | governance | No | read, search, execute |
+| `orchestrator` | governance | Yes | read, edit, search, execute, todo, agent |
+| `output-compiler` | domain | No | read, edit, execute |
+| `prairie-prosperity-expert` | workstream_expert | No | read, search, agent |
+| `primary-producer` | domain | No | read, edit, search |
+| `quality-auditor` | domain | No | read, search |
+| `reference-manager` | domain | No | read, edit, search |
+| `repo-liaison` | governance | No | read, edit, search, execute, agent |
+| `security` | governance | No | read, search |
+| `sugarscape-expert` | workstream_expert | No | read, search, agent |
+| `team-builder` | governance | Yes | read, edit, search, execute, todo |
+| `technical-validator` | domain | No | read, search |
+| `visual-designer` | domain | No | read, edit, execute, search |
+| `visualize-energy-data-expert` | workstream_expert | No | read, search, agent |
+| `work-summarizer` | domain | Yes | read, search, execute, edit, agent |
+
+---
+
+## Adjacency List
+
+| Agent | Receives from | Hands off to |
+| --- | --- | --- |
+| `adversarial` | `agent-updater`, `crisis-credit-allocation-expert`, `fed-response-dag-expert`, `orchestrator`, `prairie-prosperity-expert`, `sugarscape-expert`, `visualize-energy-data-expert`, `work-summarizer` | `conflict-auditor`, `orchestrator` |
+| `agent-refactor` | `agent-updater`, `code-hygiene`, `orchestrator` | `conflict-auditor`, `orchestrator` |
+| `agent-updater` | `conflict-auditor`, `conflict-resolution`, `git-operations`, `orchestrator` | `adversarial`, `agent-refactor`, `conflict-auditor`, `orchestrator` |
+| `cleanup` | `code-hygiene`, `orchestrator` | `orchestrator` |
+| `code-hygiene` | `orchestrator` | `agent-refactor`, `cleanup`, `conflict-auditor`, `orchestrator`, `security` |
+| `cohesion-repairer` | `orchestrator`, `primary-producer`, `quality-auditor` | `orchestrator`, `quality-auditor` |
+| `conflict-auditor` | `adversarial`, `agent-refactor`, `agent-updater`, `code-hygiene`, `orchestrator`, `primary-producer`, `reference-manager`, `repo-liaison`, `technical-validator`, `work-summarizer` | `agent-updater`, `conflict-resolution`, `orchestrator`, `technical-validator` |
+| `conflict-resolution` | `conflict-auditor`, `git-operations`, `orchestrator` | `agent-updater`, `orchestrator` |
+| `content-enricher` | — | `orchestrator`, `primary-producer`, `technical-validator` |
+| `crisis-credit-allocation-expert` | `orchestrator` | `adversarial`, `orchestrator`, `primary-producer`, `reference-manager` |
+| `fed-response-dag-expert` | `orchestrator` | `adversarial`, `orchestrator`, `primary-producer`, `reference-manager` |
+| `format-converter` | `orchestrator`, `output-compiler`, `visual-designer` | `orchestrator`, `output-compiler`, `quality-auditor` |
+| `git-operations` | `orchestrator` | `agent-updater`, `conflict-resolution`, `orchestrator`, `security` |
+| `navigator` | `orchestrator` | `orchestrator` |
+| `orchestrator` | `adversarial`, `agent-refactor`, `agent-updater`, `cleanup`, `code-hygiene`, `cohesion-repairer`, `conflict-auditor`, `conflict-resolution`, `content-enricher`, `crisis-credit-allocation-expert`, `fed-response-dag-expert`, `format-converter`, `git-operations`, `navigator`, `output-compiler`, `prairie-prosperity-expert`, `primary-producer`, `quality-auditor`, `reference-manager`, `repo-liaison`, `security`, `sugarscape-expert`, `technical-validator`, `visual-designer`, `visualize-energy-data-expert`, `work-summarizer` | `adversarial`, `agent-refactor`, `agent-updater`, `cleanup`, `code-hygiene`, `cohesion-repairer`, `conflict-auditor`, `conflict-resolution`, `crisis-credit-allocation-expert`, `fed-response-dag-expert`, `format-converter`, `git-operations`, `navigator`, `output-compiler`, `prairie-prosperity-expert`, `primary-producer`, `quality-auditor`, `reference-manager`, `repo-liaison`, `security`, `sugarscape-expert`, `technical-validator`, `visual-designer`, `visualize-energy-data-expert`, `work-summarizer` |
+| `output-compiler` | `format-converter`, `orchestrator` | `format-converter`, `orchestrator`, `technical-validator` |
+| `prairie-prosperity-expert` | `orchestrator` | `adversarial`, `orchestrator`, `primary-producer`, `reference-manager` |
+| `primary-producer` | `content-enricher`, `crisis-credit-allocation-expert`, `fed-response-dag-expert`, `orchestrator`, `prairie-prosperity-expert`, `quality-auditor`, `sugarscape-expert`, `technical-validator`, `visualize-energy-data-expert` | `cohesion-repairer`, `conflict-auditor`, `orchestrator`, `quality-auditor` |
+| `quality-auditor` | `cohesion-repairer`, `format-converter`, `orchestrator`, `primary-producer`, `visual-designer` | `cohesion-repairer`, `orchestrator`, `primary-producer` |
+| `reference-manager` | `crisis-credit-allocation-expert`, `fed-response-dag-expert`, `orchestrator`, `prairie-prosperity-expert`, `sugarscape-expert`, `technical-validator`, `visualize-energy-data-expert` | `conflict-auditor`, `orchestrator` |
+| `repo-liaison` | `orchestrator` | `conflict-auditor`, `orchestrator`, `security` |
+| `security` | `code-hygiene`, `git-operations`, `orchestrator`, `repo-liaison` | `orchestrator` |
+| `sugarscape-expert` | `orchestrator` | `adversarial`, `orchestrator`, `primary-producer`, `reference-manager` |
+| `team-builder` | — | — |
+| `technical-validator` | `conflict-auditor`, `content-enricher`, `orchestrator`, `output-compiler`, `work-summarizer` | `conflict-auditor`, `orchestrator`, `primary-producer`, `reference-manager` |
+| `visual-designer` | `orchestrator` | `format-converter`, `orchestrator`, `quality-auditor` |
+| `visualize-energy-data-expert` | `orchestrator` | `adversarial`, `orchestrator`, `primary-producer`, `reference-manager` |
+| `work-summarizer` | `orchestrator` | `adversarial`, `conflict-auditor`, `orchestrator`, `technical-validator` |
+
+---
+
+## Diagram Source
+
+<details>
+<summary>Mermaid &amp; DOT source for the topology diagram above</summary>
+
 ```mermaid
 flowchart LR
     classDef governance fill:#e8e8ff,stroke:#6666cc,color:#000
@@ -240,94 +334,6 @@ flowchart LR
     work_summarizer -.-> technical_validator
 ```
 
----
-
-## Node Legend
-
-| Colour | Agent Type |
-| --- | --- |
-| <svg width="12" height="12"><rect width="12" height="12" fill="#e8e8ff" stroke="#6666cc"/></svg> Blue-lavender | Governance |
-| <svg width="12" height="12"><rect width="12" height="12" fill="#e8ffe8" stroke="#66aa66"/></svg> Green | Domain |
-| <svg width="12" height="12"><rect width="12" height="12" fill="#fff8e8" stroke="#ccaa44"/></svg> Yellow | Workstream Expert |
-| <svg width="12" height="12"><rect width="12" height="12" fill="#ffe8e8" stroke="#cc6666"/></svg> Red-pink | Tool Specialist |
-
----
-
-## Agent Roster
-
-| Agent | Type | User-Invokable | Tools |
-| --- | --- | --- | --- |
-| `adversarial` | governance | Yes | read, search |
-| `agent-refactor` | governance | No | edit, search, agent |
-| `agent-updater` | governance | No | edit, search, execute, agent |
-| `cleanup` | governance | No | edit, search, execute |
-| `code-hygiene` | governance | No | read, search |
-| `cohesion-repairer` | domain | No | read, edit |
-| `conflict-auditor` | governance | No | read, search |
-| `conflict-resolution` | governance | No | edit, search, read |
-| `content-enricher` | domain | Yes | read, edit, search |
-| `crisis-credit-allocation-expert` | workstream_expert | No | read, search, agent |
-| `fed-response-dag-expert` | workstream_expert | No | read, search, agent |
-| `format-converter` | domain | No | read, edit, execute |
-| `git-operations` | governance | Yes | read, execute, search |
-| `navigator` | governance | No | read, search, execute |
-| `orchestrator` | governance | Yes | read, edit, search, execute, todo, agent |
-| `output-compiler` | domain | No | read, edit, execute |
-| `prairie-prosperity-expert` | workstream_expert | No | read, search, agent |
-| `primary-producer` | domain | No | read, edit, search |
-| `quality-auditor` | domain | No | read, search |
-| `reference-manager` | domain | No | read, edit, search |
-| `repo-liaison` | governance | No | read, edit, search, execute, agent |
-| `security` | governance | No | read, search |
-| `sugarscape-expert` | workstream_expert | No | read, search, agent |
-| `team-builder` | governance | Yes | read, edit, search, execute, todo |
-| `technical-validator` | domain | No | read, search |
-| `visual-designer` | domain | No | read, edit, execute, search |
-| `visualize-energy-data-expert` | workstream_expert | No | read, search, agent |
-| `work-summarizer` | domain | Yes | read, search, execute, edit, agent |
-
----
-
-## Adjacency List
-
-| Agent | Receives from | Hands off to |
-| --- | --- | --- |
-| `adversarial` | `agent-updater`, `crisis-credit-allocation-expert`, `fed-response-dag-expert`, `orchestrator`, `prairie-prosperity-expert`, `sugarscape-expert`, `visualize-energy-data-expert`, `work-summarizer` | `conflict-auditor`, `orchestrator` |
-| `agent-refactor` | `agent-updater`, `code-hygiene`, `orchestrator` | `conflict-auditor`, `orchestrator` |
-| `agent-updater` | `conflict-auditor`, `conflict-resolution`, `git-operations`, `orchestrator` | `adversarial`, `agent-refactor`, `conflict-auditor`, `orchestrator` |
-| `cleanup` | `code-hygiene`, `orchestrator` | `orchestrator` |
-| `code-hygiene` | `orchestrator` | `agent-refactor`, `cleanup`, `conflict-auditor`, `orchestrator`, `security` |
-| `cohesion-repairer` | `orchestrator`, `primary-producer`, `quality-auditor` | `orchestrator`, `quality-auditor` |
-| `conflict-auditor` | `adversarial`, `agent-refactor`, `agent-updater`, `code-hygiene`, `orchestrator`, `primary-producer`, `reference-manager`, `repo-liaison`, `technical-validator`, `work-summarizer` | `agent-updater`, `conflict-resolution`, `orchestrator`, `technical-validator` |
-| `conflict-resolution` | `conflict-auditor`, `git-operations`, `orchestrator` | `agent-updater`, `orchestrator` |
-| `content-enricher` | — | `orchestrator`, `primary-producer`, `technical-validator` |
-| `crisis-credit-allocation-expert` | `orchestrator` | `adversarial`, `orchestrator`, `primary-producer`, `reference-manager` |
-| `fed-response-dag-expert` | `orchestrator` | `adversarial`, `orchestrator`, `primary-producer`, `reference-manager` |
-| `format-converter` | `orchestrator`, `output-compiler`, `visual-designer` | `orchestrator`, `output-compiler`, `quality-auditor` |
-| `git-operations` | `orchestrator` | `agent-updater`, `conflict-resolution`, `orchestrator`, `security` |
-| `navigator` | `orchestrator` | `orchestrator` |
-| `orchestrator` | `adversarial`, `agent-refactor`, `agent-updater`, `cleanup`, `code-hygiene`, `cohesion-repairer`, `conflict-auditor`, `conflict-resolution`, `content-enricher`, `crisis-credit-allocation-expert`, `fed-response-dag-expert`, `format-converter`, `git-operations`, `navigator`, `output-compiler`, `prairie-prosperity-expert`, `primary-producer`, `quality-auditor`, `reference-manager`, `repo-liaison`, `security`, `sugarscape-expert`, `technical-validator`, `visual-designer`, `visualize-energy-data-expert`, `work-summarizer` | `adversarial`, `agent-refactor`, `agent-updater`, `cleanup`, `code-hygiene`, `cohesion-repairer`, `conflict-auditor`, `conflict-resolution`, `crisis-credit-allocation-expert`, `fed-response-dag-expert`, `format-converter`, `git-operations`, `navigator`, `output-compiler`, `prairie-prosperity-expert`, `primary-producer`, `quality-auditor`, `reference-manager`, `repo-liaison`, `security`, `sugarscape-expert`, `technical-validator`, `visual-designer`, `visualize-energy-data-expert`, `work-summarizer` |
-| `output-compiler` | `format-converter`, `orchestrator` | `format-converter`, `orchestrator`, `technical-validator` |
-| `prairie-prosperity-expert` | `orchestrator` | `adversarial`, `orchestrator`, `primary-producer`, `reference-manager` |
-| `primary-producer` | `content-enricher`, `crisis-credit-allocation-expert`, `fed-response-dag-expert`, `orchestrator`, `prairie-prosperity-expert`, `quality-auditor`, `sugarscape-expert`, `technical-validator`, `visualize-energy-data-expert` | `cohesion-repairer`, `conflict-auditor`, `orchestrator`, `quality-auditor` |
-| `quality-auditor` | `cohesion-repairer`, `format-converter`, `orchestrator`, `primary-producer`, `visual-designer` | `cohesion-repairer`, `orchestrator`, `primary-producer` |
-| `reference-manager` | `crisis-credit-allocation-expert`, `fed-response-dag-expert`, `orchestrator`, `prairie-prosperity-expert`, `sugarscape-expert`, `technical-validator`, `visualize-energy-data-expert` | `conflict-auditor`, `orchestrator` |
-| `repo-liaison` | `orchestrator` | `conflict-auditor`, `orchestrator`, `security` |
-| `security` | `code-hygiene`, `git-operations`, `orchestrator`, `repo-liaison` | `orchestrator` |
-| `sugarscape-expert` | `orchestrator` | `adversarial`, `orchestrator`, `primary-producer`, `reference-manager` |
-| `team-builder` | — | — |
-| `technical-validator` | `conflict-auditor`, `content-enricher`, `orchestrator`, `output-compiler`, `work-summarizer` | `conflict-auditor`, `orchestrator`, `primary-producer`, `reference-manager` |
-| `visual-designer` | `orchestrator` | `format-converter`, `orchestrator`, `quality-auditor` |
-| `visualize-energy-data-expert` | `orchestrator` | `adversarial`, `orchestrator`, `primary-producer`, `reference-manager` |
-| `work-summarizer` | `orchestrator` | `adversarial`, `conflict-auditor`, `orchestrator`, `technical-validator` |
-
----
-
-## DOT Source
-
-Save the block below as `pipeline-graph.dot` and run
-`dot -Tsvg pipeline-graph.dot -o pipeline-graph.svg` to produce an SVG.
-
 ```dot
 digraph "ProjectRepositories Agent Team" {
     rankdir=LR;
@@ -468,6 +474,8 @@ digraph "ProjectRepositories Agent Team" {
     "work-summarizer" -> "technical-validator" [style=solid, label="Verify Summary Accuracy"];
 }
 ```
+
+</details>
 
 ---
 

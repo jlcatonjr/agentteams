@@ -580,14 +580,24 @@ def run_generate(args: argparse.Namespace, strict_manual_placeholders: bool) -> 
             print("Changes detected but no matching rendered files — already up to date.")
             return 0
 
-        # Always regenerate the team topology graph on every update
+        # Always regenerate the team topology graph (md + companion svg) on every update
         graph_rel_path = "references/pipeline-graph.md"
+        graph_svg_rel_path = "references/pipeline-graph.svg"
         if not any(p == graph_rel_path for p, _ in update_rendered):
             from agentteams import graph as _graph
+            graph_file_map = dict(final_rendered)
             graph_update_content = _graph.generate_graph_document(
-                dict(final_rendered), project_name=project_name
+                graph_file_map, project_name=project_name
             )
             update_rendered.append((graph_rel_path, graph_update_content))
+            update_rendered.append((
+                graph_svg_rel_path,
+                _graph.generate_graph_svg(graph_file_map, project_name=project_name),
+            ))
+            update_rendered.append((
+                "references/pipeline-handoffs.svg",
+                _graph.generate_graph_handoff_svg(graph_file_map, project_name=project_name),
+            ))
 
         # --prune: delete removed files (with confirmation unless --yes)
         if args.prune and sdreport.removed_files:

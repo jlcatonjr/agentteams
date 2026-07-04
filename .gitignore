@@ -65,8 +65,10 @@ python
 # Stale root-level templates/ — canonical copy is agentteams/templates/
 /templates/
 
-# SVG build artifacts — regenerated on demand via graph module
-# Regenerate with: python -m agentteams.graph .github/agents/ --format svg
+# Ignored SVG build artifacts under docs/book/figures/ (hand-authored figures are
+# allowlisted with '!' below). NOTE: the generated pipeline/architecture graph SVGs
+# live under references/ and ARE tracked — see references/pipeline-graph.svg and
+# references/architecture-graph.svg (regenerate: agentteams --refresh-graph / --refresh-architecture).
 docs/book/figures/*.svg
 docs_src/book/figures/*.svg
 !docs/book/figures/agent-team-structure.svg
