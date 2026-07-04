@@ -6,8 +6,8 @@ same commit — so the committed maps are always in step with the committed sour
 
 Two maps are refreshed, each under its own guard:
 
-- agent files staged → `references/pipeline-graph.md` (agent topology, via [`graph`](graph.md))
-- `*.py` files staged → `references/architecture-graph.md` (module architecture, via [`architecture`](architecture.md))
+- agent files staged → `<agent-dir>/references/pipeline-graph.md` (agent topology, kept *with the team* — same location `--update`/emit writes — via [`graph`](graph.md))
+- `*.py` files staged → `references/architecture-graph.md` (repo-level module architecture, via [`architecture`](architecture.md))
 
 > *Source: `agentteams/git_hooks.py`*
 
@@ -26,14 +26,16 @@ agree with `--update`.
 
 ## Key functions
 
-### `refresh_pipeline_graph(repo_root, *, agents_dir=None, dry_run=False) -> RefreshResult`
+### `refresh_pipeline_graph(repo_root, *, agents_dir=None, dry_run=False, stage=False) -> RefreshResult`
 
-Rebuild `references/pipeline-graph.md` from the agent files on disk
-(`.github/agents/` or `.claude/agents/`), fence-normalised and written only when
-the topology changed. Backup/ghost agents under dot-prefixed directories are
-excluded.
+Rebuild the agent dir's `references/pipeline-graph.md` (+ `pipeline-graph.svg` and
+`pipeline-handoffs.svg`) from the agent files on disk (`.github/agents/` or
+`.claude/agents/`) — the same location `--update`/emit writes, so there is a single
+copy (no repo-root duplicate). Fence-normalised, written only when the topology
+changed. Backup/ghost agents under dot-prefixed directories are excluded. When
+`stage=True` (the hook path) the written files are `git add`-ed.
 
-### `refresh_architecture_graph(repo_root, *, package_dir=None, dry_run=False) -> RefreshResult`
+### `refresh_architecture_graph(repo_root, *, package_dir=None, dry_run=False, stage=False) -> RefreshResult`
 
 Rebuild `references/architecture-graph.md` from the repo's primary Python package
 (auto-detected). Same write-if-changed contract.

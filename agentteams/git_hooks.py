@@ -1,6 +1,6 @@
 """git_hooks.py — commit-triggered refresh of the agent-team topology map.
 
-The team topology graph (``references/pipeline-graph.md``) is regenerated on
+The team topology graph (``<agent-dir>/references/pipeline-graph.md``) is regenerated on
 every ``agentteams --update``. Between updates it can go stale whenever an agent
 file is edited by hand and committed. This module closes that gap with a
 ``pre-commit`` hook that, when a commit touches agent files, regenerates the
@@ -13,7 +13,7 @@ Two public capabilities, exposed on the CLI as ``--refresh-graph`` and
 ``--install-git-hooks`` (and auto-installed by ``--update`` unless
 ``--no-git-hooks``):
 
-- :func:`refresh_pipeline_graph` — rebuild ``references/pipeline-graph.md`` from
+- :func:`refresh_pipeline_graph` — rebuild the agent-dir ``references/pipeline-graph.md`` from
   the agent files on disk, writing only when the content actually changes. This
   is what the installed hook invokes via ``python -m agentteams.git_hooks``.
 - :func:`install_pre_commit_hook` — write (or sentinel-merge) the refresh block
@@ -33,6 +33,7 @@ reorderings on every commit and never agree with ``--update``.
 from __future__ import annotations
 
 import re
+import shutil
 import subprocess
 import sys
 from dataclasses import dataclass
@@ -96,14 +97,15 @@ def _resolve_agents_dir(repo_root: Path) -> Path | None:
     return None
 
 
-def _project_name_for(repo_root: Path, file_map: dict[str, str]) -> str:
+def _project_name_for(src_dir: Path, file_map: dict[str, str]) -> str:
     """Recover the project name, preferring the existing graph's H1 for stability.
 
-    Falls back to inference from agent ``name:`` fields when the graph file does
-    not yet exist. Preferring the existing heading guarantees the refresh never
-    changes the project name spuriously — it only ever updates topology.
+    Reads the existing pipeline graph from the agent-dir ``references/`` (where it
+    is written). Falls back to inference from agent ``name:`` fields when the graph
+    file does not yet exist. Preferring the existing heading guarantees the refresh
+    never changes the project name spuriously — it only ever updates topology.
     """
-    existing = repo_root / GRAPH_REL_PATH
+    existing = src_dir / GRAPH_REL_PATH
     if existing.is_file():
         m = _H1_RE.search(existing.read_text(encoding="utf-8"))
         if m:
@@ -111,13 +113,38 @@ def _project_name_for(repo_root: Path, file_map: dict[str, str]) -> str:
     return _graph.infer_project_name(file_map)
 
 
+def _stage(repo_root: Path, paths: list[Path]) -> None:
+    """Best-effort ``git add`` of the existing paths in ``paths``.
+
+    Staging is non-blocking: a ``git add`` of a gitignored path exits non-zero
+    (``check=False`` ignores that), a missing ``git`` binary or a subprocess error
+    is swallowed via a narrow catch — the pre-commit hook must never fail because
+    of staging.
+    """
+    existing = [str(p) for p in paths if p.exists()]
+    if not existing or shutil.which("git") is None:
+        return
+    try:
+        subprocess.run(
+            ["git", "-C", str(repo_root), "add", "--"] + existing,
+            capture_output=True, timeout=30, check=False,
+        )
+    except (OSError, subprocess.SubprocessError):
+        return
+
+
 def refresh_pipeline_graph(
     repo_root: Path,
     *,
     agents_dir: Path | None = None,
     dry_run: bool = False,
+    stage: bool = False,
 ) -> RefreshResult:
-    """Regenerate ``references/pipeline-graph.md`` from agent files on disk.
+    """Regenerate the team topology graph in the agent dir's ``references/``.
+
+    Writes to ``<agents_dir>/references/`` — the same location ``agentteams --update``
+    / emit writes — so there is a single pipeline-graph copy (no repo-root duplicate).
+    When ``stage`` is set (the hook path), the written files are ``git add``-ed.
 
     Writes only when the freshly-built graph differs from the file on disk, so a
     no-op commit leaves the file (and the git index) untouched. The output is
@@ -134,36 +161,41 @@ def refresh_pipeline_graph(
         A :class:`RefreshResult` describing what happened.
     """
     repo_root = repo_root.resolve()
-    graph_path = repo_root / GRAPH_REL_PATH
 
     src_dir = agents_dir if agents_dir is not None else _resolve_agents_dir(repo_root)
     if src_dir is None or not src_dir.is_dir():
         return RefreshResult(
-            changed=False, wrote=False, out_path=graph_path,
+            changed=False, wrote=False, out_path=repo_root / GRAPH_REL_PATH,
             source=src_dir, count=0, reason="no agent files found",
         )
 
     file_map = _graph.load_from_disk(src_dir)
     if not file_map:
         return RefreshResult(
-            changed=False, wrote=False, out_path=graph_path,
+            changed=False, wrote=False, out_path=src_dir / GRAPH_REL_PATH,
             source=src_dir, count=0, reason="no agent files found",
         )
 
-    project_name = _project_name_for(repo_root, file_map)
+    # Pipeline graph lives WITH the team (agent-dir references/), matching emit.
+    graph_path = src_dir / GRAPH_REL_PATH
+    svg_path = src_dir / GRAPH_SVG_REL_PATH
+    handoff_path = src_dir / GRAPH_HANDOFF_SVG_REL_PATH
+
+    project_name = _project_name_for(src_dir, file_map)
     raw = _graph.generate_graph_document(file_map, project_name=project_name)
     new_content = emit._normalize_generated_content(GRAPH_REL_PATH, raw)
     changed, wrote = _write_if_changed(graph_path, new_content, dry_run=dry_run)
 
-    # Companion SVG diagram (raw XML, not fence-normalised); regenerated
-    # independently so a stale/absent svg is fixed even when the .md is current.
-    svg_path = repo_root / GRAPH_SVG_REL_PATH
+    # Companion SVGs (raw XML, not fence-normalised); regenerated independently so
+    # a stale/absent svg is fixed even when the .md is current.
     svg = _graph.generate_graph_svg(file_map, project_name=project_name)
     svg_changed, svg_wrote = _write_if_changed(svg_path, svg, dry_run=dry_run)
 
-    handoff_path = repo_root / GRAPH_HANDOFF_SVG_REL_PATH
     handoff = _graph.generate_graph_handoff_svg(file_map, project_name=project_name)
     h_changed, h_wrote = _write_if_changed(handoff_path, handoff, dry_run=dry_run)
+
+    if stage and not dry_run:
+        _stage(repo_root, [graph_path, svg_path, handoff_path])
 
     any_changed = changed or svg_changed or h_changed
     return RefreshResult(
@@ -178,6 +210,7 @@ def refresh_architecture_graph(
     *,
     package_dir: Path | None = None,
     dry_run: bool = False,
+    stage: bool = False,
 ) -> RefreshResult:
     """Regenerate ``references/architecture-graph.md`` from the repo's package.
 
@@ -212,6 +245,9 @@ def refresh_architecture_graph(
 
     mod_path = repo_root / ARCH_MODULE_SVG_REL_PATH
     mod_changed, mod_wrote = _write_if_changed(mod_path, graph.to_module_svg(), dry_run=dry_run)
+
+    if stage and not dry_run:
+        _stage(repo_root, [out_path, svg_path, mod_path])
 
     any_changed = changed or svg_changed or mod_changed
     return RefreshResult(
@@ -533,7 +569,7 @@ def main(argv: list[str] | None = None) -> int:
 
     for label, unit, fn in jobs:
         try:
-            result = fn(repo_root, dry_run=args.dry_run)
+            result = fn(repo_root, dry_run=args.dry_run, stage=True)
         except (OSError, ImportError, ValueError) as exc:
             # CLI boundary: report cleanly rather than dumping a traceback. Narrow
             # set — file I/O (OSError) and the architecture build's parse/resolve

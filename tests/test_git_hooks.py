@@ -55,7 +55,30 @@ def test_refresh_creates_graph_when_missing(tmp_path):
     result = gh.refresh_pipeline_graph(repo)
     assert result.wrote and result.changed
     assert result.count == 24
-    assert (repo / "references" / "pipeline-graph.md").is_file()
+    assert (repo / ".github" / "agents" / "references" / "pipeline-graph.md").is_file()
+
+
+def test_refresh_writes_pipeline_to_agent_dir_not_repo_root(tmp_path):
+    """Pipeline graph lives in the agent dir's references/ (matching emit) — never repo-root."""
+    repo = _make_repo(tmp_path)
+    gh.refresh_pipeline_graph(repo)
+    agref = repo / ".github" / "agents" / "references"
+    assert (agref / "pipeline-graph.svg").is_file()
+    assert (agref / "pipeline-handoffs.svg").is_file()
+    # No repo-root duplicate is created.
+    assert not (repo / "references" / "pipeline-graph.md").exists()
+    assert not (repo / "references" / "pipeline-graph.svg").exists()
+
+
+def test_refresh_stage_stages_agent_dir_pipeline(tmp_path):
+    """stage=True git-adds the agent-dir pipeline files (so the hook commits them)."""
+    if not _has_git():
+        pytest.skip("git required")
+    repo = _make_repo(tmp_path)
+    gh.refresh_pipeline_graph(repo, stage=True)
+    staged = _git(repo, "diff", "--cached", "--name-only").stdout
+    assert ".github/agents/references/pipeline-graph.svg" in staged
+    assert ".github/agents/references/pipeline-handoffs.svg" in staged
 
 
 def test_refresh_is_idempotent(tmp_path):
@@ -69,7 +92,7 @@ def test_refresh_is_idempotent(tmp_path):
 def test_refresh_output_is_fence_wrapped(tmp_path):
     repo = _make_repo(tmp_path)
     gh.refresh_pipeline_graph(repo)
-    text = (repo / "references" / "pipeline-graph.md").read_text()
+    text = (repo / ".github" / "agents" / "references" / "pipeline-graph.md").read_text()
     assert text.startswith("<!-- AGENTTEAMS:BEGIN content v=1 -->")
     assert text.rstrip().endswith("<!-- AGENTTEAMS:END content -->")
 
@@ -77,10 +100,11 @@ def test_refresh_output_is_fence_wrapped(tmp_path):
 def test_refresh_reproduces_pipeline_golden_byte_for_byte(tmp_path):
     """A disk-built refresh must equal what the render pipeline committed."""
     repo = _make_repo(tmp_path)
-    (repo / "references").mkdir(exist_ok=True)
-    shutil.copy(_EXAMPLE_GRAPH, repo / "references" / "pipeline-graph.md")
-    shutil.copy(_EXAMPLE_GRAPH_SVG, repo / "references" / "pipeline-graph.svg")
-    shutil.copy(_EXAMPLE_GRAPH_HANDOFF_SVG, repo / "references" / "pipeline-handoffs.svg")
+    (repo / ".github" / "agents" / "references").mkdir(parents=True, exist_ok=True)
+    _agref = repo / ".github" / "agents" / "references"
+    shutil.copy(_EXAMPLE_GRAPH, _agref / "pipeline-graph.md")
+    shutil.copy(_EXAMPLE_GRAPH_SVG, _agref / "pipeline-graph.svg")
+    shutil.copy(_EXAMPLE_GRAPH_HANDOFF_SVG, _agref / "pipeline-handoffs.svg")
     result = gh.refresh_pipeline_graph(repo)
     # Golden is the pipeline output (md + svg); refresh must not want to change either.
     assert not result.changed, "hook refresh diverges from --update output"
@@ -99,7 +123,7 @@ def test_refresh_dry_run_does_not_write(tmp_path):
     repo = _make_repo(tmp_path)
     result = gh.refresh_pipeline_graph(repo, dry_run=True)
     assert result.changed and not result.wrote
-    assert not (repo / "references" / "pipeline-graph.md").exists()
+    assert not (repo / ".github" / "agents" / "references" / "pipeline-graph.md").exists()
 
 
 def test_refresh_excludes_backup_ghost_agents(tmp_path):
@@ -109,14 +133,14 @@ def test_refresh_excludes_backup_ghost_agents(tmp_path):
     backup.mkdir(parents=True)
     shutil.copy(_EXAMPLE_AGENTS / "cleanup.agent.md", backup / "stale-ghost.agent.md")
     gh.refresh_pipeline_graph(repo)
-    text = (repo / "references" / "pipeline-graph.md").read_text()
+    text = (repo / ".github" / "agents" / "references" / "pipeline-graph.md").read_text()
     assert "stale-ghost" not in text
     assert "stale_ghost" not in text
 
 
 def test_refresh_preserves_project_name_from_existing_h1(tmp_path):
     repo = _make_repo(tmp_path)
-    graph_path = repo / "references" / "pipeline-graph.md"
+    graph_path = repo / ".github" / "agents" / "references" / "pipeline-graph.md"
     graph_path.parent.mkdir(exist_ok=True)
     graph_path.write_text(
         "<!-- AGENTTEAMS:BEGIN content v=1 -->\n"
@@ -415,8 +439,8 @@ def test_installed_hook_refreshes_and_stages_on_commit(tmp_path):
     commit = _git(repo, "commit", "-m", "add agents")
     assert commit.returncode == 0, commit.stderr
     # The hook should have generated and staged pipeline-graph.md into the commit.
-    tracked = _git(repo, "ls-files", "references/pipeline-graph.md").stdout.strip()
-    assert tracked == "references/pipeline-graph.md"
+    tracked = _git(repo, "ls-files", ".github/agents/references/pipeline-graph.md").stdout.strip()
+    assert tracked == ".github/agents/references/pipeline-graph.md"
     assert _git(repo, "status", "--porcelain").stdout.strip() == ""
 
 
@@ -433,4 +457,4 @@ def test_cli_refresh_graph_and_install(tmp_path):
     assert (gh._resolve_hooks_dir(repo) / "pre-commit").is_file()
     rc = build_team.main(["--refresh-graph", "--output", str(repo)])
     assert rc == 0
-    assert (repo / "references" / "pipeline-graph.md").is_file()
+    assert (repo / ".github" / "agents" / "references" / "pipeline-graph.md").is_file()

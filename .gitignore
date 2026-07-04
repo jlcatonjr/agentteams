@@ -66,9 +66,10 @@ python
 /templates/
 
 # Ignored SVG build artifacts under docs/book/figures/ (hand-authored figures are
-# allowlisted with '!' below). NOTE: the generated pipeline/architecture graph SVGs
-# live under references/ and ARE tracked — see references/pipeline-graph.svg and
-# references/architecture-graph.svg (regenerate: agentteams --refresh-graph / --refresh-architecture).
+# allowlisted with '!' below). NOTE: the architecture graph SVGs live under references/
+# and ARE tracked (references/architecture-graph.svg, architecture-modules.svg); the
+# pipeline graph SVGs live in the agent dir's references/ (.github/agents/references/).
+# Regenerate: agentteams --refresh-graph / --refresh-architecture.
 docs/book/figures/*.svg
 docs_src/book/figures/*.svg
 !docs/book/figures/agent-team-structure.svg
