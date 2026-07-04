@@ -1,22 +1,22 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 744 110" width="744" height="110" font-family="monospace">
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 744 138" width="744" height="138" font-family="monospace">
   <title>agentteams — Architecture</title>
   <defs>
     <marker id="arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
       <polygon points="0,0 10,5 0,10" fill="#8a8a8a"/>
     </marker>
   </defs>
-  <path d="M176,31 C246,31 246,31 316,31" fill="none" stroke="#8a8a8a" stroke-width="1.5" marker-start="url(#arrow)" marker-end="url(#arrow)"/>
-  <path d="M176,31 C240,31 240,79 304,79" fill="none" stroke="#8a8a8a" stroke-width="1.5" marker-end="url(#arrow)"/>
-  <path d="M176,31 C356,31 356,55 536,55" fill="none" stroke="#8a8a8a" stroke-width="1.5" marker-start="url(#arrow)" marker-end="url(#arrow)"/>
-  <path d="M452,31 C494,31 494,55 536,55" fill="none" stroke="#8a8a8a" stroke-width="1.5" marker-end="url(#arrow)"/>
-  <rect x="72" y="16" width="104" height="30" rx="6" fill="#e8eefb" stroke="#1b3fa0" stroke-width="1.5"/>
-  <text x="124" y="36" font-size="13" text-anchor="middle" fill="#000000">agentteams</text>
+  <path d="M176,45 L232,45 C268,45 268,31 304,31 L316,31" fill="none" stroke="#8a8a8a" stroke-width="1.5" marker-start="url(#arrow)" marker-end="url(#arrow)"/>
+  <path d="M176,45 L232,45 C268,45 268,79 304,79" fill="none" stroke="#8a8a8a" stroke-width="1.5" marker-end="url(#arrow)"/>
+  <path d="M176,45 L232,45 C268,45 268,117 304,117 L464,117 C500,117 500,69 536,69" fill="none" stroke="#8a8a8a" stroke-width="1.5" marker-start="url(#arrow)" marker-end="url(#arrow)"/>
+  <path d="M452,31 L464,31 C500,31 500,69 536,69" fill="none" stroke="#8a8a8a" stroke-width="1.5" marker-end="url(#arrow)"/>
+  <rect x="72" y="30" width="104" height="30" rx="6" fill="#e8eefb" stroke="#1b3fa0" stroke-width="1.5"/>
+  <text x="124" y="50" font-size="13" text-anchor="middle" fill="#000000">agentteams</text>
   <rect x="316" y="16" width="136" height="30" rx="6" fill="#eef6ee" stroke="#3f8f4f" stroke-width="1.5"/>
   <text x="384" y="36" font-size="13" text-anchor="middle" fill="#000000">agentteams.cli</text>
   <rect x="304" y="64" width="160" height="30" rx="6" fill="#eef6ee" stroke="#3f8f4f" stroke-width="1.5"/>
   <text x="384" y="84" font-size="13" text-anchor="middle" fill="#000000">agentteams.enrich</text>
-  <rect x="16" y="64" width="216" height="30" rx="6" fill="#eef6ee" stroke="#3f8f4f" stroke-width="1.5"/>
-  <text x="124" y="84" font-size="13" text-anchor="middle" fill="#000000">agentteams.eval_adapters</text>
-  <rect x="536" y="40" width="192" height="30" rx="6" fill="#eef6ee" stroke="#3f8f4f" stroke-width="1.5"/>
-  <text x="632" y="60" font-size="13" text-anchor="middle" fill="#000000">agentteams.frameworks</text>
+  <rect x="16" y="78" width="216" height="30" rx="6" fill="#eef6ee" stroke="#3f8f4f" stroke-width="1.5"/>
+  <text x="124" y="98" font-size="13" text-anchor="middle" fill="#000000">agentteams.eval_adapters</text>
+  <rect x="536" y="54" width="192" height="30" rx="6" fill="#eef6ee" stroke="#3f8f4f" stroke-width="1.5"/>
+  <text x="632" y="74" font-size="13" text-anchor="middle" fill="#000000">agentteams.frameworks</text>
 </svg>

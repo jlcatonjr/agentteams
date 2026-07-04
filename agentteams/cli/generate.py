@@ -585,7 +585,15 @@ def run_generate(args: argparse.Namespace, strict_manual_placeholders: bool) -> 
         graph_svg_rel_path = "references/pipeline-graph.svg"
         if not any(p == graph_rel_path for p, _ in update_rendered):
             from agentteams import graph as _graph
-            graph_file_map = dict(final_rendered)
+            from pathlib import Path as _Path
+            # Build from the UNION of on-disk agents and the freshly rendered team so
+            # hand-authored specialists the (often thin) build description omits are
+            # still drawn — matching render_pipeline and the git-hook refresh. Without
+            # this the graph under-draws the team (e.g. 18 of 37 agents).
+            graph_file_map = _graph.load_from_disk(output_dir)
+            for _p, _c in final_rendered:
+                if _p.endswith(".agent.md"):
+                    graph_file_map[_Path(_p).name] = _c
             graph_update_content = _graph.generate_graph_document(
                 graph_file_map, project_name=project_name
             )
@@ -746,6 +754,7 @@ def run_generate(args: argparse.Namespace, strict_manual_placeholders: bool) -> 
             _emit_mcp_servers_if_enabled(manifest, project_root)
             from agentteams import git_hooks as _git_hooks
             _git_hooks.maybe_install_git_hooks(args, project_root)
+            _git_hooks.maybe_refresh_architecture_map(args, project_root)
             if heal_converged:
                 print(
                     "  ✓  Healed build-log baseline (no material drift; "
@@ -964,6 +973,7 @@ def run_generate(args: argparse.Namespace, strict_manual_placeholders: bool) -> 
         _emit_mcp_servers_if_enabled(manifest, project_root)
         from agentteams import git_hooks as _git_hooks
         _git_hooks.maybe_install_git_hooks(args, project_root)
+        _git_hooks.maybe_refresh_architecture_map(args, project_root)
 
     return _finalize_exit_code(result, args)
 

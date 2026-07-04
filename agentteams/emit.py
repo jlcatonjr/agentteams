@@ -365,7 +365,18 @@ def emit_all(
             if auto_fenced_now and _auto_wrapped is not None:
                 existing_text = _auto_wrapped
 
-            if merge and existing_text is not None:
+            if (
+                merge
+                and existing_text is not None
+                and _is_machine_managed_merge_overwrite_path(rel_path)
+            ):
+                # Mirror the real path: machine-managed maps full-replace in merge.
+                if existing_text == normalized_content:
+                    entry.action = "UNCHANGED"
+                else:
+                    entry.action = "MERGE-OVERWRITE-FENCED"
+                    entry.delta_bytes = len(normalized_content) - len(existing_text)
+            elif merge and existing_text is not None:
                 mr = _merge_fenced_content(
                     normalized_content,
                     existing_text,
@@ -452,6 +463,22 @@ def emit_all(
         # Merge path
         if merge and target.exists():
             existing_text = target.read_text(encoding="utf-8")
+            # Machine-managed maps (graph/architecture .md and .svg) carry no
+            # user-editable region — full-replace them in merge mode instead of
+            # fence-merging. The unfenced SVGs already reach a full-replace via the
+            # legacy-no-fence branch below, but the .md variants ARE fenced, so
+            # _merge_fenced_content would keep the stale body and the roster table
+            # would drift behind its companion diagram when the team grows.
+            if _is_machine_managed_merge_overwrite_path(rel_path):
+                if existing_text == normalized_content:
+                    result.unchanged.append(str(target))
+                else:
+                    try:
+                        _atomic_write_text(target, normalized_content)
+                        result.merged.append(str(target))
+                    except OSError as exc:
+                        result.errors.append(f"Failed to write {target}: {exc}")
+                continue
             merge_result = _merge_fenced_content(
                 normalized_content,
                 existing_text,

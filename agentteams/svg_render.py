@@ -14,6 +14,12 @@ Design constraints (see ``tmp/by-week/2026-W27/svg-graph-protocol-2026-07-03.pla
   box it was measured for), sorted iteration everywhere, no timestamps, no ``float`` in output.
 * **Layered layout with crossing reduction.** A naive within-rank ordering renders the dense
   agent-topology hub as a hairball; barycenter sweeps materially reduce crossings.
+* **Waypoint (dummy-node) edge routing.** An edge spanning more than one rank is broken at
+  every intermediate rank by a zero-width *dummy node* that joins the columns and the
+  barycenter sweeps like a real node. The edge is then drawn as a single multi-segment
+  spline through its dummy chain, with all vertical movement confined to the inter-column
+  gaps — so long, back, and cross-hub edges route *between* boxes instead of straight
+  through them. (Without this a majority of edges in a dense graph pierce unrelated boxes.)
 """
 
 from __future__ import annotations
@@ -78,6 +84,7 @@ _H_GAP = 72        # horizontal gap between rank columns
 _V_GAP = 18        # vertical gap between nodes in a column
 _MARGIN = 16       # outer margin
 _MIN_W = 48        # minimum node width
+_DUMMY_H = 10      # vertical lane reserved for an edge routing waypoint (dummy node)
 
 
 def _node_width(label: str) -> int:
@@ -177,22 +184,36 @@ def _rank_nodes(ids: list[str], dag: list[tuple[str, str]]) -> dict[str, int]:
     return rank
 
 
-def _order_within_ranks(
-    columns: dict[int, list[str]],
-    directed: list[tuple[str, str]],
-) -> None:
-    """Barycenter sweeps to reduce edge crossings (mutates ``columns`` in place)."""
-    neighbours: dict[str, list[str]] = {}
-    for src, dst in directed:
-        neighbours.setdefault(src, []).append(dst)
-        neighbours.setdefault(dst, []).append(src)
+def _order_key(node: object) -> tuple[int, object]:
+    """Type-homogeneous, deterministic sort key for a real (str) or dummy (tuple) node.
 
+    Real node ids are plain strings; routing waypoints (dummy nodes) are
+    ``("d", edge_index, rank)`` tuples. A raw ``sorted`` over the mixed set would
+    compare ``str`` against ``tuple`` and raise ``TypeError`` under Python 3, so
+    every comparison is funnelled through this key: reals sort before dummies, reals
+    by id, dummies by their (integer) edge index.
+    """
+    if isinstance(node, tuple):
+        return (1, node[1])
+    return (0, node)
+
+
+def _order_within_ranks(
+    columns: dict[int, list[object]],
+    neighbours: dict[object, list[object]],
+) -> None:
+    """Barycenter sweeps to reduce edge crossings (mutates ``columns`` in place).
+
+    ``neighbours`` is the adjacency of the *routing* graph — real nodes plus the
+    per-edge dummy waypoint chains — so long edges pull their waypoints into line
+    and the crossing count drops for the whole spline, not just its endpoints.
+    """
     for _sweep in range(4):
         for rank in sorted(columns):
             order = columns[rank]
             position = {node: idx for idx, node in enumerate(order)}
             # Position of each node in whichever ranks its neighbours occupy.
-            other_pos: dict[str, list[int]] = {}
+            other_pos: dict[object, list[int]] = {}
             for other_rank, members in columns.items():
                 if other_rank == rank:
                     continue
@@ -200,15 +221,15 @@ def _order_within_ranks(
                     other_pos[node] = other_pos.get(node, [])
                     other_pos[node].append(idx)
 
-            def barycenter(node: str) -> tuple[int, int, str]:
+            def barycenter(node: object) -> tuple[int, int, tuple[int, object]]:
                 bucket: list[int] = []
                 for nbr in neighbours.get(node, []):
                     bucket.extend(other_pos.get(nbr, []))
                 if not bucket:
                     # No cross-rank neighbours: keep current relative position.
-                    return (1, position[node], node)
+                    return (1, position[node], _order_key(node))
                 # Scaled-integer average → no float in the sort key.
-                return (0, (sum(bucket) * 1000) // len(bucket), node)
+                return (0, (sum(bucket) * 1000) // len(bucket), _order_key(node))
 
             columns[rank] = sorted(order, key=barycenter)
 
@@ -266,18 +287,67 @@ def render_svg(
     dag = [pair for pair in directed if pair not in back]
     rank = _rank_nodes(ids, dag)
 
-    columns: dict[int, list[str]] = {}
+    # Deduplicate to the edges actually drawn: a mutual pair (a→b and b→a) becomes a
+    # single ``(a, b, both=True)`` entry. ``directed`` is sorted, so ``drawn`` — and
+    # therefore every dummy-node id derived from a drawn edge's index — is
+    # order-independent.
+    drawn: list[tuple[str, str, bool]] = []
+    seen_pair: set[tuple[str, str]] = set()
+    for src, dst in directed:
+        key = (min(src, dst), max(src, dst))
+        both = key in mutual
+        if both:
+            if key in seen_pair:
+                continue
+            seen_pair.add(key)
+        drawn.append((src, dst, both))
+
+    # Routing waypoints (dummy nodes). An edge spanning more than one rank gets one
+    # dummy per intermediate rank so it can be threaded *between* boxes rather than
+    # drawn straight through them. Dummies join the layered columns and the
+    # crossing-reduction sweeps like ordinary nodes.
+    columns: dict[int, list[object]] = {}
     for node_id in ids:
         columns.setdefault(rank[node_id], []).append(node_id)
+    dummy_rank: dict[tuple[str, int, int], int] = {}
+    edge_chain: list[list[tuple[str, int, int]]] = []   # per drawn edge, src-side→dst-side
+    for ei, (src, dst, _both) in enumerate(drawn):
+        lo, hi = sorted((rank[src], rank[dst]))
+        chain = [("d", ei, r) for r in range(lo + 1, hi)]
+        for key in chain:
+            dummy_rank[key] = key[2]
+            columns.setdefault(key[2], []).append(key)
+        if rank[src] > rank[dst]:
+            chain.reverse()
+        edge_chain.append(chain)
+
+    # Adjacency of the routing graph (reals + dummy chains) for the barycenter sweeps.
+    neighbours: dict[object, list[object]] = {}
+    for ei, (src, dst, _both) in enumerate(drawn):
+        prev: object = src
+        for key in edge_chain[ei]:
+            neighbours.setdefault(prev, []).append(key)
+            neighbours.setdefault(key, []).append(prev)
+            prev = key
+        neighbours.setdefault(prev, []).append(dst)
+        neighbours.setdefault(dst, []).append(prev)
+
     for members in columns.values():
-        members.sort()
-    _order_within_ranks(columns, directed)
+        members.sort(key=_order_key)
+    _order_within_ranks(columns, neighbours)
 
     max_rank = max(columns) if columns else 0
 
-    # Column widths and x offsets (left-to-right).
+    def _is_dummy(node: object) -> bool:
+        return isinstance(node, tuple)
+
+    def _item_h(node: object) -> int:
+        return _DUMMY_H if _is_dummy(node) else _NODE_H
+
+    # Column widths (real nodes only; dummies are zero-width lanes) and x offsets.
     col_w = {
-        r: max((_node_width(by_id[i].label) for i in members), default=_MIN_W)
+        r: max((_node_width(by_id[n].label) for n in members if not _is_dummy(n)),
+               default=_MIN_W)
         for r, members in columns.items()
     }
     x_left: dict[int, int] = {}
@@ -287,55 +357,97 @@ def render_svg(
         cursor += col_w.get(r, 0) + _H_GAP
     content_w = cursor - _H_GAP if columns else _MARGIN
 
-    # Column heights and vertical centering.
+    # Column heights (mixed real/dummy item heights) and vertical centering.
     col_h = {
-        r: len(members) * (_NODE_H + _V_GAP) - _V_GAP
+        r: sum(_item_h(n) for n in members) + _V_GAP * (len(members) - 1) if members else 0
         for r, members in columns.items()
     }
     content_h = max(col_h.values(), default=0)
 
-    # Final integer box coordinates: id -> (x, y, w, h).
+    # Final integer coordinates: real nodes → box (x, y, w, h); dummies → lane centre.
     box: dict[str, tuple[int, int, int, int]] = {}
+    dummy_c: dict[tuple[str, int, int], tuple[int, int]] = {}
     for r, members in columns.items():
-        start_y = _MARGIN + (content_h - col_h[r]) // 2
-        for idx, node_id in enumerate(members):
-            width = _node_width(by_id[node_id].label)
-            x = x_left[r] + (col_w[r] - width) // 2
-            y = start_y + idx * (_NODE_H + _V_GAP)
-            box[node_id] = (x, y, width, _NODE_H)
+        y = _MARGIN + (content_h - col_h[r]) // 2
+        for node in members:
+            h = _item_h(node)
+            if _is_dummy(node):
+                dummy_c[node] = (x_left[r] + col_w[r] // 2, y + h // 2)
+            else:
+                width = _node_width(by_id[node].label)
+                x = x_left[r] + (col_w[r] - width) // 2
+                box[node] = (x, y, width, _NODE_H)
+            y += h + _V_GAP
 
-    total_w = content_w + _MARGIN
-    total_h = content_h + 2 * _MARGIN
+    out: list[str] = []   # SVG header appended after edge geometry fixes the bounds.
 
-    out: list[str] = [
-        '<svg xmlns="http://www.w3.org/2000/svg" '
-        f'viewBox="0 0 {total_w} {total_h}" width="{total_w}" height="{total_h}" '
-        'font-family="monospace">',
-        f"  <title>{escape(title)}</title>" if title else "  <title>graph</title>",
-        _arrow_marker(),
-    ]
+    # Edges. Each drawn edge is ONE <path> whose vertical movement is confined to the
+    # inter-column gaps: in-column segments are horizontal lanes (a node's own y-row
+    # or a dummy's reserved slot), which never overlap another box.
+    def _colL(r: int) -> int:
+        return x_left[r]
 
-    # Edges (drawn first so nodes sit on top).
-    drawn_pairs: set[tuple[str, str]] = set()
-    for src, dst in directed:
-        key = (min(src, dst), max(src, dst))
-        both_ends = key in mutual
-        if both_ends:
-            if key in drawn_pairs:
-                continue
-            drawn_pairs.add(key)
+    def _colR(r: int) -> int:
+        return x_left[r] + col_w[r]
+
+    max_x = content_w
+    edge_lines: list[str] = []
+    for ei, (src, dst, both) in enumerate(drawn):
+        rs, rd = rank[src], rank[dst]
         sx, sy, sw, sh = box[src]
-        dx, dy, _dw, dh = box[dst]
-        x1, y1 = sx + sw, sy + sh // 2
-        x2, y2 = dx, dy + dh // 2
-        mx = (x1 + x2) // 2
-        dashed = "" if both_ends or rank[dst] > rank[src] else ' stroke-dasharray="4,3"'
-        marker_start = ' marker-start="url(#arrow)"' if both_ends else ""
-        out.append(
-            f'  <path d="M{x1},{y1} C{mx},{y1} {mx},{y2} {x2},{y2}" '
+        syc = sy + sh // 2
+        dx, dy, dw, dh = box[dst]
+        dyc = dy + dh // 2
+        stops: list[tuple[int, int]] = []
+        if rd > rs:                                    # forward (rightward)
+            stops += [(sx + sw, syc), (_colR(rs), syc)]
+            for key in edge_chain[ei]:
+                r, (cxp, cyp) = dummy_rank[key], dummy_c[key]
+                stops += [(_colL(r), cyp), (_colR(r), cyp)]
+            stops += [(_colL(rd), dyc), (dx, dyc)]
+        elif rd < rs:                                  # back (leftward), rendered dashed
+            stops += [(sx, syc), (_colL(rs), syc)]
+            for key in edge_chain[ei]:
+                r, (cxp, cyp) = dummy_rank[key], dummy_c[key]
+                stops += [(_colR(r), cyp), (_colL(r), cyp)]
+            stops += [(_colR(rd), dyc), (dx + dw, dyc)]
+        else:                                          # same rank: bulge into the gap
+            bulge = _colR(rs) + _H_GAP // 2
+            stops += [(sx + sw, syc), (bulge, syc), (bulge, dyc), (dx + dw, dyc)]
+        # Collapse consecutive duplicate points (e.g. a full-column-width box).
+        pts = [stops[0]]
+        for p in stops[1:]:
+            if p != pts[-1]:
+                pts.append(p)
+        segs = [f"M{pts[0][0]},{pts[0][1]}"]
+        for i in range(len(pts) - 1):
+            x1, y1 = pts[i]
+            x2, y2 = pts[i + 1]
+            max_x = max(max_x, x1, x2)
+            if y1 == y2:                               # horizontal lane → straight line
+                segs.append(f"L{x2},{y2}")
+            else:                                      # gap transition → S-curve
+                mx = (x1 + x2) // 2
+                segs.append(f"C{mx},{y1} {mx},{y2} {x2},{y2}")
+        dashed = "" if both or rd > rs else ' stroke-dasharray="4,3"'
+        marker_start = ' marker-start="url(#arrow)"' if both else ""
+        edge_lines.append(
+            f'  <path d="{" ".join(segs)}" '
             f'fill="none" stroke="#8a8a8a" stroke-width="1.5"{dashed}'
             f'{marker_start} marker-end="url(#arrow)"/>'
         )
+
+    total_w = max_x + _MARGIN
+    total_h = content_h + 2 * _MARGIN
+
+    out.append(
+        '<svg xmlns="http://www.w3.org/2000/svg" '
+        f'viewBox="0 0 {total_w} {total_h}" width="{total_w}" height="{total_h}" '
+        'font-family="monospace">'
+    )
+    out.append(f"  <title>{escape(title)}</title>" if title else "  <title>graph</title>")
+    out.append(_arrow_marker())
+    out += edge_lines
 
     # Nodes.
     baseline = _FONT_SIZE // 2

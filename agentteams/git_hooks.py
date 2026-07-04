@@ -528,6 +528,32 @@ def maybe_install_git_hooks(args, project_root: Path) -> None:
         print(f"  ✓  Pipeline-graph pre-commit hook {res.action}: {res.hook_path}")
 
 
+def maybe_refresh_architecture_map(args, project_root: Path) -> None:
+    """Regenerate the module-architecture map after a successful build/update.
+
+    ``agentteams --update`` regenerates the *team* topology graph (md + SVGs) on
+    every run, but the *module* architecture map was previously refreshed only by
+    the ``*.py``-staged pre-commit hook or an explicit ``--refresh-architecture``.
+    A repo whose Python changed via a fleet ``--update`` (rather than a hook-fired
+    commit) would keep a stale ``architecture-*.svg`` indefinitely. This closes that
+    gap by refreshing it alongside the topology graph, writing to the repo-root
+    ``references/`` (the same location the hook and ``--refresh-architecture`` use —
+    NOT the agent dir), so no divergent second copy is created.
+
+    No-op (quietly) when the repo has no importable package. Non-fatal: a failure
+    never fails the build. Deterministic + write-if-changed, so a run with no code
+    change touches nothing.
+    """
+    repo_root = resolve_repo_root(args, project_root)
+    try:
+        res = refresh_architecture_graph(repo_root, stage=False)
+    except (OSError, ImportError, ValueError) as exc:  # never block a build on this
+        print(f"  !  Architecture map refresh skipped: {exc}", file=sys.stderr)
+        return
+    if res.changed and res.wrote:
+        print(f"  ✓  Architecture map refreshed ({res.count} modules): {res.out_path}")
+
+
 # ---------------------------------------------------------------------------
 # Module entry point (invoked by the installed hook)
 # ---------------------------------------------------------------------------

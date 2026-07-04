@@ -173,7 +173,22 @@ def _build_final_rendered(
             }, indent=2) + "\n",
         ))
 
-    graph_file_map = dict(final)
+    # Build the topology graph from the UNION of the agent files already on disk and
+    # the freshly rendered team. Hand-authored specialists that the (often thin) build
+    # description does not enumerate live on disk but are absent from ``final``; without
+    # this union the graph under-draws the real team (e.g. 18 of 37 agents). This is the
+    # same disk roster the commit-triggered refresh (agentteams.git_hooks) builds from —
+    # the two are documented to produce an identical graph. Freshly rendered content
+    # overlays the disk copy (by basename) so updated agents contribute their new
+    # handoffs; disk-only agents are preserved. On a fresh build ``output_dir`` is empty
+    # or absent, so the union degenerates to the rendered team (unchanged behaviour).
+    from pathlib import Path as _Path
+    graph_file_map: dict[str, str] = {}
+    if output_dir is not None:
+        graph_file_map.update(_graph.load_from_disk(output_dir))
+    for _p, _c in final:
+        if _p.endswith(".agent.md"):
+            graph_file_map[_Path(_p).name] = _c
     final.append((
         "references/pipeline-graph.md",
         _graph.generate_graph_document(graph_file_map, project_name=project_name),

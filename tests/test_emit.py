@@ -357,6 +357,39 @@ def test_restore_backup_nonexistent_raises(tmp_path):
 # Regression: --update --merge must not overwrite user content below fences
 # ---------------------------------------------------------------------------
 
+def test_machine_managed_graph_md_full_replaced_in_merge(tmp_path):
+    """A fenced machine map (pipeline-graph.md) full-replaces in merge mode.
+
+    Regression: the graph .md carries no user-editable region, so merge must NOT
+    fence-preserve its stale body — otherwise the roster table drifts behind the
+    companion .svg when the team grows (18→37). The .md is in the machine-managed
+    merge-overwrite set, so it must be written wholesale like the SVGs.
+    """
+    refs = tmp_path / "references"
+    refs.mkdir()
+    stale = (
+        "<!-- AGENTTEAMS:BEGIN content v=1 -->\n"
+        "# Team — Agent Team Topology\n\nOLD: 18 agents.\n"
+        "<!-- AGENTTEAMS:END content -->\n"
+    )
+    (refs / "pipeline-graph.md").write_text(stale, encoding="utf-8")
+    fresh = (
+        "<!-- AGENTTEAMS:BEGIN content v=1 -->\n"
+        "# Team — Agent Team Topology\n\nNEW: 37 agents.\n"
+        "<!-- AGENTTEAMS:END content -->\n"
+    )
+    result = emit_all(
+        [("references/pipeline-graph.md", fresh)],
+        output_dir=tmp_path,
+        merge=True,
+        yes=True,
+    )
+    assert result.success
+    written = (refs / "pipeline-graph.md").read_text(encoding="utf-8")
+    assert "NEW: 37 agents." in written
+    assert "OLD: 18 agents." not in written
+
+
 def test_merge_preserves_user_content_below_fence(tmp_path):
     existing = (
         "<!-- AGENTTEAMS:BEGIN header v=1 -->\n"

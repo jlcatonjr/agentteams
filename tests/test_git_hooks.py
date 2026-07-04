@@ -267,6 +267,38 @@ def test_refresh_architecture_no_package_is_graceful(tmp_path):
     assert "no importable package" in result.reason
 
 
+def test_maybe_refresh_architecture_map_on_update_writes_repo_root(tmp_path):
+    """The --update hook writes architecture SVGs to repo-root/references (F1b).
+
+    Regression guard: the module map must be refreshed by the build/update path
+    (not only the *.py pre-commit hook), and it must land in the REPO-ROOT
+    references dir — the same place the hook and --refresh-architecture write — so
+    no divergent agent-dir copy is created.
+    """
+    import types
+    repo = _make_pkg_repo(tmp_path)
+    args = types.SimpleNamespace(project=str(repo))
+    gh.maybe_refresh_architecture_map(args, repo)
+    for name in ("architecture-graph.svg", "architecture-modules.svg", "architecture-graph.md"):
+        assert (repo / "references" / name).is_file(), f"{name} not written to repo-root references"
+    # No agent-dir copy was created.
+    assert not (repo / ".github" / "agents" / "references" / "architecture-graph.svg").exists()
+    # Idempotent: a second call with no code change rewrites nothing.
+    svg_before = (repo / "references" / "architecture-graph.svg").read_text()
+    gh.maybe_refresh_architecture_map(args, repo)
+    assert (repo / "references" / "architecture-graph.svg").read_text() == svg_before
+
+
+def test_maybe_refresh_architecture_map_no_package_is_quiet(tmp_path):
+    """No importable package → no files written, no crash."""
+    import types
+    repo = tmp_path / "nopkg2"
+    repo.mkdir()
+    (repo / "loose.py").write_text("x = 1\n")
+    gh.maybe_refresh_architecture_map(types.SimpleNamespace(project=str(repo)), repo)
+    assert not (repo / "references" / "architecture-graph.svg").exists()
+
+
 # ---------------------------------------------------------------------------
 # Hook block rendering
 # ---------------------------------------------------------------------------

@@ -86,6 +86,13 @@ _MACHINE_MANAGED_MERGE_OVERWRITE_PATHS: frozenset[str] = frozenset([
     "references/pipeline-handoffs.svg",
     "references/architecture-graph.svg",
     "references/architecture-modules.svg",
+    # The graph .md documents are 100% machine-generated ("Auto-generated. Do not
+    # edit manually") with no user-editable region. Under --merge, fence-merging
+    # their single `content` block preserved the stale body, so the .md drifted
+    # behind its companion .svg (which IS overwritten) — the roster table would show
+    # a different agent count than the diagram. Full-replace keeps the two in lockstep.
+    "references/pipeline-graph.md",
+    "references/architecture-graph.md",
 ])
 
 # Fences whose body is refreshed each run from an upstream live feed
