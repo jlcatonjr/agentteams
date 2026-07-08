@@ -1,6 +1,6 @@
 {
   "schema_version": "1.0",
-  "generated_at": "2026-06-23T23:02:19.718802+00:00",
+  "generated_at": "2026-07-08T17:07:14.610534+00:00",
   "source_framework": "copilot-vscode",
   "target_framework": "claude",
   "source_dir": "/Users/jamescaton/githubrepositories/agentteams/.github/agents",
@@ -35,7 +35,7 @@
     },
     {
       "path": "agents/cohesion-repairer.agent.md",
-      "sha256": "4f1db5c189108c4386cd6ece9fa6cd9c7add562bfc84baf3ca0876793e5c0c43"
+      "sha256": "f65cd4a10064e1c085f8e8461b504863e8c76b4cd483c815759cfb752d1c1c52"
     },
     {
       "path": "agents/conflict-auditor.agent.md",
@@ -67,7 +67,7 @@
     },
     {
       "path": "agents/orchestrator.agent.md",
-      "sha256": "3e2f58bd5fcb5055591e436e63ac73f395d5570b092d09d32469490aff2d090d"
+      "sha256": "9caf5669647e6345cb95fc42b92873eee0f36b6f0ee51d4c461e4a2ba9fc6f3f"
     },
     {
       "path": "agents/output-compiler.agent.md",
@@ -91,7 +91,7 @@
     },
     {
       "path": "agents/primary-producer.agent.md",
-      "sha256": "c4d93d442acaea4c9f076344272938444bae18de0cfce38f45686d5c78dd1729"
+      "sha256": "e075bd5a3cc2b76af7ea3e45209b2ac9b0b5d0659360124723c5df4fb744a39f"
     },
     {
       "path": "agents/quality-auditor.agent.md",
@@ -115,7 +115,7 @@
     },
     {
       "path": "agents/security.agent.md",
-      "sha256": "5d1faf344bb96d516d8280563427f81b9ab8eb9015c6ba7f670acd162f4b46ad"
+      "sha256": "de78bd8505bd2595e2d591d36a977e08534015848638a9a8b95ebf1de938a860"
     },
     {
       "path": "agents/team-builder.agent.md",
@@ -134,6 +134,10 @@
       "sha256": "91c1ec5817b0e86d07f142fac44ee6db3620a69c10816713b87c6c7aba2114fb"
     },
     {
+      "path": "agents/tool-doc-researcher.agent.md",
+      "sha256": "f314c65aed745091d195e3914c6e4e96fc58e39fbab0c9b8e489aacbfd210138"
+    },
+    {
       "path": "agents/work-summarizer.agent.md",
       "sha256": "29acfad46bc418dd8e71e21804c728290ba2ebe07f1f4cd0d8c9827bdcd89a0a"
     },
@@ -142,6 +146,6 @@
       "sha256": "28aa6667f79eefc110da63836d0c7601c4c6c67b5387a248f2d676d6e6483149"
     }
   ],
-  "inventory_count": 33,
+  "inventory_count": 34,
   "bridge_version": "1"
 }
