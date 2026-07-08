@@ -84,7 +84,8 @@ from agentteams.cli.app import (  # noqa: E402
 # Artifact emission extracted to agentteams/errors.py + cli/artifacts.py (CH-07);
 # re-exported so main and tests resolve these in build_team's namespace.
 from agentteams.errors import (
-    DeliveryReceiptError, EvalSuiteError, MemoryIndexError, ModelRoutingError,
+    CodeIndexError, DeliveryReceiptError, EvalSuiteError, MemoryIndexError,
+    ModelRoutingError,
 )
 from agentteams.cli.artifacts import (
     DELIVERY_RECEIPT_REL_PATH, EVAL_SUITE_REL_PATH, MODEL_ROUTING_REL_PATH,
@@ -93,6 +94,9 @@ from agentteams.cli.artifacts import (
     _write_delivery_receipt, _write_eval_suite, _write_model_routing,
     _memory_index_sources, _read_memory_index, _validate_memory_index_schema,
     _run_refresh_index, _run_query_index, _write_memory_index,
+    CODE_INDEX_REL_DIR, _code_index_sources, _read_code_index,
+    _validate_code_index_schema, _write_code_index,
+    _run_refresh_code_index, _run_query_code_index,
 )
 # Convert/interop/bridge runners extracted to agentteams/cli/commands.py
 # (CH-07); re-exported so main resolves them in build_team's namespace.

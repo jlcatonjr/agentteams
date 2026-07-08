@@ -171,6 +171,57 @@ def _build_parser() -> argparse.ArgumentParser:
         ),
     )
     parser.add_argument(
+        "--refresh-code-index",
+        action="store_true",
+        dest="refresh_code_index",
+        help=(
+            "Rebuild the code & API index only (references/code-index/, a "
+            "gitignored local cache) and exit. Indexes local scripts (and, in "
+            "later phases, the external API modules/docs they use). Useful after "
+            "editing scripts or bumping dependencies."
+        ),
+    )
+    parser.add_argument(
+        "--query-code",
+        metavar="TEXT",
+        dest="query_code",
+        default=None,
+        help=(
+            "Query the code & API index and print ranked hits. Auto-refreshes a "
+            "stale local partition first. Requires a pre-existing cache (run "
+            "--refresh-code-index or --update once)."
+        ),
+    )
+    parser.add_argument(
+        "--code-query-k",
+        metavar="N",
+        dest="code_query_k",
+        type=int,
+        default=5,
+        help="Number of ranked results to return with --query-code (default: 5).",
+    )
+    parser.add_argument(
+        "--code-query-strategy",
+        choices=["lexical", "vector"],
+        default="lexical",
+        dest="code_query_strategy",
+        help=(
+            "Query strategy for --query-code: 'lexical' (BM25, default — better "
+            "for identifier/keyword matching) or 'vector' (cosine similarity)."
+        ),
+    )
+    parser.add_argument(
+        "--code-kind",
+        choices=["local", "api", "doc", "all"],
+        default="all",
+        dest="code_kind",
+        help=(
+            "Filter --query-code by source kind: 'local' (repository scripts), "
+            "'api' (external API modules), 'doc' (API documentation), or 'all' "
+            "(default)."
+        ),
+    )
+    parser.add_argument(
         "--fail-on-legacy-skip",
         action="store_true",
         dest="fail_on_legacy_skip",
@@ -236,6 +287,19 @@ def _build_parser() -> argparse.ArgumentParser:
             "auto-installs the pipeline-graph pre-commit hook into the target git "
             "repository. Pass this flag for repositories that manage git hooks "
             "manually or run in environments where hooks are undesirable."
+        ),
+    )
+    parser.add_argument(
+        "--code-index-hook",
+        action="store_true",
+        dest="code_index_hook",
+        help=(
+            "Opt IN to a pre-commit warm-up that refreshes the code & API index "
+            "cache when scripts or dependency manifests are committed. The cache "
+            "is gitignored, so this clause never stages anything (unlike the "
+            "graph refreshes). Off by default: --query-code already rebuilds a "
+            "stale partition on demand. Applies to --install-git-hooks and the "
+            "auto-install on generate/update."
         ),
     )
     parser.add_argument(

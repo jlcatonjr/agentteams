@@ -58,6 +58,12 @@ references/plans/
 # contain machine-specific absolute paths; keep local, never publish.
 references/bridges/**/bridge-merge.report.md
 
+# Code & API vector index (F-CODEIDX) — a gitignored local retrieval cache
+# rebuilt on demand (agentteams --refresh-code-index / --query-code / --update).
+# The api-* partitions embed machine-specific resolved paths & installed
+# versions; keep local, never commit. See references/plans/code-api-vector-index.plan.md.
+references/code-index/
+
 # Structural or audit plan docs committed during development
 docs_src/structural-update-plan.md
 python

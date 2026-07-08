@@ -8,6 +8,36 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### added
 
+- **Code & API vector index (F-CODEIDX) — a searchable, auto-refreshed retrieval
+  cache over repository scripts and the external APIs they use.** The
+  code-retrieval sibling of the memory index (F8): where the memory index covers
+  durable prose, this covers *code*. New module `agentteams/code_index.py` +
+  `schemas/code-index.schema.json` build a stdlib-only **sparse tf·idf
+  vector-space** index (BM25 lexical + cosine vector strategies) with a
+  code-aware tokenizer (keeps short identifiers like `os`/`re`, keeps dotted
+  import paths whole *and* split, splits `snake_case`/`camelCase`) and AST-based
+  symbol-aware passages.
+  - **Labeled by `source_kind`** — `local-script` (repository scripts),
+    `api-module` (external API source the scripts import), `api-doc` (API
+    documentation) — filterable at query time with `--code-kind {local,api,doc,all}`.
+  - **Gitignored local cache** under `references/code-index/` (`manifest.json` +
+    per-kind partition files); never committed, never drift-tracked, never staged
+    by a git hook. The BM25/cosine scorers are a parity-tested copy of the
+    memory-index's (the shipped, grid-tuned module is left untouched).
+  - **New CLI:** `--refresh-code-index`, `--query-code TEXT` (auto-refreshes a
+    stale partition first), `--code-query-k`, `--code-query-strategy
+    {lexical,vector}` (default `lexical`), `--code-kind`.
+  - **Auto-update triggers:** query-time staleness (primary) — the `local`
+    partition on source hash/mtime, the `api-*` partitions on a dependency
+    fingerprint (dependency-manifest contents + import-name set + dist→version) so
+    a dependency upgrade is detected even though no local file changed; plus
+    `--update` (keeps an existing cache fresh) and an optional off-by-default
+    pre-commit warm-up.
+  - Never executes third-party code (static `ast` + `importlib.metadata` only).
+    Atomic writes; empty-repo ⇒ empty-but-valid; non-blocking fallback to file
+    read then grep. Docs: `docs_src/api-reference/code-index.md`. Audited design
+    (two adversarial + conflict rounds): `references/plans/code-api-vector-index.plan.md`.
+
 - **Parallel execution of independent plan steps (Workflow 0A).** Every team
   agentteams creates or `--update --merge`-updates now inherently identifies plan
   steps whose domains are independent and dispatches them as parallel **waves**

@@ -441,6 +441,8 @@ def build_manifest(description: dict[str, Any], *, framework: str = "copilot-vsc
         # from description so _memory_index_sources can see it without depending
         # on the description being re-attached later in the update path.
         "memory_index_extra_dirs": description.get("memory_index_extra_dirs") or [],
+        # Extra local-script dirs/globs for the code & API index (gitignored cache).
+        "code_index_extra_dirs": description.get("code_index_extra_dirs") or [],
     }
     # MCP-suitability detection (report §5). Advisory only — populated solely
     # when the description declares mcp_hints, so manifests for projects without
