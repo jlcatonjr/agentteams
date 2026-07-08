@@ -300,6 +300,15 @@
         ["docs/**/*.md"]
       ]
     },
+    "code_index_extra_dirs": {
+      "type": "array",
+      "description": "Optional consumer-declared extra directories or glob patterns of local scripts merged into the code & API index's local-script partition, in addition to the git-tracked source files discovered by default. Each entry is a project-relative string: a directory (recursively scanned for *.py/*.sh) or a glob (literal expansion of *.py/*.sh). Absolute paths, traversal escapes, and symlinked escapes outside the project root are rejected. The code index is a gitignored local cache. See docs_src/api-reference/code-index.md.",
+      "items": { "type": "string" },
+      "examples": [
+        ["scripts", "tools/bin"],
+        ["services/**/*.py"]
+      ]
+    },
     "conversion_pipeline": {
       "type": "string",
       "description": "Command or tool used to convert primary deliverables to output format. Used as {CONVERSION_PIPELINE} in format-converter agent.",

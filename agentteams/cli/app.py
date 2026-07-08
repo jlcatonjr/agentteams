@@ -234,7 +234,9 @@ def main(argv: list[str] | None = None) -> int:
         from agentteams import git_hooks as _git_hooks
         repo_root = Path(args.output or args.project or ".").resolve()
         try:
-            result = _git_hooks.install_pre_commit_hook(repo_root)
+            result = _git_hooks.install_pre_commit_hook(
+                repo_root, code_index_hook=getattr(args, "code_index_hook", False),
+            )
         except FileNotFoundError as exc:
             print(f"Error: {exc}", file=sys.stderr)
             return 1

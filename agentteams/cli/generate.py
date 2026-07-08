@@ -20,8 +20,8 @@ from agentteams import analyze, emit, ingest, liaison_logs, render
 from agentteams.cli import security_gate
 from agentteams.cli.artifacts import (
     _emit_mcp_servers_if_enabled,
-    _run_query_index,
-    _run_refresh_index,
+    _refresh_existing_code_index,
+    _run_retrieval_utility_modes,
     _write_delivery_receipt,
     _write_eval_suite,
     _write_memory_index,
@@ -234,24 +234,12 @@ def run_generate(args: argparse.Namespace, strict_manual_placeholders: bool) -> 
         return 1 if breport.has_failures else 0
 
     # -----------------------------------------------------------------------
-    # Step 4c: Handle memory-index utility modes (no template rendering)
+    # Step 4c: Handle retrieval utility modes — memory-index + code-index
+    # (no template rendering; gitignored/local artifacts)
     # -----------------------------------------------------------------------
-    if args.refresh_index:
-        try:
-            return _run_refresh_index(manifest, output_dir)
-        except (OSError, MemoryIndexError) as exc:
-            print(f"Memory index refresh failed: {exc}", file=sys.stderr)
-            return 1
-
-    if args.query_index:
-        try:
-            return _run_query_index(
-                manifest, output_dir, args.query_index, args.query_k,
-                strategy=args.query_strategy,
-            )
-        except (OSError, MemoryIndexError) as exc:
-            print(f"Memory index query failed: {exc}", file=sys.stderr)
-            return 1
+    _retrieval_rc = _run_retrieval_utility_modes(args, manifest, output_dir)
+    if _retrieval_rc is not None:
+        return _retrieval_rc
 
     # -----------------------------------------------------------------------
     # Step 4d: Build live security intelligence placeholders
@@ -743,6 +731,9 @@ def run_generate(args: argparse.Namespace, strict_manual_placeholders: bool) -> 
                     f"  !  Memory index write failed: {exc}",
                     file=sys.stderr,
                 )
+            # Code index (F-CODEIDX) — lazy: keep an *existing* gitignored cache
+            # fresh on --update (query-time is the primary trigger). §8.2.
+            _refresh_existing_code_index(manifest, output_dir)
             if args.cost_routing:
                 try:
                     _write_model_routing(manifest, output_dir)

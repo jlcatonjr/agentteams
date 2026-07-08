@@ -31,3 +31,9 @@ class MemoryIndexError(AgentTeamsError, RuntimeError):
     at the call site: the existing work-summary documents are the source of
     truth — the navigator falls back to opening them and to filesystem search
     when the index is absent / stale / malformed."""
+class CodeIndexError(AgentTeamsError, RuntimeError):
+    """Raised when a code-index partition/manifest fails schema validation
+    (F-CODEIDX). Non-fatal at the call site: the source files are the source of
+    truth — a query falls back to opening the referenced file and to filesystem
+    search when the code index is absent / stale / malformed. The code index is
+    a gitignored local cache, never a committed/drift-tracked artifact."""

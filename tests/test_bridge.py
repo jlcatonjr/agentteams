@@ -371,8 +371,11 @@ def test_bridge_emits_domain_boundary(tmp_path: Path):
     boundary = out_root / "references" / "bridges" / "copilot-vscode-to-claude" / "domain-boundary.md"
     assert boundary.exists()
     text = boundary.read_text(encoding="utf-8")
-    assert "memory-history retrieval only" in text
-    assert "separate" in text.lower()
+    # The boundary now names three distinct retrieval surfaces (memory-index,
+    # code-index, project retrieval-integrator) that must not be conflated.
+    assert "must not be conflated" in text
+    assert "Memory-index" in text and "Code index" in text
+    assert "retrieval-integrator" in text.lower()
 
 
 def test_bridge_emits_recall_skill_for_claude_target(tmp_path: Path):

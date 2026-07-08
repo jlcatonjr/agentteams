@@ -1,0 +1,167 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "code-index.schema.json",
+  "title": "AgentTeams Code & API Index (local retrieval cache)",
+  "description": "Sparse TF-IDF vector-space index over repository local scripts and the external API modules/docs they use. A GITIGNORED local cache under references/code-index/ (manifest.json + per-kind partition files); NOT committed, NOT drift-tracked, NEVER staged by a git hook. Rebuilt on demand via --refresh-code-index, --update, and query-time staleness. Each document carries a source_kind label distinguishing local-script vs api-module vs api-doc. This schema validates BOTH the cache manifest (artifact_type=code-index-manifest) and an individual partition file (artifact_type=code-index-partition); the matching branch is selected by artifact_type.",
+  "oneOf": [
+    { "$ref": "#/definitions/manifest" },
+    { "$ref": "#/definitions/partition" }
+  ],
+  "definitions": {
+    "hex64": { "type": "string", "pattern": "^[a-f0-9]{64}$" },
+    "iso8601z": {
+      "type": "string",
+      "pattern": "^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}(\\.\\d+)?Z$"
+    },
+    "source_kind": { "enum": ["local-script", "api-module", "api-doc"] },
+    "manifest": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "artifact_type",
+        "code_index_schema_version",
+        "project_name",
+        "framework",
+        "built_at",
+        "partitions"
+      ],
+      "properties": {
+        "artifact_type": { "const": "code-index-manifest" },
+        "code_index_schema_version": { "type": "string", "minLength": 1 },
+        "index_format_version": { "type": "string", "minLength": 1 },
+        "index_write_owner": { "type": "string", "minLength": 1 },
+        "vector_runtime_mode": { "type": "string", "minLength": 1 },
+        "vector_model_id": { "type": ["string", "null"] },
+        "vector_dim": { "type": ["integer", "null"], "minimum": 1 },
+        "fallback_policy": { "type": "string", "minLength": 1 },
+        "project_name": { "type": "string" },
+        "framework": { "type": "string" },
+        "built_at": { "$ref": "#/definitions/iso8601z" },
+        "partitions": {
+          "type": "object",
+          "additionalProperties": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["file", "source_kind", "N"],
+            "properties": {
+              "file": { "type": "string", "minLength": 1 },
+              "source_kind": { "$ref": "#/definitions/source_kind" },
+              "N": { "type": "integer", "minimum": 0 },
+              "source_count": { "type": "integer", "minimum": 0 },
+              "built_at": { "$ref": "#/definitions/iso8601z" },
+              "source_fingerprint": { "$ref": "#/definitions/hex64" },
+              "dependency_fingerprint": {
+                "oneOf": [{ "$ref": "#/definitions/hex64" }, { "type": "null" }],
+                "description": "For api-* partitions: sha256 over dependency-manifest contents + external import-name set + dist->version map. null for the local partition (which uses per-source hash/mtime staleness). See plan R2-M1."
+              }
+            }
+          }
+        },
+        "query_entrypoints": { "type": "array", "items": { "type": "string" } },
+        "maintenance_entrypoints": { "type": "array", "items": { "type": "string" } },
+        "trigger_sources": {
+          "type": "array",
+          "items": { "enum": ["cli", "env", "scheduler", "workflow", "script", "manual"] }
+        }
+      }
+    },
+    "partition": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "artifact_type",
+        "code_index_schema_version",
+        "source_kind",
+        "project_name",
+        "framework",
+        "built_at",
+        "source_count",
+        "documents",
+        "postings",
+        "avgdl",
+        "N"
+      ],
+      "properties": {
+        "artifact_type": { "const": "code-index-partition" },
+        "code_index_schema_version": { "type": "string", "minLength": 1 },
+        "index_format_version": { "type": "string", "minLength": 1 },
+        "index_build_id": { "$ref": "#/definitions/hex64" },
+        "index_write_owner": { "type": "string", "minLength": 1 },
+        "vector_runtime_mode": { "type": "string", "minLength": 1 },
+        "vector_model_id": { "type": ["string", "null"] },
+        "vector_dim": { "type": ["integer", "null"], "minimum": 1 },
+        "fallback_policy": { "type": "string", "minLength": 1 },
+        "source_fingerprint": { "$ref": "#/definitions/hex64" },
+        "dependency_fingerprint": {
+          "oneOf": [{ "$ref": "#/definitions/hex64" }, { "type": "null" }]
+        },
+        "source_kind": { "$ref": "#/definitions/source_kind" },
+        "project_name": { "type": "string" },
+        "framework": { "type": "string" },
+        "built_at": { "$ref": "#/definitions/iso8601z" },
+        "source_count": { "type": "integer", "minimum": 0 },
+        "documents": {
+          "type": "array",
+          "items": { "$ref": "#/definitions/document" }
+        },
+        "postings": {
+          "type": "object",
+          "additionalProperties": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": ["doc_id", "tf"],
+              "properties": {
+                "doc_id": { "type": "integer", "minimum": 0 },
+                "tf": { "type": "integer", "minimum": 1 }
+              }
+            }
+          }
+        },
+        "avgdl": { "type": "number", "minimum": 0 },
+        "N": { "type": "integer", "minimum": 0 }
+      }
+    },
+    "document": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["doc_id", "path", "source_kind", "title", "length", "snippet", "passages", "source_mtime"],
+      "properties": {
+        "doc_id": { "type": "integer", "minimum": 0 },
+        "path": { "type": "string" },
+        "source_kind": { "$ref": "#/definitions/source_kind" },
+        "language": { "type": ["string", "null"] },
+        "symbol": { "type": ["string", "null"] },
+        "signature": { "type": ["string", "null"] },
+        "provenance": {
+          "oneOf": [
+            { "type": "null" },
+            {
+              "type": "object",
+              "additionalProperties": false,
+              "properties": {
+                "distribution": { "type": "string" },
+                "version": { "type": ["string", "null"] },
+                "resolved_from": { "type": ["string", "null"] },
+                "editable": { "type": ["boolean", "null"] },
+                "declared_only": { "type": ["boolean", "null"] }
+              }
+            }
+          ]
+        },
+        "title": { "type": "string" },
+        "length": { "type": "integer", "minimum": 0 },
+        "snippet": { "type": "string" },
+        "passages": {
+          "type": "array",
+          "items": { "type": "string" },
+          "description": "Symbol-aware code passages (one per top-level def/class or labeled section) for query-time passage scoring."
+        },
+        "source_hash": { "$ref": "#/definitions/hex64" },
+        "source_mtime": { "type": "number", "minimum": 0 },
+        "vector_norm_sq": { "type": "number", "minimum": 0 }
+      }
+    }
+  }
+}

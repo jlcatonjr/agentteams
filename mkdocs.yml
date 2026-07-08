@@ -77,6 +77,8 @@ nav:
       - framework-research: api-reference/framework-research.md
       - enrich: api-reference/enrich.md
       - memory-index: api-reference/memory-index.md
+      - code-index: api-reference/code-index.md
+      - code-sources: api-reference/code-sources.md
       - fence-inject: api-reference/fence-inject.md
       - graph: api-reference/graph.md
       - architecture: api-reference/architecture.md

@@ -257,6 +257,58 @@ def refresh_architecture_graph(
     )
 
 
+def refresh_code_index(
+    repo_root: Path,
+    *,
+    agents_dir: Path | None = None,
+    dry_run: bool = False,
+    stage: bool = False,
+) -> RefreshResult:
+    """Refresh the code & API index cache (F-CODEIDX) from the working tree.
+
+    This is the optional pre-commit warm-up (off by default). Unlike the graph
+    refreshes, the code index is a **gitignored local cache** — it is NEVER
+    staged, so the ``stage`` argument is accepted (for a uniform job signature)
+    but ignored. Correctness does not depend on this hook: ``--query-code``
+    rebuilds a stale partition on demand. Best-effort and non-raising.
+    """
+    repo_root = repo_root.resolve()
+    src_dir = agents_dir if agents_dir is not None else _resolve_agents_dir(repo_root)
+    out_dir = src_dir if (src_dir is not None and src_dir.is_dir()) else repo_root
+    cache_dir = out_dir / "references" / "code-index"
+    if dry_run:
+        return RefreshResult(
+            changed=False, wrote=False, out_path=cache_dir, source=src_dir,
+            count=0, reason="dry-run (code index cache)",
+        )
+    from agentteams.cli.artifacts import _write_code_index, _read_code_index
+
+    manifest = {
+        "project_name": repo_root.name,
+        "framework": "",
+        "existing_project_path": str(repo_root),
+    }
+    from agentteams.errors import CodeIndexError
+
+    try:
+        cache_dir = _write_code_index(manifest, out_dir)
+    except (OSError, CodeIndexError, ValueError) as exc:  # never block a commit on the warm-up
+        return RefreshResult(
+            changed=False, wrote=False, out_path=cache_dir, source=src_dir,
+            count=0, reason=f"code index refresh failed: {exc}",
+        )
+    count = 0
+    try:
+        data = _read_code_index(out_dir)
+        count = sum(int(p.get("N", 0)) for p in data["partitions"].values())
+    except (OSError, CodeIndexError, KeyError, ValueError):
+        count = 0
+    return RefreshResult(
+        changed=True, wrote=True, out_path=cache_dir, source=src_dir,
+        count=count, reason="updated (gitignored code index cache; not staged)",
+    )
+
+
 def _write_if_changed(path: Path, content: str, *, dry_run: bool) -> tuple[bool, bool]:
     """Write ``content`` to ``path`` only when it differs. Returns (changed, wrote)."""
     old = path.read_text(encoding="utf-8") if path.is_file() else None
@@ -329,19 +381,31 @@ def _hooks_dir_fallback(repo_root: Path) -> Path:
     return (dot_git / "hooks").resolve()
 
 
-def _render_hook_block(agentteams_path: str) -> str:
+def _render_hook_block(agentteams_path: str, *, code_index_hook: bool = False) -> str:
     """Render the sentinel-delimited refresh block for a pre-commit hook.
 
-    Two independent, guarded refreshes, each staging its own map:
+    Independent, guarded refreshes, each firing only when relevant files are
+    staged so unrelated commits pay no cost:
 
-    - agent files staged  → refresh references/pipeline-graph.md (agent topology)
-    - ``*.py`` files staged → refresh references/architecture-graph.md (module map)
+    - agent files staged  → refresh references/pipeline-graph.md (agent topology, staged)
+    - ``*.py`` files staged → refresh references/architecture-graph.md (module map, staged)
+    - (opt-in ``code_index_hook``) script/dependency files staged → warm the code
+      & API index cache. This clause is **sequential to, not a replacement of**,
+      the ``*.py`` architecture guard: it refreshes a *gitignored* cache and does
+      **NOT** ``git add`` anything (C2-2). It is off by default because
+      ``--query-code`` already rebuilds a stale partition on demand.
 
-    The block is non-blocking (``|| true``): a refresh failure never aborts a
-    commit, and each guard fires only when relevant files are staged, so
-    unrelated commits pay no cost.
+    The block is non-blocking: a refresh failure never aborts a commit.
     """
     pp = f'PYTHONPATH="{agentteams_path}${{PYTHONPATH:+:$PYTHONPATH}}"'
+    code_index_clause = ""
+    if code_index_hook:
+        code_index_clause = (
+            "        if printf '%s\\n' \"$_staged\" | grep -qE "
+            "'\\.(py|sh|bash)$|(^|/)(pyproject\\.toml|requirements[^/]*\\.txt|poetry\\.lock|Pipfile\\.lock|uv\\.lock)$'; then\n"
+            f'            {pp} python3 -m agentteams.git_hooks --refresh-code-index --repo "$_at_root" >/dev/null 2>&1 || echo "agentteams: code-index warm-up failed (gitignored cache; self-heals on next --query-code)" >&2\n'
+            "        fi\n"
+        )
     # `_at_rc=$?` captures the exit status of whatever ran before this block (a
     # pre-existing hook whose body was preserved by the sentinel merge), and the
     # closing `exit $_at_rc` restores it — so appending this block can never mask
@@ -374,6 +438,7 @@ def _render_hook_block(agentteams_path: str) -> str:
         '                echo "agentteams: architecture-graph refresh failed; references/architecture-graph.md may be stale (run: agentteams --refresh-architecture)" >&2\n'
         "            fi\n"
         "        fi\n"
+        f"{code_index_clause}"
         "    fi\n"
         "fi\n"
         "exit $_at_rc\n"
@@ -427,6 +492,7 @@ def install_pre_commit_hook(
     *,
     agentteams_path: str | None = None,
     hooks_dir: Path | None = None,
+    code_index_hook: bool = False,
 ) -> InstallResult:
     """Install (or refresh) the agentteams pipeline-graph pre-commit hook.
 
@@ -454,7 +520,7 @@ def install_pre_commit_hook(
     target_dir = hooks_dir if hooks_dir is not None else _resolve_hooks_dir(repo_root)
     hook_path = target_dir / "pre-commit"
 
-    block = _render_hook_block(at_path)
+    block = _render_hook_block(at_path, code_index_hook=code_index_hook)
     existing = hook_path.read_text(encoding="utf-8") if hook_path.is_file() else None
     merged = _merge_hook_content(existing, block)
 
@@ -520,7 +586,10 @@ def maybe_install_git_hooks(args, project_root: Path) -> None:
         )
         return
     try:
-        res = install_pre_commit_hook(repo_root, hooks_dir=hooks_dir)
+        res = install_pre_commit_hook(
+            repo_root, hooks_dir=hooks_dir,
+            code_index_hook=getattr(args, "code_index_hook", False),
+        )
     except (OSError, FileNotFoundError) as exc:  # never block a build on hooks
         print(f"  !  Git hook install skipped: {exc}", file=sys.stderr)
         return
@@ -575,6 +644,9 @@ def main(argv: list[str] | None = None) -> int:
                         help="Regenerate references/pipeline-graph.md from agent files on disk.")
     parser.add_argument("--refresh-architecture", action="store_true", dest="refresh_architecture",
                         help="Regenerate references/architecture-graph.md from the package's .py files.")
+    parser.add_argument("--refresh-code-index", action="store_true", dest="refresh_code_index",
+                        help="Refresh the gitignored code & API index cache (references/code-index/). "
+                             "Not staged. Called by the optional --code-index-hook pre-commit warm-up.")
     parser.add_argument("--repo", metavar="DIR", default=".",
                         help="Repository root (default: current directory).")
     parser.add_argument("--dry-run", action="store_true",
@@ -583,8 +655,8 @@ def main(argv: list[str] | None = None) -> int:
                         help="Print a one-line result summary.")
     args = parser.parse_args(argv)
 
-    if not args.refresh and not args.refresh_architecture:
-        parser.error("nothing to do: pass --refresh and/or --refresh-architecture")
+    if not args.refresh and not args.refresh_architecture and not args.refresh_code_index:
+        parser.error("nothing to do: pass --refresh, --refresh-architecture, and/or --refresh-code-index")
 
     repo_root = Path(args.repo).resolve()
     jobs = []
@@ -592,6 +664,8 @@ def main(argv: list[str] | None = None) -> int:
         jobs.append(("pipeline-graph", "agents", refresh_pipeline_graph))
     if args.refresh_architecture:
         jobs.append(("architecture-graph", "modules", refresh_architecture_graph))
+    if args.refresh_code_index:
+        jobs.append(("code-index", "units", refresh_code_index))
 
     for label, unit, fn in jobs:
         try:
