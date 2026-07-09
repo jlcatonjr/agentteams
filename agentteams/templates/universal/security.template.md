@@ -15,7 +15,7 @@ handoffs:
 SECTION MANIFEST — security.template.md
 | section_id                  | designation   | notes                                     |
 |-----------------------------|---------------|-------------------------------------------|
-| security_rules_invariant    | FENCED        | Triggers, rules S-1..S-8, HALT criteria, AI-authored-code screening, low-level/systems vulnerability screening |
+| security_rules_invariant    | FENCED        | Triggers, rules S-1..S-8, HALT criteria, AI-authored-code screening, low-level/systems vulnerability screening, OS platform-hardening pointers |
 | threat_intelligence         | FENCED        | Live security scan data from NVD/OSV      |
 | security_rules              | USER-EDITABLE | Project may extend (add rules below S-8)  |
 -->
@@ -59,7 +59,7 @@ Runtime enforcement also consumes machine-readable freshness metadata from the s
 | Any operation that exports, forwards, or logs agent YAML front matter or system prompt content | System prompt leakage (LLM07) |
 | Any modification to a vector store, embeddings index, or RAG data source | Vector/embedding attack surface (LLM08) |
 | Any agent loop or external API call without a declared rate limit or termination condition | Unbounded consumption (LLM10) |
-| Any AI-authored change to native or unsafe-memory code (C/C++, Rust `unsafe`, cgo, ctypes/cffi/FFI, inline asm, manual memory management) | Memory-safety exploit surface (low-level) |
+| Any AI-authored change to native or unsafe-memory code (C/C++/Objective-C, Rust `unsafe`, Zig, cgo, ctypes/cffi/PyO3/N-API/JNI, inline assembly, manual allocation, or raw pointer arithmetic) | Memory-safety exploit surface (low-level) |
 
 ### Security Rules
 
@@ -168,7 +168,7 @@ The classes above are web/service-tier. AI agents also emit **low-level** defect
 **Memory-safety corruption — applies when the reviewed code touches a native/unsafe surface** (C/C++/Objective-C, Rust `unsafe`, Zig, cgo, ctypes/cffi/PyO3/N-API/JNI, inline assembly, manual allocation, or raw pointer arithmetic). Flag the **obvious/local** shapes; non-local lifetime bugs need a sanitizer/static analyzer — route those:
 - **Buffer overflow / out-of-bounds write (CWE-787/120/121/122)** and **out-of-bounds read (CWE-125)** — unbounded copy (`strcpy`/`memcpy`), fixed buffer with unchecked length, `arr[user_index]` without a bound check. Fix: bounded copies; validate every index and length.
 - **Use-after-free / double-free (CWE-416/415)** — deref or free after free (obvious local cases). Fix: null the pointer after free; a single clear owner (RAII / borrow checker).
-- **Integer overflow into an allocation or index (CWE-190/191)** — `malloc(a*b)` or size arithmetic that can wrap. Fix: checked arithmetic before allocating or indexing.
+- **Integer overflow/underflow into an allocation or index (CWE-190/191)** — `malloc(a*b)` or size arithmetic that can wrap. Fix: checked arithmetic before allocating or indexing.
 - **Format string (CWE-134)** — untrusted string used as a format argument (`printf(user)`). Fix: a constant format string; pass data as arguments.
 - **Type confusion (CWE-843)** — `unsafe.Pointer` / union / `reinterpret_cast` misuse. Fix: tagged unions; validated casts.
 - **TOCTOU file race (CWE-367)** — `access()`-then-`open()` on a path an attacker can swap. Fix: operate on file descriptors; `O_NOFOLLOW`.

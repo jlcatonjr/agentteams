@@ -10,9 +10,11 @@ This test pins, per platform:
   3. it renders through the pipeline with {PROJECT_NAME} substituted;
 and once for all three:
   4. the security agent template references all three docs, OS-gated, inside the
-     invariant fence (so `--update --merge` propagates the pointer).
+     invariant fence (so `--update --merge` propagates the pointer);
+  5. the three refs share ONE identical set of domain titles (parallel structure).
 
-See `references/plans/security-low-level-vuln-coverage.report.md`.
+See `references/plans/security-hardening-wave-audit.report.md` (audit + revision of
+this wave) and `references/plans/security-low-level-vuln-coverage.report.md`.
 """
 
 from __future__ import annotations
@@ -31,17 +33,24 @@ _EXAMPLES = _PKG.parent / "examples"
 
 # Per-platform expectations. Domain + source samples are drawn from the authored,
 # web-verified content; CVEs are the landmark exploit classes each doc names.
+
+# The three refs share ONE canonical set of 10 domain titles ("parallel structure").
+# Each entry is a verbatim substring of a canonical `## N.` heading, identical
+# across all three docs; a divergence in any doc breaks the parallelism guarantee.
+_CANON_DOMAINS = [
+    "System integrity", "Privilege-escalation", "Mandatory access control",
+    "Application isolation", "Capability", "memory-protection",
+    "Service / daemon hardening", "Filesystem", "Auditing",
+    "Vulnerability & exploit-class",
+]
+
 _PLATFORMS = {
     "linux": {
         "template": "security-linux-hardening.reference.template.md",
         "fence": "linux_hardening",
         "output": "references/security-linux-hardening.reference.md",
         "title": "# Linux Security Hardening — ",
-        "domains": [
-            "Kernel hardening", "Privilege-escalation", "Mandatory Access Control",
-            "Namespaces", "seccomp", "memory-protection",
-            "systemd service", "Filesystem", "Auditing",
-        ],
+        "domains": _CANON_DOMAINS,
         "sources": [
             "https://kspp.github.io/",
             "https://man7.org/linux/man-pages/man7/capabilities.7.html",
@@ -57,11 +66,7 @@ _PLATFORMS = {
         "fence": "macos_hardening",
         "output": "references/security-macos-hardening.reference.md",
         "title": "# macOS Security Hardening — ",
-        "domains": [
-            "System integrity", "Privilege-escalation", "application control",
-            "Application isolation", "Capability / process restriction",
-            "memory-protection", "Service / daemon hardening", "Filesystem", "Auditing",
-        ],
+        "domains": _CANON_DOMAINS,
         "sources": [
             "https://support.apple.com/guide/security/system-integrity-protection-secb7ea06b49/web",
             "https://developer.apple.com/documentation/security/app-sandbox",
@@ -77,11 +82,7 @@ _PLATFORMS = {
         "fence": "windows_hardening",
         "output": "references/security-windows-hardening.reference.md",
         "title": "# Windows Security Hardening — ",
-        "domains": [
-            "system-integrity", "Privilege-escalation", "application control",
-            "Application isolation", "Process mitigation", "memory-protection",
-            "Service / daemon hardening", "Filesystem", "Auditing",
-        ],
+        "domains": _CANON_DOMAINS,
         "sources": [
             "https://learn.microsoft.com/en-us/windows/security/hardware-security/enable-virtualization-based-protection-of-code-integrity",
             "https://learn.microsoft.com/en-us/windows/win32/secbp/control-flow-guard",
@@ -161,3 +162,24 @@ def test_security_agent_template_references_all_platform_docs() -> None:
         pos = text.index(p["output"])
         assert begin < pos < end, f"{p['output']} pointer must be inside the invariant fence"
     assert "OS-specific deployment targets" in text
+
+
+def test_refs_share_identical_domain_titles() -> None:
+    """The "parallel structure" claim must literally hold: the three refs carry
+    the same 10 `## N.` domain headings in the same order (CI-enforced so it can't
+    silently diverge again)."""
+    import re
+
+    heading_re = re.compile(r"^## \d+\. (.+)$", re.M)
+    titles_by_os = {}
+    for name, p in _PLATFORMS.items():
+        text = _template_text(p)
+        titles_by_os[name] = heading_re.findall(text)
+
+    linux = titles_by_os["linux"]
+    assert len(linux) == 10, f"expected 10 domains, got {len(linux)}: {linux}"
+    for name, titles in titles_by_os.items():
+        assert titles == linux, (
+            f"{name} domain titles diverge from the canonical set:\n"
+            f"  {name}: {titles}\n  linux: {linux}"
+        )

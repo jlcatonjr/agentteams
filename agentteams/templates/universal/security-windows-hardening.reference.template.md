@@ -25,9 +25,9 @@ resolves to the named authority.
 
 - **Scope gate:** consult this reference only for Windows deployment/build/distribution targets. Skip for projects with no Windows surface.
 - **Screen, don't remediate:** `@security` is read-only. Flag an unmet control as a finding, route remediation to the owning agent, and escalate exploitation-likely gaps to `@orchestrator` with a HALT recommendation.
-- **Tie to the code tier:** platform gaps compound code-level classes (buffer overflow CWE-787, use-after-free CWE-416, command injection CWE-78). A memory bug inside a CFG/CET-protected, AppContainer-isolated process on a VBS/HVCI host is far less exploitable than the same bug on an unhardened host.
+- **Tie to the code tier:** platform gaps compound code-level classes (out-of-bounds write CWE-787, use-after-free CWE-416, command injection CWE-78). A memory bug inside a CFG/CET-protected, AppContainer-isolated process on a VBS/HVCI host is far less exploitable than the same bug on an unhardened host.
 
-## 1. Kernel / system-integrity & secure boot
+## 1. System integrity, kernel & secure boot
 
 Establish a measured, integrity-protected boot and kernel. Require **Secure
 Boot** and **Measured Boot**; enable **Virtualization-Based Security (VBS)** and
@@ -61,15 +61,17 @@ HiveNightmare/SeriousSAM (CVE-2021-36934), Win32k EoP (CVE-2021-1732), Zerologon
 ## 3. Mandatory access control / application control
 
 Control what executes. Enforce **App Control for Business (WDAC)** as the true
-code-integrity boundary; use **AppLocker** as defense-in-depth; enable **Smart
-App Control** on eligible endpoints. Treat "allow unsigned/anything" policies as
-findings.
+code-integrity boundary; use **AppLocker** as defense-in-depth. **Smart App
+Control** is consumer-only: it starts in evaluation mode, cannot be turned on for
+an existing install (only via a clean Windows 11 install), and is not
+policy-enforceable — rely on WDAC for a managed boundary. Treat "allow
+unsigned/anything" policies as findings.
 
 - App Control for Business (WDAC) — Microsoft Learn — <https://learn.microsoft.com/en-us/windows/security/application-security/application-control/app-control-for-business/appcontrol>
 - AppLocker overview — Microsoft Learn — <https://learn.microsoft.com/en-us/windows/security/application-security/application-control/app-control-for-business/applocker/applocker-overview>
 - Smart App Control FAQ — Microsoft Support — <https://support.microsoft.com/en-us/windows/smart-app-control-frequently-asked-questions-285ea03d-fa88-4d56-882e-6698afdb7003>
 
-## 4. Application isolation / sandboxing / containers
+## 4. Application isolation, sandboxing & containers
 
 Isolate untrusted and network-facing code. Run components in an **AppContainer**;
 test/execute untrusted software in **Windows Sandbox**; adopt **Win32 app
@@ -82,12 +84,13 @@ workloads.
 - Win32 app isolation overview — Microsoft Learn — <https://learn.microsoft.com/en-us/windows/win32/secauthz/app-isolation-overview>
 - Isolation modes (process vs. Hyper-V) — Microsoft Learn — <https://learn.microsoft.com/en-us/virtualization/windowscontainers/manage-containers/hyperv-container>
 
-## 5. Process mitigation & capability restriction
+## 5. Capability & process-mitigation restriction
 
 Shrink each process's attack surface. Apply **Exploit Protection** / per-process
 mitigation policies (`SetProcessMitigationPolicy`), including syscall-disable and
 child-process restrictions; declare least-privilege **AppContainer** capabilities;
-enable `NoChildProcess`/`BlockDynamicCode` where compatible.
+enable child-process blocking (`ChildProcess` / DisallowChildProcessCreation) and
+`BlockDynamicCode` where compatible.
 
 - Apply mitigations (Exploit Protection) — Microsoft Learn — <https://learn.microsoft.com/en-us/defender-endpoint/exploit-protection>
 - SetProcessMitigationPolicy — Microsoft Learn — <https://learn.microsoft.com/en-us/windows/win32/api/processthreadsapi/nf-processthreadsapi-setprocessmitigationpolicy>
