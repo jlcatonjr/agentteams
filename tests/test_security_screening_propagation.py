@@ -27,7 +27,12 @@ _BLOCK = (
     "### AI-Authored Code Is Insecure By Default\n\n"
     "Screen AI-authored code for CWE-79/89/352/862, slopsquatting, and "
     "unsanitized output to a sink. The OWASP LLM Top 10 is enumerated in the "
-    "`threat_intelligence` fence.\n"
+    "`threat_intelligence` fence.\n\n"
+    "### Low-Level & Systems Vulnerabilities (Any Language)\n\n"
+    "Also screen for arbitrary-code-execution / injection sinks (CWE-78/94/502/"
+    "22/918/611), memory-safety corruption on native/unsafe surfaces (CWE-787/"
+    "416/190/134), and constant-time / microarchitectural candidates (CWE-208), "
+    "routing hardware exploits to specialist tooling.\n"
 )
 
 
