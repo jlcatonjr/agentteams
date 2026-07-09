@@ -122,6 +122,26 @@ def _plan_output_files(
         "type": "artifact",
         "component_slug": None,
     })
+    # OS security hardening references (always — curated platform-hardening
+    # baselines linked from security.template.md, each gated to its deployment OS).
+    files.append({
+        "path": "references/security-linux-hardening.reference.md",
+        "template": f"{agents_dir}security-linux-hardening.reference.template.md",
+        "type": "reference",
+        "component_slug": None,
+    })
+    files.append({
+        "path": "references/security-macos-hardening.reference.md",
+        "template": f"{agents_dir}security-macos-hardening.reference.template.md",
+        "type": "reference",
+        "component_slug": None,
+    })
+    files.append({
+        "path": "references/security-windows-hardening.reference.md",
+        "template": f"{agents_dir}security-windows-hardening.reference.template.md",
+        "type": "reference",
+        "component_slug": None,
+    })
 
     # AI bad-habits catalog (always — @code-hygiene CH-25 + @security screening)
     files.append({
