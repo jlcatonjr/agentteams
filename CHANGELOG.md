@@ -6,6 +6,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### fixed
+
+- **Code index (F-CODEIDX) is now surfaced to the *primary* agent team, not only the
+  Claude bridge skill.** `/code-recall` was emitted solely into `.claude/skills/`, so
+  Copilot-framework teams (which have no skills concept — retrieval awareness lives in
+  agent templates) never learned about `--query-code`. Added a fenced
+  `code_index_consultation` section to the **navigator** and **retrieval-integrator**
+  templates (parallel to `memory_index_consultation`), so every framework's rendered
+  agent team surfaces the code-index retrieval protocol. Because the section is fenced,
+  `--update --merge` propagates it into existing teams. New guard
+  `tests/test_template_code_index_consultation.py` asserts a fresh Copilot team renders
+  `--query-code` into its agent files (not only the Claude skill).
+
 ### added
 
 - **Code & API vector index (F-CODEIDX) — a searchable, auto-refreshed retrieval
