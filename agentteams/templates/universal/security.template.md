@@ -174,6 +174,13 @@ The classes above are web/service-tier. AI agents also emit **low-level** defect
 - **TOCTOU file race (CWE-367)** — `access()`-then-`open()` on a path an attacker can swap. Fix: operate on file descriptors; `O_NOFOLLOW`.
 
 **Hardware / microarchitectural exploits — awareness and candidate-flagging only, NOT per-line proof.** In crypto/auth code, flag the reviewable patterns: **non-constant-time comparison or secret-dependent branch/table-lookup (CWE-208)** and the canonical **Spectre-v1 bounds-check gadget** (`if (x < len) y = a2[a1[x]*K]`), as **candidates to route to specialist tooling** (constant-time libraries, speculation-safe compilers, sanitizers). Full Spectre/Meltdown/Rowhammer/cache-timing/fault-injection analysis requires microarchitectural modeling and is **out of scope for this agent's per-line review** — flag awareness and route; do not claim detection.
+
+**Platform hardening (OS-specific deployment targets).** When the project builds, deploys, runs, or is distributed for a specific operating system, screen the *platform* against the matching curated baseline — each covers system-integrity/boot, privilege escalation, mandatory access / application control, isolation & sandboxing, capability/process restriction, memory-protection build flags, service/daemon hardening, filesystem/disk-encryption/secrets, and auditing, with primary-authority sources (kernel.org, Apple, Microsoft, NSA/CISA, NIST/MITRE, CIS):
+- **Linux / native targets** — `references/security-linux-hardening.reference.md` (KSPP, LSM/SELinux/AppArmor, namespaces/containers, seccomp/capabilities, systemd).
+- **macOS targets** — `references/security-macos-hardening.reference.md` (SIP/SSV, Gatekeeper, TCC, App Sandbox, Hardened Runtime, notarization, PAC, FileVault/Keychain).
+- **Windows targets** — `references/security-windows-hardening.reference.md` (Secure Boot/VBS/HVCI, UAC/Credential Guard, WDAC/AppLocker, AppContainer/Windows Sandbox, CFG/CET/ACG, BitLocker/DPAPI).
+
+Apply only the baseline(s) matching the actual deployment target(s); skip this gate for pure managed-runtime projects with no OS-specific surface.
 <!-- AGENTTEAMS:END security_rules_invariant -->
 
 ---

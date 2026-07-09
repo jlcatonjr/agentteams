@@ -21,6 +21,22 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### added
 
+- **Curated OS security-hardening references (Linux, macOS, Windows) that `@security`
+  consults for platform targets.** Three new rendered reference templates —
+  `references/security-{linux,macos,windows}-hardening.reference.md` — give the agent a
+  platform-hardening baseline (the systems-tier companion to the low-level *code*
+  screening block). Each follows a parallel 10-domain structure: system-integrity/boot,
+  privilege escalation, mandatory access / application control, isolation & sandboxing,
+  capability/process restriction, userspace memory-protection, service/daemon hardening,
+  filesystem/disk-encryption/secrets, auditing/compliance, and vulnerability catalogs —
+  every source a **web-verified primary authority** (kernel.org & Linux man-pages; Apple
+  Platform Security & Developer; Microsoft Learn & MSRC; NSA/CISA, NIST/MITRE, CIS), plus
+  landmark exploit-class CVEs (e.g. Dirty Pipe, runc escape, PwnKit; Shrootless, powerdir;
+  PrintNightmare, Zerologon). The security agent template gains an **OS-gated, directionless
+  pointer** inside the `security_rules_invariant` fence (applies only to the matching
+  deployment OS), so `--update --merge` propagates it into existing teams. Registered in
+  `output_plan.py`; new guard `tests/test_security_platform_hardening.py`. Sources verified
+  per Rule S-3 (Reference Integrity) — no fabricated links.
 - **`@security` agent now screens for low-level / systems vulnerabilities, in any
   language.** The security template's screening taxonomy was exclusively web/LLM-tier
   (XSS/SQLi/CSRF/broken-access-control + slopsquatting + unsanitized-output-to-sink +
