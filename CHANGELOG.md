@@ -25,18 +25,23 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   consults for platform targets.** Three new rendered reference templates —
   `references/security-{linux,macos,windows}-hardening.reference.md` — give the agent a
   platform-hardening baseline (the systems-tier companion to the low-level *code*
-  screening block). Each follows a parallel 10-domain structure: system-integrity/boot,
-  privilege escalation, mandatory access / application control, isolation & sandboxing,
-  capability/process restriction, userspace memory-protection, service/daemon hardening,
-  filesystem/disk-encryption/secrets, auditing/compliance, and vulnerability catalogs —
-  every source a **web-verified primary authority** (kernel.org & Linux man-pages; Apple
-  Platform Security & Developer; Microsoft Learn & MSRC; NSA/CISA, NIST/MITRE, CIS), plus
-  landmark exploit-class CVEs (e.g. Dirty Pipe, runc escape, PwnKit; Shrootless, powerdir;
-  PrintNightmare, Zerologon). The security agent template gains an **OS-gated, directionless
-  pointer** inside the `security_rules_invariant` fence (applies only to the matching
-  deployment OS), so `--update --merge` propagates it into existing teams. Registered in
-  `output_plan.py`; new guard `tests/test_security_platform_hardening.py`. Sources verified
-  per Rule S-3 (Reference Integrity) — no fabricated links.
+  screening block). All three share **one identical set of 10 domain titles** (parallel
+  structure, CI-enforced): system integrity/kernel/secure boot; privilege escalation;
+  mandatory access / application control; application isolation, sandboxing & containers;
+  capability & process-mitigation restriction; userspace memory-protection; service/daemon
+  hardening; filesystem/disk-encryption/secrets; auditing/compliance; and vulnerability
+  catalogs — every source a **web-verified primary authority** (kernel.org & Linux man-pages;
+  Apple Platform Security & Developer; Microsoft Learn & MSRC; NSA/CISA, NIST/MITRE, CIS,
+  OpenSSF), plus landmark exploit-class CVEs (e.g. Dirty Pipe, runc escape, PwnKit;
+  Shrootless, powerdir; PrintNightmare, Zerologon). The security agent template gains an
+  **OS-gated, directionless pointer** inside the `security_rules_invariant` fence (applies
+  only to the matching deployment OS), so `--update --merge` propagates it into existing
+  teams. Registered in `output_plan.py`; new guard `tests/test_security_platform_hardening.py`.
+  Sources verified per Rule S-3 (Reference Integrity) — no fabricated links. **Audit-revised
+  (2026-07-09)** via adversarial + conflict audits: normalized the domain titles to hold the
+  parallel-structure claim, removed a non-primary man-page mirror, corrected CWE-787 naming
+  (out-of-bounds write) and a Smart-App-Control/arm64e overclaim; see
+  `references/plans/security-hardening-wave-audit.{report,plan}.md`.
 - **`@security` agent now screens for low-level / systems vulnerabilities, in any
   language.** The security template's screening taxonomy was exclusively web/LLM-tier
   (XSS/SQLi/CSRF/broken-access-control + slopsquatting + unsanitized-output-to-sink +
@@ -46,8 +51,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   injection (CWE-78), `eval`/`exec` code injection (CWE-94/95), unsafe deserialization
   (CWE-502), path traversal (CWE-22), SSRF (CWE-918), XXE (CWE-611), unsafe reflection
   (CWE-470), insecure temp files (CWE-377) — applied to any language; (2) **memory-safety
-  corruption** — buffer overflow / OOB (CWE-787/125/120…), use-after-free (CWE-416/415),
-  integer overflow into allocation (CWE-190), format string (CWE-134), type confusion
+  corruption** — out-of-bounds write/overflow (CWE-787/120/121/122), OOB read (CWE-125),
+  use-after-free (CWE-416/415), integer overflow/underflow (CWE-190/191), format string (CWE-134), type confusion
   (CWE-843), TOCTOU (CWE-367) — surface-gated to native/unsafe code (C/C++/Rust `unsafe`/
   cgo/FFI/inline asm); (3) **hardware/microarchitectural** — an honest *awareness +
   candidate-flag* posture (constant-time / Spectre-v1 gadget, CWE-208) with an explicit

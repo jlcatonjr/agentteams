@@ -26,9 +26,9 @@ without verifying it resolves to the named authority.
 
 - **Scope gate:** consult this reference only for macOS deployment/build/distribution targets. Skip for projects with no macOS surface.
 - **Screen, don't remediate:** `@security` is read-only. Flag an unmet control as a finding, route remediation to the owning agent, and escalate exploitation-likely gaps to `@orchestrator` with a HALT recommendation.
-- **Tie to the code tier:** platform gaps compound code-level classes (buffer overflow CWE-787, use-after-free CWE-416, command injection CWE-78). A memory bug inside an App-Sandboxed, hardened-runtime, PAC-protected process is far less exploitable than the same bug in an unsandboxed one.
+- **Tie to the code tier:** platform gaps compound code-level classes (out-of-bounds write CWE-787, use-after-free CWE-416, command injection CWE-78). A memory bug inside an App-Sandboxed, hardened-runtime, PAC-protected process is far less exploitable than the same bug in an unsandboxed one.
 
-## 1. System integrity & secure boot
+## 1. System integrity, kernel & secure boot
 
 Keep the platform's own integrity guarantees intact. Never disable **System
 Integrity Protection (SIP)** in production or in shipped guidance; keep the
@@ -50,8 +50,9 @@ explicit tasks. Keep `sudo` least-privilege and patched. Respect **TCC**
 (Transparency, Consent & Control): never instruct users to blanket-approve Full
 Disk Access or bypass consent prompts; request only the entitlements/privacy
 scopes actually needed. Use **Authorization Services** for privileged operations
-rather than running whole tools as root. Landmark local-privilege/consent
-bypasses: Shrootless (CVE-2021-30892), powerdir TCC bypass (CVE-2021-30970).
+rather than running whole tools as root. Landmark privilege/consent bypass:
+powerdir TCC bypass (CVE-2021-30970). (Shrootless, CVE-2021-30892, is a related
+SIP-integrity bypass — see §1.)
 
 - Protecting app access to user data (TCC model) — Apple Platform Security — <https://support.apple.com/guide/security/protecting-app-access-to-user-data-secc01781f46/web>
 - Authorization Services — Apple Developer — <https://developer.apple.com/documentation/security/authorization-services>
@@ -70,19 +71,19 @@ library validation, allowing unsigned executable memory) as findings.
 - Hardened Runtime — Apple Developer — <https://developer.apple.com/documentation/security/hardened-runtime>
 - Entitlements (key reference) — Apple Developer — <https://developer.apple.com/documentation/bundleresources/entitlements>
 
-## 4. Application isolation / sandboxing
+## 4. Application isolation, sandboxing & containers
 
 Isolate components and mediate IPC. Pair the App Sandbox with **XPC** for
 privilege-separated helpers; use the **Endpoint Security** framework for
-monitoring rather than kernel hooks. Sandbox untrusted execution; note that the
-`sandbox-exec`/Seatbelt profile mechanism is deprecated (App Sandbox is the
-supported path).
+monitoring rather than kernel hooks. Sandbox untrusted execution via the App
+Sandbox; the legacy `sandbox-exec`/Seatbelt profile mechanism is deprecated and
+has no supported public API — do not build new isolation on it.
 
+- App Sandbox — Apple Developer — <https://developer.apple.com/documentation/security/app-sandbox>
 - XPC — Apple Developer — <https://developer.apple.com/documentation/xpc>
 - Endpoint Security — Apple Developer — <https://developer.apple.com/documentation/endpointsecurity>
-- sandbox-exec(1) (deprecated; man-page mirror) — manp.gs — <https://manp.gs/mac/1/sandbox-exec>
 
-## 5. Capability / process restriction
+## 5. Capability & process-mitigation restriction
 
 Minimize what a signed process may do. Enable the **Hardened Runtime** and grant
 its capability exceptions (JIT, unsigned memory, `DYLD_*` env vars, debugging)
@@ -95,9 +96,11 @@ same-team/Apple-signed libraries load.
 ## 6. Userspace memory-protection & exploit mitigations
 
 Lean on Apple-silicon and OS mitigations that blunt the memory-safety defects
-screened in the low-level code block: **Pointer Authentication (PAC)**, Kernel
-Integrity Protection, ASLR, and Execute-Never (NX). Keep the Hardened Runtime
-and library validation on; build arm64e with PAC where supported.
+screened in the low-level code block: **Pointer Authentication (PAC)** on Apple
+silicon, Kernel Integrity Protection, ASLR, and Execute-Never (NX). PAC is a
+platform property user-mode apps receive automatically — arm64e is a system/kernel
+ABI, **not** a supported third-party distribution target, so do not ship arm64e.
+Keep the Hardened Runtime and library validation on.
 
 - Operating system integrity (PAC, KIP, page protection) — Apple Platform Security — <https://support.apple.com/guide/security/operating-system-integrity-sec8b776536b/web>
 - Preparing your app to work with pointer authentication — Apple Developer — <https://developer.apple.com/documentation/security/preparing-your-app-to-work-with-pointer-authentication>
@@ -158,8 +161,9 @@ Concrete classes to recognize; each links to its NVD entry.
 ## Source registry (authoritative, verified)
 
 Apple developer.apple.com pages are JavaScript apps (title + HTTP 200 confirmed;
-body not machine-fetchable). Two on-disk man pages (`sandbox-exec`, `launchd`)
-have no Apple-hosted URL and are cited via faithful mirrors, labeled as such.
+body not machine-fetchable). The `launchd` job guidance is cited via Apple's
+Documentation Archive (an Apple-hosted page). Every source below resolves to a
+primary authority.
 
 | Domain | Source | Publisher | URL |
 |---|---|---|---|
@@ -178,7 +182,7 @@ have no Apple-hosted URL and are cited via faithful mirrors, labeled as such.
 | App-control | Entitlements | Apple | <https://developer.apple.com/documentation/bundleresources/entitlements> |
 | Isolation | XPC | Apple | <https://developer.apple.com/documentation/xpc> |
 | Isolation | Endpoint Security | Apple | <https://developer.apple.com/documentation/endpointsecurity> |
-| Isolation | sandbox-exec(1) (mirror) | manp.gs mirror | <https://manp.gs/mac/1/sandbox-exec> |
+| Isolation | App Sandbox | Apple | <https://developer.apple.com/documentation/security/app-sandbox> |
 | Memory | Operating system integrity (PAC) | Apple | <https://support.apple.com/guide/security/operating-system-integrity-sec8b776536b/web> |
 | Memory | Pointer authentication (app adoption) | Apple | <https://developer.apple.com/documentation/security/preparing-your-app-to-work-with-pointer-authentication> |
 | Service | Launch Daemons and Agents | Apple | <https://developer.apple.com/library/archive/documentation/MacOSX/Conceptual/BPSystemStartup/Chapters/CreatingLaunchdJobs.html> |

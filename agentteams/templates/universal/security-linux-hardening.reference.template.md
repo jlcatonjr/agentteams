@@ -12,14 +12,16 @@ deploys, or executes on Linux** — containers, servers, native binaries, kernel
 or driver code. It is the systems-tier companion to the low-level / memory-safety
 screening in `.github/agents/security.agent.md` (the "Low-Level & Systems
 Vulnerabilities" block): that block screens *code*; this reference screens the
-*platform* the code runs on.
+*platform* the code runs on. Parallel in structure to the macOS and Windows
+hardening references.
 
 This is a **curated baseline of authoritative guidance**, not a live threat feed
 (that is `references/security-vulnerability-watch.reference.md`). Every source in
-the registry at the end is a primary, reputable authority (kernel.org, the Linux
-man-pages project, NSA/CISA, NIST/MITRE, CIS, and the SELinux/AppArmor/systemd
-projects). Per Rule S-3 (Reference Integrity), do not add a source here without
-verifying it resolves to the named authority.
+the registry is a primary, reputable authority — kernel.org and the Linux
+man-pages project, NSA/CISA, NIST/MITRE, CIS, and the relevant OS/tooling projects
+(SELinux, AppArmor, systemd, Debian, OpenSSF, OpenSCAP, CISOfy). Per Rule S-3
+(Reference Integrity), do not add a source here without verifying it resolves to
+the named authority.
 
 <!-- AGENTTEAMS:BEGIN linux_hardening v=1 -->
 ## How `@security` uses this reference
@@ -30,11 +32,11 @@ verifying it resolves to the named authority.
   finding and route remediation to the owning agent; escalate exploitation-likely
   gaps to `@orchestrator` with a HALT recommendation.
 - **Tie to the code tier:** platform gaps here compound the code-level classes
-  (buffer overflow CWE-787, use-after-free CWE-416, TOCTOU CWE-367, command
-  injection CWE-78). A memory-safety bug behind a hardened kernel + seccomp + MAC
-  profile is far less exploitable than the same bug on a permissive host.
+  (out-of-bounds write CWE-787, use-after-free CWE-416, command injection CWE-78).
+  A memory-safety bug behind a hardened kernel + seccomp + MAC profile is far less
+  exploitable than the same bug on a permissive host.
 
-## 1. Kernel hardening & self-protection
+## 1. System integrity, kernel & secure boot
 
 Reduce kernel attack surface and enable self-protection so a memory bug in one
 subsystem cannot trivially escalate. Key controls: enable KSPP-recommended build
@@ -47,10 +49,10 @@ loadable modules and built-in attack surface.
 - Kernel Self Protection Project (KSPP) — Linux Foundation community — <https://kspp.github.io/>
 - Documentation for `/proc/sys/kernel/` sysctls — kernel.org — <https://docs.kernel.org/admin-guide/sysctl/kernel.html>
 
-## 2. Privilege-escalation vectors
+## 2. Privilege-escalation vectors & privilege model
 
 Where a local unprivileged user becomes root. Minimize SUID/SGID binaries (audit
-with `find / -perm -4000`); keep `sudo` patched and least-privilege (no unbounded
+with `find / -perm /6000`); keep `sudo` patched and least-privilege (no unbounded
 `NOPASSWD`, no wildcard commands); enforce a secure `secure_path`; remove
 world-writable files and writable entries on `PATH`; scope file capabilities
 (`getcap -r /`). Landmark local-root CVEs: **PwnKit** (polkit `pkexec`,
@@ -60,7 +62,7 @@ CVE-2021-4034) and **Baron Samedit** (sudo, CVE-2021-3156).
 - Privilege Escalation, Tactic TA0004 (Enterprise, incl. Linux) — MITRE ATT&CK — <https://attack.mitre.org/tactics/TA0004/>
 - Sudo Security Advisories — sudo project (Todd C. Miller) — <https://www.sudo.ws/security/advisories/>
 
-## 3. Mandatory Access Control (LSM: SELinux / AppArmor)
+## 3. Mandatory access control / application control
 
 Confine services so a compromised process cannot exceed a declared policy —
 defense-in-depth beyond discretionary Unix permissions. Run SELinux
@@ -72,7 +74,7 @@ service unconfined / permissive" as a finding.
 - selinux(8) — Linux man-pages — <https://man7.org/linux/man-pages/man8/selinux.8.html>
 - AppArmor documentation — AppArmor project — <https://apparmor.net/>
 
-## 4. Namespaces, cgroups & container isolation
+## 4. Application isolation, sandboxing & containers
 
 Containers are namespaces + cgroups + capabilities + seccomp + MAC — not a
 security boundary by themselves. Drop all capabilities and add back only what is
@@ -86,7 +88,7 @@ container escape: **runc** `/proc/self/exe` overwrite (CVE-2019-5736).
 - Kubernetes Hardening Guidance — NSA / CISA — <https://www.cisa.gov/news-events/alerts/2022/03/15/updated-kubernetes-hardening-guide>
 - CVE-2019-5736 (runc container escape) — NIST NVD — <https://nvd.nist.gov/vuln/detail/CVE-2019-5736>
 
-## 5. seccomp & capabilities
+## 5. Capability & process-mitigation restriction
 
 Shrink the syscall and privilege surface a process can reach. Apply a seccomp-BPF
 allowlist (default-deny) to sandbox untrusted or network-facing code; split root
@@ -103,12 +105,14 @@ Compile-and-link so that the memory-safety defects screened in the low-level cod
 block are harder to weaponize. Require: ASLR (system-wide `randomize_va_space=2`),
 NX/DEP, stack canaries (`-fstack-protector-strong`), `-D_FORTIFY_SOURCE=2/3`,
 full RELRO + BIND_NOW (`-Wl,-z,relro,-z,now`), position-independent executables
-(`-fPIE -pie`), and CET/branch-protection where the toolchain and CPU support it.
-Treat a shipped native binary missing these as a finding.
+(`-fPIE -pie`), and CET/branch-protection where the toolchain and CPU support it
+(`-D_FORTIFY_SOURCE=3` on GCC 12+/Clang 9+; fall back to `=2`). Treat a shipped
+native binary missing these as a finding.
 
+- Compiler Options Hardening Guide for C and C++ (`_FORTIFY_SOURCE=3`, stack protector, RELRO, PIE, CET) — OpenSSF — <https://best.openssf.org/Compiler-Hardening-Guides/Compiler-Options-Hardening-Guide-for-C-and-C++.html>
 - Hardening (stack protector, FORTIFY_SOURCE, PIE, RELRO, format-string) — Debian project — <https://wiki.debian.org/Hardening>
 
-## 7. systemd service sandboxing
+## 7. Service / daemon hardening
 
 Every long-running service should declare a sandbox in its unit. High-value
 directives: `NoNewPrivileges=yes`, `ProtectSystem=strict`, `ProtectHome=yes`,
@@ -118,9 +122,9 @@ Score every unit with `systemd-analyze security` (0.0–10.0 exposure) and drive
 down. An unsandboxed network-facing unit is a finding.
 
 - systemd.exec(5) — sandboxing directives — freedesktop.org (systemd) — <https://www.freedesktop.org/software/systemd/man/latest/systemd.exec.html>
-- systemd-analyze (`security` verb) — Linux man-pages mirror — <https://man7.org/linux/man-pages/man1/systemd-analyze.1.html>
+- systemd-analyze (`security` verb) — Linux man-pages — <https://man7.org/linux/man-pages/man1/systemd-analyze.1.html>
 
-## 8. Filesystem, mounts, SUID minimization & secrets at rest
+## 8. Filesystem, disk encryption & secrets at rest
 
 Partition and mount with intent: `nodev,nosuid,noexec` on `/tmp`, `/var/tmp`,
 `/dev/shm` and removable media; separate `/var`, `/var/log`, `/home`. Remove
@@ -186,6 +190,7 @@ are cited at their canonical location and load normally in a browser.
 | seccomp | seccomp(2) | Linux man-pages | <https://man7.org/linux/man-pages/man2/seccomp.2.html> |
 | seccomp | capabilities(7) | Linux man-pages | <https://man7.org/linux/man-pages/man7/capabilities.7.html> |
 | seccomp | Seccomp BPF | kernel.org | <https://docs.kernel.org/userspace-api/seccomp_filter.html> |
+| Memory | Compiler Options Hardening Guide | OpenSSF | <https://best.openssf.org/Compiler-Hardening-Guides/Compiler-Options-Hardening-Guide-for-C-and-C++.html> |
 | Memory | Debian Hardening | Debian | <https://wiki.debian.org/Hardening> |
 | systemd | systemd.exec(5) | freedesktop.org | <https://www.freedesktop.org/software/systemd/man/latest/systemd.exec.html> |
 | systemd | systemd-analyze(1) | Linux man-pages | <https://man7.org/linux/man-pages/man1/systemd-analyze.1.html> |

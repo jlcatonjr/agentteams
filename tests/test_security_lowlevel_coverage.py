@@ -73,10 +73,38 @@ def test_template_lists_low_level_classes() -> None:
     missing = [t for t in required_tokens if t not in fence_body]
     assert not missing, f"low-level block missing CWE tokens: {missing}"
 
+    # Pin the FULL slashed groups too, so a trailing class cannot be silently
+    # dropped (a leading-token-only guard would miss collapsing
+    # CWE-787/120/121/122 -> CWE-787, or dropping /95, /415, /191).
+    slashed_groups = ["CWE-94/95", "CWE-787/120/121/122", "CWE-416/415", "CWE-190/191"]
+    missing_groups = [g for g in slashed_groups if g not in fence_body]
+    assert not missing_groups, f"low-level block missing slashed CWE groups: {missing_groups}"
+
     # Surface gating + honest hardware-tier boundary must be stated.
     assert "native/unsafe surface" in fence_body
     assert "Spectre" in fence_body
     assert "out of scope for this agent's per-line review" in fence_body
+
+
+def test_control_evidence_test_ids_resolve() -> None:
+    """Every `_CONTROL_EVIDENCE_ROWS[*].test_id` must point at something real, so
+    the control-evidence matrix cannot rot silently on a rename (guards CTRL-11)."""
+    import importlib.util
+
+    repo_root = Path(agentteams.__file__).parent.parent
+    for row in security_refs._CONTROL_EVIDENCE_ROWS:
+        tid = row["test_id"]
+        if "::" in tid:
+            mod_path, func = tid.split("::", 1)
+            p = repo_root / mod_path
+            assert p.exists(), f"{row['control_id']}: test module missing: {mod_path}"
+            spec = importlib.util.spec_from_file_location(p.stem, p)
+            mod = importlib.util.module_from_spec(spec)
+            spec.loader.exec_module(mod)
+            assert hasattr(mod, func), f"{row['control_id']}: {mod_path} has no {func}()"
+        else:
+            # Non-pytest pointer (e.g. a maintenance script) — just require it exists.
+            assert (repo_root / tid).exists(), f"{row['control_id']}: path missing: {tid}"
 
 
 def test_new_trigger_row_present() -> None:
