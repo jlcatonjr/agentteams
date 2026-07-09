@@ -21,6 +21,27 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### added
 
+- **`@security` agent now screens for low-level / systems vulnerabilities, in any
+  language.** The security template's screening taxonomy was exclusively web/LLM-tier
+  (XSS/SQLi/CSRF/broken-access-control + slopsquatting + unsanitized-output-to-sink +
+  the OWASP LLM Top 10). Added a fenced **"Low-Level & Systems Vulnerabilities (Any
+  Language)"** block to `security_rules_invariant` covering three tiers,
+  proportionately: (1) **arbitrary-code-execution / injection sinks** — command
+  injection (CWE-78), `eval`/`exec` code injection (CWE-94/95), unsafe deserialization
+  (CWE-502), path traversal (CWE-22), SSRF (CWE-918), XXE (CWE-611), unsafe reflection
+  (CWE-470), insecure temp files (CWE-377) — applied to any language; (2) **memory-safety
+  corruption** — buffer overflow / OOB (CWE-787/125/120…), use-after-free (CWE-416/415),
+  integer overflow into allocation (CWE-190), format string (CWE-134), type confusion
+  (CWE-843), TOCTOU (CWE-367) — surface-gated to native/unsafe code (C/C++/Rust `unsafe`/
+  cgo/FFI/inline asm); (3) **hardware/microarchitectural** — an honest *awareness +
+  candidate-flag* posture (constant-time / Spectre-v1 gadget, CWE-208) with an explicit
+  scope boundary: full Spectre/Meltdown/Rowhammer analysis is out of scope for per-line
+  LLM review and routes to specialist tooling. Also adds a Mandatory-Review-Triggers row
+  for AI-authored native/unsafe-memory changes, a static **MITRE CWE** threat-intel source,
+  and control **CTRL-11**. Because the block is fenced, `--update --merge` propagates it
+  into existing teams. New guard `tests/test_security_lowlevel_coverage.py`. Ownership
+  boundary with `@code-hygiene` preserved (these are exploitable → `@security`'s).
+  Analysis: `references/plans/security-low-level-vuln-coverage.{report,plan}.md`.
 - **Code & API vector index (F-CODEIDX) — a searchable, auto-refreshed retrieval
   cache over repository scripts and the external APIs they use.** The
   code-retrieval sibling of the memory index (F8): where the memory index covers

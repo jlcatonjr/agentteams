@@ -247,6 +247,13 @@ _CONTROL_EVIDENCE_ROWS: list[dict[str, str]] = [
         "enforcement_point": "daily security maintenance pipeline (.github/workflows/security-maintenance.yml; scheduled 09:00 EDT + workflow_dispatch fallback)",
         "status": "implemented",
     },
+    {
+        "control_id": "CTRL-11",
+        "layer": "low-level-vuln-awareness",
+        "test_id": "tests/test_security_lowlevel_coverage.py::test_template_lists_low_level_classes",
+        "enforcement_point": "security.template.md low-level vulnerability screening block",
+        "status": "implemented",
+    },
 ]
 
 
@@ -701,6 +708,7 @@ def build_security_placeholders(
         {"name": "OSV.dev", "url": _OSV_QUERYBATCH_URL, "status": "not_fetched"},
         {"name": "OWASP LLM Top 10", "url": "https://owasp.org/www-project-top-10-for-large-language-model-applications/", "status": "static"},
         {"name": "MITRE ATLAS", "url": "https://atlas.mitre.org/", "status": "static"},
+        {"name": "MITRE CWE (Top 25 + memory-safety)", "url": "https://cwe.mitre.org/top25/", "status": "static"},
     ]
     vulnerabilities: list[dict] = []
     epss_map: dict[str, dict[str, str]] = {}

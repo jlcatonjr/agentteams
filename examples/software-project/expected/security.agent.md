@@ -72,6 +72,7 @@ Runtime enforcement also consumes machine-readable freshness metadata from the s
 | Any operation that exports, forwards, or logs agent YAML front matter or system prompt content | System prompt leakage (LLM07) |
 | Any modification to a vector store, embeddings index, or RAG data source | Vector/embedding attack surface (LLM08) |
 | Any agent loop or external API call without a declared rate limit or termination condition | Unbounded consumption (LLM10) |
+| Any AI-authored change to native or unsafe-memory code (C/C++, Rust `unsafe`, cgo, ctypes/cffi/FFI, inline asm, manual memory management) | Memory-safety exploit surface (low-level) |
 
 ### Security Rules
 
@@ -150,6 +151,42 @@ Use this table to determine the verdict. **Criteria are deterministic** — mode
 | No security-relevant findings | **PASS** |
 
 > **Precedence rule:** If a finding matches multiple rows, apply the **most restrictive** verdict (HALT > CONDITIONAL PASS > PASS).
+
+### AI-Authored Code Is Insecure By Default
+
+`@security` owns the **security-class habits of AI-generated code** — code an AI agent emits is frequently vulnerable absent any attacker. When reviewing code authored or substantially edited by an AI agent, screen it for these classes (the OWASP LLM Top 10, enumerated in the `threat_intelligence` fence, plus the following web-weakness and supply-chain classes that AI agents reproduce most often):
+
+- **Cross-site scripting (CWE-79)** — unescaped output. Fix: context-aware output encoding; framework auto-escaping; Content-Security-Policy.
+- **SQL injection (CWE-89)** — string-built queries. Fix: parameterized queries / ORM only; never concatenate untrusted input.
+- **Cross-site request forgery (CWE-352)** — state-changing routes without anti-CSRF. Fix: framework CSRF tokens; SameSite cookies.
+- **Broken access control / missing authorization (CWE-862)** — internal services/data reached without an authz check. Fix: centralized, deny-by-default authorization at every entry point.
+- **Supply-chain / slopsquatting** — AI hallucinates a non-existent package name an attacker can pre-register. Fix: verify every dependency resolves to the real, expected registry artifact; pin + lockfile; SCA scan (LLM03).
+- **Unsanitized output passed to a sink** — model output flowed into exec/DB/render without sanitization (LLM05). Fix: validate and sanitize before any sink.
+
+Treat an unmet defense in any of these as a security finding (apply the S-rules and HALT criteria above). Code-quality/correctness/process AI habits (over-commenting, duplication, hallucinated *imports* as a build-correctness defect, output *shape*-validation, skipped tests, etc.) are **not** `@security`'s concern — they are owned by `@code-hygiene` via the AI bad-habits catalog (`#file:references/ai-bad-habits-watch.reference.md`), which deliberately defers all security-class habits to this agent.
+
+### Low-Level & Systems Vulnerabilities (Any Language)
+
+The classes above are web/service-tier. AI agents also emit **low-level** defects, in any language. Screen for these too; they are exploitable, so they are `@security`'s concern (not `@code-hygiene`'s).
+
+**Arbitrary code execution & injection sinks — applies to any language, always:**
+- **OS command injection (CWE-78)** — untrusted input built into a shell/`exec` command. Fix: pass an argument vector, never a shell string; allowlist; never interpolate untrusted input into a command line.
+- **Code injection / `eval` (CWE-94/95)** — untrusted input reaching `eval`/`exec`/dynamic template or code compilation. Fix: remove the dynamic-eval path; if unavoidable, sandbox + allowlist.
+- **Unsafe deserialization (CWE-502)** — `pickle` / `yaml.load` / native object deserialization on untrusted bytes. Fix: safe loaders only (`yaml.safe_load`, JSON); never deserialize untrusted data into live objects.
+- **Path traversal (CWE-22)** — untrusted path segments reaching the filesystem. Fix: canonicalize and confirm the resolved path stays within an allowed root.
+- **Server-side request forgery (CWE-918)** — untrusted input controls an outbound request target. Fix: allowlist hosts/schemes; block link-local/cloud-metadata IPs; never fetch a raw user-supplied URL.
+- **XML external entity (CWE-611)** — XML parsed with entity/DTD resolution enabled. Fix: disable DTD and external-entity processing.
+- **Unsafe reflection / dynamic loading (CWE-470)** and **insecure temp-file creation (CWE-377)** — untrusted input names a loaded class/module, or a predictable temp path is used. Fix: allowlist reflected targets; create temp files atomically (`mkstemp` / `O_EXCL`).
+
+**Memory-safety corruption — applies when the reviewed code touches a native/unsafe surface** (C/C++/Objective-C, Rust `unsafe`, Zig, cgo, ctypes/cffi/PyO3/N-API/JNI, inline assembly, manual allocation, or raw pointer arithmetic). Flag the **obvious/local** shapes; non-local lifetime bugs need a sanitizer/static analyzer — route those:
+- **Buffer overflow / out-of-bounds write (CWE-787/120/121/122)** and **out-of-bounds read (CWE-125)** — unbounded copy (`strcpy`/`memcpy`), fixed buffer with unchecked length, `arr[user_index]` without a bound check. Fix: bounded copies; validate every index and length.
+- **Use-after-free / double-free (CWE-416/415)** — deref or free after free (obvious local cases). Fix: null the pointer after free; a single clear owner (RAII / borrow checker).
+- **Integer overflow into an allocation or index (CWE-190/191)** — `malloc(a*b)` or size arithmetic that can wrap. Fix: checked arithmetic before allocating or indexing.
+- **Format string (CWE-134)** — untrusted string used as a format argument (`printf(user)`). Fix: a constant format string; pass data as arguments.
+- **Type confusion (CWE-843)** — `unsafe.Pointer` / union / `reinterpret_cast` misuse. Fix: tagged unions; validated casts.
+- **TOCTOU file race (CWE-367)** — `access()`-then-`open()` on a path an attacker can swap. Fix: operate on file descriptors; `O_NOFOLLOW`.
+
+**Hardware / microarchitectural exploits — awareness and candidate-flagging only, NOT per-line proof.** In crypto/auth code, flag the reviewable patterns: **non-constant-time comparison or secret-dependent branch/table-lookup (CWE-208)** and the canonical **Spectre-v1 bounds-check gadget** (`if (x < len) y = a2[a1[x]*K]`), as **candidates to route to specialist tooling** (constant-time libraries, speculation-safe compilers, sanitizers). Full Spectre/Meltdown/Rowhammer/cache-timing/fault-injection analysis requires microarchitectural modeling and is **out of scope for this agent's per-line review** — flag awareness and route; do not claim detection.
 <!-- AGENTTEAMS:END security_rules_invariant -->
 
 ---
