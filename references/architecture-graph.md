@@ -3,9 +3,9 @@
 
 > **Auto-generated.** Regenerated on every commit that touches the `agentteams` package. Do not edit manually — changes will be overwritten.
 
-- Modules mapped: **89**
+- Modules mapped: **90**
 - Packages: **5**
-- Internal import edges: **154**
+- Internal import edges: **157**
 - Distinct external dependencies: **1**
 
 ---
@@ -23,7 +23,7 @@ Inter-package import dependencies (module-level detail in the tables below).
 | Package | Modules | Depends on |
 | --- | --- | --- |
 | `agentteams` | 64 | `agentteams.cli`, `agentteams.enrich`, `agentteams.frameworks` |
-| `agentteams.cli` | 10 | `agentteams`, `agentteams.frameworks` |
+| `agentteams.cli` | 11 | `agentteams`, `agentteams.frameworks` |
 | `agentteams.enrich` | 6 | — |
 | `agentteams.eval_adapters` | 2 | — |
 | `agentteams.frameworks` | 7 | `agentteams` |
@@ -48,7 +48,7 @@ Every module, coloured by package (full adjacency in the table below).
 | `agentteams.ai_bad_habits` | — | `agentteams.cli.generate` |
 | `agentteams.analyze` | `agentteams._utils`, `agentteams.manifest_format`, `agentteams.mcp_detect`, `agentteams.output_plan`, `agentteams.recipe_fields` | `agentteams.cli.generate`, `agentteams.output_plan` |
 | `agentteams.architecture` | `agentteams.svg_render` | `agentteams.git_hooks` |
-| `agentteams.atomicio` | — | `agentteams.backup`, `agentteams.emit`, `agentteams.fence_inject`, `agentteams.fences`, `agentteams.hooks_emit`, `agentteams.mcp_emit`, `agentteams.schedule_emit` |
+| `agentteams.atomicio` | — | `agentteams.backup`, `agentteams.cli.artifacts`, `agentteams.cli.schema_cache`, `agentteams.emit`, `agentteams.fence_inject`, `agentteams.fences`, `agentteams.hooks_emit`, `agentteams.mcp_emit`, `agentteams.schedule_emit` |
 | `agentteams.audit` | — | `agentteams.cli.generate` |
 | `agentteams.backup` | `agentteams`, `agentteams.atomicio`, `agentteams.liaison_logs` | `agentteams.bridge`, `agentteams.emit` |
 | `agentteams.baseline` | — | `agentteams.cli.app` |
@@ -60,7 +60,7 @@ Every module, coloured by package (full adjacency in the table below).
 | `agentteams.budget` | — | `agentteams.cli.generate` |
 | `agentteams.cli` | — | — |
 | `agentteams.cli.app` | `agentteams.baseline`, `agentteams.cli.commands`, `agentteams.cli.generate`, `agentteams.cli.goose_switch`, `agentteams.cli.parser`, `agentteams.cli.recipe_check`, `agentteams.cli.render_pipeline`, `agentteams.fence_inject`, `agentteams.fleet`, `agentteams.frameworks.goose`, `agentteams.git_hooks`, `agentteams.host_features` | — |
-| `agentteams.cli.artifacts` | `agentteams`, `agentteams.code_index`, `agentteams.code_sources`, `agentteams.drift`, `agentteams.errors`, `agentteams.eval_suite`, `agentteams.mcp_emit`, `agentteams.memory_index`, `agentteams.memory_index_incremental`, `agentteams.model_routing` | `agentteams.cli.generate`, `agentteams.git_hooks` |
+| `agentteams.cli.artifacts` | `agentteams`, `agentteams.atomicio`, `agentteams.cli.schema_cache`, `agentteams.code_index`, `agentteams.code_sources`, `agentteams.drift`, `agentteams.errors`, `agentteams.eval_suite`, `agentteams.mcp_emit`, `agentteams.memory_index`, `agentteams.memory_index_incremental`, `agentteams.model_routing` | `agentteams.cli.generate`, `agentteams.git_hooks` |
 | `agentteams.cli.commands` | `agentteams.bridge`, `agentteams.cli.security_gate`, `agentteams.convert`, `agentteams.drift`, `agentteams.emit`, `agentteams.frameworks.registry`, `agentteams.interop`, `agentteams.security_refs`, `agentteams.stale_detector`, `agentteams.stale_remediate` | `agentteams.cli.app`, `agentteams.stale_remediate` |
 | `agentteams.cli.generate` | `agentteams.ai_bad_habits`, `agentteams.analyze`, `agentteams.audit`, `agentteams.budget`, `agentteams.cli.artifacts`, `agentteams.cli.render_pipeline`, `agentteams.cli.security_gate`, `agentteams.drift`, `agentteams.emit`, `agentteams.enrich`, `agentteams.errors`, `agentteams.framework_research`, `agentteams.frameworks.registry`, `agentteams.git_hooks`, `agentteams.graph`, `agentteams.ingest`, `agentteams.liaison_logs`, `agentteams.render`, `agentteams.scan`, `agentteams.security_refs` | `agentteams.cli.app` |
 | `agentteams.cli.goose_switch` | `agentteams.goose_config` | `agentteams.cli.app`, `agentteams.cli.parser` |
@@ -68,6 +68,7 @@ Every module, coloured by package (full adjacency in the table below).
 | `agentteams.cli.parser_validate` | — | `agentteams.cli.parser` |
 | `agentteams.cli.recipe_check` | `agentteams.frameworks.goose` | `agentteams.cli.app` |
 | `agentteams.cli.render_pipeline` | `agentteams.emit`, `agentteams.frameworks.agents_md`, `agentteams.frameworks.base`, `agentteams.frameworks.claude`, `agentteams.frameworks.copilot_cli`, `agentteams.frameworks.copilot_vscode`, `agentteams.frameworks.goose`, `agentteams.graph`, `agentteams.render`, `agentteams.vscode_tasks` | `agentteams.cli.app`, `agentteams.cli.generate` |
+| `agentteams.cli.schema_cache` | `agentteams.atomicio` | `agentteams.cli.artifacts` |
 | `agentteams.cli.security_gate` | — | `agentteams.cli.commands`, `agentteams.cli.generate` |
 | `agentteams.code_index` | — | `agentteams.cli.artifacts`, `agentteams.code_sources` |
 | `agentteams.code_sources` | `agentteams.code_index` | `agentteams.cli.artifacts` |
@@ -394,6 +395,8 @@ digraph "agentteams architecture" {
       "is_package": false,
       "imports_internal": [
         "agentteams",
+        "agentteams.atomicio",
+        "agentteams.cli.schema_cache",
         "agentteams.code_index",
         "agentteams.code_sources",
         "agentteams.drift",
@@ -404,9 +407,7 @@ digraph "agentteams architecture" {
         "agentteams.memory_index_incremental",
         "agentteams.model_routing"
       ],
-      "external": [
-        "jsonschema"
-      ],
+      "external": [],
       "repo_local": []
     },
     "agentteams.cli.commands": {
@@ -518,6 +519,18 @@ digraph "agentteams architecture" {
         "agentteams.vscode_tasks"
       ],
       "external": [],
+      "repo_local": []
+    },
+    "agentteams.cli.schema_cache": {
+      "package": "agentteams.cli",
+      "path": "agentteams/cli/schema_cache.py",
+      "is_package": false,
+      "imports_internal": [
+        "agentteams.atomicio"
+      ],
+      "external": [
+        "jsonschema"
+      ],
       "repo_local": []
     },
     "agentteams.cli.security_gate": {
@@ -1296,6 +1309,14 @@ digraph "agentteams architecture" {
     },
     {
       "source": "agentteams.cli.artifacts",
+      "target": "agentteams.atomicio"
+    },
+    {
+      "source": "agentteams.cli.artifacts",
+      "target": "agentteams.cli.schema_cache"
+    },
+    {
+      "source": "agentteams.cli.artifacts",
       "target": "agentteams.code_index"
     },
     {
@@ -1517,6 +1538,10 @@ digraph "agentteams architecture" {
     {
       "source": "agentteams.cli.render_pipeline",
       "target": "agentteams.vscode_tasks"
+    },
+    {
+      "source": "agentteams.cli.schema_cache",
+      "target": "agentteams.atomicio"
     },
     {
       "source": "agentteams.code_sources",
