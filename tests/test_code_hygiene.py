@@ -206,6 +206,7 @@ _REFACTOR_MODULES = (
     "agentteams/atomicio.py",
     "agentteams/backup.py",
     "agentteams/output_plan.py",
+    "agentteams/cli/schema_cache.py",
 )
 
 
