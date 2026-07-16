@@ -26,9 +26,9 @@ INDEX_REL = "references/memory-index.json"
 
 @pytest.fixture(autouse=True)
 def _clear_validator_cache():
-    artifacts._MEMORY_INDEX_VALIDATOR_CACHE.clear()
+    artifacts._SCHEMA_VALIDATOR_CACHE.clear()
     yield
-    artifacts._MEMORY_INDEX_VALIDATOR_CACHE.clear()
+    artifacts._SCHEMA_VALIDATOR_CACHE.clear()
 
 
 def _valid_index() -> dict:

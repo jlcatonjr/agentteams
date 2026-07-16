@@ -17,6 +17,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
+from agentteams.atomicio import _atomic_write_text
 from agentteams.errors import (
     CodeIndexError,
     DeliveryReceiptError,
@@ -120,20 +121,12 @@ def _write_delivery_receipt(manifest: dict, output_dir: Path) -> Path:
     # receipt is a real defect we want surfaced — not silently written. A
     # missing jsonschema module degrades to a non-fatal DeliveryReceiptError
     # (see _require_jsonschema) rather than crashing a completed merge.
-    jsonschema = _require_jsonschema(DeliveryReceiptError, "delivery receipt")
-    schema_path = Path(__file__).resolve().parents[2] / "schemas" / "delivery-receipt.schema.json"
-    try:
-        schema = json.loads(schema_path.read_text(encoding="utf-8"))
-    except (OSError, json.JSONDecodeError) as exc:
-        raise DeliveryReceiptError(
-            f"delivery-receipt schema unavailable ({schema_path}): {exc}"
-        ) from exc
-    try:
-        jsonschema.validate(receipt, schema)
-    except jsonschema.ValidationError as exc:
-        raise DeliveryReceiptError(
-            f"delivery receipt failed schema validation: {exc.message}"
-        ) from exc
+    schema_bytes = _load_schema_bytes(
+        _schema_path("delivery-receipt.schema.json"), DeliveryReceiptError, "delivery receipt"
+    )
+    _validate_against_schema(
+        receipt, schema_bytes, error_cls=DeliveryReceiptError, label="delivery receipt"
+    )
 
     receipt_path = output_dir / DELIVERY_RECEIPT_REL_PATH
     receipt_path.parent.mkdir(parents=True, exist_ok=True)
@@ -156,20 +149,10 @@ def _write_eval_suite(manifest: dict, output_dir: Path) -> Path:
 
     suite = build_eval_suite(manifest)
 
-    jsonschema = _require_jsonschema(EvalSuiteError, "eval suite")
-    schema_path = Path(__file__).resolve().parents[2] / "schemas" / "eval-suite.schema.json"
-    try:
-        schema = json.loads(schema_path.read_text(encoding="utf-8"))
-    except (OSError, json.JSONDecodeError) as exc:
-        raise EvalSuiteError(
-            f"eval-suite schema unavailable ({schema_path}): {exc}"
-        ) from exc
-    try:
-        jsonschema.validate(suite, schema)
-    except jsonschema.ValidationError as exc:
-        raise EvalSuiteError(
-            f"eval suite failed schema validation: {exc.message}"
-        ) from exc
+    schema_bytes = _load_schema_bytes(
+        _schema_path("eval-suite.schema.json"), EvalSuiteError, "eval suite"
+    )
+    _validate_against_schema(suite, schema_bytes, error_cls=EvalSuiteError, label="eval suite")
 
     suite_path = output_dir / EVAL_SUITE_REL_PATH
     suite_path.parent.mkdir(parents=True, exist_ok=True)
@@ -191,20 +174,12 @@ def _write_model_routing(manifest: dict, output_dir: Path) -> Path:
 
     contract = build_routing_contract(manifest)
 
-    jsonschema = _require_jsonschema(ModelRoutingError, "model routing contract")
-    schema_path = Path(__file__).resolve().parents[2] / "schemas" / "model-routing.schema.json"
-    try:
-        schema = json.loads(schema_path.read_text(encoding="utf-8"))
-    except (OSError, json.JSONDecodeError) as exc:
-        raise ModelRoutingError(
-            f"model-routing schema unavailable ({schema_path}): {exc}"
-        ) from exc
-    try:
-        jsonschema.validate(contract, schema)
-    except jsonschema.ValidationError as exc:
-        raise ModelRoutingError(
-            f"model-routing contract failed schema validation: {exc.message}"
-        ) from exc
+    schema_bytes = _load_schema_bytes(
+        _schema_path("model-routing.schema.json"), ModelRoutingError, "model-routing contract"
+    )
+    _validate_against_schema(
+        contract, schema_bytes, error_cls=ModelRoutingError, label="model-routing contract"
+    )
 
     contract_path = output_dir / MODEL_ROUTING_REL_PATH
     contract_path.parent.mkdir(parents=True, exist_ok=True)
@@ -342,111 +317,167 @@ def _memory_index_sources(manifest: dict, output_dir: Path) -> list[Path]:
                 sources.append(c)
     return sources
 # ---------------------------------------------------------------------------
-# Memory-index validation cache (perf — skip re-validating an unchanged index)
+# Schema validation + validation cache (shared by every artifact reader/writer)
 # ---------------------------------------------------------------------------
-# Schema validation dominates every ``--query-index`` call: on a real ~16MB
-# index ``jsonschema.validate`` is ~95% of wall-clock, and the ranking math it
-# guards is <0.1%. That validation is pure — identical (index bytes, schema
-# bytes) always yield the same verdict — so we record a tiny sidecar noting the
-# (index-hash, schema-hash) pair that last passed and short-circuit when it
-# still matches.
+# Schema validation dominates every hot-path read: on a real ~16MB memory index
+# ``jsonschema`` is ~95% of wall-clock and the ranking math it guards is <0.1%.
+# Validation is pure — identical (content bytes, schema bytes) always yield the
+# same verdict — so a reader records a tiny ``.vcache`` sidecar noting the
+# (content-hash, schema-hash) pair that last passed and short-circuits when it
+# still matches. Measured ~28.8x on a real memory index; the same primitive
+# backs the code-index read path.
 #
 # FAIL-OPEN by construction: any missing/torn/mismatched sidecar or any error
-# runs the full validation, and the sidecar is written *only after* a
-# validation success. A changed index OR a changed (e.g. package-upgraded)
-# schema changes the key and forces a re-validate. The sidecar holds only two
-# sha256 hashes (no machine-specific data), is a ``.vcache`` (never mistaken for
-# a generator ``.json`` artifact, and the source scanner only takes ``*.md``),
-# and is gitignored in every consumer. See SEC-CM-2026-07-16-AGENTTEAMS-VCACHE-001
-# (@security C0-C6 + repo-liaison C-L1..C-L7).
-MEMORY_INDEX_VCACHE_REL_PATH = "references/memory-index.vcache"
-_MEMORY_INDEX_VALIDATOR_CACHE: dict[str, Any] = {}  # schema_hash -> compiled validator
+# runs the full validation, and the sidecar is written *only after* a validation
+# success. A changed payload OR a changed (e.g. package-upgraded) schema changes
+# the key and forces a re-validate. The sidecar holds only two sha256 hashes (no
+# machine-specific data — C4), is a ``.vcache`` (never mistaken for a generator
+# ``.json`` artifact; the source scanner only takes ``*.md``), and is gitignored
+# in every consumer. See SEC-CM-2026-07-16-AGENTTEAMS-VCACHE-001 (@security
+# C0-C6 + repo-liaison C-L1..C-L7).
+_SCHEMA_VALIDATOR_CACHE: dict[str, Any] = {}  # schema_hash -> compiled Draft7Validator
 
 
-def _memory_index_schema_path() -> Path:
-    """The trusted, package-bundled schema the validator resolves (C3/C6)."""
-    return Path(__file__).resolve().parents[2] / "schemas" / "memory-index.schema.json"
+def _schema_path(name: str) -> Path:
+    """Resolve a trusted, package-bundled schema by filename (C3/C6)."""
+    return Path(__file__).resolve().parents[2] / "schemas" / name
 
 
-def _memory_index_vcache_key(index_bytes: bytes, schema_bytes: bytes) -> str:
-    """Cache identity = index content AND schema content (C-L1)."""
-    return (
-        f"{hashlib.sha256(index_bytes).hexdigest()}:"
-        f"{hashlib.sha256(schema_bytes).hexdigest()}"
-    )
+def _load_schema_bytes(schema_path: Path, error_cls: type[Exception], label: str) -> bytes:
+    """Read a bundled schema's raw bytes, or raise *error_cls* (never OSError).
+
+    Bytes (not a parsed dict) so callers can fold them into a content-hash key.
+    """
+    try:
+        return schema_path.read_bytes()
+    except OSError as exc:
+        raise error_cls(f"{label} schema unavailable ({schema_path}): {exc}") from exc
 
 
-def _memory_index_vcache_hit(output_dir: Path, key: str) -> bool:
-    """True only when the sidecar records a prior success for exactly *key*.
+def _validate_against_schema(
+    obj: object, schema_bytes: bytes, *, error_cls: type[Exception], label: str
+) -> None:
+    """Validate *obj* against the schema in *schema_bytes* with a process-cached
+    ``Draft7Validator``. Raises *error_cls* (a RuntimeError, never OSError) on a
+    malformed schema or a validation failure, so every caller can treat it as
+    non-fatal. This is the one place the module talks to ``jsonschema``.
+    """
+    jsonschema = _require_jsonschema(error_cls, label)
+    try:
+        schema = json.loads(schema_bytes)
+    except ValueError as exc:
+        raise error_cls(f"{label} schema unavailable: {exc}") from exc
+    schema_hash = hashlib.sha256(schema_bytes).hexdigest()
+    validator = _SCHEMA_VALIDATOR_CACHE.get(schema_hash)
+    if validator is None:
+        validator = jsonschema.Draft7Validator(schema)
+        _SCHEMA_VALIDATOR_CACHE[schema_hash] = validator
+    try:
+        validator.validate(obj)
+    except jsonschema.ValidationError as exc:
+        raise error_cls(f"{label} failed schema validation: {exc.message}") from exc
+
+
+def _vcache_content_digest(content_chunks: list[bytes]) -> str:
+    """Order-sensitive digest of one or more content blobs. A single chunk
+    hashes to ``sha256(chunk)`` so the memory-index key is unchanged; multiple
+    chunks (a code-index manifest + partitions) fold their hex hashes in order.
+    A derivation change only invalidates local sidecars, which fail open and
+    self-heal on the next read.
+    """
+    if len(content_chunks) == 1:
+        return hashlib.sha256(content_chunks[0]).hexdigest()
+    outer = hashlib.sha256()
+    for chunk in content_chunks:
+        outer.update(hashlib.sha256(chunk).hexdigest().encode("ascii"))
+    return outer.hexdigest()
+
+
+def _vcache_key(content_chunks: list[bytes], schema_bytes: bytes) -> str:
+    """Cache identity = content AND schema (C-L1)."""
+    return f"{_vcache_content_digest(content_chunks)}:{hashlib.sha256(schema_bytes).hexdigest()}"
+
+
+def _vcache_hit(sidecar_path: Path, key: str, artifact_type: str) -> bool:
+    """True only when *sidecar_path* records a prior success for exactly *key*.
 
     Fail-open (C1/C-L2): any error / missing file / mismatch → False → the
     caller runs the full validation.
     """
     try:
-        data = json.loads((output_dir / MEMORY_INDEX_VCACHE_REL_PATH).read_bytes())
+        data = json.loads(sidecar_path.read_bytes())
     except (OSError, ValueError):
         return False
     return (
         isinstance(data, dict)
-        and data.get("artifact_type") == "memory-index-vcache"
+        and data.get("artifact_type") == artifact_type
         and data.get("validated_key") == key
     )
 
 
-def _memory_index_vcache_store(output_dir: Path, key: str) -> None:
-    """Record a validation success atomically (C5). Non-fatal (C1): a write
-    failure just means the next read re-validates. No machine-specific data (C4)."""
-    path = output_dir / MEMORY_INDEX_VCACHE_REL_PATH
-    payload = {"artifact_type": "memory-index-vcache", "validated_key": key}
-    # Best-effort: a write failure just means the next read re-validates (C1).
-    # contextlib.suppress keeps this genuinely non-fatal without a swallow-and-
-    # continue handler (CH-24).
+def _vcache_store(sidecar_path: Path, key: str, artifact_type: str) -> None:
+    """Record a validation success atomically (C5) via the shared atomicio
+    primitive. Non-fatal (C1, CH-24): a write failure just means the next read
+    re-validates. Sidecar carries only the two-hash key (C4)."""
+    payload = {"artifact_type": artifact_type, "validated_key": key}
     with contextlib.suppress(OSError):
-        path.parent.mkdir(parents=True, exist_ok=True)
-        tmp = path.with_name(path.name + ".tmp")
-        tmp.write_text(json.dumps(payload, indent=2, sort_keys=True) + "\n", encoding="utf-8")
-        os.replace(tmp, path)
+        _atomic_write_text(sidecar_path, json.dumps(payload, indent=2, sort_keys=True) + "\n")
+
+
+def _validate_cached(
+    obj: object,
+    content_chunks: list[bytes],
+    schema_bytes: bytes,
+    *,
+    error_cls: type[Exception],
+    label: str,
+    sidecar_path: Path | None,
+    artifact_type: str,
+) -> None:
+    """Validate *obj*, skipping the work when *sidecar_path* already records a
+    pass for this (content, schema) key. ``sidecar_path=None`` forces a full,
+    uncached validation (the incremental-update callbacks do this).
+
+    ``content_chunks`` must be the exact bytes read from / to be written to disk
+    so the key matches on the next read (C5 — no re-read, no TOCTOU).
+    """
+    if sidecar_path is not None:
+        key = _vcache_key(content_chunks, schema_bytes)
+        if _vcache_hit(sidecar_path, key, artifact_type):
+            return  # unchanged content + unchanged schema already passed (C-L1/C-L2)
+    _validate_against_schema(obj, schema_bytes, error_cls=error_cls, label=label)
+    if sidecar_path is not None:
+        _vcache_store(sidecar_path, key, artifact_type)  # only after success (C1/C-L2)
+
+
+MEMORY_INDEX_VCACHE_REL_PATH = "references/memory-index.vcache"
+
+
+def _memory_index_schema_path() -> Path:
+    """The trusted, package-bundled memory-index schema (monkeypatched in tests
+    to simulate a schema/package upgrade)."""
+    return _schema_path("memory-index.schema.json")
 
 
 def _validate_memory_index_bytes(
     index: dict[str, object], index_bytes: bytes, output_dir: Path | None
 ) -> None:
     """Validate *index* against the bundled schema, consulting the sidecar cache
-    when *output_dir* is given. Central validator for both read and write paths.
+    when *output_dir* is given. Central validator for both read and write paths;
+    ``output_dir=None`` forces a full, uncached validation.
 
     ``index_bytes`` must be the exact bytes read from / to be written to disk so
-    the key matches on the next read (C5 — no re-read, no TOCTOU). Pass
-    ``output_dir=None`` to force a full validation with no cache (the incremental
-    update path's callback does this).
+    the key matches on the next read (C5).
     """
-    jsonschema = _require_jsonschema(MemoryIndexError, "memory index")
-    schema_path = _memory_index_schema_path()
-    try:
-        schema_bytes = schema_path.read_bytes()
-        schema = json.loads(schema_bytes)
-    except (OSError, ValueError) as exc:
-        raise MemoryIndexError(
-            f"memory-index schema unavailable ({schema_path}): {exc}"
-        ) from exc
-
-    key = _memory_index_vcache_key(index_bytes, schema_bytes)
-    if output_dir is not None and _memory_index_vcache_hit(output_dir, key):
-        return  # unchanged index + unchanged schema already passed — skip (C-L1/C-L2)
-
-    schema_hash = hashlib.sha256(schema_bytes).hexdigest()
-    validator = _MEMORY_INDEX_VALIDATOR_CACHE.get(schema_hash)
-    if validator is None:
-        validator = jsonschema.Draft7Validator(schema)
-        _MEMORY_INDEX_VALIDATOR_CACHE[schema_hash] = validator
-    try:
-        validator.validate(index)
-    except jsonschema.ValidationError as exc:
-        raise MemoryIndexError(
-            f"memory index failed schema validation: {exc.message}"
-        ) from exc
-
-    if output_dir is not None:
-        _memory_index_vcache_store(output_dir, key)  # only after success (C1/C-L2)
+    schema_bytes = _load_schema_bytes(
+        _memory_index_schema_path(), MemoryIndexError, "memory index"
+    )
+    sidecar = (output_dir / MEMORY_INDEX_VCACHE_REL_PATH) if output_dir is not None else None
+    _validate_cached(
+        index, [index_bytes], schema_bytes,
+        error_cls=MemoryIndexError, label="memory index",
+        sidecar_path=sidecar, artifact_type="memory-index-vcache",
+    )
 
 
 def _read_memory_index(output_dir: Path) -> dict[str, object]:
@@ -565,13 +596,11 @@ def _write_memory_index(manifest: dict, output_dir: Path) -> Path:
     index_bytes = serialized.encode("utf-8")
     _validate_memory_index_bytes(index, index_bytes, output_dir)
 
-    # Atomic write (tmp + os.replace) — a crash never leaves a torn index for a
-    # concurrent --query-index to read+validate. Writes the exact bytes hashed
-    # above, so the next read hits the validation cache (C5).
-    index_path.parent.mkdir(parents=True, exist_ok=True)
-    tmp_path = index_path.with_name(index_path.name + ".tmp")
-    tmp_path.write_text(serialized, encoding="utf-8")
-    os.replace(tmp_path, index_path)
+    # Atomic write via the shared atomicio primitive (temp-in-same-dir + fsync +
+    # os.replace) — a crash never leaves a torn index for a concurrent
+    # --query-index to read+validate. Writes the exact bytes hashed above, so the
+    # next read hits the validation cache (C5).
+    _atomic_write_text(index_path, serialized)
     return index_path
 
 
@@ -701,12 +730,12 @@ def _code_index_sources(manifest: dict, output_dir: Path) -> list[Path]:
     return unique
 
 
-def _code_index_schema() -> dict:
-    schema_path = Path(__file__).resolve().parents[2] / "schemas" / "code-index.schema.json"
-    try:
-        return json.loads(schema_path.read_text(encoding="utf-8"))
-    except (OSError, json.JSONDecodeError) as exc:
-        raise CodeIndexError(f"code-index schema unavailable ({schema_path}): {exc}") from exc
+CODE_INDEX_VCACHE_REL_PATH = "references/code-index/.vcache"
+
+
+def _code_index_schema_bytes() -> bytes:
+    """Raw bytes of the trusted, package-bundled code-index schema (C3/C6)."""
+    return _load_schema_bytes(_schema_path("code-index.schema.json"), CodeIndexError, "code index")
 
 
 def _validate_code_index_schema(obj: dict) -> None:
@@ -716,12 +745,9 @@ def _validate_code_index_schema(obj: dict) -> None:
     ``OSError``) so callers can treat it as non-fatal, exactly like the memory
     index.
     """
-    jsonschema = _require_jsonschema(CodeIndexError, "code index")
-    schema = _code_index_schema()
-    try:
-        jsonschema.validate(obj, schema)
-    except jsonschema.ValidationError as exc:
-        raise CodeIndexError(f"code index failed schema validation: {exc.message}") from exc
+    _validate_against_schema(
+        obj, _code_index_schema_bytes(), error_cls=CodeIndexError, label="code index"
+    )
 
 
 def _write_code_index_partition(cache_dir: Path, name: str, part: dict) -> dict:
