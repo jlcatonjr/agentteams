@@ -8,6 +8,8 @@ dir. build_team re-exports these so main and tests resolve them unchanged.
 
 from __future__ import annotations
 
+import contextlib
+import hashlib
 import json
 import os
 import sys
@@ -339,6 +341,114 @@ def _memory_index_sources(manifest: dict, output_dir: Path) -> list[Path]:
                     continue
                 sources.append(c)
     return sources
+# ---------------------------------------------------------------------------
+# Memory-index validation cache (perf — skip re-validating an unchanged index)
+# ---------------------------------------------------------------------------
+# Schema validation dominates every ``--query-index`` call: on a real ~16MB
+# index ``jsonschema.validate`` is ~95% of wall-clock, and the ranking math it
+# guards is <0.1%. That validation is pure — identical (index bytes, schema
+# bytes) always yield the same verdict — so we record a tiny sidecar noting the
+# (index-hash, schema-hash) pair that last passed and short-circuit when it
+# still matches.
+#
+# FAIL-OPEN by construction: any missing/torn/mismatched sidecar or any error
+# runs the full validation, and the sidecar is written *only after* a
+# validation success. A changed index OR a changed (e.g. package-upgraded)
+# schema changes the key and forces a re-validate. The sidecar holds only two
+# sha256 hashes (no machine-specific data), is a ``.vcache`` (never mistaken for
+# a generator ``.json`` artifact, and the source scanner only takes ``*.md``),
+# and is gitignored in every consumer. See SEC-CM-2026-07-16-AGENTTEAMS-VCACHE-001
+# (@security C0-C6 + repo-liaison C-L1..C-L7).
+MEMORY_INDEX_VCACHE_REL_PATH = "references/memory-index.vcache"
+_MEMORY_INDEX_VALIDATOR_CACHE: dict[str, Any] = {}  # schema_hash -> compiled validator
+
+
+def _memory_index_schema_path() -> Path:
+    """The trusted, package-bundled schema the validator resolves (C3/C6)."""
+    return Path(__file__).resolve().parents[2] / "schemas" / "memory-index.schema.json"
+
+
+def _memory_index_vcache_key(index_bytes: bytes, schema_bytes: bytes) -> str:
+    """Cache identity = index content AND schema content (C-L1)."""
+    return (
+        f"{hashlib.sha256(index_bytes).hexdigest()}:"
+        f"{hashlib.sha256(schema_bytes).hexdigest()}"
+    )
+
+
+def _memory_index_vcache_hit(output_dir: Path, key: str) -> bool:
+    """True only when the sidecar records a prior success for exactly *key*.
+
+    Fail-open (C1/C-L2): any error / missing file / mismatch → False → the
+    caller runs the full validation.
+    """
+    try:
+        data = json.loads((output_dir / MEMORY_INDEX_VCACHE_REL_PATH).read_bytes())
+    except (OSError, ValueError):
+        return False
+    return (
+        isinstance(data, dict)
+        and data.get("artifact_type") == "memory-index-vcache"
+        and data.get("validated_key") == key
+    )
+
+
+def _memory_index_vcache_store(output_dir: Path, key: str) -> None:
+    """Record a validation success atomically (C5). Non-fatal (C1): a write
+    failure just means the next read re-validates. No machine-specific data (C4)."""
+    path = output_dir / MEMORY_INDEX_VCACHE_REL_PATH
+    payload = {"artifact_type": "memory-index-vcache", "validated_key": key}
+    # Best-effort: a write failure just means the next read re-validates (C1).
+    # contextlib.suppress keeps this genuinely non-fatal without a swallow-and-
+    # continue handler (CH-24).
+    with contextlib.suppress(OSError):
+        path.parent.mkdir(parents=True, exist_ok=True)
+        tmp = path.with_name(path.name + ".tmp")
+        tmp.write_text(json.dumps(payload, indent=2, sort_keys=True) + "\n", encoding="utf-8")
+        os.replace(tmp, path)
+
+
+def _validate_memory_index_bytes(
+    index: dict[str, object], index_bytes: bytes, output_dir: Path | None
+) -> None:
+    """Validate *index* against the bundled schema, consulting the sidecar cache
+    when *output_dir* is given. Central validator for both read and write paths.
+
+    ``index_bytes`` must be the exact bytes read from / to be written to disk so
+    the key matches on the next read (C5 — no re-read, no TOCTOU). Pass
+    ``output_dir=None`` to force a full validation with no cache (the incremental
+    update path's callback does this).
+    """
+    jsonschema = _require_jsonschema(MemoryIndexError, "memory index")
+    schema_path = _memory_index_schema_path()
+    try:
+        schema_bytes = schema_path.read_bytes()
+        schema = json.loads(schema_bytes)
+    except (OSError, ValueError) as exc:
+        raise MemoryIndexError(
+            f"memory-index schema unavailable ({schema_path}): {exc}"
+        ) from exc
+
+    key = _memory_index_vcache_key(index_bytes, schema_bytes)
+    if output_dir is not None and _memory_index_vcache_hit(output_dir, key):
+        return  # unchanged index + unchanged schema already passed — skip (C-L1/C-L2)
+
+    schema_hash = hashlib.sha256(schema_bytes).hexdigest()
+    validator = _MEMORY_INDEX_VALIDATOR_CACHE.get(schema_hash)
+    if validator is None:
+        validator = jsonschema.Draft7Validator(schema)
+        _MEMORY_INDEX_VALIDATOR_CACHE[schema_hash] = validator
+    try:
+        validator.validate(index)
+    except jsonschema.ValidationError as exc:
+        raise MemoryIndexError(
+            f"memory index failed schema validation: {exc.message}"
+        ) from exc
+
+    if output_dir is not None:
+        _memory_index_vcache_store(output_dir, key)  # only after success (C1/C-L2)
+
+
 def _read_memory_index(output_dir: Path) -> dict[str, object]:
     """Load and parse references/memory-index.json from output_dir.
 
@@ -350,33 +460,22 @@ def _read_memory_index(output_dir: Path) -> dict[str, object]:
             f"memory index not found at {index_path}; run --refresh-index or --update first"
         )
     try:
-        index = json.loads(index_path.read_text(encoding="utf-8"))
+        raw = index_path.read_bytes()
+        index = json.loads(raw)
     except (OSError, json.JSONDecodeError) as exc:
         raise MemoryIndexError(f"failed reading memory index at {index_path}: {exc}") from exc
-    _validate_memory_index_schema(index)
+    _validate_memory_index_bytes(index, raw, output_dir)
     return index
+
+
 def _validate_memory_index_schema(index: dict[str, object]) -> None:
-    """Validate a parsed memory-index payload against its schema.
+    """Validate a parsed memory-index payload against its schema (no cache).
 
-    Query-mode reads must validate shape so malformed payloads fail with a
-    controlled ``MemoryIndexError`` instead of surfacing raw ``KeyError`` from
-    downstream ranking logic.
+    Retained as the incremental-update path's ``validate_index`` callback, which
+    is invoked with only the parsed dict. Always runs a full validation
+    (fail-open); the cached fast path is :func:`_validate_memory_index_bytes`.
     """
-    jsonschema = _require_jsonschema(MemoryIndexError, "memory index")
-
-    schema_path = Path(__file__).resolve().parents[2] / "schemas" / "memory-index.schema.json"
-    try:
-        schema = json.loads(schema_path.read_text(encoding="utf-8"))
-    except (OSError, json.JSONDecodeError) as exc:
-        raise MemoryIndexError(
-            f"memory-index schema unavailable ({schema_path}): {exc}"
-        ) from exc
-    try:
-        jsonschema.validate(index, schema)
-    except jsonschema.ValidationError as exc:
-        raise MemoryIndexError(
-            f"memory index failed schema validation: {exc.message}"
-        ) from exc
+    _validate_memory_index_bytes(index, b"", None)
 def _run_refresh_index(manifest: dict, output_dir: Path) -> int:
     """Rebuild memory-index.json only (no template emit/update path)."""
     path = _write_memory_index(manifest, output_dir)
@@ -462,23 +561,17 @@ def _write_memory_index(manifest: dict, output_dir: Path) -> Path:
         framework=manifest.get("framework", ""),
     )
 
-    jsonschema = _require_jsonschema(MemoryIndexError, "memory index")
-    schema_path = Path(__file__).resolve().parents[2] / "schemas" / "memory-index.schema.json"
-    try:
-        schema = json.loads(schema_path.read_text(encoding="utf-8"))
-    except (OSError, json.JSONDecodeError) as exc:
-        raise MemoryIndexError(
-            f"memory-index schema unavailable ({schema_path}): {exc}"
-        ) from exc
-    try:
-        jsonschema.validate(index, schema)
-    except jsonschema.ValidationError as exc:
-        raise MemoryIndexError(
-            f"memory index failed schema validation: {exc.message}"
-        ) from exc
+    serialized = json.dumps(index, indent=2) + "\n"
+    index_bytes = serialized.encode("utf-8")
+    _validate_memory_index_bytes(index, index_bytes, output_dir)
 
+    # Atomic write (tmp + os.replace) — a crash never leaves a torn index for a
+    # concurrent --query-index to read+validate. Writes the exact bytes hashed
+    # above, so the next read hits the validation cache (C5).
     index_path.parent.mkdir(parents=True, exist_ok=True)
-    index_path.write_text(json.dumps(index, indent=2) + "\n", encoding="utf-8")
+    tmp_path = index_path.with_name(index_path.name + ".tmp")
+    tmp_path.write_text(serialized, encoding="utf-8")
+    os.replace(tmp_path, index_path)
     return index_path
 
 
