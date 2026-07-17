@@ -112,6 +112,8 @@ def test_write_delivery_receipt_produces_schema_valid_payload(tmp_path):
     receipt_path = build_team._write_delivery_receipt(manifest, output_dir)
     assert receipt_path == output_dir / "references" / "delivery-receipt.json"
     assert receipt_path.exists()
+    # Atomic write leaves no temp file behind (routed through atomicio).
+    assert not list(receipt_path.parent.glob("*.tmp"))
     payload = json.loads(receipt_path.read_text(encoding="utf-8"))
     jsonschema.Draft7Validator(_schema()).validate(payload)
     assert payload["artifact_type"] == "delivery-receipt"

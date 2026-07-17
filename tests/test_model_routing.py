@@ -165,7 +165,10 @@ def test_cost_routing_on_emits_valid_drift_excluded_contract(tmp_path, monkeypat
     _run_generate(brief, out, monkeypatch, cost_routing=True, ticket="MRON")
 
     import jsonschema
-    contract = json.loads((out / build_team.MODEL_ROUTING_REL_PATH).read_text())
+    contract_path = out / build_team.MODEL_ROUTING_REL_PATH
+    # Atomic write leaves no temp file behind (routed through atomicio).
+    assert not list(contract_path.parent.glob("*.tmp"))
+    contract = json.loads(contract_path.read_text())
     jsonschema.Draft7Validator(_schema()).validate(contract)
     # Governance agents present → at least one cheap assignment.
     tiers = {a["agent"]: a["tier"] for a in contract["assignments"]}
