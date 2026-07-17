@@ -119,8 +119,7 @@ def _write_delivery_receipt(manifest: dict, output_dir: Path) -> Path:
     )
 
     receipt_path = output_dir / DELIVERY_RECEIPT_REL_PATH
-    receipt_path.parent.mkdir(parents=True, exist_ok=True)
-    receipt_path.write_text(json.dumps(receipt, indent=2) + "\n", encoding="utf-8")
+    _atomic_write_text(receipt_path, json.dumps(receipt, indent=2) + "\n")
     return receipt_path
 EVAL_SUITE_REL_PATH = "references/eval-suite.json"
 def _write_eval_suite(manifest: dict, output_dir: Path) -> Path:
@@ -145,8 +144,7 @@ def _write_eval_suite(manifest: dict, output_dir: Path) -> Path:
     _validate_against_schema(suite, schema_bytes, error_cls=EvalSuiteError, label="eval suite")
 
     suite_path = output_dir / EVAL_SUITE_REL_PATH
-    suite_path.parent.mkdir(parents=True, exist_ok=True)
-    suite_path.write_text(json.dumps(suite, indent=2) + "\n", encoding="utf-8")
+    _atomic_write_text(suite_path, json.dumps(suite, indent=2) + "\n")
     return suite_path
 MODEL_ROUTING_REL_PATH = "references/model-routing.json"
 def _write_model_routing(manifest: dict, output_dir: Path) -> Path:
@@ -172,8 +170,7 @@ def _write_model_routing(manifest: dict, output_dir: Path) -> Path:
     )
 
     contract_path = output_dir / MODEL_ROUTING_REL_PATH
-    contract_path.parent.mkdir(parents=True, exist_ok=True)
-    contract_path.write_text(json.dumps(contract, indent=2) + "\n", encoding="utf-8")
+    _atomic_write_text(contract_path, json.dumps(contract, indent=2) + "\n")
     return contract_path
 
 
