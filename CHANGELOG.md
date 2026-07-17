@@ -6,7 +6,40 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### changed
+
+- **Memory-index and code-index schema validation is now cached, skipping re-validation
+  of an unchanged index on the `--query-index` / `--query-code` hot paths.** `jsonschema`
+  validation dominated every query (~95% of wall-clock on a real ~16 MB memory index; the
+  ranking math it guards is <0.1%), and it re-ran on every read even when nothing changed.
+  A tiny fail-open `.vcache` sidecar records the `sha256(content):sha256(schema)` pair that
+  last passed and short-circuits when it still matches — **~28.8× faster warm reads**
+  (~2,269 ms → ~79 ms). The code-index variant folds the manifest **and every partition**
+  into a multi-file key, so a change to any file or the schema forces a re-validate. The
+  sidecar holds only the two hashes (no machine-specific data), is gitignored in every
+  consumer, and is written only after a validation success — a stale/torn/missing sidecar
+  always falls back to full validation. Public API, all `schemas/*.json`, and the on-disk
+  artifact byte formats are unchanged (internal `_`-prefixed functions only). The shared
+  validation + cache machinery was carved into `agentteams/cli/schema_cache.py`. New guards
+  `tests/test_memory_index_validation_cache.py` (9) and `tests/test_code_index_validation_cache.py` (8).
+  Ref: `SEC-CM-2026-07-16-AGENTTEAMS-VCACHE-001`.
+  - **Not adopted: `fastjsonschema`.** Evaluated as the lever for the validations the
+    content cache *can't* skip (cold first reads, rebuilds, build-time writers) but declined:
+    it would break the deliberate single-runtime-dependency posture and carries supply-chain
+    conditions (it `exec`s compiled schema code — needs pin+lockfile, trusted-tree schema,
+    and accept/reject parity fixtures against `jsonschema`). Measured trade-off: caching a
+    compiled `Draft7Validator` saves only ~1.4%, while *not* validating (the content cache)
+    saves ~28.8× — so the cache already captures the realistic win. The single
+    `_validate_against_schema` seam is left ready for a future opt-in behind an optional extra.
+
 ### fixed
+
+- **The delivery-receipt, eval-suite, and model-routing writers now write atomically.**
+  They used a bare `write_text(json.dumps(...))` that could leave a torn file on a crash
+  mid-write; all three (and the memory-index writer) now route through the shared
+  `atomicio._atomic_write_text` (temp-in-same-dir + fsync + mode-preserving + `os.replace`),
+  bringing the whole artifact-writer cluster to a uniform atomic-write posture.
+
 
 - **Code index (F-CODEIDX) is now surfaced to the *primary* agent team, not only the
   Claude bridge skill.** `/code-recall` was emitted solely into `.claude/skills/`, so
