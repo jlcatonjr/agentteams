@@ -21,6 +21,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### added
 
+- **Runtime-governance guidance for generated apps that serve LLM output (docs-only;
+  scope boundary + two new guides).** Building the LingoFriend project (an agentteams-generated
+  team) surfaced a class of concern that lives in a *produced application's runtime*, not in the
+  design-time team — which agentteams, being "a generator, not a runtime," does not cover. This
+  release documents that boundary rather than expanding scope into runtime code:
+  a **Design-time vs runtime governance** note in `SECURITY.md` and `README.md`; a new
+  **"Runtime Security for Served Apps"** guide (`docs_src/runtime-security-guide.md` — output-safety
+  gate as a *floor* not moderation, applying "data-not-instructions" to a served app's own runtime
+  prompts, input sanitization + bounds); and a new **"Per-User Runtime Goose Pattern"** guide
+  (`docs_src/goose-runtime-pattern-guide.md` — per-user named-session isolation, and a binding rule
+  to keep latency-critical/interactive paths *off* `goose run`). Both guides are registered in the
+  MkDocs nav and carry LingoFriend reference implementations as illustrative *floors*, not solutions.
+  Docs only — no CLI flags, schemas, or emitted artifacts changed. Ref: LingoFriend handoff
+  `agentteams-runtime-governance` (AT-1/AT-2/AT-3).
 - **Curated OS security-hardening references (Linux, macOS, Windows) that `@security`
   consults for platform targets.** Three new rendered reference templates —
   `references/security-{linux,macos,windows}-hardening.reference.md` — give the agent a

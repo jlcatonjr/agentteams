@@ -39,6 +39,7 @@ nav:
   - Guides:
       - Post-Production Auditor: post-production-auditor-guide.md
       - Security Hardening & Threat Intelligence: security-hardening-guide.md
+      - Runtime Security for Served Apps: runtime-security-guide.md
       - Section Fencing & Safe Merges: section-fencing-guide.md
       - Update Lifecycle, Drift & Backups: update-lifecycle-guide.md
       - Detecting Stale Docs & Scripts: stale-detection-guide.md
@@ -56,6 +57,7 @@ nav:
       - Cheat Sheet: goose-cheat-sheet.md
       - Cloud Providers: goose-cloud-providers.md
       - Privileges: goose-privileges.md
+      - Per-User Runtime Pattern: goose-runtime-pattern-guide.md
   - API Reference:
       - Overview: api-reference/index.md
       - ingest: api-reference/ingest.md
