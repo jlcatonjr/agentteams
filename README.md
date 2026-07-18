@@ -27,6 +27,8 @@ The generated team includes:
 - 1 **Team Builder agent** — framework-native agent that can regenerate or expand the team from within your framework
 - A framework instructions file — `.github/copilot-instructions.md` (Copilot VS Code / Copilot CLI), `.claude/CLAUDE.md` (Claude), or a repo-root `AGENTS.md` + `.goosehints` (Goose)
 
+> **Design-time, not runtime.** This team governs *how your app is built* — its agents review the code you write. It does **not** run inside the application you ship. If your produced app serves LLM output to end users, you must add runtime governance yourself; see the [Runtime Security for Served Apps](docs_src/runtime-security-guide.md) guide.
+
 ---
 
 ## Workflow

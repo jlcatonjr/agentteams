@@ -56,6 +56,22 @@ Out of scope:
 - Bugs in generated agent files themselves — agentteams is a generator,
   not a runtime; generated outputs are the user's responsibility to review.
 
+### Design-time vs runtime governance
+
+The generated agent team governs **how an application is built** — its agents
+review the code you and your AI assistants write. It does **not** run inside the
+application you produce. In particular, the generated `security` agent is
+read-only and HALTs at *review* time; nothing it emits executes in your shipped
+app's request path.
+
+So if your produced application **serves LLM output to end users** (a chat UI, a
+tutor, an assistant), the generated team does not police that runtime — you must
+add runtime governance yourself. The word "team" describes design-time build
+governance, not an app that polices itself at runtime. See the
+[Runtime Security for Served Apps](docs_src/runtime-security-guide.md) checklist
+(output-safety gate, "data-not-instructions" for your app's own prompts, input
+sanitization + bounds).
+
 ## Security-relevant changes in this release
 
 See the `### security` blocks of [`CHANGELOG.md`](CHANGELOG.md). For 1.0
