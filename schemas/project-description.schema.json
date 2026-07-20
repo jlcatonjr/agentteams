@@ -222,6 +222,7 @@
           "style-guardian",
           "technical-validator",
           "retrieval-integrator",
+          "research-analyst",
           "post-production-auditor",
           "format-converter",
           "reference-manager",
@@ -231,6 +232,14 @@
           "module-doc-validator",
           "tool-specific"
         ]
+      }
+    },
+    "capabilities": {
+      "type": "array",
+      "description": "Explicit, opt-in capabilities this project wants beyond archetype selection. `research_verification` selects the `research-analyst` archetype, which orchestrates the optional `agentteams[research]` runtime library (real, installable Python — not a design-time-only template) — a project must deliberately choose this, since it adds a real runtime dependency to the generated project, unlike every other archetype selection.",
+      "items": {
+        "type": "string",
+        "enum": ["research_verification"]
       }
     },
     "components": {

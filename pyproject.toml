@@ -36,6 +36,17 @@ test = [
     "pytest>=8",
     "pyyaml>=6",
 ]
+# The `agentteams.research` subpackage (search/reputable/verify) is a real, optional runtime
+# library, not part of the CLI/generator pipeline — the base install stays exactly as
+# dependency-free as before this extra existed. `pypdf` additionally stays lazily imported inside
+# `agentteams/research/search.py`'s PDF-handling branch specifically (never at that module's own
+# top level), so a caller who never touches a PDF doesn't eat that import even within this extra.
+# See docs_src/api-reference/research.md and
+# tmp/by-week/2026-W29/agentteams-research-verification-baseline.plan.md (Design §0).
+research = [
+    "httpx>=0.27",
+    "pypdf>=4.0",
+]
 
 [project.urls]
 Homepage = "https://github.com/jlcatonjr/agentteams"

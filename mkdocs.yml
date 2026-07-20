@@ -105,6 +105,7 @@ nav:
       - mcp-emit: api-reference/mcp-emit.md
       - goose-config: api-reference/goose-config.md
       - pr-management: api-reference/pr-management.md
+      - research: api-reference/research.md
   - Template Authoring: template-authoring.md
   - Description Format: DESCRIPTION-FORMAT.md
   - Structural Update Plan: structural-update-plan.md

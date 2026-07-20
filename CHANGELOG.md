@@ -6,6 +6,33 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### added
+
+- **`agentteams[research]` — a real, optional runtime library (web search, curated-source rating,
+  dual-lens claim verification), not a design-time template.** A disclosed, bounded exception to
+  the "generator, not a runtime" boundary (see `SECURITY.md`): `pip install agentteams[research]`
+  installs `agentteams.research` (`search`/`reputable`/`verify`), a small, self-contained Python
+  library with zero import-time coupling to the CLI/generator pipeline in either direction and
+  zero effect on the base install's dependency footprint (still `jsonschema` only). Includes a new
+  `research-analyst` domain-archetype template (opt-in only, gated on an explicit `capabilities:
+  ["research_verification"]` brief field, never inferred) documenting how an agent orchestrates
+  it, and a `python -m agentteams.research search|fetch` CLI for the two calls that need no chat
+  backend. Full API reference: `docs_src/api-reference/research.md`. Ported and generalized from a
+  working pattern in a downstream consumer project (LingoFriend) — every consumer supplies its own
+  domain-allowlist data via `AllowlistConfig`; none is hardcoded into the library. **Note on
+  timing:** this lands during the `1.0.0rc6` pre-release soak, which `STABILITY.md` describes as
+  accepting only bugfix changes; landing anyway is consistent with actual recent practice on this
+  branch — `de1ce5a` (itself `feat`-tagged during the same rc) is one of roughly a dozen further
+  `feat:`-tagged commits already landed since the rc.6 cut, and this section already held several
+  other feature-shaped entries before this one — rather than a new departure; flagged explicitly
+  here rather than silently. **Note on `mkdocs build --strict`:** it does not pass on this branch,
+  but that's pre-existing and unrelated — confirmed by running the identical build against a clean
+  `origin/main` checkout, which fails with the exact same 3 warnings (dead links in `changelog.md`
+  and `verification-environment.md`, none touching this change). `research.md`/`mkdocs.yml`
+  themselves introduce zero additional warnings, which is the bar the equivalent situation was
+  already held to for `runtime-security-guide.md`/`goose-runtime-pattern-guide.md` in
+  `references/plans/lingofriend-handoffs-metaplan-2026-07-18.plan.md`.
+
 ### fixed
 
 - **Code index (F-CODEIDX) is now surfaced to the *primary* agent team, not only the

@@ -44,16 +44,34 @@ LENGTH_ALLOWLIST: frozenset[str] = frozenset({
     # each (emit: fence/merge -> fences.py; analyze: _format_*/_default_* -> manifest_format.py);
     # deferred — proven to work but a larger blast radius.
 })
-BROAD_EXCEPT_BASELINE = 11      # except Exception/BaseException/bare. Narrowed over the sweep
+BROAD_EXCEPT_BASELINE = 13      # except Exception/BaseException/bare. Narrowed over the sweep
                                 # (Steps E + remaining-items I6: commands, render_pipeline, ingest,
                                 # mcp_emit). The remaining 11 are justified external/isolation/
                                 # never-block/cleanup-reraise boundaries, each annotated with a
                                 # CH-24 rationale (visible WARN or re-raise, not silent swallow).
-SWALLOW_BASELINE = 31           # except clause whose body is only pass/continue (narrow catches =
+                                # 11→13: agentteams/research/ (the research + fact-verification
+                                # baseline capability) added two — search.py's _extract_pdf_text
+                                # (third-party pypdf parsing of adversarial external PDF bytes; the
+                                # exception surface for arbitrary untrusted input isn't enumerable
+                                # in advance) and reputable.py's ThreadPoolExecutor future-result
+                                # loop (thread-isolation boundary — one worker's unexpected failure
+                                # must not abort the whole batch, matching architecture.py's
+                                # existing best-effort-mapper precedent below). Every OTHER
+                                # exception site this package added was narrowed to named types
+                                # (httpx.HTTPError, ValueError, json.JSONDecodeError, etc.) instead
+                                # of raising this baseline further — see the CH-24 comments inline.
+SWALLOW_BASELINE = 34           # except clause whose body is only pass/continue (narrow catches =
                                 # known-recoverable external boundaries; the ratchet blocks new ones).
                                 # 30→31: architecture.py skips files that fail ast.parse (SyntaxError/
                                 # ValueError) — a best-effort module mapper must tolerate an
                                 # unparseable source file rather than abort the whole map.
+                                # 31→34: agentteams/research/ added three — reputable.py's
+                                # ThreadPoolExecutor loop (continue; same isolation boundary as
+                                # above) and verify.py's two JSON-extraction attempts (pass; a
+                                # tolerant multi-strategy JSON parser trying progressively looser
+                                # extraction strategies, each individually allowed to fail and fall
+                                # through to the next — narrowed to json.JSONDecodeError, not a
+                                # blanket catch, per the CH-24 comments inline).
 
 
 def _tracked_py_files() -> list[str]:

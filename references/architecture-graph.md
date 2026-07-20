@@ -3,10 +3,10 @@
 
 > **Auto-generated.** Regenerated on every commit that touches the `agentteams` package. Do not edit manually — changes will be overwritten.
 
-- Modules mapped: **90**
-- Packages: **5**
-- Internal import edges: **157**
-- Distinct external dependencies: **1**
+- Modules mapped: **95**
+- Packages: **6**
+- Internal import edges: **162**
+- Distinct external dependencies: **3**
 
 ---
 
@@ -22,11 +22,12 @@ Inter-package import dependencies (module-level detail in the tables below).
 
 | Package | Modules | Depends on |
 | --- | --- | --- |
-| `agentteams` | 64 | `agentteams.cli`, `agentteams.enrich`, `agentteams.frameworks` |
+| `agentteams` | 65 | `agentteams.cli`, `agentteams.enrich`, `agentteams.frameworks`, `agentteams.research` |
 | `agentteams.cli` | 11 | `agentteams`, `agentteams.frameworks` |
 | `agentteams.enrich` | 6 | — |
 | `agentteams.eval_adapters` | 2 | — |
 | `agentteams.frameworks` | 7 | `agentteams` |
+| `agentteams.research` | 4 | — |
 
 ---
 
@@ -124,6 +125,11 @@ Every module, coloured by package (full adjacency in the table below).
 | `agentteams.recipe_fields` | — | `agentteams.analyze` |
 | `agentteams.remediate` | — | — |
 | `agentteams.render` | — | `agentteams.cli.generate`, `agentteams.cli.render_pipeline` |
+| `agentteams.research` | `agentteams.research.reputable`, `agentteams.research.search`, `agentteams.research.verify` | — |
+| `agentteams.research.__main__` | `agentteams.research.search` | — |
+| `agentteams.research.reputable` | `agentteams.research.search` | `agentteams.research` |
+| `agentteams.research.search` | — | `agentteams.research`, `agentteams.research.__main__`, `agentteams.research.reputable` |
+| `agentteams.research.verify` | — | `agentteams.research` |
 | `agentteams.scan` | — | `agentteams.cli.generate` |
 | `agentteams.schedule_emit` | `agentteams.atomicio` | `agentteams.bridge` |
 | `agentteams.security_refs` | — | `agentteams.cli.commands`, `agentteams.cli.generate` |
@@ -139,7 +145,7 @@ Every module, coloured by package (full adjacency in the table below).
 
 Third-party (non-stdlib) top-level packages imported by the mapped package:
 
-`jsonschema`
+`httpx`, `jsonschema`, `pypdf`
 
 **Repo-local (outside the mapped package):** `build_team`
 
@@ -164,9 +170,12 @@ flowchart LR
     class agentteams_eval_adapters sub
     agentteams_frameworks["agentteams.frameworks"]
     class agentteams_frameworks sub
+    agentteams_research["agentteams.research"]
+    class agentteams_research sub
     agentteams --> agentteams_cli
     agentteams --> agentteams_enrich
     agentteams --> agentteams_frameworks
+    agentteams --> agentteams_research
     agentteams_cli --> agentteams
     agentteams_cli --> agentteams_frameworks
     agentteams_frameworks --> agentteams
@@ -182,9 +191,11 @@ digraph "agentteams architecture" {
     "agentteams.enrich" [fillcolor="#eef6ee"];
     "agentteams.eval_adapters" [fillcolor="#eef6ee"];
     "agentteams.frameworks" [fillcolor="#eef6ee"];
+    "agentteams.research" [fillcolor="#eef6ee"];
     "agentteams" -> "agentteams.cli";
     "agentteams" -> "agentteams.enrich";
     "agentteams" -> "agentteams.frameworks";
+    "agentteams" -> "agentteams.research";
     "agentteams.cli" -> "agentteams";
     "agentteams.cli" -> "agentteams.frameworks";
     "agentteams.frameworks" -> "agentteams";
@@ -1061,6 +1072,57 @@ digraph "agentteams architecture" {
       "external": [],
       "repo_local": []
     },
+    "agentteams.research": {
+      "package": "agentteams",
+      "path": "agentteams/research/__init__.py",
+      "is_package": true,
+      "imports_internal": [
+        "agentteams.research.reputable",
+        "agentteams.research.search",
+        "agentteams.research.verify"
+      ],
+      "external": [],
+      "repo_local": []
+    },
+    "agentteams.research.__main__": {
+      "package": "agentteams.research",
+      "path": "agentteams/research/__main__.py",
+      "is_package": false,
+      "imports_internal": [
+        "agentteams.research.search"
+      ],
+      "external": [],
+      "repo_local": []
+    },
+    "agentteams.research.reputable": {
+      "package": "agentteams.research",
+      "path": "agentteams/research/reputable.py",
+      "is_package": false,
+      "imports_internal": [
+        "agentteams.research.search"
+      ],
+      "external": [],
+      "repo_local": []
+    },
+    "agentteams.research.search": {
+      "package": "agentteams.research",
+      "path": "agentteams/research/search.py",
+      "is_package": false,
+      "imports_internal": [],
+      "external": [
+        "httpx",
+        "pypdf"
+      ],
+      "repo_local": []
+    },
+    "agentteams.research.verify": {
+      "package": "agentteams.research",
+      "path": "agentteams/research/verify.py",
+      "is_package": false,
+      "imports_internal": [],
+      "external": [],
+      "repo_local": []
+    },
     "agentteams.scan": {
       "package": "agentteams",
       "path": "agentteams/scan.py",
@@ -1148,6 +1210,10 @@ digraph "agentteams architecture" {
     {
       "source": "agentteams",
       "target": "agentteams.frameworks"
+    },
+    {
+      "source": "agentteams",
+      "target": "agentteams.research"
     },
     {
       "source": "agentteams.cli",
@@ -1764,6 +1830,26 @@ digraph "agentteams architecture" {
       "target": "agentteams.analyze"
     },
     {
+      "source": "agentteams.research",
+      "target": "agentteams.research.reputable"
+    },
+    {
+      "source": "agentteams.research",
+      "target": "agentteams.research.search"
+    },
+    {
+      "source": "agentteams.research",
+      "target": "agentteams.research.verify"
+    },
+    {
+      "source": "agentteams.research.__main__",
+      "target": "agentteams.research.search"
+    },
+    {
+      "source": "agentteams.research.reputable",
+      "target": "agentteams.research.search"
+    },
+    {
       "source": "agentteams.schedule_emit",
       "target": "agentteams.atomicio"
     },
@@ -1793,7 +1879,9 @@ digraph "agentteams architecture" {
     }
   ],
   "external_dependencies": [
-    "jsonschema"
+    "httpx",
+    "jsonschema",
+    "pypdf"
   ],
   "repo_local_dependencies": [
     "build_team"
