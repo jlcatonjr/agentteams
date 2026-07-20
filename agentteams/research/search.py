@@ -26,6 +26,21 @@ _UA = "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML
 _RESULT_A = re.compile(r'class="result__a"[^>]*href="([^"]+)"[^>]*>(.*?)</a>', re.DOTALL)
 _SNIPPET = re.compile(r'class="result__snippet"[^>]*>(.*?)</a>', re.DOTALL)
 
+_JSON_LD_BLOCK = re.compile(
+    r'<script[^>]*type=["\']application/ld\+json["\'][^>]*>(.*?)</script>',
+    re.DOTALL | re.IGNORECASE,
+)
+_JSON_LD_DATE = re.compile(r'"date(?:Published|Created)"\s*:\s*"([^"]+)"')
+_META_ARTICLE_TIME = re.compile(
+    r'<meta[^>]*property=["\']article:published_time["\'][^>]*content=["\']([^"\']+)["\']',
+    re.IGNORECASE,
+)
+_META_DATE = re.compile(
+    r'<meta[^>]*name=["\'](?:date|pubdate|publish-date)["\'][^>]*content=["\']([^"\']+)["\']',
+    re.IGNORECASE,
+)
+_TIME_TAG = re.compile(r'<time[^>]*datetime=["\']([^"\']+)["\']', re.IGNORECASE)
+
 
 @dataclass
 class Source:
@@ -126,6 +141,69 @@ def _extract_pdf_text(body: bytes) -> str:
         return ""
 
 
+def extract_published_date(html: str) -> str | None:
+    """Best-effort publish-date extraction from a page's raw (unstripped) HTML.
+
+    Tried, in order: JSON-LD ``datePublished``/``dateCreated`` inside an ``application/ld+json``
+    script block; an ``article:published_time`` meta tag; a ``date``/``pubdate``/``publish-date``
+    meta tag; a bare ``<time datetime="...">`` tag. Returns the raw string as found — never
+    normalizes, guesses, or fabricates a date. Returns ``None`` on no match. Never raises: a page
+    with no extractable date is an honest empty, not a caller-visible error.
+
+    Must be called against the RAW html — ``fetch_text``'s own stripping regex removes ``<script>``
+    blocks (where JSON-LD dates live) before returning, so this only sees what it needs when run
+    before that stripping, not after (see ``fetch_text_and_date``).
+    """
+    for block in _JSON_LD_BLOCK.findall(html):
+        match = _JSON_LD_DATE.search(block)
+        if match:
+            return match.group(1)
+    for pattern in (_META_ARTICLE_TIME, _META_DATE, _TIME_TAG):
+        match = pattern.search(html)
+        if match:
+            return match.group(1)
+    return None
+
+
+def _fetch_raw(
+    url: str, max_bytes: int, timeout_s: float, max_pdf_bytes: int, pdf_timeout_s: float
+) -> tuple[bytes, str, str] | None:
+    """Shared fetch core for ``fetch_text``/``fetch_text_and_date`` — one network round-trip,
+    two possible post-processing paths. Returns ``(body, content_type, encoding)``, or ``None`` on
+    any guard/failure/non-200 (both callers convert that into their own empty-result shape).
+    """
+    if not _is_public_https(url):
+        return None
+    try:
+        deadline = time.monotonic() + timeout_s
+        with httpx.stream(
+            "GET", url, headers={"User-Agent": _UA}, timeout=timeout_s, follow_redirects=False
+        ) as resp:
+            if resp.status_code != 200:
+                return None
+            content_type = resp.headers.get("content-type", "")
+            is_pdf = "application/pdf" in content_type
+            cap = max_pdf_bytes if is_pdf else max_bytes
+            if is_pdf:
+                # A separate, later-computed deadline (not known until the header is read) — PDFs
+                # get pdf_timeout_s's larger wall-clock budget instead of timeout_s's.
+                deadline = time.monotonic() + pdf_timeout_s
+            chunks: list[bytes] = []
+            total = 0
+            for chunk in resp.iter_bytes():
+                chunks.append(chunk)
+                total += len(chunk)
+                if total >= cap or time.monotonic() >= deadline:
+                    break
+            body = b"".join(chunks)
+            encoding = resp.encoding or "utf-8"
+    except httpx.HTTPError:
+        # CH-24: named type — see web_search()'s identical rationale; this streams the same
+        # httpx request/response boundary (connect/timeout/transport failures mid-stream).
+        return None
+    return body, content_type, encoding
+
+
 def fetch_text(
     url: str,
     max_bytes: int = 40_000,
@@ -153,37 +231,44 @@ def fetch_text(
     per-chunk window) never trips httpx's own timeout even when the full transfer takes minutes,
     so only the wall-clock side needs widening for PDFs.
     """
-    if not _is_public_https(url):
+    raw = _fetch_raw(url, max_bytes, timeout_s, max_pdf_bytes, pdf_timeout_s)
+    if raw is None:
         return ""
-    try:
-        deadline = time.monotonic() + timeout_s
-        with httpx.stream(
-            "GET", url, headers={"User-Agent": _UA}, timeout=timeout_s, follow_redirects=False
-        ) as resp:
-            if resp.status_code != 200:
-                return ""
-            content_type = resp.headers.get("content-type", "")
-            is_pdf = "application/pdf" in content_type
-            cap = max_pdf_bytes if is_pdf else max_bytes
-            if is_pdf:
-                # A separate, later-computed deadline (not known until the header is read) — PDFs
-                # get pdf_timeout_s's larger wall-clock budget instead of timeout_s's.
-                deadline = time.monotonic() + pdf_timeout_s
-            chunks: list[bytes] = []
-            total = 0
-            for chunk in resp.iter_bytes():
-                chunks.append(chunk)
-                total += len(chunk)
-                if total >= cap or time.monotonic() >= deadline:
-                    break
-            body = b"".join(chunks)
-    except httpx.HTTPError:
-        # CH-24: named type — see web_search()'s identical rationale; this streams the same
-        # httpx request/response boundary (connect/timeout/transport failures mid-stream).
-        return ""
+    body, content_type, encoding = raw
     if "application/pdf" in content_type or body.startswith(b"%PDF-"):
         return _extract_pdf_text(body)[:max_chars]
-    text = body.decode(resp.encoding or "utf-8", errors="ignore")
+    text = body.decode(encoding, errors="ignore")
     text = re.sub(r"(?is)<(script|style|nav|footer|header)[^>]*>.*?</\1>", " ", text)
     text = _html.unescape(re.sub(r"<[^>]+>", " ", text))
     return re.sub(r"\s+", " ", text).strip()[:max_chars]
+
+
+def fetch_text_and_date(
+    url: str,
+    *,
+    max_bytes: int = 40_000,
+    timeout_s: float = 8.0,
+    max_chars: int = 4000,
+    max_pdf_bytes: int = 12_000_000,
+    pdf_timeout_s: float = 60.0,
+) -> tuple[str, str | None]:
+    """Fetch a page once and return both its extracted text (identical to what ``fetch_text``
+    would return for the same input) and a best-effort publish date — for a caller who wants both
+    without paying for two fetches. Additive: does not change ``fetch_text``'s own signature or
+    behavior.
+
+    A PDF response never carries an extractable date via this module's regex-based approach
+    (dates live in HTML meta/JSON-LD, not PDF structure) — returns ``(text, None)`` for a PDF, the
+    same honest-empty shape as any other page with no extractable date.
+    """
+    raw = _fetch_raw(url, max_bytes, timeout_s, max_pdf_bytes, pdf_timeout_s)
+    if raw is None:
+        return "", None
+    body, content_type, encoding = raw
+    if "application/pdf" in content_type or body.startswith(b"%PDF-"):
+        return _extract_pdf_text(body)[:max_chars], None
+    raw_text = body.decode(encoding, errors="ignore")
+    published_at = extract_published_date(raw_text)
+    text = re.sub(r"(?is)<(script|style|nav|footer|header)[^>]*>.*?</\1>", " ", raw_text)
+    text = _html.unescape(re.sub(r"<[^>]+>", " ", text))
+    return re.sub(r"\s+", " ", text).strip()[:max_chars], published_at

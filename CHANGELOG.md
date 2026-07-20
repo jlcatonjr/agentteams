@@ -32,6 +32,21 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   themselves introduce zero additional warnings, which is the bar the equivalent situation was
   already held to for `runtime-security-guide.md`/`goose-runtime-pattern-guide.md` in
   `references/plans/lingofriend-handoffs-metaplan-2026-07-18.plan.md`.
+- **`agentteams.research.news` — news as perspective, not fact.** The `type="news"` tag
+  `reputable.py` already carried (11+ domains once a consumer supplies its own `AllowlistConfig`,
+  3 in `DEFAULT_CONFIG`) was inert — stored and returned but never read for behavior. New module
+  `news.py` gives it real behavior: `is_news_source()`, and `perspective_attribution()`, a
+  single shared attribution-string formatter so a consumer presents a news claim as a
+  contemporaneous account ("outlet reported, as of date"), not settled fact. A `PerspectiveKind`
+  alias (`"reported"` / `"contested"`) distinguishes a plain factual report from a claim about how
+  a source *characterized* something — the latter warranting more hedging, a distinction lifted
+  from a proven pattern at a downstream research consumer project. Deliberately never uses the
+  word "primary" for this concept — `tier="primary"` already means something else (a repository of
+  original source *texts*). `search.py` gains `extract_published_date()` (best-effort, regex-based
+  — JSON-LD, `article:published_time`/`date`/`pubdate` meta tags, `<time datetime>` — never
+  fabricates, honest `None` on no match) and additive `fetch_text_and_date()` (one fetch, both
+  text and date; `fetch_text()`'s own signature/behavior unchanged). Full API reference:
+  `docs_src/api-reference/research.md`.
 
 ### fixed
 

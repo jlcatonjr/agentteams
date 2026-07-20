@@ -14,13 +14,24 @@ verdicts are "survived" or "refuted" — never "verified" or "proven."
 
 from __future__ import annotations
 
+from agentteams.research.news import (
+    PerspectiveKind,
+    is_news_source,
+    perspective_attribution,
+)
 from agentteams.research.reputable import (
     DEFAULT_CONFIG,
     AllowlistConfig,
     ReputableSource,
     ReputableSourceAllowlist,
 )
-from agentteams.research.search import Source, fetch_text, web_search
+from agentteams.research.search import (
+    Source,
+    extract_published_date,
+    fetch_text,
+    fetch_text_and_date,
+    web_search,
+)
 from agentteams.research.verify import (
     ChatFn,
     Claim,
@@ -35,13 +46,18 @@ __all__ = [
     "ChatFn",
     "Claim",
     "DEFAULT_CONFIG",
+    "PerspectiveKind",
     "ReputableSource",
     "ReputableSourceAllowlist",
     "Source",
     "Verdict",
     "audit_claims",
     "extract_claims",
+    "extract_published_date",
     "fetch_text",
+    "fetch_text_and_date",
+    "is_news_source",
+    "perspective_attribution",
     "revise",
     "web_search",
 ]
