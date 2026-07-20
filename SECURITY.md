@@ -56,6 +56,19 @@ Out of scope:
 - Bugs in generated agent files themselves — agentteams is a generator,
   not a runtime; generated outputs are the user's responsibility to review.
 
+### The `agentteams[research]` extra is a disclosed, bounded exception to this boundary
+
+Everything above describes `agentteams`'s CLI/template-rendering output, which remains
+design-time-only and unchanged. The optional `research` extra
+(`pip install agentteams[research]`) is a genuinely different kind of thing: a real, importable
+Python library (`agentteams.research`) a consuming project may add as its **own** runtime
+dependency and call directly — the same relationship any project has with any dependency, not
+agentteams reaching into a produced app's runtime uninvited. It has no import-time coupling to the
+CLI/generator pipeline in either direction. The `research-analyst` domain-archetype template
+documents the recommended way to give an LLM agent instructions for orchestrating it; see
+[`docs_src/api-reference/research.md`](docs_src/api-reference/research.md) for the library's own
+documented surface and stability status.
+
 ## Security-relevant changes in this release
 
 See the `### security` blocks of [`CHANGELOG.md`](CHANGELOG.md). For 1.0

@@ -217,6 +217,47 @@ def test_build_manifest_no_retrieval_mode_does_not_add_retrieval_files():
     assert "references/retrieval-trigger-contract.reference.md" not in planned_paths
 
 
+def test_build_manifest_research_capability_adds_research_analyst():
+    desc = {
+        "project_goal": "Build a research-heavy conversational product.",
+        "capabilities": ["research_verification"],
+    }
+    manifest = build_manifest(desc, framework="copilot-vscode")
+
+    assert "research-analyst" in manifest["selected_archetypes"]
+    planned_paths = {f["path"] for f in manifest["output_files"]}
+    assert "research-analyst.agent.md" in planned_paths
+
+
+def test_build_manifest_no_capabilities_does_not_add_research_analyst():
+    """The opt-in-only constraint: research-analyst must never be inferred from project
+    type/tools, only from an explicit capabilities flag — this is the false-positive check the
+    archetype's own plan requires, not just a happy-path assertion."""
+    desc = {"project_goal": "Build a research-heavy conversational product."}
+    manifest = build_manifest(desc, framework="copilot-vscode")
+
+    assert "research-analyst" not in manifest["selected_archetypes"]
+    planned_paths = {f["path"] for f in manifest["output_files"]}
+    assert "research-analyst.agent.md" not in planned_paths
+
+
+def test_build_manifest_research_capability_force_appends_past_selected_archetypes_override():
+    """Regression guard for the exact bug an adversarial audit caught pre-implementation: an
+    internal branch inside select_archetypes() would be silently bypassed whenever a brief also
+    sets selected_archetypes for an unrelated reason, since analyze.py only calls
+    select_archetypes() when selected_archetypes is ABSENT. research-analyst must be
+    force-appended after that override path too, not just the auto-select path."""
+    desc = {
+        "project_goal": "Build a research-heavy conversational product.",
+        "selected_archetypes": ["primary-producer"],
+        "capabilities": ["research_verification"],
+    }
+    manifest = build_manifest(desc, framework="copilot-vscode")
+
+    assert "research-analyst" in manifest["selected_archetypes"]
+    assert "primary-producer" in manifest["selected_archetypes"]
+
+
 def test_build_manifest_includes_builder_agent():
     desc = {"project_goal": "Test project"}
     for fw in ("copilot-vscode", "copilot-cli", "claude"):

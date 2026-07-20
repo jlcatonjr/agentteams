@@ -240,6 +240,16 @@ def build_manifest(description: dict[str, Any], *, framework: str = "copilot-vsc
     if retrieval_enabled and "retrieval-integrator" not in archetypes:
         archetypes = list(archetypes) + ["retrieval-integrator"]
 
+    # research-analyst: gated on an EXPLICIT opt-in capability flag, never inferred from project
+    # type/tools — unlike other archetypes, selecting this recommends a real runtime dependency
+    # (agentteams[research]) the generated project's own code would import, not just a rendered
+    # instruction file. Force-appended after both the auto-select and selected_archetypes-override
+    # paths (mirroring retrieval-integrator above), so an unrelated selected_archetypes override
+    # never silently drops it.
+    research_capability_enabled = "research_verification" in description.get("capabilities", [])
+    if research_capability_enabled and "research-analyst" not in archetypes:
+        archetypes = list(archetypes) + ["research-analyst"]
+
     # Tool agents
     tool_agents = detect_tool_agents(description.get("tools", []))
 

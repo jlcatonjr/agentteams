@@ -27,6 +27,17 @@ The generated team includes:
 - 1 **Team Builder agent** — framework-native agent that can regenerate or expand the team from within your framework
 - A framework instructions file — `.github/copilot-instructions.md` (Copilot VS Code / Copilot CLI), `.claude/CLAUDE.md` (Claude), or a repo-root `AGENTS.md` + `.goosehints` (Goose)
 
+The generated team governs *how your project gets built* — it does not run inside the project
+itself. If your app serves LLM output to end users, you're responsible for adding your own runtime
+governance; the generated team reviews the code as it's written, not the app's live behavior.
+**One exception, disclosed:** `pip install agentteams[research]` installs
+`agentteams.research` — a small, real Python library (no-key web search, curated-source rating,
+dual-lens claim verification) a project may add as its own runtime dependency and call directly.
+Unlike everything else this module emits, that's genuine runtime code, not a design-time
+instruction file — see [`SECURITY.md`](SECURITY.md#the-agentteamsresearch-extra-is-a-disclosed-bounded-exception-to-this-boundary)
+for the full boundary statement and the `research-analyst` archetype for the recommended way to
+orchestrate it from an agent.
+
 ---
 
 ## Workflow
