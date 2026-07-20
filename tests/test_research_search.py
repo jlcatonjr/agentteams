@@ -3,9 +3,11 @@ module this was ported from."""
 
 from __future__ import annotations
 
+from unittest.mock import patch
+
 import pytest
 
-from agentteams.research.search import _extract_pdf_text
+from agentteams.research.search import _extract_pdf_text, extract_published_date, fetch_text_and_date
 
 
 def _build_minimal_pdf(text: str) -> bytes:
@@ -55,6 +57,101 @@ def test_extract_pdf_text_degrades_to_empty_on_truncated_pdf() -> None:
     assert _extract_pdf_text(truncated) == ""
 
 
+def test_extract_published_date_json_ld() -> None:
+    html = (
+        '<html><head><script type="application/ld+json">'
+        '{"@type":"NewsArticle","datePublished":"2026-07-18T10:00:00Z"}'
+        "</script></head></html>"
+    )
+    assert extract_published_date(html) == "2026-07-18T10:00:00Z"
+
+
+def test_extract_published_date_article_meta_tag() -> None:
+    html = (
+        '<html><head><meta property="article:published_time" '
+        'content="2026-07-19T08:30:00+00:00"></head></html>'
+    )
+    assert extract_published_date(html) == "2026-07-19T08:30:00+00:00"
+
+
+def test_extract_published_date_generic_date_meta_tag() -> None:
+    html = '<html><head><meta name="pubdate" content="2026-07-20"></head></html>'
+    assert extract_published_date(html) == "2026-07-20"
+
+
+def test_extract_published_date_time_tag() -> None:
+    html = '<html><body><time datetime="2026-07-17">July 17</time></body></html>'
+    assert extract_published_date(html) == "2026-07-17"
+
+
+def test_extract_published_date_no_match_returns_none_never_fabricates() -> None:
+    assert extract_published_date("<html><body>No date anywhere here.</body></html>") is None
+
+
+def test_extract_published_date_never_raises_on_malformed_input() -> None:
+    assert extract_published_date("<<<not even close to html>>>") is None
+    assert extract_published_date("") is None
+
+
+def test_fetch_text_and_date_extracts_date_from_raw_html_before_stripping() -> None:
+    """The date must be pulled from the RAW body -- fetch_text's own stripping regex removes
+    <script> blocks (where JSON-LD dates live) before the text is returned, so date extraction
+    has to happen before that stripping runs, not after. Mocks the shared _fetch_raw seam rather
+    than httpx directly, since this module has no existing httpx-mocking test to follow.
+
+    Deliberately placed BEFORE test_import_agentteams_research_search_without_pypdf below: that
+    test pops this module from sys.modules and re-imports it, which would leave this file's own
+    top-level `fetch_text_and_date` binding pointing at a stale module object whose `_fetch_raw`
+    this test's own patch() call could no longer reach -- confirmed live by moving these tests
+    after that one and watching them fail on an unmocked real network call.
+    """
+    html = (
+        '<html><head><script type="application/ld+json">'
+        '{"datePublished":"2026-07-18"}</script></head>'
+        "<body><p>Article body text.</p></body></html>"
+    ).encode("utf-8")
+    with patch(
+        "agentteams.research.search._fetch_raw",
+        return_value=(html, "text/html; charset=utf-8", "utf-8"),
+    ):
+        text, published_at = fetch_text_and_date("https://bbc.com/news/story")
+    assert published_at == "2026-07-18"
+    assert "Article body text." in text
+    assert "datePublished" not in text  # the script block itself must still be stripped from text
+
+
+def test_fetch_text_and_date_degrades_to_none_when_no_date_found() -> None:
+    html = b"<html><body>No date in this one.</body></html>"
+    with patch(
+        "agentteams.research.search._fetch_raw",
+        return_value=(html, "text/html; charset=utf-8", "utf-8"),
+    ):
+        text, published_at = fetch_text_and_date("https://bbc.com/news/story")
+    assert published_at is None
+    assert "No date in this one." in text
+
+
+def test_fetch_text_and_date_returns_empty_and_none_on_fetch_failure() -> None:
+    with patch("agentteams.research.search._fetch_raw", return_value=None):
+        text, published_at = fetch_text_and_date("https://bbc.com/news/story")
+    assert text == ""
+    assert published_at is None
+
+
+def test_fetch_text_and_date_pdf_response_has_no_date() -> None:
+    """PDF structure has no HTML meta/JSON-LD to extract a date from -- confirms this is treated
+    as an honest empty, not an error, for the one content-type this module's date regexes cannot
+    reach."""
+    pdf_bytes = _build_minimal_pdf("PDF body text")
+    with patch(
+        "agentteams.research.search._fetch_raw",
+        return_value=(pdf_bytes, "application/pdf", "utf-8"),
+    ):
+        text, published_at = fetch_text_and_date("https://reuters.com/report.pdf")
+    assert "PDF body text" in text
+    assert published_at is None
+
+
 def test_no_module_level_pypdf_import() -> None:
     """The exact regression guard this pattern's LingoFriend origin shipped: `search.py` must be
     importable without pypdf ever being touched at module scope, since agentteams' base install
@@ -75,7 +172,12 @@ def test_import_agentteams_research_search_without_pypdf() -> None:
     """Live-confirm the base-install decoupling claim, not just by static inspection: block pypdf
     at import time with a genuine find_spec-based meta-path finder (NOT the deprecated
     find_module/load_module protocol, which silently fails to intercept under Python 3.12+) and
-    confirm this module still imports cleanly."""
+    confirm this module still imports cleanly.
+
+    Deliberately the LAST test in this file: it pops this module from sys.modules and re-imports
+    it, which leaves this file's own top-level bindings pointing at a stale module object for any
+    test that runs after it and needs to patch() one of this module's internal attributes.
+    """
     import importlib
     import sys
 

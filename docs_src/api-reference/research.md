@@ -72,6 +72,26 @@ rejection — never raises.
   `pdf_timeout_s` wall-clock deadline exists specifically because a real PDF transfer can take
   meaningfully longer than typical HTML front-matter.
 
+### `extract_published_date(html) -> str | None`
+
+Best-effort publish-date extraction from a page's raw (unstripped) HTML. Tried, in order: JSON-LD
+`datePublished`/`dateCreated` inside an `application/ld+json` script block; an
+`article:published_time` meta tag; a `date`/`pubdate`/`publish-date` meta tag; a bare
+`<time datetime="...">` tag. Returns the raw string as found — never normalizes, guesses, or
+fabricates a date. Returns `None` on no match; never raises.
+
+Must be called against RAW html, before any script/tag stripping — `fetch_text`'s own stripping
+removes the `<script>` blocks a JSON-LD date lives in.
+
+### `fetch_text_and_date(url, *, max_bytes=40_000, timeout_s=8.0, max_chars=4000, max_pdf_bytes=12_000_000, pdf_timeout_s=60.0) -> tuple[str, str | None]`
+
+Fetch a page once and return both its extracted text (identical to what `fetch_text` would return
+for the same input) and a best-effort publish date — for a caller who wants both without paying
+for two fetches. Additive: does not change `fetch_text`'s own signature or behavior.
+
+**Returns:** `(text, published_at)`. A PDF response always has `published_at=None` — PDF structure
+has no HTML meta/JSON-LD for this module's regexes to reach.
+
 ---
 
 ## `reputable` — curated-allowlist source rating

@@ -3,9 +3,9 @@
 
 > **Auto-generated.** Regenerated on every commit that touches the `agentteams` package. Do not edit manually — changes will be overwritten.
 
-- Modules mapped: **95**
+- Modules mapped: **96**
 - Packages: **6**
-- Internal import edges: **162**
+- Internal import edges: **164**
 - Distinct external dependencies: **3**
 
 ---
@@ -27,7 +27,7 @@ Inter-package import dependencies (module-level detail in the tables below).
 | `agentteams.enrich` | 6 | — |
 | `agentteams.eval_adapters` | 2 | — |
 | `agentteams.frameworks` | 7 | `agentteams` |
-| `agentteams.research` | 4 | — |
+| `agentteams.research` | 5 | — |
 
 ---
 
@@ -125,9 +125,10 @@ Every module, coloured by package (full adjacency in the table below).
 | `agentteams.recipe_fields` | — | `agentteams.analyze` |
 | `agentteams.remediate` | — | — |
 | `agentteams.render` | — | `agentteams.cli.generate`, `agentteams.cli.render_pipeline` |
-| `agentteams.research` | `agentteams.research.reputable`, `agentteams.research.search`, `agentteams.research.verify` | — |
+| `agentteams.research` | `agentteams.research.news`, `agentteams.research.reputable`, `agentteams.research.search`, `agentteams.research.verify` | — |
 | `agentteams.research.__main__` | `agentteams.research.search` | — |
-| `agentteams.research.reputable` | `agentteams.research.search` | `agentteams.research` |
+| `agentteams.research.news` | `agentteams.research.reputable` | `agentteams.research` |
+| `agentteams.research.reputable` | `agentteams.research.search` | `agentteams.research`, `agentteams.research.news` |
 | `agentteams.research.search` | — | `agentteams.research`, `agentteams.research.__main__`, `agentteams.research.reputable` |
 | `agentteams.research.verify` | — | `agentteams.research` |
 | `agentteams.scan` | — | `agentteams.cli.generate` |
@@ -1077,6 +1078,7 @@ digraph "agentteams architecture" {
       "path": "agentteams/research/__init__.py",
       "is_package": true,
       "imports_internal": [
+        "agentteams.research.news",
         "agentteams.research.reputable",
         "agentteams.research.search",
         "agentteams.research.verify"
@@ -1090,6 +1092,16 @@ digraph "agentteams architecture" {
       "is_package": false,
       "imports_internal": [
         "agentteams.research.search"
+      ],
+      "external": [],
+      "repo_local": []
+    },
+    "agentteams.research.news": {
+      "package": "agentteams.research",
+      "path": "agentteams/research/news.py",
+      "is_package": false,
+      "imports_internal": [
+        "agentteams.research.reputable"
       ],
       "external": [],
       "repo_local": []
@@ -1831,6 +1843,10 @@ digraph "agentteams architecture" {
     },
     {
       "source": "agentteams.research",
+      "target": "agentteams.research.news"
+    },
+    {
+      "source": "agentteams.research",
       "target": "agentteams.research.reputable"
     },
     {
@@ -1844,6 +1860,10 @@ digraph "agentteams architecture" {
     {
       "source": "agentteams.research.__main__",
       "target": "agentteams.research.search"
+    },
+    {
+      "source": "agentteams.research.news",
+      "target": "agentteams.research.reputable"
     },
     {
       "source": "agentteams.research.reputable",
