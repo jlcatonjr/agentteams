@@ -33,7 +33,7 @@ jobs:
         run: python scripts/verify-env.py
 
       - name: Install package and pytest
-        run: pip install -e ".[test]"
+        run: pip install -e ".[test,research]"
 
       - name: Run tests
         run: pytest tests/
