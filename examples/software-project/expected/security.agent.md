@@ -38,7 +38,7 @@ Runtime enforcement also consumes machine-readable freshness metadata from the s
 
 > ⛔ **Do not modify or omit.** All triggers, rules, the HALT directive, and the AI-authored-code screening guidance below are the immutable contract for this agent.
 
-<!-- AGENTTEAMS:BEGIN security_rules_invariant v=1 -->
+<!-- AGENTTEAMS:BEGIN security_rules_invariant v=2 -->
 ### Mandatory Review Triggers
 
 | Trigger | Risk Category |
@@ -70,6 +70,8 @@ Runtime enforcement also consumes machine-readable freshness metadata from the s
 - ✅ Apply OPSEC to **all committed files**, not only deliverables — sanitize absolute home-directory paths (`/Users/<name>/`, `/home/<name>/`) in infrastructure artifacts (`tmp/*.csv`, scripts, config files) to `~/`-relative or repo-relative forms before committing
 - ❌ Never include actual API keys, tokens, SSH keys, or passwords in any file
 - ❌ Do not commit infrastructure artifacts retaining full absolute home-directory paths
+
+These patterns are also checked deterministically by `agentteams.scan.scan_content(text)` (or `python -m agentteams.scan <path>` for a shell-only runtime) — if engineering integration is available, run it over the reviewed content and treat any `high`-severity finding as this rule's HALT trigger instead of re-deriving the regex match by eye. Falls back to manual pattern review (the bullets above) when it isn't.
 
 **Rule S-2: Read-Only Access to External Repos**
 - ✅ Read source files from external repositories as reference material
@@ -115,6 +117,8 @@ Machine-specific information uniquely identifies the local development machine, 
 
 This rule is stricter than S-1 in one key respect: **any match triggers HALT** (not CONDITIONAL PASS) because machine-specific data in version-controlled files risks OPSEC exposure in perpetuity through git history, forks, and cached views.
 
+These patterns are also checked deterministically by `agentteams.scan.scan_content(text)` (or `python -m agentteams.scan <path>` for a shell-only runtime) — if engineering integration is available, run it over the reviewed content and treat any `high`-severity finding as this rule's HALT trigger instead of re-deriving the regex match by eye. Falls back to manual pattern review (the bullets above) when it isn't.
+
 ---
 
 ### HALT vs. CONDITIONAL PASS Escalation Criteria
@@ -138,6 +142,8 @@ Use this table to determine the verdict. **Criteria are deterministic** — mode
 | No security-relevant findings | **PASS** |
 
 > **Precedence rule:** If a finding matches multiple rows, apply the **most restrictive** verdict (HALT > CONDITIONAL PASS > PASS).
+
+The Credential and Machine-specific-information rows above are exactly `scan.py`'s scan-derivable categories — `agentteams.scan.verdict_for_findings()` computes HALT/CONDITIONAL PASS/PASS for that subset mechanically from `ScanFinding.severity`. The remaining rows (destructive-op confirmation, external writes, injection attempts, scope violations) are procedural and stay a judgment call.
 
 ### AI-Authored Code Is Insecure By Default
 
@@ -173,7 +179,7 @@ The classes above are web/service-tier. AI agents also emit **low-level** defect
 - **Type confusion (CWE-843)** — `unsafe.Pointer` / union / `reinterpret_cast` misuse. Fix: tagged unions; validated casts.
 - **TOCTOU file race (CWE-367)** — `access()`-then-`open()` on a path an attacker can swap. Fix: operate on file descriptors; `O_NOFOLLOW`.
 
-**Hardware / microarchitectural exploits — awareness and candidate-flagging only, NOT per-line proof.** In crypto/auth code, flag the reviewable patterns: **non-constant-time comparison or secret-dependent branch/table-lookup (CWE-208)** and the canonical **Spectre-v1 bounds-check gadget** (`if (x < len) y = a2[a1[x]*K]`), as **candidates to route to specialist tooling** (constant-time libraries, speculation-safe compilers, sanitizers). Full Spectre/Meltdown/Rowhammer/cache-timing/fault-injection analysis requires microarchitectural modeling and is **out of scope for this agent's per-line review** — flag awareness and route; do not claim detection.
+**Hardware / microarchitectural exploits — awareness and candidate-flagging only, NOT per-line proof.** In crypto/auth code, flag the reviewable patterns: **non-constant-time comparison or secret-dependent branch/table-lookup (CWE-208)** and the canonical **Spectre-v1 bounds-check gadget** (`if (x < len) y = a2[a1[x]*K]`), as **candidates to route to specialist tooling** (constant-time libraries, speculation-safe compilers, sanitizers). Full Spectre, Meltdown, Rowhammer, cache-timing, and fault-injection analysis requires microarchitectural modeling and is **out of scope for this agent's per-line review** — flag awareness and route; do not claim detection.
 
 **Platform hardening (OS-specific deployment targets).** When the project builds, deploys, runs, or is distributed for a specific operating system, screen the *platform* against the matching curated baseline — each covers system-integrity/boot, privilege escalation, mandatory access / application control, isolation & sandboxing, capability/process restriction, memory-protection build flags, service/daemon hardening, filesystem/disk-encryption/secrets, and auditing, with primary-authority sources (kernel.org, Apple, Microsoft, NSA/CISA, NIST/MITRE, CIS):
 - **Linux / native targets** — `references/security-linux-hardening.reference.md` (KSPP, LSM/SELinux/AppArmor, namespaces/containers, seccomp/capabilities, systemd).
@@ -188,21 +194,36 @@ Apply only the baseline(s) matching the actual deployment target(s); skip this g
 ### Current Threat Intelligence Snapshot
 
 <!-- AGENTTEAMS:BEGIN threat_intelligence v=1 -->
-Generated at: `2026-06-02T21:53:20Z`
+Generated at: `2026-07-21T19:34:58Z`
 
 **Sources:**
 
-- CISA KEV: not_fetched — https://www.cisa.gov/sites/default/files/feeds/known_exploited_vulnerabilities.json
+- CISA KEV: ok (catalog 2026.07.21, items 1651) — https://www.cisa.gov/sites/default/files/feeds/known_exploited_vulnerabilities.json
 - MITRE CVE: metadata_only — https://cveawg.mitre.org/api/cve/
-- FIRST EPSS: not_fetched — https://api.first.org/data/v1/epss
+- FIRST EPSS: ok (items 15) — https://api.first.org/data/v1/epss
 - NVD (NIST): skipped — https://services.nvd.nist.gov/rest/json/cves/2.0
-- OSV.dev: not_fetched — https://api.osv.dev/v1/querybatch
+- OSV.dev: skipped — https://api.osv.dev/v1/querybatch
 - OWASP LLM Top 10: static — https://owasp.org/www-project-top-10-for-large-language-model-applications/
 - MITRE ATLAS: static — https://atlas.mitre.org/
+- MITRE CWE: static — https://cwe.mitre.org/
 
 **Current major vulnerabilities:**
 
-- No live vulnerability data was available; consult cached reference file.
+- `CVE-2026-60137` | WordPress Core | WordPress Core SQL Injection Vulnerability | added 2026-07-21 | EPSS 0.040260000, percentile 0.894740000
+- `CVE-2026-63030` | WordPress Core | WordPress Core Interpretation Conflict Vulnerability | added 2026-07-21 | EPSS 0.089460000, percentile 0.946790000
+- `CVE-2026-0770` | Langflow Langflow | Langflow Inclusion of Functionality from Untrusted Control Sphere Vulnerability | added 2026-07-21 | EPSS 0.103710000, percentile 0.952250000
+- `CVE-2021-27137` | DD-WRT DD-WRT | DD-WRT Stack-Based Buffer Overflow Vulnerability | added 2026-07-21 | EPSS 0.054470000, percentile 0.918610000
+- `CVE-2026-58644` | Microsoft SharePoint | Microsoft SharePoint Deserialization of Untrusted Data Vulnerability | added 2026-07-16 | EPSS 0.014650000, percentile 0.707920000
+- `CVE-2026-25089` | Fortinet FortiSandbox | Fortinet FortiSandbox OS Command Injection Vulnerability | added 2026-07-16 | EPSS 0.361350000, percentile 0.983110000
+- `CVE-2026-39808` | Fortinet FortiSandbox | Fortinet FortiSandbox OS Command Injection Vulnerability | added 2026-07-16 | EPSS 0.841580000, percentile 0.996680000
+- `CVE-2026-46817` | Oracle E-Business Suite | Oracle E-Business Suite Improper Privilege Management Vulnerability | added 2026-07-15 | EPSS 0.010450000, percentile 0.603780000
+- `CVE-2023-4346` | KNX Association KNX Protocol Connection Authorization Option 1 | KNX Association KNX Protocol Connection Authorization Option 1 Overly Restrictive Account Lockout Mechanism Vulnerability | added 2026-07-15 | EPSS 0.008550000, percentile 0.543650000
+- `CVE-2026-56155` | Microsoft Active Directory Federation Services | Microsoft Active Directory Federation Services Insufficient Granularity of Access Control Vulnerability  | added 2026-07-14 | EPSS 0.003790000, percentile 0.302870000
+- `CVE-2026-56164` | Microsoft SharePoint Server | Microsoft SharePoint Server Missing Authentication for Critical Function Vulnerability | added 2026-07-14 | EPSS 0.056010000, percentile 0.920560000
+- `CVE-2026-15409` | SonicWall SMA1000 Appliances | SonicWall SMA1000 Appliances Server-Side Request Forgery Vulnerability | added 2026-07-14 | EPSS 0.012660000, percentile 0.665440000
+- `CVE-2026-15410` | SonicWall SMA1000 Appliances | SonicWall SMA1000 Appliances Code Injection Vulnerability | added 2026-07-14 | EPSS 0.014860000, percentile 0.712010000
+- `CVE-2008-4128` | Cisco IOS | Cisco IOS Cross-Site Request Forgery Vulnerability | added 2026-07-13 | EPSS 0.238570000, percentile 0.975820000
+- `CVE-2026-56291` | Balbooa Forms | Balbooa Forms Unrestricted Upload of File with Dangerous Type Vulnerability | added 2026-07-10 | EPSS 0.086350000, percentile 0.945150000
 
 **Prevention and mitigation playbook:**
 
@@ -211,6 +232,8 @@ Generated at: `2026-06-02T21:53:20Z`
 - Enforce patch windows with owner, SLA, and verification evidence for each critical CVE.
 - When patching is blocked, define compensating controls (WAF rules, ACL tightening, feature disablement).
 - Add detections for exploitation attempts and verify telemetry coverage for affected assets.
+- Vendor/CISA required actions:
+  - Apply mitigations in accordance with vendor instructions, ensuring compliance with CISA’s BOD 26-04 Prioritizing Security Updates Based on Risk (see URL in Notes) guidance and CISA’s “Forensics Triage Requirements” (see URL in Notes). Follow applicable BOD 26-04 guidance for cloud services or discontinue use of the product if mitigations are unavailable. Stakeholders are responsible for evaluating each asset's internet exposure and ensuring adherence to BOD 26-04 patching guidelines.
 
 ### LLM and AI-Specific Threat Intelligence
 
@@ -252,7 +275,8 @@ Generated at: `2026-06-02T21:53:20Z`
 | CTRL-07 | threat-intel-freshness-governance | tests/test_security_refs.py::test_build_security_placeholders_nvd_enrichment | security_refs live CVSS/EPSS enrichment | implemented |
 | CTRL-08 | scoring-completeness | tests/test_security_refs.py::test_build_security_placeholders_osv_packages | security_refs OSV enrichment | implemented |
 | CTRL-09 | stale-data-signaling | tests/test_security_refs.py::test_build_security_placeholders_offline_from_cache | security_refs stale-cache warning | implemented |
-| CTRL-10 | continuous control drift | scripts/run_daily_security_maintenance.sh | daily security maintenance pipeline | implemented |
+| CTRL-10 | continuous control drift | scripts/run_daily_security_maintenance.sh | daily security maintenance pipeline (.github/workflows/security-maintenance.yml; scheduled 09:00 EDT + workflow_dispatch fallback) | implemented |
+| CTRL-11 | low-level-vuln-awareness | tests/test_security_lowlevel_coverage.py::test_template_lists_low_level_classes | security.template.md low-level vulnerability screening block | implemented |
 <!-- AGENTTEAMS:END threat_intelligence -->
 
 ### Output Format

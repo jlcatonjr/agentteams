@@ -215,6 +215,7 @@ def test_scoring_parity_lexical(tmp_path, query):
     mh = mi.query_index(mem, query, k=10, strategy="lexical")
     ch = ci.query_partition(code, query, k=10, strategy="lexical")
     assert [(h["path"], h["score"]) for h in mh] == [(h["path"], h["score"]) for h in ch]
+    assert [h["confidence"] for h in mh] == [h["confidence"] for h in ch]
 
 
 @pytest.mark.parametrize("query", ["apple mango", "cherry grape", "peach berry melon"])
@@ -225,3 +226,28 @@ def test_scoring_parity_vector(tmp_path, query):
     mh = mi.query_index(mem, query, k=10, strategy="vector")
     ch = ci.query_partition(code, query, k=10, strategy="vector")
     assert [(h["path"], h["score"]) for h in mh] == [(h["path"], h["score"]) for h in ch]
+    assert [h["confidence"] for h in mh] == [h["confidence"] for h in ch]
+
+
+# ------------------------------ confidence tiers ------------------------------
+
+def test_confidence_for_lexical_thresholds():
+    assert ci._confidence_for("lexical", 3.0) == "reliable"
+    assert ci._confidence_for("lexical", 1.0) == "candidate"
+    assert ci._confidence_for("lexical", 0.5) == "weak"
+
+
+def test_confidence_for_vector_thresholds():
+    assert ci._confidence_for("vector", 0.30) == "reliable"
+    assert ci._confidence_for("vector", 0.20) == "candidate"
+    assert ci._confidence_for("vector", 0.1) == "weak"
+
+
+def test_query_partition_hits_carry_confidence_field(tmp_path):
+    paths = _synthetic_docs(tmp_path)
+    code = ci.build_code_partition(ci.local_units(paths), source_kind="local-script")
+    for strategy in ("lexical", "vector"):
+        hits = ci.query_partition(code, "apple mango", k=10, strategy=strategy)
+        assert hits, f"expected hits for strategy={strategy}"
+        for hit in hits:
+            assert hit["confidence"] in ("reliable", "candidate", "weak")

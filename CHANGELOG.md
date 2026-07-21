@@ -6,6 +6,139 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### changed
+
+- **`agentteams/bridge.py`'s goose-target `.goose/README.md` now points to its own
+  `quickstart-snippet.md`** instead of a single unadorned sentence ("Lightweight bridge; source
+  files are canonical."), so a Goose developer reading the README first isn't left without a pointer
+  to operational guidance (retrieval-first protocol, `--bridge-check` scope, MCP wiring). Fence
+  bumped `goose-bridge-readme` v1→v2. Scoped to the goose call site only — the byte-identical claude
+  bridge README literal is untouched (separate, unlogged finding, not part of this fix). Remediates
+  this repo's own `.github/agents/references/conflict-log.csv` row (gitignored; dated 2026-06-22,
+  found stale-but-still-valid while auditing that log's 5 open `copilot-vscode-to-goose` rows — the
+  other 4 were either already fixed by an earlier commit or don't have a proportionate fix available;
+  see `tmp/by-week/2026-W29/goose-bridge-conflict-log-remediation.plan.md`). No test asserted the
+  prior exact wording (confirmed by grep before changing it).
+- **`technical-validator.template.md`'s Accuracy Rules renamed `CH-01`..`CH-07` → `TV-01`..`TV-07`,
+  closing a pre-existing `CH-`-prefix collision** with the unrelated, much larger `CH-01`..`CH-28`
+  catalog in `code-hygiene.template.md`/`code-hygiene-rules-reference.template.md` (e.g. "CH-02"
+  meant "file paths must resolve" under one template and "Script Lifecycle" under the other) —
+  flagged but explicitly deferred by the LingoFriend-handoff audit above as a separate finding.
+  Rule text is unchanged; codes only. Confirmed via full-repo grep before renaming: every other
+  `CH-0X` reference in the codebase (`build_team.py` and other module docstrings,
+  `agentteams/ai_bad_habits.py`'s `cross_links`, `tests/test_code_hygiene.py`,
+  `tests/test_ai_bad_habits.py`, `unix-philosophy-mapping-reference.template.md`,
+  `docs_src/api-reference/*`) resolves to code-hygiene's catalog, never technical-validator's — pure
+  prompt text, nothing machine-parses these strings by value. `TV-` confirmed unused elsewhere.
+  Regenerated the 3 test-covered example snapshots (`software-project`, `research-project`,
+  `data-pipeline`). Full plan: `tmp/by-week/2026-W29/technical-validator-ch-rename.plan.md`.
+  **Deliberately not touched by this change** (each independently confirmed, not merely assumed):
+  the self-hosted `.github/agents/technical-validator.agent.md` — a `--self --update --merge
+  --dry-run` confirmed the tool detects the template changed but correctly classifies the file
+  `UNCHANGED`, since the Accuracy Rules table is a USER-EDITABLE section and merge mode preserves
+  already-generated USER-EDITABLE content by design; forcing it current would need a full
+  security-cleared `--overwrite`, disproportionate for a gitignored, non-shipped local artifact.
+  `examples/project-repositories/` — excluded from every pipeline-integration test's parametrize
+  list and found, on independent review, to be 11 files and seven weeks stale (missing
+  `style-guardian.agent.md` entirely, missing a Code-index-consultation feature) for reasons
+  unrelated to this rename; flagged as its own separate resync task rather than folded in here.
+
+- **Four canonical-module process gaps closed after auditing a downstream project's (LingoFriend)
+  real remediation incident** (basis: that project's `workSummaries/daily/2026-07-21.md` and
+  `docs/news-retrieval-enumeration-failure-report.md`, handed off as
+  `lingofriend-agentteams-module-handoff.plan.md` and re-audited against this repo's actual
+  template text before adoption). All changes are additive prose within existing FENCED/
+  USER-EDITABLE sections — no new agent, tool grant, or slot. **(A)** `orchestrator.template.md`
+  Workflow 0 step 2 and `adversarial.template.md`'s "Environmental assumptions" bullet now name
+  composition-root/harness fidelity for live reproductions: a test harness that silently exercises
+  a stand-in wiring instead of the real production entry point can make a negative result ("zero
+  output") indistinguishable from a genuinely reproduced bug. **(B)** `conflict-auditor.template.md`'s
+  `SOURCE_DRIFT` category and `conflict-resolution.template.md`'s matching decision rule now
+  explicitly cover a forward citation — a plan/report path that was never written — not only
+  staleness against a since-changed file; `technical-validator.template.md`'s CH-02 now covers file
+  paths in source-code comments/docs/reports, not only deliverables. **(D)** Workflow 11 Part B's
+  repo-at-large closeout scan adds `{CONFLICT_LOG_PATH}` as a fourth issue source; unlike the other
+  three (summarized and presented only), a conflict-log row found `open` with no `resolution` now
+  gets a real `@conflict-resolution` ACCEPT/REJECT/REVISE decision, since "was this actually fixed
+  already" has a concrete, checkable answer at closeout time. **Deliberately not adopted:** a
+  same-review proposal to also add a plan/report-path grep recipe to
+  `code-hygiene-rules-reference.template.md` — already fully covered by CH-02 and `SOURCE_DRIFT`
+  above, and a third, differently-numbered `CH-` entry for the same concern would worsen the
+  pre-existing `CH-`-prefix collision between `technical-validator.template.md` (CH-01..CH-07) and
+  `code-hygiene.template.md` (CH-01..CH-28) — a known, separately-tracked naming-hygiene item, not
+  part of this change.
+- **`orchestrator.template.md`'s Pre-Execution Requirement now recommends generating/editing
+  `.steps.csv`/`{CONFLICT_LOG_PATH}` rows programmatically and re-parsing any hand-edited row with
+  `agentteams.plan_steps.read_steps()` before trusting it** — an unquoted embedded comma or a stray
+  quote can silently shift every subsequent column in a way visual inspection won't reliably catch.
+
+### fixed
+
+- **`agentteams.plan_steps.read_steps()` no longer lets a column-overflow row leak a stray `None`
+  key (mapped to a list, not a `str`) into its returned `dict[str, str]` rows** — already a
+  violation of this function's own documented return contract
+  (`docs_src/api-reference/plan_steps.md`). A row with more comma-separated values than the header
+  (typically an unquoted comma or stray quote in a hand-edited cell) now emits a `UserWarning`
+  naming the file and physical line number instead of silently discarding the signal. Confirmed
+  against this repo's own gitignored `tmp/by-week/**/*.steps.csv` history, which already carries
+  roughly two dozen such rows predating this fix — the reason this warns rather than raises: raising would
+  break on real existing data the moment anything re-parses it. New coverage:
+  `tests/test_handoff_payloads.py::test_steps_reader_warns_on_column_overflow`.
+
+### added (code-as-agent-harness audit)
+
+Basis: `references/plans/code-as-agent-harness-audit.report.md`, an audit of `agentteams/` against
+["Code as Agent Harness"](https://arxiv.org/abs/2605.18747) — code increasingly serves as the
+operational substrate for agent reasoning, action, and verification, not just a target output.
+Three value-adding gaps were identified, each with its own audited plan
+(`references/plans/code-as-harness-*.plan.md`) and implemented; one candidate (converting the
+conflict-code routing tables in `conflict-auditor`/`conflict-resolution` templates to a
+`mcp_detect.py`-style pure function) was considered and explicitly rejected — applying those rules
+still requires reading files and forming a judgment, so a function would only replace a dict lookup
+a markdown table already serves adequately.
+
+- **`agentteams.memory_index.query_index()` / `agentteams.code_index.query_partition()` /
+  `query_partitions()` now return a computed `confidence` field** (`"reliable"` / `"candidate"` /
+  `"weak"`) per hit, alongside the existing raw `score`. Replaces threshold-interpretation prose
+  ("top-1 ≥ 3.0 is reliable; 1.0–3.0 is candidate...") that had been copy-pasted, and had already
+  drifted, across 6 templates (`conflict-resolution`, `conflict-auditor`, `quality-auditor`,
+  `research-analyst`, `retrieval-integrator`, `tool-doc-researcher`) — `tool-doc-researcher` was
+  missing the vector-strategy fallback the other five carried; all six now cite the code-computed
+  field with a manual-threshold fallback for text-only runtimes, mirroring the existing
+  `handoff_payloads`/`behavioral_drift` documented-dotted-path convention. `code_index.py` keeps its
+  own independent copy of the threshold logic per the module's existing R2-M3 no-import-from-
+  memory_index invariant; the scoring-parity tests now also assert `confidence` parity between the
+  two. `agentteams --query-index`/`--query-code` CLI output prints `confidence=` alongside `score=`.
+  New coverage: `tests/test_memory_index.py`, `tests/test_code_index.py`.
+- **`agentteams.scan` gains `verdict_for_findings()` (HALT/CONDITIONAL_PASS/PASS) and a
+  `python -m agentteams.scan <path>` entrypoint** (mirrors `agentteams.research`'s `__main__`
+  rationale — a runtime with shell/`execute` access but no way to natively `import` and call
+  `scan_content` directly). Closes a real gap: `scan.py`'s deterministic PII/credential/machine-
+  info scanners were wired into exactly one call site (`--scan-security`, generation-time only,
+  against already-emitted `.agent.md` files) — nothing let `@security` invoke them at review time
+  against arbitrary deliverable/diff content, so Rules S-1 and S-8 in `security.template.md` asked
+  the agent to re-derive by eye exactly what `scan.py` already detects by regex. Both rules now cite
+  `agentteams.scan.scan_content(text)` (or the new CLI) as the preferred check, with the existing
+  manual-pattern bullets retained as fallback — no tool-grant change (`@security` stays
+  `['read', 'search']`; the citation follows the same invoke-if-available convention already used
+  for `handoff_payloads`/`behavioral_drift`). The HALT-table's Credential/Machine-specific-info rows
+  now cross-reference `verdict_for_findings()` as their scan-derivable subset — the remaining rows
+  (destructive-op confirmation, external writes, injection attempts) stay procedural judgment calls,
+  not mechanized. New coverage: `tests/test_scan.py`.
+- **New `agentteams.session_scan` module + `python -m agentteams.session_scan [repo_root]`
+  entrypoint** consolidates three of the four issue sources `orchestrator.template.md` Workflow 11
+  Part B ("Repo At-Large Issues") step 1 described as independent hand-run greps —
+  `CHANGELOG.md` "Known Issues" heading, pending/blocked rows in the gitignored `tmp/**/*.steps.csv`
+  tree (via `agentteams.plan_steps.read_steps()`), `git status --short` anomalies — into one
+  `scan_repo_issues()` call returning structured `RepoIssue` records. The fourth source,
+  `{CONFLICT_LOG_PATH}`, is intentionally NOT covered — Part B step 2 already routes it through
+  `@conflict-resolution`'s ACCEPT/REJECT/REVISE decision (a judgment call, not a summarize job) per
+  the in-flight LingoFriend-handoff remediation above; folding it into a generic scanner would
+  regress that. `_scan_git_status` takes an injectable `runner` (mirrors `pr_management.py`'s
+  `_run_gh`/`GhRunner` testability shape) and never shells with `shell=True`. New coverage:
+  `tests/test_session_scan.py`. Dogfooded via `python build_team.py --self --update --merge`
+  against this repo: convergent after one merge pass, post-audit clean, no tracked file touched.
+
 ### added
 
 - **`agentteams[research]` — a real, optional runtime library (web search, curated-source rating,

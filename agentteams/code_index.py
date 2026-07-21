@@ -62,6 +62,23 @@ _B = 0.75
 
 _MAX_PASSAGES_PER_DOC = 24
 _SNIPPETS_PER_HIT = 3
+
+# Per-strategy confidence thresholds — deliberate copy of memory_index's, not an
+# import (R2-M3: this module never imports from memory_index; see module docstring).
+_CONFIDENCE_THRESHOLDS: dict[str, dict[str, float]] = {
+    "lexical": {"reliable": 3.0, "candidate": 1.0},
+    "vector": {"reliable": 0.30, "candidate": 0.20},
+}
+
+
+def _confidence_for(strategy: str, score: float) -> str:
+    """Categorize a raw hit score into "reliable" / "candidate" / "weak"."""
+    bounds = _CONFIDENCE_THRESHOLDS[strategy]
+    if score >= bounds["reliable"]:
+        return "reliable"
+    if score >= bounds["candidate"]:
+        return "candidate"
+    return "weak"
 _PASSAGE_MAX_CHARS = 480
 _SNIPPET_MAX_CHARS = 240
 
@@ -531,6 +548,7 @@ def _ranked_hits(
     *,
     q_terms: list[str],
     idf_map: dict[str, float],
+    strategy: str,
 ) -> list[dict[str, Any]]:
     docs = partition["documents"]
     out: list[dict[str, Any]] = []
@@ -562,6 +580,7 @@ def _ranked_hits(
             "signature": d.get("signature"),
             "provenance": d.get("provenance"),
             "score": round(score, 6),
+            "confidence": _confidence_for(strategy, score),
             "snippet": snippets[0],
             "snippets": snippets,
         })
@@ -591,7 +610,7 @@ def _query_partition_lexical(partition: dict[str, Any], query: str, *, k: int) -
             denom = tf + _K1 * (1.0 - _B + _B * dl / avgdl)
             scores[doc_id] = scores.get(doc_id, 0.0) + idf * (tf * (_K1 + 1.0) / denom)
     ranked = sorted(scores.items(), key=lambda kv: (-kv[1], kv[0]))[:k]
-    return _ranked_hits(partition, ranked, q_terms=q_terms, idf_map=idf_map)
+    return _ranked_hits(partition, ranked, q_terms=q_terms, idf_map=idf_map, strategy="lexical")
 
 
 def _query_partition_vector(partition: dict[str, Any], query: str, *, k: int) -> list[dict[str, Any]]:
@@ -637,7 +656,7 @@ def _query_partition_vector(partition: dict[str, Any], query: str, *, k: int) ->
         if denom > 0.0:
             scores[doc_id] = d / denom
     ranked = sorted(scores.items(), key=lambda kv: (-kv[1], kv[0]))[:k]
-    return _ranked_hits(partition, ranked, q_terms=list(q_weights.keys()), idf_map=idf_map)
+    return _ranked_hits(partition, ranked, q_terms=list(q_weights.keys()), idf_map=idf_map, strategy="vector")
 
 
 def query_partition(
@@ -647,7 +666,11 @@ def query_partition(
     k: int = 5,
     strategy: str = "lexical",
 ) -> list[dict[str, Any]]:
-    """Return the top-*k* hits for *query* within a single partition."""
+    """Return the top-*k* hits for *query* within a single partition.
+
+    Each hit also carries a ``confidence`` field ("reliable" / "candidate" / "weak"),
+    computed from the same per-strategy thresholds callers previously had to apply by hand.
+    """
     if strategy == "lexical":
         return _query_partition_lexical(partition, query, k=k)
     if strategy == "vector":

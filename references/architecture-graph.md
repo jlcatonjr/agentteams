@@ -3,9 +3,9 @@
 
 > **Auto-generated.** Regenerated on every commit that touches the `agentteams` package. Do not edit manually — changes will be overwritten.
 
-- Modules mapped: **96**
+- Modules mapped: **97**
 - Packages: **6**
-- Internal import edges: **164**
+- Internal import edges: **165**
 - Distinct external dependencies: **3**
 
 ---
@@ -22,7 +22,7 @@ Inter-package import dependencies (module-level detail in the tables below).
 
 | Package | Modules | Depends on |
 | --- | --- | --- |
-| `agentteams` | 65 | `agentteams.cli`, `agentteams.enrich`, `agentteams.frameworks`, `agentteams.research` |
+| `agentteams` | 66 | `agentteams.cli`, `agentteams.enrich`, `agentteams.frameworks`, `agentteams.research` |
 | `agentteams.cli` | 11 | `agentteams`, `agentteams.frameworks` |
 | `agentteams.enrich` | 6 | — |
 | `agentteams.eval_adapters` | 2 | — |
@@ -119,7 +119,7 @@ Every module, coloured by package (full adjacency in the table below).
 | `agentteams.model_routing` | — | `agentteams.cli.artifacts` |
 | `agentteams.output_plan` | `agentteams.analyze` | `agentteams.analyze` |
 | `agentteams.parallel_plan` | — | `agentteams.bridge` |
-| `agentteams.plan_steps` | — | — |
+| `agentteams.plan_steps` | — | `agentteams.session_scan` |
 | `agentteams.plan_steps_todo` | — | `agentteams.bridge` |
 | `agentteams.pr_management` | — | — |
 | `agentteams.recipe_fields` | — | `agentteams.analyze` |
@@ -134,6 +134,7 @@ Every module, coloured by package (full adjacency in the table below).
 | `agentteams.scan` | — | `agentteams.cli.generate` |
 | `agentteams.schedule_emit` | `agentteams.atomicio` | `agentteams.bridge` |
 | `agentteams.security_refs` | — | `agentteams.cli.commands`, `agentteams.cli.generate` |
+| `agentteams.session_scan` | `agentteams.plan_steps` | — |
 | `agentteams.stale_detector` | `agentteams.bridge`, `agentteams.drift`, `agentteams.fleet` | `agentteams.cli.commands`, `agentteams.stale_remediate` |
 | `agentteams.stale_remediate` | `agentteams.cli.commands`, `agentteams.fleet`, `agentteams.stale_detector` | `agentteams.cli.commands` |
 | `agentteams.svg_render` | — | `agentteams.architecture`, `agentteams.graph` |
@@ -1161,6 +1162,16 @@ digraph "agentteams architecture" {
       "external": [],
       "repo_local": []
     },
+    "agentteams.session_scan": {
+      "package": "agentteams",
+      "path": "agentteams/session_scan.py",
+      "is_package": false,
+      "imports_internal": [
+        "agentteams.plan_steps"
+      ],
+      "external": [],
+      "repo_local": []
+    },
     "agentteams.stale_detector": {
       "package": "agentteams",
       "path": "agentteams/stale_detector.py",
@@ -1872,6 +1883,10 @@ digraph "agentteams architecture" {
     {
       "source": "agentteams.schedule_emit",
       "target": "agentteams.atomicio"
+    },
+    {
+      "source": "agentteams.session_scan",
+      "target": "agentteams.plan_steps"
     },
     {
       "source": "agentteams.stale_detector",

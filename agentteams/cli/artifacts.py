@@ -396,7 +396,7 @@ def _run_query_index(
         return 1
     for idx, hit in enumerate(hits, start=1):
         print(
-            f"  {idx}. score={hit['score']:.6f}  {hit['title']}\n"
+            f"  {idx}. score={hit['score']:.6f} confidence={hit['confidence']}  {hit['title']}\n"
             f"     path: {hit['path']}\n"
             f"     snippet: {hit['snippet']}"
         )
@@ -819,7 +819,7 @@ def _run_query_code_index(
     for idx, hit in enumerate(hits, start=1):
         label = hit.get("symbol") or hit["title"]
         print(
-            f"  {idx}. score={hit['score']:.6f}  [{hit['source_kind']}] {label}\n"
+            f"  {idx}. score={hit['score']:.6f} confidence={hit['confidence']}  [{hit['source_kind']}] {label}\n"
             f"     path: {hit['path']}\n"
             f"     snippet: {hit['snippet']}"
         )

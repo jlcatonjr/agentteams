@@ -210,13 +210,57 @@ class TestOrchestratorEmission:
         assert template_vars == {"src", "env"}
         assert _validate_recipe_yaml(recipe) == []
 
-    def test_non_orchestrator_recipe_has_no_params(self):
+    def test_non_orchestrator_task_agent_emits_params(self):
+        # Gap 2 (goose-task-agent-structure-handoff-2026-07-20): parameters are no
+        # longer orchestrator-only. A non-orchestrator agent that DECLARES
+        # recipe_parameters is a task-agent and must emit them (so it can be invoked
+        # directly with `goose run --recipe alpha.yaml --params ...`).
         adapter = GooseAdapter()
         manifest = self._manifest(
             recipe_parameters=[{"key": "src", "requirement": "required"}]
         )
         recipe = adapter.render_agent_file(_ORCH_MD, "alpha", manifest)
+        assert "parameters:" in recipe
+        assert "src" in recipe
+
+    def test_non_orchestrator_without_params_is_unchanged(self):
+        # An ordinary (non-task) agent declares no recipe_parameters -> no params
+        # block -> baseline behavior preserved.
+        adapter = GooseAdapter()
+        recipe = adapter.render_agent_file(_ORCH_MD, "alpha", self._manifest())
         assert "parameters:" not in recipe
+
+    def test_non_orchestrator_task_agent_emits_response_schema(self):
+        # Gap 2: recipe_response (structured output) also generalizes beyond the
+        # orchestrator, so a task-agent can declare a verdict schema.
+        adapter = GooseAdapter()
+        manifest = self._manifest(
+            recipe_response={"type": "object", "properties": {"verdict": {"type": "string"}},
+                             "required": ["verdict"]}
+        )
+        recipe = adapter.render_agent_file(_ORCH_MD, "alpha", manifest)
+        assert "response:" in recipe and "json_schema:" in recipe
+
+    def test_extension_scoping_replace_excludes_developer(self):
+        # Gap 1: a least-privilege task-agent can REPLACE the default builtin set
+        # (drop developer/shell). Baseline agents (no declaration) keep developer.
+        adapter = GooseAdapter()
+        baseline = adapter.render_agent_file(_ORCH_MD, "alpha", self._manifest())
+        assert "developer" in baseline  # unchanged default
+
+        scoped = adapter.render_agent_file(
+            _ORCH_MD, "alpha",
+            self._manifest(recipe_extensions=[], recipe_extensions_mode="replace"),
+        )
+        assert "developer" not in scoped  # shell excluded
+
+    def test_extension_scoping_append_is_additive(self):
+        adapter = GooseAdapter()
+        recipe = adapter.render_agent_file(
+            _ORCH_MD, "alpha",
+            self._manifest(recipe_extensions=["memory"], recipe_extensions_mode="append"),
+        )
+        assert "developer" in recipe and "memory" in recipe
 
     def test_orchestrator_without_params_is_unchanged(self):
         adapter = GooseAdapter()

@@ -179,11 +179,18 @@ class TestOrchestratorEmission:
         assert _json_schema_from_recipe(recipe) == _SCHEMA
         assert _validate_recipe_yaml(recipe) == []
 
-    def test_non_orchestrator_has_no_response(self):
+    def test_non_orchestrator_task_agent_gets_response(self):
+        # Gap 2 (goose-task-agent-structure-handoff-2026-07-20): a non-orchestrator
+        # agent that declares recipe_response is a task-agent and emits its schema.
         adapter = GooseAdapter()
         recipe = adapter.render_agent_file(
             _ORCH_MD, "alpha", self._manifest(recipe_response=_SCHEMA)
         )
+        assert "response:" in recipe
+
+    def test_non_orchestrator_without_response_unchanged(self):
+        adapter = GooseAdapter()
+        recipe = adapter.render_agent_file(_ORCH_MD, "alpha", self._manifest())
         assert "response:" not in recipe
 
     def test_orchestrator_without_response_unchanged(self):
