@@ -1,6 +1,6 @@
 {
   "schema_version": "1.0",
-  "generated_at": "2026-07-08T17:07:14.610534+00:00",
+  "generated_at": "2026-07-21T00:03:42.467510+00:00",
   "source_framework": "copilot-vscode",
   "target_framework": "claude",
   "source_dir": "/Users/jamescaton/githubrepositories/agentteams/.github/agents",
@@ -63,7 +63,7 @@
     },
     {
       "path": "agents/navigator.agent.md",
-      "sha256": "1c720eb7a537f1ca6167629a89268fdcfaf13997c4dc47040e735b95bb699cfb"
+      "sha256": "583bd5e0d63033820a2a0af99cc58cee6049e410e0a04bc8f022dd21c974ff83"
     },
     {
       "path": "agents/orchestrator.agent.md",
@@ -91,7 +91,7 @@
     },
     {
       "path": "agents/primary-producer.agent.md",
-      "sha256": "e075bd5a3cc2b76af7ea3e45209b2ac9b0b5d0659360124723c5df4fb744a39f"
+      "sha256": "b6921890731f2e827109831ba51ed1eb6a8801fed1c531631780737e2e3dd8c4"
     },
     {
       "path": "agents/quality-auditor.agent.md",
@@ -107,7 +107,7 @@
     },
     {
       "path": "agents/retrieval-integrator.agent.md",
-      "sha256": "073b700d3118b79c37db742f79abf9a67207f9f257b7f7e7254bf1652e7857ab"
+      "sha256": "155e4f425029c492681fefc66a547db98c9d9282e461beb8add559f5e80054aa"
     },
     {
       "path": "agents/schemas-expert.agent.md",
@@ -115,7 +115,7 @@
     },
     {
       "path": "agents/security.agent.md",
-      "sha256": "de78bd8505bd2595e2d591d36a977e08534015848638a9a8b95ebf1de938a860"
+      "sha256": "2bf01365f55e320fb71962222ec3aa644d68ca4d1f1092f48a3a5c43eae506b9"
     },
     {
       "path": "agents/team-builder.agent.md",
