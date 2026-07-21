@@ -186,6 +186,50 @@ def _validate_recipe_yaml(yaml_text: str, recipes_dir: Path | None = None) -> li
     return violations
 
 
+def _scoped_builtin_extensions(manifest: dict[str, Any]) -> list[str]:
+    """Resolve the builtin extension list for an agent's recipe (Gap 1).
+
+    Backward-compatible: with no manifest declaration, returns the historical
+    ``["developer"]`` default (byte-identical baseline). Opt-in scoping:
+
+      * ``recipe_extensions``: explicit list of builtin extension names.
+      * ``recipe_extensions_mode``: ``"append"`` (default — ``["developer"]`` plus
+        the declared names) or ``"replace"`` (use ONLY the declared list, which may
+        be empty — this is how a least-privilege task-agent excludes ``developer``/
+        shell and relies solely on a scoped MCP, e.g. a fetch-only server).
+
+    Rationale: a task-agent that processes untrusted external input (web pages)
+    must be able to run with NO shell. Changing the global default would break
+    every existing agent, so exclusion is opt-in per agent.
+    """
+    declared = manifest.get("recipe_extensions")
+    mode = str(manifest.get("recipe_extensions_mode") or "append").lower()
+    if declared is not None and mode == "replace":
+        return [str(e) for e in declared]  # may be [] → no developer/shell
+    base = ["developer"]
+    if declared:
+        base = base + [str(e) for e in declared if str(e) not in base]
+    return base
+
+
+def _task_prompt(manifest: dict[str, Any],
+                 recipe_parameters: list[dict[str, str]] | None) -> str | None:
+    """Prompt for a non-orchestrator task-agent (Gap 2).
+
+    Uses an explicit ``recipe_prompt`` when declared; when the agent has
+    ``recipe_parameters`` it appends a ``Runtime inputs:`` line referencing each
+    key via ``{{ key }}`` so the Goose params↔template coupling stays valid (the
+    same coupling the orchestrator emits). Returns None when neither applies, so
+    an ordinary agent's recipe is unchanged.
+    """
+    explicit = manifest.get("recipe_prompt")
+    if not recipe_parameters:
+        return str(explicit) if explicit else None
+    refs = "; ".join(f"{p['key']}={{{{ {p['key']} }}}}" for p in recipe_parameters)
+    runtime = f"Runtime inputs: {refs}"
+    return f"{explicit}\n\n{runtime}" if explicit else runtime
+
+
 class GooseAdapter(FrameworkAdapter):
 
     @property
@@ -214,9 +258,17 @@ class GooseAdapter(FrameworkAdapter):
             if h.get("agent") in team and h.get("agent") != agent_slug
         )
 
-        extensions = ["developer"]
+        # Gap 1: builtin extension set, opt-in scoped per agent (default ["developer"]).
+        extensions = _scoped_builtin_extensions(manifest)
         # Opt-in MCP servers scoped to this agent (empty unless goose:mcp is on).
         mcp_exts, mcp_notes = _mcp_recipe_extensions(manifest, agent_slug)
+
+        # Gap 2: parameters / response / retry are available to ANY agent whose
+        # manifest declares them (previously orchestrator-only). An ordinary agent
+        # declares none → these are None → its recipe is unchanged.
+        recipe_parameters = manifest.get("recipe_parameters") or None
+        recipe_response = manifest.get("recipe_response") or None
+        recipe_retry = manifest.get("recipe_retry") or None
 
         if agent_slug == "orchestrator":
             sub_recipes = [
@@ -239,22 +291,16 @@ class GooseAdapter(FrameworkAdapter):
                 })
             if sub_recipes:
                 extensions.append("summon")
-            # Phase-4a (opt-in): emit declared recipe parameters on the orchestrator
-            # (the team entry point) and reference each key in a controlled prompt
-            # suffix so the Goose params<->{{ template }} coupling stays valid.
-            recipe_parameters = manifest.get("recipe_parameters") or None
+            # Phase-4a: reference declared parameter keys in the orchestrator's
+            # probe prompt so the Goose params<->{{ template }} coupling stays valid.
+            # (recipe_parameters / recipe_response / recipe_retry are resolved above,
+            # now for every agent — Gap 2 — not just the orchestrator.)
             prompt = _ORCHESTRATOR_PROBE_PROMPT
             if recipe_parameters:
                 refs = "; ".join(
                     f"{p['key']}={{{{ {p['key']} }}}}" for p in recipe_parameters
                 )
                 prompt = f"{prompt}\n\nRuntime inputs: {refs}"
-            # Phase-4b (opt-in): emit a declared response json_schema so goose
-            # validates the orchestrator's final output against it.
-            recipe_response = manifest.get("recipe_response") or None
-            # Phase-4c (opt-in): emit a bounded retry block so goose re-runs the
-            # orchestrator until the declared shell checks pass.
-            recipe_retry = manifest.get("recipe_retry") or None
             return _emit_recipe(
                 title=name,
                 description=description,
@@ -275,11 +321,19 @@ class GooseAdapter(FrameworkAdapter):
         if targets:
             body = body + "\n\n" + _load_section(targets)
             extensions.append("summon")
+        # Gap 2: a non-orchestrator agent that declares parameters/response/retry is
+        # a task-agent; emit them (and a params-coupled prompt). An agent declaring
+        # none passes all-None → byte-identical to the prior baseline.
+        prompt = _task_prompt(manifest, recipe_parameters)
         return _emit_recipe(
             title=name,
             description=description,
             instructions=body,
             extensions=extensions,
+            prompt=prompt,
+            parameters=recipe_parameters,
+            response=recipe_response,
+            retry=recipe_retry,
             mcp_extensions=mcp_exts,
             mcp_notes=mcp_notes,
         )
@@ -750,6 +804,16 @@ def _emit_recipe(
             lines += [
                 "  - type: platform",
                 "    name: summon",
+            ]
+        else:
+            # Generic builtin (Gap 1: scoped recipe_extensions may name other
+            # bundled servers, e.g. memory). Rendered with the same bundled/timeout
+            # shape as developer so goose treats it as a builtin extension.
+            lines += [
+                "  - type: builtin",
+                f"    name: {_yaml_dq(ext)}",
+                "    bundled: true",
+                "    timeout: 300",
             ]
     for mx in mcp_extensions or []:
         lines.append(f"  - type: {mx['type']}")

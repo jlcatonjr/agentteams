@@ -174,10 +174,18 @@ class TestOrchestratorEmission:
         assert "  timeout_seconds: 300\n" in recipe  # bounded default injected
         assert _validate_recipe_yaml(recipe) == []
 
-    def test_non_orchestrator_has_no_retry(self):
+    def test_non_orchestrator_task_agent_gets_retry(self):
+        # Gap 2 (goose-task-agent-structure-handoff-2026-07-20): retry generalizes
+        # beyond the orchestrator too; a task-agent that declares recipe_retry emits
+        # it (opt-in — an agent declaring none is unchanged).
         adapter = GooseAdapter()
         norm = _normalize_recipe_retry(_RETRY)
         recipe = adapter.render_agent_file(_ORCH_MD, "alpha", self._manifest(recipe_retry=norm))
+        assert "retry:" in recipe
+
+    def test_non_orchestrator_without_retry_unchanged(self):
+        adapter = GooseAdapter()
+        recipe = adapter.render_agent_file(_ORCH_MD, "alpha", self._manifest())
         assert "retry:" not in recipe
 
     def test_orchestrator_without_retry_unchanged(self):
