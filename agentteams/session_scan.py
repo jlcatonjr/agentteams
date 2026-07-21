@@ -1,11 +1,15 @@
 """session_scan.py — deterministic repo at-large issue scan (orchestrator Workflow 11 Part B).
 
 Consolidates the three still-manual issue sources Part B step 1 describes in prose — CHANGELOG.md
-"Known Issues", tmp/**/*.steps.csv pending/blocked rows, git status --short anomalies — into one
-function returning structured findings, instead of three independently hand-run greps. The fourth
-source, {CONFLICT_LOG_PATH}, is intentionally NOT covered here: orchestrator.template.md step 2
-already routes it through @conflict-resolution's ACCEPT/REJECT/REVISE decision, a judgment call
-this module doesn't attempt to replace.
+"Known Issues", pending/blocked rows in the gitignored plan-steps tree, git status --short
+anomalies — into one function returning structured findings, instead of three independently
+hand-run greps. The fourth source, {CONFLICT_LOG_PATH}, is intentionally NOT covered here:
+orchestrator.template.md step 2 already routes it through @conflict-resolution's ACCEPT/REJECT/
+REVISE decision, a judgment call this module doesn't attempt to replace.
+
+RSR1 note: every path below under the gitignored plan-steps tree is read via ``glob()``/``status``,
+which return empty on a fresh clone rather than raising — no durable code here depends on the
+directory existing.
 
 Also exposes ``python -m agentteams.session_scan [repo_root]`` for a shell-only runtime.
 """
@@ -69,11 +73,13 @@ def _scan_changelog_known_issues(repo_root: Path) -> list[RepoIssue]:
 def _scan_pending_blocked_steps(
     repo_root: Path, *, exclude_paths: set[Path] | None = None
 ) -> list[RepoIssue]:
-    """Return pending/blocked rows from tmp/by-week/**/*.steps.csv and legacy tmp/*.steps.csv."""
+    """Return pending/blocked rows from the gitignored plan-steps tree (current + legacy layout)."""
     exclude = {p.resolve() for p in (exclude_paths or set())}
-    csv_paths = sorted(
-        {*repo_root.glob("tmp/by-week/**/*.steps.csv"), *repo_root.glob("tmp/*.steps.csv")}
-    )
+    # glob() returns empty on a fresh clone rather than raising, since these paths are gitignored.
+    csv_paths = sorted({
+        *repo_root.glob("tmp/by-week/**/*.steps.csv"),  # gitignored
+        *repo_root.glob("tmp/*.steps.csv"),  # gitignored
+    })
 
     issues: list[RepoIssue] = []
     for csv_path in csv_paths:
@@ -109,7 +115,7 @@ def _run_git(argv: list[str]) -> subprocess.CompletedProcess:
 def _scan_git_status(
     repo_root: Path, *, known_output_paths: set[str] | None = None, runner: GitRunner = _run_git
 ) -> list[RepoIssue]:
-    """Return git-status anomalies: untracked tmp/ files, or modified files outside known outputs."""
+    """Return git-status anomalies: untracked gitignored-tmp/ files, or modified files outside known outputs."""
     known = known_output_paths or set()
     result = runner(["-C", str(repo_root), "status", "--short"])
     if result.returncode != 0:
@@ -122,7 +128,7 @@ def _scan_git_status(
         code = line[:2]
         path = line[3:].strip().strip('"')
         untracked = code.strip() == "??"
-        if untracked and path.startswith("tmp/"):
+        if untracked and path.startswith("tmp/"):  # tmp/ is gitignored, so untracked here is expected
             issues.append(RepoIssue(source="git_status", path=path, detail=f"untracked ({code.strip()})"))
         elif not untracked and path not in known:
             issues.append(RepoIssue(source="git_status", path=path, detail=f"modified outside known outputs ({code.strip()})"))

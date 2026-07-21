@@ -80,8 +80,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   (`docs_src/api-reference/plan_steps.md`). A row with more comma-separated values than the header
   (typically an unquoted comma or stray quote in a hand-edited cell) now emits a `UserWarning`
   naming the file and physical line number instead of silently discarding the signal. Confirmed
-  against this repo's own `tmp/by-week/**/*.steps.csv` history, which already carries roughly two
-  dozen such rows predating this fix — the reason this warns rather than raises: raising would
+  against this repo's own gitignored `tmp/by-week/**/*.steps.csv` history, which already carries
+  roughly two dozen such rows predating this fix — the reason this warns rather than raises: raising would
   break on real existing data the moment anything re-parses it. New coverage:
   `tests/test_handoff_payloads.py::test_steps_reader_warns_on_column_overflow`.
 
@@ -128,8 +128,8 @@ a markdown table already serves adequately.
 - **New `agentteams.session_scan` module + `python -m agentteams.session_scan [repo_root]`
   entrypoint** consolidates three of the four issue sources `orchestrator.template.md` Workflow 11
   Part B ("Repo At-Large Issues") step 1 described as independent hand-run greps —
-  `CHANGELOG.md` "Known Issues" heading, `tmp/**/*.steps.csv` pending/blocked rows (via
-  `agentteams.plan_steps.read_steps()`), `git status --short` anomalies — into one
+  `CHANGELOG.md` "Known Issues" heading, pending/blocked rows in the gitignored `tmp/**/*.steps.csv`
+  tree (via `agentteams.plan_steps.read_steps()`), `git status --short` anomalies — into one
   `scan_repo_issues()` call returning structured `RepoIssue` records. The fourth source,
   `{CONFLICT_LOG_PATH}`, is intentionally NOT covered — Part B step 2 already routes it through
   `@conflict-resolution`'s ACCEPT/REJECT/REVISE decision (a judgment call, not a summarize job) per
