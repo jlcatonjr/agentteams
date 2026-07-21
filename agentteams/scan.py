@@ -7,11 +7,21 @@ Scans .agent.md and related files in a generated agents directory for:
     - High-entropy secret-like tokens in sensitive contexts
   - Unresolved auto-placeholders ({UPPER_SNAKE_CASE} tokens)
   - Unresolved manual placeholders ({MANUAL:*} still present after setup)
+
+Also exposes ``python -m agentteams.scan <path>`` so a runtime with shell/``execute``
+access but no way to natively ``import`` and call ``scan_content`` directly can invoke
+the scanner at review time (not just at generation time via ``--scan-security``), and
+``verdict_for_findings()`` — a pure mapping from scan findings to the HALT/CONDITIONAL
+PASS/PASS verdict for the scan-derivable subset of security.template.md's escalation table.
 """
 
 from __future__ import annotations
 
+import argparse
+import json
 import re
+import sys
+from collections.abc import Iterable
 from dataclasses import dataclass, field
 from pathlib import Path
 
@@ -125,6 +135,33 @@ class ScanReport:
     def low_count(self) -> int:
         """Return the count of low-severity findings."""
         return sum(1 for f in self.findings if f.severity == "low")
+
+    @property
+    def verdict(self) -> str:
+        """Return the HALT/CONDITIONAL_PASS/PASS verdict for this report's findings."""
+        return verdict_for_findings(self.findings)
+
+
+HALT = "HALT"
+CONDITIONAL_PASS = "CONDITIONAL_PASS"
+PASS = "PASS"
+
+
+def verdict_for_findings(findings: Iterable[ScanFinding]) -> str:
+    """Map scan findings to the security template's HALT/CONDITIONAL PASS/PASS verdict.
+
+    Covers only the scan-derivable subset of security.template.md's escalation table
+    (credential, PII-path, machine-specific-info, unresolved-placeholder findings).
+    Procedural findings in that table (bulk destructive ops, external-repo writes,
+    injection attempts) aren't derivable from a static content scan and remain the
+    agent's own judgment call.
+    """
+    severities = {f.severity for f in findings}
+    if "high" in severities:
+        return HALT
+    if severities:
+        return CONDITIONAL_PASS
+    return PASS
 
 
 # ---------------------------------------------------------------------------
@@ -431,3 +468,31 @@ def _token_entropy(token: str) -> float:
         probability = count / total
         entropy -= probability * __import__("math").log2(probability)
     return entropy
+
+
+def main(argv: list[str] | None = None) -> int:
+    """``python -m agentteams.scan <path>`` — scan a file's current content, or ``-`` for stdin.
+
+    Exists for a runtime with shell/``execute`` access but no way to natively ``import`` and
+    call ``scan_content`` directly — mirrors ``agentteams.research``'s ``__main__`` rationale.
+    Prints JSON: ``{"findings": [...], "verdict": "HALT"|"CONDITIONAL_PASS"|"PASS"}``.
+    Exit code 1 iff verdict is HALT (mirrors --scan-security's high_count gate), else 0.
+    """
+    parser = argparse.ArgumentParser(prog="python -m agentteams.scan")
+    parser.add_argument("path", help="File to scan, or '-' to read stdin")
+    args = parser.parse_args(argv)
+
+    content = sys.stdin.read() if args.path == "-" else Path(args.path).read_text(encoding="utf-8")
+    filename = "<stdin>" if args.path == "-" else args.path
+    findings = scan_content(content, filename=filename)
+    verdict = verdict_for_findings(findings)
+    json.dump(
+        {"findings": [f.__dict__ for f in findings], "verdict": verdict},
+        sys.stdout, indent=2,
+    )
+    sys.stdout.write("\n")
+    return 1 if verdict == HALT else 0
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())

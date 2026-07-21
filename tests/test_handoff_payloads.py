@@ -228,3 +228,23 @@ def test_steps_reader_tolerates_quoted_multiline_notes(tmp_path):
     assert "line one" in rows[0]["notes"]
     assert "line two" in rows[0]["notes"]
     assert rows[1]["payload_schema_in"] == "foo/v1.schema.json"
+
+
+# ---------- steps reader warns (not raises) on a column-overflow row ----------
+def test_steps_reader_warns_on_column_overflow(tmp_path):
+    # An unquoted comma inside `notes` shifts an extra value past the header —
+    # the exact corruption class a hand-edited row can introduce.
+    csv_text = textwrap.dedent(
+        '''\
+        step,agent,action,inputs,outputs,status,notes
+        1,@x,do thing,in.txt,out.txt,done,unquoted, comma splits this row
+        2,@y,do other,in2.txt,out2.txt,pending,clean row
+        '''
+    )
+    p = tmp_path / "x.steps.csv"
+    p.write_text(csv_text, encoding="utf-8")
+    with pytest.warns(UserWarning, match="more fields than the header"):
+        rows = read_steps(p)
+    assert len(rows) == 2
+    assert None not in rows[0]  # overflow key must not leak into the returned dict
+    assert rows[1]["notes"] == "clean row"  # well-formed rows are unaffected

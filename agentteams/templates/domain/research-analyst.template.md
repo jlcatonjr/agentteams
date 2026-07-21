@@ -61,7 +61,7 @@ they point at genuine runtime code the project must have installed, not just at 
    you invoke directly by shelling out. If a verification task needs them and no such integration
    exists in this project yet, say so explicitly rather than improvising a workaround.
 
-<!-- AGENTTEAMS:BEGIN memory_index_consultation v=2 -->
+<!-- AGENTTEAMS:BEGIN memory_index_consultation v=3 -->
 ## Memory-index consultation *(applies when `references/memory-index.json` is present)*
 
 Before researching a topic from scratch, check whether a prior finding, source rating, or
@@ -76,10 +76,12 @@ Fall back to `--query-strategy vector` when **either** (a) lexical returns zero 
 the lexical top-1 has no content-word overlap with the query (single-term false-positive guard),
 **or** (c) the question is conceptual rather than about a named topic/claim.
 
-Per-strategy thresholds (the two scales are not comparable):
-- **Lexical:** top-1 ≥ 3.0 is a reliable hit; 1.0–3.0 is candidate-for-inspection.
-- **Vector:** top-1 ≥ 0.30 is reliable; 0.20–0.30 is candidate-for-inspection. These floors are
-  corpus-specific guidance, not a mathematical cap.
+Each hit's `confidence` field (`reliable` / `candidate` / `weak`) is computed by
+`agentteams.memory_index.query_index()` from the same per-strategy thresholds this section used to
+restate by hand — treat `reliable` as an actionable hit, `candidate` as worth opening before relying
+on it, and `weak` as noise. If your runtime can't read the structured field, fall back to: lexical
+top-1 ≥ 3.0 reliable / 1.0–3.0 candidate-for-inspection; vector top-1 ≥ 0.30 reliable / 0.20–0.30
+candidate-for-inspection (corpus-specific guidance, not a mathematical cap).
 
 A prior finding is historical context, not settled truth — re-verify against current evidence per
 the Invariant Core's honest-ceiling rules before restating it. Never block on the index.

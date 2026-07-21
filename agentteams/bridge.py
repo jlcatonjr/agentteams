@@ -661,7 +661,10 @@ def _render_target_files(
                 "# Goose Bridge\n\n"
                 + _wrap_fence(
                     "goose-bridge-readme",
-                    "Lightweight bridge; source files are canonical.\n",
+                    "Lightweight bridge; source files are canonical. See "
+                    f"`{rel_quickstart}` for operational guidance (retrieval-first "
+                    "protocol, --bridge-check scope, MCP wiring).\n",
+                    version=2,
                 ),
             ),
         ]

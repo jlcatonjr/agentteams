@@ -150,6 +150,41 @@ def test_query_with_no_matching_terms_returns_empty(tmp_path):
     assert query_index(idx, "completely unrelated cryptographic terms") == []
 
 
+# ------------------------------ confidence tiers ------------------------------
+
+def test_confidence_for_lexical_thresholds():
+    from agentteams.memory_index import _confidence_for
+    assert _confidence_for("lexical", 3.0) == "reliable"
+    assert _confidence_for("lexical", 5.0) == "reliable"
+    assert _confidence_for("lexical", 1.0) == "candidate"
+    assert _confidence_for("lexical", 2.9) == "candidate"
+    assert _confidence_for("lexical", 0.99) == "weak"
+    assert _confidence_for("lexical", 0.0) == "weak"
+
+
+def test_confidence_for_vector_thresholds():
+    from agentteams.memory_index import _confidence_for
+    assert _confidence_for("vector", 0.30) == "reliable"
+    assert _confidence_for("vector", 1.0) == "reliable"
+    assert _confidence_for("vector", 0.20) == "candidate"
+    assert _confidence_for("vector", 0.29) == "candidate"
+    assert _confidence_for("vector", 0.19) == "weak"
+    assert _confidence_for("vector", 0.0) == "weak"
+
+
+def test_query_index_hits_carry_confidence_field(tmp_path):
+    a = tmp_path / "drift.md"
+    a.write_text("# Drift\n\nDrift detection compares template hashes to a baseline.\n" * 4)
+    b = tmp_path / "handoff.md"
+    b.write_text("# Handoff\n\nTyped handoff payloads validate against schemas.\n")
+    idx = build_memory_index([a, b])
+    for strategy in ("lexical", "vector"):
+        hits = query_index(idx, "drift baseline template", strategy=strategy)
+        assert hits, f"expected hits for strategy={strategy}"
+        for hit in hits:
+            assert hit["confidence"] in ("reliable", "candidate", "weak")
+
+
 def test_is_index_stale_detects_newer_source(tmp_path):
     src = tmp_path / "daily.md"
     src.write_text("# Daily\n\nFirst entry.\n")

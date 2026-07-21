@@ -56,6 +56,27 @@ _B = 0.75
 _MAX_PARAGRAPHS_PER_DOC = 20
 _SNIPPETS_PER_HIT = 3
 
+# Per-strategy confidence thresholds (the two scales are not comparable —
+# lexical is an unbounded BM25 score, vector is a cosine similarity in
+# [0, 1]). These are the same thresholds templates under agentteams/templates/
+# used to restate as prose in a memory_index_consultation fence; query_index()
+# now computes the categorical label directly so that prose can cite the field
+# instead of re-deriving it.
+_CONFIDENCE_THRESHOLDS: dict[str, dict[str, float]] = {
+    "lexical": {"reliable": 3.0, "candidate": 1.0},
+    "vector": {"reliable": 0.30, "candidate": 0.20},
+}
+
+
+def _confidence_for(strategy: str, score: float) -> str:
+    """Categorize a raw hit score into "reliable" / "candidate" / "weak"."""
+    bounds = _CONFIDENCE_THRESHOLDS[strategy]
+    if score >= bounds["reliable"]:
+        return "reliable"
+    if score >= bounds["candidate"]:
+        return "candidate"
+    return "weak"
+
 # Small, generic English stopword set. Kept deliberately short so it is
 # obvious and reproducible; do not balloon this into a dependency.
 _STOPWORDS = frozenset({
@@ -333,6 +354,7 @@ def _ranked_hits(
     *,
     q_terms: list[str],
     idf_map: dict[str, float],
+    strategy: str,
 ) -> list[dict[str, Any]]:
     """Format ranked doc_ids into API hit records with dynamic snippets."""
     docs = index["documents"]
@@ -361,6 +383,7 @@ def _ranked_hits(
             "path": d["path"],
             "title": d["title"],
             "score": round(score, 6),
+            "confidence": _confidence_for(strategy, score),
             "snippet": snippets[0],
             "snippets": snippets,
         })
@@ -393,7 +416,7 @@ def _query_index_lexical(index: dict[str, Any], query: str, *, k: int = 5) -> li
             scores[doc_id] = scores.get(doc_id, 0.0) + idf * (tf * (_K1 + 1.0) / denom)
 
     ranked = sorted(scores.items(), key=lambda kv: (-kv[1], kv[0]))[:k]
-    return _ranked_hits(index, ranked, q_terms=q_terms, idf_map=idf_map)
+    return _ranked_hits(index, ranked, q_terms=q_terms, idf_map=idf_map, strategy="lexical")
 
 
 def _query_index_vector(index: dict[str, Any], query: str, *, k: int = 5) -> list[dict[str, Any]]:
@@ -467,7 +490,7 @@ def _query_index_vector(index: dict[str, Any], query: str, *, k: int = 5) -> lis
             scores[doc_id] = d / denom
 
     ranked = sorted(scores.items(), key=lambda kv: (-kv[1], kv[0]))[:k]
-    return _ranked_hits(index, ranked, q_terms=list(q_weights.keys()), idf_map=idf_map)
+    return _ranked_hits(index, ranked, q_terms=list(q_weights.keys()), idf_map=idf_map, strategy="vector")
 
 
 def query_index(
@@ -482,6 +505,9 @@ def query_index(
     Strategies:
     - ``"lexical"``: BM25 lexical scoring (default).
     - ``"vector"``: sparse vector-space cosine scoring (deterministic, stdlib-only).
+
+    Each hit also carries a ``confidence`` field ("reliable" / "candidate" / "weak"),
+    computed from the same per-strategy thresholds callers previously had to apply by hand.
     """
     if strategy == "lexical":
         return _query_index_lexical(index, query, k=k)

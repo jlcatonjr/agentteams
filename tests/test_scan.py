@@ -2,9 +2,23 @@
 Tests for src/scan.py — security scanner for generated agent files.
 """
 
+import json
+import subprocess
+import sys
+
 import pytest
 from pathlib import Path
-from agentteams.scan import scan_directory, scan_content, ScanReport, ScanFinding
+from agentteams.scan import (
+    CONDITIONAL_PASS,
+    HALT,
+    PASS,
+    ScanFinding,
+    ScanReport,
+    main as scan_main,
+    scan_content,
+    scan_directory,
+    verdict_for_findings,
+)
 
 
 # ---------------------------------------------------------------------------
@@ -414,4 +428,74 @@ def test_entropy_genuine_mixed_token_still_flagged():
     findings = scan_content(content)
     cred = [f for f in findings if f.category == "credential"]
     assert cred, "Genuine mixed-alphanumeric secret token should still be flagged"
+
+
+# ---------------------------------------------------------------------------
+# verdict_for_findings / ScanReport.verdict
+# ---------------------------------------------------------------------------
+
+def test_verdict_empty_findings_is_pass():
+    assert verdict_for_findings([]) == PASS
+
+
+def test_verdict_low_or_medium_only_is_conditional_pass():
+    findings = [
+        ScanFinding(file="a.md", line=1, category="unresolved-auto", severity="low",
+                    message="m", snippet="s"),
+    ]
+    assert verdict_for_findings(findings) == CONDITIONAL_PASS
+
+
+def test_verdict_any_high_is_halt():
+    findings = [
+        ScanFinding(file="a.md", line=1, category="unresolved-auto", severity="low",
+                    message="m", snippet="s"),
+        ScanFinding(file="a.md", line=2, category="credential", severity="high",
+                    message="m", snippet="s"),
+    ]
+    assert verdict_for_findings(findings) == HALT
+
+
+def test_scan_report_verdict_property_matches_findings():
+    report = ScanReport(scanned_files=1, findings=[
+        ScanFinding(file="a.md", line=1, category="credential", severity="high",
+                    message="m", snippet="s"),
+    ])
+    assert report.verdict == HALT
+    assert ScanReport().verdict == PASS
+
+
+# ---------------------------------------------------------------------------
+# python -m agentteams.scan — review-time CLI
+# ---------------------------------------------------------------------------
+
+def test_main_returns_1_and_halt_verdict_for_credential(tmp_path, capsys):
+    f = tmp_path / "sample.md"
+    f.write_text('password: "hunter2222"\n')
+    rc = scan_main([str(f)])
+    assert rc == 1
+    out = json.loads(capsys.readouterr().out)
+    assert out["verdict"] == "HALT"
+    assert out["findings"]
+
+
+def test_main_returns_0_and_pass_verdict_for_clean_content(tmp_path, capsys):
+    f = tmp_path / "sample.md"
+    f.write_text("hello world\n")
+    rc = scan_main([str(f)])
+    assert rc == 0
+    out = json.loads(capsys.readouterr().out)
+    assert out["verdict"] == "PASS"
+    assert out["findings"] == []
+
+
+def test_main_reads_stdin_with_dash_path():
+    result = subprocess.run(
+        [sys.executable, "-m", "agentteams.scan", "-"],
+        input='password: "hunter2222"\n',
+        capture_output=True, text=True, cwd=Path(__file__).parent.parent,
+    )
+    assert result.returncode == 1
+    out = json.loads(result.stdout)
+    assert out["verdict"] == "HALT"
 
