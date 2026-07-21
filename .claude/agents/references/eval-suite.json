@@ -1,0 +1,212 @@
+{
+  "artifact_type": "eval-suite",
+  "eval_suite_schema_version": "1.0",
+  "project_name": "AgentTeamsModule",
+  "framework": "claude",
+  "generated_from": "manifest",
+  "scenarios": [
+    {
+      "id": "routing-orchestrator-knows-all-experts",
+      "category": "routing",
+      "claim": "The orchestrator's agents: list includes every workstream expert, so it can route to each declared component.",
+      "predicate": {
+        "kind": "frontmatter-list-contains-all",
+        "file": "orchestrator.agent.md",
+        "field": "agents",
+        "values": [
+          "template-library-expert",
+          "pipeline-core-expert",
+          "framework-adapters-expert",
+          "schemas-expert",
+          "cli-and-examples-expert",
+          "test-suite-expert"
+        ]
+      }
+    },
+    {
+      "id": "routing-expert-count-matches-components",
+      "category": "routing",
+      "claim": "Exactly 6 workstream-expert agent file(s) are emitted for 6 declared component(s).",
+      "predicate": {
+        "kind": "agent-count",
+        "suffix": "-expert.agent.md",
+        "count": 6
+      }
+    },
+    {
+      "id": "handoff-template-library",
+      "category": "handoff",
+      "claim": "template-library-expert receives upstream from pipeline-core-expert, schemas-expert and returns to the orchestrator (coordination is orchestrator-mediated, not peer-to-peer).",
+      "predicate": {
+        "kind": "handoff-chain",
+        "chain": [
+          "pipeline-core-expert",
+          "schemas-expert",
+          "template-library-expert"
+        ],
+        "returns_to": "orchestrator"
+      }
+    },
+    {
+      "id": "governance-template-library-triad-and-return",
+      "category": "governance",
+      "claim": "template-library-expert wires the worker-governance triad (primary-producer, adversarial, reference-manager) and includes a 'Return to Orchestrator' edge.",
+      "predicate": {
+        "kind": "frontmatter-and-body",
+        "file": "template-library-expert.agent.md",
+        "agents_contains_all": [
+          "primary-producer",
+          "adversarial",
+          "reference-manager"
+        ],
+        "body_contains": "Return to Orchestrator"
+      }
+    },
+    {
+      "id": "handoff-pipeline-core",
+      "category": "handoff",
+      "claim": "pipeline-core-expert receives upstream from template-library-expert, framework-adapters-expert, schemas-expert and returns to the orchestrator (coordination is orchestrator-mediated, not peer-to-peer).",
+      "predicate": {
+        "kind": "handoff-chain",
+        "chain": [
+          "template-library-expert",
+          "framework-adapters-expert",
+          "schemas-expert",
+          "pipeline-core-expert"
+        ],
+        "returns_to": "orchestrator"
+      }
+    },
+    {
+      "id": "governance-pipeline-core-triad-and-return",
+      "category": "governance",
+      "claim": "pipeline-core-expert wires the worker-governance triad (primary-producer, adversarial, reference-manager) and includes a 'Return to Orchestrator' edge.",
+      "predicate": {
+        "kind": "frontmatter-and-body",
+        "file": "pipeline-core-expert.agent.md",
+        "agents_contains_all": [
+          "primary-producer",
+          "adversarial",
+          "reference-manager"
+        ],
+        "body_contains": "Return to Orchestrator"
+      }
+    },
+    {
+      "id": "handoff-framework-adapters",
+      "category": "handoff",
+      "claim": "framework-adapters-expert receives upstream from pipeline-core-expert, template-library-expert and returns to the orchestrator (coordination is orchestrator-mediated, not peer-to-peer).",
+      "predicate": {
+        "kind": "handoff-chain",
+        "chain": [
+          "pipeline-core-expert",
+          "template-library-expert",
+          "framework-adapters-expert"
+        ],
+        "returns_to": "orchestrator"
+      }
+    },
+    {
+      "id": "governance-framework-adapters-triad-and-return",
+      "category": "governance",
+      "claim": "framework-adapters-expert wires the worker-governance triad (primary-producer, adversarial, reference-manager) and includes a 'Return to Orchestrator' edge.",
+      "predicate": {
+        "kind": "frontmatter-and-body",
+        "file": "framework-adapters-expert.agent.md",
+        "agents_contains_all": [
+          "primary-producer",
+          "adversarial",
+          "reference-manager"
+        ],
+        "body_contains": "Return to Orchestrator"
+      }
+    },
+    {
+      "id": "handoff-schemas",
+      "category": "handoff",
+      "claim": "schemas-expert receives upstream from pipeline-core-expert and returns to the orchestrator (coordination is orchestrator-mediated, not peer-to-peer).",
+      "predicate": {
+        "kind": "handoff-chain",
+        "chain": [
+          "pipeline-core-expert",
+          "schemas-expert"
+        ],
+        "returns_to": "orchestrator"
+      }
+    },
+    {
+      "id": "governance-schemas-triad-and-return",
+      "category": "governance",
+      "claim": "schemas-expert wires the worker-governance triad (primary-producer, adversarial, reference-manager) and includes a 'Return to Orchestrator' edge.",
+      "predicate": {
+        "kind": "frontmatter-and-body",
+        "file": "schemas-expert.agent.md",
+        "agents_contains_all": [
+          "primary-producer",
+          "adversarial",
+          "reference-manager"
+        ],
+        "body_contains": "Return to Orchestrator"
+      }
+    },
+    {
+      "id": "handoff-cli-and-examples",
+      "category": "handoff",
+      "claim": "cli-and-examples-expert receives upstream from pipeline-core-expert, framework-adapters-expert, schemas-expert and returns to the orchestrator (coordination is orchestrator-mediated, not peer-to-peer).",
+      "predicate": {
+        "kind": "handoff-chain",
+        "chain": [
+          "pipeline-core-expert",
+          "framework-adapters-expert",
+          "schemas-expert",
+          "cli-and-examples-expert"
+        ],
+        "returns_to": "orchestrator"
+      }
+    },
+    {
+      "id": "governance-cli-and-examples-triad-and-return",
+      "category": "governance",
+      "claim": "cli-and-examples-expert wires the worker-governance triad (primary-producer, adversarial, reference-manager) and includes a 'Return to Orchestrator' edge.",
+      "predicate": {
+        "kind": "frontmatter-and-body",
+        "file": "cli-and-examples-expert.agent.md",
+        "agents_contains_all": [
+          "primary-producer",
+          "adversarial",
+          "reference-manager"
+        ],
+        "body_contains": "Return to Orchestrator"
+      }
+    },
+    {
+      "id": "handoff-test-suite",
+      "category": "handoff",
+      "claim": "test-suite-expert receives upstream from pipeline-core-expert, cli-and-examples-expert and returns to the orchestrator (coordination is orchestrator-mediated, not peer-to-peer).",
+      "predicate": {
+        "kind": "handoff-chain",
+        "chain": [
+          "pipeline-core-expert",
+          "cli-and-examples-expert",
+          "test-suite-expert"
+        ],
+        "returns_to": "orchestrator"
+      }
+    },
+    {
+      "id": "governance-test-suite-triad-and-return",
+      "category": "governance",
+      "claim": "test-suite-expert wires the worker-governance triad (primary-producer, adversarial, reference-manager) and includes a 'Return to Orchestrator' edge.",
+      "predicate": {
+        "kind": "frontmatter-and-body",
+        "file": "test-suite-expert.agent.md",
+        "agents_contains_all": [
+          "primary-producer",
+          "adversarial",
+          "reference-manager"
+        ],
+        "body_contains": "Return to Orchestrator"
+      }
+    }
+  ]
+}
