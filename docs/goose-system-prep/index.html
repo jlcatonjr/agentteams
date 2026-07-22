@@ -1,0 +1,3682 @@
+
+<!doctype html>
+<html lang="en" class="no-js">
+  <head>
+    
+      <meta charset="utf-8">
+      <meta name="viewport" content="width=device-width,initial-scale=1">
+      
+        <meta name="description" content="Generate a complete, coordinated AI agent team for any project from a single description file.">
+      
+      
+        <meta name="author" content="jlcatonjr">
+      
+      
+        <link rel="canonical" href="https://jlcatonjr.github.io/agentteams/goose-system-prep/">
+      
+      
+        <link rel="prev" href="../verification-environment/">
+      
+      
+        <link rel="next" href="../goose-cheat-sheet/">
+      
+      
+        
+      
+      
+      <link rel="icon" href="../assets/images/favicon.png">
+      <meta name="generator" content="mkdocs-1.6.1, mkdocs-material-9.7.6">
+    
+    
+      
+        <title>System Prep & Source/Model Switch - Agent Teams Module</title>
+      
+    
+    
+      <link rel="stylesheet" href="../assets/stylesheets/main.484c7ddc.min.css">
+      
+        
+        <link rel="stylesheet" href="../assets/stylesheets/palette.ab4e12ef.min.css">
+      
+      
+
+
+    
+    
+      
+    
+    
+      
+        
+        
+        <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+        <link rel="stylesheet" href="https://fonts.googleapis.com/css?family=Roboto:300,300i,400,400i,700,700i%7CRoboto+Mono:400,400i,700,700i&display=fallback">
+        <style>:root{--md-text-font:"Roboto";--md-code-font:"Roboto Mono"}</style>
+      
+    
+    
+    <script>__md_scope=new URL("..",location),__md_hash=e=>[...e].reduce(((e,_)=>(e<<5)-e+_.charCodeAt(0)),0),__md_get=(e,_=localStorage,t=__md_scope)=>JSON.parse(_.getItem(t.pathname+"."+e)),__md_set=(e,_,t=localStorage,a=__md_scope)=>{try{t.setItem(a.pathname+"."+e,JSON.stringify(_))}catch(e){}}</script>
+    
+      
+
+    
+    
+  </head>
+  
+  
+    
+    
+      
+    
+    
+    
+    
+    <body dir="ltr" data-md-color-scheme="default" data-md-color-primary="indigo" data-md-color-accent="indigo">
+  
+    
+    <input class="md-toggle" data-md-toggle="drawer" type="checkbox" id="__drawer" autocomplete="off">
+    <input class="md-toggle" data-md-toggle="search" type="checkbox" id="__search" autocomplete="off">
+    <label class="md-overlay" for="__drawer"></label>
+    <div data-md-component="skip">
+      
+        
+        <a href="#preparing-your-system-to-run-agentteams-goose-teams" class="md-skip">
+          Skip to content
+        </a>
+      
+    </div>
+    <div data-md-component="announce">
+      
+    </div>
+    
+    
+      
+
+<header class="md-header" data-md-component="header">
+  <nav class="md-header__inner md-grid" aria-label="Header">
+    <a href=".." title="Agent Teams Module" class="md-header__button md-logo" aria-label="Agent Teams Module" data-md-component="logo">
+      
+  
+  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 8a3 3 0 0 0 3-3 3 3 0 0 0-3-3 3 3 0 0 0-3 3 3 3 0 0 0 3 3m0 3.54C9.64 9.35 6.5 8 3 8v11c3.5 0 6.64 1.35 9 3.54 2.36-2.19 5.5-3.54 9-3.54V8c-3.5 0-6.64 1.35-9 3.54"/></svg>
+
+    </a>
+    <label class="md-header__button md-icon" for="__drawer">
+      
+      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M3 6h18v2H3zm0 5h18v2H3zm0 5h18v2H3z"/></svg>
+    </label>
+    <div class="md-header__title" data-md-component="header-title">
+      <div class="md-header__ellipsis">
+        <div class="md-header__topic">
+          <span class="md-ellipsis">
+            Agent Teams Module
+          </span>
+        </div>
+        <div class="md-header__topic" data-md-component="header-topic">
+          <span class="md-ellipsis">
+            
+              System Prep & Source/Model Switch
+            
+          </span>
+        </div>
+      </div>
+    </div>
+    
+      
+        <form class="md-header__option" data-md-component="palette">
+  
+    
+    
+    
+    <input class="md-option" data-md-color-media="" data-md-color-scheme="default" data-md-color-primary="indigo" data-md-color-accent="indigo"  aria-hidden="true"  type="radio" name="__palette" id="__palette_0">
+    
+  
+</form>
+      
+    
+    
+      <script>var palette=__md_get("__palette");if(palette&&palette.color){if("(prefers-color-scheme)"===palette.color.media){var media=matchMedia("(prefers-color-scheme: light)"),input=document.querySelector(media.matches?"[data-md-color-media='(prefers-color-scheme: light)']":"[data-md-color-media='(prefers-color-scheme: dark)']");palette.color.media=input.getAttribute("data-md-color-media"),palette.color.scheme=input.getAttribute("data-md-color-scheme"),palette.color.primary=input.getAttribute("data-md-color-primary"),palette.color.accent=input.getAttribute("data-md-color-accent")}for(var[key,value]of Object.entries(palette.color))document.body.setAttribute("data-md-color-"+key,value)}</script>
+    
+    
+    
+      
+      
+        <label class="md-header__button md-icon" for="__search">
+          
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M9.5 3A6.5 6.5 0 0 1 16 9.5c0 1.61-.59 3.09-1.56 4.23l.27.27h.79l5 5-1.5 1.5-5-5v-.79l-.27-.27A6.52 6.52 0 0 1 9.5 16 6.5 6.5 0 0 1 3 9.5 6.5 6.5 0 0 1 9.5 3m0 2C7 5 5 7 5 9.5S7 14 9.5 14 14 12 14 9.5 12 5 9.5 5"/></svg>
+        </label>
+        <div class="md-search" data-md-component="search" role="dialog">
+  <label class="md-search__overlay" for="__search"></label>
+  <div class="md-search__inner" role="search">
+    <form class="md-search__form" name="search">
+      <input type="text" class="md-search__input" name="query" aria-label="Search" placeholder="Search" autocapitalize="off" autocorrect="off" autocomplete="off" spellcheck="false" data-md-component="search-query" required>
+      <label class="md-search__icon md-icon" for="__search">
+        
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M9.5 3A6.5 6.5 0 0 1 16 9.5c0 1.61-.59 3.09-1.56 4.23l.27.27h.79l5 5-1.5 1.5-5-5v-.79l-.27-.27A6.52 6.52 0 0 1 9.5 16 6.5 6.5 0 0 1 3 9.5 6.5 6.5 0 0 1 9.5 3m0 2C7 5 5 7 5 9.5S7 14 9.5 14 14 12 14 9.5 12 5 9.5 5"/></svg>
+        
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M20 11v2H8l5.5 5.5-1.42 1.42L4.16 12l7.92-7.92L13.5 5.5 8 11z"/></svg>
+      </label>
+      <nav class="md-search__options" aria-label="Search">
+        
+        <button type="reset" class="md-search__icon md-icon" title="Clear" aria-label="Clear" tabindex="-1">
+          
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M19 6.41 17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z"/></svg>
+        </button>
+      </nav>
+      
+        <div class="md-search__suggest" data-md-component="search-suggest"></div>
+      
+    </form>
+    <div class="md-search__output">
+      <div class="md-search__scrollwrap" tabindex="0" data-md-scrollfix>
+        <div class="md-search-result" data-md-component="search-result">
+          <div class="md-search-result__meta">
+            Initializing search
+          </div>
+          <ol class="md-search-result__list" role="presentation"></ol>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+      
+    
+    
+      <div class="md-header__source">
+        <a href="https://github.com/jlcatonjr/agentteams" title="Go to repository" class="md-source" data-md-component="source">
+  <div class="md-source__icon md-icon">
+    
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 448 512"><!--! Font Awesome Free 7.1.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2025 Fonticons, Inc.--><path d="M439.6 236.1 244 40.5c-5.4-5.5-12.8-8.5-20.4-8.5s-15 3-20.4 8.4L162.5 81l51.5 51.5c27.1-9.1 52.7 16.8 43.4 43.7l49.7 49.7c34.2-11.8 61.2 31 35.5 56.7-26.5 26.5-70.2-2.9-56-37.3L240.3 199v121.9c25.3 12.5 22.3 41.8 9.1 55-6.4 6.4-15.2 10.1-24.3 10.1s-17.8-3.6-24.3-10.1c-17.6-17.6-11.1-46.9 11.2-56v-123c-20.8-8.5-24.6-30.7-18.6-45L142.6 101 8.5 235.1C3 240.6 0 247.9 0 255.5s3 15 8.5 20.4l195.6 195.7c5.4 5.4 12.7 8.4 20.4 8.4s15-3 20.4-8.4l194.7-194.7c5.4-5.4 8.4-12.8 8.4-20.4s-3-15-8.4-20.4"/></svg>
+  </div>
+  <div class="md-source__repository">
+    jlcatonjr/agentteams
+  </div>
+</a>
+      </div>
+    
+  </nav>
+  
+</header>
+    
+    <div class="md-container" data-md-component="container">
+      
+      
+        
+          
+            
+<nav class="md-tabs" aria-label="Tabs" data-md-component="tabs">
+  <div class="md-grid">
+    <ul class="md-tabs__list">
+      
+        
+  
+  
+  
+  
+    <li class="md-tabs__item">
+      <a href=".." class="md-tabs__link">
+        
+  
+  
+    
+  
+  Home
+
+      </a>
+    </li>
+  
+
+      
+        
+  
+  
+  
+  
+    <li class="md-tabs__item">
+      <a href="../manuscript/" class="md-tabs__link">
+        
+  
+  
+    
+  
+  Manuscript
+
+      </a>
+    </li>
+  
+
+      
+        
+  
+  
+  
+  
+    <li class="md-tabs__item">
+      <a href="../getting-started/" class="md-tabs__link">
+        
+  
+  
+    
+  
+  Getting Started
+
+      </a>
+    </li>
+  
+
+      
+        
+  
+  
+  
+  
+    <li class="md-tabs__item">
+      <a href="../agent-assisted-setup/" class="md-tabs__link">
+        
+  
+  
+    
+  
+  Agent-Assisted Setup
+
+      </a>
+    </li>
+  
+
+      
+        
+  
+  
+  
+  
+    <li class="md-tabs__item">
+      <a href="../how-it-works/" class="md-tabs__link">
+        
+  
+  
+    
+  
+  How It Works
+
+      </a>
+    </li>
+  
+
+      
+        
+  
+  
+  
+  
+    <li class="md-tabs__item">
+      <a href="../examples/" class="md-tabs__link">
+        
+  
+  
+    
+  
+  Examples
+
+      </a>
+    </li>
+  
+
+      
+        
+  
+  
+  
+  
+    <li class="md-tabs__item">
+      <a href="../cli-reference/" class="md-tabs__link">
+        
+  
+  
+    
+  
+  CLI Reference
+
+      </a>
+    </li>
+  
+
+      
+        
+  
+  
+  
+  
+    
+    
+      <li class="md-tabs__item">
+        <a href="../post-production-auditor-guide/" class="md-tabs__link">
+          
+  
+  
+  Guides
+
+        </a>
+      </li>
+    
+  
+
+      
+        
+  
+  
+  
+    
+  
+  
+    
+    
+      <li class="md-tabs__item md-tabs__item--active">
+        <a href="./" class="md-tabs__link">
+          
+  
+  
+  Goose
+
+        </a>
+      </li>
+    
+  
+
+      
+        
+  
+  
+  
+  
+    
+    
+      <li class="md-tabs__item">
+        <a href="../api-reference/" class="md-tabs__link">
+          
+  
+  
+  API Reference
+
+        </a>
+      </li>
+    
+  
+
+      
+        
+  
+  
+  
+  
+    <li class="md-tabs__item">
+      <a href="../template-authoring/" class="md-tabs__link">
+        
+  
+  
+    
+  
+  Template Authoring
+
+      </a>
+    </li>
+  
+
+      
+        
+  
+  
+  
+  
+    <li class="md-tabs__item">
+      <a href="../DESCRIPTION-FORMAT/" class="md-tabs__link">
+        
+  
+  
+    
+  
+  Description Format
+
+      </a>
+    </li>
+  
+
+      
+        
+  
+  
+  
+  
+    <li class="md-tabs__item">
+      <a href="../structural-update-plan/" class="md-tabs__link">
+        
+  
+  
+    
+  
+  Structural Update Plan
+
+      </a>
+    </li>
+  
+
+      
+        
+  
+  
+  
+  
+    <li class="md-tabs__item">
+      <a href="../contributing/" class="md-tabs__link">
+        
+  
+  
+    
+  
+  Contributing
+
+      </a>
+    </li>
+  
+
+      
+        
+  
+  
+  
+  
+    <li class="md-tabs__item">
+      <a href="../changelog/" class="md-tabs__link">
+        
+  
+  
+    
+  
+  Changelog
+
+      </a>
+    </li>
+  
+
+      
+    </ul>
+  </div>
+</nav>
+          
+        
+      
+      <main class="md-main" data-md-component="main">
+        <div class="md-main__inner md-grid">
+          
+            
+              
+              <div class="md-sidebar md-sidebar--primary" data-md-component="sidebar" data-md-type="navigation" >
+                <div class="md-sidebar__scrollwrap">
+                  <div class="md-sidebar__inner">
+                    
+
+
+  
+
+
+<nav class="md-nav md-nav--primary md-nav--lifted" aria-label="Navigation" data-md-level="0">
+  <label class="md-nav__title" for="__drawer">
+    <a href=".." title="Agent Teams Module" class="md-nav__button md-logo" aria-label="Agent Teams Module" data-md-component="logo">
+      
+  
+  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 8a3 3 0 0 0 3-3 3 3 0 0 0-3-3 3 3 0 0 0-3 3 3 3 0 0 0 3 3m0 3.54C9.64 9.35 6.5 8 3 8v11c3.5 0 6.64 1.35 9 3.54 2.36-2.19 5.5-3.54 9-3.54V8c-3.5 0-6.64 1.35-9 3.54"/></svg>
+
+    </a>
+    Agent Teams Module
+  </label>
+  
+    <div class="md-nav__source">
+      <a href="https://github.com/jlcatonjr/agentteams" title="Go to repository" class="md-source" data-md-component="source">
+  <div class="md-source__icon md-icon">
+    
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 448 512"><!--! Font Awesome Free 7.1.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2025 Fonticons, Inc.--><path d="M439.6 236.1 244 40.5c-5.4-5.5-12.8-8.5-20.4-8.5s-15 3-20.4 8.4L162.5 81l51.5 51.5c27.1-9.1 52.7 16.8 43.4 43.7l49.7 49.7c34.2-11.8 61.2 31 35.5 56.7-26.5 26.5-70.2-2.9-56-37.3L240.3 199v121.9c25.3 12.5 22.3 41.8 9.1 55-6.4 6.4-15.2 10.1-24.3 10.1s-17.8-3.6-24.3-10.1c-17.6-17.6-11.1-46.9 11.2-56v-123c-20.8-8.5-24.6-30.7-18.6-45L142.6 101 8.5 235.1C3 240.6 0 247.9 0 255.5s3 15 8.5 20.4l195.6 195.7c5.4 5.4 12.7 8.4 20.4 8.4s15-3 20.4-8.4l194.7-194.7c5.4-5.4 8.4-12.8 8.4-20.4s-3-15-8.4-20.4"/></svg>
+  </div>
+  <div class="md-source__repository">
+    jlcatonjr/agentteams
+  </div>
+</a>
+    </div>
+  
+  <ul class="md-nav__list" data-md-scrollfix>
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href=".." class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Home
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../manuscript/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Manuscript
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../getting-started/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Getting Started
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../agent-assisted-setup/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Agent-Assisted Setup
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../how-it-works/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    How It Works
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../examples/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Examples
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../cli-reference/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    CLI Reference
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+    
+    
+      
+      
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_8" >
+        
+          
+          <label class="md-nav__link" for="__nav_8" id="__nav_8_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Guides
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_8_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_8">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Guides
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../post-production-auditor-guide/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Post-Production Auditor
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../security-hardening-guide/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Security Hardening & Threat Intelligence
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../section-fencing-guide/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Section Fencing & Safe Merges
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../update-lifecycle-guide/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Update Lifecycle, Drift & Backups
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../stale-detection-guide/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Detecting Stale Docs & Scripts
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../update-compatibility-maintenance-guide/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Update Compatibility Maintenance
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../delivery-procedure/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Delivery Procedure
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../migration-guide/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Migration Guide
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../interoperability-patterns-guide/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Interoperability Patterns
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../bridge-ci-automation-guide/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Bridge CI Automation
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../enrichment-pipeline-guide/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Enrichment Pipeline
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../cross-repository-coordination-guide/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Cross-Repository Coordination
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../working-with-your-generated-team-guide/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Working with Your Generated Team
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../verification-environment/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Verification Environment
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+    
+  
+  
+  
+    
+    
+    
+    
+      
+        
+        
+      
+      
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--active md-nav__item--section md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_9" checked>
+        
+          
+          <label class="md-nav__link" for="__nav_9" id="__nav_9_label" tabindex="">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Goose
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_9_label" aria-expanded="true">
+          <label class="md-nav__title" for="__nav_9">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Goose
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+    
+  
+  
+  
+    <li class="md-nav__item md-nav__item--active">
+      
+      <input class="md-nav__toggle md-toggle" type="checkbox" id="__toc">
+      
+      
+        
+      
+      
+        <label class="md-nav__link md-nav__link--active" for="__toc">
+          
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    System Prep & Source/Model Switch
+  
+
+    
+  </span>
+  
+  
+
+          <span class="md-nav__icon md-icon"></span>
+        </label>
+      
+      <a href="./" class="md-nav__link md-nav__link--active">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    System Prep & Source/Model Switch
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+      
+        
+
+<nav class="md-nav md-nav--secondary" aria-label="Table of contents">
+  
+  
+  
+    
+  
+  
+    <label class="md-nav__title" for="__toc">
+      <span class="md-nav__icon md-icon"></span>
+      Table of contents
+    </label>
+    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
+      
+        <li class="md-nav__item">
+  <a href="#1-prerequisites" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        1. Prerequisites
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#2-choose-a-provider" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        2. Choose a provider
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="2. Choose a provider">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#2a-local-gpu-ollama-default-no-key" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        2a. Local GPU (Ollama) — default, no key
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#2b-openrouter-cloud" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        2b. OpenRouter (cloud)
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#3-the-easily-accessible-switch-openrouter-local-gpu" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        3. The easily-accessible switch (OpenRouter ⇄ local GPU)
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#3b-the-same-switch-built-into-agentteams-persistent-default" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        3b. The same switch, built into agentteams (persistent default)
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#3c-bridge-a-goose-team-tofrom-other-frameworks" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        3c. Bridge a Goose team to/from other frameworks
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#4-mcp-servers-for-teams-built-with-mcp" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        4. MCP servers (for teams built with MCP)
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#5-run-a-team" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        5. Run a team
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="5. Run a team">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#5b-verified-delegation-the-last-phase-1-sign-off" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        5b. Verified delegation (the last Phase-1 sign-off)
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#6-validate-troubleshoot" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        6. Validate &amp; troubleshoot
+      
+    </span>
+  </a>
+  
+</li>
+      
+    </ul>
+  
+</nav>
+      
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../goose-cheat-sheet/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Cheat Sheet
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../goose-cloud-providers/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Cloud Providers
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../goose-privileges/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Privileges
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+    
+    
+      
+      
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_10" >
+        
+          
+          <label class="md-nav__link" for="__nav_10" id="__nav_10_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    API Reference
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_10_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_10">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    API Reference
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../api-reference/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Overview
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../api-reference/ingest/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    ingest
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../api-reference/analyze/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    analyze
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../api-reference/manifest-format/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    manifest-format
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../api-reference/render/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    render
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../api-reference/emit/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    emit
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../api-reference/fences/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    fences
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../api-reference/convert/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    convert
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../api-reference/interop/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    interop
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../api-reference/bridge/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    bridge
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../api-reference/fleet/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    fleet
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../api-reference/drift/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    drift
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../api-reference/behavioral-drift/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    behavioral-drift
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../api-reference/scan/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    scan
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../api-reference/session_scan/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    session_scan
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../api-reference/audit/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    audit
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../api-reference/remediate/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    remediate
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../api-reference/security-refs/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    security-refs
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../api-reference/framework-research/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    framework-research
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../api-reference/enrich/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    enrich
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../api-reference/memory-index/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    memory-index
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../api-reference/code-index/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    code-index
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../api-reference/code-sources/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    code-sources
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../api-reference/fence-inject/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    fence-inject
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../api-reference/graph/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    graph
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../api-reference/architecture/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    architecture
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../api-reference/git-hooks/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    git-hooks
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../api-reference/model-routing/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    model-routing
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../api-reference/eval-suite/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    eval-suite
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../api-reference/eval-adapters/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    eval-adapters
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../api-reference/frameworks/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    frameworks
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../api-reference/man/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    man
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../api-reference/handoff_payloads/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    handoff_payloads
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../api-reference/plan_steps/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    plan_steps
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../api-reference/plan-steps-todo/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    plan-steps-todo
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../api-reference/parallel-plan/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    parallel-plan
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../api-reference/liaison-logs/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    liaison-logs
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../api-reference/host-features/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    host-features
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../api-reference/baseline/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    baseline
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../api-reference/bridge-subagents/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    bridge-subagents
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../api-reference/bridge-subagents-goose/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    bridge-subagents-goose
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../api-reference/bridge-sources/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    bridge-sources
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../api-reference/hooks-emit/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    hooks-emit
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../api-reference/instructions-split/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    instructions-split
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../api-reference/schedule-emit/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    schedule-emit
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../api-reference/mcp-detect/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    mcp-detect
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../api-reference/mcp-emit/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    mcp-emit
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../api-reference/goose-config/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    goose-config
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../api-reference/pr-management/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    pr-management
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../api-reference/research/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    research
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../template-authoring/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Template Authoring
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../DESCRIPTION-FORMAT/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Description Format
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../structural-update-plan/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Structural Update Plan
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../contributing/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Contributing
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../changelog/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Changelog
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+  </ul>
+</nav>
+                  </div>
+                </div>
+              </div>
+            
+            
+              
+              <div class="md-sidebar md-sidebar--secondary" data-md-component="sidebar" data-md-type="toc" >
+                <div class="md-sidebar__scrollwrap">
+                  <div class="md-sidebar__inner">
+                    
+
+<nav class="md-nav md-nav--secondary" aria-label="Table of contents">
+  
+  
+  
+    
+  
+  
+    <label class="md-nav__title" for="__toc">
+      <span class="md-nav__icon md-icon"></span>
+      Table of contents
+    </label>
+    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
+      
+        <li class="md-nav__item">
+  <a href="#1-prerequisites" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        1. Prerequisites
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#2-choose-a-provider" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        2. Choose a provider
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="2. Choose a provider">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#2a-local-gpu-ollama-default-no-key" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        2a. Local GPU (Ollama) — default, no key
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#2b-openrouter-cloud" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        2b. OpenRouter (cloud)
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#3-the-easily-accessible-switch-openrouter-local-gpu" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        3. The easily-accessible switch (OpenRouter ⇄ local GPU)
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#3b-the-same-switch-built-into-agentteams-persistent-default" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        3b. The same switch, built into agentteams (persistent default)
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#3c-bridge-a-goose-team-tofrom-other-frameworks" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        3c. Bridge a Goose team to/from other frameworks
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#4-mcp-servers-for-teams-built-with-mcp" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        4. MCP servers (for teams built with MCP)
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#5-run-a-team" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        5. Run a team
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="5. Run a team">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#5b-verified-delegation-the-last-phase-1-sign-off" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        5b. Verified delegation (the last Phase-1 sign-off)
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#6-validate-troubleshoot" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        6. Validate &amp; troubleshoot
+      
+    </span>
+  </a>
+  
+</li>
+      
+    </ul>
+  
+</nav>
+                  </div>
+                </div>
+              </div>
+            
+          
+          
+            <div class="md-content" data-md-component="content">
+              
+              <article class="md-content__inner md-typeset">
+                
+                  
+
+
+  
+  
+
+
+<h1 id="preparing-your-system-to-run-agentteams-goose-teams">Preparing your system to run agentteams Goose teams<a class="headerlink" href="#preparing-your-system-to-run-agentteams-goose-teams" title="Permanent link">&para;</a></h1>
+<p>This guide gets a Goose user's machine ready to <strong>run and test</strong> the Goose teams
+agentteams generates or bridges — including the <strong>MCP extensions</strong> and an
+<strong>easily-accessible OpenRouter ⇄ local-GPU switch</strong>. It complements two existing
+docs: <a href="../goose-cloud-providers/">Goose Cloud Provider Guide</a> (basic provider
+config) and the <a href="../goose-cheat-sheet/">Goose Cheat Sheet</a> (sessions, recipes).</p>
+<blockquote>
+<p><strong>Security first:</strong> never paste an API key into a recipe, <code>config.yaml</code>, or any
+committed file. Always reference keys by environment variable. The patterns below
+keep secrets out of files.</p>
+</blockquote>
+<hr />
+<h2 id="1-prerequisites">1. Prerequisites<a class="headerlink" href="#1-prerequisites" title="Permanent link">&para;</a></h2>
+<table>
+<thead>
+<tr>
+<th>Need</th>
+<th>Check</th>
+<th>Get it</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Goose CLI ≥ 1.37</td>
+<td><code>goose --version</code></td>
+<td>https://block.github.io/goose/</td>
+</tr>
+<tr>
+<td><strong>One</strong> LLM provider</td>
+<td>see §2</td>
+<td>local GPU (Ollama) <strong>or</strong> OpenRouter</td>
+</tr>
+<tr>
+<td>(MCP teams only) an MCP runner</td>
+<td><code>uvx --version</code> / <code>npx --version</code></td>
+<td><code>brew install uv</code> (for <code>uvx</code>) or Node (for <code>npx</code>)</td>
+</tr>
+</tbody>
+</table>
+<p>A generated team validates with no provider, but <strong>running</strong> it needs a provider.</p>
+<hr />
+<h2 id="2-choose-a-provider">2. Choose a provider<a class="headerlink" href="#2-choose-a-provider" title="Permanent link">&para;</a></h2>
+<p>Goose reads <code>GOOSE_PROVIDER</code> / <code>GOOSE_MODEL</code> (and provider keys) from the
+<strong>environment first</strong>, then <code>~/.config/goose/config.yaml</code>. So your <code>config.yaml</code> is
+the <em>default</em>, and environment variables are the <em>override</em> — which is exactly what
+makes a switch easy.</p>
+<h3 id="2a-local-gpu-ollama-default-no-key">2a. Local GPU (Ollama) — default, no key<a class="headerlink" href="#2a-local-gpu-ollama-default-no-key" title="Permanent link">&para;</a></h3>
+<p><div class="highlight"><pre><span></span><code><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a><span class="c1"># ~/.config/goose/config.yaml</span>
+<a id="__codelineno-0-2" name="__codelineno-0-2" href="#__codelineno-0-2"></a><span class="nt">GOOSE_PROVIDER</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">ollama</span>
+<a id="__codelineno-0-3" name="__codelineno-0-3" href="#__codelineno-0-3"></a><span class="nt">GOOSE_MODEL</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">qwen3.6:35b-a3b</span><span class="w">      </span><span class="c1"># any tool-calling model you have pulled</span>
+<a id="__codelineno-0-4" name="__codelineno-0-4" href="#__codelineno-0-4"></a><span class="nt">OLLAMA_HOST</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">http://localhost:11434</span>
+<a id="__codelineno-0-5" name="__codelineno-0-5" href="#__codelineno-0-5"></a><span class="nt">GOOSE_MODE</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">auto</span>
+</code></pre></div>
+<code>ollama pull qwen3.6:35b-a3b</code> (or your model) and you're ready.</p>
+<h3 id="2b-openrouter-cloud">2b. OpenRouter (cloud)<a class="headerlink" href="#2b-openrouter-cloud" title="Permanent link">&para;</a></h3>
+<p>OpenRouter is OpenAI-compatible. Goose supports it natively. You need a
+<strong>tool-calling-capable</strong> model id (a <em>vision-only</em> model will not work — Goose
+requires tool calls), and the slug must use <strong>hyphens, not Ollama <code>:tag</code> syntax</strong>
+(see the troubleshooting note in §6). Validate the model your <code>config.yaml</code> will
+actually use:
+<div class="highlight"><pre><span></span><code><a id="__codelineno-1-1" name="__codelineno-1-1" href="#__codelineno-1-1"></a>python<span class="w"> </span>scripts/goose-openrouter-preflight.py<span class="w">        </span><span class="c1"># exists? tool-capable? exact fix if not</span>
+</code></pre></div>
+Or check a specific id manually against the public catalog:
+<div class="highlight"><pre><span></span><code><a id="__codelineno-2-1" name="__codelineno-2-1" href="#__codelineno-2-1"></a>curl<span class="w"> </span>-s<span class="w"> </span>https://openrouter.ai/api/v1/models<span class="w"> </span><span class="se">\</span>
+<a id="__codelineno-2-2" name="__codelineno-2-2" href="#__codelineno-2-2"></a><span class="w">  </span><span class="p">|</span><span class="w"> </span>python3<span class="w"> </span>-c<span class="w"> </span><span class="s2">&quot;import sys,json;d=json.load(sys.stdin);m={x[&#39;id&#39;]:x for x in d[&#39;data&#39;]};\</span>
+<a id="__codelineno-2-3" name="__codelineno-2-3" href="#__codelineno-2-3"></a><span class="s2">mid=&#39;qwen/qwen3.6-35b-a3b&#39;;print(mid, mid in m and &#39;tools&#39; in (m[mid].get(&#39;supported_parameters&#39;) or []))&quot;</span>
+</code></pre></div>
+Set the key by env (never in a file): <code>export OPENROUTER_API_KEY=…</code>.</p>
+<hr />
+<h2 id="3-the-easily-accessible-switch-openrouter-local-gpu">3. The easily-accessible switch (OpenRouter ⇄ local GPU)<a class="headerlink" href="#3-the-easily-accessible-switch-openrouter-local-gpu" title="Permanent link">&para;</a></h2>
+<p>Drop this in <code>~/.config/goose/goose-backend.sh</code> and <code>source</code> it from your shell rc.
+It <strong>defines functions only</strong> (reads no secret at shell start), keeps <code>config.yaml</code>
+as the local-GPU baseline, and reads the OpenRouter key <strong>by reference</strong> from a file
+<em>you</em> control (e.g. a project <code>.env</code>) — never writing it anywhere.</p>
+<p><div class="highlight"><pre><span></span><code><a id="__codelineno-3-1" name="__codelineno-3-1" href="#__codelineno-3-1"></a><span class="c1"># ~/.config/goose/goose-backend.sh   — source from ~/.zshrc (or ~/.bashrc)</span>
+<a id="__codelineno-3-2" name="__codelineno-3-2" href="#__codelineno-3-2"></a>:<span class="w"> </span><span class="s2">&quot;</span><span class="si">${</span><span class="nv">GOOSE_OPENROUTER_ENV_FILE</span><span class="p">:=</span><span class="nv">$HOME</span><span class="p">/path/to/your/.env</span><span class="si">}</span><span class="s2">&quot;</span><span class="w">   </span><span class="c1"># file holding OPENROUTER_API_KEY=...</span>
+<a id="__codelineno-3-3" name="__codelineno-3-3" href="#__codelineno-3-3"></a><span class="nv">_GOOSE_OR_MODEL_DEFAULT</span><span class="o">=</span><span class="s2">&quot;qwen/qwen3.6-35b-a3b&quot;</span><span class="w">               </span><span class="c1"># tool-capable; override via GOOSE_OPENROUTER_MODEL</span>
+<a id="__codelineno-3-4" name="__codelineno-3-4" href="#__codelineno-3-4"></a>
+<a id="__codelineno-3-5" name="__codelineno-3-5" href="#__codelineno-3-5"></a>_goose_or_key<span class="o">()</span><span class="w"> </span><span class="o">{</span><span class="w">  </span><span class="c1"># extract ONLY OPENROUTER_API_KEY (no whole-file source; robust)</span>
+<a id="__codelineno-3-6" name="__codelineno-3-6" href="#__codelineno-3-6"></a><span class="w">  </span><span class="o">{</span><span class="w"> </span><span class="nb">set</span><span class="w"> </span>+x<span class="p">;</span><span class="w"> </span><span class="o">}</span><span class="w"> </span><span class="m">2</span>&gt;/dev/null
+<a id="__codelineno-3-7" name="__codelineno-3-7" href="#__codelineno-3-7"></a><span class="w">  </span><span class="nb">local</span><span class="w"> </span><span class="nv">k</span><span class="o">=</span><span class="s2">&quot;&quot;</span>
+<a id="__codelineno-3-8" name="__codelineno-3-8" href="#__codelineno-3-8"></a><span class="w">  </span><span class="o">[</span><span class="w"> </span>-f<span class="w"> </span><span class="s2">&quot;</span><span class="nv">$GOOSE_OPENROUTER_ENV_FILE</span><span class="s2">&quot;</span><span class="w"> </span><span class="o">]</span><span class="w"> </span><span class="o">&amp;&amp;</span><span class="w"> </span><span class="nv">k</span><span class="o">=</span><span class="s2">&quot;</span><span class="k">$(</span>grep<span class="w"> </span>-m1<span class="w"> </span>-E<span class="w"> </span><span class="s1">&#39;^[[:space:]]*(export[[:space:]]+)?OPENROUTER_API_KEY=&#39;</span><span class="w"> </span><span class="se">\</span>
+<a id="__codelineno-3-9" name="__codelineno-3-9" href="#__codelineno-3-9"></a><span class="w">      </span><span class="s2">&quot;</span><span class="nv">$GOOSE_OPENROUTER_ENV_FILE</span><span class="s2">&quot;</span><span class="w"> </span><span class="p">|</span><span class="w"> </span>sed<span class="w"> </span>-E<span class="w"> </span><span class="s1">&#39;s/^[[:space:]]*(export[[:space:]]+)?OPENROUTER_API_KEY=//; s/\r$//; s/^&quot;(.*)&quot;$/\1/; s/^&#39;</span><span class="se">\&#39;</span><span class="s1">&#39;(.*)&#39;</span><span class="se">\&#39;</span><span class="s1">&#39;$/\1/&#39;</span><span class="k">)</span><span class="s2">&quot;</span>
+<a id="__codelineno-3-10" name="__codelineno-3-10" href="#__codelineno-3-10"></a><span class="w">  </span><span class="o">[</span><span class="w"> </span>-n<span class="w"> </span><span class="s2">&quot;</span><span class="nv">$k</span><span class="s2">&quot;</span><span class="w"> </span><span class="o">]</span><span class="w"> </span><span class="o">||</span><span class="w"> </span><span class="nv">k</span><span class="o">=</span><span class="s2">&quot;</span><span class="nv">$OPENROUTER_API_KEY</span><span class="s2">&quot;</span><span class="w">     </span><span class="c1"># fall back to an already-set env var</span>
+<a id="__codelineno-3-11" name="__codelineno-3-11" href="#__codelineno-3-11"></a><span class="w">  </span><span class="nb">printf</span><span class="w"> </span><span class="s1">&#39;%s&#39;</span><span class="w"> </span><span class="s2">&quot;</span><span class="nv">$k</span><span class="s2">&quot;</span>
+<a id="__codelineno-3-12" name="__codelineno-3-12" href="#__codelineno-3-12"></a><span class="o">}</span>
+<a id="__codelineno-3-13" name="__codelineno-3-13" href="#__codelineno-3-13"></a>
+<a id="__codelineno-3-14" name="__codelineno-3-14" href="#__codelineno-3-14"></a>goose-backend<span class="o">()</span><span class="w"> </span><span class="o">{</span><span class="w">                </span><span class="c1"># openrouter | local | status</span>
+<a id="__codelineno-3-15" name="__codelineno-3-15" href="#__codelineno-3-15"></a><span class="w">  </span><span class="o">{</span><span class="w"> </span><span class="nb">set</span><span class="w"> </span>+x<span class="p">;</span><span class="w"> </span><span class="o">}</span><span class="w"> </span><span class="m">2</span>&gt;/dev/null
+<a id="__codelineno-3-16" name="__codelineno-3-16" href="#__codelineno-3-16"></a><span class="w">  </span><span class="k">case</span><span class="w"> </span><span class="s2">&quot;</span><span class="nv">$1</span><span class="s2">&quot;</span><span class="w"> </span><span class="k">in</span>
+<a id="__codelineno-3-17" name="__codelineno-3-17" href="#__codelineno-3-17"></a><span class="w">    </span>openrouter<span class="o">)</span><span class="w"> </span><span class="nb">local</span><span class="w"> </span>k<span class="p">;</span><span class="w"> </span><span class="nv">k</span><span class="o">=</span><span class="s2">&quot;</span><span class="k">$(</span>_goose_or_key<span class="k">)</span><span class="s2">&quot;</span><span class="p">;</span><span class="w"> </span><span class="o">[</span><span class="w"> </span>-z<span class="w"> </span><span class="s2">&quot;</span><span class="nv">$k</span><span class="s2">&quot;</span><span class="w"> </span><span class="o">]</span><span class="w"> </span><span class="o">&amp;&amp;</span><span class="w"> </span><span class="o">{</span><span class="w"> </span><span class="nb">echo</span><span class="w"> </span><span class="s2">&quot;no OPENROUTER_API_KEY found&quot;</span><span class="w"> </span>&gt;<span class="p">&amp;</span><span class="m">2</span><span class="p">;</span><span class="w"> </span><span class="k">return</span><span class="w"> </span><span class="m">1</span><span class="p">;</span><span class="w"> </span><span class="o">}</span>
+<a id="__codelineno-3-18" name="__codelineno-3-18" href="#__codelineno-3-18"></a><span class="w">      </span><span class="nb">export</span><span class="w"> </span><span class="nv">GOOSE_PROVIDER</span><span class="o">=</span>openrouter<span class="w"> </span><span class="nv">GOOSE_MODEL</span><span class="o">=</span><span class="s2">&quot;</span><span class="si">${</span><span class="nv">GOOSE_OPENROUTER_MODEL</span><span class="k">:-</span><span class="nv">$_GOOSE_OR_MODEL_DEFAULT</span><span class="si">}</span><span class="s2">&quot;</span><span class="w"> </span><span class="nv">OPENROUTER_API_KEY</span><span class="o">=</span><span class="s2">&quot;</span><span class="nv">$k</span><span class="s2">&quot;</span>
+<a id="__codelineno-3-19" name="__codelineno-3-19" href="#__codelineno-3-19"></a><span class="w">      </span><span class="nb">echo</span><span class="w"> </span><span class="s2">&quot;Goose → OpenRouter (</span><span class="nv">$GOOSE_MODEL</span><span class="s2">); key set (</span><span class="si">${#</span><span class="nv">k</span><span class="si">}</span><span class="s2"> chars)&quot;</span><span class="p">;;</span>
+<a id="__codelineno-3-20" name="__codelineno-3-20" href="#__codelineno-3-20"></a><span class="w">    </span><span class="nb">local</span><span class="o">)</span><span class="w"> </span><span class="nb">unset</span><span class="w"> </span>GOOSE_PROVIDER<span class="w"> </span>GOOSE_MODEL<span class="w"> </span>OPENROUTER_API_KEY<span class="p">;</span><span class="w"> </span><span class="nb">echo</span><span class="w"> </span><span class="s2">&quot;Goose → local GPU (config.yaml/ollama)&quot;</span><span class="p">;;</span>
+<a id="__codelineno-3-21" name="__codelineno-3-21" href="#__codelineno-3-21"></a><span class="w">    </span>status<span class="o">)</span><span class="w"> </span><span class="nb">echo</span><span class="w"> </span><span class="s2">&quot;provider=</span><span class="si">${</span><span class="nv">GOOSE_PROVIDER</span><span class="k">:-</span><span class="p">&lt;config.yaml&gt;</span><span class="si">}</span><span class="s2"> model=</span><span class="si">${</span><span class="nv">GOOSE_MODEL</span><span class="k">:-</span><span class="p">&lt;config.yaml&gt;</span><span class="si">}</span><span class="s2"> key=</span><span class="k">$(</span><span class="o">[</span><span class="w"> </span>-n<span class="w"> </span><span class="s2">&quot;</span><span class="nv">$OPENROUTER_API_KEY</span><span class="s2">&quot;</span><span class="w"> </span><span class="o">]</span><span class="w"> </span><span class="o">&amp;&amp;</span><span class="w"> </span><span class="nb">echo</span><span class="w"> </span><span class="nb">set</span><span class="w"> </span><span class="o">||</span><span class="w"> </span><span class="nb">echo</span><span class="w"> </span><span class="nb">unset</span><span class="k">)</span><span class="s2">&quot;</span><span class="p">;;</span>
+<a id="__codelineno-3-22" name="__codelineno-3-22" href="#__codelineno-3-22"></a><span class="w">    </span>*<span class="o">)</span><span class="w"> </span><span class="nb">echo</span><span class="w"> </span><span class="s2">&quot;usage: goose-backend {openrouter|local|status}  (or goose-or &lt;args&gt;)&quot;</span><span class="w"> </span>&gt;<span class="p">&amp;</span><span class="m">2</span><span class="p">;</span><span class="w"> </span><span class="k">return</span><span class="w"> </span><span class="m">2</span><span class="p">;;</span>
+<a id="__codelineno-3-23" name="__codelineno-3-23" href="#__codelineno-3-23"></a><span class="w">  </span><span class="k">esac</span>
+<a id="__codelineno-3-24" name="__codelineno-3-24" href="#__codelineno-3-24"></a><span class="o">}</span>
+<a id="__codelineno-3-25" name="__codelineno-3-25" href="#__codelineno-3-25"></a>
+<a id="__codelineno-3-26" name="__codelineno-3-26" href="#__codelineno-3-26"></a>goose-or<span class="o">()</span><span class="w"> </span><span class="o">{</span><span class="w">                     </span><span class="c1"># PREFERRED: OpenRouter for ONE run; key stays in goose&#39;s process</span>
+<a id="__codelineno-3-27" name="__codelineno-3-27" href="#__codelineno-3-27"></a><span class="w">  </span><span class="o">{</span><span class="w"> </span><span class="nb">set</span><span class="w"> </span>+x<span class="p">;</span><span class="w"> </span><span class="o">}</span><span class="w"> </span><span class="m">2</span>&gt;/dev/null
+<a id="__codelineno-3-28" name="__codelineno-3-28" href="#__codelineno-3-28"></a><span class="w">  </span><span class="nb">local</span><span class="w"> </span>k<span class="p">;</span><span class="w"> </span><span class="nv">k</span><span class="o">=</span><span class="s2">&quot;</span><span class="k">$(</span>_goose_or_key<span class="k">)</span><span class="s2">&quot;</span><span class="p">;</span><span class="w"> </span><span class="o">[</span><span class="w"> </span>-z<span class="w"> </span><span class="s2">&quot;</span><span class="nv">$k</span><span class="s2">&quot;</span><span class="w"> </span><span class="o">]</span><span class="w"> </span><span class="o">&amp;&amp;</span><span class="w"> </span><span class="o">{</span><span class="w"> </span><span class="nb">echo</span><span class="w"> </span><span class="s2">&quot;no OPENROUTER_API_KEY found&quot;</span><span class="w"> </span>&gt;<span class="p">&amp;</span><span class="m">2</span><span class="p">;</span><span class="w"> </span><span class="k">return</span><span class="w"> </span><span class="m">1</span><span class="p">;</span><span class="w"> </span><span class="o">}</span>
+<a id="__codelineno-3-29" name="__codelineno-3-29" href="#__codelineno-3-29"></a><span class="w">  </span><span class="nv">GOOSE_PROVIDER</span><span class="o">=</span>openrouter<span class="w"> </span><span class="nv">GOOSE_MODEL</span><span class="o">=</span><span class="s2">&quot;</span><span class="si">${</span><span class="nv">GOOSE_OPENROUTER_MODEL</span><span class="k">:-</span><span class="nv">$_GOOSE_OR_MODEL_DEFAULT</span><span class="si">}</span><span class="s2">&quot;</span><span class="w"> </span><span class="nv">OPENROUTER_API_KEY</span><span class="o">=</span><span class="s2">&quot;</span><span class="nv">$k</span><span class="s2">&quot;</span><span class="w"> </span>goose<span class="w"> </span><span class="s2">&quot;</span><span class="nv">$@</span><span class="s2">&quot;</span>
+<a id="__codelineno-3-30" name="__codelineno-3-30" href="#__codelineno-3-30"></a><span class="o">}</span>
+</code></pre></div>
+Then:
+<div class="highlight"><pre><span></span><code><a id="__codelineno-4-1" name="__codelineno-4-1" href="#__codelineno-4-1"></a><span class="nb">echo</span><span class="w"> </span><span class="s1">&#39;source &quot;$HOME/.config/goose/goose-backend.sh&quot;&#39;</span><span class="w"> </span>&gt;&gt;<span class="w"> </span>~/.zshrc<span class="w">   </span><span class="c1"># new shells get the commands</span>
+<a id="__codelineno-4-2" name="__codelineno-4-2" href="#__codelineno-4-2"></a>goose-or<span class="w"> </span>session<span class="w">            </span><span class="c1"># run on OpenRouter (key scoped to this run) — preferred</span>
+<a id="__codelineno-4-3" name="__codelineno-4-3" href="#__codelineno-4-3"></a>goose-backend<span class="w"> </span>openrouter<span class="w">    </span><span class="c1"># or switch the whole shell to OpenRouter</span>
+<a id="__codelineno-4-4" name="__codelineno-4-4" href="#__codelineno-4-4"></a>goose-backend<span class="w"> </span><span class="nb">local</span><span class="w">         </span><span class="c1"># back to local GPU</span>
+<a id="__codelineno-4-5" name="__codelineno-4-5" href="#__codelineno-4-5"></a>goose-backend<span class="w"> </span>status<span class="w">        </span><span class="c1"># see current</span>
+</code></pre></div>
+<strong>Why <code>goose-or</code> is preferred:</strong> it puts the key only in Goose's process, not your
+interactive shell (smaller exposure). Use <code>goose-backend openrouter</code> when you want a
+whole shell session on OpenRouter.</p>
+<hr />
+<h2 id="3b-the-same-switch-built-into-agentteams-persistent-default">3b. The same switch, built into agentteams (persistent default)<a class="headerlink" href="#3b-the-same-switch-built-into-agentteams-persistent-default" title="Permanent link">&para;</a></h2>
+<p><code>agentteams</code> can switch Goose's <strong>persistent default</strong> source/model by editing
+<code>config.yaml</code> for you — no shell function required. It finds <code>config.yaml</code> the way Goose
+does (asks <code>goose info</code>, falling back to <code>$XDG_CONFIG_HOME</code>/platform default), backs the
+file up before writing, and <strong>preserves</strong> your <code>extensions:</code> block and comments.</p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-5-1" name="__codelineno-5-1" href="#__codelineno-5-1"></a>agentteams<span class="w"> </span>--goose-show<span class="w">                       </span><span class="c1"># current provider/model + resolved path + sources</span>
+<a id="__codelineno-5-2" name="__codelineno-5-2" href="#__codelineno-5-2"></a>agentteams<span class="w"> </span>--goose-source<span class="w"> </span>ollama<span class="w">              </span><span class="c1"># switch provider; applies that source&#39;s default model</span>
+<a id="__codelineno-5-3" name="__codelineno-5-3" href="#__codelineno-5-3"></a>agentteams<span class="w"> </span>--goose-source<span class="w"> </span>openrouter<span class="w"> </span>--goose-model<span class="w"> </span>qwen/qwen3-30b-a3b<span class="w">   </span><span class="c1"># provider + explicit model</span>
+<a id="__codelineno-5-4" name="__codelineno-5-4" href="#__codelineno-5-4"></a>agentteams<span class="w"> </span>--goose-model<span class="w"> </span>qwen/qwen3.6-35b-a3b<span class="w"> </span><span class="c1"># change only the model (current provider)</span>
+<a id="__codelineno-5-5" name="__codelineno-5-5" href="#__codelineno-5-5"></a>agentteams<span class="w"> </span>--goose-config<span class="w"> </span>PATH<span class="w"> </span>--goose-show<span class="w">   </span><span class="c1"># point at a non-default config.yaml</span>
+</code></pre></div>
+<p>Each source carries a <strong>default model</strong>, so changing source without <code>--goose-model</code> uses
+that source's default (built-ins: <code>ollama → qwen3.6:35b-a3b</code>,
+<code>openrouter → qwen/qwen3.6-35b-a3b</code>). Add your own sources / override defaults in
+<code>~/.config/agentteams/goose-sources.json</code>:</p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-6-1" name="__codelineno-6-1" href="#__codelineno-6-1"></a><span class="p">{</span><span class="w"> </span><span class="nt">&quot;sources&quot;</span><span class="p">:</span><span class="w"> </span><span class="p">{</span><span class="w"> </span><span class="nt">&quot;groq&quot;</span><span class="p">:</span><span class="w"> </span><span class="p">{</span><span class="w"> </span><span class="nt">&quot;default_model&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;llama-3.3-70b-versatile&quot;</span><span class="p">,</span><span class="w"> </span><span class="nt">&quot;key_env&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;GROQ_API_KEY&quot;</span><span class="w"> </span><span class="p">}</span><span class="w"> </span><span class="p">}</span><span class="w"> </span><span class="p">}</span>
+</code></pre></div>
+<p><strong>Two complementary layers — know which one wins.</strong> Goose reads provider/model <strong>from the
+environment first, then <code>config.yaml</code></strong>. So:</p>
+<ul>
+<li><code>agentteams --goose-source …</code> sets the <strong>persistent default</strong> (<code>config.yaml</code>) — what plain
+  <code>goose run</code> and the VS Code task use.</li>
+<li><code>goose-or</code> / <code>goose-backend openrouter</code> set an <strong>ephemeral env override</strong> that <strong>wins over
+  <code>config.yaml</code></strong> for that shell.</li>
+</ul>
+<p>If an env override is active, <code>agentteams --goose-source</code> warns that its <code>config.yaml</code> edit is
+<strong>masked</strong> in that shell. It also rejects a model that doesn't match the provider's namespace
+(an OpenRouter <code>vendor/slug</code> under <code>ollama</code>, or Ollama <code>name:tag</code> syntax under <code>openrouter</code>)
+and reminds you to export a cloud provider's key. It never reads or writes the key itself.
+For full OpenRouter model validation, run <code>python scripts/goose-openrouter-preflight.py</code>.</p>
+<hr />
+<h2 id="3c-bridge-a-goose-team-tofrom-other-frameworks">3c. Bridge a Goose team to/from other frameworks<a class="headerlink" href="#3c-bridge-a-goose-team-tofrom-other-frameworks" title="Permanent link">&para;</a></h2>
+<p>Goose is a first-class bridge <strong>source and target</strong> — a <code>.goose/recipes/</code> team can be
+bridged to claude/copilot, and any source can be bridged to Goose.</p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-7-1" name="__codelineno-7-1" href="#__codelineno-7-1"></a><span class="c1"># Bridge a Goose-native team OUT to Claude (auto-detected from the .goose/recipes path):</span>
+<a id="__codelineno-7-2" name="__codelineno-7-2" href="#__codelineno-7-2"></a>agentteams<span class="w"> </span>--bridge-from<span class="w"> </span>&lt;project&gt;/.goose/recipes<span class="w"> </span>--framework<span class="w"> </span>claude<span class="w"> </span>--output<span class="w"> </span>&lt;target&gt;<span class="w"> </span>--bridge-merge
+<a id="__codelineno-7-3" name="__codelineno-7-3" href="#__codelineno-7-3"></a>
+<a id="__codelineno-7-4" name="__codelineno-7-4" href="#__codelineno-7-4"></a><span class="c1"># Per-agent stub recipes (opt-in): one thin .goose/recipes/&lt;slug&gt;.yaml per source agent,</span>
+<a id="__codelineno-7-5" name="__codelineno-7-5" href="#__codelineno-7-5"></a><span class="c1"># each a pointer to the canonical source. Default off; reserved/owned slugs are skipped and</span>
+<a id="__codelineno-7-6" name="__codelineno-7-6" href="#__codelineno-7-6"></a><span class="c1"># existing recipes are never overwritten. (For full per-agent recipes, use --convert-from.)</span>
+<a id="__codelineno-7-7" name="__codelineno-7-7" href="#__codelineno-7-7"></a>agentteams<span class="w"> </span>--bridge-from<span class="w"> </span>&lt;project&gt;/.github/agents<span class="w"> </span>--framework<span class="w"> </span>goose<span class="w"> </span>--output<span class="w"> </span>&lt;target&gt;<span class="w"> </span><span class="se">\</span>
+<a id="__codelineno-7-8" name="__codelineno-7-8" href="#__codelineno-7-8"></a><span class="w">  </span>--bridge-merge<span class="w"> </span>--target-host-features<span class="w"> </span>bridge:copilot-vscode-to-goose:subagents
+</code></pre></div>
+<p>The Goose-source inventory is read from each recipe's <code>title:</code>/<code>description:</code>; only <code>.yaml</code>
+recipes are hashed for <code>--bridge-check</code> (build artifacts and junk are excluded, same as the
+markdown-source path).</p>
+<hr />
+<h2 id="4-mcp-servers-for-teams-built-with-mcp">4. MCP servers (for teams built with MCP)<a class="headerlink" href="#4-mcp-servers-for-teams-built-with-mcp" title="Permanent link">&para;</a></h2>
+<p>agentteams wires operator-specified MCP servers into Goose recipes <strong>opt-in</strong>:</p>
+<ul>
+<li><strong>Direct build:</strong> <code>agentteams --framework goose --target-host-features goose:mcp …</code></li>
+<li><strong>Bridge:</strong> <code>agentteams --bridge-from &lt;agents&gt; --framework goose --bridge-merge
+  --target-host-features bridge:&lt;source&gt;-to-goose:mcp …</code> — emits
+  <code>.goose/recipes/bridge-orchestrator.yaml</code> with the <code>developer</code> (CLI) extension
+  <strong>by default</strong>, plus any opted-in servers.</li>
+</ul>
+<p>What you must prepare on your machine to <em>run</em> those servers:</p>
+<ol>
+<li><strong>An MCP runner.</strong> A <code>type: stdio</code> extension runs <code>cmd</code> (e.g. <code>uvx</code>, <code>npx</code>,
+   <code>python</code>). Install what your servers use — <code>brew install uv</code> for <code>uvx</code>, or use
+   <code>npx</code>-based servers if you have Node. If <code>uvx</code> is missing, a <code>uvx</code> server will
+   fail to launch.</li>
+<li><strong>Credentials by reference.</strong> Servers declare <code>env_keys: [NAME]</code> (never inline
+   secrets). Export those env vars before running, e.g. <code>export VK_PG_DSN=…</code>.</li>
+<li><strong>Nothing else</strong> — the <code>developer</code> (CLI/shell) extension is built in and is
+   always present in agentteams-generated/bridged recipes.</li>
+</ol>
+<p>Only <strong>first-party, read-only, orchestrator-scoped</strong> servers are auto-wired into the
+bridge recipe; others appear as <code># agentteams MCP: &lt;id&gt; not wired (&lt;reason&gt;)</code>
+comments (use a direct build for full per-agent MCP). See
+<a href="../api-reference/mcp-emit/"><code>mcp_emit</code></a>.</p>
+<hr />
+<h2 id="5-run-a-team">5. Run a team<a class="headerlink" href="#5-run-a-team" title="Permanent link">&para;</a></h2>
+<p><div class="highlight"><pre><span></span><code><a id="__codelineno-8-1" name="__codelineno-8-1" href="#__codelineno-8-1"></a><span class="c1"># Generated team (full recipes):</span>
+<a id="__codelineno-8-2" name="__codelineno-8-2" href="#__codelineno-8-2"></a>goose<span class="w"> </span>run<span class="w"> </span>--recipe<span class="w"> </span>.goose/recipes/orchestrator.yaml
+<a id="__codelineno-8-3" name="__codelineno-8-3" href="#__codelineno-8-3"></a>
+<a id="__codelineno-8-4" name="__codelineno-8-4" href="#__codelineno-8-4"></a><span class="c1"># Bridged team (CLI + opted-in MCP guaranteed at session start):</span>
+<a id="__codelineno-8-5" name="__codelineno-8-5" href="#__codelineno-8-5"></a>goose<span class="w"> </span>run<span class="w"> </span>--recipe<span class="w"> </span>.goose/recipes/bridge-orchestrator.yaml
+<a id="__codelineno-8-6" name="__codelineno-8-6" href="#__codelineno-8-6"></a>
+<a id="__codelineno-8-7" name="__codelineno-8-7" href="#__codelineno-8-7"></a><span class="c1"># Plain session (reads .goosehints → @AGENTS.md): just</span>
+<a id="__codelineno-8-8" name="__codelineno-8-8" href="#__codelineno-8-8"></a>goose<span class="w"> </span>session
+</code></pre></div>
+On OpenRouter, prefix with <code>goose-or</code> (e.g. <code>goose-or run --recipe …</code>).</p>
+<h3 id="5b-verified-delegation-the-last-phase-1-sign-off">5b. Verified delegation (the last Phase-1 sign-off)<a class="headerlink" href="#5b-verified-delegation-the-last-phase-1-sign-off" title="Permanent link">&para;</a></h3>
+<p>A generated <strong>direct-build</strong> orchestrator carries a <code>sub_recipes:</code> block (the
+bridge entry recipe is a pointer with none), so its recipe is the one that
+exercises native delegation. To verify end-to-end that the orchestrator actually
+routes/delegates — not just that the recipe validates — run its W6 probe prompt
+non-interactively against a real provider:</p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-9-1" name="__codelineno-9-1" href="#__codelineno-9-1"></a><span class="c1"># requires a configured OpenRouter key (export OPENROUTER_API_KEY=… or goose-or)</span>
+<a id="__codelineno-9-2" name="__codelineno-9-2" href="#__codelineno-9-2"></a><span class="nv">GOOSE_MODE</span><span class="o">=</span>chat<span class="w"> </span>goose-or<span class="w"> </span>run<span class="w"> </span><span class="se">\</span>
+<a id="__codelineno-9-3" name="__codelineno-9-3" href="#__codelineno-9-3"></a><span class="w">  </span>--recipe<span class="w"> </span>.goose/recipes/orchestrator.yaml<span class="w"> </span>--no-session<span class="w"> </span>--max-turns<span class="w"> </span><span class="m">4</span>
+</code></pre></div>
+<p>PASS = the orchestrator states its role and, for "produce a deliverable for this
+team", names the correct <strong>workflow</strong> (Workflow 1: Produce a Deliverable) and the
+<strong>first agent</strong> it routes to (<code>@primary-producer</code>, the <code>primary_producer</code>
+sub_recipe) — observable delegation to a named child session.</p>
+<p><strong>Judge the OUTPUT, not the exit code, and distinguish the two error classes:</strong></p>
+<table>
+<thead>
+<tr>
+<th>Class</th>
+<th>goose exit</th>
+<th>Meaning</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><strong>Missing key</strong> (no <code>OPENROUTER_API_KEY</code>)</td>
+<td><strong>1</strong></td>
+<td>Fails at config-resolution, <em>before any LLM call</em> — a setup problem, not a delegation result.</td>
+</tr>
+<tr>
+<td><strong>Provider error</strong> past config-resolution (<code>not a valid model</code> / 400, <code>401</code>/unauthorized, hit <code>--max-turns</code>)</td>
+<td><strong>0</strong></td>
+<td>goose exits 0 even on these — classify by output (model / auth / inconclusive), never the exit code.</td>
+</tr>
+</tbody>
+</table>
+<p>The repeatable check is <code>tests/test_goose_live_delegation.py</code>. It is
+<strong>skip-by-default</strong>: a mandatory <code>@pytest.mark.skipif</code> skips it whenever
+<code>OPENROUTER_API_KEY</code> is not resolvable (env or <code>GOOSE_OPENROUTER_ENV_FILE</code>) — and
+when <code>goose</code> is absent — so CI / a keyless repo stay offline-green. With a key it
+runs the probe above and asserts delegation; a model/auth fault or a max-turns
+miss is treated as environment/transient (skip), not a wiring regression. The key
+is resolved by reference and passed only into the goose subprocess — never logged
+or serialized.</p>
+<blockquote>
+<p><strong>Verified 2026-06-22</strong> against <code>openrouter</code> / <code>qwen/qwen3.6-35b-a3b</code>:
+<code>tests/test_goose_live_delegation.py</code> PASSED (109s) — the generated orchestrator
+ran on OpenRouter and delegated to the named <code>primary_producer</code> sub_recipe. This
+closes the master integration plan's final Phase-1 sign-off (the previously
+"not yet run" live delegation).</p>
+</blockquote>
+<hr />
+<h2 id="6-validate-troubleshoot">6. Validate &amp; troubleshoot<a class="headerlink" href="#6-validate-troubleshoot" title="Permanent link">&para;</a></h2>
+<table>
+<thead>
+<tr>
+<th>Symptom</th>
+<th>Fix</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><strong>Query stops early &amp; quickly on OpenRouter / "not a valid model ID"</strong></td>
+<td>Your <code>GOOSE_MODEL</code> uses <strong>Ollama tag syntax</strong> (<code>model:tag</code>). On OpenRouter <code>:</code> means a <em>variant</em> (<code>:free</code>), so e.g. <code>qwen/qwen3.6:35b-a3b</code> (colon) doesn't exist — use the <strong>hyphen</strong> slug <code>qwen/qwen3.6-35b-a3b</code>. Run <code>python scripts/goose-openrouter-preflight.py</code> for the exact fix; <code>--fix</code> applies it (backup first).</td>
+</tr>
+<tr>
+<td><code>goose recipe validate &lt;f&gt;</code> fails</td>
+<td>check <code>version: "1.0.0"</code>, non-empty <code>instructions:</code>, no <code>model:</code> key</td>
+</tr>
+<tr>
+<td>"No provider/model configured"</td>
+<td>set a provider (§2/§3) — env override or <code>config.yaml</code></td>
+</tr>
+<tr>
+<td>OpenRouter 401</td>
+<td><code>OPENROUTER_API_KEY</code> unset/invalid; <code>goose-backend status</code> to check</td>
+</tr>
+<tr>
+<td>Model errors / no tool calls</td>
+<td>your OpenRouter <code>GOOSE_MODEL</code> isn't tool-capable — pick a tool model (§2b)</td>
+</tr>
+<tr>
+<td>stdio MCP server won't start</td>
+<td>install its runner (<code>uv</code>/<code>uvx</code> or <code>npx</code>); export its <code>env_keys</code> creds</td>
+</tr>
+<tr>
+<td>validate a recipe before running</td>
+<td><code>goose recipe validate .goose/recipes/&lt;slug&gt;.yaml</code></td>
+</tr>
+</tbody>
+</table>
+<blockquote>
+<p><strong>Ollama tag vs OpenRouter slug — the #1 early-stop trap.</strong> The same model is
+addressed differently per provider: Ollama uses <code>name:tag</code> (e.g. <code>qwen3.6:35b-a3b</code>,
+correct in §2a), OpenRouter uses <code>vendor/model-variant</code> with <strong>hyphens</strong> (e.g.
+<code>qwen/qwen3.6-35b-a3b</code>). Pasting the Ollama tag into the OpenRouter <code>GOOSE_MODEL</code>
+makes OpenRouter reject the model and the query stops before doing any work.</p>
+</blockquote>
+<p>Verify your OpenRouter model and reproduce/diagnose the early-stop in one command
+(static check needs no key; <code>--live</code> runs an end-to-end goose tool probe):
+<div class="highlight"><pre><span></span><code><a id="__codelineno-10-1" name="__codelineno-10-1" href="#__codelineno-10-1"></a>python<span class="w"> </span>scripts/goose-openrouter-preflight.py<span class="w">          </span><span class="c1"># validate config.yaml&#39;s GOOSE_MODEL</span>
+<a id="__codelineno-10-2" name="__codelineno-10-2" href="#__codelineno-10-2"></a>python<span class="w"> </span>scripts/goose-openrouter-preflight.py<span class="w"> </span>--live<span class="w">   </span><span class="c1"># also run a real goose tool probe</span>
+</code></pre></div>
+Or the minimal manual probe (no shell exec):
+<div class="highlight"><pre><span></span><code><a id="__codelineno-11-1" name="__codelineno-11-1" href="#__codelineno-11-1"></a><span class="nv">GOOSE_MODE</span><span class="o">=</span>chat<span class="w"> </span>goose-or<span class="w"> </span>run<span class="w"> </span>--no-session<span class="w"> </span>-t<span class="w"> </span><span class="s2">&quot;Reply with exactly: OK&quot;</span>
+</code></pre></div></p>
+
+
+
+
+
+
+
+
+
+
+
+
+                
+              </article>
+            </div>
+          
+          
+<script>var target=document.getElementById(location.hash.slice(1));target&&target.name&&(target.checked=target.name.startsWith("__tabbed_"))</script>
+        </div>
+        
+          <button type="button" class="md-top md-icon" data-md-component="top" hidden>
+  
+  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M13 20h-2V8l-5.5 5.5-1.42-1.42L12 4.16l7.92 7.92-1.42 1.42L13 8z"/></svg>
+  Back to top
+</button>
+        
+      </main>
+      
+        <footer class="md-footer">
+  
+  <div class="md-footer-meta md-typeset">
+    <div class="md-footer-meta__inner md-grid">
+      <div class="md-copyright">
+  
+    <div class="md-copyright__highlight">
+      &copy; <span id='copyright-year'></span> jlcatonjr
+    </div>
+  
+  
+</div>
+      
+    </div>
+  </div>
+</footer>
+      
+    </div>
+    <div class="md-dialog" data-md-component="dialog">
+      <div class="md-dialog__inner md-typeset"></div>
+    </div>
+    
+    
+    
+      
+      
+      <script id="__config" type="application/json">{"annotate": null, "base": "..", "features": ["navigation.tabs", "navigation.sections", "navigation.top", "search.suggest", "search.highlight", "content.code.copy"], "search": "../assets/javascripts/workers/search.2c215733.min.js", "tags": null, "translations": {"clipboard.copied": "Copied to clipboard", "clipboard.copy": "Copy to clipboard", "search.result.more.one": "1 more on this page", "search.result.more.other": "# more on this page", "search.result.none": "No matching documents", "search.result.one": "1 matching document", "search.result.other": "# matching documents", "search.result.placeholder": "Type to start searching", "search.result.term.missing": "Missing", "select.version": "Select version"}, "version": null}</script>
+    
+    
+      <script src="../assets/javascripts/bundle.79ae519e.min.js"></script>
+      
+        <script src="../javascripts/current-year.js"></script>
+      
+    
+  </body>
+</html>

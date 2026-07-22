@@ -1,0 +1,4571 @@
+
+<!doctype html>
+<html lang="en" class="no-js">
+  <head>
+    
+      <meta charset="utf-8">
+      <meta name="viewport" content="width=device-width,initial-scale=1">
+      
+        <meta name="description" content="Generate a complete, coordinated AI agent team for any project from a single description file.">
+      
+      
+        <meta name="author" content="jlcatonjr">
+      
+      
+        <link rel="canonical" href="https://jlcatonjr.github.io/agentteams/claude-code-cheat-sheet/">
+      
+      
+      
+      
+        
+      
+      
+      <link rel="icon" href="../assets/images/favicon.png">
+      <meta name="generator" content="mkdocs-1.6.1, mkdocs-material-9.7.6">
+    
+    
+      
+        <title>Claude Code Cheat Sheet - Agent Teams Module</title>
+      
+    
+    
+      <link rel="stylesheet" href="../assets/stylesheets/main.484c7ddc.min.css">
+      
+        
+        <link rel="stylesheet" href="../assets/stylesheets/palette.ab4e12ef.min.css">
+      
+      
+
+
+    
+    
+      
+    
+    
+      
+        
+        
+        <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+        <link rel="stylesheet" href="https://fonts.googleapis.com/css?family=Roboto:300,300i,400,400i,700,700i%7CRoboto+Mono:400,400i,700,700i&display=fallback">
+        <style>:root{--md-text-font:"Roboto";--md-code-font:"Roboto Mono"}</style>
+      
+    
+    
+    <script>__md_scope=new URL("..",location),__md_hash=e=>[...e].reduce(((e,_)=>(e<<5)-e+_.charCodeAt(0)),0),__md_get=(e,_=localStorage,t=__md_scope)=>JSON.parse(_.getItem(t.pathname+"."+e)),__md_set=(e,_,t=localStorage,a=__md_scope)=>{try{t.setItem(a.pathname+"."+e,JSON.stringify(_))}catch(e){}}</script>
+    
+      
+
+    
+    
+  </head>
+  
+  
+    
+    
+      
+    
+    
+    
+    
+    <body dir="ltr" data-md-color-scheme="default" data-md-color-primary="indigo" data-md-color-accent="indigo">
+  
+    
+    <input class="md-toggle" data-md-toggle="drawer" type="checkbox" id="__drawer" autocomplete="off">
+    <input class="md-toggle" data-md-toggle="search" type="checkbox" id="__search" autocomplete="off">
+    <label class="md-overlay" for="__drawer"></label>
+    <div data-md-component="skip">
+      
+        
+        <a href="#claude-code-cheat-sheet" class="md-skip">
+          Skip to content
+        </a>
+      
+    </div>
+    <div data-md-component="announce">
+      
+    </div>
+    
+    
+      
+
+<header class="md-header" data-md-component="header">
+  <nav class="md-header__inner md-grid" aria-label="Header">
+    <a href=".." title="Agent Teams Module" class="md-header__button md-logo" aria-label="Agent Teams Module" data-md-component="logo">
+      
+  
+  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 8a3 3 0 0 0 3-3 3 3 0 0 0-3-3 3 3 0 0 0-3 3 3 3 0 0 0 3 3m0 3.54C9.64 9.35 6.5 8 3 8v11c3.5 0 6.64 1.35 9 3.54 2.36-2.19 5.5-3.54 9-3.54V8c-3.5 0-6.64 1.35-9 3.54"/></svg>
+
+    </a>
+    <label class="md-header__button md-icon" for="__drawer">
+      
+      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M3 6h18v2H3zm0 5h18v2H3zm0 5h18v2H3z"/></svg>
+    </label>
+    <div class="md-header__title" data-md-component="header-title">
+      <div class="md-header__ellipsis">
+        <div class="md-header__topic">
+          <span class="md-ellipsis">
+            Agent Teams Module
+          </span>
+        </div>
+        <div class="md-header__topic" data-md-component="header-topic">
+          <span class="md-ellipsis">
+            
+              Claude Code Cheat Sheet
+            
+          </span>
+        </div>
+      </div>
+    </div>
+    
+      
+        <form class="md-header__option" data-md-component="palette">
+  
+    
+    
+    
+    <input class="md-option" data-md-color-media="" data-md-color-scheme="default" data-md-color-primary="indigo" data-md-color-accent="indigo"  aria-hidden="true"  type="radio" name="__palette" id="__palette_0">
+    
+  
+</form>
+      
+    
+    
+      <script>var palette=__md_get("__palette");if(palette&&palette.color){if("(prefers-color-scheme)"===palette.color.media){var media=matchMedia("(prefers-color-scheme: light)"),input=document.querySelector(media.matches?"[data-md-color-media='(prefers-color-scheme: light)']":"[data-md-color-media='(prefers-color-scheme: dark)']");palette.color.media=input.getAttribute("data-md-color-media"),palette.color.scheme=input.getAttribute("data-md-color-scheme"),palette.color.primary=input.getAttribute("data-md-color-primary"),palette.color.accent=input.getAttribute("data-md-color-accent")}for(var[key,value]of Object.entries(palette.color))document.body.setAttribute("data-md-color-"+key,value)}</script>
+    
+    
+    
+      
+      
+        <label class="md-header__button md-icon" for="__search">
+          
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M9.5 3A6.5 6.5 0 0 1 16 9.5c0 1.61-.59 3.09-1.56 4.23l.27.27h.79l5 5-1.5 1.5-5-5v-.79l-.27-.27A6.52 6.52 0 0 1 9.5 16 6.5 6.5 0 0 1 3 9.5 6.5 6.5 0 0 1 9.5 3m0 2C7 5 5 7 5 9.5S7 14 9.5 14 14 12 14 9.5 12 5 9.5 5"/></svg>
+        </label>
+        <div class="md-search" data-md-component="search" role="dialog">
+  <label class="md-search__overlay" for="__search"></label>
+  <div class="md-search__inner" role="search">
+    <form class="md-search__form" name="search">
+      <input type="text" class="md-search__input" name="query" aria-label="Search" placeholder="Search" autocapitalize="off" autocorrect="off" autocomplete="off" spellcheck="false" data-md-component="search-query" required>
+      <label class="md-search__icon md-icon" for="__search">
+        
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M9.5 3A6.5 6.5 0 0 1 16 9.5c0 1.61-.59 3.09-1.56 4.23l.27.27h.79l5 5-1.5 1.5-5-5v-.79l-.27-.27A6.52 6.52 0 0 1 9.5 16 6.5 6.5 0 0 1 3 9.5 6.5 6.5 0 0 1 9.5 3m0 2C7 5 5 7 5 9.5S7 14 9.5 14 14 12 14 9.5 12 5 9.5 5"/></svg>
+        
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M20 11v2H8l5.5 5.5-1.42 1.42L4.16 12l7.92-7.92L13.5 5.5 8 11z"/></svg>
+      </label>
+      <nav class="md-search__options" aria-label="Search">
+        
+        <button type="reset" class="md-search__icon md-icon" title="Clear" aria-label="Clear" tabindex="-1">
+          
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M19 6.41 17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z"/></svg>
+        </button>
+      </nav>
+      
+        <div class="md-search__suggest" data-md-component="search-suggest"></div>
+      
+    </form>
+    <div class="md-search__output">
+      <div class="md-search__scrollwrap" tabindex="0" data-md-scrollfix>
+        <div class="md-search-result" data-md-component="search-result">
+          <div class="md-search-result__meta">
+            Initializing search
+          </div>
+          <ol class="md-search-result__list" role="presentation"></ol>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+      
+    
+    
+      <div class="md-header__source">
+        <a href="https://github.com/jlcatonjr/agentteams" title="Go to repository" class="md-source" data-md-component="source">
+  <div class="md-source__icon md-icon">
+    
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 448 512"><!--! Font Awesome Free 7.1.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2025 Fonticons, Inc.--><path d="M439.6 236.1 244 40.5c-5.4-5.5-12.8-8.5-20.4-8.5s-15 3-20.4 8.4L162.5 81l51.5 51.5c27.1-9.1 52.7 16.8 43.4 43.7l49.7 49.7c34.2-11.8 61.2 31 35.5 56.7-26.5 26.5-70.2-2.9-56-37.3L240.3 199v121.9c25.3 12.5 22.3 41.8 9.1 55-6.4 6.4-15.2 10.1-24.3 10.1s-17.8-3.6-24.3-10.1c-17.6-17.6-11.1-46.9 11.2-56v-123c-20.8-8.5-24.6-30.7-18.6-45L142.6 101 8.5 235.1C3 240.6 0 247.9 0 255.5s3 15 8.5 20.4l195.6 195.7c5.4 5.4 12.7 8.4 20.4 8.4s15-3 20.4-8.4l194.7-194.7c5.4-5.4 8.4-12.8 8.4-20.4s-3-15-8.4-20.4"/></svg>
+  </div>
+  <div class="md-source__repository">
+    jlcatonjr/agentteams
+  </div>
+</a>
+      </div>
+    
+  </nav>
+  
+</header>
+    
+    <div class="md-container" data-md-component="container">
+      
+      
+        
+          
+            
+<nav class="md-tabs" aria-label="Tabs" data-md-component="tabs">
+  <div class="md-grid">
+    <ul class="md-tabs__list">
+      
+        
+  
+  
+  
+  
+    <li class="md-tabs__item">
+      <a href=".." class="md-tabs__link">
+        
+  
+  
+    
+  
+  Home
+
+      </a>
+    </li>
+  
+
+      
+        
+  
+  
+  
+  
+    <li class="md-tabs__item">
+      <a href="../manuscript/" class="md-tabs__link">
+        
+  
+  
+    
+  
+  Manuscript
+
+      </a>
+    </li>
+  
+
+      
+        
+  
+  
+  
+  
+    <li class="md-tabs__item">
+      <a href="../getting-started/" class="md-tabs__link">
+        
+  
+  
+    
+  
+  Getting Started
+
+      </a>
+    </li>
+  
+
+      
+        
+  
+  
+  
+  
+    <li class="md-tabs__item">
+      <a href="../agent-assisted-setup/" class="md-tabs__link">
+        
+  
+  
+    
+  
+  Agent-Assisted Setup
+
+      </a>
+    </li>
+  
+
+      
+        
+  
+  
+  
+  
+    <li class="md-tabs__item">
+      <a href="../how-it-works/" class="md-tabs__link">
+        
+  
+  
+    
+  
+  How It Works
+
+      </a>
+    </li>
+  
+
+      
+        
+  
+  
+  
+  
+    <li class="md-tabs__item">
+      <a href="../examples/" class="md-tabs__link">
+        
+  
+  
+    
+  
+  Examples
+
+      </a>
+    </li>
+  
+
+      
+        
+  
+  
+  
+  
+    <li class="md-tabs__item">
+      <a href="../cli-reference/" class="md-tabs__link">
+        
+  
+  
+    
+  
+  CLI Reference
+
+      </a>
+    </li>
+  
+
+      
+        
+  
+  
+  
+  
+    
+    
+      <li class="md-tabs__item">
+        <a href="../post-production-auditor-guide/" class="md-tabs__link">
+          
+  
+  
+  Guides
+
+        </a>
+      </li>
+    
+  
+
+      
+        
+  
+  
+  
+  
+    
+    
+      <li class="md-tabs__item">
+        <a href="../goose-system-prep/" class="md-tabs__link">
+          
+  
+  
+  Goose
+
+        </a>
+      </li>
+    
+  
+
+      
+        
+  
+  
+  
+  
+    
+    
+      <li class="md-tabs__item">
+        <a href="../api-reference/" class="md-tabs__link">
+          
+  
+  
+  API Reference
+
+        </a>
+      </li>
+    
+  
+
+      
+        
+  
+  
+  
+  
+    <li class="md-tabs__item">
+      <a href="../template-authoring/" class="md-tabs__link">
+        
+  
+  
+    
+  
+  Template Authoring
+
+      </a>
+    </li>
+  
+
+      
+        
+  
+  
+  
+  
+    <li class="md-tabs__item">
+      <a href="../DESCRIPTION-FORMAT/" class="md-tabs__link">
+        
+  
+  
+    
+  
+  Description Format
+
+      </a>
+    </li>
+  
+
+      
+        
+  
+  
+  
+  
+    <li class="md-tabs__item">
+      <a href="../structural-update-plan/" class="md-tabs__link">
+        
+  
+  
+    
+  
+  Structural Update Plan
+
+      </a>
+    </li>
+  
+
+      
+        
+  
+  
+  
+  
+    <li class="md-tabs__item">
+      <a href="../contributing/" class="md-tabs__link">
+        
+  
+  
+    
+  
+  Contributing
+
+      </a>
+    </li>
+  
+
+      
+        
+  
+  
+  
+  
+    <li class="md-tabs__item">
+      <a href="../changelog/" class="md-tabs__link">
+        
+  
+  
+    
+  
+  Changelog
+
+      </a>
+    </li>
+  
+
+      
+    </ul>
+  </div>
+</nav>
+          
+        
+      
+      <main class="md-main" data-md-component="main">
+        <div class="md-main__inner md-grid">
+          
+            
+              
+              <div class="md-sidebar md-sidebar--primary" data-md-component="sidebar" data-md-type="navigation" >
+                <div class="md-sidebar__scrollwrap">
+                  <div class="md-sidebar__inner">
+                    
+
+
+  
+
+
+<nav class="md-nav md-nav--primary md-nav--lifted" aria-label="Navigation" data-md-level="0">
+  <label class="md-nav__title" for="__drawer">
+    <a href=".." title="Agent Teams Module" class="md-nav__button md-logo" aria-label="Agent Teams Module" data-md-component="logo">
+      
+  
+  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 8a3 3 0 0 0 3-3 3 3 0 0 0-3-3 3 3 0 0 0-3 3 3 3 0 0 0 3 3m0 3.54C9.64 9.35 6.5 8 3 8v11c3.5 0 6.64 1.35 9 3.54 2.36-2.19 5.5-3.54 9-3.54V8c-3.5 0-6.64 1.35-9 3.54"/></svg>
+
+    </a>
+    Agent Teams Module
+  </label>
+  
+    <div class="md-nav__source">
+      <a href="https://github.com/jlcatonjr/agentteams" title="Go to repository" class="md-source" data-md-component="source">
+  <div class="md-source__icon md-icon">
+    
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 448 512"><!--! Font Awesome Free 7.1.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2025 Fonticons, Inc.--><path d="M439.6 236.1 244 40.5c-5.4-5.5-12.8-8.5-20.4-8.5s-15 3-20.4 8.4L162.5 81l51.5 51.5c27.1-9.1 52.7 16.8 43.4 43.7l49.7 49.7c34.2-11.8 61.2 31 35.5 56.7-26.5 26.5-70.2-2.9-56-37.3L240.3 199v121.9c25.3 12.5 22.3 41.8 9.1 55-6.4 6.4-15.2 10.1-24.3 10.1s-17.8-3.6-24.3-10.1c-17.6-17.6-11.1-46.9 11.2-56v-123c-20.8-8.5-24.6-30.7-18.6-45L142.6 101 8.5 235.1C3 240.6 0 247.9 0 255.5s3 15 8.5 20.4l195.6 195.7c5.4 5.4 12.7 8.4 20.4 8.4s15-3 20.4-8.4l194.7-194.7c5.4-5.4 8.4-12.8 8.4-20.4s-3-15-8.4-20.4"/></svg>
+  </div>
+  <div class="md-source__repository">
+    jlcatonjr/agentteams
+  </div>
+</a>
+    </div>
+  
+  <ul class="md-nav__list" data-md-scrollfix>
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href=".." class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Home
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../manuscript/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Manuscript
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../getting-started/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Getting Started
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../agent-assisted-setup/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Agent-Assisted Setup
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../how-it-works/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    How It Works
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../examples/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Examples
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../cli-reference/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    CLI Reference
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+    
+    
+      
+      
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_8" >
+        
+          
+          <label class="md-nav__link" for="__nav_8" id="__nav_8_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Guides
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_8_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_8">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Guides
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../post-production-auditor-guide/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Post-Production Auditor
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../security-hardening-guide/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Security Hardening & Threat Intelligence
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../section-fencing-guide/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Section Fencing & Safe Merges
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../update-lifecycle-guide/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Update Lifecycle, Drift & Backups
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../stale-detection-guide/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Detecting Stale Docs & Scripts
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../update-compatibility-maintenance-guide/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Update Compatibility Maintenance
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../delivery-procedure/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Delivery Procedure
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../migration-guide/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Migration Guide
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../interoperability-patterns-guide/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Interoperability Patterns
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../bridge-ci-automation-guide/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Bridge CI Automation
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../enrichment-pipeline-guide/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Enrichment Pipeline
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../cross-repository-coordination-guide/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Cross-Repository Coordination
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../working-with-your-generated-team-guide/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Working with Your Generated Team
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../verification-environment/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Verification Environment
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+    
+    
+      
+      
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_9" >
+        
+          
+          <label class="md-nav__link" for="__nav_9" id="__nav_9_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Goose
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_9_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_9">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Goose
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../goose-system-prep/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    System Prep & Source/Model Switch
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../goose-cheat-sheet/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Cheat Sheet
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../goose-cloud-providers/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Cloud Providers
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../goose-privileges/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Privileges
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+    
+    
+      
+      
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_10" >
+        
+          
+          <label class="md-nav__link" for="__nav_10" id="__nav_10_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    API Reference
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_10_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_10">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    API Reference
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../api-reference/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Overview
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../api-reference/ingest/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    ingest
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../api-reference/analyze/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    analyze
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../api-reference/manifest-format/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    manifest-format
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../api-reference/render/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    render
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../api-reference/emit/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    emit
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../api-reference/fences/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    fences
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../api-reference/convert/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    convert
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../api-reference/interop/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    interop
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../api-reference/bridge/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    bridge
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../api-reference/fleet/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    fleet
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../api-reference/drift/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    drift
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../api-reference/behavioral-drift/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    behavioral-drift
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../api-reference/scan/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    scan
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../api-reference/session_scan/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    session_scan
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../api-reference/audit/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    audit
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../api-reference/remediate/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    remediate
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../api-reference/security-refs/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    security-refs
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../api-reference/framework-research/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    framework-research
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../api-reference/enrich/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    enrich
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../api-reference/memory-index/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    memory-index
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../api-reference/code-index/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    code-index
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../api-reference/code-sources/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    code-sources
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../api-reference/fence-inject/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    fence-inject
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../api-reference/graph/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    graph
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../api-reference/architecture/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    architecture
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../api-reference/git-hooks/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    git-hooks
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../api-reference/model-routing/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    model-routing
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../api-reference/eval-suite/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    eval-suite
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../api-reference/eval-adapters/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    eval-adapters
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../api-reference/frameworks/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    frameworks
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../api-reference/man/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    man
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../api-reference/handoff_payloads/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    handoff_payloads
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../api-reference/plan_steps/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    plan_steps
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../api-reference/plan-steps-todo/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    plan-steps-todo
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../api-reference/parallel-plan/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    parallel-plan
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../api-reference/liaison-logs/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    liaison-logs
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../api-reference/host-features/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    host-features
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../api-reference/baseline/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    baseline
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../api-reference/bridge-subagents/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    bridge-subagents
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../api-reference/bridge-subagents-goose/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    bridge-subagents-goose
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../api-reference/bridge-sources/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    bridge-sources
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../api-reference/hooks-emit/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    hooks-emit
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../api-reference/instructions-split/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    instructions-split
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../api-reference/schedule-emit/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    schedule-emit
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../api-reference/mcp-detect/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    mcp-detect
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../api-reference/mcp-emit/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    mcp-emit
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../api-reference/goose-config/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    goose-config
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../api-reference/pr-management/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    pr-management
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../api-reference/research/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    research
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../template-authoring/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Template Authoring
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../DESCRIPTION-FORMAT/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Description Format
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../structural-update-plan/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Structural Update Plan
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../contributing/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Contributing
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../changelog/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Changelog
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+  </ul>
+</nav>
+                  </div>
+                </div>
+              </div>
+            
+            
+              
+              <div class="md-sidebar md-sidebar--secondary" data-md-component="sidebar" data-md-type="toc" >
+                <div class="md-sidebar__scrollwrap">
+                  <div class="md-sidebar__inner">
+                    
+
+<nav class="md-nav md-nav--secondary" aria-label="Table of contents">
+  
+  
+  
+    
+  
+  
+    <label class="md-nav__title" for="__toc">
+      <span class="md-nav__icon md-icon"></span>
+      Table of contents
+    </label>
+    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
+      
+        <li class="md-nav__item">
+  <a href="#part-1-command-line-cli" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Part 1 — Command Line (CLI)
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#session-modes" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Session Modes
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Session Modes">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#model-aliases" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Model aliases
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#referencing-files-in-a-prompt" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Referencing Files in a Prompt
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Referencing Files in a Prompt">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#mentions" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        @ mentions
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#piping-and-stdin" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Piping and stdin
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#shell-mode-in-repl" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Shell mode (in REPL)
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#slash-commands" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Slash Commands
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Slash Commands">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#session-control" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Session control
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#model-and-effort" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Model and effort
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#memory-and-context" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Memory and context
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#tools-and-configuration" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Tools and configuration
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#autonomous-operation" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Autonomous operation
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#diagnostics" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Diagnostics
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#keyboard-shortcuts-interactive-repl" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Keyboard Shortcuts (Interactive REPL)
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Keyboard Shortcuts (Interactive REPL)">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#navigation-and-interruption" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Navigation and interruption
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#permission-mode-cycling" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Permission mode cycling
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#multiline-input-choose-one-that-matches-your-terminal" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Multiline input (choose one that matches your terminal)
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#text-editing-readline-style" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Text editing (readline-style)
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#transcript-viewer-ctrlo-to-toggle" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Transcript viewer (Ctrl+O to toggle)
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#non-interactive-scripting" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Non-Interactive / Scripting
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#mcp-server-configuration" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        MCP Server Configuration
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="MCP Server Configuration">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#adding-servers" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Adding servers
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#where-config-lives" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Where config lives
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#mcpjson-structure" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        .mcp.json structure
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#managing-and-using-mcp-tools" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Managing and using MCP tools
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#hooks" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Hooks
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Hooks">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#where-hooks-are-configured" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Where hooks are configured
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#key-event-types" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Key event types
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#example-hook-config" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Example hook config
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#claudemd-and-memory" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        CLAUDE.md and Memory
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="CLAUDE.md and Memory">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#claudemd-persistent-project-instructions" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        CLAUDE.md — persistent project instructions
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#auto-memory" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Auto-memory
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#part-2-vs-code-extension" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Part 2 — VS Code Extension
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#opening-the-panel" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Opening the Panel
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#keyboard-shortcuts" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Keyboard Shortcuts
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#attaching-files-and-code" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Attaching Files and Code
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Attaching Files and Code">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#mentions-in-the-chat-input" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        @ mentions in the chat input
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#send-selected-code-from-the-editor" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Send selected code from the editor
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#permission-modes" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Permission Modes
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#sessions-and-history" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Sessions and History
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#slash-commands-in-the-extension" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Slash Commands in the Extension
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#mcp-servers-in-the-extension" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        MCP Servers in the Extension
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#extension-settings-vs-code-settingsjson" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Extension Settings (VS Code settings.json)
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#cli-in-the-vs-code-integrated-terminal" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        CLI in the VS Code Integrated Terminal
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#extension-vs-cli-when-to-use-each" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Extension vs CLI — When to Use Each
+      
+    </span>
+  </a>
+  
+</li>
+      
+    </ul>
+  
+</nav>
+                  </div>
+                </div>
+              </div>
+            
+          
+          
+            <div class="md-content" data-md-component="content">
+              
+              <article class="md-content__inner md-typeset">
+                
+                  
+
+
+  
+  
+
+
+<h1 id="claude-code-cheat-sheet">Claude Code Cheat Sheet<a class="headerlink" href="#claude-code-cheat-sheet" title="Permanent link">&para;</a></h1>
+<p>Quick reference for the Claude Code CLI and VS Code extension.</p>
+<hr />
+<h2 id="part-1-command-line-cli">Part 1 — Command Line (CLI)<a class="headerlink" href="#part-1-command-line-cli" title="Permanent link">&para;</a></h2>
+<hr />
+<h2 id="session-modes">Session Modes<a class="headerlink" href="#session-modes" title="Permanent link">&para;</a></h2>
+<table>
+<thead>
+<tr>
+<th>Command</th>
+<th>Use when</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>claude</code></td>
+<td>Start interactive session</td>
+</tr>
+<tr>
+<td><code>claude "fix the bug in auth.py"</code></td>
+<td>Start session with an initial prompt</td>
+</tr>
+<tr>
+<td><code>claude --continue</code></td>
+<td>Continue the most recent session</td>
+</tr>
+<tr>
+<td><code>claude --resume</code></td>
+<td>Open a picker to resume any past session</td>
+</tr>
+<tr>
+<td><code>claude --model opus</code></td>
+<td>Start with a specific model</td>
+</tr>
+<tr>
+<td><code>claude --print "explain this" &lt; file.ts</code></td>
+<td>Non-interactive: print response to stdout</td>
+</tr>
+<tr>
+<td><code>claude --worktree feature-branch</code></td>
+<td>Start in an isolated git worktree</td>
+</tr>
+<tr>
+<td><code>claude --add-dir ../shared-config</code></td>
+<td>Grant access to an additional directory</td>
+</tr>
+<tr>
+<td><code>claude --safe-mode</code></td>
+<td>Disable all customizations (CLAUDE.md, MCP, hooks)</td>
+</tr>
+</tbody>
+</table>
+<h3 id="model-aliases">Model aliases<a class="headerlink" href="#model-aliases" title="Permanent link">&para;</a></h3>
+<table>
+<thead>
+<tr>
+<th>Alias</th>
+<th>Resolves to</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>default</code></td>
+<td>Account default (Opus 4.8 for Max/Team; Sonnet 4.6 for Pro)</td>
+</tr>
+<tr>
+<td><code>best</code></td>
+<td>Fable 5 where available, else latest Opus</td>
+</tr>
+<tr>
+<td><code>fable</code></td>
+<td>Claude Fable 5</td>
+</tr>
+<tr>
+<td><code>opus</code></td>
+<td>Claude Opus 4.8</td>
+</tr>
+<tr>
+<td><code>sonnet</code></td>
+<td>Claude Sonnet 4.6</td>
+</tr>
+<tr>
+<td><code>haiku</code></td>
+<td>Claude Haiku 4.5</td>
+</tr>
+<tr>
+<td><code>opusplan</code></td>
+<td>Opus for planning, Sonnet for execution</td>
+</tr>
+</tbody>
+</table>
+<p>Use full model IDs for exact pinning: <code>--model claude-sonnet-4-6</code>, <code>--model claude-opus-4-8</code>.</p>
+<hr />
+<h2 id="referencing-files-in-a-prompt">Referencing Files in a Prompt<a class="headerlink" href="#referencing-files-in-a-prompt" title="Permanent link">&para;</a></h2>
+<h3 id="mentions"><code>@</code> mentions<a class="headerlink" href="#mentions" title="Permanent link">&para;</a></h3>
+<p>Type <code>@</code> to autocomplete file paths directly in the CLI prompt:</p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a>@src/auth.py          — full file contents
+<a id="__codelineno-0-2" name="__codelineno-0-2" href="#__codelineno-0-2"></a>@src/                 — entire folder (trailing slash)
+<a id="__codelineno-0-3" name="__codelineno-0-3" href="#__codelineno-0-3"></a>@report.pdf pages=1-5 — specific PDF pages
+<a id="__codelineno-0-4" name="__codelineno-0-4" href="#__codelineno-0-4"></a>@file.ts#10-30        — specific line range
+</code></pre></div>
+<p>Multiple files in one prompt:</p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-1-1" name="__codelineno-1-1" href="#__codelineno-1-1"></a>Review @src/auth.py and @tests/test_auth.py for edge cases.
+</code></pre></div>
+<h3 id="piping-and-stdin">Piping and stdin<a class="headerlink" href="#piping-and-stdin" title="Permanent link">&para;</a></h3>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-2-1" name="__codelineno-2-1" href="#__codelineno-2-1"></a><span class="c1"># Pipe file content for non-interactive use</span>
+<a id="__codelineno-2-2" name="__codelineno-2-2" href="#__codelineno-2-2"></a>claude<span class="w"> </span>--print<span class="w"> </span><span class="s2">&quot;find bugs:&quot;</span><span class="w"> </span>&lt;<span class="w"> </span>src/auth.py
+<a id="__codelineno-2-3" name="__codelineno-2-3" href="#__codelineno-2-3"></a>
+<a id="__codelineno-2-4" name="__codelineno-2-4" href="#__codelineno-2-4"></a><span class="c1"># Pipe from another command</span>
+<a id="__codelineno-2-5" name="__codelineno-2-5" href="#__codelineno-2-5"></a>git<span class="w"> </span>diff<span class="w"> </span><span class="p">|</span><span class="w"> </span>claude<span class="w"> </span>--print<span class="w"> </span><span class="s2">&quot;write a commit message for this diff&quot;</span>
+<a id="__codelineno-2-6" name="__codelineno-2-6" href="#__codelineno-2-6"></a>
+<a id="__codelineno-2-7" name="__codelineno-2-7" href="#__codelineno-2-7"></a><span class="c1"># Heredoc multi-line prompt</span>
+<a id="__codelineno-2-8" name="__codelineno-2-8" href="#__codelineno-2-8"></a>claude<span class="w"> </span>--print<span class="w"> </span><span class="s">&lt;&lt; &#39;EOF&#39;</span>
+<a id="__codelineno-2-9" name="__codelineno-2-9" href="#__codelineno-2-9"></a><span class="s">Look at the file below and suggest improvements:</span>
+<a id="__codelineno-2-10" name="__codelineno-2-10" href="#__codelineno-2-10"></a><span class="s">$(cat src/main.py)</span>
+<a id="__codelineno-2-11" name="__codelineno-2-11" href="#__codelineno-2-11"></a><span class="s">EOF</span>
+</code></pre></div>
+<h3 id="shell-mode-in-repl">Shell mode (in REPL)<a class="headerlink" href="#shell-mode-in-repl" title="Permanent link">&para;</a></h3>
+<p>Prefix with <code>!</code> to run a shell command and add its output to the session context:</p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-3-1" name="__codelineno-3-1" href="#__codelineno-3-1"></a>! cat src/auth.py
+<a id="__codelineno-3-2" name="__codelineno-3-2" href="#__codelineno-3-2"></a>! git log --oneline -10
+<a id="__codelineno-3-3" name="__codelineno-3-3" href="#__codelineno-3-3"></a>! pytest tests/test_auth.py -v
+</code></pre></div>
+<hr />
+<h2 id="slash-commands">Slash Commands<a class="headerlink" href="#slash-commands" title="Permanent link">&para;</a></h2>
+<p>Type <code>/</code> in the interactive session to see all available commands.</p>
+<h3 id="session-control">Session control<a class="headerlink" href="#session-control" title="Permanent link">&para;</a></h3>
+<table>
+<thead>
+<tr>
+<th>Command</th>
+<th>Description</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>/clear</code></td>
+<td>Reset conversation (new context, keeps history)</td>
+</tr>
+<tr>
+<td><code>/compact</code></td>
+<td>Summarize history to free context window space</td>
+</tr>
+<tr>
+<td><code>/context</code></td>
+<td>Show context window usage breakdown</td>
+</tr>
+<tr>
+<td><code>/recap</code></td>
+<td>Generate a summary of the current session</td>
+</tr>
+<tr>
+<td><code>/btw &lt;question&gt;</code></td>
+<td>Ask a side question (no tools, no history entry — cheap)</td>
+</tr>
+</tbody>
+</table>
+<h3 id="model-and-effort">Model and effort<a class="headerlink" href="#model-and-effort" title="Permanent link">&para;</a></h3>
+<table>
+<thead>
+<tr>
+<th>Command</th>
+<th>Description</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>/model</code></td>
+<td>Open model picker</td>
+</tr>
+<tr>
+<td><code>/model opus</code></td>
+<td>Switch to Opus immediately</td>
+</tr>
+<tr>
+<td><code>/effort</code></td>
+<td>Open effort slider</td>
+</tr>
+<tr>
+<td><code>/effort high</code></td>
+<td>Set reasoning effort (low / medium / high / xhigh / max)</td>
+</tr>
+</tbody>
+</table>
+<h3 id="memory-and-context">Memory and context<a class="headerlink" href="#memory-and-context" title="Permanent link">&para;</a></h3>
+<table>
+<thead>
+<tr>
+<th>Command</th>
+<th>Description</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>/memory</code></td>
+<td>Browse and edit CLAUDE.md and auto-memory files</td>
+</tr>
+<tr>
+<td><code>/init</code></td>
+<td>Auto-generate a CLAUDE.md for the current project</td>
+</tr>
+</tbody>
+</table>
+<h3 id="tools-and-configuration">Tools and configuration<a class="headerlink" href="#tools-and-configuration" title="Permanent link">&para;</a></h3>
+<table>
+<thead>
+<tr>
+<th>Command</th>
+<th>Description</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>/mcp</code></td>
+<td>List, enable/disable, and authenticate MCP servers</td>
+</tr>
+<tr>
+<td><code>/permissions</code></td>
+<td>Set permission mode and per-tool rules</td>
+</tr>
+<tr>
+<td><code>/config</code></td>
+<td>Settings UI (model, effort, permission mode)</td>
+</tr>
+<tr>
+<td><code>/hooks</code></td>
+<td>View and manage configured hooks</td>
+</tr>
+<tr>
+<td><code>/settings</code></td>
+<td>Show active settings and their sources</td>
+</tr>
+<tr>
+<td><code>/skills</code></td>
+<td>List available skills (slash commands)</td>
+</tr>
+<tr>
+<td><code>/plugins</code></td>
+<td>Manage installed plugins</td>
+</tr>
+</tbody>
+</table>
+<h3 id="autonomous-operation">Autonomous operation<a class="headerlink" href="#autonomous-operation" title="Permanent link">&para;</a></h3>
+<table>
+<thead>
+<tr>
+<th>Command</th>
+<th>Description</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>/plan</code></td>
+<td>Switch to plan mode (Claude describes changes before making them)</td>
+</tr>
+<tr>
+<td><code>/loop [interval]</code></td>
+<td>Re-run the current prompt on a schedule (<code>/loop 5m</code>)</td>
+</tr>
+<tr>
+<td><code>/goal &lt;condition&gt;</code></td>
+<td>Set an objective to work toward (<code>/goal "tests pass"</code>); pair with <code>/loop</code> to keep iterating autonomously until the goal validates</td>
+</tr>
+<tr>
+<td><code>/background</code></td>
+<td>Detach session to run without blocking your terminal</td>
+</tr>
+<tr>
+<td><code>/batch &lt;prompt&gt;</code></td>
+<td>Decompose a large task and run parts in parallel worktrees</td>
+</tr>
+<tr>
+<td><code>/tasks</code></td>
+<td>Show background tasks and subagent progress</td>
+</tr>
+</tbody>
+</table>
+<h3 id="diagnostics">Diagnostics<a class="headerlink" href="#diagnostics" title="Permanent link">&para;</a></h3>
+<table>
+<thead>
+<tr>
+<th>Command</th>
+<th>Description</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>/doctor</code></td>
+<td>Check MCP connections, hooks, CLAUDE.md load status</td>
+</tr>
+<tr>
+<td><code>/status</code></td>
+<td>Show account, model, and session info</td>
+</tr>
+<tr>
+<td><code>/usage</code></td>
+<td>Show token usage for account and session</td>
+</tr>
+<tr>
+<td><code>/debug</code></td>
+<td>Enable debug logging for this session</td>
+</tr>
+</tbody>
+</table>
+<hr />
+<h2 id="keyboard-shortcuts-interactive-repl">Keyboard Shortcuts (Interactive REPL)<a class="headerlink" href="#keyboard-shortcuts-interactive-repl" title="Permanent link">&para;</a></h2>
+<h3 id="navigation-and-interruption">Navigation and interruption<a class="headerlink" href="#navigation-and-interruption" title="Permanent link">&para;</a></h3>
+<table>
+<thead>
+<tr>
+<th>Key</th>
+<th>Action</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>Esc</code></td>
+<td>Interrupt Claude mid-response (keeps work done so far)</td>
+</tr>
+<tr>
+<td><code>Esc Esc</code></td>
+<td>Clear input draft (saves to history), or open rewind menu when empty</td>
+</tr>
+<tr>
+<td><code>Ctrl+C</code></td>
+<td>First press clears input; second press exits</td>
+</tr>
+<tr>
+<td><code>Ctrl+D</code></td>
+<td>Exit session</td>
+</tr>
+<tr>
+<td><code>Ctrl+L</code></td>
+<td>Redraw screen</td>
+</tr>
+<tr>
+<td><code>Ctrl+O</code></td>
+<td>Toggle transcript viewer (shows all tool calls)</td>
+</tr>
+<tr>
+<td><code>Ctrl+R</code></td>
+<td>Reverse search command history</td>
+</tr>
+<tr>
+<td><code>Ctrl+G</code> or <code>Ctrl+X Ctrl+E</code></td>
+<td>Open current prompt in your <code>$EDITOR</code></td>
+</tr>
+<tr>
+<td><code>Ctrl+X Ctrl+K</code></td>
+<td>Stop all background subagents (press twice to confirm)</td>
+</tr>
+</tbody>
+</table>
+<h3 id="permission-mode-cycling">Permission mode cycling<a class="headerlink" href="#permission-mode-cycling" title="Permanent link">&para;</a></h3>
+<table>
+<thead>
+<tr>
+<th>Key</th>
+<th>Action</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>Shift+Tab</code> or <code>Alt+M</code></td>
+<td>Cycle: default → acceptEdits → plan → auto</td>
+</tr>
+<tr>
+<td><code>Option+P</code> / <code>Alt+P</code></td>
+<td>Open model picker</td>
+</tr>
+<tr>
+<td><code>Option+T</code> / <code>Alt+T</code></td>
+<td>Toggle extended thinking</td>
+</tr>
+</tbody>
+</table>
+<h3 id="multiline-input-choose-one-that-matches-your-terminal">Multiline input (choose one that matches your terminal)<a class="headerlink" href="#multiline-input-choose-one-that-matches-your-terminal" title="Permanent link">&para;</a></h3>
+<table>
+<thead>
+<tr>
+<th>Method</th>
+<th>Works in</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>\ + Enter</code></td>
+<td>All terminals</td>
+</tr>
+<tr>
+<td><code>Ctrl+J</code></td>
+<td>All terminals</td>
+</tr>
+<tr>
+<td><code>Shift+Enter</code></td>
+<td>iTerm2, Terminal.app, WezTerm, Kitty, Warp, Alacritty</td>
+</tr>
+<tr>
+<td><code>Option+Enter</code></td>
+<td>Terminals with Option-as-Meta configured</td>
+</tr>
+</tbody>
+</table>
+<p>Run <code>/terminal-setup</code> to install readline keybindings including <code>Shift+Enter</code>.</p>
+<h3 id="text-editing-readline-style">Text editing (readline-style)<a class="headerlink" href="#text-editing-readline-style" title="Permanent link">&para;</a></h3>
+<table>
+<thead>
+<tr>
+<th>Key</th>
+<th>Action</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>Ctrl+A</code> / <code>Ctrl+E</code></td>
+<td>Move to line start / end</td>
+</tr>
+<tr>
+<td><code>Ctrl+K</code></td>
+<td>Delete to end of line</td>
+</tr>
+<tr>
+<td><code>Ctrl+U</code></td>
+<td>Delete from cursor to line start</td>
+</tr>
+<tr>
+<td><code>Ctrl+W</code></td>
+<td>Delete previous word</td>
+</tr>
+<tr>
+<td><code>Alt+B</code> / <code>Alt+F</code></td>
+<td>Move back / forward one word</td>
+</tr>
+<tr>
+<td><code>Ctrl+Y</code></td>
+<td>Paste last deleted text</td>
+</tr>
+<tr>
+<td><code>Alt+Y</code></td>
+<td>Cycle paste history</td>
+</tr>
+</tbody>
+</table>
+<h3 id="transcript-viewer-ctrlo-to-toggle">Transcript viewer (<code>Ctrl+O</code> to toggle)<a class="headerlink" href="#transcript-viewer-ctrlo-to-toggle" title="Permanent link">&para;</a></h3>
+<table>
+<thead>
+<tr>
+<th>Key</th>
+<th>Action</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>{</code> / <code>}</code></td>
+<td>Jump to previous / next user prompt</td>
+</tr>
+<tr>
+<td><code>Ctrl+E</code></td>
+<td>Toggle show full content</td>
+</tr>
+<tr>
+<td><code>v</code></td>
+<td>Open in text editor</td>
+</tr>
+<tr>
+<td><code>q</code> / <code>Esc</code></td>
+<td>Exit transcript view</td>
+</tr>
+</tbody>
+</table>
+<hr />
+<h2 id="non-interactive-scripting">Non-Interactive / Scripting<a class="headerlink" href="#non-interactive-scripting" title="Permanent link">&para;</a></h2>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-4-1" name="__codelineno-4-1" href="#__codelineno-4-1"></a><span class="c1"># Print response to stdout</span>
+<a id="__codelineno-4-2" name="__codelineno-4-2" href="#__codelineno-4-2"></a>claude<span class="w"> </span>--print<span class="w"> </span><span class="s2">&quot;summarize this module&quot;</span><span class="w"> </span>&lt;<span class="w"> </span>src/payments.py
+<a id="__codelineno-4-3" name="__codelineno-4-3" href="#__codelineno-4-3"></a>
+<a id="__codelineno-4-4" name="__codelineno-4-4" href="#__codelineno-4-4"></a><span class="c1"># JSON output for automation</span>
+<a id="__codelineno-4-5" name="__codelineno-4-5" href="#__codelineno-4-5"></a>claude<span class="w"> </span>--print<span class="w"> </span>--output-format<span class="w"> </span>json<span class="w"> </span><span class="s2">&quot;list all exported functions&quot;</span><span class="w"> </span>&lt;<span class="w"> </span>src/api.py
+<a id="__codelineno-4-6" name="__codelineno-4-6" href="#__codelineno-4-6"></a>
+<a id="__codelineno-4-7" name="__codelineno-4-7" href="#__codelineno-4-7"></a><span class="c1"># Streaming JSON (for real-time parsing)</span>
+<a id="__codelineno-4-8" name="__codelineno-4-8" href="#__codelineno-4-8"></a>claude<span class="w"> </span>--print<span class="w"> </span>--output-format<span class="w"> </span>stream-json<span class="w"> </span><span class="s2">&quot;audit this file&quot;</span><span class="w"> </span>&lt;<span class="w"> </span>src/auth.py
+<a id="__codelineno-4-9" name="__codelineno-4-9" href="#__codelineno-4-9"></a>
+<a id="__codelineno-4-10" name="__codelineno-4-10" href="#__codelineno-4-10"></a><span class="c1"># Override model for one run</span>
+<a id="__codelineno-4-11" name="__codelineno-4-11" href="#__codelineno-4-11"></a>claude<span class="w"> </span>--print<span class="w"> </span>--model<span class="w"> </span>haiku<span class="w"> </span><span class="s2">&quot;is this valid JSON?&quot;</span><span class="w"> </span>&lt;<span class="w"> </span>data.json
+<a id="__codelineno-4-12" name="__codelineno-4-12" href="#__codelineno-4-12"></a>
+<a id="__codelineno-4-13" name="__codelineno-4-13" href="#__codelineno-4-13"></a><span class="c1"># Set reasoning effort</span>
+<a id="__codelineno-4-14" name="__codelineno-4-14" href="#__codelineno-4-14"></a>claude<span class="w"> </span>--print<span class="w"> </span>--effort<span class="w"> </span>high<span class="w"> </span><span class="s2">&quot;find subtle bugs&quot;</span><span class="w"> </span>&lt;<span class="w"> </span>src/core.py
+<a id="__codelineno-4-15" name="__codelineno-4-15" href="#__codelineno-4-15"></a>
+<a id="__codelineno-4-16" name="__codelineno-4-16" href="#__codelineno-4-16"></a><span class="c1"># Quiet (no spinner, no status messages)</span>
+<a id="__codelineno-4-17" name="__codelineno-4-17" href="#__codelineno-4-17"></a>claude<span class="w"> </span>--print<span class="w"> </span><span class="s2">&quot;fix the TODO&quot;</span><span class="w"> </span>&lt;<span class="w"> </span>src/todo.py<span class="w"> </span><span class="m">2</span>&gt;/dev/null
+</code></pre></div>
+<hr />
+<h2 id="mcp-server-configuration">MCP Server Configuration<a class="headerlink" href="#mcp-server-configuration" title="Permanent link">&para;</a></h2>
+<h3 id="adding-servers">Adding servers<a class="headerlink" href="#adding-servers" title="Permanent link">&para;</a></h3>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-5-1" name="__codelineno-5-1" href="#__codelineno-5-1"></a><span class="c1"># HTTP server</span>
+<a id="__codelineno-5-2" name="__codelineno-5-2" href="#__codelineno-5-2"></a>claude<span class="w"> </span>mcp<span class="w"> </span>add<span class="w"> </span>--transport<span class="w"> </span>http<span class="w"> </span>my-server<span class="w"> </span>https://api.example.com/mcp
+<a id="__codelineno-5-3" name="__codelineno-5-3" href="#__codelineno-5-3"></a>
+<a id="__codelineno-5-4" name="__codelineno-5-4" href="#__codelineno-5-4"></a><span class="c1"># Local stdio server</span>
+<a id="__codelineno-5-5" name="__codelineno-5-5" href="#__codelineno-5-5"></a>claude<span class="w"> </span>mcp<span class="w"> </span>add<span class="w"> </span>playwright<span class="w"> </span>--<span class="w"> </span>npx<span class="w"> </span>-y<span class="w"> </span>@playwright/mcp@latest
+<a id="__codelineno-5-6" name="__codelineno-5-6" href="#__codelineno-5-6"></a>
+<a id="__codelineno-5-7" name="__codelineno-5-7" href="#__codelineno-5-7"></a><span class="c1"># User scope (available in all projects)</span>
+<a id="__codelineno-5-8" name="__codelineno-5-8" href="#__codelineno-5-8"></a>claude<span class="w"> </span>mcp<span class="w"> </span>add<span class="w"> </span>--scope<span class="w"> </span>user<span class="w"> </span>github<span class="w"> </span>https://api.githubcopilot.com/mcp<span class="w"> </span><span class="se">\</span>
+<a id="__codelineno-5-9" name="__codelineno-5-9" href="#__codelineno-5-9"></a><span class="w">  </span>--transport<span class="w"> </span>http<span class="w"> </span>--header<span class="w"> </span><span class="s2">&quot;Authorization: Bearer YOUR_PAT&quot;</span>
+<a id="__codelineno-5-10" name="__codelineno-5-10" href="#__codelineno-5-10"></a>
+<a id="__codelineno-5-11" name="__codelineno-5-11" href="#__codelineno-5-11"></a><span class="c1"># Project scope (committed to repo, shared with team)</span>
+<a id="__codelineno-5-12" name="__codelineno-5-12" href="#__codelineno-5-12"></a>claude<span class="w"> </span>mcp<span class="w"> </span>add<span class="w"> </span>--scope<span class="w"> </span>project<span class="w"> </span>my-server<span class="w"> </span>https://api.example.com/mcp
+</code></pre></div>
+<h3 id="where-config-lives">Where config lives<a class="headerlink" href="#where-config-lives" title="Permanent link">&para;</a></h3>
+<table>
+<thead>
+<tr>
+<th>Scope</th>
+<th>File</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Local (default)</td>
+<td><code>~/.claude.json</code> (project-specific entry)</td>
+</tr>
+<tr>
+<td>User</td>
+<td><code>~/.claude.json</code> (top-level <code>mcpServers</code> key)</td>
+</tr>
+<tr>
+<td>Project</td>
+<td><code>.mcp.json</code> in repo root (committed)</td>
+</tr>
+</tbody>
+</table>
+<h3 id="mcpjson-structure"><code>.mcp.json</code> structure<a class="headerlink" href="#mcpjson-structure" title="Permanent link">&para;</a></h3>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-6-1" name="__codelineno-6-1" href="#__codelineno-6-1"></a><span class="p">{</span>
+<a id="__codelineno-6-2" name="__codelineno-6-2" href="#__codelineno-6-2"></a><span class="w">  </span><span class="nt">&quot;mcpServers&quot;</span><span class="p">:</span><span class="w"> </span><span class="p">{</span>
+<a id="__codelineno-6-3" name="__codelineno-6-3" href="#__codelineno-6-3"></a><span class="w">    </span><span class="nt">&quot;my-http-server&quot;</span><span class="p">:</span><span class="w"> </span><span class="p">{</span>
+<a id="__codelineno-6-4" name="__codelineno-6-4" href="#__codelineno-6-4"></a><span class="w">      </span><span class="nt">&quot;type&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;http&quot;</span><span class="p">,</span>
+<a id="__codelineno-6-5" name="__codelineno-6-5" href="#__codelineno-6-5"></a><span class="w">      </span><span class="nt">&quot;url&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;https://api.example.com/mcp&quot;</span>
+<a id="__codelineno-6-6" name="__codelineno-6-6" href="#__codelineno-6-6"></a><span class="w">    </span><span class="p">},</span>
+<a id="__codelineno-6-7" name="__codelineno-6-7" href="#__codelineno-6-7"></a><span class="w">    </span><span class="nt">&quot;my-local-server&quot;</span><span class="p">:</span><span class="w"> </span><span class="p">{</span>
+<a id="__codelineno-6-8" name="__codelineno-6-8" href="#__codelineno-6-8"></a><span class="w">      </span><span class="nt">&quot;type&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;stdio&quot;</span><span class="p">,</span>
+<a id="__codelineno-6-9" name="__codelineno-6-9" href="#__codelineno-6-9"></a><span class="w">      </span><span class="nt">&quot;command&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;npx&quot;</span><span class="p">,</span>
+<a id="__codelineno-6-10" name="__codelineno-6-10" href="#__codelineno-6-10"></a><span class="w">      </span><span class="nt">&quot;args&quot;</span><span class="p">:</span><span class="w"> </span><span class="p">[</span><span class="s2">&quot;-y&quot;</span><span class="p">,</span><span class="w"> </span><span class="s2">&quot;@org/my-mcp@latest&quot;</span><span class="p">]</span>
+<a id="__codelineno-6-11" name="__codelineno-6-11" href="#__codelineno-6-11"></a><span class="w">    </span><span class="p">}</span>
+<a id="__codelineno-6-12" name="__codelineno-6-12" href="#__codelineno-6-12"></a><span class="w">  </span><span class="p">}</span>
+<a id="__codelineno-6-13" name="__codelineno-6-13" href="#__codelineno-6-13"></a><span class="p">}</span>
+</code></pre></div>
+<h3 id="managing-and-using-mcp-tools">Managing and using MCP tools<a class="headerlink" href="#managing-and-using-mcp-tools" title="Permanent link">&para;</a></h3>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-7-1" name="__codelineno-7-1" href="#__codelineno-7-1"></a>claude<span class="w"> </span>mcp<span class="w"> </span>list<span class="w">          </span><span class="c1"># check connection status</span>
+<a id="__codelineno-7-2" name="__codelineno-7-2" href="#__codelineno-7-2"></a>claude<span class="w"> </span>mcp<span class="w"> </span>remove<span class="w"> </span>&lt;name&gt;<span class="w"> </span><span class="c1"># remove a server</span>
+</code></pre></div>
+<p>In a session: type <code>/mcp</code> to enable/disable servers and authenticate OAuth servers. Claude discovers and uses MCP tools automatically — no special prompt syntax needed. You can be explicit:</p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-8-1" name="__codelineno-8-1" href="#__codelineno-8-1"></a>Use the github MCP server to review PR #456.
+<a id="__codelineno-8-2" name="__codelineno-8-2" href="#__codelineno-8-2"></a>Use the playwright server to screenshot the homepage.
+</code></pre></div>
+<hr />
+<h2 id="hooks">Hooks<a class="headerlink" href="#hooks" title="Permanent link">&para;</a></h2>
+<p>Hooks run shell commands at lifecycle events — enforce coding standards, format on save, block dangerous commands, log tool use.</p>
+<h3 id="where-hooks-are-configured">Where hooks are configured<a class="headerlink" href="#where-hooks-are-configured" title="Permanent link">&para;</a></h3>
+<table>
+<thead>
+<tr>
+<th>File</th>
+<th>Scope</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>~/.claude/settings.json</code></td>
+<td>All projects (user)</td>
+</tr>
+<tr>
+<td><code>.claude/settings.json</code></td>
+<td>This project (committed)</td>
+</tr>
+<tr>
+<td><code>.claude/settings.local.json</code></td>
+<td>This project (not committed)</td>
+</tr>
+</tbody>
+</table>
+<h3 id="key-event-types">Key event types<a class="headerlink" href="#key-event-types" title="Permanent link">&para;</a></h3>
+<table>
+<thead>
+<tr>
+<th>Event</th>
+<th>Fires when</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>PreToolUse</code></td>
+<td>Before any tool call (Bash, Edit, Read, MCP, etc.)</td>
+</tr>
+<tr>
+<td><code>PostToolUse</code></td>
+<td>After a tool succeeds</td>
+</tr>
+<tr>
+<td><code>UserPromptSubmit</code></td>
+<td>Before Claude processes a user prompt</td>
+</tr>
+<tr>
+<td><code>SessionStart</code></td>
+<td>Session begins or resumes</td>
+</tr>
+<tr>
+<td><code>Stop</code></td>
+<td>Claude finishes responding (the main agent's turn ends — per-turn, not session end)</td>
+</tr>
+<tr>
+<td><code>SessionEnd</code></td>
+<td>The session terminates</td>
+</tr>
+<tr>
+<td><code>FileChanged</code></td>
+<td>A watched file changes on disk</td>
+</tr>
+<tr>
+<td><code>PreCompact</code> / <code>PostCompact</code></td>
+<td>Before / after context compaction</td>
+</tr>
+</tbody>
+</table>
+<h3 id="example-hook-config">Example hook config<a class="headerlink" href="#example-hook-config" title="Permanent link">&para;</a></h3>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-9-1" name="__codelineno-9-1" href="#__codelineno-9-1"></a><span class="p">{</span>
+<a id="__codelineno-9-2" name="__codelineno-9-2" href="#__codelineno-9-2"></a><span class="w">  </span><span class="nt">&quot;hooks&quot;</span><span class="p">:</span><span class="w"> </span><span class="p">{</span>
+<a id="__codelineno-9-3" name="__codelineno-9-3" href="#__codelineno-9-3"></a><span class="w">    </span><span class="nt">&quot;PreToolUse&quot;</span><span class="p">:</span><span class="w"> </span><span class="p">[</span>
+<a id="__codelineno-9-4" name="__codelineno-9-4" href="#__codelineno-9-4"></a><span class="w">      </span><span class="p">{</span>
+<a id="__codelineno-9-5" name="__codelineno-9-5" href="#__codelineno-9-5"></a><span class="w">        </span><span class="nt">&quot;matcher&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;Bash&quot;</span><span class="p">,</span>
+<a id="__codelineno-9-6" name="__codelineno-9-6" href="#__codelineno-9-6"></a><span class="w">        </span><span class="nt">&quot;hooks&quot;</span><span class="p">:</span><span class="w"> </span><span class="p">[</span>
+<a id="__codelineno-9-7" name="__codelineno-9-7" href="#__codelineno-9-7"></a><span class="w">          </span><span class="p">{</span><span class="w"> </span><span class="nt">&quot;type&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;command&quot;</span><span class="p">,</span><span class="w"> </span><span class="nt">&quot;command&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;cmd=$(jq -r &#39;.tool_input.command&#39;); case \&quot;$cmd\&quot; in *&#39;rm -rf&#39;*) echo &#39;rm -rf is blocked&#39; &gt;&amp;2; exit 2 ;; esac&quot;</span><span class="w"> </span><span class="p">}</span>
+<a id="__codelineno-9-8" name="__codelineno-9-8" href="#__codelineno-9-8"></a><span class="w">        </span><span class="p">]</span>
+<a id="__codelineno-9-9" name="__codelineno-9-9" href="#__codelineno-9-9"></a><span class="w">      </span><span class="p">}</span>
+<a id="__codelineno-9-10" name="__codelineno-9-10" href="#__codelineno-9-10"></a><span class="w">    </span><span class="p">],</span>
+<a id="__codelineno-9-11" name="__codelineno-9-11" href="#__codelineno-9-11"></a><span class="w">    </span><span class="nt">&quot;PostToolUse&quot;</span><span class="p">:</span><span class="w"> </span><span class="p">[</span>
+<a id="__codelineno-9-12" name="__codelineno-9-12" href="#__codelineno-9-12"></a><span class="w">      </span><span class="p">{</span>
+<a id="__codelineno-9-13" name="__codelineno-9-13" href="#__codelineno-9-13"></a><span class="w">        </span><span class="nt">&quot;matcher&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;Edit|Write&quot;</span><span class="p">,</span>
+<a id="__codelineno-9-14" name="__codelineno-9-14" href="#__codelineno-9-14"></a><span class="w">        </span><span class="nt">&quot;hooks&quot;</span><span class="p">:</span><span class="w"> </span><span class="p">[</span>
+<a id="__codelineno-9-15" name="__codelineno-9-15" href="#__codelineno-9-15"></a><span class="w">          </span><span class="p">{</span><span class="w"> </span><span class="nt">&quot;type&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;command&quot;</span><span class="p">,</span><span class="w"> </span><span class="nt">&quot;command&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;jq -r &#39;.tool_input.file_path&#39; | xargs -r prettier --write 2&gt;/dev/null || true&quot;</span><span class="w"> </span><span class="p">}</span>
+<a id="__codelineno-9-16" name="__codelineno-9-16" href="#__codelineno-9-16"></a><span class="w">        </span><span class="p">]</span>
+<a id="__codelineno-9-17" name="__codelineno-9-17" href="#__codelineno-9-17"></a><span class="w">      </span><span class="p">}</span>
+<a id="__codelineno-9-18" name="__codelineno-9-18" href="#__codelineno-9-18"></a><span class="w">    </span><span class="p">]</span>
+<a id="__codelineno-9-19" name="__codelineno-9-19" href="#__codelineno-9-19"></a><span class="w">  </span><span class="p">}</span>
+<a id="__codelineno-9-20" name="__codelineno-9-20" href="#__codelineno-9-20"></a><span class="p">}</span>
+</code></pre></div>
+<p>Hooks are keyed by <strong>event name</strong>; <code>matcher</code> is a tool-name pattern (string), and each match holds a <code>hooks</code> array. The hook reads the event as <strong>JSON on stdin</strong> (<code>tool_name</code>, <code>tool_input</code>, …) — there is no result-template variable. <strong>Exit 2 blocks</strong> the call (stderr goes to Claude); exit 0 allows it; exit 1 does not block. View configured hooks in a session with <code>/hooks</code>.</p>
+<hr />
+<h2 id="claudemd-and-memory">CLAUDE.md and Memory<a class="headerlink" href="#claudemd-and-memory" title="Permanent link">&para;</a></h2>
+<h3 id="claudemd-persistent-project-instructions">CLAUDE.md — persistent project instructions<a class="headerlink" href="#claudemd-persistent-project-instructions" title="Permanent link">&para;</a></h3>
+<p>Claude reads these files at session start (broadest to most specific):</p>
+<table>
+<thead>
+<tr>
+<th>Location</th>
+<th>Scope</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>/Library/Application Support/ClaudeCode/CLAUDE.md</code> (macOS)</td>
+<td>Organization-wide policy</td>
+</tr>
+<tr>
+<td><code>~/.claude/CLAUDE.md</code></td>
+<td>All your projects</td>
+</tr>
+<tr>
+<td><code>./CLAUDE.md</code> or <code>./.claude/CLAUDE.md</code></td>
+<td>This project (committed)</td>
+</tr>
+<tr>
+<td><code>./CLAUDE.local.md</code></td>
+<td>This project, personal (not committed)</td>
+</tr>
+<tr>
+<td>Subdirectory <code>CLAUDE.md</code> files</td>
+<td>Lazy-loaded when Claude reads matching files</td>
+</tr>
+</tbody>
+</table>
+<p><strong>Tips:</strong>
+- Keep it under 200 lines — shorter means better adherence.
+- Be specific: "Use 2-space indentation" beats "format code nicely."
+- Import other files: <code>@README</code>, <code>@docs/style-guide.md</code>.
+- Generate one automatically: <code>/init</code></p>
+<h3 id="auto-memory">Auto-memory<a class="headerlink" href="#auto-memory" title="Permanent link">&para;</a></h3>
+<p>Claude writes project-specific memories automatically based on what's useful to recall across sessions.</p>
+<table>
+<thead>
+<tr>
+<th></th>
+<th>CLAUDE.md</th>
+<th>Auto-memory</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Written by</td>
+<td>You</td>
+<td>Claude (automatically)</td>
+</tr>
+<tr>
+<td>Location</td>
+<td>Repo or <code>~/.claude/</code></td>
+<td><code>~/.claude/projects/&lt;hash&gt;/memory/</code></td>
+</tr>
+<tr>
+<td>Shared via git</td>
+<td>Yes (if in repo)</td>
+<td>No — machine-local</td>
+</tr>
+<tr>
+<td>Loaded at startup</td>
+<td>Yes (all matching files)</td>
+<td>First 200 lines of <code>MEMORY.md</code></td>
+</tr>
+</tbody>
+</table>
+<p>Browse and edit both with <code>/memory</code>.</p>
+<hr />
+<hr />
+<h2 id="part-2-vs-code-extension">Part 2 — VS Code Extension<a class="headerlink" href="#part-2-vs-code-extension" title="Permanent link">&para;</a></h2>
+<p>The extension wraps the same Claude Code engine with an inline chat panel, file-attach shortcuts, and editor integration. Requires Claude Code CLI installed.</p>
+<hr />
+<h2 id="opening-the-panel">Opening the Panel<a class="headerlink" href="#opening-the-panel" title="Permanent link">&para;</a></h2>
+<table>
+<thead>
+<tr>
+<th>Action</th>
+<th>How</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Sidebar panel</td>
+<td>Click the spark <strong>✦</strong> icon in the Activity Bar (left sidebar)</td>
+</tr>
+<tr>
+<td>Editor toolbar</td>
+<td>Click the spark <strong>✦</strong> icon in the top-right toolbar (requires a file open)</td>
+</tr>
+<tr>
+<td>Status bar</td>
+<td>Click <strong>✱ Claude Code</strong> in the bottom status bar</td>
+</tr>
+<tr>
+<td>New tab</td>
+<td>Command Palette → <code>Claude Code: Open in New Tab</code></td>
+</tr>
+<tr>
+<td>Keyboard (new tab)</td>
+<td><code>Cmd+Shift+Esc</code> (macOS) / <code>Ctrl+Shift+Esc</code> (Windows/Linux)</td>
+</tr>
+</tbody>
+</table>
+<p>A colored dot on the spark icon signals session state: <strong>blue</strong> = permission pending, <strong>orange</strong> = finished while the panel was hidden.</p>
+<hr />
+<h2 id="keyboard-shortcuts">Keyboard Shortcuts<a class="headerlink" href="#keyboard-shortcuts" title="Permanent link">&para;</a></h2>
+<table>
+<thead>
+<tr>
+<th>Shortcut</th>
+<th>Action</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>Cmd+Esc</code> / <code>Ctrl+Esc</code></td>
+<td>Toggle focus between editor and Claude panel</td>
+</tr>
+<tr>
+<td><code>Cmd+Shift+Esc</code> / <code>Ctrl+Shift+Esc</code></td>
+<td>Open new Claude conversation in a tab</td>
+</tr>
+<tr>
+<td><code>Option+K</code> / <code>Alt+K</code></td>
+<td>Insert <code>@file.ts#line-range</code> for the current editor selection</td>
+</tr>
+<tr>
+<td><code>Shift+Enter</code></td>
+<td>Multiline input in the chat box</td>
+</tr>
+<tr>
+<td><code>Cmd+Shift+T</code> / <code>Ctrl+Shift+T</code></td>
+<td>Reopen last closed Claude tab</td>
+</tr>
+</tbody>
+</table>
+<hr />
+<h2 id="attaching-files-and-code">Attaching Files and Code<a class="headerlink" href="#attaching-files-and-code" title="Permanent link">&para;</a></h2>
+<h3 id="mentions-in-the-chat-input"><code>@</code> mentions in the chat input<a class="headerlink" href="#mentions-in-the-chat-input" title="Permanent link">&para;</a></h3>
+<p>Type <code>@</code> to fuzzy-search and attach files from the workspace:</p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-10-1" name="__codelineno-10-1" href="#__codelineno-10-1"></a>@src/auth.py               — full file
+<a id="__codelineno-10-2" name="__codelineno-10-2" href="#__codelineno-10-2"></a>@src/                      — entire folder
+<a id="__codelineno-10-3" name="__codelineno-10-3" href="#__codelineno-10-3"></a>@src/auth.py#10-30         — specific line range
+<a id="__codelineno-10-4" name="__codelineno-10-4" href="#__codelineno-10-4"></a>@browser                   — browser content (requires Claude in Chrome extension)
+</code></pre></div>
+<p>Multiple attachments:</p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-11-1" name="__codelineno-11-1" href="#__codelineno-11-1"></a>@src/auth.py @tests/test_auth.py  — do these tests cover all branches?
+</code></pre></div>
+<p>Attached files appear as chips above the input. Their full contents are sent to the model.</p>
+<h3 id="send-selected-code-from-the-editor">Send selected code from the editor<a class="headerlink" href="#send-selected-code-from-the-editor" title="Permanent link">&para;</a></h3>
+<ol>
+<li>Select lines in the editor</li>
+<li>Press <code>Option+K</code> / <code>Alt+K</code> — inserts the <code>@file#range</code> reference automatically</li>
+<li>Or: right-click → <strong>Send to Claude Code</strong></li>
+</ol>
+<p>The selection chip shows a line count in the corner. Click the eye icon to toggle whether the selection is visible to Claude.</p>
+<p>You can also <strong>Shift+drag</strong> files from the Explorer into the prompt box.</p>
+<hr />
+<h2 id="permission-modes">Permission Modes<a class="headerlink" href="#permission-modes" title="Permanent link">&para;</a></h2>
+<p>The mode selector sits at the bottom of the prompt box. Cycle it or click to choose:</p>
+<table>
+<thead>
+<tr>
+<th>Mode</th>
+<th>Behavior</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>default</code></td>
+<td>Asks permission for file edits and shell commands</td>
+</tr>
+<tr>
+<td><code>plan</code></td>
+<td>Claude describes all changes first; accept/reject before execution</td>
+</tr>
+<tr>
+<td><code>acceptEdits</code></td>
+<td>Auto-approves file edits; still asks for shell commands</td>
+</tr>
+<tr>
+<td><code>auto</code></td>
+<td>Auto-approves safe actions via classifier; no prompts</td>
+</tr>
+</tbody>
+</table>
+<p>In <code>plan</code> mode, diffs open in a markdown editor where you can add inline comments before accepting.</p>
+<p>You can also cycle modes from the CLI REPL with <code>Shift+Tab</code>.</p>
+<hr />
+<h2 id="sessions-and-history">Sessions and History<a class="headerlink" href="#sessions-and-history" title="Permanent link">&para;</a></h2>
+<p>Sessions in the extension persist across VS Code restarts.</p>
+<ul>
+<li><strong>Browse history:</strong> Click the "Session history" button in the panel header → search or select any past session.</li>
+<li><strong>Remote sessions:</strong> The "Remote" tab shows cloud sessions from claude.ai (requires subscription).</li>
+<li><strong>Multiple tabs:</strong> Open additional conversations with <code>Cmd+Shift+Esc</code> — each tab is independent.</li>
+<li><strong>Resume sessions from CLI:</strong> Run <code>claude --resume</code> (picker) or <code>claude --continue</code> in the terminal; the extension panel picks up the active session.</li>
+</ul>
+<p>Manage sessions from the integrated terminal:</p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-12-1" name="__codelineno-12-1" href="#__codelineno-12-1"></a>claude<span class="w"> </span>--resume<span class="w">                         </span><span class="c1"># resume most recent session</span>
+<a id="__codelineno-12-2" name="__codelineno-12-2" href="#__codelineno-12-2"></a>claude<span class="w"> </span>--continue<span class="w"> </span>&lt;session-id&gt;<span class="w">          </span><span class="c1"># continue a specific session</span>
+</code></pre></div>
+<hr />
+<h2 id="slash-commands-in-the-extension">Slash Commands in the Extension<a class="headerlink" href="#slash-commands-in-the-extension" title="Permanent link">&para;</a></h2>
+<p>The extension supports a subset of CLI slash commands. Type <code>/</code> in the chat input to see what's available. Confirmed in both CLI and extension:</p>
+<p><code>/clear</code> <code>/compact</code> <code>/context</code> <code>/model</code> <code>/effort</code> <code>/memory</code> <code>/mcp</code> <code>/permissions</code> <code>/plan</code> <code>/status</code> <code>/doctor</code> <code>/recap</code> <code>/settings</code></p>
+<p>Commands available in CLI only (not in the extension panel): <code>!</code> shell mode, <code>/loop</code>, <code>/goal</code>, <code>/background</code>, <code>/batch</code>, tab completion.</p>
+<hr />
+<h2 id="mcp-servers-in-the-extension">MCP Servers in the Extension<a class="headerlink" href="#mcp-servers-in-the-extension" title="Permanent link">&para;</a></h2>
+<p>MCP server configuration is shared between the CLI and extension — both read <code>~/.claude.json</code> and <code>.mcp.json</code>.</p>
+<p><strong>Add servers</strong> from the terminal using <code>claude mcp add</code> (same as CLI).</p>
+<p><strong>Manage servers</strong> from within the extension: type <code>/mcp</code> in the chat input → enable, disable, or authenticate servers.</p>
+<hr />
+<h2 id="extension-settings-vs-code-settingsjson">Extension Settings (VS Code <code>settings.json</code>)<a class="headerlink" href="#extension-settings-vs-code-settingsjson" title="Permanent link">&para;</a></h2>
+<p>These settings live in VS Code workspace or user settings, not in <code>~/.claude/settings.json</code>:</p>
+<table>
+<thead>
+<tr>
+<th>Setting</th>
+<th>Description</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>claudeCode.useTerminal</code></td>
+<td>Use CLI mode instead of the graphical panel</td>
+</tr>
+<tr>
+<td><code>claudeCode.initialPermissionMode</code></td>
+<td>Starting permission mode: <code>default</code> / <code>plan</code> / <code>acceptEdits</code> / <code>auto</code></td>
+</tr>
+<tr>
+<td><code>claudeCode.autosave</code></td>
+<td>Auto-save files before Claude reads or writes them</td>
+</tr>
+<tr>
+<td><code>claudeCode.respectGitIgnore</code></td>
+<td>Exclude <code>.gitignore</code> patterns from file search</td>
+</tr>
+<tr>
+<td><code>claudeCode.usePythonEnvironment</code></td>
+<td>Activate the workspace Python environment for Claude</td>
+</tr>
+<tr>
+<td><code>claudeCode.enableNewConversationShortcut</code></td>
+<td>Enable <code>Cmd+N</code> to open a new conversation</td>
+</tr>
+</tbody>
+</table>
+<p>Behavioral settings (effort, model, hooks, MCP) live in <code>~/.claude/settings.json</code> and apply to both the CLI and extension.</p>
+<hr />
+<h2 id="cli-in-the-vs-code-integrated-terminal">CLI in the VS Code Integrated Terminal<a class="headerlink" href="#cli-in-the-vs-code-integrated-terminal" title="Permanent link">&para;</a></h2>
+<p>The extension bundles a private CLI for the chat panel, which is separate from the <code>claude</code> command in your PATH. To connect the CLI to VS Code (for diff viewing and IDE context):</p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-13-1" name="__codelineno-13-1" href="#__codelineno-13-1"></a><span class="c1"># Inside a CLI session, link it to the open VS Code window</span>
+<a id="__codelineno-13-2" name="__codelineno-13-2" href="#__codelineno-13-2"></a>/ide
+</code></pre></div>
+<p>This gives the CLI access to the IDE MCP server (file open, diff view, diagnostics).</p>
+<hr />
+<h2 id="extension-vs-cli-when-to-use-each">Extension vs CLI — When to Use Each<a class="headerlink" href="#extension-vs-cli-when-to-use-each" title="Permanent link">&para;</a></h2>
+<table>
+<thead>
+<tr>
+<th>Scenario</th>
+<th>Extension</th>
+<th>CLI</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Exploring code in the open editor</td>
+<td>Preferred — Code Lens + <code>@</code> attach</td>
+<td>Works</td>
+</tr>
+<tr>
+<td>Long multi-file editing session</td>
+<td>Preferred — persistent panel, history</td>
+<td>Works</td>
+</tr>
+<tr>
+<td>CI / scripted automation</td>
+<td>Not applicable</td>
+<td>Required</td>
+</tr>
+<tr>
+<td><code>--print</code> / JSON output capture</td>
+<td>Not applicable</td>
+<td><code>--print --output-format json</code></td>
+</tr>
+<tr>
+<td><code>!</code> shell mode</td>
+<td>Not available</td>
+<td><code>!command</code></td>
+</tr>
+<tr>
+<td><code>/loop</code>, <code>/goal</code> (autonomous runs)</td>
+<td>Not available</td>
+<td>Full support</td>
+</tr>
+<tr>
+<td><code>/batch</code> (parallel worktree tasks)</td>
+<td>Not available</td>
+<td>Full support</td>
+</tr>
+<tr>
+<td>Reviewing diffs inline</td>
+<td>Preferred — plan mode + diff editor</td>
+<td>Works with <code>/ide</code></td>
+</tr>
+<tr>
+<td>MCP management</td>
+<td><code>/mcp</code> panel</td>
+<td><code>claude mcp add/list/remove</code></td>
+</tr>
+</tbody>
+</table>
+
+
+
+
+
+
+
+
+
+
+
+
+                
+              </article>
+            </div>
+          
+          
+<script>var target=document.getElementById(location.hash.slice(1));target&&target.name&&(target.checked=target.name.startsWith("__tabbed_"))</script>
+        </div>
+        
+          <button type="button" class="md-top md-icon" data-md-component="top" hidden>
+  
+  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M13 20h-2V8l-5.5 5.5-1.42-1.42L12 4.16l7.92 7.92-1.42 1.42L13 8z"/></svg>
+  Back to top
+</button>
+        
+      </main>
+      
+        <footer class="md-footer">
+  
+  <div class="md-footer-meta md-typeset">
+    <div class="md-footer-meta__inner md-grid">
+      <div class="md-copyright">
+  
+    <div class="md-copyright__highlight">
+      &copy; <span id='copyright-year'></span> jlcatonjr
+    </div>
+  
+  
+</div>
+      
+    </div>
+  </div>
+</footer>
+      
+    </div>
+    <div class="md-dialog" data-md-component="dialog">
+      <div class="md-dialog__inner md-typeset"></div>
+    </div>
+    
+    
+    
+      
+      
+      <script id="__config" type="application/json">{"annotate": null, "base": "..", "features": ["navigation.tabs", "navigation.sections", "navigation.top", "search.suggest", "search.highlight", "content.code.copy"], "search": "../assets/javascripts/workers/search.2c215733.min.js", "tags": null, "translations": {"clipboard.copied": "Copied to clipboard", "clipboard.copy": "Copy to clipboard", "search.result.more.one": "1 more on this page", "search.result.more.other": "# more on this page", "search.result.none": "No matching documents", "search.result.one": "1 matching document", "search.result.other": "# matching documents", "search.result.placeholder": "Type to start searching", "search.result.term.missing": "Missing", "select.version": "Select version"}, "version": null}</script>
+    
+    
+      <script src="../assets/javascripts/bundle.79ae519e.min.js"></script>
+      
+        <script src="../javascripts/current-year.js"></script>
+      
+    
+  </body>
+</html>
