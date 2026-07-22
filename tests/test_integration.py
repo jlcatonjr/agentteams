@@ -367,8 +367,13 @@ def test_snapshot_comparison(tmp_path, example):
 
     _run_pipeline(brief, tmp_path)
 
-    # Exclude files that contain live network data (threat intel, CVE feeds) — non-deterministic
-    _live_data_files = {"security-vulnerability-watch.reference.md", "security.agent.md"}
+    # Exclude files that contain live network data (threat intel, CVE feeds, framework
+    # research fetches) — non-deterministic
+    _live_data_files = {
+        "security-vulnerability-watch.reference.md",
+        "security.agent.md",
+        "framework-watch.reference.md",
+    }
     expected_files = sorted(
         f for f in list(expected_dir.rglob("*.md")) + list(expected_dir.rglob("*.svg"))
         if "build-log" not in f.name

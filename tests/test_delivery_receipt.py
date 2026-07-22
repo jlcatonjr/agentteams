@@ -121,6 +121,56 @@ def test_write_delivery_receipt_produces_schema_valid_payload(tmp_path):
     assert payload["framework"] == "copilot-vscode"
 
 
+def test_write_delivery_receipt_output_dir_is_never_absolute(tmp_path):
+    """Security fix: a receipt written into a tracked/published location must never
+    leak the operator's home directory / OS username via an absolute output_dir.
+    tmp_path is not inside a git repo, so this exercises the plain-basename fallback."""
+    manifest = {
+        "project_name": "TestProject",
+        "framework": "copilot-vscode",
+        "components": [],
+        "selected_archetypes": [],
+        "agent_slug_list": [],
+        "governance_agents": [],
+        "output_files": [],
+        "tools": [],
+        "auto_resolved_placeholders": {},
+        "manual_required_placeholders": [],
+    }
+    output_dir = tmp_path / "some-project" / ".github" / "agents"
+    output_dir.mkdir(parents=True)
+    receipt_path = build_team._write_delivery_receipt(manifest, output_dir)
+    payload = json.loads(receipt_path.read_text(encoding="utf-8"))
+    assert not payload["output_dir"].startswith("/")
+    assert str(tmp_path) not in payload["output_dir"]
+    assert payload["output_dir"] == "agents"
+
+
+def test_write_delivery_receipt_output_dir_is_repo_relative_inside_a_git_repo(tmp_path):
+    """Inside a git repo, output_dir should be repo-relative, not just a bare basename —
+    still informative without leaking the machine's absolute path."""
+    manifest = {
+        "project_name": "TestProject",
+        "framework": "copilot-vscode",
+        "components": [],
+        "selected_archetypes": [],
+        "agent_slug_list": [],
+        "governance_agents": [],
+        "output_files": [],
+        "tools": [],
+        "auto_resolved_placeholders": {},
+        "manual_required_placeholders": [],
+    }
+    repo_root = tmp_path / "fake-repo"
+    output_dir = repo_root / ".github" / "agents"
+    output_dir.mkdir(parents=True)
+    (repo_root / ".git").mkdir()
+    receipt_path = build_team._write_delivery_receipt(manifest, output_dir)
+    payload = json.loads(receipt_path.read_text(encoding="utf-8"))
+    assert payload["output_dir"] == str(Path(".github") / "agents")
+    assert not payload["output_dir"].startswith("/")
+
+
 def test_require_jsonschema_missing_degrades_to_writer_error(monkeypatch):
     """A missing jsonschema must surface as the writer's own (non-fatal) error
     type — never a bare ImportError that would crash a completed merge.

@@ -65,6 +65,27 @@ def _compute_file_hashes(written_abs_paths: list[str], output_dir: Path) -> dict
         hashes[rel] = digest
     return hashes
 DELIVERY_RECEIPT_REL_PATH = "references/delivery-receipt.json"
+
+
+def _sanitized_output_dir(output_dir: Path) -> str:
+    """Return a receipt-safe representation of *output_dir*.
+
+    Repo-relative when *output_dir* is inside a git repository (walks up looking
+    for `.git`), else just the directory's own name. Never returns an absolute
+    path — an absolute path embeds the operator's home directory / OS username,
+    which is fine for a private consumer output dir but leaks real machine
+    identity when the receipt lands in a tracked, published artifact (e.g. this
+    repository's own `examples/*/expected/` fixtures). The schema documents
+    `output_dir` as "absolute or repo-relative... informational only", so a
+    repo-relative value is fully conformant.
+    """
+    resolved = output_dir.resolve()
+    for candidate in (resolved, *resolved.parents):
+        if (candidate / ".git").exists():
+            return str(resolved.relative_to(candidate))
+    return resolved.name
+
+
 def _write_delivery_receipt(manifest: dict, output_dir: Path) -> Path:
     """Write a P3 delivery receipt attesting that ``--update`` succeeded.
 
@@ -102,7 +123,7 @@ def _write_delivery_receipt(manifest: dict, output_dir: Path) -> Path:
         "framework": manifest.get("framework", ""),
         "manifest_fingerprint": _drift.compute_manifest_fingerprint(manifest),
         "fingerprint_algo_version": _drift.FINGERPRINT_ALGO_VERSION,
-        "output_dir": str(output_dir),
+        "output_dir": _sanitized_output_dir(output_dir),
     }
     if _agentteams_version:
         receipt["agentteams_version"] = str(_agentteams_version)
