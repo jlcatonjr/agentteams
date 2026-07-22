@@ -18,7 +18,9 @@ handoffs:
     agent: orchestrator
     prompt: "Technical validation complete. See findings."
     send: false
+
 ---
+
 <!--
 SECTION MANIFEST — technical-validator.template.md
 | section_id             | designation   | notes                              |

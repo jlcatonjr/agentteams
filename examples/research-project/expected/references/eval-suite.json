@@ -1,0 +1,91 @@
+{
+  "artifact_type": "eval-suite",
+  "eval_suite_schema_version": "1.0",
+  "project_name": "ResearchPaperProject",
+  "framework": "copilot-vscode",
+  "generated_from": "manifest",
+  "scenarios": [
+    {
+      "id": "routing-orchestrator-knows-all-experts",
+      "category": "routing",
+      "claim": "The orchestrator's agents: list includes every workstream expert, so it can route to each declared component.",
+      "predicate": {
+        "kind": "frontmatter-list-contains-all",
+        "file": "orchestrator.agent.md",
+        "field": "agents",
+        "values": [
+          "ch01-introduction-expert",
+          "ch02-literature-expert"
+        ]
+      }
+    },
+    {
+      "id": "routing-expert-count-matches-components",
+      "category": "routing",
+      "claim": "Exactly 2 workstream-expert agent file(s) are emitted for 2 declared component(s).",
+      "predicate": {
+        "kind": "agent-count",
+        "suffix": "-expert.agent.md",
+        "count": 2
+      }
+    },
+    {
+      "id": "handoff-ch01-introduction",
+      "category": "handoff",
+      "claim": "ch01-introduction-expert receives upstream from ch02-literature-expert, ch05-conclusion-expert and returns to the orchestrator (coordination is orchestrator-mediated, not peer-to-peer).",
+      "predicate": {
+        "kind": "handoff-chain",
+        "chain": [
+          "ch02-literature-expert",
+          "ch05-conclusion-expert",
+          "ch01-introduction-expert"
+        ],
+        "returns_to": "orchestrator"
+      }
+    },
+    {
+      "id": "governance-ch01-introduction-triad-and-return",
+      "category": "governance",
+      "claim": "ch01-introduction-expert wires the worker-governance triad (primary-producer, adversarial, reference-manager) and includes a 'Return to Orchestrator' edge.",
+      "predicate": {
+        "kind": "frontmatter-and-body",
+        "file": "ch01-introduction-expert.agent.md",
+        "agents_contains_all": [
+          "primary-producer",
+          "adversarial",
+          "reference-manager"
+        ],
+        "body_contains": "Return to Orchestrator"
+      }
+    },
+    {
+      "id": "handoff-ch02-literature",
+      "category": "handoff",
+      "claim": "ch02-literature-expert receives upstream from ch01-introduction-expert, ch03-framework-expert and returns to the orchestrator (coordination is orchestrator-mediated, not peer-to-peer).",
+      "predicate": {
+        "kind": "handoff-chain",
+        "chain": [
+          "ch01-introduction-expert",
+          "ch03-framework-expert",
+          "ch02-literature-expert"
+        ],
+        "returns_to": "orchestrator"
+      }
+    },
+    {
+      "id": "governance-ch02-literature-triad-and-return",
+      "category": "governance",
+      "claim": "ch02-literature-expert wires the worker-governance triad (primary-producer, adversarial, reference-manager) and includes a 'Return to Orchestrator' edge.",
+      "predicate": {
+        "kind": "frontmatter-and-body",
+        "file": "ch02-literature-expert.agent.md",
+        "agents_contains_all": [
+          "primary-producer",
+          "adversarial",
+          "reference-manager"
+        ],
+        "body_contains": "Return to Orchestrator"
+      }
+    }
+  ]
+}

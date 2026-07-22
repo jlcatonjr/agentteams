@@ -53,6 +53,7 @@ The handoff-only control-flow backbone (agents-list edges omitted):
 | `reference-manager` | domain | No | read, edit, search |
 | `repo-liaison` | governance | No | read, edit, search, execute, agent |
 | `security` | governance | No | read, search |
+| `style-guardian` | domain | No | read, edit, search |
 | `sugarscape-expert` | workstream_expert | No | read, search, agent |
 | `team-builder` | governance | Yes | read, edit, search, execute, todo |
 | `technical-validator` | domain | No | read, search |
@@ -80,14 +81,15 @@ The handoff-only control-flow backbone (agents-list edges omitted):
 | `format-converter` | `orchestrator`, `output-compiler`, `visual-designer` | `orchestrator`, `output-compiler`, `quality-auditor` |
 | `git-operations` | `orchestrator` | `agent-updater`, `conflict-resolution`, `orchestrator`, `security` |
 | `navigator` | `orchestrator` | `orchestrator` |
-| `orchestrator` | `adversarial`, `agent-refactor`, `agent-updater`, `cleanup`, `code-hygiene`, `cohesion-repairer`, `conflict-auditor`, `conflict-resolution`, `content-enricher`, `crisis-credit-allocation-expert`, `fed-response-dag-expert`, `format-converter`, `git-operations`, `navigator`, `output-compiler`, `prairie-prosperity-expert`, `primary-producer`, `quality-auditor`, `reference-manager`, `repo-liaison`, `security`, `sugarscape-expert`, `technical-validator`, `visual-designer`, `visualize-energy-data-expert`, `work-summarizer` | `adversarial`, `agent-refactor`, `agent-updater`, `cleanup`, `code-hygiene`, `cohesion-repairer`, `conflict-auditor`, `conflict-resolution`, `crisis-credit-allocation-expert`, `fed-response-dag-expert`, `format-converter`, `git-operations`, `navigator`, `output-compiler`, `prairie-prosperity-expert`, `primary-producer`, `quality-auditor`, `reference-manager`, `repo-liaison`, `security`, `sugarscape-expert`, `technical-validator`, `visual-designer`, `visualize-energy-data-expert`, `work-summarizer` |
+| `orchestrator` | `adversarial`, `agent-refactor`, `agent-updater`, `cleanup`, `code-hygiene`, `cohesion-repairer`, `conflict-auditor`, `conflict-resolution`, `content-enricher`, `crisis-credit-allocation-expert`, `fed-response-dag-expert`, `format-converter`, `git-operations`, `navigator`, `output-compiler`, `prairie-prosperity-expert`, `primary-producer`, `quality-auditor`, `reference-manager`, `repo-liaison`, `security`, `style-guardian`, `sugarscape-expert`, `technical-validator`, `visual-designer`, `visualize-energy-data-expert`, `work-summarizer` | `adversarial`, `agent-refactor`, `agent-updater`, `cleanup`, `code-hygiene`, `cohesion-repairer`, `conflict-auditor`, `conflict-resolution`, `crisis-credit-allocation-expert`, `fed-response-dag-expert`, `format-converter`, `git-operations`, `navigator`, `output-compiler`, `prairie-prosperity-expert`, `primary-producer`, `quality-auditor`, `reference-manager`, `repo-liaison`, `security`, `sugarscape-expert`, `technical-validator`, `visual-designer`, `visualize-energy-data-expert`, `work-summarizer` |
 | `output-compiler` | `format-converter`, `orchestrator` | `format-converter`, `orchestrator`, `technical-validator` |
 | `prairie-prosperity-expert` | `orchestrator` | `adversarial`, `orchestrator`, `primary-producer`, `reference-manager` |
-| `primary-producer` | `content-enricher`, `crisis-credit-allocation-expert`, `fed-response-dag-expert`, `orchestrator`, `prairie-prosperity-expert`, `quality-auditor`, `sugarscape-expert`, `technical-validator`, `visualize-energy-data-expert` | `cohesion-repairer`, `conflict-auditor`, `orchestrator`, `quality-auditor` |
+| `primary-producer` | `content-enricher`, `crisis-credit-allocation-expert`, `fed-response-dag-expert`, `orchestrator`, `prairie-prosperity-expert`, `quality-auditor`, `style-guardian`, `sugarscape-expert`, `technical-validator`, `visualize-energy-data-expert` | `cohesion-repairer`, `conflict-auditor`, `orchestrator`, `quality-auditor` |
 | `quality-auditor` | `cohesion-repairer`, `format-converter`, `orchestrator`, `primary-producer`, `visual-designer` | `cohesion-repairer`, `orchestrator`, `primary-producer` |
 | `reference-manager` | `crisis-credit-allocation-expert`, `fed-response-dag-expert`, `orchestrator`, `prairie-prosperity-expert`, `sugarscape-expert`, `technical-validator`, `visualize-energy-data-expert` | `conflict-auditor`, `orchestrator` |
 | `repo-liaison` | `orchestrator` | `conflict-auditor`, `orchestrator`, `security` |
 | `security` | `code-hygiene`, `git-operations`, `orchestrator`, `repo-liaison` | `orchestrator` |
+| `style-guardian` | — | `orchestrator`, `primary-producer` |
 | `sugarscape-expert` | `orchestrator` | `adversarial`, `orchestrator`, `primary-producer`, `reference-manager` |
 | `team-builder` | — | — |
 | `technical-validator` | `conflict-auditor`, `content-enricher`, `orchestrator`, `output-compiler`, `work-summarizer` | `conflict-auditor`, `orchestrator`, `primary-producer`, `reference-manager` |
@@ -153,6 +155,8 @@ flowchart LR
     class repo_liaison governance
     security["Security"]
     class security governance
+    style_guardian["Style Guardian"]
+    class style_guardian domain
     sugarscape_expert["Sugarscape Agent-Based Model Expert"]
     class sugarscape_expert workstream_expert
     team_builder["Team Builder"]
@@ -299,6 +303,9 @@ flowchart LR
     repo_liaison -->|"Return to Orchestrator"| orchestrator
     repo_liaison -->|"Security Review for Cross-Repo Write"| security
     security -->|"Return to Orchestrator"| orchestrator
+    style_guardian -->|"Return to Orchestrator"| orchestrator
+    style_guardian -->|"Route Style Corrections"| primary_producer
+    style_guardian -.-> primary_producer
     sugarscape_expert -->|"Vet Brief Before Drafting"| adversarial
     sugarscape_expert -->|"Return to Orchestrator"| orchestrator
     sugarscape_expert -->|"Send to Primary Producer"| primary_producer
@@ -361,6 +368,7 @@ digraph "ProjectRepositories Agent Team" {
     "reference-manager" [label="Reference Manager", fillcolor="#e8ffe8"];
     "repo-liaison" [label="Repo Liaison", fillcolor="#e8e8ff"];
     "security" [label="Security", fillcolor="#e8e8ff"];
+    "style-guardian" [label="Style Guardian", fillcolor="#e8ffe8"];
     "sugarscape-expert" [label="Sugarscape Agent-Based Model Expert", fillcolor="#fff8e8"];
     "team-builder" [label="Team Builder", fillcolor="#e8e8ff"];
     "technical-validator" [label="Technical Validator", fillcolor="#e8ffe8"];
@@ -453,6 +461,8 @@ digraph "ProjectRepositories Agent Team" {
     "repo-liaison" -> "orchestrator" [style=solid, label="Return to Orchestrator"];
     "repo-liaison" -> "security" [style=solid, label="Security Review for Cross-Repo Write"];
     "security" -> "orchestrator" [style=solid, label="Return to Orchestrator"];
+    "style-guardian" -> "orchestrator" [style=solid, label="Return to Orchestrator"];
+    "style-guardian" -> "primary-producer" [style=solid, label="Route Style Corrections"];
     "sugarscape-expert" -> "adversarial" [style=solid, label="Vet Brief Before Drafting"];
     "sugarscape-expert" -> "orchestrator" [style=solid, label="Return to Orchestrator"];
     "sugarscape-expert" -> "primary-producer" [style=solid, label="Send to Primary Producer"];
@@ -702,6 +712,16 @@ digraph "ProjectRepositories Agent Team" {
       "user_invokable": false,
       "tools": [
         "read",
+        "search"
+      ]
+    },
+    "style-guardian": {
+      "display_name": "Style Guardian",
+      "agent_type": "domain",
+      "user_invokable": false,
+      "tools": [
+        "read",
+        "edit",
         "search"
       ]
     },
@@ -1576,6 +1596,24 @@ digraph "ProjectRepositories Agent Team" {
       "label": "Return to Orchestrator"
     },
     {
+      "source": "style-guardian",
+      "target": "orchestrator",
+      "edge_type": "handoff",
+      "label": "Return to Orchestrator"
+    },
+    {
+      "source": "style-guardian",
+      "target": "primary-producer",
+      "edge_type": "handoff",
+      "label": "Route Style Corrections"
+    },
+    {
+      "source": "style-guardian",
+      "target": "primary-producer",
+      "edge_type": "agents-list",
+      "label": null
+    },
+    {
       "source": "sugarscape-expert",
       "target": "adversarial",
       "edge_type": "handoff",
@@ -1904,6 +1942,10 @@ digraph "ProjectRepositories Agent Team" {
     ],
     "security": [
       "orchestrator"
+    ],
+    "style-guardian": [
+      "orchestrator",
+      "primary-producer"
     ],
     "sugarscape-expert": [
       "adversarial",

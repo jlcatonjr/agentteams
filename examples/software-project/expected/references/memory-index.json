@@ -1,0 +1,20 @@
+{
+  "artifact_type": "memory-index",
+  "memory_index_schema_version": "1.3",
+  "index_format_version": "json-bm25-postings-v2",
+  "index_build_id": "da480965e0097e408c6f54da1de52835f0308693b637aba27e682c54cc6e1d39",
+  "index_write_owner": "agentteams.build_team",
+  "vector_runtime_mode": "sparse-tfidf-cosine",
+  "vector_model_id": null,
+  "vector_dim": null,
+  "fallback_policy": "non-blocking-file-read-then-search",
+  "source_fingerprint": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+  "project_name": "WebAppBackend",
+  "framework": "copilot-vscode",
+  "built_at": "2026-07-22T17:25:00.176409Z",
+  "source_count": 0,
+  "documents": [],
+  "postings": {},
+  "avgdl": 0.0,
+  "N": 0
+}

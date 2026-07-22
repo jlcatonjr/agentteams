@@ -205,6 +205,15 @@ def _plan_output_files(
         "component_slug": None,
     })
 
+    # Post-Deliverable Retrospective reference (always — @orchestrator Workflow 1/2/3
+    # support; @repo-liaison Protocol 5 support).
+    files.append({
+        "path": "references/retrospective-remediation.reference.md",
+        "template": f"{agents_dir}retrospective-remediation.reference.template.md",
+        "type": "reference",
+        "component_slug": None,
+    })
+
     if "retrieval-integrator" in archetypes:
         files.append({
             "path": "references/retrieval-integration.reference.md",

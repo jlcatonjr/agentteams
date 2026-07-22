@@ -1,2 +1,3 @@
-timestamp,requesting_agent,action_reviewed,verdict,conditions,conditions_verified
-2026-04-27T20:46:38Z,security,overwrite,CONDITIONAL PASS,"checkpoint commit 7cb740720d9a629ed07527cde1e0f13441980bd1 created; explicit output path reviewed; dry-run scope verified before overwrite",verified
+timestamp,requesting_agent,action_reviewed,verdict,conditions,conditions_verified,consumed
+2026-04-27T20:46:38Z,security,overwrite,CONDITIONAL PASS,checkpoint commit 7cb740720d9a629ed07527cde1e0f13441980bd1 created; explicit output path reviewed; dry-run scope verified before overwrite,verified,yes
+2026-07-22T00:00:00Z,security,overwrite,PASS,Rule S-8 delivery-receipt.json absolute-path leak independently verified remediated (see software-project row for detail). Supersedes the dormant 2026-04-27T20:46:38Z CONDITIONAL PASS above via the reversed-scan latest-wins match in _latest_security_decision -- that row is left untouched for audit history and becomes unreachable once this row follows it. Clears --overwrite for this output_dir.,verified,yes

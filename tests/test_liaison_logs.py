@@ -6,6 +6,8 @@ from pathlib import Path
 import pytest
 
 from agentteams.liaison_logs import (
+    AGENTTEAMS_REMEDIATION_CSV,
+    AGENTTEAMS_REMEDIATION_HEADERS,
     CHANGELOG_CSV,
     CHANGELOG_HEADERS,
     COORD_LOG_CSV,
@@ -25,10 +27,16 @@ from agentteams.liaison_logs import (
 def test_init_csv_stubs_creates_both_files(tmp_path):
     refs = tmp_path / "references"
     created = init_csv_stubs(refs)
-    assert set(created) == {CHANGELOG_CSV, COORD_LOG_CSV, SECURITY_DECISIONS_CSV}
+    assert set(created) == {
+        CHANGELOG_CSV,
+        COORD_LOG_CSV,
+        SECURITY_DECISIONS_CSV,
+        AGENTTEAMS_REMEDIATION_CSV,
+    }
     assert (refs / CHANGELOG_CSV).exists()
     assert (refs / COORD_LOG_CSV).exists()
     assert (refs / SECURITY_DECISIONS_CSV).exists()
+    assert (refs / AGENTTEAMS_REMEDIATION_CSV).exists()
 
 
 def test_init_csv_stubs_writes_correct_headers(tmp_path):
@@ -42,6 +50,10 @@ def test_init_csv_stubs_writes_correct_headers(tmp_path):
     with (refs / COORD_LOG_CSV).open(newline="", encoding="utf-8") as fh:
         row = next(csv.reader(fh))
     assert row == COORD_LOG_HEADERS
+
+    with (refs / AGENTTEAMS_REMEDIATION_CSV).open(newline="", encoding="utf-8") as fh:
+        row = next(csv.reader(fh))
+    assert row == AGENTTEAMS_REMEDIATION_HEADERS
 
     with (refs / SECURITY_DECISIONS_CSV).open(newline="", encoding="utf-8") as fh:
         row = next(csv.reader(fh))

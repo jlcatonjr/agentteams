@@ -80,7 +80,6 @@ SECTION MANIFEST — copilot-instructions.template.md
 - `@primary-producer` — drafts and revises primary deliverables
 - `@quality-auditor` — read-only structural and prose quality audit
 - `@cohesion-repairer` — repairs within-section cohesion failures
-- `@style-guardian` — enforces voice and style fidelity
 - `@technical-validator` — verifies technical accuracy against authority sources
 - `@format-converter` — converts deliverables to final output format
 - `@reference-manager` — manages the reference/bibliography database

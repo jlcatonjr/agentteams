@@ -19,13 +19,11 @@
     "ch02-literature"
   ],
   "files_written": [
-    "research-project/expected/references/security-linux-hardening.reference.md",
-    "research-project/expected/references/security-macos-hardening.reference.md",
-    "research-project/expected/references/security-windows-hardening.reference.md"
+    "research-project/expected/references/security-vulnerability-watch.json"
   ],
   "manual_required": 8,
   "template_hashes": {
-    "universal/orchestrator.template.md": "44d00da53cb9228b",
+    "universal/orchestrator.template.md": "6ca6e34637d07cf7",
     "universal/navigator.template.md": "003a30ed545c0523",
     "universal/security.template.md": "8e4256bcb84ee04e",
     "universal/code-hygiene.template.md": "5212068c8a00a608",
@@ -35,7 +33,7 @@
     "universal/cleanup.template.md": "bf795b64968349f6",
     "universal/agent-updater.template.md": "c9636a2efa322a6d",
     "universal/agent-refactor.template.md": "a9717cc56c35f4ac",
-    "universal/repo-liaison.template.md": "f3ab2dffbbbb29ff",
+    "universal/repo-liaison.template.md": "e0ce7bfccf6dafce",
     "universal/git-operations.template.md": "82546b5e807d9c98",
     "domain/work-summarizer.template.md": "c8687de2c1c7761f",
     "domain/primary-producer.template.md": "c128e8f2fb52885f",
@@ -64,6 +62,7 @@
     "universal/work-summary-tooling.reference.template.md": "62e643b1a9711af6",
     "universal/work-summary-backfill.reference.template.md": "5730bac043dc2874",
     "universal/parallelization.reference.template.md": "2c872341050a7781",
+    "universal/retrospective-remediation.reference.template.md": "b1802f5e1ab294ad",
     "workstream-expert.template.md": "13161f3a3cdf1789",
     "copilot-instructions.template.md": "9c56d724f06a9549",
     "builder/team-builder-copilot-vscode.template.md": "5708c3fd29801a3d",
@@ -308,6 +307,12 @@
       "component_slug": null
     },
     {
+      "path": "references/retrospective-remediation.reference.md",
+      "template": "universal/retrospective-remediation.reference.template.md",
+      "type": "reference",
+      "component_slug": null
+    },
+    {
       "path": "ch01-introduction-expert.agent.md",
       "template": "workstream-expert.template.md",
       "type": "agent",
@@ -401,17 +406,13 @@
     "repo-liaison",
     "git-operations"
   ],
-  "manifest_fingerprint": "cd5d9bb78ae76aed",
+  "manifest_fingerprint": "990b1216c3126c5d",
   "fingerprint_algo_version": 1,
   "file_hashes": {
-    "references/security-linux-hardening.reference.md": "500913c0592ea661",
-    "references/security-macos-hardening.reference.md": "440bc0247ebc7430",
-    "references/security-windows-hardening.reference.md": "1651bbe731f10eb4",
-    "orchestrator.agent.md": "69ec00f6c28540f9",
-    "references/security-vulnerability-watch.json": "63dddd71437793a8",
-    "security.agent.md": "c64df797543256c6",
-    "references/security-vulnerability-watch.reference.md": "d974d76f8f9639f3",
+    "references/security-vulnerability-watch.json": "4120343e8b7252b9",
+    "orchestrator.agent.md": "875b16efb5fe8c7a",
     "navigator.agent.md": "be14519cdac5bdd5",
+    "security.agent.md": "c64df797543256c6",
     "code-hygiene.agent.md": "3c54d027a231a50a",
     "adversarial.agent.md": "c662732b64c4cc74",
     "conflict-auditor.agent.md": "7a63e2b2b4c5d4fb",
@@ -419,7 +420,7 @@
     "cleanup.agent.md": "d1a4b6cf79b54698",
     "agent-updater.agent.md": "feb0151e0c6d7e30",
     "agent-refactor.agent.md": "d0fcc9b01fbb1d99",
-    "repo-liaison.agent.md": "af4752f804d96b20",
+    "repo-liaison.agent.md": "5a1436471322bb22",
     "git-operations.agent.md": "eb8208032829e7f4",
     "work-summarizer.agent.md": "b6f47c230833172e",
     "primary-producer.agent.md": "3fabc8133ec385d0",
@@ -431,20 +432,31 @@
     "reference-manager.agent.md": "8d862ed02a9bcb97",
     "output-compiler.agent.md": "c9623d7100e0dc3d",
     "tool-doc-researcher.agent.md": "244ea251a9418166",
+    "references/ref-pandoc-reference.md": "6b488eea9284ca4d",
     "references/ref-bibtex-reference.md": "0368d11909e0c907",
     "references/code-hygiene-rules.reference.md": "7e50babb25038985",
-    "references/framework-watch.reference.md": "9dc7c3a4a0df0460",
+    "references/unix-philosophy-mapping.reference.md": "f5db2bb856a8f9b2",
+    "references/security-vulnerability-watch.reference.md": "9d9d97daef3e4244",
+    "references/security-linux-hardening.reference.md": "500913c0592ea661",
+    "references/security-macos-hardening.reference.md": "440bc0247ebc7430",
+    "references/security-windows-hardening.reference.md": "1651bbe731f10eb4",
+    "references/ai-bad-habits-watch.reference.md": "261f0d7d3ae1302b",
+    "references/framework-watch.reference.md": "d7ef66ea8ce7ffc8",
+    "references/adjacent-repos.md": "419f2f38ea4c5ded",
     "references/github-workflows-merge.reference.md": "376e08186dfa558a",
     "references/work-summary-spec.reference.md": "96232231a1f7c6be",
     "references/work-summary-tooling.reference.md": "f3656972717153a9",
     "references/work-summary-backfill.reference.md": "b62bbfcd19e6c715",
     "references/parallelization.reference.md": "d2321bf5ac1ed2f8",
+    "references/retrospective-remediation.reference.md": "0e469ec98792810b",
     "ch01-introduction-expert.agent.md": "e14dcbaa3a6472cf",
     "ch02-literature-expert.agent.md": "3580a27bf97c382b",
-    "../copilot-instructions.md": "fc1b34782c9d3863",
+    "../copilot-instructions.md": "d45d53e3993c648d",
     "team-builder.agent.md": "c66118c1daf94720",
     "SETUP-REQUIRED.md": "a391503cc18a8e5d",
     "content-enricher.agent.md": "2555da468e292c70",
-    "references/pipeline-graph.md": "8a40a67385e52720"
+    "references/pipeline-graph.md": "8a40a67385e52720",
+    "references/pipeline-graph.svg": "6d9af8b82da7db4e",
+    "references/pipeline-handoffs.svg": "87725b60b5d32380"
   }
 }

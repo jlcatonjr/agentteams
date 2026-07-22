@@ -3,13 +3,9 @@ name: Primary Producer — ProjectRepositories
 description: "Drafts and revises deliverables in ProjectRepositories from Component Briefs provided by workstream expert agents"
 user-invokable: false
 tools: ['read', 'edit', 'search']
-agents: ['style-guardian', 'cohesion-repairer', 'quality-auditor', 'conflict-auditor']
+agents: ['cohesion-repairer', 'quality-auditor', 'conflict-auditor']
 model: ["Claude Sonnet 4.6 (copilot)"]
 handoffs:
-  - label: Style Audit
-    agent: style-guardian
-    prompt: "Draft is ready for style audit."
-    send: false
   - label: Cohesion Audit
     agent: cohesion-repairer
     prompt: "Draft is ready for cohesion audit."
@@ -26,6 +22,7 @@ handoffs:
     agent: orchestrator
     prompt: "Deliverable production is complete."
     send: false
+
 ---
 <!-- AGENTTEAMS:BEGIN content v=1 -->
 

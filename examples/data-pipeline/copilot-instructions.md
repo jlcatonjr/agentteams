@@ -84,8 +84,7 @@ SECTION MANIFEST — copilot-instructions.template.md
 - `@format-converter` — converts deliverables to final output format
 - `@output-compiler` — assembles components into the final deliverable package
 - `@visual-designer` — creates and revises diagrams and figures
-- `@module-doc-author` — specialized domain agent
-- `@module-doc-validator` — specialized domain agent
+- `@post-production-auditor` — specialized domain agent
 - `@tool-doc-researcher` — specialized domain agent
 
 ### Workstream Experts
@@ -96,6 +95,25 @@ SECTION MANIFEST — copilot-instructions.template.md
 <!-- AGENTTEAMS:END agent_team -->
 
 ---
+
+<!-- AGENTTEAMS:BEGIN tone_and_style v=1 -->
+## Tone and Style
+
+Default to terse output for read-only auditor and governance roles
+(`@security`, `@adversarial`, `@code-hygiene`, `@conflict-auditor`,
+`@navigator`, `@quality-auditor`, `@technical-validator`,
+`@post-production-auditor`, `@module-doc-validator`,
+`@reference-manager` in read mode): respond in ≤200 words unless
+the task requires longer output. Producing roles
+(`@primary-producer`, `@module-doc-author`, `@content-enricher`,
+`@output-compiler`, `@orchestrator` when summarizing a multi-step
+session) emit the deliverable in full and are exempt from this
+default.
+
+Terse mode reduces consumer-harness token consumption on the
+common case of audit-and-route turns. Producing roles override the
+default explicitly by saying so in their first line.
+<!-- AGENTTEAMS:END tone_and_style -->
 
 <!-- AGENTTEAMS:BEGIN authority_hierarchy v=1 -->
 ## Authority Hierarchy
@@ -135,22 +153,3 @@ SECTION MANIFEST — copilot-instructions.template.md
 - All SQL queries parameterized — no string concatenation
 - Log all row counts at each pipeline stage
 - Idempotent loads: upsert on primary key
-
-<!-- AGENTTEAMS:BEGIN tone_and_style v=1 -->
-## Tone and Style
-
-Default to terse output for read-only auditor and governance roles
-(`@security`, `@adversarial`, `@code-hygiene`, `@conflict-auditor`,
-`@navigator`, `@quality-auditor`, `@technical-validator`,
-`@post-production-auditor`, `@module-doc-validator`,
-`@reference-manager` in read mode): respond in ≤200 words unless
-the task requires longer output. Producing roles
-(`@primary-producer`, `@module-doc-author`, `@content-enricher`,
-`@output-compiler`, `@orchestrator` when summarizing a multi-step
-session) emit the deliverable in full and are exempt from this
-default.
-
-Terse mode reduces consumer-harness token consumption on the
-common case of audit-and-route turns. Producing roles override the
-default explicitly by saying so in their first line.
-<!-- AGENTTEAMS:END tone_and_style -->

@@ -1,10 +1,13 @@
 """liaison_logs.py — Manage external CSV log files for the Repo Liaison agent.
 
-The Repo Liaison and security workflows track three kinds of log data:
+The Repo Liaison and security workflows track four kinds of log data:
 
   * Per-repo changelogs — one row per cross-repository file change
   * Cross-orchestrator coordination log — one row per orchestrator exchange
-    * Security decisions log — one row per PASS/HALT/CONDITIONAL PASS verdict
+  * Security decisions log — one row per PASS/HALT/CONDITIONAL PASS verdict
+  * AgentTeamsModule remediation log — one row per Post-Deliverable Retrospective
+    finding about the agentteams tool itself (see
+    ``retrospective-remediation.reference.template.md``)
 
 These are stored as CSV files in the ``references/`` directory rather than
 inline markdown tables, so they stay machine-readable and do not bloat the
@@ -43,6 +46,13 @@ COORD_LOG_CSV = "adjacent-repos-coordination-log.csv"
 #: File name for the security decisions log CSV
 SECURITY_DECISIONS_CSV = "security-decisions.log.csv"
 
+#: File name for the AgentTeamsModule-itself remediation backlog CSV (Post-Deliverable
+#: Retrospective — see retrospective-remediation.reference.template.md). Deliberately has no
+#: matching `*.csv.template` static file: the 3 existing ones (changelog/coord-log/security)
+#: have zero readers anywhere in this package and are a drift risk, not a pattern to extend —
+#: this constant list is the only source of truth for the header row.
+AGENTTEAMS_REMEDIATION_CSV = "agentteams-remediation-log.csv"
+
 #: Column headers for each CSV
 CHANGELOG_HEADERS: list[str] = ["date", "repo_name", "action", "files_changed", "summary"]
 COORD_LOG_HEADERS: list[str] = ["date", "adjacent_repo", "direction", "outcome"]
@@ -53,6 +63,14 @@ SECURITY_DECISIONS_HEADERS: list[str] = [
     "verdict",
     "conditions",
     "conditions_verified",
+]
+AGENTTEAMS_REMEDIATION_HEADERS: list[str] = [
+    "date",
+    "source_repo",
+    "category",
+    "summary",
+    "proposed_touch_points",
+    "status",
 ]
 
 # ---------------------------------------------------------------------------
@@ -141,6 +159,7 @@ def init_csv_stubs(refs_dir: Path) -> list[str]:
         (CHANGELOG_CSV, CHANGELOG_HEADERS),
         (COORD_LOG_CSV, COORD_LOG_HEADERS),
         (SECURITY_DECISIONS_CSV, SECURITY_DECISIONS_HEADERS),
+        (AGENTTEAMS_REMEDIATION_CSV, AGENTTEAMS_REMEDIATION_HEADERS),
     ):
         target = refs_dir / fname
         if not target.exists():

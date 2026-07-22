@@ -1,0 +1,134 @@
+{
+  "artifact_type": "eval-suite",
+  "eval_suite_schema_version": "1.0",
+  "project_name": "SalesDataPipeline",
+  "framework": "copilot-vscode",
+  "generated_from": "manifest",
+  "scenarios": [
+    {
+      "id": "routing-orchestrator-knows-all-experts",
+      "category": "routing",
+      "claim": "The orchestrator's agents: list includes every workstream expert, so it can route to each declared component.",
+      "predicate": {
+        "kind": "frontmatter-list-contains-all",
+        "file": "orchestrator.agent.md",
+        "field": "agents",
+        "values": [
+          "ingest-expert",
+          "transform-expert",
+          "load-expert",
+          "weekly-report-expert"
+        ]
+      }
+    },
+    {
+      "id": "routing-expert-count-matches-components",
+      "category": "routing",
+      "claim": "Exactly 4 workstream-expert agent file(s) are emitted for 4 declared component(s).",
+      "predicate": {
+        "kind": "agent-count",
+        "suffix": "-expert.agent.md",
+        "count": 4
+      }
+    },
+    {
+      "id": "governance-ingest-triad-and-return",
+      "category": "governance",
+      "claim": "ingest-expert wires the worker-governance triad (primary-producer, adversarial, reference-manager) and includes a 'Return to Orchestrator' edge.",
+      "predicate": {
+        "kind": "frontmatter-and-body",
+        "file": "ingest-expert.agent.md",
+        "agents_contains_all": [
+          "primary-producer",
+          "adversarial",
+          "reference-manager"
+        ],
+        "body_contains": "Return to Orchestrator"
+      }
+    },
+    {
+      "id": "handoff-transform",
+      "category": "handoff",
+      "claim": "transform-expert receives upstream from ingest-expert and returns to the orchestrator (coordination is orchestrator-mediated, not peer-to-peer).",
+      "predicate": {
+        "kind": "handoff-chain",
+        "chain": [
+          "ingest-expert",
+          "transform-expert"
+        ],
+        "returns_to": "orchestrator"
+      }
+    },
+    {
+      "id": "governance-transform-triad-and-return",
+      "category": "governance",
+      "claim": "transform-expert wires the worker-governance triad (primary-producer, adversarial, reference-manager) and includes a 'Return to Orchestrator' edge.",
+      "predicate": {
+        "kind": "frontmatter-and-body",
+        "file": "transform-expert.agent.md",
+        "agents_contains_all": [
+          "primary-producer",
+          "adversarial",
+          "reference-manager"
+        ],
+        "body_contains": "Return to Orchestrator"
+      }
+    },
+    {
+      "id": "handoff-load",
+      "category": "handoff",
+      "claim": "load-expert receives upstream from transform-expert and returns to the orchestrator (coordination is orchestrator-mediated, not peer-to-peer).",
+      "predicate": {
+        "kind": "handoff-chain",
+        "chain": [
+          "transform-expert",
+          "load-expert"
+        ],
+        "returns_to": "orchestrator"
+      }
+    },
+    {
+      "id": "governance-load-triad-and-return",
+      "category": "governance",
+      "claim": "load-expert wires the worker-governance triad (primary-producer, adversarial, reference-manager) and includes a 'Return to Orchestrator' edge.",
+      "predicate": {
+        "kind": "frontmatter-and-body",
+        "file": "load-expert.agent.md",
+        "agents_contains_all": [
+          "primary-producer",
+          "adversarial",
+          "reference-manager"
+        ],
+        "body_contains": "Return to Orchestrator"
+      }
+    },
+    {
+      "id": "handoff-weekly-report",
+      "category": "handoff",
+      "claim": "weekly-report-expert receives upstream from load-expert and returns to the orchestrator (coordination is orchestrator-mediated, not peer-to-peer).",
+      "predicate": {
+        "kind": "handoff-chain",
+        "chain": [
+          "load-expert",
+          "weekly-report-expert"
+        ],
+        "returns_to": "orchestrator"
+      }
+    },
+    {
+      "id": "governance-weekly-report-triad-and-return",
+      "category": "governance",
+      "claim": "weekly-report-expert wires the worker-governance triad (primary-producer, adversarial, reference-manager) and includes a 'Return to Orchestrator' edge.",
+      "predicate": {
+        "kind": "frontmatter-and-body",
+        "file": "weekly-report-expert.agent.md",
+        "agents_contains_all": [
+          "primary-producer",
+          "adversarial",
+          "reference-manager"
+        ],
+        "body_contains": "Return to Orchestrator"
+      }
+    }
+  ]
+}

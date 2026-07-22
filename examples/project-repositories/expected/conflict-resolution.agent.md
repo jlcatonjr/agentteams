@@ -40,13 +40,13 @@ For each conflict in `.github/agents/references/conflict-log.csv` with status `o
 | `TM` (Term Mismatch) | Use the term that appears in the highest-authority source |
 | `CC` (Claim Conflict) | Accept the claim from the higher-authority source; REVISE the lower |
 | `AE` (Attribution Error) | Verify against external source; REVISE the incorrect attribution |
-| `SD` (Source Drift) | Update deliverable to match source on disk |
+| `SD` (Source Drift) | Update deliverable to match source on disk; if the cited path was never written, REJECT the citation and REVISE the deliverable to remove it |
 | `CN` (Count Mismatch) | Verify actual count on disk; REVISE the incorrect stated count |
 | `HC` (Hierarchy Conflict) | Use `copilot-instructions.md` as ground truth; REVISE diverging files |
 | `SR` (Stale Reference) | REJECT the stale reference; REVISE the deliverable to remove or update it |
 | `PE` (Phantom Entry) | REJECT the entry; *(If `@reference-manager` in team)* flag for `@reference-manager` investigation |
 
-<!-- AGENTTEAMS:BEGIN memory_index_consultation v=2 -->
+<!-- AGENTTEAMS:BEGIN memory_index_consultation v=3 -->
 ### Memory-index consultation *(applies when `references/memory-index.json` is present)*
 
 Before deciding, check whether a structurally similar conflict has been resolved before — a prior `ACCEPT`/`REJECT`/`REVISE` outcome is binding precedent unless the authority hierarchy has changed. Lexical-first because conflict claims usually carry precise terminology or identifiers:
@@ -57,9 +57,7 @@ agentteams --query-index "<conflict claim, terminology, or identifiers>" --query
 
 Fall back to `--query-strategy vector` when **either** (a) lexical returns zero hits, **or** (b) the lexical top-1 has no content-word overlap with the query (single-term false-positive guard).
 
-Per-strategy thresholds (the two scales are not comparable):
-- **Lexical:** top-1 ≥ 3.0 is a reliable precedent; 1.0–3.0 is candidate-for-inspection.
-- **Vector:** top-1 ≥ 0.30 is reliable; 0.20–0.30 is candidate-for-inspection. The empirical cap is ~0.42; never demand ≥ 0.5 on vector.
+Each hit's `confidence` field (`reliable` / `candidate` / `weak`) is computed by `agentteams.memory_index.query_index()` from the same per-strategy thresholds this section used to restate by hand — treat `reliable` as a binding precedent, `candidate` as worth opening before relying on it, and `weak` as noise. If your runtime can't read the structured field (text-only CLI output), fall back to: lexical top-1 ≥ 3.0 reliable / 1.0–3.0 candidate-for-inspection; vector top-1 ≥ 0.30 reliable / 0.20–0.30 candidate-for-inspection (cosine ∈ [0,1]; high values ≥ 0.5 are legitimate on a focused/short document, not anomalous).
 
 If a prior resolution surfaces, open the cited resolution log entry and apply the same outcome; record the precedent in the new log entry's `resolution` field. Never block on the index — if no precedent is found, proceed with the hierarchy-based rules below.
 <!-- AGENTTEAMS:END memory_index_consultation -->

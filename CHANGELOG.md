@@ -6,6 +6,50 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### added (Post-Deliverable Retrospective)
+
+- **New `@orchestrator` subroutine, "Post-Deliverable Retrospective,"** runs after a primary
+  deliverable is produced or revised (Workflow 1, Workflow 2, and Workflow 3's corrections-made
+  branch — not Workflow 4, which would double-count already-retrospected deliverables) and before
+  Standard Doc-Sync Closeout. It enumerates two audited lists: generalizable lessons about the
+  current project's own agent infrastructure (applied in-repo via `@agent-updater`), and
+  remediation items for the AgentTeamsModule tool itself (logged to
+  `references/agentteams-remediation-log.csv` via a new `@repo-liaison` Protocol 5, so they
+  survive past the session that surfaced them). Both lists are challenged by `@adversarial` and
+  `@conflict-auditor` before anything is applied or logged; the conflict-auditor step also rejects
+  or sanitizes any item that reads as formula-injection or credential-like content. An empty
+  retrospective is the expected common case and costs one no-op line. Full semantics (category
+  definitions, dedup rule, CSV schema, and an explicit self-referential destination exception for
+  AgentTeamsModule's own gitignored dogfood output directory) live in the new
+  `references/retrospective-remediation.reference.md`. New `agentteams/liaison_logs.py` CSV
+  constant (`AGENTTEAMS_REMEDIATION_CSV`) wired into the existing `init_csv_stubs()` mechanism —
+  no call-site changes needed.
+
+### fixed (delivery-receipt absolute-path leak)
+
+- **`_write_delivery_receipt()` no longer writes an absolute filesystem path (embedding the
+  operator's OS username) into `references/delivery-receipt.json`.** Found by `@security` during
+  the Post-Deliverable Retrospective work above: regenerating this repo's own checked-in example
+  snapshots (`examples/*/expected/`) via `agentteams --update`/`--overwrite` wrote the real local
+  absolute path into a file headed straight for a tracked, published fixture. The schema already
+  documented `output_dir` as "absolute or repo-relative... informational only," so the fix needed
+  no schema change: a new `_sanitized_output_dir()` helper in `agentteams/cli/artifacts.py` returns
+  a repo-relative path when the output directory is inside a git repository (walking up for a
+  `.git` marker), or just the directory's own name otherwise — never an absolute path. The leak
+  never reached git history (caught pre-commit); the 4 affected example receipts were regenerated
+  clean. Two new regression tests in `tests/test_delivery_receipt.py` pin the never-absolute
+  contract for both branches (inside/outside a git repo).
+
+### fixed (test harness)
+
+- **`tests/test_integration.py::test_snapshot_comparison` no longer flags
+  `references/framework-watch.reference.md` as a false-positive diff.** This file carries live
+  framework-research fetch data (timestamps, diff summaries), exactly like the two files already
+  excluded as non-deterministic (`security-vulnerability-watch.reference.md`, `security.agent.md`)
+  — it was simply missing from that same `_live_data_files` exclusion set. Unrelated to the
+  Post-Deliverable Retrospective feature above; found while regenerating the example snapshots for
+  it and fixed in the same pass since it blocked a clean test run.
+
 ### fixed (security-refs offline/stale-cache round-trip)
 
 - **`agentteams.security_refs.build_security_placeholders()` no longer degrades a real cached CVE

@@ -1,0 +1,11 @@
+{
+  "artifact_type": "delivery-receipt",
+  "receipt_schema_version": "1.0",
+  "delivered_at": "2026-07-22T16:50:01Z",
+  "project_name": "ProjectRepositories",
+  "framework": "copilot-vscode",
+  "manifest_fingerprint": "9907449555be80c2",
+  "fingerprint_algo_version": 1,
+  "output_dir": "examples/project-repositories/expected",
+  "agentteams_version": "1.0.0rc6"
+}

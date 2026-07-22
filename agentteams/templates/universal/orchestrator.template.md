@@ -133,6 +133,7 @@ You coordinate all agent operations for **{PROJECT_NAME}**. You route work to do
 14. **Bridge-refresh safety** — Before delegating or executing any `agentteams … --bridge-refresh` invocation against an external project (including any designated test team), require the Pre-Flight in `references/bridge-refresh-safety.md` §II to pass: (a) inventory existing target entry files (`CLAUDE.md`, `.claude/README.md`, `.claude/agent-team.md`, `.claude/quickstart-snippet.md`, `.claude/skills/recall.md`); (b) confirm each present file carries an `AGENTTEAMS-BRIDGE:BEGIN` fence; (c) confirm the target's working tree is clean for those paths; (d) confirm each present file is tracked in git. If any check fails, mandate `--bridge-merge` instead. Treat `--bridge-refresh` as a destructive cross-repository write subject to rule 11.
 15. **Past-Day Backfill Obligation** — At session close, when the session executed work, detect *recent past active-day* daily-summary gaps and invoke `@work-summarizer` **Workflow D — Automatic Backfill Sweep** to fill them automatically. This **complements** Rule 12 (today-capture) and is **disjoint** from it: Rule 12 owns **exactly today**; this obligation owns **strictly-prior active dates** back to the cap. Today is never a backfill target. All semantics (window, the `AUTO_BACKFILL_LOOKBACK_CAP_DAYS` cap, idempotency, honor-prior-skip fail-safe, create-only scope, audit gate, recommend-only overflow) are defined once in `references/work-summary-backfill.reference.md` → *Automatic Trigger (session-close sweep)* — do not restate them here.
 16. **Independent work may proceed in parallel under per-wave audit** *(summary — operative logic lives in Workflow 0A; this constitutional line is a non-load-bearing reminder)* — When a plan contains pending steps whose read/write footprints are disjoint and that touch no shared mutable state, they may be dispatched together as a "wave" instead of strictly one at a time. Concurrency is taken **only where the host runtime supports concurrent subagents** (e.g. the Claude `agent` tool); elsewhere the independent set is surfaced as an any-order recommendation. The per-step audit cadence is preserved: `@conflict-auditor` runs per member at wave join, `@adversarial` once per wave on the remaining plan. Destructive, cross-repository, and `--bridge-refresh` steps are **never** batched — each runs as its own singleton wave with full per-step clearance (Rules 1, 11, 14). See Workflow 0A and `references/parallelization.reference.md`.
+17. **Post-Deliverable Retrospective** *(summary — operative logic lives in the fenced workflow subroutine; this constitutional line is a non-load-bearing reminder)* — When a primary deliverable is produced or revised (Workflow 1, Workflow 2, or Workflow 3's corrections-made branch) and has passed its audit chain, evaluate the session for (a) generalizable lessons about this project's own agent infrastructure and (b) remediation items for the AgentTeamsModule tool itself; audit both via `@adversarial` and `@conflict-auditor`; apply (a) via `@agent-updater` and log (b) to `references/agentteams-remediation-log.csv`. Also fires at the close of any ad-hoc session that produced or revised a deliverable without entering a numbered workflow. Does not apply to Workflow 4 (would double-count already-retrospected deliverables) or Workflows 5–10 (governance/maintenance, not deliverable production). All semantics (category definitions, dedup rule, content-safety check, CSV schema, destination rule) are defined once in `references/retrospective-remediation.reference.md` — do not restate them here.
 
 <!-- AGENTTEAMS:BEGIN authority_hierarchy v=1 -->
 ### Authority Hierarchy
@@ -285,6 +286,50 @@ Before executing any such step:
 
 ---
 
+### Post-Deliverable Retrospective
+
+**Applies to:** the terminal acceptance step of Workflow 1 (Produce a Deliverable), Workflow 2
+(Revise a Deliverable), and Workflow 3's "corrections were made" branch (Technical Accuracy
+Audit) — run once the deliverable has passed its full audit chain and immediately before
+**Standard Doc-Sync Closeout**. **Does not apply** to Workflow 4 (Compile Final Output) — it
+assembles deliverables that were each already retrospected at their own Workflow 1/2 production
+point, and has no audit chain of its own to gate on; retrospecting again there would
+double-count. Also does not apply to Workflows 5–10 — consistency review, doc maintenance,
+cleanup, hygiene audit, cross-repository coordination, and plan review are governance/
+maintenance/coordination actions, not primary-deliverable production or revision, even where
+several of them also terminate via Standard Doc-Sync Closeout. **Reachability:** also runs at
+the close of any session that produced or materially revised a primary deliverable even when
+handled ad-hoc, without literally entering Workflow 1/2/3's numbered steps — the same
+standing-checklist principle Workflow 11 already applies to its own closeout gates.
+
+1. Enumerate two lists, each starting empty: (a) **repository-infrastructure lessons** —
+   generalizable gaps in this project's own agent docs/rules/routing that this session's work
+   exposed; (b) **AgentTeamsModule remediation items** — gaps in the agentteams tool itself
+   (template library, `analyze`/`render`/`emit` pipeline, `agentteams --update`/`--init`
+   behavior, schemas, or CLI) that this session's work exposed. Full category definitions and
+   worked qualify/don't-qualify examples: `references/retrospective-remediation.reference.md`.
+2. If both lists are empty → note "No retrospective items this session" → proceed directly to
+   Standard Doc-Sync Closeout.
+3. Invoke `@adversarial` → challenge every surviving item in both lists: is it truly
+   generalizable (not a one-off content fix), truly novel (not already covered), and
+   proportionate?
+4. Invoke `@conflict-auditor` → verify surviving list (a) items do not contradict existing
+   agent docs; deduplicate list (b) items against existing `open` rows in
+   `references/agentteams-remediation-log.csv`; additionally reject or sanitize (do not append
+   verbatim) any item whose `summary` or `proposed_touch_points` text begins with a
+   formula-injection character (`=`, `+`, `-`, `@`) or reads as credential/secret-like —
+   escalate to `@security` only for that specific case.
+5. Surviving list (a) items → hand to the `@agent-updater` step of the immediately-following
+   Standard Doc-Sync Closeout as extra instructions (its existing "a workflow step may attach a
+   workflow-specific instruction" convention).
+6. Surviving list (b) items → invoke `@repo-liaison` → append one row per item to
+   `references/agentteams-remediation-log.csv` (`status` always starts `open`; never edit an
+   existing row). Destination and self-referential exception:
+   `references/retrospective-remediation.reference.md`.
+7. → **Standard Doc-Sync Closeout**.
+
+---
+
 ### Standard Doc-Sync Closeout
 
 **Applies to:** Workflows that end by synchronizing documentation and auditing that synchronization.
@@ -312,7 +357,7 @@ A workflow step may attach a workflow-specific instruction to its closeout refer
 6. *(If `@cohesion-repairer` in team)* Invoke `@cohesion-repairer` → repair within-section cohesion failures
 7. *(If `@style-guardian` in team)* Invoke `@style-guardian` → three-priority style audit
 8. Invoke `@conflict-auditor` → verify consistency with existing deliverables
-9. → **Standard Doc-Sync Closeout**
+9. → **Post-Deliverable Retrospective**
 
 ### Workflow 2: Revise a Deliverable
 
@@ -325,7 +370,7 @@ A workflow step may attach a workflow-specific instruction to its closeout refer
 5. *(If `@style-guardian` in team)* Invoke `@style-guardian` → audit style consistency
 6. Invoke `@conflict-auditor` → verify no new contradictions introduced
 7. *(If `@reference-manager` in team)* Invoke `@reference-manager` → verify all references still resolve
-8. → **Standard Doc-Sync Closeout**
+8. → **Post-Deliverable Retrospective**
 
 ### Workflow 3: Technical Accuracy Audit
 
@@ -336,7 +381,7 @@ A workflow step may attach a workflow-specific instruction to its closeout refer
 3. If corrections needed → invoke `@primary-producer` to update deliverable
 4. If deliverable edited → invoke `@quality-auditor`; also `@cohesion-repairer`, `@style-guardian` if in team
 5. Invoke `@conflict-auditor` → verify consistency
-6. If any corrections were made → **Standard Doc-Sync Closeout**; otherwise → **Invoke Workflow 11: Final Check**
+6. If any corrections were made → **Post-Deliverable Retrospective**; otherwise → **Invoke Workflow 11: Final Check**
 
 ### Workflow 4: Compile Final Output
 

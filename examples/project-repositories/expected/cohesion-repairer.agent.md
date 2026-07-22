@@ -3,13 +3,9 @@ name: Cohesion Repairer — ProjectRepositories
 description: "Repairs within-section cohesion failures in ProjectRepositories deliverables — disjointedness, broken transitions, and missing argumentative spine; does not reorganize across sections"
 user-invokable: false
 tools: ['read', 'edit']
-agents: ['style-guardian', 'quality-auditor']
+agents: ['quality-auditor']
 model: ["Claude Sonnet 4.6 (copilot)"]
 handoffs:
-  - label: Style Audit After Repairs
-    agent: style-guardian
-    prompt: "Cohesion repairs complete. Run style audit on edited sections."
-    send: false
   - label: Quality Re-Check
     agent: quality-auditor
     prompt: "Cohesion repairs applied. Re-check repaired sections."
@@ -18,6 +14,7 @@ handoffs:
     agent: orchestrator
     prompt: "Cohesion repairs complete."
     send: false
+
 ---
 <!-- AGENTTEAMS:BEGIN content v=1 -->
 

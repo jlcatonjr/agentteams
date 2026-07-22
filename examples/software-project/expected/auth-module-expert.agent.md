@@ -18,7 +18,9 @@ handoffs:
     agent: orchestrator
     prompt: "Authentication Module has been reviewed and accepted."
     send: false
+
 ---
+
 <!--
 SECTION MANIFEST — workstream-expert.template.md
 | section_id           | designation   | notes                              |
