@@ -100,6 +100,16 @@ LOCAL_CATALOG: tuple[dict[str, Any], ...] = (
      "fix": "Make the smallest change that satisfies the task; never reformat or "
             "restructure unrelated lines in the same edit (CH-28). Required guards/"
             "cleanups (CH-10/CH-22/CH-23/CH-24) and sanctioned refactors still apply."},
+    {"id": "BH-11", "category": "correctness",
+     "habit": "A backstage/utility LLM call silently inherits a user-facing, dynamically-selectable "
+              "model (or other generation parameter) choice, without accounting for that model's "
+              "behavioral differences",
+     "cross_links": ("CH-23",),
+     "fix": "Give utility calls (routing, extraction, summarization, auditing) their own default, "
+            "independent of a user-facing picker — or explicitly account for the selected model's "
+            "behavior (e.g. a reasoning model consuming its fixed token budget on internal thinking "
+            "before any requested output). An ambiguous empty/degraded result from such a call must "
+            "not be treated as a confident negative (see BH-07/CH-23)."},
 )
 
 _CATEGORY_LABELS = {

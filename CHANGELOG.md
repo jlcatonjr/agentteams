@@ -6,6 +6,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### added (AI bad-habits catalog: BH-11 utility-call model inheritance)
+
+- **New catalog entry `BH-11`** (category: AI-specific correctness, cross-linked to `CH-23`):
+  *"A backstage/utility LLM call silently inherits a user-facing, dynamically-selectable model (or
+  other generation parameter) choice, without accounting for that model's behavioral differences."*
+  Surfaced while investigating a LingoFriend production bug (weather/news questions silently
+  returning no live-research grounding whenever a "thinking" chat model was selected) — the
+  underlying failure mode generalizes to any agentic system with more than one LLM call per turn
+  and a user-selectable model, so it's cataloged here for `@code-hygiene` (CH-25) to catch in every
+  current and future agentteams-scaffolded project, not just the one that surfaced it.
+  `references/ai-bad-habits-watch.md` regenerated from the updated catalog.
+
 ### fixed (bridge subagent stubs absolute-path leak)
 
 - **Claude and Goose subagent bridge stubs no longer embed the operator's absolute filesystem

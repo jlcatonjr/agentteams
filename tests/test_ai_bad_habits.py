@@ -166,9 +166,9 @@ def test_known_corrective_mappings() -> None:
 
 def test_bh_ids_unique_and_contiguous() -> None:
     ids = [e["id"] for e in ai_bad_habits.LOCAL_CATALOG]
-    assert len(ids) == len(set(ids)) == 10
+    assert len(ids) == len(set(ids)) == 11
     nums = sorted(int(i.split("-")[1]) for i in ids)
-    assert nums == list(range(1, 11))
+    assert nums == list(range(1, 12))
 
 
 def test_catalog_placeholder_resolves_with_no_unresolved_token() -> None:
