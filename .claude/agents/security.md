@@ -31,7 +31,7 @@ Runtime enforcement also consumes machine-readable freshness metadata from the s
 
 > ⛔ **Do not modify or omit.** All triggers, rules, the HALT directive, and the AI-authored-code screening guidance below are the immutable contract for this agent.
 
-<!-- AGENTTEAMS:BEGIN security_rules_invariant v=1 -->
+<!-- AGENTTEAMS:BEGIN security_rules_invariant v=2 -->
 ### Mandatory Review Triggers
 
 | Trigger | Risk Category |
@@ -63,6 +63,8 @@ Runtime enforcement also consumes machine-readable freshness metadata from the s
 - ✅ Apply OPSEC to **all committed files**, not only deliverables — sanitize absolute home-directory paths (`/Users/<name>/`, `/home/<name>/`) in infrastructure artifacts (`tmp/*.csv`, scripts, config files) to `~/`-relative or repo-relative forms before committing
 - ❌ Never include actual API keys, tokens, SSH keys, or passwords in any file
 - ❌ Do not commit infrastructure artifacts retaining full absolute home-directory paths
+
+These patterns are also checked deterministically by `agentteams.scan.scan_content(text)` (or `python -m agentteams.scan <path>` for a shell-only runtime) — if engineering integration is available, run it over the reviewed content and treat any `high`-severity finding as this rule's HALT trigger instead of re-deriving the regex match by eye. Falls back to manual pattern review (the bullets above) when it isn't.
 
 **Rule S-2: Read-Only Access to External Repos**
 - ✅ Read source files from external repositories as reference material
@@ -108,6 +110,8 @@ Machine-specific information uniquely identifies the local development machine, 
 
 This rule is stricter than S-1 in one key respect: **any match triggers HALT** (not CONDITIONAL PASS) because machine-specific data in version-controlled files risks OPSEC exposure in perpetuity through git history, forks, and cached views.
 
+These patterns are also checked deterministically by `agentteams.scan.scan_content(text)` (or `python -m agentteams.scan <path>` for a shell-only runtime) — if engineering integration is available, run it over the reviewed content and treat any `high`-severity finding as this rule's HALT trigger instead of re-deriving the regex match by eye. Falls back to manual pattern review (the bullets above) when it isn't.
+
 ---
 
 ### HALT vs. CONDITIONAL PASS Escalation Criteria
@@ -131,6 +135,8 @@ Use this table to determine the verdict. **Criteria are deterministic** — mode
 | No security-relevant findings | **PASS** |
 
 > **Precedence rule:** If a finding matches multiple rows, apply the **most restrictive** verdict (HALT > CONDITIONAL PASS > PASS).
+
+The Credential and Machine-specific-information rows above are exactly `scan.py`'s scan-derivable categories — `agentteams.scan.verdict_for_findings()` computes HALT/CONDITIONAL PASS/PASS for that subset mechanically from `ScanFinding.severity`. The remaining rows (destructive-op confirmation, external writes, injection attempts, scope violations) are procedural and stay a judgment call.
 
 ### AI-Authored Code Is Insecure By Default
 
@@ -181,11 +187,11 @@ Apply only the baseline(s) matching the actual deployment target(s); skip this g
 ### Current Threat Intelligence Snapshot
 
 <!-- AGENTTEAMS:BEGIN threat_intelligence v=1 -->
-Generated at: `2026-07-21T04:31:13Z`
+Generated at: `2026-07-22T18:55:19Z`
 
 **Sources:**
 
-- CISA KEV: ok (catalog 2026.07.16, items 1647) — https://www.cisa.gov/sites/default/files/feeds/known_exploited_vulnerabilities.json
+- CISA KEV: ok (catalog 2026.07.21, items 1651) — https://www.cisa.gov/sites/default/files/feeds/known_exploited_vulnerabilities.json
 - MITRE CVE: metadata_only — https://cveawg.mitre.org/api/cve/
 - FIRST EPSS: ok (items 15) — https://api.first.org/data/v1/epss
 - NVD (NIST): ok (items 5) — https://services.nvd.nist.gov/rest/json/cves/2.0
@@ -196,21 +202,21 @@ Generated at: `2026-07-21T04:31:13Z`
 
 **Current major vulnerabilities:**
 
-- `CVE-2026-58644` | Microsoft SharePoint | Microsoft SharePoint Deserialization of Untrusted Data Vulnerability | added 2026-07-16 | EPSS 0.014650000, percentile 0.707740000 | CVSS 9.8 CRITICAL
-- `CVE-2026-25089` | Fortinet FortiSandbox | Fortinet FortiSandbox OS Command Injection Vulnerability | added 2026-07-16 | EPSS 0.361350000, percentile 0.983090000 | CVSS 9.8 CRITICAL
-- `CVE-2026-39808` | Fortinet FortiSandbox | Fortinet FortiSandbox OS Command Injection Vulnerability | added 2026-07-16 | EPSS 0.841580000, percentile 0.996670000 | CVSS 9.8 CRITICAL
-- `CVE-2026-46817` | Oracle E-Business Suite | Oracle E-Business Suite Improper Privilege Management Vulnerability | added 2026-07-15 | EPSS 0.010450000, percentile 0.603520000 | CVSS 9.8 CRITICAL
-- `CVE-2023-4346` | KNX Association KNX Protocol Connection Authorization Option 1 | KNX Association KNX Protocol Connection Authorization Option 1 Overly Restrictive Account Lockout Mechanism Vulnerability | added 2026-07-15 | EPSS 0.008550000, percentile 0.543380000 | CVSS 7.5 HIGH
-- `CVE-2026-56155` | Microsoft Active Directory Federation Services | Microsoft Active Directory Federation Services Insufficient Granularity of Access Control Vulnerability  | added 2026-07-14 | EPSS 0.003790000, percentile 0.302780000
-- `CVE-2026-56164` | Microsoft SharePoint Server | Microsoft SharePoint Server Missing Authentication for Critical Function Vulnerability | added 2026-07-14 | EPSS 0.056010000, percentile 0.920510000
-- `CVE-2026-15409` | SonicWall SMA1000 Appliances | SonicWall SMA1000 Appliances Server-Side Request Forgery Vulnerability | added 2026-07-14 | EPSS 0.012660000, percentile 0.665210000
-- `CVE-2026-15410` | SonicWall SMA1000 Appliances | SonicWall SMA1000 Appliances Code Injection Vulnerability | added 2026-07-14 | EPSS 0.014860000, percentile 0.711820000
-- `CVE-2008-4128` | Cisco IOS | Cisco IOS Cross-Site Request Forgery Vulnerability | added 2026-07-13 | EPSS 0.238570000, percentile 0.975810000
-- `CVE-2026-56291` | Balbooa Forms | Balbooa Forms Unrestricted Upload of File with Dangerous Type Vulnerability | added 2026-07-10 | EPSS 0.086350000, percentile 0.945100000
-- `CVE-2026-48939` | iCagenda iCagenda | iCagenda Unrestricted Upload of File with Dangerous Type Vulnerability | added 2026-07-10 | EPSS 0.015050000, percentile 0.715350000
-- `CVE-2026-48908` | JoomShaper SP Page Builder | JoomShaper SP Page Builder Unrestricted Upload of File with Dangerous Type Vulnerability | added 2026-07-07 | EPSS 0.015690000, percentile 0.726290000
-- `CVE-2026-55255` | Langflow Langflow | Langflow Authorization Bypass Through User-Controlled Key Vulnerability | added 2026-07-07 | EPSS 0.005600000, percentile 0.429080000
-- `CVE-2026-56290` | Joomlack Page Builder | Joomlack Page Builder Improper Access Control Vulnerability | added 2026-07-07 | EPSS 0.029120000, percentile 0.854740000
+- `CVE-2026-60137` | WordPress Core | WordPress Core SQL Injection Vulnerability | added 2026-07-21 | EPSS 0.203950000, percentile 0.972190000 | CVSS 5.9 MEDIUM
+- `CVE-2026-63030` | WordPress Core | WordPress Core Interpretation Conflict Vulnerability | added 2026-07-21 | EPSS 0.385990000, percentile 0.984250000 | CVSS 9.8 CRITICAL
+- `CVE-2026-0770` | Langflow Langflow | Langflow Inclusion of Functionality from Untrusted Control Sphere Vulnerability | added 2026-07-21 | EPSS 0.545030000, percentile 0.989110000 | CVSS 9.8 CRITICAL
+- `CVE-2021-27137` | DD-WRT DD-WRT | DD-WRT Stack-Based Buffer Overflow Vulnerability | added 2026-07-21 | EPSS 0.108090000, percentile 0.953770000 | CVSS 8.1 HIGH
+- `CVE-2026-58644` | Microsoft SharePoint | Microsoft SharePoint Deserialization of Untrusted Data Vulnerability | added 2026-07-16 | EPSS 0.014650000, percentile 0.709000000 | CVSS 9.8 CRITICAL
+- `CVE-2026-25089` | Fortinet FortiSandbox | Fortinet FortiSandbox OS Command Injection Vulnerability | added 2026-07-16 | EPSS 0.361350000, percentile 0.983170000
+- `CVE-2026-39808` | Fortinet FortiSandbox | Fortinet FortiSandbox OS Command Injection Vulnerability | added 2026-07-16 | EPSS 0.841580000, percentile 0.996690000
+- `CVE-2026-46817` | Oracle E-Business Suite | Oracle E-Business Suite Improper Privilege Management Vulnerability | added 2026-07-15 | EPSS 0.010450000, percentile 0.605300000
+- `CVE-2023-4346` | KNX Association KNX Protocol Connection Authorization Option 1 | KNX Association KNX Protocol Connection Authorization Option 1 Overly Restrictive Account Lockout Mechanism Vulnerability | added 2026-07-15 | EPSS 0.008550000, percentile 0.545440000
+- `CVE-2026-56155` | Microsoft Active Directory Federation Services | Microsoft Active Directory Federation Services Insufficient Granularity of Access Control Vulnerability  | added 2026-07-14 | EPSS 0.003790000, percentile 0.304510000
+- `CVE-2026-56164` | Microsoft SharePoint Server | Microsoft SharePoint Server Missing Authentication for Critical Function Vulnerability | added 2026-07-14 | EPSS 0.056010000, percentile 0.920860000
+- `CVE-2026-15409` | SonicWall SMA1000 Appliances | SonicWall SMA1000 Appliances Server-Side Request Forgery Vulnerability | added 2026-07-14 | EPSS 0.162710000, percentile 0.966150000
+- `CVE-2026-15410` | SonicWall SMA1000 Appliances | SonicWall SMA1000 Appliances Code Injection Vulnerability | added 2026-07-14 | EPSS 0.182870000, percentile 0.969180000
+- `CVE-2008-4128` | Cisco IOS | Cisco IOS Cross-Site Request Forgery Vulnerability | added 2026-07-13 | EPSS 0.238570000, percentile 0.975910000
+- `CVE-2026-56291` | Balbooa Forms | Balbooa Forms Unrestricted Upload of File with Dangerous Type Vulnerability | added 2026-07-10 | EPSS 0.086350000, percentile 0.945350000
 
 **Prevention and mitigation playbook:**
 
