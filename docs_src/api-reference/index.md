@@ -33,6 +33,7 @@ This reference defines the **supported public API surface** (documented modules 
 | Module | Role |
 |--------|------|
 | [`scan`](scan.md) | Proactive security scan for generated agent files |
+| [`session_scan`](session_scan.md) | Repo at-large issue scan (CHANGELOG Known Issues, plan-steps pending/blocked, git status) for orchestrator closeout |
 | [`audit`](audit.md) | Post-generation static and AI-powered audit |
 | [`remediate`](remediate.md) | Auto-correct audit findings via standalone Copilot CLI |
 | [`security-refs`](security-refs.md) | Build live security intelligence placeholders for templates |

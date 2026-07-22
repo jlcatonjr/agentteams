@@ -108,3 +108,16 @@ contract — the three address different questions and must not be conflated.
 
 See `schemas/code-index.schema.json` for the artifact contract and
 `references/plans/code-api-vector-index.plan.md` for the audited design (v3).
+
+### Query result shape
+
+`query_partition()`/`query_partitions()` each hit dict contains: `doc_id`, `path`, `title`,
+`source_kind` (`local-script` / `api-module` / `api-doc`), `language`, `symbol`, `signature`,
+`provenance`, `score` (rounded to 6 decimal places), `confidence`, `snippet`, `snippets`.
+
+`confidence` is `"reliable"` / `"candidate"` / `"weak"`, computed from `score` against the same
+per-strategy thresholds as [`memory_index`](memory-index.md)'s `query_index()` — lexical: `≥3.0`
+reliable, `1.0–3.0` candidate; vector: `≥0.30` reliable, `0.20–0.30` candidate.
+This module keeps its own copy of the threshold logic (not an import from `memory_index`) per the
+module's existing R2-M3 no-import invariant; `tests/test_code_index.py`'s scoring-parity tests
+assert `confidence` stays in lockstep with `memory_index`'s copy, not just `score`.

@@ -124,6 +124,7 @@ Return the top-*k* documents for *query* using the specified retrieval strategy.
 - `path`: Source file path
 - `title`: Extracted heading (first `# ` line) or filename
 - `score`: Relevance score (rounded to 6 decimal places; BM25 for lexical, cosine similarity for vector)
+- `confidence`: `"reliable"` / `"candidate"` / `"weak"`, computed from `score` against per-strategy thresholds (lexical: `≥3.0` reliable, `1.0–3.0` candidate; vector: `≥0.30` reliable, `0.20–0.30` candidate). Replaces threshold prose several templates used to restate by hand — see `agentteams/templates/universal/conflict-resolution.template.md`'s `memory_index_consultation` fence for the canonical wording consumers cite.
 - `snippet`: Best single passage (backward-compat; always present)
 - `snippets`: List of up to 3 best-matching passages (new in v1.2; dynamic passage scoring; present even for v1.1 indexes)
 

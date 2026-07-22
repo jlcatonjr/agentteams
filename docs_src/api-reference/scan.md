@@ -4,6 +4,13 @@ Proactive security scanner for generated agent files.
 
 Scans `.agent.md` and related files for: absolute paths containing usernames (PII exposure), credential patterns (API keys, tokens, passwords), unresolved auto-placeholders (`{UPPER_SNAKE_CASE}`), and unresolved manual placeholders (`{MANUAL:*}`).
 
+`scan_content()` is content-only (no filesystem coupling), so it doubles as a review-time check: `security.template.md` Rules S-1 and S-8 cite it directly as the preferred way to verify a piece of reviewed content, with the existing manual-pattern bullets retained as a fallback for runtimes that can't execute Python.
+
+## Layout
+
+- **Module:** `agentteams.scan` (importable)
+- **CLI:** `python -m agentteams.scan <path>` (or `-` for stdin) — for a runtime with shell/`execute` access but no way to natively `import` and call `scan_content` directly.
+
 > *Source: `agentteams/scan.py`*
 
 ---
@@ -44,6 +51,17 @@ Results of a security scan.
 - `high_count` (`int`) — Count of high-severity findings.
 - `medium_count` (`int`) — Count of medium-severity findings.
 - `low_count` (`int`) — Count of low-severity findings.
+- `verdict` (`str`) — `HALT` / `CONDITIONAL_PASS` / `PASS`, computed from `self.findings` via `verdict_for_findings()`.
+
+---
+
+## Constants
+
+### `HALT`, `CONDITIONAL_PASS`, `PASS`
+
+> *Source: `agentteams/scan.py`*
+
+The three verdict strings `verdict_for_findings()` returns. Mirror the `HALT` / `CONDITIONAL PASS` / `PASS` verdicts in `security.template.md`'s escalation table — specifically the Credential and Machine-specific-information rows, the scan-derivable subset of that table. The remaining rows (destructive-op confirmation, external writes, injection attempts, scope violations) are procedural and stay a judgment call this module doesn't attempt to mechanize.
 
 ---
 
@@ -117,3 +135,31 @@ Print a human-readable scan report to stdout.
 **Args:**
 
 - `report` (`ScanReport`) — Result from `scan_directory()`.
+
+---
+
+### `verdict_for_findings(findings)`
+
+> *Source: `agentteams/scan.py`*
+
+Map scan findings to a `HALT` / `CONDITIONAL_PASS` / `PASS` verdict: any `high`-severity finding is `HALT`; any finding at all (with no `high`) is `CONDITIONAL_PASS`; no findings is `PASS`.
+
+**Args:**
+
+- `findings` (`Iterable[ScanFinding]`) — Findings to evaluate — typically `scan_content()`'s return value or a `ScanReport.findings` list.
+
+**Returns:** `str` — One of `HALT`, `CONDITIONAL_PASS`, `PASS`.
+
+## CLI
+
+```bash
+# Scan a file, print JSON findings + verdict, exit 1 iff verdict is HALT
+python -m agentteams.scan path/to/file.md
+
+# Scan piped content (e.g. a diff) via stdin
+git diff | python -m agentteams.scan -
+```
+
+## See Also
+
+- [`session_scan`](session_scan.md) — a sibling review-time utility (repo at-large issue scan) with its own `python -m` entrypoint.

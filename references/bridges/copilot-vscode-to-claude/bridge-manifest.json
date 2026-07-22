@@ -1,13 +1,13 @@
 {
   "schema_version": "1.0",
-  "generated_at": "2026-07-21T00:03:42.467510+00:00",
+  "generated_at": "2026-07-22T00:31:17.029592+00:00",
   "source_framework": "copilot-vscode",
   "target_framework": "claude",
   "source_dir": "/Users/jamescaton/githubrepositories/agentteams/.github/agents",
   "source_hashes": [
     {
       "path": "agents/adversarial.agent.md",
-      "sha256": "266c9c0c735bde7871fea84dc45801e1e2e639e839a6338bb15c47fdbcc08e04"
+      "sha256": "96eeaa3881ca07be884a5b108be6b1f211804ee7dc46cb1a24d42ac099e658f9"
     },
     {
       "path": "agents/agent-refactor.agent.md",
@@ -39,11 +39,11 @@
     },
     {
       "path": "agents/conflict-auditor.agent.md",
-      "sha256": "3d69ea108d6ada19b91e6384c20fe2f622d69f5a9df056db7bcb17fb237c10a2"
+      "sha256": "2328595b5d116f1c0ce62c2178ef34f455b1f53c911abf25c34f897fef108bb4"
     },
     {
       "path": "agents/conflict-resolution.agent.md",
-      "sha256": "33d3253cae554d1366def7bda6ebd9dc4872980a8c99b383dfe236466b6e6cae"
+      "sha256": "5c901798036c161e3e11482091858920b89fb5614f1fba0c57ade1e1cee8a70e"
     },
     {
       "path": "agents/content-enricher.agent.md",
@@ -67,7 +67,7 @@
     },
     {
       "path": "agents/orchestrator.agent.md",
-      "sha256": "9caf5669647e6345cb95fc42b92873eee0f36b6f0ee51d4c461e4a2ba9fc6f3f"
+      "sha256": "8ed4d6913bb52121b6198e10eeab6be359c6d62a3de242b8aa19d8f8c78a1c84"
     },
     {
       "path": "agents/output-compiler.agent.md",
@@ -95,7 +95,7 @@
     },
     {
       "path": "agents/quality-auditor.agent.md",
-      "sha256": "6b602c3d56d7f357c7bde5345aff9ee6abc178a00149b0e662504bdaab5177cf"
+      "sha256": "d85788c555d03bbd7e1b748c458b1acbef47740842ca3140b3edfe811b29a48a"
     },
     {
       "path": "agents/reference-manager.agent.md",
@@ -107,7 +107,7 @@
     },
     {
       "path": "agents/retrieval-integrator.agent.md",
-      "sha256": "155e4f425029c492681fefc66a547db98c9d9282e461beb8add559f5e80054aa"
+      "sha256": "31b543c2d5bdf21c8edfccf4ca9304d82202b8e8900bf071f4e9b08767c5514e"
     },
     {
       "path": "agents/schemas-expert.agent.md",
@@ -115,7 +115,7 @@
     },
     {
       "path": "agents/security.agent.md",
-      "sha256": "2bf01365f55e320fb71962222ec3aa644d68ca4d1f1092f48a3a5c43eae506b9"
+      "sha256": "9804b6cdf9ca161e1acc76b5e1899da793808f0ea0a347936bf34fc3f33f3cda"
     },
     {
       "path": "agents/team-builder.agent.md",

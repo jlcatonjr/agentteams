@@ -272,6 +272,14 @@ Workflows are step sequences embedded in the generated Orchestrator agent. Every
 
 ---
 
+## Retrieval & Review-Time Utilities
+
+144. **Confidence-Tiered Retrieval** — `memory_index.query_index()` and `code_index.query_partition()`/`query_partitions()` hits carry a `confidence` field (`"reliable"` / `"candidate"` / `"weak"`) computed from `score` against per-strategy thresholds, printed alongside `score=` by `--query-index`/`--query-code`. Replaces threshold-interpretation prose duplicated across 6 templates (`conflict-resolution`, `conflict-auditor`, `quality-auditor`, `research-analyst`, `retrieval-integrator`, `tool-doc-researcher`). See [`memory-index`](memory-index.md), [`code-index`](code-index.md).
+145. **`agentteams.scan` Review-Time Invocability** — `verdict_for_findings()` (`HALT` / `CONDITIONAL_PASS` / `PASS`) and a `python -m agentteams.scan <path>` entrypoint let a shell-only runtime invoke the deterministic PII/credential scanner at review time, not only at generation time via `--scan-security`. `security.template.md` Rules S-1/S-8 cite it as the preferred check. See [`scan`](scan.md).
+146. **`session_scan` Module** — `scan_repo_issues()` consolidates the orchestrator's Workflow 11 Part B closeout scan (CHANGELOG "Known Issues", plan-steps pending/blocked rows, `git status` anomalies) into one call, with a `python -m agentteams.session_scan` entrypoint. See [`session_scan`](session_scan.md).
+
+---
+
 ## Getting Started
 
 ### Essential Features

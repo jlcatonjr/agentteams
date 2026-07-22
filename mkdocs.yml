@@ -71,6 +71,7 @@ nav:
       - drift: api-reference/drift.md
       - behavioral-drift: api-reference/behavioral-drift.md
       - scan: api-reference/scan.md
+      - session_scan: api-reference/session_scan.md
       - audit: api-reference/audit.md
       - remediate: api-reference/remediate.md
       - security-refs: api-reference/security-refs.md
