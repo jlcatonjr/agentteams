@@ -54,6 +54,22 @@ def test_emit_stubs_writes_one_per_source(tmp_path: Path):
         assert ".github/agents/" in text
 
 
+def test_emit_stubs_never_leak_absolute_source_path(tmp_path: Path):
+    """Security fix: a stub must never embed the operator's absolute filesystem path
+    (which would leak the OS username into a file that may end up tracked/published).
+    The relative path (already given in front matter + body) is sufficient — Claude
+    resolves it against the repo root at read time."""
+    src = tmp_path / ".github" / "agents"
+    _src_agent(src, "orchestrator")
+    result = bs.emit_subagent_stubs(source_dir=src, output_root=tmp_path)
+    assert result.success
+    stub = tmp_path / ".claude" / "agents" / "orchestrator.md"
+    text = stub.read_text(encoding="utf-8")
+    assert str(tmp_path) not in text
+    assert str(src) not in text
+    assert "Source absolute path" not in text
+
+
 def test_emit_stubs_collapses_experts(tmp_path: Path):
     src = tmp_path / ".github" / "agents"
     _src_agent(src, "orchestrator")
@@ -372,6 +388,19 @@ def test_goose_stubs_one_valid_recipe_per_agent_reserved_skipped(tmp_path: Path)
     for p in recipes.glob("*.yaml"):
         assert _validate_recipe_yaml(p.read_text(encoding="utf-8")) == [], p.name
     assert any("orchestrator" in s for s in result.skipped)
+
+
+def test_goose_stubs_never_leak_absolute_source_path(tmp_path: Path):
+    """Security fix: same as the Claude stub case — never embed the operator's
+    absolute filesystem path in a generated recipe."""
+    src = tmp_path / ".github" / "agents"
+    _src_agent(src, "cleanup")
+    result = bsg.emit_goose_subagent_stubs(source_dir=src, output_root=tmp_path)
+    assert result.written
+    recipe = (tmp_path / ".goose" / "recipes" / "cleanup.yaml").read_text(encoding="utf-8")
+    assert str(tmp_path) not in recipe
+    assert str(src) not in recipe
+    assert "Source absolute path" not in recipe
 
 
 def test_goose_stubs_never_overwrite_existing_recipe(tmp_path: Path):

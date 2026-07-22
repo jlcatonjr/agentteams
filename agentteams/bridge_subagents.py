@@ -189,16 +189,16 @@ def _short_description(meta: dict[str, str], slug: str) -> str:
     return desc
 
 
-def _stub_body(*, source_abs_path: Path, source_rel_path: str, role_desc: str) -> str:
+def _stub_body(*, source_rel_path: str, role_desc: str) -> str:
     """Render the body that delegates to the canonical source agent."""
     return (
         f"# Bridged agent (copilot-vscode → claude)\n\n"
         f"This is a Claude subagent stub. The canonical agent definition lives at:\n\n"
         f"    {source_rel_path}\n\n"
-        f"**On invocation, first read the source file at the absolute path below**, then "
-        f"perform the work it describes. Honor every constraint and protocol stated "
-        f"in the canonical body; the stub adds no policy of its own.\n\n"
-        f"- Source absolute path: `{source_abs_path}`\n"
+        f"**On invocation, first read the source file at the path above** (relative to "
+        f"this repository's root), then perform the work it describes. Honor every "
+        f"constraint and protocol stated in the canonical body; the stub adds no policy "
+        f"of its own.\n\n"
         f"- Source role: {role_desc}\n\n"
         f"Runtime context note: you are invoked via the copilot-vscode → claude bridge "
         f"from a Claude runtime. Where the source body refers to chat-mode invocations "
@@ -211,7 +211,6 @@ def _render_subagent_stub(
     *,
     slug: str,
     description: str,
-    source_abs_path: Path,
     source_rel_path: str,
     source_sha256: str,
     tools_raw: str | None = None,
@@ -231,7 +230,6 @@ def _render_subagent_stub(
             fm_lines.append(f"allowed-tools: {', '.join(allowed)}")
     fm_lines += ["---", ""]
     body = _stub_body(
-        source_abs_path=source_abs_path,
         source_rel_path=source_rel_path,
         role_desc=description,
     )
@@ -339,7 +337,6 @@ def emit_subagent_stubs(
         stub_content = _render_subagent_stub(
             slug=slug,
             description=description,
-            source_abs_path=src,
             source_rel_path=source_rel,
             source_sha256=sha,
             tools_raw=meta.get("tools"),

@@ -52,16 +52,16 @@ def _collect_source_agents(source_dir: Path, source_framework: str) -> list[Path
     )
 
 
-def _stub_instructions(*, source_rel_path: str, source_abs_path: Path, role_desc: str) -> str:
+def _stub_instructions(*, source_rel_path: str, role_desc: str) -> str:
     """Render the recipe instructions that delegate to the canonical source agent."""
     return (
         "This is a bridged Goose stub recipe. The canonical agent definition lives in "
         "the source framework at:\n\n"
         f"    {source_rel_path}\n\n"
-        "On activation, read that source file with your developer (file) tool, then "
-        "perform the work it describes. Honor every constraint and protocol stated in "
-        "the canonical body; this stub adds no policy of its own.\n\n"
-        f"- Source absolute path: {source_abs_path}\n"
+        "On activation, read that source file (relative to this repository's root) "
+        "with your developer (file) tool, then perform the work it describes. Honor "
+        "every constraint and protocol stated in the canonical body; this stub adds no "
+        "policy of its own.\n\n"
         f"- Source role: {role_desc}\n"
     )
 
@@ -107,7 +107,7 @@ def emit_goose_subagent_stubs(
             title=f"{display_name} (bridged stub)",
             description=description,
             instructions=_stub_instructions(
-                source_rel_path=source_rel, source_abs_path=src, role_desc=description,
+                source_rel_path=source_rel, role_desc=description,
             ),
             extensions=["developer"],
         )
