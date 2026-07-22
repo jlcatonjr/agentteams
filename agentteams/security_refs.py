@@ -19,9 +19,12 @@ import json
 import time
 import urllib.parse
 import urllib.request
+import warnings
 from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
+
+from agentteams.cli.schema_cache import _schema_path
 
 _KEV_URL = "https://www.cisa.gov/sites/default/files/feeds/known_exploited_vulnerabilities.json"
 _EPSS_URL = "https://api.first.org/data/v1/epss"
@@ -418,6 +421,28 @@ def _fetch_kev(max_items: int) -> tuple[list[dict], dict]:
     return selected, source_meta
 
 
+def _normalize_kev_record(v: dict) -> dict:
+    """Convert one live-CISA-KEV-API-shape entry into this module's canonical (write) shape.
+
+    Canonical shape is the shape this module has always persisted to
+    ``security-vulnerability-watch.json`` (``cve``/``vendor``/``name``/``date_added``/...) — every
+    downstream consumer (``_format_threat_summary``, ``_format_prevention_playbook``, the JSON
+    payload builder) operates on this shape regardless of whether a record originated from a live
+    fetch (this function) or a cache read (already canonical on disk — see
+    references/plans/security-vuln-cache-normalization.plan.md for why a second shape must never be
+    allowed to reach those consumers again).
+    """
+    return {
+        "cve": v.get("cveID", ""),
+        "vendor": v.get("vendorProject", ""),
+        "product": v.get("product", ""),
+        "name": v.get("vulnerabilityName", ""),
+        "date_added": v.get("dateAdded", ""),
+        "known_ransomware_campaign_use": v.get("knownRansomwareCampaignUse", ""),
+        "required_action": v.get("requiredAction", ""),
+    }
+
+
 def _fetch_epss(cves: list[str]) -> tuple[dict[str, dict[str, str]], dict]:
     """Fetch EPSS data for the provided CVEs.
 
@@ -603,6 +628,38 @@ def _format_source_registry(sources: list[dict]) -> str:
     return "\n".join(lines)
 
 
+def _validate_vuln_watch_payload(payload: dict, *, context: str) -> bool:
+    """Validate *payload* against ``schemas/security-vulnerability-watch.schema.json``.
+
+    Fail-open by construction (mirrors this codebase's established schema-validation
+    convention for generator-owned artifacts, e.g. memory-index/code-index): returns ``True``
+    (treat as valid, don't block a real run) if ``jsonschema`` is unavailable or the bundled
+    schema itself fails to load or parse. Returns ``False`` only on a genuine, successfully
+    -checked schema violation, after emitting a ``UserWarning`` naming *context* and the
+    violation — this is the read-side recurrence-prevention mechanism from
+    references/plans/security-vuln-cache-json-schema.plan.md: a future write/read shape drift
+    gets its cache rejected (and the rejection is visible), rather than silently rendering
+    per-field defaults again.
+    """
+    try:
+        import jsonschema
+    except ImportError:
+        return True
+    try:
+        schema = json.loads(_schema_path("security-vulnerability-watch.schema.json").read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError):
+        return True
+    try:
+        jsonschema.validate(payload, schema)
+        return True
+    except jsonschema.ValidationError as exc:
+        warnings.warn(
+            f"security-vulnerability-watch {context} failed schema validation: {exc.message}",
+            stacklevel=2,
+        )
+        return False
+
+
 def _format_control_evidence_matrix(rows: list[dict[str, str]]) -> str:
     """Return a markdown table describing the control-to-test evidence matrix."""
     if not rows:
@@ -619,44 +676,47 @@ def _format_control_evidence_matrix(rows: list[dict[str, str]]) -> str:
     return "\n".join(lines)
 
 
-def _format_threat_summary(
-    vulns: list[dict],
-    epss: dict[str, dict[str, str]],
-    nvd: dict[str, dict] | None = None,
-) -> str:
+def _format_threat_summary(vulns: list[dict]) -> str:
+    """Render the threat summary from canonical-shape vulnerability records.
+
+    Enrichment (EPSS/CVSS) is embedded inline per-record (``epss``, ``epss_percentile``,
+    ``cvss_score``, ``cvss_severity``) rather than passed as separate lookup maps — this is what
+    lets an offline cache read render identically to a live fetch: the enrichment travels with the
+    record instead of needing to be separately restored (see
+    references/plans/security-vuln-cache-normalization.plan.md).
+    """
     if not vulns:
         return "- No live vulnerability data was available; consult cached reference file."
 
-    nvd = nvd or {}
     lines: list[str] = []
     for vuln in vulns:
-        cve = vuln.get("cveID", "UNKNOWN-CVE")
-        e = epss.get(cve, {})
-        epss_score = e.get("epss")
-        pct = e.get("percentile")
+        cve = vuln.get("cve", "UNKNOWN-CVE")
+        epss_score = vuln.get("epss")
+        pct = vuln.get("epss_percentile")
         epss_text = ""
         if epss_score:
             pct_text = f", percentile {pct}" if pct else ""
             epss_text = f" | EPSS {epss_score}{pct_text}"
-        nvd_entry = nvd.get(cve, {})
         cvss_text = ""
-        if nvd_entry.get("cvss_score"):
+        if vuln.get("cvss_score"):
             cvss_text = (
-                f" | CVSS {nvd_entry['cvss_score']}"
-                + (f" {nvd_entry['cvss_severity']}" if nvd_entry.get("cvss_severity") else "")
+                f" | CVSS {vuln['cvss_score']}"
+                + (f" {vuln['cvss_severity']}" if vuln.get("cvss_severity") else "")
             )
         lines.append(
-            f"- `{cve}` | {vuln.get('vendorProject', 'Unknown vendor')} {vuln.get('product', '')} | "
-            f"{vuln.get('vulnerabilityName', 'Known exploited vulnerability')} | "
-            f"added {vuln.get('dateAdded', 'n/a')}{epss_text}{cvss_text}"
+            f"- `{cve}` | {vuln.get('vendor', 'Unknown vendor')} {vuln.get('product', '')} | "
+            f"{vuln.get('name', 'Known exploited vulnerability')} | "
+            f"added {vuln.get('date_added', 'n/a')}{epss_text}{cvss_text}"
         )
     return "\n".join(lines)
 
 
 def _format_prevention_playbook(vulns: list[dict]) -> str:
+    """Render the prevention playbook from canonical-shape vulnerability records (see
+    _format_threat_summary's docstring for why these are canonical, not live-API, shape)."""
     actions: list[str] = []
     for vuln in vulns:
-        action = (vuln.get("requiredAction") or "").strip()
+        action = (vuln.get("required_action") or "").strip()
         if action and action not in actions:
             actions.append(action)
         if len(actions) >= 4:
@@ -722,19 +782,25 @@ def build_security_placeholders(
         if cache_json.exists():
             try:
                 cached = json.loads(cache_json.read_text(encoding="utf-8"))
-                vulnerabilities = cached.get("vulnerabilities", [])[:max_items]
+            except (json.JSONDecodeError, OSError):
+                cached = None
+            if cached is not None and _validate_vuln_watch_payload(cached, context=f"cache read ({cache_json})"):
+                # Cached records are already canonical shape (that's the only shape this module
+                # ever persists) — no re-normalization needed. The `v.get("cve")` filter is a
+                # resilience guard against a cache degraded by a pre-fix version of this module
+                # (blank cve/vendor/name fields): drop those records rather than render them.
+                vulnerabilities = [v for v in cached.get("vulnerabilities", [])[:max_items] if v.get("cve")]
                 sources = cached.get("sources", sources)
                 generated_at = cached.get("generated_at", generated_at)
                 osv_findings = cached.get("osv_packages", [])
-            except (json.JSONDecodeError, OSError):
-                pass
         else:
             _offline_without_cache = True
     else:
         try:
             vulnerabilities, kev_source = _fetch_kev(max_items=max_items)
+            vulnerabilities = [_normalize_kev_record(v) for v in vulnerabilities]
             sources[0] = kev_source
-            cves = [v.get("cveID", "") for v in vulnerabilities if v.get("cveID")]
+            cves = [v["cve"] for v in vulnerabilities if v["cve"]]
             try:
                 epss_map, epss_source = _fetch_epss(cves)
                 sources[2] = epss_source
@@ -746,12 +812,27 @@ def build_security_placeholders(
                     sources[3] = nvd_source
                 except OSError:
                     sources[3]["status"] = "unavailable"
+            # Merge enrichment inline, once, right after fetching it — every downstream consumer
+            # (rendering, JSON payload) then reads a single self-contained record shape regardless
+            # of provenance (live fetch here, or a cache read elsewhere in this function).
+            for v in vulnerabilities:
+                e = epss_map.get(v["cve"], {})
+                v["epss"] = e.get("epss", "")
+                v["epss_percentile"] = e.get("percentile", "")
+                n = nvd_map.get(v["cve"], {})
+                if n:
+                    v["cvss_score"] = n.get("cvss_score", "")
+                    v["cvss_severity"] = n.get("cvss_severity", "")
+                    v["cvss_version"] = n.get("cvss_version", "")
         except OSError:
             sources[0]["status"] = "unavailable"
             if cache_json.exists():
                 try:
                     cached = json.loads(cache_json.read_text(encoding="utf-8"))
-                    vulnerabilities = cached.get("vulnerabilities", [])[:max_items]
+                except (json.JSONDecodeError, OSError):
+                    cached = None
+                if cached is not None and _validate_vuln_watch_payload(cached, context=f"cache read ({cache_json})"):
+                    vulnerabilities = [v for v in cached.get("vulnerabilities", [])[:max_items] if v.get("cve")]
                     generated_at = cached.get("generated_at", generated_at)
                     osv_findings = cached.get("osv_packages", [])
                     _used_stale_cache = True
@@ -759,8 +840,6 @@ def build_security_placeholders(
                     cached_sources = cached.get("sources", [])
                     if cached_sources:
                         sources = cached_sources
-                except (json.JSONDecodeError, OSError):
-                    pass
             else:
                 _fetch_failed_without_cache = True
 
@@ -775,7 +854,7 @@ def build_security_placeholders(
             sources[4]["status"] = "skipped"
 
     source_registry = _format_source_registry(sources)
-    threat_summary = _format_threat_summary(vulnerabilities, epss_map, nvd_map)
+    threat_summary = _format_threat_summary(vulnerabilities)
     prevention = _format_prevention_playbook(vulnerabilities)
     llm_threats = _format_llm_threats(include_references=True)
     osv_summary = _format_osv_summary(osv_findings)
@@ -794,26 +873,12 @@ def build_security_placeholders(
         threat_summary = _STALE_DATA_WARNING + threat_summary
         prevention = _STALE_DATA_WARNING + prevention
 
-    # Build per-vuln entries for JSON payload including CVSS when available
-    vuln_records: list[dict[str, Any]] = []
-    for v in vulnerabilities:
-        cve_id = v.get("cveID", "")
-        record: dict[str, Any] = {
-            "cve": cve_id,
-            "vendor": v.get("vendorProject", ""),
-            "product": v.get("product", ""),
-            "name": v.get("vulnerabilityName", ""),
-            "date_added": v.get("dateAdded", ""),
-            "known_ransomware_campaign_use": v.get("knownRansomwareCampaignUse", ""),
-            "required_action": v.get("requiredAction", ""),
-            "epss": epss_map.get(cve_id, {}).get("epss", ""),
-            "epss_percentile": epss_map.get(cve_id, {}).get("percentile", ""),
-        }
-        if cve_id in nvd_map:
-            record["cvss_score"] = nvd_map[cve_id].get("cvss_score", "")
-            record["cvss_severity"] = nvd_map[cve_id].get("cvss_severity", "")
-            record["cvss_version"] = nvd_map[cve_id].get("cvss_version", "")
-        vuln_records.append(record)
+    # `vulnerabilities` is already canonical shape here regardless of provenance — normalized
+    # right after a live fetch (above), or already canonical because that's the only shape ever
+    # persisted to cache. No rebuild needed; this used to re-derive from live-API-shape keys
+    # unconditionally, which silently blanked every field when `vulnerabilities` actually came from
+    # a cache read (see references/plans/security-vuln-cache-normalization.plan.md).
+    vuln_records: list[dict[str, Any]] = vulnerabilities
 
     json_payload: dict[str, Any] = {
         "generated_at": generated_at,
@@ -843,6 +908,11 @@ def build_security_placeholders(
             "refresh_process": "Generated during team initialization and update runs.",
         },
     }
+
+    # Fail-open: a schema violation only warns (see _validate_vuln_watch_payload's docstring) — it
+    # must never block a real --update run. Primary value is catching drift in tests/CI; this
+    # write-side call is a bonus runtime signal, not a hard gate.
+    _validate_vuln_watch_payload(json_payload, context="write")
 
     return {
         "SECURITY_DATA_GENERATED_AT": generated_at,

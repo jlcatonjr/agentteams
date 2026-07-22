@@ -216,13 +216,17 @@ def test_build_security_placeholders_offline_from_cache(tmp_path: Path) -> None:
         ],
         "vulnerabilities": [
             {
-                "cveID": "CVE-2026-1111",
-                "vendorProject": "CacheVendor",
+                # Canonical (write) shape — this is the ONLY shape this module ever persists to
+                # disk. A fixture using the live-CISA-API shape (cveID/vendorProject/...) here
+                # would never actually occur in the wild and would mask the round-trip bug fixed
+                # by references/plans/security-vuln-cache-normalization.plan.md.
+                "cve": "CVE-2026-1111",
+                "vendor": "CacheVendor",
                 "product": "CacheProduct",
-                "vulnerabilityName": "Cached Vulnerability",
-                "dateAdded": "2026-04-12",
-                "requiredAction": "Patch now.",
-                "knownRansomwareCampaignUse": "Unknown",
+                "name": "Cached Vulnerability",
+                "date_added": "2026-04-12",
+                "required_action": "Patch now.",
+                "known_ransomware_campaign_use": "Unknown",
             }
         ],
     }
@@ -239,6 +243,199 @@ def test_build_security_placeholders_offline_from_cache(tmp_path: Path) -> None:
 
     assert "CVE-2026-1111" in placeholders["SECURITY_CURRENT_THREATS_SUMMARY"]
     assert "cached" in placeholders["SECURITY_SOURCE_REGISTRY"]
+
+
+def test_offline_round_trip_through_real_write_path(monkeypatch, tmp_path: Path) -> None:
+    """The actual regression test for the 2026-07-22 collector-management incident.
+
+    Unlike the fixture-based tests above (which assert against a *hand-constructed* cache shape),
+    this test writes the cache via a real online `build_security_placeholders()` call — the same
+    code path that produces every real-world cache — then reads it back offline, exactly as
+    `--security-offline` does against a prior run's output. Before
+    references/plans/security-vuln-cache-normalization.plan.md's fix, this failed with the real CVE
+    ID replaced by `UNKNOWN-CVE` and every other field blank, because the write and read paths used
+    two different key-naming schemes for the same on-disk data.
+    """
+    kev_payload = {
+        "catalogVersion": "2026.07.22",
+        "count": 1,
+        "vulnerabilities": [
+            {
+                "cveID": "CVE-2026-5555",
+                "vendorProject": "RoundTripVendor",
+                "product": "RoundTripProduct",
+                "vulnerabilityName": "Round Trip RCE",
+                "dateAdded": "2026-07-20",
+                "requiredAction": "Patch the round trip.",
+                "knownRansomwareCampaignUse": "Known",
+            },
+        ],
+    }
+    epss_payload = {
+        "status": "OK",
+        "data": [{"cve": "CVE-2026-5555", "epss": "0.87", "percentile": "0.95"}],
+    }
+
+    def _fake_urlopen(req, timeout=12):
+        url = req.full_url
+        if "known_exploited_vulnerabilities.json" in url:
+            return _FakeResponse(kev_payload, url=url)
+        if "api.first.org/data/v1/epss" in url:
+            return _FakeResponse(epss_payload, url=url)
+        raise OSError(f"unexpected URL: {url}")
+
+    monkeypatch.setattr(security_refs.urllib.request, "urlopen", _fake_urlopen)
+
+    output_dir = tmp_path / ".github" / "agents"
+    ref_dir = output_dir / "references"
+    ref_dir.mkdir(parents=True, exist_ok=True)
+
+    # Step 1: a real online run, writing the cache exactly as a live --update would.
+    online_placeholders = security_refs.build_security_placeholders(
+        output_dir=output_dir, offline=False, max_items=5, skip_nvd=True,
+    )
+    (ref_dir / "security-vulnerability-watch.json").write_text(
+        online_placeholders["SECURITY_VULNERABILITY_WATCH_JSON"], encoding="utf-8",
+    )
+
+    # Step 2: --security-offline against that same cache.
+    offline_placeholders = security_refs.build_security_placeholders(
+        output_dir=output_dir, offline=True, max_items=5,
+    )
+
+    summary = offline_placeholders["SECURITY_CURRENT_THREATS_SUMMARY"]
+    assert "UNKNOWN-CVE" not in summary
+    assert "CVE-2026-5555" in summary
+    assert "RoundTripVendor" in summary
+    assert "RoundTripProduct" in summary
+    assert "Round Trip RCE" in summary
+    assert "2026-07-20" in summary
+    assert "EPSS 0.87" in summary  # enrichment survives the round trip too
+
+    playbook = offline_placeholders["SECURITY_PREVENTION_PLAYBOOK"]
+    assert "Patch the round trip." in playbook
+
+    payload = json.loads(offline_placeholders["SECURITY_VULNERABILITY_WATCH_JSON"])
+    assert payload["vulnerabilities"][0]["cve"] == "CVE-2026-5555"
+    assert payload["vulnerabilities"][0]["vendor"] == "RoundTripVendor"
+
+
+def test_offline_cache_with_blank_cve_records_is_treated_as_no_data(tmp_path: Path) -> None:
+    """Resilience guard: a cache degraded by a pre-fix run (blank cve/vendor/name fields) must not
+    render blank/garbled rows — it should be dropped and reported as no vulnerability data, an
+    honest signal rather than false-confidence placeholder content."""
+    output_dir = tmp_path / ".github" / "agents"
+    ref_dir = output_dir / "references"
+    ref_dir.mkdir(parents=True, exist_ok=True)
+
+    cache_payload = {
+        "generated_at": "2026-07-21T00:00:00Z",
+        "sources": [],
+        "vulnerabilities": [
+            {"cve": "", "vendor": "", "product": "", "name": "", "date_added": ""},
+        ],
+    }
+    (ref_dir / "security-vulnerability-watch.json").write_text(
+        json.dumps(cache_payload), encoding="utf-8",
+    )
+
+    placeholders = security_refs.build_security_placeholders(
+        output_dir=output_dir, offline=True, max_items=5,
+    )
+
+    assert "No live vulnerability data was available" in placeholders["SECURITY_CURRENT_THREATS_SUMMARY"]
+    assert "UNKNOWN-CVE" not in placeholders["SECURITY_CURRENT_THREATS_SUMMARY"]
+
+
+# ---------------------------------------------------------------------------
+# security-vulnerability-watch.schema.json (Plan B)
+# ---------------------------------------------------------------------------
+
+def test_vuln_watch_schema_is_valid_draft7() -> None:
+    import jsonschema
+
+    schema_path = Path("schemas/security-vulnerability-watch.schema.json")
+    schema = json.loads(schema_path.read_text(encoding="utf-8"))
+    jsonschema.Draft7Validator.check_schema(schema)
+
+
+def test_online_payload_validates_against_vuln_watch_schema(monkeypatch, tmp_path: Path) -> None:
+    import jsonschema
+
+    kev_payload = {
+        "catalogVersion": "2026.07.22",
+        "count": 1,
+        "vulnerabilities": [
+            {
+                "cveID": "CVE-2026-7777",
+                "vendorProject": "SchemaVendor",
+                "product": "SchemaProduct",
+                "vulnerabilityName": "Schema Check RCE",
+                "dateAdded": "2026-07-22",
+                "requiredAction": "Patch.",
+                "knownRansomwareCampaignUse": "Unknown",
+            },
+        ],
+    }
+
+    def _fake_urlopen(req, timeout=12):
+        url = req.full_url
+        if "known_exploited_vulnerabilities.json" in url:
+            return _FakeResponse(kev_payload, url=url)
+        raise OSError(f"unexpected URL: {url}")
+
+    monkeypatch.setattr(security_refs.urllib.request, "urlopen", _fake_urlopen)
+
+    output_dir = tmp_path / ".github" / "agents"
+    placeholders = security_refs.build_security_placeholders(
+        output_dir=output_dir, offline=False, max_items=5, skip_nvd=True,
+    )
+    payload = json.loads(placeholders["SECURITY_VULNERABILITY_WATCH_JSON"])
+    schema = json.loads(Path("schemas/security-vulnerability-watch.schema.json").read_text(encoding="utf-8"))
+    jsonschema.validate(payload, schema)  # raises on violation
+
+
+def test_malformed_cache_shape_fails_schema_validation_and_is_rejected(tmp_path: Path) -> None:
+    """A cache using the (never-actually-persisted) live-API key shape must fail schema
+    validation, warn, and be treated as absent rather than trusted. This is a regression guard:
+    if the shape fix or this validation is ever reverted, this test fails."""
+    output_dir = tmp_path / ".github" / "agents"
+    ref_dir = output_dir / "references"
+    ref_dir.mkdir(parents=True, exist_ok=True)
+
+    cache_payload = {
+        "generated_at": "2026-04-16T00:00:00Z",
+        "sources": [],
+        "vulnerabilities": [
+            {
+                "cveID": "CVE-2026-1111",  # wrong key shape — additionalProperties: false catches it
+                "vendorProject": "CacheVendor",
+                "product": "CacheProduct",
+                "vulnerabilityName": "Cached Vulnerability",
+                "dateAdded": "2026-04-12",
+            }
+        ],
+    }
+    (ref_dir / "security-vulnerability-watch.json").write_text(
+        json.dumps(cache_payload), encoding="utf-8",
+    )
+
+    with pytest.warns(UserWarning, match="failed schema validation"):
+        placeholders = security_refs.build_security_placeholders(
+            output_dir=output_dir, offline=True, max_items=5,
+        )
+
+    assert "No live vulnerability data was available" in placeholders["SECURITY_CURRENT_THREATS_SUMMARY"]
+    assert "CVE-2026-1111" not in placeholders["SECURITY_CURRENT_THREATS_SUMMARY"]
+
+
+def test_vuln_watch_validation_fails_open_when_schema_file_missing(monkeypatch, tmp_path: Path) -> None:
+    """A missing/unreadable bundled schema must never block a real run (fail-open, matching this
+    codebase's established schema-validation convention)."""
+    monkeypatch.setattr(
+        security_refs, "_schema_path", lambda name: Path("/nonexistent/does-not-exist.json")
+    )
+    assert security_refs._validate_vuln_watch_payload({"vulnerabilities": []}, context="test") is True
 
 
 # ---------------------------------------------------------------------------
@@ -417,13 +614,14 @@ def test_stale_cache_warning_applied_on_kev_failure(monkeypatch, tmp_path: Path)
         "sources": [],
         "vulnerabilities": [
             {
-                "cveID": "CVE-2025-0001",
-                "vendorProject": "OldVendor",
+                # Canonical (write) shape — see the sibling offline-from-cache test above.
+                "cve": "CVE-2025-0001",
+                "vendor": "OldVendor",
                 "product": "OldProduct",
-                "vulnerabilityName": "Old RCE",
-                "dateAdded": "2025-01-01",
-                "requiredAction": "Patch.",
-                "knownRansomwareCampaignUse": "Unknown",
+                "name": "Old RCE",
+                "date_added": "2025-01-01",
+                "required_action": "Patch.",
+                "known_ransomware_campaign_use": "Unknown",
             }
         ],
         "osv_packages": [],

@@ -6,6 +6,38 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### fixed (security-refs offline/stale-cache round-trip)
+
+- **`agentteams.security_refs.build_security_placeholders()` no longer degrades a real cached CVE
+  watch to `UNKNOWN-CVE`/blank placeholders on `--security-offline` or a live-fetch-failed fallback**
+  — the write path persisted vulnerability records in one key-naming scheme (`cve`/`vendor`/`name`/
+  `date_added`/...) while the render/rebuild code assumed the live CISA-KEV-API scheme (`cveID`/
+  `vendorProject`/`vulnerabilityName`/`dateAdded`/...); every `.get(liveKey, default)` silently fell
+  through on a cache read, and — worse than the original symptom — the corrupted (blanked) records
+  got written straight back to `security-vulnerability-watch.json` on that same run, compounding
+  across subsequent runs. Root-caused and reported from `visualknowledge/collector-management`
+  (2026-07-22 incident; no data was actually lost there — the operator's agent self-caught it and
+  restored from `agentteams`'s own automatic pre-write backup — but the underlying bug was real,
+  general, and reproduces for any consumer repo on any `--security-offline` run against a real prior
+  cache). Fixed by normalizing every KEV record to one canonical shape immediately after fetch (or
+  reading it back unchanged from cache, since that's the only shape ever persisted), with enrichment
+  (EPSS/CVSS) merged inline per-record rather than via separate lookup maps that never survived an
+  offline read. A resilience guard also drops any cached record with a blank `cve` (protects against
+  a cache already degraded by a pre-fix run) instead of rendering it. The two existing cache-fixture
+  tests were themselves testing a cache shape that could never exist in the wild (live-API-shape
+  keys — this codebase's write path has never persisted that shape) — fixed to use the real shape,
+  and a new round-trip test writes a cache via the actual online code path, then reads it back
+  offline, closing the coverage gap that let this ship silently. See
+  `references/plans/security-offline-cache-schema-mismatch.report.md` (incident) and
+  `references/plans/security-vuln-cache-normalization.plan.md` (fix).
+- **New `schemas/security-vulnerability-watch.schema.json`** formalizes the canonical vulnerability-
+  record shape (Draft-07, `additionalProperties: false` on `vulnerabilities[]`/`osv_packages[]`
+  items) and is now validated on both write (fail-open: warns, never blocks a real `--update`) and
+  read (a cache that fails validation is rejected — with a `UserWarning` naming the violation — and
+  treated as absent rather than trusted). This is the recurrence-prevention layer: a future
+  write/read shape drift gets its own cache rejected visibly instead of silently defaulting every
+  field again. See `references/plans/security-vuln-cache-json-schema.plan.md`.
+
 ### changed
 
 - **`agentteams/bridge.py`'s goose-target `.goose/README.md` now points to its own

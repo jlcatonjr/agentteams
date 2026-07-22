@@ -5,7 +5,7 @@
 
 - Modules mapped: **97**
 - Packages: **6**
-- Internal import edges: **165**
+- Internal import edges: **166**
 - Distinct external dependencies: **3**
 
 ---
@@ -69,7 +69,7 @@ Every module, coloured by package (full adjacency in the table below).
 | `agentteams.cli.parser_validate` | — | `agentteams.cli.parser` |
 | `agentteams.cli.recipe_check` | `agentteams.frameworks.goose` | `agentteams.cli.app` |
 | `agentteams.cli.render_pipeline` | `agentteams.emit`, `agentteams.frameworks.agents_md`, `agentteams.frameworks.base`, `agentteams.frameworks.claude`, `agentteams.frameworks.copilot_cli`, `agentteams.frameworks.copilot_vscode`, `agentteams.frameworks.goose`, `agentteams.graph`, `agentteams.render`, `agentteams.vscode_tasks` | `agentteams.cli.app`, `agentteams.cli.generate` |
-| `agentteams.cli.schema_cache` | `agentteams.atomicio` | `agentteams.cli.artifacts` |
+| `agentteams.cli.schema_cache` | `agentteams.atomicio` | `agentteams.cli.artifacts`, `agentteams.security_refs` |
 | `agentteams.cli.security_gate` | — | `agentteams.cli.commands`, `agentteams.cli.generate` |
 | `agentteams.code_index` | — | `agentteams.cli.artifacts`, `agentteams.code_sources` |
 | `agentteams.code_sources` | `agentteams.code_index` | `agentteams.cli.artifacts` |
@@ -133,7 +133,7 @@ Every module, coloured by package (full adjacency in the table below).
 | `agentteams.research.verify` | — | `agentteams.research` |
 | `agentteams.scan` | — | `agentteams.cli.generate` |
 | `agentteams.schedule_emit` | `agentteams.atomicio` | `agentteams.bridge` |
-| `agentteams.security_refs` | — | `agentteams.cli.commands`, `agentteams.cli.generate` |
+| `agentteams.security_refs` | `agentteams.cli.schema_cache` | `agentteams.cli.commands`, `agentteams.cli.generate` |
 | `agentteams.session_scan` | `agentteams.plan_steps` | — |
 | `agentteams.stale_detector` | `agentteams.bridge`, `agentteams.drift`, `agentteams.fleet` | `agentteams.cli.commands`, `agentteams.stale_remediate` |
 | `agentteams.stale_remediate` | `agentteams.cli.commands`, `agentteams.fleet`, `agentteams.stale_detector` | `agentteams.cli.commands` |
@@ -1158,8 +1158,12 @@ digraph "agentteams architecture" {
       "package": "agentteams",
       "path": "agentteams/security_refs.py",
       "is_package": false,
-      "imports_internal": [],
-      "external": [],
+      "imports_internal": [
+        "agentteams.cli.schema_cache"
+      ],
+      "external": [
+        "jsonschema"
+      ],
       "repo_local": []
     },
     "agentteams.session_scan": {
@@ -1883,6 +1887,10 @@ digraph "agentteams architecture" {
     {
       "source": "agentteams.schedule_emit",
       "target": "agentteams.atomicio"
+    },
+    {
+      "source": "agentteams.security_refs",
+      "target": "agentteams.cli.schema_cache"
     },
     {
       "source": "agentteams.session_scan",
