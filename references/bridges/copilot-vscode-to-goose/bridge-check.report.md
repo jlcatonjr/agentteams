@@ -1,5 +1,9 @@
 # Bridge Check Report
 
-Result: PASS
+Result: FAIL
 
-- Bridge artifacts are fresh and consistent with source files.
+## Changed Source Files
+- agents/orchestrator.agent.md
+- agents/repo-liaison.agent.md
+- agents/security.agent.md
+

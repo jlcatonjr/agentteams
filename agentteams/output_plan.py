@@ -214,6 +214,24 @@ def _plan_output_files(
         "component_slug": None,
     })
 
+    # CLI tool discovery + skill-generation references (always — @orchestrator Workflow 0
+    # "Capability gap check" support). Framework-agnostic methodology: how to discover/expand
+    # actual shell capability, and the attempt-then-build-infrastructure protocol for a
+    # confirmed gap. Uniform `type: "reference"` for every framework — this module reserves
+    # `type: "skill"` for the manifest-driven tool_agents pathway, not unconditional content.
+    files.append({
+        "path": "references/cli-tool-discovery.reference.md",
+        "template": f"{agents_dir}cli-tool-discovery.reference.template.md",
+        "type": "reference",
+        "component_slug": None,
+    })
+    files.append({
+        "path": "references/skill-generation.reference.md",
+        "template": f"{agents_dir}skill-generation.reference.template.md",
+        "type": "reference",
+        "component_slug": None,
+    })
+
     if "retrieval-integrator" in archetypes:
         files.append({
             "path": "references/retrieval-integration.reference.md",

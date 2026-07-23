@@ -484,6 +484,37 @@ def test_bridge_goose_first_time_creates_exact_file_set(tmp_path: Path, source_f
     assert (pair_dir / "agent-inventory.md").exists()
 
 
+@pytest.mark.parametrize("source_framework", ["copilot-vscode", "claude"])
+def test_bridge_goose_entry_has_always_present_behavioral_lines(tmp_path: Path, source_framework: str):
+    """AGENTS.md's goose-bridge-entry fence must carry the two always-applicable behavioral
+    lines regardless of orchestrator-persona adoption — see
+    tmp/by-week/2026-W30/goose-bridge-entry-actionability.plan.md. These are reachable without
+    reading any further file, which is the whole point (empirically confirmed: the orchestrator
+    persona is not adopted for off-topic queries, so anything gated behind it is unreachable
+    for exactly the failure case this fixes)."""
+    source_dir = tmp_path / "src" / _source_rel(source_framework)
+    _build_source(source_framework, source_dir)
+    out_root = tmp_path / "out"
+
+    result = run_bridge(
+        source_dir=source_dir,
+        source_framework=source_framework,
+        target_framework="goose",
+        output_root=out_root,
+    )
+    assert result.success, f"errors: {result.errors}"
+
+    agents_md = (out_root / "AGENTS.md").read_text(encoding="utf-8")
+    assert "apply to every request in this session" in agents_md
+    assert "web_scrape" in agents_md
+    assert "computercontroller" in agents_md
+    assert "don't default to refusal without" in agents_md
+    assert "closest well-known match" in agents_md
+    # Ambiguity carve-out must survive — regression guard against a confident-but-wrong answer
+    # when multiple entities are genuinely comparably plausible.
+    assert "comparably plausible" in agents_md
+
+
 def test_bridge_goose_merge_updates_fence_preserves_outside(tmp_path: Path):
     """T2: --bridge-merge re-renders only the fenced region of AGENTS.md."""
     source_dir = tmp_path / "src" / ".github" / "agents"

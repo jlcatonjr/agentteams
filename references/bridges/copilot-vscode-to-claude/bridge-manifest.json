@@ -1,6 +1,6 @@
 {
   "schema_version": "1.0",
-  "generated_at": "2026-07-22T00:31:17.029592+00:00",
+  "generated_at": "2026-07-23T17:42:44.351360+00:00",
   "source_framework": "copilot-vscode",
   "target_framework": "claude",
   "source_dir": "/Users/jamescaton/githubrepositories/agentteams/.github/agents",
@@ -67,7 +67,7 @@
     },
     {
       "path": "agents/orchestrator.agent.md",
-      "sha256": "8ed4d6913bb52121b6198e10eeab6be359c6d62a3de242b8aa19d8f8c78a1c84"
+      "sha256": "f79e896ae0ce25c4b79e7f6b18f4fa402809ca94bca0c3e903dcc9958f9140d6"
     },
     {
       "path": "agents/output-compiler.agent.md",
@@ -103,7 +103,7 @@
     },
     {
       "path": "agents/repo-liaison.agent.md",
-      "sha256": "56dae8f5e934b52231004f42d712dd2f73d27e496e2f3e9853d033b4bf5641c5"
+      "sha256": "4002160638de1a384fef6aac328f66cb328fc94109a4c91c6659db723a5e99d8"
     },
     {
       "path": "agents/retrieval-integrator.agent.md",
@@ -115,7 +115,7 @@
     },
     {
       "path": "agents/security.agent.md",
-      "sha256": "9804b6cdf9ca161e1acc76b5e1899da793808f0ea0a347936bf34fc3f33f3cda"
+      "sha256": "1ddf59a1c1680a146588b9973b549d8121ac66580b63c9ee59c9b0ba6c81452c"
     },
     {
       "path": "agents/team-builder.agent.md",

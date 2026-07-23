@@ -142,11 +142,12 @@ Before invoking any workflow-specific trigger path (Workflows 1–10C), execute 
 
 1. Identify the domain of the problem/request using Domain Agent Routing indicators
 2. Investigate and produce a findings report describing the problem and its domain relationship (if the investigation includes a live/dynamic reproduction, first confirm the harness matches the real production composition root — a mis-wired harness can silently mimic a real bug's absence of expected output)
-3. Invoke `@adversarial` and `@conflict-auditor` on the findings report; revise findings if required
-4. Prepare an implementation plan based on the revised findings report
-5. Invoke `@adversarial` and `@conflict-auditor` on the implementation plan; revise plan if required
-6. If the plan has two or more steps, run **Workflow 0A (Parallelization Analysis)** on the audited plan to compute its wave schedule
-7. Proceed with end-to-end implementation according to the audited plan and its wave schedule
+3. **Capability gap check.** If fulfilling the request needs a resource this team cannot already reliably access, don't conclude it's impossible before working the gap: try existing capability first — `references/cli-tool-discovery.reference.md` covers discovering and expanding what's actually available (checking `$PATH`, reading `--help`/`man`, installing a missing tool) — and if that still doesn't reach it, apply the capability-gap protocol in `references/skill-generation.reference.md` (attempt-then-build-infrastructure, not a bare refusal)
+4. Invoke `@adversarial` and `@conflict-auditor` on the findings report; revise findings if required
+5. Prepare an implementation plan based on the revised findings report
+6. Invoke `@adversarial` and `@conflict-auditor` on the implementation plan; revise plan if required
+7. If the plan has two or more steps, run **Workflow 0A (Parallelization Analysis)** on the audited plan to compute its wave schedule
+8. Proceed with end-to-end implementation according to the audited plan and its wave schedule
 
 This mandatory intake lifecycle complements (and does not replace) the per-step reassessment rule: after each completed plan step, remaining steps must still be re-reviewed by `@adversarial` and `@conflict-auditor` before proceeding.
 

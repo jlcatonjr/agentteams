@@ -8,7 +8,7 @@ import pytest
 from agentteams.frameworks.copilot_vscode import CopilotVSCodeAdapter
 from agentteams.frameworks.copilot_cli import CopilotCLIAdapter
 from agentteams.frameworks.claude import ClaudeAdapter
-from agentteams.frameworks.goose import GooseAdapter
+from agentteams.frameworks.goose import GooseAdapter, _goosehints_content
 
 
 # ---------------------------------------------------------------------------
@@ -762,11 +762,41 @@ class TestGooseAdapter:
 
     def test_extra_output_files_emits_goosehints(self):
         extras = self.adapter.extra_output_files(GOOSE_MANIFEST)
-        assert len(extras) == 1
-        path, content = extras[0]
-        assert path == "../../.goosehints"
+        extras_by_path = dict(extras)
+        assert "../../.goosehints" in extras_by_path
         # Integrates AGENTS.md via the @file content-include.
-        assert content.startswith("@AGENTS.md")
+        assert extras_by_path["../../.goosehints"].startswith("@AGENTS.md")
+
+    # --- capabilities reference ---
+
+    def test_extra_output_files_emits_capabilities_reference(self):
+        extras = self.adapter.extra_output_files(GOOSE_MANIFEST)
+        extras_by_path = dict(extras)
+        assert "references/goose-capabilities-reference.md" in extras_by_path
+        content = extras_by_path["references/goose-capabilities-reference.md"]
+        # States the diagnosed capability plainly: developer's shell has no network
+        # sandbox, regardless of which optional extensions a team additionally enables.
+        assert "no code-level\nnetwork sandbox" in content
+        assert "developer" in content
+        # Must not assert that opt-in extensions are active for this team.
+        assert "computercontroller" in content
+        assert "not** enabled unless your own recipe" in content
+        # Cross-links the runtime-agnostic CLI-competency methodology doc.
+        assert "references/cli-tool-discovery.reference.md" in content
+        assert "references/skill-generation.reference.md" in content
+        # Context-bloat management: states this is already a native Goose feature, not
+        # something to prompt an agent to monitor/trigger itself (empirically confirmed
+        # this session — see tmp/by-week/2026-W30/goose-context-bloat-management.plan.md).
+        assert "context_mgmt" in content
+        assert "GOOSE_AUTO_COMPACT_THRESHOLD" in content
+        assert "autoCompactThreshold" in content
+        assert "not exposed in the interactive `goose configure` wizard" in content
+        assert "no recipe-level equivalent" in content
+        assert "inert" in content
+
+    def test_goosehints_links_to_capabilities_reference(self):
+        content = _goosehints_content("Acme Team")
+        assert ".goose/recipes/references/goose-capabilities-reference.md" in content
 
     # --- render_agent_file: orchestrator → sub_recipes (delegation) ---
 

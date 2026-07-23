@@ -236,6 +236,22 @@ Notes` section present in all agent files (§3.1) and, for the orchestrator, its
 `project_rules` gap. This is the supported, merge-safe home for project-specific
 rules — the first-class alternative to ad-hoc orphan fences.
 
+**Pre-edit check for implementers.** Before editing any span of a template
+file or a generated agent file, check whether that span sits inside an
+`AGENTTEAMS:BEGIN … END` fence or under a ⛔ "do not modify or omit" banner.
+If it does, do not edit it in place: either the change belongs outside the
+fence (a `USER-EDITABLE` region, a cross-reference from an unfenced location,
+or a companion reference file), or it is a deliberate revision to the
+template's own contract and must go through a version bump rather than a
+silent in-place edit. Concretely: increment that fenced section's `v=` by 1
+(see [`FENCE-CONVENTIONS.md`](FENCE-CONVENTIONS.md) § Versioning Strategy) —
+a per-section content-revision marker, distinct from the MAJOR.MINOR.PATCH
+bump under "Versioning Standards for Agent-Documentation Rules" above, which
+applies only when the change also alters the authoring standard itself (not
+just one template's fenced content). Treat this as a mechanical check to run
+*before* drafting the edit, not something to notice only if a later audit
+pass happens to catch it.
+
 ---
 
 ## 4. Registering a New Domain Archetype
@@ -294,6 +310,18 @@ Reference-tier tools generate a lightweight reference file (no YAML front matter
 ## 6. Per-Framework Agent File Format
 
 Templates are always authored with VS Code Copilot YAML front matter. The framework adapter post-processes template output into the format the target runtime expects. **Never write framework-specific output directly into a template.**
+
+### Universal templates vs. framework-adapter-inline content
+
+That rule also governs *generated non-agent files* (reference docs, hint files), not just agent front matter — this is the case most likely to be missed. `templates/universal/*.reference.template.md` renders **unconditionally to every framework**: there is no per-framework filtering inside `universal/` (see the "always" block in `agentteams/output_plan.py`). Put content there only if it is genuinely framework-agnostic.
+
+For content that is specific to one framework but should still ship by default with every team generated for that framework (e.g., a Goose-only capabilities reference, or `.goosehints`), do **not** add a new `templates/universal/` template — it would leak that framework's concepts into every other framework's output. Instead, follow the existing precedent in that framework's own adapter module: an inline Python function returning the file's content (e.g. `_goosehints_content` in `agentteams/frameworks/goose.py`), wired through that adapter's `extra_output_files`. Because `extra_output_files` is implemented per-adapter, it only ever runs for that one framework by construction, which is what makes it the safe home for this kind of content.
+
+### Verify runtime capability before authoring instruction content
+
+Before adding template prose that instructs an agent to actively do something (monitor a condition, call a command, trigger a check on its own initiative), verify two things against the real target runtime — not just the request as phrased: (1) the runtime doesn't already implement the behavior natively, and (2) agent-instruction text is even capable of producing the effect. An agent's own generated output is not re-parsed by the harness as a command, so instructing a persona to autonomously invoke a harness-level action it has no tool call for is not merely redundant — it is inert. When the runtime already handles it natively, the fix is a configuration change or a factual documentation note, not new instruction prose (see the context-bloat-management paragraph inside `_goose_capabilities_content`, `agentteams/frameworks/goose.py`, for a worked example: Goose auto-triggers `/compact` at the harness level, so the actual fix was a `GOOSE_AUTO_COMPACT_THRESHOLD` config value).
+
+A second, separate check on the same content applies even when the prose is not inert: verify it is actually *reachable* from the query that needs it. Guidance placed only behind a conditional persona-adoption hop (e.g. an entry file that says "if doing X, read Y, which routes to Z") is invisible to any query that never triggers that hop — an off-topic or general-assistant question, for instance. Trace the actual hop count from the runtime's true entry point (not from the framework's intended persona-adoption path) to the content in question; if a class of real queries can reach the target behavior without ever crossing that hop, either duplicate a short form of the guidance at the shallower, always-reachable layer, or lower the number of hops. This is a distinct failure mode from the first paragraph's capability check — content can be fully capable of producing its effect and still never execute because nothing routes the triggering query to it (see `agentteams/bridge.py`'s goose `agents_entry_body`, which reaches both `AGENTS.md` and `.goosehints` directly rather than requiring persona adoption first, for a worked example of shallow placement).
 
 ---
 
@@ -388,3 +416,4 @@ Before submitting a new template:
    ```bash
    python -c "import yaml; yaml.safe_load(open('.claude/agents/your-agent.md').read().split('---', 2)[1])"
    ```
+5. **If this repo's own `.github/agents/` or `.claude/agents/` team was generated from the template you edited (self-hosting)** — a passing example-brief snapshot test is not evidence the fix is live in this repo's own deployed team; those are separate outputs. Re-run `agentteams --self` (regenerates this module's own team from its stored `_build-description.json`, per README §15) and spot-check the specific section you changed in the live agent file before considering the template edit done — do this at the point of the edit, not only once at final session closeout.

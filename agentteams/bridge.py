@@ -640,7 +640,18 @@ def _render_target_files(
         agents_entry_body = (
             f"Use source framework `{source_framework}` as canonical agent infrastructure.\n"
             f"Read `{rel_inventory}` and `{rel_quickstart}`.\n"
-            "Start with orchestrator routing.\n"
+            "Start with orchestrator routing.\n\n"
+            "These two apply to every request in this session, not just project-coordination\n"
+            "work routed through the orchestrator above:\n"
+            "- Before claiming you lack real-time or internet access, try a read-only fetch\n"
+            "  first (`web_scrape` if the `computercontroller` extension is active, otherwise\n"
+            "  a plain `curl`/`wget` via the shell) — don't default to refusal without\n"
+            "  attempting it.\n"
+            "- When a name in the request doesn't exactly match a known entity, resolve to the\n"
+            "  single closest well-known match and proceed confidently — but only when one\n"
+            "  candidate is clearly the best fit (an obvious misspelling or variant). If\n"
+            "  multiple entities are genuinely comparably plausible, say so and ask instead of\n"
+            "  forcing a guess between real alternatives.\n"
         )
         agents_md = (
             "# Agent Team (Goose bridge)\n\n"

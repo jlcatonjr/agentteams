@@ -26,7 +26,7 @@ Fence markers solve this by making the boundary explicit and machine-readable.
 
 1. **Syntax is exact.** The opening tag must match `<!-- AGENTTEAMS:BEGIN <section_id> v=<version> -->` precisely. No spaces inside `-->`.
 2. **`section_id`** is `lower_snake_case`. It must be unique within a file, but the same `section_id` may appear in different files.
-3. **`v=<version>`** is an integer starting at `1`. It is present only on the BEGIN marker. It is reserved for future format migration — the merge engine currently accepts any `v=` value without error.
+3. **`v=<version>`** is an integer starting at `1`, present only on the BEGIN marker. It is a **per-section, author-maintained content-revision marker**: the template author increments it by 1 whenever that section's fenced content is deliberately revised (see Versioning Strategy below). The merge engine does not read, validate, or compare the integer — it accepts any `v=` value without error.
 4. **END marker** carries only the `section_id` and no version attribute.
 5. **Markers are HTML comments** — they are invisible in VS Code Markdown previews and rendered documentation.
 6. **No nesting.** Fenced regions must not contain other fenced regions.
@@ -107,18 +107,19 @@ Given a newly-rendered file and an existing on-disk file:
 | Unclosed fence (BEGIN with no matching END) | Parse error; merge is aborted for that file. Record in `MergeResult.parse_errors`. |
 | END marker with no matching BEGIN | Orphan END is ignored; the file is treated as unfenced (no parse error). |
 | Mismatched `section_id` on END marker | Parse error; merge is aborted for that file. |
-| `v=` value differs between on-disk and new render | Accepted without error in v=1. Future versions may define migration logic. |
+| `v=` value differs between on-disk and new render | Expected, not an error — merge replaces the section body by `section_id` and adopts the new render's `v=` verbatim (see Versioning Strategy). |
 | File is new (does not exist on disk) | Written fresh; no merge needed. |
 
 ---
 
 ## Versioning Strategy
 
-The `v=` attribute is reserved for future format evolution. The current protocol version is `1`.
+The `v=` attribute is a **per-section, author-maintained content-revision marker**, not a global merge-protocol version. Each `section_id` carries its own `v=`, independent of every other section — including other copies of the same `section_id` in different templates. `agentteams/fences.py` never reads, compares, or sets this integer; the merge engine matches purely by `section_id` and replaces content, so `v=` carries no runtime behavior. This corrects an earlier draft of this document that described an engine-managed protocol-version mechanism — no such mechanism was ever implemented, and none is currently planned.
 
-- If a future version of the module changes the merge algorithm in a breaking way, it will increment `v=` to `2` and provide a migration path.
-- The merge engine must not reject files with `v=1` markers after a version increment; it must migrate them silently or with a one-time warning.
-- Template authors must not change `v=` manually. The rendering engine sets it automatically from the current protocol version.
+- **Bump a section's `v=` by 1 whenever you deliberately revise its fenced content** (add a rule, materially reword guidance, etc.) — this is the concrete action behind AUTHORING-GUIDE.md §3.3's instruction to route a contract revision through "a version bump" rather than a silent in-place edit.
+- Start a newly-added section at `v=1`; don't bump on first introduction.
+- Sibling copies of the same `section_id` across different templates legitimately sit at **different** `v=` values when revised on different schedules (e.g. `memory_index_consultation` currently ranges `v=2`–`v=4` across templates) — this reflects real, asynchronous drift, not an error to reconcile on sight.
+- A `v=` mismatch between an on-disk file and a freshly-rendered template is never a merge error — see the Edge Cases table above.
 
 ---
 

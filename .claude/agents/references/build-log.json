@@ -21,10 +21,13 @@
     "cli-and-examples",
     "test-suite"
   ],
-  "files_written": [],
+  "files_written": [
+    ".claude/agents/references/cli-tool-discovery.reference.md",
+    ".claude/agents/references/skill-generation.reference.md"
+  ],
   "manual_required": 0,
   "template_hashes": {
-    "universal/orchestrator.template.md": "6ca6e34637d07cf7",
+    "universal/orchestrator.template.md": "d97901a295889110",
     "universal/navigator.template.md": "003a30ed545c0523",
     "universal/security.template.md": "8e4256bcb84ee04e",
     "universal/code-hygiene.template.md": "5212068c8a00a608",
@@ -62,6 +65,8 @@
     "universal/work-summary-backfill.reference.template.md": "5730bac043dc2874",
     "universal/parallelization.reference.template.md": "2c872341050a7781",
     "universal/retrospective-remediation.reference.template.md": "b1802f5e1ab294ad",
+    "universal/cli-tool-discovery.reference.template.md": "c99b2e96a9a4bd95",
+    "universal/skill-generation.reference.template.md": "050d4cdd12dff99d",
     "universal/retrieval-integration.reference.template.md": "71cbf701c97a6e22",
     "universal/retrieval-trigger-contract.reference.template.md": "b5934b1f48552945",
     "workstream-expert.template.md": "13161f3a3cdf1789",
@@ -307,6 +312,18 @@
       "component_slug": null
     },
     {
+      "path": "references/cli-tool-discovery.reference.md",
+      "template": "universal/cli-tool-discovery.reference.template.md",
+      "type": "reference",
+      "component_slug": null
+    },
+    {
+      "path": "references/skill-generation.reference.md",
+      "template": "universal/skill-generation.reference.template.md",
+      "type": "reference",
+      "component_slug": null
+    },
+    {
       "path": "references/retrieval-integration.reference.md",
       "template": "universal/retrieval-integration.reference.template.md",
       "type": "reference",
@@ -439,17 +456,18 @@
     "repo-liaison",
     "git-operations"
   ],
-  "manifest_fingerprint": "61c4add9633cbc32",
+  "manifest_fingerprint": "d57ffca39e64e37e",
   "fingerprint_algo_version": 1,
   "file_hashes": {
-    "references/security-vulnerability-watch.reference.md": "0ed88500591d03fc",
-    "references/security-vulnerability-watch.json": "0f410c81c4768c5e",
-    "references/ai-bad-habits-watch.reference.md": "51487a0c1aef349d",
-    "references/framework-watch.reference.md": "12d5423a26fd5954",
-    "security.md": "866c535f4787464b",
+    "references/cli-tool-discovery.reference.md": "3c25babc2056fa56",
+    "references/skill-generation.reference.md": "02602448b5f5bd0f",
+    "references/security-vulnerability-watch.reference.md": "f4a82e02e9227926",
+    "references/security-vulnerability-watch.json": "557f7a0f918d4489",
+    "references/framework-watch.reference.md": "62f24dadae17f8a5",
+    "orchestrator.md": "afd60cf361314ce1",
+    "security.md": "ff9e7f7c26633311",
     "../CLAUDE.md": "6fabbc3ec0171e5b",
     "references/runtime-handoffs.json": "852bced5092daaf5",
-    "orchestrator.md": "b63e798104c2e4cb",
     "navigator.md": "28cf45e90d0f7be9",
     "code-hygiene.md": "9e149274da16a7fc",
     "adversarial.md": "4501d36314fcd481",

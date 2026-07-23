@@ -145,7 +145,98 @@ def _goosehints_content(project_name: str) -> str:
         "   route all requests through the appropriate specialist agent\n\n"
         "This startup read applies to plain interactive sessions and IDE extension sessions equally.\n"
         "`goose run --recipe .goose/recipes/orchestrator.yaml` is the alternative that pre-loads\n"
-        "automatically without the startup read.\n"
+        "automatically without the startup read.\n\n"
+        "See `.goose/recipes/references/goose-capabilities-reference.md` for what your tools\n"
+        "can actually do — in particular, the default `developer` extension's shell has no\n"
+        "network sandbox, which its own built-in prompt never mentions.\n"
+    )
+
+
+def _goose_capabilities_content(project_name: str) -> str:
+    """Return the capabilities-reference content emitted to every generated Goose team.
+
+    Diagnosed gap (2026-07-23): Goose's `developer` extension ships by default for
+    effectively every agent (see ``_scoped_builtin_extensions``), and its built-in
+    system prompt frames the shell tool purely as a coding tool ("build software and
+    operate a terminal," "prefer rg," "use python3") without ever mentioning that the
+    same shell has unrestricted network access. Agents therefore under-use `curl`/
+    `wget` for external retrieval and instead report "no tool for this," even when a
+    plain shell command would work. This file states that fact explicitly for every
+    generated team, since it's true regardless of which optional extensions a given
+    team's agents additionally enable.
+
+    Deliberately does NOT assert that any opt-in extension (e.g. ``computercontroller``)
+    is active — only ``developer`` is presumed present. Doing otherwise would repeat the
+    original bug's own failure mode: telling an agent a tool exists that was never wired
+    into its recipe's ``extensions:`` block for that specific team.
+    """
+    return (
+        f"# Goose CLI Capabilities Reference — {project_name}\n\n"
+        "This file documents what Goose's builtin extensions can actually do, and how to\n"
+        "tell which ones are wired in for *you specifically*. It is generated once per\n"
+        "project and does not change as agents are added or removed.\n\n"
+        "## Check your own capability set first\n\n"
+        "Only the extensions listed in **your own** `.goose/recipes/<your-slug>.yaml`\n"
+        "`extensions:` block are callable by you. This reference describes what each\n"
+        "builtin extension can do *if present* — it is not a claim that every extension\n"
+        "listed below is active for every agent in this team. When in doubt, read your\n"
+        "own recipe file.\n\n"
+        "## `developer` — present for effectively every agent by default\n\n"
+        "Read/write files and execute shell commands. The shell tool has **no code-level\n"
+        "network sandbox**: `curl`, `wget`, and any other CLI network client work exactly\n"
+        "as they would in a normal terminal, unless a specific deployment has deliberately\n"
+        "restricted egress. The extension's own built-in system prompt frames this tool\n"
+        "entirely around software work (reading/editing code, running tests, using `rg`)\n"
+        "and never mentions network use — do not treat that framing as a capability limit.\n"
+        "If a user asks for something that needs live external data (a webpage, an API\n"
+        "response, a public data feed) and no dedicated fetch/search extension is listed in\n"
+        "your own recipe, try a plain shell command (e.g. `curl <url>`) before concluding\n"
+        "you have no way to retrieve it.\n\n"
+        "## Other builtin extensions (opt-in per agent, via `recipe_extensions`)\n\n"
+        "These are **not** enabled unless your own recipe's `extensions:` block lists them:\n\n"
+        "- `computercontroller` — web scraping (`web_scrape`: fetch a URL's content), file\n"
+        "  caching, PDF/DOCX/XLSX manipulation, and local automation scripts. The closest\n"
+        "  thing to a dedicated fetch tool; prefer it over ad hoc shell `curl` when it's\n"
+        "  available, since it handles content-type negotiation and caching for you.\n"
+        "- `summon` — load referenced recipes/skills into your own context, or delegate to\n"
+        "  a sub-recipe session (orchestrator only; Goose forbids nested delegation beyond\n"
+        "  one layer).\n"
+        "- `apps`, `skills`, `todo`, `analyze`, `memory`, `autovisualiser` — local,\n"
+        "  non-network tools for sandboxed HTML apps, skill discovery, task tracking, code\n"
+        "  structure analysis, durable memory, and data visualization respectively.\n\n"
+        "None of the builtin extensions include a general web-search tool (query text in,\n"
+        "ranked results out). `computercontroller`'s `web_scrape` requires a known URL. If a\n"
+        "task genuinely needs search rather than fetch, that requires a separate MCP\n"
+        "extension (e.g. a Brave/Tavily/DuckDuckGo search server) added via\n"
+        "`recipe_extensions`/`goose:mcp` in this team's brief — check whether one is\n"
+        "configured before assuming search is unavailable outright.\n\n"
+        "## General CLI competency (not Goose-specific)\n\n"
+        "See `references/cli-tool-discovery.reference.md` for the runtime-agnostic\n"
+        "methodology this file's `developer`/network guidance above is one instance of:\n"
+        "discovering what's actually installed, using `--help`/`man`, inspecting a program\n"
+        "as a last resort, and installing a genuinely missing tool. See\n"
+        "`references/skill-generation.reference.md` for what to do when a capability is\n"
+        "still out of reach after trying that.\n\n"
+        "## Context-bloat management (built into Goose, not something to prompt for)\n\n"
+        "Goose already auto-compacts a long-running conversation on its own — this is a real,\n"
+        "harness-level feature (`goose::context_mgmt`), not something an agent needs to\n"
+        "monitor or trigger itself. `/compact` is a genuine Goose slash command, and Goose\n"
+        "already calls it automatically once accumulated context crosses a configurable\n"
+        "fraction of the model's context window, summarizing rather than truncating so the\n"
+        "conversation's signal survives the compaction. Don't write agent instructions telling\n"
+        "a persona to \"check context usage and call /compact\" — the harness already does this\n"
+        "unconditionally, and an agent's own generated text isn't re-parsed as a slash command\n"
+        "by the harness, so such an instruction would be inert.\n\n"
+        "The one thing that IS configurable is the threshold: `GOOSE_AUTO_COMPACT_THRESHOLD`\n"
+        "(env var) / `autoCompactThreshold` (the same setting's name in Goose's ACP protocol,\n"
+        "used by IDE integrations like the VS Code extension) — a fraction, `(0, 1]`, e.g.\n"
+        "`0.9` for 90%. It is not exposed in the interactive `goose configure` wizard and has\n"
+        "no recipe-level equivalent (`.goose/recipes/*.yaml` has no settings-override block) —\n"
+        "it is set the same way as `GOOSE_MODE`/`GOOSE_DEBUG`, as a flat top-level key in that\n"
+        "Goose installation's own `~/.config/goose/config.yaml`. This project's generator has\n"
+        "no mechanism to set it on a downstream user's behalf — that file lives outside every\n"
+        "project directory this module writes to. A team that wants a specific threshold must\n"
+        "set it directly in their own Goose installation.\n"
     )
 
 
@@ -426,9 +517,16 @@ class GooseAdapter(FrameworkAdapter):
         W7: The content now includes a Session Startup block (below the managed
         fence) so plain `goose session` and VSCode extension sessions automatically
         adopt the Orchestrator role without requiring `goose run --recipe`.
+
+        Also emits a capabilities reference (bare `references/...` path, landing at
+        `.goose/recipes/references/` alongside every other generated reference doc —
+        unlike `.goosehints`, this file has no reason to sit at repo root).
         """
         project_name = manifest.get("project_name", "this project")
-        return [("../../.goosehints", _goosehints_content(project_name))]
+        return [
+            ("../../.goosehints", _goosehints_content(project_name)),
+            ("references/goose-capabilities-reference.md", _goose_capabilities_content(project_name)),
+        ]
 
 
 # ---------------------------------------------------------------------------
