@@ -147,7 +147,11 @@ def run_bridge(
         "generated_at": datetime.now(timezone.utc).isoformat(),
         "source_framework": src_fw,
         "target_framework": target_framework,
-        "source_dir": str(source_dir),
+        "source_dir": (
+            str(source_dir.relative_to(output_root))
+            if source_dir.is_relative_to(output_root)
+            else str(source_dir)
+        ),
         "source_hashes": source_hashes,
         "inventory_count": len(inventory),
         "bridge_version": "1",

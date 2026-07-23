@@ -1,9 +1,9 @@
 {
   "schema_version": "1.0",
-  "generated_at": "2026-07-23T17:42:38.974682+00:00",
+  "generated_at": "2026-07-23T18:42:23.255198+00:00",
   "source_framework": "copilot-vscode",
   "target_framework": "goose",
-  "source_dir": "/Users/jamescaton/githubrepositories/agentteams/.github/agents",
+  "source_dir": ".github/agents",
   "source_hashes": [
     {
       "path": "agents/adversarial.agent.md",

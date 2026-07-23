@@ -61,6 +61,35 @@ def _build_source(framework: str, source_dir: Path) -> None:
         (source_dir.parent / "CLAUDE.md").write_text("# Instructions\n", encoding="utf-8")
 
 
+def test_bridge_manifest_source_dir_is_relative_when_nested_in_output_root(tmp_path: Path):
+    """OPSEC regression: when source_dir sits inside output_root (the realistic case —
+    e.g. `.github/agents` inside the project root that is also output_root, exactly how
+    self-hosting repos like agentteams/researchteam/OrthodoxLLM are actually bridged),
+    bridge-manifest.json's source_dir must be relative, not an absolute filesystem path
+    carrying the local OS username. Found leaking into two real consumer repos' committed
+    bridge-manifest.json before this fix — see agentteams/bridge.py."""
+    output_root = tmp_path / "project"
+    source_dir = output_root / ".github" / "agents"
+    _build_source("copilot-vscode", source_dir)
+
+    result = run_bridge(
+        source_dir=source_dir,
+        source_framework="copilot-vscode",
+        target_framework="claude",
+        output_root=output_root,
+        dry_run=False,
+        overwrite=True,
+        check_only=False,
+    )
+    assert result.success, f"errors: {result.errors}"
+
+    pair_dir = output_root / "references" / "bridges" / "copilot-vscode-to-claude"
+    manifest = json.loads((pair_dir / "bridge-manifest.json").read_text(encoding="utf-8"))
+    assert manifest["source_dir"] == str(Path(".github") / "agents")
+    assert not Path(manifest["source_dir"]).is_absolute()
+    assert str(tmp_path) not in manifest["source_dir"]
+
+
 @pytest.mark.parametrize(
     "source_framework,target_framework",
     [
