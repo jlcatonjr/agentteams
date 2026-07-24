@@ -16,6 +16,18 @@ def _slugify(text: str) -> str:
     return slug.lower()
 
 
+def _slugify_tool_name(name: str) -> str:
+    """Slugify a tool name, treating `@`/`/` as word separators rather than
+    deleting them — plain `_slugify` silently concatenates adjacent words for
+    inputs like npm-scoped packages (`@scope/name` -> `scopename`), which can
+    collide with an unrelated, differently-named package. Produces identical
+    output to `_slugify` for any name that doesn't contain `@` or `/`.
+    """
+    normalized = re.sub(r"[@/]+", "-", name)
+    slug = _slugify(normalized)
+    return re.sub(r"-+", "-", slug).strip("-")
+
+
 def _split_yaml_front_matter(content: str) -> tuple[str | None, str]:
     """Split file content into YAML front matter and body using a line-by-line scan.
 

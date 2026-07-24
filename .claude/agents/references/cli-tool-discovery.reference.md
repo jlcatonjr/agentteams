@@ -79,6 +79,14 @@ than treated as permanently unavailable:
    of an explicit gate as a reason for more caution, not less: if no user or security-agent
    session is available to grant confirmation (a non-interactive/CI context), **HALT and
    report the blocker** rather than silently installing or silently refusing.
+4. **Persisting the install pattern is a separate decision from running it once.** Rule S-4
+   above governs clearance to run an install now. If the specific install command or
+   invocation pattern is then going to be **written into a reference/skill file** so a future
+   session reuses it automatically, that additionally requires Rule S-9 (Pathway Safety
+   Verification, `security.template.md`) — see `references/skill-generation.reference.md`'s
+   "Security audit gate" for the concrete criteria and verdict handling. A pathway can clear
+   S-4 (safe to run once, with confirmation) and still fail S-9 (not safe to memorialize for
+   unattended reuse), or vice versa.
 
 ## When this still isn't enough
 

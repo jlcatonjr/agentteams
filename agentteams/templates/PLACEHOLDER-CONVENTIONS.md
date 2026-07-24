@@ -22,10 +22,35 @@ These are filled automatically by the rendering engine from the project descript
 - `{DIAGRAM_TOOLS}` — Diagram tool(s) detected from the project description (e.g., "Mermaid or Graphviz/DOT")
 - `{DIAGRAM_EXTENSION}` — Default file extension for diagram source files (e.g., "mmd")
 - `{COMPONENT_SLUG}` — Generic `<component-slug>` pattern used in file naming conventions
-- `{TOOL_DOCS_URL}` — Official documentation URL for the tool (from brief.json `tools[].docs_url`)
-- `{TOOL_API_SURFACE}` — Key classes, functions, and APIs the agent must understand (from brief.json `tools[].api_surface`)
-- `{TOOL_COMMON_PATTERNS}` — Common usage patterns, anti-patterns, and version-specific gotchas (from brief.json `tools[].common_patterns`)
-- `{UNRESOLVED_TOOL_LIST}` — Markdown bullet list of tools missing `docs_url`, `api_surface`, or `common_patterns` after auto-enrichment (used in `tool-doc-researcher.template.md`)
+- `{TOOL_DOCS_URL}` — Official documentation URL for the tool
+- `{TOOL_API_SURFACE}` — Key classes, functions, and APIs the agent must understand
+- `{TOOL_COMMON_PATTERNS}` — Common usage patterns, anti-patterns, and version-specific gotchas
+- `{UNRESOLVED_TOOL_LIST}` — Markdown bullet list of tools missing `docs_url`, `api_surface`, or `common_patterns` after resolution (used in `tool-doc-researcher.template.md`)
+
+**Resolution order for the three `TOOL_*` fields above** (each tried in turn; first
+non-empty value wins), unconditionally on every generation run — no flag required for
+the first two tiers:
+
+1. **Brief-provided** — `tools[].docs_url` / `.api_surface` / `.common_patterns` in the
+   project description, when the brief author supplied them directly.
+2. **Unified static catalog** (`agentteams/tool_metadata_catalog.py`, zero network) —
+   known-package metadata for common tools (numpy, pandas, boto3, requests,
+   sqlalchemy, pytest, and others). Consulted via `analyze._merge_known_tool_metadata`.
+3. **Network fetch** (`agentteams/enrich/_tools.py::build_tool_catalog`, PyPI then npm)
+   — opt-in via `--enrich` (or `--post-audit`, which implies it). Not run by default,
+   since it makes outbound network calls.
+4. **AI fill** (`enrich.ai_enrich`, via the standalone `copilot` CLI) — opt-in via
+   `--post-audit`, only for whatever tiers 1-3 left unresolved.
+5. **`{MANUAL:TOOL_DOCS_URL}` / `{MANUAL:TOOL_API_SURFACE}` / `{MANUAL:TOOL_COMMON_PATTERNS}`**
+   — the tool is in none of the above; genuinely requires human or `@tool-doc-researcher`
+   research. Surfaced in `SETUP-REQUIRED.md` and the `references/defaults-audit.csv`
+   findings CSV (`--enrich`).
+
+See `tmp/by-week/2026-W30/tool-doc-catalog-remediation.plan.md` for why this resolution
+order exists — prior to it, only part of tier 2 was reachable unconditionally (a smaller,
+separate catalog covering 13 packages); the rest of tier 2 and all of tier 3 were gated
+behind `--enrich`. A package with zero-network, already-known metadata but absent from
+that smaller catalog (e.g. `boto3`) still rendered `{MANUAL:TOOL_DOCS_URL}` by default.
 
 ## Manual-Required Placeholders
 
@@ -39,9 +64,9 @@ These cannot be inferred from the project description and require human completi
 - `{MANUAL:API_ENDPOINT_NAMES}` — Proprietary API endpoints
 - `{MANUAL:STYLE_EXEMPLARS}` — Specific style example documents
 - `{MANUAL:EXTERNAL_REPO_PATHS}` — Exact paths to external read-only repositories
-- `{MANUAL:TOOL_DOCS_URL}` — Documentation URL when not provided in `tools[].docs_url`
-- `{MANUAL:TOOL_API_SURFACE}` — Key API surface when not provided in `tools[].api_surface`
-- `{MANUAL:TOOL_COMMON_PATTERNS}` — Common patterns when not provided in `tools[].common_patterns`
+- `{MANUAL:TOOL_DOCS_URL}` — Documentation URL when none of the resolution tiers above found one
+- `{MANUAL:TOOL_API_SURFACE}` — Key API surface when none of the resolution tiers above found one
+- `{MANUAL:TOOL_COMMON_PATTERNS}` — Common patterns when none of the resolution tiers above found one
 
 ### Post-Production-Auditor Specific Placeholders
 
@@ -85,6 +110,6 @@ Every template section must be designated either **FENCED** (module-owned, updat
 
 1. Placeholder names are UPPER_SNAKE_CASE
 2. Every placeholder must appear in at least one template
-3. Auto-resolved placeholders must be emitted by one of the placeholder-map builders — `analyze._build_placeholder_map` (in `agentteams/analyze.py`), `render._component_placeholder_map`/`render._tool_placeholder_map`, `ai_bad_habits.build_catalog_placeholders`, `framework_research.build_framework_placeholders`, or `security_refs.build_security_placeholders`. Note: `team-manifest.schema.json`'s `auto_resolved_placeholders` is a free-form object with **no enumerated properties**, so it does not constrain placeholder names — the builders above are the source of truth.
+3. Auto-resolved placeholders must be emitted by one of the placeholder-map builders — `analyze._build_placeholder_map` (in `agentteams/analyze.py`), `render._component_placeholder_map`/`render._tool_placeholder_map`, `ai_bad_habits.build_catalog_placeholders`, `framework_research.build_framework_placeholders`, `security_refs.build_security_placeholders`, or `enrich._tools.build_tool_catalog` (the opt-in `--enrich` network-fetch tier for the `TOOL_*` fields — see the resolution order above). Note: `team-manifest.schema.json`'s `auto_resolved_placeholders` is a free-form object with **no enumerated properties**, so it does not constrain placeholder names — the builders above are the source of truth.
 4. Manual placeholders must have a description in `SETUP-REQUIRED.md` generation logic
 5. Nested placeholders are not supported — `{FOO_{BAR}}` is invalid

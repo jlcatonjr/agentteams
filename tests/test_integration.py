@@ -790,6 +790,63 @@ def test_update_reports_orphan_agent_files(tmp_path, capsys):
     assert "zz-orphan-expert.agent.md" in combined
 
 
+def test_update_reports_orphan_reference_docs(tmp_path, capsys):
+    """--update surfaces references/ref-*-reference.md files on disk that the
+    current team no longer emits — the same blind spot as orphan agent files
+    (tmp/by-week/2026-W30/tool-doc-catalog-remediation.plan.md), and just as
+    invisible without this: a tool dropped from the brief otherwise leaves its
+    reference doc's {MANUAL:...} tokens unreachable by --update/--enrich forever."""
+    import build_team
+
+    brief = EXAMPLES_DIR / "software-project" / "brief.json"
+    if not brief.exists():
+        pytest.skip("software-project brief not found")
+
+    output_dir = tmp_path / ".github" / "agents"
+    _run_pipeline_to_dir(brief, output_dir)
+
+    # A reference doc on disk for a tool no longer in the brief.
+    references_dir = output_dir / "references"
+    (references_dir / "ref-zz-orphan-tool-reference.md").write_text(
+        "# zz-orphan-tool Reference\n\n{MANUAL:TOOL_DOCS_URL}\n", encoding="utf-8"
+    )
+
+    capsys.readouterr()  # clear
+    rc = build_team.main([
+        "--description", str(brief), "--output", str(output_dir),
+        "--update", "--merge", "--dry-run", "--yes", "--no-scan", "--security-offline",
+    ])
+    combined = "".join(capsys.readouterr())
+
+    assert rc == 0
+    assert "orphaned by past team-config changes" in combined
+    assert "references/ref-zz-orphan-tool-reference.md" in combined
+
+
+def test_update_does_not_report_current_reference_docs_as_orphans(tmp_path, capsys):
+    """A reference doc that IS still part of the current team must never be
+    misreported as an orphan (false-positive guard for the advisory added
+    alongside test_update_reports_orphan_reference_docs)."""
+    import build_team
+
+    brief = EXAMPLES_DIR / "software-project" / "brief.json"
+    if not brief.exists():
+        pytest.skip("software-project brief not found")
+
+    output_dir = tmp_path / ".github" / "agents"
+    _run_pipeline_to_dir(brief, output_dir)
+
+    capsys.readouterr()  # clear
+    rc = build_team.main([
+        "--description", str(brief), "--output", str(output_dir),
+        "--update", "--merge", "--dry-run", "--yes", "--no-scan", "--security-offline",
+    ])
+    combined = "".join(capsys.readouterr())
+
+    assert rc == 0
+    assert "reference doc(s) on disk are not part" not in combined
+
+
 def test_stale_fingerprint_with_identical_content_does_not_rerender(tmp_path, monkeypatch, capsys):
     """Defect 2 Option A: a stale build-log manifest_fingerprint must NOT cause
     --update to re-render files whose rendered content is identical to disk.

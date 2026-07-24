@@ -16,7 +16,7 @@
 
 ## Official Documentation
 
-{MANUAL:TOOL_DOCS_URL}
+https://docs.sqlalchemy.org/en/latest/
 
 ## Key API Surface
 

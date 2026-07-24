@@ -15,7 +15,8 @@ from typing import Any
 # re-exported so analyze._plan_output_files resolves unchanged.
 from agentteams.output_plan import _plan_output_files  # noqa: F401,E402
 
-from agentteams._utils import _slugify
+from agentteams import tool_metadata_catalog
+from agentteams._utils import _slugify_tool_name
 from agentteams.mcp_detect import detect_mcp_candidates
 
 from agentteams.recipe_fields import (  # noqa: E402,F401 (carved CH-07; re-exported)
@@ -596,75 +597,6 @@ _REFERENCE_TOOLS: set[str] = {
     "graphql", "grpc", "protobuf",
 }
 
-_KNOWN_TOOL_METADATA: dict[str, dict[str, str]] = {
-    "jupyter": {
-        "docs_url": "https://docs.jupyter.org/en/latest/",
-        "api_surface": "Notebook and Lab workflows, kernels, markdown cells, magics, nbconvert",
-        "common_patterns": "Keep notebooks reproducible: restart and run all, move reusable logic into modules, and avoid hidden state between cells.",
-    },
-    "pandas": {
-        "docs_url": "https://pandas.pydata.org/docs/",
-        "api_surface": "DataFrame, Series, read_csv, merge, groupby, pivot_table",
-        "common_patterns": "Prefer vectorized operations, explicit dtypes, and merge or groupby pipelines over row-wise apply when possible.",
-    },
-    "numpy": {
-        "docs_url": "https://numpy.org/doc/stable/",
-        "api_surface": "ndarray, array, arange, where, concatenate, linalg",
-        "common_patterns": "Use array operations and broadcasting instead of Python loops where possible, and make shape assumptions explicit.",
-    },
-    "matplotlib": {
-        "docs_url": "https://matplotlib.org/stable/contents.html",
-        "api_surface": "pyplot.figure, pyplot.subplots, Axes.plot, Axes.bar, savefig",
-        "common_patterns": "Create figures and axes explicitly, label every chart, and save deterministic output paths for reproducibility.",
-    },
-    "plotly": {
-        "docs_url": "https://plotly.com/python/",
-        "api_surface": "plotly.express, graph_objects.Figure, update_layout, write_html",
-        "common_patterns": "Prefer self-contained HTML exports, centralize layout styling, and validate hover labels and axis formatting before publication.",
-    },
-    "pandasdatareader": {
-        "docs_url": "https://pydata.github.io/pandas-datareader/",
-        "api_surface": "data.DataReader, fred.FredReader, wb.download",
-        "common_patterns": "Cache downloaded data for reproducibility, document provider-specific limits, and normalize index frequency immediately after fetch.",
-    },
-    "linearmodels": {
-        "docs_url": "https://bashtage.github.io/linearmodels/",
-        "api_surface": "PanelOLS, PooledOLS, RandomEffects, fit",
-        "common_patterns": "Make panel indexes explicit, state fixed-effects choices clearly, and inspect fit summaries before exporting results.",
-    },
-    "sqlite": {
-        "docs_url": "https://www.sqlite.org/docs.html",
-        "api_surface": "sqlite3 CLI, CREATE TABLE, CREATE INDEX, PRAGMA, EXPLAIN QUERY PLAN",
-        "common_patterns": "Use parameterized queries, explicit transactions, and indexes validated with EXPLAIN QUERY PLAN.",
-    },
-    "nmap": {
-        "docs_url": "https://nmap.org/book/man.html",
-        "api_surface": "nmap -sn (ping scan), -sV (version detection), -O (OS detection), -p (port range), --script (NSE), -oX (XML output), -oG (greppable output)",
-        "common_patterns": "Use -sn for fast host discovery, parse XML output programmatically, and always run -O and -sS with sudo. Use --host-timeout to avoid hangs on unreachable hosts.",
-    },
-    "arpscan": {
-        "docs_url": "https://github.com/royhills/arp-scan/wiki",
-        "api_surface": "arp-scan --localnet, --interface=<iface>, --retry=<n>, --timeout=<ms>; output: IP, MAC, vendor",
-        "common_patterns": "Always run with sudo. Combine with vendor OUI lookup for device classification. Check for DUP lines which may indicate ARP spoofing.",
-    },
-    "ssh": {
-        "docs_url": "https://www.openssh.com/manual.html",
-        "api_surface": "ssh user@host, -L (local forward), -R (remote forward), -N -f (background), -o options, ssh-keygen, ssh-copy-id, scp, sftp",
-        "common_patterns": "Use autossh or ServerAliveInterval for persistent tunnels. Use -N -f for background port-only tunnels. Manage known_hosts explicitly in production.",
-    },
-    "d3js": {
-        "docs_url": "https://d3js.org/api",
-        "api_surface": "d3.select/selectAll, selection.data().enter().exit(), scales (scaleLinear/scaleBand/scaleTime), axes, line/area/arc generators, d3.zoom/drag, d3.transition",
-        "common_patterns": "Use the update-enter-exit (or join()) pattern for dynamic data. Use viewBox for responsive sizing. Note: D3 v6+ uses event parameter in callbacks — d3.event is removed.",
-    },
-    "paramiko": {
-        "docs_url": "https://docs.paramiko.org/en/stable/api/",
-        "api_surface": "SSHClient.connect/exec_command/invoke_shell/open_sftp, Transport.request_port_forward, SFTPClient.get/put, RSAKey/Ed25519Key.from_private_key_file",
-        "common_patterns": "Use AutoAddPolicy only in trusted environments; prefer RejectPolicy in production. Always close connections. Set timeout= on connect() to avoid hangs on unreachable hosts.",
-    },
-}
-
-
 def classify_tool_importance(tool: dict[str, Any]) -> str:
     """Classify a tool into an importance tier.
 
@@ -700,15 +632,10 @@ def _classify_without_override(tool: dict[str, Any]) -> str:
     return "passive"
 
 
-def _normalize_tool_key(name: str) -> str:
-    """Normalize a tool name into a lookup key for built-in metadata."""
-    return re.sub(r"[^a-z0-9]+", "", name.lower())
-
-
 def _merge_known_tool_metadata(tool: dict[str, Any]) -> dict[str, Any]:
     """Overlay built-in tool metadata when the brief omits it."""
     merged = dict(tool)
-    defaults = _KNOWN_TOOL_METADATA.get(_normalize_tool_key(tool.get("name", "")), {})
+    defaults = tool_metadata_catalog.get_tool_metadata(tool.get("name", ""))
     for field in ("docs_url", "api_surface", "common_patterns"):
         if not merged.get(field) and defaults.get(field):
             merged[field] = defaults[field]
@@ -749,7 +676,7 @@ def detect_tool_agents(tools: list[dict[str, Any]]) -> list[dict[str, Any]]:
         name = (tool.get("name") or "").strip()
         if not name:
             continue
-        slug = f"tool-{_slugify(name)}"
+        slug = f"tool-{_slugify_tool_name(name)}"
         category = tool.get("category", "other")
         agents.append({
             "slug": slug,
@@ -785,7 +712,7 @@ def detect_reference_tools(tools: list[dict[str, Any]]) -> list[dict[str, Any]]:
         if not name:
             continue
         refs.append({
-            "slug": f"ref-{_slugify(name)}",
+            "slug": f"ref-{_slugify_tool_name(name)}",
             "tool_name": name,
             "tool_version": tool.get("version", ""),
             "tool_category": tool.get("category", "other"),

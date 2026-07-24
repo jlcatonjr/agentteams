@@ -6,6 +6,36 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### fixed (unified tool-metadata catalog: unconditional resolution + npm registry tier)
+
+- **Consolidated three drifted-apart static tool-metadata catalogs** (`analyze.py`'s
+  `_KNOWN_TOOL_METADATA`, `enrich/_tools.py`'s `_TOOL_CATALOG` and `_CANONICAL_DOCS`) into one,
+  `agentteams/tool_metadata_catalog.py`. Previously only `_KNOWN_TOOL_METADATA` (13 entries) was
+  reachable on the unconditional generation path — every other known-package entry, including
+  `boto3`, `requests`, `sqlalchemy`, `fastapi`, `tensorflow`, `torch`, `scikit-learn`, was only
+  ever consulted inside the opt-in `--enrich` pass, so a plain `--overwrite`/`--update` run
+  rendered `{MANUAL:TOOL_DOCS_URL}` for those packages even though a zero-network, already-known
+  answer existed. The merge resolves 5 conflicting `docs_url` entries (preferring the richer
+  `_TOOL_CATALOG` value, discarded value recorded in a comment) and adds a new `pytest` entry.
+- **New npm registry fetch tier** (`enrich/_tools.py::_fetch_npm_metadata`, opt-in via `--enrich`,
+  same as the existing PyPI tier) — closes a real gap for JS/TS dependencies detected via
+  `package.json`, which no prior fetch path could ever resolve. Handles scoped packages
+  (`@scope/name`) correctly. `build_tool_catalog`'s PyPI→npm fallback merges fields rather than
+  replacing wholesale, so a real `api_surface` PyPI returns alongside an empty `docs_url` survives
+  the npm fallback instead of being silently discarded (post-implementation audit finding).
+- **Fixed `_slugify` mangling scoped package names**: `_slugify('@typescript-eslint/parser')`
+  silently concatenated to `'typescript-eslintparser'` (both `@` and `/` were simply deleted). New
+  `_slugify_tool_name` (used only for tool-doc slugs) treats `@`/`/` as separators instead,
+  producing `'typescript-eslint-parser'`, with byte-identical output to the original `_slugify` for
+  every name that doesn't contain `@`/`/`.
+- **Orphan-file advisory extended to reference docs**: `--update`'s existing orphan-*agent*-file
+  advisory (`*.agent.md` only) now also detects+reports `references/ref-*-reference.md` files left
+  behind when a tool is removed from the brief — previously invisible to `--update`, `--enrich`,
+  and `SETUP-REQUIRED.md` alike, since all three only ever look at the current run's rendered
+  output. Detection + reporting only (matches what the agent-orphan advisory already does; neither
+  it nor `--prune` deletes anything today).
+  - Full design/audit trail: `tmp/by-week/2026-W30/tool-doc-catalog-remediation.plan.md`.
+
 ### added (Playwright-backed browser rendering, CLI-managed)
 
 - **New `agentteams.research.browser` module** (`agentteams/research/browser.py`) — closes the

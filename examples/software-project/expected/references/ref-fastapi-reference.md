@@ -16,7 +16,7 @@
 
 ## Official Documentation
 
-{MANUAL:TOOL_DOCS_URL}
+https://fastapi.tiangolo.com/reference/
 
 ## Key API Surface
 

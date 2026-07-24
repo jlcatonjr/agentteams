@@ -6,9 +6,10 @@ import re
 from pathlib import Path
 from typing import Any
 
+from agentteams import tool_metadata_catalog
 from ._fills import _RULE_BASED_FILLS
 from ._models import DefaultFinding, _MANUAL_RE, _SECTION_RE
-from ._tools import _CANONICAL_DOCS, _IMPORT_TO_PACKAGE, _get_docs_url, scan_project_imports
+from ._tools import _IMPORT_TO_PACKAGE, _get_docs_url, scan_project_imports
 
 
 #: Generic boilerplate phrases — a section body containing *only* these is underdeveloped.
@@ -193,7 +194,7 @@ def scan_defaults(
         for p in file_map if "references/" in p and p.endswith(".md")
     }
     for pkg_name, alias in detected_packages.items():
-        has_canonical = pkg_name in _CANONICAL_DOCS or pkg_name in brief_tools
+        has_canonical = tool_metadata_catalog.is_known_tool(pkg_name) or pkg_name in brief_tools
         if not has_canonical:
             continue
         pkg_norm = pkg_name.lower().replace("-", "").replace("_", "")

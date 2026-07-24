@@ -2,16 +2,14 @@
   "schema_version": "1.2",
   "project_name": "AgentTeamsModule",
   "framework": "claude",
-  "project_type": "mixed",
+  "project_type": "software",
   "archetypes": [
     "primary-producer",
     "quality-auditor",
-    "cohesion-repairer",
     "technical-validator",
     "format-converter",
     "reference-manager",
-    "output-compiler",
-    "retrieval-integrator"
+    "output-compiler"
   ],
   "components": [
     "template-library",
@@ -21,15 +19,12 @@
     "cli-and-examples",
     "test-suite"
   ],
-  "files_written": [
-    ".claude/agents/references/cli-tool-discovery.reference.md",
-    ".claude/agents/references/skill-generation.reference.md"
-  ],
+  "files_written": [],
   "manual_required": 0,
   "template_hashes": {
     "universal/orchestrator.template.md": "d97901a295889110",
     "universal/navigator.template.md": "003a30ed545c0523",
-    "universal/security.template.md": "8e4256bcb84ee04e",
+    "universal/security.template.md": "84df1e9387585ac4",
     "universal/code-hygiene.template.md": "5212068c8a00a608",
     "universal/adversarial.template.md": "ea4659f376567351",
     "universal/conflict-auditor.template.md": "a8e9e710ea50cfb2",
@@ -42,12 +37,10 @@
     "domain/work-summarizer.template.md": "c8687de2c1c7761f",
     "domain/primary-producer.template.md": "c128e8f2fb52885f",
     "domain/quality-auditor.template.md": "d8414b64b6db9fb7",
-    "domain/cohesion-repairer.template.md": "a2c3b4844110b04a",
     "domain/technical-validator.template.md": "bf48db2ccc132397",
     "domain/format-converter.template.md": "ecf8c801f1d66dab",
     "domain/reference-manager.template.md": "f7538df16abbbba8",
     "domain/output-compiler.template.md": "fd90f3a13765386a",
-    "domain/retrieval-integrator.template.md": "7f641e639dad3cdc",
     "domain/tool-reference.template.md": "5ce5638b7094cc86",
     "domain/code-hygiene-rules-reference.template.md": "64dd0cd05107784f",
     "domain/unix-philosophy-mapping-reference.template.md": "b086c16596a3030b",
@@ -65,10 +58,8 @@
     "universal/work-summary-backfill.reference.template.md": "5730bac043dc2874",
     "universal/parallelization.reference.template.md": "2c872341050a7781",
     "universal/retrospective-remediation.reference.template.md": "b1802f5e1ab294ad",
-    "universal/cli-tool-discovery.reference.template.md": "c99b2e96a9a4bd95",
-    "universal/skill-generation.reference.template.md": "050d4cdd12dff99d",
-    "universal/retrieval-integration.reference.template.md": "71cbf701c97a6e22",
-    "universal/retrieval-trigger-contract.reference.template.md": "b5934b1f48552945",
+    "universal/cli-tool-discovery.reference.template.md": "203004e771c8b2fd",
+    "universal/skill-generation.reference.template.md": "47bcf76ed8f69a80",
     "workstream-expert.template.md": "13161f3a3cdf1789",
     "copilot-instructions.template.md": "9c56d724f06a9549",
     "builder/team-builder-claude.template.md": "1fa8401d6258d9b7",
@@ -166,12 +157,6 @@
       "component_slug": null
     },
     {
-      "path": "cohesion-repairer.agent.md",
-      "template": "domain/cohesion-repairer.template.md",
-      "type": "agent",
-      "component_slug": null
-    },
-    {
       "path": "technical-validator.agent.md",
       "template": "domain/technical-validator.template.md",
       "type": "agent",
@@ -192,12 +177,6 @@
     {
       "path": "output-compiler.agent.md",
       "template": "domain/output-compiler.template.md",
-      "type": "agent",
-      "component_slug": null
-    },
-    {
-      "path": "retrieval-integrator.agent.md",
-      "template": "domain/retrieval-integrator.template.md",
       "type": "agent",
       "component_slug": null
     },
@@ -324,18 +303,6 @@
       "component_slug": null
     },
     {
-      "path": "references/retrieval-integration.reference.md",
-      "template": "universal/retrieval-integration.reference.template.md",
-      "type": "reference",
-      "component_slug": null
-    },
-    {
-      "path": "references/retrieval-trigger-contract.reference.md",
-      "template": "universal/retrieval-trigger-contract.reference.template.md",
-      "type": "reference",
-      "component_slug": null
-    },
-    {
       "path": "template-library-expert.agent.md",
       "template": "workstream-expert.template.md",
       "type": "agent",
@@ -430,12 +397,10 @@
     "work-summarizer",
     "primary-producer",
     "quality-auditor",
-    "cohesion-repairer",
     "technical-validator",
     "format-converter",
     "reference-manager",
     "output-compiler",
-    "retrieval-integrator",
     "template-library-expert",
     "pipeline-core-expert",
     "framework-adapters-expert",
@@ -456,18 +421,16 @@
     "repo-liaison",
     "git-operations"
   ],
-  "manifest_fingerprint": "d57ffca39e64e37e",
+  "manifest_fingerprint": "93ebf6e45eb1a49b",
   "fingerprint_algo_version": 1,
   "file_hashes": {
-    "references/cli-tool-discovery.reference.md": "3c25babc2056fa56",
-    "references/skill-generation.reference.md": "02602448b5f5bd0f",
-    "references/security-vulnerability-watch.reference.md": "f4a82e02e9227926",
-    "references/security-vulnerability-watch.json": "557f7a0f918d4489",
-    "references/framework-watch.reference.md": "62f24dadae17f8a5",
-    "orchestrator.md": "afd60cf361314ce1",
-    "security.md": "ff9e7f7c26633311",
+    "references/security-vulnerability-watch.json": "4e992c084e2bc603",
+    "references/framework-watch.reference.md": "19bf6d14b493820e",
+    "security.md": "3a0c36ec72e4465b",
+    "references/security-vulnerability-watch.reference.md": "ba334763a33ddcb0",
     "../CLAUDE.md": "6fabbc3ec0171e5b",
     "references/runtime-handoffs.json": "852bced5092daaf5",
+    "orchestrator.md": "f13e7cbcaa9975db",
     "navigator.md": "28cf45e90d0f7be9",
     "code-hygiene.md": "9e149274da16a7fc",
     "adversarial.md": "4501d36314fcd481",
@@ -481,12 +444,10 @@
     "work-summarizer.md": "02d2e525a9e9c3c1",
     "primary-producer.md": "43e78830e0d614cb",
     "quality-auditor.md": "2573595c531c181f",
-    "cohesion-repairer.md": "642e74bba955260f",
     "technical-validator.md": "377f9b354cc5f228",
     "format-converter.md": "e033e3a58c6efb4f",
     "reference-manager.md": "a357fd185fe7c7ab",
     "output-compiler.md": "6f5fd9d2281a6e16",
-    "retrieval-integrator.md": "c4b47eb5c3a0c1b4",
     "references/ref-pytest-reference.md": "785da59ae0fcefa5",
     "references/ref-json-schema-reference.md": "64ee7849298b80d9",
     "references/code-hygiene-rules.reference.md": "dac2a91e68b180d9",
@@ -496,8 +457,8 @@
     "references/work-summary-backfill.reference.md": "845ee35bc64ee727",
     "references/parallelization.reference.md": "d2321bf5ac1ed2f8",
     "references/retrospective-remediation.reference.md": "7a1211b89ab93048",
-    "references/retrieval-integration.reference.md": "4c118423a97597e4",
-    "references/retrieval-trigger-contract.reference.md": "9ccc1645e13257dc",
+    "references/cli-tool-discovery.reference.md": "ebf4a4f64eb2dfb7",
+    "references/skill-generation.reference.md": "5dc99a3a146ba505",
     "template-library-expert.md": "3eec5a26204b45dc",
     "pipeline-core-expert.md": "f161367ab31428ef",
     "framework-adapters-expert.md": "e73c7898996da272",

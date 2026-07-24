@@ -280,11 +280,11 @@ def _build_component_fills(
     if notebook_imports:
         # Normalise imports to package names using the tool catalog alias map
         try:
-            from ._tools import _IMPORT_TO_PACKAGE, _CANONICAL_DOCS, _TOOL_CATALOG
+            from agentteams import tool_metadata_catalog
+            from ._tools import _IMPORT_TO_PACKAGE
         except ImportError:
             _IMPORT_TO_PACKAGE = {}
-            _CANONICAL_DOCS = {}
-            _TOOL_CATALOG = {}
+            tool_metadata_catalog = None
 
         tool_agent_names = {
             ta.get("tool_name", "").lower(): ta["slug"]
@@ -330,7 +330,7 @@ def _build_component_fills(
                 tool_lines.append(
                     f"- `references/{ref_tool_names[pkg_lower]}-reference.md`"
                 )
-            elif pkg_lower in _CANONICAL_DOCS or pkg_lower in _TOOL_CATALOG:
+            elif tool_metadata_catalog is not None and tool_metadata_catalog.is_known_tool(pkg_lower):
                 tool_lines.append(f"- {pkg}")
             else:
                 # Include it if it looks like a real third-party package

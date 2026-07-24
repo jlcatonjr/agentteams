@@ -259,6 +259,43 @@ def _check_dual_descriptor(args: argparse.Namespace) -> None:
         print(f"[WARN] could not persist dual-descriptor event: {exc}", file=sys.stderr)
 
 
+def _report_orphan_reference_docs(
+    final_rendered: list[tuple[str, str]],
+    output_dir: Path,
+) -> list[str]:
+    """Detect + print references/ref-*-reference.md files on disk that the current
+    team no longer emits — same blind spot as the orphan-agent-file advisory (a tool
+    dropped from the brief leaves its reference doc's {MANUAL:...} tokens unreachable
+    by --update/--enrich forever). Detection + reporting only, mirroring what the
+    agent-orphan advisory does — neither this nor --prune deletes these; see
+    tmp/by-week/2026-W30/tool-doc-catalog-remediation.plan.md.
+
+    Returns the sorted list of orphaned filenames (empty if none).
+    """
+    emitted_names = {
+        Path(p).name for p, _ in final_rendered
+        if p.startswith("references/ref-") and p.endswith("-reference.md")
+    }
+    orphans = sorted(
+        f.name for f in output_dir.glob("references/ref-*-reference.md")
+        if f.name not in emitted_names
+    )
+    if orphans:
+        print(
+            f"\n  ⚠  {len(orphans)} reference doc(s) on disk are not "
+            "part of the current team (orphaned by past team-config changes):",
+            file=sys.stderr,
+        )
+        for name in orphans:
+            print(f"       references/{name}", file=sys.stderr)
+        print(
+            "     These are not updated by --update, and --prune cannot remove "
+            "them (detection-only today). Review and delete manually if obsolete.",
+            file=sys.stderr,
+        )
+    return orphans
+
+
 def _persist_orphan_events(
     orphans: list[str],
     manifest: dict[str, Any],

@@ -5,8 +5,11 @@ from __future__ import annotations
 import json
 import re
 import urllib.error
+import urllib.parse
 import urllib.request
 from pathlib import Path
+
+from agentteams import tool_metadata_catalog
 
 
 #: Maps common import aliases → canonical PyPI package names.
@@ -53,400 +56,6 @@ _IMPORT_TO_PACKAGE: dict[str, str] = {
 
 #: (Kept for backward compatibility with any direct references)
 _TOOL_ALIASES = _IMPORT_TO_PACKAGE
-
-#: Canonical documentation URLs for known packages (no network needed).
-_CANONICAL_DOCS: dict[str, str] = {
-    "numpy": "https://numpy.org/doc/stable/reference/",
-    "pandas": "https://pandas.pydata.org/docs/reference/",
-    "matplotlib": "https://matplotlib.org/stable/api/",
-    "scipy": "https://docs.scipy.org/doc/scipy/reference/",
-    "statsmodels": "https://www.statsmodels.org/stable/api.html",
-    "scikit-learn": "https://scikit-learn.org/stable/api/index.html",
-    "tensorflow": "https://www.tensorflow.org/api_docs/python/",
-    "torch": "https://pytorch.org/docs/stable/index.html",
-    "jupyter": "https://docs.jupyter.org/en/latest/",
-    "seaborn": "https://seaborn.pydata.org/api.html",
-    "plotly": "https://plotly.com/python-api-reference/",
-    "sympy": "https://docs.sympy.org/latest/reference/",
-    "networkx": "https://networkx.org/documentation/stable/reference/",
-    "nltk": "https://www.nltk.org/api/nltk.html",
-    "spacy": "https://spacy.io/api",
-    "transformers": "https://huggingface.co/docs/transformers/index",
-    "helipad": "https://helipad.dev/apidocs/",
-    "ipywidgets": "https://ipywidgets.readthedocs.io/en/stable/",
-    "pandas-datareader": "https://pandas-datareader.readthedocs.io/en/latest/",
-    "voila": "https://voila.readthedocs.io/en/stable/",
-    "paramiko": "https://docs.paramiko.org/en/stable/api/",
-    "D3.js": "https://d3js.org/api",
-    "nmap": "https://nmap.org/book/man.html",
-    "arp-scan": "https://github.com/royhills/arp-scan/wiki",
-    "ssh": "https://www.openssh.com/manual.html",
-    "requests": "https://requests.readthedocs.io/en/latest/api/",
-    "flask": "https://flask.palletsprojects.com/en/latest/api/",
-    "fastapi": "https://fastapi.tiangolo.com/reference/",
-    "sqlalchemy": "https://docs.sqlalchemy.org/en/latest/",
-    "boto3": "https://boto3.amazonaws.com/v1/documentation/api/latest/reference/services/index.html",
-    "xgboost": "https://xgboost.readthedocs.io/en/stable/python/python_api.html",
-}
-
-# Keep a small legacy inline catalog for the three most-used packages so that
-# api_surface and common_patterns are available without a network call.
-_TOOL_CATALOG: dict[str, dict[str, str]] = {
-    "numpy": {
-        "docs_url": "https://numpy.org/doc/stable/reference/",
-        "api_surface": (
-            "ndarray creation (np.array, np.zeros, np.ones, np.arange, np.linspace); "
-            "array operations (reshape, transpose, concatenate, stack); "
-            "math (np.sum, np.mean, np.std, np.dot, np.linalg); "
-            "broadcasting and vectorized arithmetic"
-        ),
-        "common_patterns": (
-            "Prefer vectorized operations over Python loops for performance. "
-            "Use dtype=float64 explicitly when storing financial/econometric data. "
-            "np.nan-safe aggregates: np.nanmean, np.nanstd. "
-            "For boolean indexing: arr[arr > 0]. "
-            "Pitfall: integer division in older NumPy — cast dtypes explicitly."
-        ),
-    },
-    "pandas": {
-        "docs_url": "https://pandas.pydata.org/docs/reference/",
-        "api_surface": (
-            "DataFrame/Series creation and I/O (pd.read_csv, pd.read_excel, to_csv); "
-            "indexing (.loc, .iloc, boolean indexing); "
-            "groupby, merge/join, pivot_table; "
-            "time-series (DatetimeIndex, resample, rolling); "
-            "string methods (.str.*); "
-            "missing data (dropna, fillna, isna)"
-        ),
-        "common_patterns": (
-            "Always set index explicitly after loading CSVs when a natural key exists. "
-            "Use .copy() when slicing to avoid SettingWithCopyWarning. "
-            "groupby().agg() for multi-stat summaries. "
-            "pd.to_datetime() + dt accessor for time-series manipulation. "
-            "Pitfall: chained indexing silently creates copies — use .loc."
-        ),
-    },
-    "matplotlib": {
-        "docs_url": "https://matplotlib.org/stable/api/",
-        "api_surface": (
-            "Functional interface (plt.plot, plt.scatter, plt.hist, plt.bar, plt.show); "
-            "object-oriented interface (fig, ax = plt.subplots()); "
-            "axes labels/titles/legends (ax.set_xlabel, ax.set_title, ax.legend); "
-            "multiple subplots (plt.subplots(nrows, ncols)); "
-            "saving figures (plt.savefig)"
-        ),
-        "common_patterns": (
-            "Prefer the OO interface (fig, ax = plt.subplots()) for multi-panel figures. "
-            "Always set fig.tight_layout() before savefig to avoid clipped labels. "
-            "Use plt.style.use('seaborn-v0_8') for publication-ready aesthetics. "
-            "Pitfall: plt.show() clears the figure — call savefig before show."
-        ),
-    },
-    "scipy": {
-        "docs_url": "https://docs.scipy.org/doc/scipy/reference/",
-        "api_surface": (
-            "scipy.stats — probability distributions (norm, t, f, chi2, binom), "
-            "hypothesis tests (ttest_ind, ttest_rel, mannwhitneyu, chi2_contingency, f_oneway), "
-            "descriptive stats (describe, skew, kurtosis); "
-            "scipy.optimize — minimize, curve_fit, root_scalar; "
-            "scipy.linalg — solve, inv, det, eig"
-        ),
-        "common_patterns": (
-            "scipy.stats.norm.cdf/ppf for z-score and critical-value lookups. "
-            "ttest_ind(a, b, equal_var=False) (Welch t-test) unless variances are verified equal. "
-            "f_oneway(*groups) for one-way ANOVA. "
-            "Pitfall: most distribution objects use scale (not variance) as the second parameter."
-        ),
-    },
-    "statsmodels": {
-        "docs_url": "https://www.statsmodels.org/stable/api.html",
-        "api_surface": (
-            "OLS regression (sm.OLS, smf.ols); "
-            "GLM (sm.GLM); "
-            "time-series models (ARIMA, SARIMAX, VAR); "
-            "diagnostic tests (acf/pacf, Durbin-Watson, Breusch-Pagan, White test); "
-            "summary tables (.summary(), .summary2()); "
-            "formula interface (smf.ols('y ~ x1 + x2', data=df).fit())"
-        ),
-        "common_patterns": (
-            "Always call .fit() — the model object alone is not fitted. "
-            "Use smf formula interface for clean model specification with categorical dummies. "
-            "model.summary() prints LaTeX-ready tables. "
-            "Use HC3 robust standard errors: .fit(cov_type='HC3'). "
-            "Pitfall: sm.add_constant(X) must be called explicitly when using sm.OLS with arrays."
-        ),
-    },
-    "jupyter": {
-        "docs_url": "https://docs.jupyter.org/en/latest/",
-        "api_surface": (
-            "IPython display API (display, HTML, Markdown, Image); "
-            "magic commands (%matplotlib inline, %run, %%time, %who); "
-            "Jupyter widgets (ipywidgets); "
-            "nbformat for programmatic notebook I/O"
-        ),
-        "common_patterns": (
-            "Use %matplotlib inline or %matplotlib widget at notebook top. "
-            "Cell execution order matters — restart kernel and run all before submitting. "
-            "Use display(df) instead of print(df) for formatted DataFrame rendering. "
-            "Pitfall: hidden state from out-of-order execution causes hard-to-reproduce bugs."
-        ),
-    },
-    "seaborn": {
-        "docs_url": "https://seaborn.pydata.org/api.html",
-        "api_surface": (
-            "Figure-level functions (sns.relplot, sns.displot, sns.catplot, sns.lmplot); "
-            "axes-level functions (sns.scatterplot, sns.lineplot, sns.histplot, sns.kdeplot, "
-            "sns.boxplot, sns.violinplot, sns.barplot, sns.heatmap, sns.pairplot); "
-            "theming (sns.set_theme, sns.set_palette, sns.set_style); "
-            "FacetGrid for multi-panel layout"
-        ),
-        "common_patterns": (
-            "Call sns.set_theme() at the top of a notebook for consistent aesthetics. "
-            "Pass tidy DataFrames via data=df with x='col', y='col' keyword arguments. "
-            "Use hue= for colour-encoding a grouping variable. "
-            "Seaborn is built on Matplotlib — use plt.tight_layout() and plt.savefig() as usual. "
-            "Pitfall: seaborn expects long/tidy data — reshape wide DataFrames with pd.melt() first."
-        ),
-    },
-    "plotly": {
-        "docs_url": "https://plotly.com/python-api-reference/",
-        "api_surface": (
-            "Plotly Express (px) — high-level: px.scatter, px.line, px.bar, px.histogram, "
-            "px.box, px.heatmap, px.choropleth; "
-            "Graph Objects (go) — low-level: go.Figure, go.Scatter, go.Bar, go.Heatmap, "
-            "fig.add_trace(), fig.update_layout(), fig.update_xaxes(); "
-            "Export: fig.show(), fig.write_html(), fig.write_image()"
-        ),
-        "common_patterns": (
-            "Use px for quick interactive charts; switch to go.Figure for fine-grained control. "
-            "fig.show() renders inline in Jupyter — set pio.renderers.default='notebook' if blank. "
-            "fig.update_layout(title=, xaxis_title=, yaxis_title=) for clean labelling. "
-            "Export interactive charts with fig.write_html('chart.html'). "
-            "Pitfall: Plotly figures are JSON-serialisable — very large datasets slow the browser."
-        ),
-    },
-    "networkx": {
-        "docs_url": "https://networkx.org/documentation/stable/reference/",
-        "api_surface": (
-            "Graph creation: nx.Graph(), nx.DiGraph(), nx.MultiGraph(); "
-            "graph manipulation: G.add_node(), G.add_edge(), G.add_nodes_from(), G.add_edges_from(); "
-            "algorithms: nx.shortest_path(), nx.degree_centrality(), nx.betweenness_centrality(), "
-            "nx.pagerank(), nx.connected_components(), nx.is_connected(); "
-            "drawing: nx.draw(), nx.draw_networkx(), nx.spring_layout()"
-        ),
-        "common_patterns": (
-            "Create graphs with G = nx.Graph(); G.add_edges_from(edge_list). "
-            "Store node attributes: G.nodes[n]['weight'] = val. "
-            "Visualise with nx.draw(G, pos=nx.spring_layout(G), with_labels=True). "
-            "For weighted shortest paths pass weight='weight' to the algorithm. "
-            "Pitfall: NetworkX stores graphs in memory — for >100k nodes use GraphTool or igraph."
-        ),
-    },
-    "scikit-learn": {
-        "docs_url": "https://scikit-learn.org/stable/api/index.html",
-        "api_surface": (
-            "Estimator API: .fit(X, y), .predict(X), .transform(X), .fit_transform(X); "
-            "linear models: LinearRegression, Ridge, Lasso, LogisticRegression; "
-            "preprocessing: StandardScaler, MinMaxScaler, OneHotEncoder, LabelEncoder; "
-            "model selection: train_test_split, cross_val_score, GridSearchCV, KFold; "
-            "metrics: mean_squared_error, r2_score, accuracy_score, classification_report; "
-            "pipeline: Pipeline, make_pipeline"
-        ),
-        "common_patterns": (
-            "Always split train/test before fitting: X_train, X_test, y_train, y_test = "
-            "train_test_split(X, y, test_size=0.2, random_state=42). "
-            "Use Pipeline to chain preprocessing + model: Pipeline([('scaler', StandardScaler()), ('model', LinearRegression())]). "
-            "cross_val_score(model, X, y, cv=5) for robust generalisation estimates. "
-            "Pitfall: fit the scaler on training data only, then transform both train and test — "
-            "never call .fit_transform() on the test set."
-        ),
-    },
-    "helipad": {
-        "docs_url": "https://helipad.dev/apidocs/",
-        "api_surface": (
-            "Model class — main simulation container; "
-            "model.addPrimitive(name, cls) — register agent type; "
-            "model.addParam(name, title, type, dflt) — add adjustable parameter; "
-            "model.addPlot(name, title) / model.addSeries() — define visualisation; "
-            "model.start() / model.launchGUI() — run simulation; "
-            "Agent base class with step() method; "
-            "match() function for pairwise agent interactions"
-        ),
-        "common_patterns": (
-            "Define agent behaviour by subclassing Agent and overriding step(). "
-            "Use model.addPrimitive() to register each agent class before calling start(). "
-            "Parameters added with addParam() appear as GUI sliders — set dflt for the default value. "
-            "Collect time-series data via model.addPlot() and model.addSeries(). "
-            "Pitfall: helipad's interactive GUI requires a Tkinter event loop — "
-            "in Jupyter use model.start() rather than model.launchGUI()."
-        ),
-    },
-    "ipywidgets": {
-        "docs_url": "https://ipywidgets.readthedocs.io/en/stable/",
-        "api_surface": (
-            "widgets.IntSlider / FloatSlider(value, min, max, step) — numeric sliders; "
-            "widgets.Dropdown(options, value) — dropdown selector; "
-            "widgets.Checkbox(value) — boolean toggle; "
-            "widgets.Output() — capture display output; "
-            "widgets.HBox / VBox(*children) — layout containers; "
-            "interact(fn, **kwargs) / interactive(fn, **kwargs) — auto-generate UI from function signature; "
-            "widgets.observe(handler, names) — react to value changes; "
-            "display(widget) — render widget in notebook"
-        ),
-        "common_patterns": (
-            "Use interact() or @interact decorator for quick exploratory UIs — "
-            "pass slider ranges as (min, max) or (min, max, step) tuples. "
-            "For more control use interactive() and display its .widget attribute. "
-            "Combine multiple widgets with HBox/VBox for layout. "
-            "Use widgets.Output() context manager to capture prints/plots inside callbacks. "
-            "Pitfall: widgets only render in a live Jupyter kernel — "
-            "use Voilà to serve them as standalone apps or nbconvert --to html for static export. "
-            "Pitfall: observe callbacks fire on every keystroke for Text widgets — "
-            "debounce with a submit Button or use continuous_update=False on sliders."
-        ),
-    },
-    "pandas-datareader": {
-        "docs_url": "https://pandas-datareader.readthedocs.io/en/latest/",
-        "api_surface": (
-            "pdr.DataReader(name, data_source, start, end) — fetch time-series data; "
-            "data_source options: 'fred' (FRED), 'yahoo' (Yahoo Finance), "
-            "'famafrench' (Fama-French), 'wb' (World Bank), 'oecd', 'eurostat'; "
-            "pdr.fred.FredReader(symbols, start, end).read() — direct FRED access; "
-            "pdr.wb.download(indicator, country, start, end) — World Bank data; "
-            "Returns pandas DataFrame indexed by date"
-        ),
-        "common_patterns": (
-            "Use pdr.DataReader('SERIES_ID', 'fred', start='2000-01-01') to fetch FRED series — "
-            "SERIES_ID examples: 'GDP', 'CPIAUCSL', 'FEDFUNDS', 'UNRATE', 'M2SL'. "
-            "Chain with .pct_change() or .diff() for growth rates. "
-            "Pitfall: Yahoo Finance reader is unreliable — prefer yfinance for equity data. "
-            "Pitfall: some data sources require an API key set as environment variable "
-            "(e.g. FRED requires FRED_API_KEY for bulk requests). "
-            "Wrap reads in try/except RemoteDataError for network resilience in notebooks."
-        ),
-    },
-    "voila": {
-        "docs_url": "https://voila.readthedocs.io/en/stable/",
-        "api_surface": (
-            "CLI: voila notebook.ipynb — serve notebook as web app; "
-            "voila --port=8866 --no-browser notebook.ipynb — specify port; "
-            "voila --template=material notebook.ipynb — apply theme; "
-            "voila --strip_sources=True — hide source cells in output; "
-            "binder integration via postBuild + voila server extension; "
-            "Python API: VoilaConfiguration for programmatic config"
-        ),
-        "common_patterns": (
-            "Convert any ipywidgets notebook to a dashboard with `voila notebook.ipynb`. "
-            "For Binder deployment add `voila` to requirements.txt and set URL path to "
-            "`/voila/render/notebook.ipynb` in the Binder badge URL. "
-            "Use --strip_sources=True for student-facing dashboards to hide code cells. "
-            "Pitfall: Voilà re-executes the entire notebook on each page load — "
-            "cache expensive computations or use @lru_cache on data-loading functions. "
-            "Pitfall: widgets that depend on display() must use widgets.Output() — "
-            "bare matplotlib plt.show() calls may not render correctly under Voilà."
-        ),
-    },
-    "paramiko": {
-        "docs_url": "https://docs.paramiko.org/en/stable/api/",
-        "api_surface": (
-            "SSHClient — connect(), exec_command(), invoke_shell(), open_sftp(); "
-            "Transport — request_port_forward(), open_channel(); "
-            "SFTPClient — get(), put(), listdir(), stat(); "
-            "RSAKey / Ed25519Key — from_private_key_file(); "
-            "AuthenticationException, SSHException for error handling"
-        ),
-        "common_patterns": (
-            "Use SSHClient with AutoAddPolicy only in trusted environments; "
-            "prefer RejectPolicy and known_hosts in production. "
-            "Always close connections with client.close() or use context manager. "
-            "For port forwarding, use transport.request_port_forward() and handle "
-            "incoming channels in a thread. "
-            "Pitfall: exec_command() stdout is blocking — read stdout before stderr "
-            "to avoid deadlocks. "
-            "Pitfall: set timeout= on connect() to avoid hanging on unreachable hosts."
-        ),
-    },
-    "D3.js": {
-        "docs_url": "https://d3js.org/api",
-        "api_surface": (
-            "d3.select() / d3.selectAll() — DOM selection and chaining; "
-            "selection.data() + .enter() + .exit() — data join pattern; "
-            "d3.scaleLinear(), d3.scaleBand(), d3.scaleTime() — scales; "
-            "d3.axisBottom(), d3.axisLeft() — axes; "
-            "d3.line(), d3.area(), d3.arc() — path generators; "
-            "d3.json(), d3.csv() — async data loading; "
-            "d3.zoom(), d3.drag() — interaction; "
-            "d3.transition() — animated updates"
-        ),
-        "common_patterns": (
-            "Always use the update-enter-exit (or join()) pattern for dynamic data. "
-            "Use d3.select('#chart').append('svg').attr('viewBox', ...) for responsive sizing. "
-            "For real-time updates, store the selection and call .data(newData).join() on each tick. "
-            "Pitfall: D3 v6+ uses event parameter in callbacks — d3.event is removed. "
-            "Pitfall: axes must be appended inside a <g> and called with .call(axis)."
-        ),
-    },
-    "nmap": {
-        "docs_url": "https://nmap.org/book/man.html",
-        "api_surface": (
-            "nmap -sn <range> — ping scan (host discovery, no port scan); "
-            "nmap -sV <host> — service/version detection; "
-            "nmap -O <host> — OS detection (requires root); "
-            "nmap -p <ports> <host> — specific port scan; "
-            "nmap --script <script> <host> — NSE script execution; "
-            "nmap -oX output.xml — XML output for parsing; "
-            "nmap -oG - — greppable output"
-        ),
-        "common_patterns": (
-            "Use -sn for fast host discovery without port scanning. "
-            "Combine with --open to only show hosts with open ports. "
-            "Parse XML output with python-nmap library for programmatic use. "
-            "Pitfall: OS detection (-O) and SYN scan (-sS) require root/sudo. "
-            "Pitfall: aggressive scans (-A) can trigger IDS/firewall alerts on monitored networks. "
-            "Use --host-timeout to prevent hangs on unresponsive hosts."
-        ),
-    },
-    "arp-scan": {
-        "docs_url": "https://github.com/royhills/arp-scan/wiki",
-        "api_surface": (
-            "arp-scan --localnet — scan all hosts on local subnet; "
-            "arp-scan --interface=<iface> <range> — scan on specific interface; "
-            "arp-scan --retry=<n> — retry count for ARP probes; "
-            "arp-scan --timeout=<ms> — per-probe timeout in milliseconds; "
-            "Output: IP, MAC, vendor (from OUI database)"
-        ),
-        "common_patterns": (
-            "Always run with sudo — ARP scanning requires raw socket access. "
-            "Use --localnet flag to automatically scan the local subnet. "
-            "Parse output with awk/grep: `arp-scan --localnet | grep -v 'DUP\\|starting\\|packets'`. "
-            "Combine with MAC vendor lookup files for device classification. "
-            "Pitfall: may not detect devices with ARP filtering or strict firewalls. "
-            "Pitfall: duplicate ARP responses may indicate ARP spoofing — check for DUP lines."
-        ),
-    },
-    "ssh": {
-        "docs_url": "https://www.openssh.com/manual.html",
-        "api_surface": (
-            "ssh user@host — basic connection; "
-            "ssh -L local_port:remote_host:remote_port user@host — local port forward; "
-            "ssh -R remote_port:local_host:local_port user@host — remote port forward; "
-            "ssh -N -f — background non-interactive tunnel; "
-            "ssh -o StrictHostKeyChecking=no -o BatchMode=yes — scripting options; "
-            "ssh-keygen -t ed25519 -C comment — key generation; "
-            "ssh-copy-id user@host — install public key; "
-            "scp / sftp — secure file transfer"
-        ),
-        "common_patterns": (
-            "For persistent tunnels use autossh or ssh with -o ServerAliveInterval=60. "
-            "Use -N -f for background tunnels that only forward ports (no shell). "
-            "Check tunnel is alive: nc -z localhost <local_port> or check /proc/<pid>. "
-            "Use ~/.ssh/config to define host aliases, port, IdentityFile, and tunnels. "
-            "Pitfall: -o StrictHostKeyChecking=no is unsafe in production — manage known_hosts. "
-            "Pitfall: tunnels drop silently on network changes — always monitor and reconnect."
-        ),
-    },
-}
-
 
 def _fetch_pypi_metadata(package_name: str) -> dict[str, str]:
     """Query the PyPI JSON API and return docs_url + a brief summary.
@@ -509,12 +118,60 @@ def _fetch_pypi_docs_url(package_name: str) -> str:
     return _fetch_pypi_metadata(package_name)["docs_url"]
 
 
+def _fetch_npm_metadata(package_name: str) -> dict[str, str]:
+    """Query the public npm registry and return docs_url + a brief summary.
+
+    Handles scoped packages (``@scope/name``) — the slash is a genuine path
+    separator in npm's registry API, not something to strip; ``urllib.parse.quote``
+    keeps ``@``/``/`` literal and percent-encodes anything else, so malformed or
+    unexpected characters in a brief-provided tool name can't reach the request
+    unescaped. Returns a dict with keys: docs_url, api_surface, common_patterns.
+    Values are empty strings on any network/parse error.
+    """
+    safe_name = package_name.strip()
+    if not safe_name or " " in safe_name:
+        return {"docs_url": "", "api_surface": "", "common_patterns": ""}
+    encoded_name = urllib.parse.quote(safe_name, safe="@/")
+    url = f"https://registry.npmjs.org/{encoded_name}"
+    result = {"docs_url": "", "api_surface": "", "common_patterns": ""}
+    try:
+        req = urllib.request.Request(url, headers={"User-Agent": "agentteams-enrich/1.0"})
+        with urllib.request.urlopen(req, timeout=6) as resp:
+            data = json.loads(resp.read().decode())
+
+        latest_version = (data.get("dist-tags") or {}).get("latest", "")
+        version_info = (data.get("versions") or {}).get(latest_version, {}) or {}
+
+        # -- docs_url: homepage first, then repository URL --
+        homepage = version_info.get("homepage") or data.get("homepage") or ""
+        if homepage and homepage.startswith("http"):
+            result["docs_url"] = homepage
+        if not result["docs_url"]:
+            repo = version_info.get("repository") or data.get("repository") or {}
+            repo_url = repo.get("url", "") if isinstance(repo, dict) else str(repo)
+            repo_url = re.sub(r"^git\+", "", repo_url).removesuffix(".git")
+            if repo_url.startswith("http"):
+                result["docs_url"] = repo_url
+
+        # -- api_surface from the package description --
+        description = (version_info.get("description") or data.get("description") or "").strip()
+        if description:
+            result["api_surface"] = description
+
+    except (urllib.error.URLError, urllib.error.HTTPError, json.JSONDecodeError, OSError):
+        pass
+    return result
+
+
 def _get_docs_url(package_name: str) -> str:
-    """Return documentation URL: canonical dict first, then PyPI lookup."""
-    canonical = _CANONICAL_DOCS.get(package_name.lower(), "")
-    if canonical:
-        return canonical
-    return _fetch_pypi_docs_url(package_name)
+    """Return documentation URL: unified static catalog first, then PyPI, then npm."""
+    known = tool_metadata_catalog.get_tool_metadata(package_name).get("docs_url", "")
+    if known:
+        return known
+    pypi_url = _fetch_pypi_docs_url(package_name)
+    if pypi_url:
+        return pypi_url
+    return _fetch_npm_metadata(package_name)["docs_url"]
 
 
 def scan_project_imports(project_path: Path) -> dict[str, str]:
@@ -584,24 +241,29 @@ def build_tool_catalog(
 ) -> dict[str, dict[str, str]]:
     """Build a metadata catalog for a list of packages.
 
-    Uses the legacy _TOOL_CATALOG for rich entries; fills docs_url from
-    _CANONICAL_DOCS or PyPI for everything else.
+    Resolution order per package: the unified static catalog
+    (agentteams.tool_metadata_catalog, zero network) first; if unresolved and
+    `fetch_pypi` is True (also gates the npm registry fetch, despite the
+    parameter's PyPI-era name — kept for its one existing call site), PyPI is
+    tried, then npm.
     """
     catalog: dict[str, dict[str, str]] = {}
     for pkg in package_names:
-        if pkg in _TOOL_CATALOG:
-            catalog[pkg] = _TOOL_CATALOG[pkg]
+        known = tool_metadata_catalog.get_tool_metadata(pkg)
+        if known:
+            catalog[pkg] = known
+        elif fetch_pypi:
+            meta = _fetch_pypi_metadata(pkg)
+            if not meta["docs_url"]:
+                # Fill gaps from npm rather than replacing wholesale — PyPI can
+                # return a real api_surface (from its summary) alongside an
+                # empty docs_url (no Documentation/Homepage/Source/Repository
+                # project URL at all); discarding that in favor of npm's
+                # (likely empty, for a Python package) result would silently
+                # lose real data (post-implementation audit finding).
+                npm_meta = _fetch_npm_metadata(pkg)
+                meta = {field: meta[field] or npm_meta[field] for field in meta}
+            catalog[pkg] = meta
         else:
-            canonical_url = _CANONICAL_DOCS.get(pkg.lower(), "")
-            if canonical_url:
-                catalog[pkg] = {
-                    "docs_url": canonical_url,
-                    "api_surface": "",
-                    "common_patterns": "",
-                }
-            elif fetch_pypi:
-                meta = _fetch_pypi_metadata(pkg)
-                catalog[pkg] = meta
-            else:
-                catalog[pkg] = {"docs_url": "", "api_surface": "", "common_patterns": ""}
+            catalog[pkg] = {"docs_url": "", "api_surface": "", "common_patterns": ""}
     return catalog

@@ -107,6 +107,7 @@ Use this baseline command sequence for update-safe execution:
 - Never bypass `@code-hygiene` — code changes require a hygiene audit before merge
 - Always close multi-file sessions with `@conflict-auditor`
 - Route to the correct domain agent — never handle domain work directly
+- Audit-roster composition for diff/plan reviews: when assembling the parallel post-implementation (or pre-implementation) audit roster for a plan or diff review, match the roster to the diff's actual touched-file footprint against each workstream/governance agent's ownership area — never rely on which agents "usually" get included. Concretely: diff touches `templates/**` → include `@template-library-expert`; diff touches security-gated code, adds a new outbound network call, or invokes/cites a numbered Security Rule as clearance for something → include `@security`
 - After any investigation or fix: delegate to `@agent-updater`, then `@adversarial`, then `@conflict-auditor` before closing
 - Any git operation (commit/push/pull/merge/rebase/revert/restore) must route through `@git-operations` and follow `references/github-workflows-merge.reference.md`
 - Document every multi-step implementation plan before execution: `tmp/by-week/YYYY-Www/<plan-slug>.plan.md` + `tmp/by-week/YYYY-Www/<plan-slug>.steps.csv`; create the week folder if absent; read legacy undated plans from `tmp/` when canonical week-organized storage is unavailable; initial `status` = `pending`; after each step, audit remaining steps via `@adversarial` + `@conflict-auditor` before proceeding

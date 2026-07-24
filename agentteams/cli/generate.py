@@ -636,6 +636,11 @@ def run_generate(args: argparse.Namespace, strict_manual_placeholders: bool) -> 
             )
             build_team._persist_orphan_events(_orphan_agents, manifest, output_dir)
 
+        # Orphan-reference-doc advisory (CH-07: extracted to build_team.py to keep
+        # this module under the line ceiling) — mirrors the orphan-agent advisory
+        # above for references/ref-*-reference.md files.
+        build_team._report_orphan_reference_docs(final_rendered, output_dir)
+
         print(f"\nWriting {len(update_rendered)} file(s)...")
 
         # Back up BEFORE migration so the backup captures pre-migration state

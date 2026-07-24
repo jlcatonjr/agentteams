@@ -642,11 +642,14 @@ def test_detect_reference_tools_includes_common_patterns():
     assert result[0]["common_patterns"] == "Use vectorised operations."
 
 
-def test_detect_reference_tools_api_surface_defaults_to_empty():
-    """api_surface defaults to empty string when absent from tool dict."""
+def test_detect_reference_tools_api_surface_fills_from_catalog_when_absent():
+    """A known tool's api_surface is filled from the unified tool_metadata_catalog
+    when absent from the tool dict, rather than defaulting to empty. Value updated
+    by tmp/by-week/2026-W30/tool-doc-catalog-remediation.plan.md's catalog
+    consolidation, which prefers the richer of two previously-separate catalogs."""
     tools = [{"name": "pandas", "category": "library"}]
     result = detect_reference_tools(tools)
-    assert result[0]["api_surface"] == "DataFrame, Series, read_csv, merge, groupby, pivot_table"
+    assert result[0]["api_surface"].startswith("DataFrame/Series creation and I/O")
 
 
 def test_detect_tool_agents_includes_docs_url():
@@ -1031,12 +1034,49 @@ def test_build_manifest_tool_doc_researcher_when_tool_missing_metadata():
     desc = {
         "project_goal": "Build a project with a custom internal database.",
         "tools": [
-            # database category → specialist tier; not in _KNOWN_TOOL_METADATA
+            # database category → specialist tier; not in tool_metadata_catalog
             {"name": "InternalDB", "category": "database"},
         ],
     }
     manifest = build_manifest(desc, framework="copilot-vscode")
     assert "tool-doc-researcher" in manifest["selected_archetypes"]
+
+
+def test_build_manifest_known_catalog_tool_resolves_without_enrich_flag():
+    """Regression test (tmp/by-week/2026-W30/tool-doc-catalog-remediation.plan.md):
+    boto3 has a zero-network docs_url entry in the unified tool_metadata_catalog, so
+    a brief that lists it with no docs_url must resolve TOOL_DOCS_URL during a plain
+    build_manifest() call — no --enrich flag involved at this layer at all. Before
+    the catalog consolidation, boto3 was only reachable via the --enrich-gated
+    enrich/_tools.py catalogs, so this tool would have rendered
+    {MANUAL:TOOL_DOCS_URL} even though a known, offline answer existed. boto3's
+    catalog entry is docs_url-only (inherited from the old _CANONICAL_DOCS, which
+    never had api_surface/common_patterns for it) — tool-doc-researcher correctly
+    still triggers for those two fields; see the pandas case below for a tool
+    that's fully resolved and does NOT trigger it."""
+    desc = {
+        "project_goal": "Build a project that talks to AWS.",
+        "tools": [{"name": "boto3", "category": "library"}],
+    }
+    manifest = build_manifest(desc, framework="copilot-vscode")
+    ref_tools = manifest.get("reference_tools", [])
+    boto3_entries = [t for t in ref_tools if t["tool_name"] == "boto3"]
+    assert boto3_entries, "boto3 should classify as a reference-tier tool"
+    assert boto3_entries[0]["docs_url"] == (
+        "https://boto3.amazonaws.com/v1/documentation/api/latest/reference/services/index.html"
+    )
+
+
+def test_build_manifest_fully_resolved_catalog_tool_skips_tool_doc_researcher():
+    """A tool fully resolved by the unified catalog (docs_url + api_surface +
+    common_patterns, e.g. pandas) must not trigger tool-doc-researcher — unlike
+    boto3 above, which is docs_url-only."""
+    desc = {
+        "project_goal": "Build a data project.",
+        "tools": [{"name": "pandas", "category": "library"}],
+    }
+    manifest = build_manifest(desc, framework="copilot-vscode")
+    assert "tool-doc-researcher" not in manifest["selected_archetypes"]
 
 
 def test_build_manifest_no_tool_doc_researcher_when_metadata_complete():
@@ -1058,12 +1098,14 @@ def test_build_manifest_no_tool_doc_researcher_when_metadata_complete():
 
 
 def test_detect_reference_tools_enrich_known_tool_metadata():
-    """Known reference tools inherit metadata when the brief omits it."""
+    """Known reference tools inherit metadata when the brief omits it. docs_url
+    updated by tmp/by-week/2026-W30/tool-doc-catalog-remediation.plan.md's catalog
+    consolidation (prefers the richer catalog's value on conflict)."""
     tools = [{"name": "plotly", "category": "library"}]
     result = detect_reference_tools(tools)
-    assert result[0]["docs_url"] == "https://plotly.com/python/"
-    assert "graph_objects.Figure" in result[0]["api_surface"]
-    assert "self-contained HTML exports" in result[0]["common_patterns"]
+    assert result[0]["docs_url"] == "https://plotly.com/python-api-reference/"
+    assert "go.Figure" in result[0]["api_surface"]
+    assert "JSON-serialisable" in result[0]["common_patterns"]
 
 
 def test_build_manifest_flags_missing_tool_reference_metadata():

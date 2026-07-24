@@ -20,23 +20,14 @@ authoritative source; the table below is a human-readable projection
 re-rendered on every `--update --merge`.
 
 <!-- AGENTTEAMS:BEGIN framework_data v=1 -->
-> ⚠️ **STALE DATA** — snapshot is 28.9 days old (threshold 7 days). Run the daily research stage online.
+{FRAMEWORK_RESEARCH_STALE_BANNER}
 
-Generated on: `2026-06-23`
-Source: https://docs.anthropic.com/en/docs/claude-code/sub-agents
-Fetch status: `ok`
-Diff summary: `matched=1 new_upstream=2 missing_upstream=1`
+Generated on: `{FRAMEWORK_RESEARCH_GENERATED_ON}`
+Source: {FRAMEWORK_RESEARCH_SOURCE_URL}
+Fetch status: `{FRAMEWORK_RESEARCH_FETCH_STATUS}`
+Diff summary: `{FRAMEWORK_RESEARCH_DIFF_SUMMARY}`
 
-| Framework | Fetch | Tokens observed | Locations observed |
-|---|---|---|---|
-| claude (Claude Code Sub-Agents) | `ok` | model, name, tools | .claude/agents, CLAUDE.md |
-| copilot_vscode (GitHub Copilot — VS Code Chat Modes) | `ok` | — | .github/agents |
-| copilot_cli (GitHub Copilot — CLI) | `ok` | — | — |
-
-Local Claude adapter constants:
-- required_front_matter_keys: description, name
-- default_allowed_tools: Bash, Read, Write, Edit
-- claude diff — matched: name; new_upstream: model, tools; missing_upstream: description
+{FRAMEWORK_RESEARCH_TABLE}
 <!-- AGENTTEAMS:END framework_data -->
 
 ## Operational Integration Process
