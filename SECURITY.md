@@ -56,18 +56,25 @@ Out of scope:
 - Bugs in generated agent files themselves — agentteams is a generator,
   not a runtime; generated outputs are the user's responsibility to review.
 
-### The `agentteams[research]` extra is a disclosed, bounded exception to this boundary
+### The `agentteams[research]`/`[browser]` extras are a disclosed, bounded exception to this boundary
 
 Everything above describes `agentteams`'s CLI/template-rendering output, which remains
 design-time-only and unchanged. The optional `research` extra
-(`pip install agentteams[research]`) is a genuinely different kind of thing: a real, importable
-Python library (`agentteams.research`) a consuming project may add as its **own** runtime
-dependency and call directly — the same relationship any project has with any dependency, not
-agentteams reaching into a produced app's runtime uninvited. It has no import-time coupling to the
-CLI/generator pipeline in either direction. The `research-analyst` domain-archetype template
-documents the recommended way to give an LLM agent instructions for orchestrating it; see
-[`docs_src/api-reference/research.md`](docs_src/api-reference/research.md) for the library's own
-documented surface and stability status.
+(`pip install agentteams[research]`) — and its heavier `browser` sibling
+(`pip install agentteams[browser]`, layered on top of `research`, adding real Playwright-driven
+browser rendering for JavaScript-heavy pages, and requiring a further one-time
+`playwright install chromium` beyond the `pip install` itself) — are a genuinely different kind of
+thing: real, importable Python libraries (`agentteams.research`, `agentteams.research.browser`) a
+consuming project may add as its **own** runtime dependency and call directly — the same
+relationship any project has with any dependency, not agentteams reaching into a produced app's
+runtime uninvited. Neither has import-time coupling to the CLI/generator pipeline in either
+direction; `browser` additionally has no import-time coupling to `research`'s own package-level
+exports (it is deliberately not re-exported from `agentteams.research.__init__`, so a plain
+`agentteams[research]` install never risks touching Playwright). The `research-analyst`
+domain-archetype template documents the recommended way to give an LLM agent instructions for
+orchestrating both; see [`docs_src/api-reference/research.md`](docs_src/api-reference/research.md)
+for the libraries' own documented surface and stability status, including `browser`'s two-layer
+SSRF guard and its named DNS-rebinding limitation.
 
 ## Security-relevant changes in this release
 

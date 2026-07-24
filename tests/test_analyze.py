@@ -2,7 +2,10 @@
 Tests for agentteams/analyze.py
 """
 
+from pathlib import Path
+
 import pytest
+from agentteams import render
 from agentteams.analyze import (
     build_manifest,
     classify_project_type,
@@ -15,6 +18,8 @@ from agentteams.analyze import (
     _format_unresolved_tool_list,
     _contains_keyword,
 )
+
+_TEMPLATES_DIR = Path(__file__).parent.parent / "agentteams" / "templates"
 
 
 # ---------------------------------------------------------------------------
@@ -256,6 +261,33 @@ def test_build_manifest_research_capability_force_appends_past_selected_archetyp
 
     assert "research-analyst" in manifest["selected_archetypes"]
     assert "primary-producer" in manifest["selected_archetypes"]
+
+
+def test_research_analyst_template_documents_browser_escalation():
+    """tmp/by-week/2026-W30/web-browsing-playwright-cli.plan.md Implementation item 5 /
+    template-library-expert audit finding: neither the reworded Invariant Core bullet nor the
+    Procedure's browser-escalation sentence had any test coverage anywhere in the suite. Renders
+    the actual template through the real pipeline (not a string search of the .template.md
+    source) so a future paraphrase that silently drops the guidance is caught."""
+    desc = {
+        "project_goal": "Build a research-heavy conversational product.",
+        "capabilities": ["research_verification"],
+    }
+    manifest = build_manifest(desc, framework="copilot-vscode")
+    rendered = dict(render.render_all(manifest, templates_dir=_TEMPLATES_DIR))
+
+    assert "research-analyst.agent.md" in rendered
+    body = rendered["research-analyst.agent.md"]
+
+    # Procedure step 2: escalate to `browser` when `fetch` can't render JS-heavy content.
+    assert 'python -m agentteams.research browser "<url>"' in body
+    assert "references/skill-generation.reference.md" in body
+
+    # Invariant Core: the reworded bullet must not assert a stale count while adding the
+    # third CLI surface.
+    assert "CLI-invokable vs. integration-only surfaces" in body
+    assert 'browser "<url>"' in body
+    assert "agentteams.research.verify" in body  # the untouched integration-only constraint
 
 
 def test_build_manifest_includes_builder_agent():

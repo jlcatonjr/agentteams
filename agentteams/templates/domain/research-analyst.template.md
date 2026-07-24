@@ -53,13 +53,14 @@ they point at genuine runtime code the project must have installed, not just at 
 4. **Correction discipline.** Any correction you surface from a `refuted` verdict must stay
    hedged and source-attributed ("According to `<source>`, ...") — never a silent, confident
    restatement as if it were always known.
-5. **Two invocation surfaces, not one.** `python -m agentteams.research search "<query>"` and
-   `python -m agentteams.research fetch "<url>"` are CLI-invokable (use your `execute` tool) and
-   need no chat backend. `agentteams.research.verify`'s functions
-   (`extract_claims`/`audit_claims`/`revise`) require a real chat-completion callable and are NOT
-   exposed as a CLI — they are for this project's own Python integration to wire up, not something
-   you invoke directly by shelling out. If a verification task needs them and no such integration
-   exists in this project yet, say so explicitly rather than improvising a workaround.
+5. **CLI-invokable vs. integration-only surfaces.** `python -m agentteams.research search
+   "<query>"`, `fetch "<url>"`, and `browser "<url>"` (the third, for a page `fetch` can't render
+   — see step 2) are all CLI-invokable (use your `execute` tool) and need no chat backend.
+   `agentteams.research.verify`'s functions (`extract_claims`/`audit_claims`/`revise`) require a
+   real chat-completion callable and are NOT exposed as a CLI — they are for this project's own
+   Python integration to wire up, not something you invoke directly by shelling out. If a
+   verification task needs them and no such integration exists in this project yet, say so
+   explicitly rather than improvising a workaround.
 
 <!-- AGENTTEAMS:BEGIN memory_index_consultation v=3 -->
 ## Memory-index consultation *(applies when `references/memory-index.json` is present)*
@@ -95,7 +96,11 @@ the Invariant Core's honest-ceiling rules before restating it. Never block on th
    `python -m agentteams.research fetch "<url>"` for page text from a promising result. Prefer
    sources this project's own `AllowlistConfig` rates highly, when one is configured — do not
    assume the shipped `DEFAULT_CONFIG` reflects this project's editorial judgment; check for a
-   project-supplied config first.
+   project-supplied config first. If `fetch` returns empty or clearly-incomplete text for a page
+   that needs JavaScript to render its content, escalate:
+   `python -m agentteams.research browser "<url>"`. It requires the separate `agentteams[browser]`
+   extra plus a one-time `playwright install chromium`; if neither is installed, that absence is
+   itself a capability gap, not a dead end — see `references/skill-generation.reference.md`.
 3. For claims already drafted (e.g. reviewing another agent's or a generated document's output),
    this project's own Python integration should call `extract_claims`/`audit_claims` (dual-lens:
    `"adversarial"` checks a claim against fresh evidence, `"conflict"` checks it against what was

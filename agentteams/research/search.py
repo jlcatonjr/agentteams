@@ -98,8 +98,18 @@ def web_search(query: str, k: int = 5, timeout_s: float = 8.0) -> list[Source]:
     return out
 
 
-def _is_public_https(url: str) -> bool:
-    """SSRF guard: https only, and the host must not resolve to a private/loopback IP."""
+def is_public_https(url: str) -> bool:
+    """SSRF guard: https only, and the host must not resolve to a private/loopback IP.
+
+    Public (not underscore-prefixed) because ``agentteams.research.browser`` reuses this exact
+    check as its own pre-navigation gate before launching a browser — deliberately the one
+    cross-submodule import of a previously-module-private name in this package (every other
+    cross-module import here, e.g. ``reputable.py``'s ``from agentteams.research.search import
+    Source, web_search``, only ever touched already-public names). A browser context additionally
+    needs a *second*, per-request guard of its own (redirects and page-initiated JS requests never
+    pass back through this function) — see ``browser.py``'s ``page.route`` handler; this function
+    is necessary but not sufficient there.
+    """
     try:
         parsed = urlparse(url)
         if parsed.scheme != "https" or not parsed.hostname:
@@ -172,7 +182,7 @@ def _fetch_raw(
     two possible post-processing paths. Returns ``(body, content_type, encoding)``, or ``None`` on
     any guard/failure/non-200 (both callers convert that into their own empty-result shape).
     """
-    if not _is_public_https(url):
+    if not is_public_https(url):
         return None
     try:
         deadline = time.monotonic() + timeout_s
@@ -202,6 +212,22 @@ def _fetch_raw(
         # httpx request/response boundary (connect/timeout/transport failures mid-stream).
         return None
     return body, content_type, encoding
+
+
+def strip_html_to_text(html: str, max_chars: int) -> str:
+    """Shared HTML→text extraction: drop script/style/nav/footer/header blocks, strip remaining
+    tags, unescape entities, collapse whitespace, cap at ``max_chars``.
+
+    Public (not module-private) because ``agentteams.research.browser`` reuses this exact
+    extraction — applied there to a browser's rendered ``page.content()`` instead of a raw HTTP
+    response body — so ``fetch_text`` and ``browser_fetch`` return text in a consistent shape.
+    Hoisted here after CH-24's sibling CH-08 duplication guard was crossed (the same 3-statement
+    sequence had drifted into three call sites — this function, ``fetch_text_and_date``, and
+    ``browser.py`` — see ``tmp/by-week/2026-W30/web-browsing-playwright-cli.plan.md``).
+    """
+    text = re.sub(r"(?is)<(script|style|nav|footer|header)[^>]*>.*?</\1>", " ", html)
+    text = _html.unescape(re.sub(r"<[^>]+>", " ", text))
+    return re.sub(r"\s+", " ", text).strip()[:max_chars]
 
 
 def fetch_text(
@@ -237,10 +263,7 @@ def fetch_text(
     body, content_type, encoding = raw
     if "application/pdf" in content_type or body.startswith(b"%PDF-"):
         return _extract_pdf_text(body)[:max_chars]
-    text = body.decode(encoding, errors="ignore")
-    text = re.sub(r"(?is)<(script|style|nav|footer|header)[^>]*>.*?</\1>", " ", text)
-    text = _html.unescape(re.sub(r"<[^>]+>", " ", text))
-    return re.sub(r"\s+", " ", text).strip()[:max_chars]
+    return strip_html_to_text(body.decode(encoding, errors="ignore"), max_chars)
 
 
 def fetch_text_and_date(
@@ -269,6 +292,4 @@ def fetch_text_and_date(
         return _extract_pdf_text(body)[:max_chars], None
     raw_text = body.decode(encoding, errors="ignore")
     published_at = extract_published_date(raw_text)
-    text = re.sub(r"(?is)<(script|style|nav|footer|header)[^>]*>.*?</\1>", " ", raw_text)
-    text = _html.unescape(re.sub(r"<[^>]+>", " ", text))
-    return re.sub(r"\s+", " ", text).strip()[:max_chars], published_at
+    return strip_html_to_text(raw_text, max_chars), published_at

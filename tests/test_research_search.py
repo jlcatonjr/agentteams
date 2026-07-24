@@ -7,7 +7,45 @@ from unittest.mock import patch
 
 import pytest
 
-from agentteams.research.search import _extract_pdf_text, extract_published_date, fetch_text_and_date
+from agentteams.research.search import (
+    _extract_pdf_text,
+    extract_published_date,
+    fetch_text_and_date,
+    is_public_https,
+)
+
+
+def test_is_public_https_accepts_ordinary_public_url() -> None:
+    assert is_public_https("https://example.com/page") is True
+
+
+def test_is_public_https_rejects_non_https_scheme() -> None:
+    assert is_public_https("http://example.com/page") is False
+
+
+def test_is_public_https_rejects_loopback() -> None:
+    assert is_public_https("https://127.0.0.1/internal") is False
+    assert is_public_https("https://localhost/internal") is False
+
+
+def test_is_public_https_rejects_link_local_metadata_endpoint() -> None:
+    """The canonical SSRF target this guard exists to block."""
+    assert is_public_https("https://169.254.169.254/latest/meta-data/") is False
+
+
+def test_is_public_https_rejects_private_range() -> None:
+    assert is_public_https("https://10.0.0.5/internal") is False
+    assert is_public_https("https://192.168.1.1/router") is False
+
+
+def test_is_public_https_rejects_malformed_or_hostless_url() -> None:
+    assert is_public_https("https://") is False
+    assert is_public_https("not a url at all") is False
+    assert is_public_https("") is False
+
+
+def test_is_public_https_rejects_unresolvable_hostname() -> None:
+    assert is_public_https("https://this-host-does-not-exist.invalid/") is False
 
 
 def _build_minimal_pdf(text: str) -> bytes:

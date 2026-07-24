@@ -15,7 +15,14 @@ the recommended way to give an LLM agent instructions for orchestrating it.
 [stability policy](https://github.com/jlcatonjr/agentteams/blob/main/STABILITY.md) — covered by
 the normal SemVer contract like any other documented module.
 
-> *Source: `agentteams/research/{search,reputable,verify}.py`*
+> *Source: `agentteams/research/{search,reputable,verify,browser}.py`*
+
+`browser` (below) is a further, heavier exception within this already-exceptional subpackage: it
+is gated behind its own separate `agentteams[browser]` install (not folded into `agentteams[research]`)
+and is deliberately **not** re-exported from `agentteams.research`'s package-level `__all__` the
+way `search`/`reputable`/`verify` are — reach it via `from agentteams.research.browser import
+browser_fetch`, or `python -m agentteams.research browser <url>`, so that a plain `import
+agentteams.research` never risks pulling in Playwright.
 
 Honesty ceiling, restated: allowlisted-domain retrieval is provenance, not correctness —
 "reputable" is never "true." Claim-verification verdicts are `"survived"` or `"refuted"` — never
@@ -91,6 +98,84 @@ for two fetches. Additive: does not change `fetch_text`'s own signature or behav
 
 **Returns:** `(text, published_at)`. A PDF response always has `published_at=None` — PDF structure
 has no HTML meta/JSON-LD for this module's regexes to reach.
+
+### `is_public_https(url) -> bool`
+
+The SSRF guard `fetch_text`/`fetch_text_and_date` apply before every request: `https` scheme only,
+and the hostname must not resolve to a private, loopback, link-local, or reserved IP address.
+Public (not module-private) specifically so `agentteams.research.browser` can reuse this exact
+check as its own pre-navigation gate — the one deliberate cross-submodule import of a
+security-relevant helper in this package. A browser context needs a **second**, per-request
+version of this same check in addition (see `browser` below) — this function alone is necessary
+but not sufficient there, since it only ever runs once, before the first request.
+
+---
+
+## `browser` — real-browser rendering for JavaScript-heavy pages
+
+> *Source: `agentteams/research/browser.py`* — requires the separate `agentteams[browser]` extra
+> (`pip install agentteams[browser]`) **and** a one-time `playwright install chromium` (the extra
+> installs the `playwright` Python package only; browser binaries are a required second step it
+> cannot perform). Not imported by `agentteams.research`'s own `__init__.py` — see the note at the
+> top of this page.
+
+Use this only once `fetch_text` has been tried and found insufficient — i.e. the page needs
+JavaScript to populate its real content (a client-rendered app, a "loading..." skeleton, content a
+framework injects after the initial HTML). Slower and heavier than a plain fetch by design; it is
+the escalation tier, not the default.
+
+### `browser_fetch(url, *, headed=False, wait_until="networkidle", timeout_s=20.0, max_chars=4000) -> str`
+
+Render `url` in a real Chromium browser and return extracted, bounded text — same tag-strip/
+unescape/whitespace-collapse text shape as `fetch_text`, so the two are consistent regardless of
+which one a caller used.
+
+**Args:**
+
+- `headed` (`bool`) — Show the browser window. Default `False` (headless): this is normally a
+  one-shot call from an agent's shell tool on a server/container/CI runner with no display
+  attached, where a headed launch would simply fail. `headed=True` is for a human operator
+  co-located with a real display who wants to watch (debugging, demos, a manual login/2FA step) —
+  it changes nothing about the function's return value; the calling agent has no way to perceive a
+  rendered window either way.
+- `wait_until` (`str`) — One of Playwright's navigation wait conditions: `"load"`,
+  `"domcontentloaded"`, `"networkidle"`. Default `"networkidle"` — a better fit than `"load"` for
+  the JS-hydration-heavy pages this function exists for, which often fire `load` before
+  client-side rendering has populated real content. Known tradeoff: `"networkidle"` never fires on
+  a page with continuous background activity (long-polling, websockets); pass `"load"` or
+  `"domcontentloaded"` for those.
+- `timeout_s` (`float`) — Navigation timeout. Default `20.0`.
+- `max_chars` (`int`) — Cap on the returned extracted text. Default `4000`.
+
+**Returns:** `str` — Extracted text. Empty string on any failure: `playwright` not installed,
+browser binaries not installed, the initial URL failing the SSRF guard, navigation timeout, or any
+other Playwright-raised error. Never raises.
+
+### `browser_screenshot(url, output_path, *, headed=False, wait_until="networkidle", timeout_s=20.0) -> bool`
+
+Render `url` and save a full-page screenshot to `output_path`. Same args and never-raises contract
+as `browser_fetch`; returns `True` on success, `False` on any failure.
+
+**Behavior Notes:**
+
+- **SSRF guard, two layers — not one.** The initial URL is checked with `is_public_https` before a
+  browser is even launched, **and** every subsequent request the live page attempts (redirects,
+  subresources, page-initiated JS `fetch`/`XHR`) is re-checked by the same guard via a Playwright
+  `page.route` handler. A single pre-navigation check alone is insufficient for a real browser,
+  which follows redirects by default and runs arbitrary page JavaScript capable of issuing its own
+  requests to other hosts — a pre-navigation-only check (as a plain HTTP fetch tool correctly
+  uses) does not cover either case.
+- **Named, undefended residual: DNS rebinding.** This guard's DNS resolution and Chromium's own
+  subsequent connection are two separate resolutions, not atomically the same one — stated
+  honestly as a known gap, not silently assumed away.
+- Content is capped at 2,000,000 characters immediately after `page.content()` retrieval, before
+  any text extraction — a cap applied *after* the DOM is materialized, not a true streaming cap
+  like `fetch_text`'s (Playwright's `page.content()` is synchronous and always returns the full
+  rendered DOM; there is no earlier point to interrupt at).
+- Before installing or first using this capability in a project, see
+  [`references/skill-generation.reference.md`](https://github.com/jlcatonjr/agentteams/blob/main/agentteams/templates/universal/skill-generation.reference.template.md)'s
+  Security Rule S-9 (Pathway Safety Verification) gate — the same review path any other new,
+  durable CLI capability in a generated team goes through.
 
 ---
 

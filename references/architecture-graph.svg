@@ -6,7 +6,7 @@
     </marker>
   </defs>
   <path d="M176,69 L232,69 C268,69 268,31 304,31 L324,31" fill="none" stroke="#8a8a8a" stroke-width="1.5" marker-start="url(#arrow)" marker-end="url(#arrow)"/>
-  <path d="M176,69 L232,69 C268,69 268,79 304,79 L312,79" fill="none" stroke="#8a8a8a" stroke-width="1.5" marker-end="url(#arrow)"/>
+  <path d="M176,69 L232,69 C268,69 268,79 304,79 L312,79" fill="none" stroke="#8a8a8a" stroke-width="1.5" marker-start="url(#arrow)" marker-end="url(#arrow)"/>
   <path d="M176,69 L232,69 C268,69 268,165 304,165 L480,165 C516,165 516,93 552,93" fill="none" stroke="#8a8a8a" stroke-width="1.5" marker-start="url(#arrow)" marker-end="url(#arrow)"/>
   <path d="M176,69 L232,69 C268,69 268,127 304,127" fill="none" stroke="#8a8a8a" stroke-width="1.5" marker-end="url(#arrow)"/>
   <path d="M460,31 L480,31 C516,31 516,93 552,93" fill="none" stroke="#8a8a8a" stroke-width="1.5" marker-end="url(#arrow)"/>

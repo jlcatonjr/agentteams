@@ -794,6 +794,41 @@ class TestGooseAdapter:
         assert "no recipe-level equivalent" in content
         assert "inert" in content
 
+    def test_capabilities_reference_states_agentteams_research_verify_first(self):
+        """tmp/by-week/2026-W30/web-browsing-playwright-cli.plan.md Design decision 8: must not
+        assert agentteams.research is installed for this team (goose.py's
+        _goose_capabilities_content takes no manifest parameter, so it genuinely cannot know) --
+        phrase as verify-first guidance, matching this same paragraph's existing MCP-search-server
+        sentence, never as a presence claim."""
+        extras = self.adapter.extra_output_files(GOOSE_MANIFEST)
+        content = dict(extras)["references/goose-capabilities-reference.md"]
+        assert "agentteams.research" in content
+        assert "If this project has its own optional `agentteams.research` module installed" in content
+        assert "python -m agentteams.research --help" in content
+
+    def test_capabilities_reference_separates_non_extension_capability_from_extension_list(self):
+        """Framework-adapters-expert audit finding: agentteams.research isn't a Goose extension
+        at all (not part of recipe_extensions) -- must not read as filed under the '## Other
+        builtin extensions (opt-in per agent, via recipe_extensions)' heading above it."""
+        extras = self.adapter.extra_output_files(GOOSE_MANIFEST)
+        content = dict(extras)["references/goose-capabilities-reference.md"]
+        assert "## Capability that isn't a Goose extension at all" in content
+        extensions_heading = content.index("## Other builtin extensions")
+        capability_heading = content.index("## Capability that isn't a Goose extension at all")
+        agentteams_research_mention = content.index("If this project has its own optional")
+        assert extensions_heading < capability_heading < agentteams_research_mention
+
+    def test_capabilities_reference_states_no_builtin_extension_renders_js(self):
+        extras = self.adapter.extra_output_files(GOOSE_MANIFEST)
+        content = dict(extras)["references/goose-capabilities-reference.md"]
+        assert "none of the\nbuiltin extensions execute JavaScript" in content
+        assert 'python -m agentteams.research browser "<url>"' in content
+
+    def test_capabilities_reference_points_at_skill_generation_worked_example(self):
+        extras = self.adapter.extra_output_files(GOOSE_MANIFEST)
+        content = dict(extras)["references/goose-capabilities-reference.md"]
+        assert 'worked example ("a page `fetch` can\'t' in content
+
     def test_goosehints_links_to_capabilities_reference(self):
         content = _goosehints_content("Acme Team")
         assert ".goose/recipes/references/goose-capabilities-reference.md" in content

@@ -44,7 +44,7 @@ LENGTH_ALLOWLIST: frozenset[str] = frozenset({
     # each (emit: fence/merge -> fences.py; analyze: _format_*/_default_* -> manifest_format.py);
     # deferred — proven to work but a larger blast radius.
 })
-BROAD_EXCEPT_BASELINE = 13      # except Exception/BaseException/bare. Narrowed over the sweep
+BROAD_EXCEPT_BASELINE = 14      # except Exception/BaseException/bare. Narrowed over the sweep
                                 # (Steps E + remaining-items I6: commands, render_pipeline, ingest,
                                 # mcp_emit). The remaining 11 are justified external/isolation/
                                 # never-block/cleanup-reraise boundaries, each annotated with a
@@ -60,6 +60,17 @@ BROAD_EXCEPT_BASELINE = 13      # except Exception/BaseException/bare. Narrowed 
                                 # exception site this package added was narrowed to named types
                                 # (httpx.HTTPError, ValueError, json.JSONDecodeError, etc.) instead
                                 # of raising this baseline further — see the CH-24 comments inline.
+                                # 13→14: agentteams/research/browser.py's _safe_render — the same
+                                # "adversarial external content via a third-party parser" boundary
+                                # as _extract_pdf_text above, one level heavier (a real browser
+                                # driving an arbitrary untrusted page: navigation timeouts, missing
+                                # browser binaries, protocol errors, page crashes — not enumerable
+                                # in advance). browser_fetch/browser_screenshot both route through
+                                # this ONE shared helper specifically so the module contributes a
+                                # single new broad catch, not two — a code-hygiene-audit-driven
+                                # consolidation (see tmp/by-week/2026-W30/
+                                # web-browsing-playwright-cli.plan.md, "Post-implementation audit
+                                # outcome" — where this exact consolidation is explained).
 SWALLOW_BASELINE = 34           # except clause whose body is only pass/continue (narrow catches =
                                 # known-recoverable external boundaries; the ratchet blocks new ones).
                                 # 30→31: architecture.py skips files that fail ast.parse (SyntaxError/

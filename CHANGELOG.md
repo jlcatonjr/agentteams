@@ -6,6 +6,33 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### added (Playwright-backed browser rendering, CLI-managed)
+
+- **New `agentteams.research.browser` module** (`agentteams/research/browser.py`) — closes the
+  gap left by `agentteams.research.fetch_text`/Goose's `computercontroller.web_scrape`, neither of
+  which executes JavaScript: `browser_fetch`/`browser_screenshot` render a page in real Chromium
+  via Playwright and return extracted text or a screenshot. Deliberately **CLI-managed, not
+  MCP-managed** (explicit operator preference) — invoked as `python -m agentteams.research browser
+  "<url>" [--headed] [--wait-until ...] [--screenshot PATH]`, gated behind a new, separate
+  `agentteams[browser]` optional extra (composes on top of `agentteams[research]`; not folded into
+  it, so text-only search users never pay for Playwright's browser-binary download) plus a
+  required one-time `playwright install chromium`.
+  - **Two-layer SSRF guard**: the initial URL is checked with the now-public
+    `agentteams.research.search.is_public_https` before a browser is even launched, *and* every
+    subsequent request the live page attempts (redirects, subresources, page-initiated JS
+    `fetch`/`XHR`) is re-checked by the same guard via a Playwright `page.route` handler — a
+    single pre-navigation check alone is insufficient for a real browser. DNS rebinding is a named,
+    undefended residual limitation, not silently assumed away.
+  - `headed=False` by default (a one-shot CLI call from an agent's shell tool usually has no
+    display attached); `--headed` is for a human operator co-located with a real display who wants
+    to watch — it changes nothing about what the function itself returns.
+  - `agentteams/frameworks/goose.py`'s `_goose_capabilities_content()` and
+    `agentteams/templates/universal/skill-generation.reference.template.md` (new "Worked example: a
+    page `fetch` can't render" section) both document the tiered escalation path (static
+    fetch → `agentteams.research.browser`, if installed → durable-infrastructure gap otherwise),
+    using verify-first phrasing rather than asserting the capability is present for any given team.
+  - Full design/audit trail: `tmp/by-week/2026-W30/web-browsing-playwright-cli.plan.md`.
+
 ### added (AI bad-habits catalog: BH-11 utility-call model inheritance)
 
 - **New catalog entry `BH-11`** (category: AI-specific correctness, cross-linked to `CH-23`):

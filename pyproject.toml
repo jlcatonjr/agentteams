@@ -47,6 +47,18 @@ research = [
     "httpx>=0.27",
     "pypdf>=4.0",
 ]
+# `agentteams.research.browser` (Playwright-backed rendering for JS-heavy pages `fetch_text` can't
+# reach) is a SEPARATE, heavier extra layered on top of `research` — not folded into it — so a
+# caller who only wants lightweight text search/fetch never pays for Playwright's browser-binary
+# download. This extra installs the `playwright` PACKAGE only; the browser binaries themselves are
+# a required second step the extra cannot perform: `playwright install chromium`. `browser.py` is
+# deliberately not imported by `agentteams/research/__init__.py`, so installing `research` alone
+# never touches this dependency either. See docs_src/api-reference/research.md and
+# tmp/by-week/2026-W30/web-browsing-playwright-cli.plan.md.
+browser = [
+    "agentteams[research]",
+    "playwright>=1.40",
+]
 
 [project.urls]
 Homepage = "https://github.com/jlcatonjr/agentteams"

@@ -29,6 +29,47 @@ found insufficient — it is not a mandatory detour for requests that are alread
    requirement), or adding a small script. Surface the option to build the capability — don't
    stop at reporting that it's unavailable.
 
+## Worked example: a page `fetch` can't render
+
+A concrete instance of the two-part response above, for a request that keeps recurring across
+frameworks: a task needs content from a page that only appears after JavaScript runs (a
+client-rendered app, a page behind a "loading..." skeleton, content injected by a framework like
+React/Vue after the initial HTML). A plain HTTP fetch — this team's own static text-fetch tool, or
+a bare `curl`/`wget` from a shell extension — returns the pre-render shell, not the real content.
+That is a genuine capability gap, not a reason to give up: work it in tiers, cheapest first, and
+verify each tier before assuming it or the next one is needed.
+
+1. **Tier 1 — static fetch/search, if this project already has it.** Check for an existing
+   text-search-and-fetch capability the same way `references/cli-tool-discovery.reference.md`
+   teaches for any CLI tool — don't assume presence or absence. If it works for this page, stop
+   here; it's the cheapest tier and most pages don't need more.
+2. **Tier 2 — real browser rendering, only once Tier 1 is confirmed insufficient.** The durable-
+   infrastructure answer here is **the pattern**, not one specific tool: a small, dependency-gated,
+   project-owned CLI wrapper around a browser-automation library (e.g. Playwright), invoked via
+   shell, that (a) renders the page with JavaScript enabled, (b) extracts text from the rendered
+   result, and (c) re-applies this project's own URL-safety check to **every** request the live
+   page attempts — not just the one URL a caller typed in, since a real browser follows redirects
+   and runs page JavaScript that can issue its own requests to other hosts. A single check of the
+   original URL alone does not cover that; if you build this for a project that already has an
+   HTTP-fetch safety guard, reuse it as the per-request check rather than writing a second, looser
+   one.
+   - **If this project is Python-based** (or the operator is willing to add a Python runtime for
+     this), `agentteams` ships a ready-made instance of exactly this pattern:
+     `agentteams.research.browser` (`python -m agentteams.research browser "<url>" [--headed]`),
+     gated behind the separate `agentteams[browser]` optional install
+     (`pip install agentteams[browser]` **and** a one-time `playwright install chromium`) so a
+     project that only wants lightweight text search never pays for it. `--headed` shows the
+     browser window — useful only when a human operator is watching the same machine locally
+     (debugging, a manual login/2FA step); it changes nothing about what the calling agent itself
+     receives back, which is the same extracted text either way.
+   - **If this project is not Python-based**, the pattern still applies: the equivalent in this
+     project's own ecosystem (e.g. a Node script around Playwright's own JS bindings) is the
+     durable-infrastructure answer, built and gated the same way — don't reach for a Python tool a
+     non-Python project has no reason to depend on.
+3. **Neither tier reaches it, or the browser tier isn't installed yet.** That absence is itself the
+   capability gap this protocol exists for — proceed to the "Output and ownership" plan mechanism
+   below, don't just report the page as unreachable.
+
 ## Security audit gate — before use or persistence, not after
 
 Before acting on either part of the two-part response above, check the pathway (the specific

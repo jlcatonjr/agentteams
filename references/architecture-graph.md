@@ -3,10 +3,10 @@
 
 > **Auto-generated.** Regenerated on every commit that touches the `agentteams` package. Do not edit manually — changes will be overwritten.
 
-- Modules mapped: **97**
+- Modules mapped: **99**
 - Packages: **6**
-- Internal import edges: **166**
-- Distinct external dependencies: **3**
+- Internal import edges: **172**
+- Distinct external dependencies: **4**
 
 ---
 
@@ -22,12 +22,12 @@ Inter-package import dependencies (module-level detail in the tables below).
 
 | Package | Modules | Depends on |
 | --- | --- | --- |
-| `agentteams` | 66 | `agentteams.cli`, `agentteams.enrich`, `agentteams.frameworks`, `agentteams.research` |
+| `agentteams` | 67 | `agentteams.cli`, `agentteams.enrich`, `agentteams.frameworks`, `agentteams.research` |
 | `agentteams.cli` | 11 | `agentteams`, `agentteams.frameworks` |
-| `agentteams.enrich` | 6 | — |
+| `agentteams.enrich` | 6 | `agentteams` |
 | `agentteams.eval_adapters` | 2 | — |
 | `agentteams.frameworks` | 7 | `agentteams` |
-| `agentteams.research` | 5 | — |
+| `agentteams.research` | 6 | — |
 
 ---
 
@@ -47,7 +47,7 @@ Every module, coloured by package (full adjacency in the table below).
 | `agentteams._utils` | — | `agentteams.analyze`, `agentteams.graph`, `agentteams.ingest` |
 | `agentteams.advisory` | — | — |
 | `agentteams.ai_bad_habits` | — | `agentteams.cli.generate` |
-| `agentteams.analyze` | `agentteams._utils`, `agentteams.manifest_format`, `agentteams.mcp_detect`, `agentteams.output_plan`, `agentteams.recipe_fields` | `agentteams.cli.generate`, `agentteams.output_plan` |
+| `agentteams.analyze` | `agentteams._utils`, `agentteams.manifest_format`, `agentteams.mcp_detect`, `agentteams.output_plan`, `agentteams.recipe_fields`, `agentteams.tool_metadata_catalog` | `agentteams.cli.generate`, `agentteams.output_plan` |
 | `agentteams.architecture` | `agentteams.svg_render` | `agentteams.git_hooks` |
 | `agentteams.atomicio` | — | `agentteams.backup`, `agentteams.cli.artifacts`, `agentteams.cli.schema_cache`, `agentteams.emit`, `agentteams.fence_inject`, `agentteams.fences`, `agentteams.hooks_emit`, `agentteams.mcp_emit`, `agentteams.schedule_emit` |
 | `agentteams.audit` | — | `agentteams.cli.generate` |
@@ -77,12 +77,12 @@ Every module, coloured by package (full adjacency in the table below).
 | `agentteams.drift` | `agentteams.emit` | `agentteams.cli.artifacts`, `agentteams.cli.commands`, `agentteams.cli.generate`, `agentteams.stale_detector` |
 | `agentteams.emit` | `agentteams.atomicio`, `agentteams.backup`, `agentteams.fence_inject`, `agentteams.fences` | `agentteams.cli.commands`, `agentteams.cli.generate`, `agentteams.cli.parser`, `agentteams.cli.render_pipeline`, `agentteams.drift`, `agentteams.fence_inject`, `agentteams.git_hooks` |
 | `agentteams.enrich` | `agentteams.enrich._audit`, `agentteams.enrich._enrich`, `agentteams.enrich._models`, `agentteams.enrich._tools` | `agentteams.cli.generate` |
-| `agentteams.enrich._audit` | `agentteams.enrich._fills`, `agentteams.enrich._models`, `agentteams.enrich._tools` | `agentteams.enrich` |
+| `agentteams.enrich._audit` | `agentteams.enrich._fills`, `agentteams.enrich._models`, `agentteams.enrich._tools`, `agentteams.tool_metadata_catalog` | `agentteams.enrich` |
 | `agentteams.enrich._enrich` | `agentteams.enrich._fills`, `agentteams.enrich._models`, `agentteams.enrich._notebooks`, `agentteams.enrich._tools` | `agentteams.enrich` |
 | `agentteams.enrich._fills` | — | `agentteams.enrich._audit`, `agentteams.enrich._enrich` |
 | `agentteams.enrich._models` | — | `agentteams.enrich`, `agentteams.enrich._audit`, `agentteams.enrich._enrich`, `agentteams.enrich._notebooks` |
-| `agentteams.enrich._notebooks` | `agentteams.enrich._models`, `agentteams.enrich._tools` | `agentteams.enrich._enrich` |
-| `agentteams.enrich._tools` | — | `agentteams.enrich`, `agentteams.enrich._audit`, `agentteams.enrich._enrich`, `agentteams.enrich._notebooks` |
+| `agentteams.enrich._notebooks` | `agentteams.enrich._models`, `agentteams.enrich._tools`, `agentteams.tool_metadata_catalog` | `agentteams.enrich._enrich` |
+| `agentteams.enrich._tools` | `agentteams.tool_metadata_catalog` | `agentteams.enrich`, `agentteams.enrich._audit`, `agentteams.enrich._enrich`, `agentteams.enrich._notebooks` |
 | `agentteams.errors` | — | `agentteams.cli.artifacts`, `agentteams.cli.generate`, `agentteams.git_hooks` |
 | `agentteams.eval_adapters` | — | — |
 | `agentteams.eval_adapters.inspect_ai` | — | — |
@@ -126,10 +126,11 @@ Every module, coloured by package (full adjacency in the table below).
 | `agentteams.remediate` | — | — |
 | `agentteams.render` | — | `agentteams.cli.generate`, `agentteams.cli.render_pipeline` |
 | `agentteams.research` | `agentteams.research.news`, `agentteams.research.reputable`, `agentteams.research.search`, `agentteams.research.verify` | — |
-| `agentteams.research.__main__` | `agentteams.research.search` | — |
+| `agentteams.research.__main__` | `agentteams.research.browser`, `agentteams.research.search` | — |
+| `agentteams.research.browser` | `agentteams.research.search` | `agentteams.research.__main__` |
 | `agentteams.research.news` | `agentteams.research.reputable` | `agentteams.research` |
 | `agentteams.research.reputable` | `agentteams.research.search` | `agentteams.research`, `agentteams.research.news` |
-| `agentteams.research.search` | — | `agentteams.research`, `agentteams.research.__main__`, `agentteams.research.reputable` |
+| `agentteams.research.search` | — | `agentteams.research`, `agentteams.research.__main__`, `agentteams.research.browser`, `agentteams.research.reputable` |
 | `agentteams.research.verify` | — | `agentteams.research` |
 | `agentteams.scan` | — | `agentteams.cli.generate` |
 | `agentteams.schedule_emit` | `agentteams.atomicio` | `agentteams.bridge` |
@@ -138,6 +139,7 @@ Every module, coloured by package (full adjacency in the table below).
 | `agentteams.stale_detector` | `agentteams.bridge`, `agentteams.drift`, `agentteams.fleet` | `agentteams.cli.commands`, `agentteams.stale_remediate` |
 | `agentteams.stale_remediate` | `agentteams.cli.commands`, `agentteams.fleet`, `agentteams.stale_detector` | `agentteams.cli.commands` |
 | `agentteams.svg_render` | — | `agentteams.architecture`, `agentteams.graph` |
+| `agentteams.tool_metadata_catalog` | — | `agentteams.analyze`, `agentteams.enrich._audit`, `agentteams.enrich._notebooks`, `agentteams.enrich._tools` |
 | `agentteams.vscode_tasks` | — | `agentteams.cli.render_pipeline` |
 | `agentteams.yaml_frontmatter` | — | `agentteams.frameworks.agents_md`, `agentteams.frameworks.base`, `agentteams.frameworks.claude`, `agentteams.frameworks.copilot_vscode`, `agentteams.frameworks.goose`, `agentteams.interop` |
 
@@ -147,7 +149,7 @@ Every module, coloured by package (full adjacency in the table below).
 
 Third-party (non-stdlib) top-level packages imported by the mapped package:
 
-`httpx`, `jsonschema`, `pypdf`
+`httpx`, `jsonschema`, `playwright`, `pypdf`
 
 **Repo-local (outside the mapped package):** `build_team`
 
@@ -180,6 +182,7 @@ flowchart LR
     agentteams --> agentteams_research
     agentteams_cli --> agentteams
     agentteams_cli --> agentteams_frameworks
+    agentteams_enrich --> agentteams
     agentteams_frameworks --> agentteams
 ```
 
@@ -200,6 +203,7 @@ digraph "agentteams architecture" {
     "agentteams" -> "agentteams.research";
     "agentteams.cli" -> "agentteams";
     "agentteams.cli" -> "agentteams.frameworks";
+    "agentteams.enrich" -> "agentteams";
     "agentteams.frameworks" -> "agentteams";
 }
 ```
@@ -255,7 +259,8 @@ digraph "agentteams architecture" {
         "agentteams.manifest_format",
         "agentteams.mcp_detect",
         "agentteams.output_plan",
-        "agentteams.recipe_fields"
+        "agentteams.recipe_fields",
+        "agentteams.tool_metadata_catalog"
       ],
       "external": [],
       "repo_local": []
@@ -626,7 +631,8 @@ digraph "agentteams architecture" {
       "imports_internal": [
         "agentteams.enrich._fills",
         "agentteams.enrich._models",
-        "agentteams.enrich._tools"
+        "agentteams.enrich._tools",
+        "agentteams.tool_metadata_catalog"
       ],
       "external": [],
       "repo_local": []
@@ -666,7 +672,8 @@ digraph "agentteams architecture" {
       "is_package": false,
       "imports_internal": [
         "agentteams.enrich._models",
-        "agentteams.enrich._tools"
+        "agentteams.enrich._tools",
+        "agentteams.tool_metadata_catalog"
       ],
       "external": [],
       "repo_local": []
@@ -675,7 +682,9 @@ digraph "agentteams architecture" {
       "package": "agentteams.enrich",
       "path": "agentteams/enrich/_tools.py",
       "is_package": false,
-      "imports_internal": [],
+      "imports_internal": [
+        "agentteams.tool_metadata_catalog"
+      ],
       "external": [],
       "repo_local": []
     },
@@ -1092,9 +1101,22 @@ digraph "agentteams architecture" {
       "path": "agentteams/research/__main__.py",
       "is_package": false,
       "imports_internal": [
+        "agentteams.research.browser",
         "agentteams.research.search"
       ],
       "external": [],
+      "repo_local": []
+    },
+    "agentteams.research.browser": {
+      "package": "agentteams.research",
+      "path": "agentteams/research/browser.py",
+      "is_package": false,
+      "imports_internal": [
+        "agentteams.research.search"
+      ],
+      "external": [
+        "playwright"
+      ],
       "repo_local": []
     },
     "agentteams.research.news": {
@@ -1208,6 +1230,14 @@ digraph "agentteams architecture" {
       "external": [],
       "repo_local": []
     },
+    "agentteams.tool_metadata_catalog": {
+      "package": "agentteams",
+      "path": "agentteams/tool_metadata_catalog.py",
+      "is_package": false,
+      "imports_internal": [],
+      "external": [],
+      "repo_local": []
+    },
     "agentteams.vscode_tasks": {
       "package": "agentteams",
       "path": "agentteams/vscode_tasks.py",
@@ -1251,6 +1281,10 @@ digraph "agentteams architecture" {
       "target": "agentteams.frameworks"
     },
     {
+      "source": "agentteams.enrich",
+      "target": "agentteams"
+    },
+    {
       "source": "agentteams.frameworks",
       "target": "agentteams"
     }
@@ -1275,6 +1309,10 @@ digraph "agentteams architecture" {
     {
       "source": "agentteams.analyze",
       "target": "agentteams.recipe_fields"
+    },
+    {
+      "source": "agentteams.analyze",
+      "target": "agentteams.tool_metadata_catalog"
     },
     {
       "source": "agentteams.architecture",
@@ -1697,6 +1735,10 @@ digraph "agentteams architecture" {
       "target": "agentteams.enrich._tools"
     },
     {
+      "source": "agentteams.enrich._audit",
+      "target": "agentteams.tool_metadata_catalog"
+    },
+    {
       "source": "agentteams.enrich._enrich",
       "target": "agentteams.enrich._fills"
     },
@@ -1719,6 +1761,14 @@ digraph "agentteams architecture" {
     {
       "source": "agentteams.enrich._notebooks",
       "target": "agentteams.enrich._tools"
+    },
+    {
+      "source": "agentteams.enrich._notebooks",
+      "target": "agentteams.tool_metadata_catalog"
+    },
+    {
+      "source": "agentteams.enrich._tools",
+      "target": "agentteams.tool_metadata_catalog"
     },
     {
       "source": "agentteams.fence_inject",
@@ -1874,6 +1924,14 @@ digraph "agentteams architecture" {
     },
     {
       "source": "agentteams.research.__main__",
+      "target": "agentteams.research.browser"
+    },
+    {
+      "source": "agentteams.research.__main__",
+      "target": "agentteams.research.search"
+    },
+    {
+      "source": "agentteams.research.browser",
       "target": "agentteams.research.search"
     },
     {
@@ -1924,6 +1982,7 @@ digraph "agentteams architecture" {
   "external_dependencies": [
     "httpx",
     "jsonschema",
+    "playwright",
     "pypdf"
   ],
   "repo_local_dependencies": [

@@ -152,6 +152,78 @@ def test_security_template_states_the_real_current_log_schema():
 
 
 # ---------------------------------------------------------------------------
+# references/skill-generation.reference.md — worked example: a page fetch can't render
+# (tmp/by-week/2026-W30/web-browsing-playwright-cli.plan.md)
+# ---------------------------------------------------------------------------
+
+def test_skill_generation_reference_has_browser_worked_example():
+    content = _skill_generation_reference()
+    assert "Worked example: a page `fetch` can't render" in content
+
+
+def test_skill_generation_browser_example_states_tiered_approach_not_a_single_tool():
+    content = _skill_generation_reference()
+    assert "Tier 1" in content
+    assert "Tier 2" in content
+
+
+def test_skill_generation_browser_example_states_pattern_before_python_specific_tool():
+    """First-draft-audit finding: this file is cross-framework AND cross-language, so it must not
+    presuppose every generated project has (or wants) a Python runtime -- state the general
+    pattern first, offer agentteams.research.browser as one concrete instance of it, not the only
+    path."""
+    content = _skill_generation_reference()
+    tier2 = content[content.index("Tier 2"):content.index("Neither tier reaches it")]
+    assert "pattern" in tier2.lower()
+    assert "If this project is Python-based" in tier2
+    assert "If this project is not Python-based" in tier2
+
+
+def test_skill_generation_browser_example_names_per_request_guard_not_just_url_check():
+    """Adversarial-audit-driven correction: a single check of the original URL is not sufficient
+    for a real browser (redirects + page-initiated JS requests) -- the doc must say so, not just
+    gesture at "safety"."""
+    content = _skill_generation_reference()
+    assert "re-applies this project's own URL-safety check to **every** request" in content
+    assert "not just the one URL a caller typed in" in content
+
+
+def test_skill_generation_browser_example_documents_headed_flag_semantics_honestly():
+    content = _skill_generation_reference()
+    assert "--headed" in content
+    assert "it changes nothing about what the calling agent itself" in content
+
+
+def test_skill_generation_browser_example_no_mcp_content():
+    """Explicit user correction mid-session: Playwright is managed via CLI, not MCP. Checks the
+    WHOLE worked-example section (not just the Tier 2 slice, per code-review's own narrower first
+    draft) -- the property being guarded is "no MCP leakage anywhere in this section", not just
+    within one subsection of it."""
+    content = _skill_generation_reference()
+    start = content.index("Worked example: a page `fetch` can't render")
+    end = content.index("## Security audit gate")
+    section = content[start:end]
+    assert "MCP" not in section
+    assert "mcp_servers" not in section
+    assert "goose:mcp" not in section
+
+
+def test_skill_generation_browser_example_pins_exact_install_pathway():
+    """A typo in the extra name or the browser-binary install step would silently mislead every
+    future reader of this generated doc -- pin the exact strings, not just "some install
+    guidance exists"."""
+    content = _skill_generation_reference()
+    assert "agentteams[browser]" in content
+    assert "playwright install chromium" in content
+
+
+def test_skill_generation_browser_example_routes_absence_back_to_the_plan_mechanism():
+    content = _skill_generation_reference()
+    assert "Neither tier reaches it, or the browser tier isn't installed yet" in content
+    assert "capability gap this protocol exists for" in content
+
+
+# ---------------------------------------------------------------------------
 # _plan_output_files — both new docs are unconditional (every framework), type: reference
 # ---------------------------------------------------------------------------
 
