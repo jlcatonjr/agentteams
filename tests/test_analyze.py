@@ -290,6 +290,188 @@ def test_research_analyst_template_documents_browser_escalation():
     assert "agentteams.research.verify" in body  # the untouched integration-only constraint
 
 
+def test_research_analyst_template_documents_external_retrieval_gate():
+    """tmp/by-week/2026-W30/external-retrieval-quality-gate.plan.md: the mandatory final-step
+    gate must actually render into the agent file, not just exist in the template source."""
+    desc = {
+        "project_goal": "Build a research-heavy conversational product.",
+        "capabilities": ["research_verification"],
+    }
+    manifest = build_manifest(desc, framework="copilot-vscode")
+    rendered = dict(render.render_all(manifest, templates_dir=_TEMPLATES_DIR))
+
+    assert "research-analyst.agent.md" in rendered
+    body = rendered["research-analyst.agent.md"]
+    assert "references/external-retrieval-quality-gate.reference.md" in body
+    assert "@adversarial" in body and "@conflict-auditor" in body
+    # The gate step must be a numbered Procedure step, not a stray mention.
+    assert "run the external-retrieval quality gate" in body.lower() or \
+        "external-retrieval quality gate" in body
+
+
+def test_tool_doc_researcher_template_documents_external_retrieval_gate():
+    """Same regression, for tool-doc-researcher.template.md."""
+    desc = {
+        "project_goal": "Build a project with a custom internal database.",
+        "tools": [{"name": "InternalDB", "category": "database"}],
+    }
+    manifest = build_manifest(desc, framework="copilot-vscode")
+    rendered = dict(render.render_all(manifest, templates_dir=_TEMPLATES_DIR))
+
+    assert "tool-doc-researcher.agent.md" in rendered
+    body = rendered["tool-doc-researcher.agent.md"]
+    assert "references/external-retrieval-quality-gate.reference.md" in body
+    assert "@adversarial" in body and "@conflict-auditor" in body
+    # The gate must come before the final @agent-updater hand-off instructions, not after.
+    gate_idx = body.index("external-retrieval-quality-gate.reference.md")
+    handoff_idx = body.index("with these instructions:")
+    assert gate_idx < handoff_idx
+
+
+def test_content_enricher_template_documents_external_retrieval_gate():
+    """Same regression, for content-enricher.template.md. content-enricher is emitted
+    unconditionally, so a minimal, feature-less description is enough to exercise it."""
+    desc = {"project_goal": "Build the simplest possible project."}
+    manifest = build_manifest(desc, framework="copilot-vscode")
+    rendered = dict(render.render_all(manifest, templates_dir=_TEMPLATES_DIR))
+
+    assert "content-enricher.agent.md" in rendered
+    body = rendered["content-enricher.agent.md"]
+    assert "references/external-retrieval-quality-gate.reference.md" in body
+    assert "@adversarial" in body and "@conflict-auditor" in body
+    # The gate must come before Step 5 (Validate), not after.
+    gate_idx = body.index("External-Retrieval Quality Gate")
+    step5_idx = body.index("### Step 5: Validate")
+    assert gate_idx < step5_idx
+
+
+# Legacy (pre-plan) fixtures for the merge-path tests below. Hand-authored, not derived from
+# the current render via regex-stripping (post-implementation Code Hygiene audit finding): a
+# v=2 bump, added nesting, or reflowed text near a fence boundary could make a strip-regex
+# silently mis-match against a *future* version of the real template, undermining the test's
+# premise without failing loudly. These mirror each template's real pre-plan shape (the
+# pre-existing memory_index_consultation fence, plus unfenced Procedure/hand-off prose) without
+# being a byte-for-byte copy of any specific historical commit.
+_RESEARCH_ANALYST_LEGACY = (
+    "---\nname: x\n---\n"
+    "<!-- AGENTTEAMS:BEGIN memory_index_consultation v=3 -->\n"
+    "## Memory-index consultation\n(pre-existing content, unchanged by this plan)\n"
+    "<!-- AGENTTEAMS:END memory_index_consultation -->\n"
+    "\n## Procedure\n\n"
+    "1. Identify the discrete, checkable claims.\n"
+    "2. Gather evidence.\n"
+    "3. Cross-check against prior findings.\n"
+    "4. Report findings per the honest-ceiling rules.\n"
+    "\n## Output Format\n\n"
+    "- Findings: numbered list.\n- Corrections: hedged, source-attributed.\n"
+    "- Unresolved items: listed explicitly.\n"
+)
+
+_TOOL_DOC_RESEARCHER_LEGACY = (
+    "---\nname: x\n---\n"
+    "<!-- AGENTTEAMS:BEGIN memory_index_consultation v=2 -->\n"
+    "## Memory-index consultation\n(pre-existing content, unchanged by this plan)\n"
+    "<!-- AGENTTEAMS:END memory_index_consultation -->\n"
+    "\n## Output Format\n\nFor each tool, produce a fenced block:\n\n"
+    "```\nTool: <tool-name> <version>\n```\n\n"
+    "After completing all tools in the list, hand off to `@agent-updater` with these "
+    "instructions:\n\n"
+    "1. Add `docs_url`, `api_surface`, and `common_patterns` to each matching tool entry.\n"
+    "2. Directly update the affected tool documents.\n"
+)
+
+
+def test_external_retrieval_quality_gate_reaches_already_generated_team(tmp_path):
+    """Regression test for the pre-implementation-audit-caught fencing gap: the gate content
+    in research-analyst.template.md is only useful if it actually propagates to a team that
+    was generated BEFORE this plan landed, via --update --merge. A fresh-render test (the
+    three tests above) cannot detect a fencing regression, since a fresh render always
+    contains 100% of a template's content whether fenced or not -- this test exercises the
+    real merge path (agentteams.emit.emit_all(..., merge=True), the same one --update --merge
+    uses) against the hand-authored legacy fixture above."""
+    from agentteams import emit
+
+    desc = {
+        "project_goal": "Build a research-heavy conversational product.",
+        "capabilities": ["research_verification"],
+    }
+    manifest = build_manifest(desc, framework="copilot-vscode")
+    rendered = dict(render.render_all(manifest, templates_dir=_TEMPLATES_DIR))
+    new_rendered = rendered["research-analyst.agent.md"]
+
+    out = tmp_path / "team"
+    out.mkdir()
+    (out / "research-analyst.agent.md").write_text(_RESEARCH_ANALYST_LEGACY, encoding="utf-8")
+
+    emit.emit_all(
+        [("research-analyst.agent.md", new_rendered)],
+        output_dir=out, merge=True, yes=True,
+    )
+    merged = (out / "research-analyst.agent.md").read_text(encoding="utf-8")
+    assert "AGENTTEAMS:BEGIN external_retrieval_quality_gate" in merged, (
+        "the gate section did not propagate via --update --merge to an already-generated team"
+    )
+    assert "@adversarial" in merged and "@conflict-auditor" in merged
+    # The old unfenced Procedure survives verbatim (expected, non-destructive merge behavior)
+    # alongside the new gate -- both must hold simultaneously for the merge to be sound.
+    assert "3. Cross-check against prior findings." in merged
+
+
+def test_external_retrieval_quality_gate_reaches_already_generated_tool_doc_researcher_team(
+    tmp_path,
+):
+    """Same regression as above, for tool-doc-researcher.template.md -- the file where the
+    Template Library post-implementation audit caught a real blocking bug (B1): the two
+    sentences connecting the gate to the `@agent-updater` hand-off were originally added as
+    NEW unfenced text, which --update --merge silently drops entirely for an already-generated
+    team (unfenced-*new* content never propagates; only unfenced-*old* content is preserved
+    verbatim). Only the fenced gate body itself reaches an existing team, appended wherever
+    fences.py's _merge_fenced_content places brand-new fence IDs -- always the end of the file
+    (fences.py:345-351, confirmed by direct reading), which is *after* this fixture's
+    pre-existing, unfenced "hand off ... with these instructions" text. There is no way, with
+    the current merge algorithm, to insert a new fence at a specific position relative to
+    unfenced content (a Pipeline Core capability gap, logged to the remediation log) -- so this
+    test cannot and does not assert physical pre-hand-off ordering. What it asserts instead is
+    the actual fix applied post-audit: the gate's own wording is self-contained and explicitly
+    correct regardless of where it physically lands relative to the hand-off instruction."""
+    from agentteams import emit
+
+    desc = {
+        "project_goal": "Build a project with a custom internal database.",
+        "tools": [{"name": "InternalDB", "category": "database"}],
+    }
+    manifest = build_manifest(desc, framework="copilot-vscode")
+    rendered = dict(render.render_all(manifest, templates_dir=_TEMPLATES_DIR))
+    new_rendered = rendered["tool-doc-researcher.agent.md"]
+
+    out = tmp_path / "team"
+    out.mkdir()
+    (out / "tool-doc-researcher.agent.md").write_text(
+        _TOOL_DOC_RESEARCHER_LEGACY, encoding="utf-8"
+    )
+
+    emit.emit_all(
+        [("tool-doc-researcher.agent.md", new_rendered)],
+        output_dir=out, merge=True, yes=True,
+    )
+    merged = (out / "tool-doc-researcher.agent.md").read_text(encoding="utf-8")
+    assert "AGENTTEAMS:BEGIN external_retrieval_quality_gate" in merged, (
+        "the gate section did not propagate via --update --merge to an already-generated team"
+    )
+    # The pre-existing unfenced hand-off instruction survives verbatim (expected merge
+    # behavior, and precisely why the fix below must not depend on physical position).
+    assert "hand off to `@agent-updater` with these instructions:" in merged
+    # Whitespace-normalized: the real template wraps this sentence across source lines, and a
+    # raw substring check would be brittle against that wrap (same trap already hit once this
+    # session -- fixed the same way there).
+    merged_norm = " ".join(merged.split())
+    assert "do not send it while any finding is still open" in merged_norm
+    assert (
+        "regardless of where in this document that hand-off instruction appears "
+        "relative to this gate" in merged_norm
+    )
+
+
 def test_build_manifest_includes_builder_agent():
     desc = {"project_goal": "Test project"}
     for fw in ("copilot-vscode", "copilot-cli", "claude"):

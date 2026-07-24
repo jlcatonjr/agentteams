@@ -3,6 +3,7 @@ name: Tool Documentation Researcher — WebAppBackend
 description: "Locates and verifies official documentation, API surfaces, and usage patterns for tools in WebAppBackend that are missing metadata"
 user-invokable: false
 tools: ['read', 'search']
+agents: ['adversarial', 'conflict-auditor']
 model: ["Claude Sonnet 4.6 (copilot)"]
 handoffs:
   - label: Update Brief and Generated Docs
@@ -14,6 +15,14 @@ handoffs:
     prompt: "Tool documentation research complete."
     send: false
 ---
+
+<!--
+SECTION MANIFEST — tool-doc-researcher.template.md
+| section_id                     | designation | notes                             |
+|---------------------------------|-------------|-------------------------------------|
+| memory_index_consultation        | FENCED      | Index-query strategy/thresholds    |
+| external_retrieval_quality_gate  | FENCED      | Mandatory pre-hand-off audit gate  |
+-->
 
 # Tool Documentation Researcher — WebAppBackend
 
@@ -149,7 +158,24 @@ common_patterns: |
   ...
 ```
 
-After completing all tools in the list, hand off to `@agent-updater` with these instructions:
+After completing all tools in the list, run the mandatory external-retrieval quality gate below
+before handing off to `@agent-updater`.
+
+<!-- AGENTTEAMS:BEGIN external_retrieval_quality_gate v=1 -->
+**Mandatory gate on the hand-off to `@agent-updater` in this file (whether that instruction
+appears above or below this note) — do not send it while any finding is still open.** Every
+`docs_url`/`api_surface`/`common_patterns` value produced by this agent rests on documentation
+looked up externally. Before `@agent-updater` receives them, hand the complete set off to
+`@adversarial` and `@conflict-auditor` per
+`references/external-retrieval-quality-gate.reference.md`. Revise (re-check the source, correct
+the tier citation, or drop the value as unresolved) and re-run the gate until it passes, or
+escalate a specific persistently-failing value per that reference's escalation valve — never let
+the hand-off to `@agent-updater` carry an unaudited value, regardless of where in this document
+that hand-off instruction appears relative to this gate.
+<!-- AGENTTEAMS:END external_retrieval_quality_gate -->
+
+Once the gate above has passed (or a specific value has been explicitly escalated instead), hand
+off to `@agent-updater` with these instructions:
 
 1. Add `docs_url`, `api_surface`, and `common_patterns` to each matching tool entry in the project brief so that future pipeline reruns auto-populate these fields.
 2. Directly update the affected tool documents — reference files in `references/` and Claude skills in `.claude/skills/` — so the current generation is complete without requiring a full rerender.

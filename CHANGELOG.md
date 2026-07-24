@@ -6,6 +6,27 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### added (mandatory external-retrieval quality gate)
+
+- **New shared reference doc** (`references/external-retrieval-quality-gate.reference.md`,
+  emitted unconditionally for every team) defining a mandatory final-step audit gate for any
+  summary built from externally-retrieved information: hand the draft off to `@adversarial` and
+  `@conflict-auditor`, revise and re-audit any claim with a finding until it passes, and escalate
+  (rather than loop forever) a claim — tracked by its stable underlying assertion, not by its
+  citation URL — that still fails after 3 consecutive cycles.
+- **Wired into the three agents that retrieve external information**:
+  `research-analyst.template.md` (new Procedure step, before presenting findings),
+  `tool-doc-researcher.template.md` (before the `@agent-updater` hand-off — don't persist an
+  unaudited `docs_url`/`api_surface`/`common_patterns` value), and `content-enricher.template.md`
+  (before Step 5 Validate, scoped to the externally-looked-up tool-documentation fields only).
+- The new content in `research-analyst.template.md`/`tool-doc-researcher.template.md` is wrapped
+  in its own explicit fence (`external_retrieval_quality_gate`) so it actually propagates to an
+  already-generated team via `--update --merge`, not just a fresh render — both templates already
+  had a `memory_index_consultation` fence, which (per this project's own fencing convention)
+  suppresses the automatic whole-body default fence for the rest of the file. Verified with a new
+  test exercising the real merge path, not just a fresh render.
+  - Full design/audit trail: `tmp/by-week/2026-W30/external-retrieval-quality-gate.plan.md`.
+
 ### fixed (unified tool-metadata catalog: unconditional resolution + npm registry tier)
 
 - **Consolidated three drifted-apart static tool-metadata catalogs** (`analyze.py`'s

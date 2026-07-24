@@ -1,10 +1,10 @@
 {
   "artifact_type": "delivery-receipt",
   "receipt_schema_version": "1.0",
-  "delivered_at": "2026-07-24T02:55:24Z",
+  "delivered_at": "2026-07-24T12:26:55Z",
   "project_name": "AgentTeamsModule",
   "framework": "claude",
-  "manifest_fingerprint": "93ebf6e45eb1a49b",
+  "manifest_fingerprint": "0c32a1b5ba2a5db8",
   "fingerprint_algo_version": 1,
   "output_dir": ".claude/agents",
   "agentteams_version": "1.0.0rc6"

@@ -66,15 +66,15 @@ The handoff-only control-flow backbone (agents-list edges omitted):
 
 | Agent | Receives from | Hands off to |
 | --- | --- | --- |
-| `adversarial` | `agent-updater`, `crisis-credit-allocation-expert`, `fed-response-dag-expert`, `orchestrator`, `prairie-prosperity-expert`, `sugarscape-expert`, `visualize-energy-data-expert`, `work-summarizer` | `conflict-auditor`, `orchestrator` |
+| `adversarial` | `agent-updater`, `content-enricher`, `crisis-credit-allocation-expert`, `fed-response-dag-expert`, `orchestrator`, `prairie-prosperity-expert`, `sugarscape-expert`, `visualize-energy-data-expert`, `work-summarizer` | `conflict-auditor`, `orchestrator` |
 | `agent-refactor` | `agent-updater`, `code-hygiene`, `orchestrator` | `conflict-auditor`, `orchestrator` |
 | `agent-updater` | `conflict-auditor`, `conflict-resolution`, `git-operations`, `orchestrator` | `adversarial`, `agent-refactor`, `conflict-auditor`, `orchestrator` |
 | `cleanup` | `code-hygiene`, `orchestrator` | `orchestrator` |
 | `code-hygiene` | `orchestrator` | `agent-refactor`, `cleanup`, `conflict-auditor`, `orchestrator`, `security` |
 | `cohesion-repairer` | `orchestrator`, `primary-producer`, `quality-auditor` | `orchestrator`, `quality-auditor` |
-| `conflict-auditor` | `adversarial`, `agent-refactor`, `agent-updater`, `code-hygiene`, `orchestrator`, `primary-producer`, `reference-manager`, `repo-liaison`, `technical-validator`, `work-summarizer` | `agent-updater`, `conflict-resolution`, `orchestrator`, `technical-validator` |
+| `conflict-auditor` | `adversarial`, `agent-refactor`, `agent-updater`, `code-hygiene`, `content-enricher`, `orchestrator`, `primary-producer`, `reference-manager`, `repo-liaison`, `technical-validator`, `work-summarizer` | `agent-updater`, `conflict-resolution`, `orchestrator`, `technical-validator` |
 | `conflict-resolution` | `conflict-auditor`, `git-operations`, `orchestrator` | `agent-updater`, `orchestrator` |
-| `content-enricher` | — | `orchestrator`, `primary-producer`, `technical-validator` |
+| `content-enricher` | — | `adversarial`, `conflict-auditor`, `orchestrator`, `primary-producer`, `technical-validator` |
 | `crisis-credit-allocation-expert` | `orchestrator` | `adversarial`, `orchestrator`, `primary-producer`, `reference-manager` |
 | `fed-response-dag-expert` | `orchestrator` | `adversarial`, `orchestrator`, `primary-producer`, `reference-manager` |
 | `format-converter` | `orchestrator`, `output-compiler`, `visual-designer` | `orchestrator`, `output-compiler`, `quality-auditor` |
@@ -197,6 +197,8 @@ flowchart LR
     conflict_resolution -->|"Return to Orchestrator"| orchestrator
     content_enricher -->|"Return to Orchestrator"| orchestrator
     content_enricher -->|"Validate Enriched Content"| technical_validator
+    content_enricher -.-> adversarial
+    content_enricher -.-> conflict_auditor
     content_enricher -.-> primary_producer
     content_enricher -.-> technical_validator
     crisis_credit_allocation_expert -->|"Vet Brief Before Drafting"| adversarial
@@ -391,6 +393,8 @@ digraph "ProjectRepositories Agent Team" {
     "conflict-resolution" -> "orchestrator" [style=solid, label="Return to Orchestrator"];
     "content-enricher" -> "orchestrator" [style=solid, label="Return to Orchestrator"];
     "content-enricher" -> "technical-validator" [style=solid, label="Validate Enriched Content"];
+    "content-enricher" -> "adversarial" [style=dashed];
+    "content-enricher" -> "conflict-auditor" [style=dashed];
     "content-enricher" -> "primary-producer" [style=dashed];
     "crisis-credit-allocation-expert" -> "adversarial" [style=solid, label="Vet Brief Before Drafting"];
     "crisis-credit-allocation-expert" -> "orchestrator" [style=solid, label="Return to Orchestrator"];
@@ -962,6 +966,18 @@ digraph "ProjectRepositories Agent Team" {
       "target": "technical-validator",
       "edge_type": "handoff",
       "label": "Validate Enriched Content"
+    },
+    {
+      "source": "content-enricher",
+      "target": "adversarial",
+      "edge_type": "agents-list",
+      "label": null
+    },
+    {
+      "source": "content-enricher",
+      "target": "conflict-auditor",
+      "edge_type": "agents-list",
+      "label": null
     },
     {
       "source": "content-enricher",
@@ -1814,6 +1830,8 @@ digraph "ProjectRepositories Agent Team" {
       "orchestrator"
     ],
     "content-enricher": [
+      "adversarial",
+      "conflict-auditor",
       "orchestrator",
       "primary-producer",
       "technical-validator"

@@ -60,10 +60,11 @@
     "universal/retrospective-remediation.reference.template.md": "b1802f5e1ab294ad",
     "universal/cli-tool-discovery.reference.template.md": "203004e771c8b2fd",
     "universal/skill-generation.reference.template.md": "47bcf76ed8f69a80",
+    "universal/external-retrieval-quality-gate.reference.template.md": "961ec24da248b289",
     "workstream-expert.template.md": "13161f3a3cdf1789",
     "copilot-instructions.template.md": "9c56d724f06a9549",
     "builder/team-builder-claude.template.md": "1fa8401d6258d9b7",
-    "domain/content-enricher.template.md": "d7e6e4a50dcef1c7"
+    "domain/content-enricher.template.md": "8176cebe85aace8f"
   },
   "output_files_map": [
     {
@@ -303,6 +304,12 @@
       "component_slug": null
     },
     {
+      "path": "references/external-retrieval-quality-gate.reference.md",
+      "template": "universal/external-retrieval-quality-gate.reference.template.md",
+      "type": "reference",
+      "component_slug": null
+    },
+    {
       "path": "template-library-expert.agent.md",
       "template": "workstream-expert.template.md",
       "type": "agent",
@@ -421,13 +428,13 @@
     "repo-liaison",
     "git-operations"
   ],
-  "manifest_fingerprint": "93ebf6e45eb1a49b",
+  "manifest_fingerprint": "0c32a1b5ba2a5db8",
   "fingerprint_algo_version": 1,
   "file_hashes": {
-    "references/security-vulnerability-watch.json": "4e992c084e2bc603",
-    "references/framework-watch.reference.md": "19bf6d14b493820e",
-    "security.md": "3a0c36ec72e4465b",
-    "references/security-vulnerability-watch.reference.md": "ba334763a33ddcb0",
+    "references/security-vulnerability-watch.reference.md": "96f5337bff46246e",
+    "references/security-vulnerability-watch.json": "5f9806c6d1d4a8a6",
+    "references/external-retrieval-quality-gate.reference.md": "112a41c9ebc3e610",
+    "security.md": "52aeb72ec8e6ce68",
     "../CLAUDE.md": "6fabbc3ec0171e5b",
     "references/runtime-handoffs.json": "852bced5092daaf5",
     "orchestrator.md": "f13e7cbcaa9975db",
@@ -467,7 +474,7 @@
     "test-suite-expert.md": "6e18aac98b40f7e3",
     "team-builder.md": "68b87c7c0aab94aa",
     "SETUP-REQUIRED.md": "199d0999a19a68e6",
-    "content-enricher.md": "13794e2acd4750ee",
+    "content-enricher.md": "36ccd280104edda6",
     "references/pipeline-graph.md": "21579e6e275596ff"
   }
 }

@@ -131,3 +131,37 @@ The following content categories must **never** be placed inside fence markers:
 - The section manifest comment block itself
 - The file's primary `#` heading
 - Content that is entirely user-authored from first generation (e.g., `## Constitutional Rules` in `copilot-instructions.md`)
+
+---
+
+## Authoring Consequences
+
+Two operational corollaries of the rules above, easy to miss when actually editing a template —
+both surfaced concretely by `tmp/by-week/2026-W30/external-retrieval-quality-gate.plan.md`:
+
+1. **A front-matter change (`agents:`, `tools:`, `model:`, `handoffs:`, etc.) to an existing
+   template never reaches an already-generated team via `--update --merge`, full stop.** Front
+   matter is excluded from fencing by rule (above), and Merge Semantics rule 5 preserves
+   everything outside a fence unconditionally — the two rules jointly mean there is no merge path
+   for front matter at all, ever. After any `--update --merge` regen driven by a template edit
+   that touched front matter, manually verify (and fix if needed) the front matter of every
+   already-generated file this repo self-hosts or ships as an example snapshot; don't assume the
+   regen applied it just because the body content merged correctly. (Concrete instance: the plan
+   above shipped a `content-enricher.template.md` front-matter change that merged correctly into
+   `.claude/agents/content-enricher.md`'s body but left `.github/agents/content-enricher.agent.md`'s
+   `agents:` line stale — caught only by a close-out audit that happened to check front matter
+   specifically.)
+2. **A brand-new fenced section always lands at the end of the merged file, never at its position
+   in the fresh render.** Merge Semantics rule 3's "append the new block at the end of the file"
+   applies regardless of where the new `section_id` appears in the template source — a new fence
+   inserted mid-procedure in the template will still land at the end of an already-generated
+   team's file on its first merge. Any new fenced content whose correctness depends on being read
+   before or after specific surrounding text must be written to be self-contained and correct
+   regardless of physical position — not reliant on document order. (Concrete instance: the plan
+   above's first draft wrote a gate step that assumed it would land *before* an existing hand-off
+   instruction; on merge into an already-generated team it landed *after* instead, producing a
+   direct contradiction — fixed by rewording the fenced content to be position-independent, not by
+   controlling where it lands.)
+
+Neither of these is a gap in this document's own accuracy — both rules were already stated above,
+just not carried through to their authoring consequence until a real plan hit both.

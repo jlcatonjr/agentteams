@@ -232,6 +232,18 @@ def _plan_output_files(
         "component_slug": None,
     })
 
+    # External-retrieval quality gate (always — content-enricher.agent.md is emitted
+    # unconditionally for every team further below, and its own procedure links here;
+    # research-analyst/tool-doc-researcher link here too when either is selected). The
+    # mandatory adversarial + conflict-auditor pass on any summary built from
+    # externally-retrieved information.
+    files.append({
+        "path": "references/external-retrieval-quality-gate.reference.md",
+        "template": f"{agents_dir}external-retrieval-quality-gate.reference.template.md",
+        "type": "reference",
+        "component_slug": None,
+    })
+
     if "retrieval-integrator" in archetypes:
         files.append({
             "path": "references/retrieval-integration.reference.md",

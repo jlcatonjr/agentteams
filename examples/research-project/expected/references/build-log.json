@@ -18,12 +18,14 @@
     "ch01-introduction",
     "ch02-literature"
   ],
-  "files_written": [],
+  "files_written": [
+    "research-project/expected/tool-doc-researcher.agent.md"
+  ],
   "manual_required": 8,
   "template_hashes": {
-    "universal/orchestrator.template.md": "6ca6e34637d07cf7",
+    "universal/orchestrator.template.md": "d97901a295889110",
     "universal/navigator.template.md": "003a30ed545c0523",
-    "universal/security.template.md": "8e4256bcb84ee04e",
+    "universal/security.template.md": "84df1e9387585ac4",
     "universal/code-hygiene.template.md": "5212068c8a00a608",
     "universal/adversarial.template.md": "ea4659f376567351",
     "universal/conflict-auditor.template.md": "a8e9e710ea50cfb2",
@@ -42,7 +44,7 @@
     "domain/format-converter.template.md": "ecf8c801f1d66dab",
     "domain/reference-manager.template.md": "f7538df16abbbba8",
     "domain/output-compiler.template.md": "fd90f3a13765386a",
-    "domain/tool-doc-researcher.template.md": "a3d89da37c6f521e",
+    "domain/tool-doc-researcher.template.md": "d1584758642c5303",
     "domain/tool-cli.doc.template.md": "c5a4440c4ad425a7",
     "domain/tool-reference.template.md": "5ce5638b7094cc86",
     "domain/code-hygiene-rules-reference.template.md": "64dd0cd05107784f",
@@ -61,10 +63,13 @@
     "universal/work-summary-backfill.reference.template.md": "5730bac043dc2874",
     "universal/parallelization.reference.template.md": "2c872341050a7781",
     "universal/retrospective-remediation.reference.template.md": "b1802f5e1ab294ad",
+    "universal/cli-tool-discovery.reference.template.md": "203004e771c8b2fd",
+    "universal/skill-generation.reference.template.md": "47bcf76ed8f69a80",
+    "universal/external-retrieval-quality-gate.reference.template.md": "961ec24da248b289",
     "workstream-expert.template.md": "13161f3a3cdf1789",
     "copilot-instructions.template.md": "9c56d724f06a9549",
     "builder/team-builder-copilot-vscode.template.md": "5708c3fd29801a3d",
-    "domain/content-enricher.template.md": "d7e6e4a50dcef1c7"
+    "domain/content-enricher.template.md": "8176cebe85aace8f"
   },
   "output_files_map": [
     {
@@ -311,6 +316,24 @@
       "component_slug": null
     },
     {
+      "path": "references/cli-tool-discovery.reference.md",
+      "template": "universal/cli-tool-discovery.reference.template.md",
+      "type": "reference",
+      "component_slug": null
+    },
+    {
+      "path": "references/skill-generation.reference.md",
+      "template": "universal/skill-generation.reference.template.md",
+      "type": "reference",
+      "component_slug": null
+    },
+    {
+      "path": "references/external-retrieval-quality-gate.reference.md",
+      "template": "universal/external-retrieval-quality-gate.reference.template.md",
+      "type": "reference",
+      "component_slug": null
+    },
+    {
       "path": "ch01-introduction-expert.agent.md",
       "template": "workstream-expert.template.md",
       "type": "agent",
@@ -404,15 +427,14 @@
     "repo-liaison",
     "git-operations"
   ],
-  "manifest_fingerprint": "23724f58b450ae74",
+  "manifest_fingerprint": "cbaad1a0a02d7036",
   "fingerprint_algo_version": 1,
   "file_hashes": {
-    "security.agent.md": "a477ff778ee157ba",
-    "references/security-vulnerability-watch.reference.md": "6943dd1767bada77",
-    "references/security-vulnerability-watch.json": "aaae91b9604425f9",
-    "references/ai-bad-habits-watch.reference.md": "d021ce2965464c15",
-    "references/framework-watch.reference.md": "20145464a820bd54",
-    "orchestrator.agent.md": "875b16efb5fe8c7a",
+    "tool-doc-researcher.agent.md": "170dbaf1db7ba469",
+    "references/security-vulnerability-watch.json": "8a8801cca16b81c7",
+    "security.agent.md": "395dc8d92810a098",
+    "references/security-vulnerability-watch.reference.md": "8f5e1f59628ebdfe",
+    "orchestrator.agent.md": "6b77c5d0097845be",
     "navigator.agent.md": "be14519cdac5bdd5",
     "code-hygiene.agent.md": "3c54d027a231a50a",
     "adversarial.agent.md": "c662732b64c4cc74",
@@ -432,20 +454,23 @@
     "format-converter.agent.md": "fcd300e7119c9efe",
     "reference-manager.agent.md": "8d862ed02a9bcb97",
     "output-compiler.agent.md": "c9623d7100e0dc3d",
-    "tool-doc-researcher.agent.md": "244ea251a9418166",
     "references/ref-bibtex-reference.md": "0368d11909e0c907",
     "references/code-hygiene-rules.reference.md": "7e50babb25038985",
+    "references/framework-watch.reference.md": "9dc7c3a4a0df0460",
     "references/github-workflows-merge.reference.md": "376e08186dfa558a",
     "references/work-summary-spec.reference.md": "96232231a1f7c6be",
     "references/work-summary-tooling.reference.md": "f3656972717153a9",
     "references/work-summary-backfill.reference.md": "b62bbfcd19e6c715",
     "references/parallelization.reference.md": "d2321bf5ac1ed2f8",
     "references/retrospective-remediation.reference.md": "0e469ec98792810b",
+    "references/cli-tool-discovery.reference.md": "350e8b87d42500d4",
+    "references/skill-generation.reference.md": "6d677eb4bd0404ac",
+    "references/external-retrieval-quality-gate.reference.md": "95731ccd6e3450a2",
     "ch01-introduction-expert.agent.md": "e14dcbaa3a6472cf",
     "ch02-literature-expert.agent.md": "3580a27bf97c382b",
     "team-builder.agent.md": "c66118c1daf94720",
     "SETUP-REQUIRED.md": "a391503cc18a8e5d",
-    "content-enricher.agent.md": "2555da468e292c70",
-    "references/pipeline-graph.md": "8a40a67385e52720"
+    "content-enricher.agent.md": "e42b67ee332622f5",
+    "references/pipeline-graph.md": "091fbe57367d19c1"
   }
 }

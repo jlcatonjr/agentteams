@@ -20,16 +20,12 @@
     "sugarscape",
     "visualize-energy-data"
   ],
-  "files_written": [
-    "project-repositories/expected/security.agent.md",
-    "project-repositories/expected/references/security-vulnerability-watch.reference.md",
-    "project-repositories/expected/references/security-vulnerability-watch.json"
-  ],
+  "files_written": [],
   "manual_required": 2,
   "template_hashes": {
-    "universal/orchestrator.template.md": "6ca6e34637d07cf7",
+    "universal/orchestrator.template.md": "d97901a295889110",
     "universal/navigator.template.md": "003a30ed545c0523",
-    "universal/security.template.md": "8e4256bcb84ee04e",
+    "universal/security.template.md": "84df1e9387585ac4",
     "universal/code-hygiene.template.md": "5212068c8a00a608",
     "universal/adversarial.template.md": "ea4659f376567351",
     "universal/conflict-auditor.template.md": "a8e9e710ea50cfb2",
@@ -66,10 +62,13 @@
     "universal/work-summary-backfill.reference.template.md": "5730bac043dc2874",
     "universal/parallelization.reference.template.md": "2c872341050a7781",
     "universal/retrospective-remediation.reference.template.md": "b1802f5e1ab294ad",
+    "universal/cli-tool-discovery.reference.template.md": "203004e771c8b2fd",
+    "universal/skill-generation.reference.template.md": "47bcf76ed8f69a80",
+    "universal/external-retrieval-quality-gate.reference.template.md": "961ec24da248b289",
     "workstream-expert.template.md": "13161f3a3cdf1789",
     "copilot-instructions.template.md": "9c56d724f06a9549",
     "builder/team-builder-copilot-vscode.template.md": "5708c3fd29801a3d",
-    "domain/content-enricher.template.md": "d7e6e4a50dcef1c7"
+    "domain/content-enricher.template.md": "8176cebe85aace8f"
   },
   "output_files_map": [
     {
@@ -352,6 +351,24 @@
       "component_slug": null
     },
     {
+      "path": "references/cli-tool-discovery.reference.md",
+      "template": "universal/cli-tool-discovery.reference.template.md",
+      "type": "reference",
+      "component_slug": null
+    },
+    {
+      "path": "references/skill-generation.reference.md",
+      "template": "universal/skill-generation.reference.template.md",
+      "type": "reference",
+      "component_slug": null
+    },
+    {
+      "path": "references/external-retrieval-quality-gate.reference.md",
+      "template": "universal/external-retrieval-quality-gate.reference.template.md",
+      "type": "reference",
+      "component_slug": null
+    },
+    {
       "path": "crisis-credit-allocation-expert.agent.md",
       "template": "workstream-expert.template.md",
       "type": "agent",
@@ -465,13 +482,14 @@
     "repo-liaison",
     "git-operations"
   ],
-  "manifest_fingerprint": "f82db9f2ecae27a8",
+  "manifest_fingerprint": "f35a8f4a54cd456e",
   "fingerprint_algo_version": 1,
   "file_hashes": {
-    "security.agent.md": "99dc976afa91e4fd",
-    "references/security-vulnerability-watch.reference.md": "f7d8e32440cb73c3",
-    "references/security-vulnerability-watch.json": "4e3a163b9f4dcbbd",
-    "orchestrator.agent.md": "ba5a6cd8fbaf2f45",
+    "security.agent.md": "4927ec0739503b9a",
+    "references/security-vulnerability-watch.json": "ead9d5f94f6988ac",
+    "references/security-vulnerability-watch.reference.md": "6a81b4183fb9b59f",
+    "references/framework-watch.reference.md": "148f778bd4744c04",
+    "orchestrator.agent.md": "3418b3bb6ee91392",
     "navigator.agent.md": "027d45f624bb02e6",
     "code-hygiene.agent.md": "b1bb05738691a62f",
     "adversarial.agent.md": "acb4a1fcf82f380a",
@@ -491,39 +509,31 @@
     "reference-manager.agent.md": "1d2f58452d52d3fe",
     "output-compiler.agent.md": "ed007ccc182d2ce4",
     "visual-designer.agent.md": "1ecbc63aa602bb29",
-    "references/ref-sqlite-reference.md": "92705616f2224e31",
-    "references/ref-jupyter-reference.md": "89b3015b837221fa",
-    "references/ref-pandas-reference.md": "dd494253dd9816fb",
-    "references/ref-numpy-reference.md": "c86a136ca778c7f4",
-    "references/ref-matplotlib-reference.md": "4b14a5c8b149cc67",
-    "references/ref-plotly-reference.md": "53deb68153a34173",
-    "references/ref-pandas-datareader-reference.md": "9f8a00001f1ea5bd",
+    "references/ref-jupyter-reference.md": "5cab38c1cad24581",
+    "references/ref-pandas-reference.md": "3e6510fe0c578531",
+    "references/ref-numpy-reference.md": "14a24bb274527bae",
+    "references/ref-matplotlib-reference.md": "a4e6499ed7d917fe",
+    "references/ref-plotly-reference.md": "c51622d8e10f63ec",
+    "references/ref-pandas-datareader-reference.md": "ea6ad5701568f876",
     "references/ref-linearmodels-reference.md": "6e680431e5c5c3a3",
     "references/code-hygiene-rules.reference.md": "4c319cfd5c959b42",
-    "references/unix-philosophy-mapping.reference.md": "da34867f57bb237b",
-    "references/security-linux-hardening.reference.md": "a985d3773d4c262a",
-    "references/security-macos-hardening.reference.md": "fcfbdd7863108ee8",
-    "references/security-windows-hardening.reference.md": "44cf4ef929d8ca9c",
-    "references/ai-bad-habits-watch.reference.md": "cba3185c411c10be",
-    "references/framework-watch.reference.md": "e78679b53c3319a8",
-    "references/adjacent-repos.md": "cb2591c6b3c61a0b",
     "references/github-workflows-merge.reference.md": "d48a88d0aef17e2c",
     "references/work-summary-spec.reference.md": "96232231a1f7c6be",
     "references/work-summary-tooling.reference.md": "f3656972717153a9",
     "references/work-summary-backfill.reference.md": "3a2274e8064291f4",
     "references/parallelization.reference.md": "d2321bf5ac1ed2f8",
     "references/retrospective-remediation.reference.md": "0b7dea9b1f7647e5",
+    "references/cli-tool-discovery.reference.md": "3b27e28cf9d3b6a0",
+    "references/skill-generation.reference.md": "c346ebdf1d0d22f1",
+    "references/external-retrieval-quality-gate.reference.md": "2f450b92d29c752c",
     "crisis-credit-allocation-expert.agent.md": "115f9decf073cb06",
     "fed-response-dag-expert.agent.md": "5bc175e9f6a83ef3",
     "prairie-prosperity-expert.agent.md": "0206a1429727c4ff",
     "sugarscape-expert.agent.md": "568df4ccfa25bf93",
     "visualize-energy-data-expert.agent.md": "02d27fc4c1458c14",
-    "../copilot-instructions.md": "a5e6b5de66c40aed",
     "team-builder.agent.md": "c66118c1daf94720",
     "SETUP-REQUIRED.md": "87c8bb53f60c0d98",
-    "content-enricher.agent.md": "7089174c45a129ae",
-    "references/pipeline-graph.md": "19f63485ce1ff2a7",
-    "references/pipeline-graph.svg": "27b5571a03221423",
-    "references/pipeline-handoffs.svg": "89d5f30626df2007"
+    "content-enricher.agent.md": "e89511bbdad7a43d",
+    "references/pipeline-graph.md": "7a57fa6f9b9ccdbe"
   }
 }

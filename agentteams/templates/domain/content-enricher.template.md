@@ -3,7 +3,7 @@ name: Content Enricher — {PROJECT_NAME}
 description: "Fills in default template placeholders and underdeveloped sections in generated agent files for {PROJECT_NAME} using the project's source materials"
 user-invokable: true
 tools: ['read', 'edit', 'search']
-agents: ['primary-producer', 'technical-validator']
+agents: ['primary-producer', 'technical-validator', 'adversarial', 'conflict-auditor']
 model: ["Claude Sonnet 4.6 (copilot)"]
 handoffs:
   - label: Validate Enriched Content
@@ -86,6 +86,17 @@ For each pending finding, open the agent file, locate the `{MANUAL:TOKEN}` place
 After filling each placeholder, update the corresponding row in the CSV:
 - Change `status` from `pending` to `ai_filled`
 - Populate `auto_suggestion` with the value you used (if it was empty)
+
+### Step 4.5: External-Retrieval Quality Gate
+
+**Mandatory for any `TOOL_DOCS_URL`/`TOOL_API_SURFACE`/`TOOL_COMMON_PATTERNS` value you just
+filled** — these rest on documentation you looked up externally (Step 2), unlike
+`COMPONENT_SPEC`/`STYLE_REFERENCE_PATH`/`REFERENCE_DB_PATH`, which are derived from this
+project's own files and are out of this gate's scope. Before Step 5, hand the filled
+tool-documentation values off to `@adversarial` and `@conflict-auditor` per
+`references/external-retrieval-quality-gate.reference.md`. Revise and re-run the gate on any
+finding until it passes, or escalate a specific persistently-failing value per that reference's
+escalation valve — do not leave an unaudited external value in a generated file.
 
 ### Step 5: Validate
 

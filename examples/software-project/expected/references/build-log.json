@@ -17,13 +17,13 @@
     "tasks-api"
   ],
   "files_written": [
-    ".vscode/tasks.json"
+    "software-project/expected/tool-doc-researcher.agent.md"
   ],
-  "manual_required": 15,
+  "manual_required": 10,
   "template_hashes": {
-    "universal/orchestrator.template.md": "6ca6e34637d07cf7",
+    "universal/orchestrator.template.md": "d97901a295889110",
     "universal/navigator.template.md": "003a30ed545c0523",
-    "universal/security.template.md": "8e4256bcb84ee04e",
+    "universal/security.template.md": "84df1e9387585ac4",
     "universal/code-hygiene.template.md": "5212068c8a00a608",
     "universal/adversarial.template.md": "ea4659f376567351",
     "universal/conflict-auditor.template.md": "a8e9e710ea50cfb2",
@@ -40,7 +40,7 @@
     "domain/technical-validator.template.md": "bf48db2ccc132397",
     "domain/format-converter.template.md": "ecf8c801f1d66dab",
     "domain/output-compiler.template.md": "fd90f3a13765386a",
-    "domain/tool-doc-researcher.template.md": "a3d89da37c6f521e",
+    "domain/tool-doc-researcher.template.md": "d1584758642c5303",
     "domain/tool-database.doc.template.md": "a8c87030930380d4",
     "domain/tool-reference.template.md": "5ce5638b7094cc86",
     "domain/code-hygiene-rules-reference.template.md": "64dd0cd05107784f",
@@ -59,10 +59,13 @@
     "universal/work-summary-backfill.reference.template.md": "5730bac043dc2874",
     "universal/parallelization.reference.template.md": "2c872341050a7781",
     "universal/retrospective-remediation.reference.template.md": "b1802f5e1ab294ad",
+    "universal/cli-tool-discovery.reference.template.md": "203004e771c8b2fd",
+    "universal/skill-generation.reference.template.md": "47bcf76ed8f69a80",
+    "universal/external-retrieval-quality-gate.reference.template.md": "961ec24da248b289",
     "workstream-expert.template.md": "13161f3a3cdf1789",
     "copilot-instructions.template.md": "9c56d724f06a9549",
     "builder/team-builder-copilot-vscode.template.md": "5708c3fd29801a3d",
-    "domain/content-enricher.template.md": "d7e6e4a50dcef1c7"
+    "domain/content-enricher.template.md": "8176cebe85aace8f"
   },
   "output_files_map": [
     {
@@ -311,6 +314,24 @@
       "component_slug": null
     },
     {
+      "path": "references/cli-tool-discovery.reference.md",
+      "template": "universal/cli-tool-discovery.reference.template.md",
+      "type": "reference",
+      "component_slug": null
+    },
+    {
+      "path": "references/skill-generation.reference.md",
+      "template": "universal/skill-generation.reference.template.md",
+      "type": "reference",
+      "component_slug": null
+    },
+    {
+      "path": "references/external-retrieval-quality-gate.reference.md",
+      "template": "universal/external-retrieval-quality-gate.reference.template.md",
+      "type": "reference",
+      "component_slug": null
+    },
+    {
       "path": "auth-module-expert.agent.md",
       "template": "workstream-expert.template.md",
       "type": "agent",
@@ -402,50 +423,51 @@
     "repo-liaison",
     "git-operations"
   ],
-  "manifest_fingerprint": "2055782f7d157828",
+  "manifest_fingerprint": "79308bb85915e392",
   "fingerprint_algo_version": 1,
   "file_hashes": {
-    "/Users/jamescaton/githubrepositories/agentteams/examples/.vscode/tasks.json": "c2409a7c58cd2346",
-    "security.agent.md": "086b352c9f1c8a65",
-    "references/security-vulnerability-watch.reference.md": "09f321cdb762011e",
-    "references/security-vulnerability-watch.json": "3f711d7a4242e384",
-    "references/ai-bad-habits-watch.reference.md": "4a5cfb1f1f5e7713",
-    "references/framework-watch.reference.md": "a5a8760144cf673e",
-    "orchestrator.agent.md": "8116a8b090ed073c",
+    "tool-doc-researcher.agent.md": "d3c0e4bceaff9126",
+    "references/security-vulnerability-watch.json": "c806bc7b1d6c2dca",
+    "security.agent.md": "e650cbcb31c7c58d",
+    "references/security-vulnerability-watch.reference.md": "190f0a06efffc4ea",
+    "orchestrator.agent.md": "2a71eba968882ba9",
     "navigator.agent.md": "f87e75456d851956",
-    "conflict-auditor.agent.md": "8a63e0e9e1b63640",
-    "cleanup.agent.md": "3be9445c9b292675",
-    "agent-updater.agent.md": "72a65d47d60107a2",
-    "primary-producer.agent.md": "8802a584ddc73522",
-    "auth-module-expert.agent.md": "2d103b5913dd90ad",
-    "tasks-api-expert.agent.md": "90ffaa5ca87d3b3f",
-    "../copilot-instructions.md": "d7d83fd826e50439",
-    "SETUP-REQUIRED.md": "0f0edeebefddfadd",
     "code-hygiene.agent.md": "89c22bf991caaac2",
     "adversarial.agent.md": "39c3c433a3c222d3",
+    "conflict-auditor.agent.md": "8a63e0e9e1b63640",
     "conflict-resolution.agent.md": "a21aee2f7d2b6eec",
+    "cleanup.agent.md": "3be9445c9b292675",
+    "agent-updater.agent.md": "72a65d47d60107a2",
     "agent-refactor.agent.md": "2969ddfba8d87754",
     "repo-liaison.agent.md": "3ef85b7f167d58a9",
     "git-operations.agent.md": "5c1a7127bad6eaac",
     "work-summarizer.agent.md": "4f453cd263e96e2d",
+    "primary-producer.agent.md": "8802a584ddc73522",
     "quality-auditor.agent.md": "ac2c2b9b70027e07",
     "cohesion-repairer.agent.md": "f77e8491aa2b9348",
     "technical-validator.agent.md": "9a6a1bcf9cfb919a",
     "format-converter.agent.md": "c6ad2aa58ae2b32e",
     "output-compiler.agent.md": "cb6450530ac704cf",
-    "tool-doc-researcher.agent.md": "496965c0c9f0bc15",
-    "references/ref-fastapi-reference.md": "1ddc69f04760a66c",
-    "references/ref-sqlalchemy-reference.md": "2a9491a510f6e054",
-    "references/ref-pytest-reference.md": "41afa473b932626f",
+    "references/ref-fastapi-reference.md": "c82a444520da9a5a",
+    "references/ref-sqlalchemy-reference.md": "19cb176319a2da09",
+    "references/ref-pytest-reference.md": "7826a86817941180",
     "references/code-hygiene-rules.reference.md": "afd0caa9333edc96",
+    "references/framework-watch.reference.md": "989b21d5bb7f4878",
     "references/github-workflows-merge.reference.md": "2d04bee0e4d783e3",
     "references/work-summary-spec.reference.md": "96232231a1f7c6be",
     "references/work-summary-tooling.reference.md": "f3656972717153a9",
     "references/work-summary-backfill.reference.md": "08c8c62e312282b4",
     "references/parallelization.reference.md": "d2321bf5ac1ed2f8",
     "references/retrospective-remediation.reference.md": "66cff1411041ae49",
+    "references/cli-tool-discovery.reference.md": "ed2d6b8474274c34",
+    "references/skill-generation.reference.md": "052d521bdbd31b21",
+    "references/external-retrieval-quality-gate.reference.md": "4c8b2831f3b51d0e",
+    "auth-module-expert.agent.md": "2d103b5913dd90ad",
+    "tasks-api-expert.agent.md": "90ffaa5ca87d3b3f",
+    "../copilot-instructions.md": "d7d83fd826e50439",
     "team-builder.agent.md": "c66118c1daf94720",
-    "content-enricher.agent.md": "d263438faaf77100",
-    "references/pipeline-graph.md": "10f412e6c108c5c7"
+    "SETUP-REQUIRED.md": "f9910a8c4fe8a54b",
+    "content-enricher.agent.md": "9de88ef611a0fe84",
+    "references/pipeline-graph.md": "55dfff8520f0ed78"
   }
 }

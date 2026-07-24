@@ -66,15 +66,15 @@ The handoff-only control-flow backbone (agents-list edges omitted):
 
 | Agent | Receives from | Hands off to |
 | --- | --- | --- |
-| `adversarial` | `agent-updater`, `ingest-expert`, `load-expert`, `orchestrator`, `post-production-auditor`, `transform-expert`, `weekly-report-expert`, `work-summarizer` | `conflict-auditor`, `orchestrator` |
+| `adversarial` | `agent-updater`, `content-enricher`, `ingest-expert`, `load-expert`, `orchestrator`, `post-production-auditor`, `tool-doc-researcher`, `transform-expert`, `weekly-report-expert`, `work-summarizer` | `conflict-auditor`, `orchestrator` |
 | `agent-refactor` | `agent-updater`, `code-hygiene`, `orchestrator` | `conflict-auditor`, `orchestrator` |
 | `agent-updater` | `conflict-auditor`, `conflict-resolution`, `git-operations`, `orchestrator`, `tool-doc-researcher` | `adversarial`, `agent-refactor`, `conflict-auditor`, `orchestrator` |
 | `cleanup` | `code-hygiene`, `orchestrator` | `orchestrator` |
 | `code-hygiene` | `orchestrator` | `agent-refactor`, `cleanup`, `conflict-auditor`, `orchestrator`, `security` |
 | `cohesion-repairer` | `orchestrator`, `primary-producer`, `quality-auditor` | `orchestrator`, `quality-auditor` |
-| `conflict-auditor` | `adversarial`, `agent-refactor`, `agent-updater`, `code-hygiene`, `orchestrator`, `post-production-auditor`, `primary-producer`, `repo-liaison`, `technical-validator`, `work-summarizer` | `agent-updater`, `conflict-resolution`, `orchestrator`, `technical-validator` |
+| `conflict-auditor` | `adversarial`, `agent-refactor`, `agent-updater`, `code-hygiene`, `content-enricher`, `orchestrator`, `post-production-auditor`, `primary-producer`, `repo-liaison`, `technical-validator`, `tool-doc-researcher`, `work-summarizer` | `agent-updater`, `conflict-resolution`, `orchestrator`, `technical-validator` |
 | `conflict-resolution` | `conflict-auditor`, `git-operations`, `orchestrator` | `agent-updater`, `orchestrator` |
-| `content-enricher` | — | `orchestrator`, `primary-producer`, `technical-validator` |
+| `content-enricher` | — | `adversarial`, `conflict-auditor`, `orchestrator`, `primary-producer`, `technical-validator` |
 | `format-converter` | `orchestrator`, `output-compiler`, `visual-designer` | `orchestrator`, `output-compiler`, `quality-auditor` |
 | `git-operations` | `orchestrator` | `agent-updater`, `conflict-resolution`, `orchestrator`, `security` |
 | `ingest-expert` | `orchestrator` | `adversarial`, `orchestrator`, `primary-producer` |
@@ -89,7 +89,7 @@ The handoff-only control-flow backbone (agents-list edges omitted):
 | `security` | `code-hygiene`, `git-operations`, `orchestrator`, `post-production-auditor`, `repo-liaison` | `orchestrator` |
 | `team-builder` | — | — |
 | `technical-validator` | `conflict-auditor`, `content-enricher`, `orchestrator`, `output-compiler`, `post-production-auditor`, `work-summarizer` | `conflict-auditor`, `orchestrator`, `primary-producer` |
-| `tool-doc-researcher` | `orchestrator` | `agent-updater`, `orchestrator` |
+| `tool-doc-researcher` | `orchestrator` | `adversarial`, `agent-updater`, `conflict-auditor`, `orchestrator` |
 | `transform-expert` | `orchestrator` | `adversarial`, `orchestrator`, `primary-producer` |
 | `visual-designer` | `orchestrator` | `format-converter`, `orchestrator`, `quality-auditor` |
 | `weekly-report-expert` | `orchestrator` | `adversarial`, `orchestrator`, `primary-producer` |
@@ -197,6 +197,8 @@ flowchart LR
     conflict_resolution -->|"Return to Orchestrator"| orchestrator
     content_enricher -->|"Return to Orchestrator"| orchestrator
     content_enricher -->|"Validate Enriched Content"| technical_validator
+    content_enricher -.-> adversarial
+    content_enricher -.-> conflict_auditor
     content_enricher -.-> primary_producer
     content_enricher -.-> technical_validator
     format_converter -->|"Return to Orchestrator"| orchestrator
@@ -301,6 +303,8 @@ flowchart LR
     technical_validator -.-> primary_producer
     tool_doc_researcher -->|"Update Brief and Generated Docs"| agent_updater
     tool_doc_researcher -->|"Return to Orchestrator"| orchestrator
+    tool_doc_researcher -.-> adversarial
+    tool_doc_researcher -.-> conflict_auditor
     transform_expert -->|"Vet Brief Before Drafting"| adversarial
     transform_expert -->|"Return to Orchestrator"| orchestrator
     transform_expert -->|"Send to Primary Producer"| primary_producer
@@ -382,6 +386,8 @@ digraph "SalesDataPipeline Agent Team" {
     "conflict-resolution" -> "orchestrator" [style=solid, label="Return to Orchestrator"];
     "content-enricher" -> "orchestrator" [style=solid, label="Return to Orchestrator"];
     "content-enricher" -> "technical-validator" [style=solid, label="Validate Enriched Content"];
+    "content-enricher" -> "adversarial" [style=dashed];
+    "content-enricher" -> "conflict-auditor" [style=dashed];
     "content-enricher" -> "primary-producer" [style=dashed];
     "format-converter" -> "orchestrator" [style=solid, label="Return to Orchestrator"];
     "format-converter" -> "output-compiler" [style=solid, label="Pass to Output Compiler"];
@@ -446,6 +452,8 @@ digraph "SalesDataPipeline Agent Team" {
     "technical-validator" -> "primary-producer" [style=solid, label="Route Corrections to Primary Producer"];
     "tool-doc-researcher" -> "agent-updater" [style=solid, label="Update Brief and Generated Docs"];
     "tool-doc-researcher" -> "orchestrator" [style=solid, label="Return to Orchestrator"];
+    "tool-doc-researcher" -> "adversarial" [style=dashed];
+    "tool-doc-researcher" -> "conflict-auditor" [style=dashed];
     "transform-expert" -> "adversarial" [style=solid, label="Vet Brief Before Drafting"];
     "transform-expert" -> "orchestrator" [style=solid, label="Return to Orchestrator"];
     "transform-expert" -> "primary-producer" [style=solid, label="Send to Primary Producer"];
@@ -948,6 +956,18 @@ digraph "SalesDataPipeline Agent Team" {
       "target": "technical-validator",
       "edge_type": "handoff",
       "label": "Validate Enriched Content"
+    },
+    {
+      "source": "content-enricher",
+      "target": "adversarial",
+      "edge_type": "agents-list",
+      "label": null
+    },
+    {
+      "source": "content-enricher",
+      "target": "conflict-auditor",
+      "edge_type": "agents-list",
+      "label": null
     },
     {
       "source": "content-enricher",
@@ -1574,6 +1594,18 @@ digraph "SalesDataPipeline Agent Team" {
       "label": "Return to Orchestrator"
     },
     {
+      "source": "tool-doc-researcher",
+      "target": "adversarial",
+      "edge_type": "agents-list",
+      "label": null
+    },
+    {
+      "source": "tool-doc-researcher",
+      "target": "conflict-auditor",
+      "edge_type": "agents-list",
+      "label": null
+    },
+    {
       "source": "transform-expert",
       "target": "adversarial",
       "edge_type": "handoff",
@@ -1746,6 +1778,8 @@ digraph "SalesDataPipeline Agent Team" {
       "orchestrator"
     ],
     "content-enricher": [
+      "adversarial",
+      "conflict-auditor",
       "orchestrator",
       "primary-producer",
       "technical-validator"
@@ -1839,7 +1873,9 @@ digraph "SalesDataPipeline Agent Team" {
       "primary-producer"
     ],
     "tool-doc-researcher": [
+      "adversarial",
       "agent-updater",
+      "conflict-auditor",
       "orchestrator"
     ],
     "transform-expert": [

@@ -247,3 +247,28 @@ def test_both_references_are_planned_for_every_framework(framework):
     ):
         assert path in by_path, f"{path} missing for framework={framework}"
         assert by_path[path]["type"] == "reference"
+
+
+@pytest.mark.parametrize(
+    "framework", ["copilot-vscode", "copilot-cli", "claude", "goose", "agents-md"]
+)
+def test_external_retrieval_quality_gate_reference_planned_for_every_framework(framework):
+    """tmp/by-week/2026-W30/external-retrieval-quality-gate.plan.md: unconditional, like
+    cli-tool-discovery/skill-generation above -- content-enricher.agent.md (which links to
+    this reference) is itself emitted unconditionally for every team, so gating this file on
+    archetype presence (the first implementation draft's plan) would leave a dangling
+    reference in the common case of a team with content-enricher but neither
+    research-analyst nor tool-doc-researcher."""
+    from agentteams.output_plan import _plan_output_files
+
+    files = _plan_output_files(
+        archetypes=["quality-auditor"],
+        tool_agents=[],
+        reference_tools=[],
+        components=[],
+        framework=framework,
+    )
+    by_path = {f["path"]: f for f in files}
+    path = "references/external-retrieval-quality-gate.reference.md"
+    assert path in by_path, f"{path} missing for framework={framework}"
+    assert by_path[path]["type"] == "reference"
