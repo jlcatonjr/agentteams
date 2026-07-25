@@ -3,6 +3,11 @@ __pycache__/
 *.pyo
 .venv/
 dist/
+# setuptools' intermediate staging tree, created by `pip wheel .`, `pip install -e .`,
+# and `python -m build`. It holds a full copy of agentteams/, which the code-hygiene
+# guards (git ls-files --others --exclude-standard) would otherwise scan as a second
+# set of source files — producing phantom duplicate-definition failures.
+build/
 *.egg-info/
 .DS_Store
 .pytest_cache/

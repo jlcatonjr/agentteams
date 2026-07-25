@@ -18,6 +18,34 @@ cd agentteams
 pip install -e .
 ```
 
+### If `agentteams` fails with `ModuleNotFoundError`
+
+An editable install records the *path* of the source tree it was installed from. If that
+directory is later moved, renamed, or deleted — a git worktree that was cleaned up, a checkout
+under a temporary directory — the install remains registered but resolves to nothing. Every
+import through it fails:
+
+```
+$ agentteams --version
+ModuleNotFoundError: No module named 'build_team'
+```
+
+The message names `build_team` only because that is the first import the console script
+attempts; `import agentteams` fails the same way. This is an environment fault, not a packaging
+problem. Confirm it by checking where the install points:
+
+```bash
+pip show agentteams | grep -i "editable project location"
+```
+
+If that path no longer exists, reinstall from your current checkout:
+
+```bash
+pip uninstall -y agentteams
+cd /path/to/agentteams
+pip install -e .
+```
+
 ---
 
 ## Prefer a conversational setup?

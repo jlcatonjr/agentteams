@@ -6,6 +6,37 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### fixed (packaging/build hygiene)
+
+- **`build/` is now gitignored.** `.gitignore` covered `dist/` and `*.egg-info/` but not
+  setuptools' intermediate staging tree, which `pip wheel .`, `pip install -e .`, and
+  `python -m build` all create at the repo root. Because it holds a full copy of `agentteams/`,
+  and the code-hygiene guards enumerate sources via
+  `git ls-files --cached --others --exclude-standard`, an unignored `build/` made three
+  `tests/test_code_hygiene.py` tests fail with phantom duplicate definitions — e.g. "Framework
+  registry must be a single dict literal in registry.py; found definers:
+  `['build/lib/agentteams/frameworks/registry.py', 'agentteams/frameworks/registry.py']`". Any
+  contributor who built a distribution locally hit this. No test change was needed; the guards
+  already honour gitignore.
+
+### added (packaging regression guard)
+
+- **`tests/test_console_script_entrypoints.py`** asserts that every `[project.scripts]` target
+  module is covered by the packaging config (`py-modules` or `packages.find`) and that the named
+  attribute exists and is callable. The `agentteams` script resolves `build_team:main`, and
+  `build_team` reaches the wheel only via `py-modules` — a split that lets an entry point
+  silently reference an unshipped module, surfacing only post-install as a bare
+  `ModuleNotFoundError`.
+
+### docs
+
+- **Getting Started documents the stale-editable-install failure mode.** An editable install
+  records the path it was installed from; if that tree is deleted (a cleaned-up git worktree, a
+  checkout under `/tmp`), every import through it fails and `agentteams --version` reports
+  `ModuleNotFoundError: No module named 'build_team'`. The message names `build_team` only
+  because it is the first import attempted — `import agentteams` fails identically — which
+  misdirects diagnosis toward packaging. Added the `pip show` check and the reinstall recovery.
+
 ### added (mandatory external-retrieval quality gate)
 
 - **New shared reference doc** (`references/external-retrieval-quality-gate.reference.md`,
