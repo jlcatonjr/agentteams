@@ -30,13 +30,11 @@ never logged, asserted on, or serialized into a captured-output message.
 from __future__ import annotations
 
 import os
-import re
-import shutil
 import subprocess
 import sys
 from pathlib import Path
 
-import pytest
+from . import conftest
 
 REPO_ROOT = Path(__file__).parent.parent
 _BUILD_TEAM = REPO_ROOT / "build_team.py"
@@ -55,50 +53,8 @@ _EXPECTED_WORKFLOW_HINTS = ("workflow 1", "produce a deliverable")
 
 
 # --- credential resolution (by reference; never logged/serialized) -----------
-
-def _resolve_openrouter_key() -> str:
-    """Resolve OPENROUTER_API_KEY by reference: env first, then an env-file.
-
-    Mirrors goose-backend.sh / goose-openrouter-preflight.resolve_api_key — extract
-    ONLY the key line from the referenced file; never source the whole file. Returns
-    the key string for subprocess use ONLY; callers must report presence, never the
-    value.
-    """
-    key = os.environ.get("OPENROUTER_API_KEY", "")
-    if key:
-        return key
-    env_file = os.environ.get("GOOSE_OPENROUTER_ENV_FILE")
-    if not env_file:
-        return ""
-    try:
-        text = Path(env_file).expanduser().read_text(encoding="utf-8")
-    except (OSError, UnicodeDecodeError):
-        return ""
-    for line in text.splitlines():
-        m = re.match(r"^\s*(?:export\s+)?OPENROUTER_API_KEY=(.*)$", line)
-        if m:
-            return m.group(1).strip().strip('"').strip("'")
-    return ""
-
-
-# Resolve ONCE at import. We expose only the boolean to the skip marker — the key
-# string itself never leaves this module's local scope / the subprocess env.
-_KEY_PRESENT = bool(_resolve_openrouter_key())
-
-_skip_no_goose = pytest.mark.skipif(
-    shutil.which("goose") is None,
-    reason="goose CLI not installed (live delegation needs the goose binary)",
-)
-# MANDATORY missing-key skip: keeps CI/this repo offline-green; a missing key is a
-# setup condition (goose exits 1 at config-resolution), not a delegation failure.
-_skip_no_key = pytest.mark.skipif(
-    not _KEY_PRESENT,
-    reason=(
-        "OPENROUTER_API_KEY not resolvable (env or GOOSE_OPENROUTER_ENV_FILE); "
-        "live delegation needs a configured provider key. Skip-by-default keeps "
-        "CI/this repo offline-green."
-    ),
-)
+# Shared with test_goose_run_resilient.py via tests/conftest.py (code-hygiene
+# CH-08, 2026-07-24: this was duplicated near-identically across both files).
 
 
 # --- output classification (exit code is NOT a signal; goose exits 0 on error) -
@@ -189,8 +145,8 @@ def _generate_goose_team(project: Path) -> Path:
 
 # --- the live test -----------------------------------------------------------
 
-@_skip_no_goose
-@_skip_no_key
+@conftest.skip_no_goose
+@conftest.skip_no_openrouter_key
 def test_generated_orchestrator_delegates_live(tmp_path):
     """End-to-end: the generated orchestrator names the correct workflow + first
     agent (the W6 probe), demonstrating it routes/delegates to a named sub_recipe.
@@ -201,7 +157,7 @@ def test_generated_orchestrator_delegates_live(tmp_path):
     """
     orchestrator = _generate_goose_team(tmp_path)
 
-    key = _resolve_openrouter_key()  # local only; never logged/asserted/serialized
+    key = conftest.resolve_openrouter_key()  # local only; never logged/asserted/serialized
     assert key, "skip gate should have prevented running without a key"
     env = dict(os.environ)
     env["OPENROUTER_API_KEY"] = key
