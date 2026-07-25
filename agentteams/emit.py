@@ -329,7 +329,7 @@ def emit_all(
             and auto_fence_legacy
             and yes
             and target.exists()
-            and not _is_machine_managed_merge_overwrite_path(rel_path)
+            and not _is_machine_managed_merge_overwrite_path(rel_path, normalized_content)
         ):
             try:
                 _pre_text = target.read_text(encoding="utf-8")
@@ -368,7 +368,7 @@ def emit_all(
             if (
                 merge
                 and existing_text is not None
-                and _is_machine_managed_merge_overwrite_path(rel_path)
+                and _is_machine_managed_merge_overwrite_path(rel_path, normalized_content)
             ):
                 # Mirror the real path: machine-managed maps full-replace in merge.
                 if existing_text == normalized_content:
@@ -408,7 +408,7 @@ def emit_all(
                     legacy_no_fence = all(
                         "No fence markers detected" in e for e in mr.parse_errors
                     )
-                    if legacy_no_fence and _is_machine_managed_merge_overwrite_path(rel_path):
+                    if legacy_no_fence and _is_machine_managed_merge_overwrite_path(rel_path, normalized_content):
                         if existing_text == normalized_content:
                             entry.action = "UNCHANGED"
                         else:
@@ -469,7 +469,7 @@ def emit_all(
             # legacy-no-fence branch below, but the .md variants ARE fenced, so
             # _merge_fenced_content would keep the stale body and the roster table
             # would drift behind its companion diagram when the team grows.
-            if _is_machine_managed_merge_overwrite_path(rel_path):
+            if _is_machine_managed_merge_overwrite_path(rel_path, normalized_content):
                 if existing_text == normalized_content:
                     result.unchanged.append(str(target))
                 else:
@@ -527,7 +527,7 @@ def emit_all(
                 legacy_no_fence = all(
                     "No fence markers detected" in err for err in merge_result.parse_errors
                 )
-                if legacy_no_fence and _is_machine_managed_merge_overwrite_path(rel_path):
+                if legacy_no_fence and _is_machine_managed_merge_overwrite_path(rel_path, normalized_content):
                     if existing_text == normalized_content:
                         result.unchanged.append(str(target))
                     else:

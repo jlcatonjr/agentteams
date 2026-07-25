@@ -21,7 +21,7 @@ import argparse
 import json
 import sys
 
-from agentteams.research.search import fetch_text, web_search
+from agentteams.research.search import fetch_text, web_search_verbose
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -35,7 +35,13 @@ def main(argv: list[str] | None = None) -> int:
 
     fetch_p = sub.add_parser("fetch", help="Fetch and extract page text (HTML or PDF)")
     fetch_p.add_argument("url")
-    fetch_p.add_argument("--max-chars", type=int, default=4000)
+    fetch_p.add_argument("--max-chars", type=int, default=4000,
+                         help="cap on returned text (bounds what enters your context)")
+    fetch_p.add_argument("--max-bytes", type=int, default=None,
+                         help="cap on bytes DOWNLOADED before extraction (default 400000). "
+                              "Distinct from --max-chars: too low and a large page is "
+                              "truncated to its navigation header, returning chrome with no "
+                              "error to say so.")
     fetch_p.add_argument("--timeout-s", type=float, default=8.0)
 
     browser_p = sub.add_parser(
@@ -68,13 +74,20 @@ def main(argv: list[str] | None = None) -> int:
     args = parser.parse_args(argv)
 
     if args.command == "search":
-        results = web_search(args.query, k=args.k, timeout_s=args.timeout_s)
+        results, note = web_search_verbose(args.query, k=args.k, timeout_s=args.timeout_s)
         json.dump([r.__dict__ for r in results], sys.stdout, indent=2)
         sys.stdout.write("\n")
+        if note:
+            # stderr, so the JSON on stdout stays machine-parseable. Without this an agent
+            # reads `[]` as "no such information exists" and abandons an answerable question.
+            print(f"note: {note}", file=sys.stderr)
         return 0
 
     if args.command == "fetch":
-        text = fetch_text(args.url, max_chars=args.max_chars, timeout_s=args.timeout_s)
+        kwargs = {"max_chars": args.max_chars, "timeout_s": args.timeout_s}
+        if args.max_bytes is not None:
+            kwargs["max_bytes"] = args.max_bytes
+        text = fetch_text(args.url, **kwargs)
         json.dump({"url": args.url, "text": text}, sys.stdout, indent=2)
         sys.stdout.write("\n")
         return 0

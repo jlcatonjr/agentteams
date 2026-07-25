@@ -31,6 +31,7 @@ from typing import Any
 
 from agentteams import backup
 from agentteams.interop import detect_framework
+from agentteams.capability_hints import RESEARCH_CAPABILITY_BULLET
 from agentteams.bridge_sources import (  # noqa: F401  (carved for CH-07; re-exported)
     _INSTRUCTIONS_NAMES,
     _collect_source_files,
@@ -645,12 +646,18 @@ def _render_target_files(
             f"Use source framework `{source_framework}` as canonical agent infrastructure.\n"
             f"Read `{rel_inventory}` and `{rel_quickstart}`.\n"
             "Start with orchestrator routing.\n\n"
-            "These two apply to every request in this session, not just project-coordination\n"
+            "These apply to every request in this session, not just project-coordination\n"
             "work routed through the orchestrator above:\n"
-            "- Before claiming you lack real-time or internet access, try a read-only fetch\n"
-            "  first (`web_scrape` if the `computercontroller` extension is active, otherwise\n"
-            "  a plain `curl`/`wget` via the shell) — don't default to refusal without\n"
-            "  attempting it.\n"
+            + RESEARCH_CAPABILITY_BULLET
+            + "- Before claiming you lack real-time or internet access, try a read-only fetch\n"
+            "  first (the above if available, else `web_scrape` if the `computercontroller`\n"
+            "  extension is active, otherwise a plain `curl`/`wget` via the shell) —\n"
+            "  don't default to refusal without attempting it. Prefer extracted text over\n"
+            "  raw HTML: a scraped homepage is mostly navigation chrome and can consume more\n"
+            "  than half your context while containing none of the answer.\n"
+            "- For \"most recent / latest\" questions, relevance ranking is not recency —\n"
+            "  confirm the date of what you found rather than trusting result order, and say\n"
+            "  which date you are reporting.\n"
             "- When a name in the request doesn't exactly match a known entity, resolve to the\n"
             "  single closest well-known match and proceed confidently — but only when one\n"
             "  candidate is clearly the best fit (an obvious misspelling or variant). If\n"

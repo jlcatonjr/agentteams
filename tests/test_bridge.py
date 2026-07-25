@@ -407,6 +407,44 @@ def test_bridge_emits_domain_boundary(tmp_path: Path):
     assert "retrieval-integrator" in text.lower()
 
 
+def test_goose_bridge_entry_advertises_research_capability(tmp_path: Path):
+    """A bridged Goose team's entry files must name `agentteams.research`.
+
+    Regression guard for a real 2026-07-24 failure: `agentteams/frameworks/goose.py`
+    documents the research module in the hints it generates, but the BRIDGE path
+    writes its own AGENTS.md/.goosehints and silently dropped that reference. The
+    live repo measured `grep -c agentteams.research AGENTS.md .goosehints` -> 0, 0,
+    and the failing turn's 20k-char system prompt contained zero occurrences of
+    "research". The agent therefore had no idea a search tool existed, guessed URLs,
+    scraped a homepage, and put 29,654 chars of navigation HTML into its own context.
+    Capability present + never advertised == capability absent, from the agent's view.
+    """
+    source_dir = tmp_path / "src" / ".github" / "agents"
+    _build_source("copilot-vscode", source_dir)
+    out_root = tmp_path / "out"
+
+    run_bridge(
+        source_dir=source_dir,
+        source_framework="copilot-vscode",
+        target_framework="goose",
+        output_root=out_root,
+        dry_run=False,
+        overwrite=True,
+        check_only=False,
+    )
+    agents_md = (out_root / "AGENTS.md").read_text(encoding="utf-8")
+    assert "agentteams.research" in agents_md
+    # Must teach verify-first, not just assert the tool exists (it is an optional extra).
+    assert "python -m agentteams.research --help" in agents_md
+    # Must distinguish search from fetch -- conflating them is what caused the failure.
+    assert "search" in agents_md.lower() and "web_scrape" in agents_md
+    # Recency: relevance ranking is not date ordering.
+    assert "recency" in agents_md.lower() or "most recent" in agents_md.lower()
+    # .goosehints must still pull AGENTS.md in, or none of the above reaches the model.
+    hints = (out_root / ".goosehints").read_text(encoding="utf-8")
+    assert "@AGENTS.md" in hints
+
+
 def test_bridge_emits_recall_skill_for_claude_target(tmp_path: Path):
     """Claude target with emit_skills=True (default) emits .claude/skills/recall.md."""
     source_dir = tmp_path / "src" / ".github" / "agents"

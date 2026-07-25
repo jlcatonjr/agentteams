@@ -44,6 +44,13 @@ Frozen dataclass fields:
 `dict[str, SourceSpec]` — the seeded source registry. Ships with `ollama` and `openrouter`; merged
 with (and overridable by) a user file in [`load_sources`](#load_sourcesuser_filenone).
 
+### `NewSchemaTargetError`
+
+`ValueError` subclass raised by
+[`set_provider_model`](#set_provider_modelpath-providernone-modelnone) when the target
+`config.yaml` already uses the newer `providers:`/`active_provider:` schema. See that
+function's Raises section.
+
 ---
 
 ## Public Functions
@@ -107,7 +114,9 @@ Returns:
 
 ### `read_config(path)`
 
-Parse top-level `GOOSE_*: value` scalars; ignore the nested `extensions:` block.
+Parse top-level `GOOSE_*: value` scalars; ignore the nested `extensions:` block. Also parses
+the newer `providers:`/`active_provider:` schema (2026-07-24) that recent `goose configure`
+(1.37+) writes instead of flat keys.
 
 Args:
 
@@ -115,7 +124,10 @@ Args:
 
 Returns:
 
-- `dict[str, str]` — the top-level `GOOSE_*` scalars (empty when the file is absent or unreadable).
+- `tuple[dict[str, str], dict[str, object] | None]` — the top-level `GOOSE_*` scalars (empty
+  when the file is absent, unreadable, or uses only the newer schema), and the parsed
+  `providers:` block (`{"active_provider", "model", "models_by_provider"}`) or `None` when the
+  file uses the older flat-key schema.
 
 ---
 
@@ -126,6 +138,12 @@ Set top-level `GOOSE_PROVIDER` / `GOOSE_MODEL`, preserving everything else.
 Writes a timestamped backup **before** the rewrite (no partial-write window). Creates a minimal
 config if the file is absent. Anchors on column 0, so the nested `extensions:` keys are never
 touched. Never reads or writes provider keys.
+
+**Write support is flat-schema only.** Against a target already using the newer
+`providers:`/`active_provider:` schema, this refuses instead of writing a flat
+`GOOSE_PROVIDER:`/`GOOSE_MODEL:` pair goose's new-schema reader would never consult — no write,
+no backup, file untouched. The exception message names the exact indented `model:` line to
+edit by hand.
 
 Args:
 
@@ -140,6 +158,9 @@ Returns:
 Raises:
 
 1. `ValueError` when neither `provider` nor `model` is supplied.
+2. `NewSchemaTargetError` (a `ValueError` subclass) when `path` already uses the newer
+   `providers:`/`active_provider:` schema — callers that need to distinguish this from the
+   missing-args case (the CLI prints a different message for each) should catch it first.
 
 ---
 
@@ -179,6 +200,9 @@ Returns:
 
 Snapshot the `config.yaml` provider/model and any masking env override.
 
+Prefers the newer `providers:`/`active_provider:` schema when `read_config` finds one; falls
+back to the flat `GOOSE_PROVIDER`/`GOOSE_MODEL` keys otherwise.
+
 Args:
 
 1. `path` (`Path`): path to the `config.yaml` file.
@@ -186,7 +210,9 @@ Args:
 
 Returns:
 
-- `dict[str, object]` with keys `config_provider`, `config_model`, `config_mode`, and `env_override`.
+- `dict[str, object]` with keys `config_provider`, `config_model`, `config_mode`, `env_override`,
+  and `schema_source` (`"v2"` | `"v1"` | `"none"` — which shape `config_provider`/`config_model`
+  were resolved from).
 
 ---
 
@@ -198,3 +224,7 @@ Returns:
    surrounding content are preserved verbatim.
 3. An env override always wins over `config.yaml`; surface it (via `current_status`) so a switch is
    never silently masked by an active `goose-or` shell.
+4. Reading supports both the older flat-key `config.yaml` schema and the newer
+   `providers:`/`active_provider:` schema recent `goose configure` writes. **Writing supports only
+   the older schema** — against a newer-schema target, `set_provider_model` refuses
+   (`NewSchemaTargetError`) rather than write dead keys goose would never read.

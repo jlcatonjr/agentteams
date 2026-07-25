@@ -65,10 +65,50 @@ def _resolve_url(href: str) -> str:
     return href
 
 
-def web_search(query: str, k: int = 5, timeout_s: float = 8.0) -> list[Source]:
-    """Return up to ``k`` search results for ``query`` (title, resolved url, snippet)."""
-    if not query.strip():
-        return []
+#: DuckDuckGo answers a challenged request with 202 + an interstitial page rather than an
+#: error status, so ``raise_for_status()`` never fires (202 IS success). Observed 2026-07-24:
+#: long, highly specific queries are challenged *deterministically* (4/4 attempts -> 202, zero
+#: parseable results) while a short form of the same query returns 200 with 10 results. Without
+#: this discriminator the caller cannot tell "blocked" from "nothing matched" -- an agent reads
+#: the empty list as "no such information exists" and stops searching.
+_DDG_CHALLENGE_STATUS = 202
+
+#: Broadening keeps the first half of the query, never fewer than this many terms.
+#: A fixed small cap was tried first and rejected: truncating the motivating query
+#: ("2026 NASCAR Cup Pennzoil 400 Las Vegas top 10 finishers results") to 4 terms
+#: yields "2026 NASCAR Cup Pennzoil" — which severs the race name "Pennzoil 400",
+#: the very entity the search needs. Halving yields "2026 NASCAR Cup Pennzoil 400",
+#: keeping it intact. Both were verified to return 200 with 10 results, so the
+#: choice is about preserving the entity, not about getting past the challenge.
+_MIN_BROADEN_TERMS = 3
+
+
+def _broaden(query: str) -> str:
+    """Return a shorter form of ``query`` for a retry, or "" when it can't be shortened.
+
+    Keeps the leading half of the terms — long queries put the specific entity first
+    and descriptive filler last, and it is the filler that draws the challenge. Halving
+    (rather than truncating to a fixed length) scales with the query, so a very long
+    query is cut hard while a mildly long one loses only its tail.
+
+    Args:
+        query: The query that was challenged.
+
+    Returns:
+        The broadened query, or ``""`` when ``query`` is already at/below the floor
+        and shortening it further would strip meaning rather than filler.
+    """
+    terms = query.split()
+    if len(terms) <= _MIN_BROADEN_TERMS:
+        return ""
+    kept = max(_MIN_BROADEN_TERMS, len(terms) // 2)
+    if kept >= len(terms):
+        return ""
+    return " ".join(terms[:kept])
+
+
+def _ddg_results(query: str, k: int, timeout_s: float) -> tuple[list[Source], bool]:
+    """One search round-trip. Returns ``(results, was_challenged)``."""
     try:
         resp = httpx.get(
             _DDG_URL,
@@ -79,23 +119,74 @@ def web_search(query: str, k: int = 5, timeout_s: float = 8.0) -> list[Source]:
         )
         resp.raise_for_status()
         page = resp.text
+        status = resp.status_code
     except httpx.HTTPError:
         # CH-24: named type — httpx.HTTPError is the base class for every exception httpx itself
         # raises (connect/timeout/transport failures, and raise_for_status()'s HTTPStatusError) —
         # a genuinely unavoidable network-I/O boundary, not a blanket catch-all.
-        return []  # network down / blocked / non-2xx → caller falls back
+        return [], False  # network down / non-2xx → caller falls back
     titles = _RESULT_A.findall(page)
     snippets = [_strip(s) for s in _SNIPPET.findall(page)]
-    out: list[Source] = []
-    for i, (href, title) in enumerate(titles[:k]):
-        out.append(
-            Source(
-                title=_strip(title),
-                url=_resolve_url(href),
-                snippet=snippets[i] if i < len(snippets) else "",
-            )
+    out = [
+        Source(
+            title=_strip(title),
+            url=_resolve_url(href),
+            snippet=snippets[i] if i < len(snippets) else "",
         )
-    return out
+        for i, (href, title) in enumerate(titles[:k])
+    ]
+    return out, (not out and status == _DDG_CHALLENGE_STATUS)
+
+
+def web_search(query: str, k: int = 5, timeout_s: float = 8.0) -> list[Source]:
+    """Return up to ``k`` search results for ``query`` (title, resolved url, snippet).
+
+    When the upstream challenges the request (see ``_DDG_CHALLENGE_STATUS``) rather than
+    answering it, retries **once** with a broadened query instead of reporting an empty
+    result set. A challenge is not evidence that nothing matched, and treating it as such
+    is what makes a caller give up on a question that is in fact answerable.
+
+    Args:
+        query: Free-text search query.
+        k: Maximum number of results to return.
+        timeout_s: Per-request timeout in seconds.
+
+    Returns:
+        Up to ``k`` results; empty when the query is blank, the network fails, or nothing
+        matched. Use :func:`web_search_verbose` when the caller needs to distinguish those.
+    """
+    return web_search_verbose(query, k=k, timeout_s=timeout_s)[0]
+
+
+def web_search_verbose(
+    query: str, k: int = 5, timeout_s: float = 8.0,
+) -> tuple[list[Source], str | None]:
+    """:func:`web_search` plus a note describing any fallback or block.
+
+    Returns:
+        ``(results, note)``. ``note`` is ``None`` on an ordinary search; otherwise a short
+        human-readable explanation — that the query was broadened, or that the upstream
+        challenged the request and the caller should not read the empty list as "no such
+        information exists."
+    """
+    if not query.strip():
+        return [], None
+    results, challenged = _ddg_results(query, k, timeout_s)
+    if results or not challenged:
+        return results, None
+
+    broadened = _broaden(query)
+    if not broadened:
+        return [], ("search endpoint challenged this request (no results returned); "
+                    "this is not evidence that nothing matched — retry shortly")
+    retried, still_challenged = _ddg_results(broadened, k, timeout_s)
+    if retried:
+        return retried, (f"original query was challenged by the search endpoint; "
+                         f"retried with the broader query {broadened!r}")
+    if still_challenged:
+        return [], (f"search endpoint challenged both {query!r} and the broader "
+                    f"{broadened!r}; not evidence that nothing matched — retry shortly")
+    return [], f"no results for {query!r} or the broader {broadened!r}"
 
 
 def is_public_https(url: str) -> bool:
@@ -175,6 +266,16 @@ def extract_published_date(html: str) -> str | None:
     return None
 
 
+#: HTML download cap. Was 40_000, which silently truncated any real article to its
+#: <head> + navigation chrome: measured 2026-07-24, an en.wikipedia.org article
+#: yielded 342 chars and ZERO body content at 40 KB versus 17,744 chars containing
+#: the full data table at 400 KB. The failure was invisible -- text returned, no
+#: error -- so a caller could not tell "page has no such content" from "we never
+#: downloaded the part that has it". This bounds the DOWNLOAD; `max_chars` separately
+#: bounds what reaches the caller, so raising this does not enlarge anyone's context.
+_DEFAULT_MAX_BYTES = 400_000
+
+
 def _fetch_raw(
     url: str, max_bytes: int, timeout_s: float, max_pdf_bytes: int, pdf_timeout_s: float
 ) -> tuple[bytes, str, str] | None:
@@ -232,7 +333,7 @@ def strip_html_to_text(html: str, max_chars: int) -> str:
 
 def fetch_text(
     url: str,
-    max_bytes: int = 40_000,
+    max_bytes: int = _DEFAULT_MAX_BYTES,
     timeout_s: float = 8.0,
     max_chars: int = 4000,
     max_pdf_bytes: int = 12_000_000,
@@ -269,7 +370,7 @@ def fetch_text(
 def fetch_text_and_date(
     url: str,
     *,
-    max_bytes: int = 40_000,
+    max_bytes: int = _DEFAULT_MAX_BYTES,
     timeout_s: float = 8.0,
     max_chars: int = 4000,
     max_pdf_bytes: int = 12_000_000,

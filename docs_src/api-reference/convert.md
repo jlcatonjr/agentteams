@@ -55,7 +55,7 @@ Raises:
 
 1. Preserves body prose while rewriting framework wrappers/front matter.
 2. The instructions file is placed at the adapter's `finalize_output_path` location — `copilot-instructions.md`, `CLAUDE.md`, or, for `goose`, the repo-root `AGENTS.md` (front matter stripped) — and rendered through the target adapter's `render_instructions_file`.
-3. Emits any adapter sidecars via `extra_output_files` — e.g. `goose`'s repo-root `.goosehints` integrator.
+3. Emits any adapter sidecars via `extra_output_files` — e.g. `goose`'s repo-root `.goosehints` integrator, capabilities reference, and resilient-runner script (see [Framework Adapters](frameworks.md#extra_output_filesmanifest)).
 4. Copies passthrough assets such as `SETUP-REQUIRED.md` and `references/`.
 
 ### Goose target (`--framework goose`) — beta
@@ -63,7 +63,7 @@ Raises:
 !!! note "Beta"
     Goose is a **beta** convert target; its emitted-artifact shapes are not yet covered by the [stability policy](https://github.com/jlcatonjr/agentteams/blob/main/STABILITY.md).
 
-Converting an existing team to Goose emits one recipe per agent under `.goose/recipes/*.yaml`, plus the repo-root `AGENTS.md` + `.goosehints`. The orchestrator's `sub_recipes` delegation is reconstructed from each agent's handoffs:
+Converting an existing team to Goose emits one recipe per agent under `.goose/recipes/*.yaml`, plus the repo-root `AGENTS.md` + `.goosehints`, a capabilities reference, and `scripts/goose-run-resilient.py`. The orchestrator's `sub_recipes` delegation is reconstructed from each agent's handoffs:
 
 - **`copilot-vscode` sources** keep handoffs inline in their agent files, so delegation wires fully (identical to a native `--framework goose` generation).
 - **`claude` / `copilot-cli` sources** strip handoffs at their own generation (handoffs live in `references/runtime-handoffs.json`), so they currently convert to valid but **flat (un-delegated)** recipes. Recovering that delegation from the sidecar is planned (see the handoff-recovery work).

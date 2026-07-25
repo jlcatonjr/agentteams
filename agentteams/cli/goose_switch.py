@@ -73,6 +73,13 @@ def run_goose_switch(args: argparse.Namespace) -> int:
     # Apply the persistent config edit (backup-before-write).
     try:
         backup = gc.set_provider_model(path, provider=provider, model=model)
+    except gc.NewSchemaTargetError as exc:
+        # 2026-07-24: the newer providers:/active_provider: schema can't be safely
+        # rewritten by this flat-key mutator — refuse (no write, no backup) with the
+        # exact line to edit by hand, rather than silently writing dead output that
+        # a later --goose-show would then confidently report as if it had taken effect.
+        print(f"agentteams --goose-source/--goose-model: {exc}")
+        return 2
     except OSError as exc:
         print(f"agentteams: could not write {path}: {exc}")
         return 2

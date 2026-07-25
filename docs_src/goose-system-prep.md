@@ -151,6 +151,14 @@ If an env override is active, `agentteams --goose-source` warns that its `config
 and reminds you to export a cloud provider's key. It never reads or writes the key itself.
 For full OpenRouter model validation, run `python scripts/goose-openrouter-preflight.py`.
 
+**Newer Goose versions write a different `config.yaml` schema.** `goose configure` on
+recent Goose CLIs (1.37+) writes a nested `providers:` block with `active_provider:` at
+the top level, instead of the older flat `GOOSE_PROVIDER:`/`GOOSE_MODEL:` keys.
+`--goose-show` reads both schemas transparently. `--goose-source`/`--goose-model` **read**
+both too, but only **write** the older flat schema — against a `providers:` config they
+refuse (exit 2, no write, no backup) rather than add dead top-level keys Goose would never
+read, and print the exact `model:` line to edit by hand under `providers:\n  <provider>:`.
+
 ---
 
 ## 3c. Bridge a Goose team to/from other frameworks
@@ -217,6 +225,28 @@ goose session
 ```
 On OpenRouter, prefix with `goose-or` (e.g. `goose-or run --recipe …`).
 
+### 5a. Running through the resilient wrapper (optional)
+
+Every team agentteams generates or bridges ships with `scripts/goose-run-resilient.py` (repo
+root, alongside your other project scripts) — a thin wrapper around `goose run` that detects the
+dead-turn symptom in §6 below (a turn that ends with no error and no output) and automatically
+resubmits `"Continue"` in the same session, up to a retry cap:
+
+```sh
+python3 scripts/goose-run-resilient.py --recipe .goose/recipes/orchestrator.yaml
+python3 scripts/goose-run-resilient.py -t "your prompt" --provider openrouter --model <model>
+```
+
+It forwards `--provider`/`--model`/any other `goose run` args unchanged and has no hardcoded
+provider or model default — when you don't pass one, goose's own env/`config.yaml` resolution
+decides, same as calling `goose run` directly. **This is an addition, not a replacement** — the
+bare `goose run` commands above keep working exactly as documented, and the wrapper only helps
+if a session dies silently in the specific way §6 describes; it does not cover `goose session` or
+the VS Code extension's interactive path. Its dead-turn detection was confirmed against
+OpenRouter + a reasoning-capable model; on other providers (including local Ollama) it fails
+closed — if it can't confidently classify a turn as dead, it takes no action, so at worst it's a
+no-op passthrough, never a false "Continue."
+
 ### 5b. Verified delegation (the last Phase-1 sign-off)
 
 A generated **direct-build** orchestrator carries a `sub_recipes:` block (the
@@ -264,7 +294,11 @@ or serialized.
 
 | Symptom | Fix |
 |---|---|
-| **Query stops early & quickly on OpenRouter / "not a valid model ID"** | Your `GOOSE_MODEL` uses **Ollama tag syntax** (`model:tag`). On OpenRouter `:` means a *variant* (`:free`), so e.g. `qwen/qwen3.6:35b-a3b` (colon) doesn't exist — use the **hyphen** slug `qwen/qwen3.6-35b-a3b`. Run `python scripts/goose-openrouter-preflight.py` for the exact fix; `--fix` applies it (backup first). |
+| **Query stops early & quickly on OpenRouter / "not a valid model ID"** | Your `GOOSE_MODEL` uses **Ollama tag syntax** (`model:tag`). On OpenRouter `:` means a *variant* (`:free`), so e.g. `qwen/qwen3.6:35b-a3b` (colon) doesn't exist — use the **hyphen** slug `qwen/qwen3.6-35b-a3b`. Run `python scripts/goose-openrouter-preflight.py` for the exact fix; `--fix` applies it (backup first). On a newer `providers:`/`active_provider:` `config.yaml` (§3b), `--fix` refuses instead of guessing — it prints the exact `model:` line to edit by hand. |
+| **A turn silently ends with no error and no output** — not the above (your model id is valid), `goose doctor` is clean, and nothing appears in `~/.local/state/goose/logs/cli/<date>/*.log` | Different, deeper failure: the model traps its own tool call inside `<tool_call>` text in the reasoning stream instead of the structured tool-call field, so nothing actionable reaches goose (`finish_reason: stop`, no error anywhere). **This is largely a matter of which OpenRouter backend served you** — on one real payload, measured leak rates ranged from 0/12 to 3/12 across backends serving the *same* model. **Best available mitigation (not a fix):** select the backend via `scripts/goose-openrouter-route-proxy.py` + `OPENROUTER_HOST` — see [goose-cloud-providers.md](goose-cloud-providers.md#reliability-choosing-which-upstream-backend-serves-you). This covers **all** goose surfaces including VS Code. **It does not eliminate the failure** — on 2026-07-24 the leak recurred on Morph, one of the backends measured 12/12 clean, with routing verifiably active; an 8-run end-to-end test still saw 2 silent dead turns. **CLI-only secondary:** `scripts/goose-run-resilient.py` (§5a) detects the dead turn and auto-continues — but it wraps `goose run`, so it does **not** protect the VS Code extension (which runs `goose acp`). Note `OPENROUTER_PARAMETERS` is **inert in Goose 1.37.0** and cannot be used for this. |
+| **The agent scrapes a homepage, floods its own context with navigation HTML, and never finds the answer** | It has no *search* tool in its tool list — `web_scrape` needs a URL it already knows, so it guesses one. Measured 2026-07-24: a single scraped homepage was 29,654 chars, **54% of the whole conversation**, and contained none of the answer (goose's 50 KB tool-output limit then truncated it to a temp file). Use `python -m agentteams.research search "<query>"` to *find* the page and `... fetch "<url>"` to get extracted text rather than raw HTML. Bridged Goose teams built before 2026-07-24 don't mention this module in their `AGENTS.md` — re-run `agentteams --bridge-from … --framework goose --bridge-merge` to add it. |
+| **`agentteams.research search` returns `[]` for a long, specific query** | Not "no results": DuckDuckGo answers a challenged request with **HTTP 202** and an interstitial page, which parses to nothing. Fixed 2026-07-24 — it now retries once with a broadened query and prints a `note:` to stderr explaining what happened. If you see that note, the empty list is a block, not an absence. Short keyword queries are challenged far less. |
+| **`agentteams.research fetch` returns a few hundred chars of menus** | `--max-bytes` caps the *download*, and the old 40 KB default stopped inside a large page's `<head>`/navigation — 342 chars and zero body content from a Wikipedia article, with no error. Default is now 400,000. Raise `--max-bytes` for very large pages; `--max-chars` separately bounds what enters your context. |
 | `goose recipe validate <f>` fails | check `version: "1.0.0"`, non-empty `instructions:`, no `model:` key |
 | "No provider/model configured" | set a provider (§2/§3) — env override or `config.yaml` |
 | OpenRouter 401 | `OPENROUTER_API_KEY` unset/invalid; `goose-backend status` to check |

@@ -93,6 +93,17 @@ _MACHINE_MANAGED_MERGE_OVERWRITE_PATHS: frozenset[str] = frozenset([
     # a different agent count than the diagram. Full-replace keeps the two in lockstep.
     "references/pipeline-graph.md",
     "references/architecture-graph.md",
+    # Gap 3 (2026-07-24): the Goose resilient-runner script is a verbatim shipped
+    # Python tool with no user-editable region (agentteams/frameworks/goose.py's
+    # _resilient_runner_content reads it from disk each run, so "the source of
+    # truth" already lives outside the generated project). Auto-fencing an
+    # unfenced .py file inserts an HTML-comment fence marker as its new first
+    # line, displacing the `#!/usr/bin/env python3` shebang and producing invalid
+    # Python (a SyntaxError on any subsequent run) — the exact same failure mode
+    # the SVG entries above document for XML, just for Python instead. Full-replace
+    # on merge keeps the shipped copy in lockstep with this repo's own script,
+    # exactly like the .md/.svg pairs above.
+    "../../scripts/goose-run-resilient.py",
 ])
 
 # Fences whose body is refreshed each run from an upstream live feed
@@ -210,9 +221,25 @@ def _extract_fenced_regions(content: str) -> dict[str, str] | str:
     return regions
 
 
-def _is_machine_managed_merge_overwrite_path(rel_path: str) -> bool:
-    """Return True when merge mode may safely full-replace a machine-managed file."""
-    return rel_path in _MACHINE_MANAGED_MERGE_OVERWRITE_PATHS
+def _is_machine_managed_merge_overwrite_path(rel_path: str, fresh_content: str) -> bool:
+    """Return True when merge mode may safely full-replace a machine-managed file.
+
+    Content-aware (2026-07-24, Gap 4): explicit-allowlist membership is always safe. Beyond
+    that, a non-Markdown path is safe to full-replace UNLESS its freshly-rendered content
+    already contains a real, engine-recognized AGENTTEAMS fence marker -- such a file (today:
+    ``.goosehints``, hand-authored by ``_goosehints_content``; some ``.goose/recipes/*.yaml``,
+    which inherit a fence from their source template's body) is deliberately designed for
+    fence-merge, and full-replacing it would silently discard legitimate out-of-fence content.
+    A blanket "any non-.md path" rule (the first version of this fix) does not hold: it
+    corrupted `.goosehints` in exactly this way. ``.md`` paths are never eligible here --
+    ``_normalize_generated_content`` already governs their fencing, and the explicit set is
+    for ``.md`` files that need full-replace for reasons unrelated to file-type safety.
+    """
+    if rel_path in _MACHINE_MANAGED_MERGE_OVERWRITE_PATHS:
+        return True
+    if rel_path.endswith(".md"):
+        return False
+    return _FENCE_BEGIN_RE.search(fresh_content) is None
 
 
 def _merge_fenced_content(

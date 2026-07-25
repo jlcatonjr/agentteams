@@ -73,6 +73,27 @@ def test_env_override_masking_warning(tmp_path, capsys, monkeypatch):
     assert "env override active" in out and "masked" in out
 
 
+def test_goose_model_against_v2_schema_refuses_cleanly(tmp_path, capsys):
+    # 2026-07-24: the CLI must surface set_provider_model's NewSchemaTargetError as a clean
+    # message + exit 2 — NOT an uncaught traceback (round-2 adversarial finding: before this
+    # wiring, run_goose_switch's only handler caught OSError, so this exception propagated
+    # unhandled all the way out of main()).
+    body = (
+        "providers:\n"
+        "  openrouter:\n"
+        "    enabled: true\n"
+        "    model: qwen/qwen3.6-27b\n"
+        "    configured: true\n"
+        "active_provider: openrouter\n"
+    )
+    p = _cfg(tmp_path, body)
+    code = main(["--goose-model", "qwen/qwen3.7-max", "--goose-config", str(p)])
+    out = capsys.readouterr().out
+    assert code == 2
+    assert "providers:/active_provider:" in out
+    assert p.read_text(encoding="utf-8") == body  # untouched, no backup written
+
+
 def test_goose_switch_mutually_exclusive_with_self(tmp_path):
     # parser.error raises SystemExit(2)
     with pytest.raises(SystemExit) as exc:

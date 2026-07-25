@@ -422,6 +422,35 @@ def test_merge_preserves_user_content_below_fence(tmp_path):
     assert "user-authored content below the fence" in content
 
 
+def test_merge_preserves_goosehints_content_outside_its_fence(tmp_path):
+    """Regression guard (2026-07-24): .goosehints is a non-.md path that DOES carry a real,
+    engine-recognized fence (via _goosehints_content) -- it must stay on the merge path, never
+    full-replaced, or a user's hand-edits outside the fence (e.g. in the Session Startup block,
+    which goose.py's own docstring says is deliberately kept mergeable) are silently discarded.
+    A blanket "any non-.md path is machine-managed" rule -- the first version of this fix --
+    corrupted exactly this file; this test is what would have caught it.
+    """
+    from agentteams.frameworks.goose import _goosehints_content
+
+    new_rendered = _goosehints_content("Acme Team")
+    existing = new_rendered.replace(
+        "### Session Startup (Mandatory)",
+        "### Session Startup (Mandatory)\n\nUSER-ADDED NOTE: do not skip step 3.",
+    )
+    target = tmp_path / ".goosehints"
+    target.write_text(existing, encoding="utf-8")
+
+    result = emit_all(
+        [("../../.goosehints", new_rendered)],
+        output_dir=tmp_path / ".goose" / "recipes",
+        merge=True,
+    )
+
+    assert result.success
+    content = target.read_text(encoding="utf-8")
+    assert "USER-ADDED NOTE: do not skip step 3." in content
+
+
 def test_merge_normalizes_unfenced_markdown_render_before_merge(tmp_path):
     existing = (
         "<!-- AGENTTEAMS:BEGIN content v=1 -->\n"

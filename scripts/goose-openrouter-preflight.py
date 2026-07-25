@@ -72,6 +72,9 @@ _PROBE_TEXT = (
 )
 
 _GOOSE_KV_RE = re.compile(r"^(GOOSE_[A-Z0-9_]+):\s*(.*?)\s*$")
+_ACTIVE_PROVIDER_RE = re.compile(r"^active_provider:\s*(.+?)\s*$")
+_PROVIDER_NAME_RE = re.compile(r"^  ([a-zA-Z0-9_-]+):\s*$")
+_PROVIDER_MODEL_RE = re.compile(r"^    model:\s*(.+?)\s*$")
 
 
 # ---------------------------------------------------------------------------
@@ -97,15 +100,113 @@ def parse_goose_config(text: str) -> dict[str, str]:
     return out
 
 
-def resolve_models(env: dict[str, str], config: dict[str, str]) -> dict[str, object]:
+def parse_goose_providers_block(text: str) -> dict[str, object] | None:
+    """Parse the newer ``providers:``/``active_provider:`` config.yaml schema.
+
+    Goose's config.yaml migrated (observed live, goose 1.37.0) from flat
+    ``GOOSE_PROVIDER:``/``GOOSE_MODEL:`` scalars to::
+
+        providers:
+          ollama:
+            enabled: true
+            model: qwen3.6:35b-a3b
+            configured: true
+          openrouter:
+            enabled: true
+            model: qwen/qwen3.6-27b
+            configured: true
+        active_provider: openrouter
+
+    A narrow line-scan state machine, not a YAML parser (matches
+    ``parse_goose_config``'s own no-dependency convention) — it only recognizes
+    this one fixed shape: a top-level ``providers:`` block, 2-space-indented
+    provider names, and their 4-space-indented ``model:`` value, matched **by
+    key name, not position** (real files interleave ``enabled``/``configured``
+    around ``model`` in varying order). Blank lines and ``#``-comment lines
+    inside the block are skipped, not treated as structure. Returns ``None``
+    when neither ``providers:`` nor ``active_provider:`` is present anywhere in
+    the file (an old-schema file) so callers can cleanly fall back.
+    """
+    active_provider: str | None = None
+    models_by_provider: dict[str, str] = {}
+    in_providers_block = False
+    current_provider: str | None = None
+
+    for raw in text.splitlines():
+        if not raw.strip() or raw.lstrip().startswith("#"):
+            continue
+
+        if raw == "providers:":
+            in_providers_block = True
+            current_provider = None
+            continue
+
+        m_active = _ACTIVE_PROVIDER_RE.match(raw)
+        if m_active and not raw[0].isspace():
+            active_provider = m_active.group(1).strip().strip('"').strip("'")
+            in_providers_block = False
+            continue
+
+        if in_providers_block:
+            if not raw[0].isspace():
+                # Any other unindented top-level key ends the providers: block.
+                in_providers_block = False
+                current_provider = None
+                continue
+            m_name = _PROVIDER_NAME_RE.match(raw)
+            if m_name:
+                current_provider = m_name.group(1)
+                continue
+            m_model = _PROVIDER_MODEL_RE.match(raw)
+            if m_model and current_provider is not None:
+                models_by_provider[current_provider] = m_model.group(1).strip('"').strip("'")
+                continue
+            # Other 4-space sub-keys (enabled:, configured:) — ignored by name.
+
+    if active_provider is None and not models_by_provider:
+        return None
+
+    return {
+        "active_provider": active_provider,
+        "models_by_provider": models_by_provider,
+        "model": models_by_provider.get(active_provider) if active_provider else None,
+    }
+
+
+def resolve_models(
+    env: dict[str, str],
+    config: dict[str, str],
+    providers_block: dict[str, object] | None = None,
+) -> dict[str, object]:
     """Resolve the provider + the env-effective and config-effective models.
 
     The **config** model is what plain ``goose run`` (no override) uses — the
     primary subject. The **env** model (``GOOSE_MODEL`` exported by
     ``goose-or``/``goose-backend``) overrides it only for invocations that set it.
+
+    ``providers_block`` (``parse_goose_providers_block``'s result) is preferred over
+    the flat ``GOOSE_PROVIDER``/``GOOSE_MODEL`` keys when present — ``active_provider:``
+    is what current ``goose`` itself actually reads. ``schema_source`` in the return
+    value ("v2" | "v1" | "none") tells callers (notably ``--fix``) which shape the
+    config-effective value came from, since a "v2" model lives on an indented
+    ``model:`` line ``apply_fix``'s column-0-anchored rewrite cannot safely reach.
     """
-    provider = env.get("GOOSE_PROVIDER") or config.get("GOOSE_PROVIDER") or ""
-    config_model = config.get("GOOSE_MODEL") or ""
+    new_schema_model = ""
+    new_schema_provider = ""
+    if providers_block is not None:
+        # A providers:/active_provider: block was found -- this file is schema v2,
+        # regardless of whether a model could be fully resolved from it (e.g. a
+        # dangling active_provider naming a provider absent from the block).
+        schema_source = "v2"
+        new_schema_provider = str(providers_block.get("active_provider") or "")
+        new_schema_model = str(providers_block.get("model") or "")
+    elif config.get("GOOSE_MODEL") or config.get("GOOSE_PROVIDER"):
+        schema_source = "v1"
+    else:
+        schema_source = "none"
+
+    provider = env.get("GOOSE_PROVIDER") or new_schema_provider or config.get("GOOSE_PROVIDER") or ""
+    config_model = new_schema_model or config.get("GOOSE_MODEL") or ""
     env_model = env.get("GOOSE_MODEL") or ""
     primary = config_model or env_model
     diverges = bool(env_model and config_model and env_model != config_model)
@@ -116,6 +217,7 @@ def resolve_models(env: dict[str, str], config: dict[str, str]) -> dict[str, obj
         "primary_model": primary,
         "primary_source": "config.yaml" if config_model else ("env" if env_model else "none"),
         "diverges": diverges,
+        "schema_source": schema_source,
     }
 
 
@@ -199,13 +301,15 @@ class SetupError(Exception):
     """A setup/parse/network/auth failure → exit code 2 (never a model verdict)."""
 
 
-def read_config(path: Path) -> dict[str, str]:
+def read_config(path: Path) -> tuple[dict[str, str], dict[str, object] | None]:
+    """Return (flat GOOSE_* scalars, new-schema providers-block parse or None)."""
     try:
-        return parse_goose_config(path.read_text(encoding="utf-8"))
+        text = path.read_text(encoding="utf-8")
     except FileNotFoundError:
-        return {}
+        return {}, None
     except (OSError, UnicodeDecodeError) as exc:
         raise SetupError(f"could not read goose config {path}: {exc}") from exc
+    return parse_goose_config(text), parse_goose_providers_block(text)
 
 
 def fetch_catalog(timeout: float) -> list[dict[str, object]]:
@@ -221,6 +325,66 @@ def fetch_catalog(timeout: float) -> list[dict[str, object]]:
     if not isinstance(data, list):
         raise SetupError("OpenRouter catalog JSON had no 'data' list")
     return data
+
+
+def fetch_endpoints(model: str, timeout: float) -> list[dict[str, object]]:
+    """Fetch the upstream backends OpenRouter can route ``model`` to.
+
+    Which backend serves a request materially affects tool-calling reliability: the
+    same model id can return a structured tool call from one backend and leak it into
+    the reasoning stream on another (see docs_src/goose-cloud-providers.md). This
+    surfaces the routing options so a caller can choose deliberately.
+
+    Args:
+        model: OpenRouter model slug, e.g. ``qwen/qwen3.6-27b``.
+        timeout: Socket timeout in seconds.
+
+    Returns:
+        The endpoint dicts, each with at least ``provider_name``.
+
+    Raises:
+        SetupError: On transport failure, non-JSON payload, or a missing endpoint list.
+    """
+    url = f"{CATALOG_URL}/{model}/endpoints"
+    req = urllib.request.Request(url, headers={"User-Agent": "agentteams-goose-preflight"})
+    try:
+        with urllib.request.urlopen(req, timeout=timeout) as resp:  # noqa: S310 (https literal)
+            payload = json.loads(resp.read().decode("utf-8"))
+    except (urllib.error.URLError, TimeoutError, OSError) as exc:
+        raise SetupError(f"could not fetch endpoints for '{model}': {exc}") from exc
+    except (json.JSONDecodeError, ValueError) as exc:
+        raise SetupError(f"endpoint listing for '{model}' was not valid JSON: {exc}") from exc
+    data = payload.get("data") if isinstance(payload, dict) else None
+    endpoints = data.get("endpoints") if isinstance(data, dict) else None
+    if not isinstance(endpoints, list):
+        raise SetupError(f"endpoint listing for '{model}' had no 'endpoints' list")
+    return endpoints
+
+
+def format_endpoints(model: str, endpoints: list[dict[str, object]]) -> str:
+    """Render an endpoint listing for humans.
+
+    Args:
+        model: The model slug the endpoints belong to.
+        endpoints: Endpoint dicts from :func:`fetch_endpoints`.
+
+    Returns:
+        A printable multi-line report.
+    """
+    lines = [f"upstream backends for {model}:"]
+    for ep in endpoints:
+        supported = ep.get("supported_parameters") or []
+        tools = "tools=yes" if "tools" in supported else "tools=NO"
+        ctx = ep.get("context_length") or "?"
+        quant = ep.get("quantization") or "unknown"
+        lines.append(f"  - {ep.get('provider_name', '?'):20s} {tools:9s} "
+                     f"ctx={ctx} quant={quant}")
+    lines.append("")
+    lines.append("  Backends are NOT equally reliable for tool calling, even at tools=yes —")
+    lines.append("  that flag means the parameter is accepted, not that the model's native")
+    lines.append("  tool-call template is extracted correctly. Measure before trusting one;")
+    lines.append("  pin with scripts/goose-openrouter-route-proxy.py --only <names>.")
+    return "\n".join(lines)
 
 
 def resolve_api_key(env: dict[str, str], env_file: str | None) -> str:
@@ -288,8 +452,8 @@ def _build_report(args: argparse.Namespace) -> dict[str, object]:
     """Run the checks and return a JSON-safe report (no secrets). Exit code in
     report['exit']. Raises SetupError for exit-2 conditions.
     """
-    config = read_config(Path(args.config).expanduser())
-    resolved = resolve_models(dict(os.environ), config)
+    config, providers_block = read_config(Path(args.config).expanduser())
+    resolved = resolve_models(dict(os.environ), config, providers_block)
     report: dict[str, object] = {"resolved": resolved, "checks": [], "fix": None, "live": None}
 
     primary = str(resolved["primary_model"])
@@ -330,9 +494,23 @@ def _build_report(args: argparse.Namespace) -> dict[str, object]:
     exit_code = 0 if primary_result["ok"] else 1
 
     if args.fix and fix:
-        report["fix_applied"] = apply_fix(Path(args.config).expanduser(), primary, fix)
-        # After a successful fix the plain-run path is healthy.
-        exit_code = 0
+        if resolved["schema_source"] == "v2":
+            # apply_fix's column-0-anchored regex would either no-op (no top-level
+            # GOOSE_MODEL: line exists to match) or, worse, insert one goose's
+            # new-schema reader never consults — refuse rather than guess, naming
+            # the exact indented line to edit by hand (Non-goal: safely rewriting
+            # inside the nested providers: block is separable, higher-risk work).
+            active = providers_block.get("active_provider") if providers_block else None
+            report["fix"] = None
+            report["fix_refused"] = (
+                f"'{args.config}' uses the newer providers:/active_provider: schema — "
+                f"--fix cannot safely rewrite an indented line automatically. Edit "
+                f"'model: {fix}' under 'providers:\\n  {active or '<provider>'}:' by hand."
+            )
+        else:
+            report["fix_applied"] = apply_fix(Path(args.config).expanduser(), primary, fix)
+            # After a successful fix the plain-run path is healthy.
+            exit_code = 0
 
     if args.live:
         target = fix if (args.fix and fix) else primary
@@ -370,9 +548,18 @@ def _format_human(report: dict[str, object]) -> str:
         lines.append(f"  {mark} [{c['role']}] {c['model']}: {'exists' if c['exists'] else 'NOT FOUND'}, {tools}")
     if report.get("fix"):
         lines.append(f"  → fix: change GOOSE_MODEL to '{report['fix']}' (Ollama uses ':', OpenRouter uses '-').")
-        lines.append("    apply with: python scripts/goose-openrouter-preflight.py --fix")
+        if r["schema_source"] == "v2":
+            # 2026-07-24 (code-hygiene close-out finding): the default report used to
+            # unconditionally point at `--fix`, but on a providers:/active_provider: config
+            # that flag refuses (see _build_report) -- don't advise a command known to fail.
+            lines.append("    config.yaml uses the newer providers:/active_provider: schema —")
+            lines.append("    --fix would refuse; edit the indented 'model:' line by hand instead.")
+        else:
+            lines.append("    apply with: python scripts/goose-openrouter-preflight.py --fix")
     if report.get("fix_applied"):
         lines.append(f"  ✓ config.yaml updated (backup: {report['fix_applied']}).")
+    if report.get("fix_refused"):
+        lines.append(f"  ⚠ {report['fix_refused']}")
     if report.get("live"):
         lv = report["live"]
         lines.append(f"  live probe: {lv['verdict']} — {lv['detail']}")
@@ -394,7 +581,25 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--max-turns", type=int, default=4, help="live probe --max-turns (>=3)")
     parser.add_argument("--quiet", action="store_true", help="suppress output on success")
     parser.add_argument("--json", action="store_true", help="emit JSON report")
+    parser.add_argument("--providers", metavar="MODEL", default=None,
+                        help="list the upstream backends OpenRouter can route MODEL to, then "
+                             "exit (backend choice affects tool-calling reliability)")
     args = parser.parse_args(argv)
+
+    if args.providers:
+        try:
+            endpoints = fetch_endpoints(args.providers, args.timeout)
+        except SetupError as exc:
+            if args.json:
+                print(json.dumps({"exit": 2, "error": str(exc)}, indent=2))
+            else:
+                print(f"goose-openrouter-preflight: SETUP ERROR: {exc}", file=sys.stderr)
+            return 2
+        if args.json:
+            print(json.dumps({"exit": 0, "model": args.providers, "endpoints": endpoints}, indent=2))
+        else:
+            print(format_endpoints(args.providers, endpoints))
+        return 0
 
     try:
         report = _build_report(args)

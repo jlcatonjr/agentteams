@@ -31,7 +31,7 @@ goose-backend local
 
 # Switch this shell to OpenRouter (also exports the key into the shell):
 goose-backend openrouter
-# → exports GOOSE_PROVIDER=openrouter, GOOSE_MODEL=qwen/qwen3.6-35b-a3b, OPENROUTER_API_KEY=<key>
+# → exports GOOSE_PROVIDER=openrouter, GOOSE_MODEL=qwen/qwen3.6-27b, OPENROUTER_API_KEY=<key>
 # → unsets OLLAMA_HOST
 
 # Show active provider/model (key shown as set/unset only, never printed):
@@ -69,7 +69,7 @@ functions; none require editing the script.
 
 | Env var | Default | Effect |
 |---|---|---|
-| `GOOSE_OPENROUTER_MODEL` | `qwen/qwen3.6-35b-a3b` | OpenRouter model used by `goose-backend openrouter` and `goose-or` |
+| `GOOSE_OPENROUTER_MODEL` | `qwen/qwen3.6-27b` | OpenRouter model used by `goose-backend openrouter` and `goose-or` |
 | `GOOSE_OPENROUTER_ENV_FILE` | *(a local `.env` file containing `OPENROUTER_API_KEY=<value>`)* | File the key is read from by reference; set per-shell to your own key file |
 | `GOOSE_OLLAMA_MODEL` | `qwen3.6:35b-a3b` | Ollama model used by `goose-backend local` |
 | `GOOSE_OLLAMA_HOST` | `http://localhost:11434` | Ollama host URL; sets `OLLAMA_HOST` in the subprocess |

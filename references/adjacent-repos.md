@@ -88,3 +88,19 @@ Each entry documents:
 | 2026-05-08 | Orchestrator | Initial creation with 38 repos | Fleet-update-all-repositories discovery phase |
 | 2026-07-23 | Repo Liaison | Added `researchteam` and `researchRepositories/OrthodoxLLM` as named rows | Both were real, actively-updated consumers of today's agentteams changes but were unregistered — discovered while integrating Rule S-9/CLI-competency updates into both repos |
 
+## 2026-07-24 — `agentteams.research` behavior change (consumers should be aware)
+
+`agentteams/research/search.py` changed in two ways that affect every consumer of the module,
+not just Goose teams (it is imported by `reputable.py`, `news.py`, and any downstream project):
+
+- **`web_search` may now issue a second request.** When the search endpoint answers with an
+  HTTP-202 challenge, the query is broadened and retried once. Worst-case wall-clock per call
+  roughly doubles; callers that fan out searches in a pool (e.g. `reputable.py`) should expect
+  the change in timing. The list-returning contract is unchanged.
+- **`fetch_text`'s `max_bytes` default rose 40,000 → 400,000** (a 10× larger download per fetch).
+  The previous default silently truncated any large page to its navigation header. `max_chars`
+  (what actually reaches a caller's context) is unchanged at 4,000.
+
+New `web_search_verbose` returns `(results, note)` for callers that must distinguish "blocked"
+from "nothing matched" — the plain `[]` cannot.
+

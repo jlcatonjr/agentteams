@@ -10,11 +10,15 @@ Powers the ``agentteams --goose-source/--goose-model/--goose-show`` CLI action. 
   seeded for ollama + openrouter and extensible via ``~/.config/agentteams/goose-sources.json``.
 * **Config mutation** (``set_provider_model``): set only the top-level ``GOOSE_PROVIDER`` /
   ``GOOSE_MODEL`` scalars with a column-0 anchor (never the nested ``extensions:`` keys),
-  timestamped-backup-before-write, no provider keys ever read or written.
+  timestamped-backup-before-write, no provider keys ever read or written. Only applies to the
+  older flat-key config.yaml schema — raises ``NewSchemaTargetError`` (no write, no backup)
+  against the newer ``providers:``/``active_provider:`` schema (2026-07-24) rather than
+  writing dead lines the newer reader never consults; see that exception's docstring.
 
 config.yaml is the **persistent default** goose reads when no env override is set; an active
 ``GOOSE_PROVIDER``/``GOOSE_MODEL`` env (e.g. a ``goose-or`` shell) wins over it — callers must
-surface that (see ``current_status``/``env_override``).
+surface that (see ``current_status``/``env_override``). ``read_config``/``current_status``
+recognize both config.yaml schemas; ``set_provider_model`` writes only the older one.
 """
 from __future__ import annotations
 
@@ -168,16 +172,93 @@ def _run_goose_info(runner) -> str | None:
 # ---------------------------------------------------------------------------
 
 _TOP_LEVEL_KV_RE = re.compile(r"^(GOOSE_[A-Z0-9_]+):\s*(.*?)\s*$")
+_ACTIVE_PROVIDER_RE = re.compile(r"^active_provider:\s*(.+?)\s*$")
+_PROVIDER_NAME_RE = re.compile(r"^  ([a-zA-Z0-9_-]+):\s*$")
+_PROVIDER_MODEL_RE = re.compile(r"^    model:\s*(.+?)\s*$")
+
+# Cheap, sufficient-for-a-pre-write-check detector: does this text contain the newer
+# providers:/active_provider: schema at all? Deliberately NOT the full parser below --
+# set_provider_model needs this before it does any write, and a full parse isn't required
+# to answer "is this new-schema" (confirmed: no ordering dependency on the full parser).
+_NEW_SCHEMA_MARKER_RE = re.compile(r"^(providers|active_provider):", re.MULTILINE)
 
 
-def read_config(path: Path) -> dict[str, str]:
-    """Parse top-level ``GOOSE_*: value`` scalars; ignore the nested ``extensions:`` block."""
+class NewSchemaTargetError(ValueError):
+    """Raised when set_provider_model's target uses the providers:/active_provider: schema.
+
+    Distinct from set_provider_model's other ValueError (missing provider/model args) --
+    callers (the CLI) must be able to tell these apart and print a different message.
+    """
+
+
+def _parse_providers_block(text: str) -> dict[str, object] | None:
+    """Parse the newer ``providers:``/``active_provider:`` config.yaml schema.
+
+    Independently implemented from ``scripts/goose-openrouter-preflight.py``'s identical
+    function (not shared: that script is deliberately standalone/dependency-free -- it is
+    excluded from the packaged distribution per ``pyproject.toml``'s
+    ``[tool.setuptools.packages.find] exclude`` -- so a shared module under ``scripts/``
+    would be unimportable from an installed ``agentteams``, and one under ``agentteams/``
+    would make the standalone script depend on the package being installed). See that
+    script's docstring for the schema shape this recognizes. Returns ``None`` when neither
+    ``providers:`` nor ``active_provider:`` is present (an old-schema file).
+    """
+    active_provider: str | None = None
+    models_by_provider: dict[str, str] = {}
+    in_providers_block = False
+    current_provider: str | None = None
+
+    for raw in text.splitlines():
+        if not raw.strip() or raw.lstrip().startswith("#"):
+            continue
+
+        if raw == "providers:":
+            in_providers_block = True
+            current_provider = None
+            continue
+
+        m_active = _ACTIVE_PROVIDER_RE.match(raw)
+        if m_active and not raw[0].isspace():
+            active_provider = m_active.group(1).strip().strip('"').strip("'")
+            in_providers_block = False
+            continue
+
+        if in_providers_block:
+            if not raw[0].isspace():
+                in_providers_block = False
+                current_provider = None
+                continue
+            m_name = _PROVIDER_NAME_RE.match(raw)
+            if m_name:
+                current_provider = m_name.group(1)
+                continue
+            m_model = _PROVIDER_MODEL_RE.match(raw)
+            if m_model and current_provider is not None:
+                models_by_provider[current_provider] = m_model.group(1).strip('"').strip("'")
+                continue
+
+    if active_provider is None and not models_by_provider:
+        return None
+
+    return {
+        "active_provider": active_provider,
+        "models_by_provider": models_by_provider,
+        "model": models_by_provider.get(active_provider) if active_provider else None,
+    }
+
+
+def read_config(path: Path) -> tuple[dict[str, str], dict[str, object] | None]:
+    """Return (flat GOOSE_* scalars, new-schema providers-block parse or None).
+
+    The flat-key scan ignores the nested ``extensions:`` block and the new schema's
+    ``providers:``/``active_provider:`` lines equally (neither matches ``GOOSE_*:``).
+    """
     try:
         text = path.read_text(encoding="utf-8")
     except FileNotFoundError:
-        return {}
+        return {}, None
     except (OSError, UnicodeDecodeError):
-        return {}
+        return {}, None
     out: dict[str, str] = {}
     for raw in text.splitlines():
         if not raw or raw[0].isspace() or raw.lstrip().startswith("#"):
@@ -185,7 +266,7 @@ def read_config(path: Path) -> dict[str, str]:
         m = _TOP_LEVEL_KV_RE.match(raw)
         if m:
             out[m.group(1)] = m.group(2).strip().strip('"').strip("'")
-    return out
+    return out, _parse_providers_block(text)
 
 
 def _rewrite_or_insert(text: str, key: str, value: str) -> str:
@@ -206,6 +287,16 @@ def set_provider_model(
     Writes a timestamped backup BEFORE the rewrite (no partial-write window). Creates a
     minimal config if the file is absent. Returns the backup path, or None when the file
     was newly created. Never reads or writes provider keys.
+
+    Raises ``NewSchemaTargetError`` (2026-07-24), refusing the write entirely, when the
+    target already uses the newer ``providers:``/``active_provider:`` schema: this
+    function's flat-key rewrite would either no-op (no top-level ``GOOSE_PROVIDER:``/
+    ``GOOSE_MODEL:`` line to match) or insert one goose's new-schema reader never
+    consults -- confirmed empirically (round-1 plan-level audit) to silently produce a
+    config.yaml whose real ``active_provider:``/nested ``model:`` are unchanged while
+    ``current_status()`` reports the dead write back as if it had taken effect. No backup
+    is written and the original file is untouched when refusing -- checked before any I/O
+    besides the read already needed to detect this.
     """
     if provider is None and model is None:
         raise ValueError("set_provider_model requires provider and/or model")
@@ -216,6 +307,16 @@ def set_provider_model(
     except FileNotFoundError:
         original = ""
         existed = False
+
+    if existed and _NEW_SCHEMA_MARKER_RE.search(original):
+        block = _parse_providers_block(original)
+        active = block.get("active_provider") if block else None
+        raise NewSchemaTargetError(
+            f"'{path}' uses the newer providers:/active_provider: schema -- refusing to "
+            f"write flat GOOSE_PROVIDER:/GOOSE_MODEL: lines goose would never read. Edit "
+            f"'model: {model or '<value>'}' under 'providers:\\n  {active or provider or '<provider>'}:' "
+            "by hand, or 'active_provider: ' to switch which provider is active."
+        )
 
     if not existed:
         # Fresh file: write a clean, canonical, ordered block.
@@ -276,11 +377,27 @@ def env_override(env: dict[str, str] | None = None) -> dict[str, str]:
 
 
 def current_status(path: Path, env: dict[str, str] | None = None) -> dict[str, object]:
-    """Snapshot the config.yaml provider/model and any masking env override."""
-    cfg = read_config(path)
+    """Snapshot the config.yaml provider/model and any masking env override.
+
+    Prefers the newer providers:/active_provider: schema when present (2026-07-24) --
+    previously this always reported the flat GOOSE_PROVIDER/GOOSE_MODEL keys, which are
+    silently absent from any config.yaml written by current `goose configure`, so every
+    new-schema file reported empty provider/model here regardless of its real, active
+    configuration. `schema_source` ("v2"/"v1"/"none") tells a caller which shape resolved.
+    """
+    cfg, providers_block = read_config(path)
+    if providers_block is not None:
+        active = providers_block.get("active_provider") or ""
+        model = providers_block.get("model") or ""
+        schema_source = "v2"
+    else:
+        active = cfg.get("GOOSE_PROVIDER", "")
+        model = cfg.get("GOOSE_MODEL", "")
+        schema_source = "v1" if (active or model) else "none"
     return {
-        "config_provider": cfg.get("GOOSE_PROVIDER", ""),
-        "config_model": cfg.get("GOOSE_MODEL", ""),
+        "config_provider": active,
+        "config_model": model,
         "config_mode": cfg.get("GOOSE_MODE", ""),
         "env_override": env_override(env),
+        "schema_source": schema_source,
     }

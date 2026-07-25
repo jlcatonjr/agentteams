@@ -397,13 +397,24 @@ class TestW7GoosehintsSessionStartup:
         assert "orchestrator.yaml" in goosehints
 
     def test_goosehints_has_managed_fence(self):
-        """Operational notes are inside an AGENTTEAMS fence (merge-safe)."""
+        """Operational notes are inside a real, engine-recognized AGENTTEAMS fence (merge-safe).
+
+        Regression guard (2026-07-24): a substring check alone previously passed against a
+        marker that LOOKED like a fence but didn't match fences.py's actual grammar (hyphenated
+        section_id, no v=<N>) -- silently defeating merge-safety while this test stayed green.
+        Assert against the real engine, not just string presence.
+        """
+        from agentteams.fences import _FENCE_BEGIN_RE, _FENCE_END_RE
+
         adapter = GooseAdapter()
         manifest = _make_manifest()
         files = dict(adapter.extra_output_files(manifest))
         goosehints = files.get("../../.goosehints", "")
-        assert "AGENTTEAMS:BEGIN goose-operational-notes" in goosehints
-        assert "AGENTTEAMS:END goose-operational-notes" in goosehints
+        begin = _FENCE_BEGIN_RE.search(goosehints)
+        end = _FENCE_END_RE.search(goosehints)
+        assert begin is not None, "no engine-recognized AGENTTEAMS:BEGIN fence found"
+        assert end is not None, "no engine-recognized AGENTTEAMS:END fence found"
+        assert begin.group("sid") == end.group("sid") == "goose_operational_notes"
 
     def test_goosehints_content_function_parameterized(self):
         content = _goosehints_content("MyCustomProject")

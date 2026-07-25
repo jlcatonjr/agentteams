@@ -135,7 +135,7 @@ Post-process the rendered team-builder meta-agent. **Default implementation: ide
 
 #### `extra_output_files(manifest)`
 
-Return additional `(rel_path, content)` files the framework emits that are not derived from a template. **Default implementation: empty list.** `GooseAdapter` overrides this to emit the repo-root `.goosehints` integrator alongside `AGENTS.md`. These files are emitted by the generate path **and** by `convert_team`, so a converted Goose team also gets its `.goosehints`.
+Return additional `(rel_path, content)` files the framework emits that are not derived from a template. **Default implementation: empty list.** `GooseAdapter` overrides this to emit three files unconditionally: the repo-root `.goosehints` integrator alongside `AGENTS.md`, a `references/goose-capabilities-reference.md` reference doc, and a repo-root `scripts/goose-run-resilient.py` resilient-runner script (a dead-turn-detecting wrapper around `goose run`, read from this package's own `scripts/` at generation time so the shipped copy can't drift). These files are emitted by the generate path **and** by `convert_team`, so a converted Goose team gets all three too.
 
 **Args:**
 

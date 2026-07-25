@@ -48,7 +48,35 @@ No-API-key DuckDuckGo HTML-endpoint search.
 redirect wrapper), and `snippet`. Empty list on any failure (network down, blocked, parse error) —
 never raises.
 
-### `fetch_text(url, max_bytes=40_000, timeout_s=8.0, max_chars=4000, max_pdf_bytes=12_000_000, pdf_timeout_s=60.0)`
+When the endpoint *challenges* a request rather than answering it, this retries once with a
+broadened query before giving up (see `web_search_verbose` for why, and for how to tell the two
+cases apart).
+
+### `web_search_verbose(query, k=5, timeout_s=8.0)`
+
+`web_search` plus an explanation of any fallback or block.
+
+DuckDuckGo answers a challenged request with **HTTP 202** and an interstitial page rather than an
+error status, so `raise_for_status()` never fires and the page simply parses to nothing. Plain
+`web_search` therefore cannot distinguish *"you were blocked"* from *"nothing matched"* — both are
+`[]`. That ambiguity is load-bearing for an agent: read as "no such information exists", it
+abandons an answerable question. Measured 2026-07-24: a long specific query was challenged on 4/4
+attempts while a shortened form returned 10 results.
+
+**Args:** identical to `web_search`.
+
+**Returns:** `tuple[list[Source], str | None]` — the results, plus `None` for an ordinary search or
+a short human-readable note saying the query was broadened, or that the endpoint challenged the
+request and the empty list is **not** evidence that nothing matched.
+
+`python -m agentteams.research search` prints this note to **stderr**, keeping the JSON on stdout
+parseable.
+
+> **Known gap:** the note is prose, so a caller distinguishing block-from-absence must
+> substring-match it. Also, a `429` rate-limit still arrives via `httpx.HTTPError` and remains
+> indistinguishable from "nothing matched" — only the `202` case is handled.
+
+### `fetch_text(url, max_bytes=400_000, timeout_s=8.0, max_chars=4000, max_pdf_bytes=12_000_000, pdf_timeout_s=60.0)`
 
 Fetch a page and return extracted, bounded text. Public-HTTPS-only with an SSRF guard (no private/
 loopback/link-local targets, no redirects). Content-type aware: HTML is tag-stripped; a PDF
@@ -58,7 +86,7 @@ fallback) is routed through a lazily-imported `pypdf` extractor instead.
 **Args:**
 
 - `url` (`str`) — The URL to fetch.
-- `max_bytes` (`int`) — Byte cap for non-PDF (HTML) responses. Default: `40_000`.
+- `max_bytes` (`int`) — Byte cap on the DOWNLOAD for non-PDF (HTML) responses. Default: `400_000`. Distinct from `max_chars` (which bounds returned text): set too low, a large page is truncated to its `<head>`/navigation and extraction silently yields chrome with no error — raised from `40_000` on 2026-07-24 after a Wikipedia article extracted to 342 chars of pure navigation.
 - `timeout_s` (`float`) — Wall-clock deadline for non-PDF responses; also httpx's own per-chunk
   read-gap timeout for every response. Default: `8.0`.
 - `max_chars` (`int`) — Cap on the returned extracted text. Default: `4000`.
@@ -90,7 +118,7 @@ fabricates a date. Returns `None` on no match; never raises.
 Must be called against RAW html, before any script/tag stripping — `fetch_text`'s own stripping
 removes the `<script>` blocks a JSON-LD date lives in.
 
-### `fetch_text_and_date(url, *, max_bytes=40_000, timeout_s=8.0, max_chars=4000, max_pdf_bytes=12_000_000, pdf_timeout_s=60.0) -> tuple[str, str | None]`
+### `fetch_text_and_date(url, *, max_bytes=400_000, timeout_s=8.0, max_chars=4000, max_pdf_bytes=12_000_000, pdf_timeout_s=60.0) -> tuple[str, str | None]`
 
 Fetch a page once and return both its extracted text (identical to what `fetch_text` would return
 for the same input) and a best-effort publish date — for a caller who wants both without paying

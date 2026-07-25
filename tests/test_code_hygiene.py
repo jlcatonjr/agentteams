@@ -71,7 +71,7 @@ BROAD_EXCEPT_BASELINE = 14      # except Exception/BaseException/bare. Narrowed 
                                 # consolidation (see tmp/by-week/2026-W30/
                                 # web-browsing-playwright-cli.plan.md, "Post-implementation audit
                                 # outcome" — where this exact consolidation is explained).
-SWALLOW_BASELINE = 34           # except clause whose body is only pass/continue (narrow catches =
+SWALLOW_BASELINE = 35           # except clause whose body is only pass/continue (narrow catches =
                                 # known-recoverable external boundaries; the ratchet blocks new ones).
                                 # 30→31: architecture.py skips files that fail ast.parse (SyntaxError/
                                 # ValueError) — a best-effort module mapper must tolerate an
@@ -83,6 +83,18 @@ SWALLOW_BASELINE = 34           # except clause whose body is only pass/continue
                                 # extraction strategies, each individually allowed to fail and fall
                                 # through to the next — narrowed to json.JSONDecodeError, not a
                                 # blanket catch, per the CH-24 comments inline).
+                                # 33→35 (this comment previously said 34, the pre-existing baseline
+                                # value, but the true pre-session count measured against git HEAD
+                                # with untracked files excluded — `git stash -u` — was 33; that 1-unit
+                                # of slack predates this change and is unrelated to it): +2 from
+                                # scripts/goose-run-resilient.py (new file, 2026-07-24) —
+                                # classify_request_log skips an unparseable llm_request.jsonl
+                                # line (continue; narrowed to json.JSONDecodeError/ValueError, same
+                                # tolerant-parser boundary as verify.py above) and
+                                # find_and_classify_latest_run skips a log candidate whose mtime
+                                # can't be read (continue; OSError, e.g. a file deleted mid-glob) —
+                                # both are the fail-closed contract's "can't confidently classify ->
+                                # treat as alive, never as dead" boundary, not silent-failure debt.
 
 
 def _tracked_py_files() -> list[str]:

@@ -31,6 +31,7 @@ from agentteams.research.search import (
     fetch_text,
     fetch_text_and_date,
     web_search,
+    web_search_verbose,
 )
 from agentteams.research.verify import (
     ChatFn,
@@ -60,4 +61,5 @@ __all__ = [
     "perspective_attribution",
     "revise",
     "web_search",
+    "web_search_verbose",
 ]

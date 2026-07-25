@@ -92,3 +92,12 @@ docs_src/book/figures/*.svg
 # (added with the validation-cache perf fix; keeps test_root_doc_hygiene / untracked-artifact checks clean)
 references/memory-index.vcache
 **/references/memory-index.vcache
+
+# Goose cost-monitoring tooling — local operator tooling, never committed.
+# Untracked at the time these rules were added, so no `git rm --cached` was needed.
+# Note: .gitignore'd paths are also excluded from tests/test_code_hygiene.py's scan
+# (it enumerates via `git ls-files --cached --others --exclude-standard`), so these
+# files no longer count toward the CH-24 broad-except / swallowed-exception baselines.
+scripts/goose-cost-proxy.py
+scripts/cost-monitor-app.html
+scripts/gooseCostMonitor/

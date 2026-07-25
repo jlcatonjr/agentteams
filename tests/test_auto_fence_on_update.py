@@ -13,6 +13,8 @@ from __future__ import annotations
 
 from pathlib import Path
 
+import pytest
+
 from agentteams import emit
 
 _FENCED_NEW = (
@@ -115,5 +117,53 @@ def test_machine_managed_path_not_auto_fenced(tmp_path: Path) -> None:
         output_dir=out, merge=True, yes=True, auto_fence_legacy=True,
     )
     # machine-managed json keeps its overwrite-fenced path; never auto-fenced.
+    assert res.fence_injected == []
+    assert "AGENTTEAMS:BEGIN" not in target.read_text(encoding="utf-8")
+
+
+def test_goose_resilient_runner_not_auto_fenced(tmp_path: Path) -> None:
+    # Regression guard (framework-adapters-expert audit, 2026-07-24, empirically
+    # reproduced 3x against real generated projects): before this path was added
+    # to _MACHINE_MANAGED_MERGE_OVERWRITE_PATHS, auto-fencing injected an
+    # HTML-comment marker as the file's new first line, displacing the
+    # `#!/usr/bin/env python3` shebang and making the shipped script fail to
+    # parse as Python on the very next `--update`/`--update --merge` a downstream
+    # project runs. Same failure class the SVG entries above solve for XML.
+    out = tmp_path / "a"; (out / "scripts").mkdir(parents=True)
+    rel = "../../scripts/goose-run-resilient.py"
+    target = out / "scripts" / "goose-run-resilient.py"
+    target.write_text("#!/usr/bin/env python3\nprint('legacy local edit')\n", encoding="utf-8")
+    res = emit.emit_all(
+        [(rel, "#!/usr/bin/env python3\nprint('fresh from agentteams')\n")],
+        output_dir=out, merge=True, yes=True, auto_fence_legacy=True,
+    )
+    assert res.fence_injected == []
+    content = target.read_text(encoding="utf-8")
+    assert "AGENTTEAMS:BEGIN" not in content
+    assert content.startswith("#!/usr/bin/env python3\n")
+    import ast
+    ast.parse(content)  # must still be valid Python after --update --merge
+
+
+@pytest.mark.parametrize(
+    "rel,legacy_body,fresh_body",
+    [
+        ("references/some-tool.json", '{"legacy": true}\n', '{"fresh": true}\n'),
+        ("scripts/some-hook.sh", "#!/bin/sh\necho legacy\n", "#!/bin/sh\necho fresh\n"),
+    ],
+)
+def test_generic_unfenced_non_md_path_not_auto_fenced(
+    tmp_path: Path, rel: str, legacy_body: str, fresh_body: str
+) -> None:
+    # General case (2026-07-24): this path is in NO explicit allowlist at all -- proves the
+    # content-aware rule protects any future non-.md, no-fence file automatically, not just the
+    # two paths hand-added to _MACHINE_MANAGED_MERGE_OVERWRITE_PATHS so far.
+    out = tmp_path / "a"
+    target = out / rel
+    target.parent.mkdir(parents=True, exist_ok=True)
+    target.write_text(legacy_body, encoding="utf-8")
+    res = emit.emit_all(
+        [(rel, fresh_body)], output_dir=out, merge=True, yes=True, auto_fence_legacy=True,
+    )
     assert res.fence_injected == []
     assert "AGENTTEAMS:BEGIN" not in target.read_text(encoding="utf-8")

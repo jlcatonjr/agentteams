@@ -8,11 +8,158 @@ from unittest.mock import patch
 import pytest
 
 from agentteams.research.search import (
+    _broaden,
     _extract_pdf_text,
     extract_published_date,
     fetch_text_and_date,
     is_public_https,
+    web_search,
+    web_search_verbose,
 )
+
+
+# --- challenged-request handling (2026-07-24) -------------------------------
+#
+# DuckDuckGo answers a challenged request with HTTP 202 + an interstitial page, NOT an
+# error status, so raise_for_status() never fires. Before this handling, a challenge was
+# indistinguishable from "nothing matched": a live agent read the empty list as "no such
+# information exists" and abandoned an answerable question. Measured that day: a long,
+# specific query was challenged 4/4 attempts while a shortened form returned 10 results.
+
+class _FakeResp:
+    def __init__(self, status_code: int, text: str):
+        self.status_code = status_code
+        self.text = text
+
+    def raise_for_status(self) -> None:
+        if self.status_code >= 400:
+            raise AssertionError("test fixture should not use error statuses here")
+
+
+_RESULT_HTML = (
+    '<a class="result__a" href="https://example.com/a">Result A</a>'
+    '<a class="result__snippet">snippet a</a>'
+)
+
+
+def test_broaden_preserves_the_entity_not_just_a_fixed_prefix():
+    """The broadened query must keep the entity being searched for, intact.
+
+    Regression guard for a defect caught in review: a fixed 4-term cap turned the
+    motivating query into "2026 NASCAR Cup Pennzoil", severing the race name
+    "Pennzoil 400" — the one term the search actually needs. Halving keeps it.
+    """
+    q = "2026 NASCAR Cup Pennzoil 400 Las Vegas top 10 finishers results"
+    out = _broaden(q)
+    assert "Pennzoil 400" in out, f"broadening severed the entity: {out!r}"
+    assert len(out.split()) < len(q.split())
+
+
+def test_broaden_scales_with_query_length_rather_than_truncating_to_a_constant():
+    long_q = " ".join(f"t{i}" for i in range(20))
+    mild_q = " ".join(f"t{i}" for i in range(6))
+    assert len(_broaden(long_q).split()) == 10   # halved
+    assert len(_broaden(mild_q).split()) == 3    # halved, at the floor
+
+
+def test_broaden_returns_empty_when_query_is_already_short():
+    # Below the floor, shortening would strip meaning rather than filler.
+    assert _broaden("2026 Pennzoil 400") == ""
+    assert _broaden("one two") == ""
+
+
+def test_challenged_query_retries_broadened_and_reports_it():
+    calls: list[str] = []
+
+    def fake_get(url, params=None, **kwargs):
+        calls.append(params["q"])
+        if len(calls) == 1:
+            return _FakeResp(202, "<html>anomaly challenge</html>")  # challenged
+        return _FakeResp(200, _RESULT_HTML)
+
+    with patch("agentteams.research.search.httpx.get", side_effect=fake_get):
+        results, note = web_search_verbose("one two three four five six seven")
+
+    assert len(calls) == 2 and calls[1] == "one two three"   # 7 terms -> halved
+    assert [r.title for r in results] == ["Result A"]
+    assert note is not None and "challenged" in note and "one two three" in note
+
+
+def test_challenge_with_unshortenable_query_reports_block_not_no_results():
+    # The distinction that matters: an agent must not conclude "nothing exists".
+    with patch("agentteams.research.search.httpx.get",
+               return_value=_FakeResp(202, "<html>challenge</html>")):
+        results, note = web_search_verbose("short query")
+    assert results == []
+    assert note is not None and "not evidence that nothing matched" in note
+
+
+def test_genuine_zero_results_is_not_reported_as_a_challenge():
+    # 200 with no parseable results really does mean nothing matched.
+    with patch("agentteams.research.search.httpx.get",
+               return_value=_FakeResp(200, "<html>no results here</html>")):
+        results, note = web_search_verbose("obscure query")
+    assert results == [] and note is None
+
+
+def test_successful_search_needs_no_retry_and_emits_no_note():
+    calls: list[str] = []
+
+    def fake_get(url, params=None, **kwargs):
+        calls.append(params["q"])
+        return _FakeResp(200, _RESULT_HTML)
+
+    with patch("agentteams.research.search.httpx.get", side_effect=fake_get):
+        results, note = web_search_verbose("a b c d e f g")
+    assert len(calls) == 1 and note is None and len(results) == 1
+
+
+def test_web_search_keeps_its_list_return_contract():
+    # Back-compat: existing callers still get a plain list, retry included.
+    def fake_get(url, params=None, **kwargs):
+        return _FakeResp(200, _RESULT_HTML)
+
+    with patch("agentteams.research.search.httpx.get", side_effect=fake_get):
+        assert [r.title for r in web_search("q")] == ["Result A"]
+
+
+# --- download cap vs output cap (2026-07-24) --------------------------------
+
+def test_default_max_bytes_is_large_enough_for_a_real_article():
+    """`max_bytes` bounds the DOWNLOAD; too low silently returns navigation chrome.
+
+    Regression guard for a live failure: at the previous 40,000-byte default, an
+    en.wikipedia.org article extracted to 342 chars containing ZERO body content —
+    the whole budget was spent on <head> and nav before reaching the article. At
+    400,000 the same page yields 17,744 chars including the full results table.
+    Nothing errored in the 40 KB case, so a caller could not distinguish "the page
+    doesn't contain that" from "we never downloaded the part that does".
+    """
+    from agentteams.research.search import _DEFAULT_MAX_BYTES
+
+    assert _DEFAULT_MAX_BYTES >= 200_000
+
+
+def test_max_bytes_and_max_chars_are_independent_knobs():
+    """Raising the download cap must not enlarge what reaches the caller's context.
+
+    `max_chars` is the context guard and stays small by default; `max_bytes` only
+    governs how much is pulled before extraction. Conflating them is what would make
+    a fix for one a regression for the other.
+    """
+    import inspect
+
+    from agentteams.research.search import fetch_text
+
+    params = inspect.signature(fetch_text).parameters
+    assert params["max_chars"].default == 4000
+    assert params["max_bytes"].default > params["max_chars"].default
+
+
+def test_blank_query_short_circuits_without_network():
+    with patch("agentteams.research.search.httpx.get",
+               side_effect=AssertionError("must not hit the network")):
+        assert web_search_verbose("   ") == ([], None)
 
 
 def test_is_public_https_accepts_ordinary_public_url() -> None:

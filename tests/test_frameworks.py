@@ -8,7 +8,13 @@ import pytest
 from agentteams.frameworks.copilot_vscode import CopilotVSCodeAdapter
 from agentteams.frameworks.copilot_cli import CopilotCLIAdapter
 from agentteams.frameworks.claude import ClaudeAdapter
-from agentteams.frameworks.goose import GooseAdapter, _goosehints_content
+from agentteams.frameworks.goose import (
+    GooseAdapter,
+    _goosehints_content,
+    _resilient_runner_content,
+    _RESILIENT_RUNNER_SOURCE,
+)
+from agentteams.fences import _FENCE_BEGIN_RE, _is_machine_managed_merge_overwrite_path
 
 
 # ---------------------------------------------------------------------------
@@ -833,6 +839,63 @@ class TestGooseAdapter:
         content = _goosehints_content("Acme Team")
         assert ".goose/recipes/references/goose-capabilities-reference.md" in content
 
+    # --- resilient-runner script (Gap 3, 2026-07-24) ---
+
+    def test_extra_output_files_emits_resilient_runner_unconditionally(self):
+        # Opposite assertion direction from recipe_retry's tests (which assert
+        # ABSENCE when opted out): this ships even for a manifest with no opt-in
+        # of any kind, because it is unconditional, unlike recipe_retry.
+        extras = self.adapter.extra_output_files(GOOSE_MANIFEST_NO_SECURITY)
+        extras_by_path = dict(extras)
+        assert "../../scripts/goose-run-resilient.py" in extras_by_path
+        assert "recipe_retry" not in GOOSE_MANIFEST_NO_SECURITY
+
+    def test_resilient_runner_content_matches_disk_source_exactly(self):
+        # Single source of truth: the emitted copy must never drift from the
+        # tested scripts/goose-run-resilient.py (read from disk, not duplicated).
+        extras = self.adapter.extra_output_files(GOOSE_MANIFEST)
+        emitted = dict(extras)["../../scripts/goose-run-resilient.py"]
+        on_disk = _RESILIENT_RUNNER_SOURCE.read_text(encoding="utf-8")
+        assert emitted == on_disk
+
+    def test_resilient_runner_content_helper_degrades_on_missing_source(self, monkeypatch, tmp_path):
+        missing = tmp_path / "does-not-exist.py"
+        monkeypatch.setattr("agentteams.frameworks.goose._RESILIENT_RUNNER_SOURCE", missing)
+        content = _resilient_runner_content()
+        assert "Placeholder" in content
+        assert str(missing) in content
+
+    def test_goosehints_links_to_resilient_runner(self):
+        content = _goosehints_content("Acme Team")
+        assert "scripts/goose-run-resilient.py" in content
+
+    # --- .goose/recipes/*.yaml: per-file fence classification (2026-07-24) ---
+    #
+    # Empirically confirmed (round-2 adversarial audit, re-verified here) against a real
+    # `build_team.py --framework goose` render of examples/software-project/brief.json: 11/24
+    # generated recipes inherit a real, engine-recognized fence from their source .template.md
+    # body (orchestrator, security, conflict-auditor, navigator, etc.); 13/24 carry none
+    # (adversarial, cleanup, code-hygiene, etc.). Both outcomes are individually correct under
+    # the content-aware design — test the MECHANISM (does a fence in the source survive into the
+    # rendered recipe, and does the predicate classify each case correctly), not one fixed
+    # current agent, so this doesn't silently stop testing anything if templates are edited later.
+
+    def test_rendered_recipe_with_inherited_fence_is_not_machine_managed(self):
+        fenced_source = (
+            "---\nname: X\n---\n\n"
+            "<!-- AGENTTEAMS:BEGIN example_section v=1 -->\nBody.\n"
+            "<!-- AGENTTEAMS:END example_section -->\n"
+        )
+        recipe = self.adapter.render_agent_file(fenced_source, "alpha", GOOSE_MANIFEST)
+        assert _FENCE_BEGIN_RE.search(recipe) is not None  # sanity: the fence really survived
+        assert _is_machine_managed_merge_overwrite_path(".goose/recipes/alpha.yaml", recipe) is False
+
+    def test_rendered_recipe_without_fence_is_machine_managed(self):
+        unfenced_source = "---\nname: X\n---\n\nBody with no fence at all.\n"
+        recipe = self.adapter.render_agent_file(unfenced_source, "alpha", GOOSE_MANIFEST)
+        assert _FENCE_BEGIN_RE.search(recipe) is None  # sanity: genuinely no fence
+        assert _is_machine_managed_merge_overwrite_path(".goose/recipes/alpha.yaml", recipe) is True
+
     # --- render_agent_file: orchestrator → sub_recipes (delegation) ---
 
     def test_orchestrator_builds_sub_recipes(self):
@@ -947,3 +1010,35 @@ class TestGooseAdapter:
 
         hints_path, _ = self.adapter.extra_output_files(GOOSE_MANIFEST)[0]
         assert (agents_dir / hints_path).resolve() == Path("/project/.goosehints")
+
+
+# ===========================================================================
+# Cross-adapter: every extra_output_files() path is correctly auto-fence-safe
+# ===========================================================================
+
+class TestExtraOutputFilesAutoFenceSafety:
+    """Every framework adapter's extra_output_files() output must classify correctly under
+    _is_machine_managed_merge_overwrite_path (2026-07-24) -- not asserting a flat "never
+    fenced" (no longer universally true by design: a legitimately-fenced non-.md path, like
+    .goosehints, correctly stays merge-protected), but that classification MATCHES whether the
+    path's fresh content actually carries a real fence. Forward-looking: only GooseAdapter
+    currently returns any non-.md extra file, but this test automatically covers any future
+    adapter that adds one, without needing a new test written for it.
+    """
+
+    ADAPTERS = [CopilotVSCodeAdapter, CopilotCLIAdapter, ClaudeAdapter, GooseAdapter]
+
+    @pytest.mark.parametrize("adapter_cls", ADAPTERS)
+    def test_classification_matches_actual_fence_presence(self, adapter_cls):
+        adapter = adapter_cls()
+        manifest = {"project_name": "TestProject", "framework": adapter_cls.__name__.lower()}
+        for rel_path, content in adapter.extra_output_files(manifest):
+            has_fence = _FENCE_BEGIN_RE.search(content) is not None
+            is_managed = _is_machine_managed_merge_overwrite_path(rel_path, content)
+            if rel_path.endswith(".md"):
+                continue  # governed by _normalize_generated_content / the explicit allowlist, not this rule
+            assert is_managed != has_fence, (
+                f"{adapter_cls.__name__}:{rel_path} — has_fence={has_fence} but "
+                f"machine_managed={is_managed} (a real fence must never be machine-managed, "
+                f"and a fence-free file must always be)"
+            )

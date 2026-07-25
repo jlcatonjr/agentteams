@@ -97,6 +97,104 @@ goose run --recipe .goose/recipes/orchestrator.yaml \
   --model anthropic/claude-opus-4
 ```
 
+### Reliability: choosing which upstream backend serves you
+
+OpenRouter routes a single model id across many upstream backends, and **they are not equally
+correct**. Measured 2026-07-24 against `qwen/qwen3.6-27b`, replaying one real captured agent
+payload (11 messages, 24 tools, reasoning on) 12 times per backend:
+
+| backend | structured tool call | leaked into reasoning | no tool call |
+|---|---|---|---|
+| Alibaba | 12/12 | 0 | 0 |
+| CoreWeave | 12/12 | 0 | 0 |
+| Morph | 12/12 | 0 | 0 |
+| Chutes | 10/12 | **1** | 1 |
+| Phala | 9/12 | **1** | 2 |
+| SiliconFlow | 8/12 | **3** | 1 |
+
+("no tool call" = answered without calling a tool; not the leak bug, but not the requested
+behavior either. Rows sum to 12.)
+
+A "leak" is the silent dead turn described in
+[goose-system-prep.md §6](goose-system-prep.md#6-validate--troubleshoot): the model emits its
+tool call as literal `<tool_call>` text inside its reasoning instead of the structured field, so
+goose has nothing to execute, the turn ends with `finish_reason: stop`, and **nothing is logged
+anywhere**. Same model, same request — the difference is the backend.
+
+> **`OPENROUTER_PARAMETERS` does not work in Goose 1.37.0.** Earlier revisions of this page
+> recommended setting `OPENROUTER_PARAMETERS.provider.require_parameters` in `config.yaml`.
+> That key is **inert**: it does not appear anywhere in the 1.37.0 binary, and neither a nested
+> `provider` block nor a top-level `transforms` override reaches the wire (verified with an
+> isolated config via `XDG_CONFIG_HOME`, with a `model` change in the same file confirming goose
+> did read it). If you set it, nothing happens. Re-check this against your own version before
+> assuming it is still true.
+
+Goose 1.37.0 exposes only `OPENROUTER_API_KEY` and `OPENROUTER_HOST`. `OPENROUTER_HOST` **is**
+honored, so backend selection is done with a small local proxy that adds the routing OpenRouter
+needs:
+
+```sh
+python3 scripts/goose-openrouter-route-proxy.py --port 8791
+```
+
+```yaml
+# ~/.config/goose/config.yaml
+OPENROUTER_HOST: http://127.0.0.1:8791
+```
+
+Restart goose afterwards (VS Code: reload the window, so the `goose acp` daemons re-read config).
+
+Because this sits at the transport layer, it covers **every** goose surface — CLI, the VS Code
+extension, and desktop. That is the key advantage over
+[`scripts/goose-run-resilient.py`](goose-system-prep.md#5a-running-through-the-resilient-wrapper-optional),
+which wraps `goose run` and therefore cannot see VS Code / ACP traffic at all.
+
+**Know the tradeoffs before adopting it:**
+
+- It is **a process that must stay running** — if it stops, goose has no endpoint and every
+  request fails. That is a real cost against an intermittent, self-recovering failure.
+- Prefer the `--only` allowlist over `--ignore`. A denylist is only as good as your list of bad
+  backends: excluding just Chutes reroutes to whatever remains, and in the table above that
+  landed on SiliconFlow — the *worst* measured backend.
+- "Clean" is bounded, not proven — 0/12 still leaves roughly a 22% upper bound on the true leak
+  rate at 95% confidence (~10% pooled across the three). This lowers the failure rate; it does
+  not eliminate it. **Confirmed the hard way on 2026-07-24:** the leak recurred on **Morph**, one
+  of the three backends above, with routing verifiably active. Treat this as risk reduction, not
+  a fix.
+- **Context size is *not* an established factor.** It is tempting to assume bigger prompts leak
+  more; measured, that did not hold — three real payloads × three backends × 8 streaming trials
+  gave a completely clean 21k-token payload (24/24) and one leak at 23k. Whatever drives it is
+  not simply length, so don't rely on trimming context as a leak mitigation. (Trim it anyway for
+  the reasons in [goose-system-prep.md §6](goose-system-prep.md#6-validate--troubleshoot) — those
+  stand on their own.)
+- Restricting backends can lower your effective context ceiling (Morph advertises 131k vs 262k
+  elsewhere) and reduces price/availability competition.
+- These measurements are a **snapshot**, and nothing re-measures them for you.
+  `python3 scripts/goose-openrouter-preflight.py --providers <model>` lists the current
+  **roster** — who serves the model, context length, quantization — which will tell you if a
+  listed backend has disappeared. It does **not** measure tool-call reliability; that still
+  means replaying a real payload N times per backend by hand.
+
+
+### Model choice matters more than routing
+
+Backend routing reduces the dead-turn leak; it does not remove it. Measured 2026-07-24 on one
+real agent task (find and report a race's top-10 finishers), 8 CLI runs each, identical harness:
+
+| model | correct | silent dead turn | partial |
+|---|---|---|---|
+| `qwen/qwen3.6-27b` | 4/8 | 2 | 2 |
+| `qwen/qwen3.6-plus` | **8/8** | **0** | **0** |
+
+Same routing, same tools, same prompt. If an agent task is failing intermittently and you have
+already ruled out the config-level causes above, **try a stronger model before investing further
+in routing** — it was the larger lever here by a wide margin.
+
+Check what serves a candidate model first: `python3 scripts/goose-openrouter-preflight.py
+--providers <model>`. `qwen/qwen3.6-plus`, for instance, is served by **Alibaba alone**, so
+pairing it with the proxy's `allow_fallbacks: false` means an Alibaba outage is a hard failure
+rather than a reroute — a real trade against the reliability you gain.
+
 ---
 
 ## Direct Providers

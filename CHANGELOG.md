@@ -37,6 +37,111 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   because it is the first import attempted — `import agentteams` fails identically — which
   misdirects diagnosis toward packaging. Added the `pip show` check and the reinstall recovery.
 
+### fixed (bridged Goose teams could not retrieve anything: capability existed but was invisible)
+
+- **`agentteams/bridge.py` now advertises `agentteams.research` in the entry files it writes.**
+  `agentteams/frameworks/goose.py` already documented the module (search / text-extracted fetch /
+  browser rendering) in the hints it generates, but the **bridge** path writes its own
+  `AGENTS.md`/`.goosehints` and silently dropped that guidance. Measured on this repo:
+  `grep -c "agentteams.research" AGENTS.md .goosehints` → `0`, `0`, and a live failing turn's
+  20,258-char system prompt contained **zero** occurrences of "research". The agent had a working
+  general web-search capability installed and no idea it existed — so it guessed URLs, scraped a
+  homepage, and put 29,654 chars of navigation HTML into its own context (54% of the whole
+  conversation) without ever retrieving the answer. Also adds guidance to prefer extracted text
+  over raw HTML, and that relevance ranking is not recency for "most recent X" questions.
+- **`agentteams/research/search.py`: a blocked search is no longer reported as "no results".**
+  DuckDuckGo answers a challenged request with **HTTP 202** plus an interstitial page, so
+  `raise_for_status()` never fires (202 *is* success) and the challenge page simply parsed to
+  nothing. Measured deterministic: a long specific query returned 202 with zero results on 4/4
+  attempts while a shortened form returned 200 with 10 results. New `web_search_verbose` retries
+  once with a broadened query and returns a note explaining the fallback or the block; the CLI
+  prints it to stderr so stdout JSON stays parseable. `web_search` keeps its list contract.
+- **`fetch_text`'s download cap raised from 40,000 to 400,000 bytes.** `max_bytes` bounds the
+  *download*, and at 40 KB a real Wikipedia article extracted to **342 chars of navigation
+  chrome with zero body content** — with no error to distinguish "the page lacks that" from "we
+  never downloaded the part that has it". The same page yields 17,744 chars including the full
+  results table at the new default. `max_chars` (context guard, still 4000) is unchanged and
+  independent; `--max-bytes` is now exposed on `python -m agentteams.research fetch`.
+- **Measured effect on the original failing question** ("top 10 finishers at the most recent
+  NASCAR Cup race at Las Vegas"), CLI runs before (7) and after (8):
+
+  | | correct | silent dead turn | partial/wrong |
+  |---|---|---|---|
+  | before | 2/7 | 3 | 2 |
+  | after | 4/8 | 2 | 2 |
+
+  Retrieval now works — the agent discovers the tool, verifies it with `--help`, searches, and
+  fetches the right page. On `qwen/qwen3.6-27b` that was **not** enough to meet a pre-set ≥7/8
+  criterion. Re-running the identical harness on **`qwen/qwen3.6-plus`** gives **8/8 correct, 0
+  dead turns, 0 partial** (34–188s) — so the retrieval fixes were *necessary but not sufficient*,
+  and model capability was the second binding constraint. Plus also volunteered the recency check
+  ("the next Las Vegas Cup race is October 4, 2026, which hasn't occurred yet") unprompted.
+  Caveat: `qwen3.6-plus` is served by **Alibaba only**, so with the route proxy's
+  `allow_fallbacks: false` an Alibaba outage is a hard failure rather than a reroute. The residual failures are the separate dead-turn leak
+  (unfixed; it recurs even on an allowlisted backend) and partial answers. Running through
+  `scripts/goose-run-resilient.py` was also measured (3 correct / 1 dead / 4 partial): it roughly
+  halves dead turns but converts them into partial answers rather than correct ones, so it is not
+  a net win for answer quality here.
+
+### fixed (Goose/OpenRouter: backend routing is the real dead-turn lever; corrected false docs)
+
+- **`docs_src/goose-cloud-providers.md` no longer documents `OPENROUTER_PARAMETERS` as working.**
+  It is **inert in Goose 1.37.0** — the key does not appear in the binary, and neither a nested
+  `provider` block nor a top-level `transforms` override reaches the outgoing request body
+  (verified with an isolated config via `XDG_CONFIG_HOME`; a `model` change in the same file
+  confirmed goose had read it). Previous revisions instructed users to set a key that does
+  nothing.
+- **Corrected `references/plans/goose-openrouter-tool-call-reasoning-leak-2026-07-24.report.md`.**
+  It reported `provider.require_parameters: true` as "tested negative" for the dead-turn bug.
+  The setting was never transmitted, so that experiment never ran; the observed leak rate was
+  the unmitigated baseline. The conclusion stands, the stated reason does not.
+- **New `scripts/goose-openrouter-route-proxy.py`** — the mitigation that actually works, and
+  the only one that covers **all** goose surfaces. `OPENROUTER_HOST` *is* honored, so this local
+  proxy injects OpenRouter provider routing at the transport layer, reaching the CLI, the
+  desktop app, and `goose acp` (the VS Code extension). Allowlist-first, streaming-safe, and it
+  never overrides a caller-supplied `provider` block. Opt-in: it is a process that must stay
+  running, and that tradeoff is stated in the docs rather than decided for the user.
+- **Which OpenRouter backend serves you materially changes tool-calling reliability.** Replaying
+  one real captured agent payload (11 messages, 24 tools, reasoning on) 12× per backend against
+  `qwen/qwen3.6-27b`: Alibaba, CoreWeave and Morph 12/12 clean; Chutes 1/12, Phala 1/12 and
+  **SiliconFlow 3/12** leaked the tool call into the reasoning stream. Quantization does not
+  explain it (CoreWeave is fp8 and clean; Phala is unquantized and leaks). "Clean" is bounded,
+  not proven — 0/12 still leaves a ~22% upper bound at 95% confidence.
+- **New `--providers MODEL` flag on `scripts/goose-openrouter-preflight.py`** lists a model's
+  upstream backends, flagging that `tools=yes` means the parameter is *accepted*, not that the
+  model's native tool-call template is extracted correctly.
+- **`scripts/goose-run-resilient.py` now documents its scope limit**: it wraps `goose run`, so it
+  cannot protect the VS Code extension / any ACP client. `docs_src/goose-system-prep.md` §6 now
+  leads with backend routing and marks the wrapper as CLI-only.
+
+### added (Goose dead-turn resilience: OpenRouter reliability docs + auto-continue runner)
+
+- **New `scripts/goose-run-resilient.py`**, shipped unconditionally with every Goose team
+  agentteams generates or bridges (`GooseAdapter.extra_output_files()`, read from disk so the
+  shipped copy can never drift from the tested one). Detects a "dead turn" — goose's own logged
+  response has no `text` and no `toolRequest` content, the confirmed signature of a model
+  trapping its tool call inside `<tool_call>` text in the reasoning stream instead of the
+  structured API field, silently with no error anywhere — and auto-resubmits `"Continue"` in the
+  same session, up to a retry cap. Fail-closed: any log it can't confidently classify (missing,
+  empty, malformed, or an unrecognized shape) is treated as alive, never as dead. Confirmed
+  against OpenRouter + a reasoning-capable model live-testing (4/4 real dead turns recovered
+  across 8 trials); behavior on other providers, including local Ollama, is untested but
+  structurally can't misfire thanks to the fail-closed design.
+- **New documentation**: `docs_src/goose-cloud-providers.md` gains a provider-reliability
+  section; `docs_src/goose-system-prep.md` gains a new §5a introducing the bundled runner and a
+  new §6 troubleshooting row distinct from the existing colon-slug early-stop row.
+  *(Superseded within this same release by the `### fixed` entry above: that section's original
+  `OPENROUTER_PARAMETERS`/`require_parameters` guidance was wrong — the key is inert in Goose
+  1.37.0 — and has been rewritten as "Reliability: choosing which upstream backend serves you".)*
+- **Fixed in the same pass**: `agentteams/fences.py`'s auto-fence-on-update retrofit would have
+  corrupted the shipped script into invalid Python on the next `--update`/`--update --merge` (same
+  failure class already solved for generated SVGs — the new path is now in
+  `_MACHINE_MANAGED_MERGE_OVERWRITE_PATHS`), caught by `@framework-adapters-expert` audit before
+  merge, not after.
+  - Full design/audit trail (plan-level + implementation-level audits):
+    `tmp/by-week/2026-W30/goose-openrouter-resilience-integration.plan.md`. Underlying
+    investigation: `references/plans/goose-openrouter-tool-call-reasoning-leak-2026-07-24.report.md`.
+
 ### added (mandatory external-retrieval quality gate)
 
 - **New shared reference doc** (`references/external-retrieval-quality-gate.reference.md`,
