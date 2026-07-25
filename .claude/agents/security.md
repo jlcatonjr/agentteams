@@ -250,7 +250,7 @@ Apply only the baseline(s) matching the actual deployment target(s); skip this g
 ### Current Threat Intelligence Snapshot
 
 <!-- AGENTTEAMS:BEGIN threat_intelligence v=1 -->
-Generated at: `2026-07-24T12:26:46Z`
+Generated at: `2026-07-24T13:46:50Z`
 
 **Sources:**
 
