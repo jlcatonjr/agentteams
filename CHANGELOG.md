@@ -37,12 +37,26 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   with no supporting artifact. Reports *absent evidence*, not violation, and always
   exits 0: gating would try to prevent what the principle says can only be made
   accountable.
-- **`templates/domain/code-hygiene-mechanization.reference.template.md`** — the 28
-  `CH-` rules classified as mechanized / mechanizable / partly / judgment, with a
-  reason each, so a deliberate boundary is distinguishable from a backlog.
+- **`references/code-hygiene-mechanization.reference.md`** — the 28 `CH-` rules
+  classified with a reason each, so a deliberate boundary is distinguishable from a
+  backlog. **Refiled** out of `templates/domain/` (see *fixed*, below).
 - **`tests/test_code_hygiene.py`: CH-01, CH-11, CH-15** as path-based rules, each
   stating what its PASS establishes. CH-18 was attempted and rejected — a naive
   version-token probe flags dated work summaries.
+- **`tests/test_template_emission_coverage.py`** — every template under
+  `agentteams/templates/` must be reachable from `output_plan.py`, or allowlisted
+  with a reason. The existing orphan advisory runs output-side only, so a template
+  no plan reached was undetectable; one had been sitting in `templates/domain/`.
+  The first version of this check **passed a planted orphan**: it derived the valid
+  archetype set from the templates directory, making every file that existed
+  trivially "reachable". Archetypes and tool categories are now read from
+  `analyze.py` instead, and three negative controls verify the check fails when it
+  should.
+- **Three self-consistency guards on the mechanization classification** in
+  `tests/test_code_hygiene.py`: every catalogue rule appears exactly once, the
+  Summary counts are derived from the table rather than tallied, and any row
+  claiming a check exists must name it. The third found five rows asserting
+  coverage with no implementing surface.
 
 ### changed (audit ledger)
 
@@ -66,6 +80,25 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **`docs_src/api-reference/feature-inventory.md`**: version baseline read `0.1.0
   (2026-04-15)` at `1.0.0rc6`. Re-baselined, and the per-category counts are now
   declared hand-maintained rather than presented as derived.
+- **The mechanization classification was misfiled, misclassified, and its severity
+  overstated — retracting all three.** The audit that produced it asserted "this
+  template ships to consumers" as the finding's severity basis. **That was false.**
+  It was the only domain template absent from `output_plan.py`, so it never
+  rendered into any team; and its content names agentteams internals
+  (`tests/test_code_hygiene.py`, `audit.py::_check_*`) that no generated team has,
+  so registering it for emission would have been the wrong repair. Refiled to
+  `references/`. Separately, a re-read of every test in `tests/test_code_hygiene.py`
+  found **four rules misclassified** — CH-05 and CH-24 filed as `judgment`, CH-07
+  and CH-22 as unwritten backlog, while each had an enforcing test — all in the
+  direction that overstates the backlog. Filing them then exposed that `partly
+  mechanizable` was carrying two unrelated meanings, now split into
+  `partly mechanized` (a check exists, narrower than the rule) and `partly
+  mechanizable` (no check, partly specifiable).
+- **`references/agentteams-remediation-log.csv` shape is now validated**
+  (`tests/test_remediation_log_shape.py`), closing the gap the entry above left
+  open. Structural only — field count, ISO dates, populated required fields, no
+  embedded newlines. It asserts **nothing** about `status`, because Rule 11 makes
+  that lifecycle maintainer-owned; a new status value passes unchanged.
 
 ### fixed (packaging/build hygiene)
 

@@ -325,7 +325,7 @@ def test_refactor_modules_are_fully_type_annotated() -> None:
 # Path- and filename-based hygiene rules (CH-01, CH-11, CH-15)
 #
 # These three were selected from the mechanization classification in
-# templates/domain/code-hygiene-mechanization.reference.template.md on one
+# references/code-hygiene-mechanization.reference.md on one
 # criterion: what a PASS establishes is unambiguous. Each is a pure statement
 # about tracked paths, so a clean result means exactly what it says and nothing
 # more. CH-18 was considered and rejected — a naive "version-numbered sibling"
@@ -407,4 +407,118 @@ def test_audit_ledger_makes_no_structurally_false_claims() -> None:
     defects = [f for f in findings if f["status"] == "DEFECT"]
     assert not defects, "ledger rows make structurally false claims: " + "; ".join(
         f"{f['audit_id']}: {f['issue']}" for f in defects
+    )
+
+
+# ---------------------------------------------------------------------------
+# The mechanization classification must describe itself accurately
+#
+# references/code-hygiene-mechanization.reference.md records which CH- rules are
+# machine-checked and which are judgment. Its Summary counts were hand-tallied
+# twice and wrong twice — once reporting eleven judgment rules where the table
+# held ten, once leaving four rules filed as unwritten backlog after their tests
+# had shipped. The counts are derived here so a stale tally fails the suite.
+# ---------------------------------------------------------------------------
+
+_MECHANIZATION_REF = REPO_ROOT / "references/code-hygiene-mechanization.reference.md"
+
+# Two axes in one column, distinguished by suffix: -ed means a check exists,
+# -able means one could. `partly mechanized` was split out of `partly
+# mechanizable` on 2026-07-29 because the latter was carrying both meanings.
+_STATUSES = (
+    "mechanized",
+    "partly mechanized",
+    "mechanizable",
+    "partly mechanizable",
+    "judgment",
+)
+
+# Statuses that assert a check exists, and therefore must cite it.
+_COVERAGE_STATUSES = ("mechanized", "partly mechanized")
+
+
+def _mechanization_rows() -> dict[str, str]:
+    """Return {rule_id: status} parsed from the classification table.
+
+    Status is read from the second pipe-delimited cell with markdown emphasis
+    stripped. Matching is longest-first so ``partly mechanizable`` is not read as
+    ``mechanizable``.
+    """
+    rows: dict[str, str] = {}
+    for line in _MECHANIZATION_REF.read_text(encoding="utf-8").splitlines():
+        match = re.match(r"^\|\s*(CH-\d\d)\b[^|]*\|([^|]*)\|", line)
+        if not match:
+            continue
+        cell = match.group(2).replace("*", "").strip().lower()
+        for status in sorted(_STATUSES, key=len, reverse=True):
+            if cell == status:
+                rows[match.group(1)] = status
+                break
+        else:  # pragma: no cover - guards a malformed edit, not a code path
+            raise AssertionError(
+                f"{_MECHANIZATION_REF.name}: {match.group(1)} has unrecognised "
+                f"status {cell!r}; expected one of {_STATUSES}"
+            )
+    return rows
+
+
+def test_mechanization_table_covers_every_rule_exactly_once() -> None:
+    """Every CH- rule in the catalogue appears in the classification, once."""
+    rows = _mechanization_rows()
+    catalogue = set(re.findall(r"^### (CH-\d\d) — ", _DOMAIN_CH.read_text(encoding="utf-8"), re.M))
+    assert rows, f"parsed no rows from {_MECHANIZATION_REF.name}"
+    missing = sorted(catalogue - set(rows))
+    extra = sorted(set(rows) - catalogue)
+    assert not missing, f"rules in the catalogue but absent from the classification: {missing}"
+    assert not extra, f"rules classified but absent from the catalogue: {extra}"
+
+
+def test_mechanization_summary_counts_match_the_table() -> None:
+    """CH-20 self-consistency: the Summary must be derived from the table.
+
+    The Summary is the figure other documents quote, so a drifted count
+    propagates. This recomputes it and compares.
+    """
+    rows = _mechanization_rows()
+    actual = {status: sum(1 for v in rows.values() if v == status) for status in _STATUSES}
+
+    body = _MECHANIZATION_REF.read_text(encoding="utf-8")
+    stated: dict[str, int] = {}
+    for status in _STATUSES:
+        match = re.search(rf"^\|\s*{re.escape(status)}\s*\|\s*(\d+)\s*\|", body, re.M)
+        assert match, f"Summary table has no row for {status!r}"
+        stated[status] = int(match.group(1))
+
+    assert stated == actual, (
+        f"Summary counts drifted from the table: stated {stated}, table {actual}. "
+        "Update the Summary, and anything quoting it."
+    )
+    assert sum(actual.values()) == len(rows)
+
+
+def test_mechanized_rows_name_a_resolvable_surface() -> None:
+    """A row claiming a check exists must cite the check.
+
+    Without this, the two statuses that assert coverage could be set with no
+    implementation behind them — the failure mode the file was written to expose,
+    committed inside the file itself. This is also what caught the vocabulary
+    defect: five `partly mechanizable` rows tripped it, which is how the two
+    senses of that phrase were found sharing one column.
+    """
+    text = _MECHANIZATION_REF.read_text(encoding="utf-8")
+    unsupported = []
+    for line in text.splitlines():
+        match = re.match(r"^\|\s*(CH-\d\d)\b[^|]*\|([^|]*)\|(.*)$", line)
+        if not match:
+            continue
+        status = match.group(2).replace("*", "").strip().lower()
+        if status not in _COVERAGE_STATUSES:
+            continue
+        # A citation is a `module.py::name`, an `agentteams.<mod>` dotted path, or
+        # a backticked test/function name.
+        reason = match.group(3)
+        if not re.search(r"`[^`]*(::|\bagentteams\.|_check_|test_)[^`]*`", reason):
+            unsupported.append(match.group(1))
+    assert not unsupported, (
+        f"rows assert coverage without naming an implementing surface: {unsupported}"
     )
