@@ -13,6 +13,7 @@ import pytest
 
 import build_team
 from agentteams.memory_index import (
+    resolve_path,
     FALLBACK_POLICY,
     INDEX_FORMAT_VERSION,
     INDEX_WRITE_OWNER,
@@ -565,7 +566,12 @@ def test_write_memory_index_incremental_sed_single_doc_success_without_full_rebu
     src = ws / "day.md"
     src.write_text("# Daily\n\nalpha beta beta\n", encoding="utf-8")
 
-    initial = build_memory_index([src], project_name="P", framework="copilot-vscode")
+    # root= matches what _write_memory_index passes, so the seeded index is in the
+    # same path form production writes. Seeding absolute paths here made the
+    # incremental matcher compare relative-to-absolute and fall back every time.
+    initial = build_memory_index(
+        [src], project_name="P", framework="copilot-vscode", root=tmp_path
+    )
     idx_path = index_dir / "memory-index.json"
     idx_path.write_text(json.dumps(initial, indent=2) + "\n", encoding="utf-8")
 
@@ -606,7 +612,9 @@ def test_incremental_update_vector_norm_sq_matches_full_rebuild(tmp_path):
     c.write_text("# C\n\ngamma delta theta iota kappa\n", encoding="utf-8")
     sources = [a, b, c]
 
-    initial = build_memory_index(sources, project_name="P", framework="claude")
+    initial = build_memory_index(
+        sources, project_name="P", framework="claude", root=tmp_path
+    )
     idx_path = tmp_path / "memory-index.json"
     idx_path.write_text(json.dumps(initial, indent=2) + "\n", encoding="utf-8")
 
@@ -620,11 +628,14 @@ def test_incremental_update_vector_norm_sq_matches_full_rebuild(tmp_path):
         project_name="P",
         framework="claude",
         validate_index=lambda _idx: None,
+        root=tmp_path,
     )
     assert res.applied, f"incremental should apply, got {res.reason}"
 
     after_incremental = json.loads(idx_path.read_text(encoding="utf-8"))
-    full_rebuild = build_memory_index(sources, project_name="P", framework="claude")
+    full_rebuild = build_memory_index(
+        sources, project_name="P", framework="claude", root=tmp_path
+    )
 
     inc_norms = {d["path"]: d.get("vector_norm_sq") for d in after_incremental["documents"]}
     reb_norms = {d["path"]: d.get("vector_norm_sq") for d in full_rebuild["documents"]}
@@ -650,7 +661,9 @@ def test_write_memory_index_incremental_sed_falls_back_on_term_set_change(
     src = ws / "day.md"
     src.write_text("# Daily\n\nalpha beta beta\n", encoding="utf-8")
 
-    initial = build_memory_index([src], project_name="P", framework="copilot-vscode")
+    initial = build_memory_index(
+        [src], project_name="P", framework="copilot-vscode", root=tmp_path
+    )
     idx_path = index_dir / "memory-index.json"
     idx_path.write_text(json.dumps(initial, indent=2) + "\n", encoding="utf-8")
 
@@ -956,3 +969,135 @@ def test_query_index_rejects_unknown_strategy(tmp_path):
 
     with pytest.raises(ValueError, match="Unknown query strategy"):
         query_index(idx, "alpha content", strategy="unknown")
+
+
+# ---------------------------------------------------------------------------
+# Relative document paths (and migrating an index that has absolute ones)
+#
+# memory-index.json is committed, so absolute document paths leak the operator's
+# home directory and username — 2150 of them in this repository's own index.
+# `root=` relativizes them. The migration case matters because every existing
+# committed index has absolute paths: it must degrade to a full rebuild, which
+# rewrites the file in the new form, rather than misbehave.
+# ---------------------------------------------------------------------------
+
+
+def test_build_memory_index_stores_paths_relative_to_root(tmp_path):
+    ws = tmp_path / "workSummaries"
+    ws.mkdir()
+    src = ws / "day.md"
+    src.write_text("# Daily\n\nalpha beta\n", encoding="utf-8")
+
+    idx = build_memory_index([src], root=tmp_path)
+    stored = idx["documents"][0]["path"]
+    assert stored == "workSummaries/day.md", stored
+    assert not Path(stored).is_absolute()
+    assert str(tmp_path) not in json.dumps(idx), "an absolute path survived somewhere in the index"
+
+
+def test_root_none_preserves_absolute_paths(tmp_path):
+    """Backward compatibility: unconverted callers must be unaffected."""
+    src = tmp_path / "a.md"
+    src.write_text("# A\n\nalpha\n", encoding="utf-8")
+    assert build_memory_index([src])["documents"][0]["path"] == str(src)
+
+
+def test_paths_outside_the_root_stay_absolute(tmp_path):
+    """A genuinely external source is not a leak, and rewriting it would misdescribe it."""
+    root = tmp_path / "project"
+    root.mkdir()
+    outside = tmp_path / "elsewhere.md"
+    outside.write_text("# Out\n\nalpha\n", encoding="utf-8")
+    assert build_memory_index([outside], root=root)["documents"][0]["path"] == str(outside)
+
+
+def test_stored_relative_paths_resolve_back_to_real_files(tmp_path):
+    """A relative path that resolves nowhere is the failure mode worth guarding."""
+    ws = tmp_path / "workSummaries"
+    ws.mkdir()
+    for name in ("a.md", "b.md"):
+        (ws / name).write_text(f"# {name}\n\nalpha beta\n", encoding="utf-8")
+    sources = sorted(ws.glob("*.md"))
+
+    idx = build_memory_index(sources, root=tmp_path)
+    for doc in idx["documents"]:
+        resolved = resolve_path(doc["path"], tmp_path)
+        assert resolved.is_file(), f"stored path {doc['path']!r} does not resolve to a file"
+
+
+def test_is_index_stale_needs_the_root_to_find_relative_sources(tmp_path):
+    """Without root, relative paths resolve against CWD and everything reads as stale.
+
+    That would trigger a full rebuild on every single query — slow and silently
+    wrong, which is why root is threaded rather than inferred.
+    """
+    ws = tmp_path / "workSummaries"
+    ws.mkdir()
+    src = ws / "day.md"
+    src.write_text("# Daily\n\nalpha beta\n", encoding="utf-8")
+    idx = build_memory_index([src], root=tmp_path)
+
+    assert not is_index_stale(idx, [src], root=tmp_path), "fresh index reported stale"
+
+    src.write_text("# Daily\n\nalpha beta gamma\n", encoding="utf-8")
+    assert is_index_stale(idx, [src], root=tmp_path), "edited source not detected"
+
+
+def test_legacy_absolute_index_migrates_via_full_rebuild(tmp_path, monkeypatch):
+    """An index with absolute paths must fall back to a full rebuild, not misapply.
+
+    The incremental matcher compares stored paths against source paths. A legacy
+    index stores absolute, the new code offers relative, so the sets differ and the
+    conservative path declines — which is correct: the full rebuild rewrites the
+    whole file in the new form. Applying incrementally would produce an index with
+    mixed absolute and relative paths.
+    """
+    from agentteams.memory_index_incremental import try_incremental_sed_update
+
+    ws = tmp_path / "workSummaries"
+    ws.mkdir()
+    src = ws / "day.md"
+    src.write_text("# Daily\n\nalpha beta beta\n", encoding="utf-8")
+
+    legacy = build_memory_index([src], project_name="P", framework="claude")  # absolute
+    assert Path(legacy["documents"][0]["path"]).is_absolute()
+    idx_path = tmp_path / "memory-index.json"
+    idx_path.write_text(json.dumps(legacy, indent=2) + "\n", encoding="utf-8")
+
+    src.write_text("# Daily\n\nalpha alpha beta\n", encoding="utf-8")
+    monkeypatch.setenv("AGENTTEAMS_MEMORY_INDEX_INCREMENTAL_SED", "1")
+    result = try_incremental_sed_update(
+        index_path=idx_path,
+        index=json.loads(idx_path.read_text(encoding="utf-8")),
+        sources=[src],
+        project_name="P",
+        framework="claude",
+        validate_index=lambda _idx: None,
+        root=tmp_path,
+    )
+    assert not result.applied, "incremental applied against a legacy index — would mix path forms"
+    assert result.reason == "source_set_changed", result.reason
+
+
+def test_committed_memory_index_stores_relative_paths():
+    """The tracked index must not carry absolute document paths.
+
+    Scoped to the ``path`` **metadata**, not the whole file, on purpose. The index
+    also stores ``snippet`` and ``paragraphs`` — verbatim excerpts of the documents
+    it indexes — and some source documents mention absolute paths in their own
+    prose. Rewriting a quotation to remove a path would make the index misquote its
+    source while ``source_hash`` still attested to the original. The metadata is the
+    tool's own output and is its to get right; the quoted content belongs to the
+    source, and the fix for that belongs there.
+    """
+    index_path = Path(__file__).resolve().parents[1] / ".claude/agents/references/memory-index.json"
+    if not index_path.exists():
+        pytest.skip("no committed claude memory index in this checkout")
+    documents = json.loads(index_path.read_text(encoding="utf-8")).get("documents", [])
+    assert documents, "committed index has no documents — this test would pass vacuously"
+    absolute = [d["path"] for d in documents if Path(d["path"]).is_absolute()]
+    assert not absolute, (
+        f"{len(absolute)} document path(s) are absolute, leaking the operator's home "
+        f"directory into a committed artifact: {absolute[:3]}. Rebuild with "
+        "--refresh-index (build_memory_index now takes root=)."
+    )

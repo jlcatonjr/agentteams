@@ -121,6 +121,31 @@ def _compute_hash_rows(files: list[Path], source_dir: Path) -> list[dict[str, st
     return rows
 
 
+def source_state_digest(source_hash_rows: list[dict[str, str]]) -> str:
+    """Digest the source state a bridge verdict was computed from.
+
+    Deterministic in the source tree alone: the same files always produce the same
+    digest, on any machine, at any time. That is what lets a check report be
+    byte-stable across re-runs *and* machine-comparable against the current tree —
+    the two properties a wall-clock timestamp cannot provide together.
+
+    Sorted by path so row ordering cannot perturb it. Same construction as
+    ``memory_index._documents_fingerprint``, which is this repository's existing
+    precedent for a path/hash fingerprint.
+
+    Args:
+        source_hash_rows: ``{"path", "sha256"}`` rows as recorded in the manifest.
+
+    Returns:
+        Hex sha256 over the sorted ``path:sha256`` pairs.
+    """
+    parts = [
+        f"{row.get('path', '')}:{row.get('sha256', '')}"
+        for row in sorted(source_hash_rows, key=lambda r: str(r.get("path", "")))
+    ]
+    return hashlib.sha256("|".join(parts).encode("utf-8")).hexdigest()
+
+
 def _run_bridge_check(*, manifest_path: Path, source_hash_rows: list[dict[str, str]]) -> tuple[bool, str]:
     if not manifest_path.exists():
         report = (
@@ -161,23 +186,28 @@ def _run_bridge_check(*, manifest_path: Path, source_hash_rows: list[dict[str, s
 
     ok = not stale_paths and not missing_paths and not extra_paths and not empty_inventory
 
-    # A check report is a snapshot of one run, but its wording is present-tense
-    # ("artifacts ARE fresh"), and it is only rewritten when --bridge-check runs.
-    # The copilot-cli report sat committed at PASS for a week while six source files
-    # drifted, because nothing re-ran the check and nothing in the file revealed how
-    # old the verdict was. Both timestamps are recorded so a reader can tell whether
-    # the verdict still applies without re-running anything.
-    checked_at = datetime.now(timezone.utc).isoformat()
+    # A committed check report is a CACHED verdict, and the defect it had was not a
+    # missing date — it was that nothing detected the cache going stale. The
+    # copilot-cli report sat at PASS for a week while six sources drifted.
+    #
+    # The first fix recorded a wall-clock "checked at", which conveys staleness only
+    # to a human who opens the file and does the arithmetic, and made every
+    # --bridge-check rewrite a tracked file (a documented read-only command mutating
+    # the tree). Recording the digest of the *inputs* instead is deterministic, so a
+    # re-check of unchanged sources produces identical bytes, and it is machine
+    # comparable — tests/test_bridge_mode_safety.py checks the committed digest
+    # against the working tree, which is what actually catches the drift.
     lines = [
         "# Bridge Check Report",
         "",
         f"Result: {'PASS' if ok else 'FAIL'}",
         "",
-        f"- Checked at: {checked_at}",
+        f"- Source state: {source_state_digest(source_hash_rows)}",
         f"- Manifest generated at: {manifest.get('generated_at', '(not recorded)')}",
         "",
-        "> This verdict describes the moment of the check above. Source files may have"
-        " changed since. Re-run `--bridge-check` rather than trusting a stale PASS.",
+        "> `Source state` is a digest of the source files this verdict was computed"
+        " from. It is not a timestamp: if it no longer matches the current tree, the"
+        " verdict is stale regardless of when it ran. Re-run `--bridge-check`.",
         "",
     ]
     if empty_inventory:

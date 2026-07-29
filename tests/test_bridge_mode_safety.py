@@ -113,7 +113,7 @@ def test_notice_is_reached_through_run_bridge() -> None:
 
 
 # ---------------------------------------------------------------------------
-# A check verdict must carry its own date
+# A check verdict must say what state it describes
 #
 # bridge-check.report.md is a snapshot of one run, but its wording is
 # present-tense ("artifacts ARE fresh") and it is only rewritten when
@@ -121,6 +121,12 @@ def test_notice_is_reached_through_run_bridge() -> None:
 # while six source files drifted: the check last ran on 2026-07-22 when the
 # manifest was fresh, wrote PASS, and nothing re-ran it. A reader consulting the
 # file to answer "is this bridge current?" got a confident, wrong yes.
+#
+# These two tests originally pinned a wall-clock "Checked at" line. That was the
+# wrong fix — see test_check_report_is_deterministic_in_the_source_tree below —
+# and they are rewritten against the digest that replaced it. Their intent is
+# unchanged: a verdict must be attributable to a state, and a PASS must caveat
+# itself.
 # ---------------------------------------------------------------------------
 
 
@@ -139,11 +145,21 @@ def _check_report(tmp_path: Path, *, stale: bool) -> str:
     return report
 
 
-def test_check_report_records_when_it_ran(tmp_path: Path) -> None:
-    """Both a PASS and a FAIL must be datable without re-running the check."""
+def test_check_report_attributes_its_verdict_to_a_source_state(tmp_path: Path) -> None:
+    """A PASS and a FAIL must both name the state they describe.
+
+    The digest replaces the wall clock: it identifies *which* source state produced
+    the verdict, which is the question a reader actually has, and unlike a timestamp
+    it can be compared to the tree.
+    """
+    from agentteams.bridge_sources import source_state_digest
+
     for stale in (False, True):
+        rows = [{"path": "agents/a.md", "sha256": "bbb" if stale else "aaa"}]
         report = _check_report(tmp_path, stale=stale)
-        assert "Checked at:" in report, f"no check timestamp (stale={stale}): {report}"
+        assert f"Source state: {source_state_digest(rows)}" in report, (
+            f"report does not name the source state it describes (stale={stale}): {report}"
+        )
         assert "Manifest generated at: 2026-01-01T00:00:00+00:00" in report, (
             f"report does not carry the manifest's own date (stale={stale}): {report}"
         )
@@ -156,8 +172,12 @@ def test_passing_report_warns_that_the_verdict_can_go_stale() -> None:
     with tempfile.TemporaryDirectory() as tmp:
         report = _check_report(Path(tmp), stale=False)
     assert "PASS" in report
-    assert "may have changed since" in report, (
+    assert "no longer matches the current tree" in report, (
         f"a PASS report does not caveat its own freshness: {report}"
+    )
+    assert "not a timestamp" in report, (
+        "the report does not tell the reader the digest is a state, not a time — "
+        "which is the misreading that produced the wall-clock version"
     )
     assert "Re-run" in report, "the report does not say how to get a current verdict"
 
@@ -216,4 +236,118 @@ def test_no_committed_bridge_artifact_contains_an_absolute_home_path() -> None:
         "bridge artifact(s) embed an absolute home path, leaking the operator's "
         f"username and directory layout: {offenders}. Render paths through "
         "agentteams.bridge.rel_to_root(path, output_root)."
+    )
+
+
+# ---------------------------------------------------------------------------
+# --bridge-check must be tree-neutral and machine-verifiable
+#
+# The first attempt at making a stale PASS visible recorded a wall-clock
+# "Checked at", which created a worse problem: a command documented "read-only;
+# produces a freshness report" then rewrote a tracked file on every invocation.
+# And it solved the original problem only for a human who opened the file and did
+# the arithmetic — which is exactly what nobody did for a week.
+#
+# Recording the digest of the *inputs* fixes both at once. It is deterministic, so
+# re-checking unchanged sources produces identical bytes; and it is comparable, so
+# the test below can catch the drift mechanically.
+# ---------------------------------------------------------------------------
+
+
+def test_check_report_is_deterministic_in_the_source_tree(tmp_path: Path) -> None:
+    """Same inputs must produce byte-identical reports, so a re-check is a no-op."""
+    from agentteams.bridge_sources import _run_bridge_check
+
+    manifest = tmp_path / "bridge-manifest.json"
+    manifest.write_text(
+        '{"generated_at": "2026-01-01T00:00:00+00:00", "inventory_count": 2, '
+        '"source_hashes": [{"path": "agents/a.md", "sha256": "aaa"}]}',
+        encoding="utf-8",
+    )
+    rows = [{"path": "agents/a.md", "sha256": "aaa"}]
+    first = _run_bridge_check(manifest_path=manifest, source_hash_rows=rows)[1]
+    second = _run_bridge_check(manifest_path=manifest, source_hash_rows=rows)[1]
+    assert first == second, "check report is not reproducible across runs"
+    assert "Checked at" not in first, (
+        "report carries a wall-clock timestamp, which makes every check dirty the tree"
+    )
+    assert "Source state:" in first
+
+
+def test_source_state_digest_is_order_independent_and_content_sensitive() -> None:
+    from agentteams.bridge_sources import source_state_digest
+
+    a = [{"path": "z.md", "sha256": "2"}, {"path": "a.md", "sha256": "1"}]
+    b = [{"path": "a.md", "sha256": "1"}, {"path": "z.md", "sha256": "2"}]
+    assert source_state_digest(a) == source_state_digest(b), "row order perturbs the digest"
+
+    changed = [{"path": "a.md", "sha256": "1"}, {"path": "z.md", "sha256": "CHANGED"}]
+    assert source_state_digest(a) != source_state_digest(changed), (
+        "a changed source hash does not change the digest — the digest cannot detect drift"
+    )
+    renamed = [{"path": "a.md", "sha256": "1"}, {"path": "RENAMED.md", "sha256": "2"}]
+    assert source_state_digest(a) != source_state_digest(renamed), "a renamed path is invisible"
+
+
+# ---------------------------------------------------------------------------
+# The committed verdict must still describe the committed tree
+#
+# This is the check that was missing when the copilot-cli report sat at PASS for a
+# week. It reads the report from `git show HEAD:` deliberately: comparing a
+# freshly-generated report against the tree would be vacuous, because generating it
+# recomputes the digest from that same tree and can never disagree. Only the
+# committed bytes can be stale.
+# ---------------------------------------------------------------------------
+
+
+def _committed(rel: str) -> str | None:
+    import subprocess
+
+    proc = subprocess.run(
+        ["git", "show", f"HEAD:{rel}"], cwd=REPO_ROOT, capture_output=True, text=True
+    )
+    return proc.stdout if proc.returncode == 0 else None
+
+
+def test_committed_check_reports_describe_the_committed_source_state() -> None:
+    """A committed PASS whose digest no longer matches the tree is a stale verdict."""
+    from agentteams.bridge_sources import (
+        _collect_source_files,
+        _compute_hash_rows,
+        source_state_digest,
+    )
+
+    bridges = REPO_ROOT / "references/bridges"
+    if not bridges.exists():
+        return
+
+    source_dir = REPO_ROOT / ".github/agents"
+    if not source_dir.is_dir():
+        return
+    current = source_state_digest(
+        _compute_hash_rows(_collect_source_files(source_dir, "copilot-vscode"), source_dir)
+    )
+
+    stale: dict[str, str] = {}
+    checked = 0
+    for pair in sorted(p for p in bridges.iterdir() if p.is_dir()):
+        rel = f"references/bridges/{pair.name}/bridge-check.report.md"
+        body = _committed(rel)
+        if body is None:
+            continue  # not committed yet; nothing to be stale
+        recorded = re.search(r"^- Source state: ([0-9a-f]{64})$", body, re.M)
+        if not recorded:
+            stale[rel] = "report records no source-state digest"
+            continue
+        checked += 1
+        if recorded.group(1) != current:
+            stale[rel] = f"records {recorded.group(1)[:12]}…, tree is {current[:12]}…"
+
+    assert checked, (
+        "no committed bridge-check report carried a source-state digest — this test "
+        "would silently pass forever; regenerate the reports"
+    )
+    assert not stale, (
+        "committed bridge-check verdict(s) no longer describe the source tree: "
+        f"{stale}. Re-run `--bridge-check` for each pair and commit the reports."
     )

@@ -256,6 +256,26 @@ def _emit_mcp_servers_if_enabled(manifest: dict, project_root: Path) -> None:
         print(f"  !  MCP server skipped (non-conformant): {err}", file=sys.stderr)
 MEMORY_INDEX_REL_PATH = "references/memory-index.json"
 MEMORY_INDEX_EXTRA_DOC_NAMES = ("CHANGELOG.md", "README.md", "build-team-plan.md")
+def _memory_index_root(manifest: dict, output_dir: Path) -> Path:
+    """Resolve the project root the memory index is built against.
+
+    Extracted from :func:`_memory_index_sources`, which already derived it, so the
+    build, staleness and incremental-update paths cannot disagree about what the
+    index's relative paths are relative *to*. Three call sites computing this
+    independently is how a stored relative path ends up resolving nowhere.
+
+    Args:
+        manifest: Team manifest; ``existing_project_path`` wins when present.
+        output_dir: The agents directory (``<project>/.github/agents`` or
+            ``<project>/.claude/agents`` in the standard layout).
+
+    Returns:
+        The project root.
+    """
+    epp = manifest.get("existing_project_path")
+    return Path(epp) if epp else output_dir.parent.parent
+
+
 def _memory_index_sources(manifest: dict, output_dir: Path) -> list[Path]:
     """Collect durable text sources for the memory index (F8).
 
@@ -266,8 +286,7 @@ def _memory_index_sources(manifest: dict, output_dir: Path) -> list[Path]:
     absent (standard layout: ``<project>/.github/agents`` or
     ``<project>/.claude/agents``).
     """
-    epp = manifest.get("existing_project_path")
-    project_root = Path(epp) if epp else output_dir.parent.parent
+    project_root = _memory_index_root(manifest, output_dir)
     sources: list[Path] = []
     # Work summaries (the canonical durable history substrate).
     ws = project_root / "workSummaries"
@@ -401,7 +420,7 @@ def _run_query_index(
 
     index = _read_memory_index(output_dir)
     sources = _memory_index_sources(manifest, output_dir)
-    if is_index_stale(index, sources):
+    if is_index_stale(index, sources, root=_memory_index_root(manifest, output_dir)):
         refreshed_path = _write_memory_index(manifest, output_dir)
         index = _read_memory_index(output_dir)
         print(
@@ -447,6 +466,7 @@ def _write_memory_index(manifest: dict, output_dir: Path) -> Path:
                 index_path=index_path,
                 index=current,
                 sources=_memory_index_sources(manifest, output_dir),
+                root=_memory_index_root(manifest, output_dir),
                 project_name=manifest.get("project_name", ""),
                 framework=manifest.get("framework", ""),
                 validate_index=_validate_memory_index_schema,
@@ -467,6 +487,7 @@ def _write_memory_index(manifest: dict, output_dir: Path) -> Path:
         _memory_index_sources(manifest, output_dir),
         project_name=manifest.get("project_name", ""),
         framework=manifest.get("framework", ""),
+        root=_memory_index_root(manifest, output_dir),
     )
 
     serialized = json.dumps(index, indent=2) + "\n"
