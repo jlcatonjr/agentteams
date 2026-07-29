@@ -89,13 +89,35 @@ For `domain/post-production-auditor.template.md`, use this registration profile:
 
 1. Add contextual selection logic in `agentteams/analyze.py` for operation/state-change cues + verification/proof cues (avoid broad single-keyword auto-selection)
 2. Add `post-production-auditor` to `selected_archetypes.items.enum` in `schemas/team-manifest.schema.json`
-3. Register the template in `agentteams/templates/template-chapter-audit.csv` using a unique `TA-` ID
+3. Register the template in `agentteams/templates/template-chapter-audit.csv` using a unique `TA-` ID, and fill the three provenance columns (see below)
 4. Do not place optional post-production routing rows inside `AGENTTEAMS:BEGIN routing_table_rows`; add them in the user-editable gap below the fence
 5. Do not place optional post-production workflows inside `AGENTTEAMS:BEGIN available_workflows`; add them in the user-editable gap before that fence
 6. Use `{MANUAL:...}` placeholders for post-production profile values (trigger version, bulk threshold, source-of-truth spec, duplicate cap, and audit slug) unless you also add auto-resolution mappings in `agentteams/analyze.py`
 7. Document explicit manual override via `selected_archetypes` for teams that need guaranteed inclusion regardless of auto-selection cues
 
 This prevents `--update --merge` from force-propagating post-production routing/workflow content to teams that do not include `@post-production-auditor`.
+
+### Audit-ledger provenance columns
+
+`template-chapter-audit.csv` records how each template relates to the book's
+architecture. Three columns keep that record honest, and a row without them is
+incomplete:
+
+| Column | Values | Meaning |
+|---|---|---|
+| `disposition` | `absent` · `discharged-operationally` · `superseded` · `by-design` · `unreviewed` | Whether the gap the row describes is real |
+| `implementing_surface` | module or path | Where the function actually lives, when it is not a template |
+| `verified_on` | `YYYY-MM-DD` | When the row was last checked against the tree |
+
+`disposition` exists because "no template for X" and "X is not implemented" are
+different claims. Several rows asserted the first and were read as the second:
+workspace coordination, topology discovery and template-compliance checking are
+all discharged in code (`fleet.py`, `drift.py`) and were nonetheless ranked as
+high-severity gaps. Use `absent` only when nothing in the module performs the
+function; use `discharged-operationally` and name the surface when something does.
+
+Rows are verified by `scripts/verify_audit_ledger.py`, which is report-only and
+never edits the ledger.
 
 ---
 

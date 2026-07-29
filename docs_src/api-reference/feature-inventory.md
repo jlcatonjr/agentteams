@@ -5,11 +5,23 @@ description: Comprehensive enumeration of all AgentTeams capabilities, organized
 
 # AgentTeams — Feature Inventory
 
-**Version baseline:** 0.1.0 (Released 2026-04-15)
+**Version baseline:** 1.0.0rc6 · **counts last reconciled by hand:** 2026-07-29
 
 Features below are grouped by capability area. This inventory may include capabilities currently present on
 `main` that are not yet part of a tagged release. Release-specific availability should be verified against
 `CHANGELOG.md` and repository tags.
+
+!!! note "The per-category counts are hand-maintained"
+
+    They are not derived from the code and will drift between reconciliations.
+    The baseline above had read `0.1.0 (2026-04-15)` while the module was at
+    `1.0.0rc6` — nearly four months and a major version stale. Treat the counts
+    as indicative and the category descriptions as authoritative; verify any
+    specific capability against `CHANGELOG.md` or the CLI's own `--help`.
+
+    Deriving these counts requires a machine-readable feature set, which the
+    module does not yet carry. Until it does, this note is the honest
+    alternative to a number that looks computed and is not.
 
 ---
 
