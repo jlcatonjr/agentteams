@@ -4,9 +4,9 @@ Generated 2026-07-29 by `scripts/verify_audit_ledger.py`.
 Structural claims only; prose accuracy and severity remain judgment.
 
 - rows: 44
-- unreviewed dispositions: 38
+- unreviewed dispositions: 34
 - defects: 0
-- reviews: 38
+- reviews: 34
 
 ## TA-001
 - REVIEW: disposition is 'unreviewed' — claim not yet checked
@@ -96,18 +96,6 @@ Structural claims only; prose accuracy and severity remain judgment.
 - REVIEW: disposition is 'unreviewed' — claim not yet checked
 
 ## TA-031
-- REVIEW: disposition is 'unreviewed' — claim not yet checked
-
-## TA-036
-- REVIEW: disposition is 'unreviewed' — claim not yet checked
-
-## TA-037
-- REVIEW: disposition is 'unreviewed' — claim not yet checked
-
-## TA-038
-- REVIEW: disposition is 'unreviewed' — claim not yet checked
-
-## TA-039
 - REVIEW: disposition is 'unreviewed' — claim not yet checked
 
 ## TA-040
