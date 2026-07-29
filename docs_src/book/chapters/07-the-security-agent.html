@@ -44,6 +44,14 @@
       
       <p> The triggers are themselves environmental signals: they arise from the shared project state, which includes the files being modified, the operations being requested, the external systems being accessed, and communicate back to the security agent that the environment has entered a condition requiring constitutional review. The relationship is bidirectional: the agent team’s actions generate the triggers that in turn constrain what the team may do next.</p>
       <p>The triggers are defined in the orchestrator's constitution, which means they cannot be modified by any agent under routine operations. Changing the trigger definitions requires the human principal to directly edit the constitution: the same level of authority required to change the security agent's veto power.</p>
+
+      <p>Placing the triggers in the constitution settles who may authorize a dangerous act. It does not settle what happens when one is authorized and then goes wrong, and the two questions are separable. A clearance regime governs entry to the act; it is silent about the state the act leaves behind. An arrangement that answers only the first question has protected itself against unauthorized destruction while remaining fully exposed to authorized destruction that turns out to have been mistaken — and the second is the more common case, since an act that passes review is an act someone believed was correct.</p>
+
+      <div class="project-illustration">
+      <p>The tooling that generates and maintains agent teams answers the second question separately from the first. Clearance is enforced where the constitution requires it, but every operation that rewrites a team's files also copies the prior state before writing, and an operator may ask what an operation would do and receive the complete list of affected files without any of them being touched. Neither mechanism consults the security rules, and neither replaces them. They address what remains after clearance has been granted.</p>
+      </div>
+
+      <p>The relationship between the two is complementary rather than hierarchical, though the levels differ. Clearance is a constitutional matter, since it determines what the team is permitted to do; recovery is an operational one, since it determines what can be undone. Chapter 14 returns to this pairing in the context of deletion, where the asymmetry between the two kinds of protection is sharpest.</p>
     </section>
 
     <section id="sec:security-halt">
