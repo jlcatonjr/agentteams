@@ -5407,11 +5407,32 @@ and this project adheres to <a href="https://semver.org/spec/v2.0.0.html">Semant
 </ul>
 <h3 id="fixed">fixed<a class="headerlink" href="#fixed" title="Permanent link">&para;</a></h3>
 <ul>
-<li><strong><code>references/agentteams-remediation-log.csv</code></strong>: two rows carried unquoted commas
+<li>
+<p><strong>The bridge's mode banner could not name the mode, and its skip notice
+  recommended the destructive one.</strong> Both sit on the safety path that
+  <code>references/bridge-refresh-safety.md</code> exists to enforce, and both were found while
+  running a <code>--bridge-merge</code> under that policy. <code>cli/commands.py</code> printed only
+  <code>check</code> or <code>generate</code>, so a <code>--bridge-merge</code> displayed as <code>generate</code> and a
+  <code>--bridge-refresh</code> was indistinguishable from a bare invocation — the banner could
+  not confirm the intended mode ran. And when <code>--bridge-merge</code> correctly skipped
+  unfenced target files, <code>bridge.py</code> advised "Pass <code>--bridge-refresh</code>… recommended
+  when bridge state is incomplete or stale" — pointing the operator at the
+  destructive mode for exactly the user-authored files merge mode had just protected,
+  under the condition where the advice is most likely to be followed. That is the
+  mechanism of the 2026-05-27 incident, still live in the tool. The banner now names
+  all four modes and states that refresh overwrites; the notice explains the skip as
+  the merge contract and warns against refresh. <code>bridge.skip_notice()</code> was extracted
+  so the text is testable without a live bridge run, guarded by
+  <code>tests/test_bridge_mode_safety.py</code> (7 tests, including one asserting the helper is
+  actually wired into <code>run_bridge</code>).</p>
+</li>
+<li>
+<p><strong><code>references/agentteams-remediation-log.csv</code></strong>: two rows carried unquoted commas
   that split them into eight fields against a six-column header, so any
   <code>DictWriter</code> consumer raised. Repaired under a proof that every non-comma
   character is preserved. The underlying gap — nothing validates the log's shape —
-  remains logged as open.</li>
+  remains logged as open.</p>
+</li>
 <li><strong><code>docs_src/api-reference/feature-inventory.md</code></strong>: version baseline read <code>0.1.0
   (2026-04-15)</code> at <code>1.0.0rc6</code>. Re-baselined, and the per-category counts are now
   declared hand-maintained rather than presented as derived.</li>

@@ -73,6 +73,45 @@ class BridgeResult:
         return len(self.errors) == 0 and (self.check_ok or not self.check_only)
 
 
+def skip_notice(count: int, *, merge_only: bool) -> str:
+    """Build the operator notice for target files the bridge left alone.
+
+    The two cases are opposite in meaning and must not share advice. Under
+    ``--bridge-merge`` a skip is the **contract**: a target file carrying no
+    ``AGENTTEAMS-BRIDGE`` fence holds user-authored content, and leaving it
+    untouched is the entire reason merge mode exists. This notice previously
+    recommended ``--bridge-refresh`` in both cases — advising the operator to
+    overwrite precisely the files that had just been protected, and calling it
+    "recommended when bridge state is incomplete or stale", which is when the
+    advice is most likely to be followed. That is the 2026-05-27 incident recorded
+    in ``references/bridge-refresh-safety.md``.
+
+    Args:
+        count: How many target files were skipped.
+        merge_only: True when running under ``--bridge-merge``.
+
+    Returns:
+        The notice text. Under merge it explains the skip and warns against
+        refresh; otherwise it offers merge first and gates refresh behind the
+        mandatory Pre-Flight reference.
+    """
+    if merge_only:
+        return (
+            f"{count} target file(s) were left untouched because they carry no "
+            "AGENTTEAMS-BRIDGE fence — the intended --bridge-merge behaviour, since "
+            "an unfenced file holds user-authored content. See bridge-merge.report.md "
+            "for the per-file reason. Do NOT reach for --bridge-refresh to 'fix' this: "
+            "it overwrites those files unconditionally. To bring a file under bridge "
+            "management, add the fence to it."
+        )
+    return (
+        f"{count} existing bridge file(s) were not overwritten. Use --bridge-merge to "
+        "update fenced regions non-destructively. --bridge-refresh regenerates the full "
+        "set but overwrites target entry files unconditionally — run the Pre-Flight "
+        "checks in references/bridge-refresh-safety.md first."
+    )
+
+
 def run_bridge(
     *,
     source_dir: Path,
@@ -375,11 +414,7 @@ def run_bridge(
         result.written.append(str(report_path))
 
     if result.skipped and not overwrite:
-        result.notices.append(
-            f"{len(result.skipped)} existing bridge file(s) were not overwritten. "
-            "Pass --bridge-refresh to regenerate the full bridge artifact set "
-            "(recommended when bridge state is incomplete or stale)."
-        )
+        result.notices.append(skip_notice(len(result.skipped), merge_only=merge_only))
 
     # Phase 2: emit Claude subagent stubs delegating to copilot-vscode source.
     # Opt-in via host feature subselector; default emission is unchanged.

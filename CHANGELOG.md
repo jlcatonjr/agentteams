@@ -72,6 +72,24 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### fixed
 
+- **The bridge's mode banner could not name the mode, and its skip notice
+  recommended the destructive one.** Both sit on the safety path that
+  `references/bridge-refresh-safety.md` exists to enforce, and both were found while
+  running a `--bridge-merge` under that policy. `cli/commands.py` printed only
+  `check` or `generate`, so a `--bridge-merge` displayed as `generate` and a
+  `--bridge-refresh` was indistinguishable from a bare invocation — the banner could
+  not confirm the intended mode ran. And when `--bridge-merge` correctly skipped
+  unfenced target files, `bridge.py` advised "Pass `--bridge-refresh`… recommended
+  when bridge state is incomplete or stale" — pointing the operator at the
+  destructive mode for exactly the user-authored files merge mode had just protected,
+  under the condition where the advice is most likely to be followed. That is the
+  mechanism of the 2026-05-27 incident, still live in the tool. The banner now names
+  all four modes and states that refresh overwrites; the notice explains the skip as
+  the merge contract and warns against refresh. `bridge.skip_notice()` was extracted
+  so the text is testable without a live bridge run, guarded by
+  `tests/test_bridge_mode_safety.py` (7 tests, including one asserting the helper is
+  actually wired into `run_bridge`).
+
 - **`references/agentteams-remediation-log.csv`**: two rows carried unquoted commas
   that split them into eight fields against a six-column header, so any
   `DictWriter` consumer raised. Repaired under a proof that every non-comma
