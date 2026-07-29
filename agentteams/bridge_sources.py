@@ -10,6 +10,7 @@ from __future__ import annotations
 import hashlib
 import json
 import re
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
@@ -160,7 +161,25 @@ def _run_bridge_check(*, manifest_path: Path, source_hash_rows: list[dict[str, s
 
     ok = not stale_paths and not missing_paths and not extra_paths and not empty_inventory
 
-    lines = ["# Bridge Check Report", "", f"Result: {'PASS' if ok else 'FAIL'}", ""]
+    # A check report is a snapshot of one run, but its wording is present-tense
+    # ("artifacts ARE fresh"), and it is only rewritten when --bridge-check runs.
+    # The copilot-cli report sat committed at PASS for a week while six source files
+    # drifted, because nothing re-ran the check and nothing in the file revealed how
+    # old the verdict was. Both timestamps are recorded so a reader can tell whether
+    # the verdict still applies without re-running anything.
+    checked_at = datetime.now(timezone.utc).isoformat()
+    lines = [
+        "# Bridge Check Report",
+        "",
+        f"Result: {'PASS' if ok else 'FAIL'}",
+        "",
+        f"- Checked at: {checked_at}",
+        f"- Manifest generated at: {manifest.get('generated_at', '(not recorded)')}",
+        "",
+        "> This verdict describes the moment of the check above. Source files may have"
+        " changed since. Re-run `--bridge-check` rather than trusting a stale PASS.",
+        "",
+    ]
     if empty_inventory:
         lines.append("## Empty Inventory")
         lines.append(
@@ -187,7 +206,20 @@ def _run_bridge_check(*, manifest_path: Path, source_hash_rows: list[dict[str, s
     return ok, "\n".join(lines) + "\n"
 
 
-def _render_inventory_md(rows: list[dict[str, str]]) -> str:
+def _render_inventory_md(rows: list[dict[str, str]], output_root: Path | None = None) -> str:
+    """Render the bridge inventory table.
+
+    Args:
+        rows: Inventory rows from ``_extract_inventory``.
+        output_root: Repository root. When given, ``source_file`` is rendered
+            relative to it — this artifact is committed, and an absolute path
+            leaks the operator's home directory and username. ``1937cbc`` fixed
+            that for the manifest's ``source_dir`` and missed this column.
+            Optional so existing callers keep working; they get absolute paths.
+
+    Returns:
+        The inventory markdown.
+    """
     lines = [
         "# Agent Team Bridge Inventory",
         "",
@@ -198,8 +230,13 @@ def _render_inventory_md(rows: list[dict[str, str]]) -> str:
     ]
     for row in rows:
         role = row["role"].replace("|", "\\|")
+        source = row["source_file"]
+        if output_root is not None:
+            candidate = Path(source)
+            if candidate.is_absolute() and candidate.is_relative_to(output_root):
+                source = str(candidate.relative_to(output_root))
         lines.append(
-            f"| {row['display_name']} | {row['invokable']} | {role} | `{row['source_file']}` |"
+            f"| {row['display_name']} | {row['invokable']} | {role} | `{source}` |"
         )
     lines.append("")
     return "\n".join(lines)

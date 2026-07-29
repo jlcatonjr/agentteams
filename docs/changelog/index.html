@@ -5407,6 +5407,36 @@ and this project adheres to <a href="https://semver.org/spec/v2.0.0.html">Semant
 </ul>
 <h3 id="fixed">fixed<a class="headerlink" href="#fixed" title="Permanent link">&para;</a></h3>
 <ul>
+<li><strong>The remaining two bridge manifests regenerated; all three pairs now PASS.</strong>
+  <code>copilot-vscode-to-copilot-cli</code> was 6 rows stale and <code>copilot-vscode-to-goose</code> 3.
+  Verified as pure time drift before writing rather than after: all three pairs carry
+  identical 35-row sets, goose's stale set is a strict subset of copilot-cli's, and
+  every stale row is a source file modified after that pair's own <code>generated_at</code>
+  (copilot-cli 2026-07-22, goose 2026-07-25). No structural divergence was being
+  masked. <code>--bridge-merge</code> throughout — Pre-Flight Check 4 forbids refresh here
+  because <code>.github/copilot-instructions.md</code> is gitignored and was never committed, so
+  it has no git safety net at all.</li>
+<li><strong>A committed <code>bridge-check.report.md</code> said PASS while its manifest was 6 rows
+  stale — and nothing in the file revealed how old the verdict was.</strong> The report is a
+  snapshot of one run, written only when <code>--bridge-check</code> runs, but its wording is
+  present-tense: "Bridge artifacts are fresh and consistent with source files." The
+  copilot-cli check last ran on 2026-07-22 when that was true, and the verdict then
+  sat unchallenged for a week. This is how the drift went unnoticed. Reports now
+  record both the check time and the manifest's <code>generated_at</code>, and a passing report
+  caveats its own freshness.</li>
+<li>
+<p><strong><code>1937cbc</code>'s OPSEC fix was incomplete: six tracked bridge artifacts still embedded
+  an absolute home path.</strong> That commit relativized <code>bridge-manifest.json</code>'s
+  <code>source_dir</code> — one field in one file — while the sibling artifacts the same run
+  writes kept leaking the operator's username and directory layout:
+  <code>agent-inventory.md</code>'s source-file column and <code>bridge-merge.report.md</code>'s per-file
+  lines, across all three pairs. Extracted <code>bridge.rel_to_root()</code> as the shared form
+  so the three cannot drift again, regenerated every pair, and added a guard that
+  scans <strong>every</strong> file under <code>references/bridges/</code> rather than the manifest alone —
+  a one-field fix on a multi-file emission is exactly how this recurred.
+  <code>.claude/agents/references/memory-index.json</code> still carries the same leak; it is a
+  different subsystem and is reported, not changed here.</p>
+</li>
 <li>
 <p><strong>The bridge's mode banner could not name the mode, and its skip notice
   recommended the destructive one.</strong> Both sit on the safety path that

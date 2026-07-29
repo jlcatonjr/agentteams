@@ -1,9 +1,9 @@
 {
   "schema_version": "1.0",
-  "generated_at": "2026-07-22T00:31:16.428485+00:00",
+  "generated_at": "2026-07-29T23:06:07.843659+00:00",
   "source_framework": "copilot-vscode",
   "target_framework": "copilot-cli",
-  "source_dir": "/Users/jamescaton/githubrepositories/agentteams/.github/agents",
+  "source_dir": ".github/agents",
   "source_hashes": [
     {
       "path": "agents/adversarial.agent.md",
@@ -47,7 +47,7 @@
     },
     {
       "path": "agents/content-enricher.agent.md",
-      "sha256": "8bc4b3f860230cba1556e7996d8eae5b447f8b2dd2a43d7b657cc2a04f380946"
+      "sha256": "395589b3b793323b7e4890b29c459994ff9fd17d9b1b60387127fc117d9eb022"
     },
     {
       "path": "agents/format-converter.agent.md",
@@ -59,7 +59,7 @@
     },
     {
       "path": "agents/git-operations.agent.md",
-      "sha256": "a0b7238257913c6e7f45b7d3732bbb201797e703d6a7445265286313f151ba75"
+      "sha256": "2012d18e4701e5e94d453d01f0f4d1e8576bf0ac42e82665844884aa29598a62"
     },
     {
       "path": "agents/navigator.agent.md",
@@ -67,7 +67,7 @@
     },
     {
       "path": "agents/orchestrator.agent.md",
-      "sha256": "8ed4d6913bb52121b6198e10eeab6be359c6d62a3de242b8aa19d8f8c78a1c84"
+      "sha256": "d5b42c0e10077d9053087d88cda72c73afffff1e80aabd7bfda72698b05a831a"
     },
     {
       "path": "agents/output-compiler.agent.md",
@@ -103,7 +103,7 @@
     },
     {
       "path": "agents/repo-liaison.agent.md",
-      "sha256": "56dae8f5e934b52231004f42d712dd2f73d27e496e2f3e9853d033b4bf5641c5"
+      "sha256": "4002160638de1a384fef6aac328f66cb328fc94109a4c91c6659db723a5e99d8"
     },
     {
       "path": "agents/retrieval-integrator.agent.md",
@@ -115,7 +115,7 @@
     },
     {
       "path": "agents/security.agent.md",
-      "sha256": "9804b6cdf9ca161e1acc76b5e1899da793808f0ea0a347936bf34fc3f33f3cda"
+      "sha256": "2a7586b0509fb24c81c27e18a9572e8e3f77f17f03d352c3439adfbcb86499f2"
     },
     {
       "path": "agents/team-builder.agent.md",
@@ -135,7 +135,7 @@
     },
     {
       "path": "agents/tool-doc-researcher.agent.md",
-      "sha256": "f314c65aed745091d195e3914c6e4e96fc58e39fbab0c9b8e489aacbfd210138"
+      "sha256": "75bd330c42ab4985f420238b062dd9e79a3db458147755709c3dad0152edd220"
     },
     {
       "path": "agents/work-summarizer.agent.md",

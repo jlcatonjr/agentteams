@@ -73,6 +73,31 @@ class BridgeResult:
         return len(self.errors) == 0 and (self.check_ok or not self.check_only)
 
 
+def rel_to_root(path: Path | str, output_root: Path) -> str:
+    """Render ``path`` relative to ``output_root`` when it lies inside it.
+
+    Bridge artifacts are committed, so an absolute path baked into one leaks the
+    operator's home directory and username to anyone who reads the repository.
+    ``1937cbc`` fixed this for the manifest's ``source_dir`` but only for that one
+    field, leaving the sibling artifacts the same run writes —
+    ``agent-inventory.md``'s source-file column and ``bridge-merge.report.md``'s
+    per-file lines — still absolute. This is the shared form so the three cannot
+    drift again.
+
+    Args:
+        path: Absolute or relative path to render.
+        output_root: Repository root the bridge is writing under.
+
+    Returns:
+        The path relative to ``output_root``, or unchanged when it lies outside
+        (a genuinely external path is information, not a leak).
+    """
+    candidate = Path(path)
+    if candidate.is_absolute() and candidate.is_relative_to(output_root):
+        return str(candidate.relative_to(output_root))
+    return str(candidate)
+
+
 def skip_notice(count: int, *, merge_only: bool) -> str:
     """Build the operator notice for target files the bridge left alone.
 
@@ -214,7 +239,9 @@ def run_bridge(
     # Bridge-internal artifacts: always regenerated regardless of mode.
     bridge_files: list[tuple[Path, str]] = []
     bridge_files.append((manifest_path, json.dumps(manifest, indent=2) + "\n"))
-    bridge_files.append((pair_dir / "agent-inventory.md", _render_inventory_md(inventory)))
+    bridge_files.append(
+        (pair_dir / "agent-inventory.md", _render_inventory_md(inventory, output_root))
+    )
     bridge_files.append((pair_dir / "quickstart-snippet.md", _render_quickstart(src_fw, target_framework)))
     bridge_files.append((pair_dir / "entrypoint.md", _render_entrypoint(src_fw, target_framework)))
     bridge_files.append((pair_dir / "domain-boundary.md", _render_domain_boundary(src_fw, target_framework)))
@@ -370,7 +397,7 @@ def run_bridge(
                 if not dry_run:
                     path.write_text(merged, encoding="utf-8")
                 result.written.append(str(path))
-                merge_report_lines.append(f"- merged: {path}")
+                merge_report_lines.append(f"- merged: {rel_to_root(path, output_root)}")
             elif status == "no-fence":
                 # W2: distinguish between a truly unmanaged file and one that was
                 # written by --bridge-refresh (AGENTTEAMS-BRIDGE namespace).  The
@@ -383,16 +410,18 @@ def run_bridge(
                         "to enable future --merge updates."
                     )
                     merge_report_lines.append(
-                        f"- skipped (AGENTTEAMS-BRIDGE fence present but no AGENTTEAMS fence; see notices): {path}"
+                        f"- skipped (AGENTTEAMS-BRIDGE fence present but no AGENTTEAMS fence; "
+                        f"see notices): {rel_to_root(path, output_root)}"
                     )
                 else:
                     merge_report_lines.append(
-                        f"- skipped (no AGENTTEAMS-BRIDGE fence in existing file): {path}"
+                        f"- skipped (no AGENTTEAMS-BRIDGE fence in existing file): "
+                        f"{rel_to_root(path, output_root)}"
                     )
                 result.skipped.append(str(path))
             else:
                 result.skipped.append(str(path))
-                merge_report_lines.append(f"- skipped ({status}): {path}")
+                merge_report_lines.append(f"- skipped ({status}): {rel_to_root(path, output_root)}")
             continue
 
         if not overwrite:
