@@ -307,7 +307,7 @@ def test_pii_in_operational_json_is_suppressed(tmp_path):
     refs = agents_dir / "references"
     refs.mkdir(parents=True)
     (refs / "delivery-receipt.json").write_text(
-        '{"path": "/Users/jamescaton/githubrepositories/foo"}\n',
+        '{"path": "/Users/alice/githubrepositories/foo"}\n',
         encoding="utf-8",
     )
     report = scan_directory(agents_dir)
@@ -320,7 +320,7 @@ def test_pii_in_regular_md_still_flagged(tmp_path):
     agents_dir = tmp_path / ".github" / "agents"
     agents_dir.mkdir(parents=True)
     (agents_dir / "live.agent.md").write_text(
-        "Note: see /Users/jamescaton/githubrepositories/foo for details.\n",
+        "Note: see /Users/alice/githubrepositories/foo for details.\n",
         encoding="utf-8",
     )
     report = scan_directory(agents_dir)

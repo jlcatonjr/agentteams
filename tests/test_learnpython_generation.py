@@ -31,7 +31,9 @@ TEMPLATES_DIR = REPO_ROOT / "agentteams" / "templates"
 LEARN_PYTHON_BRIEF = EXAMPLES_DIR / "learn-python-for-stats-and-econ" / "brief.json"
 
 # External live repo (may not be present on all machines / CI)
-LIVE_REPO = Path("/Users/jamescaton/githubrepositories/Learn-Python-for-Stats-and-Econ")
+# Resolved from $HOME rather than hard-coded: the literal embedded the author's
+# username in a tracked file, and the test already skips when the repo is absent.
+LIVE_REPO = Path.home() / "githubrepositories" / "Learn-Python-for-Stats-and-Econ"
 LIVE_AGENTS = LIVE_REPO / ".github" / "agents"
 
 # ---------------------------------------------------------------------------

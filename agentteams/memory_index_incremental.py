@@ -64,7 +64,9 @@ def _old_tf_for_doc(index: dict[str, Any], doc_id: int) -> dict[str, int]:
     return out
 
 
-def _new_doc_and_tf(path: Path, doc_id: int) -> tuple[dict[str, Any], dict[str, int]] | None:
+def _new_doc_and_tf(
+    path: Path, doc_id: int, root: Path | None = None
+) -> tuple[dict[str, Any], dict[str, int]] | None:
     try:
         text = path.read_text(encoding="utf-8")
     except (OSError, UnicodeDecodeError):
@@ -80,7 +82,7 @@ def _new_doc_and_tf(path: Path, doc_id: int) -> tuple[dict[str, Any], dict[str, 
     paragraphs = mi._extract_paragraphs(text)
     doc = {
         "doc_id": doc_id,
-        "path": str(path),
+        "path": mi.store_path(path, root),
         "title": mi._title_for(path, text),
         "length": len(tokens),
         "snippet": mi._snippet_from_paragraphs(paragraphs) or mi._snippet(text),
@@ -220,6 +222,7 @@ def try_incremental_sed_update(
     project_name: str,
     framework: str,
     validate_index: callable,
+    root: Path | None = None,
 ) -> IncrementalUpdateResult:
     """Try reliable incremental update; return non-applied result on any risk.
 
@@ -243,14 +246,18 @@ def try_incremental_sed_update(
         if isinstance(path, str):
             doc_by_path[path] = doc
 
-    source_set = {str(p) for p in source_paths}
+    # Compare in the STORED form on both sides. Keying by absolute path while the
+    # index stores relative ones makes every set comparison differ, so the
+    # incremental path would silently never apply again — correct output, but the
+    # optimisation quietly dead.
+    source_set = {mi.store_path(p, root) for p in source_paths}
     indexed_set = set(doc_by_path.keys())
     if source_set != indexed_set:
         return IncrementalUpdateResult(False, "source_set_changed")
 
     changed: list[Path] = []
     for path in source_paths:
-        old_doc = doc_by_path.get(str(path))
+        old_doc = doc_by_path.get(mi.store_path(path, root))
         if not old_doc:
             return IncrementalUpdateResult(False, "missing_doc_entry")
         expected_hash = old_doc.get("source_hash")
@@ -262,13 +269,13 @@ def try_incremental_sed_update(
         return IncrementalUpdateResult(False, "eligible_only_single_changed_doc")
 
     changed_path = changed[0]
-    old_doc = doc_by_path[str(changed_path)]
+    old_doc = doc_by_path[mi.store_path(changed_path, root)]
     doc_id = old_doc.get("doc_id")
     if not isinstance(doc_id, int):
         return IncrementalUpdateResult(False, "invalid_doc_id")
 
     old_tf = _old_tf_for_doc(index, doc_id)
-    built = _new_doc_and_tf(changed_path, doc_id)
+    built = _new_doc_and_tf(changed_path, doc_id, root)
     if built is None:
         return IncrementalUpdateResult(False, "changed_doc_unreadable_or_empty")
     new_doc, new_tf = built

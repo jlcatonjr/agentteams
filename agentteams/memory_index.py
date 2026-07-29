@@ -216,6 +216,41 @@ def _source_text_hash(path: Path) -> str:
     return hashlib.sha256(text.encode("utf-8")).hexdigest()
 
 
+def store_path(path: Path | str, root: Path | None) -> str:
+    """Render a document path for storage in the index.
+
+    Args:
+        path: The source file path, normally absolute.
+        root: Project root to relativize against, or ``None`` to store as-is.
+
+    Returns:
+        The path relative to ``root`` when it lies inside it, otherwise unchanged.
+        A path outside the project is stored absolute deliberately: it is genuinely
+        external, and silently rewriting it would misdescribe where it came from.
+    """
+    candidate = Path(path)
+    if root is not None and candidate.is_absolute() and candidate.is_relative_to(root):
+        return str(candidate.relative_to(root))
+    return str(candidate)
+
+
+def resolve_path(stored: str, root: Path | None) -> Path:
+    """Invert :func:`store_path` — turn a stored path back into a readable one.
+
+    Args:
+        stored: The ``path`` value from an index document.
+        root: Project root the index was built against, or ``None``.
+
+    Returns:
+        An absolute path when ``root`` is given and ``stored`` is relative;
+        otherwise ``Path(stored)`` unchanged.
+    """
+    candidate = Path(stored)
+    if root is not None and not candidate.is_absolute():
+        return root / candidate
+    return candidate
+
+
 def _documents_fingerprint(documents: list[dict[str, Any]]) -> str:
     """Stable fingerprint over indexed document path/hash pairs."""
     parts: list[str] = []
@@ -229,12 +264,30 @@ def build_memory_index(
     *,
     project_name: str = "",
     framework: str = "",
+    root: Path | None = None,
 ) -> dict[str, Any]:
     """Build a lexical BM25 index over *sources*. Pure.
 
     Each source is read once; missing/unreadable sources are silently skipped
     so the index is robust to in-flight file churn. Empty source list ⇒ an
     empty-but-schema-valid index (no error).
+
+    Args:
+        sources: Files to index.
+        project_name: Recorded in the index metadata.
+        framework: Recorded in the index metadata.
+        root: When given, each document's ``path`` is stored **relative to this
+            root**. The index is a committed artifact, so absolute paths leak the
+            operator's home directory and username — 2150 of them, in this
+            repository's own index. Relativizing happens here rather than at the
+            serialization boundary so ``source_fingerprint``, which is derived from
+            the document paths a few lines below, describes the paths that are
+            actually stored. Fixing only the boundary would leave the fingerprint
+            describing paths the file does not contain. Defaults to ``None``, which
+            preserves absolute paths, so existing callers are unaffected.
+
+    Returns:
+        The index payload.
     """
     source_paths = [Path(p) for p in sources]
     documents: list[dict[str, Any]] = []
@@ -258,7 +311,7 @@ def build_memory_index(
         paragraphs = _extract_paragraphs(text)
         documents.append({
             "doc_id": doc_id,
-            "path": str(path),
+            "path": store_path(path, root),
             "title": _title_for(path, text),
             "length": len(tokens),
             "snippet": _snippet_from_paragraphs(paragraphs) or _snippet(text),
@@ -314,10 +367,21 @@ def build_memory_index(
     }
 
 
-def is_index_stale(index: dict[str, Any], sources: Iterable[Path | str]) -> bool:
+def is_index_stale(
+    index: dict[str, Any], sources: Iterable[Path | str], *, root: Path | None = None
+) -> bool:
     """Return True when any source file is newer than the index build time.
 
     Invalid/missing timestamp metadata is treated as stale for safety.
+
+    Args:
+        index: A parsed index payload.
+        sources: The current source files.
+        root: The project root the index was built against. **Required when the
+            index stores relative paths** — without it, each ``path`` resolves
+            against the process CWD, the hash read fails, and the index is reported
+            stale on every call, triggering a full rebuild per query. Defaults to
+            ``None`` for indexes that store absolute paths.
     """
     built_at = index.get("built_at")
     if not isinstance(built_at, str) or not built_at:
@@ -336,7 +400,7 @@ def is_index_stale(index: dict[str, Any], sources: Iterable[Path | str]) -> bool
         path_str = doc.get("path")
         expected_hash = doc.get("source_hash")
         if isinstance(path_str, str) and isinstance(expected_hash, str) and expected_hash:
-            actual_hash = _source_text_hash(Path(path_str))
+            actual_hash = _source_text_hash(resolve_path(path_str, root))
             if not actual_hash or actual_hash != expected_hash:
                 return True
 

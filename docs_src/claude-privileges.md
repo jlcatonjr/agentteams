@@ -122,7 +122,7 @@ Patterns use shell-style globs applied to the tool's first argument (the command
 **Absolute paths require a `//` prefix** (single slash is relative to the project root):
 
 ```json
-"Read(//Users/jamescaton/githubrepositories/shared/**)"
+"Read(//Users/you/githubrepositories/shared/**)"
 ```
 
 Omitting the argument entirely matches all uses of that tool:

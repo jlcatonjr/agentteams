@@ -3030,6 +3030,17 @@
 </li>
         
           <li class="md-nav__item">
+  <a href="#changed" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        changed
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
   <a href="#fixed-packagingbuild-hygiene" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -3195,7 +3206,7 @@
 </li>
         
           <li class="md-nav__item">
-  <a href="#changed" class="md-nav__link">
+  <a href="#changed_1" class="md-nav__link">
     <span class="md-ellipsis">
       
         changed
@@ -3272,7 +3283,7 @@
 </li>
         
           <li class="md-nav__item">
-  <a href="#changed_1" class="md-nav__link">
+  <a href="#changed_2" class="md-nav__link">
     <span class="md-ellipsis">
       
         changed
@@ -3316,7 +3327,7 @@
 </li>
         
           <li class="md-nav__item">
-  <a href="#changed_2" class="md-nav__link">
+  <a href="#changed_3" class="md-nav__link">
     <span class="md-ellipsis">
       
         changed
@@ -3338,7 +3349,7 @@
 </li>
         
           <li class="md-nav__item">
-  <a href="#changed_3" class="md-nav__link">
+  <a href="#changed_4" class="md-nav__link">
     <span class="md-ellipsis">
       
         changed
@@ -3388,7 +3399,7 @@
 </li>
         
           <li class="md-nav__item">
-  <a href="#changed_4" class="md-nav__link">
+  <a href="#changed_5" class="md-nav__link">
     <span class="md-ellipsis">
       
         changed
@@ -3488,7 +3499,7 @@
       <ul class="md-nav__list">
         
           <li class="md-nav__item">
-  <a href="#changed_5" class="md-nav__link">
+  <a href="#changed_6" class="md-nav__link">
     <span class="md-ellipsis">
       
         changed
@@ -4090,7 +4101,7 @@
 </li>
         
           <li class="md-nav__item">
-  <a href="#changed_6" class="md-nav__link">
+  <a href="#changed_7" class="md-nav__link">
     <span class="md-ellipsis">
       
         Changed
@@ -4213,6 +4224,17 @@
 </li>
         
           <li class="md-nav__item">
+  <a href="#changed" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        changed
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
   <a href="#fixed-packagingbuild-hygiene" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -4378,7 +4400,7 @@
 </li>
         
           <li class="md-nav__item">
-  <a href="#changed" class="md-nav__link">
+  <a href="#changed_1" class="md-nav__link">
     <span class="md-ellipsis">
       
         changed
@@ -4455,7 +4477,7 @@
 </li>
         
           <li class="md-nav__item">
-  <a href="#changed_1" class="md-nav__link">
+  <a href="#changed_2" class="md-nav__link">
     <span class="md-ellipsis">
       
         changed
@@ -4499,7 +4521,7 @@
 </li>
         
           <li class="md-nav__item">
-  <a href="#changed_2" class="md-nav__link">
+  <a href="#changed_3" class="md-nav__link">
     <span class="md-ellipsis">
       
         changed
@@ -4521,7 +4543,7 @@
 </li>
         
           <li class="md-nav__item">
-  <a href="#changed_3" class="md-nav__link">
+  <a href="#changed_4" class="md-nav__link">
     <span class="md-ellipsis">
       
         changed
@@ -4571,7 +4593,7 @@
 </li>
         
           <li class="md-nav__item">
-  <a href="#changed_4" class="md-nav__link">
+  <a href="#changed_5" class="md-nav__link">
     <span class="md-ellipsis">
       
         changed
@@ -4671,7 +4693,7 @@
       <ul class="md-nav__list">
         
           <li class="md-nav__item">
-  <a href="#changed_5" class="md-nav__link">
+  <a href="#changed_6" class="md-nav__link">
     <span class="md-ellipsis">
       
         changed
@@ -5273,7 +5295,7 @@
 </li>
         
           <li class="md-nav__item">
-  <a href="#changed_6" class="md-nav__link">
+  <a href="#changed_7" class="md-nav__link">
     <span class="md-ellipsis">
       
         Changed
@@ -5407,7 +5429,46 @@ and this project adheres to <a href="https://semver.org/spec/v2.0.0.html">Semant
 </ul>
 <h3 id="fixed">fixed<a class="headerlink" href="#fixed" title="Permanent link">&para;</a></h3>
 <ul>
-<li><strong>The remaining two bridge manifests regenerated; all three pairs now PASS.</strong>
+<li><strong><code>memory-index.json</code> stored absolute document paths — 2150 of them in a committed
+  artifact.</strong> <code>build_memory_index(..., root=)</code> now stores each document's <code>path</code>
+  relative to the project root, and <code>is_index_stale</code>/the incremental sed updater
+  resolve against the same root. Relativizing happens <strong>inside</strong> the builder rather
+  than at the serialization boundary, so <code>source_fingerprint</code> — derived from the
+  document paths — describes the paths actually stored; fixing only the boundary
+  would have repeated the one-field-fixed mistake from the bridge manifest. The
+  committed index went from 2135 absolute occurrences to 36, and <strong>all 36 remaining
+  are inside <code>snippet</code>/<code>paragraphs</code></strong>: verbatim excerpts of source documents whose own
+  prose names absolute paths. Those are deliberately left alone — rewriting a
+  quotation would make the index misquote its source while <code>source_hash</code> still
+  attested to the original. A legacy index with absolute paths degrades to a full
+  rebuild (which rewrites it in the new form) rather than producing a mixed index.</li>
+<li><strong>Also genericized:</strong> <code>docs_src/claude-privileges.md</code>'s example permission string,
+  two <code>tests/test_scan.py</code> PII fixtures (<code>/Users/alice</code>, matching <code>scan.py</code>'s own
+  docstring example — the regex is username-agnostic, so the test is unweakened), and
+  <code>tests/test_learnpython_generation.py</code>'s live-repo constant, now resolved from
+  <code>Path.home()</code>.</li>
+</ul>
+<h3 id="changed">changed<a class="headerlink" href="#changed" title="Permanent link">&para;</a></h3>
+<ul>
+<li>
+<p><strong>The bridge check report records a source-state digest instead of a wall clock,
+  and <code>--bridge-check</code> no longer writes when nothing changed.</strong> The previous fix
+  recorded <code>Checked at: &lt;timestamp&gt;</code>, which created a second problem while only
+  half-solving the first: a command documented "read-only; produces a freshness
+  report" then rewrote a tracked file on <strong>every</strong> invocation, and a timestamp
+  conveys staleness only to a human who opens the file and does the arithmetic —
+  which is exactly what nobody did for the week the copilot-cli report sat wrong.
+  Recording <code>Source state: &lt;digest of the source files&gt;</code> is deterministic, so
+  re-checking unchanged sources produces identical bytes and the report is skipped;
+  and it is machine-comparable, so
+  <code>test_committed_check_reports_describe_the_committed_source_state</code> fails when a
+  committed verdict no longer describes the tree. That test reads <code>git show HEAD:</code>
+  deliberately — comparing a freshly generated report against the tree recomputes
+  the digest from that same tree and could never disagree. <code>Manifest generated at</code>
+  is retained; it comes from the manifest and answers a different question.</p>
+</li>
+<li>
+<p><strong>The remaining two bridge manifests regenerated; all three pairs now PASS.</strong>
   <code>copilot-vscode-to-copilot-cli</code> was 6 rows stale and <code>copilot-vscode-to-goose</code> 3.
   Verified as pure time drift before writing rather than after: all three pairs carry
   identical 35-row sets, goose's stale set is a strict subset of copilot-cli's, and
@@ -5415,7 +5476,8 @@ and this project adheres to <a href="https://semver.org/spec/v2.0.0.html">Semant
   (copilot-cli 2026-07-22, goose 2026-07-25). No structural divergence was being
   masked. <code>--bridge-merge</code> throughout — Pre-Flight Check 4 forbids refresh here
   because <code>.github/copilot-instructions.md</code> is gitignored and was never committed, so
-  it has no git safety net at all.</li>
+  it has no git safety net at all.</p>
+</li>
 <li><strong>A committed <code>bridge-check.report.md</code> said PASS while its manifest was 6 rows
   stale — and nothing in the file revealed how old the verdict was.</strong> The report is a
   snapshot of one run, written only when <code>--bridge-check</code> runs, but its wording is
@@ -5820,7 +5882,7 @@ and this project adheres to <a href="https://semver.org/spec/v2.0.0.html">Semant
   write/read shape drift gets its own cache rejected visibly instead of silently defaulting every
   field again. See <code>references/plans/security-vuln-cache-json-schema.plan.md</code>.</li>
 </ul>
-<h3 id="changed">changed<a class="headerlink" href="#changed" title="Permanent link">&para;</a></h3>
+<h3 id="changed_1">changed<a class="headerlink" href="#changed_1" title="Permanent link">&para;</a></h3>
 <ul>
 <li><strong><code>agentteams/bridge.py</code>'s goose-target <code>.goose/README.md</code> now points to its own
   <code>quickstart-snippet.md</code></strong> instead of a single unadorned sentence ("Lightweight bridge; source
@@ -6383,7 +6445,7 @@ a markdown table already serves adequately.</p>
   emits only the real agents. Test in <code>tests/test_interop.py</code>.</p>
 </li>
 </ul>
-<h3 id="changed_1">changed<a class="headerlink" href="#changed_1" title="Permanent link">&para;</a></h3>
+<h3 id="changed_2">changed<a class="headerlink" href="#changed_2" title="Permanent link">&para;</a></h3>
 <ul>
 <li>
 <p><strong>Repository filing conventions — stray plan docs no longer land at the root.</strong>
@@ -6491,7 +6553,7 @@ a markdown table already serves adequately.</p>
   (was incorrectly "warn"). The <code>agent-updater</code> template's ERROR rung was rewritten
   so a non-zero exit is no longer equated with a partial write / restore trigger.</li>
 </ul>
-<h3 id="changed_2">changed<a class="headerlink" href="#changed_2" title="Permanent link">&para;</a></h3>
+<h3 id="changed_3">changed<a class="headerlink" href="#changed_3" title="Permanent link">&para;</a></h3>
 <ul>
 <li><strong><code>--update --merge</code> now auto-retrofits fence markers onto legacy files by
   default.</strong> Previously, files without <code>AGENTTEAMS</code> fence markers (legacy/
@@ -6688,7 +6750,7 @@ a markdown table already serves adequately.</p>
   Defensive Programming). Example <code>expected/</code> snapshots regenerated for
   all four example teams.</li>
 </ul>
-<h3 id="changed_3">changed<a class="headerlink" href="#changed_3" title="Permanent link">&para;</a></h3>
+<h3 id="changed_4">changed<a class="headerlink" href="#changed_4" title="Permanent link">&para;</a></h3>
 <ul>
 <li><strong>Orchestrator model pinned to Claude Opus 4.8.</strong> The tier-1
   Orchestrator template front matter now declares
@@ -6757,7 +6819,7 @@ final is now on or after 2026-06-03 (one week after rc.6).</p>
 <li><strong>Labels <code>advisory</code> and <code>awaiting-human</code></strong> created on the remote
   via <code>gh label create</code> out-of-band.</li>
 </ul>
-<h3 id="changed_4">changed<a class="headerlink" href="#changed_4" title="Permanent link">&para;</a></h3>
+<h3 id="changed_5">changed<a class="headerlink" href="#changed_5" title="Permanent link">&para;</a></h3>
 <ul>
 <li><strong>Daily-pipeline integration.</strong> The 5 advisory detectors continue
   to write their gitignored tmp/ logs unchanged; the new workflow consumes
@@ -6835,7 +6897,7 @@ clock resets per pre-release convention; earliest defensible
 promotion to 1.0.0 final is now on or after 2026-06-03 (one week
 after rc.4).</p>
 <p>No public-API breaks since rc.3.</p>
-<h3 id="changed_5">changed<a class="headerlink" href="#changed_5" title="Permanent link">&para;</a></h3>
+<h3 id="changed_6">changed<a class="headerlink" href="#changed_6" title="Permanent link">&para;</a></h3>
 <ul>
 <li><strong><code>framework-auto-update.yml</code> auto-merges its own PR.</strong> The
   workflow now runs <code>gh pr merge --merge --delete-branch</code>
@@ -7491,7 +7553,7 @@ a live test of <code>--update --merge</code> and <code>--migrate</code>:</p>
 <li><strong>Infrastructure: Workflow 9 (Cross-Repository Coordination)</strong> added to <code>orchestrator-workflows.reference.md</code>; previously documented only in the orchestrator agent file</li>
 <li><strong>Infrastructure: snapshot archive</strong> — pre-update snapshots of all patched agent files saved to <code>references/plans/snapshots-2026-04-17/</code> for reversible rollback</li>
 </ul>
-<h3 id="changed_6">Changed<a class="headerlink" href="#changed_6" title="Permanent link">&para;</a></h3>
+<h3 id="changed_7">Changed<a class="headerlink" href="#changed_7" title="Permanent link">&para;</a></h3>
 <ul>
 <li>Workflow 2 in <code>orchestrator.template.md</code> and deployed <code>orchestrator.agent.md</code>: step 8 added (<code>@agent-updater</code> sync)</li>
 <li>Workflow 3: step 6 added (conditional <code>@agent-updater</code> when corrections made)</li>

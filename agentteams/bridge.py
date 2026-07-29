@@ -199,10 +199,20 @@ def run_bridge(
         result.check_ok = ok
         result.check_report_path = str(report_path)
         result.manifest_missing = not manifest_path.exists()
-        if not dry_run:
+        # --bridge-check is documented "read-only; produces a freshness report", so
+        # a check whose verdict has not changed must not touch the file. Rewriting it
+        # unconditionally made a read operation dirty a tracked file on every run —
+        # which is only possible to skip because the report is now deterministic in
+        # the source tree (see source_state_digest). `written` reflects what actually
+        # changed, so a no-op check reports nothing written.
+        report_changed = True
+        if report_path.exists():
+            report_changed = report_path.read_text(encoding="utf-8") != report
+        if not dry_run and report_changed:
             report_path.parent.mkdir(parents=True, exist_ok=True)
             report_path.write_text(report, encoding="utf-8")
-        result.written.append(str(report_path))
+        if report_changed:
+            result.written.append(str(report_path))
         if not ok:
             result.errors.append("bridge-check detected stale or missing bridge artifacts")
         return result
@@ -212,11 +222,10 @@ def run_bridge(
         "generated_at": datetime.now(timezone.utc).isoformat(),
         "source_framework": src_fw,
         "target_framework": target_framework,
-        "source_dir": (
-            str(source_dir.relative_to(output_root))
-            if source_dir.is_relative_to(output_root)
-            else str(source_dir)
-        ),
+        # Was an inline copy of rel_to_root's body. Left behind when the helper was
+        # extracted, which made "the shared form so the three cannot drift again"
+        # false of the very site the helper was named after.
+        "source_dir": rel_to_root(source_dir, output_root),
         "source_hashes": source_hashes,
         "inventory_count": len(inventory),
         "bridge_version": "1",

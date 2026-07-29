@@ -72,6 +72,43 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### fixed
 
+- **`memory-index.json` stored absolute document paths — 2150 of them in a committed
+  artifact.** `build_memory_index(..., root=)` now stores each document's `path`
+  relative to the project root, and `is_index_stale`/the incremental sed updater
+  resolve against the same root. Relativizing happens **inside** the builder rather
+  than at the serialization boundary, so `source_fingerprint` — derived from the
+  document paths — describes the paths actually stored; fixing only the boundary
+  would have repeated the one-field-fixed mistake from the bridge manifest. The
+  committed index went from 2135 absolute occurrences to 36, and **all 36 remaining
+  are inside `snippet`/`paragraphs`**: verbatim excerpts of source documents whose own
+  prose names absolute paths. Those are deliberately left alone — rewriting a
+  quotation would make the index misquote its source while `source_hash` still
+  attested to the original. A legacy index with absolute paths degrades to a full
+  rebuild (which rewrites it in the new form) rather than producing a mixed index.
+- **Also genericized:** `docs_src/claude-privileges.md`'s example permission string,
+  two `tests/test_scan.py` PII fixtures (`/Users/alice`, matching `scan.py`'s own
+  docstring example — the regex is username-agnostic, so the test is unweakened), and
+  `tests/test_learnpython_generation.py`'s live-repo constant, now resolved from
+  `Path.home()`.
+
+### changed
+
+- **The bridge check report records a source-state digest instead of a wall clock,
+  and `--bridge-check` no longer writes when nothing changed.** The previous fix
+  recorded `Checked at: <timestamp>`, which created a second problem while only
+  half-solving the first: a command documented "read-only; produces a freshness
+  report" then rewrote a tracked file on **every** invocation, and a timestamp
+  conveys staleness only to a human who opens the file and does the arithmetic —
+  which is exactly what nobody did for the week the copilot-cli report sat wrong.
+  Recording `Source state: <digest of the source files>` is deterministic, so
+  re-checking unchanged sources produces identical bytes and the report is skipped;
+  and it is machine-comparable, so
+  `test_committed_check_reports_describe_the_committed_source_state` fails when a
+  committed verdict no longer describes the tree. That test reads `git show HEAD:`
+  deliberately — comparing a freshly generated report against the tree recomputes
+  the digest from that same tree and could never disagree. `Manifest generated at`
+  is retained; it comes from the manifest and answers a different question.
+
 - **The remaining two bridge manifests regenerated; all three pairs now PASS.**
   `copilot-vscode-to-copilot-cli` was 6 rows stale and `copilot-vscode-to-goose` 3.
   Verified as pure time drift before writing rather than after: all three pairs carry
