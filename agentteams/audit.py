@@ -18,6 +18,7 @@ import json
 import re
 import shutil
 import subprocess
+from agentteams import living_doc as _living_doc
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
@@ -170,6 +171,23 @@ def run_post_audit(
     # --- Code-hygiene checks ---
     result.code_hygiene_findings.extend(_check_ch14_inline_data_blocks(file_map))
     result.code_hygiene_findings.extend(_check_ch20_duplicate_descriptions(file_map))
+    # Living-document policy — scope and rationale in agentteams.living_doc.
+    # Warnings, never errors: a date in prose is evidence of archaeology, not
+    # proof of it, and a legitimate effective-date must not fail a build.
+    result.code_hygiene_findings.extend(
+        AuditFinding(
+            category="WARNING",
+            code="LIVING-DOC",
+            severity="warning",
+            file=_p,
+            description=(
+                f"Dated content in unfenced agent prose ({_d}): {_l[:110]} — the "
+                f"living-document policy forbids dated snapshots, archaeology "
+                f"and fix logs in agent docs. Move it to a reference file."
+            ),
+        )
+        for _p, _d, _l in _living_doc.find_dated_prose(file_map)
+    )
 
     # --- Optional AI audit ---
     if ai_audit:
@@ -698,6 +716,8 @@ def _check_dangling_agent_slugs(
 _CH14_INLINE_DATA_THRESHOLD = 10
 _CH14_ALLOW_INLINE_START = "<!-- CH14:ALLOW_INLINE_DATA -->"
 _CH14_ALLOW_INLINE_END = "<!-- /CH14:ALLOW_INLINE_DATA -->"
+
+
 
 
 def _check_ch14_inline_data_blocks(

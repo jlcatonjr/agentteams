@@ -30,7 +30,13 @@ from typing import Any
 
 REPORT_NAME = "update.report.md"
 
-__all__ = ["REPORT_NAME", "has_attributable_events", "build_report", "write_report"]
+__all__ = [
+    "REPORT_NAME",
+    "has_attributable_events",
+    "build_report",
+    "write_report",
+    "report_run",
+]
 
 
 def _get(result: Any, name: str) -> list:
@@ -169,3 +175,26 @@ def write_report(
     path = Path(output_dir) / REPORT_NAME
     path.write_text(build_report(result, backup_path=backup_path), encoding="utf-8")
     return path
+
+
+def report_run(result: Any, output_dir: Path, backup_path: object = None) -> None:
+    """Write the update report for a completed run and announce it.
+
+    Wraps :func:`write_report` with the announcement and the guarantee callers
+    depend on: a report is never allowed to fail an otherwise successful update,
+    and a run with nothing to attribute stays silent.
+
+    Args:
+        result: An EmitResult-like object from the emit phase.
+        output_dir: The agents directory this run wrote to.
+        backup_path: Backup location for this run, if one was taken.
+    """
+    try:
+        path = write_report(
+            result, output_dir, backup_path=str(backup_path) if backup_path else None
+        )
+    except OSError as exc:
+        print(f"  !  Could not write update report: {exc}")
+        return
+    if path is not None:
+        print(f"  ✓  Update report: {path.name}")

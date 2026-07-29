@@ -3,9 +3,9 @@
 
 > **Auto-generated.** Regenerated on every commit that touches the `agentteams` package. Do not edit manually — changes will be overwritten.
 
-- Modules mapped: **101**
+- Modules mapped: **102**
 - Packages: **6**
-- Internal import edges: **175**
+- Internal import edges: **176**
 - Distinct external dependencies: **4**
 
 ---
@@ -22,7 +22,7 @@ Inter-package import dependencies (module-level detail in the tables below).
 
 | Package | Modules | Depends on |
 | --- | --- | --- |
-| `agentteams` | 69 | `agentteams.cli`, `agentteams.enrich`, `agentteams.frameworks`, `agentteams.research` |
+| `agentteams` | 70 | `agentteams.cli`, `agentteams.enrich`, `agentteams.frameworks`, `agentteams.research` |
 | `agentteams.cli` | 11 | `agentteams`, `agentteams.frameworks` |
 | `agentteams.enrich` | 6 | `agentteams` |
 | `agentteams.eval_adapters` | 2 | — |
@@ -50,7 +50,7 @@ Every module, coloured by package (full adjacency in the table below).
 | `agentteams.analyze` | `agentteams._utils`, `agentteams.manifest_format`, `agentteams.mcp_detect`, `agentteams.output_plan`, `agentteams.recipe_fields`, `agentteams.tool_metadata_catalog` | `agentteams.cli.generate`, `agentteams.output_plan` |
 | `agentteams.architecture` | `agentteams.svg_render` | `agentteams.git_hooks` |
 | `agentteams.atomicio` | — | `agentteams.backup`, `agentteams.cli.artifacts`, `agentteams.cli.schema_cache`, `agentteams.emit`, `agentteams.fence_inject`, `agentteams.fences`, `agentteams.hooks_emit`, `agentteams.mcp_emit`, `agentteams.schedule_emit` |
-| `agentteams.audit` | — | `agentteams.cli.generate` |
+| `agentteams.audit` | `agentteams.living_doc` | `agentteams.cli.generate` |
 | `agentteams.backup` | `agentteams`, `agentteams.atomicio`, `agentteams.liaison_logs` | `agentteams.bridge`, `agentteams.emit` |
 | `agentteams.baseline` | — | `agentteams.cli.app` |
 | `agentteams.behavioral_drift` | `agentteams.handoff_payloads` | — |
@@ -111,6 +111,7 @@ Every module, coloured by package (full adjacency in the table below).
 | `agentteams.instructions_split` | — | `agentteams.bridge` |
 | `agentteams.interop` | `agentteams.frameworks.registry`, `agentteams.yaml_frontmatter` | `agentteams.bridge`, `agentteams.cli.commands` |
 | `agentteams.liaison_logs` | — | `agentteams.backup`, `agentteams.cli.generate` |
+| `agentteams.living_doc` | — | `agentteams.audit` |
 | `agentteams.man` | — | — |
 | `agentteams.manifest_format` | — | `agentteams.analyze` |
 | `agentteams.mcp_detect` | — | `agentteams.analyze` |
@@ -289,7 +290,9 @@ digraph "agentteams architecture" {
       "package": "agentteams",
       "path": "agentteams/audit.py",
       "is_package": false,
-      "imports_internal": [],
+      "imports_internal": [
+        "agentteams.living_doc"
+      ],
       "external": [],
       "repo_local": []
     },
@@ -966,6 +969,14 @@ digraph "agentteams architecture" {
       "external": [],
       "repo_local": []
     },
+    "agentteams.living_doc": {
+      "package": "agentteams",
+      "path": "agentteams/living_doc.py",
+      "is_package": false,
+      "imports_internal": [],
+      "external": [],
+      "repo_local": []
+    },
     "agentteams.man": {
       "package": "agentteams",
       "path": "agentteams/man.py",
@@ -1338,6 +1349,10 @@ digraph "agentteams architecture" {
     {
       "source": "agentteams.architecture",
       "target": "agentteams.svg_render"
+    },
+    {
+      "source": "agentteams.audit",
+      "target": "agentteams.living_doc"
     },
     {
       "source": "agentteams.backup",

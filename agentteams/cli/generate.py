@@ -903,21 +903,10 @@ def run_generate(args: argparse.Namespace, strict_manual_placeholders: bool) -> 
     emit.print_summary(result, manifest)
     build_team._persist_shrink_events(args, result, manifest, output_dir)
 
-    # Durable record of what this run chose to do — preserved fences, skipped
-    # legacy files, retrofitted markers. Silent when there is nothing to
-    # attribute, and never affects the exit code.
+    # Durable record of this run's decisions; silent when nothing to attribute.
     if not args.dry_run:
-        from agentteams import update_report as _update_report
-
-        try:
-            _report_path = _update_report.write_report(
-                result, output_dir, backup_path=str(backup_path) if backup_path else None
-            )
-        except OSError as exc:  # never fail a successful update over its own report
-            print(f"  !  Could not write update report: {exc}")
-        else:
-            if _report_path is not None:
-                print(f"  ✓  Update report: {_report_path.name}")
+        from agentteams import update_report as _ur
+        _ur.report_run(result, output_dir, backup_path)
 
     if args.dry_run and result.dry_run_report is not None:
         emit.print_dry_run_report(

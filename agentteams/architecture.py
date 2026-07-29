@@ -30,6 +30,7 @@ guarantee the commit-refresh relies on to avoid spurious diffs.
 from __future__ import annotations
 
 import ast
+import warnings
 import json
 import sys
 from dataclasses import dataclass, field
@@ -334,6 +335,123 @@ class ArchitectureGraph:
 # ---------------------------------------------------------------------------
 # Construction
 # ---------------------------------------------------------------------------
+
+
+def module_level_edges(package_dir: Path, root_pkg: str) -> set[tuple[str, str]]:
+    """Internal import edges that execute at module load.
+
+    ``ArchitectureGraph`` is built with ``ast.walk``, which records imports at
+    any depth — including those deliberately deferred inside a function to break
+    a cycle. For CH-13 that distinction is the whole question: a deferred import
+    does not create a load-time cycle, and three of this package's own
+    "cycles" are exactly that mitigation.
+
+    This re-derives edges from direct children of each module body only.
+
+    Args:
+        package_dir: Directory of the package to parse.
+        root_pkg: Top-level package name, used to keep edges internal.
+
+    Returns:
+        Set of (importer, imported) dotted-name pairs executing at import time.
+    """
+    files = list(_iter_module_files(package_dir))
+    known: set[str] = set()
+    for path in files:
+        name, _is_pkg = _module_name(path.relative_to(package_dir))
+        known.add(f"{root_pkg}.{name}" if name else root_pkg)
+
+    edges: set[tuple[str, str]] = set()
+    for path in files:
+        name, _is_pkg = _module_name(path.relative_to(package_dir))
+        current = f"{root_pkg}.{name}" if name else root_pkg
+        try:
+            tree = ast.parse(path.read_text(encoding="utf-8"))
+        except (OSError, SyntaxError) as exc:
+            # CH-24: surface the condition rather than continuing silently — a
+            # module we cannot parse is a module whose edges are missing from
+            # the cycle check, and a clean result would overstate its coverage.
+            warnings.warn(
+                f"module_level_edges: skipping unparsable {path}: {exc}",
+                stacklevel=2,
+            )
+            continue
+        for node in tree.body:  # direct children only — no nested scopes
+            targets: list[str] = []
+            if isinstance(node, ast.Import):
+                targets = [a.name for a in node.names]
+            elif isinstance(node, ast.ImportFrom) and node.level == 0 and node.module:
+                # "from pkg.mod import name" may address either pkg.mod or,
+                # when name is itself a module, pkg.mod.name.
+                targets = [node.module] + [
+                    f"{node.module}.{a.name}" for a in node.names
+                ]
+            for target in targets:
+                if target in known and target != current:
+                    edges.add((current, target))
+    return edges
+
+
+def detect_import_cycles(
+    graph: "ArchitectureGraph",
+    *,
+    edges: set[tuple[str, str]] | None = None,
+) -> list[list[str]]:
+    """Find circular import chains among a package's own modules (CH-13).
+
+    Runs an iterative depth-first search over ``graph.edges`` and returns each
+    distinct cycle as a list of module names in traversal order.
+
+    **What a clean result covers.** Pass ``edges`` from :func:`module_level_edges`
+    to detect load-time cycles, which is what CH-13 is about. Using
+    ``graph.edges`` instead counts imports deferred inside functions, and those
+    are the standard way to *break* a cycle — measured against this package,
+    that yields three findings of which none is actionable.
+
+    Either way the result covers static imports of one package: a cycle formed
+    through a dynamic import or through a third-party package is not modelled
+    and will not appear. CH-13 is broader than this check.
+
+    Args:
+        graph: A populated ArchitectureGraph.
+        edges: Optional edge set to traverse instead of ``graph.edges``.
+
+    Returns:
+        Distinct cycles, each a list of module names. Empty when none are found.
+    """
+    adjacency: dict[str, set[str]] = {}
+    for src, dst in (graph.edges if edges is None else edges):
+        adjacency.setdefault(src, set()).add(dst)
+
+    cycles: list[list[str]] = []
+    seen_signatures: set[tuple[str, ...]] = set()
+    visited: set[str] = set()
+
+    def _canonical(path: list[str]) -> tuple[str, ...]:
+        """Rotate a cycle so equal cycles compare equal regardless of entry."""
+        if not path:
+            return ()
+        pivot = path.index(min(path))
+        return tuple(path[pivot:] + path[:pivot])
+
+    for start in sorted(adjacency):
+        if start in visited:
+            continue
+        stack: list[tuple[str, list[str], set[str]]] = [(start, [start], {start})]
+        while stack:
+            node, path, on_path = stack.pop()
+            visited.add(node)
+            for nxt in sorted(adjacency.get(node, ())):
+                if nxt in on_path:
+                    cycle = path[path.index(nxt) :]
+                    signature = _canonical(cycle)
+                    if signature not in seen_signatures:
+                        seen_signatures.add(signature)
+                        cycles.append(list(signature))
+                elif len(path) < 64:
+                    stack.append((nxt, path + [nxt], on_path | {nxt}))
+    return cycles
+
 
 def _node_id(dotted: str) -> str:
     """Mermaid/DOT-safe identifier from a dotted name."""
