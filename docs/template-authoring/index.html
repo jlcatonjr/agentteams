@@ -2979,6 +2979,17 @@
   
 </li>
         
+          <li class="md-nav__item">
+  <a href="#audit-ledger-provenance-columns" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Audit-ledger provenance columns
+      
+    </span>
+  </a>
+  
+</li>
+        
       </ul>
     </nav>
   
@@ -3260,6 +3271,17 @@
   
 </li>
         
+          <li class="md-nav__item">
+  <a href="#audit-ledger-provenance-columns" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Audit-ledger provenance columns
+      
+    </span>
+  </a>
+  
+</li>
+        
       </ul>
     </nav>
   
@@ -3408,13 +3430,51 @@
 <ol>
 <li>Add contextual selection logic in <code>agentteams/analyze.py</code> for operation/state-change cues + verification/proof cues (avoid broad single-keyword auto-selection)</li>
 <li>Add <code>post-production-auditor</code> to <code>selected_archetypes.items.enum</code> in <code>schemas/team-manifest.schema.json</code></li>
-<li>Register the template in <code>agentteams/templates/template-chapter-audit.csv</code> using a unique <code>TA-</code> ID</li>
+<li>Register the template in <code>agentteams/templates/template-chapter-audit.csv</code> using a unique <code>TA-</code> ID, and fill the three provenance columns (see below)</li>
 <li>Do not place optional post-production routing rows inside <code>AGENTTEAMS:BEGIN routing_table_rows</code>; add them in the user-editable gap below the fence</li>
 <li>Do not place optional post-production workflows inside <code>AGENTTEAMS:BEGIN available_workflows</code>; add them in the user-editable gap before that fence</li>
 <li>Use <code>{MANUAL:...}</code> placeholders for post-production profile values (trigger version, bulk threshold, source-of-truth spec, duplicate cap, and audit slug) unless you also add auto-resolution mappings in <code>agentteams/analyze.py</code></li>
 <li>Document explicit manual override via <code>selected_archetypes</code> for teams that need guaranteed inclusion regardless of auto-selection cues</li>
 </ol>
 <p>This prevents <code>--update --merge</code> from force-propagating post-production routing/workflow content to teams that do not include <code>@post-production-auditor</code>.</p>
+<h3 id="audit-ledger-provenance-columns">Audit-ledger provenance columns<a class="headerlink" href="#audit-ledger-provenance-columns" title="Permanent link">&para;</a></h3>
+<p><code>template-chapter-audit.csv</code> records how each template relates to the book's
+architecture. Three columns keep that record honest, and a row without them is
+incomplete:</p>
+<table>
+<thead>
+<tr>
+<th>Column</th>
+<th>Values</th>
+<th>Meaning</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>disposition</code></td>
+<td><code>absent</code> · <code>discharged-operationally</code> · <code>superseded</code> · <code>not-a-gap</code> · <code>by-design</code> · <code>unreviewed</code></td>
+<td>Whether the gap the row describes is real. Use <code>not-a-gap</code> for rows that document a template/chapter divergence rather than an absence — the question does not apply to them.</td>
+</tr>
+<tr>
+<td><code>implementing_surface</code></td>
+<td>module or path</td>
+<td>Where the function actually lives, when it is not a template</td>
+</tr>
+<tr>
+<td><code>verified_on</code></td>
+<td><code>YYYY-MM-DD</code></td>
+<td>When the row was last checked against the tree</td>
+</tr>
+</tbody>
+</table>
+<p><code>disposition</code> exists because "no template for X" and "X is not implemented" are
+different claims. Several rows asserted the first and were read as the second:
+workspace coordination, topology discovery and template-compliance checking are
+all discharged in code (<code>fleet.py</code>, <code>drift.py</code>) and were nonetheless ranked as
+high-severity gaps. Use <code>absent</code> only when nothing in the module performs the
+function; use <code>discharged-operationally</code> and name the surface when something does.</p>
+<p>Rows are verified by <code>scripts/verify_audit_ledger.py</code>, which is report-only and
+never edits the ledger.</p>
 <hr />
 <h2 id="placeholder-rules">Placeholder Rules<a class="headerlink" href="#placeholder-rules" title="Permanent link">&para;</a></h2>
 <ol>

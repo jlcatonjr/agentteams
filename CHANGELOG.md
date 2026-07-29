@@ -6,6 +6,67 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### added (governance instruments)
+
+- **`agentteams/living_doc.py` + an `audit.py` check — living-document conformance.**
+  Every generated team's constitution forbids dated snapshots, resolved-issue
+  archaeology and dated fix logs in agent docs. Nothing verified it. Scope was set
+  by measurement, not assumption: a date scan over the module's own emitted teams
+  returns 65 signals and one true violation across all files, and exactly that one
+  violation when restricted to unfenced `.agent.md` prose. 60 of the 65 are CVE
+  rows inside the `threat_intelligence` fence, which re-renders on every update and
+  so cannot go stale. Findings are warnings, never errors. The policy's fourth
+  prohibition (hardcoded volatile state) is deliberately excluded — whether a value
+  is volatile is a claim about the future.
+- **`architecture.detect_import_cycles` + `module_level_edges` — CH-13.** The first
+  implementation walked `ArchitectureGraph.edges` and reported three cycles in this
+  package, none actionable: `analyze`/`output_plan`, `emit`/`fence_inject` and
+  `cli.commands`/`stale_remediate` are all deliberately broken by deferring one
+  side's import inside a function. `ast.walk` cannot tell a load-time import from a
+  deferred one. `module_level_edges` reads only direct children of each module body;
+  the package reports zero load-time cycles, which is the true state.
+- **`agentteams/update_report.py` — `update.report.md`.** `--fleet`,
+  `--bridge-merge` and `--recipe-check` all leave reports; `--update`, the most
+  common operation, left none. Preserved fences, skipped legacy files and
+  retrofitted markers went to stdout and died with the scrollback. Silent on a
+  clean run; never affects an exit code.
+- **`scripts/verify_audit_ledger.py`** — report-only structural verification of
+  `template-chapter-audit.csv`. Its own first run reported "no structurally false
+  claims" while 38 of 44 rows were unverified; `unreviewed` now surfaces as REVIEW.
+- **`scripts/check_session_obligations.py`** — reports constitutional obligations
+  with no supporting artifact. Reports *absent evidence*, not violation, and always
+  exits 0: gating would try to prevent what the principle says can only be made
+  accountable.
+- **`templates/domain/code-hygiene-mechanization.reference.template.md`** — the 28
+  `CH-` rules classified as mechanized / mechanizable / partly / judgment, with a
+  reason each, so a deliberate boundary is distinguishable from a backlog.
+- **`tests/test_code_hygiene.py`: CH-01, CH-11, CH-15** as path-based rules, each
+  stating what its PASS establishes. CH-18 was attempted and rejected — a naive
+  version-token probe flags dated work summaries.
+
+### changed (audit ledger)
+
+- **`template-chapter-audit.csv` gains `disposition`, `implementing_surface` and
+  `verified_on`.** "No template for X" and "X is not implemented" are different
+  claims and the schema could not express the difference. Four rows asserting the
+  first were read as the second, and that framing reached the book: `TA-033`/`034`
+  were discharged by `fleet.py` and `TA-035` by `drift.py` while ranked as
+  high-severity gaps. All 44 rows now carry a disposition; 0 unreviewed.
+- `TA-036`–`TA-038` verified genuinely **absent** rather than reframed — the
+  assumption that they shared the `TA-033` conflation held for only one of the four.
+- `TA-003` corrected: it understated the security rule count by five.
+
+### fixed
+
+- **`references/agentteams-remediation-log.csv`**: two rows carried unquoted commas
+  that split them into eight fields against a six-column header, so any
+  `DictWriter` consumer raised. Repaired under a proof that every non-comma
+  character is preserved. The underlying gap — nothing validates the log's shape —
+  remains logged as open.
+- **`docs_src/api-reference/feature-inventory.md`**: version baseline read `0.1.0
+  (2026-04-15)` at `1.0.0rc6`. Re-baselined, and the per-category counts are now
+  declared hand-maintained rather than presented as derived.
+
 ### fixed (packaging/build hygiene)
 
 - **`build/` is now gitignored.** `.gitignore` covered `dist/` and `*.egg-info/` but not
