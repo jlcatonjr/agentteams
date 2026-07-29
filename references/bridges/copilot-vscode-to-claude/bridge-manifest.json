@@ -1,6 +1,6 @@
 {
   "schema_version": "1.0",
-  "generated_at": "2026-07-25T11:46:54.685685+00:00",
+  "generated_at": "2026-07-29T22:18:41.019071+00:00",
   "source_framework": "copilot-vscode",
   "target_framework": "claude",
   "source_dir": ".github/agents",
@@ -59,7 +59,7 @@
     },
     {
       "path": "agents/git-operations.agent.md",
-      "sha256": "a0b7238257913c6e7f45b7d3732bbb201797e703d6a7445265286313f151ba75"
+      "sha256": "2012d18e4701e5e94d453d01f0f4d1e8576bf0ac42e82665844884aa29598a62"
     },
     {
       "path": "agents/navigator.agent.md",
@@ -115,7 +115,7 @@
     },
     {
       "path": "agents/security.agent.md",
-      "sha256": "5dadae52f5afd5bdc1a9cca9f0a24f0fe8a27a7390696d6c8919b01fcdb98f19"
+      "sha256": "2a7586b0509fb24c81c27e18a9572e8e3f77f17f03d352c3439adfbcb86499f2"
     },
     {
       "path": "agents/team-builder.agent.md",
@@ -135,7 +135,7 @@
     },
     {
       "path": "agents/tool-doc-researcher.agent.md",
-      "sha256": "f314c65aed745091d195e3914c6e4e96fc58e39fbab0c9b8e489aacbfd210138"
+      "sha256": "75bd330c42ab4985f420238b062dd9e79a3db458147755709c3dad0152edd220"
     },
     {
       "path": "agents/work-summarizer.agent.md",

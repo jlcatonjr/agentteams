@@ -445,6 +445,38 @@ def _normalize_bridge_output_root(output: Path, target_framework: str) -> Path:
             )
             return normalized
     return output
+
+
+def _bridge_mode_label(check_only: bool, overwrite: bool, merge_only: bool) -> str:
+    """Name the bridge mode that is actually about to run.
+
+    The mode determines whether target entry files are read, fenced-merged, or
+    overwritten unconditionally, so it is the single most consequential fact in
+    the run banner. This line previously printed only ``check`` or ``generate``,
+    which meant a ``--bridge-refresh`` and a bare invocation were
+    indistinguishable in the output and ``--bridge-merge`` displayed as
+    ``generate`` — so an operator could not confirm from the banner that the mode
+    they intended was the mode that ran. See
+    ``references/bridge-refresh-safety.md``.
+
+    Args:
+        check_only: ``--bridge-check`` — read-only freshness comparison.
+        overwrite: ``--bridge-refresh`` or ``--overwrite`` — destructive at the target.
+        merge_only: ``--bridge-merge`` — fenced regions only.
+
+    Returns:
+        One of ``"check"``, ``"refresh (overwrites target entry files)"``,
+        ``"merge (fenced regions only)"`` or ``"generate (creates missing files only)"``.
+    """
+    if check_only:
+        return "check"
+    if overwrite:
+        return "refresh (overwrites target entry files)"
+    if merge_only:
+        return "merge (fenced regions only)"
+    return "generate (creates missing files only)"
+
+
 def _run_bridge(
     source_dir: Path,
     source_framework: str | None,
@@ -489,7 +521,7 @@ def _run_bridge(
         f"  source framework: {detected}\n"
         f"  target framework: {target_framework}\n"
         f"  output root: {output_root}\n"
-        f"  mode: {'check' if check_only else 'generate'}"
+        f"  mode: {_bridge_mode_label(check_only, overwrite, merge_only)}"
     )
 
     try:
