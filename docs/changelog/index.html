@@ -5372,12 +5372,26 @@ and this project adheres to <a href="https://semver.org/spec/v2.0.0.html">Semant
   with no supporting artifact. Reports <em>absent evidence</em>, not violation, and always
   exits 0: gating would try to prevent what the principle says can only be made
   accountable.</li>
-<li><strong><code>templates/domain/code-hygiene-mechanization.reference.template.md</code></strong> — the 28
-  <code>CH-</code> rules classified as mechanized / mechanizable / partly / judgment, with a
-  reason each, so a deliberate boundary is distinguishable from a backlog.</li>
+<li><strong><code>references/code-hygiene-mechanization.reference.md</code></strong> — the 28 <code>CH-</code> rules
+  classified with a reason each, so a deliberate boundary is distinguishable from a
+  backlog. <strong>Refiled</strong> out of <code>templates/domain/</code> (see <em>fixed</em>, below).</li>
 <li><strong><code>tests/test_code_hygiene.py</code>: CH-01, CH-11, CH-15</strong> as path-based rules, each
   stating what its PASS establishes. CH-18 was attempted and rejected — a naive
   version-token probe flags dated work summaries.</li>
+<li><strong><code>tests/test_template_emission_coverage.py</code></strong> — every template under
+  <code>agentteams/templates/</code> must be reachable from <code>output_plan.py</code>, or allowlisted
+  with a reason. The existing orphan advisory runs output-side only, so a template
+  no plan reached was undetectable; one had been sitting in <code>templates/domain/</code>.
+  The first version of this check <strong>passed a planted orphan</strong>: it derived the valid
+  archetype set from the templates directory, making every file that existed
+  trivially "reachable". Archetypes and tool categories are now read from
+  <code>analyze.py</code> instead, and three negative controls verify the check fails when it
+  should.</li>
+<li><strong>Three self-consistency guards on the mechanization classification</strong> in
+  <code>tests/test_code_hygiene.py</code>: every catalogue rule appears exactly once, the
+  Summary counts are derived from the table rather than tallied, and any row
+  claiming a check exists must name it. The third found five rows asserting
+  coverage with no implementing surface.</li>
 </ul>
 <h3 id="changed-audit-ledger">changed (audit ledger)<a class="headerlink" href="#changed-audit-ledger" title="Permanent link">&para;</a></h3>
 <ul>
@@ -5401,6 +5415,25 @@ and this project adheres to <a href="https://semver.org/spec/v2.0.0.html">Semant
 <li><strong><code>docs_src/api-reference/feature-inventory.md</code></strong>: version baseline read <code>0.1.0
   (2026-04-15)</code> at <code>1.0.0rc6</code>. Re-baselined, and the per-category counts are now
   declared hand-maintained rather than presented as derived.</li>
+<li><strong>The mechanization classification was misfiled, misclassified, and its severity
+  overstated — retracting all three.</strong> The audit that produced it asserted "this
+  template ships to consumers" as the finding's severity basis. <strong>That was false.</strong>
+  It was the only domain template absent from <code>output_plan.py</code>, so it never
+  rendered into any team; and its content names agentteams internals
+  (<code>tests/test_code_hygiene.py</code>, <code>audit.py::_check_*</code>) that no generated team has,
+  so registering it for emission would have been the wrong repair. Refiled to
+  <code>references/</code>. Separately, a re-read of every test in <code>tests/test_code_hygiene.py</code>
+  found <strong>four rules misclassified</strong> — CH-05 and CH-24 filed as <code>judgment</code>, CH-07
+  and CH-22 as unwritten backlog, while each had an enforcing test — all in the
+  direction that overstates the backlog. Filing them then exposed that <code>partly
+  mechanizable</code> was carrying two unrelated meanings, now split into
+  <code>partly mechanized</code> (a check exists, narrower than the rule) and <code>partly
+  mechanizable</code> (no check, partly specifiable).</li>
+<li><strong><code>references/agentteams-remediation-log.csv</code> shape is now validated</strong>
+  (<code>tests/test_remediation_log_shape.py</code>), closing the gap the entry above left
+  open. Structural only — field count, ISO dates, populated required fields, no
+  embedded newlines. It asserts <strong>nothing</strong> about <code>status</code>, because Rule 11 makes
+  that lifecycle maintainer-owned; a new status value passes unchanged.</li>
 </ul>
 <h3 id="fixed-packagingbuild-hygiene">fixed (packaging/build hygiene)<a class="headerlink" href="#fixed-packagingbuild-hygiene" title="Permanent link">&para;</a></h3>
 <ul>
