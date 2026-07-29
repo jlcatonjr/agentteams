@@ -105,7 +105,7 @@ incomplete:
 
 | Column | Values | Meaning |
 |---|---|---|
-| `disposition` | `absent` · `discharged-operationally` · `superseded` · `by-design` · `unreviewed` | Whether the gap the row describes is real |
+| `disposition` | `absent` · `discharged-operationally` · `superseded` · `not-a-gap` · `by-design` · `unreviewed` | Whether the gap the row describes is real. Use `not-a-gap` for rows that document a template/chapter divergence rather than an absence — the question does not apply to them. |
 | `implementing_surface` | module or path | Where the function actually lives, when it is not a template |
 | `verified_on` | `YYYY-MM-DD` | When the row was last checked against the tree |
 

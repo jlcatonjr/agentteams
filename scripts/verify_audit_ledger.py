@@ -43,11 +43,12 @@ TEMPLATES = ROOT / "agentteams" / "templates"
 REPORT = LEDGER.parent / "template-chapter-audit.report.md"
 
 DISPOSITIONS = {
-    "absent",
-    "discharged-operationally",
-    "superseded",
-    "by-design",
-    "unreviewed",
+    "absent",                    # nothing in the module performs the function
+    "discharged-operationally",  # implemented as code rather than as a template
+    "superseded",                # a general template covers the specific need
+    "not-a-gap",                 # the row documents a divergence, not an absence
+    "by-design",                 # the absence is intentional
+    "unreviewed",                # claim not yet checked
 }
 
 OK, REVIEW, DEFECT = "OK", "REVIEW", "DEFECT"
@@ -113,6 +114,8 @@ def verify() -> tuple[list[dict], dict]:
         # A row cannot both claim nothing implements the function and name what does.
         if disp == "absent" and surface:
             add(aid, DEFECT, f"disposition 'absent' but names surface '{surface}'")
+        if disp == "not-a-gap" and not surface:
+            add(aid, DEFECT, "claims 'not-a-gap' but names no template surface")
         if disp == "discharged-operationally" and not surface:
             add(aid, DEFECT, "claims operational discharge but names no surface")
 

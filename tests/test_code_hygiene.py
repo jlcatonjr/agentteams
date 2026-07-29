@@ -24,6 +24,7 @@ ceiling. Raising any baseline requires an explicit, reviewed justification.
 from __future__ import annotations
 
 import ast
+import re
 import subprocess
 from pathlib import Path
 
@@ -95,6 +96,22 @@ SWALLOW_BASELINE = 35           # except clause whose body is only pass/continue
                                 # can't be read (continue; OSError, e.g. a file deleted mid-glob) —
                                 # both are the fail-closed contract's "can't confidently classify ->
                                 # treat as alive, never as dead" boundary, not silent-failure debt.
+
+
+
+def _tracked_files() -> list[str]:
+    """Return tracked + untracked-non-ignored paths of any type (relative, POSIX).
+
+    The ``*.py``-scoped sibling above cannot serve the path-based rules, which
+    must see every file type. Same rationale otherwise: include untracked-but-
+    not-ignored paths so a newly added artifact is caught before it is staged,
+    and fail loud if git is absent (CH-23).
+    """
+    out = subprocess.check_output(
+        ["git", "ls-files", "-z", "--cached", "--others", "--exclude-standard"],
+        cwd=REPO_ROOT, text=True,
+    )
+    return [line for line in out.split("\0") if line]
 
 
 def _tracked_py_files() -> list[str]:
@@ -302,3 +319,92 @@ def test_refactor_modules_are_fully_type_annotated() -> None:
                         f"(unannotated params={unannotated}, has_return={node.returns is not None})"
                     )
     assert not gaps, f"CH-22: refactor modules have unannotated signatures: {gaps}"
+
+
+# ---------------------------------------------------------------------------
+# Path- and filename-based hygiene rules (CH-01, CH-11, CH-15)
+#
+# These three were selected from the mechanization classification in
+# templates/domain/code-hygiene-mechanization.reference.template.md on one
+# criterion: what a PASS establishes is unambiguous. Each is a pure statement
+# about tracked paths, so a clean result means exactly what it says and nothing
+# more. CH-18 was considered and rejected — a naive "version-numbered sibling"
+# probe flags dated work summaries, so its semantics are not settled.
+#
+# Scope for all three: files tracked by git in *this* repository. They say
+# nothing about a consuming project's tree, which agentteams does not scan.
+# ---------------------------------------------------------------------------
+
+_BACKUP_SUFFIX_RE = re.compile(r"(\.bak|~|\.orig|\.rej)$")
+_LEGACY_DIR_RE = re.compile(r"(^|/)(oldScripts|legacy|deprecated)/")
+_TEST_FILE_RE = re.compile(r"(^|/)test_[^/]+\.py$")
+
+
+def test_ch01_no_backup_files_tracked() -> None:
+    """CH-01: no backup or merge-reject artifacts are tracked.
+
+    A PASS means no tracked path ends in .bak, ~, .orig or .rej. It says nothing
+    about untracked working copies, which are the developer's business.
+    """
+    offenders = [f for f in _tracked_files() if _BACKUP_SUFFIX_RE.search(f)]
+    assert not offenders, (
+        f"CH-01: backup artifacts are tracked: {offenders}. "
+        "Delete them or add the pattern to .gitignore."
+    )
+
+
+def test_ch11_tests_live_in_the_tests_directory() -> None:
+    """CH-11: test modules are not scattered alongside source.
+
+    A PASS means every tracked ``test_*.py`` is under ``tests/``. It does not
+    check that the tests are good, reachable, or run by CI.
+    """
+    offenders = [
+        f
+        for f in _tracked_files()
+        if _TEST_FILE_RE.search(f) and not f.startswith("tests/")
+    ]
+    assert not offenders, (
+        f"CH-11: test modules outside tests/: {offenders}. "
+        "Move them, or rename if they are not tests."
+    )
+
+
+def test_ch15_no_legacy_directories_in_source() -> None:
+    """CH-15: no oldScripts/legacy/deprecated directories are tracked.
+
+    A PASS means no tracked path sits under a directory with one of those three
+    names. Superseded code kept under any *other* name is invisible to this
+    check — the rule's intent is broader than the check's reach.
+    """
+    offenders = [f for f in _tracked_files() if _LEGACY_DIR_RE.search(f)]
+    assert not offenders, (
+        f"CH-15: files under a legacy directory: {offenders}. "
+        "Delete them; git history is the archive."
+    )
+
+
+def test_audit_ledger_makes_no_structurally_false_claims() -> None:
+    """The audit ledger's rows must resolve against the tree.
+
+    A regression guard, not a completeness check. It asserts zero DEFECTs — a row
+    claiming ``absent`` while naming a surface, a surface that does not resolve,
+    a template_file that does not exist. It deliberately tolerates REVIEW rows:
+    ``unreviewed`` is a legitimate transient state for a newly registered
+    template, and failing on it would push authors toward guessing a disposition
+    rather than leaving it honest.
+    """
+    import importlib.util
+
+    spec = importlib.util.spec_from_file_location(
+        "_verify_ledger", REPO_ROOT / "scripts" / "verify_audit_ledger.py"
+    )
+    assert spec and spec.loader
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+
+    findings, _stats = module.verify()
+    defects = [f for f in findings if f["status"] == "DEFECT"]
+    assert not defects, "ledger rows make structurally false claims: " + "; ".join(
+        f"{f['audit_id']}: {f['issue']}" for f in defects
+    )
