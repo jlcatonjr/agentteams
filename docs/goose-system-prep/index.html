@@ -1412,6 +1412,17 @@
       <ul class="md-nav__list">
         
           <li class="md-nav__item">
+  <a href="#5a-running-through-the-resilient-wrapper-optional" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        5a. Running through the resilient wrapper (optional)
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
   <a href="#5b-verified-delegation-the-last-phase-1-sign-off" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -3265,6 +3276,17 @@
       <ul class="md-nav__list">
         
           <li class="md-nav__item">
+  <a href="#5a-running-through-the-resilient-wrapper-optional" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        5a. Running through the resilient wrapper (optional)
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
   <a href="#5b-verified-delegation-the-last-phase-1-sign-off" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -3457,6 +3479,13 @@ environment first, then <code>config.yaml</code></strong>. So:</p>
 (an OpenRouter <code>vendor/slug</code> under <code>ollama</code>, or Ollama <code>name:tag</code> syntax under <code>openrouter</code>)
 and reminds you to export a cloud provider's key. It never reads or writes the key itself.
 For full OpenRouter model validation, run <code>python scripts/goose-openrouter-preflight.py</code>.</p>
+<p><strong>Newer Goose versions write a different <code>config.yaml</code> schema.</strong> <code>goose configure</code> on
+recent Goose CLIs (1.37+) writes a nested <code>providers:</code> block with <code>active_provider:</code> at
+the top level, instead of the older flat <code>GOOSE_PROVIDER:</code>/<code>GOOSE_MODEL:</code> keys.
+<code>--goose-show</code> reads both schemas transparently. <code>--goose-source</code>/<code>--goose-model</code> <strong>read</strong>
+both too, but only <strong>write</strong> the older flat schema — against a <code>providers:</code> config they
+refuse (exit 2, no write, no backup) rather than add dead top-level keys Goose would never
+read, and print the exact <code>model:</code> line to edit by hand under <code>providers:\n  &lt;provider&gt;:</code>.</p>
 <hr />
 <h2 id="3c-bridge-a-goose-team-tofrom-other-frameworks">3c. Bridge a Goose team to/from other frameworks<a class="headerlink" href="#3c-bridge-a-goose-team-tofrom-other-frameworks" title="Permanent link">&para;</a></h2>
 <p>Goose is a first-class bridge <strong>source and target</strong> — a <code>.goose/recipes/</code> team can be
@@ -3510,15 +3539,32 @@ comments (use a direct build for full per-agent MCP). See
 <a id="__codelineno-8-8" name="__codelineno-8-8" href="#__codelineno-8-8"></a>goose<span class="w"> </span>session
 </code></pre></div>
 On OpenRouter, prefix with <code>goose-or</code> (e.g. <code>goose-or run --recipe …</code>).</p>
+<h3 id="5a-running-through-the-resilient-wrapper-optional">5a. Running through the resilient wrapper (optional)<a class="headerlink" href="#5a-running-through-the-resilient-wrapper-optional" title="Permanent link">&para;</a></h3>
+<p>Every team agentteams generates or bridges ships with <code>scripts/goose-run-resilient.py</code> (repo
+root, alongside your other project scripts) — a thin wrapper around <code>goose run</code> that detects the
+dead-turn symptom in §6 below (a turn that ends with no error and no output) and automatically
+resubmits <code>"Continue"</code> in the same session, up to a retry cap:</p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-9-1" name="__codelineno-9-1" href="#__codelineno-9-1"></a>python3<span class="w"> </span>scripts/goose-run-resilient.py<span class="w"> </span>--recipe<span class="w"> </span>.goose/recipes/orchestrator.yaml
+<a id="__codelineno-9-2" name="__codelineno-9-2" href="#__codelineno-9-2"></a>python3<span class="w"> </span>scripts/goose-run-resilient.py<span class="w"> </span>-t<span class="w"> </span><span class="s2">&quot;your prompt&quot;</span><span class="w"> </span>--provider<span class="w"> </span>openrouter<span class="w"> </span>--model<span class="w"> </span>&lt;model&gt;
+</code></pre></div>
+<p>It forwards <code>--provider</code>/<code>--model</code>/any other <code>goose run</code> args unchanged and has no hardcoded
+provider or model default — when you don't pass one, goose's own env/<code>config.yaml</code> resolution
+decides, same as calling <code>goose run</code> directly. <strong>This is an addition, not a replacement</strong> — the
+bare <code>goose run</code> commands above keep working exactly as documented, and the wrapper only helps
+if a session dies silently in the specific way §6 describes; it does not cover <code>goose session</code> or
+the VS Code extension's interactive path. Its dead-turn detection was confirmed against
+OpenRouter + a reasoning-capable model; on other providers (including local Ollama) it fails
+closed — if it can't confidently classify a turn as dead, it takes no action, so at worst it's a
+no-op passthrough, never a false "Continue."</p>
 <h3 id="5b-verified-delegation-the-last-phase-1-sign-off">5b. Verified delegation (the last Phase-1 sign-off)<a class="headerlink" href="#5b-verified-delegation-the-last-phase-1-sign-off" title="Permanent link">&para;</a></h3>
 <p>A generated <strong>direct-build</strong> orchestrator carries a <code>sub_recipes:</code> block (the
 bridge entry recipe is a pointer with none), so its recipe is the one that
 exercises native delegation. To verify end-to-end that the orchestrator actually
 routes/delegates — not just that the recipe validates — run its W6 probe prompt
 non-interactively against a real provider:</p>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-9-1" name="__codelineno-9-1" href="#__codelineno-9-1"></a><span class="c1"># requires a configured OpenRouter key (export OPENROUTER_API_KEY=… or goose-or)</span>
-<a id="__codelineno-9-2" name="__codelineno-9-2" href="#__codelineno-9-2"></a><span class="nv">GOOSE_MODE</span><span class="o">=</span>chat<span class="w"> </span>goose-or<span class="w"> </span>run<span class="w"> </span><span class="se">\</span>
-<a id="__codelineno-9-3" name="__codelineno-9-3" href="#__codelineno-9-3"></a><span class="w">  </span>--recipe<span class="w"> </span>.goose/recipes/orchestrator.yaml<span class="w"> </span>--no-session<span class="w"> </span>--max-turns<span class="w"> </span><span class="m">4</span>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-10-1" name="__codelineno-10-1" href="#__codelineno-10-1"></a><span class="c1"># requires a configured OpenRouter key (export OPENROUTER_API_KEY=… or goose-or)</span>
+<a id="__codelineno-10-2" name="__codelineno-10-2" href="#__codelineno-10-2"></a><span class="nv">GOOSE_MODE</span><span class="o">=</span>chat<span class="w"> </span>goose-or<span class="w"> </span>run<span class="w"> </span><span class="se">\</span>
+<a id="__codelineno-10-3" name="__codelineno-10-3" href="#__codelineno-10-3"></a><span class="w">  </span>--recipe<span class="w"> </span>.goose/recipes/orchestrator.yaml<span class="w"> </span>--no-session<span class="w"> </span>--max-turns<span class="w"> </span><span class="m">4</span>
 </code></pre></div>
 <p>PASS = the orchestrator states its role and, for "produce a deliverable for this
 team", names the correct <strong>workflow</strong> (Workflow 1: Produce a Deliverable) and the
@@ -3573,7 +3619,23 @@ closes the master integration plan's final Phase-1 sign-off (the previously
 <tbody>
 <tr>
 <td><strong>Query stops early &amp; quickly on OpenRouter / "not a valid model ID"</strong></td>
-<td>Your <code>GOOSE_MODEL</code> uses <strong>Ollama tag syntax</strong> (<code>model:tag</code>). On OpenRouter <code>:</code> means a <em>variant</em> (<code>:free</code>), so e.g. <code>qwen/qwen3.6:35b-a3b</code> (colon) doesn't exist — use the <strong>hyphen</strong> slug <code>qwen/qwen3.6-35b-a3b</code>. Run <code>python scripts/goose-openrouter-preflight.py</code> for the exact fix; <code>--fix</code> applies it (backup first).</td>
+<td>Your <code>GOOSE_MODEL</code> uses <strong>Ollama tag syntax</strong> (<code>model:tag</code>). On OpenRouter <code>:</code> means a <em>variant</em> (<code>:free</code>), so e.g. <code>qwen/qwen3.6:35b-a3b</code> (colon) doesn't exist — use the <strong>hyphen</strong> slug <code>qwen/qwen3.6-35b-a3b</code>. Run <code>python scripts/goose-openrouter-preflight.py</code> for the exact fix; <code>--fix</code> applies it (backup first). On a newer <code>providers:</code>/<code>active_provider:</code> <code>config.yaml</code> (§3b), <code>--fix</code> refuses instead of guessing — it prints the exact <code>model:</code> line to edit by hand.</td>
+</tr>
+<tr>
+<td><strong>A turn silently ends with no error and no output</strong> — not the above (your model id is valid), <code>goose doctor</code> is clean, and nothing appears in <code>~/.local/state/goose/logs/cli/&lt;date&gt;/*.log</code></td>
+<td>Different, deeper failure: the model traps its own tool call inside <code>&lt;tool_call&gt;</code> text in the reasoning stream instead of the structured tool-call field, so nothing actionable reaches goose (<code>finish_reason: stop</code>, no error anywhere). <strong>This is largely a matter of which OpenRouter backend served you</strong> — on one real payload, measured leak rates ranged from 0/12 to 3/12 across backends serving the <em>same</em> model. <strong>Best available mitigation (not a fix):</strong> select the backend via <code>scripts/goose-openrouter-route-proxy.py</code> + <code>OPENROUTER_HOST</code> — see <a href="../goose-cloud-providers/#reliability-choosing-which-upstream-backend-serves-you">goose-cloud-providers.md</a>. This covers <strong>all</strong> goose surfaces including VS Code. <strong>It does not eliminate the failure</strong> — on 2026-07-24 the leak recurred on Morph, one of the backends measured 12/12 clean, with routing verifiably active; an 8-run end-to-end test still saw 2 silent dead turns. <strong>CLI-only secondary:</strong> <code>scripts/goose-run-resilient.py</code> (§5a) detects the dead turn and auto-continues — but it wraps <code>goose run</code>, so it does <strong>not</strong> protect the VS Code extension (which runs <code>goose acp</code>). Note <code>OPENROUTER_PARAMETERS</code> is <strong>inert in Goose 1.37.0</strong> and cannot be used for this.</td>
+</tr>
+<tr>
+<td><strong>The agent scrapes a homepage, floods its own context with navigation HTML, and never finds the answer</strong></td>
+<td>It has no <em>search</em> tool in its tool list — <code>web_scrape</code> needs a URL it already knows, so it guesses one. Measured 2026-07-24: a single scraped homepage was 29,654 chars, <strong>54% of the whole conversation</strong>, and contained none of the answer (goose's 50 KB tool-output limit then truncated it to a temp file). Use <code>python -m agentteams.research search "&lt;query&gt;"</code> to <em>find</em> the page and <code>... fetch "&lt;url&gt;"</code> to get extracted text rather than raw HTML. Bridged Goose teams built before 2026-07-24 don't mention this module in their <code>AGENTS.md</code> — re-run <code>agentteams --bridge-from … --framework goose --bridge-merge</code> to add it.</td>
+</tr>
+<tr>
+<td><strong><code>agentteams.research search</code> returns <code>[]</code> for a long, specific query</strong></td>
+<td>Not "no results": DuckDuckGo answers a challenged request with <strong>HTTP 202</strong> and an interstitial page, which parses to nothing. Fixed 2026-07-24 — it now retries once with a broadened query and prints a <code>note:</code> to stderr explaining what happened. If you see that note, the empty list is a block, not an absence. Short keyword queries are challenged far less.</td>
+</tr>
+<tr>
+<td><strong><code>agentteams.research fetch</code> returns a few hundred chars of menus</strong></td>
+<td><code>--max-bytes</code> caps the <em>download</em>, and the old 40 KB default stopped inside a large page's <code>&lt;head&gt;</code>/navigation — 342 chars and zero body content from a Wikipedia article, with no error. Default is now 400,000. Raise <code>--max-bytes</code> for very large pages; <code>--max-chars</code> separately bounds what enters your context.</td>
 </tr>
 <tr>
 <td><code>goose recipe validate &lt;f&gt;</code> fails</td>
@@ -3610,11 +3672,11 @@ makes OpenRouter reject the model and the query stops before doing any work.</p>
 </blockquote>
 <p>Verify your OpenRouter model and reproduce/diagnose the early-stop in one command
 (static check needs no key; <code>--live</code> runs an end-to-end goose tool probe):
-<div class="highlight"><pre><span></span><code><a id="__codelineno-10-1" name="__codelineno-10-1" href="#__codelineno-10-1"></a>python<span class="w"> </span>scripts/goose-openrouter-preflight.py<span class="w">          </span><span class="c1"># validate config.yaml&#39;s GOOSE_MODEL</span>
-<a id="__codelineno-10-2" name="__codelineno-10-2" href="#__codelineno-10-2"></a>python<span class="w"> </span>scripts/goose-openrouter-preflight.py<span class="w"> </span>--live<span class="w">   </span><span class="c1"># also run a real goose tool probe</span>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-11-1" name="__codelineno-11-1" href="#__codelineno-11-1"></a>python<span class="w"> </span>scripts/goose-openrouter-preflight.py<span class="w">          </span><span class="c1"># validate config.yaml&#39;s GOOSE_MODEL</span>
+<a id="__codelineno-11-2" name="__codelineno-11-2" href="#__codelineno-11-2"></a>python<span class="w"> </span>scripts/goose-openrouter-preflight.py<span class="w"> </span>--live<span class="w">   </span><span class="c1"># also run a real goose tool probe</span>
 </code></pre></div>
 Or the minimal manual probe (no shell exec):
-<div class="highlight"><pre><span></span><code><a id="__codelineno-11-1" name="__codelineno-11-1" href="#__codelineno-11-1"></a><span class="nv">GOOSE_MODE</span><span class="o">=</span>chat<span class="w"> </span>goose-or<span class="w"> </span>run<span class="w"> </span>--no-session<span class="w"> </span>-t<span class="w"> </span><span class="s2">&quot;Reply with exactly: OK&quot;</span>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-12-1" name="__codelineno-12-1" href="#__codelineno-12-1"></a><span class="nv">GOOSE_MODE</span><span class="o">=</span>chat<span class="w"> </span>goose-or<span class="w"> </span>run<span class="w"> </span>--no-session<span class="w"> </span>-t<span class="w"> </span><span class="s2">&quot;Reply with exactly: OK&quot;</span>
 </code></pre></div></p>
 
 

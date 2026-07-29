@@ -2837,6 +2837,17 @@
   
 </li>
         
+          <li class="md-nav__item">
+  <a href="#newschematargeterror" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        NewSchemaTargetError
+      
+    </span>
+  </a>
+  
+</li>
+        
       </ul>
     </nav>
   
@@ -3236,6 +3247,17 @@
   
 </li>
         
+          <li class="md-nav__item">
+  <a href="#newschematargeterror" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        NewSchemaTargetError
+      
+    </span>
+  </a>
+  
+</li>
+        
       </ul>
     </nav>
   
@@ -3414,6 +3436,11 @@ only the <strong>name</strong> of the env var that holds a key (<code>key_env</c
 <h3 id="builtin_sources"><code>BUILTIN_SOURCES</code><a class="headerlink" href="#builtin_sources" title="Permanent link">&para;</a></h3>
 <p><code>dict[str, SourceSpec]</code> — the seeded source registry. Ships with <code>ollama</code> and <code>openrouter</code>; merged
 with (and overridable by) a user file in <a href="#load_sourcesuser_filenone"><code>load_sources</code></a>.</p>
+<h3 id="newschematargeterror"><code>NewSchemaTargetError</code><a class="headerlink" href="#newschematargeterror" title="Permanent link">&para;</a></h3>
+<p><code>ValueError</code> subclass raised by
+<a href="#set_provider_modelpath-providernone-modelnone"><code>set_provider_model</code></a> when the target
+<code>config.yaml</code> already uses the newer <code>providers:</code>/<code>active_provider:</code> schema. See that
+function's Raises section.</p>
 <hr />
 <h2 id="public-functions">Public Functions<a class="headerlink" href="#public-functions" title="Permanent link">&para;</a></h2>
 <h3 id="load_sourcesuser_filenone"><code>load_sources(user_file=None)</code><a class="headerlink" href="#load_sourcesuser_filenone" title="Permanent link">&para;</a></h3>
@@ -3463,14 +3490,19 @@ does <strong>not</strong> split on internal whitespace (a Windows path may conta
 </ul>
 <hr />
 <h3 id="read_configpath"><code>read_config(path)</code><a class="headerlink" href="#read_configpath" title="Permanent link">&para;</a></h3>
-<p>Parse top-level <code>GOOSE_*: value</code> scalars; ignore the nested <code>extensions:</code> block.</p>
+<p>Parse top-level <code>GOOSE_*: value</code> scalars; ignore the nested <code>extensions:</code> block. Also parses
+the newer <code>providers:</code>/<code>active_provider:</code> schema (2026-07-24) that recent <code>goose configure</code>
+(1.37+) writes instead of flat keys.</p>
 <p>Args:</p>
 <ol>
 <li><code>path</code> (<code>Path</code>): path to the <code>config.yaml</code> file.</li>
 </ol>
 <p>Returns:</p>
 <ul>
-<li><code>dict[str, str]</code> — the top-level <code>GOOSE_*</code> scalars (empty when the file is absent or unreadable).</li>
+<li><code>tuple[dict[str, str], dict[str, object] | None]</code> — the top-level <code>GOOSE_*</code> scalars (empty
+  when the file is absent, unreadable, or uses only the newer schema), and the parsed
+  <code>providers:</code> block (<code>{"active_provider", "model", "models_by_provider"}</code>) or <code>None</code> when the
+  file uses the older flat-key schema.</li>
 </ul>
 <hr />
 <h3 id="set_provider_modelpath-providernone-modelnone"><code>set_provider_model(path, provider=None, model=None)</code><a class="headerlink" href="#set_provider_modelpath-providernone-modelnone" title="Permanent link">&para;</a></h3>
@@ -3478,6 +3510,11 @@ does <strong>not</strong> split on internal whitespace (a Windows path may conta
 <p>Writes a timestamped backup <strong>before</strong> the rewrite (no partial-write window). Creates a minimal
 config if the file is absent. Anchors on column 0, so the nested <code>extensions:</code> keys are never
 touched. Never reads or writes provider keys.</p>
+<p><strong>Write support is flat-schema only.</strong> Against a target already using the newer
+<code>providers:</code>/<code>active_provider:</code> schema, this refuses instead of writing a flat
+<code>GOOSE_PROVIDER:</code>/<code>GOOSE_MODEL:</code> pair goose's new-schema reader would never consult — no write,
+no backup, file untouched. The exception message names the exact indented <code>model:</code> line to
+edit by hand.</p>
 <p>Args:</p>
 <ol>
 <li><code>path</code> (<code>Path</code>): path to the <code>config.yaml</code> file.</li>
@@ -3491,6 +3528,9 @@ touched. Never reads or writes provider keys.</p>
 <p>Raises:</p>
 <ol>
 <li><code>ValueError</code> when neither <code>provider</code> nor <code>model</code> is supplied.</li>
+<li><code>NewSchemaTargetError</code> (a <code>ValueError</code> subclass) when <code>path</code> already uses the newer
+   <code>providers:</code>/<code>active_provider:</code> schema — callers that need to distinguish this from the
+   missing-args case (the CLI prints a different message for each) should catch it first.</li>
 </ol>
 <hr />
 <h3 id="model_provider_mismatchprovider-model"><code>model_provider_mismatch(provider, model)</code><a class="headerlink" href="#model_provider_mismatchprovider-model" title="Permanent link">&para;</a></h3>
@@ -3520,6 +3560,8 @@ variants). Catches the common trap of pasting an Ollama <code>:tag</code> into a
 <hr />
 <h3 id="current_statuspath-envnone"><code>current_status(path, env=None)</code><a class="headerlink" href="#current_statuspath-envnone" title="Permanent link">&para;</a></h3>
 <p>Snapshot the <code>config.yaml</code> provider/model and any masking env override.</p>
+<p>Prefers the newer <code>providers:</code>/<code>active_provider:</code> schema when <code>read_config</code> finds one; falls
+back to the flat <code>GOOSE_PROVIDER</code>/<code>GOOSE_MODEL</code> keys otherwise.</p>
 <p>Args:</p>
 <ol>
 <li><code>path</code> (<code>Path</code>): path to the <code>config.yaml</code> file.</li>
@@ -3527,7 +3569,9 @@ variants). Catches the common trap of pasting an Ollama <code>:tag</code> into a
 </ol>
 <p>Returns:</p>
 <ul>
-<li><code>dict[str, object]</code> with keys <code>config_provider</code>, <code>config_model</code>, <code>config_mode</code>, and <code>env_override</code>.</li>
+<li><code>dict[str, object]</code> with keys <code>config_provider</code>, <code>config_model</code>, <code>config_mode</code>, <code>env_override</code>,
+  and <code>schema_source</code> (<code>"v2"</code> | <code>"v1"</code> | <code>"none"</code> — which shape <code>config_provider</code>/<code>config_model</code>
+  were resolved from).</li>
 </ul>
 <hr />
 <h2 id="notes">Notes<a class="headerlink" href="#notes" title="Permanent link">&para;</a></h2>
@@ -3538,6 +3582,10 @@ variants). Catches the common trap of pasting an Ollama <code>:tag</code> into a
    surrounding content are preserved verbatim.</li>
 <li>An env override always wins over <code>config.yaml</code>; surface it (via <code>current_status</code>) so a switch is
    never silently masked by an active <code>goose-or</code> shell.</li>
+<li>Reading supports both the older flat-key <code>config.yaml</code> schema and the newer
+   <code>providers:</code>/<code>active_provider:</code> schema recent <code>goose configure</code> writes. <strong>Writing supports only
+   the older schema</strong> — against a newer-schema target, <code>set_provider_model</code> refuses
+   (<code>NewSchemaTargetError</code>) rather than write dead keys goose would never read.</li>
 </ol>
 
 

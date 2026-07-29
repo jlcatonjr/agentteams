@@ -1450,6 +1450,28 @@
   
 </li>
         
+          <li class="md-nav__item">
+  <a href="#reliability-choosing-which-upstream-backend-serves-you" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Reliability: choosing which upstream backend serves you
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#model-choice-matters-more-than-routing" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Model choice matters more than routing
+      
+    </span>
+  </a>
+  
+</li>
+        
       </ul>
     </nav>
   
@@ -3457,6 +3479,28 @@
   
 </li>
         
+          <li class="md-nav__item">
+  <a href="#reliability-choosing-which-upstream-backend-serves-you" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Reliability: choosing which upstream backend serves you
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#model-choice-matters-more-than-routing" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Model choice matters more than routing
+      
+    </span>
+  </a>
+  
+</li>
+        
       </ul>
     </nav>
   
@@ -3861,183 +3905,324 @@
 <a id="__codelineno-4-3" name="__codelineno-4-3" href="#__codelineno-4-3"></a><span class="w">  </span>--provider<span class="w"> </span>openrouter<span class="w"> </span><span class="se">\</span>
 <a id="__codelineno-4-4" name="__codelineno-4-4" href="#__codelineno-4-4"></a><span class="w">  </span>--model<span class="w"> </span>anthropic/claude-opus-4
 </code></pre></div>
+<h3 id="reliability-choosing-which-upstream-backend-serves-you">Reliability: choosing which upstream backend serves you<a class="headerlink" href="#reliability-choosing-which-upstream-backend-serves-you" title="Permanent link">&para;</a></h3>
+<p>OpenRouter routes a single model id across many upstream backends, and <strong>they are not equally
+correct</strong>. Measured 2026-07-24 against <code>qwen/qwen3.6-27b</code>, replaying one real captured agent
+payload (11 messages, 24 tools, reasoning on) 12 times per backend:</p>
+<table>
+<thead>
+<tr>
+<th>backend</th>
+<th>structured tool call</th>
+<th>leaked into reasoning</th>
+<th>no tool call</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Alibaba</td>
+<td>12/12</td>
+<td>0</td>
+<td>0</td>
+</tr>
+<tr>
+<td>CoreWeave</td>
+<td>12/12</td>
+<td>0</td>
+<td>0</td>
+</tr>
+<tr>
+<td>Morph</td>
+<td>12/12</td>
+<td>0</td>
+<td>0</td>
+</tr>
+<tr>
+<td>Chutes</td>
+<td>10/12</td>
+<td><strong>1</strong></td>
+<td>1</td>
+</tr>
+<tr>
+<td>Phala</td>
+<td>9/12</td>
+<td><strong>1</strong></td>
+<td>2</td>
+</tr>
+<tr>
+<td>SiliconFlow</td>
+<td>8/12</td>
+<td><strong>3</strong></td>
+<td>1</td>
+</tr>
+</tbody>
+</table>
+<p>("no tool call" = answered without calling a tool; not the leak bug, but not the requested
+behavior either. Rows sum to 12.)</p>
+<p>A "leak" is the silent dead turn described in
+<a href="../goose-system-prep/#6-validate--troubleshoot">goose-system-prep.md §6</a>: the model emits its
+tool call as literal <code>&lt;tool_call&gt;</code> text inside its reasoning instead of the structured field, so
+goose has nothing to execute, the turn ends with <code>finish_reason: stop</code>, and <strong>nothing is logged
+anywhere</strong>. Same model, same request — the difference is the backend.</p>
+<blockquote>
+<p><strong><code>OPENROUTER_PARAMETERS</code> does not work in Goose 1.37.0.</strong> Earlier revisions of this page
+recommended setting <code>OPENROUTER_PARAMETERS.provider.require_parameters</code> in <code>config.yaml</code>.
+That key is <strong>inert</strong>: it does not appear anywhere in the 1.37.0 binary, and neither a nested
+<code>provider</code> block nor a top-level <code>transforms</code> override reaches the wire (verified with an
+isolated config via <code>XDG_CONFIG_HOME</code>, with a <code>model</code> change in the same file confirming goose
+did read it). If you set it, nothing happens. Re-check this against your own version before
+assuming it is still true.</p>
+</blockquote>
+<p>Goose 1.37.0 exposes only <code>OPENROUTER_API_KEY</code> and <code>OPENROUTER_HOST</code>. <code>OPENROUTER_HOST</code> <strong>is</strong>
+honored, so backend selection is done with a small local proxy that adds the routing OpenRouter
+needs:</p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-5-1" name="__codelineno-5-1" href="#__codelineno-5-1"></a>python3<span class="w"> </span>scripts/goose-openrouter-route-proxy.py<span class="w"> </span>--port<span class="w"> </span><span class="m">8791</span>
+</code></pre></div>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-6-1" name="__codelineno-6-1" href="#__codelineno-6-1"></a><span class="c1"># ~/.config/goose/config.yaml</span>
+<a id="__codelineno-6-2" name="__codelineno-6-2" href="#__codelineno-6-2"></a><span class="nt">OPENROUTER_HOST</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">http://127.0.0.1:8791</span>
+</code></pre></div>
+<p>Restart goose afterwards (VS Code: reload the window, so the <code>goose acp</code> daemons re-read config).</p>
+<p>Because this sits at the transport layer, it covers <strong>every</strong> goose surface — CLI, the VS Code
+extension, and desktop. That is the key advantage over
+<a href="../goose-system-prep/#5a-running-through-the-resilient-wrapper-optional"><code>scripts/goose-run-resilient.py</code></a>,
+which wraps <code>goose run</code> and therefore cannot see VS Code / ACP traffic at all.</p>
+<p><strong>Know the tradeoffs before adopting it:</strong></p>
+<ul>
+<li>It is <strong>a process that must stay running</strong> — if it stops, goose has no endpoint and every
+  request fails. That is a real cost against an intermittent, self-recovering failure.</li>
+<li>Prefer the <code>--only</code> allowlist over <code>--ignore</code>. A denylist is only as good as your list of bad
+  backends: excluding just Chutes reroutes to whatever remains, and in the table above that
+  landed on SiliconFlow — the <em>worst</em> measured backend.</li>
+<li>"Clean" is bounded, not proven — 0/12 still leaves roughly a 22% upper bound on the true leak
+  rate at 95% confidence (~10% pooled across the three). This lowers the failure rate; it does
+  not eliminate it. <strong>Confirmed the hard way on 2026-07-24:</strong> the leak recurred on <strong>Morph</strong>, one
+  of the three backends above, with routing verifiably active. Treat this as risk reduction, not
+  a fix.</li>
+<li><strong>Context size is <em>not</em> an established factor.</strong> It is tempting to assume bigger prompts leak
+  more; measured, that did not hold — three real payloads × three backends × 8 streaming trials
+  gave a completely clean 21k-token payload (24/24) and one leak at 23k. Whatever drives it is
+  not simply length, so don't rely on trimming context as a leak mitigation. (Trim it anyway for
+  the reasons in <a href="../goose-system-prep/#6-validate--troubleshoot">goose-system-prep.md §6</a> — those
+  stand on their own.)</li>
+<li>Restricting backends can lower your effective context ceiling (Morph advertises 131k vs 262k
+  elsewhere) and reduces price/availability competition.</li>
+<li>These measurements are a <strong>snapshot</strong>, and nothing re-measures them for you.
+  <code>python3 scripts/goose-openrouter-preflight.py --providers &lt;model&gt;</code> lists the current
+  <strong>roster</strong> — who serves the model, context length, quantization — which will tell you if a
+  listed backend has disappeared. It does <strong>not</strong> measure tool-call reliability; that still
+  means replaying a real payload N times per backend by hand.</li>
+</ul>
+<h3 id="model-choice-matters-more-than-routing">Model choice matters more than routing<a class="headerlink" href="#model-choice-matters-more-than-routing" title="Permanent link">&para;</a></h3>
+<p>Backend routing reduces the dead-turn leak; it does not remove it. Measured 2026-07-24 on one
+real agent task (find and report a race's top-10 finishers), 8 CLI runs each, identical harness:</p>
+<table>
+<thead>
+<tr>
+<th>model</th>
+<th>correct</th>
+<th>silent dead turn</th>
+<th>partial</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>qwen/qwen3.6-27b</code></td>
+<td>4/8</td>
+<td>2</td>
+<td>2</td>
+</tr>
+<tr>
+<td><code>qwen/qwen3.6-plus</code></td>
+<td><strong>8/8</strong></td>
+<td><strong>0</strong></td>
+<td><strong>0</strong></td>
+</tr>
+</tbody>
+</table>
+<p>Same routing, same tools, same prompt. If an agent task is failing intermittently and you have
+already ruled out the config-level causes above, <strong>try a stronger model before investing further
+in routing</strong> — it was the larger lever here by a wide margin.</p>
+<p>Check what serves a candidate model first: <code>python3 scripts/goose-openrouter-preflight.py
+--providers &lt;model&gt;</code>. <code>qwen/qwen3.6-plus</code>, for instance, is served by <strong>Alibaba alone</strong>, so
+pairing it with the proxy's <code>allow_fallbacks: false</code> means an Alibaba outage is a hard failure
+rather than a reroute — a real trade against the reliability you gain.</p>
 <hr />
 <h2 id="direct-providers">Direct Providers<a class="headerlink" href="#direct-providers" title="Permanent link">&para;</a></h2>
 <p>Configure these if you prefer to bill the provider directly rather than through OpenRouter.</p>
 <h3 id="anthropic">Anthropic<a class="headerlink" href="#anthropic" title="Permanent link">&para;</a></h3>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-5-1" name="__codelineno-5-1" href="#__codelineno-5-1"></a><span class="nb">export</span><span class="w"> </span><span class="nv">ANTHROPIC_API_KEY</span><span class="o">=</span><span class="s2">&quot;sk-ant-...&quot;</span>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-7-1" name="__codelineno-7-1" href="#__codelineno-7-1"></a><span class="nb">export</span><span class="w"> </span><span class="nv">ANTHROPIC_API_KEY</span><span class="o">=</span><span class="s2">&quot;sk-ant-...&quot;</span>
 </code></pre></div>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-6-1" name="__codelineno-6-1" href="#__codelineno-6-1"></a><span class="nt">GOOSE_PROVIDER</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">anthropic</span>
-<a id="__codelineno-6-2" name="__codelineno-6-2" href="#__codelineno-6-2"></a><span class="nt">GOOSE_MODEL</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">claude-sonnet-4-6</span>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-8-1" name="__codelineno-8-1" href="#__codelineno-8-1"></a><span class="nt">GOOSE_PROVIDER</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">anthropic</span>
+<a id="__codelineno-8-2" name="__codelineno-8-2" href="#__codelineno-8-2"></a><span class="nt">GOOSE_MODEL</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">claude-sonnet-4-6</span>
 </code></pre></div>
 <p>Models available in Goose: <code>claude-opus-4-6</code>, <code>claude-sonnet-4-6</code>, <code>claude-sonnet-4-5-20250929</code>, <code>claude-haiku-4-5-20251001</code>, <code>claude-opus-4-5-20251101</code>.</p>
 <p>Custom endpoint (e.g., Anthropic-compatible proxy):</p>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-7-1" name="__codelineno-7-1" href="#__codelineno-7-1"></a><span class="nt">ANTHROPIC_HOST</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">https://your-proxy.example.com</span>
-<a id="__codelineno-7-2" name="__codelineno-7-2" href="#__codelineno-7-2"></a><span class="nt">ANTHROPIC_API_KEY</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">your-key</span>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-9-1" name="__codelineno-9-1" href="#__codelineno-9-1"></a><span class="nt">ANTHROPIC_HOST</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">https://your-proxy.example.com</span>
+<a id="__codelineno-9-2" name="__codelineno-9-2" href="#__codelineno-9-2"></a><span class="nt">ANTHROPIC_API_KEY</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">your-key</span>
 </code></pre></div>
 <p>Custom headers:</p>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-8-1" name="__codelineno-8-1" href="#__codelineno-8-1"></a><span class="nt">ANTHROPIC_CUSTOM_HEADERS</span><span class="p">:</span><span class="w"> </span><span class="s">&#39;{&quot;x-origin-client-id&quot;:</span><span class="nv"> </span><span class="s">&quot;my-app&quot;}&#39;</span>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-10-1" name="__codelineno-10-1" href="#__codelineno-10-1"></a><span class="nt">ANTHROPIC_CUSTOM_HEADERS</span><span class="p">:</span><span class="w"> </span><span class="s">&#39;{&quot;x-origin-client-id&quot;:</span><span class="nv"> </span><span class="s">&quot;my-app&quot;}&#39;</span>
 </code></pre></div>
 <h3 id="openai">OpenAI<a class="headerlink" href="#openai" title="Permanent link">&para;</a></h3>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-9-1" name="__codelineno-9-1" href="#__codelineno-9-1"></a><span class="nb">export</span><span class="w"> </span><span class="nv">OPENAI_API_KEY</span><span class="o">=</span><span class="s2">&quot;sk-...&quot;</span>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-11-1" name="__codelineno-11-1" href="#__codelineno-11-1"></a><span class="nb">export</span><span class="w"> </span><span class="nv">OPENAI_API_KEY</span><span class="o">=</span><span class="s2">&quot;sk-...&quot;</span>
 </code></pre></div>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-10-1" name="__codelineno-10-1" href="#__codelineno-10-1"></a><span class="nt">GOOSE_PROVIDER</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">openai</span>
-<a id="__codelineno-10-2" name="__codelineno-10-2" href="#__codelineno-10-2"></a><span class="nt">GOOSE_MODEL</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">gpt-4o</span>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-12-1" name="__codelineno-12-1" href="#__codelineno-12-1"></a><span class="nt">GOOSE_PROVIDER</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">openai</span>
+<a id="__codelineno-12-2" name="__codelineno-12-2" href="#__codelineno-12-2"></a><span class="nt">GOOSE_MODEL</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">gpt-4o</span>
 </code></pre></div>
 <p>Optional overrides:</p>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-11-1" name="__codelineno-11-1" href="#__codelineno-11-1"></a><span class="nt">OPENAI_BASE_URL</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">https://your-openai-compatible-endpoint.com</span><span class="w">  </span><span class="c1"># for compatible APIs</span>
-<a id="__codelineno-11-2" name="__codelineno-11-2" href="#__codelineno-11-2"></a><span class="nt">OPENAI_ORGANIZATION</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">org-...</span>
-<a id="__codelineno-11-3" name="__codelineno-11-3" href="#__codelineno-11-3"></a><span class="nt">OPENAI_PROJECT</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">proj-...</span>
-<a id="__codelineno-11-4" name="__codelineno-11-4" href="#__codelineno-11-4"></a><span class="nt">OPENAI_TIMEOUT</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">120</span>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-13-1" name="__codelineno-13-1" href="#__codelineno-13-1"></a><span class="nt">OPENAI_BASE_URL</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">https://your-openai-compatible-endpoint.com</span><span class="w">  </span><span class="c1"># for compatible APIs</span>
+<a id="__codelineno-13-2" name="__codelineno-13-2" href="#__codelineno-13-2"></a><span class="nt">OPENAI_ORGANIZATION</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">org-...</span>
+<a id="__codelineno-13-3" name="__codelineno-13-3" href="#__codelineno-13-3"></a><span class="nt">OPENAI_PROJECT</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">proj-...</span>
+<a id="__codelineno-13-4" name="__codelineno-13-4" href="#__codelineno-13-4"></a><span class="nt">OPENAI_TIMEOUT</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">120</span>
 </code></pre></div>
 <h3 id="google-gemini">Google Gemini<a class="headerlink" href="#google-gemini" title="Permanent link">&para;</a></h3>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-12-1" name="__codelineno-12-1" href="#__codelineno-12-1"></a><span class="nb">export</span><span class="w"> </span><span class="nv">GOOGLE_API_KEY</span><span class="o">=</span><span class="s2">&quot;AIza...&quot;</span>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-14-1" name="__codelineno-14-1" href="#__codelineno-14-1"></a><span class="nb">export</span><span class="w"> </span><span class="nv">GOOGLE_API_KEY</span><span class="o">=</span><span class="s2">&quot;AIza...&quot;</span>
 </code></pre></div>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-13-1" name="__codelineno-13-1" href="#__codelineno-13-1"></a><span class="nt">GOOSE_PROVIDER</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">google</span>
-<a id="__codelineno-13-2" name="__codelineno-13-2" href="#__codelineno-13-2"></a><span class="nt">GOOSE_MODEL</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">gemini-2.5-pro</span>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-15-1" name="__codelineno-15-1" href="#__codelineno-15-1"></a><span class="nt">GOOSE_PROVIDER</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">google</span>
+<a id="__codelineno-15-2" name="__codelineno-15-2" href="#__codelineno-15-2"></a><span class="nt">GOOSE_MODEL</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">gemini-2.5-pro</span>
 </code></pre></div>
 <p>For OAuth (sign-in via browser):</p>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-14-1" name="__codelineno-14-1" href="#__codelineno-14-1"></a>goose<span class="w"> </span>configure
-<a id="__codelineno-14-2" name="__codelineno-14-2" href="#__codelineno-14-2"></a><span class="c1"># Choose: Google Gemini → Sign in with Google</span>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-16-1" name="__codelineno-16-1" href="#__codelineno-16-1"></a>goose<span class="w"> </span>configure
+<a id="__codelineno-16-2" name="__codelineno-16-2" href="#__codelineno-16-2"></a><span class="c1"># Choose: Google Gemini → Sign in with Google</span>
 </code></pre></div>
 <h3 id="mistral">Mistral<a class="headerlink" href="#mistral" title="Permanent link">&para;</a></h3>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-15-1" name="__codelineno-15-1" href="#__codelineno-15-1"></a><span class="nb">export</span><span class="w"> </span><span class="nv">MISTRAL_API_KEY</span><span class="o">=</span><span class="s2">&quot;...&quot;</span>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-17-1" name="__codelineno-17-1" href="#__codelineno-17-1"></a><span class="nb">export</span><span class="w"> </span><span class="nv">MISTRAL_API_KEY</span><span class="o">=</span><span class="s2">&quot;...&quot;</span>
 </code></pre></div>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-16-1" name="__codelineno-16-1" href="#__codelineno-16-1"></a><span class="nt">GOOSE_PROVIDER</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">mistral</span>
-<a id="__codelineno-16-2" name="__codelineno-16-2" href="#__codelineno-16-2"></a><span class="nt">GOOSE_MODEL</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">mistral-large-latest</span>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-18-1" name="__codelineno-18-1" href="#__codelineno-18-1"></a><span class="nt">GOOSE_PROVIDER</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">mistral</span>
+<a id="__codelineno-18-2" name="__codelineno-18-2" href="#__codelineno-18-2"></a><span class="nt">GOOSE_MODEL</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">mistral-large-latest</span>
 </code></pre></div>
 <h3 id="xai-grok">xAI (Grok)<a class="headerlink" href="#xai-grok" title="Permanent link">&para;</a></h3>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-17-1" name="__codelineno-17-1" href="#__codelineno-17-1"></a><span class="nb">export</span><span class="w"> </span><span class="nv">XAI_API_KEY</span><span class="o">=</span><span class="s2">&quot;xai-...&quot;</span>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-19-1" name="__codelineno-19-1" href="#__codelineno-19-1"></a><span class="nb">export</span><span class="w"> </span><span class="nv">XAI_API_KEY</span><span class="o">=</span><span class="s2">&quot;xai-...&quot;</span>
 </code></pre></div>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-18-1" name="__codelineno-18-1" href="#__codelineno-18-1"></a><span class="nt">GOOSE_PROVIDER</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">xai</span>
-<a id="__codelineno-18-2" name="__codelineno-18-2" href="#__codelineno-18-2"></a><span class="nt">GOOSE_MODEL</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">grok-3</span>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-20-1" name="__codelineno-20-1" href="#__codelineno-20-1"></a><span class="nt">GOOSE_PROVIDER</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">xai</span>
+<a id="__codelineno-20-2" name="__codelineno-20-2" href="#__codelineno-20-2"></a><span class="nt">GOOSE_MODEL</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">grok-3</span>
 </code></pre></div>
 <p>Available: <code>grok-4-0709</code>, <code>grok-3</code>, <code>grok-3-fast</code>, <code>grok-3-mini</code>, <code>grok-2-vision-1212</code>.</p>
 <h3 id="groq">Groq<a class="headerlink" href="#groq" title="Permanent link">&para;</a></h3>
 <p>Groq runs open-weight models (Llama, Qwen, etc.) on fast LPU hardware — very low latency.</p>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-19-1" name="__codelineno-19-1" href="#__codelineno-19-1"></a><span class="nb">export</span><span class="w"> </span><span class="nv">GROQ_API_KEY</span><span class="o">=</span><span class="s2">&quot;gsk_...&quot;</span>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-21-1" name="__codelineno-21-1" href="#__codelineno-21-1"></a><span class="nb">export</span><span class="w"> </span><span class="nv">GROQ_API_KEY</span><span class="o">=</span><span class="s2">&quot;gsk_...&quot;</span>
 </code></pre></div>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-20-1" name="__codelineno-20-1" href="#__codelineno-20-1"></a><span class="nt">GOOSE_PROVIDER</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">groq</span>
-<a id="__codelineno-20-2" name="__codelineno-20-2" href="#__codelineno-20-2"></a><span class="nt">GOOSE_MODEL</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">llama-3.3-70b-versatile</span>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-22-1" name="__codelineno-22-1" href="#__codelineno-22-1"></a><span class="nt">GOOSE_PROVIDER</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">groq</span>
+<a id="__codelineno-22-2" name="__codelineno-22-2" href="#__codelineno-22-2"></a><span class="nt">GOOSE_MODEL</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">llama-3.3-70b-versatile</span>
 </code></pre></div>
 <h3 id="deepseek">DeepSeek<a class="headerlink" href="#deepseek" title="Permanent link">&para;</a></h3>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-21-1" name="__codelineno-21-1" href="#__codelineno-21-1"></a><span class="nb">export</span><span class="w"> </span><span class="nv">DEEPSEEK_API_KEY</span><span class="o">=</span><span class="s2">&quot;sk-...&quot;</span>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-23-1" name="__codelineno-23-1" href="#__codelineno-23-1"></a><span class="nb">export</span><span class="w"> </span><span class="nv">DEEPSEEK_API_KEY</span><span class="o">=</span><span class="s2">&quot;sk-...&quot;</span>
 </code></pre></div>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-22-1" name="__codelineno-22-1" href="#__codelineno-22-1"></a><span class="nt">GOOSE_PROVIDER</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">custom_deepseek</span>
-<a id="__codelineno-22-2" name="__codelineno-22-2" href="#__codelineno-22-2"></a><span class="nt">GOOSE_MODEL</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">deepseek-chat</span>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-24-1" name="__codelineno-24-1" href="#__codelineno-24-1"></a><span class="nt">GOOSE_PROVIDER</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">custom_deepseek</span>
+<a id="__codelineno-24-2" name="__codelineno-24-2" href="#__codelineno-24-2"></a><span class="nt">GOOSE_MODEL</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">deepseek-chat</span>
 </code></pre></div>
 <hr />
 <h2 id="enterprise-infrastructure-providers">Enterprise / Infrastructure Providers<a class="headerlink" href="#enterprise-infrastructure-providers" title="Permanent link">&para;</a></h2>
 <h3 id="azure-openai">Azure OpenAI<a class="headerlink" href="#azure-openai" title="Permanent link">&para;</a></h3>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-23-1" name="__codelineno-23-1" href="#__codelineno-23-1"></a><span class="nb">export</span><span class="w"> </span><span class="nv">AZURE_OPENAI_API_KEY</span><span class="o">=</span><span class="s2">&quot;...&quot;</span>
-<a id="__codelineno-23-2" name="__codelineno-23-2" href="#__codelineno-23-2"></a><span class="nb">export</span><span class="w"> </span><span class="nv">AZURE_OPENAI_ENDPOINT</span><span class="o">=</span><span class="s2">&quot;https://your-resource.openai.azure.com&quot;</span>
-<a id="__codelineno-23-3" name="__codelineno-23-3" href="#__codelineno-23-3"></a><span class="nb">export</span><span class="w"> </span><span class="nv">AZURE_OPENAI_DEPLOYMENT_NAME</span><span class="o">=</span><span class="s2">&quot;gpt-4o&quot;</span>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-25-1" name="__codelineno-25-1" href="#__codelineno-25-1"></a><span class="nb">export</span><span class="w"> </span><span class="nv">AZURE_OPENAI_API_KEY</span><span class="o">=</span><span class="s2">&quot;...&quot;</span>
+<a id="__codelineno-25-2" name="__codelineno-25-2" href="#__codelineno-25-2"></a><span class="nb">export</span><span class="w"> </span><span class="nv">AZURE_OPENAI_ENDPOINT</span><span class="o">=</span><span class="s2">&quot;https://your-resource.openai.azure.com&quot;</span>
+<a id="__codelineno-25-3" name="__codelineno-25-3" href="#__codelineno-25-3"></a><span class="nb">export</span><span class="w"> </span><span class="nv">AZURE_OPENAI_DEPLOYMENT_NAME</span><span class="o">=</span><span class="s2">&quot;gpt-4o&quot;</span>
 </code></pre></div>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-24-1" name="__codelineno-24-1" href="#__codelineno-24-1"></a><span class="nt">GOOSE_PROVIDER</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">azure_openai</span>
-<a id="__codelineno-24-2" name="__codelineno-24-2" href="#__codelineno-24-2"></a><span class="nt">GOOSE_MODEL</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">gpt-4o</span>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-26-1" name="__codelineno-26-1" href="#__codelineno-26-1"></a><span class="nt">GOOSE_PROVIDER</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">azure_openai</span>
+<a id="__codelineno-26-2" name="__codelineno-26-2" href="#__codelineno-26-2"></a><span class="nt">GOOSE_MODEL</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">gpt-4o</span>
 </code></pre></div>
 <h3 id="aws-bedrock">AWS Bedrock<a class="headerlink" href="#aws-bedrock" title="Permanent link">&para;</a></h3>
 <p>Uses your existing AWS credential chain (SSO, environment, or credentials file). Region is required.</p>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-25-1" name="__codelineno-25-1" href="#__codelineno-25-1"></a><span class="nb">export</span><span class="w"> </span><span class="nv">AWS_REGION</span><span class="o">=</span><span class="s2">&quot;us-east-1&quot;</span>
-<a id="__codelineno-25-2" name="__codelineno-25-2" href="#__codelineno-25-2"></a><span class="c1"># Use SSO: aws sso login --profile my-profile</span>
-<a id="__codelineno-25-3" name="__codelineno-25-3" href="#__codelineno-25-3"></a><span class="c1"># Or: export AWS_ACCESS_KEY_ID / AWS_SECRET_ACCESS_KEY</span>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-27-1" name="__codelineno-27-1" href="#__codelineno-27-1"></a><span class="nb">export</span><span class="w"> </span><span class="nv">AWS_REGION</span><span class="o">=</span><span class="s2">&quot;us-east-1&quot;</span>
+<a id="__codelineno-27-2" name="__codelineno-27-2" href="#__codelineno-27-2"></a><span class="c1"># Use SSO: aws sso login --profile my-profile</span>
+<a id="__codelineno-27-3" name="__codelineno-27-3" href="#__codelineno-27-3"></a><span class="c1"># Or: export AWS_ACCESS_KEY_ID / AWS_SECRET_ACCESS_KEY</span>
 </code></pre></div>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-26-1" name="__codelineno-26-1" href="#__codelineno-26-1"></a><span class="nt">GOOSE_PROVIDER</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">aws_bedrock</span>
-<a id="__codelineno-26-2" name="__codelineno-26-2" href="#__codelineno-26-2"></a><span class="nt">GOOSE_MODEL</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">anthropic.claude-sonnet-4-5-20250929-v1:0</span>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-28-1" name="__codelineno-28-1" href="#__codelineno-28-1"></a><span class="nt">GOOSE_PROVIDER</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">aws_bedrock</span>
+<a id="__codelineno-28-2" name="__codelineno-28-2" href="#__codelineno-28-2"></a><span class="nt">GOOSE_MODEL</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">anthropic.claude-sonnet-4-5-20250929-v1:0</span>
 </code></pre></div>
 <p>Enable prompt caching for Anthropic models on Bedrock:</p>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-27-1" name="__codelineno-27-1" href="#__codelineno-27-1"></a><span class="nb">export</span><span class="w"> </span><span class="nv">BEDROCK_ENABLE_CACHING</span><span class="o">=</span><span class="nb">true</span>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-29-1" name="__codelineno-29-1" href="#__codelineno-29-1"></a><span class="nb">export</span><span class="w"> </span><span class="nv">BEDROCK_ENABLE_CACHING</span><span class="o">=</span><span class="nb">true</span>
 </code></pre></div>
 <h3 id="gcp-vertex-ai">GCP Vertex AI<a class="headerlink" href="#gcp-vertex-ai" title="Permanent link">&para;</a></h3>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-28-1" name="__codelineno-28-1" href="#__codelineno-28-1"></a><span class="nb">export</span><span class="w"> </span><span class="nv">GCP_PROJECT_ID</span><span class="o">=</span><span class="s2">&quot;my-gcp-project&quot;</span>
-<a id="__codelineno-28-2" name="__codelineno-28-2" href="#__codelineno-28-2"></a><span class="nb">export</span><span class="w"> </span><span class="nv">GCP_LOCATION</span><span class="o">=</span><span class="s2">&quot;us-central1&quot;</span>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-30-1" name="__codelineno-30-1" href="#__codelineno-30-1"></a><span class="nb">export</span><span class="w"> </span><span class="nv">GCP_PROJECT_ID</span><span class="o">=</span><span class="s2">&quot;my-gcp-project&quot;</span>
+<a id="__codelineno-30-2" name="__codelineno-30-2" href="#__codelineno-30-2"></a><span class="nb">export</span><span class="w"> </span><span class="nv">GCP_LOCATION</span><span class="o">=</span><span class="s2">&quot;us-central1&quot;</span>
 </code></pre></div>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-29-1" name="__codelineno-29-1" href="#__codelineno-29-1"></a><span class="nt">GOOSE_PROVIDER</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">gcp_vertex_ai</span>
-<a id="__codelineno-29-2" name="__codelineno-29-2" href="#__codelineno-29-2"></a><span class="nt">GOOSE_MODEL</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">gemini-2.5-pro</span>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-31-1" name="__codelineno-31-1" href="#__codelineno-31-1"></a><span class="nt">GOOSE_PROVIDER</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">gcp_vertex_ai</span>
+<a id="__codelineno-31-2" name="__codelineno-31-2" href="#__codelineno-31-2"></a><span class="nt">GOOSE_MODEL</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">gemini-2.5-pro</span>
 </code></pre></div>
 <h3 id="databricks">Databricks<a class="headerlink" href="#databricks" title="Permanent link">&para;</a></h3>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-30-1" name="__codelineno-30-1" href="#__codelineno-30-1"></a><span class="nb">export</span><span class="w"> </span><span class="nv">DATABRICKS_HOST</span><span class="o">=</span><span class="s2">&quot;https://dbc-....cloud.databricks.com&quot;</span>
-<a id="__codelineno-30-2" name="__codelineno-30-2" href="#__codelineno-30-2"></a><span class="nb">export</span><span class="w"> </span><span class="nv">DATABRICKS_TOKEN</span><span class="o">=</span><span class="s2">&quot;dapi...&quot;</span>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-32-1" name="__codelineno-32-1" href="#__codelineno-32-1"></a><span class="nb">export</span><span class="w"> </span><span class="nv">DATABRICKS_HOST</span><span class="o">=</span><span class="s2">&quot;https://dbc-....cloud.databricks.com&quot;</span>
+<a id="__codelineno-32-2" name="__codelineno-32-2" href="#__codelineno-32-2"></a><span class="nb">export</span><span class="w"> </span><span class="nv">DATABRICKS_TOKEN</span><span class="o">=</span><span class="s2">&quot;dapi...&quot;</span>
 </code></pre></div>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-31-1" name="__codelineno-31-1" href="#__codelineno-31-1"></a><span class="nt">GOOSE_PROVIDER</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">databricks</span>
-<a id="__codelineno-31-2" name="__codelineno-31-2" href="#__codelineno-31-2"></a><span class="nt">GOOSE_MODEL</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">databricks-claude-sonnet-4-5</span>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-33-1" name="__codelineno-33-1" href="#__codelineno-33-1"></a><span class="nt">GOOSE_PROVIDER</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">databricks</span>
+<a id="__codelineno-33-2" name="__codelineno-33-2" href="#__codelineno-33-2"></a><span class="nt">GOOSE_MODEL</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">databricks-claude-sonnet-4-5</span>
 </code></pre></div>
 <p>Available: <code>databricks-claude-sonnet-4-5</code>, <code>databricks-meta-llama-3-3-70b-instruct</code>, <code>databricks-meta-llama-3-1-405b-instruct</code>.</p>
 <p>For Databricks AI Gateway v2 endpoints: use <code>GOOSE_PROVIDER: databricks_v2</code>.</p>
 <h3 id="litellm-proxy">LiteLLM Proxy<a class="headerlink" href="#litellm-proxy" title="Permanent link">&para;</a></h3>
 <p>LiteLLM is a self-hosted proxy that normalises many providers behind one OpenAI-compatible endpoint — useful for teams that want centralized key management or usage tracking.</p>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-32-1" name="__codelineno-32-1" href="#__codelineno-32-1"></a><span class="nb">export</span><span class="w"> </span><span class="nv">LITELLM_HOST</span><span class="o">=</span><span class="s2">&quot;https://your-litellm-proxy.example.com&quot;</span>
-<a id="__codelineno-32-2" name="__codelineno-32-2" href="#__codelineno-32-2"></a><span class="nb">export</span><span class="w"> </span><span class="nv">LITELLM_API_KEY</span><span class="o">=</span><span class="s2">&quot;...&quot;</span>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-34-1" name="__codelineno-34-1" href="#__codelineno-34-1"></a><span class="nb">export</span><span class="w"> </span><span class="nv">LITELLM_HOST</span><span class="o">=</span><span class="s2">&quot;https://your-litellm-proxy.example.com&quot;</span>
+<a id="__codelineno-34-2" name="__codelineno-34-2" href="#__codelineno-34-2"></a><span class="nb">export</span><span class="w"> </span><span class="nv">LITELLM_API_KEY</span><span class="o">=</span><span class="s2">&quot;...&quot;</span>
 </code></pre></div>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-33-1" name="__codelineno-33-1" href="#__codelineno-33-1"></a><span class="nt">GOOSE_PROVIDER</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">litellm</span>
-<a id="__codelineno-33-2" name="__codelineno-33-2" href="#__codelineno-33-2"></a><span class="nt">GOOSE_MODEL</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">claude-sonnet-4-5</span><span class="w">   </span><span class="c1"># as configured in your proxy</span>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-35-1" name="__codelineno-35-1" href="#__codelineno-35-1"></a><span class="nt">GOOSE_PROVIDER</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">litellm</span>
+<a id="__codelineno-35-2" name="__codelineno-35-2" href="#__codelineno-35-2"></a><span class="nt">GOOSE_MODEL</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">claude-sonnet-4-5</span><span class="w">   </span><span class="c1"># as configured in your proxy</span>
 </code></pre></div>
 <hr />
 <h2 id="switching-providers">Switching Providers<a class="headerlink" href="#switching-providers" title="Permanent link">&para;</a></h2>
 <h3 id="keep-multiple-providers-configured-switch-default">Keep multiple providers configured, switch default<a class="headerlink" href="#keep-multiple-providers-configured-switch-default" title="Permanent link">&para;</a></h3>
 <p>Goose now supports a <code>providers:</code> block that stores settings for each provider independently, so switching doesn't overwrite your model selection for the other provider.</p>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-34-1" name="__codelineno-34-1" href="#__codelineno-34-1"></a><span class="c1"># ~/.config/goose/config.yaml</span>
-<a id="__codelineno-34-2" name="__codelineno-34-2" href="#__codelineno-34-2"></a><span class="nt">GOOSE_MODE</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">auto</span>
-<a id="__codelineno-34-3" name="__codelineno-34-3" href="#__codelineno-34-3"></a><span class="nt">GOOSE_PROVIDER</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">openrouter</span><span class="w">       </span><span class="c1"># active default</span>
-<a id="__codelineno-34-4" name="__codelineno-34-4" href="#__codelineno-34-4"></a><span class="nt">GOOSE_MODEL</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">anthropic/claude-sonnet-4.5</span>
-<a id="__codelineno-34-5" name="__codelineno-34-5" href="#__codelineno-34-5"></a>
-<a id="__codelineno-34-6" name="__codelineno-34-6" href="#__codelineno-34-6"></a><span class="nt">extensions</span><span class="p">:</span>
-<a id="__codelineno-34-7" name="__codelineno-34-7" href="#__codelineno-34-7"></a><span class="w">  </span><span class="nt">developer</span><span class="p">:</span>
-<a id="__codelineno-34-8" name="__codelineno-34-8" href="#__codelineno-34-8"></a><span class="w">    </span><span class="nt">enabled</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">true</span>
-<a id="__codelineno-34-9" name="__codelineno-34-9" href="#__codelineno-34-9"></a><span class="w">    </span><span class="nt">type</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">builtin</span>
-<a id="__codelineno-34-10" name="__codelineno-34-10" href="#__codelineno-34-10"></a><span class="w">    </span><span class="nt">name</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">developer</span>
-<a id="__codelineno-34-11" name="__codelineno-34-11" href="#__codelineno-34-11"></a><span class="w">    </span><span class="nt">timeout</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">300</span>
-<a id="__codelineno-34-12" name="__codelineno-34-12" href="#__codelineno-34-12"></a><span class="w">    </span><span class="nt">bundled</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">true</span>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-36-1" name="__codelineno-36-1" href="#__codelineno-36-1"></a><span class="c1"># ~/.config/goose/config.yaml</span>
+<a id="__codelineno-36-2" name="__codelineno-36-2" href="#__codelineno-36-2"></a><span class="nt">GOOSE_MODE</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">auto</span>
+<a id="__codelineno-36-3" name="__codelineno-36-3" href="#__codelineno-36-3"></a><span class="nt">GOOSE_PROVIDER</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">openrouter</span><span class="w">       </span><span class="c1"># active default</span>
+<a id="__codelineno-36-4" name="__codelineno-36-4" href="#__codelineno-36-4"></a><span class="nt">GOOSE_MODEL</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">anthropic/claude-sonnet-4.5</span>
+<a id="__codelineno-36-5" name="__codelineno-36-5" href="#__codelineno-36-5"></a>
+<a id="__codelineno-36-6" name="__codelineno-36-6" href="#__codelineno-36-6"></a><span class="nt">extensions</span><span class="p">:</span>
+<a id="__codelineno-36-7" name="__codelineno-36-7" href="#__codelineno-36-7"></a><span class="w">  </span><span class="nt">developer</span><span class="p">:</span>
+<a id="__codelineno-36-8" name="__codelineno-36-8" href="#__codelineno-36-8"></a><span class="w">    </span><span class="nt">enabled</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">true</span>
+<a id="__codelineno-36-9" name="__codelineno-36-9" href="#__codelineno-36-9"></a><span class="w">    </span><span class="nt">type</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">builtin</span>
+<a id="__codelineno-36-10" name="__codelineno-36-10" href="#__codelineno-36-10"></a><span class="w">    </span><span class="nt">name</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">developer</span>
+<a id="__codelineno-36-11" name="__codelineno-36-11" href="#__codelineno-36-11"></a><span class="w">    </span><span class="nt">timeout</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">300</span>
+<a id="__codelineno-36-12" name="__codelineno-36-12" href="#__codelineno-36-12"></a><span class="w">    </span><span class="nt">bundled</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">true</span>
 </code></pre></div>
 <p>To change default interactively: <code>goose session</code> → <code>/model</code> → pick a different provider and model → press Enter to save as default (or <code>s</code> for session-only).</p>
 <h3 id="override-for-one-run">Override for one run<a class="headerlink" href="#override-for-one-run" title="Permanent link">&para;</a></h3>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-35-1" name="__codelineno-35-1" href="#__codelineno-35-1"></a><span class="c1"># Cloud model for a single recipe run, local default unchanged</span>
-<a id="__codelineno-35-2" name="__codelineno-35-2" href="#__codelineno-35-2"></a>goose<span class="w"> </span>run<span class="w"> </span>--recipe<span class="w"> </span>.goose/recipes/orchestrator.yaml<span class="w"> </span><span class="se">\</span>
-<a id="__codelineno-35-3" name="__codelineno-35-3" href="#__codelineno-35-3"></a><span class="w">  </span>--provider<span class="w"> </span>openrouter<span class="w"> </span><span class="se">\</span>
-<a id="__codelineno-35-4" name="__codelineno-35-4" href="#__codelineno-35-4"></a><span class="w">  </span>--model<span class="w"> </span>deepseek/deepseek-r1-0528
-<a id="__codelineno-35-5" name="__codelineno-35-5" href="#__codelineno-35-5"></a>
-<a id="__codelineno-35-6" name="__codelineno-35-6" href="#__codelineno-35-6"></a><span class="c1"># Override inside a live session</span>
-<a id="__codelineno-35-7" name="__codelineno-35-7" href="#__codelineno-35-7"></a>/model<span class="w"> </span>openrouter<span class="w"> </span>anthropic/claude-opus-4
+<div class="highlight"><pre><span></span><code><a id="__codelineno-37-1" name="__codelineno-37-1" href="#__codelineno-37-1"></a><span class="c1"># Cloud model for a single recipe run, local default unchanged</span>
+<a id="__codelineno-37-2" name="__codelineno-37-2" href="#__codelineno-37-2"></a>goose<span class="w"> </span>run<span class="w"> </span>--recipe<span class="w"> </span>.goose/recipes/orchestrator.yaml<span class="w"> </span><span class="se">\</span>
+<a id="__codelineno-37-3" name="__codelineno-37-3" href="#__codelineno-37-3"></a><span class="w">  </span>--provider<span class="w"> </span>openrouter<span class="w"> </span><span class="se">\</span>
+<a id="__codelineno-37-4" name="__codelineno-37-4" href="#__codelineno-37-4"></a><span class="w">  </span>--model<span class="w"> </span>deepseek/deepseek-r1-0528
+<a id="__codelineno-37-5" name="__codelineno-37-5" href="#__codelineno-37-5"></a>
+<a id="__codelineno-37-6" name="__codelineno-37-6" href="#__codelineno-37-6"></a><span class="c1"># Override inside a live session</span>
+<a id="__codelineno-37-7" name="__codelineno-37-7" href="#__codelineno-37-7"></a>/model<span class="w"> </span>openrouter<span class="w"> </span>anthropic/claude-opus-4
 </code></pre></div>
 <h3 id="override-via-environment-variable">Override via environment variable<a class="headerlink" href="#override-via-environment-variable" title="Permanent link">&para;</a></h3>
 <p>Env vars take precedence over config.yaml for the duration of the shell session:</p>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-36-1" name="__codelineno-36-1" href="#__codelineno-36-1"></a><span class="nv">GOOSE_PROVIDER</span><span class="o">=</span>anthropic<span class="w"> </span><span class="nv">GOOSE_MODEL</span><span class="o">=</span>claude-opus-4-6<span class="w"> </span>goose<span class="w"> </span>session
+<div class="highlight"><pre><span></span><code><a id="__codelineno-38-1" name="__codelineno-38-1" href="#__codelineno-38-1"></a><span class="nv">GOOSE_PROVIDER</span><span class="o">=</span>anthropic<span class="w"> </span><span class="nv">GOOSE_MODEL</span><span class="o">=</span>claude-opus-4-6<span class="w"> </span>goose<span class="w"> </span>session
 </code></pre></div>
 <p>Useful in CI or scripts where you don't want to alter the shared config file.</p>
 <hr />
 <h2 id="verifying-your-configuration">Verifying Your Configuration<a class="headerlink" href="#verifying-your-configuration" title="Permanent link">&para;</a></h2>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-37-1" name="__codelineno-37-1" href="#__codelineno-37-1"></a><span class="c1"># Show active provider and model</span>
-<a id="__codelineno-37-2" name="__codelineno-37-2" href="#__codelineno-37-2"></a>goose<span class="w"> </span>info<span class="w"> </span>--verbose
-<a id="__codelineno-37-3" name="__codelineno-37-3" href="#__codelineno-37-3"></a>
-<a id="__codelineno-37-4" name="__codelineno-37-4" href="#__codelineno-37-4"></a><span class="c1"># Run connectivity check</span>
-<a id="__codelineno-37-5" name="__codelineno-37-5" href="#__codelineno-37-5"></a>goose<span class="w"> </span>doctor
-<a id="__codelineno-37-6" name="__codelineno-37-6" href="#__codelineno-37-6"></a>
-<a id="__codelineno-37-7" name="__codelineno-37-7" href="#__codelineno-37-7"></a><span class="c1"># Test from a session</span>
-<a id="__codelineno-37-8" name="__codelineno-37-8" href="#__codelineno-37-8"></a>goose<span class="w"> </span>session
-<a id="__codelineno-37-9" name="__codelineno-37-9" href="#__codelineno-37-9"></a>&gt;<span class="w"> </span>/status
+<div class="highlight"><pre><span></span><code><a id="__codelineno-39-1" name="__codelineno-39-1" href="#__codelineno-39-1"></a><span class="c1"># Show active provider and model</span>
+<a id="__codelineno-39-2" name="__codelineno-39-2" href="#__codelineno-39-2"></a>goose<span class="w"> </span>info<span class="w"> </span>--verbose
+<a id="__codelineno-39-3" name="__codelineno-39-3" href="#__codelineno-39-3"></a>
+<a id="__codelineno-39-4" name="__codelineno-39-4" href="#__codelineno-39-4"></a><span class="c1"># Run connectivity check</span>
+<a id="__codelineno-39-5" name="__codelineno-39-5" href="#__codelineno-39-5"></a>goose<span class="w"> </span>doctor
+<a id="__codelineno-39-6" name="__codelineno-39-6" href="#__codelineno-39-6"></a>
+<a id="__codelineno-39-7" name="__codelineno-39-7" href="#__codelineno-39-7"></a><span class="c1"># Test from a session</span>
+<a id="__codelineno-39-8" name="__codelineno-39-8" href="#__codelineno-39-8"></a>goose<span class="w"> </span>session
+<a id="__codelineno-39-9" name="__codelineno-39-9" href="#__codelineno-39-9"></a>&gt;<span class="w"> </span>/status
 </code></pre></div>
 <p>A successful <code>goose doctor</code> shows the active provider connected and the model responding.</p>
 <hr />
 <h2 id="configyaml-reference">Config.yaml Reference<a class="headerlink" href="#configyaml-reference" title="Permanent link">&para;</a></h2>
 <p>Full example with OpenRouter as default and Anthropic as a fallback entry:</p>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-38-1" name="__codelineno-38-1" href="#__codelineno-38-1"></a><span class="c1"># ~/.config/goose/config.yaml</span>
-<a id="__codelineno-38-2" name="__codelineno-38-2" href="#__codelineno-38-2"></a>
-<a id="__codelineno-38-3" name="__codelineno-38-3" href="#__codelineno-38-3"></a><span class="nt">GOOSE_PROVIDER</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">openrouter</span>
-<a id="__codelineno-38-4" name="__codelineno-38-4" href="#__codelineno-38-4"></a><span class="nt">GOOSE_MODEL</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">anthropic/claude-sonnet-4.5</span>
-<a id="__codelineno-38-5" name="__codelineno-38-5" href="#__codelineno-38-5"></a><span class="nt">GOOSE_MODE</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">auto</span>
-<a id="__codelineno-38-6" name="__codelineno-38-6" href="#__codelineno-38-6"></a>
-<a id="__codelineno-38-7" name="__codelineno-38-7" href="#__codelineno-38-7"></a><span class="c1"># Extension defaults</span>
-<a id="__codelineno-38-8" name="__codelineno-38-8" href="#__codelineno-38-8"></a><span class="nt">extensions</span><span class="p">:</span>
-<a id="__codelineno-38-9" name="__codelineno-38-9" href="#__codelineno-38-9"></a><span class="w">  </span><span class="nt">developer</span><span class="p">:</span>
-<a id="__codelineno-38-10" name="__codelineno-38-10" href="#__codelineno-38-10"></a><span class="w">    </span><span class="nt">enabled</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">true</span>
-<a id="__codelineno-38-11" name="__codelineno-38-11" href="#__codelineno-38-11"></a><span class="w">    </span><span class="nt">type</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">builtin</span>
-<a id="__codelineno-38-12" name="__codelineno-38-12" href="#__codelineno-38-12"></a><span class="w">    </span><span class="nt">name</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">developer</span>
-<a id="__codelineno-38-13" name="__codelineno-38-13" href="#__codelineno-38-13"></a><span class="w">    </span><span class="nt">timeout</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">300</span>
-<a id="__codelineno-38-14" name="__codelineno-38-14" href="#__codelineno-38-14"></a><span class="w">    </span><span class="nt">bundled</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">true</span>
-<a id="__codelineno-38-15" name="__codelineno-38-15" href="#__codelineno-38-15"></a>
-<a id="__codelineno-38-16" name="__codelineno-38-16" href="#__codelineno-38-16"></a><span class="c1"># Secrets can go here or in env vars (env vars take precedence)</span>
-<a id="__codelineno-38-17" name="__codelineno-38-17" href="#__codelineno-38-17"></a><span class="c1"># OPENROUTER_API_KEY: sk-or-v1-...</span>
-<a id="__codelineno-38-18" name="__codelineno-38-18" href="#__codelineno-38-18"></a><span class="c1"># ANTHROPIC_API_KEY: sk-ant-...</span>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-40-1" name="__codelineno-40-1" href="#__codelineno-40-1"></a><span class="c1"># ~/.config/goose/config.yaml</span>
+<a id="__codelineno-40-2" name="__codelineno-40-2" href="#__codelineno-40-2"></a>
+<a id="__codelineno-40-3" name="__codelineno-40-3" href="#__codelineno-40-3"></a><span class="nt">GOOSE_PROVIDER</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">openrouter</span>
+<a id="__codelineno-40-4" name="__codelineno-40-4" href="#__codelineno-40-4"></a><span class="nt">GOOSE_MODEL</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">anthropic/claude-sonnet-4.5</span>
+<a id="__codelineno-40-5" name="__codelineno-40-5" href="#__codelineno-40-5"></a><span class="nt">GOOSE_MODE</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">auto</span>
+<a id="__codelineno-40-6" name="__codelineno-40-6" href="#__codelineno-40-6"></a>
+<a id="__codelineno-40-7" name="__codelineno-40-7" href="#__codelineno-40-7"></a><span class="c1"># Extension defaults</span>
+<a id="__codelineno-40-8" name="__codelineno-40-8" href="#__codelineno-40-8"></a><span class="nt">extensions</span><span class="p">:</span>
+<a id="__codelineno-40-9" name="__codelineno-40-9" href="#__codelineno-40-9"></a><span class="w">  </span><span class="nt">developer</span><span class="p">:</span>
+<a id="__codelineno-40-10" name="__codelineno-40-10" href="#__codelineno-40-10"></a><span class="w">    </span><span class="nt">enabled</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">true</span>
+<a id="__codelineno-40-11" name="__codelineno-40-11" href="#__codelineno-40-11"></a><span class="w">    </span><span class="nt">type</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">builtin</span>
+<a id="__codelineno-40-12" name="__codelineno-40-12" href="#__codelineno-40-12"></a><span class="w">    </span><span class="nt">name</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">developer</span>
+<a id="__codelineno-40-13" name="__codelineno-40-13" href="#__codelineno-40-13"></a><span class="w">    </span><span class="nt">timeout</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">300</span>
+<a id="__codelineno-40-14" name="__codelineno-40-14" href="#__codelineno-40-14"></a><span class="w">    </span><span class="nt">bundled</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">true</span>
+<a id="__codelineno-40-15" name="__codelineno-40-15" href="#__codelineno-40-15"></a>
+<a id="__codelineno-40-16" name="__codelineno-40-16" href="#__codelineno-40-16"></a><span class="c1"># Secrets can go here or in env vars (env vars take precedence)</span>
+<a id="__codelineno-40-17" name="__codelineno-40-17" href="#__codelineno-40-17"></a><span class="c1"># OPENROUTER_API_KEY: sk-or-v1-...</span>
+<a id="__codelineno-40-18" name="__codelineno-40-18" href="#__codelineno-40-18"></a><span class="c1"># ANTHROPIC_API_KEY: sk-ant-...</span>
 </code></pre></div>
 <blockquote>
 <p><strong>Security note:</strong> Storing API keys in <code>config.yaml</code> writes them to disk in plaintext. Prefer environment variables or the system keyring (<code>goose configure</code> → Secret Storage → System Keyring).</p>

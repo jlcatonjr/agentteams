@@ -671,6 +671,23 @@
     </span>
   </a>
   
+    <nav class="md-nav" aria-label="Installation">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#if-agentteams-fails-with-modulenotfounderror" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        If agentteams fails with ModuleNotFoundError
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
 </li>
       
         <li class="md-nav__item">
@@ -3189,6 +3206,23 @@
     </span>
   </a>
   
+    <nav class="md-nav" aria-label="Installation">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#if-agentteams-fails-with-modulenotfounderror" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        If agentteams fails with ModuleNotFoundError
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
 </li>
       
         <li class="md-nav__item">
@@ -3371,42 +3405,60 @@
 <a id="__codelineno-1-2" name="__codelineno-1-2" href="#__codelineno-1-2"></a><span class="nb">cd</span><span class="w"> </span>agentteams
 <a id="__codelineno-1-3" name="__codelineno-1-3" href="#__codelineno-1-3"></a>pip<span class="w"> </span>install<span class="w"> </span>-e<span class="w"> </span>.
 </code></pre></div>
+<h3 id="if-agentteams-fails-with-modulenotfounderror">If <code>agentteams</code> fails with <code>ModuleNotFoundError</code><a class="headerlink" href="#if-agentteams-fails-with-modulenotfounderror" title="Permanent link">&para;</a></h3>
+<p>An editable install records the <em>path</em> of the source tree it was installed from. If that
+directory is later moved, renamed, or deleted — a git worktree that was cleaned up, a checkout
+under a temporary directory — the install remains registered but resolves to nothing. Every
+import through it fails:</p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-2-1" name="__codelineno-2-1" href="#__codelineno-2-1"></a>$ agentteams --version
+<a id="__codelineno-2-2" name="__codelineno-2-2" href="#__codelineno-2-2"></a>ModuleNotFoundError: No module named &#39;build_team&#39;
+</code></pre></div>
+<p>The message names <code>build_team</code> only because that is the first import the console script
+attempts; <code>import agentteams</code> fails the same way. This is an environment fault, not a packaging
+problem. Confirm it by checking where the install points:</p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-3-1" name="__codelineno-3-1" href="#__codelineno-3-1"></a>pip<span class="w"> </span>show<span class="w"> </span>agentteams<span class="w"> </span><span class="p">|</span><span class="w"> </span>grep<span class="w"> </span>-i<span class="w"> </span><span class="s2">&quot;editable project location&quot;</span>
+</code></pre></div>
+<p>If that path no longer exists, reinstall from your current checkout:</p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-4-1" name="__codelineno-4-1" href="#__codelineno-4-1"></a>pip<span class="w"> </span>uninstall<span class="w"> </span>-y<span class="w"> </span>agentteams
+<a id="__codelineno-4-2" name="__codelineno-4-2" href="#__codelineno-4-2"></a><span class="nb">cd</span><span class="w"> </span>/path/to/agentteams
+<a id="__codelineno-4-3" name="__codelineno-4-3" href="#__codelineno-4-3"></a>pip<span class="w"> </span>install<span class="w"> </span>-e<span class="w"> </span>.
+</code></pre></div>
 <hr />
 <h2 id="prefer-a-conversational-setup">Prefer a conversational setup?<a class="headerlink" href="#prefer-a-conversational-setup" title="Permanent link">&para;</a></h2>
 <p>If you'd rather describe your project in plain language and have a coding agent draft the brief and run the commands for you, see <a href="../agent-assisted-setup/">Agent-Assisted Setup</a>. That page documents the prompts to use with GitHub Copilot, Claude, or any capable chat model.</p>
 <hr />
 <h2 id="write-a-project-description">Write a Project Description<a class="headerlink" href="#write-a-project-description" title="Permanent link">&para;</a></h2>
 <p>Create <code>brief.json</code>:</p>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-2-1" name="__codelineno-2-1" href="#__codelineno-2-1"></a><span class="p">{</span>
-<a id="__codelineno-2-2" name="__codelineno-2-2" href="#__codelineno-2-2"></a><span class="w">  </span><span class="nt">&quot;project_name&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;MyProject&quot;</span><span class="p">,</span>
-<a id="__codelineno-2-3" name="__codelineno-2-3" href="#__codelineno-2-3"></a><span class="w">  </span><span class="nt">&quot;project_goal&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;Build a FastAPI backend with authentication and a task management API.&quot;</span><span class="p">,</span>
-<a id="__codelineno-2-4" name="__codelineno-2-4" href="#__codelineno-2-4"></a><span class="w">  </span><span class="nt">&quot;deliverables&quot;</span><span class="p">:</span><span class="w"> </span><span class="p">[</span><span class="s2">&quot;Python modules&quot;</span><span class="p">,</span><span class="w"> </span><span class="s2">&quot;OpenAPI docs&quot;</span><span class="p">],</span>
-<a id="__codelineno-2-5" name="__codelineno-2-5" href="#__codelineno-2-5"></a><span class="w">  </span><span class="nt">&quot;output_format&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;Python 3.11&quot;</span><span class="p">,</span>
-<a id="__codelineno-2-6" name="__codelineno-2-6" href="#__codelineno-2-6"></a><span class="w">  </span><span class="nt">&quot;primary_output_dir&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;src/&quot;</span><span class="p">,</span>
-<a id="__codelineno-2-7" name="__codelineno-2-7" href="#__codelineno-2-7"></a><span class="w">  </span><span class="nt">&quot;components&quot;</span><span class="p">:</span><span class="w"> </span><span class="p">[</span>
-<a id="__codelineno-2-8" name="__codelineno-2-8" href="#__codelineno-2-8"></a><span class="w">    </span><span class="p">{</span><span class="nt">&quot;slug&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;auth-module&quot;</span><span class="p">,</span><span class="w"> </span><span class="nt">&quot;name&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;Authentication Module&quot;</span><span class="p">,</span><span class="w"> </span><span class="nt">&quot;number&quot;</span><span class="p">:</span><span class="w"> </span><span class="mi">1</span><span class="p">},</span>
-<a id="__codelineno-2-9" name="__codelineno-2-9" href="#__codelineno-2-9"></a><span class="w">    </span><span class="p">{</span><span class="nt">&quot;slug&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;tasks-api&quot;</span><span class="p">,</span><span class="w"> </span><span class="nt">&quot;name&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;Tasks API&quot;</span><span class="p">,</span><span class="w"> </span><span class="nt">&quot;number&quot;</span><span class="p">:</span><span class="w"> </span><span class="mi">2</span><span class="p">}</span>
-<a id="__codelineno-2-10" name="__codelineno-2-10" href="#__codelineno-2-10"></a><span class="w">  </span><span class="p">]</span>
-<a id="__codelineno-2-11" name="__codelineno-2-11" href="#__codelineno-2-11"></a><span class="p">}</span>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-5-1" name="__codelineno-5-1" href="#__codelineno-5-1"></a><span class="p">{</span>
+<a id="__codelineno-5-2" name="__codelineno-5-2" href="#__codelineno-5-2"></a><span class="w">  </span><span class="nt">&quot;project_name&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;MyProject&quot;</span><span class="p">,</span>
+<a id="__codelineno-5-3" name="__codelineno-5-3" href="#__codelineno-5-3"></a><span class="w">  </span><span class="nt">&quot;project_goal&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;Build a FastAPI backend with authentication and a task management API.&quot;</span><span class="p">,</span>
+<a id="__codelineno-5-4" name="__codelineno-5-4" href="#__codelineno-5-4"></a><span class="w">  </span><span class="nt">&quot;deliverables&quot;</span><span class="p">:</span><span class="w"> </span><span class="p">[</span><span class="s2">&quot;Python modules&quot;</span><span class="p">,</span><span class="w"> </span><span class="s2">&quot;OpenAPI docs&quot;</span><span class="p">],</span>
+<a id="__codelineno-5-5" name="__codelineno-5-5" href="#__codelineno-5-5"></a><span class="w">  </span><span class="nt">&quot;output_format&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;Python 3.11&quot;</span><span class="p">,</span>
+<a id="__codelineno-5-6" name="__codelineno-5-6" href="#__codelineno-5-6"></a><span class="w">  </span><span class="nt">&quot;primary_output_dir&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;src/&quot;</span><span class="p">,</span>
+<a id="__codelineno-5-7" name="__codelineno-5-7" href="#__codelineno-5-7"></a><span class="w">  </span><span class="nt">&quot;components&quot;</span><span class="p">:</span><span class="w"> </span><span class="p">[</span>
+<a id="__codelineno-5-8" name="__codelineno-5-8" href="#__codelineno-5-8"></a><span class="w">    </span><span class="p">{</span><span class="nt">&quot;slug&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;auth-module&quot;</span><span class="p">,</span><span class="w"> </span><span class="nt">&quot;name&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;Authentication Module&quot;</span><span class="p">,</span><span class="w"> </span><span class="nt">&quot;number&quot;</span><span class="p">:</span><span class="w"> </span><span class="mi">1</span><span class="p">},</span>
+<a id="__codelineno-5-9" name="__codelineno-5-9" href="#__codelineno-5-9"></a><span class="w">    </span><span class="p">{</span><span class="nt">&quot;slug&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;tasks-api&quot;</span><span class="p">,</span><span class="w"> </span><span class="nt">&quot;name&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;Tasks API&quot;</span><span class="p">,</span><span class="w"> </span><span class="nt">&quot;number&quot;</span><span class="p">:</span><span class="w"> </span><span class="mi">2</span><span class="p">}</span>
+<a id="__codelineno-5-10" name="__codelineno-5-10" href="#__codelineno-5-10"></a><span class="w">  </span><span class="p">]</span>
+<a id="__codelineno-5-11" name="__codelineno-5-11" href="#__codelineno-5-11"></a><span class="p">}</span>
 </code></pre></div>
 <p>Or use a Markdown brief with section headings:</p>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-3-1" name="__codelineno-3-1" href="#__codelineno-3-1"></a><span class="gu">## Project Name</span>
-<a id="__codelineno-3-2" name="__codelineno-3-2" href="#__codelineno-3-2"></a>MyProject
-<a id="__codelineno-3-3" name="__codelineno-3-3" href="#__codelineno-3-3"></a>
-<a id="__codelineno-3-4" name="__codelineno-3-4" href="#__codelineno-3-4"></a><span class="gu">## Project Goal</span>
-<a id="__codelineno-3-5" name="__codelineno-3-5" href="#__codelineno-3-5"></a>Build a FastAPI backend with authentication and a task management API.
-<a id="__codelineno-3-6" name="__codelineno-3-6" href="#__codelineno-3-6"></a>
-<a id="__codelineno-3-7" name="__codelineno-3-7" href="#__codelineno-3-7"></a><span class="gu">## Deliverables</span>
-<a id="__codelineno-3-8" name="__codelineno-3-8" href="#__codelineno-3-8"></a><span class="k">-</span><span class="w"> </span>Python modules
-<a id="__codelineno-3-9" name="__codelineno-3-9" href="#__codelineno-3-9"></a><span class="k">-</span><span class="w"> </span>OpenAPI docs
+<div class="highlight"><pre><span></span><code><a id="__codelineno-6-1" name="__codelineno-6-1" href="#__codelineno-6-1"></a><span class="gu">## Project Name</span>
+<a id="__codelineno-6-2" name="__codelineno-6-2" href="#__codelineno-6-2"></a>MyProject
+<a id="__codelineno-6-3" name="__codelineno-6-3" href="#__codelineno-6-3"></a>
+<a id="__codelineno-6-4" name="__codelineno-6-4" href="#__codelineno-6-4"></a><span class="gu">## Project Goal</span>
+<a id="__codelineno-6-5" name="__codelineno-6-5" href="#__codelineno-6-5"></a>Build a FastAPI backend with authentication and a task management API.
+<a id="__codelineno-6-6" name="__codelineno-6-6" href="#__codelineno-6-6"></a>
+<a id="__codelineno-6-7" name="__codelineno-6-7" href="#__codelineno-6-7"></a><span class="gu">## Deliverables</span>
+<a id="__codelineno-6-8" name="__codelineno-6-8" href="#__codelineno-6-8"></a><span class="k">-</span><span class="w"> </span>Python modules
+<a id="__codelineno-6-9" name="__codelineno-6-9" href="#__codelineno-6-9"></a><span class="k">-</span><span class="w"> </span>OpenAPI docs
 </code></pre></div>
 <p>See <a href="../DESCRIPTION-FORMAT/">DESCRIPTION-FORMAT.md</a> for all supported fields.</p>
 <hr />
 <h2 id="generate-your-team">Generate Your Team<a class="headerlink" href="#generate-your-team" title="Permanent link">&para;</a></h2>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-4-1" name="__codelineno-4-1" href="#__codelineno-4-1"></a>agentteams<span class="w"> </span><span class="se">\</span>
-<a id="__codelineno-4-2" name="__codelineno-4-2" href="#__codelineno-4-2"></a><span class="w">  </span>--description<span class="w"> </span>brief.json<span class="w"> </span><span class="se">\</span>
-<a id="__codelineno-4-3" name="__codelineno-4-3" href="#__codelineno-4-3"></a><span class="w">  </span>--project<span class="w"> </span>/path/to/your/project<span class="w"> </span><span class="se">\</span>
-<a id="__codelineno-4-4" name="__codelineno-4-4" href="#__codelineno-4-4"></a><span class="w">  </span>--framework<span class="w"> </span>copilot-vscode
+<div class="highlight"><pre><span></span><code><a id="__codelineno-7-1" name="__codelineno-7-1" href="#__codelineno-7-1"></a>agentteams<span class="w"> </span><span class="se">\</span>
+<a id="__codelineno-7-2" name="__codelineno-7-2" href="#__codelineno-7-2"></a><span class="w">  </span>--description<span class="w"> </span>brief.json<span class="w"> </span><span class="se">\</span>
+<a id="__codelineno-7-3" name="__codelineno-7-3" href="#__codelineno-7-3"></a><span class="w">  </span>--project<span class="w"> </span>/path/to/your/project<span class="w"> </span><span class="se">\</span>
+<a id="__codelineno-7-4" name="__codelineno-7-4" href="#__codelineno-7-4"></a><span class="w">  </span>--framework<span class="w"> </span>copilot-vscode
 </code></pre></div>
 <p>Output is written to <code>/path/to/your/project/.github/agents/</code>.</p>
 <p>Framework-specific defaults:</p>
@@ -3429,10 +3481,10 @@
 <hr />
 <h2 id="convert-an-existing-team-to-another-framework">Convert an Existing Team to Another Framework<a class="headerlink" href="#convert-an-existing-team-to-another-framework" title="Permanent link">&para;</a></h2>
 <p>Use <code>--convert-from</code> when you already have an agent team and want to migrate formats while preserving body prose:</p>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-5-1" name="__codelineno-5-1" href="#__codelineno-5-1"></a>agentteams<span class="w"> </span><span class="se">\</span>
-<a id="__codelineno-5-2" name="__codelineno-5-2" href="#__codelineno-5-2"></a><span class="w">  </span>--convert-from<span class="w"> </span>/path/to/source/agents<span class="w"> </span><span class="se">\</span>
-<a id="__codelineno-5-3" name="__codelineno-5-3" href="#__codelineno-5-3"></a><span class="w">  </span>--framework<span class="w"> </span>claude<span class="w"> </span><span class="se">\</span>
-<a id="__codelineno-5-4" name="__codelineno-5-4" href="#__codelineno-5-4"></a><span class="w">  </span>--output<span class="w"> </span>/path/to/project/.claude/agents
+<div class="highlight"><pre><span></span><code><a id="__codelineno-8-1" name="__codelineno-8-1" href="#__codelineno-8-1"></a>agentteams<span class="w"> </span><span class="se">\</span>
+<a id="__codelineno-8-2" name="__codelineno-8-2" href="#__codelineno-8-2"></a><span class="w">  </span>--convert-from<span class="w"> </span>/path/to/source/agents<span class="w"> </span><span class="se">\</span>
+<a id="__codelineno-8-3" name="__codelineno-8-3" href="#__codelineno-8-3"></a><span class="w">  </span>--framework<span class="w"> </span>claude<span class="w"> </span><span class="se">\</span>
+<a id="__codelineno-8-4" name="__codelineno-8-4" href="#__codelineno-8-4"></a><span class="w">  </span>--output<span class="w"> </span>/path/to/project/.claude/agents
 </code></pre></div>
 <p>Supported conversion directions include all six combinations across <code>copilot-vscode</code>, <code>copilot-cli</code>, and <code>claude</code>.</p>
 <hr />
@@ -3444,15 +3496,15 @@
 <hr />
 <h2 id="keeping-your-team-up-to-date">Keeping Your Team Up to Date<a class="headerlink" href="#keeping-your-team-up-to-date" title="Permanent link">&para;</a></h2>
 <p>When project structure or templates change, update your team without losing manual edits:</p>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-6-1" name="__codelineno-6-1" href="#__codelineno-6-1"></a>agentteams<span class="w"> </span>--description<span class="w"> </span>brief.json<span class="w"> </span>--project<span class="w"> </span>/path/to/project<span class="w"> </span>--update
+<div class="highlight"><pre><span></span><code><a id="__codelineno-9-1" name="__codelineno-9-1" href="#__codelineno-9-1"></a>agentteams<span class="w"> </span>--description<span class="w"> </span>brief.json<span class="w"> </span>--project<span class="w"> </span>/path/to/project<span class="w"> </span>--update
 </code></pre></div>
 <p>Use <code>--prune</code> to also remove agents that are no longer part of the taxonomy.</p>
 <p>Check for drift without writing:</p>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-7-1" name="__codelineno-7-1" href="#__codelineno-7-1"></a>agentteams<span class="w"> </span>--description<span class="w"> </span>brief.json<span class="w"> </span>--project<span class="w"> </span>/path/to/project<span class="w"> </span>--check
+<div class="highlight"><pre><span></span><code><a id="__codelineno-10-1" name="__codelineno-10-1" href="#__codelineno-10-1"></a>agentteams<span class="w"> </span>--description<span class="w"> </span>brief.json<span class="w"> </span>--project<span class="w"> </span>/path/to/project<span class="w"> </span>--check
 </code></pre></div>
 <hr />
 <h2 id="running-a-post-generation-audit">Running a Post-Generation Audit<a class="headerlink" href="#running-a-post-generation-audit" title="Permanent link">&para;</a></h2>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-8-1" name="__codelineno-8-1" href="#__codelineno-8-1"></a>agentteams<span class="w"> </span>--description<span class="w"> </span>brief.json<span class="w"> </span>--project<span class="w"> </span>/path/to/project<span class="w"> </span>--post-audit
+<div class="highlight"><pre><span></span><code><a id="__codelineno-11-1" name="__codelineno-11-1" href="#__codelineno-11-1"></a>agentteams<span class="w"> </span>--description<span class="w"> </span>brief.json<span class="w"> </span>--project<span class="w"> </span>/path/to/project<span class="w"> </span>--post-audit
 </code></pre></div>
 <p>This runs static checks (unresolved placeholders, YAML integrity, required-agent coverage). If the <code>copilot</code> CLI is available and authenticated, it also runs an AI-powered conflict and presupposition review.</p>
 <hr />
@@ -3464,31 +3516,31 @@
 <li>Runs <code>--overwrite</code> to regenerate all agent files with fenced templates.</li>
 <li>Prints a quality-audit checklist with <code>git diff</code> commands to review any lost project-specific content.</li>
 </ol>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-9-1" name="__codelineno-9-1" href="#__codelineno-9-1"></a>agentteams<span class="w"> </span><span class="se">\</span>
-<a id="__codelineno-9-2" name="__codelineno-9-2" href="#__codelineno-9-2"></a><span class="w">  </span>--description<span class="w"> </span>brief.json<span class="w"> </span><span class="se">\</span>
-<a id="__codelineno-9-3" name="__codelineno-9-3" href="#__codelineno-9-3"></a><span class="w">  </span>--framework<span class="w"> </span>copilot-vscode<span class="w"> </span><span class="se">\</span>
-<a id="__codelineno-9-4" name="__codelineno-9-4" href="#__codelineno-9-4"></a><span class="w">  </span>--project<span class="w"> </span>/path/to/project<span class="w"> </span><span class="se">\</span>
-<a id="__codelineno-9-5" name="__codelineno-9-5" href="#__codelineno-9-5"></a><span class="w">  </span>--migrate
-</code></pre></div>
-<h3 id="after-migration-restore-project-specific-rules">After migration: restore project-specific rules<a class="headerlink" href="#after-migration-restore-project-specific-rules" title="Permanent link">&para;</a></h3>
-<p>Review the diff for content that was in the old files but is not auto-generated:</p>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-10-1" name="__codelineno-10-1" href="#__codelineno-10-1"></a>git<span class="w"> </span>diff<span class="w"> </span>pre-fencing-snapshot<span class="w"> </span>HEAD<span class="w"> </span>--<span class="w"> </span>.github/agents/orchestrator.agent.md
-</code></pre></div>
-<p>Add any project-specific rules to the <code>### Rules</code> → <code>### &lt;Project&gt; Project Rules</code> subsection in <code>orchestrator.agent.md</code>. This is the <code>USER-EDITABLE</code> zone — it survives all future <code>--merge</code> runs permanently.</p>
-<p>Then commit:</p>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-11-1" name="__codelineno-11-1" href="#__codelineno-11-1"></a>git<span class="w"> </span>add<span class="w"> </span>.github/agents/<span class="w"> </span><span class="o">&amp;&amp;</span><span class="w"> </span>git<span class="w"> </span>commit<span class="w"> </span>-m<span class="w"> </span><span class="s2">&quot;chore: fence-migrate agent team&quot;</span>
-</code></pre></div>
-<h3 id="all-future-updates-use-merge">All future updates use <code>--merge</code><a class="headerlink" href="#all-future-updates-use-merge" title="Permanent link">&para;</a></h3>
-<p>Once migrated, never use <code>--overwrite</code> again. Use <code>--merge</code> instead:</p>
 <div class="highlight"><pre><span></span><code><a id="__codelineno-12-1" name="__codelineno-12-1" href="#__codelineno-12-1"></a>agentteams<span class="w"> </span><span class="se">\</span>
 <a id="__codelineno-12-2" name="__codelineno-12-2" href="#__codelineno-12-2"></a><span class="w">  </span>--description<span class="w"> </span>brief.json<span class="w"> </span><span class="se">\</span>
 <a id="__codelineno-12-3" name="__codelineno-12-3" href="#__codelineno-12-3"></a><span class="w">  </span>--framework<span class="w"> </span>copilot-vscode<span class="w"> </span><span class="se">\</span>
 <a id="__codelineno-12-4" name="__codelineno-12-4" href="#__codelineno-12-4"></a><span class="w">  </span>--project<span class="w"> </span>/path/to/project<span class="w"> </span><span class="se">\</span>
-<a id="__codelineno-12-5" name="__codelineno-12-5" href="#__codelineno-12-5"></a><span class="w">  </span>--merge<span class="w"> </span>--yes
+<a id="__codelineno-12-5" name="__codelineno-12-5" href="#__codelineno-12-5"></a><span class="w">  </span>--migrate
+</code></pre></div>
+<h3 id="after-migration-restore-project-specific-rules">After migration: restore project-specific rules<a class="headerlink" href="#after-migration-restore-project-specific-rules" title="Permanent link">&para;</a></h3>
+<p>Review the diff for content that was in the old files but is not auto-generated:</p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-13-1" name="__codelineno-13-1" href="#__codelineno-13-1"></a>git<span class="w"> </span>diff<span class="w"> </span>pre-fencing-snapshot<span class="w"> </span>HEAD<span class="w"> </span>--<span class="w"> </span>.github/agents/orchestrator.agent.md
+</code></pre></div>
+<p>Add any project-specific rules to the <code>### Rules</code> → <code>### &lt;Project&gt; Project Rules</code> subsection in <code>orchestrator.agent.md</code>. This is the <code>USER-EDITABLE</code> zone — it survives all future <code>--merge</code> runs permanently.</p>
+<p>Then commit:</p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-14-1" name="__codelineno-14-1" href="#__codelineno-14-1"></a>git<span class="w"> </span>add<span class="w"> </span>.github/agents/<span class="w"> </span><span class="o">&amp;&amp;</span><span class="w"> </span>git<span class="w"> </span>commit<span class="w"> </span>-m<span class="w"> </span><span class="s2">&quot;chore: fence-migrate agent team&quot;</span>
+</code></pre></div>
+<h3 id="all-future-updates-use-merge">All future updates use <code>--merge</code><a class="headerlink" href="#all-future-updates-use-merge" title="Permanent link">&para;</a></h3>
+<p>Once migrated, never use <code>--overwrite</code> again. Use <code>--merge</code> instead:</p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-15-1" name="__codelineno-15-1" href="#__codelineno-15-1"></a>agentteams<span class="w"> </span><span class="se">\</span>
+<a id="__codelineno-15-2" name="__codelineno-15-2" href="#__codelineno-15-2"></a><span class="w">  </span>--description<span class="w"> </span>brief.json<span class="w"> </span><span class="se">\</span>
+<a id="__codelineno-15-3" name="__codelineno-15-3" href="#__codelineno-15-3"></a><span class="w">  </span>--framework<span class="w"> </span>copilot-vscode<span class="w"> </span><span class="se">\</span>
+<a id="__codelineno-15-4" name="__codelineno-15-4" href="#__codelineno-15-4"></a><span class="w">  </span>--project<span class="w"> </span>/path/to/project<span class="w"> </span><span class="se">\</span>
+<a id="__codelineno-15-5" name="__codelineno-15-5" href="#__codelineno-15-5"></a><span class="w">  </span>--merge<span class="w"> </span>--yes
 </code></pre></div>
 <p><code>--merge</code> updates only the template-fenced regions in each file and leaves all user-authored content untouched.</p>
 <h3 id="reverting-if-something-goes-wrong">Reverting if something goes wrong<a class="headerlink" href="#reverting-if-something-goes-wrong" title="Permanent link">&para;</a></h3>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-13-1" name="__codelineno-13-1" href="#__codelineno-13-1"></a>agentteams<span class="w"> </span>--revert-migration<span class="w"> </span>--project<span class="w"> </span>/path/to/project
+<div class="highlight"><pre><span></span><code><a id="__codelineno-16-1" name="__codelineno-16-1" href="#__codelineno-16-1"></a>agentteams<span class="w"> </span>--revert-migration<span class="w"> </span>--project<span class="w"> </span>/path/to/project
 </code></pre></div>
 <p>This runs <code>git reset --hard pre-fencing-snapshot</code> and deletes the tag, restoring all agent files to their pre-migration state. If you have already pushed the migrated commit to a remote, a manual force-push is required after the revert.</p>
 

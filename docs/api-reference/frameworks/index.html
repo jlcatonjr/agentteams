@@ -3625,7 +3625,7 @@
 </ul>
 <p><strong>Returns:</strong> <code>str</code> — Framework-shaped builder content.</p>
 <h4 id="extra_output_filesmanifest"><code>extra_output_files(manifest)</code><a class="headerlink" href="#extra_output_filesmanifest" title="Permanent link">&para;</a></h4>
-<p>Return additional <code>(rel_path, content)</code> files the framework emits that are not derived from a template. <strong>Default implementation: empty list.</strong> <code>GooseAdapter</code> overrides this to emit the repo-root <code>.goosehints</code> integrator alongside <code>AGENTS.md</code>. These files are emitted by the generate path <strong>and</strong> by <code>convert_team</code>, so a converted Goose team also gets its <code>.goosehints</code>.</p>
+<p>Return additional <code>(rel_path, content)</code> files the framework emits that are not derived from a template. <strong>Default implementation: empty list.</strong> <code>GooseAdapter</code> overrides this to emit three files unconditionally: the repo-root <code>.goosehints</code> integrator alongside <code>AGENTS.md</code>, a <code>references/goose-capabilities-reference.md</code> reference doc, and a repo-root <code>scripts/goose-run-resilient.py</code> resilient-runner script (a dead-turn-detecting wrapper around <code>goose run</code>, read from this package's own <code>scripts/</code> at generation time so the shipped copy can't drift). These files are emitted by the generate path <strong>and</strong> by <code>convert_team</code>, so a converted Goose team gets all three too.</p>
 <p><strong>Args:</strong></p>
 <ul>
 <li><code>manifest</code> (<code>dict[str, Any]</code>) — Team manifest.</li>

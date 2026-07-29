@@ -3205,6 +3205,17 @@
 </li>
       
         <li class="md-nav__item">
+  <a href="#retrieval-review-time-utilities" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Retrieval &amp; Review-Time Utilities
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
   <a href="#getting-started" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -3643,6 +3654,13 @@
 <li><strong>Delivery Receipt Artifact</strong> — <code>references/delivery-receipt.json</code> written after every successful <code>--update</code> (non-dry-run) recording <code>artifact_type</code>, <code>receipt_schema_version</code>, <code>delivered_at</code>, <code>project_name</code>, <code>framework</code>, <code>manifest_fingerprint</code>, and <code>fingerprint_algo_version</code>; heal-first-attest-second order ensures the receipt records the post-heal state; write failures warn on stderr but do not fail the run; receipt file is excluded from drift detection</li>
 <li><strong><code>schemas/delivery-receipt.schema.json</code></strong> — Draft-07 JSON Schema for the delivery receipt; <code>additionalProperties: false</code>; top-level discriminator is <code>artifact_type</code> (const <code>"delivery-receipt"</code>); <code>receipt_schema_version</code> const <code>"1.0"</code></li>
 <li><strong><code>docs_src/delivery-procedure.md</code> Operator Guide</strong> — Documents the heal/attest order, receipt schema, and operator procedure for verifying a delivered update; registered under Guides in <code>mkdocs.yml</code></li>
+</ol>
+<hr />
+<h2 id="retrieval-review-time-utilities">Retrieval &amp; Review-Time Utilities<a class="headerlink" href="#retrieval-review-time-utilities" title="Permanent link">&para;</a></h2>
+<ol>
+<li><strong>Confidence-Tiered Retrieval</strong> — <code>memory_index.query_index()</code> and <code>code_index.query_partition()</code>/<code>query_partitions()</code> hits carry a <code>confidence</code> field (<code>"reliable"</code> / <code>"candidate"</code> / <code>"weak"</code>) computed from <code>score</code> against per-strategy thresholds, printed alongside <code>score=</code> by <code>--query-index</code>/<code>--query-code</code>. Replaces threshold-interpretation prose duplicated across 6 templates (<code>conflict-resolution</code>, <code>conflict-auditor</code>, <code>quality-auditor</code>, <code>research-analyst</code>, <code>retrieval-integrator</code>, <code>tool-doc-researcher</code>). See <a href="../memory-index/"><code>memory-index</code></a>, <a href="../code-index/"><code>code-index</code></a>.</li>
+<li><strong><code>agentteams.scan</code> Review-Time Invocability</strong> — <code>verdict_for_findings()</code> (<code>HALT</code> / <code>CONDITIONAL_PASS</code> / <code>PASS</code>) and a <code>python -m agentteams.scan &lt;path&gt;</code> entrypoint let a shell-only runtime invoke the deterministic PII/credential scanner at review time, not only at generation time via <code>--scan-security</code>. <code>security.template.md</code> Rules S-1/S-8 cite it as the preferred check. See <a href="../scan/"><code>scan</code></a>.</li>
+<li><strong><code>session_scan</code> Module</strong> — <code>scan_repo_issues()</code> consolidates the orchestrator's Workflow 11 Part B closeout scan (CHANGELOG "Known Issues", plan-steps pending/blocked rows, <code>git status</code> anomalies) into one call, with a <code>python -m agentteams.session_scan</code> entrypoint. See <a href="../session_scan/"><code>session_scan</code></a>.</li>
 </ol>
 <hr />
 <h2 id="getting-started">Getting Started<a class="headerlink" href="#getting-started" title="Permanent link">&para;</a></h2>

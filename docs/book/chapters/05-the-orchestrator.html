@@ -156,6 +156,14 @@
       </div>
 
       <p>This pattern complements rather than replaces the mandatory opener and closer. The opener protects execution entry conditions; the closer verifies final consistency; the post-step loop governs everything in between. Together they bracket execution at three control points: before the first step, between each step, and after the final step.</p>
+
+      <p>The loop presupposes something the description has passed over: that the remaining steps exist as an inspectable object. A plan held only in the orchestrator's reasoning cannot be re-audited between steps, because there is nothing for the adversarial and conflict gates to read. Making the plan an artifact rather than a state of mind is what converts a sequence of intentions into something a second agent can examine, and it is the reason the coordination described here can be audited at all.</p>
+
+      <div class="project-illustration">
+      <p>The module fixes the artifact's shape rather than its content. A plan is recorded as a table with a defined set of columns — the step, the agent responsible, the action, its inputs and outputs, its status, and optionally the steps it depends on — and the orchestrator's constitution requires it to exist before the first step executes. The columns are the contract; what fills them is the orchestrator's judgment. Because dependencies are declared rather than inferred, a procedure can read the table and report which pending steps have disjoint footprints and could therefore proceed together, leaving the decision to dispatch them to the orchestrator.</p>
+      </div>
+
+      <p>Note what has and has not been delegated. Computing which steps are mutually independent is a question about a graph, and the answer follows from the declarations. Deciding whether to act on that answer — whether two formally independent steps are prudently run together given what the completed steps have revealed — is a judgment the table cannot contain. Coordination is the function of this team that has been mechanized least, and the pattern here shows why: what can be handed to a procedure is the derivation of options, not the choice among them.</p>
     </section>
 
   </article>

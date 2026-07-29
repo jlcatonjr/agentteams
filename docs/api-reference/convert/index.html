@@ -3260,7 +3260,7 @@
 <ol>
 <li>Preserves body prose while rewriting framework wrappers/front matter.</li>
 <li>The instructions file is placed at the adapter's <code>finalize_output_path</code> location — <code>copilot-instructions.md</code>, <code>CLAUDE.md</code>, or, for <code>goose</code>, the repo-root <code>AGENTS.md</code> (front matter stripped) — and rendered through the target adapter's <code>render_instructions_file</code>.</li>
-<li>Emits any adapter sidecars via <code>extra_output_files</code> — e.g. <code>goose</code>'s repo-root <code>.goosehints</code> integrator.</li>
+<li>Emits any adapter sidecars via <code>extra_output_files</code> — e.g. <code>goose</code>'s repo-root <code>.goosehints</code> integrator, capabilities reference, and resilient-runner script (see <a href="../frameworks/#extra_output_filesmanifest">Framework Adapters</a>).</li>
 <li>Copies passthrough assets such as <code>SETUP-REQUIRED.md</code> and <code>references/</code>.</li>
 </ol>
 <h3 id="goose-target-framework-goose-beta">Goose target (<code>--framework goose</code>) — beta<a class="headerlink" href="#goose-target-framework-goose-beta" title="Permanent link">&para;</a></h3>
@@ -3268,7 +3268,7 @@
 <p class="admonition-title">Beta</p>
 <p>Goose is a <strong>beta</strong> convert target; its emitted-artifact shapes are not yet covered by the <a href="https://github.com/jlcatonjr/agentteams/blob/main/STABILITY.md">stability policy</a>.</p>
 </div>
-<p>Converting an existing team to Goose emits one recipe per agent under <code>.goose/recipes/*.yaml</code>, plus the repo-root <code>AGENTS.md</code> + <code>.goosehints</code>. The orchestrator's <code>sub_recipes</code> delegation is reconstructed from each agent's handoffs:</p>
+<p>Converting an existing team to Goose emits one recipe per agent under <code>.goose/recipes/*.yaml</code>, plus the repo-root <code>AGENTS.md</code> + <code>.goosehints</code>, a capabilities reference, and <code>scripts/goose-run-resilient.py</code>. The orchestrator's <code>sub_recipes</code> delegation is reconstructed from each agent's handoffs:</p>
 <ul>
 <li><strong><code>copilot-vscode</code> sources</strong> keep handoffs inline in their agent files, so delegation wires fully (identical to a native <code>--framework goose</code> generation).</li>
 <li><strong><code>claude</code> / <code>copilot-cli</code> sources</strong> strip handoffs at their own generation (handoffs live in <code>references/runtime-handoffs.json</code>), so they currently convert to valid but <strong>flat (un-delegated)</strong> recipes. Recovering that delegation from the sidecar is planned (see the handoff-recovery work).</li>
