@@ -31,7 +31,7 @@
       <p>Gate four: security clearance. Every remaining deletion candidate is submitted to a security review for clearance. The security reviewer evaluates whether the deletion creates risks along several dimensions: would the deletion remove a file containing credentials? Would it affect an external repository? Would it eliminate a file needed for citation verification? Would the deletion itself be classified as a destructive operation requiring explicit authorization? Would the deletion path reveal sensitive information? Only files that receive clearance pass all four gates and are deleted.</p>
 
       <div class="project-illustration">
-      <p>In this project, the security agent (Chapter 7) performs this review, evaluating deletion candidates against its S-1 through S-6 rules: credential exposure (S-1), external repository effects (S-2), citation verification dependencies (S-3), destructive operations requiring authorization (S-4), sensitive path disclosure (S-5), and local credential file handling (S-6). Only files that receive a PROCEED response from the security agent are deleted.</p>
+      <p>In this project, the security agent (Chapter 7) performs this review, evaluating deletion candidates against the rules of its current rule set that bear on deletion: credential and PII exposure (S-1), external repository effects (S-2), reference verification dependencies (S-3), destructive operations requiring authorization (S-4), and machine-specific information disclosure (S-8). Only files that receive a PROCEED response from the security agent are deleted.</p>
       </div>
     </section>
 
