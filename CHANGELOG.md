@@ -110,6 +110,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### fixed
 
+- **`test_committed_check_reports_describe_the_committed_source_state` broke CI on
+  `main` and I did not notice for four merges.** The test compares a committed
+  bridge-check verdict against the working tree's source team — but `.github/agents/*`
+  is gitignored here (1 of ~35 files tracked), so a fresh clone has nothing to hash and
+  the digest degrades to `sha256("")` = `e3b0c442…`, which can never match a committed
+  report. It passed locally only because those files exist on the author's disk.
+  `main`'s CI went red at `f145434` (the commit introducing it) and stayed red through
+  three further merges, each verified locally and reported as green while CI was not.
+  The check is **inherently local-only** and now says so: it skips, with the reason, when
+  the source team is absent. Skipped rather than relaxed — comparing against an empty
+  tree would "pass" only by making the assertion meaningless, which is the failure mode
+  the file exists to prevent. Verified both ways: skips in a simulated fresh checkout,
+  runs and passes locally.
+
 - **Eight API-doc signatures had drifted from the code, two of them fatally.**
   `drift.compute_structural_diff` was documented with parameter `manifest` where the
   code says `new_manifest`, and `enrich.build_tool_catalog` with `packages` where the
