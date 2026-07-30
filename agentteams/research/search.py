@@ -1,8 +1,13 @@
 """No-key web search and page-text fetching.
 
-Uses DuckDuckGo's HTML endpoint over plain ``httpx`` (no API key, no browser automation). Only
-the caller-supplied query/URL is ever sent. Any failure returns an empty result so a caller can
-degrade gracefully rather than crash.
+Search runs through a **chain of backends** (:mod:`agentteams.research.backends`) rather than a
+single endpoint, and results are served from a **TTL disk cache**
+(:mod:`agentteams.research.cache`) when one is warm. Only the caller-supplied query/URL is ever
+sent. Any failure returns an empty result so a caller can degrade gracefully rather than crash.
+
+The zero-configuration path remains fully functional: with no environment variables set, the
+chain is ``duckduckgo`` → ``ddg_lite``, both key-free. Keyed/hosted backends are additional
+links, never prerequisites.
 
 Ported from LingoFriend (``knowledge/search.py``, commit-adjacent to 2026-07-19's PDF
 content-type fix) — the origin of the ``max_pdf_bytes``/``pdf_timeout_s`` split and the lazy
@@ -17,14 +22,20 @@ import re
 import socket
 import time
 from dataclasses import dataclass
-from urllib.parse import parse_qs, unquote, urlparse
+from urllib.parse import urlparse
 
 import httpx
 
-_DDG_URL = "https://html.duckduckgo.com/html/"
+# Imported from the SUBMODULE path, not `from agentteams.research import cache`: the latter
+# creates a load-time edge back to the package `__init__`, which itself imports this module —
+# a genuine import cycle that `tests/test_living_doc_and_cycles.py` rejects.
+from agentteams.research.backends import CHALLENGE_STATUS as _DDG_CHALLENGE_STATUS_VALUE
+from agentteams.research.backends import available_backends
+from agentteams.research.cache import load as _cache_load
+from agentteams.research.cache import make_key as _cache_key
+from agentteams.research.cache import store as _cache_store
+
 _UA = "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko)"
-_RESULT_A = re.compile(r'class="result__a"[^>]*href="([^"]+)"[^>]*>(.*?)</a>', re.DOTALL)
-_SNIPPET = re.compile(r'class="result__snippet"[^>]*>(.*?)</a>', re.DOTALL)
 
 _JSON_LD_BLOCK = re.compile(
     r'<script[^>]*type=["\']application/ld\+json["\'][^>]*>(.*?)</script>',
@@ -49,29 +60,17 @@ class Source:
     snippet: str
 
 
-def _strip(text: str) -> str:
-    return _html.unescape(re.sub(r"<[^>]+>", "", text)).strip()
-
-
-def _resolve_url(href: str) -> str:
-    """DDG wraps results as ``//duckduckgo.com/l/?uddg=<encoded>`` — unwrap to the real URL."""
-    if "uddg=" in href:
-        try:
-            query = urlparse(href if href.startswith("http") else "https:" + href).query
-            target = parse_qs(query).get("uddg", [href])[0]
-            return unquote(target)
-        except (ValueError, IndexError, UnicodeError):  # CH-24: named types, not blanket
-            return href
-    return href
-
-
 #: DuckDuckGo answers a challenged request with 202 + an interstitial page rather than an
 #: error status, so ``raise_for_status()`` never fires (202 IS success). Observed 2026-07-24:
 #: long, highly specific queries are challenged *deterministically* (4/4 attempts -> 202, zero
 #: parseable results) while a short form of the same query returns 200 with 10 results. Without
 #: this discriminator the caller cannot tell "blocked" from "nothing matched" -- an agent reads
 #: the empty list as "no such information exists" and stops searching.
-_DDG_CHALLENGE_STATUS = 202
+#:
+#: Re-exported from :mod:`agentteams.research.backends`, which now owns per-backend response
+#: parsing; kept as a module attribute here because it is part of this module's documented
+#: vocabulary.
+_DDG_CHALLENGE_STATUS = _DDG_CHALLENGE_STATUS_VALUE
 
 #: Broadening keeps the first half of the query, never fewer than this many terms.
 #: A fixed small cap was tried first and rejected: truncating the motivating query
@@ -107,35 +106,50 @@ def _broaden(query: str) -> str:
     return " ".join(terms[:kept])
 
 
-def _ddg_results(query: str, k: int, timeout_s: float) -> tuple[list[Source], bool]:
-    """One search round-trip. Returns ``(results, was_challenged)``."""
-    try:
-        resp = httpx.get(
-            _DDG_URL,
-            params={"q": query},
-            headers={"User-Agent": _UA},
-            timeout=timeout_s,
-            follow_redirects=True,
-        )
-        resp.raise_for_status()
-        page = resp.text
-        status = resp.status_code
-    except httpx.HTTPError:
-        # CH-24: named type — httpx.HTTPError is the base class for every exception httpx itself
-        # raises (connect/timeout/transport failures, and raise_for_status()'s HTTPStatusError) —
-        # a genuinely unavoidable network-I/O boundary, not a blanket catch-all.
-        return [], False  # network down / non-2xx → caller falls back
-    titles = _RESULT_A.findall(page)
-    snippets = [_strip(s) for s in _SNIPPET.findall(page)]
-    out = [
-        Source(
-            title=_strip(title),
-            url=_resolve_url(href),
-            snippet=snippets[i] if i < len(snippets) else "",
-        )
-        for i, (href, title) in enumerate(titles[:k])
-    ]
-    return out, (not out and status == _DDG_CHALLENGE_STATUS)
+@dataclass
+class SearchProvenance:
+    """Where a result set actually came from — for the external-retrieval quality gate.
+
+    A summary resting on retrieved information has to be able to say which backend answered,
+    whether the answer was live or cached, and whether the query was altered on the way. Before
+    this existed a caller could report a URL but not how it was obtained.
+    """
+
+    backend: str | None
+    cached: bool
+    query_used: str
+    backends_tried: tuple[str, ...]
+    challenged: bool
+
+
+def _try_chain(query: str, k: int, timeout_s: float) -> tuple[list[Source], bool, str | None, list[str]]:
+    """Run ``query`` against each available backend in order, stopping at the first that answers.
+
+    Args:
+        query: The exact query string to issue.
+        k: Maximum results.
+        timeout_s: Per-request timeout.
+
+    Returns:
+        ``(results, any_challenged, answering_backend, backends_tried)``. ``any_challenged`` is
+        True when at least one backend actively deflected the request and none answered — the
+        signal that broadening is worth trying. It is deliberately distinct from "every backend
+        returned an honest zero", which must NOT trigger broadening.
+    """
+    tried: list[str] = []
+    any_challenged = False
+    for backend in available_backends():
+        hits, challenged = backend.search(query, k, timeout_s)
+        tried.append(backend.name)
+        any_challenged = any_challenged or challenged
+        if hits:
+            return (
+                [Source(title=h.title, url=h.url, snippet=h.snippet) for h in hits],
+                False,
+                backend.name,
+                tried,
+            )
+    return [], any_challenged, None, tried
 
 
 def web_search(query: str, k: int = 5, timeout_s: float = 8.0) -> list[Source]:
@@ -158,35 +172,154 @@ def web_search(query: str, k: int = 5, timeout_s: float = 8.0) -> list[Source]:
     return web_search_verbose(query, k=k, timeout_s=timeout_s)[0]
 
 
+def _broadening_forms(query: str) -> list[str]:
+    """Return successively broader forms of ``query``, most specific first.
+
+    ``_broaden`` halves once. Measured 2026-07-30, one halving is not always enough: a
+    12-term query challenged at full length was still challenged at 6 terms. Applying it
+    repeatedly walks down to the floor instead of giving up after a single step.
+
+    Args:
+        query: The original query.
+
+    Returns:
+        Broadened forms excluding the original, ordered most-specific to least. Empty when
+        ``query`` is already at or below the broadening floor.
+    """
+    forms: list[str] = []
+    current = query
+    while True:
+        nxt = _broaden(current)
+        if not nxt or nxt in forms:
+            break
+        forms.append(nxt)
+        current = nxt
+    return forms
+
+
 def web_search_verbose(
     query: str, k: int = 5, timeout_s: float = 8.0,
 ) -> tuple[list[Source], str | None]:
     """:func:`web_search` plus a note describing any fallback or block.
 
+    Tries every available backend on the original query before altering the query at all —
+    switching provider loses nothing, whereas broadening discards search terms. Only when the
+    whole chain has been *challenged* (not merely empty) does it broaden and try the chain
+    again, progressively, down to the broadening floor.
+
+    Args:
+        query: Free-text search query.
+        k: Maximum number of results to return.
+        timeout_s: Per-request timeout in seconds.
+
     Returns:
         ``(results, note)``. ``note`` is ``None`` on an ordinary search; otherwise a short
-        human-readable explanation — that the query was broadened, or that the upstream
-        challenged the request and the caller should not read the empty list as "no such
-        information exists."
+        human-readable explanation — that the query was broadened, that a non-default backend
+        answered, or that the upstream challenged the request and the caller should not read
+        the empty list as "no such information exists."
     """
-    if not query.strip():
-        return [], None
-    results, challenged = _ddg_results(query, k, timeout_s)
-    if results or not challenged:
-        return results, None
+    results, note, _ = web_search_with_provenance(query, k=k, timeout_s=timeout_s)
+    return results, note
 
-    broadened = _broaden(query)
-    if not broadened:
-        return [], ("search endpoint challenged this request (no results returned); "
-                    "this is not evidence that nothing matched — retry shortly")
-    retried, still_challenged = _ddg_results(broadened, k, timeout_s)
-    if retried:
-        return retried, (f"original query was challenged by the search endpoint; "
-                         f"retried with the broader query {broadened!r}")
-    if still_challenged:
-        return [], (f"search endpoint challenged both {query!r} and the broader "
-                    f"{broadened!r}; not evidence that nothing matched — retry shortly")
-    return [], f"no results for {query!r} or the broader {broadened!r}"
+
+def web_search_with_provenance(
+    query: str, k: int = 5, timeout_s: float = 8.0,
+) -> tuple[list[Source], str | None, SearchProvenance]:
+    """:func:`web_search_verbose` plus a structured :class:`SearchProvenance` record.
+
+    The external-retrieval quality gate requires a summary to state how its evidence was
+    obtained; ``note`` is prose for a human, this is the machine-readable form.
+
+    Args:
+        query: Free-text search query.
+        k: Maximum number of results to return.
+        timeout_s: Per-request timeout in seconds.
+
+    Returns:
+        ``(results, note, provenance)``.
+    """
+    empty = SearchProvenance(
+        backend=None, cached=False, query_used=query, backends_tried=(), challenged=False
+    )
+    if not query.strip():
+        return [], None, empty
+
+    chain = tuple(b.name for b in available_backends())
+    cache_key = _cache_key("search", query, k, *chain)
+    cached = _cache_load(cache_key)
+    if isinstance(cached, dict) and isinstance(cached.get("results"), list):
+        hits = [
+            Source(title=str(r.get("title", "")), url=str(r.get("url", "")),
+                   snippet=str(r.get("snippet", "")))
+            for r in cached["results"]
+            if isinstance(r, dict)
+        ]
+        return hits, cached.get("note"), SearchProvenance(
+            backend=cached.get("backend"),
+            cached=True,
+            query_used=str(cached.get("query_used", query)),
+            backends_tried=tuple(cached.get("backends_tried", ())),
+            challenged=False,
+        )
+
+    def _finish(
+        results: list[Source], note: str | None, backend: str | None,
+        query_used: str, tried: list[str], challenged: bool,
+    ) -> tuple[list[Source], str | None, SearchProvenance]:
+        prov = SearchProvenance(
+            backend=backend, cached=False, query_used=query_used,
+            backends_tried=tuple(tried), challenged=challenged,
+        )
+        if results:
+            _cache_store(cache_key, {
+                "results": [r.__dict__ for r in results],
+                "note": note,
+                "backend": backend,
+                "query_used": query_used,
+                "backends_tried": list(tried),
+            })
+        return results, note, prov
+
+    results, challenged, backend, tried = _try_chain(query, k, timeout_s)
+    if results:
+        # A non-first backend answering is worth saying out loud — it tells an operator the
+        # primary endpoint is degraded — but it is not a caveat about the RESULTS, so the note
+        # stays None for the ordinary case of the first backend answering.
+        note = None if tried[:1] == [backend] else f"answered by the {backend!r} backend"
+        return _finish(results, note, backend, query, tried, False)
+    if not challenged:
+        # Every backend returned an honest zero. Broadening a query nothing matched only
+        # produces less precise nothing.
+        return _finish([], None, None, query, tried, False)
+
+    all_tried = list(tried)
+    forms = _broadening_forms(query)
+    if not forms:
+        return _finish(
+            [], "search endpoint challenged this request (no results returned); "
+                "this is not evidence that nothing matched — retry shortly",
+            None, query, all_tried, True,
+        )
+
+    for form in forms:
+        retried, still_challenged, backend, tried = _try_chain(form, k, timeout_s)
+        all_tried.extend(tried)
+        if retried:
+            return _finish(
+                retried,
+                f"original query was challenged by the search endpoint; "
+                f"retried with the broader query {form!r}",
+                backend, form, all_tried, False,
+            )
+        if not still_challenged:
+            return _finish([], f"no results for {query!r} or the broader {form!r}",
+                           None, form, all_tried, False)
+    return _finish(
+        [], f"search endpoint challenged {query!r} and every broader form tried "
+            f"({', '.join(repr(f) for f in forms)}); not evidence that nothing matched "
+            f"— retry shortly",
+        None, forms[-1], all_tried, True,
+    )
 
 
 def is_public_https(url: str) -> bool:

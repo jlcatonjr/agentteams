@@ -15,7 +15,7 @@ the recommended way to give an LLM agent instructions for orchestrating it.
 [stability policy](https://github.com/jlcatonjr/agentteams/blob/main/STABILITY.md) — covered by
 the normal SemVer contract like any other documented module.
 
-> *Source: `agentteams/research/{search,reputable,verify,browser}.py`*
+> *Source: `agentteams/research/{search,backends,cache,scholarly,reputable,news,verify,browser}.py`*
 
 `browser` (below) is a further, heavier exception within this already-exceptional subpackage: it
 is gated behind its own separate `agentteams[browser]` install (not folded into `agentteams[research]`)
@@ -73,8 +73,33 @@ request and the empty list is **not** evidence that nothing matched.
 parseable.
 
 > **Known gap:** the note is prose, so a caller distinguishing block-from-absence must
-> substring-match it. Also, a `429` rate-limit still arrives via `httpx.HTTPError` and remains
-> indistinguishable from "nothing matched" — only the `202` case is handled.
+> substring-match it — use `web_search_with_provenance` below for a structured form. Also, a
+> `429` rate-limit still arrives via `httpx.HTTPError` and remains indistinguishable from
+> "nothing matched" — only the `202` case is handled.
+
+### `web_search_with_provenance(query, k=5, timeout_s=8.0)`
+
+`web_search_verbose` plus a structured `SearchProvenance` record — the machine-readable form of
+"how was this obtained", which the external-retrieval quality gate requires a summary to be able
+to state.
+
+**Returns:** `tuple[list[Source], str | None, SearchProvenance]`, where `SearchProvenance` carries
+`backend`, `cached`, `query_used`, `backends_tried`, and `challenged`.
+
+Three of those change what a claim is worth:
+
+- **`cached`** — `true` means up to 6 hours old. Re-run with `AGENTTEAMS_RESEARCH_NO_CACHE=1`
+  before presenting a time-sensitive claim as current.
+- **`query_used`** — when it differs from the query you issued, the endpoint challenged the
+  original and the tool retried with a **broader** one. Broader queries return less precise
+  results; treat such a hit as weaker evidence and say so.
+- **`backend`** — not all backends index the same corpus.
+
+`python -m agentteams.research search` prints all of this to **stderr** on every query:
+
+```
+provenance: backend=duckduckgo cached=false query_used='...' tried=duckduckgo,ddg_lite
+```
 
 ### `fetch_text(url, max_bytes=400_000, timeout_s=8.0, max_chars=4000, max_pdf_bytes=12_000_000, pdf_timeout_s=60.0)`
 
@@ -207,6 +232,102 @@ as `browser_fetch`; returns `True` on success, `False` on any failure.
 
 ---
 
+## `backends` — the search fallback chain
+
+> *Source: `agentteams/research/backends.py`*
+
+`web_search` does not call one endpoint; it walks a chain. The zero-configuration chain is
+`duckduckgo` → `ddg_lite`, both key-free — a fallback that requires setup is not a fallback.
+
+| Backend | Enabled by | Notes |
+|---|---|---|
+| `duckduckgo` | always | `html.duckduckgo.com`; the historical default |
+| `ddg_lite` | always | `lite.duckduckgo.com`; a different renderer, challenged independently |
+| `searxng` | `AGENTTEAMS_SEARXNG_URL` | Operator-chosen instance; many disable the JSON API, which degrades to a skip |
+| `brave` | `AGENTTEAMS_BRAVE_API_KEY` | Key travels as a header, never a query parameter |
+
+Configured backends always rank **after** the free ones, so an operator who supplies a key does
+not pay for every query.
+
+### `available_backends()` / `backend_names()`
+
+The backends usable right now, in chain order. Useful for reporting provenance.
+
+**Chain semantics.** Every backend is tried on the *original* query before the query is altered
+at all — switching provider loses nothing, whereas broadening discards search terms. Only when
+the whole chain has been **challenged** does `web_search` broaden, and then progressively, down
+to the floor. An honest zero across all backends does **not** trigger broadening: a query that
+genuinely matched nothing will only match less precise nothing when shortened.
+
+---
+
+## `cache` — TTL disk cache for retrieved results
+
+> *Source: `agentteams/research/cache.py`*
+
+Search, fetch, and scholarly results are cached for 6 hours by default under
+`references/research-cache/` (gitignored). Disable with `AGENTTEAMS_RESEARCH_NO_CACHE=1`;
+relocate with `AGENTTEAMS_RESEARCH_CACHE_DIR`.
+
+This cache persists **untrusted third-party bytes**, so its failure behaviour is part of its
+contract: filenames are SHA-256 digests only (no external text reaches a path component), writes
+are atomic, and a corrupt, oversized, or expired entry is treated as a **miss** rather than an
+error. A broken cache degrades to "no cache", never to a broken call.
+
+### `make_key(kind, *parts)`
+
+Every part participates in the digest, so changing `k` or the backend set produces a different
+key rather than silently reusing a differently-shaped result.
+
+### `load(key, ttl_s=DEFAULT_TTL_S)`
+
+### `store(key, value)`
+
+### `purge_expired(ttl_s=DEFAULT_TTL_S)`
+
+---
+
+## `scholarly` — OpenAlex, Crossref, arXiv
+
+> *Source: `agentteams/research/scholarly.py`*
+
+A general web search returns a *page about* a paper; these APIs return the paper's own record,
+with a DOI. All three are key-free — no credential is read, required, or supported.
+
+### `scholarly_search(query, k=5, sources=SOURCES, timeout_s=10.0) -> list[ScholarlyWork]`
+
+Queries the chosen indexes concurrently and deduplicates by DOI, then by normalised title for
+records that reach one index without a DOI. One index failing never loses the others' results.
+
+### `search_openalex(query, k=5, timeout_s=10.0)`
+
+### `search_crossref(query, k=5, timeout_s=10.0)`
+
+### `search_arxiv(query, k=5, timeout_s=10.0)`
+
+Single-source variants. Each returns `[]` on any failure and never raises.
+
+### `ScholarlyWork`
+
+`title`, `authors`, `year`, `doi`, `url`, `abstract`, `venue`, `source`.
+
+### `format_citation(work) -> str`
+
+A compact citation line built only from fields the source actually provided. A missing year
+renders `(n.d.)` rather than a guess.
+
+**Honesty ceiling.** A scholarly index hit is **provenance**: the work exists, by these authors,
+published there. It is not a claim the work is correct, replicated, relevant, or **un-retracted**
+— retraction status is not checked. Nothing is inferred, normalised, or filled in when a source
+omits it, which is what makes the output safe to build a bibliography from.
+
+**Polite pool.** OpenAlex and Crossref grant higher rate limits to requests carrying a contact
+address. Set `AGENTTEAMS_RESEARCH_CONTACT_EMAIL` to opt in. It is deliberately never derived from
+git config or any other ambient source — transmitting an operator's address to a third party is
+their decision to make explicitly.
+
+---
+
 ## `reputable` — curated-allowlist source rating
 
 > *Source: `agentteams/research/reputable.py`*
@@ -223,6 +344,30 @@ own config, or uses `DEFAULT_CONFIG`.
 A small, deliberately generic `AllowlistConfig` — a starting-point convenience, not a
 comprehensive claim about source quality for any subject area or language. A real consuming
 project should supply its own config sized to its own domain and editorial judgment.
+
+Four general-interest domains with no primary repositories, which in practice reduces
+`reputable_sources()` to "one general search filtered to Wikipedia and three wire services".
+Its contents are frozen for back-compatibility: it is the default argument of
+`ReputableSourceAllowlist.__init__`, so changing it would silently change behaviour for every
+existing caller. Prefer a preset below.
+
+### `SOFTWARE_CONFIG`, `RESEARCH_CONFIG`, `DATA_CONFIG`
+
+Larger starting points for the three project archetypes, each with populated `tier_by_domain`,
+`type_by_domain`, and `topic_primary_repos`.
+
+The **same honesty ceiling applies to all three**, and is worth restating because a longer list
+reads as more authoritative than a short one: these are *provenance* judgments — "this domain is
+a defensible place to look" — never claims that a given page is correct, current, or unbiased. A
+consuming project is expected to edit them, not inherit them uncritically. An official statistics
+series, for instance, is authoritative about what it measured, which is not the same as being the
+right series for a question.
+
+### `config_for_project_type(project_type) -> AllowlistConfig`
+
+Maps a `classify_project_type` value to its preset (`software`/`documentation` →
+`SOFTWARE_CONFIG`, `research`/`writing` → `RESEARCH_CONFIG`, `data-pipeline` → `DATA_CONFIG`).
+Unknown, `mixed`, and `unknown` types fall back to `DEFAULT_CONFIG` rather than guessing.
 
 ### `ReputableSourceAllowlist(config=DEFAULT_CONFIG)`
 

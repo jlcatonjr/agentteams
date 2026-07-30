@@ -31,6 +31,11 @@ VALID_TYPES = frozenset(
     {"news", "academic", "government", "encyclopedia", "primary-text", "book"}
 )
 
+#: Ceiling on simultaneous search requests issued for one topic. Four keeps the common case
+#: (a handful of primary repos plus the general backstop) effectively parallel while refusing
+#: to scale the burst linearly with allowlist size.
+_MAX_CONCURRENT_SEARCHES = 4
+
 
 @dataclass(frozen=True)
 class AllowlistConfig:
@@ -71,6 +76,172 @@ DEFAULT_CONFIG = AllowlistConfig(
     },
     default_repos=(),
 )
+
+
+# ---------------------------------------------------------------------------
+# Archetype presets
+#
+# DEFAULT_CONFIG above is four general-interest domains with no primary repositories — a
+# demonstration, not a working configuration. In practice `reputable_sources()` on the default
+# reduced to "one general search filtered to Wikipedia and three wire services", which is not
+# usable for technical or scholarly work.
+#
+# The presets below are larger starting points for the three project archetypes this module
+# actually gets used from. The SAME honesty ceiling stated in the module docstring applies to
+# every one of them, and is worth restating because a longer list reads as more authoritative
+# than a short one: these are PROVENANCE judgments — "this domain is a defensible place to
+# look" — never claims that a given page is correct, current, or unbiased. A consuming project
+# is expected to edit these, not inherit them uncritically.
+#
+# DEFAULT_CONFIG is deliberately left exactly as it was: it is the default argument of
+# ReputableSourceAllowlist.__init__, so changing its contents would silently change behaviour
+# for every existing caller.
+# ---------------------------------------------------------------------------
+
+SOFTWARE_CONFIG = AllowlistConfig(
+    tier_by_domain={
+        "python.org": "authoritative",
+        "developer.mozilla.org": "authoritative",
+        "rust-lang.org": "authoritative",
+        "go.dev": "authoritative",
+        "postgresql.org": "authoritative",
+        "kernel.org": "authoritative",
+        "w3.org": "authoritative",
+        "ietf.org": "authoritative",
+        "docs.github.com": "authoritative",
+        "readthedocs.io": "reference",
+        "github.com": "primary",
+        "stackoverflow.com": "reference",
+        "wikipedia.org": "reference",
+    },
+    type_by_domain={
+        "python.org": "primary-text",
+        "developer.mozilla.org": "primary-text",
+        "rust-lang.org": "primary-text",
+        "go.dev": "primary-text",
+        "postgresql.org": "primary-text",
+        "kernel.org": "primary-text",
+        "w3.org": "government",
+        "ietf.org": "government",
+        "docs.github.com": "primary-text",
+        "readthedocs.io": "primary-text",
+        "github.com": "primary-text",
+        "stackoverflow.com": "encyclopedia",
+        "wikipedia.org": "encyclopedia",
+    },
+    topic_primary_repos=(
+        (("python", "pip", "pypi", "django", "flask", "pytest"), ("python.org", "readthedocs.io")),
+        (("javascript", "typescript", "npm", "node", "react"), ("developer.mozilla.org", "github.com")),
+        (("rust", "cargo", "crate"), ("rust-lang.org", "github.com")),
+        (("golang", "go module"), ("go.dev", "github.com")),
+        (("sql", "postgres", "postgresql", "database"), ("postgresql.org",)),
+        (("http", "tls", "protocol", "rfc"), ("ietf.org", "w3.org")),
+    ),
+    default_repos=("github.com", "readthedocs.io"),
+)
+"""Software-engineering sources. Provenance only — see the block comment above."""
+
+RESEARCH_CONFIG = AllowlistConfig(
+    tier_by_domain={
+        "doi.org": "authoritative",
+        "arxiv.org": "primary",
+        "openalex.org": "reference",
+        "crossref.org": "reference",
+        "semanticscholar.org": "reference",
+        "pubmed.ncbi.nlm.nih.gov": "authoritative",
+        "ncbi.nlm.nih.gov": "authoritative",
+        "nature.com": "authoritative",
+        "science.org": "authoritative",
+        "jstor.org": "reference",
+        "plato.stanford.edu": "authoritative",
+        "gutenberg.org": "primary",
+        "wikipedia.org": "reference",
+    },
+    type_by_domain={
+        "doi.org": "academic",
+        "arxiv.org": "academic",
+        "openalex.org": "academic",
+        "crossref.org": "academic",
+        "semanticscholar.org": "academic",
+        "pubmed.ncbi.nlm.nih.gov": "academic",
+        "ncbi.nlm.nih.gov": "government",
+        "nature.com": "academic",
+        "science.org": "academic",
+        "jstor.org": "academic",
+        "plato.stanford.edu": "encyclopedia",
+        "gutenberg.org": "primary-text",
+        "wikipedia.org": "encyclopedia",
+    },
+    topic_primary_repos=(
+        (("physics", "mathematics", "machine learning", "computer science"), ("arxiv.org",)),
+        (("medicine", "clinical", "biology", "genome"), ("pubmed.ncbi.nlm.nih.gov",)),
+        (("philosophy", "ethics", "epistemology"), ("plato.stanford.edu",)),
+    ),
+    default_repos=("openalex.org", "crossref.org"),
+)
+"""Scholarly sources. Pairs with :mod:`agentteams.research.scholarly`, which queries the
+key-free subset of these directly rather than through a general web search. Provenance only."""
+
+DATA_CONFIG = AllowlistConfig(
+    tier_by_domain={
+        "data.gov": "authoritative",
+        "census.gov": "authoritative",
+        "bls.gov": "authoritative",
+        "federalreserve.gov": "authoritative",
+        "fred.stlouisfed.org": "authoritative",
+        "eurostat.ec.europa.eu": "authoritative",
+        "worldbank.org": "authoritative",
+        "oecd.org": "authoritative",
+        "imf.org": "authoritative",
+        "wikipedia.org": "reference",
+    },
+    type_by_domain={
+        "data.gov": "government",
+        "census.gov": "government",
+        "bls.gov": "government",
+        "federalreserve.gov": "government",
+        "fred.stlouisfed.org": "government",
+        "eurostat.ec.europa.eu": "government",
+        "worldbank.org": "government",
+        "oecd.org": "government",
+        "imf.org": "government",
+        "wikipedia.org": "encyclopedia",
+    },
+    topic_primary_repos=(
+        (("employment", "unemployment", "labor", "wage"), ("bls.gov", "fred.stlouisfed.org")),
+        (("population", "demographic", "census"), ("census.gov",)),
+        (("gdp", "inflation", "monetary", "interest rate"), ("fred.stlouisfed.org", "federalreserve.gov")),
+        (("global", "developing", "international"), ("worldbank.org", "oecd.org", "imf.org")),
+    ),
+    default_repos=("data.gov", "worldbank.org"),
+)
+"""Official-statistics sources. Provenance only — an official series is authoritative about
+what it measured, which is not the same as being the right series for a question."""
+
+#: `project_type` values (see `agentteams.analyze.classify_project_type`) → preset.
+#: Unlisted types intentionally fall back to DEFAULT_CONFIG rather than guessing.
+_CONFIG_BY_PROJECT_TYPE: dict[str, AllowlistConfig] = {
+    "software": SOFTWARE_CONFIG,
+    "research": RESEARCH_CONFIG,
+    "writing": RESEARCH_CONFIG,
+    "documentation": SOFTWARE_CONFIG,
+    "data-pipeline": DATA_CONFIG,
+}
+
+
+def config_for_project_type(project_type: str) -> AllowlistConfig:
+    """Return the allowlist preset matching a project type.
+
+    Args:
+        project_type: A value from ``agentteams.analyze.classify_project_type`` — e.g.
+            ``"software"``, ``"research"``, ``"data-pipeline"``.
+
+    Returns:
+        The matching preset, or :data:`DEFAULT_CONFIG` for an unknown, ``"mixed"``, or
+        ``"unknown"`` type. Never raises: an unrecognised type means "no better information
+        than the generic default", not an error.
+    """
+    return _CONFIG_BY_PROJECT_TYPE.get((project_type or "").strip().lower(), DEFAULT_CONFIG)
 
 
 @dataclass
@@ -193,7 +364,12 @@ class ReputableSourceAllowlist:
         ]
         jobs.append((topic, 8, False))
 
-        with ThreadPoolExecutor(max_workers=len(jobs)) as pool:
+        # Bounded, not one-worker-per-job. A config with many primary repos previously fired
+        # `len(repos) + 1` simultaneous requests at the same free endpoint for a single topic;
+        # that burst is itself a plausible contributor to the challenge responses this package
+        # has to work around (see agentteams.research.backends). Capping trades a little
+        # latency for a materially lower chance of the whole batch being deflected.
+        with ThreadPoolExecutor(max_workers=min(len(jobs), _MAX_CONCURRENT_SEARCHES)) as pool:
             futures = {
                 pool.submit(web_search, query, count, timeout_s): require_relevant
                 for query, count, require_relevant in jobs

@@ -41,6 +41,13 @@ _RESULT_HTML = (
     '<a class="result__snippet">snippet a</a>'
 )
 
+#: lite.duckduckgo.com uses a different renderer (`result-link`), which is precisely why it is
+#: worth having in the chain — it is challenged independently rather than in lockstep.
+_LITE_RESULT_HTML = (
+    '<a class="result-link" href="https://example.com/lite">Lite Result</a>'
+    '<td class="result-snippet">lite snippet</td>'
+)
+
 
 def test_broaden_preserves_the_entity_not_just_a_fixed_prefix():
     """The broadened query must keep the entity being searched for, intact.
@@ -68,58 +75,118 @@ def test_broaden_returns_empty_when_query_is_already_short():
     assert _broaden("one two") == ""
 
 
-def test_challenged_query_retries_broadened_and_reports_it():
+# Search now runs through a CHAIN of backends (agentteams.research.backends), so the
+# transport these tests patch moved from `search.httpx` to `backends.httpx`, and a
+# "challenged" query is retried against every remaining backend BEFORE the query is
+# broadened — switching provider loses nothing, broadening discards search terms. The
+# behavioural contracts below are unchanged from the single-backend era; only the call
+# counts reflect the chain. `_zero_config_chain` pins the chain to the two key-free
+# DuckDuckGo backends so a developer machine with AGENTTEAMS_BRAVE_API_KEY set does not
+# change what these tests measure.
+
+_CHAIN_LEN = 2  # duckduckgo + ddg_lite, the zero-configuration chain
+
+
+@pytest.fixture
+def _zero_config_chain(monkeypatch):
+    for var in ("AGENTTEAMS_SEARXNG_URL", "AGENTTEAMS_BRAVE_API_KEY"):
+        monkeypatch.delenv(var, raising=False)
+    return _CHAIN_LEN
+
+
+def test_challenged_query_retries_broadened_and_reports_it(_zero_config_chain):
     calls: list[str] = []
 
     def fake_get(url, params=None, **kwargs):
         calls.append(params["q"])
-        if len(calls) == 1:
-            return _FakeResp(202, "<html>anomaly challenge</html>")  # challenged
+        # Challenge every backend on the full query; answer once it has been broadened.
+        if len(calls) <= _CHAIN_LEN:
+            return _FakeResp(202, "<html>anomaly challenge</html>")
         return _FakeResp(200, _RESULT_HTML)
 
-    with patch("agentteams.research.search.httpx.get", side_effect=fake_get):
+    with patch("agentteams.research.backends.httpx.get", side_effect=fake_get):
         results, note = web_search_verbose("one two three four five six seven")
 
-    assert len(calls) == 2 and calls[1] == "one two three"   # 7 terms -> halved
+    # The whole chain is tried on the original query first, then the broadened form.
+    assert calls[:_CHAIN_LEN] == ["one two three four five six seven"] * _CHAIN_LEN
+    assert calls[_CHAIN_LEN] == "one two three"   # 7 terms -> halved
     assert [r.title for r in results] == ["Result A"]
     assert note is not None and "challenged" in note and "one two three" in note
 
 
-def test_challenge_with_unshortenable_query_reports_block_not_no_results():
+def test_challenge_with_unshortenable_query_reports_block_not_no_results(_zero_config_chain):
     # The distinction that matters: an agent must not conclude "nothing exists".
-    with patch("agentteams.research.search.httpx.get",
+    with patch("agentteams.research.backends.httpx.get",
                return_value=_FakeResp(202, "<html>challenge</html>")):
         results, note = web_search_verbose("short query")
     assert results == []
     assert note is not None and "not evidence that nothing matched" in note
 
 
-def test_genuine_zero_results_is_not_reported_as_a_challenge():
+def test_genuine_zero_results_is_not_reported_as_a_challenge(_zero_config_chain):
     # 200 with no parseable results really does mean nothing matched.
-    with patch("agentteams.research.search.httpx.get",
+    with patch("agentteams.research.backends.httpx.get",
                return_value=_FakeResp(200, "<html>no results here</html>")):
         results, note = web_search_verbose("obscure query")
     assert results == [] and note is None
 
 
-def test_successful_search_needs_no_retry_and_emits_no_note():
+def test_genuine_zero_results_does_not_broaden(_zero_config_chain):
+    """Honest emptiness must not trigger broadening.
+
+    Broadening exists to get around a *challenge*. Applying it to a query that genuinely
+    matched nothing just produces less precise nothing, at the cost of extra requests to a
+    free endpoint — the load that contributes to challenges in the first place.
+    """
+    calls: list[str] = []
+
+    def fake_get(url, params=None, **kwargs):
+        calls.append(params["q"])
+        return _FakeResp(200, "<html>no results here</html>")
+
+    with patch("agentteams.research.backends.httpx.get", side_effect=fake_get):
+        web_search_verbose("one two three four five six seven eight")
+
+    assert calls == ["one two three four five six seven eight"] * _CHAIN_LEN
+
+
+def test_successful_search_needs_no_retry_and_emits_no_note(_zero_config_chain):
     calls: list[str] = []
 
     def fake_get(url, params=None, **kwargs):
         calls.append(params["q"])
         return _FakeResp(200, _RESULT_HTML)
 
-    with patch("agentteams.research.search.httpx.get", side_effect=fake_get):
+    with patch("agentteams.research.backends.httpx.get", side_effect=fake_get):
         results, note = web_search_verbose("a b c d e f g")
+    # First backend answers → chain stops immediately, and no note: a plain success is not
+    # a caveat.
     assert len(calls) == 1 and note is None and len(results) == 1
 
 
-def test_web_search_keeps_its_list_return_contract():
+def test_second_backend_answering_is_reported_but_still_returns_results(_zero_config_chain):
+    """A degraded primary endpoint is operator-relevant, so it is named in the note."""
+    calls: list[str] = []
+
+    def fake_get(url, params=None, **kwargs):
+        calls.append(url)
+        if len(calls) == 1:
+            return _FakeResp(202, "<html>challenge</html>")
+        return _FakeResp(200, _LITE_RESULT_HTML)
+
+    with patch("agentteams.research.backends.httpx.get", side_effect=fake_get):
+        results, note = web_search_verbose("a b c")
+
+    assert [r.title for r in results] == ["Lite Result"]
+    assert note is not None and "ddg_lite" in note
+
+
+def test_web_search_keeps_its_list_return_contract(_zero_config_chain):
     # Back-compat: existing callers still get a plain list, retry included.
     def fake_get(url, params=None, **kwargs):
         return _FakeResp(200, _RESULT_HTML)
 
-    with patch("agentteams.research.search.httpx.get", side_effect=fake_get):
+    with patch("agentteams.research.backends.httpx.get", side_effect=fake_get):
         assert [r.title for r in web_search("q")] == ["Result A"]
 
 

@@ -49,13 +49,13 @@ The handoff-only control-flow backbone (agents-list edges omitted):
 | `output-compiler` | domain | No | read, edit, execute |
 | `primary-producer` | domain | No | read, edit, search |
 | `quality-auditor` | domain | No | read, search |
-| `reference-manager` | domain | No | read, edit, search |
+| `reference-manager` | domain | No | read, edit, search, retrieval |
 | `repo-liaison` | governance | No | read, edit, search, execute, agent |
 | `security` | governance | No | read, search |
 | `style-guardian` | domain | No | read, edit, search |
 | `team-builder` | governance | Yes | read, edit, search, execute, todo |
 | `technical-validator` | domain | No | read, search |
-| `tool-doc-researcher` | tool_specialist | No | read, search |
+| `tool-doc-researcher` | tool_specialist | No | read, search, retrieval |
 | `work-summarizer` | domain | Yes | read, search, execute, edit, agent |
 
 ---
@@ -642,7 +642,8 @@ digraph "ResearchPaperProject Agent Team" {
       "tools": [
         "read",
         "edit",
-        "search"
+        "search",
+        "retrieval"
       ]
     },
     "repo-liaison": {
@@ -703,7 +704,8 @@ digraph "ResearchPaperProject Agent Team" {
       "user_invokable": false,
       "tools": [
         "read",
-        "search"
+        "search",
+        "retrieval"
       ]
     },
     "work-summarizer": {

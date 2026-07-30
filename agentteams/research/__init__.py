@@ -14,24 +14,39 @@ verdicts are "survived" or "refuted" — never "verified" or "proven."
 
 from __future__ import annotations
 
+from agentteams.research.backends import available_backends, backend_names
 from agentteams.research.news import (
     PerspectiveKind,
     is_news_source,
     perspective_attribution,
 )
 from agentteams.research.reputable import (
+    DATA_CONFIG,
     DEFAULT_CONFIG,
+    RESEARCH_CONFIG,
+    SOFTWARE_CONFIG,
     AllowlistConfig,
     ReputableSource,
     ReputableSourceAllowlist,
+    config_for_project_type,
+)
+from agentteams.research.scholarly import (
+    ScholarlyWork,
+    format_citation,
+    scholarly_search,
+    search_arxiv,
+    search_crossref,
+    search_openalex,
 )
 from agentteams.research.search import (
+    SearchProvenance,
     Source,
     extract_published_date,
     fetch_text,
     fetch_text_and_date,
     web_search,
     web_search_verbose,
+    web_search_with_provenance,
 )
 from agentteams.research.verify import (
     ChatFn,
@@ -43,23 +58,37 @@ from agentteams.research.verify import (
 )
 
 __all__ = [
+    "DATA_CONFIG",
+    "DEFAULT_CONFIG",
+    "RESEARCH_CONFIG",
+    "SOFTWARE_CONFIG",
     "AllowlistConfig",
     "ChatFn",
     "Claim",
-    "DEFAULT_CONFIG",
     "PerspectiveKind",
     "ReputableSource",
     "ReputableSourceAllowlist",
+    "ScholarlyWork",
+    "SearchProvenance",
     "Source",
     "Verdict",
     "audit_claims",
+    "available_backends",
+    "backend_names",
+    "config_for_project_type",
     "extract_claims",
     "extract_published_date",
     "fetch_text",
     "fetch_text_and_date",
+    "format_citation",
     "is_news_source",
     "perspective_attribution",
     "revise",
+    "scholarly_search",
+    "search_arxiv",
+    "search_crossref",
+    "search_openalex",
     "web_search",
     "web_search_verbose",
+    "web_search_with_provenance",
 ]

@@ -53,7 +53,7 @@ The handoff-only control-flow backbone (agents-list edges omitted):
 | `tasks-api-expert` | workstream_expert | No | read, search, agent |
 | `team-builder` | governance | Yes | read, edit, search, execute, todo |
 | `technical-validator` | domain | No | read, search |
-| `tool-doc-researcher` | tool_specialist | No | read, search |
+| `tool-doc-researcher` | tool_specialist | No | read, search, retrieval |
 | `work-summarizer` | domain | Yes | read, search, execute, edit, agent |
 
 ---
@@ -639,7 +639,8 @@ digraph "WebAppBackend Agent Team" {
       "user_invokable": false,
       "tools": [
         "read",
-        "search"
+        "search",
+        "retrieval"
       ]
     },
     "work-summarizer": {

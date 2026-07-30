@@ -251,6 +251,20 @@ def build_manifest(description: dict[str, Any], *, framework: str = "copilot-vsc
     if research_capability_enabled and "research-analyst" not in archetypes:
         archetypes = list(archetypes) + ["research-analyst"]
 
+    # A research-type project with no research capability declared is the single most common way
+    # this framework ships a literature-review team that cannot look anything up: measured
+    # 2026-07-30, neither of the two downstream research teams had the flag set, so the
+    # external-retrieval quality gate governed a path no agent could take.
+    #
+    # This records an ADVISORY and deliberately does not auto-enable. Selecting research-analyst
+    # pulls a real runtime dependency (agentteams[research]) into the generated project, which is
+    # exactly why the flag above is explicit opt-in; silently flipping it here would override a
+    # documented decision rather than surface it. The advisory lands on the manifest — an
+    # advisory nobody can read is decoration.
+    research_advisory = (
+        project_type == "research" and not research_capability_enabled
+    )
+
     # Tool agents
     tool_agents = detect_tool_agents(description.get("tools", []))
 
@@ -436,6 +450,25 @@ def build_manifest(description: dict[str, Any], *, framework: str = "copilot-vsc
         "conversion_pipeline": conversion_pipeline,
         "retrieval_trigger_contract_version": retrieval_integration.get("trigger_contract_version", "v1"),
         "retrieval_integration": retrieval_integration,
+        **(
+            {
+                "advisories": [
+                    {
+                        "code": "research-capability-unset",
+                        "message": (
+                            "project_type is 'research' but capabilities does not include "
+                            "'research_verification', so no research-analyst is generated and "
+                            "the team has no external-retrieval path. Add "
+                            "\"research_verification\" to capabilities in the project "
+                            "description to enable it (this also adds the agentteams[research] "
+                            "runtime dependency)."
+                        ),
+                    }
+                ]
+            }
+            if research_advisory
+            else {}
+        ),
         "selected_archetypes": archetypes,
         "tool_agents": tool_agents,
         "reference_tools": reference_tools,

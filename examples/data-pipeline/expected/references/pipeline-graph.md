@@ -54,7 +54,7 @@ The handoff-only control-flow backbone (agents-list edges omitted):
 | `security` | governance | No | read, search |
 | `team-builder` | governance | Yes | read, edit, search, execute, todo |
 | `technical-validator` | domain | No | read, search |
-| `tool-doc-researcher` | tool_specialist | No | read, search |
+| `tool-doc-researcher` | tool_specialist | No | read, search, retrieval |
 | `transform-expert` | workstream_expert | No | read, search, agent |
 | `visual-designer` | domain | No | read, edit, execute, search |
 | `weekly-report-expert` | workstream_expert | No | read, search, agent |
@@ -717,7 +717,8 @@ digraph "SalesDataPipeline Agent Team" {
       "user_invokable": false,
       "tools": [
         "read",
-        "search"
+        "search",
+        "retrieval"
       ]
     },
     "transform-expert": {

@@ -6,6 +6,158 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### fixed (schema drift that made strict manifest validation fail, and the missing test behind it)
+
+- **Three separate drifts between `build_manifest` and `team-manifest.schema.json`**, all
+  pre-existing, all found by one new test. The schema sets `additionalProperties: false`, so a
+  real manifest failed strict validation: four undeclared top-level fields
+  (`existing_project_path`, `governance_agents`, `code_index_extra_dirs`,
+  `memory_index_extra_dirs`), `graph-svg` missing from the `output_files[].type` enum, and
+  `research-analyst` missing from the `selected_archetypes` enum. Types were read off real
+  emitted values rather than inferred from names.
+- **`tests/test_manifest_schema_conformance.py` — the test that would have caught all three.**
+  Every existing schema test validates a hand-written *fixture*, which by construction contains
+  only fields someone remembered to include, so the gap between what the schema declares and what
+  the generator emits was structurally invisible. This validates `build_manifest`'s own output
+  across seven descriptions and all four frameworks. It deliberately does **not** assert
+  declared == emitted in the other direction: six declared fields (`mcp_*`, `recipe_*`,
+  `adopted_agents`) are correctly conditional, and an equality assertion would "fix" them by
+  deleting live schema.
+
+### added (a charter an agent cannot fulfil is now a test failure)
+
+- **`tests/test_agent_charter_tool_parity.py`.** `tool-doc-researcher`'s description promised it
+  "locates and verifies official documentation"; its tools were `['read','search']`, where
+  `search` is Grep/Glob. It could not fetch documentation, and neither could `reference-manager`
+  with its "citation verification" charter — for the life of the project. Nothing compared the
+  two, though they are authored four lines apart in the same file. The check reads the
+  `description:` line only, fires on explicit external indicators, and is suppressed by locality
+  qualifiers so `technical-validator` ("match what exists **on disk**") stays correctly clean.
+  It includes proof-of-failure cases, and does **not** auto-grant anything: which agents hold
+  `retrieval` is a least-privilege decision recorded in `references/retrieval-transport-policy.md`.
+
+### changed (the dense-retrieval deferral now rests on a measurement, not a guess)
+
+- **`tests/test_memory_index_paraphrase_recall.py`.** The 2026-07-30 review deferred a dense tier
+  "until there is evidence lexical scoring is the binding constraint" — with no evidence either
+  way and no way to obtain any. Pre-registered construction rule and hypothesis, then measured on
+  the same corpus, the same ten target documents, and the same BM25 retriever, varying only the
+  wording:
+
+  | Query style | top-1 | top-3 |
+  |---|---|---|
+  | Keyword (document's own vocabulary) | **10/10** | 10/10 |
+  | Paraphrase (deliberately avoiding it) | **1/10** | 3/10 |
+
+  Nine of ten paraphrased queries never surface their target at all. The lone top-1 hit is not a
+  real exception — "command line" is `cli-reference.md`'s own phrasing. This does not make a dense
+  tier automatically correct (BM25 is excellent when the caller knows the words, and a dense tier
+  still needs a dependency the stdlib-only base forbids); it converts an open-ended deferral into
+  a decision with a measured cost and a benchmark any replacement must beat. The test asserts
+  *floors* at the measured values so a regression fails but the known limitation does not.
+  Recorded in the report's §5 Tier 3.
+
+### added (the unverified scoped-`Bash` grant is now tracked, not just disclosed)
+
+- **`framework_research._scan_scoped_tool_support`.** Whether Claude Code honours
+  `Bash(python -m agentteams.research:*)` inside *sub-agent* front matter cannot be verified from
+  inside this repository, and the failure direction is unsafe — a host ignoring the scope grants
+  *more* than intended. The policy disclosed that; nothing would have noticed if it changed. The
+  snapshot now records whether upstream docs show evidence of command-scoped permissions, with
+  status `evidence-found`/`no-evidence` and never `supported`: a marker on the page could be
+  describing slash commands rather than sub-agents, so only a human may upgrade the claim.
+
+### fixed (downstream: the two research teams that motivated the review can now retrieve)
+
+- `researchteam` and `GeneralResearchTeam` both classify as `project_type: research`, both produce
+  bibliographies, and both had `capabilities: null` — so neither generated a `research-analyst`
+  and neither had any external retrieval. Added `research_verification` to each `brief.json` and
+  regenerated with `--update --merge`. Local only; nothing committed or pushed in either repo.
+- **Discovered doing so:** agent-file YAML front matter lies *outside* every `AGENTTEAMS` fence,
+  so `--update --merge` preserves it verbatim and **a template `tools:` change never reaches an
+  already-generated team.** The fenced body content (the external-retrieval quality gate) updated
+  correctly while the tool grant did not; both files needed hand-editing. This silently bounds the
+  reach of any capability fix expressed as a tool grant. Logged to
+  `references/agentteams-remediation-log.csv`, along with the finding that `GeneralResearchTeam`
+  is not under version control at all.
+
+### added (external retrieval: the teams this framework generates could not search the web)
+
+A review of every external-retrieval path (`references/plans/external-retrieval-expansion-2026-07-30.report.md`)
+found the capability was real but unreachable. Remediation plan and its adversarial/conflict
+audit: `tmp/by-week/2026-W31/external-retrieval-remediation.plan.md`.
+
+- **`agentteams/research/backends.py` — a search fallback chain, where there was one endpoint.**
+  Measured 2026-07-30, the query `"retrieval augmented generation 2026 best practices for local
+  code search"` returned zero results on both its original and its `_broaden`-halved form:
+  DuckDuckGo challenges long multi-concept queries — exactly the shape a research agent produces
+  — and a single halving does not clear it. Search now tries every available backend on the
+  original query *before* altering the query at all (switching provider loses nothing;
+  broadening discards search terms), and only then broadens **progressively** down to the floor.
+  The zero-configuration chain is `duckduckgo` → `ddg_lite`, both key-free: a fallback that
+  requires setup is not a fallback. `searxng` and `brave` join only when
+  `AGENTTEAMS_SEARXNG_URL` / `AGENTTEAMS_BRAVE_API_KEY` are set, and always rank after the free
+  endpoints. An honest zero still does **not** trigger broadening — that would only produce less
+  precise nothing at the cost of more load on the endpoint whose rate limit caused the problem.
+- **`agentteams/research/scholarly.py` + `python -m agentteams.research scholar` — OpenAlex,
+  Crossref, arXiv.** This framework generates literature-review teams that emit
+  `bibliography.bib`, and Constitutional Rule 5 forbids unverifiable citations, but nothing in
+  the package could reach a scholarly index — a general web search returns a *page about* a
+  paper, not the paper's record. Key-free sources only; built on `security_refs.py`'s proven
+  exact-match host allowlist + response size bounds. Absent fields stay absent (`year=None`, not
+  a guess), which is the property that makes the output safe to cite from. Retraction status is
+  **not** checked and the CLI says so on every call.
+- **`agentteams/research/cache.py` — TTL disk cache (6 h default).** Every search and fetch was
+  a cold round trip. Because this persists untrusted third-party bytes: SHA-256 hex filenames
+  only (no external text reaches a path component), corrupt/oversized/expired entries degrade to
+  a **miss** rather than an error, atomic writes, gitignored directory, and
+  `AGENTTEAMS_RESEARCH_NO_CACHE=1` to disable. `tests/conftest.py` disables it suite-wide so a
+  warm entry cannot silently satisfy a test that asserts a transport was called.
+- **A `retrieval` tool token — generated agents can now search, without gaining a shell.**
+  The vocabulary was `read | edit | search | execute | todo | agent`, where `search` maps to
+  `("Grep","Glob")` — *local file* search. Nothing granted external retrieval, so it was reachable
+  only by an agent holding `execute` (full `Bash`). `retrieval` maps to the scoped
+  `Bash(python -m agentteams.research:*)`. Granted to `tool-doc-researcher` (whose charter is
+  locating official docs) and `reference-manager` (citation verification) — both previously had
+  external-verification jobs and no way to reach the network. Read-only auditors are deliberately
+  excluded; `execute` absorbs the token rather than emitting a misleading `Bash, Bash(...)`.
+- **`references/retrieval-transport-policy.md` — the no-MCP decision, recorded.** External
+  retrieval here is CLI-mediated; neither MCP servers nor host-native `WebSearch`/`WebFetch` are
+  the transport. Written down because a gap and a decision look identical from the outside: the
+  next agent reading the review would otherwise read "no transport wired up" as an oversight and
+  add one. `tests/test_retrieval_transport.py` enforces it, and includes a test proving the guard
+  can still fail (it strips docstrings/comments, so the policy prose it protects does not trip it).
+- **Archetype allowlist presets** — `SOFTWARE_CONFIG`, `RESEARCH_CONFIG`, `DATA_CONFIG`, and
+  `config_for_project_type()`. `DEFAULT_CONFIG` (four general-interest domains, no primary
+  repositories) reduced `reputable_sources()` to "one general search filtered to Wikipedia and
+  three wire services". Its contents are **unchanged** — it is the default argument of
+  `ReputableSourceAllowlist.__init__`, so editing it would silently change every existing caller.
+- **A `research-capability-unset` manifest advisory.** `research-analyst` is gated on an explicit
+  `capabilities: ["research_verification"]` opt-in and no inspected team declared it — including
+  two literature-review teams. It **advises, and does not auto-enable**: selecting the archetype
+  pulls a real runtime dependency into the generated project, which is why the flag is opt-in in
+  the first place. Requires a new `advisories` property in `team-manifest.schema.json`.
+- **Provenance is now emitted and required.** `python -m agentteams.research search` prints
+  `backend=`/`cached=`/`query_used=`/`tried=` on stderr for every query, and the
+  external-retrieval quality gate requires carrying it: a cached result may be six hours old, and
+  a `query_used` that differs from the query issued means the endpoint challenged the original
+  and the tool retried with a **broader** one — weaker evidence, and the summary has to say so.
+
+Also: bounded concurrency (max 4) in `reputable_sources()`, which previously fired
+`len(repos) + 1` simultaneous requests at one free endpoint per topic — plausibly a contributor
+to the challenges above.
+
+### corrected (a finding in the 2026-07-30 review was wrong)
+
+- **F6 ("`embedding-vector` is declarable but unimplemented") is withdrawn; no code changed.**
+  `retrieval_integration.mode` does not describe a capability agentteams provides — it describes
+  the **consuming project's** retrieval stack. `ingest.py:679` reads the target project's files
+  and `ingest.py:738` sets `embedding-vector` when *that project's* code mentions
+  faiss/chroma/pinecone/qdrant/weaviate/milvus, so the generated `@retrieval-integrator` can
+  validate its contract. The review conflated this with `code_index.py`'s separate — and already
+  explicitly labelled — reservation of `vector_model_id`/`vector_dim` for a future dense tier.
+  The report carries the correction inline rather than silently dropping the finding.
+
 ### added (governance instruments)
 
 - **`agentteams/living_doc.py` + an `audit.py` check — living-document conformance.**

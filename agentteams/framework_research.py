@@ -95,11 +95,60 @@ def _load_local_adapter_constants(repo_root: Path) -> dict[str, list[str]]:
     return {"required_front_matter_keys": required, "default_allowed_tools": tools}
 
 
-def _scan_tokens(text: str) -> dict[str, list[str]]:
+#: Substrings that would indicate upstream documents command-SCOPED tool permissions — i.e.
+#: `Bash(cmd:*)` rather than bare `Bash`. Matched case-insensitively against the sub-agent doc.
+_SCOPED_TOOL_MARKERS = (
+    "bash(",
+    "allowed-tools: bash(",
+    "tools: bash(",
+)
+
+
+def _scan_scoped_tool_support(text: str) -> dict[str, Any]:
+    """Look for upstream evidence that sub-agent front matter honours command-scoped tools.
+
+    ``agentteams/frameworks/claude.py`` maps the ``retrieval`` vocabulary token to
+    ``Bash(python -m agentteams.research:*)`` — a scoped permission granting one command rather
+    than a shell. Whether a given Claude Code version honours that parenthesised scope inside
+    *sub-agent* front matter (as opposed to slash-command front matter, where it is
+    long-established) cannot be determined from inside this repository, and the failure direction
+    is unsafe: a host ignoring the scope reads the entry as plain ``Bash`` and grants MORE than
+    intended. ``references/retrieval-transport-policy.md`` records that uncertainty; without this
+    probe, nothing would ever notice if the answer changed.
+
+    Reports **evidence, never a verdict**. A marker appearing somewhere in the page is not proof
+    that sub-agent front matter honours scoping — the doc might be describing slash commands or
+    settings-file permissions — so the status is ``"evidence-found"``, not ``"supported"``. Only a
+    human confirming behaviour against a real host may change the policy's language.
+
+    Args:
+        text: The fetched upstream documentation page.
+
+    Returns:
+        A dict with ``status`` (``"evidence-found"`` / ``"no-evidence"``) and the markers seen.
+    """
+    lower = text.lower()
+    seen = sorted({m for m in _SCOPED_TOOL_MARKERS if m in lower})
+    return {
+        "status": "evidence-found" if seen else "no-evidence",
+        "markers_seen": seen,
+        "claim": (
+            "Presence of a scoped-tool marker in upstream docs is EVIDENCE ONLY, not "
+            "confirmation that sub-agent front matter honours command scoping. See "
+            "references/retrieval-transport-policy.md."
+        ),
+    }
+
+
+def _scan_tokens(text: str) -> dict[str, Any]:
     lower = text.lower()
     found_keys = sorted({k for k in EXPECTED_FRONT_MATTER_KEYS if re.search(rf"\b{k}\b\s*:", text)})
     found_locations = sorted({loc for loc in EXPECTED_LOCATIONS if loc.lower() in lower})
-    return {"front_matter_keys_present": found_keys, "locations_present": found_locations}
+    return {
+        "front_matter_keys_present": found_keys,
+        "locations_present": found_locations,
+        "scoped_tool_permissions": _scan_scoped_tool_support(text),
+    }
 
 
 def _diff_keys(expected: list[str], observed: list[str]) -> dict[str, list[str]]:
