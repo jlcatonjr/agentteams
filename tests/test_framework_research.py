@@ -321,3 +321,53 @@ def test_stale_days_non_positive_raises(monkeypatch):
         finally:
             monkeypatch.delenv("AGENTTEAMS_STALE_DAYS", raising=False)
             importlib.reload(fr)
+
+
+# --- scoped tool-permission drift probe (2026-07-30) ------------------------
+#
+# claude.py maps the `retrieval` token to `Bash(python -m agentteams.research:*)`. Whether a
+# given Claude Code version honours that scope inside SUB-AGENT front matter is not verifiable
+# from inside this repo, and the failure direction is unsafe (an ignored scope grants MORE).
+# references/retrieval-transport-policy.md records the uncertainty; this probe makes it
+# TRACKED rather than merely stated.
+
+def test_scoped_tool_probe_reports_evidence_when_markers_are_present():
+    from agentteams.framework_research import _scan_scoped_tool_support
+
+    result = _scan_scoped_tool_support(
+        "Use allowed-tools: Bash(git diff:*) to restrict a command."
+    )
+    assert result["status"] == "evidence-found"
+    assert "bash(" in result["markers_seen"]
+
+
+def test_scoped_tool_probe_reports_no_evidence_when_absent():
+    from agentteams.framework_research import _scan_scoped_tool_support
+
+    result = _scan_scoped_tool_support("Sub-agents accept a comma-separated tools list.")
+    assert result["status"] == "no-evidence"
+    assert result["markers_seen"] == []
+
+
+def test_scoped_tool_probe_never_claims_support():
+    """Evidence is not a verdict.
+
+    A marker anywhere on the page could be describing slash commands or settings-file
+    permissions rather than sub-agent front matter. The probe must never emit a status a reader
+    could mistake for confirmation.
+    """
+    from agentteams.framework_research import _scan_scoped_tool_support
+
+    result = _scan_scoped_tool_support("allowed-tools: Bash(ls:*)")
+    assert result["status"] != "supported"
+    assert "EVIDENCE ONLY" in result["claim"]
+    assert "retrieval-transport-policy" in result["claim"]
+
+
+def test_scan_tokens_carries_the_probe_without_dropping_existing_fields():
+    from agentteams.framework_research import _scan_tokens
+
+    scanned = _scan_tokens("name: x\ndescription: y\ntools: z\nmodel: m\n.claude/agents")
+    assert "front_matter_keys_present" in scanned
+    assert "locations_present" in scanned
+    assert scanned["scoped_tool_permissions"]["status"] == "no-evidence"
