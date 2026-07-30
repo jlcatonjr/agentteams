@@ -2005,6 +2005,146 @@
   
   
     <li class="md-nav__item">
+      <a href="../memory-index-incremental/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    memory-index-incremental
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../output-plan/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    output-plan
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../update-report/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    update-report
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../living-doc/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    living-doc
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../cli/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    cli
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
       <a href="../code-index/" class="md-nav__link">
         
   
@@ -2635,6 +2775,34 @@
   
 </li>
       
+        <li class="md-nav__item">
+  <a href="#verdict-attribution" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Verdict attribution
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Verdict attribution">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#source_state_digestsource_hash_rows-str" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        source_state_digest(source_hash_rows) -&gt; str
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
     </ul>
   
 </nav>
@@ -3047,6 +3215,34 @@
   
 </li>
       
+        <li class="md-nav__item">
+  <a href="#verdict-attribution" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Verdict attribution
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Verdict attribution">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#source_state_digestsource_hash_rows-str" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        source_state_digest(source_hash_rows) -&gt; str
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
     </ul>
   
 </nav>
@@ -3090,6 +3286,33 @@ resolve these helpers from <code>agentteams.bridge</code> unchanged.</p>
   fails a 0-inventory manifest (a wrong-source bridge cannot pass silently).</li>
 <li><code>_render_inventory_md(rows)</code> — the <code>agent-inventory.md</code> compatibility table.</li>
 </ul>
+<h2 id="verdict-attribution">Verdict attribution<a class="headerlink" href="#verdict-attribution" title="Permanent link">&para;</a></h2>
+<h3 id="source_state_digestsource_hash_rows-str"><code>source_state_digest(source_hash_rows) -&gt; str</code><a class="headerlink" href="#source_state_digestsource_hash_rows-str" title="Permanent link">&para;</a></h3>
+<blockquote>
+<p><em>Source: <code>agentteams/bridge_sources.py</code></em></p>
+</blockquote>
+<p>Digest the source state a bridge verdict was computed from.</p>
+<p>Deterministic in the source tree alone: the same files always produce the same digest,
+on any machine, at any time. That is what lets <code>bridge-check.report.md</code> be byte-stable
+across re-runs <strong>and</strong> machine-comparable against the current tree — the two properties
+a wall-clock timestamp cannot provide together.</p>
+<p><strong>Args:</strong></p>
+<ul>
+<li><code>source_hash_rows</code> (<code>list[dict[str, str]]</code>) — <code>{"path", "sha256"}</code> rows as recorded in
+  the manifest. Sorted by path, so row ordering cannot perturb the digest.</li>
+</ul>
+<p><strong>Returns:</strong> <code>str</code> — Hex SHA-256 over the sorted <code>path:sha256</code> pairs.</p>
+<p><strong>Why not a timestamp.</strong> A committed check report is a <em>cached verdict</em>, and its defect
+was never a missing date — it was that nothing detected the cache going stale. The
+copilot-cli report sat at <code>PASS</code> for a week while six sources drifted. A first fix
+recorded <code>Checked at: &lt;wall clock&gt;</code>, which conveyed staleness only to a human who
+opened the file and did the arithmetic, and made a command documented <em>"read-only"</em>
+rewrite a tracked file on every invocation. The digest fixes both:
+<code>--bridge-check</code> now writes only when the bytes differ, and
+<code>tests/test_bridge_mode_safety.py::test_committed_check_reports_describe_the_committed_source_state</code>
+compares the <strong>committed</strong> digest against the working tree.</p>
+<p>Same construction as <code>memory_index._documents_fingerprint</code>, this repository's existing
+precedent for a path/hash fingerprint.</p>
 
 
 

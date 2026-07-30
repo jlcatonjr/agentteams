@@ -110,6 +110,52 @@ Goose is supported as a bridge **target** only (any of copilot-vscode/copilot-cl
 2. Hash-based freshness checks detect changed, missing, and newly added source files.
 3. Target entry files are emitted to help route users through source orchestrator-first flow.
 
+## Operator-Facing Helpers
+
+### `rel_to_root(path, output_root) -> str`
+
+> *Source: `agentteams/bridge.py`*
+
+Render a path relative to `output_root` when it lies inside it.
+
+Bridge artifacts are committed, so an absolute path baked into one leaks the operator's
+home directory and username. `1937cbc` fixed this for `bridge-manifest.json`'s
+`source_dir` — one field, one file — leaving the sibling artifacts the same run writes
+still absolute: `agent-inventory.md`'s source-file column and
+`bridge-merge.report.md`'s per-file lines, across all three pairs. This is the shared
+form so the three sites cannot drift again.
+
+**Returns:** `str` — Relative to `output_root`, or unchanged when the path lies outside
+it (a genuinely external path is information, not a leak).
+
+Guarded by
+`tests/test_bridge_mode_safety.py::test_no_committed_bridge_artifact_contains_an_absolute_home_path`,
+which scans **every** file under `references/bridges/` rather than the manifest alone.
+
+### `skip_notice(count, *, merge_only) -> str`
+
+> *Source: `agentteams/bridge.py`*
+
+Build the notice for target files the bridge left alone. **The two cases are opposite
+in meaning and must not share advice.**
+
+Under `--bridge-merge` a skip is the **contract**: a target file with no
+`AGENTTEAMS-BRIDGE` fence holds user-authored content, and leaving it untouched is the
+entire reason merge mode exists. This notice previously recommended `--bridge-refresh`
+in both cases — advising the operator to overwrite precisely the files that had just
+been protected, and calling it *"recommended when bridge state is incomplete or
+stale"*, which is when the advice is most likely to be followed. That is the 2026-05-27
+incident recorded in `references/bridge-refresh-safety.md`, still live in the tool.
+
+**Args:**
+
+- `count` (`int`) — How many target files were skipped.
+- `merge_only` (`bool`, keyword-only) — `True` under `--bridge-merge`.
+
+**Returns:** `str` — Under merge, explains the skip and warns against refresh;
+otherwise offers merge first and gates refresh behind the mandatory Pre-Flight
+reference.
+
 ## Mode Selection Guidance
 
 | Situation | Use |

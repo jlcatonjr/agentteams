@@ -54,6 +54,51 @@ is found.
 
 ---
 
+### `module_level_edges(package_dir, root_pkg) -> set[tuple[str, str]]`
+
+> *Source: `agentteams/architecture.py`*
+
+Import edges that exist **at module load time** — only `import` statements that are
+direct children of the module body.
+
+**Args:**
+
+- `package_dir` (`Path`) — Package directory to scan.
+- `root_pkg` (`str`) — Package name, used to keep edges internal and to resolve
+  `from pkg import submodule` to the submodule rather than to `pkg`.
+
+**Returns:** `set[tuple[str, str]]` — `(importer, imported)` module-name pairs.
+
+**Why this exists rather than reusing `ArchitectureGraph.edges`:** that graph is built
+with `ast.walk`, which cannot distinguish a load-time import from one deferred inside a
+function. Cycle detection over it reported three cycles in this package, none
+actionable — `analyze`/`output_plan`, `emit`/`fence_inject` and
+`cli.commands`/`stale_remediate` are each deliberately broken by deferring one side.
+Reading only direct children of the module body gives the true load-time picture.
+
+Unparseable files are skipped with a `warnings.warn` rather than silently — a
+best-effort mapper must tolerate a broken source file, but CH-24 forbids swallowing
+the fact.
+
+### `detect_import_cycles(graph, *, edges=None) -> list[list[str]]`
+
+> *Source: `agentteams/architecture.py`*
+
+Find import cycles. **CH-13.**
+
+**Args:**
+
+- `graph` (`ArchitectureGraph`) — The module graph.
+- `edges` (`set[tuple[str, str]] | None`, keyword-only) — Edge set to analyse. Pass
+  `module_level_edges(...)` for load-time cycles; `None` uses the graph's own edges,
+  which include deferred imports and so report cycles that never occur at runtime.
+
+**Returns:** `list[list[str]]` — One list of module names per cycle found.
+
+Guarded by `tests/test_living_doc_and_cycles.py::test_this_package_has_no_load_time_cycles`.
+Scope: load-time static imports of one package — a deferred, dynamic or third-party
+cycle is not modelled.
+
 ## CLI
 
 ```

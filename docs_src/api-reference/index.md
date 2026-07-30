@@ -24,6 +24,9 @@ This reference defines the **supported public API surface** (documented modules 
 | [`convert`](convert.md) | Direct format migration between framework outputs |
 | [`interop`](interop.md) | Canonical Agent Interface (CAI) interop pipeline |
 | [`bridge`](bridge.md) | Lightweight runtime compatibility bridge artifacts |
+| [`cli`](cli.md) | CLI package decomposition — which module owns which stage (flags live in the CLI Reference) |
+| [`output-plan`](output-plan.md) | Plans which files a manifest produces, before anything renders |
+| [`update-report`](update-report.md) | `update.report.md` — durable record of an `--update` run's decisions |
 | [`fleet`](fleet.md) | Multi-workspace `--update --merge` (`--fleet DIR`) with git snapshot + diff audit |
 | [`drift`](drift.md) | Detect template-to-instance drift for incremental updates |
 | [`behavioral-drift`](behavioral-drift.md) | Detect behavioral divergence in agent runs vs. specification |
@@ -35,6 +38,7 @@ This reference defines the **supported public API surface** (documented modules 
 | [`scan`](scan.md) | Proactive security scan for generated agent files |
 | [`session_scan`](session_scan.md) | Repo at-large issue scan (CHANGELOG Known Issues, plan-steps pending/blocked, git status) for orchestrator closeout |
 | [`audit`](audit.md) | Post-generation static and AI-powered audit |
+| [`living-doc`](living-doc.md) | Living-document conformance (Rule 7) over unfenced agent prose |
 | [`remediate`](remediate.md) | Auto-correct audit findings via standalone Copilot CLI |
 | [`security-refs`](security-refs.md) | Build live security intelligence placeholders for templates |
 | [`framework-research`](framework-research.md) | Detect upstream framework drift; transmit via `--update --merge`; supervised-PR auto-update path |
@@ -45,6 +49,7 @@ This reference defines the **supported public API surface** (documented modules 
 |--------|------|
 | [`enrich`](enrich.md) | Default-value audit and context-aware placeholder enrichment |
 | [`memory-index`](memory-index.md) | Lexical (BM25) search index for work summaries and documentation |
+| [`memory-index-incremental`](memory-index-incremental.md) | In-place single-document index patching; declines conservatively to a full rebuild |
 | [`fence-inject`](fence-inject.md) | Inject and extract fenced-region content from agent files |
 
 ## Agent & Team Analysis
@@ -123,3 +128,28 @@ The interoperability feature family has three dedicated modules:
 3. [`bridge`](bridge.md) for lightweight source-canonical runtime bridging.
 
 For workflow-level usage and mode selection, see the [Interoperability](../interoperability.md) page.
+
+---
+
+## Coverage gaps
+
+This index does not cover every module. **14 top-level public modules have no API
+page**, listed here rather than left to be discovered:
+
+`advisory`, `ai_bad_habits`, `atomicio`, `backup`, `budget`, `capability_hints`,
+`errors`, `recipe_fields`, `stale_detector`, `stale_remediate`, `svg_render`,
+`tool_metadata_catalog`, `vscode_tasks`, `yaml_frontmatter`.
+
+Four exceed 400 lines (`stale_detector` 739, `vscode_tasks` 673, `backup` 486,
+`svg_render` 470) and are the highest-value additions. `backup`'s public API is
+partially documented inside [`emit`](emit.md), which re-exports it.
+
+They are listed rather than written because a thin page that misdescribes a module is
+worse than a missing one — a reader trusts what is written. The pages added on
+2026-07-29 (`living-doc`, `update-report`, `output-plan`,
+`memory-index-incremental`, `cli`) were scoped to modules whose behaviour was
+established first-hand rather than inferred.
+
+**What *is* mechanically guaranteed:** every documented signature matches the code, and
+the feature summary's total equals its addends —
+`tests/test_api_doc_signatures.py`. Coverage is a known gap; accuracy is enforced.

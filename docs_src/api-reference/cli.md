@@ -1,0 +1,58 @@
+# `agentteams.cli` — CLI Package Decomposition
+
+> *Source: `agentteams/cli/`*
+
+**This page documents the module layout, not the command-line surface.** For flags,
+option combinations and their interactions, see
+[CLI Reference](../cli-reference.md) — restating them here would duplicate rather than
+reference (CH-14).
+
+## Why the package exists
+
+`build_team.py` was a single module holding argument parsing, the generate pipeline,
+artifact writers and the security gate. CH-07 caps a module at 1000 lines, so it was
+carved into this package. `build_team.py` **re-exports** what it moved, so
+`build_team.main`, `build_team._write_memory_index` and friends resolve unchanged — the
+carve was behaviour-preserving by construction, and the re-exports are what let the
+existing test suite pin that.
+
+Two modules remain on the `LENGTH_ALLOWLIST`: `artifacts.py` (976) and `generate.py`
+(998) sit just under the ceiling, and `app.py` came down from 1174 to 388 when the
+pipeline moved out.
+
+## Module map
+
+| Module | Owns |
+|---|---|
+| `app.py` | Entry point. Dispatches on parsed arguments to the right runner; holds no pipeline logic itself. |
+| `parser.py` | Argument parser definition — every flag lives here. |
+| `parser_validate.py` | Option-combination validation, carved from `parser.py`. Rejects mutually exclusive pairs (e.g. two bridge modes) *before* any work begins. |
+| `generate.py` | The generate / update / check pipeline: analyse → render → merge → emit → attest. |
+| `render_pipeline.py` | Template rendering and content-merge helpers used by the pipeline. |
+| `artifacts.py` | Writers for the generator-owned artifacts: delivery receipt, eval suite, model routing, memory index, code index. Also owns the memory index's source-scope rules. |
+| `commands.py` | Sub-command runners for `--convert`, `--interop-*` and `--bridge-*`. |
+| `security_gate.py` | The destructive-action gate: requires a recorded PASS decision, or an explicit waiver, before a destructive operation proceeds. |
+| `schema_cache.py` | Shared JSON-Schema validation plus a content-hash cache, so re-validating unchanged bytes is free. |
+| `goose_switch.py` | Glue for `--goose-source` / `--goose-model` / `--goose-show`. |
+| `recipe_check.py` | Standalone structural validator for Goose recipe YAML. |
+
+## Two behaviours worth knowing when reading this package
+
+**The memory index's scope lives in `artifacts.py`, not `memory_index.py`.**
+`_memory_index_sources` decides *what* to index and `_memory_index_root` decides what
+relative paths are relative *to*; `memory_index.py` only builds an index over whatever
+it is handed. `_SCRATCH_DIR_NAMES` / `_is_durable_source` exclude backup and cache
+directories from every recursive scan — without that filter the index reached 1764
+gitignored files, 1488 of them backup snapshots, in a 51 MB committed artifact.
+
+**Reporting never changes an outcome.** `generate.py` calls
+[`update_report.report_run`](update-report.md) after the write phase and only when
+`--dry-run` was not passed. A failure to write the report must not turn a successful
+update into a failed one.
+
+## Related pages
+
+- [CLI Reference](../cli-reference.md) — flags and option semantics
+- [`update_report`](update-report.md) — the `update.report.md` record
+- [`memory_index`](memory-index.md) — index construction and path storage
+- [`output_plan`](output-plan.md) — which files a manifest produces

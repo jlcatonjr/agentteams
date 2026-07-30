@@ -13,4 +13,4 @@
 | **Bridge Automation** | 7 | Daily maintenance script, CI workflows, staleness watchdog, deduplication |
 | **Cross-Repository** | 8 | `@repo-liaison` agent, adjacent-repo tracking, impact/update/coordination protocols |
 
-**Total:** ~126 documented features across 12 capability areas.
+**Total:** 125 documented features across 12 capability areas — the sum of the column above, checked by `tests/test_api_doc_signatures.py::test_feature_summary_total_equals_its_addends`. It read `~126` until 2026-07-29; a hand-written total that does not equal its own addends is the same defect the note below warns about, committed in the summary itself.

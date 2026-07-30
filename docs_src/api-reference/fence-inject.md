@@ -42,7 +42,7 @@ Outcome of a fence marker injection attempt.
 
 ## Functions
 
-### `inject_fence_markers(path, *, mode="sidecar", confirm_in_place=False, fence_id=None)`
+### `inject_fence_markers(path, *, mode="sidecar", fence_id=DEFAULT_RETROFIT_FENCE_ID, confirm_in_place=False)`
 
 > *Source: `agentteams/fence_inject.py`*
 

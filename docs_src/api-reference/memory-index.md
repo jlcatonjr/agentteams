@@ -42,7 +42,7 @@ Current schema version for memory index artifacts. Used to detect compatibility 
 
 ## Functions
 
-### `build_memory_index(sources, *, project_name="", framework="")`
+### `build_memory_index(sources, *, project_name="", framework="", root=None)`
 
 > *Source: `agentteams/memory_index.py`*
 
@@ -53,6 +53,7 @@ Build a BM25 search index over durable text sources.
 - `sources` (`Iterable[Path | str]`) — List of file paths to index (work summaries, CHANGELOG, plan artifacts, etc.). Missing or unreadable files are silently skipped.
 - `project_name` (`str`, keyword-only) — Optional project name to embed in the index metadata. Default: `""`.
 - `framework` (`str`, keyword-only) — Optional framework name to embed in the index metadata. Default: `""`.
+- `root` (`Path | None`, keyword-only) — Project root. When given, each document's `path` is stored **relative to it**; the index is a committed artifact, so absolute paths leak the operator's home directory. Relativization happens here rather than at serialization so `source_fingerprint`, derived from the document paths, describes the paths actually stored. A source outside `root` stays absolute — it is genuinely external. Default: `None`, preserving absolute paths for existing callers.
 
 **Returns:** `dict[str, Any]` — Index dict with keys:
 - `artifact_type`: `"memory-index"`
@@ -86,7 +87,7 @@ Build a BM25 search index over durable text sources.
 
 ---
 
-### `is_index_stale(index, sources)`
+### `is_index_stale(index, sources, *, root=None)`
 
 > *Source: `agentteams/memory_index.py`*
 
@@ -96,6 +97,7 @@ Check if any source file is newer than the index's `built_at` timestamp or no lo
 
 - `index` (`dict[str, Any]`) — Index dict from `build_memory_index()`.
 - `sources` (`Iterable[Path | str]`) — Original source paths (same list used for build, or a subset).
+- `root` (`Path | None`, keyword-only) — The project root the index was built against. **Required when the index stores relative paths:** without it each `path` resolves against the process CWD, the hash read fails, and the index reports stale on every call — triggering a full rebuild per query. Default: `None`, for indexes storing absolute paths.
 
 **Returns:** `bool` — `True` if any source content hash mismatches indexed `source_hash`, or if any source mtime > index `built_at` (index is stale); `False` otherwise.
 
@@ -298,6 +300,46 @@ Domain boundary note:
 - It is separate from relational retrieval-integrator validation contracts in other module domains.
 
 ---
+
+## Path Storage
+
+Document paths are stored **relative to the project root** when `build_memory_index`
+is given `root=`. The index is a committed artifact, so absolute paths leak the
+operator's home directory and username — this repository's own index carried 2135 of
+them before the change.
+
+### `store_path(path, root) -> str`
+
+> *Source: `agentteams/memory_index.py`*
+
+Render a document path for storage.
+
+**Args:**
+
+- `path` (`Path | str`) — The source file path, normally absolute.
+- `root` (`Path | None`) — Project root to relativize against, or `None` to store as-is.
+
+**Returns:** `str` — Relative to `root` when the path lies inside it; unchanged
+otherwise. A path **outside** the project stays absolute deliberately: it is genuinely
+external, and silently rewriting it would misdescribe where it came from.
+
+### `resolve_path(stored, root) -> Path`
+
+> *Source: `agentteams/memory_index.py`*
+
+Invert `store_path` — turn a stored path back into a readable one.
+
+**Args:**
+
+- `stored` (`str`) — The `path` value from an index document.
+- `root` (`Path | None`) — Project root the index was built against.
+
+**Returns:** `Path` — Absolute when `root` is given and `stored` is relative; otherwise
+`Path(stored)` unchanged.
+
+**Callers must pass the same `root` used at build time.** A reader that omits it
+resolves relative paths against the process CWD, fails every hash read, and reports the
+index stale on every call.
 
 ## Integration Notes
 

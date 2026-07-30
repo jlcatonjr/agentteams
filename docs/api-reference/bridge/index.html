@@ -1807,6 +1807,45 @@
 </li>
       
         <li class="md-nav__item">
+  <a href="#operator-facing-helpers" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Operator-Facing Helpers
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Operator-Facing Helpers">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#rel_to_rootpath-output_root-str" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        rel_to_root(path, output_root) -&gt; str
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#skip_noticecount-merge_only-str" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        skip_notice(count, *, merge_only) -&gt; str
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
   <a href="#mode-selection-guidance" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -2132,6 +2171,146 @@
     
   
     memory-index
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../memory-index-incremental/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    memory-index-incremental
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../output-plan/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    output-plan
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../update-report/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    update-report
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../living-doc/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    living-doc
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../cli/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    cli
   
 
     
@@ -3204,6 +3383,45 @@
 </li>
       
         <li class="md-nav__item">
+  <a href="#operator-facing-helpers" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Operator-Facing Helpers
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Operator-Facing Helpers">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#rel_to_rootpath-output_root-str" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        rel_to_root(path, output_root) -&gt; str
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#skip_noticecount-merge_only-str" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        skip_notice(count, *, merge_only) -&gt; str
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
   <a href="#mode-selection-guidance" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -3347,6 +3565,44 @@
 <li>Hash-based freshness checks detect changed, missing, and newly added source files.</li>
 <li>Target entry files are emitted to help route users through source orchestrator-first flow.</li>
 </ol>
+<h2 id="operator-facing-helpers">Operator-Facing Helpers<a class="headerlink" href="#operator-facing-helpers" title="Permanent link">&para;</a></h2>
+<h3 id="rel_to_rootpath-output_root-str"><code>rel_to_root(path, output_root) -&gt; str</code><a class="headerlink" href="#rel_to_rootpath-output_root-str" title="Permanent link">&para;</a></h3>
+<blockquote>
+<p><em>Source: <code>agentteams/bridge.py</code></em></p>
+</blockquote>
+<p>Render a path relative to <code>output_root</code> when it lies inside it.</p>
+<p>Bridge artifacts are committed, so an absolute path baked into one leaks the operator's
+home directory and username. <code>1937cbc</code> fixed this for <code>bridge-manifest.json</code>'s
+<code>source_dir</code> — one field, one file — leaving the sibling artifacts the same run writes
+still absolute: <code>agent-inventory.md</code>'s source-file column and
+<code>bridge-merge.report.md</code>'s per-file lines, across all three pairs. This is the shared
+form so the three sites cannot drift again.</p>
+<p><strong>Returns:</strong> <code>str</code> — Relative to <code>output_root</code>, or unchanged when the path lies outside
+it (a genuinely external path is information, not a leak).</p>
+<p>Guarded by
+<code>tests/test_bridge_mode_safety.py::test_no_committed_bridge_artifact_contains_an_absolute_home_path</code>,
+which scans <strong>every</strong> file under <code>references/bridges/</code> rather than the manifest alone.</p>
+<h3 id="skip_noticecount-merge_only-str"><code>skip_notice(count, *, merge_only) -&gt; str</code><a class="headerlink" href="#skip_noticecount-merge_only-str" title="Permanent link">&para;</a></h3>
+<blockquote>
+<p><em>Source: <code>agentteams/bridge.py</code></em></p>
+</blockquote>
+<p>Build the notice for target files the bridge left alone. <strong>The two cases are opposite
+in meaning and must not share advice.</strong></p>
+<p>Under <code>--bridge-merge</code> a skip is the <strong>contract</strong>: a target file with no
+<code>AGENTTEAMS-BRIDGE</code> fence holds user-authored content, and leaving it untouched is the
+entire reason merge mode exists. This notice previously recommended <code>--bridge-refresh</code>
+in both cases — advising the operator to overwrite precisely the files that had just
+been protected, and calling it <em>"recommended when bridge state is incomplete or
+stale"</em>, which is when the advice is most likely to be followed. That is the 2026-05-27
+incident recorded in <code>references/bridge-refresh-safety.md</code>, still live in the tool.</p>
+<p><strong>Args:</strong></p>
+<ul>
+<li><code>count</code> (<code>int</code>) — How many target files were skipped.</li>
+<li><code>merge_only</code> (<code>bool</code>, keyword-only) — <code>True</code> under <code>--bridge-merge</code>.</li>
+</ul>
+<p><strong>Returns:</strong> <code>str</code> — Under merge, explains the skip and warns against refresh;
+otherwise offers merge first and gates refresh behind the mandatory Pre-Flight
+reference.</p>
 <h2 id="mode-selection-guidance">Mode Selection Guidance<a class="headerlink" href="#mode-selection-guidance" title="Permanent link">&para;</a></h2>
 <table>
 <thead>
