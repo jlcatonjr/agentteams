@@ -3,9 +3,9 @@
 
 > **Auto-generated.** Regenerated on every commit that touches the `agentteams` package. Do not edit manually — changes will be overwritten.
 
-- Modules mapped: **102**
+- Modules mapped: **105**
 - Packages: **6**
-- Internal import edges: **177**
+- Internal import edges: **183**
 - Distinct external dependencies: **4**
 
 ---
@@ -27,7 +27,7 @@ Inter-package import dependencies (module-level detail in the tables below).
 | `agentteams.enrich` | 6 | `agentteams` |
 | `agentteams.eval_adapters` | 2 | — |
 | `agentteams.frameworks` | 7 | `agentteams` |
-| `agentteams.research` | 6 | — |
+| `agentteams.research` | 9 | — |
 
 ---
 
@@ -127,12 +127,15 @@ Every module, coloured by package (full adjacency in the table below).
 | `agentteams.recipe_fields` | — | `agentteams.analyze` |
 | `agentteams.remediate` | — | — |
 | `agentteams.render` | — | `agentteams.cli.generate`, `agentteams.cli.render_pipeline` |
-| `agentteams.research` | `agentteams.research.news`, `agentteams.research.reputable`, `agentteams.research.search`, `agentteams.research.verify` | — |
-| `agentteams.research.__main__` | `agentteams.research.browser`, `agentteams.research.search` | — |
+| `agentteams.research` | `agentteams.research.backends`, `agentteams.research.news`, `agentteams.research.reputable`, `agentteams.research.scholarly`, `agentteams.research.search`, `agentteams.research.verify` | — |
+| `agentteams.research.__main__` | `agentteams.research.browser`, `agentteams.research.scholarly`, `agentteams.research.search` | — |
+| `agentteams.research.backends` | — | `agentteams.research`, `agentteams.research.search` |
 | `agentteams.research.browser` | `agentteams.research.search` | `agentteams.research.__main__` |
+| `agentteams.research.cache` | — | `agentteams.research.scholarly`, `agentteams.research.search` |
 | `agentteams.research.news` | `agentteams.research.reputable` | `agentteams.research` |
 | `agentteams.research.reputable` | `agentteams.research.search` | `agentteams.research`, `agentteams.research.news` |
-| `agentteams.research.search` | — | `agentteams.research`, `agentteams.research.__main__`, `agentteams.research.browser`, `agentteams.research.reputable` |
+| `agentteams.research.scholarly` | `agentteams.research.cache` | `agentteams.research`, `agentteams.research.__main__` |
+| `agentteams.research.search` | `agentteams.research.backends`, `agentteams.research.cache` | `agentteams.research`, `agentteams.research.__main__`, `agentteams.research.browser`, `agentteams.research.reputable` |
 | `agentteams.research.verify` | — | `agentteams.research` |
 | `agentteams.scan` | — | `agentteams.cli.generate` |
 | `agentteams.schedule_emit` | `agentteams.atomicio` | `agentteams.bridge` |
@@ -1113,8 +1116,10 @@ digraph "agentteams architecture" {
       "path": "agentteams/research/__init__.py",
       "is_package": true,
       "imports_internal": [
+        "agentteams.research.backends",
         "agentteams.research.news",
         "agentteams.research.reputable",
+        "agentteams.research.scholarly",
         "agentteams.research.search",
         "agentteams.research.verify"
       ],
@@ -1127,9 +1132,20 @@ digraph "agentteams architecture" {
       "is_package": false,
       "imports_internal": [
         "agentteams.research.browser",
+        "agentteams.research.scholarly",
         "agentteams.research.search"
       ],
       "external": [],
+      "repo_local": []
+    },
+    "agentteams.research.backends": {
+      "package": "agentteams.research",
+      "path": "agentteams/research/backends.py",
+      "is_package": false,
+      "imports_internal": [],
+      "external": [
+        "httpx"
+      ],
       "repo_local": []
     },
     "agentteams.research.browser": {
@@ -1142,6 +1158,14 @@ digraph "agentteams architecture" {
       "external": [
         "playwright"
       ],
+      "repo_local": []
+    },
+    "agentteams.research.cache": {
+      "package": "agentteams.research",
+      "path": "agentteams/research/cache.py",
+      "is_package": false,
+      "imports_internal": [],
+      "external": [],
       "repo_local": []
     },
     "agentteams.research.news": {
@@ -1164,11 +1188,26 @@ digraph "agentteams architecture" {
       "external": [],
       "repo_local": []
     },
+    "agentteams.research.scholarly": {
+      "package": "agentteams.research",
+      "path": "agentteams/research/scholarly.py",
+      "is_package": false,
+      "imports_internal": [
+        "agentteams.research.cache"
+      ],
+      "external": [
+        "httpx"
+      ],
+      "repo_local": []
+    },
     "agentteams.research.search": {
       "package": "agentteams.research",
       "path": "agentteams/research/search.py",
       "is_package": false,
-      "imports_internal": [],
+      "imports_internal": [
+        "agentteams.research.backends",
+        "agentteams.research.cache"
+      ],
       "external": [
         "httpx",
         "pypdf"
@@ -1961,11 +2000,19 @@ digraph "agentteams architecture" {
     },
     {
       "source": "agentteams.research",
+      "target": "agentteams.research.backends"
+    },
+    {
+      "source": "agentteams.research",
       "target": "agentteams.research.news"
     },
     {
       "source": "agentteams.research",
       "target": "agentteams.research.reputable"
+    },
+    {
+      "source": "agentteams.research",
+      "target": "agentteams.research.scholarly"
     },
     {
       "source": "agentteams.research",
@@ -1978,6 +2025,10 @@ digraph "agentteams architecture" {
     {
       "source": "agentteams.research.__main__",
       "target": "agentteams.research.browser"
+    },
+    {
+      "source": "agentteams.research.__main__",
+      "target": "agentteams.research.scholarly"
     },
     {
       "source": "agentteams.research.__main__",
@@ -1994,6 +2045,18 @@ digraph "agentteams architecture" {
     {
       "source": "agentteams.research.reputable",
       "target": "agentteams.research.search"
+    },
+    {
+      "source": "agentteams.research.scholarly",
+      "target": "agentteams.research.cache"
+    },
+    {
+      "source": "agentteams.research.search",
+      "target": "agentteams.research.backends"
+    },
+    {
+      "source": "agentteams.research.search",
+      "target": "agentteams.research.cache"
     },
     {
       "source": "agentteams.schedule_emit",

@@ -62,3 +62,18 @@ skip_no_openrouter_key = pytest.mark.skipif(
         "CI/this repo offline-green."
     ),
 )
+
+
+@pytest.fixture(autouse=True)
+def _no_research_cache(monkeypatch):
+    """Disable the external-retrieval disk cache for every test.
+
+    Two reasons this is autouse rather than opt-in. First, the cache defaults to
+    ``references/research-cache`` under the CWD — a test suite run from the repo root would
+    otherwise write real files into the working tree. Second, a cached search result would
+    leak between tests: a fake transport asserting "the chain was called twice" silently
+    passes on a warm entry from an earlier test without calling anything at all.
+
+    ``tests/test_research_cache.py`` exercises the cache directly and clears this itself.
+    """
+    monkeypatch.setenv("AGENTTEAMS_RESEARCH_NO_CACHE", "1")

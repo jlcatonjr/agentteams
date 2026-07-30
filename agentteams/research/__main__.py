@@ -21,7 +21,8 @@ import argparse
 import json
 import sys
 
-from agentteams.research.search import fetch_text, web_search_verbose
+from agentteams.research.scholarly import SOURCES, format_citation, scholarly_search
+from agentteams.research.search import fetch_text, web_search_with_provenance
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -71,16 +72,72 @@ def main(argv: list[str] | None = None) -> int:
         help="Also save a full-page screenshot to PATH (additive — text extraction still runs).",
     )
 
+    scholar_p = sub.add_parser(
+        "scholar",
+        help="Search scholarly indexes (OpenAlex, Crossref, arXiv) — key-free, returns DOIs",
+    )
+    scholar_p.add_argument("query")
+    scholar_p.add_argument("-k", type=int, default=5, help="max works AFTER dedup")
+    scholar_p.add_argument(
+        "--sources",
+        default=",".join(SOURCES),
+        help=f"comma-separated subset of: {','.join(SOURCES)} (default: all)",
+    )
+    scholar_p.add_argument("--timeout-s", type=float, default=10.0)
+    scholar_p.add_argument(
+        "--citations",
+        action="store_true",
+        help="Also emit a formatted citation line per work (fields present in the record only "
+             "— never inferred).",
+    )
+
     args = parser.parse_args(argv)
 
     if args.command == "search":
-        results, note = web_search_verbose(args.query, k=args.k, timeout_s=args.timeout_s)
+        results, note, prov = web_search_with_provenance(
+            args.query, k=args.k, timeout_s=args.timeout_s
+        )
         json.dump([r.__dict__ for r in results], sys.stdout, indent=2)
         sys.stdout.write("\n")
         if note:
             # stderr, so the JSON on stdout stays machine-parseable. Without this an agent
             # reads `[]` as "no such information exists" and abandons an answerable question.
             print(f"note: {note}", file=sys.stderr)
+        # Provenance is emitted unconditionally, not only on the unhappy path: the
+        # external-retrieval quality gate requires a summary to be able to state HOW its
+        # evidence was obtained, and an agent cannot report what it was never told.
+        print(
+            f"provenance: backend={prov.backend or 'none'} cached={str(prov.cached).lower()} "
+            f"query_used={prov.query_used!r} tried={','.join(prov.backends_tried) or 'none'}",
+            file=sys.stderr,
+        )
+        return 0
+
+    if args.command == "scholar":
+        chosen = tuple(s.strip() for s in args.sources.split(",") if s.strip())
+        works = scholarly_search(
+            args.query, k=args.k, sources=chosen, timeout_s=args.timeout_s
+        )
+        payload: list[dict[str, object]] = []
+        for work in works:
+            record: dict[str, object] = dict(work.__dict__)
+            if args.citations:
+                record["citation"] = format_citation(work)
+            payload.append(record)
+        json.dump(payload, sys.stdout, indent=2)
+        sys.stdout.write("\n")
+        if not works:
+            print(
+                "note: no works returned. Unlike web search these APIs do not challenge "
+                "requests, so this is either a genuine miss or an upstream outage — it is "
+                "not evidence the work does not exist.",
+                file=sys.stderr,
+            )
+        print(
+            "note: a scholarly index hit is provenance, not endorsement. Retraction status "
+            "is NOT checked.",
+            file=sys.stderr,
+        )
         return 0
 
     if args.command == "fetch":

@@ -2,7 +2,7 @@
 name: Tool Documentation Researcher — ResearchPaperProject
 description: "Locates and verifies official documentation, API surfaces, and usage patterns for tools in ResearchPaperProject that are missing metadata"
 user-invokable: false
-tools: ['read', 'search']
+tools: ['read', 'search', 'retrieval']
 agents: ['adversarial', 'conflict-auditor']
 model: ["Claude Sonnet 4.6 (copilot)"]
 handoffs:

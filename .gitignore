@@ -69,6 +69,12 @@ references/bridges/**/bridge-merge.report.md
 # versions; keep local, never commit. See references/plans/code-api-vector-index.plan.md.
 references/code-index/
 
+# External-retrieval TTL cache (agentteams/research/cache.py) — search/fetch/scholar responses
+# from third-party endpoints, keyed by SHA-256 digest. Untrusted external bytes and
+# operator-local by nature; rebuilt on demand and safe to delete at any time. Never commit.
+references/research-cache/
+**/references/research-cache/
+
 # Structural or audit plan docs committed during development
 docs_src/structural-update-plan.md
 python

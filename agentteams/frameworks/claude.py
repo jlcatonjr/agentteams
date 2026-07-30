@@ -16,11 +16,18 @@ Recognised front matter keys (all optional, but name + description are strongly 
   description:   When/how to invoke this agent (used for automatic routing)
   allowed-tools: Comma-separated list of Claude tool names the agent may use
                  (Bash, Read, Write, Edit, MultiEdit, Glob, Grep, LS,
-                  WebFetch, WebSearch, TodoRead, TodoWrite)
+                  WebFetch, WebSearch, TodoRead, TodoWrite), optionally with a
+                  parenthesised command scope, e.g. Bash(git diff:*)
   model:         Claude model variant (e.g. claude-opus-4-5, claude-sonnet-4-5)
 
 VS Code Copilot keys (name:, user-invokable:, tools:, agents:, model:) are NOT
 recognised by Claude Code and must NOT be passed through.
+
+External retrieval note: `WebSearch`/`WebFetch` appear in the list above because Claude
+Code recognises them, NOT because this adapter grants them — no vocabulary token maps to
+either. Generated teams reach the web through the `retrieval` token, which grants a scoped
+Bash permission for this package's own research CLI. That is a deliberate standing
+constraint, not an oversight; see references/retrieval-transport-policy.md.
 """
 
 from __future__ import annotations
@@ -40,6 +47,21 @@ from agentteams.yaml_frontmatter import parse_yaml_front_matter as _parse_yaml_f
 # Fallback tool list when an agent declares no VS Code `tools:` block.
 _CLAUDE_DEFAULT_ALLOWED_TOOLS = "Bash, Read, Write, Edit"
 
+# The command the `retrieval` token grants, and nothing else. Scoped `Bash(<prefix>:*)` rather
+# than bare `Bash`: an agent that needs to look something up on the web should not thereby gain
+# arbitrary shell execution. See references/retrieval-transport-policy.md for why retrieval is
+# CLI-mediated here rather than delivered through WebSearch/WebFetch or an MCP server.
+#
+# Honest limitation: whether a given Claude Code version honours the scoped `Bash(...)` form
+# inside SUB-AGENT front matter (as opposed to slash-command front matter, where it is
+# long-established) is not verifiable from inside this repository, and this project already
+# tracks exactly that class of upstream drift in `agentteams/framework_research.py`. If a host
+# were to ignore the parenthesised scope, it would read the entry as plain `Bash` and grant MORE
+# than intended. That is why `retrieval` is NOT added to any read-only auditor's tool list: the
+# blast radius of the uncertainty is bounded to agents that were already going to hold `execute`
+# or that a template author opted in deliberately.
+_RETRIEVAL_CLI_SCOPE = "Bash(python -m agentteams.research:*)"
+
 # VS Code Copilot tool → Claude Code allowed-tools. Per-agent scoping matters:
 # read-only governance/audit agents (tools: ['read','search']) must NOT receive
 # Bash/Write/Edit, or their template-declared read-only invariant becomes false
@@ -51,6 +73,7 @@ _VSCODE_TO_CLAUDE_TOOLS: dict[str, tuple[str, ...]] = {
     "execute": ("Bash",),
     "todo": ("TodoWrite",),
     "agent": ("Task",),
+    "retrieval": (_RETRIEVAL_CLI_SCOPE,),
 }
 
 # Required keys for a well-formed Claude Code sub-agent front matter block
@@ -148,6 +171,11 @@ def _map_allowed_tools(content: str) -> str:
         for claude_tool in _VSCODE_TO_CLAUDE_TOOLS.get(vt.lower(), ()):
             if claude_tool not in mapped:
                 mapped.append(claude_tool)
+    # `execute` already grants unrestricted Bash, which subsumes the scoped retrieval command.
+    # Emitting both would read as though the scope constrained something when it constrains
+    # nothing — a misleading least-privilege signal in the generated file.
+    if "Bash" in mapped and _RETRIEVAL_CLI_SCOPE in mapped:
+        mapped.remove(_RETRIEVAL_CLI_SCOPE)
     return ", ".join(mapped) if mapped else _CLAUDE_DEFAULT_ALLOWED_TOOLS
 
 
