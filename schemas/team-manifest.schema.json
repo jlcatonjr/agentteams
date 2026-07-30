@@ -68,6 +68,46 @@
       "description": "Version identifier for retrieval trigger governance.",
       "default": "v1"
     },
+    "existing_project_path": {
+      "type": ["string", "null"],
+      "description": "Absolute path to the target project when generating into an existing repository; null for a greenfield build. Carried from the project description."
+    },
+    "governance_agents": {
+      "type": "array",
+      "description": "Slugs of the governance-tier agents selected for this team (navigator, security, code-hygiene, and any others the description enables).",
+      "items": { "type": "string" }
+    },
+    "code_index_extra_dirs": {
+      "type": "array",
+      "description": "Additional directories to include when building the code/API index, beyond the defaults inferred from the project layout. Empty when none were declared.",
+      "items": { "type": "string" }
+    },
+    "memory_index_extra_dirs": {
+      "type": "array",
+      "description": "Additional directories to include when building the memory index, beyond the defaults. Empty when none were declared.",
+      "items": { "type": "string" }
+    },
+    "advisories": {
+      "type": "array",
+      "description": "Non-fatal conditions the generator detected and wants an operator to see. Present only when at least one fired; absent otherwise. An advisory never blocks generation — it records a decision the descriptor's author may want to revisit (e.g. a research-type project with no external-retrieval capability enabled).",
+      "items": {
+        "type": "object",
+        "properties": {
+          "code": {
+            "type": "string",
+            "description": "Stable machine-readable identifier for the advisory condition.",
+            "minLength": 1
+          },
+          "message": {
+            "type": "string",
+            "description": "Human-readable explanation, including what to change to resolve it.",
+            "minLength": 1
+          }
+        },
+        "required": ["code", "message"],
+        "additionalProperties": false
+      }
+    },
     "retrieval_integration": {
       "type": "object",
       "description": "Normalized retrieval integration contract carried from the project description and inference stage.",
@@ -117,6 +157,7 @@
           "style-guardian",
           "technical-validator",
           "retrieval-integrator",
+          "research-analyst",
           "module-doc-author",
           "module-doc-validator",
           "tool-doc-researcher",
@@ -285,7 +326,7 @@
           "type": {
             "type": "string",
             "description": "Output artifact kind. 'skill' is a Claude operational tool doc written under .claude/skills/.",
-            "enum": ["agent", "instructions", "reference", "skill", "setup-required", "builder", "graph", "artifact"]
+            "enum": ["agent", "instructions", "reference", "skill", "setup-required", "builder", "graph", "graph-svg", "artifact"]
           },
           "fallback_template": {
             "type": "string",
