@@ -2483,6 +2483,6 @@
     }
   ],
   "label": "researchteam-copilot-vscode",
-  "root": "/Users/jamescaton/githubrepositories/researchteam/.github/agents",
+  "root": "~/githubrepositories/researchteam/.github/agents",
   "schema_version": "1.0"
 }

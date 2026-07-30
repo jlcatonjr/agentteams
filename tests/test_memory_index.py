@@ -1101,3 +1101,55 @@ def test_committed_memory_index_stores_relative_paths():
         f"directory into a committed artifact: {absolute[:3]}. Rebuild with "
         "--refresh-index (build_memory_index now takes root=)."
     )
+
+
+def test_index_sources_exclude_scratch_and_snapshot_directories(tmp_path):
+    """Backups and caches are never durable sources.
+
+    `memory_index_extra_dirs` recursively scans `*.md`, and with `["examples"]`
+    declared that swept in `examples/*/expected/.agentteams-backups/**` — 1488
+    backup snapshots, 83% of a 2120-document index, 51 MB committed. Backups are
+    near-duplicates of the documents beside them, so they diluted BM25 scoring as
+    well as bloating the artifact.
+    """
+    from agentteams.cli.artifacts import _memory_index_sources
+
+    root = tmp_path
+    (root / "workSummaries").mkdir()
+    (root / "workSummaries" / "keep.md").write_text("# Keep\n\nalpha\n", encoding="utf-8")
+    (root / "references").mkdir()
+    (root / "references" / "keep.md").write_text("# Keep\n\nbeta\n", encoding="utf-8")
+
+    # Scratch that must be skipped, one per excluded directory name.
+    for scratch in (".agentteams-backups", "__pycache__", "node_modules", ".venv"):
+        d = root / "extra" / scratch / "nested"
+        d.mkdir(parents=True)
+        (d / "skip.md").write_text("# Skip\n\ngamma\n", encoding="utf-8")
+    (root / "extra" / "real.md").write_text("# Real\n\ndelta\n", encoding="utf-8")
+
+    manifest = {"existing_project_path": str(root), "memory_index_extra_dirs": ["extra"]}
+    got = {p.relative_to(root).as_posix() for p in _memory_index_sources(manifest, root / ".claude/agents")}
+
+    assert "extra/real.md" in got, "a durable file inside an extra dir was dropped"
+    assert "workSummaries/keep.md" in got
+    assert "references/keep.md" in got
+    skipped = {p for p in got if any(s in p for s in (".agentteams-backups", "__pycache__", "node_modules", ".venv"))}
+    assert not skipped, f"scratch directories were indexed: {sorted(skipped)}"
+
+
+def test_gitignored_but_durable_sources_are_still_indexed(tmp_path):
+    """The rule is about scratch, not about gitignore.
+
+    `workSummaries/` and `references/plans/` are gitignored in this repository yet
+    are the durable history the index exists to serve. Excluding gitignored paths
+    wholesale would have removed 276 legitimate documents and gutted the feature —
+    the reason the filter matches directory *names* instead.
+    """
+    from agentteams.cli.artifacts import _is_durable_source
+
+    for durable in (
+        "workSummaries/daily/2026-07-29.md",
+        "references/plans/architecture/SESSION-STATE.md",
+        "examples/data-pipeline/brief.md",
+    ):
+        assert _is_durable_source(Path(durable)), f"{durable} must remain indexable"

@@ -522,3 +522,170 @@ def test_mechanized_rows_name_a_resolvable_surface() -> None:
     assert not unsupported, (
         f"rows assert coverage without naming an implementing surface: {unsupported}"
     )
+
+
+# ---------------------------------------------------------------------------
+# No tracked file may embed an operator's absolute home path
+#
+# Tracked artifacts are published; an absolute path in one leaks the operator's
+# username and directory layout. This was found in seven places across today's
+# work: the memory index's document paths (2135), three bridge artifact types, four
+# archived baseline captures, two work summaries, one documentation example and two
+# test fixtures. Each was a separate emission site with its own reason, which is why
+# the guard is repo-wide rather than per-subsystem.
+# ---------------------------------------------------------------------------
+
+_HOME_PATH_RE = re.compile(rb"(?:/Users/|/home/|[A-Za-z]:\\Users\\)([A-Za-z0-9._-]+)[/\\\\]")
+
+#: Home-directory names that are documented placeholders, not real operators.
+#: A generic example path is good practice — the defect is embedding a *real* one —
+#: so the guard flags any name outside this set rather than any absolute path at all.
+_PLACEHOLDER_HOME_NAMES: frozenset[str] = frozenset({
+    "me", "you", "user", "username", "alice", "bob", "johndoe", "example", "op", "x",
+})
+
+#: Tracked paths permitted to contain an absolute home path, with the reason.
+#: Not a convenience list: each entry is a case where removing the path would make
+#: the file *less* truthful.
+_HOME_PATH_ALLOWLIST: dict[str, str] = {
+    ".claude/agents/references/memory-index.json": (
+        "The index stores verbatim `snippet`/`paragraphs` excerpts of the documents "
+        "it indexes. The remaining occurrences quote gitignored local plans that "
+        "record cross-repo work, where the path IS the record. Rewriting a quotation "
+        "would make the index misquote its source while `source_hash` still attested "
+        "to the original. The index's own `path` metadata is relative and is checked "
+        "by test_committed_memory_index_stores_relative_paths."
+    ),
+}
+
+
+def test_no_tracked_file_embeds_an_absolute_home_path() -> None:
+    """Repo-wide guard. Read as bytes so a binary file needs no swallowed decode error."""
+    offenders: dict[str, str] = {}
+    for rel in _tracked_files():
+        if rel in _HOME_PATH_ALLOWLIST or rel.startswith(("src/", "tmp/")):
+            continue
+        path = REPO_ROOT / rel
+        if not path.is_file():
+            continue
+        for match in _HOME_PATH_RE.finditer(path.read_bytes()):
+            name = match.group(1).decode("utf-8", errors="replace")
+            if name not in _PLACEHOLDER_HOME_NAMES:
+                offenders[rel] = match.group(0).decode("utf-8", errors="replace")
+                break
+    assert not offenders, (
+        f"tracked file(s) embed a real absolute home path, leaking the operator's "
+        f"username: {offenders}. Use a repo-relative path, `~`, Path.home(), or one of "
+        f"the documented placeholder names {sorted(_PLACEHOLDER_HOME_NAMES)}."
+    )
+
+
+def test_home_path_allowlist_is_justified_and_current() -> None:
+    """The exemption list is the part that rots, so it is checked too."""
+    thin = {k: v for k, v in _HOME_PATH_ALLOWLIST.items() if len(v.split()) < 15}
+    assert not thin, f"_HOME_PATH_ALLOWLIST entries need a substantive reason: {sorted(thin)}"
+    for rel in _HOME_PATH_ALLOWLIST:
+        path = REPO_ROOT / rel
+        assert path.exists(), f"allowlisted {rel} no longer exists; remove the entry"
+        assert _HOME_PATH_RE.search(path.read_bytes()), (
+            f"{rel} no longer contains an absolute home path — remove it from "
+            "_HOME_PATH_ALLOWLIST so the guard covers it"
+        )
+
+
+# ---------------------------------------------------------------------------
+# CH-06 — terminal commands <=5 lines, no inline heredocs (agent instructions)
+#
+# Selected from the classification's `mechanizable` column on the one criterion its
+# standing caution demands: the definition is complete without inventing anything.
+# CH-06 names its own scope ("in agent instructions"), and audit.py already treats
+# ``` fences as a first-class construct, so nothing had to be decided here.
+#
+# The two halves are NOT equally mechanized, and conflating them would be the exact
+# hazard the classification exists to expose:
+#
+#   * heredocs      — 0 violations. A clean PASS means what the rule says.
+#   * >5-line blocks — 10 pre-existing violations, so this half is a RATCHET. A PASS
+#                      means "no NEW long command block", not "commands are short".
+#
+# CH-06 is therefore filed `partly mechanized`, not `mechanized`.
+# ---------------------------------------------------------------------------
+
+_FENCE_RE = re.compile(r"^[ \t]*```([A-Za-z0-9_+-]*)\s*$")
+_HEREDOC_RE = re.compile(r"<<-?\s*'?[A-Z_][A-Z0-9_]*'?")
+#: Fence languages that denote a terminal command block. The empty string counts:
+#: an unlabelled fence in an agent instruction is overwhelmingly a shell snippet.
+_SHELL_FENCE_LANGS = frozenset({"", "bash", "sh", "shell", "zsh", "console", "terminal"})
+CH06_MAX_COMMAND_LINES = 5
+#: Verified 2026-07-29. Only ever decrease. Raising it requires a reviewed reason.
+CH06_LONG_BLOCK_BASELINE = 10
+
+
+def _shell_blocks() -> list[tuple[str, int, list[str]]]:
+    """Return (relative path, 1-based fence line, body lines) per shell fence."""
+    out: list[tuple[str, int, list[str]]] = []
+    templates = REPO_ROOT / "agentteams/templates"
+    for path in sorted(templates.rglob("*.template.md")):
+        lines = path.read_text(encoding="utf-8").splitlines()
+        rel = str(path.relative_to(REPO_ROOT))
+        i = 0
+        while i < len(lines):
+            match = _FENCE_RE.match(lines[i])
+            if not match:
+                i += 1
+                continue
+            lang = match.group(1).lower()
+            body: list[str] = []
+            j = i + 1
+            while j < len(lines) and not _FENCE_RE.match(lines[j]):
+                body.append(lines[j])
+                j += 1
+            if lang in _SHELL_FENCE_LANGS:
+                out.append((rel, i + 1, body))
+            i = j + 1
+    return out
+
+
+def test_ch06_no_inline_heredocs_in_agent_instructions() -> None:
+    """CH-06 (heredoc half): fully enforced — a clean PASS means the rule holds.
+
+    Scope: shell fences in `agentteams/templates/**`. Says nothing about heredocs in
+    prose outside a fence, or in a consumer's own edits after emission.
+    """
+    offenders = [
+        f"{rel}:{line}"
+        for rel, line, body in _shell_blocks()
+        if any(_HEREDOC_RE.search(b) for b in body)
+    ]
+    assert not offenders, (
+        f"CH-06 forbids inline heredocs in agent instructions: {offenders}. "
+        "Save the script to a file and invoke it."
+    )
+
+
+def test_ch06_long_command_blocks_do_not_increase() -> None:
+    """CH-06 (length half): a RATCHET, not a conformance check.
+
+    10 blocks already exceed the ceiling; this only stops an 11th. It adjudicates
+    none of the existing ten, several of which may be legitimately illustrative
+    rather than commands an agent is meant to run.
+    """
+    long_blocks = [
+        (rel, line, len(body))
+        for rel, line, body in _shell_blocks()
+        if len(body) > CH06_MAX_COMMAND_LINES
+    ]
+    assert len(long_blocks) <= CH06_LONG_BLOCK_BASELINE, (
+        f"Command blocks over {CH06_MAX_COMMAND_LINES} lines rose to "
+        f"{len(long_blocks)} (baseline {CH06_LONG_BLOCK_BASELINE}). CH-06 forbids new "
+        f"ones — extract to a script file. Current: {long_blocks}"
+    )
+
+
+def test_ch06_baseline_is_not_stale() -> None:
+    """Keep the ratchet honest: a baseline above the true count hides regressions."""
+    actual = sum(1 for _r, _l, b in _shell_blocks() if len(b) > CH06_MAX_COMMAND_LINES)
+    assert actual == CH06_LONG_BLOCK_BASELINE, (
+        f"CH06_LONG_BLOCK_BASELINE is {CH06_LONG_BLOCK_BASELINE} but the true count is "
+        f"{actual}. Lower it to {actual} so the ratchet stays tight."
+    )

@@ -195,6 +195,6 @@
     }
   ],
   "label": "collector-management-claude-bridge",
-  "root": "/Users/jamescaton/githubrepositories/visualknowledge/collector-management/.claude",
+  "root": "~/githubrepositories/visualknowledge/collector-management/.claude",
   "schema_version": "1.0"
 }

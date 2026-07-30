@@ -72,6 +72,51 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### fixed
 
+- **The memory index was indexing backup snapshots: 1764 gitignored files, 83% of a
+  2120-document, 51 MB committed artifact.** 1488 were
+  `.agentteams-backups/` files under `examples/*/expected/`, reached because
+  `memory_index_extra_dirs: ["examples"]` recursively globs `*.md` and **no scan had
+  a scratch exclusion of any kind** — while `_memory_index_sources`' docstring claimed
+  "never gitignored scratch areas". Backups are near-duplicates of the documents
+  beside them, so they diluted BM25 scoring as well as bloating the artifact. Now
+  **632 documents, 16.6 MB, 0 backups**, with retrieval verified unchanged (identical
+  top-3 for a representative query).
+  The rule is deliberately **not** "exclude gitignored paths": `workSummaries/` and
+  `references/plans/` are gitignored here yet are the durable history the index
+  exists to serve, so 276 of them are still indexed. Gitignore marks *local*, not
+  *disposable*; the filter matches scratch **directory names** instead.
+- **`CH-06` implemented, and `CH-03` reclassified to judgment.** CH-06's heredoc half
+  is fully enforced (0 violations — a clean PASS means the rule holds); its
+  ≤5-line half is a **ratchet** over 10 pre-existing blocks, so CH-06 is filed
+  *partly mechanized*, not *mechanized*. CH-03's stated reason ("executable/script
+  extensions in a known directory") described a **weaker rule than the catalogue
+  states** — CH-03 forbids *ad-hoc* scripts while permitting production code, so it
+  turns on intent, the same gap that makes CH-02 and CH-27 judgment. `CH-04` stays
+  unwritten with its missing definition now named explicitly: the package has **no**
+  debug-artifact pattern vocabulary, and writing one here would be inventing the
+  rule's content. The mechanizable backlog is 5 → 3.
+- **Every remaining real absolute home path removed from tracked files**, and a
+  repo-wide guard added (`test_no_tracked_file_embeds_an_absolute_home_path`). Four
+  archived baseline captures and two work summaries now use `~`; a Windows test
+  fixture uses a documented placeholder. The guard flags *real* operator names while
+  permitting documented placeholders (`me`, `you`, `alice`, …), because a generic
+  example path is good practice — the defect is embedding a real one. The only
+  allowlisted file is the memory index, whose remaining 28 occurrences are verbatim
+  quotations of gitignored local plans.
+
+### added
+
+- **`references/plans/remediation-log-candidates-2026-07-29.report.md`** — closure
+  candidates for the remediation log with per-row evidence. **No row was edited**;
+  Rule 11 makes the `status` lifecycle maintainer-owned. Recommends closing rows 9
+  and 44, leaving 15 and 3 open with reasons, and records that row 15 **misattributes
+  the memory-index generator** to a mechanism outside the package when it is
+  `memory_index.py::build_memory_index` — a future pass following its touch points
+  would look in the wrong place. Three new rows appended (append-only, proven), one of
+  which logs a **CH-05 defect: five independent copies of the "what is scratch"
+  vocabulary** across `backup.py`, `fleet.py`, `baseline.py`, `audit.py` and now
+  `cli/artifacts.py`.
+
 - **`memory-index.json` stored absolute document paths — 2150 of them in a committed
   artifact.** `build_memory_index(..., root=)` now stores each document's `path`
   relative to the project root, and `is_index_stale`/the incremental sed updater

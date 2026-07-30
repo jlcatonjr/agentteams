@@ -147,6 +147,6 @@
     }
   ],
   "label": "researchteam-claude-bridge",
-  "root": "/Users/jamescaton/githubrepositories/researchteam/.claude",
+  "root": "~/githubrepositories/researchteam/.claude",
   "schema_version": "1.0"
 }
