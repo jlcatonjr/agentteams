@@ -4367,6 +4367,6 @@
     }
   ],
   "label": "collector-management-copilot-vscode",
-  "root": "/Users/jamescaton/githubrepositories/visualknowledge/collector-management/.github/agents",
+  "root": "~/githubrepositories/visualknowledge/collector-management/.github/agents",
   "schema_version": "1.0"
 }

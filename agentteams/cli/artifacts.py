@@ -13,9 +13,11 @@ import os
 import sys
 from datetime import datetime, timezone
 from pathlib import Path
+from collections.abc import Iterable
 from typing import TYPE_CHECKING, Any
 
 from agentteams.atomicio import _atomic_write_text
+from agentteams.backup import _BACKUP_DIR_NAME
 # Re-exported for build_team's namespace (see module docstring) and tests:
 # _require_jsonschema and _SCHEMA_VALIDATOR_CACHE were carved into schema_cache
 # but their old import sites resolve through agentteams.cli.artifacts.
@@ -256,6 +258,51 @@ def _emit_mcp_servers_if_enabled(manifest: dict, project_root: Path) -> None:
         print(f"  !  MCP server skipped (non-conformant): {err}", file=sys.stderr)
 MEMORY_INDEX_REL_PATH = "references/memory-index.json"
 MEMORY_INDEX_EXTRA_DOC_NAMES = ("CHANGELOG.md", "README.md", "build-team-plan.md")
+#: Directory names that are scratch, cache or snapshot — never durable sources.
+#:
+#: The memory index had no exclusion of any kind, so every recursive ``*.md`` scan
+#: swept them in. With ``memory_index_extra_dirs: ["examples"]`` declared, that
+#: pulled in ``examples/*/expected/.agentteams-backups/**`` — **1488 backup snapshot
+#: files, 83% of a 2120-document index**, and grew the committed artifact to 51 MB
+#: while ``_memory_index_sources`` documented the opposite.
+#:
+#: Backup snapshots are near-duplicates of the canonical documents beside them, so
+#: they do not merely bloat the index: they dilute BM25 scoring and let a query
+#: return an old copy of a document instead of the document.
+#:
+#: **This is the fifth copy of this vocabulary in the package** — ``backup.py``
+#: (`_BACKUP_DIR_NAME`), ``fleet.py``, ``baseline.py`` (`_DEFAULT_EXCLUDE_NAMES`) and
+#: an inline check in ``audit.py`` all encode a version of it. That duplication is a
+#: CH-05 defect in its own right; consolidating it touches fleet and baseline
+#: behaviour and is logged rather than done here.
+_SCRATCH_DIR_NAMES: frozenset[str] = frozenset({
+    _BACKUP_DIR_NAME,
+    "__pycache__",
+    ".git",
+    ".pytest_cache",
+    ".venv",
+    "venv",
+    "node_modules",
+})
+
+
+def _is_durable_source(path: Path) -> bool:
+    """True when no component of *path* is a scratch/cache/snapshot directory.
+
+    Args:
+        path: Candidate source file.
+
+    Returns:
+        Whether the file is eligible for indexing.
+    """
+    return not (_SCRATCH_DIR_NAMES & set(path.parts))
+
+
+def _durable(paths: Iterable[Path]) -> list[Path]:
+    """Filter *paths* to durable sources, preserving order."""
+    return [p for p in paths if _is_durable_source(p)]
+
+
 def _memory_index_root(manifest: dict, output_dir: Path) -> Path:
     """Resolve the project root the memory index is built against.
 
@@ -279,8 +326,15 @@ def _memory_index_root(manifest: dict, output_dir: Path) -> Path:
 def _memory_index_sources(manifest: dict, output_dir: Path) -> list[Path]:
     """Collect durable text sources for the memory index (F8).
 
-    RSR1-aware: durable, project-local sources only — never gitignored
-    scratch areas. Prefers the manifest's ``existing_project_path`` (the
+    RSR1-aware: durable, project-local sources only. Scratch, cache and snapshot
+    directories are excluded by name (``_SCRATCH_DIR_NAMES``) from **every**
+    recursive scan, including consumer-declared ``memory_index_extra_dirs``.
+
+    Note what this rule is *not*: it is not "exclude gitignored paths".
+    ``workSummaries/`` and ``references/plans/`` are gitignored here yet are the
+    durable history this index exists to serve — gitignore marks "local", not
+    "disposable", and conflating the two would gut the feature. The rule is
+    therefore about *scratch*, identified by directory name. Prefers the manifest's ``existing_project_path`` (the
     operator's explicit signal of the project root, e.g. when ``--output``
     is non-standard); falls back to inferring from ``output_dir`` when
     absent (standard layout: ``<project>/.github/agents`` or
@@ -291,7 +345,7 @@ def _memory_index_sources(manifest: dict, output_dir: Path) -> list[Path]:
     # Work summaries (the canonical durable history substrate).
     ws = project_root / "workSummaries"
     if ws.exists() and ws.is_dir():
-        sources.extend(sorted(ws.rglob("*.md")))
+        sources.extend(_durable(sorted(ws.rglob("*.md"))))
     # Top-level durable docs.
     for name in MEMORY_INDEX_EXTRA_DOC_NAMES:
         p = project_root / name
@@ -300,10 +354,10 @@ def _memory_index_sources(manifest: dict, output_dir: Path) -> list[Path]:
     # Additional durable authored docs.
     docs_src = project_root / "docs_src"
     if docs_src.exists() and docs_src.is_dir():
-        sources.extend(sorted(docs_src.glob("*.md")))
+        sources.extend(_durable(sorted(docs_src.glob("*.md"))))
     refs = project_root / "references"
     if refs.exists() and refs.is_dir():
-        sources.extend(sorted(refs.rglob("*.md")))
+        sources.extend(_durable(sorted(refs.rglob("*.md"))))
     # Consumer-declared extra index dirs / globs (W22 recall-first follow-up).
     # Each entry is a project-relative string treated as:
     #   - a glob pattern if it contains '*' or '?' (expanded literally), or
@@ -324,7 +378,7 @@ def _memory_index_sources(manifest: dict, output_dir: Path) -> list[Path]:
             is_glob = any(ch in raw for ch in "*?[")
             try:
                 if is_glob:
-                    candidates = sorted(project_root.glob(raw))
+                    candidates = _durable(sorted(project_root.glob(raw)))
                 else:
                     target = (project_root / raw)
                     if not (target.exists() and target.is_dir()):
@@ -333,7 +387,7 @@ def _memory_index_sources(manifest: dict, output_dir: Path) -> list[Path]:
                         target.resolve().relative_to(project_root_resolved)
                     except (ValueError, OSError):
                         continue
-                    candidates = sorted(target.rglob("*.md"))
+                    candidates = _durable(sorted(target.rglob("*.md")))
             except (OSError, ValueError):
                 continue
             for c in candidates:

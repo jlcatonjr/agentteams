@@ -19,7 +19,7 @@ The catalogue declares 28 `CH-` rules. When this file was first written, two wer
 mechanized (`CH-14`, `CH-20`, both in `agentteams/audit.py`) and nothing recorded
 which of the remaining 26 were judgment **by necessity** and which were merely
 **unwritten** — so there was no way to tell a deliberate boundary from a backlog.
-Six are fully mechanized as of 2026-07-29 and four partly; the table below is the
+Six are fully mechanized as of 2026-07-29 and five partly; the table below is the
 current state.
 
 That distinction is the descent condition: work belongs with a procedure once its
@@ -33,10 +33,10 @@ reads as conformance and suppresses the judgment that was actually required.
 |---|---|---|
 | CH-01 No backup files in source tree | **mechanized** | `tests/test_code_hygiene.py::test_ch01_no_backup_files_tracked` — tracked paths ending `.bak`/`~`/`.orig`/`.rej`. Says nothing about untracked working copies. |
 | CH-02 Script lifecycle | judgment | Requires knowing whether a script is still wanted. No artifact records intent. |
-| CH-03 No ad-hoc scripts in output dir | **mechanizable** | Executable/script extensions in a known directory. |
-| CH-04 Debug artifacts gitignored | **mechanizable** | Cross-check known debug patterns against `.gitignore`. |
+| CH-03 No ad-hoc scripts in output dir | judgment | **Reclassified 2026-07-29.** The old reason — "executable/script extensions in a known directory" — describes a *different, weaker* rule: CH-03 forbids **ad-hoc** scripts (investigative, debug, fix, benchmark) while permitting production code, so it turns on *intent*. That is the same information gap that makes CH-02 and CH-27 judgment, and no artifact records it. |
+| CH-04 Debug artifacts gitignored | **mechanizable** | Cross-check known debug patterns against `.gitignore`. **Missing definition (verified 2026-07-29): the package has no debug-artifact pattern vocabulary at all.** Writing one here would be inventing the rule's content, which the standing caution forbids. |
 | CH-05 Single source of truth for mappings | **partly mechanized** | `tests/test_code_hygiene.py::test_framework_registry_has_single_source` — asserts exactly one module defines `FRAMEWORKS`/`_ADAPTERS` as a dict literal. **Scope: one named mapping.** Detecting that two *arbitrary* structures mean the same mapping is semantic and remains judgment. |
-| CH-06 Commands ≤5 lines, no heredocs | **mechanizable** | Line counting and heredoc syntax in fenced blocks. |
+| CH-06 Commands ≤5 lines, no heredocs | **partly mechanized** | Two halves, unequally enforced. `tests/test_code_hygiene.py::test_ch06_no_inline_heredocs_in_agent_instructions` — **0 violations, a clean PASS means the rule holds**. `::test_ch06_long_command_blocks_do_not_increase` — a **ratchet** over 10 pre-existing long blocks: a PASS means no *new* one, and adjudicates none of the ten. Scope: shell fences in `agentteams/templates/**`. |
 | CH-07 Standard module structure | **partly mechanized** | `tests/test_code_hygiene.py::test_no_new_oversized_modules` (+ `test_length_allowlist_has_no_stale_entries`) — the **size** dimension only, as a ratchet with an allowlist. A PASS means "no *new* module exceeds the ceiling", not that module structure is standard. Section presence and order remain unwritten. |
 | CH-08 Common utilities over duplication | judgment | Requires deciding that two implementations are the same thing. Threshold-based approximations misfire on parallel-but-distinct code. |
 | CH-09 Config values in config files | partly mechanizable | Literal constants in code are detectable; whether a literal *is* configuration is not. |
@@ -68,10 +68,10 @@ them by suffix: **-ed = a check exists**, **-able = a check could exist**.
 | Status | Count | Means |
 |---|---|---|
 | mechanized | 6 | A check exists and covers the rule |
-| partly mechanized | 4 | A check exists and covers **part** of the rule; the row says which part |
-| mechanizable | 5 | No check; the decision procedure is fully specifiable |
+| partly mechanized | 5 | A check exists and covers **part** of the rule; the row says which part |
+| mechanizable | 3 | No check; the decision procedure is fully specifiable |
 | partly mechanizable | 5 | No check; only part of the decision procedure is specifiable |
-| judgment | 8 | No check is possible; the information is not in what a checker can see |
+| judgment | 9 | No check is possible; the information is not in what a checker can see |
 
 These counts are **derived from the table by
 `tests/test_code_hygiene.py::test_mechanization_summary_counts_match_the_table`**,
@@ -98,21 +98,32 @@ surfaced it — five rows claimed coverage while naming no implementing surface.
 
 ## What the classification shows
 
-**8 rules are judgment by necessity**, and they cluster: CH-02, CH-21, CH-27
-and CH-28 all turn on *intent* or *history* that no snapshot of the tree records.
+**9 rules are judgment by necessity**, and they cluster: CH-02, **CH-03**, CH-21,
+CH-27 and CH-28 all turn on *intent* or *history* that no snapshot of the tree
+records.
 No amount of implementation effort reaches them, because the information is not
 present in what a checker can see.
 
-**Five remain mechanizable and unwritten** — CH-03, CH-04, CH-06, CH-17, CH-26.
-These are a genuine backlog rather than a boundary. Each needs a definition the
-classification does not supply — which debug patterns count, what makes a literal
-*configuration*, what tool set a role *requires*. `CH-26` is closest: it extends a
-check `audit.py` already performs for read-only tools, but needs a role → required
-tools mapping that does not exist.
+**Three remain mechanizable and unwritten** — CH-04, CH-17, CH-26 — and each names
+the specific definition it lacks. `CH-04`: the package has **no** debug-artifact
+pattern vocabulary, so writing one would be inventing the rule's content. `CH-17`:
+standard linters already encode import ordering, so the correct implementation is
+*adopting a linter rule*, which is a tooling decision rather than a check to
+hand-roll. `CH-26` is closest to ready — it extends a check `audit.py` already
+performs for read-only tools — but needs a role → required-tools mapping that does
+not exist.
 
-**All four partly mechanized rules are ratchets or scoped guards.** CH-05 covers
-one named mapping; CH-07 covers size but not structure; CH-22 covers a fixed
-module list; CH-24 counts handlers against a baseline. Each PASS is narrower than
+**Two left the backlog on 2026-07-29 by being examined rather than implemented.**
+`CH-06` was implemented, but only half cleanly, so it is *partly* mechanized.
+`CH-03` was **reclassified to judgment**: its stated reason described a weaker rule
+than the catalogue states, and the real rule turns on intent. Shrinking a backlog by
+finding that an entry was misfiled is the same correction as growing it by finding a
+shipped check — both are the classification describing itself accurately.
+
+**All five partly mechanized rules are ratchets or scoped guards.** CH-05 covers
+one named mapping; CH-06 enforces its heredoc half outright but ratchets its length
+half over 10 pre-existing blocks; CH-07 covers size but not structure; CH-22 covers
+a fixed module list; CH-24 counts handlers against a baseline. Each PASS is narrower than
 its rule, and the row states how. **Five more are partly mechanizable** — CH-09,
 CH-10, CH-16, CH-19, CH-25 — which is a different claim: nothing is built, and
 only part of the procedure could be.

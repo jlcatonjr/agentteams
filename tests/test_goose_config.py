@@ -68,7 +68,7 @@ def test_resolve_windows_default():
     def boom(cmd, **kwargs):
         raise FileNotFoundError("goose")
     path, method = gc.resolve_goose_config_path(
-        env={"APPDATA": r"C:\Users\J\AppData\Roaming"}, platform="win32", runner=boom,
+        env={"APPDATA": r"C:\Users\example\AppData\Roaming"}, platform="win32", runner=boom,
     )
     assert path.as_posix().endswith("Block/goose/config/config.yaml") and method == "platform-default"
 
