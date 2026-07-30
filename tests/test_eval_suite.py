@@ -83,6 +83,13 @@ def test_eval_suite_is_framework_neutral():
         assert tok not in blob, f"framework-coupled token leaked: {tok!r}"
 
 
+def test_write_eval_suite_is_atomic_no_tmp(tmp_path):
+    # A valid build writes the suite through atomicio → no temp file lingers.
+    path = build_team._write_eval_suite({"project_name": "P", "framework": "claude"}, tmp_path)
+    assert path.exists()
+    assert not list(path.parent.glob("*.tmp"))
+
+
 def test_write_eval_suite_rejects_nonconforming(tmp_path, monkeypatch):
     monkeypatch.setattr(
         build_team, "_write_eval_suite", build_team._write_eval_suite
