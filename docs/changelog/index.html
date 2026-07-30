@@ -5696,7 +5696,27 @@ and this project adheres to <a href="https://semver.org/spec/v2.0.0.html">Semant
 </ul>
 <h3 id="added">added<a class="headerlink" href="#added" title="Permanent link">&para;</a></h3>
 <ul>
-<li><strong><code>tests/test_api_doc_signatures.py</code></strong> — documented signatures must equal the real
+<li>
+<p><strong><code>.github/workflows/changelog-link.yml</code></strong> — a PR touching <code>agentteams/**/*.py</code> must
+  also touch <code>CHANGELOG.md</code>. Origin: PR #56 landed the retrieval validation-cache code
+  on 2026-07-16 while its changelog entry sat in an unpushed local commit until
+  2026-07-29 — two weeks in which a ~28.8× speed-up and a documented <em>not adopted:
+  fastjsonschema</em> decision were absent from the changelog while the code shipped.
+  Nothing linked the two.
+  <strong>This check fails rather than advises, which is the one place this repository's
+  instruments do so.</strong> <code>check_session_obligations.py</code> always exits 0 and
+  <code>advisory-pr.yml</code> never merges, both because gating would try to <em>prevent</em> what the
+  accountability principle says can only be made <em>answerable</em>. The same principle is
+  why this one fails: an advisory that can be ignored is precisely what already failed
+  here. The accountability is the override, not the gate — a <code>no-changelog</code> label passes
+  the check and leaves a record on the PR of who judged the change to need no entry.
+  Proceeding is always available; proceeding <em>silently</em> is not. Bot-authored PRs (the
+  scheduled bridge-maintenance and framework-auto-update runs) are exempt.
+  Validated against real history rather than assumed: replaying <strong>PR #56's own diff</strong>
+  through the check's conditions fails it correctly, and today's merged PRs pass.</p>
+</li>
+<li>
+<p><strong><code>tests/test_api_doc_signatures.py</code></strong> — documented signatures must equal the real
   parameter lists, plus arithmetic guards on the feature summary. Written <strong>before</strong> the
   fixes and confirmed failing on the unfixed tree, so the corrections were verified by
   the instrument rather than by re-reading.
@@ -5706,7 +5726,8 @@ and this project adheres to <a href="https://semver.org/spec/v2.0.0.html">Semant
   functions in other modules (<code>parallel_plan.to_json(schedule)</code> vs
   <code>graph.ArchitectureGraph.to_json(self)</code>). An allowlist would have swallowed real drift
   along with that noise. A coverage floor (90 signatures across 25+ docs) fails on a
-  parser regression that would otherwise make the test silently vacuous.</li>
+  parser regression that would otherwise make the test silently vacuous.</p>
+</li>
 <li><strong>Five new API pages</strong> — <code>living-doc</code>, <code>update-report</code>, <code>output-plan</code>,
   <code>memory-index-incremental</code>, <code>cli</code> — plus the seven symbols added earlier today
   (<code>rel_to_root</code>, <code>skip_notice</code>, <code>source_state_digest</code>, <code>store_path</code>, <code>resolve_path</code>,

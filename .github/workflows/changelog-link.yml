@@ -1,0 +1,70 @@
+name: Changelog Link
+
+# A PR that changes agentteams/**/*.py must also change CHANGELOG.md.
+#
+# Why this exists: PR #56 (2026-07-16) landed the retrieval validation-cache code,
+# but its changelog entry stayed in an unpushed local commit and was only recovered
+# on 2026-07-29 — two weeks in which a ~28.8x speed-up and a documented
+# "not adopted: fastjsonschema" decision were absent from the changelog while the
+# code shipped. Nothing linked the two, so nothing noticed.
+#
+# This check FAILS rather than advises, which is deliberate and is the one place this
+# repository's instruments do so. `check_session_obligations.py` always exits 0 and
+# `advisory-pr.yml` never merges, both because gating would try to *prevent* what the
+# accountability principle says can only be made *answerable*. The same principle is
+# why this check fails: an advisory that can be ignored is what already failed here.
+#
+# The override is the accountability, not the gate: apply the `no-changelog` label and
+# the check passes, leaving a record on the PR of who decided the change needed no
+# entry. Proceeding is always available; proceeding silently is not.
+
+on:
+  pull_request:
+    types: [opened, synchronize, reopened, labeled, unlabeled]
+    paths:
+      - "agentteams/**/*.py"
+
+permissions:
+  contents: read
+  pull-requests: read
+
+jobs:
+  changelog:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Skip automated PRs
+        id: author
+        run: |
+          echo "bot=${{ github.event.pull_request.user.login == 'github-actions[bot]' }}" >> "$GITHUB_OUTPUT"
+
+      - name: Skip when labelled no-changelog
+        id: label
+        run: |
+          echo "skip=${{ contains(github.event.pull_request.labels.*.name, 'no-changelog') }}" >> "$GITHUB_OUTPUT"
+
+      - name: Checkout
+        if: steps.author.outputs.bot != 'true' && steps.label.outputs.skip != 'true'
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Require a CHANGELOG entry
+        if: steps.author.outputs.bot != 'true' && steps.label.outputs.skip != 'true'
+        env:
+          BASE: ${{ github.event.pull_request.base.sha }}
+          HEAD: ${{ github.event.pull_request.head.sha }}
+        run: |
+          changed=$(git diff --name-only "$BASE" "$HEAD")
+          if echo "$changed" | grep -q '^CHANGELOG\.md$'; then
+            echo "CHANGELOG.md is part of this PR."
+            exit 0
+          fi
+          echo "::error::This PR changes agentteams/**/*.py but not CHANGELOG.md."
+          echo ""
+          echo "Add an entry under [Unreleased], or apply the 'no-changelog' label if"
+          echo "the change genuinely needs none (a comment fix, a test-only refactor)."
+          echo "The label is recorded on the PR, which is the point: the decision is"
+          echo "answerable either way, and only the silent omission is blocked."
+          echo ""
+          echo "Origin: PR #56 shipped code whose changelog entry sat unpushed for two weeks."
+          exit 1

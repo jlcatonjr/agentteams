@@ -130,6 +130,24 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### added
 
+- **`.github/workflows/changelog-link.yml`** — a PR touching `agentteams/**/*.py` must
+  also touch `CHANGELOG.md`. Origin: PR #56 landed the retrieval validation-cache code
+  on 2026-07-16 while its changelog entry sat in an unpushed local commit until
+  2026-07-29 — two weeks in which a ~28.8× speed-up and a documented *not adopted:
+  fastjsonschema* decision were absent from the changelog while the code shipped.
+  Nothing linked the two.
+  **This check fails rather than advises, which is the one place this repository's
+  instruments do so.** `check_session_obligations.py` always exits 0 and
+  `advisory-pr.yml` never merges, both because gating would try to *prevent* what the
+  accountability principle says can only be made *answerable*. The same principle is
+  why this one fails: an advisory that can be ignored is precisely what already failed
+  here. The accountability is the override, not the gate — a `no-changelog` label passes
+  the check and leaves a record on the PR of who judged the change to need no entry.
+  Proceeding is always available; proceeding *silently* is not. Bot-authored PRs (the
+  scheduled bridge-maintenance and framework-auto-update runs) are exempt.
+  Validated against real history rather than assumed: replaying **PR #56's own diff**
+  through the check's conditions fails it correctly, and today's merged PRs pass.
+
 - **`tests/test_api_doc_signatures.py`** — documented signatures must equal the real
   parameter lists, plus arithmetic guards on the feature summary. Written **before** the
   fixes and confirmed failing on the unfixed tree, so the corrections were verified by
