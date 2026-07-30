@@ -163,7 +163,7 @@ Scan Python source files in `project_path` for import statements and return a ma
 
 ---
 
-### `build_tool_catalog(packages, *, fetch_pypi=True)`
+### `build_tool_catalog(package_names, *, fetch_pypi=True)`
 
 > *Source: `agentteams/enrich/_tools.py`*
 
@@ -171,7 +171,7 @@ Build a metadata catalog for a list of packages, combining the built-in static c
 
 **Args:**
 
-- `packages` (`list[str]`) — PyPI package names to look up.
+- `package_names` (`list[str]`) — PyPI package names to look up.
 - `fetch_pypi` (`bool`, keyword-only) — If `True`, fetch live metadata from PyPI for packages not in the static catalog. Default: `True`.
 
 **Returns:** `dict[str, dict[str, str]]` — Keyed by the package names exactly as supplied in `packages` (no normalization of the key); values contain `docs_url`, `api_surface`, and `common_patterns`.

@@ -112,7 +112,7 @@ Result of a backup operation.
 
 ## Functions
 
-### `emit_all(rendered_files, *, output_dir, dry_run=False, overwrite=False, merge=False, yes=False, shrink_policy="preserve", backup_path=None)`
+### `emit_all(rendered_files, *, output_dir, dry_run=False, overwrite=False, merge=False, yes=False, shrink_policy="preserve", backup_path=None, auto_fence_legacy=False)`
 
 > *Source: `agentteams/emit.py`*
 
@@ -135,6 +135,7 @@ Write rendered files to `output_dir`.
     The fence-id allowlist `_LIVE_DATA_FENCES` (`threat_intelligence`, `threat_data`) is exempt from the shrink heuristic — those fences are filled each run from live CISA KEV / NVD / OSV feeds, and CVE rotation is expected behavior, not user-content deletion. The canonical history for these fences is the cache JSON (`references/security-vulnerability-watch.json`), not the embedded snapshot.
 
 - `backup_path` (`Path | None`, keyword-only) — When provided and a shrink notice fires under `warn`, the full pre-merge body of every shrunken fence is written to `<backup_path>/<rel_path>.lost.<sid>.md` and the corresponding `EmitResult.notices` entry is annotated with `— recovery: <sidecar-path>`. This makes `warn` recoverable even when the operator didn't catch the notice — the sidecar is the durable evidence of what was dropped. Default: `None` (no sidecar written; notices are not annotated).
+- `auto_fence_legacy` (`bool`, keyword-only) — When `True`, a `--merge` run retrofits `AGENTTEAMS` fence markers into a legacy unfenced file instead of skipping it, so subsequent merges can update it. Off by default because retrofitting rewrites a file the operator has not opted in to having managed. Default: `False`.
 
 **Returns:** `EmitResult` — Results of all write operations.
 
@@ -174,7 +175,7 @@ Print the structured dry-run plan recorded on `EmitResult.dry_run_report`.
 
 ---
 
-### `backup_output_dir(output_dir, *, files_to_backup=None, dry_run=False)`
+### `backup_output_dir(output_dir, *, files_to_backup=None, dry_run=False, reason="unspecified", framework="", description_path=None)`
 
 > *Source: `agentteams/backup.py` (re-exported from `agentteams/emit.py`)*
 
@@ -187,6 +188,9 @@ The backup is placed at `<output_dir>/.agentteams-backups/YYYYMMDD-HHMMSS/`. If 
 - `output_dir` (`Path`) — Absolute path to the agents output directory.
 - `files_to_backup` (`list[str] | None`, keyword-only) — Relative paths to selectively back up. Pass `None` to back up everything. Default: `None`.
 - `dry_run` (`bool`, keyword-only) — If `True`, report what would be backed up without writing. Default: `False`.
+- `reason` (`str`, keyword-only) — Recorded in the backup's metadata so a later reader can tell why the snapshot exists (e.g. `"pre-update"`, `"overwrite-mode"`). Default: `"unspecified"`.
+- `framework` (`str`, keyword-only) — Framework the backed-up team targets, recorded alongside `reason`. Default: `""`.
+- `description_path` (`str | None`, keyword-only) — Path to the project description that drove the run, recorded for provenance. Default: `None`.
 
 **Returns:** `BackupResult` — Description of what was backed up.
 

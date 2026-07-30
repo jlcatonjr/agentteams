@@ -104,7 +104,7 @@ Print a human-readable drift report to stdout.
 
 ---
 
-### `compute_structural_diff(old_log, manifest, templates_dir)`
+### `compute_structural_diff(old_log, new_manifest, templates_dir)`
 
 > *Source: `agentteams/drift.py`*
 
@@ -115,7 +115,7 @@ In addition to added/removed/drifted classification, the function consumes the b
 **Args:**
 
 - `old_log` (`dict[str, Any]`) — Previously stored build-log from `load_build_log()`.
-- `manifest` (`dict[str, Any]`) — Current team manifest from `analyze.build_manifest()`.
+- `new_manifest` (`dict[str, Any]`) — Current team manifest from `analyze.build_manifest()`.
 - `templates_dir` (`Path`) — Path to the templates root directory.
 
 **Returns:** `StructuralDiffReport`

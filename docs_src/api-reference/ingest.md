@@ -37,7 +37,9 @@ Load and return a normalized project description dict.
 
 ---
 
-### `parse_dependency_manifests(project_path)`
+### `parse_dependency_manifests(project_path, *, max_depth=2)`
+
+> Note: `max_depth` bounds how far below *project_path* manifests are discovered.
 
 > *Source: `agentteams/ingest.py`*
 

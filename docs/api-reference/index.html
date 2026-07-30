@@ -1586,6 +1586,17 @@
   
 </li>
       
+        <li class="md-nav__item">
+  <a href="#coverage-gaps" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Coverage gaps
+      
+    </span>
+  </a>
+  
+</li>
+      
     </ul>
   
 </nav>
@@ -2142,6 +2153,146 @@
     
   
     memory-index
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="memory-index-incremental/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    memory-index-incremental
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="output-plan/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    output-plan
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="update-report/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    update-report
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="living-doc/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    living-doc
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="cli/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    cli
   
 
     
@@ -3245,6 +3396,17 @@
   
 </li>
       
+        <li class="md-nav__item">
+  <a href="#coverage-gaps" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Coverage gaps
+      
+    </span>
+  </a>
+  
+</li>
+      
     </ul>
   
 </nav>
@@ -3326,6 +3488,18 @@
 <td>Lightweight runtime compatibility bridge artifacts</td>
 </tr>
 <tr>
+<td><a href="cli/"><code>cli</code></a></td>
+<td>CLI package decomposition — which module owns which stage (flags live in the CLI Reference)</td>
+</tr>
+<tr>
+<td><a href="output-plan/"><code>output-plan</code></a></td>
+<td>Plans which files a manifest produces, before anything renders</td>
+</tr>
+<tr>
+<td><a href="update-report/"><code>update-report</code></a></td>
+<td><code>update.report.md</code> — durable record of an <code>--update</code> run's decisions</td>
+</tr>
+<tr>
 <td><a href="fleet/"><code>fleet</code></a></td>
 <td>Multi-workspace <code>--update --merge</code> (<code>--fleet DIR</code>) with git snapshot + diff audit</td>
 </tr>
@@ -3361,6 +3535,10 @@
 <td>Post-generation static and AI-powered audit</td>
 </tr>
 <tr>
+<td><a href="living-doc/"><code>living-doc</code></a></td>
+<td>Living-document conformance (Rule 7) over unfenced agent prose</td>
+</tr>
+<tr>
 <td><a href="remediate/"><code>remediate</code></a></td>
 <td>Auto-correct audit findings via standalone Copilot CLI</td>
 </tr>
@@ -3390,6 +3568,10 @@
 <tr>
 <td><a href="memory-index/"><code>memory-index</code></a></td>
 <td>Lexical (BM25) search index for work summaries and documentation</td>
+</tr>
+<tr>
+<td><a href="memory-index-incremental/"><code>memory-index-incremental</code></a></td>
+<td>In-place single-document index patching; declines conservatively to a full rebuild</td>
 </tr>
 <tr>
 <td><a href="fence-inject/"><code>fence-inject</code></a></td>
@@ -3550,6 +3732,24 @@
 <li><a href="bridge/"><code>bridge</code></a> for lightweight source-canonical runtime bridging.</li>
 </ol>
 <p>For workflow-level usage and mode selection, see the <a href="../interoperability/">Interoperability</a> page.</p>
+<hr />
+<h2 id="coverage-gaps">Coverage gaps<a class="headerlink" href="#coverage-gaps" title="Permanent link">&para;</a></h2>
+<p>This index does not cover every module. <strong>14 top-level public modules have no API
+page</strong>, listed here rather than left to be discovered:</p>
+<p><code>advisory</code>, <code>ai_bad_habits</code>, <code>atomicio</code>, <code>backup</code>, <code>budget</code>, <code>capability_hints</code>,
+<code>errors</code>, <code>recipe_fields</code>, <code>stale_detector</code>, <code>stale_remediate</code>, <code>svg_render</code>,
+<code>tool_metadata_catalog</code>, <code>vscode_tasks</code>, <code>yaml_frontmatter</code>.</p>
+<p>Four exceed 400 lines (<code>stale_detector</code> 739, <code>vscode_tasks</code> 673, <code>backup</code> 486,
+<code>svg_render</code> 470) and are the highest-value additions. <code>backup</code>'s public API is
+partially documented inside <a href="emit/"><code>emit</code></a>, which re-exports it.</p>
+<p>They are listed rather than written because a thin page that misdescribes a module is
+worse than a missing one — a reader trusts what is written. The pages added on
+2026-07-29 (<code>living-doc</code>, <code>update-report</code>, <code>output-plan</code>,
+<code>memory-index-incremental</code>, <code>cli</code>) were scoped to modules whose behaviour was
+established first-hand rather than inferred.</p>
+<p><strong>What <em>is</em> mechanically guaranteed:</strong> every documented signature matches the code, and
+the feature summary's total equals its addends —
+<code>tests/test_api_doc_signatures.py</code>. Coverage is a known gap; accuracy is enforced.</p>
 
 
 

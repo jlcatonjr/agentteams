@@ -23,3 +23,36 @@ resolve these helpers from `agentteams.bridge` unchanged.
 - `_run_bridge_check(manifest_path, source_hash_rows)` — freshness verdict + report;
   fails a 0-inventory manifest (a wrong-source bridge cannot pass silently).
 - `_render_inventory_md(rows)` — the `agent-inventory.md` compatibility table.
+
+## Verdict attribution
+
+### `source_state_digest(source_hash_rows) -> str`
+
+> *Source: `agentteams/bridge_sources.py`*
+
+Digest the source state a bridge verdict was computed from.
+
+Deterministic in the source tree alone: the same files always produce the same digest,
+on any machine, at any time. That is what lets `bridge-check.report.md` be byte-stable
+across re-runs **and** machine-comparable against the current tree — the two properties
+a wall-clock timestamp cannot provide together.
+
+**Args:**
+
+- `source_hash_rows` (`list[dict[str, str]]`) — `{"path", "sha256"}` rows as recorded in
+  the manifest. Sorted by path, so row ordering cannot perturb the digest.
+
+**Returns:** `str` — Hex SHA-256 over the sorted `path:sha256` pairs.
+
+**Why not a timestamp.** A committed check report is a *cached verdict*, and its defect
+was never a missing date — it was that nothing detected the cache going stale. The
+copilot-cli report sat at `PASS` for a week while six sources drifted. A first fix
+recorded `Checked at: <wall clock>`, which conveyed staleness only to a human who
+opened the file and did the arithmetic, and made a command documented *"read-only"*
+rewrite a tracked file on every invocation. The digest fixes both:
+`--bridge-check` now writes only when the bytes differ, and
+`tests/test_bridge_mode_safety.py::test_committed_check_reports_describe_the_committed_source_state`
+compares the **committed** digest against the working tree.
+
+Same construction as `memory_index._documents_fingerprint`, this repository's existing
+precedent for a path/hash fingerprint.

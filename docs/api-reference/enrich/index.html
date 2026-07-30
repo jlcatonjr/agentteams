@@ -2137,10 +2137,10 @@
 </li>
         
           <li class="md-nav__item">
-  <a href="#build_tool_catalogpackages-fetch_pypitrue" class="md-nav__link">
+  <a href="#build_tool_catalogpackage_names-fetch_pypitrue" class="md-nav__link">
     <span class="md-ellipsis">
       
-        build_tool_catalog(packages, *, fetch_pypi=True)
+        build_tool_catalog(package_names, *, fetch_pypi=True)
       
     </span>
   </a>
@@ -2176,6 +2176,146 @@
     
   
     memory-index
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../memory-index-incremental/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    memory-index-incremental
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../output-plan/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    output-plan
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../update-report/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    update-report
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../living-doc/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    living-doc
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../cli/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    cli
   
 
     
@@ -3298,10 +3438,10 @@
 </li>
         
           <li class="md-nav__item">
-  <a href="#build_tool_catalogpackages-fetch_pypitrue" class="md-nav__link">
+  <a href="#build_tool_catalogpackage_names-fetch_pypitrue" class="md-nav__link">
     <span class="md-ellipsis">
       
-        build_tool_catalog(packages, *, fetch_pypi=True)
+        build_tool_catalog(package_names, *, fetch_pypi=True)
       
     </span>
   </a>
@@ -3464,14 +3604,14 @@
 </ul>
 <p><strong>Returns:</strong> <code>dict[str, str]</code> — <code>{import_name: pypi_package_name}</code></p>
 <hr />
-<h3 id="build_tool_catalogpackages-fetch_pypitrue"><code>build_tool_catalog(packages, *, fetch_pypi=True)</code><a class="headerlink" href="#build_tool_catalogpackages-fetch_pypitrue" title="Permanent link">&para;</a></h3>
+<h3 id="build_tool_catalogpackage_names-fetch_pypitrue"><code>build_tool_catalog(package_names, *, fetch_pypi=True)</code><a class="headerlink" href="#build_tool_catalogpackage_names-fetch_pypitrue" title="Permanent link">&para;</a></h3>
 <blockquote>
 <p><em>Source: <code>agentteams/enrich/_tools.py</code></em></p>
 </blockquote>
 <p>Build a metadata catalog for a list of packages, combining the built-in static catalog with optional live PyPI lookups.</p>
 <p><strong>Args:</strong></p>
 <ul>
-<li><code>packages</code> (<code>list[str]</code>) — PyPI package names to look up.</li>
+<li><code>package_names</code> (<code>list[str]</code>) — PyPI package names to look up.</li>
 <li><code>fetch_pypi</code> (<code>bool</code>, keyword-only) — If <code>True</code>, fetch live metadata from PyPI for packages not in the static catalog. Default: <code>True</code>.</li>
 </ul>
 <p><strong>Returns:</strong> <code>dict[str, dict[str, str]]</code> — Keyed by the package names exactly as supplied in <code>packages</code> (no normalization of the key); values contain <code>docs_url</code>, <code>api_surface</code>, and <code>common_patterns</code>.</p>

@@ -1869,10 +1869,10 @@
 </li>
         
           <li class="md-nav__item">
-  <a href="#compute_structural_diffold_log-manifest-templates_dir" class="md-nav__link">
+  <a href="#compute_structural_diffold_log-new_manifest-templates_dir" class="md-nav__link">
     <span class="md-ellipsis">
       
-        compute_structural_diff(old_log, manifest, templates_dir)
+        compute_structural_diff(old_log, new_manifest, templates_dir)
       
     </span>
   </a>
@@ -2204,6 +2204,146 @@
     
   
     memory-index
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../memory-index-incremental/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    memory-index-incremental
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../output-plan/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    output-plan
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../update-report/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    update-report
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../living-doc/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    living-doc
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../cli/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    cli
   
 
     
@@ -3282,10 +3422,10 @@
 </li>
         
           <li class="md-nav__item">
-  <a href="#compute_structural_diffold_log-manifest-templates_dir" class="md-nav__link">
+  <a href="#compute_structural_diffold_log-new_manifest-templates_dir" class="md-nav__link">
     <span class="md-ellipsis">
       
-        compute_structural_diff(old_log, manifest, templates_dir)
+        compute_structural_diff(old_log, new_manifest, templates_dir)
       
     </span>
   </a>
@@ -3477,7 +3617,7 @@
 <li><code>report</code> (<code>DriftReport</code>) — Result from <code>detect_drift()</code>.</li>
 </ul>
 <hr />
-<h3 id="compute_structural_diffold_log-manifest-templates_dir"><code>compute_structural_diff(old_log, manifest, templates_dir)</code><a class="headerlink" href="#compute_structural_diffold_log-manifest-templates_dir" title="Permanent link">&para;</a></h3>
+<h3 id="compute_structural_diffold_log-new_manifest-templates_dir"><code>compute_structural_diff(old_log, new_manifest, templates_dir)</code><a class="headerlink" href="#compute_structural_diffold_log-new_manifest-templates_dir" title="Permanent link">&para;</a></h3>
 <blockquote>
 <p><em>Source: <code>agentteams/drift.py</code></em></p>
 </blockquote>
@@ -3486,7 +3626,7 @@
 <p><strong>Args:</strong></p>
 <ul>
 <li><code>old_log</code> (<code>dict[str, Any]</code>) — Previously stored build-log from <code>load_build_log()</code>.</li>
-<li><code>manifest</code> (<code>dict[str, Any]</code>) — Current team manifest from <code>analyze.build_manifest()</code>.</li>
+<li><code>new_manifest</code> (<code>dict[str, Any]</code>) — Current team manifest from <code>analyze.build_manifest()</code>.</li>
 <li><code>templates_dir</code> (<code>Path</code>) — Path to the templates root directory.</li>
 </ul>
 <p><strong>Returns:</strong> <code>StructuralDiffReport</code></p>

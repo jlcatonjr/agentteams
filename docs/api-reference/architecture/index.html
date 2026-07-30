@@ -2005,6 +2005,146 @@
   
   
     <li class="md-nav__item">
+      <a href="../memory-index-incremental/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    memory-index-incremental
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../output-plan/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    output-plan
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../update-report/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    update-report
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../living-doc/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    living-doc
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../cli/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    cli
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
       <a href="../code-index/" class="md-nav__link">
         
   
@@ -2226,6 +2366,28 @@
     <span class="md-ellipsis">
       
         generate_architecture_document(repo_root, package_dir=None) -&gt; str | None
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#module_level_edgespackage_dir-root_pkg-settuplestr-str" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        module_level_edges(package_dir, root_pkg) -&gt; set[tuple[str, str]]
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#detect_import_cyclesgraph-edgesnone-listliststr" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        detect_import_cycles(graph, *, edges=None) -&gt; list[list[str]]
       
     </span>
   </a>
@@ -3153,6 +3315,28 @@
   
 </li>
         
+          <li class="md-nav__item">
+  <a href="#module_level_edgespackage_dir-root_pkg-settuplestr-str" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        module_level_edges(package_dir, root_pkg) -&gt; set[tuple[str, str]]
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#detect_import_cyclesgraph-edgesnone-listliststr" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        detect_import_cycles(graph, *, edges=None) -&gt; list[list[str]]
+      
+    </span>
+  </a>
+  
+</li>
+        
       </ul>
     </nav>
   
@@ -3230,6 +3414,44 @@ external dependency via <code>sys.stdlib_module_names</code>.</p>
 package when <code>package_dir</code> is omitted). Returns <code>None</code> when no importable package
 is found.</p>
 <hr />
+<h3 id="module_level_edgespackage_dir-root_pkg-settuplestr-str"><code>module_level_edges(package_dir, root_pkg) -&gt; set[tuple[str, str]]</code><a class="headerlink" href="#module_level_edgespackage_dir-root_pkg-settuplestr-str" title="Permanent link">&para;</a></h3>
+<blockquote>
+<p><em>Source: <code>agentteams/architecture.py</code></em></p>
+</blockquote>
+<p>Import edges that exist <strong>at module load time</strong> — only <code>import</code> statements that are
+direct children of the module body.</p>
+<p><strong>Args:</strong></p>
+<ul>
+<li><code>package_dir</code> (<code>Path</code>) — Package directory to scan.</li>
+<li><code>root_pkg</code> (<code>str</code>) — Package name, used to keep edges internal and to resolve
+  <code>from pkg import submodule</code> to the submodule rather than to <code>pkg</code>.</li>
+</ul>
+<p><strong>Returns:</strong> <code>set[tuple[str, str]]</code> — <code>(importer, imported)</code> module-name pairs.</p>
+<p><strong>Why this exists rather than reusing <code>ArchitectureGraph.edges</code>:</strong> that graph is built
+with <code>ast.walk</code>, which cannot distinguish a load-time import from one deferred inside a
+function. Cycle detection over it reported three cycles in this package, none
+actionable — <code>analyze</code>/<code>output_plan</code>, <code>emit</code>/<code>fence_inject</code> and
+<code>cli.commands</code>/<code>stale_remediate</code> are each deliberately broken by deferring one side.
+Reading only direct children of the module body gives the true load-time picture.</p>
+<p>Unparseable files are skipped with a <code>warnings.warn</code> rather than silently — a
+best-effort mapper must tolerate a broken source file, but CH-24 forbids swallowing
+the fact.</p>
+<h3 id="detect_import_cyclesgraph-edgesnone-listliststr"><code>detect_import_cycles(graph, *, edges=None) -&gt; list[list[str]]</code><a class="headerlink" href="#detect_import_cyclesgraph-edgesnone-listliststr" title="Permanent link">&para;</a></h3>
+<blockquote>
+<p><em>Source: <code>agentteams/architecture.py</code></em></p>
+</blockquote>
+<p>Find import cycles. <strong>CH-13.</strong></p>
+<p><strong>Args:</strong></p>
+<ul>
+<li><code>graph</code> (<code>ArchitectureGraph</code>) — The module graph.</li>
+<li><code>edges</code> (<code>set[tuple[str, str]] | None</code>, keyword-only) — Edge set to analyse. Pass
+  <code>module_level_edges(...)</code> for load-time cycles; <code>None</code> uses the graph's own edges,
+  which include deferred imports and so report cycles that never occur at runtime.</li>
+</ul>
+<p><strong>Returns:</strong> <code>list[list[str]]</code> — One list of module names per cycle found.</p>
+<p>Guarded by <code>tests/test_living_doc_and_cycles.py::test_this_package_has_no_load_time_cycles</code>.
+Scope: load-time static imports of one package — a deferred, dynamic or third-party
+cycle is not modelled.</p>
 <h2 id="cli">CLI<a class="headerlink" href="#cli" title="Permanent link">&para;</a></h2>
 <div class="highlight"><pre><span></span><code><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a>python -m agentteams.architecture .                    # auto-detect package
 <a id="__codelineno-0-2" name="__codelineno-0-2" href="#__codelineno-0-2"></a>python -m agentteams.architecture . --package agentteams

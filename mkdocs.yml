@@ -78,6 +78,11 @@ nav:
       - framework-research: api-reference/framework-research.md
       - enrich: api-reference/enrich.md
       - memory-index: api-reference/memory-index.md
+      - memory-index-incremental: api-reference/memory-index-incremental.md
+      - output-plan: api-reference/output-plan.md
+      - update-report: api-reference/update-report.md
+      - living-doc: api-reference/living-doc.md
+      - cli: api-reference/cli.md
       - code-index: api-reference/code-index.md
       - code-sources: api-reference/code-sources.md
       - fence-inject: api-reference/fence-inject.md

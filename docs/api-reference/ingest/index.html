@@ -1528,10 +1528,10 @@
 </li>
         
           <li class="md-nav__item">
-  <a href="#parse_dependency_manifestsproject_path" class="md-nav__link">
+  <a href="#parse_dependency_manifestsproject_path-max_depth2" class="md-nav__link">
     <span class="md-ellipsis">
       
-        parse_dependency_manifests(project_path)
+        parse_dependency_manifests(project_path, *, max_depth=2)
       
     </span>
   </a>
@@ -2132,6 +2132,146 @@
     
   
     memory-index
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../memory-index-incremental/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    memory-index-incremental
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../output-plan/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    output-plan
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../update-report/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    update-report
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../living-doc/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    living-doc
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../cli/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    cli
   
 
     
@@ -3149,10 +3289,10 @@
 </li>
         
           <li class="md-nav__item">
-  <a href="#parse_dependency_manifestsproject_path" class="md-nav__link">
+  <a href="#parse_dependency_manifestsproject_path-max_depth2" class="md-nav__link">
     <span class="md-ellipsis">
       
-        parse_dependency_manifests(project_path)
+        parse_dependency_manifests(project_path, *, max_depth=2)
       
     </span>
   </a>
@@ -3276,8 +3416,9 @@
 <li><code>ValueError</code> — If <code>source</code> cannot be parsed or fails validation.</li>
 </ul>
 <hr />
-<h3 id="parse_dependency_manifestsproject_path"><code>parse_dependency_manifests(project_path)</code><a class="headerlink" href="#parse_dependency_manifestsproject_path" title="Permanent link">&para;</a></h3>
+<h3 id="parse_dependency_manifestsproject_path-max_depth2"><code>parse_dependency_manifests(project_path, *, max_depth=2)</code><a class="headerlink" href="#parse_dependency_manifestsproject_path-max_depth2" title="Permanent link">&para;</a></h3>
 <blockquote>
+<p>Note: <code>max_depth</code> bounds how far below <em>project_path</em> manifests are discovered.</p>
 <p><em>Source: <code>agentteams/ingest.py</code></em></p>
 </blockquote>
 <p>Parse all dependency manifest files found in a project directory.</p>

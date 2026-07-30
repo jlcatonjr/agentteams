@@ -72,6 +72,49 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### fixed
 
+- **Eight API-doc signatures had drifted from the code, two of them fatally.**
+  `drift.compute_structural_diff` was documented with parameter `manifest` where the
+  code says `new_manifest`, and `enrich.build_tool_catalog` with `packages` where the
+  code says `package_names` — a documented keyword call that raises `TypeError` is worse
+  than an omission. Also corrected: `emit_all` (missing `auto_fence_legacy`),
+  `backup_output_dir` (missing `reason`, `framework`, `description_path`),
+  `parse_dependency_manifests` (missing `*, max_depth`), `build_memory_index` (missing
+  `root`), `is_index_stale` (missing `*, root`), and
+  `inject_fence_markers`, whose parameters were documented in the **wrong order** —
+  found only because the new guard compares ordered lists; the ad-hoc check that
+  preceded it used set comparison and missed it. Every added parameter also gained a
+  description, not just a heading entry.
+- **`docs_src/assets/feature-summary-table.md` stated a total of `~126` while its own
+  addends sum to 125.** The inventory's own note warns readers that hand-maintained
+  counts drift — and the summary committed exactly that defect in the line summarising
+  the table above it. The governance-agent row was checked against
+  `analyze.GOVERNANCE_AGENTS` and is exactly right (11, names matching).
+
+### added
+
+- **`tests/test_api_doc_signatures.py`** — documented signatures must equal the real
+  parameter lists, plus arithmetic guards on the feature summary. Written **before** the
+  fixes and confirmed failing on the unfixed tree, so the corrections were verified by
+  the instrument rather than by re-reading.
+  Scope is narrow **by construction, not by allowlist**: only headings naming a
+  module-level function of the module that doc covers are compared, which excludes
+  methods (`graph.md`'s `to_dot()` without `self` is correct style) and same-name
+  functions in other modules (`parallel_plan.to_json(schedule)` vs
+  `graph.ArchitectureGraph.to_json(self)`). An allowlist would have swallowed real drift
+  along with that noise. A coverage floor (90 signatures across 25+ docs) fails on a
+  parser regression that would otherwise make the test silently vacuous.
+- **Five new API pages** — `living-doc`, `update-report`, `output-plan`,
+  `memory-index-incremental`, `cli` — plus the seven symbols added earlier today
+  (`rel_to_root`, `skip_notice`, `source_state_digest`, `store_path`, `resolve_path`,
+  `module_level_edges`, `detect_import_cycles`) documented in their existing module
+  pages. `cli.md` describes the **module decomposition** and links to
+  `cli-reference.md` for flags rather than restating them (CH-14).
+- **`api-reference/index.md` now records its own coverage gaps** — the 14 top-level
+  modules with no page, named individually, with the four over 400 lines called out as
+  the highest-value additions. They are listed rather than written because a thin page
+  that misdescribes a module is worse than a missing one. Accuracy is enforced;
+  coverage is a stated gap.
+
 - **The memory index was indexing backup snapshots: 1764 gitignored files, 83% of a
   2120-document, 51 MB committed artifact.** 1488 were
   `.agentteams-backups/` files under `examples/*/expected/`, reached because

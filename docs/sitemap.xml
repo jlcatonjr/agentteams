@@ -177,6 +177,10 @@
          <lastmod>2026-07-30</lastmod>
     </url>
     <url>
+         <loc>https://jlcatonjr.github.io/agentteams/api-reference/cli/</loc>
+         <lastmod>2026-07-30</lastmod>
+    </url>
+    <url>
          <loc>https://jlcatonjr.github.io/agentteams/api-reference/code-index/</loc>
          <lastmod>2026-07-30</lastmod>
     </url>
@@ -273,6 +277,10 @@
          <lastmod>2026-07-30</lastmod>
     </url>
     <url>
+         <loc>https://jlcatonjr.github.io/agentteams/api-reference/living-doc/</loc>
+         <lastmod>2026-07-30</lastmod>
+    </url>
+    <url>
          <loc>https://jlcatonjr.github.io/agentteams/api-reference/man/</loc>
          <lastmod>2026-07-30</lastmod>
     </url>
@@ -289,11 +297,19 @@
          <lastmod>2026-07-30</lastmod>
     </url>
     <url>
+         <loc>https://jlcatonjr.github.io/agentteams/api-reference/memory-index-incremental/</loc>
+         <lastmod>2026-07-30</lastmod>
+    </url>
+    <url>
          <loc>https://jlcatonjr.github.io/agentteams/api-reference/memory-index/</loc>
          <lastmod>2026-07-30</lastmod>
     </url>
     <url>
          <loc>https://jlcatonjr.github.io/agentteams/api-reference/model-routing/</loc>
+         <lastmod>2026-07-30</lastmod>
+    </url>
+    <url>
+         <loc>https://jlcatonjr.github.io/agentteams/api-reference/output-plan/</loc>
          <lastmod>2026-07-30</lastmod>
     </url>
     <url>
@@ -338,6 +354,10 @@
     </url>
     <url>
          <loc>https://jlcatonjr.github.io/agentteams/api-reference/session_scan/</loc>
+         <lastmod>2026-07-30</lastmod>
+    </url>
+    <url>
+         <loc>https://jlcatonjr.github.io/agentteams/api-reference/update-report/</loc>
          <lastmod>2026-07-30</lastmod>
     </url>
     <url>

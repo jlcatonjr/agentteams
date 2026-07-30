@@ -18,7 +18,7 @@
         <link rel="prev" href="../enrich/">
       
       
-        <link rel="next" href="../code-index/">
+        <link rel="next" href="../memory-index-incremental/">
       
       
         
@@ -2088,10 +2088,10 @@
       <ul class="md-nav__list">
         
           <li class="md-nav__item">
-  <a href="#build_memory_indexsources-project_name-framework" class="md-nav__link">
+  <a href="#build_memory_indexsources-project_name-framework-rootnone" class="md-nav__link">
     <span class="md-ellipsis">
       
-        build_memory_index(sources, *, project_name="", framework="")
+        build_memory_index(sources, *, project_name="", framework="", root=None)
       
     </span>
   </a>
@@ -2099,10 +2099,10 @@
 </li>
         
           <li class="md-nav__item">
-  <a href="#is_index_staleindex-sources" class="md-nav__link">
+  <a href="#is_index_staleindex-sources-rootnone" class="md-nav__link">
     <span class="md-ellipsis">
       
-        is_index_stale(index, sources)
+        is_index_stale(index, sources, *, root=None)
       
     </span>
   </a>
@@ -2259,6 +2259,45 @@
 </li>
       
         <li class="md-nav__item">
+  <a href="#path-storage" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Path Storage
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Path Storage">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#store_pathpath-root-str" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        store_path(path, root) -&gt; str
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#resolve_pathstored-root-path" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        resolve_path(stored, root) -&gt; Path
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
   <a href="#integration-notes" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -2295,6 +2334,146 @@
   
 </nav>
       
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../memory-index-incremental/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    memory-index-incremental
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../output-plan/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    output-plan
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../update-report/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    update-report
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../living-doc/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    living-doc
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../cli/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    cli
+  
+
+    
+  </span>
+  
+  
+
+      </a>
     </li>
   
 
@@ -3332,10 +3511,10 @@
       <ul class="md-nav__list">
         
           <li class="md-nav__item">
-  <a href="#build_memory_indexsources-project_name-framework" class="md-nav__link">
+  <a href="#build_memory_indexsources-project_name-framework-rootnone" class="md-nav__link">
     <span class="md-ellipsis">
       
-        build_memory_index(sources, *, project_name="", framework="")
+        build_memory_index(sources, *, project_name="", framework="", root=None)
       
     </span>
   </a>
@@ -3343,10 +3522,10 @@
 </li>
         
           <li class="md-nav__item">
-  <a href="#is_index_staleindex-sources" class="md-nav__link">
+  <a href="#is_index_staleindex-sources-rootnone" class="md-nav__link">
     <span class="md-ellipsis">
       
-        is_index_stale(index, sources)
+        is_index_stale(index, sources, *, root=None)
       
     </span>
   </a>
@@ -3503,6 +3682,45 @@
 </li>
       
         <li class="md-nav__item">
+  <a href="#path-storage" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Path Storage
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Path Storage">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#store_pathpath-root-str" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        store_path(path, root) -&gt; str
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#resolve_pathstored-root-path" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        resolve_path(stored, root) -&gt; Path
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
   <a href="#integration-notes" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -3605,7 +3823,7 @@
 </table>
 <hr />
 <h2 id="functions">Functions<a class="headerlink" href="#functions" title="Permanent link">&para;</a></h2>
-<h3 id="build_memory_indexsources-project_name-framework"><code>build_memory_index(sources, *, project_name="", framework="")</code><a class="headerlink" href="#build_memory_indexsources-project_name-framework" title="Permanent link">&para;</a></h3>
+<h3 id="build_memory_indexsources-project_name-framework-rootnone"><code>build_memory_index(sources, *, project_name="", framework="", root=None)</code><a class="headerlink" href="#build_memory_indexsources-project_name-framework-rootnone" title="Permanent link">&para;</a></h3>
 <blockquote>
 <p><em>Source: <code>agentteams/memory_index.py</code></em></p>
 </blockquote>
@@ -3615,6 +3833,7 @@
 <li><code>sources</code> (<code>Iterable[Path | str]</code>) — List of file paths to index (work summaries, CHANGELOG, plan artifacts, etc.). Missing or unreadable files are silently skipped.</li>
 <li><code>project_name</code> (<code>str</code>, keyword-only) — Optional project name to embed in the index metadata. Default: <code>""</code>.</li>
 <li><code>framework</code> (<code>str</code>, keyword-only) — Optional framework name to embed in the index metadata. Default: <code>""</code>.</li>
+<li><code>root</code> (<code>Path | None</code>, keyword-only) — Project root. When given, each document's <code>path</code> is stored <strong>relative to it</strong>; the index is a committed artifact, so absolute paths leak the operator's home directory. Relativization happens here rather than at serialization so <code>source_fingerprint</code>, derived from the document paths, describes the paths actually stored. A source outside <code>root</code> stays absolute — it is genuinely external. Default: <code>None</code>, preserving absolute paths for existing callers.</li>
 </ul>
 <p><strong>Returns:</strong> <code>dict[str, Any]</code> — Index dict with keys:
 - <code>artifact_type</code>: <code>"memory-index"</code>
@@ -3646,7 +3865,7 @@
 <li>No exceptions; I/O failures are silently skipped.</li>
 </ul>
 <hr />
-<h3 id="is_index_staleindex-sources"><code>is_index_stale(index, sources)</code><a class="headerlink" href="#is_index_staleindex-sources" title="Permanent link">&para;</a></h3>
+<h3 id="is_index_staleindex-sources-rootnone"><code>is_index_stale(index, sources, *, root=None)</code><a class="headerlink" href="#is_index_staleindex-sources-rootnone" title="Permanent link">&para;</a></h3>
 <blockquote>
 <p><em>Source: <code>agentteams/memory_index.py</code></em></p>
 </blockquote>
@@ -3655,6 +3874,7 @@
 <ul>
 <li><code>index</code> (<code>dict[str, Any]</code>) — Index dict from <code>build_memory_index()</code>.</li>
 <li><code>sources</code> (<code>Iterable[Path | str]</code>) — Original source paths (same list used for build, or a subset).</li>
+<li><code>root</code> (<code>Path | None</code>, keyword-only) — The project root the index was built against. <strong>Required when the index stores relative paths:</strong> without it each <code>path</code> resolves against the process CWD, the hash read fails, and the index reports stale on every call — triggering a full rebuild per query. Default: <code>None</code>, for indexes storing absolute paths.</li>
 </ul>
 <p><strong>Returns:</strong> <code>bool</code> — <code>True</code> if any source content hash mismatches indexed <code>source_hash</code>, or if any source mtime &gt; index <code>built_at</code> (index is stale); <code>False</code> otherwise.</p>
 <p><strong>Safety:</strong> Invalid/missing timestamps are treated as stale (conservative). Missing/unreadable files for hashed documents are also treated as stale.</p>
@@ -3856,6 +4076,39 @@
 <li>It is separate from relational retrieval-integrator validation contracts in other module domains.</li>
 </ul>
 <hr />
+<h2 id="path-storage">Path Storage<a class="headerlink" href="#path-storage" title="Permanent link">&para;</a></h2>
+<p>Document paths are stored <strong>relative to the project root</strong> when <code>build_memory_index</code>
+is given <code>root=</code>. The index is a committed artifact, so absolute paths leak the
+operator's home directory and username — this repository's own index carried 2135 of
+them before the change.</p>
+<h3 id="store_pathpath-root-str"><code>store_path(path, root) -&gt; str</code><a class="headerlink" href="#store_pathpath-root-str" title="Permanent link">&para;</a></h3>
+<blockquote>
+<p><em>Source: <code>agentteams/memory_index.py</code></em></p>
+</blockquote>
+<p>Render a document path for storage.</p>
+<p><strong>Args:</strong></p>
+<ul>
+<li><code>path</code> (<code>Path | str</code>) — The source file path, normally absolute.</li>
+<li><code>root</code> (<code>Path | None</code>) — Project root to relativize against, or <code>None</code> to store as-is.</li>
+</ul>
+<p><strong>Returns:</strong> <code>str</code> — Relative to <code>root</code> when the path lies inside it; unchanged
+otherwise. A path <strong>outside</strong> the project stays absolute deliberately: it is genuinely
+external, and silently rewriting it would misdescribe where it came from.</p>
+<h3 id="resolve_pathstored-root-path"><code>resolve_path(stored, root) -&gt; Path</code><a class="headerlink" href="#resolve_pathstored-root-path" title="Permanent link">&para;</a></h3>
+<blockquote>
+<p><em>Source: <code>agentteams/memory_index.py</code></em></p>
+</blockquote>
+<p>Invert <code>store_path</code> — turn a stored path back into a readable one.</p>
+<p><strong>Args:</strong></p>
+<ul>
+<li><code>stored</code> (<code>str</code>) — The <code>path</code> value from an index document.</li>
+<li><code>root</code> (<code>Path | None</code>) — Project root the index was built against.</li>
+</ul>
+<p><strong>Returns:</strong> <code>Path</code> — Absolute when <code>root</code> is given and <code>stored</code> is relative; otherwise
+<code>Path(stored)</code> unchanged.</p>
+<p><strong>Callers must pass the same <code>root</code> used at build time.</strong> A reader that omits it
+resolves relative paths against the process CWD, fails every hash read, and reports the
+index stale on every call.</p>
 <h2 id="integration-notes">Integration Notes<a class="headerlink" href="#integration-notes" title="Permanent link">&para;</a></h2>
 <ul>
 <li><strong>Durable sources</strong> (I7): Caller is responsible for passing explicit source paths; the module never globs <code>tmp/</code> or ignored directories</li>
