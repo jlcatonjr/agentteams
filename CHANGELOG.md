@@ -110,6 +110,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### fixed
 
+- **`test_committed_check_reports_describe_the_committed_source_state` broke CI on
+  `main` and I did not notice for four merges.** The test compares a committed
+  bridge-check verdict against the working tree's source team — but `.github/agents/*`
+  is gitignored here (1 of ~35 files tracked), so a fresh clone has nothing to hash and
+  the digest degrades to `sha256("")` = `e3b0c442…`, which can never match a committed
+  report. It passed locally only because those files exist on the author's disk.
+  `main`'s CI went red at `f145434` (the commit introducing it) and stayed red through
+  three further merges, each verified locally and reported as green while CI was not.
+  The check is **inherently local-only** and now says so: it skips, with the reason, when
+  the source team is absent. Skipped rather than relaxed — comparing against an empty
+  tree would "pass" only by making the assertion meaningless, which is the failure mode
+  the file exists to prevent. Verified both ways: skips in a simulated fresh checkout,
+  runs and passes locally.
+
 - **Eight API-doc signatures had drifted from the code, two of them fatally.**
   `drift.compute_structural_diff` was documented with parameter `manifest` where the
   code says `new_manifest`, and `enrich.build_tool_catalog` with `packages` where the
@@ -129,6 +143,24 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `analyze.GOVERNANCE_AGENTS` and is exactly right (11, names matching).
 
 ### added
+
+- **`.github/workflows/changelog-link.yml`** — a PR touching `agentteams/**/*.py` must
+  also touch `CHANGELOG.md`. Origin: PR #56 landed the retrieval validation-cache code
+  on 2026-07-16 while its changelog entry sat in an unpushed local commit until
+  2026-07-29 — two weeks in which a ~28.8× speed-up and a documented *not adopted:
+  fastjsonschema* decision were absent from the changelog while the code shipped.
+  Nothing linked the two.
+  **This check fails rather than advises, which is the one place this repository's
+  instruments do so.** `check_session_obligations.py` always exits 0 and
+  `advisory-pr.yml` never merges, both because gating would try to *prevent* what the
+  accountability principle says can only be made *answerable*. The same principle is
+  why this one fails: an advisory that can be ignored is precisely what already failed
+  here. The accountability is the override, not the gate — a `no-changelog` label passes
+  the check and leaves a record on the PR of who judged the change to need no entry.
+  Proceeding is always available; proceeding *silently* is not. Bot-authored PRs (the
+  scheduled bridge-maintenance and framework-auto-update runs) are exempt.
+  Validated against real history rather than assumed: replaying **PR #56's own diff**
+  through the check's conditions fails it correctly, and today's merged PRs pass.
 
 - **`tests/test_api_doc_signatures.py`** — documented signatures must equal the real
   parameter lists, plus arithmetic guards on the feature summary. Written **before** the

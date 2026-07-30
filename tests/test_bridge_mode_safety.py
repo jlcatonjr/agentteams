@@ -23,6 +23,8 @@ from __future__ import annotations
 import re
 from pathlib import Path
 
+import pytest
+
 from agentteams.bridge import skip_notice
 from agentteams.cli.commands import _bridge_mode_label
 
@@ -323,10 +325,25 @@ def test_committed_check_reports_describe_the_committed_source_state() -> None:
 
     source_dir = REPO_ROOT / ".github/agents"
     if not source_dir.is_dir():
-        return
-    current = source_state_digest(
-        _compute_hash_rows(_collect_source_files(source_dir, "copilot-vscode"), source_dir)
-    )
+        pytest.skip("no copilot-vscode source team in this checkout")
+
+    source_files = _collect_source_files(source_dir, "copilot-vscode")
+    if not source_files:
+        # `.github/agents/*` is gitignored in this repository (.gitignore:23) — only
+        # 1 of ~35 files is tracked — so a fresh clone has no source team to hash and
+        # the digest degrades to sha256("") = e3b0c442…, which can never match a
+        # committed report. This check is therefore inherently LOCAL-ONLY: it compares
+        # a committed verdict against a working tree that CI does not have.
+        #
+        # It is skipped rather than relaxed. Comparing against an empty tree would
+        # "pass" only by making the assertion meaningless, and a green check that
+        # verifies nothing is the failure mode this whole file exists to prevent.
+        pytest.skip(
+            "source team is gitignored and absent from this checkout; the committed-"
+            "verdict comparison is local-only"
+        )
+
+    current = source_state_digest(_compute_hash_rows(source_files, source_dir))
 
     stale: dict[str, str] = {}
     checked = 0
