@@ -1,3 +1,10 @@
+<!--
+SECTION MANIFEST
+| section_id | designation  |
+|------------|--------------|
+| content    | FENCED       |
+-->
+
 <!-- AGENTTEAMS:BEGIN content v=1 -->
 # Unix Philosophy — Code Hygiene Mapping (WebAppBackend)
 

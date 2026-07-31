@@ -124,6 +124,7 @@ SECTION MANIFEST — orchestrator.template.md
 | constitutional_rules        | USER-EDITABLE      | Project may extend                        |
 | available_workflows         | FENCED             | Full workflow definitions; project rules go in gap before BEGIN |
 | project_rules               | USER-EDITABLE      | Project-specific rules below routing table (preserved by --update) |
+| routing_table_rows   | FENCED       |
 -->
 
 # Orchestrator — ProjectRepositories
@@ -520,6 +521,7 @@ A workflow step may attach a workflow-specific instruction to its closeout refer
 *(Skip Part A if no plan was active for the current session.)*
 
 1. Read the current plan steps file from `tmp/by-week/YYYY-Www/<current-plan-slug>.steps.csv` when present, otherwise from legacy `tmp/<current-plan-slug>.steps.csv` → list all rows where `status` is `pending` or `blocked`
+   - **A plan file with no steps CSV is a Rule 9 finding, not an absent plan.** Distinguish the two before skipping Part A: if no plan was written, Part A does not apply; if a `*.plan.md` exists for this session without its `*.steps.csv`, the obligation was incurred and not met — record it and create the CSV before closing. Skipping Part A because the CSV is missing suppresses the only check that would catch its absence.
 2. For each open item:
    a. Investigate: read relevant files, verify facts on disk
   b. If no sub-plan exists for the issue: create `tmp/by-week/YYYY-Www/<issue-slug>.plan.md` + `tmp/by-week/YYYY-Www/<issue-slug>.steps.csv` per the Pre-Execution Requirement above

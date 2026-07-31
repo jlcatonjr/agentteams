@@ -20,6 +20,13 @@ handoffs:
     send: false
 
 ---
+<!--
+SECTION MANIFEST
+| section_id                | designation  |
+|---------------------------|--------------|
+| memory_index_consultation | FENCED       |
+-->
+
 
 # Quality Auditor — WebAppBackend
 

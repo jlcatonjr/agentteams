@@ -128,4 +128,18 @@ agent files and replace with the correct value.
 
 
 Once all items above are resolved, invoke `@conflict-auditor` to verify consistency.
+
+## Recommended `.gitignore` entries
+
+Your generated team writes two machine-local caches that should **not** be committed. Add these
+to this repository's `.gitignore`:
+
+```gitignore
+# agentteams retrieval validation-cache sidecars — machine-local, rebuilt on demand
+**/references/memory-index.vcache
+**/references/code-index/
+```
+
+Already committed one by mistake? `.gitignore` does not untrack an existing file — use
+`git rm --cached <path>` first, then confirm with `git ls-files | grep vcache`.
 <!-- AGENTTEAMS:END content -->

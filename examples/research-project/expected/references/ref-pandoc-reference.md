@@ -1,3 +1,10 @@
+<!--
+SECTION MANIFEST
+| section_id       | designation  |
+|------------------|--------------|
+| tool_api_surface | FENCED       |
+-->
+
 # Pandoc — CLI Reference — ResearchPaperProject
 
 > Operational reference for the **Pandoc ** command-line tool in ResearchPaperProject.

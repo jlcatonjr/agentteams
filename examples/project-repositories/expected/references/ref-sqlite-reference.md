@@ -1,3 +1,10 @@
+<!--
+SECTION MANIFEST
+| section_id       | designation  |
+|------------------|--------------|
+| tool_api_surface | FENCED       |
+-->
+
 # SQLite — Database Reference — ProjectRepositories
 
 > Operational reference for the **SQLite ** database in ProjectRepositories.

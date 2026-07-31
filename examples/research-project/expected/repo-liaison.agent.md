@@ -144,7 +144,7 @@ project) with no `@security` step — this protocol follows the same pattern.
    if absent). Skip any incoming item that duplicates an existing `open` row (same normalized
    `summary`) — `@conflict-auditor` has already deduplicated once upstream in the Retrospective
    subroutine; this is a defense-in-depth re-check, not a second audit.
-2. Append one row per surviving item: `date,source_repo,category,summary,proposed_touch_points,status`
+2. Append one row per surviving item: `date,source_repo,category,summary,proposed_touch_points,status,resolved_date,resolved_evidence`
    — `category` is always `agentteams-remediation`; `source_repo` is this project's name;
    `status` always starts `open`. Never edit an existing row — status changes are maintainer-owned.
 3. **Destination exception:** if this project *is* the AgentTeamsModule repository itself, append

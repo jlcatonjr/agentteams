@@ -27,6 +27,7 @@ SECTION MANIFEST — technical-validator.template.md
 |------------------------|---------------|------------------------------------|
 | authority_sources_list | FENCED        | From project authority_hierarchy   |
 | accuracy_rules         | USER-EDITABLE | Project may extend                 |
+| memory_index_consultation | FENCED       |
 -->
 
 # Technical Validator — WebAppBackend

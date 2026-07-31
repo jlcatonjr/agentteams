@@ -1,3 +1,10 @@
+<!--
+SECTION MANIFEST
+| section_id | designation  |
+|------------|--------------|
+| content    | FENCED       |
+-->
+
 # AI Coding Bad-Habits Catalog — SalesDataPipeline
 
 <!-- AGENTTEAMS:BEGIN content v=1 -->

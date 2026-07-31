@@ -14,6 +14,13 @@ handoffs:
     prompt: "Conflict resolutions may require agent documentation updates."
     send: false
 ---
+<!--
+SECTION MANIFEST
+| section_id                | designation  |
+|---------------------------|--------------|
+| memory_index_consultation | FENCED       |
+-->
+
 
 # Conflict Resolution — ResearchPaperProject
 
