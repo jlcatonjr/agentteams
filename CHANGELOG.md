@@ -6,6 +6,297 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### added (existing agent files are now genuinely updatable)
+
+Plan and audit: `tmp/by-week/2026-W31/agent-file-updatability.plan.md`.
+
+Measuring first corrected the premise. Across this repo's 34 generated agent files, **76% of body
+content already updated** — 2,657 fenced lines against 723 template-owned-but-unfenced and 770 of
+front matter. Only 121 unfenced lines are legitimately the project's. So "template changes never
+reach deployed teams" was too pessimistic; the real gaps were two specific mechanisms.
+
+- **Positional fence insertion — the keystone.** A section present in the fresh render but absent
+  on disk was appended at the *absolute end of the file*, whatever its position in the render. A
+  template author adding a gate step meant to run **before** an existing instruction got correct
+  placement on a fresh build and a silently inverted execution order on `--update --merge`. It
+  also made retrofitting fences impossible, which is what stranded those 723 lines:
+  `fence_inject` no-ops on any already-fenced file, so a template gaining a fence was the only
+  route into a deployed team, and that route mislanded. New sections now anchor to the nearest
+  preceding section, then the nearest following one, and only append as a genuine last resort —
+  which is now *reported* rather than silent. Existing content is never reordered; a file whose
+  author deliberately arranged its sections keeps that arrangement.
+- **Three-way front-matter merge.** Front matter can never be fenced — YAML must be the literal
+  first bytes, before any HTML comment — so it needed a different mechanism, not a better fence.
+  The build log now records the front matter *as emitted*, which makes "the project never touched
+  this key" provable rather than assumed. That is precisely what was missing when
+  `--sync-front-matter` was withdrawn a day earlier: a two-way difference cannot tell you who
+  caused it. Template moved and the project didn't ⇒ apply. Both moved ⇒ conflict, keep theirs,
+  report. No baseline ⇒ apply nothing, because an unknown baseline is not permission.
+- **Capability keys are still never applied automatically.** `tools`, `model` and `agents` are
+  reported as proposals however clean their provenance. Proving nobody edited `tools:` is not the
+  same as having authority to grant a downstream agent shell access — the security carve-out from
+  the plan audit, and the reason this is safe to enable by default.
+
+End to end on a synthetic deployed team: a metadata change propagates, a `tools:` change is held
+back with the exact line to apply. That is the `retrieval`-grant case that started this.
+
+**The pilot measured rather than assumed.** Fencing one section (`Invariant Core` in
+`tool-doc-researcher`) touches 3 files, 3 added lines each, no collateral — so completing the
+fencing is mechanical and low-risk per section, just repetitive. It is logged as open with that
+number attached, so the decision to continue rests on a measurement.
+
+The update *agent* is designed and deliberately deferred to its own round: it proposes and never
+writes, lives in agentteams rather than being generated into consumers (an agent editing its own
+instruction file mid-run is a footgun), and refuses targets not under version control. Building
+the highest-privilege component before its substrate is trusted is the wrong order.
+
+### fixed (the backlog was 27% stale again, one day after shipping the fix for that)
+
+Tier 1 of a tiered backlog remediation. Plan, per-item audits and tier meta plans:
+`tmp/by-week/2026-W31/backlog-tiered-remediation.plan.md`.
+
+- **13 rows closed with evidence; 48 open → 34.** Every one was verified against the tree, and
+  each closure names a test, module, commit or stated verification a later reader can check. The
+  condition is embarrassing and worth stating plainly: closure columns were added on 2026-07-30
+  *because* rows were fixed-but-open, and the three rounds that followed fixed a dozen more
+  items without closing a single row — because nothing in the process invoked the new columns.
+- **`tests/test_session_closeout_obligation.py` — the obligation as a test, not prose.** A
+  convention someone has to remember loses to finishing the work; that is the whole lesson here.
+  It checks that closures are evidenced, that dates are coherent, and that the reconciled share
+  of the log does not collapse back toward zero. It deliberately does **not** guess which rows
+  *should* close — an automated guess that closes a live row is worse than a stale open one, and
+  that design was proposed for this round and rejected in audit. `references/filing-conventions.md`
+  states the rule so a close-out failure is not someone's first notice of it.
+- **`cli/artifacts.py` decomposed, 976 → 621.** The code-index half — a *gitignored, rebuildable
+  cache*, as against the memory index's *committed* artifact — moved to
+  `cli/code_index_artifacts.py`, with re-exports so every import site resolves unchanged. The
+  split was already latent: a section rule separated the two clusters. It leaves the crowded set,
+  and the currency test now enforces that the baseline says so.
+
+**Audit changed the scope three times, and that is the point of running one.** Starting with
+`audit.py` was rejected — at one line of headroom it is the *worst* place to learn what a
+decomposition costs, not the safest, so the roomiest module went first. An automated
+staleness-detector for the log was rejected as the original defect in a new costume. And the
+fleet-wide front-matter propagation item was removed from Tier 1 entirely: it writes privilege
+declarations across repositories, one of which has no version control, so bundling it beside a
+log reconciliation was a scoping error rather than an ambitious plan.
+
+Four modules remain crowded (`audit.py` 999, `goose.py` 996, `graph.py` 992, `generate.py` 991),
+held by the ratchet and logged. Tiers 2–4 are planned but explicitly **provisional**: 32 of their
+rows are unverified, and every enumeration this session has found the log stale, so each of those
+plans begins with verification rather than trusting its own description.
+
+### fixed (round close-out — and one deferral whose stated reason was simply wrong)
+
+Closing the items the medium-complexity round left open. The audit lens set was widened this
+time — `@technical-validator`, `@code-hygiene`, `@security`, `@repo-liaison`, `@test-suite-expert`
+alongside the usual two — after several rounds in which the narrow pair kept missing the same
+class of error: a claim about the tree that nobody checked. It caught one on first use.
+
+- **Unfenced prose drift is now reported, and the reason it was deferred was false.** The
+  previous round deferred it because "an edit cannot be told apart from intended authorship
+  without a provenance mechanism the format does not have". `references/build-log.json` records
+  a per-file hash of what was last emitted (45 entries), and
+  `drift.detect_user_customizations` already compares it. The mechanism existed; it went
+  unchecked. Drift in unfenced regions is now reported for files whose hash still matches — i.e.
+  files nobody has edited, where divergence is template drift by elimination. For a modified
+  file it stays silent, which is correct: that prose is the operator's. Built on the existing
+  detector and the existing comparison, not a parallel implementation.
+- **The drift notice now carries the exact line to change.** An auto-applying
+  `--sync-front-matter` was designed and **withdrawn** in audit: `tools:` is a privilege
+  declaration, so writing it unattended is a privilege-escalation path, and the same command runs
+  against consumer repos — one of which has no version control, making a bad write
+  unrecoverable. A human applying a one-line edit they can see is the right cost. The fleet-wide
+  propagation gap stays open and logged, visibly, rather than half-fixed.
+- **The nondeterministic live test no longer reddens ordinary runs.** Measured over five runs:
+  two passes, three failures, failing identically with every local change stashed. It asserts
+  that a live model emits `delegated` rather than `early-stop` — and this repo's own log already
+  records that OpenRouter backends differ in tool-calling correctness, which is why
+  `scripts/goose-run-resilient.py` exists. It measures the provider, not this code. Now gated on
+  `AGENTTEAMS_LIVE_MODEL_TESTS=1`, with a skip reason stating the pass rate and why. The stable
+  live probe is untouched. Side effect: a suite run is ~100s faster.
+- **A CH-07 headroom ratchet, and the ceiling problem is bigger than one module.** Adding an
+  early-warning guard revealed **five** modules within 25 lines of the 1000-line ceiling —
+  `audit.py` at 999, `frameworks/goose.py` 996, `graph.py` 992, `cli/generate.py` 991,
+  `cli/artifacts.py` 976. Three have under ten lines of runway, which is why three unrelated
+  carves landed inside one session: nobody gets a warning until they are already blocked. The
+  planned fourth carve was **withdrawn** — relocating gate-adjacent control flow to buy line count
+  trades real risk for a number, against a docstring calling the pipeline's linear order
+  load-bearing. Instead the crowded set is recorded as a ratchet (the `BROAD_EXCEPT_BASELINE`
+  precedent): a listed module may shrink, never grow, and a new entrant fails. A third test keeps
+  the baseline honest by failing if it lists a module that has since been decomposed.
+- **`references/freshness-gate-scoping-decision.md`** — the security-gate scoping question, laid
+  out with the argument on each side and **no recommendation**. How much security margin to trade
+  for convenience is the operator's call, and the sharpest fact belongs in front of them: the
+  status quo's observed effect was an operator bypassing the CLI entirely, which skips every gate
+  rather than one.
+
+**A third measurement fell out of the close-out.** Adding one unrelated reference document to
+the corpus moved paraphrase top-3 recall from 3/10 to 2/10 — isolated by removing the file and
+re-measuring — while keyword recall stayed at 10/10. The floor was lowered to the observed value
+rather than the eval being adjusted to protect the old number, which would be fitting the
+benchmark to a preferred answer. It is a second, independent measurement of the same weakness:
+lexical paraphrase matching is fragile enough that an unrelated addition displaces a correct
+answer, and the corpus only grows.
+
+Three items are logged as deliberately open: the five-module decomposition, fleet-wide
+front-matter propagation, and scheduling the live provider check so regressions are noticed
+without gating.
+
+### fixed (merge preserved your edits and never said what it had skipped)
+
+Remediation of every **Medium-complexity P1/P2** item. Plan, audits and clustering:
+`tmp/by-week/2026-W31/medium-complexity-p1p2-remediation.plan.md`. Verification-before-planning
+again changed the scope: one item was already fixed, two were one defect, and one new defect was
+found in the previous session's own work.
+
+- **`--update --merge` now reports front-matter drift.** Agent-file YAML front matter lies
+  outside every `AGENTTEAMS` fence, so merge preserves it verbatim — correct, and how a project
+  keeps its own edits, but silent. Adding `retrieval` to two templates reached no
+  already-generated team and the run said nothing; both files needed hand-editing. Driving
+  `_merge_fenced_content` directly: fenced body propagates, front matter and unfenced prose do
+  not, and `shrink_notices` is empty. The fix is **detection, not different semantics** —
+  applying the template's front matter would overwrite user-owned values, the precise failure
+  merge mode exists to prevent. `MergeResult.front_matter_drift` reports drifted *keys*
+  (never values-as-diff), surfaced through the existing notice channel. `name`/`description`
+  are exempt: they interpolate the project name and would otherwise fire on every file in every
+  run, and a notice that fires on everything gets muted. Unfenced *prose* drift is explicitly
+  **not** reported — without a provenance mechanism the format lacks, an edit cannot be told
+  apart from intended authorship.
+- **`--output` write-target guard (`cli/output_target.py`).** A scratch render with a relative
+  `--output .claude/agents` once resolved against an unexpected working directory and overwrote
+  this repo's real agent tree; it was recovered from the tool's own backup, and the CLI had
+  raised nothing. The guard **fails open by design**: it refuses only a relative path landing on
+  a non-empty, git-tracked directory with *no* sign of ever being agentteams-generated. Updating
+  a real team is never blocked; anything unclassifiable warns and proceeds. `--allow-foreign-output`
+  overrides. The tests put the legitimate-update cases first, because a guard that refuses
+  `--output .github/agents` would be worse than the defect.
+- **CH-05: one name for the backup directory.** `.agentteams-backups` was restated as a literal
+  in **ten** places across nine modules (the log recorded four). Now a single
+  `backup.BACKUP_DIR_NAME`, imported everywhere; grep confirms zero remaining literals outside
+  the definition. Only the *name* is shared — `architecture._EXCLUDE_DIRS`,
+  `interop._NON_AGENT_DIRS` and `artifacts._SCRATCH_DIR_NAMES` keep their own membership,
+  because pruning an import-graph walk, filtering agent discovery, and bounding index sources
+  are three different questions and collapsing them would be a worse coupling than the
+  duplication it removed.
+
+### fixed (two defects in the previous session's own CLI work)
+
+- **`--dry-run --json` was still broken on the `--self` path.** Last session's fix wrapped only
+  `run_generate`, leaving every print issued *before* dispatch on real stdout: `cli/app.py`'s
+  "Self-maintenance mode:" banner landed ahead of the document and `json.load(sys.stdin)` failed
+  at line 1 again (stdout 12 897 bytes, banner on line 1, JSON from line 2). Silencing that one
+  line would have fixed the symptom and left the next added print to re-break it — the boundary
+  was the bug, so it moved out to `main`. The wrapper is now re-entrant, because `main` and
+  `run_generate` both wrap and a naive second entry would stash the already-redirected stream.
+- **The security-gate codes named the wrong gates.** Introduced hours earlier to make two
+  indistinguishable gates distinguishable, they were action-first and filed the *freshness* gate
+  under `[SEC-GATE/WRITE-PATH]`. Three sites raise from `_assert_destructive_action_allowed` and
+  one from `_assert_security_intelligence_fresh`; the codes are now gate-first
+  (`DESTRUCTIVE:<action>` / `INTEL-FRESHNESS`), and a test walks back from each message to the
+  `_assert_*` call above it and fails if the code names the wrong gate.
+
+### changed (a security gate diagnosed, deliberately not weakened)
+
+- The stale-intelligence gate blocks an entire run for all files, and the logged workaround was
+  to bypass the CLI and drive ingest/analyze/render/emit by hand — which skips *every* gate. The
+  planned remediation was to scope the gate; the audit rejected that as **weakening a security
+  control on convenience grounds**: a team whose security agent quotes expired advisories is a
+  hazard regardless of which file is written this minute. Scoping it is an operator decision, not
+  mine. What ships is the diagnostic half — the refusal now states its blast radius, naming how
+  many intel-bearing placeholders would actually be interpolated, so the operator can tell "the
+  intel is load-bearing here" from "one reference file is held up by a cache timestamp".
+  Recorded as a deliberate scope reduction, not a completed remediation.
+
+### fixed (the backlog said 53 open items; 8 were already done and 2 more were misdescribed)
+
+Remediation of every **Low-complexity P1/P2** item in the 2026-07-30 open-items enumeration,
+grouped into five clusters. Plan, audits and clustering:
+`tmp/by-week/2026-W31/low-complexity-p1p2-remediation.plan.md`.
+
+Verifying each item against the tree before planning changed the work three times, which is the
+main lesson of the pass:
+
+- **The bridge-manifest absolute-`source_dir` item was already fixed.** `bridge.py` has a shared
+  `rel_to_root()` and all three manifests record the relative `.github/agents`. Dropped.
+- **The memory-index item was misdescribed.** Document *paths* were already relative. What
+  actually leaked was indexed *snippet content*. And the "276 of 632 indexed documents are
+  gitignored" figure — while true — is **not a defect**: `_memory_index_sources`'s docstring
+  already rejects gitignore-based exclusion, correctly, because `workSummaries/` and
+  `references/plans/` are gitignored yet *are* the durable history the index exists to serve.
+  Gitignore marks "local", not "disposable".
+- **The stale top-level `/templates/` was gitignored and untracked**, so no clone ever carried
+  it. The hazard was real but local-only; the durable fix is the guard, not the deletion.
+
+**M1 — the remediation log could not express "done".** All 53 rows read `open`, including 8
+verifiably fixed, so the log overstated outstanding work by ~15% and prioritising from it wasted
+effort on solved problems. Added `resolved_date` + `resolved_evidence`; closed only rows with
+*mechanical* evidence (a named test, file or workflow that demonstrably exists), recording that
+evidence per row. The existing `tests/test_remediation_log_shape.py` was extended (rather than
+duplicated — it already owned this file) to assert the documented lifecycle vocabulary, that a
+terminal row carries both date and evidence, and that a non-terminal row carries neither.
+
+Two governance details the plan audit missed and the test suite caught: the documented lifecycle
+is `open → triaged → shipped | wontfix`, so the `resolved` status this change first invented was
+wrong and the rows now read `shipped`; and `liaison_logs.AGENTTEAMS_REMEDIATION_HEADERS` — not the
+CSV — is the header's single source of truth, so the schema change belonged there.
+
+Three further fixes fell out of running the suite, each an existing guard catching this work:
+
+- The repo-wide absolute-home-path guard allowlisted the memory index on the grounds that its
+  snippets are "verbatim excerpts". That reasoning does not survive inspection — snippets are
+  already truncated to 480 chars, newline-collapsed and heading-stripped, and `source_hash`
+  attests to the source document, not the excerpt. The allowlist is now **empty**, with the
+  reversal recorded where the old justification lived.
+- `cli/generate.py` stood at 998 lines against the 1000-line CH-07 ceiling, so any addition broke
+  it. Rather than weaken a ratchet that had zero exemptions, two coherent units were carved out:
+  `cli/json_mode.py` (the `--json` stdout discipline) and `cli/exit_codes.py`
+  (`_finalize_exit_code`, re-exported so existing imports are unaffected). 994 lines.
+- `docs_src/api-reference/emit.md` was updated for `print_dry_run_report`'s new `stream`
+  parameter, caught by the signature-parity test added earlier this session.
+
+
+**M2 — committed artifacts carried machine-local state.** The tracked `.claude` memory index held
+49 absolute `/Users/…` strings inside snippet text, some naming an unrelated repository — and
+because the source documents are frequently local-only, the index was the *only* place those
+strings were committed. `memory_index.redact_local_paths` now redacts at snippet-construction
+time (both the paragraph path and the legacy `_snippet` path, since either would reopen it).
+Regenerated: 0 hits. Retrieval was re-measured before and after — keyword 10/10 and paraphrase
+1/10 both unchanged, so the hygiene fix cost nothing. Separately, generated teams now get the
+`.vcache`/`code-index` ignore rules as an **operator action in SETUP-REQUIRED.md** rather than
+agentteams editing a consumer's `.gitignore`, which is not its file to write.
+
+**M3 — three ways the CLI told the operator the wrong thing.** `--dry-run --json` promised "a
+single JSON document on stdout" and emitted nine progress lines plus one `[DRY RUN] WRITE` line
+per file ahead of it, so `json.load(stdin)` failed at line 1; JSON mode now redirects human
+output to stderr and hands the real stdout to the report writer. (Patching one of the two
+`print_dry_run_report` call sites was not enough — the generate path silently kept writing JSON
+to stderr, and a test now pins that every call site passes the stream.) A no-op update no longer
+claims "no changes detected" before rewriting every live-data fence. And four gate failures
+across **two different gates** printed near-identical messages; each now carries a distinct
+`[SEC-GATE/…]` code. Two existing tests asserted on the old strings — one with a comment
+explaining how it had to pick a prefix precise enough to exclude the *other* gate's message,
+which was itself evidence of the defect.
+
+**M4 — conventions with nothing enforcing them.** `FENCE-CONVENTIONS.md` requires a SECTION
+MANIFEST in every fenced template; 10 of 26 had none and 4 more were incomplete. The guard was
+written and run against the unfixed tree first (14 failures, recorded) before anything was
+repaired, and it asserts the manifest *matches the file's real fence IDs* rather than merely
+existing — a manifest that misdescribes a file is worse than none, because it is believed.
+Designations are derived, not judged: an AGENTTEAMS-fenced region is by definition replaced on
+`--merge`, so it is `FENCED`. Also adds `scripts/regen_example_snapshots.py`, which refuses to
+run on a tree dirty outside `examples/` (regenerating over unrelated changes bakes them into the
+goldens) and never adds a snapshot that does not already exist.
+
+**M5 — stale references to a layout that changed.** Removed the stray top-level `templates/`
+after an evidence pass (3 files, 0 tracked, gitignored, zero readers; every `TEMPLATES_DIR`
+resolves to `agentteams/templates`; the stray carried 9 constitutional rules against the
+canonical 28 and nothing unique). `tests/test_canonical_template_root.py` is the lasting part:
+it pins that no module binds `TEMPLATES_DIR` to the repo root, tolerates the several legitimate
+spellings of the canonical path, and proves its own predicate can fire. Corrected nine citations
+in `.claude/CLAUDE.md` that still named `src/` (renamed to `agentteams/`) and the removed
+top-level `templates/`.
+
 ### fixed (schema drift that made strict manifest validation fail, and the missing test behind it)
 
 - **Three separate drifts between `build_manifest` and `team-manifest.schema.json`**, all
