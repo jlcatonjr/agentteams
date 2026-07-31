@@ -3,6 +3,8 @@ SECTION MANIFEST
 | section_id       | designation  |
 |------------------|--------------|
 | tool_api_surface | FENCED       |
+| key_api_surface  | FENCED       |
+| output_interpretation| FENCED       |
 -->
 
 # Pandoc — CLI Reference — ResearchPaperProject
@@ -22,7 +24,9 @@ Consult the official Pandoc documentation at: {MANUAL:TOOL_DOCS_URL}
 
 Verify CLI flags, configuration options, and rule/plugin behavior against this documentation.
 
+<!-- AGENTTEAMS:BEGIN key_api_surface v=1 -->
 ## Key API Surface
+<!-- AGENTTEAMS:END key_api_surface -->
 
 <!-- AGENTTEAMS:BEGIN tool_api_surface v=1 -->
 {MANUAL:TOOL_API_SURFACE}
@@ -56,6 +60,7 @@ Before any configuration change:
 3. Check exit code — non-zero exit indicates findings or errors
 4. Parse output to identify actionable items vs informational messages
 
+<!-- AGENTTEAMS:BEGIN output_interpretation v=1 -->
 ## Output Interpretation
 
 After every execution:
@@ -63,6 +68,7 @@ After every execution:
 - Identify auto-fixable issues vs those requiring manual intervention
 - For auto-fixable issues, apply the fix and re-run to verify
 - Report remaining issues with file paths and line numbers
+<!-- AGENTTEAMS:END output_interpretation -->
 
 ## Integration
 

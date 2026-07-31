@@ -3,6 +3,11 @@ SECTION MANIFEST
 | section_id       | designation  |
 |------------------|--------------|
 | tool_api_surface | FENCED       |
+| key_api_surface  | FENCED       |
+| schema_management| FENCED       |
+| query_standards  | FENCED       |
+| backup_recovery  | FENCED       |
+| when_to_involve_the_team| FENCED       |
 -->
 
 # PostgreSQL — Database Reference — WebAppBackend
@@ -23,7 +28,9 @@ Consult the official PostgreSQL documentation at: {MANUAL:TOOL_DOCS_URL}
 
 Verify SQL dialect features, configuration parameters, and data types against this documentation.
 
+<!-- AGENTTEAMS:BEGIN key_api_surface v=1 -->
 ## Key API Surface
+<!-- AGENTTEAMS:END key_api_surface -->
 
 <!-- AGENTTEAMS:BEGIN tool_api_surface v=1 -->
 {MANUAL:TOOL_API_SURFACE}
@@ -39,19 +46,23 @@ Verify SQL dialect features, configuration parameters, and data types against th
 
 ---
 
+<!-- AGENTTEAMS:BEGIN schema_management v=1 -->
 ## Schema Management
 
 1. All schema changes must be expressed as versioned migrations
 2. Before applying a migration: verify it is backward-compatible with the current schema version
 3. Never drop tables or columns without `@security` clearance
 4. Document all schema changes in the migration file header
+<!-- AGENTTEAMS:END schema_management -->
 
+<!-- AGENTTEAMS:BEGIN query_standards v=1 -->
 ## Query Standards
 
 1. All queries must use parameterized statements — **no string concatenation**
 2. Verify query plans for any query touching > 10 000 rows
 3. Index recommendations must cite the specific query they optimise
 4. All queries must be tested against representative data volumes
+<!-- AGENTTEAMS:END query_standards -->
 
 ## Config Management
 
@@ -64,12 +75,15 @@ Before any configuration change:
 4. Back up the existing config before writing
 5. Apply the change and verify connectivity
 
+<!-- AGENTTEAMS:BEGIN backup_recovery v=1 -->
 ## Backup & Recovery
 
 1. Verify backup schedule is documented
 2. Never overwrite existing backups without confirmation
 3. Test restore procedures against a non-production copy
+<!-- AGENTTEAMS:END backup_recovery -->
 
+<!-- AGENTTEAMS:BEGIN when_to_involve_the_team v=1 -->
 ## When to Involve the Team
 
 Raise with `@orchestrator` (and `@security` for credentials) when:
@@ -77,3 +91,5 @@ Raise with `@orchestrator` (and `@security` for credentials) when:
 - Query performance degrades > 2× after a change
 - Credential rotation is required
 - Data loss or corruption is suspected
+<!-- AGENTTEAMS:END when_to_involve_the_team -->
+

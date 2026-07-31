@@ -34,6 +34,8 @@ SECTION MANIFEST — conflict-auditor.template.md
 | authority_sources_list     | FENCED        | From project authority_hierarchy   |
 | handoff_payload_codes      | FENCED        | PAYLOAD_UNTYPED / PAYLOAD_MISMATCH |
 | scope_and_rules            | USER-EDITABLE | Project may extend                 |
+| rules                      | FENCED        | Template-owned section             |
+| handoff_payload_conflict_codes| FENCED        | Template-owned section             |
 -->
 
 # Conflict Auditor — {PROJECT_NAME}
@@ -138,6 +140,7 @@ Append to `{CONFLICT_LOG_PATH}` with columns:
 
 ---
 
+<!-- AGENTTEAMS:BEGIN rules v=1 -->
 ## Rules
 
 1. Log every finding — do not silently accept or resolve
@@ -147,8 +150,11 @@ Append to `{CONFLICT_LOG_PATH}` with columns:
 5. A clean audit (no findings) must still produce an entry in the log
 
 ---
+<!-- AGENTTEAMS:END rules -->
 
+<!-- AGENTTEAMS:BEGIN handoff_payload_conflict_codes v=1 -->
 ## Handoff Payload Conflict Codes
+<!-- AGENTTEAMS:END handoff_payload_conflict_codes -->
 
 <!-- AGENTTEAMS:BEGIN handoff_payload_codes v=1 -->
 When auditing `.steps.csv` artifacts that declare `payload_schema_in` / `payload_schema_out` columns, emit these additional codes via `agentteams.handoff_payloads.audit_handoff_chain`:

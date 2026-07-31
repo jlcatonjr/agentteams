@@ -5,6 +5,7 @@ SECTION MANIFEST — framework-watch.reference.template.md
 | section_id      | designation | notes                                                |
 |-----------------|-------------|------------------------------------------------------|
 | framework_data  | FENCED      | Live upstream framework spec snapshot (Claude Code)  |
+| operational_integration_process| FENCED      | Template-owned section                               |
 -->
 
 This reference is refreshed during team initialization and update workflows.
@@ -30,6 +31,7 @@ Diff summary: `{FRAMEWORK_RESEARCH_DIFF_SUMMARY}`
 {FRAMEWORK_RESEARCH_TABLE}
 <!-- AGENTTEAMS:END framework_data -->
 
+<!-- AGENTTEAMS:BEGIN operational_integration_process v=1 -->
 ## Operational Integration Process
 
 1. Refresh this reference on every team initialization and update.
@@ -38,3 +40,5 @@ Diff summary: `{FRAMEWORK_RESEARCH_DIFF_SUMMARY}`
    for verification — they may indicate doc drift or a missed rename.
 4. Escalate persistent unresolved drift to `@orchestrator` with a
    re-render request when adapter constants are out of date.
+<!-- AGENTTEAMS:END operational_integration_process -->
+

@@ -6,6 +6,23 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### added (42 template-owned sections fenced — and the scope was wrong twice)
+
+Example teams go **76% → 81% updatable**. Getting there corrected the premise twice, and both
+corrections matter more than the fencing.
+
+**A wholly-unfenced template already updates completely.** Its entire body sits inside the
+`content` wrapper, and merge *replaces* fenced regions — verified directly:
+`sections_replaced == ['content']`. Fencing those 32 templates would have added 145 fences for
+zero gain. Worse, it would have been a **regression**: converting a file from wholly-wrapped to
+partially-fenced strands everything that did not get an explicit fence. This retroactively
+justifies reverting 19 templates earlier, for a better reason than the one given at the time.
+
+**So the stranded content lives only in *partially*-fenced files** — 17 of 34 deployed agent
+files, 798 lines. Those are what this fences: 42 sections across 19 templates, selected by the
+same three-part test (no project-specific placeholder, not under a USER-EDITABLE heading,
+template-owned), with the boundary stopping at the next heading **or** the next fence marker.
+
 ### fixed (the blocker behind ~19 unfenceable templates — and the logged reason was wrong)
 
 Lane 2's pilot. Its job was to find out whether the 19 templates with no fences could be reached
