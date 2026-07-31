@@ -707,9 +707,10 @@ def test_migrate_exemption_skips_overwrite_gate_via_security_gate(
     _stub_drift(monkeypatch)
     # Isolate the destructive overwrite gate; the freshness gate is not under test.
     monkeypatch.setattr(security_gate, "_assert_security_intelligence_fresh", lambda *_a, **_k: None)
-    # Generate --overwrite (no --update) hits the migrate-exempted gate, whose
-    # message is exactly "Security gate blocked overwrite:" (the --update gate's
-    # message is "...overwrite update:", which this precise prefix excludes).
+    # Generate --overwrite (no --update) hits the migrate-exempted gate. Each gate now
+    # carries its own code, so this asserts on [SEC-GATE/DESTRUCTIVE:overwrite] directly rather than on
+    # a prefix carefully chosen to exclude the --update gate's near-identical message —
+    # that workaround was itself evidence the two were indistinguishable.
     args = [
         "--description", "brief.json",
         "--framework", "copilot-vscode",
@@ -724,10 +725,10 @@ def test_migrate_exemption_skips_overwrite_gate_via_security_gate(
     err_exempt = capsys.readouterr().err
     build_team.main(args)  # exemption reset -> gate must block
     err_blocked = capsys.readouterr().err
-    assert "Security gate blocked overwrite:" not in err_exempt, (
+    assert "[SEC-GATE/DESTRUCTIVE:overwrite]" not in err_exempt, (
         "exemption active but generate-overwrite gate still blocked"
     )
-    assert "Security gate blocked overwrite:" in err_blocked, (
+    assert "[SEC-GATE/DESTRUCTIVE:overwrite]" in err_blocked, (
         "exemption inactive but generate-overwrite gate did not block"
     )
 

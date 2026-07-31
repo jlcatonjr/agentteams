@@ -230,10 +230,56 @@ def _assert_security_intelligence_fresh(
         "security intelligence is stale "
         f"(status={freshness['status']}, age_hours={freshness['age_hours']}, "
         f"ttl_hours={freshness['ttl_hours']}). "
+        f"{_stale_intel_blast_radius(security_placeholders)} "
         "No 'security-intel-freshness' waiver was found. For air-gapped/offline runs, "
         "add a signed waiver (see docs/security-hardening-guide; check it with "
         "`agentteams --verify-waivers`). Note: --security-offline does NOT apply to "
         "cross-framework operations (bridge/convert/interop) — they require live intel."
+    )
+
+
+#: Placeholder keys whose rendered value embeds time-sensitive threat intelligence. A file that
+#: interpolates none of these carries no stale data even when the snapshot is past its TTL.
+_INTEL_BEARING_PLACEHOLDERS: tuple[str, ...] = (
+    "THREAT_INTELLIGENCE",
+    "SECURITY_VULNERABILITY_WATCH",
+    "KEV_CATALOG",
+    "EPSS_SCORES",
+    "CVE_SUMMARY",
+)
+
+
+def _stale_intel_blast_radius(security_placeholders: dict[str, str]) -> str:
+    """Describe how much of a run stale intelligence actually affects.
+
+    The gate is all-or-nothing: one stale snapshot fails the whole run, including files with no
+    security content at all. Operators hitting this could not tell "the intel is load-bearing
+    here" from "an unrelated reference file is being held up by a cache timestamp", and the
+    logged workaround was to bypass the CLI entirely and drive ingest/analyze/render/emit by hand
+    — which skips *every* gate, not just this one.
+
+    This does **not** narrow the gate. Scoping a security control is an operator decision, not a
+    convenience one: a team whose security agent quotes expired advisories is a real hazard even
+    when the file being written this minute is innocuous. What it does is make the trade-off
+    visible at the moment of refusal, so the operator can judge it.
+
+    Args:
+        security_placeholders: The resolved security placeholder map for this run.
+
+    Returns:
+        A sentence naming how many intel-bearing placeholders are in play.
+    """
+    bearing = [k for k in _INTEL_BEARING_PLACEHOLDERS if security_placeholders.get(k)]
+    if not bearing:
+        return (
+            "Blast radius: no intel-bearing placeholder is populated for this run, so the "
+            "staleness is unlikely to reach the generated files — the gate still refuses, "
+            "because a team carrying expired advisories is a hazard regardless of which file "
+            "is written this minute."
+        )
+    return (
+        f"Blast radius: {len(bearing)} intel-bearing placeholder(s) would be interpolated "
+        f"({', '.join(bearing)}), so generated content would embed the stale snapshot."
     )
 
 

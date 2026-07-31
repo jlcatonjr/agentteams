@@ -339,6 +339,17 @@ def _build_parser() -> argparse.ArgumentParser:
         help="Operate on the module's own agent team using .github/agents/_build-description.json",
     )
     parser.add_argument(
+        "--allow-foreign-output",
+        action="store_true",
+        dest="allow_foreign_output",
+        help=(
+            "Permit a relative --output that resolves onto a non-empty, git-tracked directory "
+            "with no sign of being an agentteams-generated tree. Without this the run refuses: "
+            "a relative path resolves against the current working directory, which is how a "
+            "scratch render once overwrote a real agent tree."
+        ),
+    )
+    parser.add_argument(
         "--allow-external-self-output",
         action="store_true",
         dest="allow_external_self_output",

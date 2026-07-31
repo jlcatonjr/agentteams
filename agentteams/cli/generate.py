@@ -27,6 +27,9 @@ from agentteams.cli.artifacts import (
     _write_memory_index,
     _write_model_routing,
 )
+from agentteams.cli.exit_codes import _finalize_exit_code
+from agentteams.cli.json_mode import json_stdout, run_with_json_stdout
+from agentteams.cli.output_target import refuse_foreign_target, resolve_output_dir
 from agentteams.cli.render_pipeline import (
     _apply_placeholder_policy,
     _build_final_rendered,
@@ -42,11 +45,19 @@ from agentteams.errors import (
 )
 from agentteams.frameworks.registry import FRAMEWORKS
 
+# Re-exported for cli.app and existing tests that resolve it here (carved to cli/exit_codes.py).
+__all__ = ["_finalize_exit_code", "run_generate"]
+
 _SCRIPT_DIR = Path(__file__).resolve().parents[2]
 TEMPLATES_DIR = _SCRIPT_DIR / "agentteams" / "templates"
 
 
 def run_generate(args: argparse.Namespace, strict_manual_placeholders: bool) -> int:
+    """Run the generate/update/check pipeline; see `cli.json_mode` for `--json` stdout handling."""
+    return run_with_json_stdout(_run_generate_inner, args, strict_manual_placeholders)
+
+
+def _run_generate_inner(args: argparse.Namespace, strict_manual_placeholders: bool) -> int:
     import build_team  # lazy: resident helpers (events/migrate/prune/run-log) stay in build_team
     build_team._check_dual_descriptor(args)
 
@@ -108,22 +119,14 @@ def run_generate(args: argparse.Namespace, strict_manual_placeholders: bool) -> 
     # -----------------------------------------------------------------------
     # Step 4: Resolve output directory
     # -----------------------------------------------------------------------
-    if args.output:
-        # W1: let the adapter normalize --output so framework-specific nested
-        # agents dirs (e.g. Goose's .goose/recipes/) are derived correctly when
-        # the user passes a project root (including `--output .`).
-        # project_root is the pre-normalization path (the operator's project root),
-        # used as the base for the project-root .claude/ MCP artifact.
-        project_root = Path(args.output).resolve()
-        output_dir = adapter.normalize_output_path(project_root)
-    elif description.get("existing_project_path"):
-        project_root = Path(description["existing_project_path"])
-        output_dir = adapter.get_agents_dir(project_root)
-    else:
-        project_root = Path.cwd()
-        output_dir = adapter.get_agents_dir(project_root)
+    project_root, output_dir = resolve_output_dir(args, adapter, description)
 
     print(f"  Output directory: {output_dir}")
+
+    _refusal = refuse_foreign_target(args, output_dir)   # fails OPEN; see cli/output_target
+    if _refusal:
+        print(f"[OUTPUT-TARGET] refused: {_refusal}", file=sys.stderr)
+        return 1
 
     # -----------------------------------------------------------------------
     # Step 4·adopt: --adopt-orphans — register pre-existing custom agent files
@@ -197,7 +200,7 @@ def run_generate(args: argparse.Namespace, strict_manual_placeholders: bool) -> 
         try:
             security_gate._assert_destructive_action_allowed(output_dir, action="restore-backup")
         except RuntimeError as exc:
-            print(f"Security gate blocked restore-backup: {exc}", file=sys.stderr)
+            print(f"[SEC-GATE/DESTRUCTIVE:restore-backup] blocked: {exc}", file=sys.stderr)
             return 1
 
         count = emit.restore_backup(backup_path, output_dir, remove_extra=True)
@@ -283,7 +286,7 @@ def run_generate(args: argparse.Namespace, strict_manual_placeholders: bool) -> 
         try:
             security_gate._assert_security_intelligence_fresh(security_placeholders, output_dir=output_dir)
         except RuntimeError as exc:
-            print(f"Security gate blocked write path: {exc}", file=sys.stderr)
+            print(f"[SEC-GATE/INTEL-FRESHNESS] blocked: {exc}", file=sys.stderr)
             return 1
 
     # -----------------------------------------------------------------------
@@ -382,7 +385,7 @@ def run_generate(args: argparse.Namespace, strict_manual_placeholders: bool) -> 
                 security_gate._assert_destructive_action_allowed(output_dir, action="overwrite")
             except RuntimeError as exc:
                 print(
-                    f"Security gate blocked overwrite update: {exc}\n"
+                    f"[SEC-GATE/DESTRUCTIVE:overwrite-update] blocked: {exc}\n"
                     "  Tip: omit --overwrite (or use --merge explicitly) to preserve "
                     "your customizations without requiring a security clearance.",
                     file=sys.stderr,
@@ -457,7 +460,13 @@ def run_generate(args: argparse.Namespace, strict_manual_placeholders: bool) -> 
             )
 
         if not sdreport.has_changes and not sdreport.removed_files:
-            print("No structural or content changes detected; refreshing security intelligence references.")
+            # Names the two halves separately: no TEMPLATE/STRUCTURE change, and a live-data
+            # refresh that does write. The old wording read as "this run did nothing".
+            print(
+                "No structural or template-content changes detected. "
+                "Live-data references (security intelligence, framework research) will still be "
+                "refreshed, so files carrying those fences may change."
+            )
         else:
             print(f"\nStructural update for {project_name!r}:")
             drift.print_structural_diff_report(sdreport)
@@ -572,8 +581,9 @@ def run_generate(args: argparse.Namespace, strict_manual_placeholders: bool) -> 
         graph_rel_path = "references/pipeline-graph.md"
         graph_svg_rel_path = "references/pipeline-graph.svg"
         if not any(p == graph_rel_path for p, _ in update_rendered):
-            from agentteams import graph as _graph
             from pathlib import Path as _Path
+
+            from agentteams import graph as _graph
             # Build from the UNION of on-disk agents and the freshly rendered team so
             # hand-authored specialists the (often thin) build description omits are
             # still drawn — matching render_pipeline and the git-hook refresh. Without
@@ -682,6 +692,7 @@ def run_generate(args: argparse.Namespace, strict_manual_placeholders: bool) -> 
             emit.print_dry_run_report(
                 result, manifest,
                 fmt="json" if args.json else "text",
+                stream=json_stdout() if args.json else None,
             )
 
         # ------------------------------------------------------------------
@@ -859,7 +870,7 @@ def run_generate(args: argparse.Namespace, strict_manual_placeholders: bool) -> 
         try:
             security_gate._assert_destructive_action_allowed(output_dir, action="overwrite")
         except RuntimeError as exc:
-            print(f"Security gate blocked overwrite: {exc}", file=sys.stderr)
+            print(f"[SEC-GATE/DESTRUCTIVE:overwrite] blocked: {exc}", file=sys.stderr)
             return 1
     elif not args.dry_run and args.overwrite and security_gate.migrate_exemption_active():
         print(
@@ -912,6 +923,7 @@ def run_generate(args: argparse.Namespace, strict_manual_placeholders: bool) -> 
         emit.print_dry_run_report(
             result, manifest,
             fmt="json" if args.json else "text",
+            stream=json_stdout() if args.json else None,
         )
 
     # -----------------------------------------------------------------------
@@ -977,22 +989,3 @@ def run_generate(args: argparse.Namespace, strict_manual_placeholders: bool) -> 
         _git_hooks.maybe_refresh_architecture_map(args, project_root)
 
     return _finalize_exit_code(result, args)
-
-
-def _finalize_exit_code(result: emit.EmitResult, args: argparse.Namespace) -> int:
-    """Return the final exit code, applying optional fail-on-legacy-skip gate.
-
-    A successful emit returns 0 by default. When ``--fail-on-legacy-skip`` is
-    set and any files were skipped due to missing fence markers, the run is
-    promoted to non-zero so CI can enforce template propagation.
-    """
-    if not result.success:
-        return 1
-    if getattr(args, "fail_on_legacy_skip", False) and result.skipped_legacy:
-        print(
-            f"\nExit 1: --fail-on-legacy-skip set and "
-            f"{len(result.skipped_legacy)} legacy file(s) skipped.",
-            file=sys.stderr,
-        )
-        return 1
-    return 0
