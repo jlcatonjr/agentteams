@@ -129,6 +129,36 @@ def _is_substantive_paragraph(paragraph: str) -> bool:
     return len(words) >= 8
 
 
+#: Absolute home-directory paths, in the three shapes that actually occur. Snippet text is
+#: COMMITTED inside the index artifact, so any such path in a source document is republished into
+#: version control — including, measured 2026-07-30, 49 occurrences naming an unrelated repository
+#: under `/Users/<name>/...`. The source documents themselves are frequently local-only
+#: (`workSummaries/`, `references/plans/`), so the index was the only place the string was
+#: committed. Redaction happens at snippet-construction time, which is the one choke point every
+#: stored passage passes through.
+_HOME_PATH_RE = re.compile(r"(?:/Users/|/home/|C:\\\\Users\\\\)[^\s\"'`,;:)\]}]*")
+
+#: What a redacted path is replaced with. A marker, not a deletion: a reader should be able to
+#: tell that a path was removed rather than that the document never mentioned one.
+_REDACTED = "<path>"
+
+
+def redact_local_paths(text: str) -> str:
+    """Replace absolute home-directory paths with :data:`_REDACTED`.
+
+    Only the leading home-prefixed component is matched, so a repository-relative tail elsewhere
+    in the sentence survives — the goal is to remove the operator's username and directory layout,
+    not to make the passage unreadable.
+
+    Args:
+        text: A snippet or paragraph about to be stored in the index.
+
+    Returns:
+        ``text`` with every absolute home path replaced.
+    """
+    return _HOME_PATH_RE.sub(_REDACTED, text)
+
+
 def _extract_paragraphs(text: str, max_count: int = _MAX_PARAGRAPHS_PER_DOC) -> list[str]:
     """Return up to *max_count* substantive paragraphs from *text*.
 
@@ -136,6 +166,9 @@ def _extract_paragraphs(text: str, max_count: int = _MAX_PARAGRAPHS_PER_DOC) -> 
     and truncated to 480 characters so the JSON stays compact while giving
     the query-time scorer enough context to rank meaningfully.  Leading heading
     lines are stripped so snippets begin with actual body content.
+
+    Absolute home paths are redacted (:func:`redact_local_paths`) before storage — see that
+    function for why the index, not the source document, is the leak surface.
     """
     raw = [p.strip() for p in re.split(r"\n\s*\n", text) if p.strip()]
     result: list[str] = []
@@ -146,7 +179,7 @@ def _extract_paragraphs(text: str, max_count: int = _MAX_PARAGRAPHS_PER_DOC) -> 
             body = " ".join(l.strip() for l in content_lines if l.strip())
             if not body:
                 body = p.replace("\n", " ")
-            result.append(body[:480])
+            result.append(redact_local_paths(body)[:480])
             if len(result) >= max_count:
                 break
     return result
@@ -158,13 +191,18 @@ def _snippet_from_paragraphs(paragraphs: list[str], max_len: int = 240) -> str:
 
 
 def _snippet(text: str, max_len: int = 240) -> str:
-    """Legacy single-snippet extractor; used only for backward-compat fallback."""
+    """Legacy single-snippet extractor; used only for backward-compat fallback.
+
+    Redacts absolute home paths on the same terms as :func:`_extract_paragraphs` — this is a
+    second, independent route into stored snippet text, so leaving it unredacted would reopen
+    the leak for any caller still on the legacy path.
+    """
     paragraphs = [p.strip() for p in re.split(r"\n\s*\n", text) if p.strip()]
     for para in paragraphs:
         if _is_substantive_paragraph(para):
             content_lines = [l for l in para.splitlines() if not l.strip().startswith("#")]
             body = " ".join(l.strip() for l in content_lines if l.strip())
-            return (body or para.replace("\n", " "))[:max_len]
+            return redact_local_paths(body or para.replace("\n", " "))[:max_len]
     # Safe fallback: first non-empty non-heading line.
     lines = text.strip().splitlines()
     body = next((ln.strip() for ln in lines if ln.strip() and not ln.strip().startswith("#")), "")

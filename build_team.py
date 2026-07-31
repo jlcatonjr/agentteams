@@ -90,7 +90,7 @@ from agentteams.errors import (
 from agentteams.cli.artifacts import (
     DELIVERY_RECEIPT_REL_PATH, EVAL_SUITE_REL_PATH, MODEL_ROUTING_REL_PATH,
     MEMORY_INDEX_REL_PATH, MEMORY_INDEX_EXTRA_DOC_NAMES,
-    _require_jsonschema, _compute_file_hashes,
+    _require_jsonschema, _compute_file_hashes, _compute_front_matter_baseline,
     _write_delivery_receipt, _write_eval_suite, _write_model_routing,
     _memory_index_sources, _read_memory_index, _validate_memory_index_schema,
     _run_refresh_index, _run_query_index, _write_memory_index,
@@ -686,6 +686,14 @@ def _write_run_log(manifest: dict, result: emit.EmitResult, output_dir: Path, te
         # this run's write-set — otherwise an incremental --update (which writes
         # few files) would leave `--verify-integrity` checking almost nothing.
         "file_hashes": _compute_file_hashes(
+            result.written + result.merged + result.unchanged, output_dir
+        ),
+        # v1.4 addition — the front matter AS EMITTED, per file. `file_hashes` answers "has this
+        # file changed at all"; a three-way front-matter merge needs "was THIS KEY the value we
+        # wrote". Without it, applying a template's front-matter change cannot distinguish a
+        # deliberate project choice from an untouched default, which is why an earlier
+        # `--sync-front-matter` design was withdrawn. See fences._merge_front_matter.
+        "front_matter_baseline": _compute_front_matter_baseline(
             result.written + result.merged + result.unchanged, output_dir
         ),
     }
