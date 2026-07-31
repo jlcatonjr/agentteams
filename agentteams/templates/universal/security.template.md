@@ -18,6 +18,7 @@ SECTION MANIFEST — security.template.md
 | security_rules_invariant    | FENCED        | Triggers, rules S-1..S-8, HALT criteria, AI-authored-code screening, low-level/systems vulnerability screening, OS platform-hardening pointers |
 | threat_intelligence         | FENCED        | Live security scan data from NVD/OSV      |
 | security_rules              | USER-EDITABLE | Project may extend (add rules below S-8)  |
+| invariant_core              | FENCED        | Immutable agent contract                  |
 -->
 
 # Security — {PROJECT_NAME}
@@ -34,9 +35,11 @@ Runtime enforcement also consumes machine-readable freshness metadata from the s
 
 ---
 
+<!-- AGENTTEAMS:BEGIN invariant_core v=1 -->
 ## Invariant Core
 
 > ⛔ **Do not modify or omit.** All triggers, rules, the HALT directive, and the AI-authored-code screening guidance below are the immutable contract for this agent.
+<!-- AGENTTEAMS:END invariant_core -->
 
 <!-- AGENTTEAMS:BEGIN security_rules_invariant v=3 -->
 ### Mandatory Review Triggers

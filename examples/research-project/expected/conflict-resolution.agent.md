@@ -19,6 +19,7 @@ SECTION MANIFEST
 | section_id                | designation  |
 |---------------------------|--------------|
 | memory_index_consultation | FENCED       |
+| invariant_core            | FENCED       |
 -->
 
 
@@ -28,9 +29,11 @@ You make **ACCEPT / REJECT / REVISE** decisions on conflicts flagged by `@confli
 
 ---
 
+<!-- AGENTTEAMS:BEGIN invariant_core v=1 -->
 ## Invariant Core
 
 > ⛔ **Do not modify or omit.**
+<!-- AGENTTEAMS:END invariant_core -->
 
 ## Decision Framework
 

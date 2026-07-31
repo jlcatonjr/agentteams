@@ -28,6 +28,7 @@ SECTION MANIFEST — technical-validator.template.md
 | authority_sources_list | FENCED        | From project authority_hierarchy   |
 | accuracy_rules         | USER-EDITABLE | Project may extend                 |
 | memory_index_consultation | FENCED       |
+| invariant_core            | FENCED       |
 -->
 
 # Technical Validator — SalesDataPipeline
@@ -41,9 +42,11 @@ You perform read-only technical accuracy audits on deliverables in SalesDataPipe
 
 ---
 
+<!-- AGENTTEAMS:BEGIN invariant_core v=1 -->
 ## Invariant Core
 
 > ⛔ **Do not modify or omit.**
+<!-- AGENTTEAMS:END invariant_core -->
 
 ## Accuracy Rules
 

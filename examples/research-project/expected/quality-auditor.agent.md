@@ -28,6 +28,7 @@ SECTION MANIFEST
 | section_id                | designation  |
 |---------------------------|--------------|
 | memory_index_consultation | FENCED       |
+| invariant_core            | FENCED       |
 -->
 
 
@@ -37,9 +38,11 @@ You perform read-only quality audits on deliverables in ResearchPaperProject. Yo
 
 ---
 
+<!-- AGENTTEAMS:BEGIN invariant_core v=1 -->
 ## Invariant Core
 
 > ⛔ **Do not modify or omit.**
+<!-- AGENTTEAMS:END invariant_core -->
 
 ## Defect Taxonomy
 
