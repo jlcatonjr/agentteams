@@ -163,7 +163,9 @@ Scan Python source files in `project_path` for import statements and return a ma
 
 ---
 
-### `build_tool_catalog(package_names, *, fetch_pypi=True)`
+### `build_tool_catalog(package_names, *, fetch_registries=True, fetch_pypi=None)`
+
+`fetch_registries` gates **both** the PyPI and npm lookups. `fetch_pypi` is a deprecated alias kept for back-compatibility: the npm tier was added under that flag without renaming it, so the name understated what it controlled — a caller passing `fetch_pypi=False` to avoid PyPI was also silently disabling npm. When given, the alias wins.
 
 > *Source: `agentteams/enrich/_tools.py`*
 
