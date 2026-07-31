@@ -6,6 +6,29 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### fixed (the blocker behind ~19 unfenceable templates — and the logged reason was wrong)
+
+Lane 2's pilot. Its job was to find out whether the 19 templates with no fences could be reached
+at all. They can, and the recorded reason they could not was mistaken.
+
+**What was logged:** "adding an inner fence produces `Nested fence not allowed: 'invariant_core'
+inside 'content'`." **What is actually true:** adding a fence *suppresses* the whole-body wrapper,
+so nesting never occurs. That error came from a boundary bug in the fencing pass — a section's END
+marker landing inside the following fence — which was fixed separately.
+
+**The real blocker is duplication.** A template with no fences has its whole body wrapped in one
+`content` fence at emit. When it gains a named section the render stops being wrapped, so a team
+generated *before* the split has `{content}` on disk while the render has `{invariant_core, …}`.
+Merging appended the named section *alongside* the stale wrapper — leaving an agent file with two
+contradictory copies of its "⛔ Do not modify or omit" contract. Worse than not updating.
+
+`_merge_fenced_content` now detects that shape and replaces wholesale. Safe **because of what a
+fence means**: everything inside `content` is template-owned and already overwritten on every
+merge, so nothing a project authored can live there. Content outside it is untouched, and the
+migration is reported rather than silent.
+
+This unblocks the remaining fencing work; the 19 templates are now fenceable.
+
 ### changed (verification sweep: the backlog shrank by checking, not fixing)
 
 Lane 1 of the cluster sequencing — verify every unverified row, close what is already done, and
