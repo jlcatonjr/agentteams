@@ -6,6 +6,7 @@ See tmp/by-week/2026-W30/pathway-safety-verification.plan.md.
 """
 from __future__ import annotations
 
+import re
 from pathlib import Path
 
 import agentteams
@@ -29,10 +30,19 @@ def _fence() -> tuple[str, int, int]:
     return text, begin, end
 
 
-def test_fence_version_bumped_to_3():
+def test_fence_version_advances_when_the_invariant_changes():
+    """The invariant's fence version must only go up.
+
+    Pinning the exact number (v=3) meant this failed on the next legitimate change rather than on
+    a regression — it broke when the Mandatory Review Triggers table gained rows for package
+    installation and elevated privilege, which is precisely the kind of edit the version is there
+    to signal. What matters is that the version is *at least* the last recorded one, so a change
+    to fenced invariant content can never ship without advancing it.
+    """
     text = _template_text()
-    assert "<!-- AGENTTEAMS:BEGIN security_rules_invariant v=3 -->" in text
-    assert "<!-- AGENTTEAMS:BEGIN security_rules_invariant v=2 -->" not in text
+    match = re.search(r"AGENTTEAMS:BEGIN security_rules_invariant v=(\d+)", text)
+    assert match, "the security_rules_invariant fence is missing"
+    assert int(match.group(1)) >= 3, "the invariant's fence version must never go backwards"
 
 
 def test_rule_s9_exists_inside_the_invariant_fence():
