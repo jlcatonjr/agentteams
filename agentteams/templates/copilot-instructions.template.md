@@ -10,6 +10,7 @@ SECTION MANIFEST — copilot-instructions.template.md
 | source_repositories   | FENCED        | Authority source entries                 |
 | constitutional_rules  | USER-EDITABLE | Project may extend or customise          |
 | style_rules           | USER-EDITABLE | Project may extend or customise          |
+| tone_and_style       | FENCED       |
 -->
 
 # {PROJECT_NAME} — Copilot Instructions

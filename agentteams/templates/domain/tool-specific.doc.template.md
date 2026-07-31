@@ -1,3 +1,10 @@
+<!--
+SECTION MANIFEST
+| section_id       | designation  |
+|------------------|--------------|
+| tool_api_surface | FENCED       |
+-->
+
 # {TOOL_NAME} — Tool Reference — {PROJECT_NAME}
 
 > Operational reference for **{TOOL_NAME} {TOOL_VERSION}** in {PROJECT_NAME}.

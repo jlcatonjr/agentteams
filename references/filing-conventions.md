@@ -95,3 +95,29 @@ directory is uniformly local.
 - **`docs_src/structural-update-plan.md`** — tracked, in the MkDocs nav, *and*
   carries a (now-ineffective) `.gitignore` line. Decide: publish it (drop the
   ignore line) or relocate it to `references/plans/`. Left untouched here.
+
+---
+
+## Close-out obligation: reconcile the remediation log
+
+A round that fixes a defect recorded in `references/agentteams-remediation-log.csv` **must close
+that row before the round closes** — setting `status` to `shipped`, with `resolved_date` and a
+`resolved_evidence` string that points at something a later reader can check (a test path, a
+module, a commit or PR reference, or a stated verification result).
+
+**Why this is a rule and not a nicety.** The log spent most of its life with every row reading
+`open`, including rows fixed months earlier. On 2026-07-30 it gained closure columns for exactly
+that reason. Over the three rounds that followed, roughly a dozen more items were fixed and *not
+one* row was closed, because nothing in the process invoked the new columns — so the next
+enumeration reported 48 open rows of which 13 were already done, and the reader had no way to
+tell which. Prioritising from that list wastes effort on solved problems, and every estimate
+built on it is wrong by an unknown margin.
+
+Enforced by `tests/test_session_closeout_obligation.py`, which checks that closures are
+evidenced, that dates are coherent, and that the reconciled share of the log does not collapse
+back toward zero. It deliberately does **not** try to guess which rows *should* be closed — an
+automated guess that closes a live row is worse than a stale open one.
+
+Statuses follow the documented lifecycle in
+`agentteams/templates/universal/retrospective-remediation.reference.template.md`:
+`open` → `triaged` → `shipped` | `wontfix`.
