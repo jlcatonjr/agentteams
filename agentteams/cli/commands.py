@@ -13,6 +13,7 @@ import argparse
 import sys
 from pathlib import Path
 
+from agentteams.backup import BACKUP_DIR_NAME as _BACKUP_DIR_NAME
 from agentteams.cli import security_gate
 from agentteams.frameworks.registry import FRAMEWORKS
 
@@ -158,7 +159,7 @@ def _run_stale_restore(args: argparse.Namespace) -> int:
     if ts in (None, "latest"):
         snap = stale_remediate.latest_snapshot(root)
     else:
-        cand = root / ".agentteams-backups" / f"stale-fix-{ts}"
+        cand = root / _BACKUP_DIR_NAME / f"stale-fix-{ts}"
         snap = cand if cand.is_dir() else None
     if snap is None:
         print(f"Error: no stale-fix snapshot found under {root}/.agentteams-backups/",

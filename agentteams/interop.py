@@ -16,13 +16,18 @@ from typing import Any
 
 # Single source of truth for the framework-id -> adapter map (CH-05).
 from agentteams.frameworks.registry import FRAMEWORKS as _ADAPTERS
-from agentteams.yaml_frontmatter import parse_yaml_front_matter as _parse_yaml_front_matter
+from agentteams.yaml_frontmatter import (
+    parse_yaml_front_matter as _parse_yaml_front_matter,
+)
 
 _INSTRUCTIONS_NAMES = {"copilot-instructions.md", "CLAUDE.md"}
 # Subdirectories under (or beside) an agents dir whose .md files are NOT agents:
 # reference docs, Claude skills (a sibling dir), and backup copies of agents.
 # Mirror of convert._PASSTHROUGH_DIRS (kept in sync deliberately — see convert.py).
-_NON_AGENT_DIRS = {"references", "skills", ".agentteams-backups"}
+from agentteams.backup import BACKUP_DIR_NAME as _BACKUP_DIR_NAME
+
+# Own set, shared name (CH-05): this filters agent discovery, not scratch pruning.
+_NON_AGENT_DIRS = {"references", "skills", _BACKUP_DIR_NAME}
 
 
 @dataclass

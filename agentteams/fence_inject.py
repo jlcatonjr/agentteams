@@ -39,7 +39,8 @@ from agentteams.atomicio import _atomic_write_text
 from agentteams.emit import _FENCE_BEGIN_RE, _YAML_FM_RE
 
 DEFAULT_RETROFIT_FENCE_ID = "content"
-_BACKUP_DIR_NAME = ".agentteams-backups"
+from agentteams.backup import BACKUP_DIR_NAME as _BACKUP_DIR_NAME
+
 _SAFE_FENCE_ID_RE = re.compile(r"^[a-z][a-z0-9_]*$")
 
 

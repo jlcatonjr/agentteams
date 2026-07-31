@@ -128,7 +128,12 @@ def test_schema_change_forces_revalidation(tmp_path, monkeypatch):
     schema = json.loads(artifacts._code_index_schema_bytes())
     schema["description"] = schema.get("description", "") + " (test variant)"
     variant = (json.dumps(schema) + "\n").encode("utf-8")
-    monkeypatch.setattr(artifacts, "_code_index_schema_bytes", lambda: variant)
+    # Patch the DEFINING module, not the re-export. The code-index helpers were carved to
+    # cli/code_index_artifacts.py (CH-07); cli.artifacts re-exports them, but the function
+    # under test resolves this name from its own module globals, so patching the alias is
+    # a no-op.
+    from agentteams.cli import code_index_artifacts as _cia
+    monkeypatch.setattr(_cia, "_code_index_schema_bytes", lambda: variant)
 
     artifacts._read_code_index(out)
     key2 = json.loads((out / VCACHE_REL).read_bytes())["validated_key"]

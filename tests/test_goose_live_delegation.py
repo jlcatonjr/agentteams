@@ -147,6 +147,7 @@ def _generate_goose_team(project: Path) -> Path:
 
 @conftest.skip_no_goose
 @conftest.skip_no_openrouter_key
+@conftest.skip_no_live_model_tests
 def test_generated_orchestrator_delegates_live(tmp_path):
     """End-to-end: the generated orchestrator names the correct workflow + first
     agent (the W6 probe), demonstrating it routes/delegates to a named sub_recipe.

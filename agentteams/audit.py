@@ -18,11 +18,12 @@ import json
 import re
 import shutil
 import subprocess
-from agentteams import living_doc as _living_doc
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
 
+from agentteams import living_doc as _living_doc
+from agentteams.backup import BACKUP_DIR_NAME as _BACKUP_DIR_NAME
 
 # ---------------------------------------------------------------------------
 # Constants
@@ -986,7 +987,7 @@ def _load_files_from_disk(output_dir: Path) -> dict[str, str]:
     if not output_dir.exists():
         return file_map
     for path in output_dir.rglob("*"):
-        if ".agentteams-backups" in path.parts:
+        if _BACKUP_DIR_NAME in path.parts:
             continue
         if path.suffix not in {".md", ".csv"}:
             continue
