@@ -29,6 +29,7 @@ SECTION MANIFEST
 |---------------------------|--------------|
 | memory_index_consultation | FENCED       |
 | code_index_consultation   | FENCED       |
+| invariant_core            | FENCED       |
 -->
 
 
@@ -56,6 +57,7 @@ holds the trigger contract version and the allowed trigger sources. Both files
 are generated alongside this agent whenever retrieval integration is enabled —
 do not restate their values inline here.
 
+<!-- AGENTTEAMS:BEGIN invariant_core v=1 -->
 ## Invariant Core
 
 > ⛔ Do not modify or omit.
@@ -66,6 +68,7 @@ do not restate their values inline here.
 4. Trigger channels must be explicit (cli, env, scheduler, workflow, script, manual).
 5. Freshness obligations must include a measurable staleness threshold and a source-of-truth check.
 6. If retrieval mode is none, do not permit vector or index capability claims.
+<!-- AGENTTEAMS:END invariant_core -->
 
 <!-- AGENTTEAMS:BEGIN memory_index_consultation v=3 -->
 ## Memory-index consultation *(applies when `references/memory-index.json` is present)*

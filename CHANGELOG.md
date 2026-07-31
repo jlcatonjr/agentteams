@@ -6,6 +6,40 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### added (the fencing the positional-insertion fix unblocked)
+
+- **`Invariant Core` is now fenced in 9 templates**, so it can finally reach an already-generated
+  team. It is the clearest template-owned section in the library — it literally reads "⛔ Do not
+  modify or omit" — and it sat outside every fence.
+
+  Selection was by explicit test, not by eye: no `{PLACEHOLDER}` rendering project-specific data,
+  not under a `USER-EDITABLE` heading, and **the file must already have a fence**.
+
+  That last condition is why this batch is 9 and not 25, and it was learned on contact. A template
+  with no existing fence gets wrapped whole in a `content` fence by `_normalize_generated_content`,
+  so adding an inner fence yields *"Nested fence not allowed: 'invariant_core' inside 'content'"*.
+  Nineteen templates were reverted for it; reaching them needs a different mechanism and is logged.
+
+  A second constraint surfaced the same way: taking a section's boundary as "up to the next `##`
+  heading" put the END marker *inside* the following fence, because a fenced section's heading sits
+  after its BEGIN marker. It showed up as an existing regression test going red —
+  `test_external_retrieval_quality_gate_reaches_already_generated_team`, which exists to protect
+  exactly this propagation path.
+
+### fixed (a gate that modelled one of CI's four steps)
+
+- **`agentteams.1` regenerated for `--allow-foreign-output`.** The pre-push gate was "full suite
+  green", and the suite *was* green at 2,937 — but CI also checks man-page currency and runs the
+  RSR1 durable-artifact lint. A gate modelled on one of four CI steps is not a gate on CI. Both
+  non-pytest steps are now verified locally before pushing.
+
+### changed (backlog reconciliation)
+
+- Four more rows closed with evidence, including the two mechanisms shipped this session
+  (positional fence insertion, front-matter propagation). The five-crowded-modules row is
+  superseded by a narrower one for the four that remain after `cli/artifacts.py` was decomposed.
+  Open rows: 48 → 33 across the session.
+
 ### added (existing agent files are now genuinely updatable)
 
 Plan and audit: `tmp/by-week/2026-W31/agent-file-updatability.plan.md`.

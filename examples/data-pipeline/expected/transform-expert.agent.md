@@ -28,6 +28,7 @@ SECTION MANIFEST — workstream-expert.template.md
 | component_spec       | FENCED        | Component spec block from manifest |
 | component_brief_prep | USER-EDITABLE | Brief process — project may extend |
 | review_protocol      | USER-EDITABLE | Review protocol — project may add  |
+| invariant_core       | FENCED        | Immutable agent contract           |
 -->
 
 # Transform Module Expert — SalesDataPipeline
@@ -39,9 +40,11 @@ You are the domain expert for **Transform Module** (component 2) in SalesDataPip
 
 ---
 
+<!-- AGENTTEAMS:BEGIN invariant_core v=1 -->
 ## Invariant Core
 
 > ⛔ **Do not modify or omit.**
+<!-- AGENTTEAMS:END invariant_core -->
 
 <!-- AGENTTEAMS:BEGIN component_spec v=1 -->
 ## Component Specification

@@ -27,6 +27,7 @@ SECTION MANIFEST — research-analyst.template.md
 | memory_index_consultation          | FENCED        | Index-query strategy/thresholds        |
 | external_retrieval_quality_gate    | FENCED        | Mandatory final-step audit gate        |
 | external_retrieval_quality_gate_output | FENCED    | Output Format pointer to the gate      |
+| invariant_core                         | FENCED    | Immutable agent contract               |
 -->
 
 # Research Analyst — {PROJECT_NAME}
@@ -44,6 +45,7 @@ another rendered instruction file — it is a real, installable Python library,
 own instructions here are still design-time-rendered exactly as usual; what's different is that
 they point at genuine runtime code the project must have installed, not just at other agents.
 
+<!-- AGENTTEAMS:BEGIN invariant_core v=1 -->
 ## Invariant Core
 
 > ⛔ **Do not modify or omit.** The rules below are the immutable contract for this agent.
@@ -70,6 +72,7 @@ they point at genuine runtime code the project must have installed, not just at 
    Python integration to wire up, not something you invoke directly by shelling out. If a
    verification task needs them and no such integration exists in this project yet, say so
    explicitly rather than improvising a workaround.
+<!-- AGENTTEAMS:END invariant_core -->
 
 <!-- AGENTTEAMS:BEGIN memory_index_consultation v=3 -->
 ## Memory-index consultation *(applies when `references/memory-index.json` is present)*
