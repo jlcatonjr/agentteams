@@ -18,6 +18,7 @@ SECTION MANIFEST — navigator.template.md
 | workstream_source_map | FENCED        | Generated from project components  |
 | project_structure     | USER-EDITABLE | Project may extend                 |
 | code_index_consultation | FENCED       |
+| invariant_rules         | FENCED       |
 -->
 
 # Navigator — ProjectRepositories
@@ -87,6 +88,7 @@ python -m src.graph .github/agents/ --output .github/agents/references/pipeline-
      stated authoritatively as Invariant Rule 2 below rather than via the
      canonical v=2 fence; @navigator IS the source of the protocol that
      audit/validation templates' fences reference. -->
+<!-- AGENTTEAMS:BEGIN invariant_rules v=1 -->
 ## Invariant Rules
 
 1. **Structural lookups never come from the *memory* index.** For *structural / current-file* queries ("where is `foo.py`?", "what files are in module Y?", "which agent owns workstream Z?"), read the project map or search the file system — the memory index is a history layer, not a structural index. **Code/API structural queries have their own fast layer — the code index; follow the *Code-index consultation* protocol below before grepping.**
@@ -109,6 +111,7 @@ python -m src.graph .github/agents/ --output .github/agents/references/pipeline-
 3. **Regenerate the project map after structural changes** — new files, new directories, renamed files
 4. **You are read-oriented** — you do not modify deliverable content, agent docs, or source files
 5. **External repo paths are read-only** — navigate but never modify files outside the project
+<!-- AGENTTEAMS:END invariant_rules -->
 
 <!-- AGENTTEAMS:BEGIN code_index_consultation v=1 -->
 ## Code-index consultation *(applies to code/API structural queries when `references/code-index/` is present)*

@@ -95,6 +95,7 @@ Before `@primary-producer` drafts, you prepare a **Component Brief** containing:
 3. Route any challenged assumptions back through `@adversarial`
 4. Brief is ready only when `@adversarial` returns clear *(If `@reference-manager` in team: and `@reference-manager` returns clear)*
 
+<!-- AGENTTEAMS:BEGIN review_protocol v=1 -->
 ## Review Protocol
 
 After `@primary-producer` returns a draft:
@@ -102,6 +103,7 @@ After `@primary-producer` returns a draft:
 2. If all PASS → issue **ACCEPT** and hand off to orchestrator
 3. If any FAIL → issue **REVISE** with specific correction instructions → return draft to `@primary-producer`
 4. Maximum 3 revision cycles before escalating to orchestrator
+<!-- AGENTTEAMS:END review_protocol -->
 
 ## Verdict Format
 

@@ -3,6 +3,8 @@ SECTION MANIFEST
 | section_id       | designation  |
 |------------------|--------------|
 | tool_api_surface | FENCED       |
+| key_api_surface  | FENCED       |
+| verification     | FENCED       |
 -->
 
 # {TOOL_NAME} — Tool Reference — {PROJECT_NAME}
@@ -25,7 +27,9 @@ Consult the official {TOOL_NAME} documentation at: {TOOL_DOCS_URL}
 Verify configuration options, API signatures, and version-specific behavior against this
 documentation before making changes.
 
+<!-- AGENTTEAMS:BEGIN key_api_surface v=1 -->
 ## Key API Surface
+<!-- AGENTTEAMS:END key_api_surface -->
 
 <!-- AGENTTEAMS:BEGIN tool_api_surface v=1 -->
 {TOOL_API_SURFACE}
@@ -60,12 +64,14 @@ Before any configuration change:
 4. Check exit code — non-zero exit is a failure; log and escalate
 5. Verify output artifacts exist in expected locations
 
+<!-- AGENTTEAMS:BEGIN verification v=1 -->
 ## Verification
 
 After every invocation, verify:
 - All expected output files are present
 - Output is not empty (zero-byte output indicates silent failure)
 - No error or warning lines appear in the log that weren't present in the previous successful run
+<!-- AGENTTEAMS:END verification -->
 
 ## Cleanup
 

@@ -3,6 +3,10 @@ SECTION MANIFEST
 | section_id       | designation  |
 |------------------|--------------|
 | tool_api_surface | FENCED       |
+| key_api_surface  | FENCED       |
+| dependency_management| FENCED       |
+| verification     | FENCED       |
+| when_to_involve_the_team| FENCED       |
 -->
 
 # {TOOL_NAME} — Build System Reference — {PROJECT_NAME}
@@ -23,7 +27,9 @@ Consult the official {TOOL_NAME} documentation at: {TOOL_DOCS_URL}
 
 Verify build configuration options, dependency specifications, and plugin APIs against this documentation.
 
+<!-- AGENTTEAMS:BEGIN key_api_surface v=1 -->
 ## Key API Surface
+<!-- AGENTTEAMS:END key_api_surface -->
 
 <!-- AGENTTEAMS:BEGIN tool_api_surface v=1 -->
 {TOOL_API_SURFACE}
@@ -58,23 +64,30 @@ Before any configuration change:
 4. Check exit code — non-zero exit is a failure; log and escalate
 5. Verify output artifacts exist in expected locations
 
+<!-- AGENTTEAMS:BEGIN dependency_management v=1 -->
 ## Dependency Management
 
 1. Pin dependency versions explicitly where possible
 2. Audit new dependencies for known vulnerabilities before adding
 3. Document the purpose of each dependency in comments or documentation
 4. Run full test suite after any dependency change
+<!-- AGENTTEAMS:END dependency_management -->
 
+<!-- AGENTTEAMS:BEGIN verification v=1 -->
 ## Verification
 
 After every build:
 - All expected output artifacts are present
 - Output is not empty (zero-byte output indicates silent failure)
 - No new warning or error lines compared to previous successful build
+<!-- AGENTTEAMS:END verification -->
 
+<!-- AGENTTEAMS:BEGIN when_to_involve_the_team v=1 -->
 ## When to Involve the Team
 
 Raise with `@orchestrator` (and `@security` for dependency sources) when:
 - The build fails on two consecutive runs after config review
 - Dependency resolution conflicts cannot be resolved
 - Security-sensitive build settings require modification
+<!-- AGENTTEAMS:END when_to_involve_the_team -->
+

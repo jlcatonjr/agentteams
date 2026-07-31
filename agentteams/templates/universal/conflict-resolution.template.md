@@ -20,6 +20,7 @@ SECTION MANIFEST
 |---------------------------|--------------|
 | memory_index_consultation | FENCED       |
 | invariant_core            | FENCED       |
+| rules                     | FENCED       |
 -->
 
 
@@ -87,9 +88,12 @@ Update `{CONFLICT_LOG_PATH}`: change `status` to `resolved`, add `resolution` de
 
 ---
 
+<!-- AGENTTEAMS:BEGIN rules v=1 -->
 ## Rules
 
 1. Never resolve a conflict without reading both source files
 2. Authority hierarchy (from `copilot-instructions.md`) is the tiebreaker — always
 3. ESCALATE only when genuinely unresolvable by the hierarchy
 4. Update the conflict log for every decision, including ACCEPT
+<!-- AGENTTEAMS:END rules -->
+
