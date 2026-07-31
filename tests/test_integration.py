@@ -749,7 +749,7 @@ def test_blocked_overwrite_update_creates_no_backup(tmp_path, monkeypatch, capsy
 
     captured = capsys.readouterr()
     combined = captured.out + captured.err
-    assert "Security gate blocked overwrite update" in combined
+    assert "[SEC-GATE/DESTRUCTIVE:overwrite-update]" in combined
     # Phase 2a: blocked update must not emit the misleading drift report or
     # the write banner.
     assert "Structural update" not in combined, (

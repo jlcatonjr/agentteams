@@ -25,6 +25,7 @@ from collections.abc import Iterable
 from dataclasses import dataclass, field
 from pathlib import Path
 
+from agentteams.backup import BACKUP_DIR_NAME as _BACKUP_DIR_NAME
 
 # ---------------------------------------------------------------------------
 # Patterns
@@ -202,7 +203,7 @@ def scan_directory(
     # Plan: references/plans/T3a-2-scan-skip-backups-2026-05-25.plan.md
     files_to_scan = [
         p for p in files_to_scan
-        if ".agentteams-backups" not in p.parts
+        if _BACKUP_DIR_NAME not in p.parts
     ]
 
     # T3a.2 v4: drop orphan .agent.md files when the caller provided the

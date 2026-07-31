@@ -29,7 +29,17 @@ __all__ = [
 ]
 
 
-_BACKUP_DIR_NAME = ".agentteams-backups"
+#: The pre-write snapshot directory. CH-05: this is the ONE definition — `fence_inject`,
+#: `cli.artifacts`, `architecture` and `interop` all import it rather than restating the
+#: literal, which had drifted into four independent spellings of the same string.
+#:
+#: Only the NAME is shared. Each consumer keeps its own set membership, because the questions
+#: differ: `architecture._EXCLUDE_DIRS` prunes an import-graph walk, `interop._NON_AGENT_DIRS`
+#: filters agent discovery, and `cli.artifacts._SCRATCH_DIR_NAMES` bounds index sources. They
+#: overlap; they are not the same set, and collapsing them would be a worse coupling than the
+#: duplication it removed.
+BACKUP_DIR_NAME = ".agentteams-backups"
+_BACKUP_DIR_NAME = BACKUP_DIR_NAME  # legacy private alias; existing importers resolve unchanged
 
 #: Default number of most-recent backups prune_backups keeps (remediation Plan 3).
 DEFAULT_BACKUP_KEEP_LAST = 10

@@ -17,6 +17,7 @@ SECTION MANIFEST — navigator.template.md
 |-----------------------|---------------|------------------------------------|
 | workstream_source_map | FENCED        | Generated from project components  |
 | project_structure     | USER-EDITABLE | Project may extend                 |
+| code_index_consultation | FENCED       |
 -->
 
 # Navigator — ProjectRepositories

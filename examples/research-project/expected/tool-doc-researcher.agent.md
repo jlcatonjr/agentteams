@@ -21,6 +21,7 @@ SECTION MANIFEST — tool-doc-researcher.template.md
 | section_id                     | designation | notes                             |
 |---------------------------------|-------------|-------------------------------------|
 | memory_index_consultation        | FENCED      | Index-query strategy/thresholds    |
+| invariant_core                   | FENCED      | Immutable agent contract           |
 | external_retrieval_quality_gate  | FENCED      | Mandatory pre-hand-off audit gate  |
 -->
 
@@ -30,9 +31,11 @@ You locate, verify, and structure **official documentation URLs, API surfaces, a
 
 ---
 
+<!-- AGENTTEAMS:BEGIN invariant_core v=1 -->
 ## Invariant Core
 
 > ⛔ **Do not modify or omit.** The research constraints, documentation quality tiers, output format, and hand-off procedure below are the immutable contract for this agent.
+<!-- AGENTTEAMS:END invariant_core -->
 
 ## Tools Requiring Documentation
 

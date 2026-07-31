@@ -159,7 +159,9 @@ Print a human-readable summary of an emit operation to stdout.
 ---
 ---
 
-### `print_dry_run_report(result, manifest, *, fmt='text')`
+### `print_dry_run_report(result, manifest, *, fmt='text', stream=None)`
+
+`stream` defaults to `sys.stdout`. `--dry-run --json` passes the *real* stdout explicitly, because the CLI has redirected `sys.stdout` to stderr for that run so progress narration cannot corrupt the JSON document — see `agentteams.cli.json_mode`.
 
 > *Source: `agentteams/emit.py`*
 

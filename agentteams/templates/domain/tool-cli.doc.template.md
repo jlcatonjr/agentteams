@@ -1,3 +1,10 @@
+<!--
+SECTION MANIFEST
+| section_id       | designation  |
+|------------------|--------------|
+| tool_api_surface | FENCED       |
+-->
+
 # {TOOL_NAME} — CLI Reference — {PROJECT_NAME}
 
 > Operational reference for the **{TOOL_NAME} {TOOL_VERSION}** command-line tool in {PROJECT_NAME}.

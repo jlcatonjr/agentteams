@@ -1153,3 +1153,58 @@ def test_gitignored_but_durable_sources_are_still_indexed(tmp_path):
         "examples/data-pipeline/brief.md",
     ):
         assert _is_durable_source(Path(durable)), f"{durable} must remain indexable"
+
+
+# --- committed-artifact path redaction (2026-07-30) -------------------------
+#
+# Snippet text is COMMITTED inside the index artifact, and the source documents it comes from
+# are frequently local-only (workSummaries/, references/plans/). Measured 2026-07-30, the tracked
+# .claude index carried 49 absolute `/Users/...` strings, some naming an unrelated repository —
+# the index was the only place those strings were committed.
+
+def test_redact_local_paths_removes_home_prefixed_absolutes():
+    from agentteams.memory_index import redact_local_paths
+
+    assert "alice" not in redact_local_paths(
+        "Trigger: `/Users/alice/githubrepositories/OtherRepo/tmp/a.csv` done"
+    )
+    assert "bob" not in redact_local_paths("see /home/bob/work/x.md for detail")
+
+
+def test_redact_local_paths_leaves_repo_relative_paths_intact():
+    """Redaction must not make passages unreadable — only the operator's layout goes."""
+    from agentteams.memory_index import redact_local_paths
+
+    text = "run tmp/by-week/2026-W31/plan.md and references/plans/x.report.md"
+    assert redact_local_paths(text) == text
+
+
+def test_extracted_paragraphs_are_redacted():
+    """The choke point every stored passage passes through."""
+    from agentteams.memory_index import _extract_paragraphs
+
+    paras = _extract_paragraphs("Some body text mentioning /Users/bob/secret/path/file.md here.\n")
+    assert paras and "/Users/" not in paras[0]
+
+
+def test_legacy_snippet_path_is_also_redacted():
+    """A second, independent route into stored snippet text — leaving it open reopens the leak."""
+    from agentteams.memory_index import _snippet
+
+    assert "/Users/" not in _snippet("Body text with /Users/bob/x.md inside it.\n")
+
+
+def test_the_committed_index_carries_no_absolute_home_paths():
+    """The artifact-level assertion. Regenerating must never reintroduce the leak."""
+    from pathlib import Path
+
+    index = Path(__file__).resolve().parents[1] / ".claude/agents/references/memory-index.json"
+    if not index.is_file():
+        import pytest
+        pytest.skip("committed .claude memory index not present in this checkout")
+    text = index.read_text(encoding="utf-8")
+    for marker in ("/Users/", "/home/"):
+        assert marker not in text, (
+            f"committed memory index contains {marker!r} — snippet redaction regressed; "
+            f"regenerate with `agentteams --self --output .claude/agents --refresh-index`."
+        )

@@ -1,3 +1,10 @@
+<!--
+SECTION MANIFEST
+| section_id | designation  |
+|------------|--------------|
+| content    | FENCED       |
+-->
+
 # AI Coding Bad-Habits Catalog — ResearchPaperProject
 
 <!-- AGENTTEAMS:BEGIN content v=1 -->

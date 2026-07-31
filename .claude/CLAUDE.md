@@ -34,7 +34,7 @@ SECTION MANIFEST — copilot-instructions.template.md
 
 | Path | Purpose |
 |------|---------|
-| `src/` | Primary authored deliverables |
+| `agentteams/` | Primary authored deliverables (the installable package) |
 | `dist/` | Compiled/converted output artifacts |
 | `docs/figures/` | Diagrams and figures |
 | `docs/` | Reference/bibliography database |
@@ -47,7 +47,7 @@ SECTION MANIFEST — copilot-instructions.template.md
 <!-- AGENTTEAMS:BEGIN output_conventions v=1 -->
 ## Output Conventions
 
-- All primary deliverables are authored in `src/` as `Python pipeline modules (ingest, analyze, render, emit), Agent template library (.template.md files), JSON schemas for project description and team manifest, Framework adapters (copilot-vscode, copilot-cli, claude), CLI entry point (build_team.py), Example project briefs and Test suite`
+- All primary deliverables are authored in `agentteams/` as `Python pipeline modules (ingest, analyze, render, emit), Agent template library (.template.md files), JSON schemas for project description and team manifest, Framework adapters (copilot-vscode, copilot-cli, claude), CLI entry point (build_team.py), Example project briefs and Test suite`
 - Compiled output lives in `dist/` and is **never edited directly**
 - Figures are generated from source files in `docs/figures/` — source files are authoritative
 - Every deliverable must correspond to a Component Spec defined by a workstream expert
@@ -119,10 +119,10 @@ default explicitly by saying so in their first line.
 <!-- AGENTTEAMS:BEGIN authority_hierarchy v=1 -->
 ## Authority Hierarchy
 
-1. **Template library** (`templates/`) — agent file structure, placeholder conventions, agent taxonomy patterns
+1. **Template library** (`agentteams/templates/`) — agent file structure, placeholder conventions, agent taxonomy patterns
 2. **JSON schemas** (`schemas/`) — input/output contract accuracy (project-description.schema.json, team-manifest.schema.json)
-3. **Python source pipeline** (`src/`) — pipeline logic, placeholder resolution, framework adapter behavior
-4. **PLACEHOLDER-CONVENTIONS.md** (`templates/PLACEHOLDER-CONVENTIONS.md`) — placeholder syntax rules (auto-resolved and manual-required token formats)
+3. **Python source pipeline** (`agentteams/`) — pipeline logic, placeholder resolution, framework adapter behavior
+4. **PLACEHOLDER-CONVENTIONS.md** (`agentteams/templates/PLACEHOLDER-CONVENTIONS.md`) — placeholder syntax rules (auto-resolved and manual-required token formats)
 5. **Implementation plan** (`build-team-plan.md`) — architectural decisions, agent taxonomy, module design rationale
 <!-- AGENTTEAMS:END authority_hierarchy -->
 
@@ -147,10 +147,10 @@ default explicitly by saying so in their first line.
 <!-- AGENTTEAMS:BEGIN source_repositories v=1 -->
 ## Source Repositories
 
-- `templates/` — agent file structure, placeholder conventions, agent taxonomy patterns
+- `agentteams/templates/` — agent file structure, placeholder conventions, agent taxonomy patterns
 - `schemas/` — input/output contract accuracy (project-description.schema.json, team-manifest.schema.json)
-- `src/` — pipeline logic, placeholder resolution, framework adapter behavior
-- `templates/PLACEHOLDER-CONVENTIONS.md` — placeholder syntax rules (auto-resolved and manual-required token formats)
+- `agentteams/` — pipeline logic, placeholder resolution, framework adapter behavior
+- `agentteams/templates/PLACEHOLDER-CONVENTIONS.md` — placeholder syntax rules (auto-resolved and manual-required token formats)
 - `build-team-plan.md` — architectural decisions, agent taxonomy, module design rationale
 <!-- AGENTTEAMS:END source_repositories -->
 
@@ -158,7 +158,7 @@ default explicitly by saying so in their first line.
 
 ## Style Rules
 
-- stdlib-only: no external dependencies in src/ (pytest is dev-only)
+- stdlib-only: no external dependencies in `agentteams/` (pytest is dev-only; the `agentteams[research]` extra is the one disclosed exception)
 - All public functions must have docstrings with Args/Returns/Raises
 - Type annotations required on all public function signatures
 - Templates use `{UPPER_SNAKE_CASE}` for auto-resolved placeholders and `{MANUAL:UPPER_SNAKE_CASE}` for human-required

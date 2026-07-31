@@ -1,3 +1,10 @@
+<!--
+SECTION MANIFEST
+| section_id      | designation  |
+|-----------------|--------------|
+| registry_header | FENCED       |
+-->
+
 <!-- AGENTTEAMS:BEGIN registry_header v=1 -->
 # Adjacent Repository Registry — {PROJECT_NAME}
 

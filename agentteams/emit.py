@@ -31,6 +31,8 @@ from agentteams.atomicio import (  # noqa: F401 — re-exported for callers/test
 )
 
 from agentteams.fences import (  # noqa: E402,F401  (carved for CH-07; re-exported)
+    _merge_front_matter,
+    _render_front_matter,
     MergeResult,
     _BRIDGE_FENCE_BEGIN_RE,
     _FENCE_BEGIN_RE,
@@ -225,6 +227,51 @@ def _ensure_project_notes_section(rel_path: str, content: str) -> str:
 # Concrete file paths (foo/bar.py, foo.md) or backtick-quoted identifiers.
 
 
+
+
+def _front_matter_baseline(output_dir: Path) -> dict[str, dict[str, str]]:
+    """Return the per-file front matter recorded at last generation.
+
+    Args:
+        output_dir: The agents directory being written to.
+
+    Returns:
+        ``{rel_path: {key: value}}``, or ``{}`` when no build log exists or it predates the
+        baseline field. Empty means "unknown", and an unknown baseline suppresses every
+        automatic application — the conservative reading.
+    """
+    try:
+        from agentteams import drift as _drift
+
+        return _drift.load_build_log(output_dir).get("front_matter_baseline", {}) or {}
+    except (FileNotFoundError, ValueError, OSError, KeyError):
+        return {}
+
+
+def _unmodified_since_build(output_dir: Path) -> frozenset[str]:
+    """Return the rel-paths that still match their recorded build-log hash.
+
+    Args:
+        output_dir: The agents directory being written to.
+
+    Returns:
+        Rel-paths unmodified since last generation. Empty when there is no build log, or on any
+        failure — "assume modified" is the safe default, because reporting template drift on a
+        file the operator actually edited would misattribute their own work.
+    """
+    try:
+        from agentteams import drift as _drift
+
+        build_log = _drift.load_build_log(output_dir)
+        recorded = set(build_log.get("file_hashes", {}))
+        modified = {c["rel_path"] for c in _drift.detect_user_customizations(
+            output_dir, build_log=build_log
+        )}
+    except (FileNotFoundError, ValueError, OSError, KeyError):
+        return frozenset()
+    return frozenset(recorded - modified)
+
+
 def emit_all(
     rendered_files: list[tuple[str, str]],
     *,
@@ -308,6 +355,16 @@ def emit_all(
                     result.errors.append("Aborted: user declined to overwrite existing files")
                     return result
             overwrite = True
+
+    # Provenance for unfenced-drift reporting: which recorded outputs still match the hash
+    # written at last generation, i.e. which files nobody has edited since. Reuses
+    # `drift.detect_user_customizations` rather than re-deriving the comparison — it already
+    # owns the hash algorithm the build log was written with. Computed once per run, not per
+    # file. Any failure yields an empty set, which means "assume modified" and report nothing:
+    # the conservative direction, since a false "unmodified" would blame the operator's own
+    # prose on the template.
+    _unmodified = _unmodified_since_build(output_dir)
+    _fm_baseline = _front_matter_baseline(output_dir)
 
     # Write files
     for rel_path, content in rendered_files:
@@ -483,7 +540,37 @@ def emit_all(
                 normalized_content,
                 existing_text,
                 preserve_on_shrink=(shrink_policy == "preserve"),
+                file_is_unmodified=(rel_path in _unmodified),
             )
+            # Front-matter drift: the template's front matter moved on while this file kept its
+            # own. Merge cannot fix it — front matter lies outside every fence and is preserved
+            # deliberately — so the remediation is to say so. Without this, a template `tools:`
+            # change reaches new teams only, and no run output mentions it (verified 2026-07-30
+            # against two downstream repos).
+            # Three-way front-matter merge. Front matter cannot be fenced (YAML must be the
+            # first bytes of the file), so it needs its own mechanism. Metadata keys whose
+            # baseline proves the project never edited them are applied; capability keys and
+            # genuine conflicts are reported instead — see fences._merge_front_matter.
+            _merged_keys, _fm_applied, _fm_proposals = _merge_front_matter(
+                normalized_content,
+                merge_result.merged_content,
+                _fm_baseline.get(rel_path),
+            )
+            if _fm_applied:
+                merge_result.merged_content = _render_front_matter(
+                    merge_result.merged_content, _merged_keys
+                )
+            for notice in _fm_applied:
+                result.notices.append(f"{rel_path}: {notice}")
+            for notice in _fm_proposals:
+                result.notices.append(f"{rel_path}: {notice}")
+            for notice in merge_result.front_matter_drift:
+                if "front matter:" in notice and _fm_applied:
+                    continue          # already applied above; do not also report it as drift
+                result.notices.append(
+                    f"{rel_path}: {notice} — preserved on-disk value; edit the file directly if "
+                    f"the template's version is wanted"
+                )
             # Plan 3: surface shrink Notices from this merge (real-run path).
             # T2.D5: shrink_policy controls whether to surface and whether
             # to write the smaller content.
@@ -596,6 +683,7 @@ def print_dry_run_report(
     manifest: dict[str, Any],
     *,
     fmt: str = "text",
+    stream: Any = None,
 ) -> None:
     """Print the structured dry-run plan (Plan 1).
 
@@ -603,7 +691,17 @@ def print_dry_run_report(
     notices; ``fmt='json'`` prints a single JSON document to stdout suitable
     for ``jq`` piping. No-op (with a one-line note) if ``result.dry_run_report``
     is None.
+
+    Args:
+        result: The emit result carrying ``dry_run_report``.
+        manifest: The team manifest (supplies project name and framework).
+        fmt: ``"text"`` or ``"json"``.
+        stream: Where to write. Defaults to ``sys.stdout``. JSON mode passes the *real* stdout
+            explicitly, because the caller has redirected ``sys.stdout`` to stderr so that
+            progress narration cannot corrupt the JSON document — see
+            :func:`agentteams.cli.generate.run_generate`.
     """
+    out = stream if stream is not None else sys.stdout
     import json as _json
     report = result.dry_run_report
     if report is None:
@@ -627,23 +725,23 @@ def print_dry_run_report(
             "notices": list(report.notices),
             "counts": _dry_run_counts(report),
         }
-        print(_json.dumps(payload, indent=2))
+        print(_json.dumps(payload, indent=2), file=out)
         return
 
     counts = _dry_run_counts(report)
-    print(f"\n[DRY RUN PLAN] {project!r} ({framework}) — no files written")
+    print(f"\n[DRY RUN PLAN] {project!r} ({framework}) — no files written", file=out)
     for entry in report.entries:
         delta = f" ({entry.delta_bytes:+d} bytes)" if entry.delta_bytes else ""
-        print(f"  {entry.action:24s} {entry.path}{delta}")
+        print(f"  {entry.action:24s} {entry.path}{delta}", file=out)
         for fa in entry.fence_actions:
-            print(f"      └─ fence:{fa['fence_id']:30s} {fa['action']}")
-    print("\n  Plan counts:")
+            print(f"      └─ fence:{fa['fence_id']:30s} {fa['action']}", file=out)
+    print("\n  Plan counts:", file=out)
     for action, n in sorted(counts.items()):
-        print(f"    {action:24s} {n}")
+        print(f"    {action:24s} {n}", file=out)
     if report.notices:
-        print(f"\n  Notices ({len(report.notices)}):")
+        print(f"\n  Notices ({len(report.notices)}):", file=out)
         for note in report.notices:
-            print(f"    Notice: {note}")
+            print(f"    Notice: {note}", file=out)
 
 
 def _dry_run_counts(report: DryRunReport) -> dict[str, int]:

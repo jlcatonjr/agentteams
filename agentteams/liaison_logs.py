@@ -64,6 +64,16 @@ SECURITY_DECISIONS_HEADERS: list[str] = [
     "conditions",
     "conditions_verified",
 ]
+#: `resolved_date`/`resolved_evidence` were added 2026-07-30. Before them the log had no way to
+#: express "done": every one of 53 rows read `status=open`, including 8 whose defect had
+#: demonstrably been fixed, so the backlog overstated outstanding work by ~15% and anyone
+#: prioritising from it spent effort on solved problems. The two columns make a status transition
+#: falsifiable — a `shipped` row has to say when, and point at something.
+#:
+#: The status lifecycle itself is unchanged and remains maintainer-owned
+#: (`open` -> `triaged` -> `shipped` | `wontfix`); a generated agent still only ever appends rows
+#: with `status=open` and never edits an existing one. See
+#: `templates/universal/retrospective-remediation.reference.template.md`.
 AGENTTEAMS_REMEDIATION_HEADERS: list[str] = [
     "date",
     "source_repo",
@@ -71,6 +81,8 @@ AGENTTEAMS_REMEDIATION_HEADERS: list[str] = [
     "summary",
     "proposed_touch_points",
     "status",
+    "resolved_date",
+    "resolved_evidence",
 ]
 
 # ---------------------------------------------------------------------------

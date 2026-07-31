@@ -402,6 +402,35 @@ def _reference_tool_placeholder_map(ref_tool: dict[str, Any]) -> dict[str, str]:
 # SETUP-REQUIRED.md rendering
 # ---------------------------------------------------------------------------
 
+# Emitted into every generated team's SETUP-REQUIRED.md.
+#
+# The `.vcache` validation-cache sidecar sits next to the memory/code index and holds only two
+# hashes, but it is machine-local state that churns on every query — it belongs in .gitignore.
+# agentteams gitignores it in its own tree; no template ever emitted the equivalent rule for a
+# consumer, so generated teams commit it by default. Measured 2026-07-29, one consumer had three
+# tracked `.vcache` files.
+#
+# This is ADVISORY on purpose. A consumer's root `.gitignore` is the operator's file, not part of
+# agentteams' output contract (which is its own `--output` directory). Silently editing a
+# repository-root file is precisely the class of act the bridge-refresh safety rules exist to
+# prevent, so the rule is surfaced as an action for a human rather than applied.
+_GITIGNORE_ADVISORY = """
+## Recommended `.gitignore` entries
+
+Your generated team writes two machine-local caches that should **not** be committed. Add these
+to this repository's `.gitignore`:
+
+```gitignore
+# agentteams retrieval validation-cache sidecars — machine-local, rebuilt on demand
+**/references/memory-index.vcache
+**/references/code-index/
+```
+
+Already committed one by mistake? `.gitignore` does not untrack an existing file — use
+`git rm --cached <path>` first, then confirm with `git ls-files | grep vcache`.
+"""
+
+
 def _render_setup_required(manifest: dict[str, Any]) -> str:
     manual_items = manifest.get("manual_required_placeholders", [])
 
@@ -410,6 +439,7 @@ def _render_setup_required(manifest: dict[str, Any]) -> str:
             "# SETUP-REQUIRED.md\n\n"
             "All placeholders were automatically resolved. No manual setup required.\n\n"
             f"Agent team successfully generated for **{manifest['project_name']}**.\n"
+            f"{_GITIGNORE_ADVISORY}"
         )
 
     lines = [
@@ -436,6 +466,7 @@ def _render_setup_required(manifest: dict[str, Any]) -> str:
     lines += [
         "",
         "Once all items above are resolved, invoke `@conflict-auditor` to verify consistency.",
+        _GITIGNORE_ADVISORY,
     ]
 
     return "\n".join(lines)

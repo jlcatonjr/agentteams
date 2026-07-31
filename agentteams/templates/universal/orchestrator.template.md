@@ -101,6 +101,7 @@ SECTION MANIFEST — orchestrator.template.md
 | constitutional_rules        | USER-EDITABLE      | Project may extend                        |
 | available_workflows         | FENCED             | Full workflow definitions; project rules go in gap before BEGIN |
 | project_rules               | USER-EDITABLE      | Project-specific rules below routing table (preserved by --update) |
+| routing_table_rows   | FENCED       |
 -->
 
 # Orchestrator — {PROJECT_NAME}

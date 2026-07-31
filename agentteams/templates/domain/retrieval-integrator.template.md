@@ -23,6 +23,14 @@ handoffs:
     prompt: "Retrieval integration validation complete."
     send: false
 ---
+<!--
+SECTION MANIFEST
+| section_id                | designation  |
+|---------------------------|--------------|
+| memory_index_consultation | FENCED       |
+| code_index_consultation   | FENCED       |
+-->
+
 
 # Retrieval Integrator — {PROJECT_NAME}
 

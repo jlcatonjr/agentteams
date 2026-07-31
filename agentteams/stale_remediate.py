@@ -22,6 +22,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 
 from agentteams import fleet
+from agentteams.backup import BACKUP_DIR_NAME as _BACKUP_DIR_NAME
 from agentteams.stale_detector import (
     GitRunner,
     StalenessReport,
@@ -76,7 +77,7 @@ def snapshot_files(root: Path, rel_paths: list[str], *, stamp: str | None = None
     rels = sorted({r for r in rel_paths if (root / r).is_file()})
     if not rels:
         return None
-    snap = root / ".agentteams-backups" / f"{_SNAPSHOT_PREFIX}{stamp or _utc_stamp()}"
+    snap = root / _BACKUP_DIR_NAME / f"{_SNAPSHOT_PREFIX}{stamp or _utc_stamp()}"
     files_dir = snap / "files"
     entries: list[dict[str, str]] = []
     for rel in rels:
@@ -103,7 +104,7 @@ def _backups_ignored(root: Path, git: GitRunner, sample_rel: str) -> bool:
 
 
 def latest_snapshot(root: Path) -> Path | None:
-    base = root / ".agentteams-backups"
+    base = root / _BACKUP_DIR_NAME
     if not base.is_dir():
         return None
     snaps = sorted(p for p in base.glob(f"{_SNAPSHOT_PREFIX}*") if (p / "manifest.json").is_file())

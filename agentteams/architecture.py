@@ -30,16 +30,20 @@ guarantee the commit-refresh relies on to avoid spurious diffs.
 from __future__ import annotations
 
 import ast
-import warnings
 import json
 import sys
+import warnings
 from dataclasses import dataclass, field
 from pathlib import Path
 
 from agentteams import svg_render
 
 # Directory names never treated as part of the mapped package.
-_EXCLUDE_DIRS = {"__pycache__", "templates", ".git", ".agentteams-backups"}
+from agentteams.backup import BACKUP_DIR_NAME as _BACKUP_DIR_NAME
+
+# Own set, shared name (CH-05): this prunes an import-graph walk, which is a
+# different question from what counts as scratch elsewhere.
+_EXCLUDE_DIRS = {"__pycache__", "templates", ".git", _BACKUP_DIR_NAME}
 
 
 # ---------------------------------------------------------------------------

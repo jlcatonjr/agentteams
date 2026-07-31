@@ -50,7 +50,7 @@ The handoff-only control-flow backbone (agents-list edges omitted):
 | `prairie-prosperity-expert` | workstream_expert | No | read, search, agent |
 | `primary-producer` | domain | No | read, edit, search |
 | `quality-auditor` | domain | No | read, search |
-| `reference-manager` | domain | No | read, edit, search |
+| `reference-manager` | domain | No | read, edit, search, retrieval |
 | `repo-liaison` | governance | No | read, edit, search, execute, agent |
 | `security` | governance | No | read, search |
 | `sugarscape-expert` | workstream_expert | No | read, search, agent |
@@ -685,7 +685,8 @@ digraph "ProjectRepositories Agent Team" {
       "tools": [
         "read",
         "edit",
-        "search"
+        "search",
+        "retrieval"
       ]
     },
     "repo-liaison": {

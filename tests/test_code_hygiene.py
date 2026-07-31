@@ -547,16 +547,25 @@ _PLACEHOLDER_HOME_NAMES: frozenset[str] = frozenset({
 #: Tracked paths permitted to contain an absolute home path, with the reason.
 #: Not a convenience list: each entry is a case where removing the path would make
 #: the file *less* truthful.
-_HOME_PATH_ALLOWLIST: dict[str, str] = {
-    ".claude/agents/references/memory-index.json": (
-        "The index stores verbatim `snippet`/`paragraphs` excerpts of the documents "
-        "it indexes. The remaining occurrences quote gitignored local plans that "
-        "record cross-repo work, where the path IS the record. Rewriting a quotation "
-        "would make the index misquote its source while `source_hash` still attested "
-        "to the original. The index's own `path` metadata is relative and is checked "
-        "by test_committed_memory_index_stores_relative_paths."
-    ),
-}
+# Emptied 2026-07-30. The sole entry was `.claude/agents/references/memory-index.json`, exempted
+# on the grounds that its snippets are "verbatim excerpts" and that redacting one "would make the
+# index misquote its source while `source_hash` still attested to the original".
+#
+# That reasoning does not survive inspection. Stored snippets were never verbatim: they are
+# truncated to 480 characters, have their newlines collapsed to spaces, and have leading heading
+# lines stripped. `source_hash` attests to the *source document*, not to the excerpt. Redacting an
+# absolute path is one more transformation of the same kind, and unlike the others it leaves a
+# visible `<path>` marker rather than silently altering the text.
+#
+# Weighed against that: the exemption was permitting 49 absolute `/Users/...` strings in a tracked,
+# already-pushed artifact, some naming an unrelated repository — and because the source documents
+# are frequently local-only, the index was the *only* place those strings were committed. The leak
+# was real; the fidelity it was traded for was not.
+#
+# `agentteams.memory_index.redact_local_paths` now removes them at snippet-construction time, so
+# the file needs no exemption. Re-adding an entry here should require the same standard: name what
+# is being traded away, and why the leak is worth it.
+_HOME_PATH_ALLOWLIST: dict[str, str] = {}
 
 
 def test_no_tracked_file_embeds_an_absolute_home_path() -> None:
@@ -688,4 +697,91 @@ def test_ch06_baseline_is_not_stale() -> None:
     assert actual == CH06_LONG_BLOCK_BASELINE, (
         f"CH06_LONG_BLOCK_BASELINE is {CH06_LONG_BLOCK_BASELINE} but the true count is "
         f"{actual}. Lower it to {actual} so the ratchet stays tight."
+    )
+
+
+#: How close a module may come to MAX_MODULE_LINES before the suite says so. Sized from
+#: experience: agentteams/cli/generate.py sat at 998/1000 and was pushed over TWICE in a single
+#: day by ordinary three-to-eight-line additions, each time forcing an unrelated carve
+#: (cli/json_mode.py, cli/exit_codes.py, cli/output_target.py) before unrelated work could land.
+#: None of those authors did anything wrong; they simply had no warning until they were already
+#: blocked. 25 lines is roughly "one more normal change" of runway.
+CEILING_WARN_MARGIN = 25
+
+#: Modules already inside the warning margin on 2026-07-30, with their line counts. Measured, not
+#: chosen: adding the guard revealed FIVE crowded modules, three within ten lines of the ceiling,
+#: so this is a systemic condition rather than one module's problem — and decomposing five
+#: modules is not a change that belongs inside an unrelated remediation round.
+#:
+#: A RATCHET, on the CH-24 `BROAD_EXCEPT_BASELINE` precedent: a module may shrink freely, but a
+#: baselined module that GROWS, or a new module entering the margin, fails. The condition
+#: therefore cannot spread or worsen while the decomposition stays queued.
+#: 2026-07-31: cli/artifacts.py left this set — the code-index half (a gitignored rebuildable
+#: cache) was carved to cli/code_index_artifacts.py, taking it 976 -> 621. The split was already
+#: latent: a section rule separated the two clusters, and they differ in kind — the memory index
+#: writes a COMMITTED artifact, the code index a local cache.
+CEILING_MARGIN_BASELINE: dict[str, int] = {
+    "agentteams/audit.py": 999,
+    "agentteams/frameworks/goose.py": 996,
+    "agentteams/graph.py": 992,
+    "agentteams/cli/generate.py": 991,
+}
+
+
+def _crowded_modules() -> dict[str, int]:
+    """Return in-scope modules within :data:`CEILING_WARN_MARGIN` of the ceiling."""
+    out: dict[str, int] = {}
+    for rel in _tracked_py_files():
+        if not _in_scope(rel, _LENGTH_EXCLUDE_PREFIXES) or rel in LENGTH_ALLOWLIST:
+            continue
+        lines = len((REPO_ROOT / rel).read_text(encoding="utf-8").splitlines())
+        if MAX_MODULE_LINES - CEILING_WARN_MARGIN <= lines <= MAX_MODULE_LINES:
+            out[rel] = lines
+    return out
+
+
+def test_no_new_module_crowds_the_ceiling() -> None:
+    """Early warning with runway, unlike `test_no_new_oversized_modules`.
+
+    That test fires only once a module is already over and the offending change is already
+    written — which is how three unrelated carves ended up inside one session. This fires while
+    there is still room to decide deliberately.
+    """
+    newly_crowded = {
+        rel: n for rel, n in _crowded_modules().items() if rel not in CEILING_MARGIN_BASELINE
+    }
+    assert not newly_crowded, (
+        f"Module(s) newly within {CEILING_WARN_MARGIN} lines of the {MAX_MODULE_LINES}-line "
+        f"CH-07 ceiling: {newly_crowded}.\n"
+        f"The next ordinary change will breach it and force a carve mid-edit. Decompose now, or "
+        f"add to CEILING_MARGIN_BASELINE if the size is genuinely warranted."
+    )
+
+
+def test_crowded_modules_do_not_grow() -> None:
+    """The ratchet: a module already in the margin may shrink, never grow."""
+    current = _crowded_modules()
+    grown = {
+        rel: (baseline, current[rel])
+        for rel, baseline in CEILING_MARGIN_BASELINE.items()
+        if rel in current and current[rel] > baseline
+    }
+    assert not grown, (
+        "Module(s) already crowding the CH-07 ceiling grew further "
+        f"(baseline -> now): {grown}.\n"
+        "These have no runway left. Take lines out, or carve, before adding more."
+    )
+
+
+def test_the_ceiling_baseline_is_current() -> None:
+    """A baseline listing a module that has since been decomposed is stale bookkeeping.
+
+    Mirrors `test_home_path_allowlist_is_justified_and_current`: an exemption that no longer
+    describes reality quietly stops protecting anything.
+    """
+    current = _crowded_modules()
+    stale = sorted(set(CEILING_MARGIN_BASELINE) - set(current))
+    assert not stale, (
+        f"CEILING_MARGIN_BASELINE lists module(s) no longer crowding the ceiling: {stale}. "
+        f"Remove them so the baseline keeps meaning what it says."
     )

@@ -12,6 +12,7 @@ build_team.py re-exports main/_finalize_exit_code/_deprecated_build_team_entry.
 
 from __future__ import annotations
 
+import argparse
 import os
 import sys
 from pathlib import Path
@@ -27,15 +28,20 @@ from agentteams.cli.commands import (
     _run_verify_integrity,
     _run_verify_waivers,
 )
-from agentteams.cli.parser import _build_parser, _validate_option_combinations
-from agentteams.cli.render_pipeline import _resolve_strict_manual_mode
+
 # run_generate holds the generate/update/check pipeline; _finalize_exit_code is
 # re-exported here so build_team's shim (from agentteams.cli.app import ...) and
 # tests resolve build_team._finalize_exit_code unchanged.
 from agentteams.cli.generate import _finalize_exit_code, run_generate
+from agentteams.cli.json_mode import run_with_json_stdout
+from agentteams.cli.parser import _build_parser, _validate_option_combinations
+from agentteams.cli.render_pipeline import _resolve_strict_manual_mode
 
 # Repo root = three levels up from agentteams/cli/app.py (identical to
 # build_team's _SCRIPT_DIR = Path(build_team.py).parent at repo root).
+# Re-exported for build_team's shim and tests that resolve build_team._finalize_exit_code.
+__all__ = ["_deprecated_build_team_entry", "_finalize_exit_code", "main"]
+
 _SCRIPT_DIR = Path(__file__).resolve().parents[2]
 
 def _deprecated_build_team_entry(argv: list[str] | None = None) -> int:
@@ -54,10 +60,36 @@ def _deprecated_build_team_entry(argv: list[str] | None = None) -> int:
 
 
 def main(argv: list[str] | None = None) -> int:
-    import build_team  # lazy: resident helpers (events/migrate/etc.) stay in build_team
+    """CLI entry point.
+
+    The ``--dry-run --json`` stdout contract is enforced here rather than deeper in the pipeline.
+    An earlier fix wrapped only ``run_generate``, which left every print issued *before* dispatch
+    on real stdout — on the ``--self`` path the "Self-maintenance mode:" banner landed ahead of
+    the document and ``json.load(sys.stdin)`` failed at line 1 again. Silencing that one line
+    would have fixed the symptom and left the next added print to re-break it; the boundary was
+    the bug, so the boundary moved out here.
+
+    Argument parsing stays *outside* the redirect: a parse error exits before JSON mode is even
+    determined, and its message belongs on stderr by argparse's own convention regardless.
+
+    Args:
+        argv: Command-line arguments, or ``None`` to read ``sys.argv``.
+
+    Returns:
+        The process exit code.
+    """
     parser = _build_parser()
     args = parser.parse_args(argv)
     _validate_option_combinations(parser, args)
+    return run_with_json_stdout(_main_dispatch, args, parser, argv)
+
+
+def _main_dispatch(
+    args: argparse.Namespace,
+    parser: argparse.ArgumentParser,
+    argv: list[str] | None,
+) -> int:
+    import build_team  # lazy: resident helpers (events/migrate/etc.) stay in build_team
 
     # --backup-mirror overrides AGENTTEAMS_BACKUP_MIRROR for this run so the
     # off-machine mirror (emit._mirror_backup) fires during any --update backup.

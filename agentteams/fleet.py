@@ -33,16 +33,18 @@ import json
 import re
 import subprocess
 import sys
-from dataclasses import dataclass, field, asdict
+from dataclasses import asdict, dataclass, field
 from datetime import datetime, timezone
 from pathlib import Path
+
+from agentteams.backup import BACKUP_DIR_NAME as _BACKUP_DIR_NAME
 
 # Directories never descended into when discovering workspaces. ``.github`` and
 # ``.claude`` are agent-infra internals — a workspace is detected from its PARENT,
 # so we must never recurse into them (else a nested ``.github/agents/.github``
 # artifact would be mis-discovered as its own workspace).
 _PRUNE_DIRS = {
-    "node_modules", ".git", ".agentteams-backups", "__pycache__", ".venv", "venv",
+    "node_modules", ".git", _BACKUP_DIR_NAME, "__pycache__", ".venv", "venv",
     ".github", ".claude", ".goose", "tmp",
 }
 _PRUNE_SUBSTR = (".worktrees", "/archive/")

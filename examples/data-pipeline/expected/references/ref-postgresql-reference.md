@@ -1,3 +1,10 @@
+<!--
+SECTION MANIFEST
+| section_id       | designation  |
+|------------------|--------------|
+| tool_api_surface | FENCED       |
+-->
+
 # PostgreSQL — Database Reference — SalesDataPipeline
 
 > Operational reference for the **PostgreSQL 15** database in SalesDataPipeline.

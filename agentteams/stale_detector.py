@@ -28,6 +28,7 @@ from pathlib import Path
 from typing import Callable
 
 from agentteams import fleet
+from agentteams.backup import BACKUP_DIR_NAME as _BACKUP_DIR_NAME
 
 # ---------------------------------------------------------------------------
 # Scan-set configuration
@@ -36,7 +37,7 @@ from agentteams import fleet
 # Directories pruned during a non-git walk (a git work-tree uses ``git ls-files``,
 # which already excludes gitignored trees such as ``tmp/`` and backups).
 _PRUNE_DIRS = {
-    ".git", "__pycache__", "node_modules", ".agentteams-backups",
+    ".git", "__pycache__", "node_modules", _BACKUP_DIR_NAME,
     ".agentteams-fleet", "_site", "dist", ".pytest_cache", ".mypy_cache",
 }
 
