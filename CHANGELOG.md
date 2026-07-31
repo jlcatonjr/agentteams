@@ -6,6 +6,39 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### added (security policy: three gaps closed under one review)
+
+- **The Mandatory Review Triggers table gains rows for package installation and elevated
+  privilege.** That table is what mechanically decides when `@security` must review before an
+  action proceeds, and it had no row for `brew`/`apt`/`pip install` or for `sudo` — only Rule
+  S-4's general destructive-operation prose, which is weaker than a table row. The gap became
+  live when the CLI-tool-discovery reference started telling agents they may install missing
+  tools. The fence is bumped `v3 → v4`, so the change reaches deployed teams.
+- **Rule S-9's metered-endpoint edge is named.** A read-only GET against an API that bills per
+  call is neither clearly "privileged or stateful" nor clearly a free inert public fetch. It is
+  now explicitly *not* a criterion-5 match — no credential or data exposure — but carries a
+  **disclosure** obligation: say the endpoint is metered and roughly what a run costs. Cost
+  control stays outside S-9's purpose, which is exposure; naming the boundary stops it being
+  resolved silently in either direction.
+- **`scan.py` now implements S-5's scan-derivable subset.** It had declined instruction-override
+  detection wholesale as "not scan-derivable". That was true of S-5's *third* bullet — a heading
+  that redefines agent identity needs judgment — but bullets one and two are literal strings, and
+  declining them left a static check undone that the template says must happen before any
+  verdict. It matters here specifically: project-supplied text is rendered into agent files a
+  model later reads as instruction.
+
+  Exempt inside YAML front matter (`description: "you are now the reviewer"` describes a role
+  rather than overriding one) and inside code spans (S-5's own rule text quotes every pattern in
+  backticks) — the latter reusing the existing `_match_inside_code_span` helper rather than
+  special-casing a file.
+
+### fixed (a test that pinned a version instead of ratcheting it)
+
+- `test_fence_version_bumped_to_3` asserted the security invariant's fence was *exactly* `v=3`,
+  so it failed on the next legitimate change rather than on a regression — which is what happened
+  when the trigger table gained its two rows. It now asserts the version never goes backwards,
+  which is the property the version actually encodes.
+
 ### added (42 template-owned sections fenced — and the scope was wrong twice)
 
 Example teams go **76% → 81% updatable**. Getting there corrected the premise twice, and both

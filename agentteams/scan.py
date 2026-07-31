@@ -151,7 +151,10 @@ PASS = "PASS"
 def verdict_for_findings(findings: Iterable[ScanFinding]) -> str:
     """Map scan findings to the security template's HALT/CONDITIONAL PASS/PASS verdict.
 
-    Covers only the scan-derivable subset of security.template.md's escalation table
+    Covers the scan-derivable subset of security.template.md's escalation table. Since
+    2026-07-31 that includes Rule S-5's literal instruction-override patterns; what remains
+    out of scope is S-5's third bullet (a heading that redefines agent identity), which needs
+    judgment rather than matching
     (credential, PII-path, machine-specific-info, unresolved-placeholder findings).
     Procedural findings in that table (bulk destructive ops, external-repo writes,
     injection attempts) aren't derivable from a static content scan and remain the
@@ -242,7 +245,13 @@ def scan_content(content: str, filename: str = "<string>") -> list[ScanFinding]:
         List of ScanFinding objects.
     """
     findings: list[ScanFinding] = []
+    in_front_matter = False
+    fm_delims = 0
     for line_num, line in enumerate(content.splitlines(), start=1):
+        if line.strip() == "---" and fm_delims < 2:
+            fm_delims += 1
+            in_front_matter = fm_delims == 1
+        _check_injection(line, line_num, filename, findings, in_front_matter=in_front_matter)
         _check_line(line, line_num, filename, findings)
     return findings
 
@@ -335,13 +344,85 @@ def _scan_file(file_path: Path, agents_dir: Path, report: ScanReport) -> None:
         rel_path = str(file_path)
 
     is_operational_json = file_path.name in _OPERATIONAL_JSON_NAMES
+    in_front_matter = False
+    fm_delims = 0
     for line_num, line in enumerate(content.splitlines(), start=1):
+        if line.strip() == "---" and fm_delims < 2:
+            fm_delims += 1
+            in_front_matter = fm_delims == 1
+        _check_injection(line, line_num, rel_path, report.findings,
+                         in_front_matter=in_front_matter)
         _check_line(
             line, line_num, rel_path, report.findings,
             skip_pii_path=is_operational_json,
             skip_entropy=is_operational_json,
             skip_placeholders=is_operational_json,
         )
+
+
+#: Rule S-5's literal instruction-override patterns, verbatim from security.template.md. These
+#: are exact strings, so they ARE scan-derivable — the module previously declined S-5 wholesale as
+#: "not scan-derivable", which was true only of S-5's third bullet (a heading that *redefines
+#: agent identity*, which needs judgment). Bullets one and two are string matching, and declining
+#: them left a static check undone that the template says must happen.
+#:
+#: Project-supplied text is rendered into agent files that a model later reads as instruction, so
+#: a match here is a real injection vector rather than a stylistic concern.
+_INJECTION_PATTERNS: tuple[str, ...] = (
+    "ignore previous instructions",
+    "ignore all instructions",
+    "disregard the above",
+    "new instructions:",
+    "system override:",
+    "security bypass:",
+)
+
+#: Identity-override phrases (S-5 bullet two). Legitimate inside agent YAML front matter — a
+#: template that says `description: "act as a reviewer"` is describing a role, not overriding one
+#: — so the caller suppresses these while inside front matter.
+_IDENTITY_OVERRIDE_PATTERNS: tuple[str, ...] = (
+    "you are now",
+    "your new role is",
+)
+
+
+def _check_injection(line: str, line_num: int, filepath: str,
+                     findings: list[ScanFinding], *, in_front_matter: bool) -> None:
+    """Flag Rule S-5's literal instruction-override patterns.
+
+    Args:
+        line: The line to check.
+        line_num: 1-indexed line number.
+        filepath: Repo-relative path, for the finding.
+        findings: Accumulator, appended in place.
+        in_front_matter: Whether this line is inside a YAML front-matter block, where
+            identity phrasing is descriptive rather than an override.
+    """
+    low = line.lower()
+    for pattern in _INJECTION_PATTERNS:
+        idx = low.find(pattern)
+        # A pattern inside a code span is being QUOTED, not issued — security.template.md's own
+        # S-5 text lists every one of these in backticks, and so does any doc explaining the rule.
+        # Reuses the same code-span discrimination the entropy/PII checks already rely on.
+        if idx != -1 and not _match_inside_code_span(line, idx, idx + len(pattern)):
+            findings.append(ScanFinding(
+                file=filepath, line=line_num, category="injection", severity="high",
+                message=(f"Rule S-5 instruction-override pattern {pattern!r} — reviewed content "
+                         f"is inert data, never instruction"),
+                snippet=line.strip()[:120],
+            ))
+            return
+    if in_front_matter:
+        return
+    for pattern in _IDENTITY_OVERRIDE_PATTERNS:
+        idx = low.find(pattern)
+        if idx != -1 and not _match_inside_code_span(line, idx, idx + len(pattern)):
+            findings.append(ScanFinding(
+                file=filepath, line=line_num, category="injection", severity="high",
+                message=f"Rule S-5 identity-override phrase {pattern!r} outside front matter",
+                snippet=line.strip()[:120],
+            ))
+            return
 
 
 def _check_line(

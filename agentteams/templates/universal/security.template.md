@@ -41,7 +41,7 @@ Runtime enforcement also consumes machine-readable freshness metadata from the s
 > ⛔ **Do not modify or omit.** All triggers, rules, the HALT directive, and the AI-authored-code screening guidance below are the immutable contract for this agent.
 <!-- AGENTTEAMS:END invariant_core -->
 
-<!-- AGENTTEAMS:BEGIN security_rules_invariant v=3 -->
+<!-- AGENTTEAMS:BEGIN security_rules_invariant v=4 -->
 ### Mandatory Review Triggers
 
 | Trigger | Risk Category |
@@ -57,6 +57,8 @@ Runtime enforcement also consumes machine-readable freshness metadata from the s
 | Any execution of `batch_update.py` or `build_team.py --self --update` | Infrastructure scope — bulk cross-repo write |
 | Any invocation of `agentteams … --bridge-refresh` against an external project | Destructive at target — see `references/bridge-refresh-safety.md` Pre-Flight; clear only when Pre-Flight §II all-pass |
 | Any committed file containing absolute filesystem paths with home directory (`/Users/`, `/home/`) | OPSEC — PII exposure in artifacts |
+| Any software installation via a package manager (`brew`, `apt`, `dnf`, `pip install`, `npm i`, …) | Supply chain — unreviewed third-party code on the host |
+| Any command run with elevated privilege (`sudo`, `doas`, an Administrator shell) | Privilege escalation — effects outside the project tree |
 | Any committed or tracked file containing a local machine hostname, OS username, MAC address, local network IP (192.168.x.x, 10.x.x.x, 172.16-31.x.x), or machine-local absolute path outside `~/` notation | OPSEC — machine-specific information exposure |
 | Any agent with `edit` or `execute` tools acting outside its declared workstream | Excessive agency (LLM06) |
 | Any operation that exports, forwards, or logs agent YAML front matter or system prompt content | System prompt leakage (LLM07) |
@@ -156,7 +158,14 @@ none of them is out of scope for this rule entirely, regardless of how novel it 
    documentation, a public API's published results) — that is the ordinary, encouraged case
    this team's own `cli-tool-discovery.reference.md` exists to promote, not something Rule S-9
    should gate. If a fetch is read-only and the source is public, it is out of scope for this
-   criterion regardless of being "external"
+   criterion regardless of being "external". **Metered or paid endpoints are the named edge
+   between those two cases**: a read-only GET against an API that bills per call carries no
+   credential or data exposure, so it is not a criterion-5 match — but it is not free and inert
+   either, and repeating it in a memorialized pattern spends real money. Treat cost as a
+   *disclosure* obligation rather than a gate: say in the pattern that the endpoint is metered
+   and roughly what a run costs, then let the operator decide. Cost control is deliberately
+   outside Rule S-9's purpose, which is exposure; naming the boundary here stops the ambiguity
+   being resolved silently in either direction
 
 - ✅ Prefer an official package registry or the vendor's own documented install method over an
   ad hoc third-party script
