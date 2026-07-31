@@ -81,7 +81,7 @@ PARAPHRASE_PAIRS: list[tuple[str, str]] = [
 # RESULT, measured 2026-07-30 on this corpus:
 #
 #     keyword    top-1 = 10/10     top-3 = 10/10
-#     paraphrase top-1 =  1/10     top-3 =  3/10
+#     paraphrase top-1 =  1/10     top-3 =  3/10  (2/10 after one doc was added; see below)
 #
 # The pre-registered hypothesis is confirmed, and by a wider margin than expected. Same corpus,
 # same target documents, same retriever — only the wording changed, and top-1 recall collapsed
@@ -101,10 +101,23 @@ PARAPHRASE_PAIRS: list[tuple[str, str]] = [
 # references/plans/external-retrieval-expansion-2026-07-30.report.md.
 # ---------------------------------------------------------------------------
 
+# CORPUS-SENSITIVITY, measured 2026-07-30 (later the same day):
+#
+# Adding ONE unrelated reference document (references/freshness-gate-scoping-decision.md) moved
+# paraphrase top-3 from 3/10 to 2/10, while keyword recall stayed at 10/10 — isolated by removing
+# the file and re-measuring. That is not noise to be tuned away; it is a second, independent
+# measurement of the same weakness. Lexical paraphrase matching is fragile enough that one
+# unrelated document displaces a correct answer, and keyword matching under identical conditions
+# does not move at all.
+#
+# The floor is therefore lowered to the observed value rather than the eval being adjusted to
+# preserve the old number. Adjusting the queries to keep the score up would be fitting the
+# benchmark to a preferred answer, which is the thing pre-registration exists to prevent.
+
 #: FLOORS recording observed behaviour, not targets. Change only alongside a note saying what
 #: changed and why.
 _MEASURED_PARAPHRASE_TOP1 = 1
-_MEASURED_PARAPHRASE_TOP3 = 3
+_MEASURED_PARAPHRASE_TOP3 = 2
 
 #: The keyword set scores 10/10 top-1 on the same corpus (test_memory_index_relevance).
 _KEYWORD_TOP1 = 10
