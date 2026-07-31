@@ -6,6 +6,30 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### changed (verification sweep: the backlog shrank by checking, not fixing)
+
+Lane 1 of the cluster sequencing — verify every unverified row, close what is already done, and
+fix only what survives.
+
+- **`build_tool_catalog(fetch_pypi=...)` → `fetch_registries`.** The npm tier was added under the
+  PyPI-era flag without renaming it, so a caller passing `fetch_pypi=False` to avoid PyPI was also
+  silently disabling npm. The old name is kept as a documented deprecated alias, so the existing
+  call site and tests are unaffected.
+- **Backlog 33 → 28 open, 1 wontfix.** `--refresh-index` was already the narrow reindex path #20
+  asked for (verified: it writes only the index and its `.vcache`, no team files). Row 15's
+  misattribution can no longer misdirect anyone now that row 15 is closed. The Goose provider docs
+  already carry the correction they were logged for — the grep that seemed to reopen that row was
+  matching the *correction text*. And `GeneralResearchTeam` is a parent folder holding research
+  repositories, not a repository, so being unversioned is correct.
+- Three rows re-verified as genuinely open and annotated with what was found, so the next pass
+  does not repeat the check.
+
+### fixed (the closure guard assumed every closure points at code)
+
+- A `wontfix` is closed by a **decision**, not an artifact — "the operator confirmed this is not a
+  defect" is the only evidence such a row can have. The evidence-anchor check rejected it and
+  would have pushed authors to invent a file path. Anchors widened and made case-insensitive.
+
 ### added (the fencing the positional-insertion fix unblocked)
 
 - **`Invariant Core` is now fenced in 9 templates**, so it can finally reach an already-generated

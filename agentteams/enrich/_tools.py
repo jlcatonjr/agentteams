@@ -237,22 +237,35 @@ def scan_project_imports(project_path: Path) -> dict[str, str]:
 def build_tool_catalog(
     package_names: list[str],
     *,
-    fetch_pypi: bool = True,
+    fetch_registries: bool = True,
+    fetch_pypi: bool | None = None,
 ) -> dict[str, dict[str, str]]:
     """Build a metadata catalog for a list of packages.
 
     Resolution order per package: the unified static catalog
     (agentteams.tool_metadata_catalog, zero network) first; if unresolved and
-    `fetch_pypi` is True (also gates the npm registry fetch, despite the
-    parameter's PyPI-era name — kept for its one existing call site), PyPI is
-    tried, then npm.
+    ``fetch_registries`` is True, PyPI is tried, then npm.
+
+    Args:
+        package_names: Packages to resolve metadata for.
+        fetch_registries: Whether to fall back to a network registry lookup when the static
+            catalog has no entry. Gates BOTH PyPI and npm.
+        fetch_pypi: Deprecated alias for ``fetch_registries``. The npm tier was added under this
+            flag without renaming it, so the name understated what it controlled — a caller
+            passing ``fetch_pypi=False`` to avoid PyPI was also silently disabling npm. Accepted
+            for back-compatibility; when given, it wins.
+
+    Returns:
+        ``{package_name: metadata}`` for every package that resolved.
     """
+    if fetch_pypi is not None:
+        fetch_registries = fetch_pypi
     catalog: dict[str, dict[str, str]] = {}
     for pkg in package_names:
         known = tool_metadata_catalog.get_tool_metadata(pkg)
         if known:
             catalog[pkg] = known
-        elif fetch_pypi:
+        elif fetch_registries:
             meta = _fetch_pypi_metadata(pkg)
             if not meta["docs_url"]:
                 # Fill gaps from npm rather than replacing wholesale — PyPI can

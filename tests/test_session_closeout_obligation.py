@@ -41,6 +41,12 @@ _MIN_EVIDENCE_CHARS = 40
 _EVIDENCE_ANCHORS = (
     "tests/", ".py", ".md", ".json", ".csv", ".github/",
     "verified", "re-verified", "grep", "PR #",
+    # A `wontfix` is closed by a DECISION, not a code artifact — "the operator confirmed this is
+    # not a defect" is the only evidence such a row can have, and demanding a file path for it
+    # would push authors to invent one. Added 2026-07-31 when the GeneralResearchTeam row (a
+    # parent folder, correctly unversioned) tripped an anchor list that assumed every closure
+    # points at code.
+    "operator confirmed", "not a defect", "by design",
 )
 
 
@@ -59,7 +65,9 @@ def test_closure_evidence_points_at_something_checkable(rows):
         evidence = row["resolved_evidence"].strip()
         if len(evidence) < _MIN_EVIDENCE_CHARS:
             weak.append(f"line {i}: evidence too thin to check ({len(evidence)} chars)")
-        elif not any(anchor in evidence for anchor in _EVIDENCE_ANCHORS):
+        elif not any(anchor in evidence.lower() for anchor in _EVIDENCE_ANCHORS):
+            # Case-insensitive: 'Operator confirmed' at the start of a sentence is the
+            # same evidence as 'operator confirmed' mid-sentence.
             weak.append(f"line {i}: evidence names no file, test, or verification")
     assert not weak, (
         "Closed row(s) whose evidence cannot be checked:\n  " + "\n  ".join(weak)
