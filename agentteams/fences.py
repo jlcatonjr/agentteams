@@ -509,6 +509,42 @@ def _render_front_matter(content: str, keys: dict[str, str]) -> str:
     return f"---\n{body}\n---\n" + content[match.end():]
 
 
+#: The section id `_normalize_generated_content` uses when it wraps an entire unfenced body.
+_WHOLE_BODY_FENCE = "content"
+
+
+def _is_whole_body_migration(existing_regions: dict, new_regions: dict) -> bool:
+    """Whether the on-disk file predates its template being split into named sections.
+
+    A template with no fences gets its whole body wrapped in a single ``content`` fence at emit
+    time. The moment that template gains a named section, the render stops being wrapped — so a
+    team generated *before* the split has ``{content}`` on disk while the render has
+    ``{invariant_core, ...}``.
+
+    Merging those naively appends the named sections *alongside* the stale ``content`` block,
+    leaving the file with two copies of the same section — measured 2026-07-31, two contradictory
+    copies of an agent's "⛔ Do not modify or omit" contract. That is worse than not updating at
+    all, and it is the real reason ~19 templates could not be fenced. (The nesting error
+    originally blamed for it turned out to be a boundary bug in the fencing pass, since fixed.)
+
+    Replacing wholesale is safe *because* of what a fence means: everything inside ``content`` is
+    template-owned and already overwritten on every merge, so nothing a project authored lives
+    there. Content outside it is untouched, exactly as before.
+
+    Args:
+        existing_regions: Fenced regions found on disk.
+        new_regions: Fenced regions in the fresh render.
+
+    Returns:
+        True when the on-disk file is wrapped and the render is not.
+    """
+    return (
+        set(existing_regions) == {_WHOLE_BODY_FENCE}
+        and _WHOLE_BODY_FENCE not in new_regions
+        and bool(new_regions)
+    )
+
+
 def _insert_section_at_render_position(
     merged: str,
     sid: str,
@@ -599,6 +635,22 @@ def _merge_fenced_content(
         parse failure.
     """
     result = MergeResult()
+
+    _existing_probe = _extract_fenced_regions(existing_on_disk)
+    _new_probe = _extract_fenced_regions(new_rendered)
+    if (isinstance(_existing_probe, dict) and isinstance(_new_probe, dict)
+            and _is_whole_body_migration(_existing_probe, _new_probe)):
+        # Structural migration, not an ordinary merge — see _is_whole_body_migration.
+        result.merged_content = new_rendered
+        result.sections_added = list(_new_probe)
+        result.sections_orphaned = [_WHOLE_BODY_FENCE]
+        result.shrink_notices.append(
+            f"fence '{_WHOLE_BODY_FENCE}': this file predates its template being split into "
+            f"named sections; the whole-body fence was replaced by "
+            f"{', '.join(sorted(_new_probe))}. Everything inside it was template-owned."
+        )
+        return result
+
     # Reported, never applied: front matter lies outside every fence, so the merge below leaves
     # the on-disk version untouched. Recording the divergence is the whole remediation — the
     # defect was that a template `tools:` change reached already-generated teams silently.
