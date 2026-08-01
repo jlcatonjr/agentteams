@@ -6,6 +6,57 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### fixed (an agent file must not begin with a fence marker)
+
+- **Goose's ACP scanner refused `.claude/agents/team-builder.md`** — `could not find expected ':'
+  at line 5 column 1`. The file opened with `<!-- AGENTTEAMS:BEGIN content v=1 -->`, so the
+  scanner read the HTML comment as the start of a YAML mapping and hit the template's horizontal
+  rule four lines later.
+- **It was logged as fence corruption; it was not.** `_normalize_generated_content` already wraps
+  *only the body* when a file has YAML front matter, precisely so framework parsers keep seeing
+  front matter first. The wrapper lands on line 1 for one reason: there was no front matter for it
+  to land after. **The cause was a single outlier template** — three of the four builder templates
+  open with a `---` block, the Claude one did not, and `render_builder_file` is identity for
+  Claude, so nothing downstream injected it the way `render_agent_file` does for ordinary agents.
+- The template now carries front matter, and this repo's deployed file was repaired directly.
+  That second step was necessary rather than redundant: **`--update --merge` cannot add front
+  matter to a file that has none**, because front matter lies outside every fence and is preserved
+  verbatim. Verified by dry-run before and after — the merge reported `+1 bytes` on the broken
+  file and `+235 bytes` once the block existed for it to preserve.
+- `SETUP-REQUIRED.md` also opens with the wrapper and is **deliberately left alone**: it is a build
+  report, not a persona, and both `emit._is_agent_doc` and `bridge_sources` exclude it from
+  agent-file enumeration. Nothing scans it.
+- Guarded by `tests/test_agent_file_front_matter_first.py`, which asserts the property per builder
+  template rather than for the one file that broke.
+
+### fixed (`.vscode/tasks.json` can no longer be written outside the output tree)
+
+- **`vscode_tasks_rel_path` returns a fixed `../../.vscode/tasks.json`**, correct for every adapter
+  that overrides it because each puts its agents dir exactly two segments below the project root —
+  and wrong for any other `--output`. Pointed at `examples/<name>/expected`, one segment below its
+  own conceptual root, the offset climbed a level too far and wrote `examples/.vscode/tasks.json`,
+  a sibling of every example project. It went unnoticed because the snapshot comparison reads only
+  `*.md`/`*.svg` inside `expected/`.
+- The call site now **derives** the expected depth from each adapter's own `get_agents_dir`
+  contract rather than restating "two levels" a second time, and **refuses with a message** when
+  `--output` is not shaped like that adapter's agents dir. Refusing beats guessing a corrected
+  offset: an arbitrary `--output` has no discoverable project root, so any inferred target is a
+  path written somewhere the operator did not name. No adapter contract changed and no existing
+  assertion moved.
+
+### changed (three more template-owned sections fenced — and one deliberately not)
+
+- `conflict-auditor` and `navigator` gain fenced `invariant_core` sections; `orchestrator` gains
+  `update_compatibility_source_pack`. Partially-fenced templates now carry 638 lines outside a
+  fence, down from 669.
+- **The orchestrator's own `## Invariant Core` was left unfenced on purpose, and the reason is
+  recorded in the template.** Its rule list carries the ⛔ "Do not modify or omit" banner while the
+  SECTION MANIFEST designates `constitutional_rules` USER-EDITABLE — and projects *do* extend it;
+  this repository's `CLAUDE.md` adds rules past the template's set. A fence spanning the heading
+  through the last rule would replace that list wholesale on `--update --merge` and delete every
+  project-added rule. The banner and the designation genuinely conflict; the designation wins,
+  because it is the one whose failure mode is data loss.
+
 ### added (plan-step CSVs are checked against the real corpus)
 
 - **The CSV-safety instruction existed in two agent files and did not prevent recurrence.**

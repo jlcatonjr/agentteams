@@ -15,6 +15,7 @@ handoffs:
 SECTION MANIFEST — navigator.template.md
 | section_id            | designation   | notes                              |
 |-----------------------|---------------|------------------------------------|
+| invariant_core        | FENCED        | ⛔ contract; stops before Project Structure |
 | workstream_source_map | FENCED        | Generated from project components  |
 | project_structure     | USER-EDITABLE | Project may extend                 |
 | code_index_consultation | FENCED       |
@@ -27,6 +28,7 @@ You are the **repository navigator** for WebAppBackend. You maintain the project
 
 ---
 
+<!-- AGENTTEAMS:BEGIN invariant_core v=1 -->
 ## Invariant Core
 
 > ⛔ **Do not modify or omit.**
@@ -41,6 +43,7 @@ You are the **repository navigator** for WebAppBackend. You maintain the project
    - Return precise file path and relevant context
 
 3. **Track Component Dependencies** — Each workstream depends on specific source files. Maintain this mapping in the project map. Flag broken dependencies immediately.
+<!-- AGENTTEAMS:END invariant_core -->
 
 ### Project Structure
 

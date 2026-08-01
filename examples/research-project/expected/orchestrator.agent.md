@@ -118,6 +118,7 @@ SECTION MANIFEST — orchestrator.template.md
 | section_id                  | designation        | notes                                     |
 |-----------------------------|--------------------|-------------------------------------------|
 | authority_hierarchy         | FENCED             | From manifest                             |
+| update_compatibility_source_pack | FENCED        | Canonical file list + command sequence    |
 | routing_table_rows          | FENCED (partial)   | Generated rows only; user may add below   |
 | constitutional_rules        | USER-EDITABLE      | Project may extend                        |
 | available_workflows         | FENCED             | Full workflow definitions; project rules go in gap before BEGIN |
@@ -136,6 +137,17 @@ You coordinate all agent operations for **ResearchPaperProject**. You route work
 ## Invariant Core
 
 > ⛔ **Do not modify or omit.** The responsibility definitions, workflows, and rules below are the immutable contract for this orchestrator.
+
+<!--
+NOT FENCED, deliberately. The rule list below carries the ⛔ banner but the SECTION MANIFEST
+designates `constitutional_rules` USER-EDITABLE ("Project may extend"), and projects do extend it
+— this repository's own CLAUDE.md adds rules past the template's set. A fence spanning the
+heading through the last rule would replace that list wholesale on `--update --merge` and delete
+every project-added rule. The only template-owned text above the list is this heading and one
+sentence, which is not worth a fence of its own. Reviewed 2026-07-31 while closing the
+unfenced-Invariant-Core item; the ⛔ banner and the USER-EDITABLE designation genuinely conflict,
+and the designation wins because it is the one with a data-loss consequence.
+-->
 
 ### Constitutional Rules (Non-Negotiable)
 
@@ -185,6 +197,7 @@ You coordinate all agent operations for **ResearchPaperProject**. You route work
 | Parallel dispatch of independent plan steps | `@orchestrator` → Workflow 0A | Plan steps with disjoint domains; "run these in parallel"; a `*.steps.csv` carrying `depends_on` |
 <!-- AGENTTEAMS:END routing_table_rows -->
 
+<!-- AGENTTEAMS:BEGIN update_compatibility_source_pack v=1 -->
 ### Update Compatibility Source Pack
 
 Before orchestrating any on-the-fly agent file update, review these canonical files in order:
@@ -200,6 +213,7 @@ Use this baseline command sequence for update-safe execution:
 2. `agentteams --description <brief> --update --merge --dry-run` for scope preview
 3. `agentteams --description <brief> --update --merge` for apply
 4. `agentteams --description <brief> --scan-security` and `--post-audit` closeout when required by policy
+<!-- AGENTTEAMS:END update_compatibility_source_pack -->
 
 ### Optional Routing Extensions (User-Editable)
 

@@ -1,3 +1,9 @@
+---
+name: Team Builder — Agent Teams Module
+description: "Interactively constructs a complete agent team for a new or existing Claude project by conducting an intake interview and invoking the build_team pipeline"
+allowed-tools: Read, Edit, Write, Grep, Glob, Bash
+---
+
 # Team Builder — Agent Teams Module (Claude)
 
 > This is the system prompt for a Claude Project or CLAUDE.md configuration that enables the construction of a complete agent team for any project.
