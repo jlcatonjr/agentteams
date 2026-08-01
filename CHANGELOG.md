@@ -6,6 +6,26 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### changed (remediation log: three rows closed by verification)
+
+- **Two rows described defects that no longer exist**, and one describes something outside this
+  repo. Rating and sequencing work kept inheriting them, so they are closed with cited evidence
+  rather than carried into another round.
+  - The Goose preflight's blindness to the newer `providers:`/`active_provider:` config schema:
+    `scripts/goose-openrouter-preflight.py` already has `parse_goose_providers_block`, and a live
+    run resolved `provider: ollama` from `active_provider` instead of the empty
+    "nothing to validate" the row predicts. → `shipped`
+  - The auto-fence retrofit's missing file-type guard: `_is_machine_managed_merge_overwrite_path`
+    full-replaces `.py`/`.json`/`.svg` and fences only `.md`, so no non-Markdown file can be
+    auto-fenced. No data file in the repo carries a fence marker. → `shipped`
+  - OpenRouter upstream tool-calling variance is provider-side — the same model id served by
+    different upstreams differs in fidelity, and nothing here can change a third party's backend.
+    The measurement is retained as the reason. → `wontfix`
+
+  Backlog: 24 open → **21 open / 37 shipped / 2 wontfix**. Both `shipped` closures were checked
+  against test-pinned code (`tests/test_goose_openrouter_preflight.py`, `tests/test_frameworks.py`),
+  not read off the source alone.
+
 ### added (security policy: three gaps closed under one review)
 
 - **The Mandatory Review Triggers table gains rows for package installation and elevated
