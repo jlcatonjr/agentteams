@@ -6,6 +6,85 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### added (plan-step CSVs are checked against the real corpus)
+
+- **The CSV-safety instruction existed in two agent files and did not prevent recurrence.**
+  "Write with `csv.writer`, re-parse via `read_steps`" has been in both orchestrator files since
+  2026-07-22; two days later this repo produced several rounds of the exact corruption it forbids.
+  `tests/test_plan_steps_corpus.py` now points the existing detector at the files that actually
+  accumulate. An instruction that competes with finishing the work loses; a test does not.
+
+  Two design points worth stating, because both cut against the obvious implementation:
+  - **It skips, rather than passes, on an empty corpus.** `tmp/` is gitignored and carries zero
+    tracked files, so this glob matches nothing in CI. A green result on an empty corpus would
+    read as coverage while checking nothing.
+  - **It is a ratchet, not a zero-gate.** 13 of 187 files already overflow, the oldest from
+    2026-W19. They are records of finished work; rewriting them to make a test pass would be
+    editing the record. The baseline lists them by path, so repairing one means deleting a line
+    and the debt stays legible.
+
+### changed (`devDependencies` no longer spawn a reference document each)
+
+- **`_parse_package_json` categorised every entry in both `dependencies` and `devDependencies` as
+  `library`**, which routes to the reference tier and gives each one its own
+  `references/ref-<tool>-reference.md`. A mid-sized JavaScript project carries dozens of lint
+  plugins and type stubs, and each was producing a document. `devDependencies` are now categorised
+  `other` — passive by default — while staying in `tools[]`, so stack inference is unaffected.
+  `other` rather than a new `dev-tool` value because `category` is enum-constrained in
+  `schemas/project-description.schema.json`, which outranks the pipeline.
+- **This is a default, not a filter**, and the distinction is what makes it safe: name-based
+  promotion in `classify_tool_importance` still fires, which is where the tools that matter live.
+  `typescript`, `webpack`, `vite`, `rollup` and `esbuild` were added to `_REFERENCE_TOOLS` in the
+  same change — without them the demotion would have silently taken a TypeScript project's
+  compiler and its bundler from reference tier to passive. They are listed as *reference*, not
+  specialist, so they keep exactly the tier they had. Test frameworks (`jest`, `pytest`, `mocha`,
+  `junit`) were already there for the same reason.
+
+### changed (orphan advisories say what `--prune` cannot do)
+
+- **The older `*.agent.md` orphan advisory said "Review and delete if obsolete"** while its
+  newer sibling for `ref-*-reference.md` files already disclosed that `--prune` cannot reach
+  them. `--prune` deletes only what the build-log diff records as removed; both advisories find
+  their orphans by globbing the output directory, which `--prune` never consults. The wording is
+  now identical in both.
+- **Wiring the glob results into `--prune`'s deletion set was declined**, not overlooked. That
+  would widen a destructive flag's reach from an authoritative build-log diff to a heuristic
+  glob — a decision that belongs to `@security` under Constitutional Rule 1, not to a
+  consistency fix.
+- **`agentteams/cli/generate.py` 991 → 958.** This carve was forced, not chosen: a six-line
+  comment took the module to 998 and the CH-07 ratchet refused it, which is the guard working
+  as designed and the exact failure mode recorded for that module in the remediation log. The
+  carve it forced was the right one anyway — the inlined orphan-agent advisory moved to
+  `build_team._report_orphan_agent_files`, next to the reference-doc advisory it mirrors. The
+  two had been describing the same blind spot from two different files. `cli/generate.py` leaves
+  `CEILING_MARGIN_BASELINE`; three modules remain.
+
+### changed (three governance documents corrected)
+
+- **The retrospective's self-referential exception cited the wrong reason.** It justified routing
+  remediation rows to the top-level CSV by calling the dogfood tree "gitignored", naming only
+  `.github/agents/`. There are two dogfood trees, and `.claude/agents/` *is* git-tracked — Claude
+  Code needs it resolvable on disk. The property that actually matters is that both are
+  **regenerable**, so a row appended to either is overwritten by the next build. The clause now
+  says that, and warns against re-narrowing it to the gitignored tree.
+- **AUTHORING-GUIDE §6 gains the `extra_output_files` sub-pattern.** These generators take no
+  manifest parameter, so they cannot see team composition. Content depending on it needs
+  verify-first phrasing ("check whether the team includes X"), not an unconditional assertion and
+  not a signature change threading manifest access through for a sentence of prose. Caught twice
+  inside `goose.py`, both times in audit rather than authoring.
+- **The work-summarizer's `append` mode gains a required idempotency rule.** The documented
+  once-per-session guard is scoped to Workflow D's backfill sweep; the append path that
+  completion-capture actually uses had no guard at all. One daily file accumulated twenty
+  `Session Stop` / `Workflow D` headings across 1,594 lines with "No Gaps Detected" repeated
+  verbatim three times. The rule bounds the decision on **evidence**, not on session identity —
+  a session is not observable in the file, and completion-capture fires several times within one.
+- **Filing conventions gain a scope-drift section.** A plan whose exit criterion is a live
+  end-to-end run will discover defects in modules it declared out of scope, and its Non-goals
+  then become false mid-flight. The convention: amend the Non-goal explicitly, record the scope
+  change as its own numbered step rather than renumbering to `10b`/`10c`, and notify
+  `@repo-liaison` when the newly-touched module is shared. It applies only where the declared
+  exit criterion is unreachable without the out-of-scope fix.
+
 ### changed (remediation log: three rows closed by verification)
 
 - **Two rows described defects that no longer exist**, and one describes something outside this

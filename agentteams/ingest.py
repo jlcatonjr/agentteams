@@ -585,16 +585,39 @@ def _parse_pyproject_toml(text: str) -> list[dict[str, Any]]:
 
 
 def _parse_package_json(text: str) -> list[dict[str, Any]]:
-    """Parse package.json dependencies."""
+    """Parse package.json dependencies.
+
+    Runtime ``dependencies`` are categorised ``library``, which routes them to the
+    reference tier and gives each one a ``references/ref-<tool>-reference.md`` file.
+    ``devDependencies`` are categorised ``other`` instead, which routes them to the
+    passive tier by default — a project's dev tooling is a real signal about its stack
+    and stays in ``tools[]``, but the long tail of lint plugins and type stubs should
+    not each spawn a reference document.
+
+    This is a *default*, not a filter: :func:`~agentteams.analyze.classify_tool_importance`
+    still promotes any dev dependency whose **name** appears in the specialist or
+    reference tool lists, so ``typescript`` or a build system declared under
+    ``devDependencies`` is tiered on its merits rather than on which section it sits in.
+
+    ``other`` is used rather than a new ``dev-tool`` value because ``category`` is
+    constrained by an enum in ``schemas/project-description.schema.json``, which outranks
+    this module in the authority hierarchy.
+
+    Args:
+        text: Raw ``package.json`` contents.
+
+    Returns:
+        Tool dicts with ``name``, ``version`` and ``category``.
+    """
     deps: list[dict[str, Any]] = []
     try:
         data = json.loads(text)
     except (json.JSONDecodeError, ValueError):
         return deps
-    for section in ("dependencies", "devDependencies"):
+    for section, category in (("dependencies", "library"), ("devDependencies", "other")):
         for name, version in data.get(section, {}).items():
             version_clean = version.lstrip("^~>=<! ")
-            deps.append({"name": name, "version": version_clean, "category": "library"})
+            deps.append({"name": name, "version": version_clean, "category": category})
     return deps
 
 

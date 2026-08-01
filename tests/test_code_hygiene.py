@@ -720,11 +720,15 @@ CEILING_WARN_MARGIN = 25
 #: cache) was carved to cli/code_index_artifacts.py, taking it 976 -> 621. The split was already
 #: latent: a section rule separated the two clusters, and they differ in kind — the memory index
 #: writes a COMMITTED artifact, the code index a local cache.
+#: 2026-07-31 (later): cli/generate.py left too, 991 -> 958. This one was NOT chosen — a six-line
+#: comment took it to 998 and this ratchet refused the commit, which is the guard working as
+#: designed. The carve it forced was the right one anyway: the inlined orphan-agent advisory
+#: moved to build_team._report_orphan_agent_files, next to the reference-doc advisory it mirrors.
+#: The two had been describing the same blind spot from two different files.
 CEILING_MARGIN_BASELINE: dict[str, int] = {
     "agentteams/audit.py": 999,
     "agentteams/frameworks/goose.py": 996,
     "agentteams/graph.py": 992,
-    "agentteams/cli/generate.py": 991,
 }
 
 

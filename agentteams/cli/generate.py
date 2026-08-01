@@ -611,44 +611,11 @@ def _run_generate_inner(args: argparse.Namespace, strict_manual_placeholders: bo
             if rc != 0:
                 return rc
 
-        # Orphan-agent advisory: agent files present on disk that the current
-        # team no longer emits. `--prune` above handles removals tracked since
-        # the last build; these are older orphans the build log no longer
-        # records, so without this advisory they accumulate invisibly.
-        _emitted_agent_names = {
-            Path(p).name for p, _ in final_rendered if p.endswith(".agent.md")
-        }
-        # Adopted orphans (--adopt-orphans) are deliberately not emitted but are
-        # now roster members — don't re-report them as orphaned.
-        _adopted_names = {f"{s}.agent.md" for s in manifest.get("adopted_agents", [])}
-        # Tool docs are never agents — exclude any tool-<slug>.agent.md whose tool
-        # is in the current team from the orphan scan (handled by migration above).
-        _tool_doc_agent_names = {
-            f"{ta['slug']}.agent.md" for ta in manifest.get("tool_agents", [])
-        }
-        _orphan_agents = sorted(
-            f.name for f in output_dir.glob("*.agent.md")
-            if f.name not in _emitted_agent_names
-            and f.name not in _adopted_names
-            and f.name not in _tool_doc_agent_names
-        )
-        if _orphan_agents:
-            print(
-                f"\n  ⚠  {len(_orphan_agents)} agent file(s) on disk are not part "
-                "of the current team (orphaned by past team-config changes):",
-                file=sys.stderr,
-            )
-            for _name in _orphan_agents:
-                print(f"       {_name}", file=sys.stderr)
-            print(
-                "     These are not updated by --update. Review and delete if obsolete.",
-                file=sys.stderr,
-            )
-            build_team._persist_orphan_events(_orphan_agents, manifest, output_dir)
-
-        # Orphan-reference-doc advisory (CH-07: extracted to build_team.py to keep
-        # this module under the line ceiling) — mirrors the orphan-agent advisory
-        # above for references/ref-*-reference.md files.
+        # Orphan advisories (CH-07: both extracted to build_team.py to keep this
+        # module under the line ceiling). Agent files and reference docs present on
+        # disk that the current team no longer emits — `--prune` above handles only
+        # removals the build log recorded, so without these they accumulate invisibly.
+        build_team._report_orphan_agent_files(final_rendered, output_dir, manifest)
         build_team._report_orphan_reference_docs(final_rendered, output_dir)
 
         print(f"\nWriting {len(update_rendered)} file(s)...")

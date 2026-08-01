@@ -622,12 +622,21 @@ _SPECIALIST_TOOLS: set[str] = {
 _REFERENCE_CATEGORIES: set[str] = {"framework", "library"}
 
 #: Tool names (lowercased) that always qualify as reference-tier
+#:
+#: Test frameworks were already here because they live in a project's dev dependencies and
+#: still matter. The compiler and bundler entries exist for the same reason and were added
+#: 2026-07-31 alongside the `package.json` change that stopped categorising every
+#: `devDependencies` entry as `library`: without them, that change would silently demote a
+#: TypeScript project's compiler and its bundler from reference tier to passive. They are
+#: listed as *reference*, not specialist, so they keep exactly the tier they had before —
+#: this preserves behaviour rather than escalating it.
 _REFERENCE_TOOLS: set[str] = {
     "fastapi", "django", "flask", "express", "react", "vue", "angular",
     "sqlalchemy", "pandas", "numpy", "scipy", "matplotlib",
     "spring", "rails", "laravel", "nextjs", "next.js",
     "pytest", "jest", "mocha", "junit",
     "graphql", "grpc", "protobuf",
+    "typescript", "webpack", "vite", "rollup", "esbuild",
 }
 
 def classify_tool_importance(tool: dict[str, Any]) -> str:
