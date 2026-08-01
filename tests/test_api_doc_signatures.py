@@ -186,6 +186,33 @@ def test_feature_summary_total_equals_its_addends() -> None:
     )
 
 
+_VERSION_BASELINE_RE = re.compile(r"\*\*Version baseline:\*\*\s*([0-9][^\s·]*)")
+
+
+def test_inventory_version_baseline_matches_the_installed_version() -> None:
+    """The drift that actually caused harm was the baseline, not the per-category counts.
+
+    The inventory's own note explains why the counts are hand-maintained and cannot be derived
+    without a machine-readable feature set — that reasoning stands. But the *version baseline*
+    beside them was never a judgement call: it is `agentteams.__version__`, and it sat at
+    `0.1.0 (2026-04-15)` while the module was at `1.0.0rc6` — four months and a major version
+    stale. A reader checking whether a capability had shipped was reading a document that
+    described a different release.
+
+    Pinned here rather than hand-reconciled, because "reconcile it by hand next time" is what
+    produced the four-month gap.
+    """
+    import agentteams
+
+    text = INVENTORY.read_text(encoding="utf-8")
+    match = _VERSION_BASELINE_RE.search(text)
+    assert match, "feature-inventory.md states no **Version baseline:** — format changed"
+    assert match.group(1) == agentteams.__version__, (
+        f"feature-inventory.md claims version baseline {match.group(1)}, but the module is at "
+        f"{agentteams.__version__}. Update the document, not this test."
+    )
+
+
 def test_inventory_governance_agent_list_matches_the_code() -> None:
     """The one category whose members are enumerable from code must agree with it."""
     from agentteams import analyze

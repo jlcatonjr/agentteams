@@ -6,6 +6,28 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### added (two published artifacts now reconcile against the tree)
+
+- **`template-chapter-audit.csv` — a generator was the wrong answer.** The obvious reading of
+  "this artifact has no regeneration mechanism" is to write one, but the ledger's contents are
+  *judgments* — disposition, severity, chapter relationship — that no code can derive from the
+  tree, and `docs_src/template-authoring.md` makes registration a deliberate authoring act. The
+  gap was never a missing generator. It was that **nothing checked the authoring rule was
+  followed**: `scripts/verify_audit_ledger.py` detects drift but is report-only and manual, and
+  CI's four steps do not include it.
+  `tests/test_template_ledger_reconciliation.py` closes that half. Measured: 60 templates on
+  disk, 32 registered, **28 with no row**. Those 28 are a listed baseline rather than a backfill —
+  writing rows for templates nobody audited would fabricate the judgments the ledger exists to
+  record. The reverse direction (a row naming a template that no longer exists) is gated at zero,
+  because it is already clean.
+- **The feature inventory's real defect was the version baseline, not the counts.** The counts are
+  hand-maintained for a stated and still-valid reason. The baseline beside them never required
+  judgment — it is `agentteams.__version__` — and it read `0.1.0 (2026-04-15)` while the module
+  was at `1.0.0rc6`, so a reader checking whether a capability had shipped was reading a document
+  describing a different release four months and a major version back. Now pinned, because
+  "reconcile it by hand next time" is exactly what produced the gap. The inventory's note is
+  corrected to say which three of its numbers are checked and which are not.
+
 ### fixed (one source for the Goose capability guidance, actually consumed)
 
 - **The shared source already existed and one of its two consumers ignored it.**
