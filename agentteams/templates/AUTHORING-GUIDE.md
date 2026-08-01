@@ -231,6 +231,38 @@ sections fenced and others left as `USER-EDITABLE` within the same file. When th
 template declares its own fences, those govern instead of the default whole-body
 wrap.
 
+> ⚠️ **The refinement is one-way, and the first fence is the expensive one.**
+> `emit._normalize_generated_content` applies the whole-body wrap **only when the
+> rendered file carries no fence at all**. So a template with zero fences is 100%
+> module-owned, and a template with one fence owns *only that region* — everything
+> else becomes preserved-forever. **Partial fencing is strictly weaker than none.**
+> Adding a first fence to a fenceless template is safe (the deployed file migrates
+> cleanly — see FENCE-CONVENTIONS.md), but it silently converts the rest of that
+> file into project-owned text that no merge will ever restore. Fence all of a
+> template's constraint-bearing content or none of it.
+> Guarded by `tests/test_fence_coverage_policy.py`, which exempts fenceless
+> templates for exactly this reason.
+
+### 3.3a The three-part fence selection test
+
+Applied per section when deciding what to fence. All three must hold:
+
+1. **Template-owned.** The text is authored here and a project has no legitimate
+   reason to rewrite it. A section projects are *expected* to extend fails this
+   and stays outside, with a named extension region beside it — the reason
+   `constitutional_rules` in `orchestrator.template.md` is deliberately unfenced.
+2. **Position-independent.** Its meaning does not depend on what precedes or
+   follows it. Required because `_insert_section_at_render_position` anchors a new
+   fence to whichever fences already exist *on disk*, so its first merge into a
+   deployed team can place it anywhere in the file. Write "the Mandatory Review
+   Triggers table", never "the table below".
+3. **Whole.** The fence covers the complete unit of meaning — a rule and its
+   exceptions, a claim and its scope. A fence bisecting an argument lets a merge
+   restore half of it and preserve a contradicting half.
+
+Sections failing (1) stay unfenced. Sections failing (2) or (3) are rewritten
+until they pass, or left alone — never fenced as they stand.
+
 Team-owned content lives **outside** every fence: the `## Project-Specific
 Notes` section present in all agent files (§3.1) and, for the orchestrator, its
 `project_rules` gap. This is the supported, merge-safe home for project-specific

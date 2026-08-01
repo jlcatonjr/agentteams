@@ -92,7 +92,7 @@ Given a newly-rendered file and an existing on-disk file:
 2. **Parse** the new render for all `AGENTTEAMS:BEGIN … AGENTTEAMS:END` blocks.
 3. For each fenced section in the new render:
    - If a matching `section_id` exists in the on-disk file → **replace** the on-disk region's content with the new render's content (markers are updated too, preserving the v= from the new render).
-   - If no matching `section_id` exists in the on-disk file → **append** the new block at the end of the file (with a preceding blank line). Record in `MergeResult.sections_added`.
+   - If no matching `section_id` exists in the on-disk file → **splice the new block in at the position the fresh render puts it**, anchored to the nearest section that is actually present on disk: after the END marker of the nearest *preceding* section in render order, else before the BEGIN marker of the nearest *following* one, else appended at the end as a genuine last resort (which emits a notice). Record in `MergeResult.sections_added`. (This supersedes an earlier always-append rule: a gate step meant to run *before* an existing instruction got correct placement on a fresh build and an inverted order on `--update --merge`. Placement is still not guaranteed — see Authoring Consequences below — so fenced content must not depend on it.)
 4. Fenced sections in the on-disk file with no match in the new render → **leave in place**. Record in `MergeResult.sections_orphaned`. These are sections that were removed from the template; the project team must decide whether to keep or delete them.
 5. All content **outside** any fence marker in the on-disk file → **preserved unconditionally**.
 
@@ -151,17 +151,25 @@ both surfaced concretely by `tmp/by-week/2026-W30/external-retrieval-quality-gat
    `.claude/agents/content-enricher.md`'s body but left `.github/agents/content-enricher.agent.md`'s
    `agents:` line stale — caught only by a close-out audit that happened to check front matter
    specifically.)
-2. **A brand-new fenced section always lands at the end of the merged file, never at its position
-   in the fresh render.** Merge Semantics rule 3's "append the new block at the end of the file"
-   applies regardless of where the new `section_id` appears in the template source — a new fence
-   inserted mid-procedure in the template will still land at the end of an already-generated
-   team's file on its first merge. Any new fenced content whose correctness depends on being read
-   before or after specific surrounding text must be written to be self-contained and correct
-   regardless of physical position — not reliant on document order. (Concrete instance: the plan
-   above's first draft wrote a gate step that assumed it would land *before* an existing hand-off
-   instruction; on merge into an already-generated team it landed *after* instead, producing a
-   direct contradiction — fixed by rewording the fenced content to be position-independent, not by
-   controlling where it lands.)
+2. **A brand-new fenced section lands wherever the merge engine can anchor it, which is not
+   necessarily its position in the fresh render.** Merge Semantics rule 3 now splices at the
+   render's position *relative to fences that already exist on disk* — so placement depends on
+   what the deployed file happens to carry, not on the template. A section whose neighbours are
+   unfenced on disk anchors to the nearest fence instead, which can be far away; a section with no
+   anchor at all is appended at the end. Any new fenced content whose correctness depends on being
+   read before or after specific surrounding text must be written to be self-contained and correct
+   regardless of physical position — not reliant on document order.
+
+   Two measured instances. (a) A gate step whose first draft assumed it would land *before* an
+   existing hand-off instruction landed *after* it, producing a direct contradiction — fixed by
+   rewording the fenced content to be position-independent, not by controlling where it lands.
+   (b) 2026-08-01: a `constitutional_core` fence placed immediately before the constitutional
+   rules in `orchestrator.template.md` lands at char 7592 of the deployed
+   `.claude/agents/orchestrator.md` — *after* those rules at char 1545 — because the rules are
+   unfenced and the nearest anchor is the `authority_hierarchy` fence that follows them.
+
+   This is the operative reason behind part 2 of the three-part selection test in
+   AUTHORING-GUIDE.md §3.3a. Write "the Mandatory Review Triggers table", never "the table below".
 
 Neither of these is a gap in this document's own accuracy — both rules were already stated above,
 just not carried through to their authoring consequence until a real plan hit both.

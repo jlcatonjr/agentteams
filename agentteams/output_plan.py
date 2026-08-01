@@ -205,6 +205,17 @@ def _plan_output_files(
         "component_slug": None,
     })
 
+    # Instruction-authority ordering (always). The project's authority_sources hierarchy ranks
+    # sources of *fact*; this ranks sources of *instruction*, which is the ordering a prompt
+    # injection actually attacks. Deliberately fenceless so emit wraps it whole — see the note at
+    # the top of the template.
+    files.append({
+        "path": "references/instruction-authority.reference.md",
+        "template": f"{agents_dir}instruction-authority.reference.template.md",
+        "type": "reference",
+        "component_slug": None,
+    })
+
     # Post-Deliverable Retrospective reference (always — @orchestrator Workflow 1/2/3
     # support; @repo-liaison Protocol 5 support).
     files.append({

@@ -26,6 +26,19 @@ from typing import Any
 
 from agentteams.cli.schema_cache import _schema_path
 
+# Untrusted-feed rendering lives in security_feed_render.py (CH-07 carve, 2026-08-01). Re-exported
+# here so every existing `from agentteams.security_refs import _format_threat_summary` keeps
+# working. `_FEED_FIELD_MAX_CHARS` and `_sanitize_feed_text` have no caller in this module and are
+# re-exports only — noqa rather than __all__, because this module has never declared one and
+# adding it would silently narrow `import *` to these five names.
+from agentteams.security_feed_render import (  # noqa: F401
+    _FEED_FIELD_MAX_CHARS,
+    _format_osv_summary,
+    _format_prevention_playbook,
+    _format_threat_summary,
+    _sanitize_feed_text,
+)
+
 _KEV_URL = "https://www.cisa.gov/sites/default/files/feeds/known_exploited_vulnerabilities.json"
 _EPSS_URL = "https://api.first.org/data/v1/epss"
 _MITRE_CVE_ROOT = "https://cveawg.mitre.org/api/cve/"
@@ -597,21 +610,6 @@ def _format_llm_threats(include_references: bool = True) -> str:
     return "\n".join(lines)
 
 
-def _format_osv_summary(findings: list[dict]) -> str:
-    """Return a markdown-formatted OSV package vulnerability summary."""
-    if not findings:
-        return "- No package-level vulnerabilities found in OSV.dev for the declared project dependencies."
-    lines: list[str] = []
-    for f in findings:
-        ids = ", ".join(f["top_ids"]) if f["top_ids"] else "n/a"
-        plural = "y" if f["vuln_count"] == 1 else "ies"
-        lines.append(
-            f"- **{f['package']}** ({f['ecosystem']}): "
-            f"{f['vuln_count']} known vulnerabilit{plural} — top IDs: {ids}"
-        )
-    return "\n".join(lines)
-
-
 def _format_source_registry(sources: list[dict]) -> str:
     lines: list[str] = []
     for src in sources:
@@ -676,65 +674,8 @@ def _format_control_evidence_matrix(rows: list[dict[str, str]]) -> str:
     return "\n".join(lines)
 
 
-def _format_threat_summary(vulns: list[dict]) -> str:
-    """Render the threat summary from canonical-shape vulnerability records.
-
-    Enrichment (EPSS/CVSS) is embedded inline per-record (``epss``, ``epss_percentile``,
-    ``cvss_score``, ``cvss_severity``) rather than passed as separate lookup maps — this is what
-    lets an offline cache read render identically to a live fetch: the enrichment travels with the
-    record instead of needing to be separately restored (see
-    references/plans/security-vuln-cache-normalization.plan.md).
-    """
-    if not vulns:
-        return "- No live vulnerability data was available; consult cached reference file."
-
-    lines: list[str] = []
-    for vuln in vulns:
-        cve = vuln.get("cve", "UNKNOWN-CVE")
-        epss_score = vuln.get("epss")
-        pct = vuln.get("epss_percentile")
-        epss_text = ""
-        if epss_score:
-            pct_text = f", percentile {pct}" if pct else ""
-            epss_text = f" | EPSS {epss_score}{pct_text}"
-        cvss_text = ""
-        if vuln.get("cvss_score"):
-            cvss_text = (
-                f" | CVSS {vuln['cvss_score']}"
-                + (f" {vuln['cvss_severity']}" if vuln.get("cvss_severity") else "")
-            )
-        lines.append(
-            f"- `{cve}` | {vuln.get('vendor', 'Unknown vendor')} {vuln.get('product', '')} | "
-            f"{vuln.get('name', 'Known exploited vulnerability')} | "
-            f"added {vuln.get('date_added', 'n/a')}{epss_text}{cvss_text}"
-        )
-    return "\n".join(lines)
-
-
-def _format_prevention_playbook(vulns: list[dict]) -> str:
-    """Render the prevention playbook from canonical-shape vulnerability records (see
-    _format_threat_summary's docstring for why these are canonical, not live-API, shape)."""
-    actions: list[str] = []
-    for vuln in vulns:
-        action = (vuln.get("required_action") or "").strip()
-        if action and action not in actions:
-            actions.append(action)
-        if len(actions) >= 4:
-            break
-
-    base = [
-        "- Prioritize remediation for KEV-listed CVEs as actively exploited threats.",
-        "- Triage by exploitability (EPSS) and internet exposure before lower-risk backlog items.",
-        "- Enforce patch windows with owner, SLA, and verification evidence for each critical CVE.",
-        "- When patching is blocked, define compensating controls (WAF rules, ACL tightening, feature disablement).",
-        "- Add detections for exploitation attempts and verify telemetry coverage for affected assets.",
-    ]
-    if actions:
-        base.append("- Vendor/CISA required actions:")
-        base.extend([f"  - {a}" for a in actions])
-    return "\n".join(base)
-
-
+#: Longest a single interpolated feed field may be before it is truncated. CISA KEV
+#: `vulnerabilityName` runs well under this; `requiredAction` is the long one.
 def build_security_placeholders(
     *,
     output_dir: Path,

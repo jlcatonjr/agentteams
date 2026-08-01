@@ -14,7 +14,6 @@ Invoke via:
 
 from __future__ import annotations
 
-import json
 import re
 import shutil
 import subprocess
@@ -23,6 +22,13 @@ from pathlib import Path
 from typing import Any
 
 from agentteams import living_doc as _living_doc
+from agentteams.audit_agent_contract import (  # re-exported for callers/tests (CH-07 carve)
+    _check_instruction_authority_reachable,
+    _check_invariant_core_present,
+    _check_readonly_tool_declarations,
+    _check_return_handoff_present,
+)
+from agentteams.audit_types import AuditFinding  # re-exported for callers/tests
 from agentteams.backup import BACKUP_DIR_NAME as _BACKUP_DIR_NAME
 
 # ---------------------------------------------------------------------------
@@ -78,17 +84,6 @@ _AI_CONTEXT_LIMIT = 12_000
 # ---------------------------------------------------------------------------
 # Data structures
 # ---------------------------------------------------------------------------
-
-@dataclass
-class AuditFinding:
-    """A single audit finding."""
-
-    category: str   # "CONFLICT" | "PRESUPPOSITION" | "WARNING"
-    code: str       # Short machine-readable code
-    severity: str   # "error" | "warning" | "info"
-    file: str       # Relative path or "(team)" for team-level findings
-    description: str
-
 
 @dataclass
 class AuditResult:
@@ -167,6 +162,7 @@ def run_post_audit(
     result.agent_refactor_findings.extend(_check_invariant_core_present(file_map))
     result.agent_refactor_findings.extend(_check_return_handoff_present(file_map))
     result.agent_refactor_findings.extend(_check_readonly_tool_declarations(file_map))
+    result.agent_refactor_findings.extend(_check_instruction_authority_reachable(file_map))
     result.agent_refactor_findings.extend(_check_dangling_agent_slugs(file_map, output_dir))
 
     # --- Code-hygiene checks ---
@@ -494,141 +490,6 @@ def _check_workstream_expert_coverage(
 
 #: Regex matching a YAML 'agents:' list entry (slug in single or double quotes)
 _AGENTS_LIST_RE = re.compile(r"['\"]([a-z][a-z0-9_-]+)['\"]")
-
-#: Pattern that identifies a self-declared read-only agent from its body text.
-#: Matches only explicit self-attributive declarations:
-#:   - ``**read-only**`` (bold, emphasis on the agent's own capability)
-#:   - ``you are/perform/operate ... read-only`` (direct self-reference)
-#: Does NOT match incidental mentions like "external paths are read-only",
-#: "authoritative — read-only" (table label), or "Read-only agents must NOT".
-_READONLY_BODY_RE = re.compile(
-    r"(?:\*\*read[- ]only\*\*|\byou\b[^.\n]*\bread[- ]only\b)",
-    re.IGNORECASE,
-)
-
-#: Tools that read-only agents must not claim.
-#: 'execute' is intentionally excluded: read-only agents may legitimately run
-#: read-only shell commands (grep, find, python -c) without modifying files.
-_READWRITE_TOOLS = frozenset({"edit", "write", "create"})
-
-
-def _check_invariant_core_present(
-    file_map: dict[str, str],
-) -> list[AuditFinding]:
-    """Check that every .agent.md file contains the Invariant Core marker.
-
-    The agent-refactor spec requires every agent file to have an Invariant
-    Core section marked with a ⛔ symbol.
-
-    Args:
-        file_map: Rendered file content keyed by relative path.
-
-    Returns:
-        List of AuditFinding for files missing the ⛔ marker.
-    """
-    findings: list[AuditFinding] = []
-    for rel_path, content in file_map.items():
-        if not rel_path.endswith(".agent.md"):
-            continue
-        if "references/" in rel_path:
-            continue
-        if "\u26d4" not in content:  # ⛔
-            findings.append(AuditFinding(
-                category="AGENT_REFACTOR",
-                code="AR_MISSING_INVARIANT_CORE",
-                severity="warning",
-                file=rel_path,
-                description=(
-                    "Agent file is missing the Invariant Core section (⛔ marker). "
-                    "Add a '> ⛔ **Do not modify or omit.**' section."
-                ),
-            ))
-    return findings
-
-
-def _check_return_handoff_present(
-    file_map: dict[str, str],
-) -> list[AuditFinding]:
-    """Check that every .agent.md file has a return-to-orchestrator handoff.
-
-    Every agent must declare a handoff back to orchestrator so the
-    conversation can be cleanly returned after the agent's work is done.
-
-    Args:
-        file_map: Rendered file content keyed by relative path.
-
-    Returns:
-        List of AuditFinding for agent files without an orchestrator handoff.
-    """
-    findings: list[AuditFinding] = []
-    for rel_path, content in file_map.items():
-        if not rel_path.endswith(".agent.md"):
-            continue
-        if "references/" in rel_path:
-            continue
-        # The orchestrator itself doesn't need a return handoff to itself.
-        # The team-builder is a meta entry-point agent, not a collaborating agent.
-        slug = Path(rel_path).stem.replace(".agent", "")
-        if slug in {"orchestrator", "team-builder"}:
-            continue
-        # Check YAML block for a handoff that routes to orchestrator
-        if "agent: orchestrator" not in content and "agent: 'orchestrator'" not in content:
-            findings.append(AuditFinding(
-                category="AGENT_REFACTOR",
-                code="AR_MISSING_RETURN_HANDOFF",
-                severity="warning",
-                file=rel_path,
-                description=(
-                    "Agent file has no 'Return to Orchestrator' handoff. "
-                    "Add a handoff entry with 'agent: orchestrator' in the YAML front matter."
-                ),
-            ))
-    return findings
-
-
-def _check_readonly_tool_declarations(
-    file_map: dict[str, str],
-) -> list[AuditFinding]:
-    """Check that self-declared read-only agents do not claim write tools.
-
-    An agent whose body prose explicitly states it is 'read-only' must have
-    only 'read' and 'search' in its tools declaration.
-
-    Args:
-        file_map: Rendered file content keyed by relative path.
-
-    Returns:
-        List of AuditFinding for read-only agents declaring write tools.
-    """
-    findings: list[AuditFinding] = []
-    _tools_re = re.compile(r"tools\s*:\s*\[([^\]]*)\]")
-
-    for rel_path, content in file_map.items():
-        if not rel_path.endswith(".agent.md"):
-            continue
-        if "references/" in rel_path:
-            continue
-        # Only enforce rule on files that self-declare as read-only
-        if not _READONLY_BODY_RE.search(content):
-            continue
-        m = _tools_re.search(content[:400])  # YAML block only
-        if not m:
-            continue
-        declared_tools = {t.strip().strip("'\"") for t in m.group(1).split(",")}
-        violations = declared_tools & _READWRITE_TOOLS
-        if violations:
-            findings.append(AuditFinding(
-                category="AGENT_REFACTOR",
-                code="AR_READONLY_TOOL_VIOLATION",
-                severity="error",
-                file=rel_path,
-                description=(
-                    f"Agent declares itself read-only but claims write tool(s): "
-                    f"{', '.join(sorted(violations))}. Remove them from the tools list."
-                ),
-            ))
-    return findings
-
 
 def _check_dangling_agent_slugs(
     file_map: dict[str, str],

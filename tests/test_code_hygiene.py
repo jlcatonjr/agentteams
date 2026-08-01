@@ -735,8 +735,13 @@ CEILING_WARN_MARGIN = 25
 #: Two of the four baselined modules have now been carved by an ordinary edit hitting the wall
 #: rather than by a decision to decompose. That is the ratchet doing its job — but it also means
 #: the remaining two will be carved the same way, at whatever moment someone is least ready.
+#: 2026-08-01: audit.py left this list the way the note above predicted — an ordinary addition
+#: (one new agent-contract check) hit the wall at 999/1000, and the carve happened then rather
+#: than when someone planned it. The agent-contract checks moved to audit_agent_contract.py and
+#: AuditFinding to audit_types.py (the carved module needed the type, audit needed the functions —
+#: a cycle the shared module breaks). 999 -> 860. Three of the four originally-baselined modules
+#: have now been carved this way; graph.py is the last one, and it will go the same way.
 CEILING_MARGIN_BASELINE: dict[str, int] = {
-    "agentteams/audit.py": 999,
     "agentteams/graph.py": 992,
 }
 
