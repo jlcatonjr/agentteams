@@ -3,9 +3,9 @@
 
 > **Auto-generated.** Regenerated on every commit that touches the `agentteams` package. Do not edit manually — changes will be overwritten.
 
-- Modules mapped: **109**
+- Modules mapped: **110**
 - Packages: **6**
-- Internal import edges: **204**
+- Internal import edges: **205**
 - Distinct external dependencies: **4**
 
 ---
@@ -26,7 +26,7 @@ Inter-package import dependencies (module-level detail in the tables below).
 | `agentteams.cli` | 15 | `agentteams`, `agentteams.frameworks` |
 | `agentteams.enrich` | 6 | `agentteams` |
 | `agentteams.eval_adapters` | 2 | — |
-| `agentteams.frameworks` | 7 | `agentteams` |
+| `agentteams.frameworks` | 8 | `agentteams` |
 | `agentteams.research` | 9 | — |
 
 ---
@@ -59,7 +59,7 @@ Every module, coloured by package (full adjacency in the table below).
 | `agentteams.bridge_subagents` | — | `agentteams.bridge`, `agentteams.bridge_subagents_goose` |
 | `agentteams.bridge_subagents_goose` | `agentteams.bridge_subagents`, `agentteams.frameworks.goose` | `agentteams.bridge` |
 | `agentteams.budget` | — | `agentteams.cli.generate` |
-| `agentteams.capability_hints` | — | `agentteams.bridge`, `agentteams.frameworks.goose` |
+| `agentteams.capability_hints` | — | `agentteams.bridge`, `agentteams.frameworks.goose_docs` |
 | `agentteams.cli` | — | — |
 | `agentteams.cli.app` | `agentteams.baseline`, `agentteams.cli.commands`, `agentteams.cli.generate`, `agentteams.cli.goose_switch`, `agentteams.cli.json_mode`, `agentteams.cli.parser`, `agentteams.cli.recipe_check`, `agentteams.cli.render_pipeline`, `agentteams.fence_inject`, `agentteams.fleet`, `agentteams.frameworks.goose`, `agentteams.git_hooks`, `agentteams.host_features` | — |
 | `agentteams.cli.artifacts` | `agentteams`, `agentteams.atomicio`, `agentteams.backup`, `agentteams.cli.code_index_artifacts`, `agentteams.cli.schema_cache`, `agentteams.drift`, `agentteams.errors`, `agentteams.eval_suite`, `agentteams.fences`, `agentteams.mcp_emit`, `agentteams.memory_index`, `agentteams.memory_index_incremental`, `agentteams.model_routing` | `agentteams.cli.generate`, `agentteams.git_hooks` |
@@ -103,7 +103,8 @@ Every module, coloured by package (full adjacency in the table below).
 | `agentteams.frameworks.claude` | `agentteams.frameworks.base`, `agentteams.yaml_frontmatter` | `agentteams.cli.render_pipeline`, `agentteams.frameworks.registry` |
 | `agentteams.frameworks.copilot_cli` | `agentteams.frameworks.base` | `agentteams.cli.render_pipeline`, `agentteams.frameworks.registry` |
 | `agentteams.frameworks.copilot_vscode` | `agentteams.frameworks.base`, `agentteams.yaml_frontmatter` | `agentteams.cli.render_pipeline`, `agentteams.frameworks.registry` |
-| `agentteams.frameworks.goose` | `agentteams.capability_hints`, `agentteams.frameworks.base`, `agentteams.yaml_frontmatter` | `agentteams.bridge`, `agentteams.bridge_subagents_goose`, `agentteams.cli.app`, `agentteams.cli.recipe_check`, `agentteams.cli.render_pipeline`, `agentteams.frameworks.registry` |
+| `agentteams.frameworks.goose` | `agentteams.frameworks.base`, `agentteams.frameworks.goose_docs`, `agentteams.yaml_frontmatter` | `agentteams.bridge`, `agentteams.bridge_subagents_goose`, `agentteams.cli.app`, `agentteams.cli.recipe_check`, `agentteams.cli.render_pipeline`, `agentteams.frameworks.registry` |
+| `agentteams.frameworks.goose_docs` | `agentteams.capability_hints` | `agentteams.frameworks.goose` |
 | `agentteams.frameworks.registry` | `agentteams.frameworks.agents_md`, `agentteams.frameworks.base`, `agentteams.frameworks.claude`, `agentteams.frameworks.copilot_cli`, `agentteams.frameworks.copilot_vscode`, `agentteams.frameworks.goose` | `agentteams.cli.commands`, `agentteams.cli.generate`, `agentteams.cli.parser`, `agentteams.convert`, `agentteams.interop` |
 | `agentteams.git_hooks` | `agentteams`, `agentteams.architecture`, `agentteams.cli.artifacts`, `agentteams.emit`, `agentteams.errors`, `agentteams.graph` | `agentteams.cli.app`, `agentteams.cli.generate` |
 | `agentteams.goose_config` | — | `agentteams.cli.goose_switch` |
@@ -909,9 +910,19 @@ digraph "agentteams architecture" {
       "path": "agentteams/frameworks/goose.py",
       "is_package": false,
       "imports_internal": [
-        "agentteams.capability_hints",
         "agentteams.frameworks.base",
+        "agentteams.frameworks.goose_docs",
         "agentteams.yaml_frontmatter"
+      ],
+      "external": [],
+      "repo_local": []
+    },
+    "agentteams.frameworks.goose_docs": {
+      "package": "agentteams.frameworks",
+      "path": "agentteams/frameworks/goose_docs.py",
+      "is_package": false,
+      "imports_internal": [
+        "agentteams.capability_hints"
       ],
       "external": [],
       "repo_local": []
@@ -2034,15 +2045,19 @@ digraph "agentteams architecture" {
     },
     {
       "source": "agentteams.frameworks.goose",
-      "target": "agentteams.capability_hints"
-    },
-    {
-      "source": "agentteams.frameworks.goose",
       "target": "agentteams.frameworks.base"
     },
     {
       "source": "agentteams.frameworks.goose",
+      "target": "agentteams.frameworks.goose_docs"
+    },
+    {
+      "source": "agentteams.frameworks.goose",
       "target": "agentteams.yaml_frontmatter"
+    },
+    {
+      "source": "agentteams.frameworks.goose_docs",
+      "target": "agentteams.capability_hints"
     },
     {
       "source": "agentteams.frameworks.registry",

@@ -725,9 +725,18 @@ CEILING_WARN_MARGIN = 25
 #: designed. The carve it forced was the right one anyway: the inlined orphan-agent advisory
 #: moved to build_team._report_orphan_agent_files, next to the reference-doc advisory it mirrors.
 #: The two had been describing the same blind spot from two different files.
+#: 2026-07-31 (later still): frameworks/goose.py left too, 996 -> 834. Also forced — single-
+#: sourcing the research-capability guidance from capability_hints.py pushed it to 1003 and this
+#: ratchet refused the commit. The seam was already there: the three document-content generators
+#: (_goosehints_content, _resilient_runner_content, _goose_capabilities_content) build files the
+#: adapter *emits*, while the rest of the module is adapter *behaviour*. They moved to
+#: frameworks/goose_docs.py and are re-exported, so no import changed.
+#:
+#: Two of the four baselined modules have now been carved by an ordinary edit hitting the wall
+#: rather than by a decision to decompose. That is the ratchet doing its job — but it also means
+#: the remaining two will be carved the same way, at whatever moment someone is least ready.
 CEILING_MARGIN_BASELINE: dict[str, int] = {
     "agentteams/audit.py": 999,
-    "agentteams/frameworks/goose.py": 996,
     "agentteams/graph.py": 992,
 }
 

@@ -6,6 +6,35 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### fixed (one source for the Goose capability guidance, actually consumed)
+
+- **The shared source already existed and one of its two consumers ignored it.**
+  `agentteams/capability_hints.py` was created so the Goose adapter and the bridge would state the
+  research capability identically. `frameworks/goose.py` imported `RESEARCH_CAPABILITY_BULLET`
+  and then **never referenced it**, keeping its own hand-written restatement — the exact defect the
+  constant exists to prevent, reintroduced under an import that made it look resolved. Nothing
+  failed, because nothing checked.
+- Worth recording how this was nearly missed a second time: `grep -c 'agentteams.research'` on the
+  two modules returns `3` and `0`, which reads as "the bridge is still missing it". The bridge
+  reaches the text through the constant, whose body lives in a third file. The measurement was
+  wrong, not the code. **The bridged `AGENTS.md` does carry the guidance** — five occurrences.
+- The adapter now embeds the shared block verbatim, in two places that had each drifted their own
+  way. Goose-specific framing stays local, which is the point of single-sourcing *facts* rather
+  than prose: the `computercontroller` renderer contrast and the "search can be added as an MCP
+  extension" route are about Goose and belong in the Goose document.
+- `tests/test_capability_hint_single_source.py` pins it, including an AST check that neither
+  emitter merely imports the constant.
+- **`agentteams/frameworks/goose.py` 996 → 834.** The second forced carve of the day: embedding
+  the shared text took the module to 1003 and the CH-07 ratchet refused it. The seam was already
+  there — `_goosehints_content`, `_resilient_runner_content` and `_goose_capabilities_content`
+  build files the adapter *emits*, while the rest is adapter *behaviour*. They moved to
+  `frameworks/goose_docs.py` and are re-exported, so no import changed. One test needed updating:
+  a `monkeypatch` targeting the re-exported alias would have silently no-opped, so it now patches
+  where the name is resolved.
+- Two of the four modules in `CEILING_MARGIN_BASELINE` have now been carved by an ordinary edit
+  hitting the wall rather than by a decision to decompose. That is the ratchet working, and it is
+  also a fair warning about the remaining two.
+
 ### fixed (an agent file must not begin with a fence marker)
 
 - **Goose's ACP scanner refused `.claude/agents/team-builder.md`** — `could not find expected ':'
