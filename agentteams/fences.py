@@ -56,6 +56,11 @@ class MergeResult:
     # already-generated team, and `--update --merge` reported nothing at all. See
     # `_detect_front_matter_drift`.
     front_matter_drift: list[str] = field(default_factory=list)
+    # Sections a newly-added fence duplicates: the deployed file already carries the same heading
+    # UNFENCED, from before the template fenced it. Reported, never auto-resolved — see
+    # `_detect_duplicate_sections` for why the whole-body case can be resolved automatically and
+    # this one cannot.
+    duplicate_section_notices: list[str] = field(default_factory=list)
 
     @property
     def has_errors(self) -> bool:
@@ -513,6 +518,33 @@ def _render_front_matter(content: str, keys: dict[str, str]) -> str:
 _WHOLE_BODY_FENCE = "content"
 
 
+def _split_at_last_fence_end(content: str) -> tuple[str, str]:
+    """Split *content* immediately after the final fence END marker's line.
+
+    Used by the whole-body migration branch to honour Merge Semantics rule 5 ("all content
+    outside any fence marker in the on-disk file is preserved unconditionally") on a code path
+    that otherwise replaces the file wholesale. For a whole-body-wrapped file the tail is
+    everything the wrap did not cover — in practice the ``## Project-Specific Notes`` region.
+
+    Args:
+        content: A full file body.
+
+    Returns:
+        ``(prefix, tail)`` where *prefix* ends with the final END marker's newline. When the
+        content carries no fence at all, or the marker is unterminated, returns
+        ``(content, "")`` so callers fall back to leaving the content alone.
+    """
+    last = None
+    for match in _FENCE_END_RE.finditer(content):
+        last = match
+    if last is None:
+        return content, ""
+    newline = content.find("\n", last.end())
+    if newline == -1:
+        return content, ""
+    return content[: newline + 1], content[newline + 1:]
+
+
 def _is_whole_body_migration(existing_regions: dict, new_regions: dict) -> bool:
     """Whether the on-disk file predates its template being split into named sections.
 
@@ -529,7 +561,11 @@ def _is_whole_body_migration(existing_regions: dict, new_regions: dict) -> bool:
 
     Replacing wholesale is safe *because* of what a fence means: everything inside ``content`` is
     template-owned and already overwritten on every merge, so nothing a project authored lives
-    there. Content outside it is untouched, exactly as before.
+    there. Content outside it is untouched, exactly as before — see
+    :func:`_split_at_last_fence_end`, which is what makes that last clause true. It was not true
+    when this branch first shipped: taking ``new_rendered`` verbatim also took the *render's*
+    out-of-fence tail, silently discarding the operator's ``## Project-Specific Notes`` — the one
+    region emit advertises as "preserved verbatim across ``agentteams --update --merge``".
 
     Args:
         existing_regions: Fenced regions found on disk.
@@ -606,6 +642,47 @@ def _insert_section_at_render_position(
     )
 
 
+_MD_HEADING_RE = re.compile(r"^(#{2,6})\s+(.+?)\s*$", re.MULTILINE)
+
+
+def _detect_duplicate_sections(merged: str, added_sids: list[str]) -> list[str]:
+    """Report headings that appear twice after new fences were added.
+
+    The partial-adoption sibling of :func:`_is_whole_body_migration`. When a template fences a
+    section that a team was generated *before*, the merge adds the fenced block while the
+    deployed file's unfenced copy of the same section is preserved unconditionally — leaving two
+    copies, one stale. Measured 2026-08-01 across this project's own team: 14 duplicated sections
+    in 5 files, including four duplicated "⛔ Do not modify or omit" contracts.
+
+    **Reported, never auto-resolved, and the asymmetry with the whole-body case is deliberate.**
+    There, everything inside a ``content`` fence is template-owned *by definition*, so replacing
+    it can lose nothing. Here the duplicated section has never been inside a fence, so a project
+    may legitimately have edited it believing it was theirs. Choosing for them is how out-of-fence
+    content gets destroyed — the defect fixed in this same module on the same day. Naming the
+    collision lets an operator resolve each one by looking at it.
+
+    Args:
+        merged: The merged file content.
+        added_sids: section_ids the merge inserted that were absent from the on-disk file.
+
+    Returns:
+        Human-readable notices, one per duplicated heading. Empty when nothing collides.
+    """
+    if not added_sids:
+        return []
+    headings = [m.group(0).strip() for m in _MD_HEADING_RE.finditer(merged)]
+    seen: dict[str, int] = {}
+    for heading in headings:
+        seen[heading] = seen.get(heading, 0) + 1
+    return [
+        f"duplicate section {heading!r}: appears {count}x after adding "
+        f"{', '.join(sorted(added_sids))} — the deployed file already carried this section "
+        f"unfenced. Delete the unfenced copy; the fenced one is now template-owned."
+        for heading, count in seen.items()
+        if count > 1
+    ]
+
+
 def _merge_fenced_content(
     new_rendered: str,
     existing_on_disk: str,
@@ -641,13 +718,23 @@ def _merge_fenced_content(
     if (isinstance(_existing_probe, dict) and isinstance(_new_probe, dict)
             and _is_whole_body_migration(_existing_probe, _new_probe)):
         # Structural migration, not an ordinary merge — see _is_whole_body_migration.
-        result.merged_content = new_rendered
+        # Merge Semantics rule 5 still applies: whatever sits outside the whole-body fence on
+        # disk is the project's, not the template's, so it survives the replacement.
+        prefix_new, _tail_new = _split_at_last_fence_end(new_rendered)
+        _prefix_disk, tail_disk = _split_at_last_fence_end(existing_on_disk)
+        preserved_tail = bool(tail_disk.strip())
+        result.merged_content = (prefix_new + tail_disk) if preserved_tail else new_rendered
         result.sections_added = list(_new_probe)
         result.sections_orphaned = [_WHOLE_BODY_FENCE]
         result.shrink_notices.append(
             f"fence '{_WHOLE_BODY_FENCE}': this file predates its template being split into "
             f"named sections; the whole-body fence was replaced by "
-            f"{', '.join(sorted(_new_probe))}. Everything inside it was template-owned."
+            f"{', '.join(sorted(_new_probe))}. Everything inside it was template-owned"
+            + (
+                "; content outside it was carried over unchanged."
+                if preserved_tail
+                else "."
+            )
         )
         return result
 
@@ -771,6 +858,7 @@ def _merge_fenced_content(
                 result.shrink_notices.append(notice)
 
     result.merged_content = merged
+    result.duplicate_section_notices = _detect_duplicate_sections(merged, result.sections_added)
     return result
 
 
