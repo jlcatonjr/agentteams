@@ -6,6 +6,43 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### added (`agentteams-updater` — an instance-update expert that cannot write)
+
+- **The agent that carefully updates deployed agentteams instances**, built last and deliberately:
+  it depends on `fences._merge_front_matter` and `_insert_section_at_render_position`, both of
+  which shipped earlier the same day. It exists for the three judgment classes the deterministic
+  merge **refuses on purpose** — capability proposals, both-sides conflicts, and telling a
+  project's intentional divergence from stale drift. Anything outside those is `--update --merge`,
+  and the agent is instructed to say so.
+- **Proposal-only is structural, not instructional.** Its front-matter grant is `['read',
+  'search']`, which the Claude adapter maps to `Read, Grep, Glob` — it cannot apply an edit even
+  when persuaded it should. This matters precisely because of capability keys: the merge never
+  auto-applies `tools:` since widening a grant unattended is privilege escalation, and an agent
+  able to apply its own proposals would route straight around that boundary. A prompt-level
+  prohibition would not survive a persuasive argument for an exception; an absent tool does.
+- **It is never generated into a consumer team.** Gated on an explicit `instance_maintenance`
+  capability and never inferred from project text — shipping it everywhere would hand each team an
+  agent whose subject is editing that team's own instruction files.
+- It refuses three Pre-Flight conditions rather than proceeding carefully: a target not under
+  version control, a dirty tree for the files in scope, and an undeterminable generating version.
+  Its contract states that a refusal is a successful outcome, that divergence is presumed
+  intentional, and that "ambiguous" is a reportable classification.
+- The template-ledger ratchet added in this same round caught this template as unregistered on its
+  first real use, before the commit. Registered as `TA-045`.
+
+### fixed (the relevance benchmark was ranking one document three times)
+
+- `test_top3_accuracy_perfect` went red on prose added elsewhere in `references/`. The cause was
+  not a relevance regression: `references/bridges/<pair>/agent-inventory.md` is the **same
+  8,999-byte file in all three bridge directories** (identical sha256), so its three copies tied
+  at 8.7782 and filled every top-3 slot, pushing the genuinely correct answer to fourth at
+  8.7777. A "top-3 accuracy" benchmark in which one document holds all three slots is measuring
+  top-1 with two wasted slots, and a 0.006% margin makes it knife-edge to any corpus change.
+- The **benchmark corpus** now deduplicates on content hash. The **product is unchanged and still
+  returns all three** — whether `query_index` should collapse identical results for real callers,
+  and which path it would then report, is a design question rather than a bug fix, so it is
+  logged rather than decided.
+
 ### added (two published artifacts now reconcile against the tree)
 
 - **`template-chapter-audit.csv` — a generator was the wrong answer.** The obvious reading of

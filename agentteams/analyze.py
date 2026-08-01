@@ -251,6 +251,19 @@ def build_manifest(description: dict[str, Any], *, framework: str = "copilot-vsc
     if research_capability_enabled and "research-analyst" not in archetypes:
         archetypes = list(archetypes) + ["research-analyst"]
 
+    # agentteams-updater: gated on an EXPLICIT opt-in and deliberately NEVER inferred. It proposes
+    # updates to *other* repositories' deployed agentteams instances, so it belongs to the team
+    # doing the maintaining — in practice agentteams itself — not to every team that happens to
+    # mention updates. Generating it into a consumer would hand each team an agent whose whole
+    # subject is editing that team's own instruction files, which is the footgun the 2026-07-31
+    # design audit ruled out. Force-appended like research-analyst above so an unrelated
+    # selected_archetypes override cannot silently drop it.
+    if (
+        "instance_maintenance" in description.get("capabilities", [])
+        and "agentteams-updater" not in archetypes
+    ):
+        archetypes = list(archetypes) + ["agentteams-updater"]
+
     # A research-type project with no research capability declared is the single most common way
     # this framework ships a literature-review team that cannot look anything up: measured
     # 2026-07-30, neither of the two downstream research teams had the flag set, so the

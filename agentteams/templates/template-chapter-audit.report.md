@@ -3,7 +3,7 @@
 Generated 2026-07-31 by `scripts/verify_audit_ledger.py`.
 Structural claims only; prose accuracy and severity remain judgment.
 
-- rows: 44
+- rows: 45
 - unreviewed dispositions: 0
 - defects: 0
 - reviews: 18
