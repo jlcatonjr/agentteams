@@ -120,3 +120,50 @@ def test_trigger_phrase_list_is_documented() -> None:
             "docs_src/template-authoring.md so template authors know what "
             "the lint scans for"
         )
+
+
+# ---------------------------------------------------------------------------
+# Every template's fences must be balanced and unnested
+#
+# Nothing checked this. It was found while chasing a render that emitted
+# `conflict-auditor.md` with 8 BEGIN / 7 END: the first hypothesis was a malformed
+# template, and verifying it required a marker-accurate count — a naive
+# `grep -c AGENTTEAMS:BEGIN` reports three false positives, because
+# `agent-updater.template.md` and `instruction-authority.reference.template.md`
+# discuss the marker in prose (the latter says it "carries no fence, deliberately").
+#
+# All 66 templates are in fact balanced. This keeps them that way: a template is the
+# authored artifact, and an unbalanced or nested fence there fails the whole file's
+# merge — `_extract_fenced_regions` returns an error string, `emit` sees a non-dict,
+# wraps the body in the whole-file `content` fence, and the real error surfaces later
+# as a confusing "Nested fence not allowed" on a file whose template was fine.
+# ---------------------------------------------------------------------------
+
+_MARKER_BEGIN_RE = re.compile(r"^<!--\s*AGENTTEAMS:BEGIN\s+(\S+)\s+v=\d+\s*-->", re.M)
+_MARKER_END_RE = re.compile(r"^<!--\s*AGENTTEAMS:END\s+(\S+)\s*-->", re.M)
+
+
+@pytest.mark.parametrize("template_path", _template_paths(), ids=lambda p: p.name)
+def test_template_fences_are_balanced_and_unnested(template_path: Path) -> None:
+    """BEGIN/END pair up in order, and no fence opens inside another."""
+    text = template_path.read_text(encoding="utf-8")
+    events = sorted(
+        [(m.start(), "begin", m.group(1)) for m in _MARKER_BEGIN_RE.finditer(text)]
+        + [(m.start(), "end", m.group(1)) for m in _MARKER_END_RE.finditer(text)]
+    )
+    stack: list[str] = []
+    for _pos, kind, sid in events:
+        if kind == "begin":
+            assert not stack, (
+                f"{template_path.name}: fence {sid!r} opens inside {stack[-1]!r}. Nested "
+                "fences make the whole file unparseable, and the failure surfaces as a "
+                "confusing error on a later merge rather than here."
+            )
+            stack.append(sid)
+        else:
+            assert stack, f"{template_path.name}: END {sid!r} with no open fence"
+            opened = stack.pop()
+            assert opened == sid, (
+                f"{template_path.name}: END {sid!r} closes {opened!r} — markers crossed"
+            )
+    assert not stack, f"{template_path.name}: fence(s) never closed: {stack}"
