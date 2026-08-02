@@ -980,6 +980,16 @@ to the challenges above.
 
 ### added
 
+- **`tests/test_unfenced_constraint_ratchet.py`** — a constraint-bearing line outside
+  every fence is a rule a project can delete and no `--update --merge` will restore.
+  `security.template.md` forbids this outright; the rest of the library carries **159 such
+  lines across 43 templates**. Too many to fence safely in one pass, so a ratchet records
+  the per-file baseline and forbids growth, with a staleness guard that requires entries be
+  *lowered* as debt is paid. Verified against a planted constraint. **A passing run
+  establishes only that no new unfenced constraint was added** — the 159 remain deletable
+  and unrestorable, so the security review's S4.5 stays open and this file is the
+  measurement of that debt, not its discharge.
+
 - **`.github/workflows/changelog-link.yml`** — a PR touching `agentteams/**/*.py` must
   also touch `CHANGELOG.md`. Origin: PR #56 landed the retrieval validation-cache code
   on 2026-07-16 while its changelog entry sat in an unpushed local commit until

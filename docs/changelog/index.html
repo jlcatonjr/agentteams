@@ -7296,6 +7296,17 @@ to the challenges above.</p>
 <h3 id="added">added<a class="headerlink" href="#added" title="Permanent link">&para;</a></h3>
 <ul>
 <li>
+<p><strong><code>tests/test_unfenced_constraint_ratchet.py</code></strong> — a constraint-bearing line outside
+  every fence is a rule a project can delete and no <code>--update --merge</code> will restore.
+  <code>security.template.md</code> forbids this outright; the rest of the library carries <strong>159 such
+  lines across 43 templates</strong>. Too many to fence safely in one pass, so a ratchet records
+  the per-file baseline and forbids growth, with a staleness guard that requires entries be
+  <em>lowered</em> as debt is paid. Verified against a planted constraint. <strong>A passing run
+  establishes only that no new unfenced constraint was added</strong> — the 159 remain deletable
+  and unrestorable, so the security review's S4.5 stays open and this file is the
+  measurement of that debt, not its discharge.</p>
+</li>
+<li>
 <p><strong><code>.github/workflows/changelog-link.yml</code></strong> — a PR touching <code>agentteams/**/*.py</code> must
   also touch <code>CHANGELOG.md</code>. Origin: PR #56 landed the retrieval validation-cache code
   on 2026-07-16 while its changelog entry sat in an unpushed local commit until
