@@ -3570,7 +3570,7 @@
 <ol>
 <li>Add contextual selection logic in <code>agentteams/analyze.py</code> for operation/state-change cues + verification/proof cues (avoid broad single-keyword auto-selection)</li>
 <li>Add <code>post-production-auditor</code> to <code>selected_archetypes.items.enum</code> in <code>schemas/team-manifest.schema.json</code></li>
-<li>Register the template in <code>agentteams/templates/template-chapter-audit.csv</code> using a unique <code>TA-</code> ID, and fill the three provenance columns (see below)</li>
+<li>Register the template in <code>agentteams/templates/template-chapter-audit.csv</code> using a unique <code>TA-</code> ID, and fill the three provenance columns (see below). <strong>Enforced</strong> by <code>tests/test_template_ledger_reconciliation.py</code>: a new template with no row fails the suite. 28 pre-existing templates are recorded as a baseline there rather than back-registered — writing rows for templates nobody audited would fabricate the dispositions the ledger exists to record</li>
 <li>Do not place optional post-production routing rows inside <code>AGENTTEAMS:BEGIN routing_table_rows</code>; add them in the user-editable gap below the fence</li>
 <li>Do not place optional post-production workflows inside <code>AGENTTEAMS:BEGIN available_workflows</code>; add them in the user-editable gap before that fence</li>
 <li>Use <code>{MANUAL:...}</code> placeholders for post-production profile values (trigger version, bulk threshold, source-of-truth spec, duplicate cap, and audit slug) unless you also add auto-resolution mappings in <code>agentteams/analyze.py</code></li>

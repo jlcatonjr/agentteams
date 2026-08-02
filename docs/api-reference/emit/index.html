@@ -1757,10 +1757,10 @@
       <ul class="md-nav__list">
         
           <li class="md-nav__item">
-  <a href="#print_dry_run_reportresult-manifest-fmttext" class="md-nav__link">
+  <a href="#print_dry_run_reportresult-manifest-fmttext-streamnone" class="md-nav__link">
     <span class="md-ellipsis">
       
-        print_dry_run_report(result, manifest, *, fmt='text')
+        print_dry_run_report(result, manifest, *, fmt='text', stream=None)
       
     </span>
   </a>
@@ -3506,10 +3506,10 @@
       <ul class="md-nav__list">
         
           <li class="md-nav__item">
-  <a href="#print_dry_run_reportresult-manifest-fmttext" class="md-nav__link">
+  <a href="#print_dry_run_reportresult-manifest-fmttext-streamnone" class="md-nav__link">
     <span class="md-ellipsis">
       
-        print_dry_run_report(result, manifest, *, fmt='text')
+        print_dry_run_report(result, manifest, *, fmt='text', stream=None)
       
     </span>
   </a>
@@ -3730,7 +3730,8 @@
 <li><code>manifest</code> (<code>dict[str, Any]</code>) — Team manifest from <code>analyze.build_manifest()</code>.</li>
 </ul>
 <h2 id="-_1">---<a class="headerlink" href="#-_1" title="Permanent link">&para;</a></h2>
-<h3 id="print_dry_run_reportresult-manifest-fmttext"><code>print_dry_run_report(result, manifest, *, fmt='text')</code><a class="headerlink" href="#print_dry_run_reportresult-manifest-fmttext" title="Permanent link">&para;</a></h3>
+<h3 id="print_dry_run_reportresult-manifest-fmttext-streamnone"><code>print_dry_run_report(result, manifest, *, fmt='text', stream=None)</code><a class="headerlink" href="#print_dry_run_reportresult-manifest-fmttext-streamnone" title="Permanent link">&para;</a></h3>
+<p><code>stream</code> defaults to <code>sys.stdout</code>. <code>--dry-run --json</code> passes the <em>real</em> stdout explicitly, because the CLI has redirected <code>sys.stdout</code> to stderr for that run so progress narration cannot corrupt the JSON document — see <code>agentteams.cli.json_mode</code>.</p>
 <blockquote>
 <p><em>Source: <code>agentteams/emit.py</code></em></p>
 </blockquote>

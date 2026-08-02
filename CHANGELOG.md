@@ -922,6 +922,30 @@ to the challenges above.
 
 ### fixed
 
+- **13 of the 17 constitutional rules were invisible to deletion (security review S4.2).**
+  `_detect_unfenced_drift` is silent on modified files and a tampered file is modified by
+  definition, which is why `_detect_deleted_constraints` exists as its complement — but it
+  matched on vocabulary (`⛔ | read-only | PRIORITY LEVEL | HALT | MUST NOT | never`), and
+  the rules do not speak that way. **Rule 1, "`@security` before destructive operations" —
+  the rule the entire enforced stack rests on — says "require", so it matched nothing.**
+  Deleting it was neither restored (the list is unfenced by design, so projects can extend
+  it) nor reported. Now tracked by *shape* (`NUMBERED_RULE_RE`) rather than by adding
+  words: broadening the vocabulary would trade a false negative for false positives on
+  prose, and a notice that fires on rewording is one people learn to skip. Measured:
+  constitutional rules tracked 4/17 → **17/17**, files firing against the real deployed
+  team 5 → 5 (**zero added noise**).
+- **`--shrink-policy=preserve` trusted the disk over security contracts (S4.4).** It
+  favours on-disk content whenever the template body looks materially smaller — correct
+  for operator enrichment, inverted for a security contract, because the heuristic cannot
+  distinguish enrichment from tampering when they are the same operation. Appending one
+  backticked token to a fenced security region suppressed that fence's update indefinitely
+  behind a scrolling notice. `_TEMPLATE_AUTHORITATIVE_FENCES` (`invariant_core`,
+  `security_authority`, `security_rules_invariant`, `security_verdict_contract`) is now
+  exempt from preservation. Kept **separate** from `_LIVE_DATA_FENCES` as the review
+  insists — that set means "upstream feed rotation is expected", a different claim, and
+  conflating them would obscure both. Ordinary fences are still preserved, pinned by a
+  second test.
+
 - **`test_committed_check_reports_describe_the_committed_source_state` broke CI on
   `main` and I did not notice for four merges.** The test compares a committed
   bridge-check verdict against the working tree's source team — but `.github/agents/*`
