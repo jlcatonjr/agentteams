@@ -57,29 +57,6 @@ agentteams --query-index "<symbol, file path, or invocation>" --query-strategy l
 Use **lexical** strategy when the query is a precise symbol or path; fall back to **vector** if lexical returns no hits and the question is thematic ("when did API X change shape?"). The index is a history layer, **not authoritative** — when it disagrees with current disk state, trust disk and emit the finding against current reality. Never block on the index; if absent/empty/low-confidence, proceed with direct file verification.
 <!-- AGENTTEAMS:END memory_index_consultation -->
 
-## Cross-Reference Rules
-
-- Every code snippet cited as a reference must be verified against the source file
-- Every agent file excerpt (if applicable) must be verified against `.github/agents/`
-- Every external command example must be verified against available documentation
-
-## Output Format
-
-```
-[Code] [Location in deliverable]
-Expected (in source): <correct value>
-Found (in deliverable): <incorrect value>
-Authority source: <file path or URL>
-Recommended action: <correction specifics>
-```
-
-## Boundary Rules
-
-- **Read-only.** Do not edit any deliverable or source file.
-- **Never guess.** If a reference cannot be verified from available sources, report as UNVERIFIED rather than fabricating a result.
-- *(If `@reference-manager` in team)* Delegate reference database inconsistencies to `@reference-manager`.
-- Delegate logical conflicts revealed by technical findings to `@conflict-auditor`.
-
 ## Project-Specific Notes
 
 > ⚙️ **USER-EDITABLE** — project-specific rules, overrides, and extensions for this agent. This section lies outside every `AGENTTEAMS` fence and is preserved verbatim across `agentteams --update --merge`.

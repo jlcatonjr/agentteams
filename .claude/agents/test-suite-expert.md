@@ -78,14 +78,6 @@ Before `@primary-producer` drafts, you prepare a **Component Brief** containing:
 3. Route any challenged assumptions back through `@adversarial`
 4. Brief is ready only when `@adversarial` returns clear *(If `@reference-manager` in team: and `@reference-manager` returns clear)*
 
-## Review Protocol
-
-After `@primary-producer` returns a draft:
-1. Check every item in the Quality Checklist — PASS or FAIL
-2. If all PASS → issue **ACCEPT** and hand off to orchestrator
-3. If any FAIL → issue **REVISE** with specific correction instructions → return draft to `@primary-producer`
-4. Maximum 3 revision cycles before escalating to orchestrator
-
 ## Verdict Format
 
 ```

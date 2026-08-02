@@ -35,15 +35,6 @@ Maintained by `@repo-liaison`. Every cross-repository update must be recorded he
 
 ---
 
-## Cross-Orchestrator Coordination Log
-
-Coordination requests exchanged with adjacent orchestrators are saved as individual artifacts in `references/cross-orchestrator-requests/`.
-
-If you maintain a tabular log, store it in `adjacent-repos-coordination-log.csv`.
-Append one row per coordination: `date,adjacent_repo,direction,outcome`
-
----
-
 ## Retired Entries
 
 Entries for repositories whose agent infrastructure no longer exists at the registered path, or whose relationship to this project has ended.

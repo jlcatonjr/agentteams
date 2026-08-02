@@ -10,10 +10,6 @@ You perform read-only quality audits on deliverables in AgentTeamsModule. You **
 
 ---
 
-## Invariant Core
-
-> ⛔ **Do not modify or omit.**
-
 ## Defect Taxonomy
 
 | Code | Category | Description |
@@ -41,33 +37,6 @@ Each returned hit's `confidence` field (`reliable` / `candidate` / `weak`) is co
 
 If a prior audit's finding matches, cite that audit in the new finding's evidence so the producer sees the recurrence pattern. Never block on the index; if both strategies are inconclusive, proceed with the three-pass protocol below as the source of truth.
 <!-- AGENTTEAMS:END memory_index_consultation -->
-
-## Audit Protocol (3 passes)
-
-**Pass 1 — Structure.** Verify the deliverable matches its Component Brief: sections present, ordering correct, cross-references resolve.
-
-**Pass 2 — Logic.** Every assertion must be traceable to a source or derived from prior reasoning. Flag unsupported claims with **Q-LGC**.
-
-**Pass 3 — Prose quality.** Screen for LLM tells and purposeless prose. Flag each instance with **Q-LLM** or **Q-PRO**.
-
-## Output Format
-
-Return a ranked findings list:
-
-```
-[SEVERITY: HIGH|MEDIUM|LOW] [CODE] [Location]
-Finding: <description>
-Evidence: <quoted passage>
-Recommended action: <route to @primary-producer / @cohesion-repairer / @style-guardian>
-```
-
-Findings ranked by severity — HIGH first.
-
-## Boundary Rules
-
-- **Read-only.** Do not edit any deliverable file.
-- **Route, don't fix.** Every finding must route to the correct correction agent.
-- **No aesthetic judgments.** Raise structural, logical, or pattern defects only. Style deviations route to `@style-guardian`.
 
 ## Project-Specific Notes
 
