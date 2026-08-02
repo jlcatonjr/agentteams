@@ -6,6 +6,244 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### added (`agentteams-updater` — an instance-update expert that cannot write)
+
+- **The agent that carefully updates deployed agentteams instances**, built last and deliberately:
+  it depends on `fences._merge_front_matter` and `_insert_section_at_render_position`, both of
+  which shipped earlier the same day. It exists for the three judgment classes the deterministic
+  merge **refuses on purpose** — capability proposals, both-sides conflicts, and telling a
+  project's intentional divergence from stale drift. Anything outside those is `--update --merge`,
+  and the agent is instructed to say so.
+- **Proposal-only is structural, not instructional.** Its front-matter grant is `['read',
+  'search']`, which the Claude adapter maps to `Read, Grep, Glob` — it cannot apply an edit even
+  when persuaded it should. This matters precisely because of capability keys: the merge never
+  auto-applies `tools:` since widening a grant unattended is privilege escalation, and an agent
+  able to apply its own proposals would route straight around that boundary. A prompt-level
+  prohibition would not survive a persuasive argument for an exception; an absent tool does.
+- **It is never generated into a consumer team.** Gated on an explicit `instance_maintenance`
+  capability and never inferred from project text — shipping it everywhere would hand each team an
+  agent whose subject is editing that team's own instruction files.
+- It refuses three Pre-Flight conditions rather than proceeding carefully: a target not under
+  version control, a dirty tree for the files in scope, and an undeterminable generating version.
+  Its contract states that a refusal is a successful outcome, that divergence is presumed
+  intentional, and that "ambiguous" is a reportable classification.
+- The template-ledger ratchet added in this same round caught this template as unregistered on its
+  first real use, before the commit. Registered as `TA-045`.
+
+### fixed (the relevance benchmark was ranking one document three times)
+
+- `test_top3_accuracy_perfect` went red on prose added elsewhere in `references/`. The cause was
+  not a relevance regression: `references/bridges/<pair>/agent-inventory.md` is the **same
+  8,999-byte file in all three bridge directories** (identical sha256), so its three copies tied
+  at 8.7782 and filled every top-3 slot, pushing the genuinely correct answer to fourth at
+  8.7777. A "top-3 accuracy" benchmark in which one document holds all three slots is measuring
+  top-1 with two wasted slots, and a 0.006% margin makes it knife-edge to any corpus change.
+- The **benchmark corpus** now deduplicates on content hash. The **product is unchanged and still
+  returns all three** — whether `query_index` should collapse identical results for real callers,
+  and which path it would then report, is a design question rather than a bug fix, so it is
+  logged rather than decided.
+
+### added (two published artifacts now reconcile against the tree)
+
+- **`template-chapter-audit.csv` — a generator was the wrong answer.** The obvious reading of
+  "this artifact has no regeneration mechanism" is to write one, but the ledger's contents are
+  *judgments* — disposition, severity, chapter relationship — that no code can derive from the
+  tree, and `docs_src/template-authoring.md` makes registration a deliberate authoring act. The
+  gap was never a missing generator. It was that **nothing checked the authoring rule was
+  followed**: `scripts/verify_audit_ledger.py` detects drift but is report-only and manual, and
+  CI's four steps do not include it.
+  `tests/test_template_ledger_reconciliation.py` closes that half. Measured: 60 templates on
+  disk, 32 registered, **28 with no row**. Those 28 are a listed baseline rather than a backfill —
+  writing rows for templates nobody audited would fabricate the judgments the ledger exists to
+  record. The reverse direction (a row naming a template that no longer exists) is gated at zero,
+  because it is already clean.
+- **The feature inventory's real defect was the version baseline, not the counts.** The counts are
+  hand-maintained for a stated and still-valid reason. The baseline beside them never required
+  judgment — it is `agentteams.__version__` — and it read `0.1.0 (2026-04-15)` while the module
+  was at `1.0.0rc6`, so a reader checking whether a capability had shipped was reading a document
+  describing a different release four months and a major version back. Now pinned, because
+  "reconcile it by hand next time" is exactly what produced the gap. The inventory's note is
+  corrected to say which three of its numbers are checked and which are not.
+
+### fixed (one source for the Goose capability guidance, actually consumed)
+
+- **The shared source already existed and one of its two consumers ignored it.**
+  `agentteams/capability_hints.py` was created so the Goose adapter and the bridge would state the
+  research capability identically. `frameworks/goose.py` imported `RESEARCH_CAPABILITY_BULLET`
+  and then **never referenced it**, keeping its own hand-written restatement — the exact defect the
+  constant exists to prevent, reintroduced under an import that made it look resolved. Nothing
+  failed, because nothing checked.
+- Worth recording how this was nearly missed a second time: `grep -c 'agentteams.research'` on the
+  two modules returns `3` and `0`, which reads as "the bridge is still missing it". The bridge
+  reaches the text through the constant, whose body lives in a third file. The measurement was
+  wrong, not the code. **The bridged `AGENTS.md` does carry the guidance** — five occurrences.
+- The adapter now embeds the shared block verbatim, in two places that had each drifted their own
+  way. Goose-specific framing stays local, which is the point of single-sourcing *facts* rather
+  than prose: the `computercontroller` renderer contrast and the "search can be added as an MCP
+  extension" route are about Goose and belong in the Goose document.
+- `tests/test_capability_hint_single_source.py` pins it, including an AST check that neither
+  emitter merely imports the constant.
+- **`agentteams/frameworks/goose.py` 996 → 834.** The second forced carve of the day: embedding
+  the shared text took the module to 1003 and the CH-07 ratchet refused it. The seam was already
+  there — `_goosehints_content`, `_resilient_runner_content` and `_goose_capabilities_content`
+  build files the adapter *emits*, while the rest is adapter *behaviour*. They moved to
+  `frameworks/goose_docs.py` and are re-exported, so no import changed. One test needed updating:
+  a `monkeypatch` targeting the re-exported alias would have silently no-opped, so it now patches
+  where the name is resolved.
+- Two of the four modules in `CEILING_MARGIN_BASELINE` have now been carved by an ordinary edit
+  hitting the wall rather than by a decision to decompose. That is the ratchet working, and it is
+  also a fair warning about the remaining two.
+
+### fixed (an agent file must not begin with a fence marker)
+
+- **Goose's ACP scanner refused `.claude/agents/team-builder.md`** — `could not find expected ':'
+  at line 5 column 1`. The file opened with `<!-- AGENTTEAMS:BEGIN content v=1 -->`, so the
+  scanner read the HTML comment as the start of a YAML mapping and hit the template's horizontal
+  rule four lines later.
+- **It was logged as fence corruption; it was not.** `_normalize_generated_content` already wraps
+  *only the body* when a file has YAML front matter, precisely so framework parsers keep seeing
+  front matter first. The wrapper lands on line 1 for one reason: there was no front matter for it
+  to land after. **The cause was a single outlier template** — three of the four builder templates
+  open with a `---` block, the Claude one did not, and `render_builder_file` is identity for
+  Claude, so nothing downstream injected it the way `render_agent_file` does for ordinary agents.
+- The template now carries front matter, and this repo's deployed file was repaired directly.
+  That second step was necessary rather than redundant: **`--update --merge` cannot add front
+  matter to a file that has none**, because front matter lies outside every fence and is preserved
+  verbatim. Verified by dry-run before and after — the merge reported `+1 bytes` on the broken
+  file and `+235 bytes` once the block existed for it to preserve.
+- `SETUP-REQUIRED.md` also opens with the wrapper and is **deliberately left alone**: it is a build
+  report, not a persona, and both `emit._is_agent_doc` and `bridge_sources` exclude it from
+  agent-file enumeration. Nothing scans it.
+- Guarded by `tests/test_agent_file_front_matter_first.py`, which asserts the property per builder
+  template rather than for the one file that broke.
+
+### fixed (`.vscode/tasks.json` can no longer be written outside the output tree)
+
+- **`vscode_tasks_rel_path` returns a fixed `../../.vscode/tasks.json`**, correct for every adapter
+  that overrides it because each puts its agents dir exactly two segments below the project root —
+  and wrong for any other `--output`. Pointed at `examples/<name>/expected`, one segment below its
+  own conceptual root, the offset climbed a level too far and wrote `examples/.vscode/tasks.json`,
+  a sibling of every example project. It went unnoticed because the snapshot comparison reads only
+  `*.md`/`*.svg` inside `expected/`.
+- The call site now **derives** the expected depth from each adapter's own `get_agents_dir`
+  contract rather than restating "two levels" a second time, and **refuses with a message** when
+  `--output` is not shaped like that adapter's agents dir. Refusing beats guessing a corrected
+  offset: an arbitrary `--output` has no discoverable project root, so any inferred target is a
+  path written somewhere the operator did not name. No adapter contract changed and no existing
+  assertion moved.
+
+### changed (three more template-owned sections fenced — and one deliberately not)
+
+- `conflict-auditor` and `navigator` gain fenced `invariant_core` sections; `orchestrator` gains
+  `update_compatibility_source_pack`. Partially-fenced templates now carry 638 lines outside a
+  fence, down from 669.
+- **The orchestrator's own `## Invariant Core` was left unfenced on purpose, and the reason is
+  recorded in the template.** Its rule list carries the ⛔ "Do not modify or omit" banner while the
+  SECTION MANIFEST designates `constitutional_rules` USER-EDITABLE — and projects *do* extend it;
+  this repository's `CLAUDE.md` adds rules past the template's set. A fence spanning the heading
+  through the last rule would replace that list wholesale on `--update --merge` and delete every
+  project-added rule. The banner and the designation genuinely conflict; the designation wins,
+  because it is the one whose failure mode is data loss.
+
+### added (plan-step CSVs are checked against the real corpus)
+
+- **The CSV-safety instruction existed in two agent files and did not prevent recurrence.**
+  "Write with `csv.writer`, re-parse via `read_steps`" has been in both orchestrator files since
+  2026-07-22; two days later this repo produced several rounds of the exact corruption it forbids.
+  `tests/test_plan_steps_corpus.py` now points the existing detector at the files that actually
+  accumulate. An instruction that competes with finishing the work loses; a test does not.
+
+  Two design points worth stating, because both cut against the obvious implementation:
+  - **It skips, rather than passes, on an empty corpus.** `tmp/` is gitignored and carries zero
+    tracked files, so this glob matches nothing in CI. A green result on an empty corpus would
+    read as coverage while checking nothing.
+  - **It is a ratchet, not a zero-gate.** 13 of 187 files already overflow, the oldest from
+    2026-W19. They are records of finished work; rewriting them to make a test pass would be
+    editing the record. The baseline lists them by path, so repairing one means deleting a line
+    and the debt stays legible.
+
+### changed (`devDependencies` no longer spawn a reference document each)
+
+- **`_parse_package_json` categorised every entry in both `dependencies` and `devDependencies` as
+  `library`**, which routes to the reference tier and gives each one its own
+  `references/ref-<tool>-reference.md`. A mid-sized JavaScript project carries dozens of lint
+  plugins and type stubs, and each was producing a document. `devDependencies` are now categorised
+  `other` — passive by default — while staying in `tools[]`, so stack inference is unaffected.
+  `other` rather than a new `dev-tool` value because `category` is enum-constrained in
+  `schemas/project-description.schema.json`, which outranks the pipeline.
+- **This is a default, not a filter**, and the distinction is what makes it safe: name-based
+  promotion in `classify_tool_importance` still fires, which is where the tools that matter live.
+  `typescript`, `webpack`, `vite`, `rollup` and `esbuild` were added to `_REFERENCE_TOOLS` in the
+  same change — without them the demotion would have silently taken a TypeScript project's
+  compiler and its bundler from reference tier to passive. They are listed as *reference*, not
+  specialist, so they keep exactly the tier they had. Test frameworks (`jest`, `pytest`, `mocha`,
+  `junit`) were already there for the same reason.
+
+### changed (orphan advisories say what `--prune` cannot do)
+
+- **The older `*.agent.md` orphan advisory said "Review and delete if obsolete"** while its
+  newer sibling for `ref-*-reference.md` files already disclosed that `--prune` cannot reach
+  them. `--prune` deletes only what the build-log diff records as removed; both advisories find
+  their orphans by globbing the output directory, which `--prune` never consults. The wording is
+  now identical in both.
+- **Wiring the glob results into `--prune`'s deletion set was declined**, not overlooked. That
+  would widen a destructive flag's reach from an authoritative build-log diff to a heuristic
+  glob — a decision that belongs to `@security` under Constitutional Rule 1, not to a
+  consistency fix.
+- **`agentteams/cli/generate.py` 991 → 958.** This carve was forced, not chosen: a six-line
+  comment took the module to 998 and the CH-07 ratchet refused it, which is the guard working
+  as designed and the exact failure mode recorded for that module in the remediation log. The
+  carve it forced was the right one anyway — the inlined orphan-agent advisory moved to
+  `build_team._report_orphan_agent_files`, next to the reference-doc advisory it mirrors. The
+  two had been describing the same blind spot from two different files. `cli/generate.py` leaves
+  `CEILING_MARGIN_BASELINE`; three modules remain.
+
+### changed (three governance documents corrected)
+
+- **The retrospective's self-referential exception cited the wrong reason.** It justified routing
+  remediation rows to the top-level CSV by calling the dogfood tree "gitignored", naming only
+  `.github/agents/`. There are two dogfood trees, and `.claude/agents/` *is* git-tracked — Claude
+  Code needs it resolvable on disk. The property that actually matters is that both are
+  **regenerable**, so a row appended to either is overwritten by the next build. The clause now
+  says that, and warns against re-narrowing it to the gitignored tree.
+- **AUTHORING-GUIDE §6 gains the `extra_output_files` sub-pattern.** These generators take no
+  manifest parameter, so they cannot see team composition. Content depending on it needs
+  verify-first phrasing ("check whether the team includes X"), not an unconditional assertion and
+  not a signature change threading manifest access through for a sentence of prose. Caught twice
+  inside `goose.py`, both times in audit rather than authoring.
+- **The work-summarizer's `append` mode gains a required idempotency rule.** The documented
+  once-per-session guard is scoped to Workflow D's backfill sweep; the append path that
+  completion-capture actually uses had no guard at all. One daily file accumulated twenty
+  `Session Stop` / `Workflow D` headings across 1,594 lines with "No Gaps Detected" repeated
+  verbatim three times. The rule bounds the decision on **evidence**, not on session identity —
+  a session is not observable in the file, and completion-capture fires several times within one.
+- **Filing conventions gain a scope-drift section.** A plan whose exit criterion is a live
+  end-to-end run will discover defects in modules it declared out of scope, and its Non-goals
+  then become false mid-flight. The convention: amend the Non-goal explicitly, record the scope
+  change as its own numbered step rather than renumbering to `10b`/`10c`, and notify
+  `@repo-liaison` when the newly-touched module is shared. It applies only where the declared
+  exit criterion is unreachable without the out-of-scope fix.
+
+### changed (remediation log: three rows closed by verification)
+
+- **Two rows described defects that no longer exist**, and one describes something outside this
+  repo. Rating and sequencing work kept inheriting them, so they are closed with cited evidence
+  rather than carried into another round.
+  - The Goose preflight's blindness to the newer `providers:`/`active_provider:` config schema:
+    `scripts/goose-openrouter-preflight.py` already has `parse_goose_providers_block`, and a live
+    run resolved `provider: ollama` from `active_provider` instead of the empty
+    "nothing to validate" the row predicts. → `shipped`
+  - The auto-fence retrofit's missing file-type guard: `_is_machine_managed_merge_overwrite_path`
+    full-replaces `.py`/`.json`/`.svg` and fences only `.md`, so no non-Markdown file can be
+    auto-fenced. No data file in the repo carries a fence marker. → `shipped`
+  - OpenRouter upstream tool-calling variance is provider-side — the same model id served by
+    different upstreams differs in fidelity, and nothing here can change a third party's backend.
+    The measurement is retained as the reason. → `wontfix`
+
+  Backlog: 24 open → **21 open / 37 shipped / 2 wontfix**. Both `shipped` closures were checked
+  against test-pinned code (`tests/test_goose_openrouter_preflight.py`, `tests/test_frameworks.py`),
+  not read off the source alone.
+
 ### added (security policy: three gaps closed under one review)
 
 - **The Mandatory Review Triggers table gains rows for package installation and elevated

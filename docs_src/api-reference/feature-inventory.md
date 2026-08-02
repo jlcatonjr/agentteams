@@ -11,17 +11,27 @@ Features below are grouped by capability area. This inventory may include capabi
 `main` that are not yet part of a tagged release. Release-specific availability should be verified against
 `CHANGELOG.md` and repository tags.
 
-!!! note "The per-category counts are hand-maintained"
+!!! note "The per-category counts are hand-maintained; the baseline is not"
 
-    They are not derived from the code and will drift between reconciliations.
-    The baseline above had read `0.1.0 (2026-04-15)` while the module was at
-    `1.0.0rc6` — nearly four months and a major version stale. Treat the counts
-    as indicative and the category descriptions as authoritative; verify any
-    specific capability against `CHANGELOG.md` or the CLI's own `--help`.
+    The counts are not derived from the code and will drift between
+    reconciliations. Treat them as indicative and the category descriptions as
+    authoritative; verify any specific capability against `CHANGELOG.md` or the
+    CLI's own `--help`.
 
-    Deriving these counts requires a machine-readable feature set, which the
+    Deriving the counts requires a machine-readable feature set, which the
     module does not yet carry. Until it does, this note is the honest
     alternative to a number that looks computed and is not.
+
+    **Three things here *are* checked**, because they never required judgment —
+    they were only ever hand-copied:
+
+    - the **version baseline** above equals `agentteams.__version__`
+      (`tests/test_api_doc_signatures.py::test_inventory_version_baseline_matches_the_installed_version`).
+      It had read `0.1.0 (2026-04-15)` while the module was at `1.0.0rc6` — four
+      months and a major version stale, so a reader checking whether a capability
+      had shipped was reading a document describing a different release;
+    - the **Governance Agents** row's members equal `analyze.GOVERNANCE_AGENTS`;
+    - the **Total** equals the sum of its own column.
 
 ---
 

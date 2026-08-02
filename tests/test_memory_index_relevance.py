@@ -17,6 +17,7 @@ Design principles:
 
 from __future__ import annotations
 
+import hashlib
 from pathlib import Path
 
 import pytest
@@ -133,7 +134,28 @@ def _build_corpus_index():
         p for p in sorted(_REFERENCES.rglob("*.md"))
         if "plans" not in p.relative_to(_REFERENCES).parts
     )
-    return build_memory_index(sources)
+    #   - byte-identical duplicates — `references/bridges/<pair>/agent-inventory.md` is the same
+    #     8,999-byte file in all three bridge directories (verified by hash). Left in, a query
+    #     matching it returns three copies of one document, so a "top-3 accuracy" benchmark is
+    #     really measuring top-1 with two wasted slots. That is exactly how this fired on
+    #     2026-07-31: the three copies tied at 8.7782 and pushed the genuinely correct answer to
+    #     fourth at 8.7777 — a 0.006% gap opened by unrelated prose added elsewhere in
+    #     `references/`, which shifted the BM25 background statistics. Nothing about relevance
+    #     regressed; the benchmark was knife-edge because a duplicate occupied the slots.
+    #
+    #     Deduplicated by content, keeping the first path, so the benchmark ranks distinct
+    #     documents. The PRODUCT is unchanged and still returns all three — whether `query_index`
+    #     should collapse identical results for real callers is a separate question, logged rather
+    #     than decided here.
+    seen_content: set[str] = set()
+    deduped: list[Path] = []
+    for path in sources:
+        digest = hashlib.sha256(path.read_bytes()).hexdigest()
+        if digest in seen_content:
+            continue
+        seen_content.add(digest)
+        deduped.append(path)
+    return build_memory_index(deduped)
 
 
 @pytest.fixture(scope="module")

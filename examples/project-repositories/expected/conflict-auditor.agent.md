@@ -28,6 +28,7 @@ handoffs:
 SECTION MANIFEST — conflict-auditor.template.md
 | section_id                 | designation   | notes                              |
 |----------------------------|---------------|------------------------------------|
+| invariant_core             | FENCED        | ⛔ contract: responsibilities + codes |
 | typed_handoff_audit        | FENCED        | Prose-first typed-handoff chain audit |
 | behavioral_spec_cross_check| FENCED        | Verifies eval-suite.json predicates |
 | memory_index_consultation  | FENCED        | History-layer precedent lookup     |
@@ -44,6 +45,7 @@ You detect logical inconsistencies across deliverables, agent documentation, ref
 
 ---
 
+<!-- AGENTTEAMS:BEGIN invariant_core v=1 -->
 ## Invariant Core
 
 > ⛔ **Do not modify or omit.**
@@ -73,6 +75,7 @@ You detect logical inconsistencies across deliverables, agent documentation, ref
 | `PHANTOM_ENTRY` | PE | Entry in reference file with no corresponding source |
 | `PAYLOAD_MISMATCH` | PM | Typed-handoff audit: an adjacent step pair's `payload_schema_out` (step N) does not equal the next step's `payload_schema_in` (step N+1) |
 | `PAYLOAD_UNTYPED` | PU | Typed-handoff audit: a plan step is missing `payload_schema_in` or `payload_schema_out` (severity follows `agentteams.handoff_payloads.PAYLOAD_UNTYPED_HARD_DATE`) |
+<!-- AGENTTEAMS:END invariant_core -->
 
 <!-- AGENTTEAMS:BEGIN typed_handoff_audit v=1 -->
 ### Typed-handoff audit *(applies when a plan `.steps.csv` carries `payload_schema_in/out` columns)*

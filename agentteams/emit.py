@@ -452,6 +452,14 @@ def emit_all(
                     result.notices.append(annotated)
                     if result.dry_run_report is not None:
                         result.dry_run_report.notices.append(annotated)
+                # Partial fence adoption collides silently, so the dry run is exactly where it
+                # needs to be visible: after the real run the operator is reading a file that
+                # already has two copies. Same notices the real path emits.
+                for notice in mr.duplicate_section_notices:
+                    annotated = f"{rel_path}: {notice}"
+                    result.notices.append(annotated)
+                    if result.dry_run_report is not None:
+                        result.dry_run_report.notices.append(annotated)
                 # T5.1 / IV.1: in dry-run, also pre-flight the halt decision
                 # so operators see what a real --shrink-policy=halt run would
                 # block, without actually modifying any file.
@@ -571,6 +579,15 @@ def emit_all(
                     f"{rel_path}: {notice} — preserved on-disk value; edit the file directly if "
                     f"the template's version is wanted"
                 )
+            # Partial fence adoption: a template fenced a section this team predates, so the
+            # fenced block landed beside the deployed file's unfenced copy. Reported, never
+            # auto-resolved — see fences._detect_duplicate_sections.
+            for notice in merge_result.duplicate_section_notices:
+                result.notices.append(f"{rel_path}: {notice}")
+            # A rule that vanished from an unfenced region is never restored by a merge, and
+            # the drift notice above is silent on edited files — which is every tampered file.
+            for notice in merge_result.deleted_constraint_notices:
+                result.notices.append(f"{rel_path}: {notice}")
             # Plan 3: surface shrink Notices from this merge (real-run path).
             # T2.D5: shrink_policy controls whether to surface and whether
             # to write the smaller content.

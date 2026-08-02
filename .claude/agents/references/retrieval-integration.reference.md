@@ -16,6 +16,7 @@ No retrieval query entrypoints declared.
 
 - scripts/run_daily_security_maintenance.sh
 - scripts/research_ai_bad_habits.py
+- scripts/regen_example_snapshots.py
 - scripts/research_claude_code_docs.py
 - scripts/run_daily_bridge_maintenance.sh
 - .github/workflows/framework-auto-update.yml

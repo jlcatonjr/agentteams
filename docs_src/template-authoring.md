@@ -89,7 +89,7 @@ For `domain/post-production-auditor.template.md`, use this registration profile:
 
 1. Add contextual selection logic in `agentteams/analyze.py` for operation/state-change cues + verification/proof cues (avoid broad single-keyword auto-selection)
 2. Add `post-production-auditor` to `selected_archetypes.items.enum` in `schemas/team-manifest.schema.json`
-3. Register the template in `agentteams/templates/template-chapter-audit.csv` using a unique `TA-` ID, and fill the three provenance columns (see below)
+3. Register the template in `agentteams/templates/template-chapter-audit.csv` using a unique `TA-` ID, and fill the three provenance columns (see below). **Enforced** by `tests/test_template_ledger_reconciliation.py`: a new template with no row fails the suite. 28 pre-existing templates are recorded as a baseline there rather than back-registered — writing rows for templates nobody audited would fabricate the dispositions the ledger exists to record
 4. Do not place optional post-production routing rows inside `AGENTTEAMS:BEGIN routing_table_rows`; add them in the user-editable gap below the fence
 5. Do not place optional post-production workflows inside `AGENTTEAMS:BEGIN available_workflows`; add them in the user-editable gap before that fence
 6. Use `{MANUAL:...}` placeholders for post-production profile values (trigger version, bulk threshold, source-of-truth spec, duplicate cap, and audit slug) unless you also add auto-resolution mappings in `agentteams/analyze.py`

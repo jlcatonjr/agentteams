@@ -73,6 +73,26 @@ def _resolve_strict_manual_mode(*, strict_arg: bool | None, self_update: bool) -
     if strict_arg is not None:
         return bool(strict_arg)
     return bool(self_update)
+#: Sentinel root used only to read an adapter's agents-dir shape out of its own contract.
+_SHAPE_PROBE_ROOT = Path("/__agentteams_shape_probe__")
+
+
+def _agents_dir_depth(adapter: FrameworkAdapter) -> tuple[str, ...]:
+    """Return an adapter's agents dir as path segments below the project root.
+
+    Read from the adapter's own :meth:`get_agents_dir`, so the depth that
+    ``vscode_tasks_rel_path`` encodes as ``../../`` is *derived* rather than assumed
+    a second time at the call site.
+
+    Args:
+        adapter: The framework adapter being rendered for.
+
+    Returns:
+        The segments between project root and agents dir, e.g. ``('.github', 'agents')``.
+    """
+    return adapter.get_agents_dir(_SHAPE_PROBE_ROOT).relative_to(_SHAPE_PROBE_ROOT).parts
+
+
 def _emit_vscode_tasks(
     manifest: dict[str, Any],
     adapter: FrameworkAdapter,
@@ -82,6 +102,21 @@ def _emit_vscode_tasks(
 
     Sentinel-merges with any existing file so user-authored tasks are preserved.
     Raises ValueError (surfaced to stderr) if the existing JSON is malformed.
+
+    ``vscode_tasks_rel_path`` returns a fixed ``../../.vscode/tasks.json`` because every
+    adapter that overrides it puts its agents dir exactly two segments below the project
+    root. That holds for a real project and fails whenever ``--output`` points somewhere
+    else: pointed at ``examples/<name>/expected``, which is one segment below its own
+    conceptual root, ``../../`` climbs a level too far and writes ``examples/.vscode/tasks.json``
+    — outside the intended tree, as a sibling of every example project. Observed during a
+    golden-snapshot regeneration; it went unnoticed because the snapshot comparison only
+    reads ``*.md``/``*.svg`` inside ``expected/``.
+
+    The guard below derives the expected depth from the adapter's own ``get_agents_dir``
+    contract and refuses to write when ``output_dir`` is not shaped like that adapter's
+    agents dir. Refusing is the right outcome rather than guessing a corrected offset: an
+    arbitrary ``--output`` has no discoverable "conceptual project root", so any inferred
+    target would be a guess written outside the tree the operator named.
     """
     rel_path = adapter.vscode_tasks_rel_path()
     if rel_path is None:
@@ -90,6 +125,16 @@ def _emit_vscode_tasks(
         return None
 
     if output_dir is not None:
+        expected = _agents_dir_depth(adapter)
+        actual = output_dir.resolve().parts[-len(expected):] if expected else ()
+        if actual != expected:
+            print(
+                f"  !  Skipping .vscode/tasks.json: --output is not shaped like this "
+                f"framework's agents dir ({'/'.join(expected)}), so the relative path "
+                f"{rel_path} would write outside the output tree.",
+                file=sys.stderr,
+            )
+            return None
         # resolved = <project_root>/.vscode/tasks.json — parent.parent is the project root.
         resolved = (output_dir / rel_path).resolve()
         project_root = resolved.parent.parent

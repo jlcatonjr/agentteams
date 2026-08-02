@@ -251,6 +251,19 @@ def build_manifest(description: dict[str, Any], *, framework: str = "copilot-vsc
     if research_capability_enabled and "research-analyst" not in archetypes:
         archetypes = list(archetypes) + ["research-analyst"]
 
+    # agentteams-updater: gated on an EXPLICIT opt-in and deliberately NEVER inferred. It proposes
+    # updates to *other* repositories' deployed agentteams instances, so it belongs to the team
+    # doing the maintaining — in practice agentteams itself — not to every team that happens to
+    # mention updates. Generating it into a consumer would hand each team an agent whose whole
+    # subject is editing that team's own instruction files, which is the footgun the 2026-07-31
+    # design audit ruled out. Force-appended like research-analyst above so an unrelated
+    # selected_archetypes override cannot silently drop it.
+    if (
+        "instance_maintenance" in description.get("capabilities", [])
+        and "agentteams-updater" not in archetypes
+    ):
+        archetypes = list(archetypes) + ["agentteams-updater"]
+
     # A research-type project with no research capability declared is the single most common way
     # this framework ships a literature-review team that cannot look anything up: measured
     # 2026-07-30, neither of the two downstream research teams had the flag set, so the
@@ -622,12 +635,21 @@ _SPECIALIST_TOOLS: set[str] = {
 _REFERENCE_CATEGORIES: set[str] = {"framework", "library"}
 
 #: Tool names (lowercased) that always qualify as reference-tier
+#:
+#: Test frameworks were already here because they live in a project's dev dependencies and
+#: still matter. The compiler and bundler entries exist for the same reason and were added
+#: 2026-07-31 alongside the `package.json` change that stopped categorising every
+#: `devDependencies` entry as `library`: without them, that change would silently demote a
+#: TypeScript project's compiler and its bundler from reference tier to passive. They are
+#: listed as *reference*, not specialist, so they keep exactly the tier they had before —
+#: this preserves behaviour rather than escalating it.
 _REFERENCE_TOOLS: set[str] = {
     "fastapi", "django", "flask", "express", "react", "vue", "angular",
     "sqlalchemy", "pandas", "numpy", "scipy", "matplotlib",
     "spring", "rails", "laravel", "nextjs", "next.js",
     "pytest", "jest", "mocha", "junit",
     "graphql", "grpc", "protobuf",
+    "typescript", "webpack", "vite", "rollup", "esbuild",
 }
 
 def classify_tool_importance(tool: dict[str, Any]) -> str:

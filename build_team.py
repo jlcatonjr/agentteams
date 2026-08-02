@@ -259,6 +259,66 @@ def _check_dual_descriptor(args: argparse.Namespace) -> None:
         print(f"[WARN] could not persist dual-descriptor event: {exc}", file=sys.stderr)
 
 
+def _report_orphan_agent_files(
+    final_rendered: list[tuple[str, str]],
+    output_dir: Path,
+    manifest: dict,
+) -> list[str]:
+    """Detect + print ``*.agent.md`` files on disk that the current team no longer emits.
+
+    ``--prune`` handles removals the build log recorded since the last build; these are older
+    orphans the log no longer records, so without this advisory they accumulate invisibly.
+
+    Carved out of ``agentteams/cli/generate.py`` on 2026-07-31 because that module had two lines
+    of runway under the CH-07 ceiling and an ordinary edit pushed it over — the exact failure
+    mode recorded for it in the remediation log. It belongs here regardless: it is the mirror of
+    :func:`_report_orphan_reference_docs`, and the two were describing the same blind spot from
+    two different files.
+
+    Args:
+        final_rendered: ``(rel_path, content)`` pairs the current run will write.
+        output_dir:     Root agents directory.
+        manifest:       Team manifest, read for ``adopted_agents`` and ``tool_agents``.
+
+    Returns:
+        The sorted list of orphaned filenames (empty if none).
+    """
+    emitted_names = {Path(p).name for p, _ in final_rendered if p.endswith(".agent.md")}
+    # Adopted orphans (--adopt-orphans) are deliberately not emitted but are now roster
+    # members — don't re-report them as orphaned.
+    adopted_names = {f"{s}.agent.md" for s in manifest.get("adopted_agents", [])}
+    # Tool docs are never agents — exclude any tool-<slug>.agent.md whose tool is in the
+    # current team from the orphan scan (handled by migration in the caller).
+    tool_doc_names = {f"{ta['slug']}.agent.md" for ta in manifest.get("tool_agents", [])}
+
+    orphans = sorted(
+        f.name for f in output_dir.glob("*.agent.md")
+        if f.name not in emitted_names
+        and f.name not in adopted_names
+        and f.name not in tool_doc_names
+    )
+    if orphans:
+        print(
+            f"\n  ⚠  {len(orphans)} agent file(s) on disk are not part "
+            "of the current team (orphaned by past team-config changes):",
+            file=sys.stderr,
+        )
+        for name in orphans:
+            print(f"       {name}", file=sys.stderr)
+        # The --prune caveat matters: --prune deletes only what the build-log diff records as
+        # removed (sdreport.removed_files). These orphans are found by globbing the output
+        # directory, which --prune never consults, so "Review and delete" without the caveat
+        # reads as though --prune would have handled them. Wording kept identical to
+        # _report_orphan_reference_docs below.
+        print(
+            "     These are not updated by --update, and --prune cannot remove "
+            "them (detection-only today). Review and delete manually if obsolete.",
+            file=sys.stderr,
+        )
+        _persist_orphan_events(orphans, manifest, output_dir)
+    return orphans
+
+
 def _report_orphan_reference_docs(
     final_rendered: list[tuple[str, str]],
     output_dir: Path,

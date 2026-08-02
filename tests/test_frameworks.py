@@ -5,6 +5,7 @@ Tests for agentteams/frameworks/ — CopilotVSCodeAdapter, CopilotCLIAdapter, Cl
 from pathlib import Path
 import pytest
 
+from agentteams.capability_hints import RESEARCH_CAPABILITY_BULLET
 from agentteams.frameworks.copilot_vscode import CopilotVSCodeAdapter
 from agentteams.frameworks.copilot_cli import CopilotCLIAdapter
 from agentteams.frameworks.claude import ClaudeAdapter
@@ -808,8 +809,11 @@ class TestGooseAdapter:
         sentence, never as a presence claim."""
         extras = self.adapter.extra_output_files(GOOSE_MANIFEST)
         content = dict(extras)["references/goose-capabilities-reference.md"]
+        # Asserts the shared block is present, not a sentence of its own. The adapter used to
+        # restate these facts in its own prose; that restatement is what drifted from bridge.py.
+        # See tests/test_capability_hint_single_source.py for the single-sourcing guard.
         assert "agentteams.research" in content
-        assert "If this project has its own optional `agentteams.research` module installed" in content
+        assert RESEARCH_CAPABILITY_BULLET in content
         assert "python -m agentteams.research --help" in content
 
     def test_capabilities_reference_separates_non_extension_capability_from_extension_list(self):
@@ -821,13 +825,13 @@ class TestGooseAdapter:
         assert "## Capability that isn't a Goose extension at all" in content
         extensions_heading = content.index("## Other builtin extensions")
         capability_heading = content.index("## Capability that isn't a Goose extension at all")
-        agentteams_research_mention = content.index("If this project has its own optional")
+        agentteams_research_mention = content.index(RESEARCH_CAPABILITY_BULLET)
         assert extensions_heading < capability_heading < agentteams_research_mention
 
     def test_capabilities_reference_states_no_builtin_extension_renders_js(self):
         extras = self.adapter.extra_output_files(GOOSE_MANIFEST)
         content = dict(extras)["references/goose-capabilities-reference.md"]
-        assert "none of the\nbuiltin extensions execute JavaScript" in content
+        assert "none of the builtin extensions execute JavaScript" in content
         assert 'python -m agentteams.research browser "<url>"' in content
 
     def test_capabilities_reference_points_at_skill_generation_worked_example(self):
@@ -860,7 +864,11 @@ class TestGooseAdapter:
 
     def test_resilient_runner_content_helper_degrades_on_missing_source(self, monkeypatch, tmp_path):
         missing = tmp_path / "does-not-exist.py"
-        monkeypatch.setattr("agentteams.frameworks.goose._RESILIENT_RUNNER_SOURCE", missing)
+        # Patch where the name is RESOLVED, not where it is re-exported. _resilient_runner_content
+        # moved to goose_docs.py in the 2026-07-31 CH-07 carve and looks the constant up in its own
+        # module globals; patching the alias on `goose` would silently no-op and this test would
+        # pass against the real file.
+        monkeypatch.setattr("agentteams.frameworks.goose_docs._RESILIENT_RUNNER_SOURCE", missing)
         content = _resilient_runner_content()
         assert "Placeholder" in content
         assert str(missing) in content

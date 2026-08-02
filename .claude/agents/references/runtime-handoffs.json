@@ -1,4 +1,3 @@
-<!-- AGENTTEAMS:BEGIN content v=1 -->
 {
   "schema_version": "1.0",
   "framework": "claude",
@@ -794,4 +793,3 @@
     }
   ]
 }
-<!-- AGENTTEAMS:END content -->

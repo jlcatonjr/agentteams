@@ -17,6 +17,14 @@ never occurs — the duplication does.
 **Why wholesale replacement is safe**, and not a shortcut: everything inside a `content` fence is
 template-owned by definition and already overwritten on every merge, so nothing a project authored
 can live there. Content *outside* it is untouched, exactly as in an ordinary merge.
+
+That last sentence was the stated invariant from the start and the code did not honour it. Taking
+`new_rendered` verbatim also took the *render's* out-of-fence tail, so an operator's
+`## Project-Specific Notes` — the one region emit advertises as "preserved verbatim across
+`agentteams --update --merge`" — was silently replaced by the render's empty boilerplate. It only
+bites files whose template goes from fenceless to fenced, which is precisely the migration this
+module exists for, and precisely the sweep that would have run it across a fleet. Fixed by
+splitting both sides at the final END marker and keeping the disk's tail; guarded below.
 """
 
 from __future__ import annotations
@@ -78,6 +86,31 @@ def test_body_content_outside_the_new_fence_survives():
     """`## Other` lived inside the old wrapper and is not yet fenced — it must not vanish."""
     merged = _merge_fenced_content(_render(), _deployed()).merged_content
     assert "## Other" in merged and "keep me" in merged
+
+
+def _deployed_with_operator_notes() -> str:
+    """A deployed file where the operator has written in the USER-EDITABLE region.
+
+    The region sits *after* the whole-body wrapper's END marker, which is exactly the ground the
+    migration used to overwrite.
+    """
+    return (
+        _deployed().rstrip("\n")
+        + "\n\n## Project-Specific Notes\n\n- Never delete anything under `vendor/`.\n"
+    )
+
+
+def test_operator_content_outside_the_wrapper_survives():
+    """The regression: out-of-fence content is the project's, and a structural rewrite is still a merge.
+
+    `## Other` (above) survives only because the render happens to carry it. This is the case the
+    render does *not* carry — the operator's own text — and it must survive on the merge rule, not
+    on a coincidence.
+    """
+    merged = _merge_fenced_content(_render(), _deployed_with_operator_notes()).merged_content
+    assert "Never delete anything under" in merged
+    assert merged.count("## Project-Specific Notes") == 1
+    assert "NEW text" in merged, "the template update must still land"
 
 
 def test_the_migration_is_reported_not_silent():

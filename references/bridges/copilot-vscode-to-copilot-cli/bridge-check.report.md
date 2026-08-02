@@ -2,8 +2,8 @@
 
 Result: PASS
 
-- Source state: d806cbf5d8044a62725a2b25ed0fc352203819b24019cb65225965ca371d3311
-- Manifest generated at: 2026-07-29T23:06:07.843659+00:00
+- Source state: 9051a59908c7fb4d97aad35d8c06ee5a876484cb7fd9be1690b3819b3399c20c
+- Manifest generated at: 2026-08-01T03:01:56.410207+00:00
 
 > `Source state` is a digest of the source files this verdict was computed from. It is not a timestamp: if it no longer matches the current tree, the verdict is stale regardless of when it ran. Re-run `--bridge-check`.
 

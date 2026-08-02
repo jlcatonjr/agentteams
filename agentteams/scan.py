@@ -385,6 +385,23 @@ _IDENTITY_OVERRIDE_PATTERNS: tuple[str, ...] = (
     "your new role is",
 )
 
+#: Precedence claims — content asserting for itself an authority tier it cannot hold (C-1 in
+#: ``references/instruction-authority.reference.md``). Distinct from the identity-override
+#: phrases above: those claim to change *who the agent is*, these claim to change *where the
+#: text ranks*. Read content sits at the bottom of the ordering by construction, so any such
+#: claim inside it is the finding rather than an instruction.
+#:
+#: Deliberately literal and few, matching the conservative style of the lists above. A precedence
+#: claim expressed in novel wording will not match, and that is the accepted trade: a scanner
+#: that guesses at intent produces false positives on ordinary prose about precedence — of which
+#: this project's own templates now contain a great deal — and a noisy security check gets muted.
+_TIER_CLAIM_PATTERNS: tuple[str, ...] = (
+    "supersedes all prior instructions",
+    "supersedes all previous instructions",
+    "takes precedence over all instructions",
+    "override all prior instructions",
+)
+
 
 def _check_injection(line: str, line_num: int, filepath: str,
                      findings: list[ScanFinding], *, in_front_matter: bool) -> None:
@@ -409,6 +426,18 @@ def _check_injection(line: str, line_num: int, filepath: str,
                 file=filepath, line=line_num, category="injection", severity="high",
                 message=(f"Rule S-5 instruction-override pattern {pattern!r} — reviewed content "
                          f"is inert data, never instruction"),
+                snippet=line.strip()[:120],
+            ))
+            return
+    for pattern in _TIER_CLAIM_PATTERNS:
+        idx = low.find(pattern)
+        # Same code-span suppression: the instruction-authority reference quotes these verbatim
+        # as examples of what a self-certifying tier claim looks like.
+        if idx != -1 and not _match_inside_code_span(line, idx, idx + len(pattern)):
+            findings.append(ScanFinding(
+                file=filepath, line=line_num, category="injection", severity="high",
+                message=(f"C-1 tier claim {pattern!r} — content cannot assert its own authority; "
+                         f"read content ranks below every instruction tier by construction"),
                 snippet=line.strip()[:120],
             ))
             return

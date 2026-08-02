@@ -121,3 +121,35 @@ automated guess that closes a live row is worse than a stale open one.
 Statuses follow the documented lifecycle in
 `agentteams/templates/universal/retrospective-remediation.reference.template.md`:
 `open` → `triaged` → `shipped` | `wontfix`.
+
+---
+
+## Scope drift: when an end-to-end exit criterion forces out-of-scope work
+
+A plan whose exit criterion is a **live end-to-end run** will, often enough to be worth planning
+for, discover real defects in modules it declared out of scope — and its Non-goals then become
+false mid-flight while the diff proceeds anyway.
+
+Observed 2026-07-24 in `goose-retrieval-capability-gap`: the plan declared "not redesigning
+`agentteams.research` itself", then its end-to-end step surfaced two genuine defects *inside* that
+module (an HTTP-202 challenge indistinguishable from a no-results response; a 40 KB download cap
+silently returning navigation chrome). Both had to be fixed for the exit criterion to be reachable
+at all. The mid-flight `10b`/`10c` step renumbering was the visible symptom of scope the plan's
+structure had not anticipated.
+
+When this happens:
+
+1. **Amend the Non-goal explicitly.** Edit it to say what is now in scope and why the exit
+   criterion forced it. Leaving a Non-goal standing while the diff contradicts it makes the plan
+   unusable as a record — a later reader cannot tell whether the scope changed or the rule was
+   ignored.
+2. **Record the scope change as its own numbered step** in the steps CSV, with the exit criterion
+   that forced it in `notes`. Renumbering existing steps to slot work in (`10b`, `10c`) hides the
+   decision inside what looks like ordinary sequencing.
+3. **Notify `@repo-liaison` if the newly-touched module is shared with other repositories.** The
+   original plan's blast-radius assessment was made against the declared scope, and no longer
+   holds.
+
+This is not a licence to widen scope opportunistically. It applies only where the *declared exit
+criterion cannot be reached* without the out-of-scope fix — that condition is what makes the
+change forced rather than chosen, and it belongs in the amended Non-goal as the justification.

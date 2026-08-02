@@ -231,6 +231,38 @@ sections fenced and others left as `USER-EDITABLE` within the same file. When th
 template declares its own fences, those govern instead of the default whole-body
 wrap.
 
+> ⚠️ **The refinement is one-way, and the first fence is the expensive one.**
+> `emit._normalize_generated_content` applies the whole-body wrap **only when the
+> rendered file carries no fence at all**. So a template with zero fences is 100%
+> module-owned, and a template with one fence owns *only that region* — everything
+> else becomes preserved-forever. **Partial fencing is strictly weaker than none.**
+> Adding a first fence to a fenceless template is safe (the deployed file migrates
+> cleanly — see FENCE-CONVENTIONS.md), but it silently converts the rest of that
+> file into project-owned text that no merge will ever restore. Fence all of a
+> template's constraint-bearing content or none of it.
+> Guarded by `tests/test_fence_coverage_policy.py`, which exempts fenceless
+> templates for exactly this reason.
+
+### 3.3a The three-part fence selection test
+
+Applied per section when deciding what to fence. All three must hold:
+
+1. **Template-owned.** The text is authored here and a project has no legitimate
+   reason to rewrite it. A section projects are *expected* to extend fails this
+   and stays outside, with a named extension region beside it — the reason
+   `constitutional_rules` in `orchestrator.template.md` is deliberately unfenced.
+2. **Position-independent.** Its meaning does not depend on what precedes or
+   follows it. Required because `_insert_section_at_render_position` anchors a new
+   fence to whichever fences already exist *on disk*, so its first merge into a
+   deployed team can place it anywhere in the file. Write "the Mandatory Review
+   Triggers table", never "the table below".
+3. **Whole.** The fence covers the complete unit of meaning — a rule and its
+   exceptions, a claim and its scope. A fence bisecting an argument lets a merge
+   restore half of it and preserve a contradicting half.
+
+Sections failing (1) stay unfenced. Sections failing (2) or (3) are rewritten
+until they pass, or left alone — never fenced as they stand.
+
 Team-owned content lives **outside** every fence: the `## Project-Specific
 Notes` section present in all agent files (§3.1) and, for the orchestrator, its
 `project_rules` gap. This is the supported, merge-safe home for project-specific
@@ -322,6 +354,8 @@ For content that is specific to one framework but should still ship by default w
 Before adding template prose that instructs an agent to actively do something (monitor a condition, call a command, trigger a check on its own initiative), verify two things against the real target runtime — not just the request as phrased: (1) the runtime doesn't already implement the behavior natively, and (2) agent-instruction text is even capable of producing the effect. An agent's own generated output is not re-parsed by the harness as a command, so instructing a persona to autonomously invoke a harness-level action it has no tool call for is not merely redundant — it is inert. When the runtime already handles it natively, the fix is a configuration change or a factual documentation note, not new instruction prose (see the context-bloat-management paragraph inside `_goose_capabilities_content`, `agentteams/frameworks/goose.py`, for a worked example: Goose auto-triggers `/compact` at the harness level, so the actual fix was a `GOOSE_AUTO_COMPACT_THRESHOLD` config value).
 
 A second, separate check on the same content applies even when the prose is not inert: verify it is actually *reachable* from the query that needs it. Guidance placed only behind a conditional persona-adoption hop (e.g. an entry file that says "if doing X, read Y, which routes to Z") is invisible to any query that never triggers that hop — an off-topic or general-assistant question, for instance. Trace the actual hop count from the runtime's true entry point (not from the framework's intended persona-adoption path) to the content in question; if a class of real queries can reach the target behavior without ever crossing that hop, either duplicate a short form of the guidance at the shallower, always-reachable layer, or lower the number of hops. This is a distinct failure mode from the first paragraph's capability check — content can be fully capable of producing its effect and still never execute because nothing routes the triggering query to it (see `agentteams/bridge.py`'s goose `agents_entry_body`, which reaches both `AGENTS.md` and `.goosehints` directly rather than requiring persona adoption first, for a worked example of shallow placement).
+
+A third check applies specifically to `extra_output_files` generators, and it has its own correct answer. These functions are typically written against the project name alone — `_goose_capabilities_content(project_name)` and `_goosehints_content` in `agentteams/frameworks/goose.py` both take no manifest parameter — so they have **no view of team composition**: which agents exist, which archetypes were selected, which capabilities the brief declared. Content that depends on any of that therefore cannot be asserted unconditionally, because the generator cannot know whether the assertion holds for the team it is writing for. The correct resolution is **verify-first phrasing** — "check whether the team includes X before assuming it" — rather than either of the two tempting alternatives: an unconditional assertion, which is wrong for every team where the condition fails, or a signature change threading manifest access through the adapter, which couples file-content generation to team analysis for a sentence of prose. The shape is architecturally available to any adapter's `extra_output_files` generator; it has been observed twice inside `goose.py`, both times caught in audit rather than authoring, which is why it is named here.
 
 ---
 
