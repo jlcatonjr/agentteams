@@ -80,3 +80,70 @@ def test_many_deletions_report_a_count_rather_than_a_wall():
     notices = _merge_fenced_content(template, _TEMPLATE.replace(_RULE, "")).deleted_constraint_notices
     assert len(notices) <= 4, "a wholesale rewrite must not produce a wall of text"
     assert any("further constraint-bearing" in n for n in notices)
+
+
+# ---------------------------------------------------------------------------
+# The numbered constitutional rules must be tracked by SHAPE, not vocabulary
+#
+# `_detect_deleted_constraints` exists precisely because `_detect_unfenced_drift` goes
+# silent on modified files, and a tampered file is modified by definition. But its
+# keyword set — ⛔ | read-only | PRIORITY LEVEL | HALT | MUST NOT | never — matched only
+# 2 of the orchestrator's 17 constitutional rules. The 15 it missed include:
+#
+#   1. `@security` before destructive operations
+#   2. `@code-hygiene` before merging code
+#  11. Cross-repository writes require `@repo-liaison` + `@security`
+#
+# Rule 1 is the rule the entire enforced stack rests on. It says "require", not "never",
+# so deleting it was neither restored (unfenced by design) nor reported (not tracked) —
+# the exact §4.1 + §4.2 compound the security review describes.
+#
+# Tracking by SHAPE rather than by adding words: a numbered, bolded rule in the
+# Constitutional Rules list is structurally identifiable, and its disappearance is
+# unambiguous. Broadening the vocabulary instead would have traded a false-negative for
+# false-positives on ordinary prose, which is what keeps this notice readable.
+# ---------------------------------------------------------------------------
+
+
+def test_deleting_a_numbered_constitutional_rule_is_reported():
+    """Rule 1 is the case that matters, and it carries none of the keywords."""
+    from agentteams.fences import _detect_deleted_constraints
+
+    template = (
+        "# Orchestrator\n\n"
+        "### Constitutional Rules (Non-Negotiable)\n\n"
+        "1. **`@security` before destructive operations** — File deletions, bulk edits, "
+        "and any irreversible action require `@security` clearance first.\n"
+        "2. **`@code-hygiene` before merging code** — Any code change session adding files "
+        "must pass a hygiene audit before merge.\n"
+    )
+    tampered = (
+        "# Orchestrator\n\n"
+        "### Constitutional Rules (Non-Negotiable)\n\n"
+        "2. **`@code-hygiene` before merging code** — Any code change session adding files "
+        "must pass a hygiene audit before merge.\n"
+        "\nan unrelated operator edit, so the file is modified\n"
+    )
+    notices = _detect_deleted_constraints(template, tampered)
+    assert notices, (
+        "deleting Constitutional Rule 1 produced no notice. It is unfenced by design, so "
+        "nothing restores it; if nothing reports it either, the deletion is invisible."
+    )
+    assert any("security" in n for n in notices), f"notice does not name the rule: {notices}"
+
+
+def test_rewording_ordinary_prose_stays_silent():
+    """The property that keeps the notice worth reading."""
+    from agentteams.fences import _detect_deleted_constraints
+
+    template = (
+        "# Orchestrator\n\n"
+        "## Overview\n\nThis agent coordinates the team and routes work to specialists.\n"
+    )
+    reworded = (
+        "# Orchestrator\n\n"
+        "## Overview\n\nThis agent coordinates the team, routing work to the specialists.\n"
+    )
+    assert not _detect_deleted_constraints(template, reworded), (
+        "ordinary prose rewording fired the notice — that is how a notice gets muted"
+    )

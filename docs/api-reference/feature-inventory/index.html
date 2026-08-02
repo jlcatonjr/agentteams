@@ -3431,15 +3431,25 @@
 <code>main</code> that are not yet part of a tagged release. Release-specific availability should be verified against
 <code>CHANGELOG.md</code> and repository tags.</p>
 <div class="admonition note">
-<p class="admonition-title">The per-category counts are hand-maintained</p>
-<p>They are not derived from the code and will drift between reconciliations.
-The baseline above had read <code>0.1.0 (2026-04-15)</code> while the module was at
-<code>1.0.0rc6</code> — nearly four months and a major version stale. Treat the counts
-as indicative and the category descriptions as authoritative; verify any
-specific capability against <code>CHANGELOG.md</code> or the CLI's own <code>--help</code>.</p>
-<p>Deriving these counts requires a machine-readable feature set, which the
+<p class="admonition-title">The per-category counts are hand-maintained; the baseline is not</p>
+<p>The counts are not derived from the code and will drift between
+reconciliations. Treat them as indicative and the category descriptions as
+authoritative; verify any specific capability against <code>CHANGELOG.md</code> or the
+CLI's own <code>--help</code>.</p>
+<p>Deriving the counts requires a machine-readable feature set, which the
 module does not yet carry. Until it does, this note is the honest
 alternative to a number that looks computed and is not.</p>
+<p><strong>Three things here <em>are</em> checked</strong>, because they never required judgment —
+they were only ever hand-copied:</p>
+<ul>
+<li>the <strong>version baseline</strong> above equals <code>agentteams.__version__</code>
+  (<code>tests/test_api_doc_signatures.py::test_inventory_version_baseline_matches_the_installed_version</code>).
+  It had read <code>0.1.0 (2026-04-15)</code> while the module was at <code>1.0.0rc6</code> — four
+  months and a major version stale, so a reader checking whether a capability
+  had shipped was reading a document describing a different release;</li>
+<li>the <strong>Governance Agents</strong> row's members equal <code>analyze.GOVERNANCE_AGENTS</code>;</li>
+<li>the <strong>Total</strong> equals the sum of its own column.</li>
+</ul>
 </div>
 <hr />
 <h2 id="summary">Summary<a class="headerlink" href="#summary" title="Permanent link">&para;</a></h2>

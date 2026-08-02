@@ -2137,10 +2137,10 @@
 </li>
         
           <li class="md-nav__item">
-  <a href="#build_tool_catalogpackage_names-fetch_pypitrue" class="md-nav__link">
+  <a href="#build_tool_catalogpackage_names-fetch_registriestrue-fetch_pypinone" class="md-nav__link">
     <span class="md-ellipsis">
       
-        build_tool_catalog(package_names, *, fetch_pypi=True)
+        build_tool_catalog(package_names, *, fetch_registries=True, fetch_pypi=None)
       
     </span>
   </a>
@@ -3438,10 +3438,10 @@
 </li>
         
           <li class="md-nav__item">
-  <a href="#build_tool_catalogpackage_names-fetch_pypitrue" class="md-nav__link">
+  <a href="#build_tool_catalogpackage_names-fetch_registriestrue-fetch_pypinone" class="md-nav__link">
     <span class="md-ellipsis">
       
-        build_tool_catalog(package_names, *, fetch_pypi=True)
+        build_tool_catalog(package_names, *, fetch_registries=True, fetch_pypi=None)
       
     </span>
   </a>
@@ -3604,7 +3604,8 @@
 </ul>
 <p><strong>Returns:</strong> <code>dict[str, str]</code> — <code>{import_name: pypi_package_name}</code></p>
 <hr />
-<h3 id="build_tool_catalogpackage_names-fetch_pypitrue"><code>build_tool_catalog(package_names, *, fetch_pypi=True)</code><a class="headerlink" href="#build_tool_catalogpackage_names-fetch_pypitrue" title="Permanent link">&para;</a></h3>
+<h3 id="build_tool_catalogpackage_names-fetch_registriestrue-fetch_pypinone"><code>build_tool_catalog(package_names, *, fetch_registries=True, fetch_pypi=None)</code><a class="headerlink" href="#build_tool_catalogpackage_names-fetch_registriestrue-fetch_pypinone" title="Permanent link">&para;</a></h3>
+<p><code>fetch_registries</code> gates <strong>both</strong> the PyPI and npm lookups. <code>fetch_pypi</code> is a deprecated alias kept for back-compatibility: the npm tier was added under that flag without renaming it, so the name understated what it controlled — a caller passing <code>fetch_pypi=False</code> to avoid PyPI was also silently disabling npm. When given, the alias wins.</p>
 <blockquote>
 <p><em>Source: <code>agentteams/enrich/_tools.py</code></em></p>
 </blockquote>

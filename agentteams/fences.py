@@ -146,6 +146,26 @@ _LIVE_DATA_FENCES: frozenset[str] = frozenset([
 ])
 
 
+#: Fences whose body the TEMPLATE owns outright — never preserved from disk on shrink.
+#:
+#: `--shrink-policy=preserve` resolves in favour of on-disk content whenever the template
+#: body looks materially smaller. For most fences that is right: it protects operator
+#: enrichment. For a security contract it inverts the trust. The shrink heuristic cannot
+#: distinguish enrichment from tampering — they are the same operation — so appending a
+#: backticked token to a fenced security region is enough to suppress its update
+#: indefinitely, with only a notice scrolling past each run.
+#:
+#: Deliberately SEPARATE from :data:`_LIVE_DATA_FENCES`. That set means "upstream feed
+#: rotation is expected", which is a different claim; conflating them would obscure both.
+#: A fence belongs here only when the project has no legitimate reason to extend its body.
+_TEMPLATE_AUTHORITATIVE_FENCES: frozenset[str] = frozenset([
+    "invariant_core",
+    "security_authority",
+    "security_rules_invariant",
+    "security_verdict_contract",
+])
+
+
 #: Timestamp line the security payload stamps into every rendered file carrying live data.
 _GENERATED_AT_RE = re.compile(r"Generated at: `[^`]+`")
 
@@ -321,6 +341,19 @@ CONSTRAINT_BEARING_RE = re.compile(
     r"⛔|\bread-only\b|PRIORITY LEVEL|\bHALT\b|MUST NOT|\bnever\b", re.IGNORECASE
 )
 
+#: A numbered, bolded rule — the shape every Constitutional Rule uses.
+#:
+#: Tracked by SHAPE because the keyword set missed 15 of the orchestrator's 17 rules,
+#: including "1. **`@security` before destructive operations**" — the rule the entire
+#: enforced stack rests on. It says "require", not "never", so it matched nothing.
+#: Those rules are unfenced by design (projects extend the list), so deleting one was
+#: neither restored NOR reported.
+#:
+#: Broadening the vocabulary instead would trade a false negative for false positives on
+#: ordinary prose, and a notice that fires on rewording is one people learn to skip. A
+#: numbered bolded rule is structurally identifiable and its disappearance is unambiguous.
+NUMBERED_RULE_RE = re.compile(r"^\d+\.\s+\*\*")
+
 #: Shortest constraint-bearing line worth tracking. Below this a "line" is a fragment — a table
 #: cell or a heading — and its absence says nothing about whether a rule survived.
 _CONSTRAINT_MIN_CHARS = 30
@@ -371,7 +404,9 @@ def _detect_deleted_constraints(new_rendered: str, existing_on_disk: str) -> lis
     missing: list[str] = []
     for raw_line in unfenced_lines(new_rendered):
         line = " ".join(raw_line.split())
-        if len(line) < _CONSTRAINT_MIN_CHARS or not CONSTRAINT_BEARING_RE.search(line):
+        if len(line) < _CONSTRAINT_MIN_CHARS:
+            continue
+        if not (CONSTRAINT_BEARING_RE.search(line) or NUMBERED_RULE_RE.match(line)):
             continue
         if line not in haystack:
             missing.append(line)
@@ -805,7 +840,11 @@ def _merge_fenced_content(
                     notice = _detect_fence_shrink(
                         sid, existing_regions.get(sid, ""), new_regions[sid]
                     )
-                    if notice and preserve_on_shrink:
+                    if (
+                        notice
+                        and preserve_on_shrink
+                        and sid not in _TEMPLATE_AUTHORITATIVE_FENCES
+                    ):
                         # Respectful update: the new render would drop enriched
                         # content. Keep the existing body verbatim; surface a
                         # notice so the suppression is visible. No data lost, so

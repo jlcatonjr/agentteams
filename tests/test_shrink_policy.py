@@ -171,3 +171,59 @@ def test_allow_writes_silently(tmp_path):
     assert not result.shrink_blocked
     body = target.read_text(encoding="utf-8")
     assert "CVE-2024-AAAA" not in body  # shrink occurred silently
+
+
+# ---------------------------------------------------------------------------
+# Security-owned fences: the template wins, even under shrink-policy=preserve
+#
+# `preserve` resolves in favour of on-disk content whenever the template's body looks
+# materially smaller. For most fences that is right — it protects operator enrichment.
+# For a security contract it inverts the trust: the mechanism cannot distinguish
+# enrichment from tampering, because they are the same operation, and appending a
+# backticked token to a fenced security region is enough to suppress the update
+# indefinitely while a notice scrolls past each run.
+#
+# Deliberately a SEPARATE set from `_LIVE_DATA_FENCES`. That one means "upstream feed
+# rotation is expected", which is a different claim; conflating them would obscure both.
+# ---------------------------------------------------------------------------
+
+
+def test_security_owned_fence_is_not_preserved_on_shrink():
+    """A security fence takes the template's body even when preserve is on."""
+    from agentteams.fences import _TEMPLATE_AUTHORITATIVE_FENCES, _merge_fenced_content
+
+    sid = sorted(_TEMPLATE_AUTHORITATIVE_FENCES)[0]
+    template = (
+        f"<!-- AGENTTEAMS:BEGIN {sid} v=1 -->\n"
+        "S-1 the authoritative rule.\n"
+        f"<!-- AGENTTEAMS:END {sid} -->\n"
+    )
+    # On disk: same fence, but padded so the template looks like a material shrink.
+    on_disk = (
+        f"<!-- AGENTTEAMS:BEGIN {sid} v=1 -->\n"
+        "S-1 the authoritative rule.\n"
+        + "".join(f"- `extra/path/{i}.md` appended content\n" for i in range(12))
+        + f"<!-- AGENTTEAMS:END {sid} -->\n"
+    )
+    result = _merge_fenced_content(template, on_disk, preserve_on_shrink=True)
+    assert sid not in result.sections_preserved, (
+        f"{sid} was preserved from disk; a security-owned fence must take the template's "
+        "body, or padding it is enough to suppress the update forever"
+    )
+    assert "extra/path/0.md" not in result.merged_content, "the padded on-disk body survived"
+
+
+def test_ordinary_fence_is_still_preserved_on_shrink():
+    """The protection for operator enrichment is unchanged."""
+    from agentteams.fences import _TEMPLATE_AUTHORITATIVE_FENCES, _merge_fenced_content
+
+    sid = "routing_table_rows"
+    assert sid not in _TEMPLATE_AUTHORITATIVE_FENCES
+    template = f"<!-- AGENTTEAMS:BEGIN {sid} v=1 -->\nshort.\n<!-- AGENTTEAMS:END {sid} -->\n"
+    on_disk = (
+        f"<!-- AGENTTEAMS:BEGIN {sid} v=1 -->\nshort.\n"
+        + "".join(f"- `enriched/{i}.md` operator content\n" for i in range(12))
+        + f"<!-- AGENTTEAMS:END {sid} -->\n"
+    )
+    result = _merge_fenced_content(template, on_disk, preserve_on_shrink=True)
+    assert sid in result.sections_preserved, "operator enrichment must still be protected"
