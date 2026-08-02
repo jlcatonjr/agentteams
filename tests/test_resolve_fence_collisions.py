@@ -310,3 +310,75 @@ def test_removal_refuses_a_span_containing_a_fence(tmp_path, monkeypatch):
         "the removal deleted a fenced region — that is deletion of managed content, not "
         f"deduplication. resolved={resolved} skipped={skipped}"
     )
+
+
+# ---------------------------------------------------------------------------
+# Collisions must be detectable AFTER the fence exists, not only while it is added
+#
+# `duplicate_section_notices` fire only while `_merge_fenced_content` is ADDING a fence.
+# Once added, the pre-existing unfenced twin is still in the file but produces no notice,
+# so the resolver reports 0 collisions against a tree carrying 23 duplicate headings in
+# 17 files. The merge creates the duplicate and blinds the only detector for it in the
+# same step.
+# ---------------------------------------------------------------------------
+
+
+def test_duplicate_is_found_when_the_fence_is_already_present(tmp_path):
+    """A heading appearing both inside a fence and outside one is a collision.
+
+    The merge-notice path cannot see this: re-merging an already-fenced file produces no
+    notices at all.
+    """
+    r = resolver
+    deployed = tmp_path / "navigator.md"
+    deployed.write_text(
+        "---\nname: navigator\n---\n\n"
+        "# Navigator\n\n"
+        "<!-- AGENTTEAMS:BEGIN invariant_core v=1 -->\n"
+        "## Invariant Core\n\nfenced body\n"
+        "<!-- AGENTTEAMS:END invariant_core -->\n\n"
+        "## Invariant Core\n\nthe stale unfenced twin\n\n"
+        "## Later\n\nbounds it.\n",
+        encoding="utf-8",
+    )
+    text = deployed.read_text(encoding="utf-8")
+
+    # Precondition: the merge-notice path is blind here — that is the defect.
+    assert not r._merge_fenced_content(text, text).duplicate_section_notices, (
+        "fixture invalid: the notice path still sees this, so it proves nothing"
+    )
+
+    found = r._duplicate_headings_in_file(text)
+    assert "## Invariant Core" in found, (
+        f"the already-fenced duplicate was not detected; found={found}"
+    )
+    assert "## Later" not in found, "a heading appearing once must not be reported"
+
+
+def test_span_bounds_the_unfenced_copy_when_a_fenced_twin_exists(tmp_path):
+    """`_unfenced_section_span` must ignore the fenced occurrence, not count it.
+
+    Its filter checks whether the heading appears among unfenced lines AT ALL, then keeps
+    every regex match — fenced ones included. With a fenced twin present that is always
+    two matches, so it returns "duplicated" and every one of the 20 real collisions was
+    refused as unboundable. The filter has to be per-occurrence.
+    """
+    r = resolver
+    text = (
+        "---\nname: a\n---\n\n"
+        "<!-- AGENTTEAMS:BEGIN invariant_core v=1 -->\n"
+        "## Invariant Core\n\nfenced body\n"
+        "<!-- AGENTTEAMS:END invariant_core -->\n\n"
+        "## Invariant Core\n\nthe stale unfenced twin\n\n"
+        "## Later\n\nbounds it.\n"
+    )
+    span = r._unfenced_section_span(text, "## Invariant Core")
+    assert not isinstance(span, str), (
+        f"expected a bounded span for the unfenced copy, got refusal {span!r}"
+    )
+    start, end = span
+    body = text[start:end]
+    assert "the stale unfenced twin" in body, "bounded the wrong occurrence"
+    assert "fenced body" not in body, "the span swallowed the fenced twin"
+    assert "AGENTTEAMS:BEGIN" not in body, "the span encloses a fence marker"
+    assert "## Later" not in body, "the span ran past the next heading"

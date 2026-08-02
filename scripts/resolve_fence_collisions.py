@@ -131,6 +131,57 @@ _PROJECT_NOTES = "## Project-Specific Notes"
 _FENCE_BEGIN_COUNT_RE = re.compile(r"AGENTTEAMS:BEGIN\s+([A-Za-z0-9_-]+)")
 
 
+def _fenced_char_spans(text: str) -> list[tuple[int, int]]:
+    """Character spans covered by AGENTTEAMS fences, markers included.
+
+    Used to decide whether a given occurrence of a heading sits inside a fence. Computed
+    from the markers directly rather than via `_extract_fenced_regions`, so it still works
+    on a file whose fences do not parse — where a refusal is wanted, but an exception is
+    not.
+    """
+    spans: list[tuple[int, int]] = []
+    opens: list[int] = []
+    for m in re.finditer(r"^<!--\s*AGENTTEAMS:(BEGIN|END)\s+\S+.*?-->\s*$", text, re.MULTILINE):
+        if m.group(1) == "BEGIN":
+            opens.append(m.start())
+        elif opens:
+            spans.append((opens.pop(), m.end()))
+    return spans
+
+
+def _duplicate_headings_in_file(text: str) -> list[str]:
+    """Headings that appear BOTH inside a fenced region and outside one.
+
+    The merge-notice path (`duplicate_section_notices`) only fires while a fence is being
+    ADDED. After `--update --merge` has added it, the pre-existing unfenced twin is still
+    in the file but generates no notice — so the resolver reported 0 collisions against a
+    tree carrying 23 duplicate headings in 17 files. The merge creates the duplicate and
+    blinds the detector for it in one step.
+
+    Requiring one copy inside a fence and one outside is deliberately narrower than
+    "appears twice": two unfenced copies are a template or authoring problem, not a
+    fencing collision, and nothing here is authorised to resolve those.
+
+    Args:
+        text: The deployed file's content.
+
+    Returns:
+        Sorted headings meeting both conditions.
+    """
+    unfenced = {ln.strip() for ln in unfenced_lines(text) if ln.strip().startswith("#")}
+    if not unfenced:
+        return []
+    regions = _extract_fenced_regions(text)
+    if not isinstance(regions, dict):
+        return []
+    fenced_headings: set[str] = set()
+    for body in regions.values():
+        fenced_headings |= {
+            ln.strip() for ln in body.splitlines() if ln.strip().startswith("#")
+        }
+    return sorted(unfenced & fenced_headings)
+
+
 def _trailing_span(text: str, heading: str) -> tuple[int, int] | str:
     """Span of a trailing section, bounded at end-of-file. Only safe under the caller's guards."""
     matches = [m.start() for m in re.finditer(rf"^{re.escape(heading)}\s*$", text, re.MULTILINE)]
@@ -153,10 +204,16 @@ def _unfenced_section_span(text: str, heading: str) -> tuple[int, int] | str:
     unfenced = set(unfenced_lines(text))
     level = len(heading) - len(heading.lstrip("#"))
 
+    # Per-OCCURRENCE, not per-file. The original condition asked whether the heading
+    # appears among unfenced lines at all and then kept every regex match, fenced ones
+    # included — so a heading with a fenced twin always counted twice and returned
+    # "duplicated". That refused all 20 real collisions in this repo's own team as
+    # unboundable, which is the state that made them look unresolvable.
+    fenced_spans = _fenced_char_spans(text)
     starts = [
         m.start()
         for m in re.finditer(rf"^{re.escape(heading)}\s*$", text, re.MULTILINE)
-        if any(line.strip() == heading.strip() for line in unfenced)
+        if not any(lo <= m.start() < hi for lo, hi in fenced_spans)
     ]
     if len(starts) != 1:
         return "duplicated" if starts else "absent"
@@ -189,7 +246,23 @@ def _resolve_file(
     """
     text = deployed.read_text(encoding="utf-8")
     result = _merge_fenced_content(fresh, text)
-    if not result.duplicate_section_notices:
+
+    # Two detection paths, because one alone is blind half the time.
+    #
+    # The merge notices fire only while a fence is being ADDED. After --update --merge has
+    # added it, the pre-existing unfenced twin remains but produces no notice — this repo's
+    # own team carried 23 such duplicates in 17 files that the resolver reported as 0.
+    # `_duplicate_headings_in_file` reads the deployed file directly and finds a heading
+    # that sits both inside a fence and outside one, which is exactly that residue.
+    headings: list[str] = []
+    for notice in result.duplicate_section_notices:
+        m = re.search(r"duplicate section '([^']+)'", notice)
+        if m and m.group(1) not in headings:
+            headings.append(m.group(1))
+    for heading in _duplicate_headings_in_file(text):
+        if heading not in headings:
+            headings.append(heading)
+    if not headings:
         return None, [], []
 
     regions = _extract_fenced_regions(fresh)
@@ -199,11 +272,7 @@ def _resolve_file(
     resolved: list[str] = []
     skipped: list[str] = []
     working = text
-    for notice in result.duplicate_section_notices:
-        m = re.search(r"duplicate section '([^']+)'", notice)
-        if not m:
-            continue
-        heading = m.group(1)
+    for heading in headings:
 
         incoming = next(
             (b for b in regions.values() if _norm(heading) in _norm(_fence_body(b))), None
