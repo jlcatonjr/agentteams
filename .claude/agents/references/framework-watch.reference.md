@@ -20,7 +20,7 @@ authoritative source; the table below is a human-readable projection
 re-rendered on every `--update --merge`.
 
 <!-- AGENTTEAMS:BEGIN framework_data v=1 -->
-> ⚠️ **STALE DATA** — snapshot is 30.7 days old (threshold 7 days). Run the daily research stage online.
+> ⚠️ **STALE DATA** — snapshot is 39.3 days old (threshold 7 days). Run the daily research stage online.
 
 Generated on: `2026-06-23`
 Source: https://docs.anthropic.com/en/docs/claude-code/sub-agents
@@ -38,6 +38,17 @@ Local Claude adapter constants:
 - default_allowed_tools: Bash, Read, Write, Edit
 - claude diff — matched: name; new_upstream: model, tools; missing_upstream: description
 <!-- AGENTTEAMS:END framework_data -->
+
+<!-- AGENTTEAMS:BEGIN operational_integration_process v=1 -->
+## Operational Integration Process
+
+1. Refresh this reference on every team initialization and update.
+2. Route `new_upstream` keys to `@framework-adapters-expert` for triage.
+3. Route `documented_locally_not_upstream` keys to `@docs-research-expert`
+   for verification — they may indicate doc drift or a missed rename.
+4. Escalate persistent unresolved drift to `@orchestrator` with a
+   re-render request when adapter constants are out of date.
+<!-- AGENTTEAMS:END operational_integration_process -->
 
 ## Operational Integration Process
 

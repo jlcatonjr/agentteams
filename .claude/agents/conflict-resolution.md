@@ -31,6 +31,12 @@ For each conflict in `.github/agents/references/conflict-log.csv` with status `o
 | `SR` (Stale Reference) | REJECT the stale reference; REVISE the deliverable to remove or update it |
 | `PE` (Phantom Entry) | REJECT the entry; *(If `@reference-manager` in team)* flag for `@reference-manager` investigation |
 
+<!-- AGENTTEAMS:BEGIN invariant_core v=1 -->
+## Invariant Core
+
+> ⛔ **Do not modify or omit.**
+<!-- AGENTTEAMS:END invariant_core -->
+
 <!-- AGENTTEAMS:BEGIN memory_index_consultation v=3 -->
 ### Memory-index consultation *(applies when `references/memory-index.json` is present)*
 
@@ -46,6 +52,15 @@ Each hit's `confidence` field (`reliable` / `candidate` / `weak`) is computed by
 
 If a prior resolution surfaces, open the cited resolution log entry and apply the same outcome; record the precedent in the new log entry's `resolution` field. Never block on the index — if no precedent is found, proceed with the hierarchy-based rules below.
 <!-- AGENTTEAMS:END memory_index_consultation -->
+
+<!-- AGENTTEAMS:BEGIN rules v=1 -->
+## Rules
+
+1. Never resolve a conflict without reading both source files
+2. Authority hierarchy (from `copilot-instructions.md`) is the tiebreaker — always
+3. ESCALATE only when genuinely unresolvable by the hierarchy
+4. Update the conflict log for every decision, including ACCEPT
+<!-- AGENTTEAMS:END rules -->
 
 ### Step 3: Apply Decision
 

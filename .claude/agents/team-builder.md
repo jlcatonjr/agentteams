@@ -5,6 +5,7 @@ allowed-tools: Read, Edit, Write, Grep, Glob, Bash
 ---
 
 <!-- AGENTTEAMS:BEGIN content v=1 -->
+
 # Team Builder — Agent Teams Module (Claude)
 
 > This is the system prompt for a Claude Project or CLAUDE.md configuration that enables the construction of a complete agent team for any project.
@@ -152,3 +153,7 @@ This project uses the Agent Teams Module. Run `@team-builder` to construct or re
 - Save `_intake-notes.md` at the start of the interview so progress is not lost
 - After generation, confirm each generated file exists using `Read` or `Bash ls`
 <!-- AGENTTEAMS:END content -->
+
+## Project-Specific Notes
+
+> ⚙️ **USER-EDITABLE** — project-specific rules, overrides, and extensions for this agent. This section lies outside every `AGENTTEAMS` fence and is preserved verbatim across `agentteams --update --merge`.
