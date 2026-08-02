@@ -238,3 +238,75 @@ def test_a_missing_build_log_declines(tmp_path):
     f = agents / "a.agent.md"
     f.write_text(_deployed("A stale earlier version."), encoding="utf-8")
     assert resolver._file_is_pristine(agents, f) is False
+
+
+# ---------------------------------------------------------------------------
+# A removal must never take a fenced region with it
+#
+# `--trust-provenance` removed `## Invariant Core` from the deployed security.md on the
+# strength of the TEMPLATE's `invariant_core` fence — which the deployed file does not
+# have. The section is level-2 with only level-3 subsections, so its span ran to EOF:
+# 363 lines -> 32, and the file's own two fenced regions (security_rules_invariant,
+# threat_intelligence) went with it. Post-removal the file had 0 fences and no
+# Invariant Core.
+#
+# The authorisation was inverted. Provenance answers "who wrote this"; it cannot answer
+# "is this content safely carried elsewhere". A span containing a live fence is managed
+# content by definition, and removing it is deletion, not deduplication.
+# ---------------------------------------------------------------------------
+
+
+def test_removal_refuses_a_span_containing_a_fence(tmp_path, monkeypatch):
+    """The exact shape of the security.md loss, reduced.
+
+    Reproducing it needs all three conditions the real file had, and the first draft of
+    this test had none of them — it passed against the buggy code, which is why it was
+    rewritten:
+
+    * a **bounded** span (a later same-level heading), not a trailing one;
+    * deployed content that **differs** from the template's fence body, so the equality
+      proof refuses and only provenance can authorise;
+    * ``_file_is_pristine`` True, which the real deployed file was.
+
+    The span then encloses the file's own fenced region, and removing it deletes managed
+    content. 363 lines -> 32 in the live incident, 2 fences -> 0.
+    """
+    r = resolver
+    monkeypatch.setattr(r, "_file_is_pristine", lambda *a, **k: True)
+
+    deployed = tmp_path / "security.md"
+    deployed.write_text(
+        "---\nname: security\n---\n\n"
+        "# Security\n\n"
+        "## Invariant Core\n\n"
+        "### Rules\n\nS-1 something.\n\n"
+        "<!-- AGENTTEAMS:BEGIN security_rules_invariant v=1 -->\n"
+        "managed content the operator must not lose\n"
+        "<!-- AGENTTEAMS:END security_rules_invariant -->\n\n"
+        "## Later Section\n\nbounds the span above.\n",
+        encoding="utf-8",
+    )
+    fresh = (
+        "---\nname: security\n---\n\n"
+        "# Security\n\n"
+        "<!-- AGENTTEAMS:BEGIN invariant_core v=1 -->\n"
+        "## Invariant Core\n\ndifferent body\n"
+        "<!-- AGENTTEAMS:END invariant_core -->\n\n"
+        "## Later Section\n\nbounds the span above.\n"
+    )
+
+    original = deployed.read_text(encoding="utf-8")
+    span = r._unfenced_section_span(original, "## Invariant Core")
+    assert not isinstance(span, str), f"fixture must produce a BOUNDED span, got {span!r}"
+    assert "AGENTTEAMS:BEGIN" in original[span[0]:span[1]], (
+        "fixture is wrong: the span must enclose a fence"
+    )
+
+    new_text, resolved, skipped = r._resolve_file(
+        deployed, fresh, agents_dir=tmp_path, trust_provenance=True
+    )
+    surviving = new_text if new_text is not None else original
+    assert "AGENTTEAMS:BEGIN security_rules_invariant" in surviving, (
+        "the removal deleted a fenced region — that is deletion of managed content, not "
+        f"deduplication. resolved={resolved} skipped={skipped}"
+    )

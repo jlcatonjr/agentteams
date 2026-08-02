@@ -128,6 +128,9 @@ def _file_is_pristine(agents_dir: Path, deployed: Path, ref: str = "HEAD") -> bo
 _PROJECT_NOTES = "## Project-Specific Notes"
 
 
+_FENCE_BEGIN_COUNT_RE = re.compile(r"AGENTTEAMS:BEGIN\s+([A-Za-z0-9_-]+)")
+
+
 def _trailing_span(text: str, heading: str) -> tuple[int, int] | str:
     """Span of a trailing section, bounded at end-of-file. Only safe under the caller's guards."""
     matches = [m.start() for m in re.finditer(rf"^{re.escape(heading)}\s*$", text, re.MULTILINE)]
@@ -222,6 +225,21 @@ def _resolve_file(
             continue
 
         start, end = span
+        # A span containing a live fence is managed content by definition, and removing it
+        # is deletion rather than deduplication. `incoming` comes from the FRESH render, so
+        # a template fence proves nothing about what the deployed file carries: the live
+        # loss removed `## Invariant Core` from security.md on the strength of the
+        # template's `invariant_core` fence, which that file has never received. The span
+        # ran 363 lines -> 32 and took the file's own two fenced regions with it, leaving
+        # zero. Merge the fence in first; only then is the unfenced copy a duplicate.
+        enclosed = _FENCE_BEGIN_COUNT_RE.findall(working[start:end])
+        if enclosed:
+            skipped.append(
+                f"{deployed.name}: {heading!r} — span encloses {len(enclosed)} fenced region(s) "
+                f"({', '.join(enclosed[:3])}); removing it would delete managed content. "
+                f"Run --update --merge first, then re-run."
+            )
+            continue
         if _norm(working[start:end]) != _norm(_fence_body(incoming)):
             pristine = (
                 trust_provenance
