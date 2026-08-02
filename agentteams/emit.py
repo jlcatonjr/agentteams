@@ -584,6 +584,10 @@ def emit_all(
             # auto-resolved — see fences._detect_duplicate_sections.
             for notice in merge_result.duplicate_section_notices:
                 result.notices.append(f"{rel_path}: {notice}")
+            # A rule that vanished from an unfenced region is never restored by a merge, and
+            # the drift notice above is silent on edited files — which is every tampered file.
+            for notice in merge_result.deleted_constraint_notices:
+                result.notices.append(f"{rel_path}: {notice}")
             # Plan 3: surface shrink Notices from this merge (real-run path).
             # T2.D5: shrink_policy controls whether to surface and whether
             # to write the smaller content.

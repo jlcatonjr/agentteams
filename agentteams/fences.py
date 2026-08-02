@@ -75,6 +75,9 @@ class MergeResult:
     # `_detect_duplicate_sections` for why the whole-body case can be resolved automatically and
     # this one cannot.
     duplicate_section_notices: list[str] = field(default_factory=list)
+    # Template rules absent from the deployed file. Fires regardless of modification state —
+    # see `_detect_deleted_constraints` for why `_detect_unfenced_drift` cannot cover this.
+    deleted_constraint_notices: list[str] = field(default_factory=list)
 
     @property
     def has_errors(self) -> bool:
@@ -304,6 +307,127 @@ def _is_machine_managed_merge_overwrite_path(rel_path: str, fresh_content: str) 
     if rel_path.endswith(".md"):
         return False
     return _FENCE_BEGIN_RE.search(fresh_content) is None
+
+
+#: Language that carries an obligation, a prohibition, or a capability limit — i.e. a *rule* as
+#: opposed to prose about one. Deliberately narrow: it should fire on "HALT is final" and "you are
+#: read-only", not on ordinary descriptive text.
+#:
+#: Homed in production rather than in a test so that :func:`_detect_deleted_constraints` and
+#: ``tests/test_fence_coverage_policy.py`` cannot disagree about what a rule is. A notice claiming
+#: "a rule was deleted" and a ratchet counting "rules outside a fence" have to mean the same thing
+#: by the same definition, or neither number means anything.
+CONSTRAINT_BEARING_RE = re.compile(
+    r"⛔|\bread-only\b|PRIORITY LEVEL|\bHALT\b|MUST NOT|\bnever\b", re.IGNORECASE
+)
+
+#: Shortest constraint-bearing line worth tracking. Below this a "line" is a fragment — a table
+#: cell or a heading — and its absence says nothing about whether a rule survived.
+_CONSTRAINT_MIN_CHARS = 30
+
+
+def _detect_deleted_constraints(new_rendered: str, existing_on_disk: str) -> list[str]:
+    """Report template rules that have vanished from the deployed file.
+
+    The complement of :func:`_detect_unfenced_drift`, and the reason that one is not enough. Drift
+    is reported only for files nobody has edited since generation — correct for its purpose, since
+    nagging about prose a tool deliberately preserves is how a notice gets muted, but it means the
+    mechanism that would surface a deleted constitutional rule is switched off in exactly the case
+    where one was deleted. A tampered file is modified by definition.
+
+    This fires regardless of modification state, and stays quiet by being specific: it reports only
+    when a **constraint-bearing** line (:data:`CONSTRAINT_BEARING_RE`) present in the template's
+    *unfenced* prose is absent from the deployed file.
+
+    Measured behaviour on the three edit shapes that actually occur:
+
+    - Ordinary prose reworded — **silent**. The line carries no constraint language, so it is
+      never tracked. This is the property that keeps the notice worth reading.
+    - A project *appends* its own rule — **silent**. Extension is the normal, sanctioned case and
+      the check only looks for template text going missing, never for text arriving.
+    - A template rule *reworded* in place — **fires**, and this is a known imprecision rather than
+      a defect: the rule as the template writes it is genuinely no longer in the file, and nothing
+      short of semantic comparison can tell "rephrased the same obligation" from "weakened it".
+      Firing is the safe direction, and the notice quotes the missing text so the reader resolves
+      it in seconds. Rewording a shipped constitutional rule is rare; deleting one is the case
+      this exists for.
+
+    Only unfenced template text is checked. Fenced content is restored by the merge anyway, so its
+    absence is self-healing and not worth a notice.
+
+    Args:
+        new_rendered: Freshly rendered file content.
+        existing_on_disk: Current on-disk content.
+
+    Returns:
+        One notice per missing rule, capped so a wholesale rewrite reports a count rather than a
+        wall of text. Empty when nothing is missing.
+    """
+    template_prose = _unfenced_regions(new_rendered)
+    if not template_prose.strip():
+        return []
+    haystack = " ".join(existing_on_disk.split())
+
+    missing: list[str] = []
+    for raw_line in unfenced_lines(new_rendered):
+        line = " ".join(raw_line.split())
+        if len(line) < _CONSTRAINT_MIN_CHARS or not CONSTRAINT_BEARING_RE.search(line):
+            continue
+        if line not in haystack:
+            missing.append(line)
+
+    if not missing:
+        return []
+    shown = missing[:3]
+    notices = [
+        f"deleted rule: template text {m[:110]!r} is not present in this file — an unfenced rule "
+        f"is preserved-forever, so a merge will not restore it"
+        for m in shown
+    ]
+    if len(missing) > len(shown):
+        notices.append(
+            f"deleted rule: {len(missing) - len(shown)} further constraint-bearing template "
+            f"line(s) are also absent"
+        )
+    return notices
+
+
+def unfenced_lines(content: str):
+    """Yield each line of *content* that lies outside every fence and outside the front matter.
+
+    Single-sourced deliberately. Two test modules had their own copy of this walk, and both
+    carried the same latent bug: the opening-delimiter branch was guarded only by ``lineno <= 3``,
+    so a *three-line* front matter (``---`` / one key / ``---``) re-entered front-matter mode on
+    its closing delimiter instead of leaving it, and the walk then yielded nothing at all. Real
+    agent templates have front matter dozens of lines long, so the closing ``---`` sits well past
+    line 3 and the bug never showed — it surfaced the moment production code reused the walk on a
+    minimal fixture. The guard now requires ``not in_front_matter``, and the tests import this
+    rather than reimplementing it.
+
+    Args:
+        content: A full file body.
+
+    Yields:
+        Each line outside both the YAML front matter and every AGENTTEAMS fence. Marker lines and
+        front-matter delimiters are not yielded.
+    """
+    in_fence = False
+    in_front_matter = False
+    for lineno, line in enumerate(content.splitlines(), 1):
+        if line.strip() == "---" and lineno <= 3 and not in_front_matter:
+            in_front_matter = True
+            continue
+        if in_front_matter and line.strip() == "---":
+            in_front_matter = False
+            continue
+        if _FENCE_BEGIN_RE.search(line):
+            in_fence = True
+            continue
+        if _FENCE_END_RE.search(line):
+            in_fence = False
+            continue
+        if not in_fence and not in_front_matter:
+            yield line
 
 
 #: Region-level drift, reported only for files the operator has not touched. See
@@ -606,6 +730,9 @@ def _merge_fenced_content(
     result.front_matter_drift = _detect_front_matter_drift(new_rendered, existing_on_disk)
     result.front_matter_drift += _detect_unfenced_drift(
         new_rendered, existing_on_disk, file_is_unmodified=file_is_unmodified
+    )
+    result.deleted_constraint_notices = _detect_deleted_constraints(
+        new_rendered, existing_on_disk
     )
 
     # Parse existing file

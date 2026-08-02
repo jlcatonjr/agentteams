@@ -22,7 +22,9 @@ from __future__ import annotations
 import re
 from pathlib import Path
 
-from agentteams.fences import _FENCE_BEGIN_RE as _BEGIN, _FENCE_END_RE as _END
+from agentteams.fences import CONSTRAINT_BEARING_RE as _CONSTRAINT
+from agentteams.fences import _FENCE_BEGIN_RE as _BEGIN
+from agentteams.fences import unfenced_lines
 
 TEMPLATES = Path(__file__).resolve().parents[1] / "agentteams/templates"
 
@@ -30,11 +32,6 @@ TEMPLATES = Path(__file__).resolve().parents[1] / "agentteams/templates"
 # fence syntax in prose or a code span (instruction-authority.reference.template.md does) would
 # otherwise be misread as fenced, and then wrongly policed for unfenced constraints.
 
-#: Language that carries an obligation, a prohibition, or a capability limit. Deliberately narrow:
-#: it should fire on "HALT is final" and "you are read-only", not on ordinary descriptive prose.
-_CONSTRAINT = re.compile(
-    r"⛔|\bread-only\b|PRIORITY LEVEL|\bHALT\b|MUST NOT|\bnever\b", re.IGNORECASE
-)
 
 #: Templates that already have a fence and still carry constraint-bearing lines outside one.
 #: Measured 2026-08-01 after security.template.md was brought to zero (7 -> 0): **19 lines across
@@ -64,26 +61,14 @@ FENCE_COVERAGE_BASELINE: dict[str, int] = {
 
 
 def _unfenced_constraint_lines(text: str) -> list[tuple[int, str]]:
-    """Constraint-bearing lines outside both the front matter and every fence."""
+    """Constraint-bearing lines outside both the front matter and every fence.
+
+    Walk and constraint definition both come from `fences`: a ratchet counting "rules outside a
+    fence" and a merge notice claiming "a rule was deleted" must mean the same thing by the same
+    definition, or neither number means anything. This module previously had its own copy of both.
+    """
     out: list[tuple[int, str]] = []
-    in_fence = False
-    in_front_matter = False
-    for lineno, line in enumerate(text.splitlines(), 1):
-        if line.strip() == "---" and lineno <= 3:
-            in_front_matter = True
-            continue
-        if in_front_matter and line.strip() == "---":
-            in_front_matter = False
-            continue
-        if _BEGIN.search(line):
-            in_fence = True
-            continue
-        if _END.search(line):
-            in_fence = False
-            continue
-        if in_fence or in_front_matter:
-            continue
-        # Table rows are excluded: a manifest or trigger table restates rule names in passing.
+    for lineno, line in enumerate(unfenced_lines(text), 1):
         if line.strip().startswith("|"):
             continue
         if _CONSTRAINT.search(line):
