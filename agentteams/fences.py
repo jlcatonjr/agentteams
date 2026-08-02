@@ -321,6 +321,19 @@ CONSTRAINT_BEARING_RE = re.compile(
     r"⛔|\bread-only\b|PRIORITY LEVEL|\bHALT\b|MUST NOT|\bnever\b", re.IGNORECASE
 )
 
+#: A numbered, bolded rule — the shape every Constitutional Rule uses.
+#:
+#: Tracked by SHAPE because the keyword set missed 15 of the orchestrator's 17 rules,
+#: including "1. **`@security` before destructive operations**" — the rule the entire
+#: enforced stack rests on. It says "require", not "never", so it matched nothing.
+#: Those rules are unfenced by design (projects extend the list), so deleting one was
+#: neither restored NOR reported.
+#:
+#: Broadening the vocabulary instead would trade a false negative for false positives on
+#: ordinary prose, and a notice that fires on rewording is one people learn to skip. A
+#: numbered bolded rule is structurally identifiable and its disappearance is unambiguous.
+NUMBERED_RULE_RE = re.compile(r"^\d+\.\s+\*\*")
+
 #: Shortest constraint-bearing line worth tracking. Below this a "line" is a fragment — a table
 #: cell or a heading — and its absence says nothing about whether a rule survived.
 _CONSTRAINT_MIN_CHARS = 30
@@ -371,7 +384,9 @@ def _detect_deleted_constraints(new_rendered: str, existing_on_disk: str) -> lis
     missing: list[str] = []
     for raw_line in unfenced_lines(new_rendered):
         line = " ".join(raw_line.split())
-        if len(line) < _CONSTRAINT_MIN_CHARS or not CONSTRAINT_BEARING_RE.search(line):
+        if len(line) < _CONSTRAINT_MIN_CHARS:
+            continue
+        if not (CONSTRAINT_BEARING_RE.search(line) or NUMBERED_RULE_RE.match(line)):
             continue
         if line not in haystack:
             missing.append(line)
