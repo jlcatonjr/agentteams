@@ -65,7 +65,7 @@ def _run(tmp_path: Path, deployed_text: str, fresh: str = _FRESH):
 
 def test_an_identical_pre_fencing_copy_is_removed(tmp_path):
     new_text, resolved, skipped = _run(tmp_path, _deployed("The contract. Do not modify."))
-    assert resolved == ["## Invariant Core"], (resolved, skipped)
+    assert resolved == ["## Invariant Core  [equality]"], (resolved, skipped)
     assert new_text is not None
     assert new_text.count("## Invariant Core") == 0, "the unfenced copy is gone"
     assert "operator content that must survive" in new_text
@@ -73,7 +73,7 @@ def test_an_identical_pre_fencing_copy_is_removed(tmp_path):
 
 def test_whitespace_differences_do_not_block_a_resolution(tmp_path):
     _, resolved, _ = _run(tmp_path, _deployed("The   contract.\n   Do not modify."))
-    assert resolved == ["## Invariant Core"]
+    assert resolved == ["## Invariant Core  [equality]"]
 
 
 def test_a_differing_copy_is_refused_and_reported(tmp_path):
@@ -120,3 +120,121 @@ def test_normalisation_is_whitespace_only(norm_in, norm_out):
     """No case folding, no punctuation stripping — a real difference cannot be normalised away."""
     assert resolver._norm(norm_in) == norm_out
     assert resolver._norm("Do not modify.") != resolver._norm("do not modify")
+
+
+# --- the provenance authorisation ------------------------------------------
+# Wider than the equality proof: it removes a copy that does NOT match the template, on the
+# grounds that a file still hashing to its build-log entry contains no project edit anywhere, so
+# an unfenced copy of a now-fenced section is necessarily the stale pre-fencing version.
+# Measured before building it: of the 20 collisions the equality proof refused, 11 were in
+# unmodified files, 9 in files this session's own deletion-only run had touched, and ZERO were
+# genuine project edits.
+
+def _with_build_log(tmp_path: Path, text: str, *, record_hash: bool) -> Path:
+    import hashlib
+    import json
+
+    agents = tmp_path / "agents"
+    (agents / "references").mkdir(parents=True)
+    f = agents / "a.agent.md"
+    f.write_text(text, encoding="utf-8")
+    digest = hashlib.sha256(text.encode("utf-8")).hexdigest() if record_hash else "0" * 64
+    (agents / "references" / "build-log.json").write_text(
+        json.dumps({"file_hashes": {"a.agent.md": digest}}), encoding="utf-8"
+    )
+    return agents
+
+
+def test_a_differing_copy_resolves_when_the_file_is_pristine(tmp_path):
+    """The whole point: refusing here left 20 collisions that carried no project edit at all."""
+    text = _deployed("A stale earlier version of the contract.")
+    agents = _with_build_log(tmp_path, text, record_hash=True)
+    new_text, resolved, skipped = resolver._resolve_file(
+        agents / "a.agent.md", _FRESH, agents_dir=agents, trust_provenance=True
+    )
+    assert resolved == ["## Invariant Core  [provenance]"], (resolved, skipped)
+    assert new_text is not None and "operator content that must survive" in new_text
+
+
+def test_an_edited_file_is_never_resolved_on_provenance(tmp_path):
+    """A hash that does not match declines. This is the guard the whole authorisation rests on."""
+    text = _deployed("A stale earlier version of the contract.")
+    agents = _with_build_log(tmp_path, text, record_hash=False)
+    new_text, resolved, skipped = resolver._resolve_file(
+        agents / "a.agent.md", _FRESH, agents_dir=agents, trust_provenance=True
+    )
+    assert resolved == []
+    assert new_text is None
+    assert any("differs from the template" in s for s in skipped), skipped
+
+
+def test_provenance_is_off_unless_asked_for(tmp_path):
+    """A wider authorisation must never be reachable by default."""
+    text = _deployed("A stale earlier version of the contract.")
+    agents = _with_build_log(tmp_path, text, record_hash=True)
+    _, resolved, skipped = resolver._resolve_file(
+        agents / "a.agent.md", _FRESH, agents_dir=agents, trust_provenance=False
+    )
+    assert resolved == []
+    assert any("differs from the template" in s for s in skipped)
+
+
+def test_a_trailing_section_is_still_refused_when_a_user_region_follows(tmp_path):
+    """The safety-critical case. Clean provenance does NOT license bounding at end-of-file here.
+
+    A trailing section can only swallow a user region if one exists below it — so the allowance
+    requires BOTH no `## Project-Specific Notes` and clean provenance. This fixture has the region,
+    so it must refuse however pristine the file is.
+    """
+    with_notes = (
+        "---\nname: A\ndescription: x\n---\n\n"
+        + _KEPT_FENCE +
+        "## Invariant Core\n\nA stale earlier version.\n"
+        "\n## Project-Specific Notes\n\n- operator content that must survive.\n"
+    )
+    agents = _with_build_log(tmp_path, with_notes, record_hash=True)
+    new_text, resolved, skipped = resolver._resolve_file(
+        agents / "a.agent.md", _FRESH, agents_dir=agents, trust_provenance=True
+    )
+    assert new_text is None or "operator content that must survive" in new_text
+    assert not any("[provenance]" in r and "Invariant Core" in r for r in resolved) or (
+        "operator content that must survive" in (new_text or "")
+    ), "the user region below a trailing section must never be swallowed"
+
+
+def test_a_trailing_section_resolves_when_no_user_region_and_pristine(tmp_path):
+    """Reference files never receive the notes region, which is what makes EOF-bounding safe."""
+    trailing_only = (
+        "---\nname: A\ndescription: x\n---\n\n"
+        + _KEPT_FENCE +
+        "## Invariant Core\n\nA stale earlier version.\n"
+    )
+    agents = _with_build_log(tmp_path, trailing_only, record_hash=True)
+    _, resolved, skipped = resolver._resolve_file(
+        agents / "a.agent.md", _FRESH, agents_dir=agents, trust_provenance=True
+    )
+    assert resolved == ["## Invariant Core  [provenance]"], (resolved, skipped)
+
+
+def test_a_trailing_section_is_refused_without_provenance(tmp_path):
+    """The allowance needs BOTH conditions; a dirty file with no notes region still refuses."""
+    trailing_only = (
+        "---\nname: A\ndescription: x\n---\n\n"
+        + _KEPT_FENCE +
+        "## Invariant Core\n\nA stale earlier version.\n"
+    )
+    agents = _with_build_log(tmp_path, trailing_only, record_hash=False)
+    _, resolved, skipped = resolver._resolve_file(
+        agents / "a.agent.md", _FRESH, agents_dir=agents, trust_provenance=True
+    )
+    assert resolved == []
+    assert any("trailing" in s for s in skipped), skipped
+
+
+def test_a_missing_build_log_declines(tmp_path):
+    """No baseline means no provenance claim; it must not default to trusting."""
+    agents = tmp_path / "agents"
+    agents.mkdir()
+    f = agents / "a.agent.md"
+    f.write_text(_deployed("A stale earlier version."), encoding="utf-8")
+    assert resolver._file_is_pristine(agents, f) is False

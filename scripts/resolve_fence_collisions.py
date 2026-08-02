@@ -45,6 +45,10 @@ from pathlib import Path
 REPO_ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(REPO_ROOT))
 
+import hashlib  # noqa: E402
+import json  # noqa: E402
+import subprocess  # noqa: E402
+
 from agentteams.backup import backup_output_dir  # noqa: E402
 from agentteams.fences import (  # noqa: E402
     _extract_fenced_regions,
@@ -76,12 +80,72 @@ def _run_pipeline(brief: Path, out_dir: Path, framework: str) -> None:
     _rp(brief, out_dir, framework=framework)
 
 
-def _unfenced_section_span(text: str, heading: str) -> tuple[int, int] | None:
+def _file_is_pristine(agents_dir: Path, deployed: Path, ref: str = "HEAD") -> bool:
+    """True when *deployed* is byte-identical to what agentteams last emitted.
+
+    The second authorisation, and a stronger one than the equality proof. If a file still hashes
+    to its build-log entry, every byte in it was written by this tool — so an unfenced copy of a
+    section the template now fences is *necessarily* the stale pre-fencing version, whatever it
+    says. No project edit can be hiding in it, because the file contains no project edit at all.
+    Same reasoning `_merge_front_matter` uses to decide when a template value may be applied,
+    applied to sections instead of keys.
+
+    Falls back to the file's state at *ref* because a prior equality-proof run can itself modify
+    files (deletions only) and thereby invalidate their working-tree hash. ``HEAD`` is the default
+    and is wrong once that run has been committed — hence the ref is an operator-supplied argument
+    rather than a hardcoded ``HEAD~1``, which would be brittle against any other history shape.
+    The comparison is always against the **build log**, never against the ref's content, so a
+    project edit that was merely committed still fails.
+
+    A stale build log makes this conservative, never permissive: a hash that does not match
+    declines the resolution.
+    """
+    log = agents_dir / "references" / "build-log.json"
+    if not log.is_file():
+        return False
+    try:
+        hashes = json.loads(log.read_text(encoding="utf-8")).get("file_hashes", {})
+    except (OSError, json.JSONDecodeError):
+        return False
+    rel = deployed.relative_to(agents_dir).as_posix()
+    recorded = hashes.get(rel)
+    if not recorded:
+        return False
+
+    def _matches(blob: str) -> bool:
+        digest = hashlib.sha256(blob.encode("utf-8")).hexdigest()
+        return digest.startswith(recorded) or recorded.startswith(digest[: len(recorded)])
+
+    if _matches(deployed.read_text(encoding="utf-8")):
+        return True
+    head = subprocess.run(
+        ["git", "show", f"{ref}:{deployed.as_posix()}"],
+        capture_output=True, text=True, cwd=REPO_ROOT,
+    )
+    return head.returncode == 0 and _matches(head.stdout)
+
+
+_PROJECT_NOTES = "## Project-Specific Notes"
+
+
+def _trailing_span(text: str, heading: str) -> tuple[int, int] | str:
+    """Span of a trailing section, bounded at end-of-file. Only safe under the caller's guards."""
+    matches = [m.start() for m in re.finditer(rf"^{re.escape(heading)}\s*$", text, re.MULTILINE)]
+    if len(matches) != 1:
+        return "duplicated"
+    return matches[0], len(text)
+
+
+def _unfenced_section_span(text: str, heading: str) -> tuple[int, int] | str:
     """Character span of the single unfenced occurrence of *heading* and its body.
 
-    Returns ``None`` when the section cannot be bounded safely: the heading is absent, appears
-    more than once outside a fence, or has no following heading of the same-or-higher level
-    (in which case it runs to end-of-file and would take any trailing user region with it).
+    Returns ``(start, end)`` on success, or a reason string when the section cannot be bounded:
+    ``"absent"``, ``"duplicated"`` (more than one unfenced occurrence, so the boundaries are
+    ambiguous), or ``"trailing"`` (no following heading of the same-or-higher level, so the
+    section runs to end-of-file and bounding it there would take any trailing region with it).
+
+    The three were one refusal until the closeout needed to know which: they have different
+    remedies and conflating them made the report say "cannot bound" 6 times without saying why.
     """
     unfenced = set(unfenced_lines(text))
     level = len(heading) - len(heading.lstrip("#"))
@@ -92,7 +156,7 @@ def _unfenced_section_span(text: str, heading: str) -> tuple[int, int] | None:
         if any(line.strip() == heading.strip() for line in unfenced)
     ]
     if len(starts) != 1:
-        return None
+        return "duplicated" if starts else "absent"
     start = starts[0]
 
     rest = text[start + len(heading):]
@@ -102,12 +166,24 @@ def _unfenced_section_span(text: str, heading: str) -> tuple[int, int] | None:
             following = m.start()
             break
     if following is None:
-        return None                       # trailing section — refuse to bound at EOF
+        return "trailing"                 # runs to EOF — refuse to bound there
     return start, start + len(heading) + following
 
 
-def _resolve_file(deployed: Path, fresh: str) -> tuple[str | None, list[str], list[str]]:
-    """Return (new_text_or_None, resolved_headings, skipped_reports) for one file."""
+def _resolve_file(
+    deployed: Path,
+    fresh: str,
+    *,
+    agents_dir: Path | None = None,
+    trust_provenance: bool = False,
+    args_ref: str = "HEAD",
+) -> tuple[str | None, list[str], list[str]]:
+    """Return (new_text_or_None, resolved_headings, skipped_reports) for one file.
+
+    ``trust_provenance`` enables the second authorisation described in
+    :func:`_file_is_pristine`. Off by default and deliberately so: it removes content that does
+    *not* match the template, which the equality proof would refuse.
+    """
     text = deployed.read_text(encoding="utf-8")
     result = _merge_fenced_content(fresh, text)
     if not result.duplicate_section_notices:
@@ -134,23 +210,36 @@ def _resolve_file(deployed: Path, fresh: str) -> tuple[str | None, list[str], li
             continue
 
         span = _unfenced_section_span(working, heading)
-        if span is None:
-            skipped.append(
-                f"{deployed.name}: {heading!r} — cannot bound the unfenced copy safely "
-                f"(absent, duplicated, or trailing at end-of-file)"
-            )
+        if span == "trailing" and trust_provenance and agents_dir is not None:
+            # A trailing section can only swallow a user region if one exists below it. Reference
+            # files never receive `## Project-Specific Notes` (emit._is_agent_doc excludes them),
+            # and a pristine file contains no operator content anywhere. Requiring BOTH is what
+            # makes bounding at end-of-file safe here; either alone would not be.
+            if _PROJECT_NOTES not in working and _file_is_pristine(agents_dir, deployed, args_ref):
+                span = _trailing_span(working, heading)
+        if isinstance(span, str):
+            skipped.append(f"{deployed.name}: {heading!r} — cannot bound: {span}")
             continue
 
         start, end = span
         if _norm(working[start:end]) != _norm(_fence_body(incoming)):
-            skipped.append(
-                f"{deployed.name}: {heading!r} — deployed copy differs from the template's; "
-                f"review by hand"
+            pristine = (
+                trust_provenance
+                and agents_dir is not None
+                and _file_is_pristine(agents_dir, deployed, args_ref)
             )
+            if not pristine:
+                skipped.append(
+                    f"{deployed.name}: {heading!r} — deployed copy differs from the template's; "
+                    f"review by hand"
+                )
+                continue
+            working = working[:start] + working[end:]
+            resolved.append(f"{heading}  [provenance]")
             continue
 
         working = working[:start] + working[end:]
-        resolved.append(heading)
+        resolved.append(f"{heading}  [equality]")
 
     return (working if resolved else None), resolved, skipped
 
@@ -162,6 +251,13 @@ def main(argv: list[str] | None = None) -> int:
     ap.add_argument("--framework", default="claude",
                     choices=["claude", "copilot-vscode", "copilot-cli"],
                     help="framework the deployed team was generated with (default: claude)")
+    ap.add_argument("--trust-provenance", action="store_true",
+                    help="also resolve a differing copy when the file is byte-identical to what "
+                         "agentteams last emitted (build-log hash) — a wider authorisation than "
+                         "the equality proof; see _file_is_pristine")
+    ap.add_argument("--provenance-ref", default="HEAD",
+                    help="git ref holding the pre-change state, used when a prior run of this "
+                         "script has already modified the working tree (default: HEAD)")
     ap.add_argument("--apply", action="store_true", help="write changes (default: report only)")
     args = ap.parse_args(argv)
 
@@ -186,7 +282,9 @@ def main(argv: list[str] | None = None) -> int:
                 unmatched.append(str(rel))
                 continue
             new_text, resolved, skipped = _resolve_file(
-                deployed, match.read_text(encoding="utf-8")
+                deployed, match.read_text(encoding="utf-8"),
+                agents_dir=args.output, trust_provenance=args.trust_provenance,
+                args_ref=args.provenance_ref,
             )
             all_skipped.extend(skipped)
             if new_text is not None:
