@@ -30,6 +30,7 @@ from agentteams.cli.artifacts import (
 from agentteams.cli.exit_codes import _finalize_exit_code
 from agentteams.cli.json_mode import json_stdout, run_with_json_stdout
 from agentteams.cli.output_target import refuse_foreign_target, resolve_output_dir
+from agentteams.cli.post_emit_checks import _post_emit_security_scan
 from agentteams.cli.render_pipeline import (
     _apply_placeholder_policy,
     _build_final_rendered,
@@ -734,7 +735,9 @@ def _run_generate_inner(args: argparse.Namespace, strict_manual_placeholders: bo
                     "  ✓  Healed build-log baseline (no material drift; "
                     "fingerprint refreshed)."
                 )
-        return _finalize_exit_code(result, args)
+        _scan_blocked = _post_emit_security_scan(args, output_dir, manifest, result)
+        _rc = _finalize_exit_code(result, args)
+        return _rc or (1 if _scan_blocked else 0)
 
     # -----------------------------------------------------------------------
     # Step 5d: Defaults audit + auto-enrichment (--enrich)
@@ -955,4 +958,6 @@ def _run_generate_inner(args: argparse.Namespace, strict_manual_placeholders: bo
         _git_hooks.maybe_install_git_hooks(args, project_root)
         _git_hooks.maybe_refresh_architecture_map(args, project_root)
 
-    return _finalize_exit_code(result, args)
+    _scan_blocked = _post_emit_security_scan(args, output_dir, manifest, result)
+    _rc = _finalize_exit_code(result, args)
+    return _rc or (1 if _scan_blocked else 0)

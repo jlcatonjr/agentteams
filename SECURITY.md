@@ -49,8 +49,28 @@ threats:
   moving that tag without user consent is a vulnerability.
 
 Out of scope:
-- Vulnerabilities that require the attacker to already have write access
-  to the target project directory.
+- Vulnerabilities that require an attacker with write access to the target
+  project directory **acting outside an agentteams operation** — i.e. someone
+  who can already edit the generated files directly, by hand, without the
+  tool's involvement.
+
+  This exclusion is deliberately narrower than "write access to the target is
+  out of scope". Surviving re-generation is a **claimed property** of `FENCED`
+  regions: a fenced section is module-owned and restored from the template on
+  every `--update --merge`, precisely so that on-disk tampering does not
+  persist. An exclusion broad enough to cover any attacker with write access
+  would make that property pointless to claim. If a fenced region does *not*
+  survive a merge, that is a vulnerability.
+
+  The property is claimed for `FENCED` regions and **only** for them.
+  Everything outside a fence — including YAML front matter, which cannot be
+  fenced because it must be the first bytes of the file — is preserved
+  unconditionally by design, and its loss or alteration is not a merge defect.
+
+  The realistic in-scope adversary is not a person with a text editor. It is
+  an agent operating inside the target repository with legitimate write access
+  and acting on injected instructions (OWASP LLM06, "Excessive Agency" —
+  enumerated as a mandatory review trigger in the generated security agent).
 - Vulnerabilities in third-party tools agentteams delegates to (git, the
   user's editor, downstream LLM CLIs).
 - Bugs in generated agent files themselves — agentteams is a generator,

@@ -369,9 +369,11 @@ def test_snapshot_comparison(tmp_path, example):
 
     # Exclude files that contain live network data (threat intel, CVE feeds, framework
     # research fetches) — non-deterministic
+    # `security.agent.md` is deliberately NOT here: only its live fence BODIES vary per run, and
+    # fences.redact_live_data blanks those, so the highest-privilege agent's stable content — the
+    # trigger table, S-1..S-9, and the fenced authority claims — is now golden-covered.
     _live_data_files = {
         "security-vulnerability-watch.reference.md",
-        "security.agent.md",
         "framework-watch.reference.md",
     }
     expected_files = sorted(
@@ -392,8 +394,9 @@ def test_snapshot_comparison(tmp_path, example):
         if not actual_file.exists():
             mismatches.append(f"MISSING: {rel}")
             continue
-        expected_text = _ts_pat.sub("", expected_file.read_text(encoding="utf-8"))
-        actual_text = _ts_pat.sub("", actual_file.read_text(encoding="utf-8"))
+        from agentteams.fences import redact_live_data
+        expected_text = _ts_pat.sub("", redact_live_data(expected_file.read_text(encoding="utf-8")))
+        actual_text = _ts_pat.sub("", redact_live_data(actual_file.read_text(encoding="utf-8")))
         expected_text = " ".join(expected_text.split())
         actual_text = " ".join(actual_text.split())
         if expected_text != actual_text:

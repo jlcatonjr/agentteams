@@ -10,9 +10,23 @@ from __future__ import annotations
 import re
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Any
 
 from agentteams.atomicio import _atomic_write_text
+
+# Front-matter handling lives in front_matter_merge.py (CH-07 carve): front matter is the one
+# part of a generated file that cannot be fenced, so it needs a different mechanism entirely.
+# Re-exported so every existing `from agentteams.fences import _merge_front_matter` still works.
+from agentteams.front_matter_merge import (  # noqa: F401
+    _CAPABILITY_FRONT_MATTER_KEYS,
+    _DRIFT_EXEMPT_FRONT_MATTER_KEYS,
+    _FM_KEY_RE,
+    _YAML_FM_RE,
+    _detect_front_matter_drift,
+    _front_matter_keys,
+    _merge_front_matter,
+    _parse_capability_list,
+    _render_front_matter,
+)
 
 _LIST_ITEM_RE = re.compile(r"^\s*(?:[-*+]\s|\d+\.\s)", re.MULTILINE)
 _PATH_RE = re.compile(r"[A-Za-z0-9_./-]+\.(?:py|md|json|yaml|yml|toml|csv|tsv|sql|sh)\b")
@@ -84,7 +98,6 @@ _FENCE_END_RE = re.compile(
 # W2: detect AGENTTEAMS-BRIDGE fences (written by --bridge-refresh) so the
 # --merge path can emit a targeted notice instead of the generic "legacy file" warning.
 _BRIDGE_FENCE_BEGIN_RE = re.compile(r"<!--\s*AGENTTEAMS-BRIDGE:BEGIN\s+")
-_YAML_FM_RE = re.compile(r"^(---\n.+?\n---\n)", re.DOTALL)
 
 _MACHINE_MANAGED_MERGE_OVERWRITE_PATHS: frozenset[str] = frozenset([
     "references/security-vulnerability-watch.json",
@@ -128,6 +141,45 @@ _LIVE_DATA_FENCES: frozenset[str] = frozenset([
     "threat_intelligence",
     "threat_data",
 ])
+
+
+#: Timestamp line the security payload stamps into every rendered file carrying live data.
+_GENERATED_AT_RE = re.compile(r"Generated at: `[^`]+`")
+
+
+def redact_live_data(text: str) -> str:
+    """Blank the parts of a rendered file that legitimately differ on every run.
+
+    Snapshot comparison excluded ``security.agent.md`` *whole-file* because one of its fences
+    carries a live vulnerability feed and a generation timestamp. The consequence was that the
+    ~90% of that file which is stable — the trigger table, Rules S-1..S-9, the escalation
+    criteria, and the fenced authority claims — shipped with no golden coverage at all, on the
+    highest-privilege agent in the team.
+
+    This narrows the exclusion from the file to the volatile regions inside it: the body of every
+    fence in :data:`_LIVE_DATA_FENCES`, plus the ``Generated at:`` stamp. Everything else stays
+    comparable.
+
+    Verified in both directions before adoption: replacing the whole ``threat_intelligence`` body
+    and the timestamp produces identical redacted output, while changing "HALT is final" outside
+    those fences does not — which is the drift a golden exists to catch.
+
+    Args:
+        text: A rendered file body.
+
+    Returns:
+        The same text with live-feed fence bodies and the generation stamp replaced by markers.
+        Whitespace is left alone; callers that normalise it should keep doing so.
+    """
+    for sid in _LIVE_DATA_FENCES:
+        text = re.sub(
+            rf"(<!--\s*AGENTTEAMS:BEGIN\s+{re.escape(sid)}\s+v=\d+\s*-->).*?"
+            rf"(<!--\s*AGENTTEAMS:END\s+{re.escape(sid)}\s*-->)",
+            r"\1<<LIVE-DATA-REDACTED>>\2",
+            text,
+            flags=re.DOTALL,
+        )
+    return _GENERATED_AT_RE.sub("Generated at: `<<REDACTED>>`", text)
 
 
 def _fence_body(block: str) -> str:
@@ -254,82 +306,6 @@ def _is_machine_managed_merge_overwrite_path(rel_path: str, fresh_content: str) 
     return _FENCE_BEGIN_RE.search(fresh_content) is None
 
 
-#: Front-matter keys excluded from drift reporting because they are project-interpolated by
-#: construction: every generated file's `name`/`description` embeds {PROJECT_NAME}, so they
-#: differ between template and render in EVERY file. Reporting them would make the notice fire
-#: universally, and a notice that fires on everything gets muted — which is the same silence
-#: this detection exists to end.
-_DRIFT_EXEMPT_FRONT_MATTER_KEYS: frozenset[str] = frozenset({"name", "description"})
-
-#: Matches a top-level `key: value` line inside a YAML front-matter block. Deliberately not a
-#: YAML parse: front matter here is flat scalars plus inline lists, PyYAML is a test-only
-#: dependency, and this module is on the stdlib-only base install path.
-_FM_KEY_RE = re.compile(r"^([A-Za-z][A-Za-z0-9_-]*):(.*)$", re.MULTILINE)
-
-
-def _front_matter_keys(content: str) -> dict[str, str]:
-    """Return the top-level front-matter keys of ``content`` mapped to their raw values.
-
-    Args:
-        content: A full file body, with or without a YAML front-matter block.
-
-    Returns:
-        ``{key: raw_value}`` for the first front-matter block, or ``{}`` when there is none.
-    """
-    match = _YAML_FM_RE.match(content)
-    if not match:
-        return {}
-    return {k: v.strip() for k, v in _FM_KEY_RE.findall(match.group(1))}
-
-
-def _detect_front_matter_drift(new_rendered: str, existing_on_disk: str) -> list[str]:
-    """Report front-matter keys whose template value differs from the on-disk one.
-
-    Front matter lies outside every AGENTTEAMS fence, so merge preserves the on-disk version
-    verbatim. That is correct — it is how a project keeps its own edits — but it also means a
-    template change to a key like ``tools:`` reaches new teams only, and silently. Verified
-    2026-07-30 against two downstream repos: the fenced body updated, the tool grant did not,
-    and nothing in the run output said so.
-
-    Scope is deliberately narrow. Only *keys* are compared, never values-as-diff, and
-    :data:`_DRIFT_EXEMPT_FRONT_MATTER_KEYS` is skipped. Unfenced *prose* drift is not reported
-    at all: prose below the front matter is genuinely user-owned, and without a provenance
-    mechanism the format does not have, an edit cannot be told apart from intended authorship.
-    Front matter is the case where the template is the de-facto owner and the failure was
-    demonstrated.
-
-    Args:
-        new_rendered: Freshly rendered file content.
-        existing_on_disk: Current on-disk content.
-
-    Returns:
-        Human-readable notices, one per drifted key. Empty when nothing drifted.
-    """
-    fresh = _front_matter_keys(new_rendered)
-    current = _front_matter_keys(existing_on_disk)
-    if not fresh or not current:
-        return []
-    notices: list[str] = []
-    for key, value in fresh.items():
-        if key in _DRIFT_EXEMPT_FRONT_MATTER_KEYS:
-            continue
-        # The notice carries the exact replacement line. Auto-applying it was designed and then
-        # withdrawn: `tools:` is a privilege declaration, so writing it unattended is a
-        # privilege-escalation path, and the same command runs against consumer repos — one of
-        # which has no version control at all, making a bad write unrecoverable. A human applying
-        # a one-line edit they can see is the right cost here.
-        if key not in current:
-            notices.append(
-                f"front matter: template adds {key!r} (absent on disk) — add `{key}: {value}`"
-            )
-        elif current[key] != value:
-            notices.append(
-                f"front matter: {key!r} differs — template {value!r}, on disk {current[key]!r}"
-                f" — to adopt it, set `{key}: {value}`"
-            )
-    return notices
-
-
 #: Region-level drift, reported only for files the operator has not touched. See
 #: :func:`_detect_unfenced_drift`.
 _UNFENCED_DRIFT_MIN_CHARS = 40
@@ -398,120 +374,6 @@ def _detect_unfenced_drift(
         "unfenced prose: template text outside the fences differs from this file, which is "
         "unmodified since generation — the template update did not reach it"
     ]
-
-
-#: Front-matter keys that declare CAPABILITY rather than metadata. Excluded from automatic
-#: application even when three-way provenance proves the project never edited the key: proving
-#: nobody touched `tools:` is not the same as having authority to grant a downstream agent shell
-#: access. These are always reported as proposals for a human to apply.
-_CAPABILITY_FRONT_MATTER_KEYS: frozenset[str] = frozenset({"tools", "model", "agents"})
-
-
-def _merge_front_matter(
-    rendered: str,
-    on_disk: str,
-    baseline: dict[str, str] | None,
-) -> tuple[dict[str, str], list[str], list[str]]:
-    """Three-way merge of a file's YAML front matter.
-
-    Front matter cannot be fenced — YAML must be the literal first bytes of the file, before any
-    HTML comment — so it needs a different mechanism rather than a better fence. Comparing the
-    template's value, the on-disk value and the value emitted *last time* distinguishes "the
-    project chose this" from "nobody has touched it since generation", which a two-way comparison
-    cannot.
-
-    That distinction is the whole point. An earlier `--sync-front-matter` design was withdrawn
-    because, without a baseline, applying the template's value would overwrite deliberate project
-    choices. With one, the safe subset is provable.
-
-    | template vs baseline | on-disk vs baseline | outcome                          |
-    |----------------------|---------------------|----------------------------------|
-    | unchanged            | anything            | keep the on-disk value           |
-    | changed              | unchanged           | apply the template's value       |
-    | changed              | changed             | conflict — keep on-disk, report  |
-    | new key              | absent              | add it                           |
-
-    Capability keys (:data:`_CAPABILITY_FRONT_MATTER_KEYS`) are never applied automatically; they
-    are reported as proposals however clean their provenance.
-
-    Args:
-        rendered: Freshly rendered file content.
-        on_disk: Current on-disk content.
-        baseline: Front matter as emitted at last generation, or ``None`` when unknown (an older
-            build log). Without it nothing is applied — an unknown baseline is treated as
-            "the project may have edited everything", which is the conservative reading.
-
-    Returns:
-        ``(merged_keys, applied_notices, proposal_notices)``.
-    """
-    fresh = _front_matter_keys(rendered)
-    current = _front_matter_keys(on_disk)
-    if not fresh or not current:
-        return current, [], []
-
-    merged = dict(current)
-    applied: list[str] = []
-    proposals: list[str] = []
-
-    for key, template_value in fresh.items():
-        if key in _DRIFT_EXEMPT_FRONT_MATTER_KEYS:
-            continue
-        disk_value = current.get(key)
-        if disk_value == template_value:
-            continue
-
-        base_value = baseline.get(key) if baseline else None
-        untouched = baseline is not None and disk_value == base_value
-        template_moved = baseline is None or base_value != template_value
-
-        if not template_moved:
-            continue                                    # template unchanged; project's value wins
-
-        if key in _CAPABILITY_FRONT_MATTER_KEYS:
-            proposals.append(
-                f"front matter: {key!r} is a capability declaration — template has "
-                f"{template_value}, on disk {disk_value!r}. Not applied automatically; "
-                f"set `{key}: {template_value}` to adopt it."
-            )
-        elif untouched:
-            merged[key] = template_value
-            applied.append(
-                f"front matter: {key!r} updated to {template_value} "
-                f"(unmodified since generation)"
-            )
-        elif disk_value is None and baseline is not None:
-            # Only with a baseline: absent-on-disk could equally mean "deliberately removed",
-            # and an unknown baseline must not be read as permission.
-            merged[key] = template_value
-            applied.append(f"front matter: added {key!r} = {template_value}")
-        else:
-            proposals.append(
-                f"front matter: {key!r} changed in BOTH template and this file — template "
-                f"{template_value}, on disk {disk_value!r}. Kept yours; reconcile by hand."
-            )
-    return merged, applied, proposals
-
-
-def _render_front_matter(content: str, keys: dict[str, str]) -> str:
-    """Return ``content`` with its front-matter block rewritten from ``keys``.
-
-    Key order follows the existing block so a merge never reshuffles a file the project reads.
-    A key added by the merge is appended after the ones already present.
-
-    Args:
-        content: The file whose front matter is being rewritten.
-        keys: The merged key/value mapping.
-
-    Returns:
-        The file with its front matter replaced; unchanged when it has none.
-    """
-    match = _YAML_FM_RE.match(content)
-    if not match:
-        return content
-    existing_order = list(_front_matter_keys(content))
-    ordered = existing_order + [k for k in keys if k not in existing_order]
-    body = "\n".join(f"{k}: {keys[k]}" for k in ordered if k in keys)
-    return f"---\n{body}\n---\n" + content[match.end():]
 
 
 #: The section id `_normalize_generated_content` uses when it wraps an entire unfenced body.

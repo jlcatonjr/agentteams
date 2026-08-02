@@ -33,15 +33,28 @@ import tempfile
 from pathlib import Path
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
+
+
+def _comparable(path: Path) -> bytes:
+    """Bytes for snapshot comparison, with per-run live data redacted out of markdown."""
+    raw = path.read_bytes()
+    if path.suffix != ".md":
+        return raw
+    from agentteams.fences import redact_live_data
+    return redact_live_data(raw.decode("utf-8")).encode("utf-8")
 EXAMPLES = REPO_ROOT / "examples"
 
 #: Files whose content is a live network fetch or a per-run timestamp. They differ on every run
 #: regardless of template state, so the snapshot test already excludes them and so must this.
 LIVE_DATA_FILES = {
     "security-vulnerability-watch.reference.md",
-    "security.agent.md",
     "framework-watch.reference.md",
 }
+
+#: `security.agent.md` used to sit in the set above. It no longer does: only the BODY of its live
+#: fences varies per run, and `fences.redact_live_data` blanks exactly those, so the rest of the
+#: highest-privilege agent's file is now comparable. The two files remaining are whole-file live
+#: payloads with no stable structure worth comparing.
 
 #: Paths this script is allowed to modify. Anything else dirty in the tree blocks the run.
 ALLOWED_DIRTY_PREFIXES = ("examples/",)
@@ -112,7 +125,7 @@ def regenerate(example: str, *, check_only: bool) -> list[str]:
             )
             if match is None:
                 continue
-            if match.read_bytes() == snap.read_bytes():
+            if _comparable(match) == _comparable(snap):
                 continue
             changed.append(str(snap.relative_to(REPO_ROOT)))
             if not check_only:
