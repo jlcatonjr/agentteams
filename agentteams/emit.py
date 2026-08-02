@@ -15,6 +15,7 @@ from __future__ import annotations
 
 import hashlib
 import re
+import warnings
 import shutil
 import sys
 from dataclasses import dataclass, field
@@ -154,6 +155,23 @@ def _normalize_generated_content(rel_path: str, content: str) -> str:
 
     existing_regions = _extract_fenced_regions(content)
     if isinstance(existing_regions, dict) and existing_regions:
+        return content
+    if isinstance(existing_regions, str):
+        # A str is an ERROR message, not an absence of fences. Wrapping a file whose
+        # fences are already malformed compounds the fault AND renames it: the wrap puts
+        # the file's own markers inside `content`, so the operator is later shown
+        # "Nested fence not allowed" about a template containing no nesting. That is
+        # exactly how the conflict-auditor render truncation was misdiagnosed twice.
+        #
+        # Warn rather than raise: this runs inside a git pre-commit hook
+        # (git_hooks.py:186, :240), and raising there would block a commit on a condition
+        # the operator cannot fix from that context. Passing the content through unchanged
+        # lets the merge reject it with the ACCURATE error.
+        warnings.warn(
+            f"{rel_path}: fences do not parse ({existing_regions}); leaving content "
+            "unwrapped so the real error survives to the merge",
+            stacklevel=2,
+        )
         return content
 
     # If content has YAML front matter, wrap only the body so the front matter

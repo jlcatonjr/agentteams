@@ -146,3 +146,51 @@ def test_the_predicate_requires_content_alone_on_disk():
     assert _is_whole_body_migration({"content": ""}, {"content": ""}) is False
     assert _is_whole_body_migration({"content": ""}, {}) is False
     assert _is_whole_body_migration({"invariant_core": ""}, {"invariant_core": ""}) is False
+
+
+# ---------------------------------------------------------------------------
+# A file that cannot be parsed must not be wrapped
+#
+# `_extract_fenced_regions` returns `dict[str, str] | str`, where a str is an ERROR
+# message. The guard tested only `isinstance(dict)`, so a parse failure fell through to
+# the whole-body wrap — compounding the fault and renaming it. That is why the
+# conflict-auditor render truncation surfaced as "Nested fence not allowed" about a
+# template containing no nesting: the wrap put the file's own fences inside `content`,
+# two steps downstream of the real defect.
+# ---------------------------------------------------------------------------
+
+
+def test_malformed_content_is_not_wrapped(recwarn):
+    """A parse error passes through untouched, and says why."""
+    from agentteams.fences import _extract_fenced_regions
+
+    # Unbalanced: an opened fence that never closes — the shape the truncated render had.
+    malformed = (
+        "---\nname: a\n---\n\n"
+        "<!-- AGENTTEAMS:BEGIN one v=1 -->\nbody\n<!-- AGENTTEAMS:END one -->\n\n"
+        "<!-- AGENTTEAMS:BEGIN two v=1 -->\ndangling\n"
+    )
+    assert isinstance(_extract_fenced_regions(malformed), str), (
+        "fixture must be malformed, or this test proves nothing"
+    )
+
+    out = _normalize_generated_content("a.agent.md", malformed)
+    assert out == malformed, (
+        "malformed content was rewritten; wrapping a file whose fences are already "
+        "broken compounds the fault and reports it as a different error"
+    )
+    assert "AGENTTEAMS:BEGIN content" not in out, "the whole-body wrap was applied anyway"
+
+    messages = [str(w.message) for w in recwarn]
+    assert any("two" in m or "END" in m or "fence" in m.lower() for m in messages), (
+        f"the real parse error was not surfaced; warnings were {messages}"
+    )
+
+
+def test_wellformed_paths_are_unaffected():
+    """The two legitimate cases keep their behaviour."""
+    bare = "# Title\n\nbody\n"
+    assert _normalize_generated_content("a.md", bare).startswith("<!-- AGENTTEAMS:BEGIN content")
+
+    fenced = "<!-- AGENTTEAMS:BEGIN x v=1 -->\nbody\n<!-- AGENTTEAMS:END x -->\n"
+    assert _normalize_generated_content("a.md", fenced) == fenced
