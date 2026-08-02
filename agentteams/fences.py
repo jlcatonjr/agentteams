@@ -146,6 +146,26 @@ _LIVE_DATA_FENCES: frozenset[str] = frozenset([
 ])
 
 
+#: Fences whose body the TEMPLATE owns outright — never preserved from disk on shrink.
+#:
+#: `--shrink-policy=preserve` resolves in favour of on-disk content whenever the template
+#: body looks materially smaller. For most fences that is right: it protects operator
+#: enrichment. For a security contract it inverts the trust. The shrink heuristic cannot
+#: distinguish enrichment from tampering — they are the same operation — so appending a
+#: backticked token to a fenced security region is enough to suppress its update
+#: indefinitely, with only a notice scrolling past each run.
+#:
+#: Deliberately SEPARATE from :data:`_LIVE_DATA_FENCES`. That set means "upstream feed
+#: rotation is expected", which is a different claim; conflating them would obscure both.
+#: A fence belongs here only when the project has no legitimate reason to extend its body.
+_TEMPLATE_AUTHORITATIVE_FENCES: frozenset[str] = frozenset([
+    "invariant_core",
+    "security_authority",
+    "security_rules_invariant",
+    "security_verdict_contract",
+])
+
+
 #: Timestamp line the security payload stamps into every rendered file carrying live data.
 _GENERATED_AT_RE = re.compile(r"Generated at: `[^`]+`")
 
@@ -820,7 +840,11 @@ def _merge_fenced_content(
                     notice = _detect_fence_shrink(
                         sid, existing_regions.get(sid, ""), new_regions[sid]
                     )
-                    if notice and preserve_on_shrink:
+                    if (
+                        notice
+                        and preserve_on_shrink
+                        and sid not in _TEMPLATE_AUTHORITATIVE_FENCES
+                    ):
                         # Respectful update: the new render would drop enriched
                         # content. Keep the existing body verbatim; surface a
                         # notice so the suppression is visible. No data lost, so
