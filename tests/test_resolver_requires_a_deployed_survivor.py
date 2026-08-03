@@ -134,25 +134,48 @@ def test_the_survivor_must_be_unambiguous(tmp_path: Path) -> None:
     assert not resolved, "an ambiguous survivor must not authorise a removal"
 
 
-def test_the_real_deployed_conflict_auditor_is_refused() -> None:
-    """Pin the exact file and heading that were destroyed on 2026-08-03."""
-    import pytest
+def test_no_deployed_file_has_a_heading_the_resolver_would_orphan() -> None:
+    """Live invariant over the real team, replacing a pin on one transient file.
 
-    deployed = REPO_ROOT / ".claude/agents/conflict-auditor.md"
-    if not deployed.exists():
-        pytest.skip("this repo's own .claude/agents is not present")
-    text = deployed.read_text(encoding="utf-8")
-    if "## Rules" not in text:
-        pytest.skip("deployed file no longer carries the unfenced section")
+    This began as a pin on `conflict-auditor.md`, which on 2026-08-03 carried an unfenced
+    `## Rules` with no `rules` fence — the shape that let the resolver delete the only copy.
+    That file was merged the same day and the fence arrived, so the pin discharged itself and
+    went red exactly as its own message predicted.
+
+    A pin on one file's defect expires when the defect is fixed. The property worth keeping is
+    the general one: for every duplicated heading in the deployed team, a fenced survivor must
+    exist — and where one does not, the resolver must refuse rather than remove.
+
+    Not vacuous when the tree is clean: the scan asserts it examined a real team with real
+    fences, so a broken walk cannot pass by finding nothing.
+    """
+    import pytest
 
     from agentteams.fences import _extract_fenced_regions
 
-    regions = _extract_fenced_regions(text)
-    assert isinstance(regions, dict)
-    assert "rules" not in regions, (
-        "the deployed file now HAS a rules fence, so this fixture no longer reproduces "
-        "the condition — re-point it at a file that still lacks its fence"
+    agents = REPO_ROOT / ".claude/agents"
+    if not agents.is_dir():
+        pytest.skip("this repo's own .claude/agents is not present")
+
+    examined = 0
+    orphanable = []
+    for path in sorted(agents.rglob("*.md")):
+        if ".agentteams-backups" in path.as_posix():
+            continue
+        text = path.read_text(encoding="utf-8")
+        regions = _extract_fenced_regions(text)
+        if not isinstance(regions, dict) or not regions:
+            continue
+        examined += 1
+        for heading in rfc._duplicate_headings_in_file(text):
+            if rfc._deployed_fence_carrying(text, heading) is None:
+                orphanable.append(f"{path.relative_to(agents)}: {heading!r}")
+
+    assert examined >= 20, (
+        f"only {examined} fenced files examined — the walk regressed and this test would "
+        "pass without checking anything"
     )
-    assert rfc._deployed_fence_carrying(text, "## Rules") is None, (
-        "the resolver believes a survivor exists for a heading this file fences nowhere"
+    assert not orphanable, (
+        "deployed heading(s) whose removal would leave no fenced copy:\n  "
+        + "\n  ".join(orphanable)
     )

@@ -84,7 +84,7 @@ including where operator instructions and read content sit: `references/instruct
 | Content Area | Agent | Key Indicators |
 |---|---|---|
 <!-- AGENTTEAMS:BEGIN routing_table_rows v=1 -->
-| Creating or revising primary Python pipeline modules (ingest, analyze, render, emit), Agent template library (.template.md files), JSON schemas for project description and team manifest, Framework adapters (copilot-vscode, copilot-cli, claude), CLI entry point (build_team.py), Example project briefs and Test suite | `@primary-producer` | New work or revision in `src/` |
+| Creating or revising primary Python pipeline modules (ingest, analyze, render, emit), Agent template library (.template.md files), JSON schemas for project description and team manifest, Framework adapters (copilot-vscode, copilot-cli, claude), CLI entry point (build_team.py), Example project briefs, Test suite and Documentation site sources (docs_src/) and the served book | `@primary-producer` | New work or revision in `src/` |
 | Architecture and file hygiene | `@code-hygiene` | Backup files, script lifecycle, duplication, agent doc consistency |
 | Quality and structural defects | `@quality-auditor` | Purposeless content, structural weakness, pattern violations |
 | Within-section cohesion | `@cohesion-repairer` *(if in team)* | Disjointed paragraphs, broken argument flow, orphaned evidence |

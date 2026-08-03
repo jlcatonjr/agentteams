@@ -23,7 +23,7 @@ SECTION MANIFEST — copilot-instructions.template.md
 
 **Name:** AgentTeamsModule
 **Goal:** A Python module that automatically generates complete, coordinated AI agent teams for any project from a single description file. The module provides a 4-tier agent taxonomy (orchestrator, governance, domain, workstream expert), a template library, a rendering pipeline, and framework adapters for VS Code Copilot, Copilot CLI, and Claude.
-**Deliverable type:** Python pipeline modules (ingest, analyze, render, emit), Agent template library (.template.md files), JSON schemas for project description and team manifest, Framework adapters (copilot-vscode, copilot-cli, claude), CLI entry point (build_team.py), Example project briefs and Test suite
+**Deliverable type:** Python pipeline modules (ingest, analyze, render, emit), Agent template library (.template.md files), JSON schemas for project description and team manifest, Framework adapters (copilot-vscode, copilot-cli, claude), CLI entry point (build_team.py), Example project briefs, Test suite and Documentation site sources (docs_src/) and the served book
 **Output format:** Python 3.11 modules
 <!-- AGENTTEAMS:END project_overview -->
 
