@@ -286,6 +286,38 @@ def _span_bounded_at_first_fence(text: str, heading: str, start: int) -> tuple[i
     return start, end
 
 
+def _fence_whose_first_heading_is(text: str, heading: str) -> str | None:
+    """The fence this heading *belongs to*, if exactly one leads with it.
+
+    Deliberately narrower than :func:`_deployed_fence_carrying`, and deliberately separate.
+
+    The safety predicate asks "will a copy survive this removal?", so containment is the right
+    test there: a heading nested inside a fenced block genuinely does survive. This asks a
+    different question — "are these two texts two versions of the same section?" — and
+    containment is the wrong test for it. ``invariant_core`` carries several sub-headings, so an
+    unfenced ``### Core Responsibilities`` was being compared against the whole ``invariant_core``
+    body: never equal, never resolvable, reported forever. Three of this repository's ten
+    collisions were that, and a review list that is 30% permanent noise stops being read.
+
+    **Not merged with the safety predicate on purpose.** Narrowing that one to remove this noise
+    would let a real survivor stop counting whenever it does not lead its fence, re-opening the
+    hole that deleted ``## Rules`` from ``conflict-auditor.md`` on 2026-08-03.
+
+    Returns None when no fence leads with the heading, or when more than one does.
+    """
+    regions = _extract_fenced_regions(text)
+    if not isinstance(regions, dict) or not regions:
+        return None
+    leads = []
+    for body in regions.values():
+        for line in _fence_body(body).strip().splitlines():
+            if line.strip():
+                if line.strip() == heading:
+                    leads.append(body)
+                break
+    return leads[0] if len(leads) == 1 else None
+
+
 def _trailing_duplicates_a_deployed_fence(text: str, heading: str) -> bool:
     """Is the trailing unfenced section an exact copy of a fence already in this file?
 
@@ -393,6 +425,21 @@ def _resolve_file(
     for heading in _duplicate_headings_in_file(text):
         if heading not in headings:
             headings.append(heading)
+
+    # A heading that only ever appears NESTED inside a fenced block is not a duplicated
+    # section — it is a sub-heading of one. Comparing its unfenced occurrence against the whole
+    # enclosing fence can never match, so it was reported as unresolvable on every run forever:
+    # three of this repository's ten collisions were that. Dropped from the collision list
+    # rather than refused, because a permanent entry in a human-review report is noise, and a
+    # report that is 30% noise stops being read.
+    #
+    # This filters what is COMPARABLE. It does not touch `_deployed_fence_carrying`, which
+    # answers the different and load-bearing question of whether a copy survives a removal.
+    headings = [
+        h for h in headings
+        if _deployed_fence_carrying(text, h) is None      # no survivor: still a real refusal
+        or _fence_whose_first_heading_is(text, h) is not None
+    ]
     if not headings:
         return None, [], []
 
