@@ -741,9 +741,18 @@ CEILING_WARN_MARGIN = 25
 #: AuditFinding to audit_types.py (the carved module needed the type, audit needed the functions —
 #: a cycle the shared module breaks). 999 -> 860. Three of the four originally-baselined modules
 #: have now been carved this way; graph.py is the last one, and it will go the same way.
-CEILING_MARGIN_BASELINE: dict[str, int] = {
-    "agentteams/graph.py": 992,
-}
+#: Empty, for the first time. `graph.py` was the last entry, at 992 lines with eight of runway,
+#: and was carved to 770 on 2026-08-03 (front-matter extraction to `graph_inputs.py`).
+#:
+#: That carve is the sixth under CH-07 and the **first chosen rather than forced**. The other
+#: five each happened when an ordinary edit pushed a module over the ceiling mid-change — the
+#: pattern the remediation ledger predicted and then recorded four times over. An empty baseline
+#: is the state where that stops being the only way carves happen.
+#:
+#: An entry here is a module allowed to sit close to the ceiling. Adding one is a decision;
+#: `test_the_ceiling_baseline_is_current` fails if an entry stops being crowded, so it cannot
+#: quietly outlive its reason the way `audit.py 999` did.
+CEILING_MARGIN_BASELINE: dict[str, int] = {}
 
 
 def _crowded_modules() -> dict[str, int]:
