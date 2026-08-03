@@ -6,6 +6,28 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### added (`--reconcile-front-matter` — divergence made visible without silent escalation)
+
+- Front matter **cannot be fenced**: YAML must occupy the first bytes and a fence marker is an
+  HTML comment, so there is nowhere to put one. The merge handles it with a three-way rule —
+  template value applied to an unmodified file, on-disk value kept on an edited one. The second
+  branch is deliberate (an edit may be a project's choice) but it means a capability fix
+  expressed as a `tools:` grant stops silently at every edited file, with the only signal a
+  notice buried in a full `--update --merge` run.
+- `--reconcile-front-matter` answers "where does this team's front matter diverge from its
+  templates?" as a standing, read-only question. `--reconcile-apply` takes the template's value,
+  and is **never implied by the report**: `allowed-tools` is a capability grant, C-3 makes
+  widening one privileged, and every applied change is announced with
+  `[CAPABILITY GRANT CHANGED]`.
+- Only keys the **template declares** are compared. A key the deployed file adds is a project
+  choice, not drift — reporting it would train operators to ignore the report. A file with no
+  front matter at all is skipped rather than given one, since inventing a block means inventing
+  a capability grant.
+- **Measured before building, and stated in the tests: this repository's own team has zero
+  divergences.** The apply path is exercised by fixtures and by two end-to-end CLI tests that
+  plant a real perturbation, not by production data. Machinery that has not run against a real
+  instance should say so.
+
 ### fixed (the collision backlog reaches zero, and a live cross-agent contradiction goes with it)
 
 - **`technical-validator.md` asserted two incompatible meanings for `CH-01`.** It carried

@@ -3,9 +3,9 @@
 
 > **Auto-generated.** Regenerated on every commit that touches the `agentteams` package. Do not edit manually — changes will be overwritten.
 
-- Modules mapped: **117**
+- Modules mapped: **118**
 - Packages: **6**
-- Internal import edges: **218**
+- Internal import edges: **220**
 - Distinct external dependencies: **4**
 
 ---
@@ -22,7 +22,7 @@ Inter-package import dependencies (module-level detail in the tables below).
 
 | Package | Modules | Depends on |
 | --- | --- | --- |
-| `agentteams` | 76 | `agentteams.cli`, `agentteams.enrich`, `agentteams.frameworks`, `agentteams.research` |
+| `agentteams` | 77 | `agentteams.cli`, `agentteams.enrich`, `agentteams.frameworks`, `agentteams.research` |
 | `agentteams.cli` | 16 | `agentteams`, `agentteams.frameworks` |
 | `agentteams.enrich` | 6 | `agentteams` |
 | `agentteams.eval_adapters` | 2 | — |
@@ -68,7 +68,7 @@ Every module, coloured by package (full adjacency in the table below).
 | `agentteams.cli.code_index_artifacts` | `agentteams.backup`, `agentteams.cli.schema_cache`, `agentteams.code_index`, `agentteams.code_sources`, `agentteams.errors` | `agentteams.cli.artifacts` |
 | `agentteams.cli.commands` | `agentteams.backup`, `agentteams.bridge`, `agentteams.cli.security_gate`, `agentteams.convert`, `agentteams.drift`, `agentteams.emit`, `agentteams.frameworks.registry`, `agentteams.interop`, `agentteams.security_refs`, `agentteams.stale_detector`, `agentteams.stale_remediate` | `agentteams.cli.app`, `agentteams.stale_remediate` |
 | `agentteams.cli.exit_codes` | `agentteams.emit` | `agentteams.cli.generate` |
-| `agentteams.cli.generate` | `agentteams.ai_bad_habits`, `agentteams.analyze`, `agentteams.audit`, `agentteams.budget`, `agentteams.cli.artifacts`, `agentteams.cli.exit_codes`, `agentteams.cli.json_mode`, `agentteams.cli.output_target`, `agentteams.cli.post_emit_checks`, `agentteams.cli.render_pipeline`, `agentteams.cli.security_gate`, `agentteams.drift`, `agentteams.emit`, `agentteams.enrich`, `agentteams.errors`, `agentteams.framework_research`, `agentteams.frameworks.registry`, `agentteams.git_hooks`, `agentteams.graph`, `agentteams.ingest`, `agentteams.liaison_logs`, `agentteams.render`, `agentteams.scan`, `agentteams.security_refs`, `agentteams.update_report` | `agentteams.cli.app` |
+| `agentteams.cli.generate` | `agentteams.ai_bad_habits`, `agentteams.analyze`, `agentteams.audit`, `agentteams.budget`, `agentteams.cli.artifacts`, `agentteams.cli.exit_codes`, `agentteams.cli.json_mode`, `agentteams.cli.output_target`, `agentteams.cli.post_emit_checks`, `agentteams.cli.render_pipeline`, `agentteams.cli.security_gate`, `agentteams.drift`, `agentteams.emit`, `agentteams.enrich`, `agentteams.errors`, `agentteams.framework_research`, `agentteams.frameworks.registry`, `agentteams.front_matter_reconcile`, `agentteams.git_hooks`, `agentteams.graph`, `agentteams.ingest`, `agentteams.liaison_logs`, `agentteams.render`, `agentteams.scan`, `agentteams.security_refs`, `agentteams.update_report` | `agentteams.cli.app` |
 | `agentteams.cli.goose_switch` | `agentteams.goose_config` | `agentteams.cli.app`, `agentteams.cli.parser` |
 | `agentteams.cli.json_mode` | — | `agentteams.cli.app`, `agentteams.cli.generate` |
 | `agentteams.cli.output_target` | `agentteams.backup` | `agentteams.cli.generate` |
@@ -110,6 +110,7 @@ Every module, coloured by package (full adjacency in the table below).
 | `agentteams.frameworks.goose_docs` | `agentteams.capability_hints` | `agentteams.frameworks.goose` |
 | `agentteams.frameworks.registry` | `agentteams.frameworks.agents_md`, `agentteams.frameworks.base`, `agentteams.frameworks.claude`, `agentteams.frameworks.copilot_cli`, `agentteams.frameworks.copilot_vscode`, `agentteams.frameworks.goose` | `agentteams.audit_types`, `agentteams.cli.commands`, `agentteams.cli.generate`, `agentteams.cli.parser`, `agentteams.convert`, `agentteams.interop` |
 | `agentteams.front_matter_merge` | — | `agentteams.fences`, `agentteams.unfenced` |
+| `agentteams.front_matter_reconcile` | `agentteams.yaml_frontmatter` | `agentteams.cli.generate` |
 | `agentteams.git_hooks` | `agentteams`, `agentteams.architecture`, `agentteams.cli.artifacts`, `agentteams.emit`, `agentteams.errors`, `agentteams.graph` | `agentteams.cli.app`, `agentteams.cli.generate` |
 | `agentteams.goose_config` | — | `agentteams.cli.goose_switch` |
 | `agentteams.graph` | `agentteams._utils`, `agentteams.graph_inputs`, `agentteams.svg_render` | `agentteams.cli.generate`, `agentteams.cli.render_pipeline`, `agentteams.git_hooks` |
@@ -159,7 +160,7 @@ Every module, coloured by package (full adjacency in the table below).
 | `agentteams.unfenced` | `agentteams.front_matter_merge` | `agentteams.fences` |
 | `agentteams.update_report` | — | `agentteams.cli.generate` |
 | `agentteams.vscode_tasks` | — | `agentteams.cli.render_pipeline` |
-| `agentteams.yaml_frontmatter` | — | `agentteams.frameworks.agents_md`, `agentteams.frameworks.base`, `agentteams.frameworks.claude`, `agentteams.frameworks.copilot_vscode`, `agentteams.frameworks.goose`, `agentteams.interop` |
+| `agentteams.yaml_frontmatter` | — | `agentteams.frameworks.agents_md`, `agentteams.frameworks.base`, `agentteams.frameworks.claude`, `agentteams.frameworks.copilot_vscode`, `agentteams.frameworks.goose`, `agentteams.front_matter_reconcile`, `agentteams.interop` |
 
 ---
 
@@ -549,6 +550,7 @@ digraph "agentteams architecture" {
         "agentteams.errors",
         "agentteams.framework_research",
         "agentteams.frameworks.registry",
+        "agentteams.front_matter_reconcile",
         "agentteams.git_hooks",
         "agentteams.graph",
         "agentteams.ingest",
@@ -990,6 +992,16 @@ digraph "agentteams architecture" {
       "path": "agentteams/front_matter_merge.py",
       "is_package": false,
       "imports_internal": [],
+      "external": [],
+      "repo_local": []
+    },
+    "agentteams.front_matter_reconcile": {
+      "package": "agentteams",
+      "path": "agentteams/front_matter_reconcile.py",
+      "is_package": false,
+      "imports_internal": [
+        "agentteams.yaml_frontmatter"
+      ],
       "external": [],
       "repo_local": []
     },
@@ -1886,6 +1898,10 @@ digraph "agentteams architecture" {
     },
     {
       "source": "agentteams.cli.generate",
+      "target": "agentteams.front_matter_reconcile"
+    },
+    {
+      "source": "agentteams.cli.generate",
       "target": "agentteams.git_hooks"
     },
     {
@@ -2199,6 +2215,10 @@ digraph "agentteams architecture" {
     {
       "source": "agentteams.frameworks.registry",
       "target": "agentteams.frameworks.goose"
+    },
+    {
+      "source": "agentteams.front_matter_reconcile",
+      "target": "agentteams.yaml_frontmatter"
     },
     {
       "source": "agentteams.git_hooks",
