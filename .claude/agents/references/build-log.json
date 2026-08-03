@@ -21,9 +21,7 @@
     "cli-and-examples",
     "test-suite"
   ],
-  "files_written": [
-    ".claude/agents/references/instruction-authority.reference.md"
-  ],
+  "files_written": [],
   "manual_required": 0,
   "template_hashes": {
     "universal/orchestrator.template.md": "86260a63063e5c6a",
@@ -469,53 +467,43 @@
     "repo-liaison",
     "git-operations"
   ],
-  "manifest_fingerprint": "49556896cb4336cb",
+  "manifest_fingerprint": "85c259eef98bf917",
   "fingerprint_algo_version": 1,
   "file_hashes": {
-    "references/instruction-authority.reference.md": "93da11dadb623013",
-    "references/security-vulnerability-watch.reference.md": "8aec96ce5835010a",
-    "references/security-vulnerability-watch.json": "ffac33711ecce7f9",
-    "references/security-linux-hardening.reference.md": "3be650681060566c",
-    "references/security-macos-hardening.reference.md": "d5921ddace4fc9e6",
-    "references/security-windows-hardening.reference.md": "c6dfe28939374a03",
-    "references/framework-watch.reference.md": "be816993ca34cbbe",
-    "references/adjacent-repos.md": "17b8990ec355cb8b",
-    "references/retrospective-remediation.reference.md": "74b01f27f58ba52a",
-    "references/external-retrieval-quality-gate.reference.md": "14a48ec3ba3fe3ff",
+    "references/security-vulnerability-watch.reference.md": "c41323bba59eaa30",
+    "references/security-vulnerability-watch.json": "615d433792ebbab9",
+    "references/framework-watch.reference.md": "91d7fd30ad8a1516",
+    "../CLAUDE.md": "eaedc241c54ba199",
+    "orchestrator.md": "2e2643f1567a1d35",
+    "security.md": "caa8c3a601800e00",
+    "conflict-auditor.md": "ea1b7d4eadb89594",
+    "reference-manager.md": "3b7424e6f05363cc",
+    "references/unix-philosophy-mapping.reference.md": "dae1e088560a2336",
+    "references/security-linux-hardening.reference.md": "0e91aeed201cf710",
+    "references/security-macos-hardening.reference.md": "b785636b62c484f9",
+    "references/security-windows-hardening.reference.md": "e38d9e654e80f83c",
+    "references/ai-bad-habits-watch.reference.md": "51487a0c1aef349d",
+    "references/adjacent-repos.md": "cd33efa6ab392c33",
     "references/retrieval-integration.reference.md": "b69a6be42636a3c9",
     "references/retrieval-trigger-contract.reference.md": "461a3cf4e58a2521",
-    "../CLAUDE.md": "bab2e61a9dea63b5",
-    "SETUP-REQUIRED.md": "642394d04b332357",
     "references/runtime-handoffs.json": "368f6e784b20b0c8",
-    "orchestrator.md": "b1af5c0834ddb1ce",
-    "navigator.md": "e4f5206610fa01a4",
-    "security.md": "e6e2be9c5fb392fd",
+    "navigator.md": "e1ff21f02a3d0350",
     "code-hygiene.md": "3c91bbb3edb5011e",
-    "conflict-resolution.md": "1a080e7f48a7be9a",
-    "repo-liaison.md": "644330463057f684",
-    "work-summarizer.md": "90b702983842a90b",
-    "quality-auditor.md": "235ab699ffbc78a6",
-    "technical-validator.md": "f0cdbfbd2eecea9d",
-    "reference-manager.md": "53bb955dcba1fb3e",
-    "retrieval-integrator.md": "9b54e9d337758b50",
-    "template-library-expert.md": "803f3e47c837fcd9",
-    "pipeline-core-expert.md": "21073808e3ee13d6",
-    "framework-adapters-expert.md": "4dc752df63c87908",
-    "schemas-expert.md": "922a49cca6f8380d",
-    "cli-and-examples-expert.md": "41cb7773f1d41aaa",
-    "test-suite-expert.md": "c47eaf834218a67c",
-    "team-builder.md": "e9f11da88c9a1863",
-    "references/unix-philosophy-mapping.reference.md": "dae1e088560a2336",
-    "references/ai-bad-habits-watch.reference.md": "51487a0c1aef349d",
     "adversarial.md": "4501d36314fcd481",
+    "conflict-resolution.md": "1a080e7f48a7be9a",
     "cleanup.md": "74d16f7c17ddea9f",
     "agent-updater.md": "ae69d2d714f7fb02",
     "agent-refactor.md": "3f458bab593aaade",
+    "repo-liaison.md": "644330463057f684",
     "git-operations.md": "81f620241bdd755c",
+    "work-summarizer.md": "90b702983842a90b",
     "primary-producer.md": "43e78830e0d614cb",
+    "quality-auditor.md": "bddebf2fcea65e22",
     "cohesion-repairer.md": "642e74bba955260f",
+    "technical-validator.md": "f0cdbfbd2eecea9d",
     "format-converter.md": "e033e3a58c6efb4f",
     "output-compiler.md": "6f5fd9d2281a6e16",
+    "retrieval-integrator.md": "b1aeec5097a6cea6",
     "references/ref-pytest-reference.md": "785da59ae0fcefa5",
     "references/ref-json-schema-reference.md": "64ee7849298b80d9",
     "references/code-hygiene-rules.reference.md": "dac2a91e68b180d9",
@@ -524,8 +512,19 @@
     "references/work-summary-tooling.reference.md": "f3656972717153a9",
     "references/work-summary-backfill.reference.md": "845ee35bc64ee727",
     "references/parallelization.reference.md": "d2321bf5ac1ed2f8",
+    "references/instruction-authority.reference.md": "93da11dadb623013",
+    "references/retrospective-remediation.reference.md": "74b01f27f58ba52a",
     "references/cli-tool-discovery.reference.md": "ebf4a4f64eb2dfb7",
     "references/skill-generation.reference.md": "5dc99a3a146ba505",
+    "references/external-retrieval-quality-gate.reference.md": "14a48ec3ba3fe3ff",
+    "template-library-expert.md": "7a863bb81f83df11",
+    "pipeline-core-expert.md": "d50a6f84fdfa6d3f",
+    "framework-adapters-expert.md": "1e335c96c2120fca",
+    "schemas-expert.md": "5b8a48f6bb507720",
+    "cli-and-examples-expert.md": "4733af6047e88ff7",
+    "test-suite-expert.md": "56dae7783649f0a8",
+    "team-builder.md": "e9f11da88c9a1863",
+    "SETUP-REQUIRED.md": "642394d04b332357",
     "content-enricher.md": "36ccd280104edda6",
     "references/pipeline-graph.md": "21579e6e275596ff"
   },
@@ -535,19 +534,34 @@
       "description": "\"Coordinates all agent operations for AgentTeamsModule: routes work to domain agents, enforces constitutional rules, and closes every multi-file session with a consistency check.\"",
       "allowed-tools": "Read, Edit, Write, Grep, Glob, Bash, TodoWrite, Task"
     },
-    "navigator.md": {
-      "name": "Navigator \u2014 AgentTeamsModule",
-      "description": "\"Repository structure navigation, project map maintenance, file location lookups, and dependency queries for AgentTeamsModule\"",
-      "allowed-tools": "Read, Grep, Glob, Bash"
-    },
     "security.md": {
       "name": "Security \u2014 AgentTeamsModule",
       "description": "\"Top-priority security sentinel: reviews actions for credential exposure, destructive operations, sensitive content leakage, and reference integrity before any sensitive action proceeds\"",
       "allowed-tools": "Read, Grep, Glob"
     },
+    "conflict-auditor.md": {
+      "name": "Conflict Auditor \u2014 AgentTeamsModule",
+      "description": "\"Detects logical conflicts across deliverables, agent documentation, reference files, and source material in AgentTeamsModule\"",
+      "allowed-tools": "Read, Grep, Glob"
+    },
+    "reference-manager.md": {
+      "name": "Reference Manager \u2014 AgentTeamsModule",
+      "description": "\"Manages the bibliography and reference database for AgentTeamsModule \u2014 CRUD operations, citation verification, anti-fabrication enforcement\"",
+      "allowed-tools": "Read, Edit, Write, Grep, Glob, Bash(python -m agentteams.research:*)"
+    },
+    "navigator.md": {
+      "name": "Navigator \u2014 AgentTeamsModule",
+      "description": "\"Repository structure navigation, project map maintenance, file location lookups, and dependency queries for AgentTeamsModule\"",
+      "allowed-tools": "Read, Grep, Glob, Bash"
+    },
     "code-hygiene.md": {
       "name": "Code Hygiene \u2014 AgentTeamsModule",
       "description": "\"Read-only auditor that enforces modular architecture, file hygiene, script lifecycle, anti-sprawl rules, and agent documentation quality. Delegates removals to @cleanup; delegates structural extraction to @agent-refactor.\"",
+      "allowed-tools": "Read, Grep, Glob"
+    },
+    "adversarial.md": {
+      "name": "Adversarial \u2014 AgentTeamsModule",
+      "description": "\"Presupposition critic: challenges the assumptions underlying any plan, proposal, or diagnosis produced by the agent team. Traces how justified changes in presuppositions cascade through dependent logic.\"",
       "allowed-tools": "Read, Grep, Glob"
     },
     "conflict-resolution.md": {
@@ -555,30 +569,65 @@
       "description": "\"Makes ACCEPT/REJECT/REVISE decisions on conflicts flagged by the conflict auditor in AgentTeamsModule\"",
       "allowed-tools": "Edit, Write, Grep, Glob, Read"
     },
+    "cleanup.md": {
+      "name": "Cleanup \u2014 AgentTeamsModule",
+      "description": "\"Removes stale drafts, build artifacts, and orphaned files from AgentTeamsModule with mandatory safety checks\"",
+      "allowed-tools": "Edit, Write, Grep, Glob, Bash"
+    },
+    "agent-updater.md": {
+      "name": "Agent Updater \u2014 AgentTeamsModule",
+      "description": "\"Synchronizes agent documentation after project structure, deliverable, or reference changes in AgentTeamsModule\"",
+      "allowed-tools": "Edit, Write, Grep, Glob, Bash, Task"
+    },
+    "agent-refactor.md": {
+      "name": "Agent Refactor \u2014 AgentTeamsModule",
+      "description": "\"Extracts shared data to reference files and enforces spec compliance across all agent documentation in AgentTeamsModule\"",
+      "allowed-tools": "Edit, Write, Grep, Glob, Task"
+    },
     "repo-liaison.md": {
       "name": "Repo Liaison \u2014 AgentTeamsModule",
       "description": "\"Tracks agent documentation in repositories adjacent to AgentTeamsModule, communicates cross-repository impacts, maintains the adjacent-repos registry, and coordinates between orchestrators when this project's activity affects neighboring agent infrastructures.\"",
       "allowed-tools": "Read, Edit, Write, Grep, Glob, Bash, Task"
+    },
+    "git-operations.md": {
+      "name": "Git Operations \u2014 AgentTeamsModule",
+      "description": "\"Executes and governs Git and GitHub operations in AgentTeamsModule, including commit/push, pull/merge/rebase, conflict handling, and recovery workflows.\"",
+      "allowed-tools": "Read, Bash, Grep, Glob"
     },
     "work-summarizer.md": {
       "name": "Work Summarizer \u2014 AgentTeamsModule",
       "description": "\"Synthesizes daily, weekly, and monthly work summaries from canonical plan artifacts and git evidence for AgentTeamsModule; supports append-first daily capture, legacy tmp/ fallback, and required adversarial/conflict audits\"",
       "allowed-tools": "Read, Grep, Glob, Bash, Edit, Write, Task"
     },
+    "primary-producer.md": {
+      "name": "Primary Producer \u2014 AgentTeamsModule",
+      "description": "\"Drafts and revises deliverables in AgentTeamsModule from Component Briefs provided by workstream expert agents\"",
+      "allowed-tools": "Read, Edit, Write, Grep, Glob"
+    },
     "quality-auditor.md": {
       "name": "Quality Auditor \u2014 AgentTeamsModule",
       "description": "\"Read-only audit agent that inspects deliverables in AgentTeamsModule for structural defects, logical inconsistencies, and LLM-generated prose patterns; does not rewrite\"",
       "allowed-tools": "Read, Grep, Glob"
+    },
+    "cohesion-repairer.md": {
+      "name": "Cohesion Repairer \u2014 AgentTeamsModule",
+      "description": "\"Repairs within-section cohesion failures in AgentTeamsModule deliverables \u2014 disjointedness, broken transitions, and missing argumentative spine; does not reorganize across sections\"",
+      "allowed-tools": "Read, Edit, Write"
     },
     "technical-validator.md": {
       "name": "Technical Validator \u2014 AgentTeamsModule",
       "description": "\"Read-only audit agent that verifies technical accuracy in AgentTeamsModule \u2014 code examples, file excerpts, API references, and tool invocations match what exists on disk\"",
       "allowed-tools": "Read, Grep, Glob"
     },
-    "reference-manager.md": {
-      "name": "Reference Manager \u2014 AgentTeamsModule",
-      "description": "\"Manages the bibliography and reference database for AgentTeamsModule \u2014 CRUD operations, citation verification, anti-fabrication enforcement\"",
-      "allowed-tools": "Read, Edit, Write, Grep, Glob"
+    "format-converter.md": {
+      "name": "Format Converter \u2014 AgentTeamsModule",
+      "description": "\"Converts deliverables from their source format to Python 3.11 modules for final output in AgentTeamsModule\"",
+      "allowed-tools": "Read, Edit, Write, Bash"
+    },
+    "output-compiler.md": {
+      "name": "Output Compiler \u2014 AgentTeamsModule",
+      "description": "\"Assembles all converted components into a final deliverable package for AgentTeamsModule \u2014 dependency check, ordering, build manifest\"",
+      "allowed-tools": "Read, Edit, Write, Bash"
     },
     "retrieval-integrator.md": {
       "name": "Retrieval Integrator \u2014 AgentTeamsModule",
@@ -619,51 +668,6 @@
       "name": "Team Builder \u2014 Agent Teams Module",
       "description": "\"Interactively constructs a complete agent team for a new or existing Claude project by conducting an intake interview and invoking the build_team pipeline\"",
       "allowed-tools": "Read, Edit, Write, Grep, Glob, Bash"
-    },
-    "adversarial.md": {
-      "name": "Adversarial \u2014 AgentTeamsModule",
-      "description": "\"Presupposition critic: challenges the assumptions underlying any plan, proposal, or diagnosis produced by the agent team. Traces how justified changes in presuppositions cascade through dependent logic.\"",
-      "allowed-tools": "Read, Grep, Glob"
-    },
-    "cleanup.md": {
-      "name": "Cleanup \u2014 AgentTeamsModule",
-      "description": "\"Removes stale drafts, build artifacts, and orphaned files from AgentTeamsModule with mandatory safety checks\"",
-      "allowed-tools": "Edit, Write, Grep, Glob, Bash"
-    },
-    "agent-updater.md": {
-      "name": "Agent Updater \u2014 AgentTeamsModule",
-      "description": "\"Synchronizes agent documentation after project structure, deliverable, or reference changes in AgentTeamsModule\"",
-      "allowed-tools": "Edit, Write, Grep, Glob, Bash, Task"
-    },
-    "agent-refactor.md": {
-      "name": "Agent Refactor \u2014 AgentTeamsModule",
-      "description": "\"Extracts shared data to reference files and enforces spec compliance across all agent documentation in AgentTeamsModule\"",
-      "allowed-tools": "Edit, Write, Grep, Glob, Task"
-    },
-    "git-operations.md": {
-      "name": "Git Operations \u2014 AgentTeamsModule",
-      "description": "\"Executes and governs Git and GitHub operations in AgentTeamsModule, including commit/push, pull/merge/rebase, conflict handling, and recovery workflows.\"",
-      "allowed-tools": "Read, Bash, Grep, Glob"
-    },
-    "primary-producer.md": {
-      "name": "Primary Producer \u2014 AgentTeamsModule",
-      "description": "\"Drafts and revises deliverables in AgentTeamsModule from Component Briefs provided by workstream expert agents\"",
-      "allowed-tools": "Read, Edit, Write, Grep, Glob"
-    },
-    "cohesion-repairer.md": {
-      "name": "Cohesion Repairer \u2014 AgentTeamsModule",
-      "description": "\"Repairs within-section cohesion failures in AgentTeamsModule deliverables \u2014 disjointedness, broken transitions, and missing argumentative spine; does not reorganize across sections\"",
-      "allowed-tools": "Read, Edit, Write"
-    },
-    "format-converter.md": {
-      "name": "Format Converter \u2014 AgentTeamsModule",
-      "description": "\"Converts deliverables from their source format to Python 3.11 modules for final output in AgentTeamsModule\"",
-      "allowed-tools": "Read, Edit, Write, Bash"
-    },
-    "output-compiler.md": {
-      "name": "Output Compiler \u2014 AgentTeamsModule",
-      "description": "\"Assembles all converted components into a final deliverable package for AgentTeamsModule \u2014 dependency check, ordering, build manifest\"",
-      "allowed-tools": "Read, Edit, Write, Bash"
     },
     "content-enricher.md": {
       "name": "Content Enricher \u2014 AgentTeamsModule",
