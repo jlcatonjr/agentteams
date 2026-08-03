@@ -21,7 +21,11 @@ import pathlib
 
 import pytest
 
-from agentteams.fences import CONSTRAINT_BEARING_RE, unfenced_lines
+from agentteams.fences import (
+    CONSTRAINT_BEARING_RE,
+    is_trackable_constraint_line,
+    unfenced_lines,
+)
 
 TEMPLATES = pathlib.Path(__file__).resolve().parents[1] / "agentteams/templates"
 
@@ -77,16 +81,20 @@ _BASELINE: dict[str, int] = {
 def _stray_count(path: pathlib.Path) -> int:
     """Constraint-bearing lines outside every fence.
 
-    Table rows are excluded: a `|`-prefixed line is a section-manifest or reference row,
-    not a rule, and counting them is the same false positive already logged against
-    `_detect_deleted_constraints`.
+    Eligibility (table rows out, fragments out) comes from
+    `fences.is_trackable_constraint_line`, not from a copy here. This function used to carry
+    its own `startswith("|")` and length floor, which is how it and
+    `_detect_deleted_constraints` ended up disagreeing about what a rule is while both cited
+    `CONSTRAINT_BEARING_RE` — the drift that constant's docstring exists to forbid.
+
+    The matcher stays local: this counts `CONSTRAINT_BEARING_RE` only, where the detector also
+    counts `NUMBERED_RULE_RE`. That divergence is real and tracked separately (130 lines
+    across 24 templates); it is not a copy of a shared rule.
     """
     return sum(
         1
         for ln in unfenced_lines(path.read_text(encoding="utf-8"))
-        if CONSTRAINT_BEARING_RE.search(ln)
-        and not ln.strip().startswith("|")
-        and len(ln.strip()) >= 30
+        if CONSTRAINT_BEARING_RE.search(ln) and is_trackable_constraint_line(ln)
     )
 
 
