@@ -6,6 +6,35 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### added (`--pin-templates` — a trust root outside the writable surface, S4.6)
+
+- Security review §4.6: nothing verified the shipped templates. `drift.py` compares against the
+  *target's own* build log — change-since-last-build, not authenticity — so anyone able to write
+  to the installed package edits Tier 1 of the authority hierarchy and every restore propagates
+  it with full ceremony. The one gap where existing controls **amplify** a compromise.
+- **The obvious fixes are worth less than they look, and this deliberately is not one.** A
+  checksum manifest shipped inside the package, or a signature verified against a key pinned
+  inside it, both put the thing being protected and the thing protecting it on the *same
+  writable surface*. `--pin-templates` records digests in
+  `<project>/.agentteams/template-pins.json`, which the **consumer commits to their own version
+  control** — a root outside the surface an attacker with package write access controls.
+- **The load-bearing property is negative: nothing else ever writes the pin.** A mismatch reports
+  and never re-pins, because a pin that follows what it checks records only the last thing it
+  saw. A structural test asserts `write_pin` has at most one caller, so a future "helpful
+  auto-refresh on upgrade" fails rather than quietly erodes it.
+- A mismatch **reports and does not block**: the threat is silent propagation, which a loud
+  report defeats, and refusing to generate would punish an intentional upgrade. Purely additive
+  template sets read as normal, not as tampering.
+- **Residue stated rather than claimed away:** this is trust-on-first-use. It detects change
+  since you pinned; it cannot tell a good first pin from a compromised one. Pair with
+  install-time verification (`pip --require-hashes`, attestations) if the wheel itself is in
+  scope — that path remains unbuilt and is a release-process decision.
+- **A defect found only by running it:** the first implementation derived the pin location from
+  `resolve_output_dir`'s `project_root`, which equals `output_dir` whenever `--output` is given —
+  the normal invocation — so the trust root landed **inside `.claude/agents/`**, a directory
+  every run rewrites. The unit tests passed throughout because they were handed a root rather
+  than deriving one. Fixed, with a regression test.
+
 ### added (`--reconcile-front-matter` — divergence made visible without silent escalation)
 
 - Front matter **cannot be fenced**: YAML must occupy the first bytes and a fence marker is an
