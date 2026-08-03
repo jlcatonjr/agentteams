@@ -6,6 +6,31 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### changed (the last file missing its fences finally received them)
+
+- **`conflict-auditor.md` merged: 4 fences → 8**, gaining `invariant_core`, `rules`,
+  `handoff_payload_codes` and `handoff_payload_conflict_codes`. It was the only file in the
+  deployed team missing any, and for a traceable reason: its render was truncated and
+  unparseable, so every `--update --merge` run skipped it. Fixing the fence-blind handoff
+  stripper earlier the same day is what made this possible at all.
+- `## Rules` — the section a resolver defect deleted outright that morning — is now removable
+  **safely**, because the fence that must survive it finally exists. Applied: one copy remains,
+  inside the fence.
+- **Collisions in the deployed team: 11 → 10, and all four "no fenced survivor" refusals are
+  gone.** Every remaining one is a content difference awaiting a human, not a missing fence.
+- The merge was **rehearsed against an isolated copy** of `.claude/` before touching the real
+  tree, because there is no per-file scope flag and the operation therefore spans the whole
+  team. `security.md` — the file this class of operation destroyed on 2026-08-01 — came through
+  at 415 → 415 lines with all 5 fenced regions intact, changed only in live CVE/EPSS data.
+
+### fixed (a discharged test pin, replaced by a live invariant)
+
+- `test_the_real_deployed_conflict_auditor_is_refused` pinned one file's defect and went red the
+  moment that defect was fixed — exactly as its own failure message predicted. A pin on a defect
+  expires when the defect does. Replaced by an invariant over the whole deployed team: every
+  duplicated heading must have a fenced survivor, with an anti-vacuity floor so a broken walk
+  cannot pass by finding nothing.
+
 ### fixed (the collision refusals were four problems giving one wrong instruction)
 
 - **"Run `--update --merge` first" was wrong for 15 of 19 refusals.** Measured: those files
