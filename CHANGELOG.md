@@ -6,6 +6,24 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### changed (`graph.py` carved — the first CH-07 split chosen rather than forced)
+
+- **`graph.py` 992 → 770**, with front-matter extraction moved to `agentteams/graph_inputs.py`
+  (269 lines: nine functions and the six regexes they use). `graph.py` owns the graph model and
+  its rendering; the new module owns the step before — reading an agent file's YAML front matter
+  into the values a node is built from.
+- **`CEILING_MARGIN_BASELINE` is now empty for the first time.** This is the sixth carve under
+  CH-07 and the first that was *chosen*: the other five each happened when an ordinary edit
+  pushed a module over the ceiling mid-change, exactly as the remediation ledger predicted and
+  then recorded four times over. `graph.py` had eight lines of runway.
+- Independence was verified **by AST before the move** — no reference to `TeamGraph`,
+  `AgentNode`, `GraphEdge`, `AGENT_TYPES` or the SVG palette — rather than by reading. Only the
+  six regexes the block actually references moved; `_DESC_RE` stayed, which a plan audit
+  specifically called out after the previous carve moved regexes its origin still needed.
+  `graph.py` re-exports all nine helpers, so `tests/test_graph.py`'s imports are untouched.
+- Four modules remain above 900 lines — `bridge.py` 973, `cli/generate.py` 966, `analyze.py`
+  943, `audit.py` 902 — and none is within the 25-line warning margin.
+
 ### fixed (a scaling claim tested with a clock, and an unexamined capability default)
 
 - **`test_build_index_scaling_is_reasonable` measured scheduler noise.** It asserted

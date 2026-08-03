@@ -3,9 +3,9 @@
 
 > **Auto-generated.** Regenerated on every commit that touches the `agentteams` package. Do not edit manually — changes will be overwritten.
 
-- Modules mapped: **116**
+- Modules mapped: **117**
 - Packages: **6**
-- Internal import edges: **216**
+- Internal import edges: **218**
 - Distinct external dependencies: **4**
 
 ---
@@ -22,7 +22,7 @@ Inter-package import dependencies (module-level detail in the tables below).
 
 | Package | Modules | Depends on |
 | --- | --- | --- |
-| `agentteams` | 75 | `agentteams.cli`, `agentteams.enrich`, `agentteams.frameworks`, `agentteams.research` |
+| `agentteams` | 76 | `agentteams.cli`, `agentteams.enrich`, `agentteams.frameworks`, `agentteams.research` |
 | `agentteams.cli` | 16 | `agentteams`, `agentteams.frameworks` |
 | `agentteams.enrich` | 6 | `agentteams` |
 | `agentteams.eval_adapters` | 2 | — |
@@ -44,7 +44,7 @@ Every module, coloured by package (full adjacency in the table below).
 | Module | Imports (internal) | Imported by |
 | --- | --- | --- |
 | `agentteams` | — | `agentteams.backup`, `agentteams.cli.artifacts`, `agentteams.cli.parser`, `agentteams.git_hooks` |
-| `agentteams._utils` | — | `agentteams.analyze`, `agentteams.graph`, `agentteams.ingest` |
+| `agentteams._utils` | — | `agentteams.analyze`, `agentteams.graph`, `agentteams.graph_inputs`, `agentteams.ingest` |
 | `agentteams.advisory` | — | — |
 | `agentteams.ai_bad_habits` | — | `agentteams.cli.generate` |
 | `agentteams.analyze` | `agentteams._utils`, `agentteams.manifest_format`, `agentteams.mcp_detect`, `agentteams.output_plan`, `agentteams.recipe_fields`, `agentteams.tool_metadata_catalog` | `agentteams.cli.generate`, `agentteams.output_plan` |
@@ -112,7 +112,8 @@ Every module, coloured by package (full adjacency in the table below).
 | `agentteams.front_matter_merge` | — | `agentteams.fences`, `agentteams.unfenced` |
 | `agentteams.git_hooks` | `agentteams`, `agentteams.architecture`, `agentteams.cli.artifacts`, `agentteams.emit`, `agentteams.errors`, `agentteams.graph` | `agentteams.cli.app`, `agentteams.cli.generate` |
 | `agentteams.goose_config` | — | `agentteams.cli.goose_switch` |
-| `agentteams.graph` | `agentteams._utils`, `agentteams.svg_render` | `agentteams.cli.generate`, `agentteams.cli.render_pipeline`, `agentteams.git_hooks` |
+| `agentteams.graph` | `agentteams._utils`, `agentteams.graph_inputs`, `agentteams.svg_render` | `agentteams.cli.generate`, `agentteams.cli.render_pipeline`, `agentteams.git_hooks` |
+| `agentteams.graph_inputs` | `agentteams._utils` | `agentteams.graph` |
 | `agentteams.handoff_payloads` | — | `agentteams.behavioral_drift` |
 | `agentteams.hooks_emit` | `agentteams.atomicio` | `agentteams.bridge` |
 | `agentteams.host_features` | — | `agentteams.cli.app` |
@@ -1021,7 +1022,18 @@ digraph "agentteams architecture" {
       "is_package": false,
       "imports_internal": [
         "agentteams._utils",
+        "agentteams.graph_inputs",
         "agentteams.svg_render"
+      ],
+      "external": [],
+      "repo_local": []
+    },
+    "agentteams.graph_inputs": {
+      "package": "agentteams",
+      "path": "agentteams/graph_inputs.py",
+      "is_package": false,
+      "imports_internal": [
+        "agentteams._utils"
       ],
       "external": [],
       "repo_local": []
@@ -2218,7 +2230,15 @@ digraph "agentteams architecture" {
     },
     {
       "source": "agentteams.graph",
+      "target": "agentteams.graph_inputs"
+    },
+    {
+      "source": "agentteams.graph",
       "target": "agentteams.svg_render"
+    },
+    {
+      "source": "agentteams.graph_inputs",
+      "target": "agentteams._utils"
     },
     {
       "source": "agentteams.hooks_emit",
