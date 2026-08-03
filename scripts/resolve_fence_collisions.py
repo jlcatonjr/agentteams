@@ -20,8 +20,13 @@ Four ways this could destroy content, and what stops each:
 
 1. A section with no following heading runs to end-of-file, so deleting it would also take
    ``## Project-Specific Notes`` — the region ``_split_at_last_fence_end`` exists to protect,
-   destroyed by the tool cleaning up after it. Resolution requires a following heading of the
-   same or higher level; a trailing section is reported, never touched.
+   destroyed by the tool cleaning up after it. Resolution normally requires a following heading
+   of the same or higher level. The one exception is *proved, not assumed*: when the text from
+   the trailing heading to EOF equals the body of a fence already in the same deployed file,
+   removing it deletes nothing that does not survive inside that fence
+   (``_trailing_duplicates_a_deployed_fence``). Anything after the duplicate — an operator note
+   carries no heading, so the walk still calls the section trailing — breaks the equality and
+   the section is reported instead.
 2. A heading appearing more than once on disk makes the boundaries ambiguous. Exactly one
    unfenced occurrence is required.
 3. A file with no fresh render is skipped.
@@ -182,12 +187,73 @@ def _duplicate_headings_in_file(text: str) -> list[str]:
     return sorted(unfenced & fenced_headings)
 
 
+def _unfenced_starts(text: str, heading: str) -> list[int]:
+    """Offsets of *heading* that lie outside every fenced region.
+
+    Single-sourced because the same bug was written twice: counting every regex match, fenced
+    ones included, so a heading with a fenced twin always looked "duplicated". That refused all
+    20 real collisions in this repo's own team through `_unfenced_section_span`, and — fixed
+    there but not here — went on to refuse the six trailing ones through `_trailing_span`,
+    including under `--trust-provenance`, which was supposed to be their escape hatch.
+    """
+    fenced_spans = _fenced_char_spans(text)
+    return [
+        m.start()
+        for m in re.finditer(rf"^{re.escape(heading)}\s*$", text, re.MULTILINE)
+        if not any(lo <= m.start() < hi for lo, hi in fenced_spans)
+    ]
+
+
 def _trailing_span(text: str, heading: str) -> tuple[int, int] | str:
     """Span of a trailing section, bounded at end-of-file. Only safe under the caller's guards."""
-    matches = [m.start() for m in re.finditer(rf"^{re.escape(heading)}\s*$", text, re.MULTILINE)]
-    if len(matches) != 1:
+    starts = _unfenced_starts(text, heading)
+    if len(starts) != 1:
         return "duplicated"
-    return matches[0], len(text)
+    return starts[0], len(text)
+
+
+def _trailing_duplicates_a_deployed_fence(text: str, heading: str) -> bool:
+    """Is the trailing unfenced section an exact copy of a fence already in this file?
+
+    The authorisation for bounding a trailing section at end-of-file. If the text from the
+    unfenced heading to EOF equals the body of a fenced region *in the same deployed file*,
+    then removing it deletes nothing that does not survive inside that fence. The proof is
+    local: no provenance, no build log, no git ref, and no ``--trust-provenance``. That flag's
+    last use gutted a deployed ``security.md`` from 363 lines to 32, and it answers a different
+    question — "has anyone edited this file?" — which is not the one that makes a delete safe.
+
+    Compared against the **deployed** fence, never the incoming render. The recurring defect in
+    this script is exactly that substitution: a template fence proves nothing about what is on
+    disk, so a file whose live fence has drifted from its template must still refuse.
+
+    "Trailing" guarantees no heading of the same-or-higher level follows — *not* that no text
+    follows. An operator note appended under the duplicate carries no heading, so the heading
+    walk still reports ``trailing`` while bounding at EOF would destroy the note. The equality
+    test is what catches that: the tail no longer matches the fence.
+
+    Refuses on anything ambiguous — unparseable fences, no fenced twin, more than one fenced
+    twin, more than one unfenced occurrence.
+
+    Args:
+        text:    The deployed file's current content.
+        heading: The duplicated heading, e.g. ``"## Operational integration"``.
+
+    Returns:
+        True only when the equality holds and the twin is unique in both directions.
+    """
+    regions = _extract_fenced_regions(text)
+    if not isinstance(regions, dict) or not regions:
+        return False
+
+    twins = [b for b in regions.values() if _norm(heading) in _norm(_fence_body(b))]
+    if len(twins) != 1:
+        return False
+
+    starts = _unfenced_starts(text, heading)
+    if len(starts) != 1:
+        return False
+
+    return _norm(text[starts[0]:]) == _norm(_fence_body(twins[0]))
 
 
 def _unfenced_section_span(text: str, heading: str) -> tuple[int, int] | str:
@@ -209,12 +275,7 @@ def _unfenced_section_span(text: str, heading: str) -> tuple[int, int] | str:
     # included — so a heading with a fenced twin always counted twice and returned
     # "duplicated". That refused all 20 real collisions in this repo's own team as
     # unboundable, which is the state that made them look unresolvable.
-    fenced_spans = _fenced_char_spans(text)
-    starts = [
-        m.start()
-        for m in re.finditer(rf"^{re.escape(heading)}\s*$", text, re.MULTILINE)
-        if not any(lo <= m.start() < hi for lo, hi in fenced_spans)
-    ]
+    starts = _unfenced_starts(text, heading)
     if len(starts) != 1:
         return "duplicated" if starts else "absent"
     start = starts[0]
@@ -282,6 +343,12 @@ def _resolve_file(
             continue
 
         span = _unfenced_section_span(working, heading)
+        # A trailing section that is an exact copy of a fence already in this file can be
+        # bounded at EOF without provenance: the content survives inside the fence. Tried
+        # before the provenance route because it proves more with less — see
+        # `_trailing_duplicates_a_deployed_fence`.
+        if span == "trailing" and _trailing_duplicates_a_deployed_fence(working, heading):
+            span = _trailing_span(working, heading)
         if span == "trailing" and trust_provenance and agents_dir is not None:
             # A trailing section can only swallow a user region if one exists below it. Reference
             # files never receive `## Project-Specific Notes` (emit._is_agent_doc excludes them),
