@@ -86,6 +86,10 @@
         }
       }
     },
+    "doc_site_config_file": {
+      "type": ["string", "null"],
+      "description": "Path to the documentation-site config (e.g. mkdocs.yml). Read by analyze.build_manifest and manifest_format; resolves {DOC_SITE_CONFIG_FILE}. The schema sets additionalProperties:false, so its absence here made every brief declaring this supported key fail validation — including this module's own."
+    },
     "style_reference": {
       "type": ["string", "null"],
       "description": "Path to the style guide, voice samples, or editorial conventions file. Used as {STYLE_REFERENCE_PATH}."

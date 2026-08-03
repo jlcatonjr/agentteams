@@ -8,7 +8,8 @@
     "Framework adapters (copilot-vscode, copilot-cli, claude)",
     "CLI entry point (build_team.py)",
     "Example project briefs",
-    "Test suite"
+    "Test suite",
+    "Documentation site sources (docs_src/) and the served book"
   ],
   "output_format": "Python 3.11 modules",
   "primary_output_dir": "src/",
@@ -68,16 +69,16 @@
       "category": "library",
       "version": "8",
       "docs_url": "https://docs.pytest.org/en/stable/",
-      "api_surface": "- **Test discovery** — files matching `test_*.py` or `*_test.py`; functions prefixed `test_`\n- **`pytest.fixture(scope=...)`** — `\"function\"` (default), `\"class\"`, `\"module\"`, `\"session\"`\n- **`pytest.mark`** — `@pytest.mark.parametrize(argnames, argvalues)`, `@pytest.mark.skip`, `@pytest.mark.skipif`, `@pytest.mark.xfail`\n- **`monkeypatch`** — `.setattr()`, `.setenv()`, `.delenv()`, `.setitem()`, `.chdir()`\n- **`tmp_path`** — `pathlib.Path` fixture scoped to the test function\n- **`capsys` / `capfd`** — capture stdout/stderr; `.readouterr()` returns `(out, err)`\n- **`conftest.py`** — project-wide fixtures; auto-used by all tests in the directory\n- **Exit codes** — 0: all passed, 1: some failed, 2: interrupted, 3: internal error, 4: bad usage, 5: no tests",
-      "common_patterns": "- **Fixtures over setUp/tearDown** — pytest fixtures are composable and scopeable; prefer them over `unittest.TestCase` methods\n- **`parametrize` flattens test matrices** — `@pytest.mark.parametrize(\"a,b,expected\", [...])` generates one test per row; ID is auto-derived\n- **`conftest.py` for shared fixtures** — never duplicate fixtures across test files; put project-wide fixtures in `tests/conftest.py`\n- **`tmp_path` not `tempfile`** — `tmp_path` is auto-cleaned and returns a `pathlib.Path`; no teardown needed\n- **`monkeypatch` scope** — only valid within the test function; never use it in session-scoped fixtures unless you understand the implications\n- **`-x` stops on first failure** — use during development; CI should run without `-x` to see all failures\n- **`-q` for clean output** — `python -m pytest tests/ -q` suppresses verbose per-test output in CI logs"
+      "api_surface": "- **Test discovery** \u2014 files matching `test_*.py` or `*_test.py`; functions prefixed `test_`\n- **`pytest.fixture(scope=...)`** \u2014 `\"function\"` (default), `\"class\"`, `\"module\"`, `\"session\"`\n- **`pytest.mark`** \u2014 `@pytest.mark.parametrize(argnames, argvalues)`, `@pytest.mark.skip`, `@pytest.mark.skipif`, `@pytest.mark.xfail`\n- **`monkeypatch`** \u2014 `.setattr()`, `.setenv()`, `.delenv()`, `.setitem()`, `.chdir()`\n- **`tmp_path`** \u2014 `pathlib.Path` fixture scoped to the test function\n- **`capsys` / `capfd`** \u2014 capture stdout/stderr; `.readouterr()` returns `(out, err)`\n- **`conftest.py`** \u2014 project-wide fixtures; auto-used by all tests in the directory\n- **Exit codes** \u2014 0: all passed, 1: some failed, 2: interrupted, 3: internal error, 4: bad usage, 5: no tests",
+      "common_patterns": "- **Fixtures over setUp/tearDown** \u2014 pytest fixtures are composable and scopeable; prefer them over `unittest.TestCase` methods\n- **`parametrize` flattens test matrices** \u2014 `@pytest.mark.parametrize(\"a,b,expected\", [...])` generates one test per row; ID is auto-derived\n- **`conftest.py` for shared fixtures** \u2014 never duplicate fixtures across test files; put project-wide fixtures in `tests/conftest.py`\n- **`tmp_path` not `tempfile`** \u2014 `tmp_path` is auto-cleaned and returns a `pathlib.Path`; no teardown needed\n- **`monkeypatch` scope** \u2014 only valid within the test function; never use it in session-scoped fixtures unless you understand the implications\n- **`-x` stops on first failure** \u2014 use during development; CI should run without `-x` to see all failures\n- **`-q` for clean output** \u2014 `python -m pytest tests/ -q` suppresses verbose per-test output in CI logs"
     },
     {
       "name": "JSON Schema",
       "category": "library",
       "version": "draft-2020-12",
       "docs_url": "https://json-schema.org/understanding-json-schema/",
-      "api_surface": "- **Type keywords** — `\"type\": \"object\"|\"array\"|\"string\"|\"number\"|\"integer\"|\"boolean\"|\"null\"`\n- **Object keywords** — `\"properties\"`, `\"required\"`, `\"additionalProperties\"`, `\"patternProperties\"`, `\"minProperties\"`, `\"maxProperties\"`\n- **Array keywords** — `\"items\"`, `\"prefixItems\"` (draft-2020-12), `\"minItems\"`, `\"maxItems\"`, `\"uniqueItems\"`, `\"contains\"`\n- **String keywords** — `\"minLength\"`, `\"maxLength\"`, `\"pattern\"` (ECMA regex), `\"format\"` (informational by default)\n- **Number keywords** — `\"minimum\"`, `\"maximum\"`, `\"exclusiveMinimum\"`, `\"exclusiveMaximum\"`, `\"multipleOf\"`\n- **Schema composition** — `\"allOf\"`, `\"anyOf\"`, `\"oneOf\"`, `\"not\"`, `\"if\"/\"then\"/\"else\"`\n- **Reuse** — `\"$defs\"` (draft-2019+; replaces `\"definitions\"`), `\"$ref\": \"#/$defs/MyType\"`\n- **Meta-data** — `\"title\"`, `\"description\"`, `\"default\"`, `\"examples\"`, `\"deprecated\"`\n- **Draft declaration** — `\"$schema\": \"https://json-schema.org/draft/2020-12/schema\"`",
-      "common_patterns": "- **`\"additionalProperties\": false`** — locks the schema; combine with `\"required\"` to enforce the full object shape\n- **`\"$defs\"` for reusable types** — define shared sub-schemas in `\"$defs\"` and reference with `\"$ref\": \"#/$defs/TypeName\"`; avoids duplication\n- **`\"oneOf\"` vs `\"anyOf\"`** — `oneOf` means exactly one sub-schema matches (XOR); `anyOf` means at least one; prefer `anyOf` for union types\n- **Draft-2020-12 `\"prefixItems\"`** — replaces draft-07 `\"items\"` for positional tuple schemas; `\"items\"` in 2020-12 matches only items beyond the prefix\n- **`\"format\"` is annotation-only by default** — `\"format\": \"uri\"` does not validate unless the validator is explicitly configured to enforce formats\n- **`\"required\"` is independent of `\"properties\"`** — a property can appear in `\"properties\"` without being in `\"required\"`; omit it to make it optional\n- **Keep `\"$ref\"` chains shallow** — circular refs are valid but require a validator that handles them; keep definitions one level deep in `\"$defs\"`"
+      "api_surface": "- **Type keywords** \u2014 `\"type\": \"object\"|\"array\"|\"string\"|\"number\"|\"integer\"|\"boolean\"|\"null\"`\n- **Object keywords** \u2014 `\"properties\"`, `\"required\"`, `\"additionalProperties\"`, `\"patternProperties\"`, `\"minProperties\"`, `\"maxProperties\"`\n- **Array keywords** \u2014 `\"items\"`, `\"prefixItems\"` (draft-2020-12), `\"minItems\"`, `\"maxItems\"`, `\"uniqueItems\"`, `\"contains\"`\n- **String keywords** \u2014 `\"minLength\"`, `\"maxLength\"`, `\"pattern\"` (ECMA regex), `\"format\"` (informational by default)\n- **Number keywords** \u2014 `\"minimum\"`, `\"maximum\"`, `\"exclusiveMinimum\"`, `\"exclusiveMaximum\"`, `\"multipleOf\"`\n- **Schema composition** \u2014 `\"allOf\"`, `\"anyOf\"`, `\"oneOf\"`, `\"not\"`, `\"if\"/\"then\"/\"else\"`\n- **Reuse** \u2014 `\"$defs\"` (draft-2019+; replaces `\"definitions\"`), `\"$ref\": \"#/$defs/MyType\"`\n- **Meta-data** \u2014 `\"title\"`, `\"description\"`, `\"default\"`, `\"examples\"`, `\"deprecated\"`\n- **Draft declaration** \u2014 `\"$schema\": \"https://json-schema.org/draft/2020-12/schema\"`",
+      "common_patterns": "- **`\"additionalProperties\": false`** \u2014 locks the schema; combine with `\"required\"` to enforce the full object shape\n- **`\"$defs\"` for reusable types** \u2014 define shared sub-schemas in `\"$defs\"` and reference with `\"$ref\": \"#/$defs/TypeName\"`; avoids duplication\n- **`\"oneOf\"` vs `\"anyOf\"`** \u2014 `oneOf` means exactly one sub-schema matches (XOR); `anyOf` means at least one; prefer `anyOf` for union types\n- **Draft-2020-12 `\"prefixItems\"`** \u2014 replaces draft-07 `\"items\"` for positional tuple schemas; `\"items\"` in 2020-12 matches only items beyond the prefix\n- **`\"format\"` is annotation-only by default** \u2014 `\"format\": \"uri\"` does not validate unless the validator is explicitly configured to enforce formats\n- **`\"required\"` is independent of `\"properties\"`** \u2014 a property can appear in `\"properties\"` without being in `\"required\"`; omit it to make it optional\n- **Keep `\"$ref\"` chains shallow** \u2014 circular refs are valid but require a validator that handles them; keep definitions one level deep in `\"$defs\"`"
     }
   ],
   "style_rules": [
@@ -116,12 +117,12 @@
         "Every template has an Invariant Core section",
         "All {PLACEHOLDER} tokens are documented in PLACEHOLDER-CONVENTIONS.md",
         "Templates are self-consistent: agent slugs in handoffs resolve to existing templates",
-        "No hardcoded project-specific values — everything parameterized"
+        "No hardcoded project-specific values \u2014 everything parameterized"
       ]
     },
     {
       "slug": "pipeline-core",
-      "name": "Pipeline Core (ingest → analyze → render → emit)",
+      "name": "Pipeline Core (ingest \u2192 analyze \u2192 render \u2192 emit)",
       "number": 2,
       "output_file": "src/",
       "description": "The four-stage Python processing pipeline: ingest.py parses descriptions, analyze.py builds manifests, render.py resolves templates, emit.py writes files to disk.",
@@ -143,7 +144,7 @@
       "quality_criteria": [
         "All public functions have docstrings with Args/Returns/Raises",
         "validate() catches all required-field and format errors before processing",
-        "No external dependencies — stdlib only",
+        "No external dependencies \u2014 stdlib only",
         "Dry-run mode produces zero side effects",
         "Overwrite protection never silently overwrites existing files"
       ]
@@ -250,5 +251,29 @@
         "No test requires external dependencies or network access"
       ]
     }
-  ]
+  ],
+  "retrieval_integration": {
+    "mode": "lexical-index",
+    "query_entrypoints": [
+      "agentteams/memory_index.py::query_index",
+      "build_team.py --query-index",
+      "build_team.py --query-code"
+    ],
+    "maintenance_entrypoints": [
+      "agentteams/memory_index.py::build_memory_index",
+      "build_team.py --refresh-index",
+      "build_team.py --refresh-code-index"
+    ],
+    "trigger_sources": [
+      "cli",
+      "manual"
+    ],
+    "source_of_truth": [
+      "workSummaries/",
+      "references/",
+      "docs/"
+    ],
+    "staleness_slo_minutes": 1440,
+    "trigger_contract_version": "v1"
+  }
 }
