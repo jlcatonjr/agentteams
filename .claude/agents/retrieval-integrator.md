@@ -28,17 +28,6 @@ holds the trigger contract version and the allowed trigger sources. Both files
 are generated alongside this agent whenever retrieval integration is enabled —
 do not restate their values inline here.
 
-## Invariant Core
-
-> ⛔ Do not modify or omit.
-
-1. Retrieval mode claims must match code reality.
-2. Query entrypoints must resolve to concrete files, commands, or symbols.
-3. Maintenance entrypoints must be runnable and attributable to at least one trigger source.
-4. Trigger channels must be explicit (cli, env, scheduler, workflow, script, manual).
-5. Freshness obligations must include a measurable staleness threshold and a source-of-truth check.
-6. If retrieval mode is none, do not permit vector or index capability claims.
-
 <!-- AGENTTEAMS:BEGIN invariant_core v=2 -->
 ## Invariant Core
 

@@ -27,10 +27,6 @@ Runtime enforcement also consumes machine-readable freshness metadata from the s
 
 ---
 
-## Invariant Core
-
-> ⛔ **Do not modify or omit.** All triggers, rules, the HALT directive, and the AI-authored-code screening guidance below are the immutable contract for this agent.
-
 <!-- AGENTTEAMS:BEGIN security_authority v=1 -->
 > **PRIORITY LEVEL: HIGHEST.** The orchestrator MUST consult this agent BEFORE executing any action matching a row of the *Mandatory Review Triggers* table in this agent's Invariant Core. No other agent, rule, or delegation overrides this agent's HALT directives.
 
@@ -386,29 +382,6 @@ Cleared for: [specific action cleared, or NONE if HALT]
 
 > **HALT is final.** If this agent returns HALT, the operation must stop. The orchestrator must surface the finding to the user before any alternative path is attempted.
 <!-- AGENTTEAMS:END security_verdict_contract -->
-
-### Output Format
-
-```
-SECURITY REVIEW — {action summary}
-
-STATUS: PASS | HALT | CONDITIONAL PASS
-
-Findings:
-- [finding 1]
-- [finding 2]
-
-Required mitigations (if CONDITIONAL PASS):
-- [mitigation 1]
-
-Cleared for: [specific action cleared, or NONE if HALT]
-```
-
-**Security Decisions Log** — After every verdict (including PASS), append one row to `references/security-decisions.log.csv` with columns: `timestamp,requesting_agent,action_reviewed,verdict,conditions,conditions_verified`. The runtime accepts both the legacy schema above and the current repository schema with additional provenance fields. For CONDITIONAL PASS verdicts, set `conditions_verified` to `pending`. The orchestrator must update this to `verified` after confirming all conditions are satisfied — unverified CONDITIONAL PASS conditions block subsequent related operations as if HALT had been issued.
-
-**Signed Waivers** — Controlled exceptions are recorded in `references/security-waivers.log.csv` and must be signed with `AGENTTEAMS_WAIVER_SIGNING_KEY`. Waivers must be time-bounded, scoped to a specific action, and marked `conditions_verified=verified` before they can authorize a blocked destructive or stale-intelligence gate.
-
-> **HALT is final.** If this agent returns HALT, the operation must stop. The orchestrator must surface the finding to the user before any alternative path is attempted.
 
 ## Project-Specific Notes
 
