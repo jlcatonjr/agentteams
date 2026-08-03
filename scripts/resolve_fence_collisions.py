@@ -212,6 +212,35 @@ def _trailing_span(text: str, heading: str) -> tuple[int, int] | str:
     return starts[0], len(text)
 
 
+def _deployed_fence_carrying(text: str, heading: str) -> str | None:
+    """The body of the fence **in this deployed file** that carries *heading*, if exactly one does.
+
+    The survivor of a removal. Every deletion this script performs is justified by "a fenced
+    copy remains" — and until 2026-08-03 nothing checked that the fenced copy was on disk.
+    ``incoming`` is read from the *fresh render*, so a template fence proves nothing about the
+    deployed file, and two separate losses followed from that:
+
+    * 2026-08-01 — ``security.md`` went from 363 lines to 32 on the strength of an
+      ``invariant_core`` fence it had never received.
+    * 2026-08-03 — ``## Rules`` was deleted outright from ``conflict-auditor.md``, five
+      substantive rules with no surviving copy. That file carries four fences and has never
+      had ``rules``.
+
+    The guard written after the first loss refuses when the removal span *encloses* a live
+    fence. That is a different property and it did not fire for the second: the span enclosed
+    nothing. This is the check the guard's own comment already described — *merge the fence in
+    first; only then is the unfenced copy a duplicate* — stated as code rather than prose.
+
+    Returns None when no deployed fence carries the heading, or when more than one does (which
+    survivor? refuse rather than choose).
+    """
+    regions = _extract_fenced_regions(text)
+    if not isinstance(regions, dict) or not regions:
+        return None
+    twins = [b for b in regions.values() if _norm(heading) in _norm(_fence_body(b))]
+    return twins[0] if len(twins) == 1 else None
+
+
 def _trailing_duplicates_a_deployed_fence(text: str, heading: str) -> bool:
     """Is the trailing unfenced section an exact copy of a fence already in this file?
 
@@ -241,19 +270,15 @@ def _trailing_duplicates_a_deployed_fence(text: str, heading: str) -> bool:
     Returns:
         True only when the equality holds and the twin is unique in both directions.
     """
-    regions = _extract_fenced_regions(text)
-    if not isinstance(regions, dict) or not regions:
-        return False
-
-    twins = [b for b in regions.values() if _norm(heading) in _norm(_fence_body(b))]
-    if len(twins) != 1:
+    twin = _deployed_fence_carrying(text, heading)
+    if twin is None:
         return False
 
     starts = _unfenced_starts(text, heading)
     if len(starts) != 1:
         return False
 
-    return _norm(text[starts[0]:]) == _norm(_fence_body(twins[0]))
+    return _norm(text[starts[0]:]) == _norm(_fence_body(twin))
 
 
 def _unfenced_section_span(text: str, heading: str) -> tuple[int, int] | str:
@@ -368,6 +393,18 @@ def _resolve_file(
         # template's `invariant_core` fence, which that file has never received. The span
         # ran 363 lines -> 32 and took the file's own two fenced regions with it, leaving
         # zero. Merge the fence in first; only then is the unfenced copy a duplicate.
+        # The survivor must already exist HERE, not merely in the render. Checked before the
+        # enclosure guard because it is the stronger condition: enclosure asks whether the span
+        # would take managed content with it, this asks whether anything is left afterwards.
+        survivor = _deployed_fence_carrying(working, heading)
+        if survivor is None:
+            skipped.append(
+                f"{deployed.name}: {heading!r} — this file has no fence carrying that section, "
+                f"so removing the unfenced copy would delete the only one. "
+                f"Run --update --merge first, then re-run."
+            )
+            continue
+
         enclosed = _FENCE_BEGIN_COUNT_RE.findall(working[start:end])
         if enclosed:
             skipped.append(

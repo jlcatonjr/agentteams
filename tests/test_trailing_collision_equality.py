@@ -181,13 +181,19 @@ def test_the_six_measured_reference_files_prove() -> None:
     if not agents.is_dir():
         pytest.skip("this repo's own .claude/agents is not present")
 
-    unproved = []
+    bad = []
     for rel, heading in cases:
         path = agents / rel
         if not path.exists():
             continue
-        if not rfc._trailing_duplicates_a_deployed_fence(
-            path.read_text(encoding="utf-8"), heading
-        ):
-            unproved.append(rel)
-    assert not unproved, f"trailing duplicates that no longer prove: {unproved}"
+        text = path.read_text(encoding="utf-8")
+        # The duplicates were resolved on 2026-08-03, so the expected steady state is now
+        # "exactly one copy, inside a fence". Either outcome is correct; a heading with no
+        # fenced copy is not.
+        if rfc._trailing_duplicates_a_deployed_fence(text, heading):
+            continue
+        if rfc._deployed_fence_carrying(text, heading) is None:
+            bad.append(f"{rel}: no fenced copy of {heading!r} survives")
+        elif len(rfc._unfenced_starts(text, heading)) > 1:
+            bad.append(f"{rel}: {heading!r} still duplicated outside a fence and no longer proves")
+    assert not bad, "trailing duplicates left in a bad state:\n  " + "\n  ".join(bad)
