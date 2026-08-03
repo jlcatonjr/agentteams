@@ -36,6 +36,8 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
+from agentteams.errors import PinLocationError
+
 #: Where a consumer's pin lives, relative to the project root. Deliberately outside the agents
 #: output directory: that directory is rewritten by every run, and a trust root that the tool
 #: routinely rewrites is not a trust root.
@@ -164,6 +166,22 @@ def write_pin(project_root: Path, installed: dict[str, str], *, pinned_at: str) 
     return path
 
 
+def _is_outside(candidate: Path, output_dir: Path) -> bool:
+    """Is *candidate* neither the output directory nor inside it?
+
+    Replaces a four-clause condition in which one clause was dead — ``out.parents[:0]`` is the
+    empty slice, so ``root not in (out, *out.parents[:0])`` reduced to ``root != out``, which the
+    first clause already said — and two more expressed containment twice over. Proved equivalent
+    to the original across a case table (project root, the output dir, inside it, `.claude`, a
+    sibling project, deep inside, filesystem root) before the swap.
+
+    Note what this does NOT decide: `<proj>/.claude` passes, because it genuinely is not inside
+    `<proj>/.claude/agents`. It is still a directory the tool generates. That gap is why the
+    caller refuses instead of falling back to `output_dir.parent`.
+    """
+    return candidate != output_dir and output_dir not in candidate.parents
+
+
 def consumer_root(description: dict[str, Any], output_dir: Path) -> Path:
     """Where the pin lives: the consuming project, never the generated output directory.
 
@@ -173,8 +191,14 @@ def consumer_root(description: dict[str, Any], output_dir: Path) -> Path:
     A trust root the tool routinely rewrites is not a trust root, and the module docstring
     says so; the code did the opposite until an end-to-end run showed the file landing there.
 
-    Prefers the brief's declared project path, falls back to the working directory, and refuses
-    either if it sits inside *output_dir*.
+    Prefers the brief's declared project path, then the working directory, and rejects either
+    if it is the output directory or inside it.
+
+    Raises:
+        PinLocationError: when no candidate qualifies. The previous fallback returned
+            ``output_dir.parent`` — `<proj>/.claude` for a claude team, which the tool
+            generates. That is the same confusion this function was written to fix, left in the
+            fallback after the primary path was corrected.
     """
     import os
 
@@ -184,10 +208,14 @@ def consumer_root(description: dict[str, Any], output_dir: Path) -> Path:
         if not cand:
             continue
         root = Path(cand).resolve()
-        if root != out and out not in root.parents and root not in (out, *out.parents[:0]):
-            if not str(root).startswith(str(out) + os.sep):
-                return root
-    return out.parent
+        if _is_outside(root, out):
+            return root
+    raise PinLocationError(
+        f"cannot place the template pin: no candidate directory sits outside {out}. "
+        "Run from the project root, or set `existing_project_path` in the brief. "
+        "The pin is deliberately not written into the generated tree — a trust root the "
+        "tool rewrites on every run is not a trust root."
+    )
 
 
 def run_pinning(
@@ -216,7 +244,14 @@ def run_pinning(
     from agentteams import render as _render
 
     installed = _render.compute_template_hashes(manifest, templates_dir=templates_dir)
-    project_root = consumer_root(description, output_dir)
+    try:
+        project_root = consumer_root(description, output_dir)
+    except PinLocationError as exc:
+        # Refusing is the outcome, but it must not be a silent one in either direction: an
+        # explicit --pin-templates fails so a script notices, and a routine run says that
+        # verification did not happen rather than implying it passed.
+        print(f"template pin: {exc}", file=sys.stderr)
+        return 1 if getattr(args, "pin_templates", False) else None
 
     if getattr(args, "pin_templates", False):
         written = write_pin(

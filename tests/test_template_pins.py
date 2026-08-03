@@ -20,6 +20,8 @@ import ast
 import json
 from pathlib import Path
 
+import pytest
+
 from agentteams import template_pins as tp
 
 INSTALLED = {"universal/navigator.template.md": "aaaa1111", "domain/x.template.md": "bbbb2222"}
@@ -167,3 +169,63 @@ def test_consumer_root_falls_back_without_a_declared_project(tmp_path: Path) -> 
     out.mkdir(parents=True)
     root = tp.consumer_root({}, out)
     assert not str(root).startswith(str(out.resolve()) + "/")
+
+
+# --------------------------------------------------------------------------------------
+# D2/D3: the fallback must refuse, not guess (report: blocking-items-and-defects)
+# --------------------------------------------------------------------------------------
+
+
+def test_the_fallback_refuses_rather_than_choosing_the_generated_area(tmp_path, monkeypatch) -> None:
+    """D2. With no declared project path and cwd inside the output, the old code returned
+    `output_dir.parent` — `<proj>/.claude`, which the tool generates.
+
+    A pin in a directory that gets overwritten is worse than no pin: it reads as protection.
+    Refusing is the correct outcome, and the message must say what to do about it.
+    """
+    out = tmp_path / "proj" / ".claude" / "agents"
+    out.mkdir(parents=True)
+    monkeypatch.chdir(out)
+
+    with pytest.raises(tp.PinLocationError) as excinfo:
+        tp.consumer_root({}, out)
+    message = str(excinfo.value)
+    assert "existing_project_path" in message, "the refusal must name the fix"
+    assert "project root" in message
+
+
+def test_the_fallback_still_accepts_a_legitimate_cwd(tmp_path, monkeypatch) -> None:
+    """Negative control: refusing must not break the ordinary case of running from the project."""
+    proj = tmp_path / "proj"
+    out = proj / ".claude" / "agents"
+    out.mkdir(parents=True)
+    monkeypatch.chdir(proj)
+    assert tp.consumer_root({}, out) == proj.resolve()
+
+
+def test_pin_templates_exits_non_zero_when_it_cannot_place_the_pin(tmp_path, monkeypatch) -> None:
+    """A script must notice. Refusing silently would be the same failure in a new costume."""
+    out = tmp_path / "proj" / ".claude" / "agents"
+    out.mkdir(parents=True)
+    monkeypatch.chdir(out)
+
+    class _Args:
+        pin_templates = True
+
+    rc = tp.run_pinning(_Args(), {"output_files": []}, {}, out, tmp_path / "templates")
+    assert rc == 1
+
+
+def test_verification_says_so_when_it_cannot_locate_a_pin(tmp_path, monkeypatch, capsys) -> None:
+    """Not silent. If the root cannot be found, verification did not happen and must say so."""
+    out = tmp_path / "proj" / ".claude" / "agents"
+    out.mkdir(parents=True)
+    monkeypatch.chdir(out)
+
+    class _Args:
+        pin_templates = False
+
+    rc = tp.run_pinning(_Args(), {"output_files": []}, {}, out, tmp_path / "templates")
+    assert rc is None, "verification must not abort the pipeline"
+    err = capsys.readouterr().err
+    assert "template pin" in err and "cannot place" in err, err
