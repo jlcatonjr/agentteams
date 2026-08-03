@@ -6,6 +6,45 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### fixed (three advisories that could not see what they were built to report)
+
+- **The orphan advisory was blind to every framework but one.** `_report_orphan_agent_files`
+  filtered on `.agent.md` in both directions — the emitted set *and*
+  `output_dir.glob("*.agent.md")`. Only copilot-vscode uses that suffix; claude, copilot-cli,
+  `agents_md` and goose all emit `*.md`, so the glob matched nothing and the advisory reported
+  zero orphans **regardless of what was on disk**. Measured on this repository's own
+  `.claude/agents`: four deployed files the current brief no longer emits — `cohesion-repairer.md`,
+  `retrieval-integrator.md` and two retrieval reference docs — none of them ever reported. The
+  extension now comes from `adapter.get_file_extension("agent")`, as `cli/generate.py`'s
+  `--adopt-orphans` path already did; only this advisory hardcoded it. `agent_ext` is keyword-only
+  and **required**, because a default is what let the suffix go unexamined. The two existing
+  carve-outs (adopted agents, tool docs) built their names with a literal `.agent.md` and would
+  have silently switched off under a bare `.md`; `SETUP-REQUIRED.md` gains an explicit exclusion it
+  previously got for free from the suffix, matching `bridge_sources.py`.
+- **A markdown table row is not a deleted rule.** `_detect_deleted_constraints` reported rows like
+  `| invariant_core | FENCED | ⛔ contract: … |` as deleted constitutional rules — they match `⛔`
+  and clear the 30-character floor. The unfenced-constraint ratchet already excluded table rows,
+  *inline, in a test file*, so the two consumers of `CONSTRAINT_BEARING_RE` disagreed about what a
+  rule is — the exact drift that constant's docstring exists to forbid. The eligibility half is now
+  one shared predicate, `fences.is_trackable_constraint_line`; a synthetic probe over the template
+  library goes from **11 notices in 8 files to 0**, with the library measurement unmoved at 43
+  files / 159 lines (verified equivalent under both whitespace normalisations before the change).
+  The consumers still diverge on `NUMBERED_RULE_RE`, deliberately: unifying that adds **130 lines
+  across 24 templates**, which is a re-baselining exercise and is tracked as its own item.
+- **Six trailing collisions were unresolvable by any route.** A duplicate heading with no
+  same-or-higher heading after it runs to end-of-file, and bounding it there would take
+  `## Project-Specific Notes` with it — so the resolver refused. The `--trust-provenance` escape
+  hatch did not work either: `_trailing_span` counted *every* regex match including the fenced
+  twin, so it returned `"duplicated"` — the same per-occurrence bug fixed in
+  `_unfenced_section_span` and never fixed in its sibling. Both now share `_unfenced_starts`, so
+  there is no third copy. The new authorisation is a **proof, not a flag**:
+  `_trailing_duplicates_a_deployed_fence` resolves only when the text from the trailing heading to
+  EOF equals the body of a fence **already in the same deployed file**, compared against the
+  deployed fence and never the incoming render — a drifted live fence still refuses. All six
+  measured cases prove; `.claude/agents` goes from 20 refusals to 14. "Trailing" guarantees no
+  *heading* follows, not that no *text* follows, so an appended operator note breaks the equality
+  and the section is reported instead — tested directly.
+
 ### added (`agentteams-updater` — an instance-update expert that cannot write)
 
 - **The agent that carefully updates deployed agentteams instances**, built last and deliberately:
