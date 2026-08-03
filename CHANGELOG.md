@@ -6,6 +6,27 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### fixed (a shipped example contradicted the contract it was meant to demonstrate)
+
+- `examples/learn-python-for-stats-and-econ/brief.json` violated
+  `project-description.schema.json` two ways: `authority_sources` as bare strings, and
+  `existing_project_path: null` where every other brief omits the key. It built correctly
+  regardless, because `analyze.py` tolerates the string form — `if isinstance(src, str)` — so
+  nothing complained.
+- **The schema was right and the example was stale**, which is the opposite of the first
+  reading. Three artifacts define the contract as objects — the schema,
+  `docs_src/DESCRIPTION-FORMAT.md` (*"Type: array of objects"*), and
+  `ingest._parse_authority_sources`, which emits dicts for markdown briefs. `analyze.py`'s own
+  comment calls the string branch a tolerance: *"Accept both plain strings and dicts"*. Acting
+  on the first reading would have widened a correct schema to accommodate one bad file.
+- The object form is **derived from `analyze.py`'s own fallback** (`{"path": src, "name": src}`,
+  `scope` defaulting to `general`, `rank` to position), so nothing was invented for a teaching
+  example. Proved: rendering both briefs in the same window produces **byte-identical output**
+  across all 61 files — a representation change with no content change.
+- Guards added for **every shipped example brief**, not just this module's own, with the two
+  violations asserted separately so fixing one cannot mask the other. All three were verified
+  red against the unfixed example before the fix landed.
+
 ### fixed (the template pin refuses rather than guessing where to live)
 
 - **The fallback could put the trust root inside the generated tree.** With no declared
