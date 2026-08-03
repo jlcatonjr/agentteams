@@ -6,6 +6,32 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### fixed (the collision refusals were four problems giving one wrong instruction)
+
+- **"Run `--update --merge` first" was wrong for 15 of 19 refusals.** Measured: those files
+  already carry every fence their render produces. Only `conflict-auditor.md` is genuinely
+  missing fences — 4 of 8 — because its render was truncated and unparseable until earlier the
+  same day, so every merge run skipped it. The refusal text was pointing operators at the one
+  operation that has twice destroyed content, to fix files where it would have changed nothing.
+- **The span bound overshot into managed content.** `_unfenced_section_span` ends a section at
+  the next heading of the same-or-higher level. When the fenced twin sits *below* the unfenced
+  one, that next heading is the twin's own heading **inside its fence**, so the span swallowed
+  every fence in between and the enclosure guard refused. `_span_bounded_at_first_fence` ends
+  the section where the managed content begins, which makes the removed span fence-free by
+  construction. **8 collisions resolved**, each still required to equal the *deployed* fence
+  body — the bound is not the authorisation.
+- Two independent guards, because the bound alone is unsafe: a section that continues past a
+  fence would be truncated (caught by the equality test — a partial section cannot equal the
+  whole), and a distant first fence could swallow a sibling section (refused outright, since a
+  section cannot contain a heading of its own level or higher).
+- **Refusals now name the actual condition** and stop recommending a merge when the fence is
+  already present. Needs-review drops **19 → 11**: 4 genuinely awaiting a merge, 7 awaiting a
+  person.
+- `references/plans/collision-hand-review.report.md` reports those 7 with the real textual
+  difference between the two copies, and deliberately **does not claim which is correct** — the
+  unfenced copy may be superseded, or may be a local change the project wants. Only a maintainer
+  can tell, and getting that backwards is how `security.md` lost 331 lines.
+
 ### fixed (the resolver deleted a section whose only copy was the one it removed)
 
 - **Every removal was justified by a fence that might exist only in the template.** `incoming`

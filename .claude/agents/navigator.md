@@ -127,29 +127,6 @@ python -m src.graph .github/agents/ --output .github/agents/references/pipeline-
      stated authoritatively as Invariant Rule 2 below rather than via the
      canonical v=2 fence; @navigator IS the source of the protocol that
      audit/validation templates' fences reference. -->
-## Invariant Rules
-
-1. **Structural lookups never come from the *memory* index.** For *structural / current-file* queries ("where is `foo.py`?", "what files are in module Y?", "which agent owns workstream Z?"), read the project map or search the file system — the memory index is a history layer, not a structural index. **Code/API structural queries have their own fast layer — the code index; follow the *Code-index consultation* protocol below before grepping.**
-2. **Historical / decision / prior-work queries follow the nested memory-index protocol.** When the question is "what did we decide about X?", "what's the prior work / history on Y?", "when did Z change?", or any other query whose answer lives in past work-summary or changelog content, follow this order:
-   (a) Query the index at `references/memory-index.json`. Choose strategy based on query type:
-       - **Lexical (default):** For keyword/exact-term lookups ("where did we document X?", "when did Y happen?"). High-precision, slightly faster.
-       - **Vector:** For thematic/semantic queries ("what's our policy on error handling?", "find prior work on resource management"). Finds documents related to ALL query terms, reducing false negatives on multi-concept queries.
-
-       Start with lexical; if the top result is low-confidence, retry with vector:
-       ```python
-       from agentteams.memory_index import query_index
-       hits = query_index(index, query, k=5, strategy="lexical")
-       if not hits or hits[0]["score"] < 0.1:
-           hits = query_index(index, query, k=5, strategy="vector")
-       ```
-   (b) Cite the pointed document **only if the snippet is clearly responsive** to the query — high-scoring with language that actually addresses the question. A weak top result is not an answer.
-   (c) If the snippet is insufficient or low-confidence, **open that specific document** for full detail.
-   (d) Only then fall back to filesystem search.
-   **If `references/memory-index.json` is absent, empty, or its snippets do not clearly answer**, proceed directly to (c)/(d) — never block on the index. The existing work-summary documents remain the source of truth; the index is an additive fast-lookup layer that may be stale between `--update` runs.
-3. **Regenerate the project map after structural changes** — new files, new directories, renamed files
-4. **You are read-oriented** — you do not modify deliverable content, agent docs, or source files
-5. **External repo paths are read-only** — navigate but never modify files outside the project
-
 <!-- AGENTTEAMS:BEGIN code_index_consultation v=1 -->
 ## Code-index consultation *(applies to code/API structural queries when `references/code-index/` is present)*
 

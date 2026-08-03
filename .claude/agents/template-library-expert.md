@@ -22,10 +22,6 @@ You are the domain expert for **Template Library** (component 1) in AgentTeamsMo
 
 ---
 
-## Invariant Core
-
-> ⛔ **Do not modify or omit.**
-
 <!-- AGENTTEAMS:BEGIN invariant_core v=1 -->
 ## Invariant Core
 
