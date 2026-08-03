@@ -241,6 +241,51 @@ def _deployed_fence_carrying(text: str, heading: str) -> str | None:
     return twins[0] if len(twins) == 1 else None
 
 
+_FENCE_BEGIN_LINE_RE = re.compile(r"^<!--\s*AGENTTEAMS:BEGIN\s+\S+.*?-->\s*$", re.MULTILINE)
+
+
+def _span_bounded_at_first_fence(text: str, heading: str, start: int) -> tuple[int, int] | None:
+    """Span of an unfenced section that ends where managed content begins.
+
+    :func:`_unfenced_section_span` ends a section at the next heading of the same-or-higher
+    level. When the fenced twin sits BELOW the unfenced one, that next heading is the twin's own
+    heading *inside the fence*, so the span swallows every fence in between and the enclosure
+    guard refuses. That refused 8 collisions in this repository's team — every one of them in a
+    file that already carried the fence — while advising a merge that would have changed
+    nothing and which has twice destroyed content.
+
+    A section ends where the managed content begins. Bounding at the first fence BEGIN after the
+    heading makes the removed span fence-free by construction.
+
+    **The bound is not the authorisation.** Two things could still go wrong, and each has its
+    own guard:
+
+    * A section that legitimately *continues past* a fence would be truncated here. The caller's
+      equality test against the deployed fence body refuses it: a partial section cannot equal
+      the whole.
+    * A distant first fence would let the span swallow whole sibling sections. Refused here — a
+      section cannot contain a heading of its own level or higher.
+
+    Args:
+        text:    The deployed file's content.
+        heading: The duplicated heading line.
+        start:   Character offset of the unfenced occurrence.
+
+    Returns:
+        ``(start, end)`` bounded at the first following fence, or None when no fence follows or
+        a sibling heading intervenes.
+    """
+    level = len(heading) - len(heading.lstrip("#"))
+    m = _FENCE_BEGIN_LINE_RE.search(text, start + len(heading))
+    if m is None:
+        return None
+    end = m.start()
+    for h in re.finditer(r"^(#{1,6})\s+\S", text[start + len(heading):end], re.MULTILINE):
+        if len(h.group(1)) <= level:
+            return None
+    return start, end
+
+
 def _trailing_duplicates_a_deployed_fence(text: str, heading: str) -> bool:
     """Is the trailing unfenced section an exact copy of a fence already in this file?
 
@@ -407,12 +452,31 @@ def _resolve_file(
 
         enclosed = _FENCE_BEGIN_COUNT_RE.findall(working[start:end])
         if enclosed:
-            skipped.append(
-                f"{deployed.name}: {heading!r} — span encloses {len(enclosed)} fenced region(s) "
-                f"({', '.join(enclosed[:3])}); removing it would delete managed content. "
-                f"Run --update --merge first, then re-run."
-            )
-            continue
+            # The twin sits BELOW the unfenced copy, so the "next same-or-higher heading" that
+            # bounded the span is the twin's own heading inside its fence, and the span
+            # overshot across every fence in between. Re-bound where the managed content
+            # begins, and require equality against the DEPLOYED survivor — not the render,
+            # which proves nothing about this file.
+            rebound = _span_bounded_at_first_fence(working, heading, start)
+            if rebound is not None and _norm(
+                working[rebound[0]:rebound[1]]
+            ) == _norm(_fence_body(survivor)):
+                start, end = rebound
+            else:
+                # `survivor is not None` above, so the fence is already here: recommending a
+                # merge would send the operator to the one operation that has twice destroyed
+                # content, to change nothing. Say what is actually true instead.
+                reason = (
+                    "the unfenced copy is not identical to it"
+                    if rebound is not None
+                    else "the section continues past the fence or contains a sibling heading"
+                )
+                skipped.append(
+                    f"{deployed.name}: {heading!r} — this file already carries the fenced copy "
+                    f"({', '.join(enclosed[:3])}), but {reason}, so the two cannot be "
+                    f"reconciled automatically. Review by hand."
+                )
+                continue
         if _norm(working[start:end]) != _norm(_fence_body(incoming)):
             pristine = (
                 trust_provenance
