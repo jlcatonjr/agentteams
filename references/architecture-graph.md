@@ -3,9 +3,9 @@
 
 > **Auto-generated.** Regenerated on every commit that touches the `agentteams` package. Do not edit manually — changes will be overwritten.
 
-- Modules mapped: **115**
+- Modules mapped: **116**
 - Packages: **6**
-- Internal import edges: **213**
+- Internal import edges: **215**
 - Distinct external dependencies: **4**
 
 ---
@@ -22,7 +22,7 @@ Inter-package import dependencies (module-level detail in the tables below).
 
 | Package | Modules | Depends on |
 | --- | --- | --- |
-| `agentteams` | 74 | `agentteams.cli`, `agentteams.enrich`, `agentteams.frameworks`, `agentteams.research` |
+| `agentteams` | 75 | `agentteams.cli`, `agentteams.enrich`, `agentteams.frameworks`, `agentteams.research` |
 | `agentteams.cli` | 16 | `agentteams`, `agentteams.frameworks` |
 | `agentteams.enrich` | 6 | `agentteams` |
 | `agentteams.eval_adapters` | 2 | — |
@@ -97,7 +97,7 @@ Every module, coloured by package (full adjacency in the table below).
 | `agentteams.eval_adapters.openai_evals` | — | — |
 | `agentteams.eval_suite` | — | `agentteams.cli.artifacts` |
 | `agentteams.fence_inject` | `agentteams.atomicio`, `agentteams.backup`, `agentteams.emit` | `agentteams.cli.app`, `agentteams.emit` |
-| `agentteams.fences` | `agentteams.atomicio`, `agentteams.front_matter_merge` | `agentteams.cli.artifacts`, `agentteams.emit` |
+| `agentteams.fences` | `agentteams.atomicio`, `agentteams.front_matter_merge`, `agentteams.unfenced` | `agentteams.cli.artifacts`, `agentteams.emit` |
 | `agentteams.fleet` | `agentteams.backup` | `agentteams.cli.app`, `agentteams.stale_detector`, `agentteams.stale_remediate` |
 | `agentteams.framework_research` | — | `agentteams.cli.generate` |
 | `agentteams.frameworks` | — | — |
@@ -109,7 +109,7 @@ Every module, coloured by package (full adjacency in the table below).
 | `agentteams.frameworks.goose` | `agentteams.frameworks.base`, `agentteams.frameworks.goose_docs`, `agentteams.yaml_frontmatter` | `agentteams.bridge`, `agentteams.bridge_subagents_goose`, `agentteams.cli.app`, `agentteams.cli.recipe_check`, `agentteams.cli.render_pipeline`, `agentteams.frameworks.registry` |
 | `agentteams.frameworks.goose_docs` | `agentteams.capability_hints` | `agentteams.frameworks.goose` |
 | `agentteams.frameworks.registry` | `agentteams.frameworks.agents_md`, `agentteams.frameworks.base`, `agentteams.frameworks.claude`, `agentteams.frameworks.copilot_cli`, `agentteams.frameworks.copilot_vscode`, `agentteams.frameworks.goose` | `agentteams.cli.commands`, `agentteams.cli.generate`, `agentteams.cli.parser`, `agentteams.convert`, `agentteams.interop` |
-| `agentteams.front_matter_merge` | — | `agentteams.fences` |
+| `agentteams.front_matter_merge` | — | `agentteams.fences`, `agentteams.unfenced` |
 | `agentteams.git_hooks` | `agentteams`, `agentteams.architecture`, `agentteams.cli.artifacts`, `agentteams.emit`, `agentteams.errors`, `agentteams.graph` | `agentteams.cli.app`, `agentteams.cli.generate` |
 | `agentteams.goose_config` | — | `agentteams.cli.goose_switch` |
 | `agentteams.graph` | `agentteams._utils`, `agentteams.svg_render` | `agentteams.cli.generate`, `agentteams.cli.render_pipeline`, `agentteams.git_hooks` |
@@ -155,6 +155,7 @@ Every module, coloured by package (full adjacency in the table below).
 | `agentteams.stale_remediate` | `agentteams.backup`, `agentteams.cli.commands`, `agentteams.fleet`, `agentteams.stale_detector` | `agentteams.cli.commands` |
 | `agentteams.svg_render` | — | `agentteams.architecture`, `agentteams.graph` |
 | `agentteams.tool_metadata_catalog` | — | `agentteams.analyze`, `agentteams.enrich._audit`, `agentteams.enrich._notebooks`, `agentteams.enrich._tools` |
+| `agentteams.unfenced` | `agentteams.front_matter_merge` | `agentteams.fences` |
 | `agentteams.update_report` | — | `agentteams.cli.generate` |
 | `agentteams.vscode_tasks` | — | `agentteams.cli.render_pipeline` |
 | `agentteams.yaml_frontmatter` | — | `agentteams.frameworks.agents_md`, `agentteams.frameworks.base`, `agentteams.frameworks.claude`, `agentteams.frameworks.copilot_vscode`, `agentteams.frameworks.goose`, `agentteams.interop` |
@@ -857,7 +858,8 @@ digraph "agentteams architecture" {
       "is_package": false,
       "imports_internal": [
         "agentteams.atomicio",
-        "agentteams.front_matter_merge"
+        "agentteams.front_matter_merge",
+        "agentteams.unfenced"
       ],
       "external": [],
       "repo_local": []
@@ -1427,6 +1429,16 @@ digraph "agentteams architecture" {
       "path": "agentteams/tool_metadata_catalog.py",
       "is_package": false,
       "imports_internal": [],
+      "external": [],
+      "repo_local": []
+    },
+    "agentteams.unfenced": {
+      "package": "agentteams",
+      "path": "agentteams/unfenced.py",
+      "is_package": false,
+      "imports_internal": [
+        "agentteams.front_matter_merge"
+      ],
       "external": [],
       "repo_local": []
     },
@@ -2091,6 +2103,10 @@ digraph "agentteams architecture" {
       "target": "agentteams.front_matter_merge"
     },
     {
+      "source": "agentteams.fences",
+      "target": "agentteams.unfenced"
+    },
+    {
       "source": "agentteams.fleet",
       "target": "agentteams.backup"
     },
@@ -2341,6 +2357,10 @@ digraph "agentteams architecture" {
     {
       "source": "agentteams.stale_remediate",
       "target": "agentteams.stale_detector"
+    },
+    {
+      "source": "agentteams.unfenced",
+      "target": "agentteams.front_matter_merge"
     }
   ],
   "external_dependencies": [
