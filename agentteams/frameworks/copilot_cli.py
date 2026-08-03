@@ -54,6 +54,20 @@ class CopilotCLIAdapter(FrameworkAdapter):
     def get_file_extension(self, file_type: str) -> str:
         return ".md"
 
+    def required_front_matter_keys(self) -> tuple[str, ...]:
+        """None: a Copilot CLI agent is a prompt body with no YAML header.
+
+        Measured on this module's own team: 29 of 30 emitted files carry no front matter. The
+        exception is `team-builder.md`, which comes from `render_builder_file` — a different
+        path with a different shape — and does not make a header contract true of the agents.
+        A contract declared here would be asserted against all 29.
+
+        Stated rather than inherited so that "inspected, and there is none" is distinguishable
+        from "not yet inspected", which is what the empty default meant when per-framework
+        contracts were first added for copilot-vscode and claude only.
+        """
+        return ()
+
     def supports_handoffs(self) -> bool:
         return False
 
