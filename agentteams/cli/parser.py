@@ -499,6 +499,27 @@ def _build_parser() -> argparse.ArgumentParser:
         help="Optional source framework override for --bridge-from (auto-detected when omitted).",
     )
     parser.add_argument(
+        "--reconcile-front-matter",
+        action="store_true",
+        dest="reconcile_front_matter",
+        help=(
+            "Report where a deployed team's YAML front matter diverges from its templates, "
+            "and change nothing. Front matter cannot be fenced, so an edited file keeps its "
+            "own values and a template's capability change stops there silently; this makes "
+            "that visible without a full update run."
+        ),
+    )
+    parser.add_argument(
+        "--reconcile-apply",
+        action="store_true",
+        dest="reconcile_apply",
+        help=(
+            "With --reconcile-front-matter, take the template's value for each diverging key. "
+            "Never implied by the report: `allowed-tools` is a capability grant and widening "
+            "one is a privileged change, so it requires saying so explicitly."
+        ),
+    )
+    parser.add_argument(
         "--bridge-check",
         action="store_true",
         dest="bridge_check",

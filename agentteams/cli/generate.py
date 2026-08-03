@@ -360,6 +360,13 @@ def _run_generate_inner(args: argparse.Namespace, strict_manual_placeholders: bo
     # graph (Step 5c) are appended by _build_final_rendered.
     final_rendered = _build_final_rendered(manifest, adapter, project_name, output_dir=output_dir)
 
+    # --reconcile-front-matter: needs the render, and nothing after it. Policy and rationale
+    # live in `front_matter_reconcile`, not here.
+    if getattr(args, "reconcile_front_matter", False):
+        from agentteams import front_matter_reconcile as _fmr
+
+        return _fmr.run_reconcile(args, final_rendered, output_dir)
+
     # -----------------------------------------------------------------------
     # Step 5b: Handle --update (structural + content drift, manual preservation)
     # -----------------------------------------------------------------------
