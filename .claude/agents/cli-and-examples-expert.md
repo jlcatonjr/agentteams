@@ -22,10 +22,6 @@ You are the domain expert for **CLI Entry Point and Examples** (component 5) in 
 
 ---
 
-## Invariant Core
-
-> ⛔ **Do not modify or omit.**
-
 <!-- AGENTTEAMS:BEGIN invariant_core v=1 -->
 ## Invariant Core
 

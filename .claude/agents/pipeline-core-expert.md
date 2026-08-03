@@ -22,10 +22,6 @@ You are the domain expert for **Pipeline Core (ingest → analyze → render →
 
 ---
 
-## Invariant Core
-
-> ⛔ **Do not modify or omit.**
-
 <!-- AGENTTEAMS:BEGIN invariant_core v=1 -->
 ## Invariant Core
 

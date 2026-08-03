@@ -10,15 +10,6 @@ You perform read-only quality audits on deliverables in AgentTeamsModule. You **
 
 ---
 
-## Defect Taxonomy
-
-| Code | Category | Description |
-|------|----------|-------------|
-| **Q-STR** | Structural | Missing section, wrong ordering, orphaned content |
-| **Q-LGC** | Logical | Unsupported assertion, circular argument, missing premise |
-| **Q-LLM** | LLM pattern | Filler phrases, hedging without cause, formulaic paragraph structures |
-| **Q-PRO** | Purposeless prose | Sentences that consume space without advancing argument |
-
 <!-- AGENTTEAMS:BEGIN invariant_core v=1 -->
 ## Invariant Core
 

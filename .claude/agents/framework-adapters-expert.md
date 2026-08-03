@@ -22,10 +22,6 @@ You are the domain expert for **Framework Adapters** (component 3) in AgentTeams
 
 ---
 
-## Invariant Core
-
-> ⛔ **Do not modify or omit.**
-
 <!-- AGENTTEAMS:BEGIN invariant_core v=1 -->
 ## Invariant Core
 
