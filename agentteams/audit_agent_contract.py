@@ -20,7 +20,7 @@ from __future__ import annotations
 import re
 from pathlib import Path
 
-from agentteams.audit_types import AuditFinding
+from agentteams.audit_types import AuditFinding, _agent_slug, _is_agent_file
 
 #: Pattern that identifies a self-declared read-only agent from its body text.
 #: Matches only explicit self-attributive declarations:
@@ -41,8 +41,10 @@ _READWRITE_TOOLS = frozenset({"edit", "write", "create"})
 
 def _check_invariant_core_present(
     file_map: dict[str, str],
+    *,
+    agent_ext: str,
 ) -> list[AuditFinding]:
-    """Check that every .agent.md file contains the Invariant Core marker.
+    """Check that every agent file contains the Invariant Core marker.
 
     The agent-refactor spec requires every agent file to have an Invariant
     Core section marked with a ⛔ symbol.
@@ -55,9 +57,7 @@ def _check_invariant_core_present(
     """
     findings: list[AuditFinding] = []
     for rel_path, content in file_map.items():
-        if not rel_path.endswith(".agent.md"):
-            continue
-        if "references/" in rel_path:
+        if not _is_agent_file(rel_path, agent_ext):
             continue
         if "\u26d4" not in content:  # ⛔
             findings.append(AuditFinding(
@@ -94,6 +94,8 @@ _INSTRUCTION_AUTHORITY_REF = "instruction-authority.reference.md"
 
 def _check_instruction_authority_reachable(
     file_map: dict[str, str],
+    *,
+    agent_ext: str,
 ) -> list[AuditFinding]:
     """Check the instruction-authority ordering is emitted and reachable from its readers.
 
@@ -129,9 +131,9 @@ def _check_instruction_authority_reachable(
         ))
 
     for rel_path, content in file_map.items():
-        if "references/" in rel_path or not rel_path.endswith((".agent.md", ".md")):
+        if not _is_agent_file(rel_path, agent_ext):
             continue
-        stem = rel_path.rsplit("/", 1)[-1].removesuffix(".agent.md").removesuffix(".md")
+        stem = _agent_slug(rel_path, agent_ext)
         if stem not in _UNTRUSTED_CONTENT_READERS:
             continue
         if _INSTRUCTION_AUTHORITY_REF not in content:
@@ -152,8 +154,11 @@ def _check_instruction_authority_reachable(
 
 def _check_return_handoff_present(
     file_map: dict[str, str],
+    *,
+    agent_ext: str,
+    supports_handoffs: bool = True,
 ) -> list[AuditFinding]:
-    """Check that every .agent.md file has a return-to-orchestrator handoff.
+    """Check that every agent file has a return-to-orchestrator handoff.
 
     Every agent must declare a handoff back to orchestrator so the
     conversation can be cleanly returned after the agent's work is done.
@@ -165,14 +170,18 @@ def _check_return_handoff_present(
         List of AuditFinding for agent files without an orchestrator handoff.
     """
     findings: list[AuditFinding] = []
+    # Frameworks that do not support handoffs have them stripped from the body at render
+    # time (`_strip_handoffs_section`), so demanding one here reports every agent file for a
+    # section the pipeline deliberately removed. Silent while the filter was hardcoded to
+    # `.agent.md`; 25 findings per `.md` framework the moment that was fixed.
+    if not supports_handoffs:
+        return findings
     for rel_path, content in file_map.items():
-        if not rel_path.endswith(".agent.md"):
-            continue
-        if "references/" in rel_path:
+        if not _is_agent_file(rel_path, agent_ext):
             continue
         # The orchestrator itself doesn't need a return handoff to itself.
         # The team-builder is a meta entry-point agent, not a collaborating agent.
-        slug = Path(rel_path).stem.replace(".agent", "")
+        slug = _agent_slug(rel_path, agent_ext)
         if slug in {"orchestrator", "team-builder"}:
             continue
         # Check YAML block for a handoff that routes to orchestrator
@@ -192,6 +201,8 @@ def _check_return_handoff_present(
 
 def _check_readonly_tool_declarations(
     file_map: dict[str, str],
+    *,
+    agent_ext: str,
 ) -> list[AuditFinding]:
     """Check that self-declared read-only agents do not claim write tools.
 
@@ -208,9 +219,7 @@ def _check_readonly_tool_declarations(
     _tools_re = re.compile(r"tools\s*:\s*\[([^\]]*)\]")
 
     for rel_path, content in file_map.items():
-        if not rel_path.endswith(".agent.md"):
-            continue
-        if "references/" in rel_path:
+        if not _is_agent_file(rel_path, agent_ext):
             continue
         # Only enforce rule on files that self-declare as read-only
         if not _READONLY_BODY_RE.search(content):

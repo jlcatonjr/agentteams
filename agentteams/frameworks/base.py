@@ -118,6 +118,29 @@ class FrameworkAdapter(ABC):
     def get_agents_dir(self, project_path: Path) -> Path:
         """Return the default agent file directory for a given project path."""
 
+    def required_front_matter_keys(self) -> tuple[str, ...]:
+        """Front-matter keys every agent file of this framework must declare.
+
+        The audit's key list was a **copilot-vscode** contract that had been applied as if it
+        were universal. It went unnoticed only because the audit's file filter was hardcoded to
+        `.agent.md`, so on every other framework the check inspected zero files. Fixing the
+        filter surfaced the real disagreement — the three frameworks emit three genuinely
+        different headers:
+
+            copilot-vscode   name, description, user-invokable, tools, model
+            claude           name, description, allowed-tools
+            copilot-cli      no front matter at all
+
+        Asserting one framework's header shape against another produced 83 findings on a tree
+        with nothing wrong with it.
+
+        The default is empty: *this framework asserts no front-matter contract*. That is the
+        honest default for an adapter whose header shape has not been established, and it
+        preserves today's behaviour, since nothing was being checked there anyway. An adapter
+        declares a contract only when its header shape is known.
+        """
+        return ()
+
     def normalize_output_path(self, output: Path) -> Path:
         """Normalize a user-supplied --output path for this framework.
 

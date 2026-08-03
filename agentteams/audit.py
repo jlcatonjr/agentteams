@@ -28,14 +28,21 @@ from agentteams.audit_agent_contract import (  # re-exported for callers/tests (
     _check_readonly_tool_declarations,
     _check_return_handoff_present,
 )
-from agentteams.audit_types import AuditFinding  # re-exported for callers/tests
+from agentteams.audit_types import (  # re-exported for callers/tests
+    AuditFinding,
+    _agent_file_count,  # noqa: F401
+    _adapter_for,
+    _agent_file_ext,
+    _agent_slug,
+    _is_agent_file,
+)
 from agentteams.backup import BACKUP_DIR_NAME as _BACKUP_DIR_NAME
 
 # ---------------------------------------------------------------------------
 # Constants
 # ---------------------------------------------------------------------------
 
-#: Required YAML front matter keys for every .agent.md file
+#: Required YAML front matter keys for every agent file
 _REQUIRED_YAML_KEYS: tuple[str, ...] = ("name", "description", "user-invokable", "tools", "model")
 
 #: Agents that must be present in every generated team
@@ -142,6 +149,12 @@ def run_post_audit(
     """
     result = AuditResult()
 
+    # Which extension marks an agent file depends entirely on the framework being audited,
+    # and the manifest is this run's own record of that. Taken once here rather than
+    # rediscovered per check.
+    agent_ext = _agent_file_ext(manifest)
+    _adapter = _adapter_for(manifest)
+
     # Build file map: prefer in-memory over disk to avoid stale-read race
     if rendered_files is not None:
         file_map: dict[str, str] = {rel: content for rel, content in rendered_files}
@@ -151,23 +164,29 @@ def run_post_audit(
     # --- Static checks (conflict-auditor style) ---
     result.static_findings.extend(_check_unresolved_placeholders(file_map))
     result.static_findings.extend(_check_unresolved_manual_placeholders(file_map))
-    result.static_findings.extend(_check_yaml_front_matter(file_map))
-    result.static_findings.extend(_check_project_name_consistency(file_map, manifest))
+    result.static_findings.extend(_check_yaml_front_matter(
+        file_map, agent_ext=agent_ext,
+        required_keys=_adapter.required_front_matter_keys() if _adapter else _REQUIRED_YAML_KEYS,
+    ))
+    result.static_findings.extend(_check_project_name_consistency(file_map, manifest, agent_ext=agent_ext))
 
     # --- Static checks (adversarial style) ---
-    result.static_findings.extend(_check_required_agents_present(file_map, manifest))
-    result.static_findings.extend(_check_workstream_expert_coverage(file_map, manifest))
+    result.static_findings.extend(_check_required_agents_present(file_map, manifest, agent_ext=agent_ext))
+    result.static_findings.extend(_check_workstream_expert_coverage(file_map, manifest, agent_ext=agent_ext))
 
     # --- Agent-refactor checks (spec compliance) ---
-    result.agent_refactor_findings.extend(_check_invariant_core_present(file_map))
-    result.agent_refactor_findings.extend(_check_return_handoff_present(file_map))
-    result.agent_refactor_findings.extend(_check_readonly_tool_declarations(file_map))
-    result.agent_refactor_findings.extend(_check_instruction_authority_reachable(file_map))
-    result.agent_refactor_findings.extend(_check_dangling_agent_slugs(file_map, output_dir))
+    result.agent_refactor_findings.extend(_check_invariant_core_present(file_map, agent_ext=agent_ext))
+    result.agent_refactor_findings.extend(_check_return_handoff_present(
+        file_map, agent_ext=agent_ext,
+        supports_handoffs=_adapter.supports_handoffs() if _adapter else True,
+    ))
+    result.agent_refactor_findings.extend(_check_readonly_tool_declarations(file_map, agent_ext=agent_ext))
+    result.agent_refactor_findings.extend(_check_instruction_authority_reachable(file_map, agent_ext=agent_ext))
+    result.agent_refactor_findings.extend(_check_dangling_agent_slugs(file_map, output_dir, agent_ext=agent_ext))
 
     # --- Code-hygiene checks ---
-    result.code_hygiene_findings.extend(_check_ch14_inline_data_blocks(file_map))
-    result.code_hygiene_findings.extend(_check_ch20_duplicate_descriptions(file_map))
+    result.code_hygiene_findings.extend(_check_ch14_inline_data_blocks(file_map, agent_ext=agent_ext))
+    result.code_hygiene_findings.extend(_check_ch20_duplicate_descriptions(file_map, agent_ext=agent_ext))
     # Living-document policy — scope and rationale in agentteams.living_doc.
     # Warnings, never errors: a date in prose is evidence of archaeology, not
     # proof of it, and a legitimate effective-date must not fail a build.
@@ -314,6 +333,9 @@ def _check_unresolved_manual_placeholders(
 
 def _check_yaml_front_matter(
     file_map: dict[str, str],
+    *,
+    agent_ext: str,
+    required_keys: tuple[str, ...] = _REQUIRED_YAML_KEYS,
 ) -> list[AuditFinding]:
     """Check that every .agent.md file has the required YAML front matter keys.
 
@@ -324,8 +346,14 @@ def _check_yaml_front_matter(
         List of AuditFinding for files with missing or malformed YAML.
     """
     findings: list[AuditFinding] = []
+    # A framework that declares no front-matter contract is not asserting that its agent files
+    # have none — it is asserting that this audit does not know its header shape. Checking
+    # anyway is how copilot-vscode's five keys came to be demanded of claude's three and
+    # copilot-cli's zero, producing 83 findings against a correct tree.
+    if not required_keys:
+        return findings
     for rel_path, content in file_map.items():
-        if not rel_path.endswith(".agent.md"):
+        if not _is_agent_file(rel_path, agent_ext):
             continue
         if "references/" in rel_path:
             continue  # reference files intentionally have no front matter
@@ -352,7 +380,7 @@ def _check_yaml_front_matter(
             continue
 
         yaml_block = content[3:end]
-        for key in _REQUIRED_YAML_KEYS:
+        for key in required_keys:
             if f"{key}:" not in yaml_block:
                 findings.append(AuditFinding(
                     category="CONFLICT",
@@ -367,6 +395,8 @@ def _check_yaml_front_matter(
 def _check_project_name_consistency(
     file_map: dict[str, str],
     manifest: dict[str, Any],
+    *,
+    agent_ext: str,
 ) -> list[AuditFinding]:
     """Check that the project name is consistent in YAML 'name:' fields.
 
@@ -393,9 +423,9 @@ def _check_project_name_consistency(
     # Slugs that legitimately carry a fixed project name unrelated to the target project
     _skip_slugs = frozenset({"team-builder"})
     for rel_path, content in file_map.items():
-        if not rel_path.endswith(".agent.md"):
+        if not _is_agent_file(rel_path, agent_ext):
             continue
-        slug = Path(rel_path).stem.replace(".agent", "")
+        slug = _agent_slug(rel_path, agent_ext)
         if slug in _skip_slugs:
             continue
         m = _name_re.search(content[:400])
@@ -422,6 +452,8 @@ def _check_project_name_consistency(
 def _check_required_agents_present(
     file_map: dict[str, str],
     manifest: dict[str, Any],
+    *,
+    agent_ext: str,
 ) -> list[AuditFinding]:
     """Verify that governance agents required in every team were generated.
 
@@ -434,9 +466,9 @@ def _check_required_agents_present(
     """
     findings: list[AuditFinding] = []
     generated_slugs = {
-        Path(p).stem.replace(".agent", "")
+        _agent_slug(p, agent_ext)
         for p in file_map
-        if p.endswith(".agent.md") and "references/" not in p
+        if _is_agent_file(p, agent_ext)
     }
     for slug in _REQUIRED_AGENTS:
         if slug not in generated_slugs:
@@ -456,6 +488,8 @@ def _check_required_agents_present(
 def _check_workstream_expert_coverage(
     file_map: dict[str, str],
     manifest: dict[str, Any],
+    *,
+    agent_ext: str,
 ) -> list[AuditFinding]:
     """Verify that every brief component has a corresponding workstream expert file.
 
@@ -469,7 +503,7 @@ def _check_workstream_expert_coverage(
     findings: list[AuditFinding] = []
     for comp in manifest.get("components", []):
         slug = comp.get("slug", "")
-        expert_file = f"{slug}-expert.agent.md"
+        expert_file = f"{slug}-expert{agent_ext}"
         if expert_file not in file_map:
             findings.append(AuditFinding(
                 category="PRESUPPOSITION",
@@ -494,6 +528,8 @@ _AGENTS_LIST_RE = re.compile(r"['\"]([a-z][a-z0-9_-]+)['\"]")
 def _check_dangling_agent_slugs(
     file_map: dict[str, str],
     output_dir: Path | None = None,
+    *,
+    agent_ext: str,
 ) -> list[AuditFinding]:
     """Check that every slug in an agent's YAML 'agents:' list has a file.
 
@@ -512,9 +548,9 @@ def _check_dangling_agent_slugs(
         List of AuditFinding for each dangling agent slug reference.
     """
     generated_slugs = {
-        Path(p).stem.replace(".agent", "")
+        _agent_slug(p, agent_ext)
         for p in file_map
-        if p.endswith(".agent.md") and "references/" not in p
+        if _is_agent_file(p, agent_ext)
     }
     # Also accept slugs from .claude/agents/ in the same repo root
     if output_dir is not None:
@@ -523,11 +559,11 @@ def _check_dangling_agent_slugs(
         if claude_agents_dir.is_dir():
             for p in claude_agents_dir.iterdir():
                 if p.suffix == ".md":
-                    generated_slugs.add(p.stem.replace(".agent", ""))
+                    generated_slugs.add(_agent_slug(p.name, agent_ext))
     findings: list[AuditFinding] = []
 
     for rel_path, content in file_map.items():
-        if not rel_path.endswith(".agent.md"):
+        if not _is_agent_file(rel_path, agent_ext):
             continue
         if "references/" in rel_path:
             continue
@@ -563,7 +599,7 @@ def _check_dangling_agent_slugs(
                         file=rel_path,
                         description=(
                             f"YAML 'agents:' references '@{slug}' "
-                            f"but no {slug}.agent.md was generated."
+                            f"but no {slug}{agent_ext} was generated."
                         ),
                     ))
 
@@ -584,6 +620,8 @@ _CH14_ALLOW_INLINE_END = "<!-- /CH14:ALLOW_INLINE_DATA -->"
 
 def _check_ch14_inline_data_blocks(
     file_map: dict[str, str],
+    *,
+    agent_ext: str,
 ) -> list[AuditFinding]:
     """CH-14: Docs should reference shared data, not duplicate it inline.
 
@@ -600,7 +638,7 @@ def _check_ch14_inline_data_blocks(
     findings: list[AuditFinding] = []
     # Reference files are expected to contain large data blocks — skip them
     for rel_path, content in file_map.items():
-        if not rel_path.endswith(".agent.md"):
+        if not _is_agent_file(rel_path, agent_ext):
             continue
         if "references/" in rel_path:
             continue
@@ -666,6 +704,8 @@ def _check_ch14_inline_data_blocks(
 
 def _check_ch20_duplicate_descriptions(
     file_map: dict[str, str],
+    *,
+    agent_ext: str,
 ) -> list[AuditFinding]:
     """CH-20: Agent docs must not contradict each other.
 
@@ -682,7 +722,7 @@ def _check_ch20_duplicate_descriptions(
     desc_to_files: dict[str, list[str]] = {}
 
     for rel_path, content in file_map.items():
-        if not rel_path.endswith(".agent.md"):
+        if not _is_agent_file(rel_path, agent_ext):
             continue
         if "references/" in rel_path:
             continue
@@ -807,7 +847,9 @@ def _build_ai_context(
     ]
 
     total_chars = 0
-    agent_paths = sorted(p for p in file_map if p.endswith(".agent.md"))
+    # Derived here rather than passed: this function already receives the manifest, and the
+    # AI audit was sending an empty agent list on every `.md` framework.
+    agent_paths = sorted(p for p in file_map if _is_agent_file(p, _agent_file_ext(manifest)))
     for rel_path in agent_paths:
         if total_chars >= _AI_CONTEXT_LIMIT:
             remaining = len(agent_paths) - len([l for l in lines if l.startswith("  ")])
