@@ -47,10 +47,28 @@ _FRESH = (
 )
 
 
+#: The deployed file carries the `invariant_core` fence **and** the pre-fencing unfenced copy.
+#:
+#: That is the state this script exists for, and these fixtures did not model it. They built a
+#: file with the unfenced copy and no `invariant_core` fence, so every assertion below described
+#: removing the section's ONLY copy — `test_an_identical_pre_fencing_copy_is_removed` asserted
+#: the count reached zero. The tool's own docstring says the merge ADDS the fenced block while
+#: the unfenced copy is preserved: two copies, one stale. One copy is not a collision.
+#:
+#: Encoding the pre-merge state as the expected input is what let a real run delete `## Rules`
+#: from `conflict-auditor.md` on 2026-08-03 and 331 lines from `security.md` on 2026-08-01,
+#: with a green suite both times.
+_DEPLOYED_FENCE = (
+    "<!-- AGENTTEAMS:BEGIN invariant_core v=1 -->\n"
+    "## Invariant Core\n\nThe contract. Do not modify.\n"
+    "<!-- AGENTTEAMS:END invariant_core -->\n\n"
+)
+
+
 def _deployed(core_body: str, *, trailing: str = "## Tail\n\ntrailing.\n") -> str:
     return (
         "---\nname: A\ndescription: x\n---\n\n"
-        + _KEPT_FENCE +
+        + _KEPT_FENCE + _DEPLOYED_FENCE +
         f"## Invariant Core\n\n{core_body}\n\n"
         f"{trailing}"
         "\n## Project-Specific Notes\n\n- operator content that must survive.\n"
@@ -67,7 +85,11 @@ def test_an_identical_pre_fencing_copy_is_removed(tmp_path):
     new_text, resolved, skipped = _run(tmp_path, _deployed("The contract. Do not modify."))
     assert resolved == ["## Invariant Core  [equality]"], (resolved, skipped)
     assert new_text is not None
-    assert new_text.count("## Invariant Core") == 0, "the unfenced copy is gone"
+    # Exactly one copy survives, and it is the FENCED one. This asserted `== 0` while the
+    # fixture had no `invariant_core` fence — i.e. it required the tool to delete the section
+    # entirely and called that success.
+    assert new_text.count("## Invariant Core") == 1, "the fenced copy must survive"
+    assert "<!-- AGENTTEAMS:BEGIN invariant_core" in new_text
     assert "operator content that must survive" in new_text
 
 
@@ -202,18 +224,34 @@ def test_a_trailing_section_is_still_refused_when_a_user_region_follows(tmp_path
     ), "the user region below a trailing section must never be swallowed"
 
 
-def test_a_trailing_section_resolves_when_no_user_region_and_pristine(tmp_path):
-    """Reference files never receive the notes region, which is what makes EOF-bounding safe."""
+def test_provenance_cannot_delete_a_section_with_no_survivor_on_disk(tmp_path):
+    """Pristine provenance is not a licence to remove the only copy.
+
+    This previously asserted the removal SUCCEEDED. The fixture has no `invariant_core` fence,
+    so "resolving" it left the file with no invariant core at all — and `_file_is_pristine` was
+    the exact authorisation that took `security.md` from 363 lines to 32 on 2026-08-01.
+
+    Provenance answers "has anyone edited this file?". That is a real question and the answer
+    is used elsewhere. It is not the question that makes a delete safe, which is "does a copy
+    remain afterwards?" — and the two were being conflated.
+
+    The trailing case is still resolvable when a survivor exists: see
+    `test_trailing_collision_equality.py`, where equality against a deployed fence authorises
+    EOF-bounding with no provenance at all.
+    """
     trailing_only = (
         "---\nname: A\ndescription: x\n---\n\n"
         + _KEPT_FENCE +
         "## Invariant Core\n\nA stale earlier version.\n"
     )
     agents = _with_build_log(tmp_path, trailing_only, record_hash=True)
-    _, resolved, skipped = resolver._resolve_file(
+    new_text, resolved, skipped = resolver._resolve_file(
         agents / "a.agent.md", _FRESH, agents_dir=agents, trust_provenance=True
     )
-    assert resolved == ["## Invariant Core  [provenance]"], (resolved, skipped)
+    assert resolved == [], f"provenance authorised deleting the only copy: {resolved}"
+    assert any("no fence carrying that section" in s for s in skipped), skipped
+    if new_text is not None:
+        assert "## Invariant Core" in new_text
 
 
 def test_a_trailing_section_is_refused_without_provenance(tmp_path):

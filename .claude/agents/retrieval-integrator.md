@@ -106,20 +106,6 @@ agentteams --query-code "<function/class name, API symbol, or capability>" --cod
 - Required remediations: explicit file-level changes
 <!-- AGENTTEAMS:END output_format -->
 
-## Validation Procedure
-
-1. Resolve every declared query and maintenance entrypoint against repository files.
-2. Verify each trigger source has executable evidence.
-3. Validate source-of-truth tables/files are referenced by verification logic.
-4. Confirm staleness threshold is documented and enforceable.
-5. Report any mode mismatch (for example, relational metadata presented as embedding-vector retrieval).
-
-## Output Format
-
-- Status: PASS, PASS_WITH_NOTES, FAIL, or INCONCLUSIVE
-- Findings: numbered list with evidence path
-- Required remediations: explicit file-level changes
-
 ## Project-Specific Notes
 
 > ⚙️ **USER-EDITABLE** — project-specific rules, overrides, and extensions for this agent. This section lies outside every `AGENTTEAMS` fence and is preserved verbatim across `agentteams --update --merge`.

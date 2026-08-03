@@ -54,8 +54,3 @@ Entries for repositories whose agent infrastructure no longer exists at the regi
 
 ---
 
-## Retired Entries
-
-Entries for repositories whose agent infrastructure no longer exists at the registered path, or whose relationship to this project has ended.
-
-*No retired entries.*
