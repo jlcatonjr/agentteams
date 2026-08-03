@@ -39,6 +39,10 @@ class CopilotVSCodeAdapter(FrameworkAdapter):
     def supports_handoffs(self) -> bool:
         return True
 
+    def required_front_matter_keys(self) -> tuple[str, ...]:
+        """The original `_REQUIRED_YAML_KEYS`, now named as this framework's contract."""
+        return ("name", "description", "user-invokable", "tools", "model")
+
     def get_agents_dir(self, project_path: Path) -> Path:
         return project_path / ".github" / "agents"
 

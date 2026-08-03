@@ -126,6 +126,10 @@ class ClaudeAdapter(FrameworkAdapter):
     def supports_handoffs(self) -> bool:
         return False
 
+    def required_front_matter_keys(self) -> tuple[str, ...]:
+        """Claude agent headers carry `allowed-tools`, not copilot-vscode's `tools`/`model`."""
+        return ("name", "description", "allowed-tools")
+
     def handoff_delivery_mode(self) -> str:
         return "manifest"
 

@@ -127,40 +127,40 @@ def test_load_files_from_disk_skips_agentteams_backups(tmp_path):
 
 def test_yaml_missing_front_matter_flagged_as_error():
     file_map = {"navigator.agent.md": "# Navigator\n\nNo front matter here.\n"}
-    findings = _check_yaml_front_matter(file_map)
+    findings = _check_yaml_front_matter(file_map, agent_ext=".agent.md")
     assert any(f.code == "YAML_MISSING" and f.severity == "error" for f in findings)
 
 
 def test_yaml_unclosed_block_flagged_as_error():
     # No second '---' to close the front matter block
     file_map = {"bad.agent.md": "---\nname: Bad\ndescription: missing closing marker\n"}
-    findings = _check_yaml_front_matter(file_map)
+    findings = _check_yaml_front_matter(file_map, agent_ext=".agent.md")
     assert any(f.code == "YAML_MALFORMED" and f.severity == "error" for f in findings)
 
 
 def test_yaml_missing_field_flagged_as_warning():
     content = "---\nname: Agent — Project\ndescription: desc\ntools: []\n---\n# body"
     file_map = {"agent.agent.md": content}
-    findings = _check_yaml_front_matter(file_map)
+    findings = _check_yaml_front_matter(file_map, agent_ext=".agent.md")
     # 'model' key is missing → one warning
     assert any(f.code == "YAML_MISSING_FIELD" and "model" in f.description for f in findings)
 
 
 def test_yaml_valid_file_returns_no_findings():
     file_map = {"orchestrator.agent.md": _VALID_AGENT_CONTENT}
-    findings = _check_yaml_front_matter(file_map)
+    findings = _check_yaml_front_matter(file_map, agent_ext=".agent.md")
     assert not findings
 
 
 def test_yaml_skips_reference_files():
     file_map = {"references/ref-tool.md": "# Tool Reference\n\nNo YAML here.\n"}
-    findings = _check_yaml_front_matter(file_map)
+    findings = _check_yaml_front_matter(file_map, agent_ext=".agent.md")
     assert not findings
 
 
 def test_yaml_skips_non_agent_files():
     file_map = {"SETUP-REQUIRED.md": "# SETUP\n\nNo YAML needed.\n"}
-    findings = _check_yaml_front_matter(file_map)
+    findings = _check_yaml_front_matter(file_map, agent_ext=".agent.md")
     assert not findings
 
 
@@ -172,28 +172,28 @@ def test_project_name_mismatch_flagged():
     content = "---\nname: Orchestrator — WrongProject\ndescription: x\ntools: []\nmodel: []\n---\n"
     file_map = {"orchestrator.agent.md": content}
     manifest = {**_MINIMAL_MANIFEST, "project_name": "TestProject"}
-    findings = _check_project_name_consistency(file_map, manifest)
+    findings = _check_project_name_consistency(file_map, manifest, agent_ext=".agent.md")
     assert any(f.code == "PROJECT_NAME_MISMATCH" for f in findings)
 
 
 def test_project_name_match_no_finding():
     file_map = {"orchestrator.agent.md": _VALID_AGENT_CONTENT}
     manifest = {**_MINIMAL_MANIFEST, "project_name": "TestProject"}
-    findings = _check_project_name_consistency(file_map, manifest)
+    findings = _check_project_name_consistency(file_map, manifest, agent_ext=".agent.md")
     assert not findings
 
 
 def test_project_name_skips_when_manifest_name_empty():
     file_map = {"orchestrator.agent.md": _VALID_AGENT_CONTENT}
     manifest = {**_MINIMAL_MANIFEST, "project_name": ""}
-    findings = _check_project_name_consistency(file_map, manifest)
+    findings = _check_project_name_consistency(file_map, manifest, agent_ext=".agent.md")
     assert not findings
 
 
 def test_project_name_skips_when_manifest_name_is_manual():
     file_map = {"orchestrator.agent.md": _VALID_AGENT_CONTENT}
     manifest = {**_MINIMAL_MANIFEST, "project_name": "{MANUAL:PROJECT_NAME}"}
-    findings = _check_project_name_consistency(file_map, manifest)
+    findings = _check_project_name_consistency(file_map, manifest, agent_ext=".agent.md")
     assert not findings
 
 
@@ -201,7 +201,7 @@ def test_project_name_comparison_is_case_insensitive():
     content = "---\nname: Orchestrator — testproject\ndescription: x\ntools: []\nmodel: []\n---\n"
     file_map = {"orchestrator.agent.md": content}
     manifest = {**_MINIMAL_MANIFEST, "project_name": "TestProject"}
-    findings = _check_project_name_consistency(file_map, manifest)
+    findings = _check_project_name_consistency(file_map, manifest, agent_ext=".agent.md")
     assert not findings
 
 
@@ -214,7 +214,7 @@ def test_missing_orchestrator_flagged_as_error():
         "adversarial.agent.md": _VALID_AGENT_CONTENT,
         "conflict-auditor.agent.md": _VALID_AGENT_CONTENT,
     }
-    findings = _check_required_agents_present(file_map, _MINIMAL_MANIFEST)
+    findings = _check_required_agents_present(file_map, _MINIMAL_MANIFEST, agent_ext=".agent.md")
     assert any(
         f.code == "MISSING_REQUIRED_AGENT" and "orchestrator" in f.description and f.severity == "error"
         for f in findings
@@ -226,7 +226,7 @@ def test_missing_adversarial_flagged_as_error():
         "orchestrator.agent.md": _VALID_AGENT_CONTENT,
         "conflict-auditor.agent.md": _VALID_AGENT_CONTENT,
     }
-    findings = _check_required_agents_present(file_map, _MINIMAL_MANIFEST)
+    findings = _check_required_agents_present(file_map, _MINIMAL_MANIFEST, agent_ext=".agent.md")
     assert any(f.code == "MISSING_REQUIRED_AGENT" and "adversarial" in f.description for f in findings)
 
 
@@ -236,7 +236,7 @@ def test_all_required_agents_present_no_finding():
         "adversarial.agent.md": _VALID_AGENT_CONTENT,
         "conflict-auditor.agent.md": _VALID_AGENT_CONTENT,
     }
-    findings = _check_required_agents_present(file_map, _MINIMAL_MANIFEST)
+    findings = _check_required_agents_present(file_map, _MINIMAL_MANIFEST, agent_ext=".agent.md")
     assert not findings
 
 
@@ -247,7 +247,7 @@ def test_required_agents_ignores_reference_files():
         "adversarial.agent.md": _VALID_AGENT_CONTENT,
         "conflict-auditor.agent.md": _VALID_AGENT_CONTENT,
     }
-    findings = _check_required_agents_present(file_map, _MINIMAL_MANIFEST)
+    findings = _check_required_agents_present(file_map, _MINIMAL_MANIFEST, agent_ext=".agent.md")
     assert any(f.code == "MISSING_REQUIRED_AGENT" and "orchestrator" in f.description for f in findings)
 
 
@@ -261,7 +261,7 @@ def test_missing_workstream_expert_flagged():
         "components": [{"slug": "pipeline-core"}],
     }
     file_map = {"orchestrator.agent.md": _VALID_AGENT_CONTENT}
-    findings = _check_workstream_expert_coverage(file_map, manifest)
+    findings = _check_workstream_expert_coverage(file_map, manifest, agent_ext=".agent.md")
     assert any(
         f.code == "MISSING_WORKSTREAM_EXPERT" and "pipeline-core" in f.description
         for f in findings
@@ -277,14 +277,14 @@ def test_workstream_expert_present_no_finding():
         "orchestrator.agent.md": _VALID_AGENT_CONTENT,
         "pipeline-core-expert.agent.md": _VALID_AGENT_CONTENT,
     }
-    findings = _check_workstream_expert_coverage(file_map, manifest)
+    findings = _check_workstream_expert_coverage(file_map, manifest, agent_ext=".agent.md")
     assert not findings
 
 
 def test_no_components_returns_no_finding():
     manifest = {**_MINIMAL_MANIFEST, "components": []}
     file_map = {"orchestrator.agent.md": _VALID_AGENT_CONTENT}
-    findings = _check_workstream_expert_coverage(file_map, manifest)
+    findings = _check_workstream_expert_coverage(file_map, manifest, agent_ext=".agent.md")
     assert not findings
 
 
@@ -442,25 +442,25 @@ model: ["Claude Sonnet 4.6 (copilot)"]
 
 def test_invariant_core_missing_flagged():
     file_map = {"navigator.agent.md": _VALID_AGENT_CONTENT}
-    findings = _check_invariant_core_present(file_map)
+    findings = _check_invariant_core_present(file_map, agent_ext=".agent.md")
     assert any(f.code == "AR_MISSING_INVARIANT_CORE" for f in findings)
 
 
 def test_invariant_core_present_no_finding():
     file_map = {"auditor.agent.md": _AGENT_WITH_INVARIANT}
-    findings = _check_invariant_core_present(file_map)
+    findings = _check_invariant_core_present(file_map, agent_ext=".agent.md")
     assert not findings
 
 
 def test_invariant_core_skips_reference_files():
     file_map = {"references/data.md": "# Data\n\nNo invariant needed.\n"}
-    findings = _check_invariant_core_present(file_map)
+    findings = _check_invariant_core_present(file_map, agent_ext=".agent.md")
     assert not findings
 
 
 def test_invariant_core_skips_non_agent_files():
     file_map = {"SETUP-REQUIRED.md": "# Setup\n\nNo invariant here.\n"}
-    findings = _check_invariant_core_present(file_map)
+    findings = _check_invariant_core_present(file_map, agent_ext=".agent.md")
     assert not findings
 
 
@@ -490,26 +490,26 @@ handoffs:
 def test_return_handoff_missing_flagged():
     content = _AGENT_WITH_INVARIANT  # has no handoffs block
     file_map = {"auditor.agent.md": content}
-    findings = _check_return_handoff_present(file_map)
+    findings = _check_return_handoff_present(file_map, agent_ext=".agent.md")
     assert any(f.code == "AR_MISSING_RETURN_HANDOFF" for f in findings)
 
 
 def test_return_handoff_present_no_finding():
     file_map = {"navigator.agent.md": _AGENT_WITH_RETURN_HANDOFF}
-    findings = _check_return_handoff_present(file_map)
+    findings = _check_return_handoff_present(file_map, agent_ext=".agent.md")
     assert not findings
 
 
 def test_return_handoff_skips_orchestrator_itself():
     # The orchestrator.agent.md file doesn't need a return handoff to itself
     file_map = {"orchestrator.agent.md": _AGENT_WITH_INVARIANT}
-    findings = _check_return_handoff_present(file_map)
+    findings = _check_return_handoff_present(file_map, agent_ext=".agent.md")
     assert not any(f.code == "AR_MISSING_RETURN_HANDOFF" for f in findings)
 
 
 def test_return_handoff_skips_reference_files():
     file_map = {"references/ref-tool.md": "# Tool\n\nNo handoff here.\n"}
-    findings = _check_return_handoff_present(file_map)
+    findings = _check_return_handoff_present(file_map, agent_ext=".agent.md")
     assert not findings
 
 
@@ -534,7 +534,7 @@ You are **read-only**: you do not write code, modify files, or execute commands.
 > ⛔ **Do not modify or omit.**
 """
     file_map = {"reader.agent.md": content}
-    findings = _check_readonly_tool_declarations(file_map)
+    findings = _check_readonly_tool_declarations(file_map, agent_ext=".agent.md")
     assert any(f.code == "AR_READONLY_TOOL_VIOLATION" and f.severity == "error" for f in findings)
 
 
@@ -555,7 +555,7 @@ You are **read-only**: you do not write code, modify files, or execute commands.
 > ⛔ **Do not modify or omit.**
 """
     file_map = {"reader.agent.md": content}
-    findings = _check_readonly_tool_declarations(file_map)
+    findings = _check_readonly_tool_declarations(file_map, agent_ext=".agent.md")
     assert not findings
 
 
@@ -577,7 +577,7 @@ You write code and modify files.
 > ⛔ **Do not modify or omit.**
 """
     file_map = {"producer.agent.md": content}
-    findings = _check_readonly_tool_declarations(file_map)
+    findings = _check_readonly_tool_declarations(file_map, agent_ext=".agent.md")
     assert not findings
 
 
@@ -601,7 +601,7 @@ agents: ['nonexistent-agent']
 > ⛔ **Do not modify or omit.**
 """
     file_map = {"some-agent.agent.md": content}
-    findings = _check_dangling_agent_slugs(file_map)
+    findings = _check_dangling_agent_slugs(file_map, agent_ext=".agent.md")
     assert any(f.code == "AR_DANGLING_AGENT_SLUG" and "nonexistent-agent" in f.description for f in findings)
 
 
@@ -624,13 +624,13 @@ agents: ['other-agent']
         "some-agent.agent.md": content,
         "other-agent.agent.md": _AGENT_WITH_INVARIANT,
     }
-    findings = _check_dangling_agent_slugs(file_map)
+    findings = _check_dangling_agent_slugs(file_map, agent_ext=".agent.md")
     assert not any(f.code == "AR_DANGLING_AGENT_SLUG" for f in findings)
 
 
 def test_dangling_slug_skips_reference_files():
     file_map = {"references/ref.md": "agents: ['missing-agent']"}
-    findings = _check_dangling_agent_slugs(file_map)
+    findings = _check_dangling_agent_slugs(file_map, agent_ext=".agent.md")
     assert not findings
 
 
@@ -664,13 +664,13 @@ def _make_large_table(rows: int) -> str:
 
 def test_ch14_large_table_outside_invariant_flagged():
     file_map = {"agent.agent.md": _make_large_table(15)}
-    findings = _check_ch14_inline_data_blocks(file_map)
+    findings = _check_ch14_inline_data_blocks(file_map, agent_ext=".agent.md")
     assert any(f.code == "CH14_INLINE_DATA_BLOCK" for f in findings)
 
 
 def test_ch14_small_table_not_flagged():
     file_map = {"agent.agent.md": _make_large_table(5)}
-    findings = _check_ch14_inline_data_blocks(file_map)
+    findings = _check_ch14_inline_data_blocks(file_map, agent_ext=".agent.md")
     assert not findings
 
 
@@ -678,14 +678,14 @@ def test_ch14_skips_reference_files():
     # Reference files are expected to contain large tables
     big_content = "\n".join(f"| row {i} | value {i} |" for i in range(20))
     file_map = {"references/big-ref.md": big_content}
-    findings = _check_ch14_inline_data_blocks(file_map)
+    findings = _check_ch14_inline_data_blocks(file_map, agent_ext=".agent.md")
     assert not findings
 
 
 def test_ch14_skips_non_agent_files():
     big_content = "\n".join(f"| row {i} | value {i} |" for i in range(20))
     file_map = {"SETUP-REQUIRED.md": big_content}
-    findings = _check_ch14_inline_data_blocks(file_map)
+    findings = _check_ch14_inline_data_blocks(file_map, agent_ext=".agent.md")
     assert not findings
 
 
@@ -718,7 +718,7 @@ model: [x]
 | 13 | 13 |
 <!-- /CH14:ALLOW_INLINE_DATA -->
 """
-    findings = _check_ch14_inline_data_blocks({"agent.agent.md": content})
+    findings = _check_ch14_inline_data_blocks({"agent.agent.md": content}, agent_ext=".agent.md")
     assert not any(f.code == "CH14_INLINE_DATA_BLOCK" for f in findings)
 
 
@@ -754,7 +754,7 @@ model: [x]
 | 10 | 10 |
 | 11 | 11 |
 """
-    findings = _check_ch14_inline_data_blocks({"agent.agent.md": content})
+    findings = _check_ch14_inline_data_blocks({"agent.agent.md": content}, agent_ext=".agent.md")
     assert any(f.code == "CH14_INLINE_DATA_BLOCK" for f in findings)
 
 
@@ -766,7 +766,7 @@ def test_ch20_duplicate_description_flagged():
     content_a = '---\nname: A — P\ndescription: "Coordinates the team."\ntools: []\nmodel: []\n---\n'
     content_b = '---\nname: B — P\ndescription: "Coordinates the team."\ntools: []\nmodel: []\n---\n'
     file_map = {"agent-a.agent.md": content_a, "agent-b.agent.md": content_b}
-    findings = _check_ch20_duplicate_descriptions(file_map)
+    findings = _check_ch20_duplicate_descriptions(file_map, agent_ext=".agent.md")
     assert any(f.code == "CH20_DUPLICATE_DESCRIPTION" for f in findings)
 
 
@@ -774,7 +774,7 @@ def test_ch20_unique_descriptions_no_finding():
     content_a = '---\nname: A — P\ndescription: "Coordinates agents."\ntools: []\nmodel: []\n---\n'
     content_b = '---\nname: B — P\ndescription: "Audits conflicts."\ntools: []\nmodel: []\n---\n'
     file_map = {"agent-a.agent.md": content_a, "agent-b.agent.md": content_b}
-    findings = _check_ch20_duplicate_descriptions(file_map)
+    findings = _check_ch20_duplicate_descriptions(file_map, agent_ext=".agent.md")
     assert not findings
 
 
@@ -785,7 +785,7 @@ def test_ch20_skips_reference_files():
         "agent-b.agent.md": f"---\nname: B — P\n{desc_line}\ntools: []\nmodel: []\n---\n",
     }
     # Only one agent file has this description → no duplicate
-    findings = _check_ch20_duplicate_descriptions(file_map)
+    findings = _check_ch20_duplicate_descriptions(file_map, agent_ext=".agent.md")
     assert not findings
 
 

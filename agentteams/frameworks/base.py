@@ -23,8 +23,19 @@ _BODY_HANDOFFS_SECTION_RE = re.compile(
     re.MULTILINE | re.DOTALL,
 )
 
+# A fence marker terminates the strip exactly as a heading does. Without that branch the
+# stripper treats fence markers as ordinary prose and can delete them: in
+# `conflict-auditor.template.md` a fenced, heading-only `## Handoff Payload Conflict Codes` is
+# followed by no further `##` heading, so the match ran to `\Z` and consumed THREE markers —
+# that fence's END and both markers of the whole next fence — across 877 characters. The BEGIN
+# above the heading survived, leaving the emitted file at 8 BEGIN / 7 END, which then made
+# `_extract_fenced_regions` fail, which made `_normalize_generated_content` wrap the body, which
+# finally surfaced as "Nested fence not allowed: invariant_core inside content" — an error three
+# steps from its cause, and one that got this file misdiagnosed twice.
+#
+# A strip may leave a fence empty. It must never leave one unbalanced.
 _HANDOFFS_HEADING_RE = re.compile(
-    r"^#{1,3}\s+Handoff.*?(?=^#{1,3}\s|\Z)",
+    r"^#{1,3}\s+Handoff.*?(?=^#{1,3}\s|^<!--\s*AGENTTEAMS(?:-BRIDGE)?:|\Z)",
     re.MULTILINE | re.DOTALL,
 )
 
@@ -106,6 +117,29 @@ class FrameworkAdapter(ABC):
     @abstractmethod
     def get_agents_dir(self, project_path: Path) -> Path:
         """Return the default agent file directory for a given project path."""
+
+    def required_front_matter_keys(self) -> tuple[str, ...]:
+        """Front-matter keys every agent file of this framework must declare.
+
+        The audit's key list was a **copilot-vscode** contract that had been applied as if it
+        were universal. It went unnoticed only because the audit's file filter was hardcoded to
+        `.agent.md`, so on every other framework the check inspected zero files. Fixing the
+        filter surfaced the real disagreement — the three frameworks emit three genuinely
+        different headers:
+
+            copilot-vscode   name, description, user-invokable, tools, model
+            claude           name, description, allowed-tools
+            copilot-cli      no front matter at all
+
+        Asserting one framework's header shape against another produced 83 findings on a tree
+        with nothing wrong with it.
+
+        The default is empty: *this framework asserts no front-matter contract*. That is the
+        honest default for an adapter whose header shape has not been established, and it
+        preserves today's behaviour, since nothing was being checked there anyway. An adapter
+        declares a contract only when its header shape is known.
+        """
+        return ()
 
     def normalize_output_path(self, output: Path) -> Path:
         """Normalize a user-supplied --output path for this framework.
