@@ -263,8 +263,10 @@ def _report_orphan_agent_files(
     final_rendered: list[tuple[str, str]],
     output_dir: Path,
     manifest: dict,
+    *,
+    agent_ext: str,
 ) -> list[str]:
-    """Detect + print ``*.agent.md`` files on disk that the current team no longer emits.
+    """Detect + print agent files on disk that the current team no longer emits.
 
     ``--prune`` handles removals the build log recorded since the last build; these are older
     orphans the log no longer records, so without this advisory they accumulate invisibly.
@@ -275,25 +277,42 @@ def _report_orphan_agent_files(
     :func:`_report_orphan_reference_docs`, and the two were describing the same blind spot from
     two different files.
 
+    **The suffix is the framework's, not a constant.** This filtered on ``.agent.md`` in both
+    directions until 2026-08-03. Only copilot-vscode uses that extension; claude, copilot-cli,
+    agents_md and goose emit ``*.md``, so ``glob("*.agent.md")`` matched nothing and the
+    advisory reported zero orphans on those frameworks regardless of what was on disk —
+    measured on this repo's own ``.claude/agents``, which carried four. ``cli/generate.py``'s
+    ``--adopt-orphans`` path already read the extension from the adapter; only this advisory
+    hardcoded it.
+
+    ``agent_ext`` is keyword-only and required rather than defaulted, because a default is
+    what let the suffix go unexamined in the first place.
+
     Args:
         final_rendered: ``(rel_path, content)`` pairs the current run will write.
         output_dir:     Root agents directory.
         manifest:       Team manifest, read for ``adopted_agents`` and ``tool_agents``.
+        agent_ext:      The framework's agent-file extension, from
+                        ``adapter.get_file_extension("agent")``.
 
     Returns:
         The sorted list of orphaned filenames (empty if none).
     """
-    emitted_names = {Path(p).name for p, _ in final_rendered if p.endswith(".agent.md")}
+    emitted_names = {Path(p).name for p, _ in final_rendered if p.endswith(agent_ext)}
     # Adopted orphans (--adopt-orphans) are deliberately not emitted but are now roster
     # members — don't re-report them as orphaned.
-    adopted_names = {f"{s}.agent.md" for s in manifest.get("adopted_agents", [])}
-    # Tool docs are never agents — exclude any tool-<slug>.agent.md whose tool is in the
+    adopted_names = {f"{s}{agent_ext}" for s in manifest.get("adopted_agents", [])}
+    # Tool docs are never agents — exclude any tool-<slug> doc whose tool is in the
     # current team from the orphan scan (handled by migration in the caller).
-    tool_doc_names = {f"{ta['slug']}.agent.md" for ta in manifest.get("tool_agents", [])}
+    tool_doc_names = {f"{ta['slug']}{agent_ext}" for ta in manifest.get("tool_agents", [])}
 
     orphans = sorted(
-        f.name for f in output_dir.glob("*.agent.md")
-        if f.name not in emitted_names
+        f.name for f in output_dir.glob(f"*{agent_ext}")
+        # A build artifact, not an agent, and never emitted as one. The `.agent.md` suffix
+        # excluded it for free; a bare `.md` does not. Same carve-out, same reason, as
+        # `bridge_sources.py` applies when it walks a source directory.
+        if f.name != "SETUP-REQUIRED.md"
+        and f.name not in emitted_names
         and f.name not in adopted_names
         and f.name not in tool_doc_names
     )
