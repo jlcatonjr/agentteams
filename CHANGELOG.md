@@ -6,6 +6,34 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### fixed (the collision backlog reaches zero, and a live cross-agent contradiction goes with it)
+
+- **`technical-validator.md` asserted two incompatible meanings for `CH-01`.** It carried
+  **7 × `TV-0x` and 7 × `CH-0x`** IDs for the same seven rules, while `code-hygiene.md` defines
+  `CH-01` as *"No Backup Files in Source Tree"*. The `CH-xx → TV-xx` rename was deliberate; the
+  unfenced copy was the pre-rename text the fence was meant to replace. Removing it takes the
+  file to 7 TV / 0 CH and resolves a contradiction of exactly the kind CH-20 forbids.
+- **Three sections claimed something false about their own file.** `> ⛔ … the guidance **below**
+  are the immutable contract` predates fencing — sections are placed by name, not position, so a
+  deployed file may carry them in a different order than the template. The fenced copies say
+  "carried in this file's fenced sections". The stale copies are gone.
+- **Three of the ten reported "collisions" were never collisions.** `_deployed_fence_carrying`
+  asks whether *some fenced body contains* the heading — the right question for safety, since a
+  nested heading genuinely does survive a removal. It is the wrong question for **pairing**:
+  `invariant_core` contains several sub-headings, so an unfenced `### Core Responsibilities` was
+  compared against the entire `invariant_core` body, never matching and never resolving.
+  `_fence_whose_first_heading_is` is a **second, narrower predicate** used only to decide what is
+  comparable. The safety predicate is deliberately untouched — narrowing *it* would have
+  re-opened the data-loss hole closed the same morning.
+- **Three genuine divergences hand-merged, and `navigator.md` proves why that mattered.** Its
+  unfenced block was not a stale copy: `### Core Responsibilities` was duplicated in the fence,
+  but `### Project Structure` — the project's own output/reference/figure paths — existed
+  **nowhere else**. A blanket "accept the fenced copy" would have destroyed it. Only the
+  duplicated prefix was removed; the project data and the heading labelling the fenced workstream
+  table both stayed. The other two were proved strict subsets of their fenced twins line by line
+  before deletion.
+- **Collisions in the deployed team: 40 → 0.** Nothing remains for the resolver to report.
+
 ### changed (`graph.py` carved — the first CH-07 split chosen rather than forced)
 
 - **`graph.py` 992 → 770**, with front-matter extraction moved to `agentteams/graph_inputs.py`
