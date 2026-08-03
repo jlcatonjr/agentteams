@@ -37,3 +37,12 @@ class CodeIndexError(AgentTeamsError, RuntimeError):
     truth — a query falls back to opening the referenced file and to filesystem
     search when the code index is absent / stale / malformed. The code index is
     a gitignored local cache, never a committed/drift-tracked artifact."""
+
+
+class PinLocationError(AgentTeamsError, RuntimeError):
+    """No directory outside the generated tree is available to hold the template pin.
+
+    Raised rather than falling back to a guess. A pin written into a directory the tool
+    rewrites is worse than no pin at all: it reads as protection while being erased on the
+    next run.
+    """

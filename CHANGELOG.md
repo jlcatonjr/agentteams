@@ -6,6 +6,26 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### fixed (the template pin refuses rather than guessing where to live)
+
+- **The fallback could put the trust root inside the generated tree.** With no declared
+  `existing_project_path` and a working directory inside the output, `consumer_root` returned
+  `output_dir.parent` — `<proj>/.claude` for a claude team, which the tool regenerates. The
+  module's own docstring says the pin must live outside that area, because *"a trust root the
+  tool routinely rewrites is not a trust root."* The fallback contradicted it. Same mistake,
+  second time, in the same function: the primary path had been corrected the same day and the
+  fallback left expressing the identical confusion.
+- It now raises `PinLocationError` instead of guessing. `--pin-templates` **exits non-zero** so a
+  script notices; a routine run reports that verification did not happen rather than implying it
+  passed. A pin in a directory that gets overwritten is worse than no pin — it reads as
+  protection.
+- The four-clause candidate test collapses to one named predicate, `_is_outside`. One clause was
+  dead: `out.parents[:0]` is the empty slice, so `root not in (out, *out.parents[:0])` reduced to
+  `root != out`, which the first clause already said. **Proved equivalent across a case table**
+  (project root, the output dir, inside it, `.claude`, a sibling project, deep inside, filesystem
+  root) before the swap — that table is also what showed the fix belonged in the fallback rather
+  than the condition.
+
 ### added (`--pin-templates` — a trust root outside the writable surface, S4.6)
 
 - Security review §4.6: nothing verified the shipped templates. `drift.py` compares against the

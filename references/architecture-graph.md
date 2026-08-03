@@ -5,7 +5,7 @@
 
 - Modules mapped: **119**
 - Packages: **6**
-- Internal import edges: **222**
+- Internal import edges: **223**
 - Distinct external dependencies: **4**
 
 ---
@@ -91,7 +91,7 @@ Every module, coloured by package (full adjacency in the table below).
 | `agentteams.enrich._models` | — | `agentteams.enrich`, `agentteams.enrich._audit`, `agentteams.enrich._enrich`, `agentteams.enrich._notebooks` |
 | `agentteams.enrich._notebooks` | `agentteams.enrich._models`, `agentteams.enrich._tools`, `agentteams.tool_metadata_catalog` | `agentteams.enrich._enrich` |
 | `agentteams.enrich._tools` | `agentteams.tool_metadata_catalog` | `agentteams.enrich`, `agentteams.enrich._audit`, `agentteams.enrich._enrich`, `agentteams.enrich._notebooks` |
-| `agentteams.errors` | — | `agentteams.cli.artifacts`, `agentteams.cli.code_index_artifacts`, `agentteams.cli.generate`, `agentteams.git_hooks` |
+| `agentteams.errors` | — | `agentteams.cli.artifacts`, `agentteams.cli.code_index_artifacts`, `agentteams.cli.generate`, `agentteams.git_hooks`, `agentteams.template_pins` |
 | `agentteams.eval_adapters` | — | — |
 | `agentteams.eval_adapters.inspect_ai` | — | — |
 | `agentteams.eval_adapters.openai_evals` | — | — |
@@ -156,7 +156,7 @@ Every module, coloured by package (full adjacency in the table below).
 | `agentteams.stale_detector` | `agentteams.backup`, `agentteams.bridge`, `agentteams.drift`, `agentteams.fleet` | `agentteams.cli.commands`, `agentteams.stale_remediate` |
 | `agentteams.stale_remediate` | `agentteams.backup`, `agentteams.cli.commands`, `agentteams.fleet`, `agentteams.stale_detector` | `agentteams.cli.commands` |
 | `agentteams.svg_render` | — | `agentteams.architecture`, `agentteams.graph` |
-| `agentteams.template_pins` | `agentteams.render` | `agentteams.cli.generate` |
+| `agentteams.template_pins` | `agentteams.errors`, `agentteams.render` | `agentteams.cli.generate` |
 | `agentteams.tool_metadata_catalog` | — | `agentteams.analyze`, `agentteams.enrich._audit`, `agentteams.enrich._notebooks`, `agentteams.enrich._tools` |
 | `agentteams.unfenced` | `agentteams.front_matter_merge` | `agentteams.fences` |
 | `agentteams.update_report` | — | `agentteams.cli.generate` |
@@ -1457,6 +1457,7 @@ digraph "agentteams architecture" {
       "path": "agentteams/template_pins.py",
       "is_package": false,
       "imports_internal": [
+        "agentteams.errors",
         "agentteams.render"
       ],
       "external": [],
@@ -2419,6 +2420,10 @@ digraph "agentteams architecture" {
     {
       "source": "agentteams.stale_remediate",
       "target": "agentteams.stale_detector"
+    },
+    {
+      "source": "agentteams.template_pins",
+      "target": "agentteams.errors"
     },
     {
       "source": "agentteams.template_pins",
