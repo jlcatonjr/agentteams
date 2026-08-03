@@ -101,6 +101,17 @@ class AgentsMdAdapter(FrameworkAdapter):
     def get_file_extension(self, file_type: str) -> str:
         return ".md"
 
+    def required_front_matter_keys(self) -> tuple[str, ...]:
+        """None: these detail files carry no front matter at all.
+
+        `render_agent_file` calls `_strip_yaml_front_matter` and prepends a `# {Name}` heading,
+        so an agents_md file is plain Markdown by construction. The empty tuple is the base
+        default, but it is stated here so "examined, and the answer is none" is distinguishable
+        from "not yet examined" — which is what it was when the audit's per-framework contracts
+        were first declared for copilot-vscode and claude only.
+        """
+        return ()
+
     def supports_handoffs(self) -> bool:
         return False
 

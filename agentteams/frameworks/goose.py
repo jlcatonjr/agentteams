@@ -357,6 +357,14 @@ class GooseAdapter(FrameworkAdapter):
             return ".yaml"
         return ".md"
 
+    def required_front_matter_keys(self) -> tuple[str, ...]:
+        """None: a Goose agent is a recipe YAML, not Markdown with a header.
+
+        There is no front-matter block to require keys of. Stated explicitly rather than
+        inherited so the absence is a recorded finding, not an unexamined default.
+        """
+        return ()
+
     def supports_handoffs(self) -> bool:
         return True
 

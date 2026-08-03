@@ -6,6 +6,35 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### fixed (a scaling claim tested with a clock, and an unexamined capability default)
+
+- **`test_build_index_scaling_is_reasonable` measured scheduler noise.** It asserted
+  `large_s < small_s * 4.0 + 0.05` where the 60-document baseline was **3.3 ms**, so the
+  multiplicative term contributed ~13 ms and the whole check rested on a 50 ms budget on a
+  shared runner. It went red on macOS/3.11 while three sibling jobs passed the same commit, and
+  a re-run of that identical commit passed. The claim is structural, so it is now measured
+  structurally: postings written **per document** is exactly constant across 60/120/240-document
+  corpora and identical on every machine. A ratio against a near-zero denominator is the defect;
+  an absolute seconds-scale ceiling is kept alongside it so a genuinely slow indexer still
+  fails. Verified stable across 20 consecutive runs and under concurrent load.
+  `test_query_latency_bound_for_moderate_corpus` is deliberately left as a wall-clock check —
+  ~100× margin rather than ~15×, an absolute ceiling rather than a ratio — with the reason
+  recorded in the test rather than the two being treated inconsistently.
+- **Every framework now declares its front-matter contract explicitly.** When
+  `required_front_matter_keys()` was added, contracts were declared for copilot-vscode and
+  claude — the two whose headers had been inspected — and the rest were left on the empty
+  default. From outside, "inspected, and there is none" and "not yet inspected" were
+  indistinguishable, which is precisely how claude's header went unchecked in the first place.
+  All five now state their answer with a reason: agents_md strips front matter and prepends a
+  heading; goose emits recipe YAML; **copilot-cli** emits 29 of 30 files with no header at all.
+- That last one corrected an earlier generalisation of mine. I had sampled `navigator.md` on
+  copilot-cli, seen no front matter, and concluded the framework had none. `team-builder.md`
+  does — it comes from `render_builder_file`, a different path — which is why the contract is
+  declared empty for the agents rather than the file set.
+- The new test ties each declaration to real emitted output and is guarded against passing
+  vacuously: at least two frameworks must declare a **non-empty** contract, or the comparison
+  would be checking nothing.
+
 ### changed (the last file missing its fences finally received them)
 
 - **`conflict-auditor.md` merged: 4 fences → 8**, gaining `invariant_core`, `rules`,
