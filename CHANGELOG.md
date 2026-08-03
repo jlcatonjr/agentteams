@@ -6,6 +6,60 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### fixed (the render truncation, and an audit that could not see four of five frameworks)
+
+- **A prose stripper was deleting fence markers.** `_HANDOFFS_HEADING_RE` removed a
+  `## Handoff…` heading and everything under it up to the next `#{1,3}` heading *or end of
+  file*, treating AGENTTEAMS markers as ordinary text. `conflict-auditor.template.md` fences a
+  heading-only `## Handoff Payload Conflict Codes` with no further `##` heading before EOF, so
+  the match ran to `\Z` and consumed **three markers** — that fence's `END` and both markers of
+  the entire following fence, 877 characters, template lines 159–172. The `BEGIN` above the
+  heading survived, leaving the emitted file at 8 BEGIN / 7 END. Everything downstream followed
+  from that: `_extract_fenced_regions` returned an error string, `_normalize_generated_content`
+  wrapped the whole body, and the operator saw **"Nested fence not allowed: invariant_core
+  inside content"** — an error three steps from its cause, which got this file misdiagnosed
+  twice (first blaming the template for nesting, then blaming the merge). A fence marker now
+  terminates the strip exactly as a heading does. Blast radius measured on *rendered* output,
+  not templates: **2 files across 3 frameworks**, both `conflict-auditor.md`; copilot-vscode is
+  untouched because it supports handoffs and never strips. A strip may leave a fence empty; it
+  may never leave one unbalanced, and every rendered file is now checked for that.
+- **The post-generation audit assumed copilot-vscode and lied in both directions.** Fourteen
+  places across `audit.py` and `audit_agent_contract.py` hardcoded `.agent.md`. On claude,
+  copilot-cli, `agents_md` and goose — all of which emit `*.md` — `generated_slugs` came out
+  **empty**, so every required agent was reported missing, including `orchestrator` with
+  `orchestrator.md` in the same file map; `_check_workstream_expert_coverage` separately built
+  `f"{slug}-expert.agent.md"` and looked it up, a name-construction bug that threading a suffix
+  alone would have left firing. Meanwhile every per-file check inspected **zero files**, so
+  CH-14 was silent and the per-agent contract checks — including the invariant-core ⛔ marker
+  check S4.5 rests on — did not run at all.
+- **Fixing the filter exposed a second layer, and fixing only the filter would have been
+  worse.** With the checks finally running, they produced **83 new findings** — because
+  `_REQUIRED_YAML_KEYS` was a copilot-vscode contract applied as if universal. The three
+  frameworks emit three genuinely different headers (`name, description, user-invokable, tools,
+  model` / `name, description, allowed-tools` / none at all), and `AR_MISSING_RETURN_HANDOFF`
+  demanded a section the pipeline deliberately strips on frameworks that do not support
+  handoffs. Adapters now declare their own contract via `required_front_matter_keys()`,
+  defaulting to empty — *this framework asserts no header shape* — and the handoff check is
+  gated on `supports_handoffs()`. Result on identical input: **all three frameworks now report
+  the same 7 findings with the same codes**, where claude previously reported 15 including 9
+  false positives and dropped CH-14 entirely.
+- **`doc_site_config_file` was a supported key the schema rejected.** `analyze.build_manifest`
+  and `manifest_format` both read it, but it was absent from
+  `project-description.schema.json`, which sets `additionalProperties: false` — so every brief
+  declaring it failed validation, including this module's own. Nothing noticed because nothing
+  validated that brief; it does now.
+
+### changed (the self brief describes capabilities the repository already has)
+
+- `.github/agents/_build-description.json` declares a `retrieval_integration` contract and a
+  documentation deliverable. `@retrieval-integrator` and `@cohesion-repairer` are listed as team
+  members in `.claude/CLAUDE.md` and deployed in `.claude/agents`, but the brief gated neither,
+  so both sat as orphans that no advisory could see — and `git log -S` confirms
+  `retrieval_integration` was **never** declared. Every field is derived from code that exists
+  and asserted to resolve: `mode: lexical-index` (the index is BM25), `query_index`,
+  `--refresh-index`, `--query-code`, and the real source directories. Orphan count for the
+  deployed team goes to **zero**. Nothing was regenerated — verified by dry run only.
+
 ### fixed (three advisories that could not see what they were built to report)
 
 - **The orphan advisory was blind to every framework but one.** `_report_orphan_agent_files`
