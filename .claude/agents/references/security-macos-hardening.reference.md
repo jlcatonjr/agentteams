@@ -210,9 +210,3 @@ primary authority.
 4. Escalate unresolved, exploitation-likely gaps to `@orchestrator` with a HALT recommendation.
 <!-- AGENTTEAMS:END operational_integration -->
 
-## Operational integration
-
-1. Refresh judgement against these primary sources during security reviews of macOS targets; the URLs are the current-truth authorities, not this file.
-2. Route high-priority platform gaps into `@security` review gates before execution.
-3. Tie remediation to owners, controls (mSCP/CIS), and verification (Unified Logging / Endpoint Security).
-4. Escalate unresolved, exploitation-likely gaps to `@orchestrator` with a HALT recommendation.

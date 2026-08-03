@@ -6,6 +6,34 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### fixed (the resolver deleted a section whose only copy was the one it removed)
+
+- **Every removal was justified by a fence that might exist only in the template.** `incoming`
+  is read from the *fresh render*, so "a fenced copy remains" was never checked against disk.
+  Applying nine `[equality]`-proved resolutions removed `## Rules` from
+  `.claude/agents/conflict-auditor.md` — five substantive routing rules, **zero surviving
+  copies**. That file carries four fences and has never had `rules`.
+- **It is the same defect that took `security.md` from 363 lines to 32 on 2026-08-01.** The
+  guard added after that incident refuses when the removal span *encloses* a live fence — a
+  different property, which did not fire here because the span enclosed nothing. The guard's own
+  comment already stated the correct rule (*"merge the fence in first; only then is the unfenced
+  copy a duplicate"*) as prose rather than code.
+- `_deployed_fence_carrying` now requires exactly one fence **in the deployed file** carrying
+  the heading. It runs before the enclosure guard, because it is the stronger condition —
+  enclosure asks whether the span would take managed content with it; this asks whether anything
+  is left afterwards. It binds on the `--trust-provenance` path too: provenance answers *"has
+  anyone edited this file?"*, which is not the question that makes a delete safe.
+- **The suite was green through both incidents because the tests encoded the unsafe behaviour.**
+  `test_resolve_fence_collisions.py`'s fixture built a deployed file with *no* `invariant_core`
+  fence and asserted the section count reached **zero** after resolution — the loss, written down
+  as the expected result. Fixtures now model the post-merge two-copy state the script is for.
+- Caught by a plan-mandated gate that re-derived the proof from the **written result** rather
+  than the input, then reverted from git. The tool's own backup was deliberately not relied on:
+  a backup taken by the component under test is not an independent net.
+- Against this repository's team the resolver now reports **8 resolvable / 19 needs-review**
+  (was 9 / 18), and the eight are applied: 7 files, 52 lines of duplicate prose removed, every
+  fenced region body hash preserved, the other 47 files byte-identical.
+
 ### fixed (the render truncation, and an audit that could not see four of five frameworks)
 
 - **A prose stripper was deleting fence markers.** `_HANDOFFS_HEADING_RE` removed a

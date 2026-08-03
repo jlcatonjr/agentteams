@@ -50,11 +50,3 @@ Local Claude adapter constants:
    re-render request when adapter constants are out of date.
 <!-- AGENTTEAMS:END operational_integration_process -->
 
-## Operational Integration Process
-
-1. Refresh this reference on every team initialization and update.
-2. Route `new_upstream` keys to `@framework-adapters-expert` for triage.
-3. Route `documented_locally_not_upstream` keys to `@docs-research-expert`
-   for verification — they may indicate doc drift or a missed rename.
-4. Escalate persistent unresolved drift to `@orchestrator` with a
-   re-render request when adapter constants are out of date.
