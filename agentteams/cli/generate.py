@@ -16,7 +16,7 @@ import argparse
 import sys
 from pathlib import Path
 
-from agentteams import analyze, emit, ingest, liaison_logs, render
+from agentteams import analyze, emit, ingest, liaison_logs, render, template_pins
 from agentteams.cli import security_gate
 from agentteams.cli.artifacts import (
     _emit_mcp_servers_if_enabled,
@@ -241,6 +241,12 @@ def _run_generate_inner(args: argparse.Namespace, strict_manual_placeholders: bo
     # Step 4c: Handle retrieval utility modes — memory-index + code-index
     # (no template rendering; gitignored/local artifacts)
     # -----------------------------------------------------------------------
+    # Template pinning (§4.6) rides the standalone-mode dispatch: --pin-templates writes and
+    # exits, every other run only verifies. Policy in agentteams.template_pins.
+    _pin_rc = template_pins.run_pinning(args, manifest, description, output_dir, TEMPLATES_DIR)
+    if _pin_rc is not None:
+        return _pin_rc
+
     _retrieval_rc = _run_retrieval_utility_modes(args, manifest, output_dir)
     if _retrieval_rc is not None:
         return _retrieval_rc

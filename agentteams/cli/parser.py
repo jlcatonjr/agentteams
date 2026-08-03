@@ -499,6 +499,17 @@ def _build_parser() -> argparse.ArgumentParser:
         help="Optional source framework override for --bridge-from (auto-detected when omitted).",
     )
     parser.add_argument(
+        "--pin-templates",
+        action="store_true",
+        dest="pin_templates",
+        help=(
+            "Record the installed template digests this project trusts, in "
+            ".agentteams/template-pins.json, and commit that file. The ONLY thing that writes "
+            "the pin: every later run compares against it and reports a mismatch, but never "
+            "updates it — a pin that follows what it checks records nothing."
+        ),
+    )
+    parser.add_argument(
         "--reconcile-front-matter",
         action="store_true",
         dest="reconcile_front_matter",
