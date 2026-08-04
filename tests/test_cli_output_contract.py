@@ -27,6 +27,16 @@ import pytest
 
 _REPO_ROOT = Path(__file__).resolve().parents[1]
 _GENERATE = _REPO_ROOT / "agentteams" / "cli" / "generate.py"
+#: The standalone "do one thing and exit" modes were carved out of `generate.py` on 2026-08-03
+#: under CH-07, taking one `[SEC-GATE/DESTRUCTIVE:restore-backup]` site with them. These checks
+#: are about the CLI's *output contract*, which is a property of the surface as a whole rather
+#: than of one file — so they read both halves. This test caught the move, which is the point.
+_STANDALONE = _REPO_ROOT / "agentteams" / "cli" / "standalone_modes.py"
+
+
+def _cli_source() -> str:
+    """The generate/update/check surface, across the modules it now spans."""
+    return _GENERATE.read_text(encoding="utf-8") + "\n" + _STANDALONE.read_text(encoding="utf-8")
 
 
 # --- 1. --dry-run --json emits exactly one JSON document -------------------
@@ -100,7 +110,7 @@ def test_every_dry_run_report_call_site_passes_the_json_stream():
     Patching only the first left the generate path writing its JSON to the redirected stdout,
     i.e. to stderr, so stdout came back empty. Any new call site must pass the stream too.
     """
-    source = _GENERATE.read_text(encoding="utf-8")
+    source = _cli_source()
     call_sites = re.findall(
         r"emit\.print_dry_run_report\((.*?)\)\n", source, re.DOTALL
     )
@@ -155,7 +165,7 @@ def test_json_report_output_is_parseable_on_its_own():
 # --- 2. the no-op summary states what actually happens ---------------------
 
 def test_no_change_summary_does_not_claim_nothing_happens():
-    source = _GENERATE.read_text(encoding="utf-8")
+    source = _cli_source()
     assert "No structural or content changes detected; refreshing security" not in source, (
         "the old wording is back: it reads as 'this run did nothing' while the run goes on to "
         "rewrite every live-data fence"
@@ -179,20 +189,20 @@ _EXPECTED_GATE_CODES = {
 
 
 def test_each_security_gate_has_a_distinct_greppable_code():
-    source = _GENERATE.read_text(encoding="utf-8")
+    source = _cli_source()
     for code in _EXPECTED_GATE_CODES:
         assert code in source, f"missing gate code {code}"
 
 
 def test_no_two_gates_share_a_code():
     """The whole point: two *different* gates were previously indistinguishable in a log."""
-    source = _GENERATE.read_text(encoding="utf-8")
+    source = _cli_source()
     found = re.findall(r"\[SEC-GATE/[A-Za-z:-]+\]", source)
     assert len(found) == len(set(found)), f"duplicate gate codes: {found}"
 
 
 def test_the_old_undifferentiated_message_is_gone():
-    source = _GENERATE.read_text(encoding="utf-8")
+    source = _cli_source()
     assert "Security gate blocked" not in source, (
         "an undifferentiated 'Security gate blocked' message remains; each site needs its own "
         "[SEC-GATE/...] code so a log can say which gate fired"
@@ -206,27 +216,32 @@ def test_each_code_names_the_gate_that_actually_raised():
     checks the code names that gate. This is what would have caught filing the freshness gate
     under "WRITE-PATH".
     """
-    lines = _GENERATE.read_text(encoding="utf-8").splitlines()
     expected_by_fn = {
         "_assert_destructive_action_allowed": "DESTRUCTIVE",
         "_assert_security_intelligence_fresh": "INTEL-FRESHNESS",
     }
+    # Per FILE, not over a concatenation: adjacency between the `_assert_*` call and its
+    # message is a within-file property, and joining the sources could pair a message in one
+    # module with a call at the tail of the other.
     checked = 0
-    for i, line in enumerate(lines):
-        if "[SEC-GATE/" not in line:
-            continue
-        raiser = next(
-            (fn for back in range(1, 12) if i - back >= 0
-             for fn in expected_by_fn
-             if fn in lines[i - back]),
-            None,
-        )
-        assert raiser, f"line {i+1}: no _assert_* call found above the gate message"
-        assert expected_by_fn[raiser] in line, (
-            f"line {i+1}: code names the wrong gate — raised by {raiser}, message is {line.strip()}"
-        )
-        checked += 1
-    assert checked == 4, f"expected 4 gate sites, found {checked}"
+    for path in (_GENERATE, _STANDALONE):
+        lines = path.read_text(encoding="utf-8").splitlines()
+        for i, line in enumerate(lines):
+            if "[SEC-GATE/" not in line:
+                continue
+            raiser = next(
+                (fn for back in range(1, 12) if i - back >= 0
+                 for fn in expected_by_fn
+                 if fn in lines[i - back]),
+                None,
+            )
+            assert raiser, f"{path.name}:{i+1}: no _assert_* call found above the gate message"
+            assert expected_by_fn[raiser] in line, (
+                f"{path.name}:{i+1}: code names the wrong gate — raised by {raiser}, "
+                f"message is {line.strip()}"
+            )
+            checked += 1
+    assert checked == 4, f"expected 4 gate sites across the surface, found {checked}"
 
 
 @pytest.mark.parametrize("code", sorted(_EXPECTED_GATE_CODES))
