@@ -27,6 +27,7 @@ from agentteams.cli.artifacts import (
     _write_memory_index,
     _write_model_routing,
 )
+from agentteams.cli import standalone_modes
 from agentteams.cli.exit_codes import _finalize_exit_code
 from agentteams.cli.json_mode import json_stdout, run_with_json_stdout
 from agentteams.cli.output_target import refuse_foreign_target, resolve_output_dir
@@ -182,74 +183,11 @@ def _run_generate_inner(args: argparse.Namespace, strict_manual_placeholders: bo
                 print(f"  {ts}  ({count} file(s))  {bpath}")
         return 0
 
-    if args.restore_backup is not None:
-        backups = emit.list_backups(output_dir)
-        if not backups:
-            print(f"No backups found for {output_dir}", file=sys.stderr)
-            return 1
-        label = args.restore_backup
-        if label == "latest":
-            _, backup_path, _ = backups[0]
-        else:
-            matched = [(ts, p, c) for ts, p, c in backups if ts == label]
-            if not matched:
-                print(f"Backup not found: {label!r}", file=sys.stderr)
-                print(f"Available: {', '.join(ts for ts, _, _ in backups)}")
-                return 1
-            _, backup_path, _ = matched[0]
-
-        try:
-            security_gate._assert_destructive_action_allowed(output_dir, action="restore-backup")
-        except RuntimeError as exc:
-            print(f"[SEC-GATE/DESTRUCTIVE:restore-backup] blocked: {exc}", file=sys.stderr)
-            return 1
-
-        count = emit.restore_backup(backup_path, output_dir, remove_extra=True)
-        print(f"  ✓  Restored {count} file(s) from {backup_path}")
-        return 0
-
-    # -----------------------------------------------------------------------
-    # Step 4b: Handle --scan-security (no rendering needed)
-    # -----------------------------------------------------------------------
-    if args.scan_security:
-        from agentteams import scan
-        # T3a.2 v4: pass the current manifest's expected agent-file set so the
-        # scanner can skip orphans that the build_team orphan advisory already
-        # surfaces separately.
-        expected = {
-            Path(f["path"]).name
-            for f in manifest.get("output_files", [])
-            if isinstance(f, dict) and str(f.get("path", "")).endswith(".agent.md")
-        }
-        report = scan.scan_directory(output_dir, expected_agent_names=expected or None)
-        scan.print_scan_report(report)
-        # Only HIGH findings block CI — medium/low are informational warnings.
-        # Medium "high-entropy token" findings commonly appear in generated
-        # markdown prose (script paths, workflow names) and are false positives.
-        return 1 if report.high_count > 0 else 0
-
-    # -----------------------------------------------------------------------
-    # Step 4b.2: Handle --check-budget (3.1 + 3.4 efficiency lints)
-    # -----------------------------------------------------------------------
-    if args.check_budget:
-        from agentteams import budget
-        breport = budget.scan_directory(output_dir)
-        budget.print_report(breport)
-        return 1 if breport.has_failures else 0
-
-    # -----------------------------------------------------------------------
-    # Step 4c: Handle retrieval utility modes — memory-index + code-index
-    # (no template rendering; gitignored/local artifacts)
-    # -----------------------------------------------------------------------
-    # Template pinning (§4.6) rides the standalone-mode dispatch: --pin-templates writes and
-    # exits, every other run only verifies. Policy in agentteams.template_pins.
-    _pin_rc = template_pins.run_pinning(args, manifest, description, output_dir, TEMPLATES_DIR)
-    if _pin_rc is not None:
-        return _pin_rc
-
-    _retrieval_rc = _run_retrieval_utility_modes(args, manifest, output_dir)
-    if _retrieval_rc is not None:
-        return _retrieval_rc
+    _standalone_rc = standalone_modes.run_standalone_modes(
+        args, manifest, description, output_dir, TEMPLATES_DIR
+    )
+    if _standalone_rc is not None:
+        return _standalone_rc
 
     # -----------------------------------------------------------------------
     # Step 4d: Build live security intelligence placeholders

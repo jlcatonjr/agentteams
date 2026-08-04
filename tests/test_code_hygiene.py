@@ -752,24 +752,15 @@ CEILING_WARN_MARGIN = 25
 #: An entry here is a module allowed to sit close to the ceiling. Adding one is a decision;
 #: `test_the_ceiling_baseline_is_current` fails if an entry stops being crowded, so it cannot
 #: quietly outlive its reason the way `audit.py 999` did.
-CEILING_MARGIN_BASELINE: dict[str, int] = {
-    # Added 2026-08-03, deliberately and with the carve logged as due.
-    #
-    # `--reconcile-front-matter` and `--pin-templates` each pushed this module into the margin,
-    # and each time the logic was moved OUT of it — into `front_matter_reconcile` and
-    # `template_pins` — leaving only a dispatch stub behind. After both moves it still sits at
-    # 979: the module has no room left for even a five-line call site.
-    #
-    # Three consecutive workarounds is the point at which working around it becomes the defect.
-    # The honest options were a real carve or a recorded exception; a carve of the main pipeline
-    # module at the end of a long session is the compounding pattern this repo has been bitten
-    # by, so this is the exception, and the carve is logged as due in the remediation ledger.
-    #
-    # The seam is already visible: the standalone "do one thing and exit" modes (adopt-orphans,
-    # restore-backup, scan-security, check-budget, --check, and now the pinning dispatch) are a
-    # different concern from the render/emit pipeline they are interleaved with.
-    "agentteams/cli/generate.py": 979,
-}
+#: Empty again. `cli/generate.py` entered this baseline on 2026-08-03 at 979 lines, deliberately
+#: and with the carve logged as due — after it had blocked two consecutive features with nothing
+#: but a five-line dispatch stub. The carve landed the same day: the standalone "do one thing and
+#: exit" modes moved to `cli/standalone_modes.py`, taking it 979 -> 917, and the entry came out.
+#:
+#: An entry here is a module allowed to sit close to the ceiling. Adding one is a decision;
+#: `test_the_ceiling_baseline_is_current` fails when an entry stops being crowded, so it cannot
+#: quietly outlive its reason the way `audit.py 999` did.
+CEILING_MARGIN_BASELINE: dict[str, int] = {}
 
 
 def _crowded_modules() -> dict[str, int]:
