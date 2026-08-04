@@ -45,7 +45,19 @@ LENGTH_ALLOWLIST: frozenset[str] = frozenset({
     # each (emit: fence/merge -> fences.py; analyze: _format_*/_default_* -> manifest_format.py);
     # deferred — proven to work but a larger blast radius.
 })
-BROAD_EXCEPT_BASELINE = 14      # except Exception/BaseException/bare. Narrowed over the sweep
+BROAD_EXCEPT_BASELINE = 15      # 14→15: tests/conftest.py's tracked-artifact detector. The
+                                # broad catch is the mechanism, not laziness: the snapshot runs
+                                # at teardown while a test may still have the filesystem
+                                # monkeypatched, and test_output_target_safety.py patches
+                                # Path.glob ON THE CLASS to raise. An unguarded walk raises,
+                                # that exception aborts monkeypatch's own undo, and Path.glob
+                                # stays broken for the session — one unguarded call produced
+                                # 2315 cascading errors on 2026-08-03. Another test could patch
+                                # it to raise anything, so the catch cannot be enumerated
+                                # narrowly. Not a silent swallow: skips are COUNTED and the
+                                # count is printed at session end, so a snapshot that quietly
+                                # failed is visible rather than mistaken for a clean run.
+                                # except Exception/BaseException/bare. Narrowed over the sweep
                                 # (Steps E + remaining-items I6: commands, render_pipeline, ingest,
                                 # mcp_emit). The remaining 11 are justified external/isolation/
                                 # never-block/cleanup-reraise boundaries, each annotated with a
