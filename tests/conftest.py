@@ -106,3 +106,82 @@ skip_no_live_model_tests = pytest.mark.skipif(
         "opt-in rather than gating every suite run."
     ),
 )
+
+
+# ---------------------------------------------------------------------------
+# The suite must leave tracked artifacts alone
+#
+# On 2026-08-03 one full-suite run rewrote
+# `references/bridges/copilot-vscode-to-claude/bridge-manifest.json` — a fresh `generated_at`
+# and 12 changed hashes. It has not recurred across seven later full runs, a per-file bisect
+# over ~120 test files, or a deliberately-staled manifest, and three hypotheses were eliminated
+# in the process: staleness triggers it, one bad test causes it, it reproduces on demand.
+#
+# Rather than keep hunting something that will not reproduce, this makes it self-identifying:
+# when it next happens, the run names the test. The investigation becomes a detector.
+#
+# Two lessons from the throwaway version are baked in:
+#
+#   * The snapshot is DEFENSIVE. `tests/test_output_target_safety.py` does
+#     `monkeypatch.setattr(Path, "glob", _boom)` — patched on the class — so an unguarded walk
+#     raises during teardown, and that exception aborts monkeypatch's own undo, leaving
+#     `Path.glob` broken for the rest of the session. One unguarded call produced 2315
+#     cascading errors and two instrumented runs that yielded no data.
+#   * Skips are COUNTED. A clean run with 0 skips means something different from a clean run
+#     with 400, and if the snapshot silently failed on the very run where a mutation happened,
+#     the count is what says so.
+#
+# Overhead measured before adding: 0.53 ms per snapshot, ~1.8 s across the suite (<0.5%).
+# ---------------------------------------------------------------------------
+
+_WATCHED_TREE = Path(__file__).resolve().parents[1] / "references" / "bridges"
+_tree_watch = {"prev": None, "culprit": None, "skips": 0, "ok": 0}
+
+
+def _snapshot_watched_tree():
+    """Digest every file under the watched tree, or None if the filesystem is not usable."""
+    import hashlib
+
+    try:
+        return {
+            str(p): hashlib.sha256(p.read_bytes()).hexdigest()
+            for p in sorted(_WATCHED_TREE.rglob("*"))
+            if p.is_file()
+        }
+    except Exception:
+        return None
+
+
+def pytest_sessionstart(session):  # noqa: D103
+    _tree_watch["prev"] = _snapshot_watched_tree()
+
+
+def pytest_runtest_teardown(item, nextitem):  # noqa: D103
+    current = _snapshot_watched_tree()
+    if current is None:
+        _tree_watch["skips"] += 1
+        return
+    _tree_watch["ok"] += 1
+    previous = _tree_watch["prev"]
+    if previous is not None and current != previous and _tree_watch["culprit"] is None:
+        changed = sorted(k for k in set(previous) | set(current)
+                         if previous.get(k) != current.get(k))
+        _tree_watch["culprit"] = (item.nodeid, changed)
+    _tree_watch["prev"] = current
+
+
+def pytest_sessionfinish(session, exitstatus):  # noqa: D103
+    if _tree_watch["culprit"] is None:
+        return
+    nodeid, changed = _tree_watch["culprit"]
+    names = "\n    ".join(Path(c).name for c in changed)
+    print(
+        "\n\n*** TRACKED-ARTIFACT MUTATION ***\n"
+        f"    first seen after: {nodeid}\n"
+        f"    changed:\n    {names}\n"
+        f"    ({_tree_watch['ok']} snapshots taken, {_tree_watch['skips']} skipped)\n"
+        "    The suite must not modify tracked artifacts. This is the detector for a mutation\n"
+        "    observed once on 2026-08-03 that never reproduced on demand.\n",
+        flush=True,
+    )
+    session.exitstatus = 1

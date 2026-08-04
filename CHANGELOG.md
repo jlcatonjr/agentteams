@@ -6,6 +6,33 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### added (standing checks for three things that were only ever found by hand)
+
+- **The suite now names any test that mutates a tracked artifact.** One full run rewrote a
+  bridge manifest on 2026-08-03 and never reproduced — not across seven later runs, a ~120-file
+  bisect, or a deliberately-staled manifest. Rather than keep hunting it, `tests/conftest.py`
+  snapshots `references/bridges/` after every test, so the next occurrence names the test and
+  fails the session. The investigation became a detector. Overhead measured before adding:
+  **0.53 ms per snapshot, ~1.8 s across the suite (<0.5%)**. The snapshot is deliberately
+  defensive and its skips are **counted**, because a throwaway version of this raised inside a
+  test that patches `Path.glob` on the class — aborting monkeypatch's own undo and producing
+  2315 cascading errors.
+- **Every published schema must have something checking it.** Three artifacts drifted from
+  their contracts this session, each found by ad-hoc investigation: `doc_site_config_file`
+  missing from a schema with `additionalProperties: false`, a stale example brief, a stale man
+  page. The pattern was that nothing enumerates the project's published artifacts. The list is
+  **derived from the tree, never declared** — a hand-written enumeration is itself an artifact
+  that goes stale. Two schemas currently have no check and are recorded as debt that may fall
+  and must not grow.
+- **A module-doc ratchet.** 20 modules have no `api-reference` page, mostly because CH-07 carves
+  keep creating modules out of documented ones. A new module now arrives documented or does not
+  arrive. `template_pins` and `front_matter_reconcile` were documented first, so the count
+  arrived **falling (22 → 20)** rather than merely frozen.
+- `tmp/by-week/INDEX.md` separates live plan artifacts from historical: **508 non-terminal rows
+  across 70 files, 434 of them (85%) in closed weeks**. Nothing was edited — a step CSV is Rule 9
+  evidence, and rewriting 400 rows to improve a count would destroy the record to improve the
+  metric. `tmp/` is gitignored in full, so this is a local working record, not shipped state.
+
 ### changed (`cli/generate.py` carved — the standalone modes were never part of the pipeline)
 
 - **979 → 917.** The "do one thing and exit" modes — restore-backup, scan-security,
