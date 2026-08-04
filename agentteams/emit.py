@@ -505,10 +505,27 @@ def emit_all(
                                 existing_text != normalized_content
                             )
                 else:
-                    migrated = _ensure_project_notes_section(rel_path, mr.merged_content)
+                    # Run the SAME front-matter merge the real path runs. Without this the
+                    # preview compares content whose front matter was never merged, so a file
+                    # whose only change is a front-matter key compares equal and is reported
+                    # UNCHANGED — which is what hid a widened `allowed-tools` grant on
+                    # 2026-08-03. Front matter is where capability grants live, and --dry-run is
+                    # what an operator reads before approving one. `_merge_front_matter` is pure:
+                    # it returns keys and notices and writes nothing, so the preview stays a
+                    # preview.
+                    _pv_keys, _pv_applied, _pv_props = _merge_front_matter(
+                        normalized_content, mr.merged_content, _fm_baseline.get(rel_path)
+                    )
+                    _pv_content = (
+                        _render_front_matter(mr.merged_content, _pv_keys)
+                        if _pv_applied
+                        else mr.merged_content
+                    )
+                    migrated = _ensure_project_notes_section(rel_path, _pv_content)
                     if (
                         not mr.content_changed
                         and not mr.sections_added
+                        and not _pv_applied
                         and migrated == existing_text
                     ):
                         entry.action = "UNCHANGED"

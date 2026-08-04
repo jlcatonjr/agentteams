@@ -6,6 +6,40 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### changed (`cli/generate.py` carved — the standalone modes were never part of the pipeline)
+
+- **979 → 917.** The "do one thing and exit" modes — restore-backup, scan-security,
+  check-budget, template pinning, the retrieval utilities — moved to
+  `agentteams/cli/standalone_modes.py`. `generate.py`'s own docstring already named them as a
+  separate group *interleaved* with the render/emit pipeline they have nothing to do with.
+- The carve was **overdue rather than chosen**: it blocked two consecutive features the same day,
+  each needing only a five-line dispatch stub, and in both cases the feature's logic had already
+  been moved into its own module. `CEILING_MARGIN_BASELINE` is empty again.
+- `--adopt-orphans` deliberately stayed — it mutates the manifest *before* rendering, so it is
+  part of the pipeline, not an alternative to it.
+- **Verified by byte-identical render**, not by green tests: pre-carve and post-carve output
+  compared in the same window across three frameworks, identical. (A first comparison showed
+  three differing files; a negative control established those as live threat-intel timestamps
+  from the runs being minutes apart.)
+- `test_cli_output_contract.py` caught the move — one `[SEC-GATE/DESTRUCTIVE:restore-backup]`
+  site travelled with the carve. Its checks now read both halves of the surface, and the
+  adjacency walk runs **per file**, since pairing a message with its `_assert_*` call is a
+  within-file property.
+
+### fixed (`--dry-run` hid a capability grant change)
+
+- The preview reported `UNCHANGED` for a file whose `allowed-tools` the real run widened. The
+  cause is structural: both paths call `_merge_fenced_content`, but **only the real path then
+  calls `_merge_front_matter`**. The preview's `migrated == existing_text` comparison was made
+  against content whose front matter had never been merged, so a file whose *only* change was a
+  front-matter key compared equal.
+- Front matter is where capability grants live. C-3 makes widening one privileged, and
+  `--dry-run` is what an operator reads before approving it.
+- The dry run now runs the same front-matter merge with the same build-log baseline.
+  `_merge_front_matter` is pure — it returns keys and notices and writes nothing — and a test
+  asserts the preview still writes nothing, since running more of the real path is exactly how a
+  preview stops being one.
+
 ### fixed (a shipped example contradicted the contract it was meant to demonstrate)
 
 - `examples/learn-python-for-stats-and-econ/brief.json` violated
