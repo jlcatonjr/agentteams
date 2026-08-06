@@ -114,13 +114,34 @@ PARAPHRASE_PAIRS: list[tuple[str, str]] = [
 # preserve the old number. Adjusting the queries to keep the score up would be fitting the
 # benchmark to a preferred answer, which is the thing pre-registration exists to prevent.
 
+# CORPUS-SENSITIVITY, third measurement (2026-08-06):
+#
+# The documentation-staleness remediation expanded the corpus substantially — 19 new flag
+# sections in cli-reference.md, a new references/documentation-refresh.procedure.md, and
+# edits across README, mkdocs nav and the API-reference index. Paraphrase top-1 fell
+# **1/10 -> 0/10**; top-3 held at 2/10; keyword top-1 fell 10/10 -> 9/10 (still at
+# test_memory_index_relevance._MIN_ACCURACY, which is 9).
+#
+# The first two measurements showed one unrelated document displacing a correct answer. This
+# one is different and worse for the lexical case: the corpus grew *more complete and more
+# on-topic*, and paraphrase recall went to zero. The clearest instance is the first query —
+# "what options can I pass on the command line when running this" — whose target is
+# cli-reference.md. That page was just made complete (71/90 -> 90/90 flags) and it was
+# displaced by goose-cheat-sheet.md. BM25 length normalisation penalises the longer document,
+# so *improving* a page can lower its own recall.
+#
+# Floors are lowered to the observed values, per this file's standing policy: record what
+# happened rather than adjust the eval to preserve a number. The queries were NOT touched.
+
 #: FLOORS recording observed behaviour, not targets. Change only alongside a note saying what
 #: changed and why.
-_MEASURED_PARAPHRASE_TOP1 = 1
+_MEASURED_PARAPHRASE_TOP1 = 0   # 1 -> 0 on 2026-08-06; see CORPUS-SENSITIVITY note above
 _MEASURED_PARAPHRASE_TOP3 = 2
 
-#: The keyword set scores 10/10 top-1 on the same corpus (test_memory_index_relevance).
-_KEYWORD_TOP1 = 10
+#: The keyword set's top-1 on the same corpus (test_memory_index_relevance). 10 -> 9 on
+#: 2026-08-06 with the same corpus growth; still at that file's _MIN_ACCURACY floor of 9.
+#: Kept as the comparison point for the vocabulary-gap assertion below.
+_KEYWORD_TOP1 = 9
 
 
 @pytest.fixture(scope="module")

@@ -133,6 +133,20 @@ for target in "${targets[@]}"; do
     python build_team.py --bridge-from "$SOURCE_DIR" --framework "$target" --output "$OUTPUT_ROOT" --bridge-check
 done
 
+# Documentation freshness — a THIRD execution path for the watcher, independent of
+# .github/workflows/docs-freshness-watch.yml and its watchdog.
+#
+# This is not duplication for its own sake. The watcher's own workflow can be disabled,
+# deleted, or have its cron dropped; this driver runs from a different workflow file on a
+# different cron, so the verdict still reaches the daily summary in that case. The detector
+# is stateless and idempotent, so running it from two places costs nothing and cannot
+# produce a conflicting verdict.
+#
+# run_noncritical, so a broken detector warns and never fails the maintenance run.
+run_noncritical \
+  "Documentation freshness watch" \
+  python scripts/docs_freshness_watch.py --out "$ROOT_DIR/tmp/bridge-maintenance/docs-freshness.md"
+
 echo
 if [[ "$noncritical_failures" -eq 0 ]]; then
   echo "[INFO] Daily agentteams bridge maintenance completed successfully."

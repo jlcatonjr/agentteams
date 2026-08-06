@@ -51,12 +51,16 @@ This reference defines the **supported public API surface** (documented modules 
 | [`memory-index`](memory-index.md) | Lexical (BM25) search index for work summaries and documentation |
 | [`memory-index-incremental`](memory-index-incremental.md) | In-place single-document index patching; declines conservatively to a full rebuild |
 | [`fence-inject`](fence-inject.md) | Inject and extract fenced-region content from agent files |
+| [`code-index`](code-index.md) | Code & API index over repository scripts and the external APIs they use (gitignored local cache) |
+| [`code-sources`](code-sources.md) | Source resolution and partitioning for the code & API index |
 
 ## Agent & Team Analysis
 
 | Module | Role |
 |--------|------|
 | [`graph`](graph.md) | Directed graph inference for agent team topology |
+| [`architecture`](architecture.md) | Module-dependency map of a repository's own Python package, built from its imports |
+| [`git-hooks`](git-hooks.md) | Commit-triggered refresh of the topology and architecture maps (`--install-git-hooks`) |
 | [`model-routing`](model-routing.md) | Framework-neutral model-routing contracts for cost/capability tiering |
 | [`eval_suite`](eval-suite.md) | Build behavioral evaluation specs for agent team runs |
 | [`eval-adapters`](eval-adapters.md) | Convert neutral eval-suite contracts into Inspect AI and OpenAI Evals artifacts |
@@ -71,6 +75,10 @@ This reference defines the **supported public API surface** (documented modules 
 | [`plan_steps`](plan_steps.md) | Tolerant reader for plan `.steps.csv` artifacts |
 | [`plan_steps_todo`](plan-steps-todo.md) | TodoWrite projection of plan `.steps.csv` (CSV is canonical; TodoWrite is the projection) |
 | [`liaison_logs`](liaison-logs.md) | Cross-repository coordination logs and artifacts |
+| [`parallel_plan`](parallel-plan.md) | Parallelisation analysis over a plan's `depends_on` column |
+| [`feature_inventory`](feature-inventory.md) | Generated inventory of the shipped feature surface |
+| [`front_matter_reconcile`](front-matter-reconcile.md) | Report (and optionally apply) template-vs-deployed YAML front-matter divergence |
+| [`template_pins`](template-pins.md) | Trust root for installed template digests (`--pin-templates`) |
 
 ## Host Features & Bridge Emission
 
@@ -85,12 +93,15 @@ This reference defines the **supported public API surface** (documented modules 
 | [`instructions_split`](instructions-split.md) | Cache-aware CLAUDE.md layout: preamble + boundary + dynamic stanza (bridge:copilot-vscode-to-claude:cache-split) |
 | [`schedule_emit`](schedule-emit.md) | `/schedule` routine spec emitter (bridge:copilot-vscode-to-claude:schedule) |
 | [`goose_config`](goose-config.md) | Locate + safely mutate Goose's `config.yaml` for source/model switching (no key handling) |
+| [`mcp_detect`](mcp-detect.md) | Detect MCP server configuration available to the target host |
+| [`mcp_emit`](mcp-emit.md) | Emit MCP server wiring into generated teams |
 
 ## PR Management
 
 | Module | Role |
 |--------|------|
 | [`pr_management`](pr-management.md) | Recipient registry, gh-CLI wrappers, stale-PR scan, end-of-task three-way disposition prompt |
+| [`research`](research.md) | Optional `agentteams[research]` extra: search, reputability scoring, claim verification |
 
 ---
 
@@ -133,12 +144,20 @@ For workflow-level usage and mode selection, see the [Interoperability](../inter
 
 ## Coverage gaps
 
-This index does not cover every module. **14 top-level public modules have no API
+This index does not cover every module. **20 top-level public modules have no API
 page**, listed here rather than left to be discovered:
 
-`advisory`, `ai_bad_habits`, `atomicio`, `backup`, `budget`, `capability_hints`,
-`errors`, `recipe_fields`, `stale_detector`, `stale_remediate`, `svg_render`,
-`tool_metadata_catalog`, `vscode_tasks`, `yaml_frontmatter`.
+`advisory`, `ai_bad_habits`, `atomicio`, `audit_agent_contract`, `audit_types`,
+`backup`, `budget`, `capability_hints`, `errors`, `front_matter_merge`,
+`graph_inputs`, `recipe_fields`, `security_feed_render`, `stale_detector`,
+`stale_remediate`, `svg_render`, `tool_metadata_catalog`, `unfenced`,
+`vscode_tasks`, `yaml_frontmatter`.
+
+The count is a **ratchet, not a target**: `tests/test_module_doc_ratchet.py` fails if a
+new module arrives without a page, and fails equally if a listed module gains one and is
+not removed from the baseline. It arrived falling (22 → 20) rather than merely frozen.
+Most of the growth came from CH-07 carves splitting documented modules — `unfenced` out of
+`fences`, `audit_types` out of `audit`, `graph_inputs` out of `graph`.
 
 Four exceed 400 lines (`stale_detector` 739, `vscode_tasks` 673, `backup` 486,
 `svg_render` 470) and are the highest-value additions. `backup`'s public API is

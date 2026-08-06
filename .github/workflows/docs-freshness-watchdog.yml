@@ -1,0 +1,150 @@
+name: Documentation Freshness Watchdog
+
+# Watches the watcher.
+#
+# docs-freshness-watch.yml is stateless, so a single failed run cannot latch it off. What
+# a stateless design does NOT protect against is the workflow ceasing to run at all —
+# disabled in the Actions UI, deleted, renamed, its cron silently dropped, or failing on
+# every invocation. This job detects that class and is the reason the reliability claim
+# does not rest on a single file.
+#
+# Independence is the point, so this deliberately does not share anything with the watcher:
+# separate workflow file, separate cron, separate job, no `needs:`. It queries the Actions
+# API rather than reading any artifact the watcher wrote, so a watcher that runs but emits
+# nothing is still visible.
+#
+# Where the regress stops: nothing watches this watchdog. Two independent workflows failing
+# silently at once is the residual risk and it is accepted, not solved. The mitigation is
+# that this one opens a GitHub issue, which is a channel a human already reads.
+#
+# Threshold: 30h. The watcher runs every 6h, so 30h is five consecutive missed runs — well
+# past transient queue delay, well short of a day and a half of blindness.
+
+on:
+  schedule:
+    # Offset from the watcher's cron so a platform-wide incident at one minute does not
+    # take out both.
+    - cron: "47 7 * * *"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  actions: read
+  issues: write
+
+jobs:
+  watchdog:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Evaluate watcher liveness and manage the alert
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const owner = context.repo.owner;
+            const repo = context.repo.repo;
+            const WORKFLOW = "docs-freshness-watch.yml";
+            const LABEL = "docs-freshness";
+            const TITLE = "Documentation Freshness: watcher not running";
+            const STALE_HOURS = 30;
+            const now = Date.now();
+
+            // --- How recently did the watcher COMPLETE a run at all? ------------------
+            // Deliberately not "succeed": a watcher failing every run is a different
+            // fault, already reported by the watcher-broken issue. This job answers the
+            // narrower question the watcher cannot answer about itself — is it running?
+            let latest = null;
+            let queryError = "";
+            try {
+              const runs = await github.rest.actions.listWorkflowRuns({
+                owner, repo, workflow_id: WORKFLOW, status: "completed", per_page: 20,
+              });
+              latest = runs.data.workflow_runs[0] || null;
+            } catch (err) {
+              queryError = err.message || String(err);
+            }
+
+            let isStale = false;
+            let detail = "";
+            if (queryError) {
+              // Could not ask. Report as unknown and do NOT open an alert — a GitHub API
+              // blip must not manufacture a false "watcher is dead" issue, and the next
+              // run re-asks from scratch.
+              detail = `Could not query workflow runs: ${queryError}. Treating as unknown.`;
+              core.warning(detail);
+              return;
+            } else if (!latest) {
+              isStale = true;
+              detail =
+                `No completed run of \`${WORKFLOW}\` was found. It may have been ` +
+                "disabled, deleted, or never triggered.";
+            } else {
+              const ts = latest.updated_at || latest.created_at;
+              const ageH = Math.floor((now - Date.parse(ts)) / 3600000);
+              if (ageH > STALE_HOURS) {
+                isStale = true;
+                detail = `Last completed run of \`${WORKFLOW}\` was ${ageH}h ago (threshold ${STALE_HOURS}h).`;
+              } else {
+                detail = `\`${WORKFLOW}\` is running (last completed ${ageH}h ago).`;
+              }
+            }
+
+            try {
+              await github.rest.issues.getLabel({ owner, repo, name: LABEL });
+            } catch (err) {
+              try {
+                await github.rest.issues.createLabel({
+                  owner, repo, name: LABEL, color: "0e8a16",
+                  description: "Documentation freshness watcher",
+                });
+              } catch (e2) {
+                core.warning(`could not create label ${LABEL}: ${e2.message}`);
+              }
+            }
+
+            const open = await github.rest.issues.listForRepo({
+              owner, repo, state: "open", labels: LABEL, per_page: 100,
+            });
+            const existing = open.data.filter((i) => i.title === TITLE);
+            const runLink =
+              `\n\n---\n[watchdog run](${context.serverUrl}/${owner}/${repo}/actions/runs/${context.runId})`;
+
+            if (isStale && existing.length === 0) {
+              await github.rest.issues.create({
+                owner, repo, title: TITLE, labels: [LABEL],
+                body: [
+                  "The documentation freshness watcher does not appear to be running.",
+                  "",
+                  detail,
+                  "",
+                  "Check, in order:",
+                  "",
+                  `1. Is \`${WORKFLOW}\` disabled in the Actions tab?`,
+                  "2. Does the file still exist on the default branch, with its `schedule:` intact?",
+                  "3. Were scheduled workflows disabled repo-wide for 60 days of inactivity?",
+                  "",
+                  "Recovery needs no backfill. The condition is a pure function of git",
+                  "history and the clock, so the first run after a fix reports the true",
+                  "current state — nothing was lost while it was down.",
+                  "",
+                  "Procedure: `references/documentation-refresh.procedure.md`",
+                ].join("\n") + runLink,
+              });
+              core.notice(`Opened watchdog alert. ${detail}`);
+            } else if (isStale) {
+              await github.rest.issues.createComment({
+                owner, repo, issue_number: existing[0].number,
+                body: "Still not running.\n\n" + detail + runLink,
+              });
+              core.notice(`Watchdog alert already open. ${detail}`);
+            } else {
+              for (const issue of existing) {
+                await github.rest.issues.createComment({
+                  owner, repo, issue_number: issue.number,
+                  body: `Watcher is running again: ${detail} Closing.` + runLink,
+                });
+                await github.rest.issues.update({
+                  owner, repo, issue_number: issue.number, state: "closed",
+                });
+              }
+              core.notice(detail);
+            }

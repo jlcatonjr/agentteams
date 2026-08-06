@@ -6,6 +6,114 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### fixed (the audit backlog cleared, and two standing checks so it cannot reopen)
+
+- **`docs_src/cli-reference.md`: 71/90 → 90/90.** The page opened by claiming it documented
+  *all* flags while missing 19 — including `--pin-templates` (the S4.6 trust root) and
+  `--reconcile-front-matter` (which gates a capability-grant change under C-3). Four new
+  sections carry them: Code & API Index, Generated Maps and Git Hooks, Output Safety /
+  Template Trust / Front-Matter Reconciliation, and Goose Source/Model Switch. The Synopsis
+  block was 19 short too.
+- **`README.md` acknowledged `agents-md`.** The framework appeared **zero times** in the
+  README while being a first-class registry entry documented on the site — so the landing
+  page and the docs contradicted each other on what the tool supports. Added to the support
+  table, the `--framework` choices and the default-locations list. The CLI block no longer
+  claims to be `agentteams --help` output: it is labelled "Most-used options" and points at
+  the complete surface, because a curated subset presented as verbatim `--help` gives a reader
+  no signal that it is partial. The structure tree showed 9 modules for a 76-module package
+  and omitted four subpackages.
+- **`api-reference/cli.md` — the page documenting the CLI carve was behind the carve.** It
+  cited a two-entry `LENGTH_ALLOWLIST` that is now **empty** and four line counts that were
+  all wrong, and its module map was missing six modules including `standalone_modes.py`, the
+  direct product of the refactor it narrates. Line counts are now a pointer to `wc -l` rather
+  than restated — restating them is what went stale.
+- **Seven pages that build and deploy were reachable from no navigation.** `interoperability.md`
+  was the sharp one: three pages send readers to a "dedicated Interoperability tab" that did
+  not exist. `template-pins` and `front-matter-reconcile` compounded the flag gap — both
+  features were missing from the CLI docs *and* off the nav, so both were undiscoverable.
+  All 57 API pages are now linked from the overview, whose own coverage-gap list was also
+  stale (claimed 14; the ratchet says 20).
+- **Two standing checks, both seeded EMPTY.** `test_cli_reference_flag_parity.py` and
+  `test_docs_nav_completeness.py`. The empty seed is the point: writing the docs first is what
+  let the ratchets start at zero instead of enshrining the debt in the instrument meant to
+  retire it. Nav exclusions are **derived** by scanning for `--8<--` snippet includes, never
+  declared, with a guard test asserting the scan still finds something — otherwise a silent
+  regression would push snippet targets into a declared exclusion list and lose the property.
+- **Bridge Tier-1 drift: 3 → 0** (`--stale-check --self`); Tier-2 advisory 45 → 37.
+  **An ordering defect found by running it:** the remediation plan sequenced the bridge
+  refresh *before* `--self --update`, which rewrites the very tree the bridge manifests
+  digest. The Tier-1 count went 3 → 0 → 3 → 0 before the order was corrected.
+  `run_daily_bridge_maintenance.sh` already encodes the right order; the plan did not copy it.
+- **The self brief named three paths that do not exist** — `primary_output_dir: "src/"`,
+  `figures_dir: "docs/figures/"`, and a null `reference_db_path` while the rendered table
+  named `docs/` as the reference database. Constitutional Rule 5 pointed agents at a
+  directory of generated HTML.
+- Generated `--recipe-check` output is now gitignored — it was untracked but *not* ignored,
+  so the next `git add -A` would have committed a build artifact (Rule 4).
+
+### known (logged to `references/agentteams-remediation-log.csv`, not fixed here)
+
+- **`--update --merge` does not propagate brief placeholder changes to fenced regions.** After
+  the three path fields above were corrected, the run reported "No structural or
+  template-content changes detected" and left the fence showing the old values. This is not a
+  stale-manifest artifact: `analyze.build_manifest` re-read from disk and resolved the new
+  values correctly, so the loss is downstream of analyze, in the drift/merge decision — which
+  appears to compare template content and structure but not resolved placeholder values. The
+  operator sees a successful run and a silently unchanged file.
+- **The `tone_and_style` template hardcodes agent names.** `@post-production-auditor`,
+  `@module-doc-validator` and `@module-doc-author` are named with no roster parameterisation,
+  so every generated team is told about teammates it may not have. Fixing it touches every
+  generated team plus the template ledger and the unfenced-constraint ratchet.
+
+### added (a documentation-refresh procedure, and a trigger that cannot latch itself off)
+
+- **The 2026-08-06 staleness audit found one pattern, not a list of defects.** Every
+  documentation surface with a standing check was current — `agentteams.1` at 90/90 flags
+  because CI diffs it, zero stale API-reference pages, zero broken internal links. Every
+  surface without one had drifted: `docs_src/cli-reference.md` claims "All flags" and is
+  **19 of 90 short**; `README.md` documents 37 of 90 and omits the `agents-md` framework
+  entirely; `api-reference/cli.md` cites a `LENGTH_ALLOWLIST` that is now empty and four
+  line counts that are all wrong. Report:
+  `references/plans/documentation-staleness-audit-2026-08-06.report.md`.
+- **`references/documentation-refresh.procedure.md`** — the per-document procedure. Stage 1
+  is mechanical and scripted (man-page regen, flag parity, API parity, nav completeness,
+  link check, `--stale-check`, fenced-file regeneration via the brief). Stage 2 is authored
+  and routes each surface to the agent that owns it, against the authority it must match.
+  A firing trigger with a clean Stage 1 and nothing in Stage 2 is a **legitimate no-op** —
+  the procedure says so explicitly, because a cosmetic commit to reset the clock is exactly
+  the metric-gaming the audit warned about.
+- **`scripts/docs_freshness_watch.py`** — fires when `docs_age > 24h AND src_age <= 24h`.
+  Both sets are derived from `git ls-files` by what a path *is*; a guide added tomorrow is
+  watched tomorrow. stdlib-only and imports nothing from the package, so a dependency
+  failure cannot take the watcher down. Advisory: **always exits 0** except under opt-in
+  `--check`, the same instrument class as `check_session_obligations.py`.
+- **The reliability property is that the verdict is a pure function of git history and the
+  clock.** No cursor, no marker commit, no cache participates in it — so a dropped,
+  cancelled or crashed run has *zero* effect on the next one, and an unmerged remediation
+  cannot silence anything because the docs are still stale. Three prohibitions are asserted
+  by tests rather than asked for in a comment: no `cancel-in-progress`, no state file read
+  back by a later run, reporting steps stay `if: always()`. `git` failing yields
+  **indeterminate**, routed to a distinct "watcher broken" issue — never mapped onto "docs
+  are fine".
+- **Five trigger channels across three mechanisms**, two of them load-bearing rather than
+  redundant: `push` catches `src_age` dropping to 0 while `docs_age` is already past the
+  window; the 6h `cron` catches `docs_age` *crossing* the window with no new push, which
+  push cannot observe at all. Plus `workflow_dispatch`, a third execution path in
+  `run_daily_bridge_maintenance.sh`, and `docs-freshness-watchdog.yml` on a separate cron
+  for the case the watcher stops running entirely. Nothing watches the watchdog; that
+  residual is stated in the procedure rather than papered over.
+- **The adversarial pass found a design-killing defect that reading would not have.**
+  `CHANGELOG.md` was in the documentation set — and `changelog-link.yml` forces a changelog
+  edit on nearly every code PR, so it acted as a freshness alibi for every other doc. The
+  first live run showed the signature: both ages 60.18h, both from the same commit.
+  Backtested over 90 days at the real 6h cadence (361 evaluations): **13 firings with it,
+  34 without — 62% of the signal suppressed.** `CHANGELOG.md` is now inert (neither doc nor
+  source), losing nothing, since it is the one doc surface already covered by a failing
+  gate. Eight further findings applied, all recorded in the procedure's audit section.
+- **60 tests** in `tests/test_docs_freshness_watch.py` covering the truth table, both
+  window boundaries, set derivation, idempotence, the write-nothing property, the
+  indeterminate branches, and the three workflow prohibitions.
+
 ### added (standing checks for three things that were only ever found by hand)
 
 - **The suite now names any test that mutates a tracked artifact.** One full run rewrote a

@@ -107,3 +107,17 @@ references/memory-index.vcache
 scripts/goose-cost-proxy.py
 scripts/cost-monitor-app.html
 scripts/gooseCostMonitor/
+
+# Generated check report, written beside the recipes by `--recipe-check`
+# (agentteams/cli/recipe_check.py:62). Constitutional Rule 4: build artifacts are
+# derived, never primary — and this one is untracked but was NOT ignored, so the
+# next `git add -A` would have committed it.
+.goose/recipes/recipe-check.report.md
+
+# MkDocs build output. NOT what serves the site: GitHub Pages is build_type=workflow, and
+# .github/workflows/docs.yml builds with `--site-dir _site` and deploys that artifact via
+# actions/deploy-pages. The committed copy was a 180-file tree nobody consumed, refreshed
+# only when a contributor happened to run a bare `mkdocs build` — and it had drifted
+# (missing template-pins/ and front-matter-reconcile/; cli-reference last built 2026-07-29).
+# `site_dir` below now matches CI so local and CI builds agree. Audit finding D-6.
+docs/

@@ -1,0 +1,231 @@
+name: Documentation Freshness Watch
+
+# Fires the documentation-refresh procedure when documentation has not been updated in the
+# last 24 hours while other files have been.
+#
+# Procedure: references/documentation-refresh.procedure.md
+# Detector:  scripts/docs_freshness_watch.py
+# Origin:    the 2026-08-06 documentation staleness audit (see CHANGELOG). The report
+#            itself is under references/plans/, gitignored by design.
+#
+# ---------------------------------------------------------------------------------------
+# RELIABILITY CONTRACT — a failed run must never prevent a future run from firing.
+# ---------------------------------------------------------------------------------------
+#
+# The verdict is a pure function of git history and the wall clock. This workflow reads no
+# persisted state and writes none that participates in the verdict. Consequences, each of
+# which is the answer to a specific way watchers die:
+#
+#   * A dropped, cancelled, throttled or crashed run has ZERO effect on the next run.
+#     There is no cursor to corrupt and no marker commit to miss.
+#   * The remediation PR being ignored does not silence anything — the docs are still
+#     stale, so the next evaluation fires again.
+#   * Closing the alert issue does not suppress evaluation. Dedupe is by label+title and
+#     suppresses only DUPLICATE ISSUES, never the check itself. Close it wrongly and it
+#     reopens; close it rightly and it stays closed because the condition went false.
+#   * A crash in the detector routes to a DISTINCT "watcher broken" alert rather than
+#     being read as "docs are fine". Indeterminate is not a pass.
+#
+# Three prohibitions, asserted by tests/test_docs_freshness_watch.py:
+#
+#   1. NO `concurrency:` with cancel-in-progress. A cancelled run leaves no verdict, and
+#      on a busy push day that is every run.
+#   2. NO step may write a state file that is read back on a later run.
+#   3. The evaluate step MUST be `if: always()` so a failed detector still reports.
+#
+# Two trigger mechanisms, both load-bearing (this is not redundancy):
+#
+#   * push   — catches src_age dropping to 0 while docs_age is already past the window.
+#   * cron   — catches docs_age crossing the window with no new push. A push-only trigger
+#              cannot see this transition at all; a cron-only trigger delays the push case.
+#
+# GitHub disables schedules after 60 days of repository inactivity. That is self-correcting
+# here: 60 days of inactivity means src_age > 24h, so the condition is false anyway, and
+# the first commit that resumes activity fires the push trigger.
+
+on:
+  push:
+    branches: [main]
+  schedule:
+    # Every 6 hours, off the top of the hour (GitHub queues heavily at :00).
+    - cron: "23 */6 * * *"
+  workflow_dispatch:
+    inputs:
+      window_hours:
+        description: "Freshness window in hours"
+        required: false
+        default: "24"
+
+permissions:
+  contents: read
+  issues: write
+
+# Deliberately NO `concurrency:` block. See prohibition 1 above.
+
+jobs:
+  watch:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          # Full history: the condition needs the last commit that touched each path,
+          # which can be arbitrarily far back. A shallow clone silently reports every
+          # file as changed at the graft commit.
+          fetch-depth: 0
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      # The detector is stdlib-only and imports nothing from the package, so it needs no
+      # install step. That is a reliability property, not an accident: a dependency
+      # resolution failure cannot take the watcher down.
+      - name: Evaluate documentation freshness
+        id: detect
+        continue-on-error: true
+        env:
+          WINDOW: ${{ github.event.inputs.window_hours || '24' }}
+        run: |
+          python3 scripts/docs_freshness_watch.py --window "$WINDOW" --json > verdict.json
+          python3 scripts/docs_freshness_watch.py --window "$WINDOW" --out body.md
+
+      - name: Publish verdict to the job summary
+        if: always()
+        run: |
+          if [ -f body.md ]; then
+            cat body.md >> "$GITHUB_STEP_SUMMARY"
+          else
+            {
+              echo "## Documentation freshness — WATCHER BROKEN"
+              echo
+              echo "The detector produced no output. This is **not** a pass."
+            } >> "$GITHUB_STEP_SUMMARY"
+          fi
+
+      - name: Open, update or close the advisory issue
+        if: always()
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const fs = require("fs");
+            const owner = context.repo.owner;
+            const repo = context.repo.repo;
+
+            const LABEL = "docs-freshness";
+            const STALE_TITLE = "Documentation Freshness: docs behind code";
+            const BROKEN_TITLE = "Documentation Freshness: watcher broken";
+
+            // --- Read the verdict. Any failure to read it is itself a finding. ---------
+            let verdict = null;
+            let readError = "";
+            try {
+              verdict = JSON.parse(fs.readFileSync("verdict.json", "utf8"));
+            } catch (err) {
+              readError = `could not read verdict.json: ${err.message}`;
+            }
+            if (verdict && verdict.error) {
+              readError = verdict.error;
+            }
+
+            let body = "";
+            try {
+              body = fs.readFileSync("body.md", "utf8");
+            } catch (err) {
+              body = "_(detector produced no markdown body)_";
+            }
+
+            // Ensure the label exists. Never fatal: a missing label must not stop an alert.
+            try {
+              await github.rest.issues.getLabel({ owner, repo, name: LABEL });
+            } catch (err) {
+              try {
+                await github.rest.issues.createLabel({
+                  owner, repo, name: LABEL, color: "0e8a16",
+                  description: "Documentation freshness watcher",
+                });
+              } catch (e2) {
+                core.warning(`could not create label ${LABEL}: ${e2.message}`);
+              }
+            }
+
+            const open = await github.rest.issues.listForRepo({
+              owner, repo, state: "open", labels: LABEL, per_page: 100,
+            });
+            const findOpen = (title) => open.data.filter((i) => i.title === title);
+
+            const runLink =
+              `\n\n---\n[watcher run](${context.serverUrl}/${owner}/${repo}/actions/runs/${context.runId})` +
+              ` · trigger: \`${context.eventName}\``;
+
+            const upsert = async (title, text) => {
+              const existing = findOpen(title);
+              if (existing.length === 0) {
+                const created = await github.rest.issues.create({
+                  owner, repo, title, body: text + runLink, labels: [LABEL],
+                });
+                core.notice(`opened #${created.data.number}: ${title}`);
+              } else {
+                // Comment rather than reopen-spam. The issue staying open suppresses
+                // duplicates ONLY — it never suppresses evaluation.
+                await github.rest.issues.createComment({
+                  owner, repo, issue_number: existing[0].number,
+                  body: "Still firing.\n\n" + text + runLink,
+                });
+                core.notice(`updated #${existing[0].number}: ${title}`);
+              }
+            };
+
+            const resolve = async (title, note) => {
+              for (const issue of findOpen(title)) {
+                await github.rest.issues.createComment({
+                  owner, repo, issue_number: issue.number, body: note + runLink,
+                });
+                await github.rest.issues.update({
+                  owner, repo, issue_number: issue.number, state: "closed",
+                });
+                core.notice(`closed #${issue.number}: ${title}`);
+              }
+            };
+
+            // --- Branch 1: the watcher could not evaluate. Indeterminate is not a pass. -
+            if (verdict === null || readError) {
+              await upsert(
+                BROKEN_TITLE,
+                [
+                  "The documentation freshness watcher could not produce a verdict.",
+                  "",
+                  "```",
+                  readError || "no verdict.json was written",
+                  "```",
+                  "",
+                  "**This is not a pass.** The documentation may or may not be stale; the",
+                  "watcher is what is broken. Fix `scripts/docs_freshness_watch.py` or this",
+                  "workflow, then re-run — the condition is stateless, so a fixed watcher",
+                  "immediately reports the true current state with no backfill needed.",
+                ].join("\n"),
+              );
+              return;   // Do NOT touch the staleness issue on an indeterminate run.
+            }
+
+            await resolve(BROKEN_TITLE, "Watcher produced a verdict again. Closing.");
+
+            // --- Branch 2: the real condition. ----------------------------------------
+            if (verdict.fires) {
+              await upsert(STALE_TITLE, body);
+            } else {
+              await resolve(
+                STALE_TITLE,
+                `Condition no longer holds: ${verdict.reason}. Closing.`,
+              );
+            }
+
+      # Surfaces a detector crash as a failed run for the watchdog to notice, WITHOUT
+      # having skipped any of the reporting above — every step that matters already ran
+      # under `if: always()`. This is the last step for exactly that reason.
+      - name: Fail the run if the detector crashed
+        if: steps.detect.outcome == 'failure'
+        run: |
+          echo "::error::docs_freshness_watch.py exited non-zero; see the watcher-broken issue."
+          exit 1
