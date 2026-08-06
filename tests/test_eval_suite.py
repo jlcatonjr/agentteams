@@ -117,7 +117,7 @@ def _seed_gates(output_dir: Path, monkeypatch):
         "timestamp": "2026-05-03T00:00:00Z", "waiver_id": "wf-es",
         "action_reviewed": "security-intel-freshness",
         "expires_at": "2099-01-01T00:00:00Z", "max_uses": "9", "uses": "0",
-        "approver": "t", "ticket_id": "ES", "reason_code": "T",
+        "approver": "security", "ticket_id": "ES", "reason_code": "T",
         "conditions_verified": "verified", "signature": "",
     }
     payload = "|".join(w[k] for k in [
@@ -179,7 +179,7 @@ def test_update_emits_drift_excluded_eval_suite(tmp_path, monkeypatch):
     ]) == 0
     (output_dir / "references" / "security-decisions.log.csv").write_text(
         "timestamp,requesting_agent,action_reviewed,verdict,conditions,conditions_verified\n"
-        "2026-05-03T00:00:00Z,t,overwrite,PASS,,verified\n", encoding="utf-8")
+        "2026-05-03T00:00:00Z,security,overwrite,PASS,,verified\n", encoding="utf-8")
     assert build_team.main([
         "--description", str(brief), "--output", str(output_dir),
         "--update", "--yes", "--no-scan", "--security-offline",

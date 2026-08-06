@@ -3,7 +3,7 @@ claude.py — Framework adapter for Claude Code sub-agents.
 
 Agent files:  .claude/agents/<slug>.md  (Claude Code sub-agent format)
 Instructions: CLAUDE.md (merged with agents for smaller teams)
-Format:       Claude Code front matter (name, description, allowed-tools) + Markdown body
+Format:       Claude Code front matter (name, description, tools) + Markdown body
 Handoffs:     Inline handoffs removed from prompt body; extracted handoffs can
               be preserved in references/runtime-handoffs.json by the build pipeline
 
@@ -14,14 +14,19 @@ Source: https://docs.anthropic.com/en/docs/claude-code/sub-agents
 Recognised front matter keys (all optional, but name + description are strongly recommended):
   name:          Display name shown in the agent picker
   description:   When/how to invoke this agent (used for automatic routing)
-  allowed-tools: Comma-separated list of Claude tool names the agent may use
+  tools:         Comma-separated list of Claude tool names the agent may use
                  (Bash, Read, Write, Edit, MultiEdit, Glob, Grep, LS,
                   WebFetch, WebSearch, TodoRead, TodoWrite), optionally with a
-                  parenthesised command scope, e.g. Bash(git diff:*)
+                  parenthesised command scope, e.g. Bash(git diff:*).
+                 OMITTING THIS KEY INHERITS EVERY TOOL. `allowed-tools` is the
+                 slash-command key and is ignored here — emitting it was finding
+                 F-1 of the 2026-08-06 constitutional audit.
+  disallowedTools: Comma-separated deny list, subtracted from the inherited pool
   model:         Claude model variant (e.g. claude-opus-4-5, claude-sonnet-4-5)
 
-VS Code Copilot keys (name:, user-invokable:, tools:, agents:, model:) are NOT
-recognised by Claude Code and must NOT be passed through.
+VS Code Copilot keys (user-invokable:, agents:) are NOT recognised by Claude Code and
+must NOT be passed through. `tools:` IS recognised, but its VALUE FORMAT differs: copilot
+writes an inline quoted list, Claude a bare comma-separated scalar.
 
 External retrieval note: `WebSearch`/`WebFetch` appear in the list above because Claude
 Code recognises them, NOT because this adapter grants them — no vocabulary token maps to
@@ -44,7 +49,16 @@ from agentteams.yaml_frontmatter import parse_yaml_front_matter as _parse_yaml_f
 # Claude Code front matter constants
 # ---------------------------------------------------------------------------
 
-# Fallback tool list when an agent declares no VS Code `tools:` block.
+#: The front-matter key Claude Code actually reads as a subagent capability limit.
+#: NOT ``allowed-tools`` — that key belongs to slash commands and is ignored in a subagent
+#: file, which silently granted every generated agent the full tool pool until 2026-08-06.
+CLAUDE_CAPABILITY_KEY = "tools"
+
+#: The superseded key. Retained as a named constant so the detectors that must still
+#: RECOGNISE it (framework detection, front-matter migration) share one definition with
+#: the emitter that no longer WRITES it.
+CLAUDE_LEGACY_CAPABILITY_KEY = "allowed-tools"
+
 _CLAUDE_DEFAULT_ALLOWED_TOOLS = "Bash, Read, Write, Edit"
 
 # The command the `retrieval` token grants, and nothing else. Scoped `Bash(<prefix>:*)` rather
@@ -127,11 +141,48 @@ class ClaudeAdapter(FrameworkAdapter):
         return False
 
     def required_front_matter_keys(self) -> tuple[str, ...]:
-        """Claude agent headers carry `allowed-tools`, not copilot-vscode's `tools`/`model`."""
-        return ("name", "description", "allowed-tools")
+        """Claude subagent headers carry `tools`, not copilot-vscode's `tools`/`model` pair.
+
+        The key is `tools` and not `allowed-tools`: Claude Code's subagent front-matter
+        schema defines `name`, `description`, `tools`, `disallowedTools`, `model` and
+        `permissionMode`, and documents that omitting `tools` makes the subagent "inherit
+        every tool available to subagents". `allowed-tools` is the *slash-command* key and
+        is silently ignored in a subagent file — so emitting it declared a capability limit
+        that the runtime never applied, which is a C-3 violation rather than a cosmetic
+        naming choice. See references/plans/constitutional-redteam-audit-2026-08-06.report.md
+        finding F-1.
+        """
+        return ("name", "description", "tools")
 
     def handoff_delivery_mode(self) -> str:
         return "manifest"
+
+    def extra_output_files(self, manifest: dict[str, Any]) -> list[tuple[str, str]]:
+        """Ship the constitutional PreToolUse hook with every generated Claude team.
+
+        The hook is what gives C-5 any reach over agent tool calls: without it, the
+        destructive-action gate guards four CLI entry points and an agent using ``Write`` or
+        ``Bash`` never touches it (2026-08-06 audit, probe E3).
+
+        Two files, landing outside the agents dir (``../`` → ``.claude/``):
+
+        * ``hooks/constitutional-gate.py`` — the hook itself, executable content;
+        * ``settings.hooks.example.json`` — the block an operator merges into their own
+          ``settings.json``.
+
+        **The settings file is deliberately NOT written.** That is the standing convention in
+        ``hooks_emit.py`` and it is right: clobbering an operator's config is a worse failure
+        than an unwired hook. It does mean the hook arrives inert until someone wires it, which
+        is stated in the example's own comment block rather than left to be discovered.
+        """
+        hook = _read_template_asset("hooks/constitutional-gate.py")
+        example = _read_template_asset("hooks/settings.hooks.example.json")
+        if not hook:
+            return []
+        files = [("../hooks/constitutional-gate.py", hook)]
+        if example:
+            files.append(("../settings.hooks.example.json", example))
+        return files
 
     def get_agents_dir(self, project_path: Path) -> Path:
         return project_path / ".claude" / "agents"
@@ -144,6 +195,21 @@ class ClaudeAdapter(FrameworkAdapter):
         if file_type == "instructions" and rel_path.endswith("copilot-instructions.md"):
             return "../CLAUDE.md"
         return super().finalize_output_path(rel_path, file_type)
+
+
+
+def _read_template_asset(rel_path: str) -> str:
+    """Return a shipped template asset's text, or "" when it is absent.
+
+    Absent rather than raising: a source checkout missing an optional asset should degrade to
+    "no hook emitted" rather than break generation. The consequence — a team that silently gets
+    no hook — is covered by tests/test_constitutional_gate_hook.py asserting the asset exists.
+    """
+    asset = Path(__file__).resolve().parents[1] / "templates" / "universal" / rel_path
+    try:
+        return asset.read_text(encoding="utf-8")
+    except OSError:
+        return ""
 
 
 # ---------------------------------------------------------------------------
@@ -220,11 +286,17 @@ def _inject_claude_front_matter(
     description: str,
     allowed_tools: str = _CLAUDE_DEFAULT_ALLOWED_TOOLS,
 ) -> str:
-    """Prepend a Claude Code-compatible YAML front matter block to content."""
+    """Prepend a Claude Code-compatible YAML front matter block to content.
+
+    The capability key is ``tools`` (comma-separated, e.g. ``tools: Read, Glob, Grep``).
+    It was ``allowed-tools`` until 2026-08-06; that key is not part of Claude Code's
+    subagent schema, so every grant emitted under it was inert and every agent inherited
+    the full tool pool. See :meth:`ClaudeAdapter.required_front_matter_keys`.
+    """
     lines = ["---", f"name: {name}"]
     if description:
         lines.append(f'description: "{description}"')
-    lines.append(f"allowed-tools: {allowed_tools}")
+    lines.append(f"{CLAUDE_CAPABILITY_KEY}: {allowed_tools}")
     lines.append("---")
     lines.append("")
     return "\n".join(lines) + content

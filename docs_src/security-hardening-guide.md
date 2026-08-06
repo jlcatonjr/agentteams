@@ -97,11 +97,45 @@ Valid scenarios for signed waivers:
 3. **Rate limiting** — Transient service unavailability (fallback to cache)
 4. **Policy exception** — Explicit business decision to accept stale data for bounded time
 
+### Signing-key custody
+
+**The key is the trust anchor for every waiver, so where it lives decides what a waiver is
+worth.** This is the one control in the system that a stronger algorithm cannot improve.
+
+A 2026-08-06 red-team probe (A9) minted a fully valid waiver — `approver=attacker`,
+`ticket_id=NONE` — simply by setting `AGENTTEAMS_WAIVER_SIGNING_KEY` to a value of its
+choosing. The HMAC verified correctly, because the process that *validates* a waiver reads the
+key from the same environment the process that *runs an agent* does. That is not a defect in
+the signature scheme; it is a statement about custody.
+
+**Do:**
+
+- Hold the key in an OS keychain or a secret manager, and inject it only into the specific
+  command that needs it (`AGENTTEAMS_WAIVER_SIGNING_KEY=$(security find-generic-password …)
+  agentteams …`), so it lives for one process rather than one shell session.
+- Keep it out of any environment an agent can read. An agent with `Bash` can read `env`.
+- Rotate it when an operator with access leaves, and re-sign outstanding waivers.
+- Maintain `references/security-approvers.txt` — one approver per line, `#` comments allowed.
+  Since 2026-08-06 the gate validates a waiver's `approver` against this roster, so the field
+  names someone real rather than being decorative.
+
+**Do not:**
+
+- Export it in a shell profile, a `.env` file, or CI configuration visible to the build that
+  runs agents.
+- Commit it. It is a credential; Rule S-1 applies.
+
+**Threat-model honesty.** None of this defends against an attacker who already owns the
+workstation — at that tier the key is theirs whatever the roster says. What custody buys is that
+a *prompt-injected agent inside a normal session* cannot mint its own waiver, which is the tier
+the constitution actually claims to defend.
+
 ### Waiver Lifecycle
 
 **Prerequisites:**
-- `AGENTTEAMS_WAIVER_SIGNING_KEY` environment variable configured (the HMAC-SHA256 key).
+- `AGENTTEAMS_WAIVER_SIGNING_KEY` configured (the HMAC-SHA256 key) — see custody above.
 - A signed record in `references/security-waivers.log.csv`.
+- The `approver` value present in `references/security-approvers.txt`, when that roster exists.
 
 **Schema (authoritative source: `agentteams/cli/security_gate.py`).** The log is a CSV
 with **11 columns** — do not hand-copy a subset; the gate rejects any other header:

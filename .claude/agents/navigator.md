@@ -1,7 +1,7 @@
 ---
 name: Navigator — AgentTeamsModule
 description: "Repository structure navigation, project map maintenance, file location lookups, and dependency queries for AgentTeamsModule"
-allowed-tools: Read, Grep, Glob, Bash
+tools: Read, Grep, Glob, Bash
 ---
 
 <!--

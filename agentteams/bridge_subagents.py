@@ -31,7 +31,9 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Iterable
 
-# Mapping from copilot-vscode tools declaration to Claude allowed-tools names.
+from agentteams.frameworks.claude import CLAUDE_CAPABILITY_KEY
+
+# Mapping from copilot-vscode tools declaration to Claude subagent tool names.
 # Source: AUTHORING-GUIDE.md tool-mapping table.
 _TOOLS_MAP: dict[str, list[str]] = {
     "read":    ["Read"],
@@ -227,7 +229,7 @@ def _render_subagent_stub(
     if tools_raw:
         allowed = _tools_to_allowed(tools_raw)
         if allowed:
-            fm_lines.append(f"allowed-tools: {', '.join(allowed)}")
+            fm_lines.append(f"{CLAUDE_CAPABILITY_KEY}: {', '.join(allowed)}")
     fm_lines += ["---", ""]
     body = _stub_body(
         source_rel_path=source_rel_path,
@@ -254,7 +256,7 @@ def _render_workstream_expert_stub(
         "bridge: copilot-vscode-to-claude",
     ]
     if tools_union:
-        fm_lines.append(f"allowed-tools: {', '.join(tools_union)}")
+        fm_lines.append(f"{CLAUDE_CAPABILITY_KEY}: {', '.join(tools_union)}")
     fm_lines += ["---", ""]
     body = (
         "# Workstream Expert (parametric, bridged)\n\n"

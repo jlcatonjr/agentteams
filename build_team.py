@@ -872,11 +872,9 @@ def _run_migrate(project_dir: Path, original_argv: list[str]) -> int:
         new_argv.append("--yes")
 
     print("  Running --overwrite migration...\n")
-    security_gate.set_migrate_exemption(True)
-    try:
-        rc_emit = main(new_argv)
-    finally:
-        security_gate.set_migrate_exemption(False)
+    # The gate exemption travels as an argument to this one call, not as process state a
+    # third party could set. See the removal note in agentteams/cli/security_gate.py (W4/A12).
+    rc_emit = main(new_argv, migrate_exemption=True)
 
     if rc_emit != 0:
         print(

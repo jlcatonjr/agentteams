@@ -121,3 +121,6 @@ scripts/gooseCostMonitor/
 # (missing template-pins/ and front-matter-reconcile/; cli-reference last built 2026-07-29).
 # `site_dir` below now matches CI so local and CI builds agree. Audit finding D-6.
 docs/
+
+# Red-team battery results, written only when the battery is run standalone.
+tests/constitutional-redteam-results.json

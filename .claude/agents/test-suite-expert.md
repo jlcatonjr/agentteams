@@ -1,7 +1,7 @@
 ---
 name: Test Suite Expert — AgentTeamsModule
 description: "Component expert for Test Suite in AgentTeamsModule — prepares Component Briefs, reviews drafts against brief checklist, approves deliverables"
-allowed-tools: Read, Grep, Glob, Task
+tools: Read, Grep, Glob, Task
 ---
 
 <!--

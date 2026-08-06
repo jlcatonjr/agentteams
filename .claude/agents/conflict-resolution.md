@@ -1,7 +1,7 @@
 ---
 name: Conflict Resolution — AgentTeamsModule
 description: "Makes ACCEPT/REJECT/REVISE decisions on conflicts flagged by the conflict auditor in AgentTeamsModule"
-allowed-tools: Edit, Write, Grep, Glob, Read
+tools: Edit, Write, Grep, Glob, Read
 ---
 
 # Conflict Resolution — AgentTeamsModule

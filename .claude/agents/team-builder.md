@@ -1,7 +1,7 @@
 ---
 name: Team Builder — Agent Teams Module
 description: "Interactively constructs a complete agent team for a new or existing Claude project by conducting an intake interview and invoking the build_team pipeline"
-allowed-tools: Read, Edit, Write, Grep, Glob, Bash
+tools: Read, Edit, Write, Grep, Glob, Bash
 ---
 
 <!-- AGENTTEAMS:BEGIN content v=1 -->

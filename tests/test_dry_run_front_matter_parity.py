@@ -26,11 +26,20 @@ from pathlib import Path
 
 from agentteams import emit
 
+#: The fixture is a capability **narrowing**: the template grants less than the deployed file.
+#:
+#: It was a widening until 2026-08-06. That direction stopped being applied when
+#: `_CAPABILITY_FRONT_MATTER_KEYS` was unified to include `allowed-tools` — a widening is
+#: proposal-only for every capability key now, which is what C-3 requires and what `tools:`
+#: already did. Narrowing is still applied on an unmodified file (it removes a capability, so
+#: it needs no authority the engine lacks), so it is the direction that still exercises this
+#: test's actual subject: whether the PREVIEW predicts what the RUN does to front matter.
+#: `test_widening_is_proposed_not_applied` below pins the other direction.
 RENDERED = (
     "---\n"
     "name: Navigator\n"
     "description: d\n"
-    "allowed-tools: Read, Grep, Glob, Bash(python -m agentteams.research:*)\n"
+    "tools: Read, Grep, Glob\n"
     "---\n\n"
     "<!-- AGENTTEAMS:BEGIN body v=1 -->\n"
     "## Body\n\nSame in both.\n"
@@ -41,7 +50,9 @@ RENDERED = (
 )
 
 #: Identical to RENDERED except the capability grant — so the *only* difference is front matter.
-DEPLOYED = RENDERED.replace(", Bash(python -m agentteams.research:*)", "")
+DEPLOYED = RENDERED.replace(
+    "tools: Read, Grep, Glob", "tools: Read, Grep, Glob, Bash(python -m agentteams.research:*)"
+)
 
 
 def _tree(tmp_path: Path) -> Path:
@@ -56,7 +67,7 @@ def _tree(tmp_path: Path) -> Path:
                 "navigator.md": {
                     "name": "Navigator",
                     "description": "d",
-                    "allowed-tools": "Read, Grep, Glob",
+                    "tools": "Read, Grep, Glob, Bash(python -m agentteams.research:*)",
                 }
             }
         }),
@@ -94,8 +105,37 @@ def test_the_real_run_does_change_it(tmp_path: Path) -> None:
         auto_fence_legacy=False,
     )
     written = (out / "navigator.md").read_text(encoding="utf-8")
-    assert "Bash(python -m agentteams.research:*)" in written, (
-        "the real run did not apply the grant, so the parity test proves nothing"
+    assert "Bash(python -m agentteams.research:*)" not in written, (
+        "the real run did not apply the narrowing, so the parity test proves nothing"
+    )
+
+
+def test_widening_is_proposed_not_applied(tmp_path: Path) -> None:
+    """A template that GRANTS MORE than the deployed file is never applied unattended.
+
+    C-3 makes widening a capability grant a privileged change. Before the capability-key sets
+    were unified (2026-08-06) this held for `tools:` and silently failed for `allowed-tools:`,
+    which is the key every Claude team actually carried — so the one framework whose governance
+    agents claim to be read-only was the one where a template widening could land unreviewed.
+    """
+    out = tmp_path / "agents"
+    (out / "references").mkdir(parents=True)
+    narrow = "tools: Read, Grep, Glob"
+    wide = "tools: Read, Grep, Glob, Bash"
+    (out / "navigator.md").write_text(RENDERED, encoding="utf-8")   # deployed = narrow
+    (out / "references" / "build-log.json").write_text(
+        json.dumps({"front_matter_baseline": {
+            "navigator.md": {"name": "Navigator", "description": "d", "tools": "Read, Grep, Glob"}
+        }}),
+        encoding="utf-8",
+    )
+    emit.emit_all(
+        [("navigator.md", RENDERED.replace(narrow, wide))],
+        output_dir=out, dry_run=False, merge=True, yes=True, auto_fence_legacy=False,
+    )
+    written = (out / "navigator.md").read_text(encoding="utf-8")
+    assert narrow in written and "Glob, Bash" not in written, (
+        "a template widening was applied unattended to an unmodified file"
     )
 
 

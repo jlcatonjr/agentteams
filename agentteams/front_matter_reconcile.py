@@ -24,14 +24,21 @@ flag, never implied by the report, and it reports every key it changes.
 
 from __future__ import annotations
 
+import re
 from dataclasses import dataclass
 from pathlib import Path
 
+from agentteams.front_matter_merge import CAPABILITY_FRONT_MATTER_KEYS
 from agentteams.yaml_frontmatter import parse_yaml_front_matter as _parse_front_matter
 
 #: Keys that carry a capability grant. Named so a report can mark them, because a diverging
 #: `allowed-tools` is a different kind of finding from a diverging `description`.
-CAPABILITY_KEYS: frozenset[str] = frozenset({"tools", "allowed-tools", "capabilities"})
+#:
+#: Re-exported from :mod:`agentteams.front_matter_merge` rather than defined here. The two
+#: modules previously carried DIFFERENT sets — this one listed `allowed-tools`, the merge
+#: engine's did not — and the merge engine's was the one gating the escalation check. Keeping a
+#: single definition is the fix (CH-05); the alias preserves every existing import.
+CAPABILITY_KEYS: frozenset[str] = CAPABILITY_FRONT_MATTER_KEYS
 
 
 @dataclass(frozen=True)
@@ -54,6 +61,113 @@ class Divergence:
             f"    deployed: {self.deployed}\n"
             f"    template: {self.template}"
         )
+
+
+#: Capability keys that name the same grant across framework generations, newest first.
+#: Mirrors ``front_matter_merge._CAPABILITY_KEY_SUCCESSION`` — kept as a separate constant only
+#: because this module is the standalone/fleet path and must not import merge internals.
+_CAPABILITY_KEY_SUCCESSION: tuple[tuple[str, str], ...] = (("tools", "allowed-tools"),)
+
+
+@dataclass(frozen=True)
+class CapabilityKeyMigration:
+    """One agent file whose capability key is written under a superseded name."""
+
+    rel_path: str
+    old_key: str
+    new_key: str
+    value: str
+    migrated: bool
+
+    def describe(self) -> str:
+        verb = "migrated" if self.migrated else "would migrate"
+        return f"{self.rel_path}: {verb} {self.old_key!r} -> {self.new_key!r} (value preserved)"
+
+
+def migrate_capability_key(
+    agents_dir: Path, *, dry_run: bool = True
+) -> list[CapabilityKeyMigration]:
+    """Rename a superseded capability key in every agent file under *agents_dir*.
+
+    **Why a standalone pass exists at all.** Front matter is preserved verbatim by
+    ``--update --merge``, so fixing the emitter reaches new teams only. Every Claude team
+    generated before 2026-08-06 declares ``allowed-tools:`` — a key Claude Code's subagent
+    schema does not define — and therefore grants every agent every tool no matter what the
+    file's own body claims (audit finding W1/F-1). Those files need a migration, not a
+    regeneration.
+
+    Only the KEY is renamed. The value is carried across byte-for-byte: the template owns the
+    key's name, the project owns its grant, and a rename must not become a back door for
+    applying a template's capabilities.
+
+    Args:
+        agents_dir: A generated team's agents directory (e.g. ``<repo>/.claude/agents``).
+        dry_run: When True (the default) nothing is written and the result describes what would
+            change. **The default is deliberate**: this function's realistic caller operates on
+            a repository other than its own, where Rule S-2 makes an unrequested write a
+            clearance violation. Writing must be asked for.
+
+    Returns:
+        One entry per file needing (or receiving) migration. Empty when the tree is already
+        migrated or carries no agent files.
+    """
+    results: list[CapabilityKeyMigration] = []
+    if not agents_dir.is_dir():
+        return results
+
+    for path in sorted(agents_dir.glob("*.md")):
+        text = path.read_text(encoding="utf-8")
+        if not text.startswith("---\n"):
+            continue
+        end = text.find("\n---", 3)
+        if end == -1:
+            continue
+        fm, rest = text[4:end + 1], text[end + 1:]
+
+        for new_key, old_key in _CAPABILITY_KEY_SUCCESSION:
+            if re.search(rf"^{re.escape(new_key)}:", fm, re.MULTILINE):
+                continue  # already migrated; never touch a file twice
+            match = re.search(rf"^{re.escape(old_key)}:(.*)$", fm, re.MULTILINE)
+            if not match:
+                continue
+            new_fm = fm[:match.start()] + f"{new_key}:{match.group(1)}" + fm[match.end():]
+            if not dry_run:
+                path.write_text("---\n" + new_fm + rest, encoding="utf-8")
+            results.append(CapabilityKeyMigration(
+                rel_path=path.name, old_key=old_key, new_key=new_key,
+                value=match.group(1).strip(), migrated=not dry_run,
+            ))
+            break
+    return results
+
+
+def survey_capability_keys(agents_dir: Path) -> dict[str, int]:
+    """Read-only census of which capability key a deployed team uses.
+
+    Separate from :func:`migrate_capability_key` because a survey across other people's
+    repositories must be provably incapable of writing. This function opens files for reading
+    and returns counts; there is no code path here that writes.
+
+    Returns:
+        ``{"agents": n, "superseded": n, "current": n, "none": n}``.
+    """
+    counts = {"agents": 0, "superseded": 0, "current": 0, "none": 0}
+    if not agents_dir.is_dir():
+        return counts
+    for path in sorted(agents_dir.glob("*.md")):
+        text = path.read_text(encoding="utf-8")
+        if not text.startswith("---\n"):
+            continue
+        end = text.find("\n---", 3)
+        fm = text[4:end + 1] if end != -1 else ""
+        counts["agents"] += 1
+        if re.search(r"^tools:", fm, re.MULTILINE):
+            counts["current"] += 1
+        elif re.search(r"^allowed-tools:", fm, re.MULTILINE):
+            counts["superseded"] += 1
+        else:
+            counts["none"] += 1
+    return counts
 
 
 def _front_matter_map(text: str) -> dict[str, str]:

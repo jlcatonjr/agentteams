@@ -1,7 +1,7 @@
 ---
 name: Format Converter — AgentTeamsModule
 description: "Converts deliverables from their source format to Python 3.11 modules for final output in AgentTeamsModule"
-allowed-tools: Read, Edit, Write, Bash
+tools: Read, Edit, Write, Bash
 ---
 <!-- AGENTTEAMS:BEGIN content v=1 -->
 

@@ -1,7 +1,7 @@
 ---
 name: Adversarial — AgentTeamsModule
 description: "Presupposition critic: challenges the assumptions underlying any plan, proposal, or diagnosis produced by the agent team. Traces how justified changes in presuppositions cascade through dependent logic."
-allowed-tools: Read, Grep, Glob
+tools: Read, Grep, Glob
 ---
 <!-- AGENTTEAMS:BEGIN content v=1 -->
 

@@ -1,7 +1,7 @@
 ---
 name: Conflict Auditor — AgentTeamsModule
 description: "Detects logical conflicts across deliverables, agent documentation, reference files, and source material in AgentTeamsModule"
-allowed-tools: Read, Grep, Glob
+tools: Read, Grep, Glob
 ---
 
 <!--

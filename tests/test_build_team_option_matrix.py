@@ -717,13 +717,12 @@ def test_migrate_exemption_skips_overwrite_gate_via_security_gate(
         "--output", str(tmp_path / ".github" / "agents"),
         "--overwrite", "--security-offline",
     ]
-    security_gate.set_migrate_exemption(True)
-    try:
-        build_team.main(args)
-    finally:
-        security_gate.set_migrate_exemption(False)
+    # The exemption is a PARAMETER now, not module state (audit W4 / probe A12). Passing it
+    # is the only way to reach the exempted path; the prior module-level setter meant any
+    # importer could disable the destructive gate for the whole process.
+    build_team.main(args, migrate_exemption=True)
     err_exempt = capsys.readouterr().err
-    build_team.main(args)  # exemption reset -> gate must block
+    build_team.main(args)  # default is False -> gate must block
     err_blocked = capsys.readouterr().err
     assert "[SEC-GATE/DESTRUCTIVE:overwrite]" not in err_exempt, (
         "exemption active but generate-overwrite gate still blocked"

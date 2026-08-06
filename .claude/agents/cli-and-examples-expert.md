@@ -1,7 +1,7 @@
 ---
 name: CLI Entry Point and Examples Expert — AgentTeamsModule
 description: "Component expert for CLI Entry Point and Examples in AgentTeamsModule — prepares Component Briefs, reviews drafts against brief checklist, approves deliverables"
-allowed-tools: Read, Grep, Glob, Task
+tools: Read, Grep, Glob, Task
 ---
 
 <!--

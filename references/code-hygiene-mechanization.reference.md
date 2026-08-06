@@ -59,6 +59,7 @@ reads as conformance and suppresses the judgment that was actually required.
 | CH-26 Least authority in tool declarations | **mechanizable** | Declared tools against a role's required set; `audit.py::_check_readonly_tool_declarations` already does the read-only case. |
 | CH-27 Long-lived utilities over ad-hoc scripts | judgment | Same intent problem as CH-02. |
 | CH-28 Minimal, scoped edits | judgment | A property of a change, not of a tree. Not checkable from a snapshot. |
+| CH-30 No exemption without provenance | judgment | Requires asking whether the thing being exempted can CHOOSE to look like the exempted shape. That is a question about an adversary's options, not about the tree. The five instances that motivated the rule (scan.py's code-span, comment-line, basename, backup-dir and orphan exemptions) were each found by attacking them, not by matching them. |
 
 ## Summary
 
@@ -71,7 +72,7 @@ them by suffix: **-ed = a check exists**, **-able = a check could exist**.
 | partly mechanized | 5 | A check exists and covers **part** of the rule; the row says which part |
 | mechanizable | 3 | No check; the decision procedure is fully specifiable |
 | partly mechanizable | 5 | No check; only part of the decision procedure is specifiable |
-| judgment | 9 | No check is possible; the information is not in what a checker can see |
+| judgment | 10 | No check is possible; the information is not in what a checker can see |
 
 These counts are **derived from the table by
 `tests/test_code_hygiene.py::test_mechanization_summary_counts_match_the_table`**,

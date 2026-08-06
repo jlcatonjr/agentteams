@@ -1,7 +1,7 @@
 ---
 name: Git Operations — AgentTeamsModule
 description: "Executes and governs Git and GitHub operations in AgentTeamsModule, including commit/push, pull/merge/rebase, conflict handling, and recovery workflows."
-allowed-tools: Read, Bash, Grep, Glob
+tools: Read, Bash, Grep, Glob
 ---
 <!-- AGENTTEAMS:BEGIN content v=1 -->
 

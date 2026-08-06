@@ -1,7 +1,7 @@
 ---
 name: Technical Validator — AgentTeamsModule
 description: "Read-only audit agent that verifies technical accuracy in AgentTeamsModule — code examples, file excerpts, API references, and tool invocations match what exists on disk"
-allowed-tools: Read, Grep, Glob
+tools: Read, Grep, Glob
 ---
 
 <!--

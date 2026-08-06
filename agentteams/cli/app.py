@@ -59,7 +59,7 @@ def _deprecated_build_team_entry(argv: list[str] | None = None) -> int:
     return main(argv)
 
 
-def main(argv: list[str] | None = None) -> int:
+def main(argv: list[str] | None = None, *, migrate_exemption: bool = False) -> int:
     """CLI entry point.
 
     The ``--dry-run --json`` stdout contract is enforced here rather than deeper in the pipeline.
@@ -81,13 +81,17 @@ def main(argv: list[str] | None = None) -> int:
     parser = _build_parser()
     args = parser.parse_args(argv)
     _validate_option_combinations(parser, args)
-    return run_with_json_stdout(_main_dispatch, args, parser, argv)
+    return run_with_json_stdout(
+        _main_dispatch, args, parser, argv, migrate_exemption=migrate_exemption
+    )
 
 
 def _main_dispatch(
     args: argparse.Namespace,
     parser: argparse.ArgumentParser,
     argv: list[str] | None,
+    *,
+    migrate_exemption: bool = False,
 ) -> int:
     import build_team  # lazy: resident helpers (events/migrate/etc.) stay in build_team
 
@@ -417,4 +421,6 @@ def _main_dispatch(
     if not args.description:
         parser.error("--description is required (or use --self for self-maintenance)")
 
-    return run_generate(args, strict_manual_placeholders)
+    return run_generate(
+        args, strict_manual_placeholders, migrate_exemption=migrate_exemption
+    )

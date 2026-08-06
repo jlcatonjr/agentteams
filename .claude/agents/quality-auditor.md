@@ -1,7 +1,7 @@
 ---
 name: Quality Auditor — AgentTeamsModule
 description: "Read-only audit agent that inspects deliverables in AgentTeamsModule for structural defects, logical inconsistencies, and LLM-generated prose patterns; does not rewrite"
-allowed-tools: Read, Grep, Glob
+tools: Read, Grep, Glob
 ---
 
 # Quality Auditor — AgentTeamsModule

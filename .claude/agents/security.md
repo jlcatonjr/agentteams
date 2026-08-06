@@ -1,7 +1,7 @@
 ---
 name: Security — AgentTeamsModule
 description: "Top-priority security sentinel: reviews actions for credential exposure, destructive operations, sensitive content leakage, and reference integrity before any sensitive action proceeds"
-allowed-tools: Read, Grep, Glob
+tools: Read, Grep, Glob
 ---
 
 <!--

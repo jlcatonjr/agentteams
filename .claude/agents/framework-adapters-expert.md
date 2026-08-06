@@ -1,7 +1,7 @@
 ---
 name: Framework Adapters Expert — AgentTeamsModule
 description: "Component expert for Framework Adapters in AgentTeamsModule — prepares Component Briefs, reviews drafts against brief checklist, approves deliverables"
-allowed-tools: Read, Grep, Glob, Task
+tools: Read, Grep, Glob, Task
 ---
 
 <!--

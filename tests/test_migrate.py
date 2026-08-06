@@ -139,7 +139,7 @@ class TestRunMigrate:
         _, head_sha, _ = _git(["rev-parse", "HEAD"], tmp_path)
 
         import build_team as _bt
-        monkeypatch.setattr(_bt, "main", lambda argv: 0)
+        monkeypatch.setattr(_bt, "main", lambda argv, **kw: 0)
         argv = [
             "--description", str(tmp_path / ".github" / "agents" / "brief.json"),
             "--project", str(tmp_path),
@@ -158,7 +158,7 @@ class TestRunMigrate:
 
         # Patch main() so we don't actually run the full pipeline
         import build_team as _bt
-        monkeypatch.setattr(_bt, "main", lambda argv: 0)
+        monkeypatch.setattr(_bt, "main", lambda argv, **kw: 0)
 
         brief_path = tmp_path / ".github" / "agents" / "brief.json"
         argv = [
@@ -179,7 +179,7 @@ class TestRunMigrate:
         _init_git_repo(tmp_path)
 
         import build_team as _bt
-        monkeypatch.setattr(_bt, "main", lambda argv: 1)  # simulate failure
+        monkeypatch.setattr(_bt, "main", lambda argv, **kw: 1)  # simulate failure
 
         brief_path = tmp_path / ".github" / "agents" / "brief.json"
         argv = [
@@ -202,7 +202,7 @@ class TestRunMigrate:
 
         import build_team as _bt
 
-        def _capture_main(argv):
+        def _capture_main(argv, *, migrate_exemption=False):
             captured["argv"] = argv
             return 0
 
@@ -233,7 +233,7 @@ class TestMigrateRevertRoundTrip:
         _write_pass_security_decision(tmp_path / ".github" / "agents", "revert-migration")
 
         import build_team as _bt
-        monkeypatch.setattr(_bt, "main", lambda argv: 0)
+        monkeypatch.setattr(_bt, "main", lambda argv, **kw: 0)
 
         brief_path = tmp_path / ".github" / "agents" / "brief.json"
         argv = [

@@ -1,7 +1,7 @@
 ---
 name: Template Library Expert — AgentTeamsModule
 description: "Component expert for Template Library in AgentTeamsModule — prepares Component Briefs, reviews drafts against brief checklist, approves deliverables"
-allowed-tools: Read, Grep, Glob, Task
+tools: Read, Grep, Glob, Task
 ---
 
 <!--

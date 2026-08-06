@@ -456,6 +456,7 @@ def emit_all(
                     normalized_content,
                     existing_text,
                     preserve_on_shrink=(shrink_policy == "preserve"),
+                    rel_path=rel_path,
                 )
                 # Plan 3: dry-run preview also surfaces the notices that the
                 # real run would emit (D-4 from update-dry-run plan).
@@ -584,6 +585,7 @@ def emit_all(
                 existing_text,
                 preserve_on_shrink=(shrink_policy == "preserve"),
                 file_is_unmodified=(rel_path in _unmodified),
+                rel_path=rel_path,
             )
             # Front-matter drift: the template's front matter moved on while this file kept its
             # own. Merge cannot fix it — front matter lies outside every fence and is preserved

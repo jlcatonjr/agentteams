@@ -1,7 +1,7 @@
 ---
 name: Orchestrator — AgentTeamsModule
 description: "Coordinates all agent operations for AgentTeamsModule: routes work to domain agents, enforces constitutional rules, and closes every multi-file session with a consistency check."
-allowed-tools: Read, Edit, Write, Grep, Glob, Bash, TodoWrite, Task
+tools: Read, Edit, Write, Grep, Glob, Bash, TodoWrite, Task
 ---
 
 <!--

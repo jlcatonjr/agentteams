@@ -28,7 +28,7 @@ RENDERED = (
     "---\n"
     "name: Navigator\n"
     "description: d\n"
-    "allowed-tools: Read, Grep, Glob, Bash(python -m agentteams.research:*)\n"
+    "tools: Read, Grep, Glob, Bash(python -m agentteams.research:*)\n"
     "---\n\n"
     "## Body\n"
 )
@@ -36,7 +36,7 @@ DEPLOYED = (
     "---\n"
     "name: Navigator\n"
     "description: d\n"
-    "allowed-tools: Read, Grep, Glob\n"
+    "tools: Read, Grep, Glob\n"
     "---\n\n"
     "## Body\n\n"
     "## Project-Specific Notes\n\nMine.\n"
@@ -55,7 +55,7 @@ def test_a_diverging_capability_grant_is_reported(tmp_path: Path) -> None:
     found = find_divergences([("navigator.md", RENDERED)], out)
     assert len(found) == 1
     d = found[0]
-    assert d.key == "allowed-tools"
+    assert d.key == "tools"
     assert d.is_capability is True
     assert "Bash(python -m agentteams.research:*)" in d.template
 
@@ -74,7 +74,7 @@ def test_apply_changes_only_the_diverging_key(tmp_path: Path) -> None:
     applied = apply_divergences(find_divergences([("navigator.md", RENDERED)], out), out)
 
     text = (out / "navigator.md").read_text(encoding="utf-8")
-    assert "allowed-tools: Read, Grep, Glob, Bash(python -m agentteams.research:*)" in text
+    assert "tools: Read, Grep, Glob, Bash(python -m agentteams.research:*)" in text
     assert "name: Navigator" in text and "description: d" in text
     assert "## Project-Specific Notes" in text and "Mine." in text, "body was touched"
     assert any("CAPABILITY GRANT CHANGED" in line for line in applied), (
@@ -87,7 +87,7 @@ def test_a_key_the_template_does_not_declare_is_not_a_divergence(tmp_path: Path)
     deployed = DEPLOYED.replace("description: d\n", "description: d\nproject-note: keep me\n")
     out = _tree(tmp_path, deployed)
     found = find_divergences([("navigator.md", RENDERED)], out)
-    assert [d.key for d in found] == ["allowed-tools"]
+    assert [d.key for d in found] == ["tools"]
 
 
 def test_a_deployed_file_with_no_front_matter_is_skipped(tmp_path: Path) -> None:
@@ -115,7 +115,11 @@ def test_the_report_never_implies_it_applied_anything(tmp_path: Path) -> None:
 
 
 def test_capability_keys_cover_both_framework_spellings() -> None:
-    """copilot-vscode writes `tools:`, claude writes `allowed-tools:`. Both are grants."""
+    """Both the current key and the superseded one are capability grants.
+
+    `allowed-tools` is what every Claude team generated before 2026-08-06 still carries on
+    disk, so the reconcile report must keep recognising it even though nothing emits it now.
+    """
     assert {"tools", "allowed-tools"} <= CAPABILITY_KEYS
 
 
@@ -185,7 +189,7 @@ def test_cli_report_never_writes_even_with_divergence(tmp_path: Path) -> None:
     brief, out = _generate(tmp_path)
     target = out / "navigator.md"
     text = target.read_text(encoding="utf-8")
-    perturbed = text.replace("allowed-tools: ", "allowed-tools: Bash, ", 1)
+    perturbed = text.replace("tools: ", "tools: Bash, ", 1)
     assert perturbed != text, "fixture did not perturb anything"
     target.write_text(perturbed, encoding="utf-8")
 
@@ -213,7 +217,7 @@ def test_cli_apply_changes_only_the_diverging_key(tmp_path: Path) -> None:
     brief, out = _generate(tmp_path)
     target = out / "navigator.md"
     original = target.read_text(encoding="utf-8")
-    target.write_text(original.replace("allowed-tools: ", "allowed-tools: Bash, ", 1), encoding="utf-8")
+    target.write_text(original.replace("tools: ", "tools: Bash, ", 1), encoding="utf-8")
     other = out / "security.md"
     other_before = other.read_text(encoding="utf-8")
 

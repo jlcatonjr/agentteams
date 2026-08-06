@@ -1,7 +1,7 @@
 ---
 name: Retrieval Integrator — AgentTeamsModule
 description: "Validates retrieval integration contracts in AgentTeamsModule — query entrypoints, maintenance entrypoints, trigger channels, and freshness obligations"
-allowed-tools: Read, Grep, Glob, Bash
+tools: Read, Grep, Glob, Bash
 ---
 
 # Retrieval Integrator — AgentTeamsModule

@@ -1,7 +1,7 @@
 ---
 name: Code Hygiene — AgentTeamsModule
 description: "Read-only auditor that enforces modular architecture, file hygiene, script lifecycle, anti-sprawl rules, and agent documentation quality. Delegates removals to @cleanup; delegates structural extraction to @agent-refactor."
-allowed-tools: Read, Grep, Glob
+tools: Read, Grep, Glob
 ---
 <!-- AGENTTEAMS:BEGIN content v=1 -->
 

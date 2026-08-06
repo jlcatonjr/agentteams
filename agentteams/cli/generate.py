@@ -54,12 +54,65 @@ _SCRIPT_DIR = Path(__file__).resolve().parents[2]
 TEMPLATES_DIR = _SCRIPT_DIR / "agentteams" / "templates"
 
 
-def run_generate(args: argparse.Namespace, strict_manual_placeholders: bool) -> int:
+def run_generate(
+    args: argparse.Namespace,
+    strict_manual_placeholders: bool,
+    *,
+    migrate_exemption: bool = False,
+) -> int:
     """Run the generate/update/check pipeline; see `cli.json_mode` for `--json` stdout handling."""
-    return run_with_json_stdout(_run_generate_inner, args, strict_manual_placeholders)
+    return run_with_json_stdout(
+        _run_generate_inner, args, strict_manual_placeholders,
+        migrate_exemption=migrate_exemption,
+    )
 
 
-def _run_generate_inner(args: argparse.Namespace, strict_manual_placeholders: bool) -> int:
+
+def _sweep_capability_key(
+    output_dir: Path, result: emit.EmitResult, *, dry_run: bool
+) -> None:
+    """Migrate a superseded capability key across the WHOLE agents directory.
+
+    ``_merge_front_matter`` migrates the key for files the render produced. That misses every
+    agent file written by another path — the ``--bridge-refresh`` subagent stubs above all.
+
+    Measured 2026-08-06 by rehearsing a fleet update against an isolated copy of a real
+    downstream repository: 27 of 31 agents migrated and 4 did not. All four were bridge-written,
+    and ``team-builder`` — holding Bash, Write and Edit — was among them. **A partial migration
+    is worse than a visible failure**, because the run reports success and the operator believes
+    the grant is now enforced.
+
+    Called from BOTH emit call sites. The first implementation was wired to the fresh-generation
+    path only, so ``--update --merge`` — the command an actual fleet sweep uses — did not run it.
+    That is the same one-of-two-paths shape as the defect it fixes.
+
+    Args:
+        output_dir: The generated team's agents directory.
+        result: The emit result; the sweep runs only on success.
+        dry_run: Report without writing.
+    """
+    if not result.success:
+        return
+    from agentteams.front_matter_reconcile import migrate_capability_key
+
+    migrated = migrate_capability_key(output_dir, dry_run=dry_run)
+    if not migrated:
+        return
+    verb = "would migrate" if dry_run else "migrated"
+    print(f"\n  Capability key: {verb} {len(migrated)} file(s) from a key this framework's "
+          f"runtime ignores:")
+    for m in migrated[:10]:
+        print(f"     {m.rel_path}: {m.old_key} -> {m.new_key}")
+    if len(migrated) > 10:
+        print(f"     ... and {len(migrated) - 10} more")
+
+
+def _run_generate_inner(
+    args: argparse.Namespace,
+    strict_manual_placeholders: bool,
+    *,
+    migrate_exemption: bool = False,
+) -> int:
     import build_team  # lazy: resident helpers (events/migrate/prune/run-log) stay in build_team
     build_team._check_dual_descriptor(args)
 
@@ -610,6 +663,7 @@ def _run_generate_inner(args: argparse.Namespace, strict_manual_placeholders: bo
         )
         emit.print_summary(result, manifest)
         build_team._persist_shrink_events(args, result, manifest, output_dir)
+        _sweep_capability_key(output_dir, result, dry_run=args.dry_run)
         if args.dry_run and result.dry_run_report is not None:
             emit.print_dry_run_report(
                 result, manifest,
@@ -786,17 +840,16 @@ def _run_generate_inner(args: argparse.Namespace, strict_manual_placeholders: bo
     # Destructive-action gate must clear BEFORE backup/migration so a blocked
     # overwrite produces no spurious backup or log migration. A --migrate-driven
     # overwrite is exempt: --migrate supplies its own safety (the
-    # pre-fencing-snapshot git tag + --revert-migration). The exemption is
-    # gated on security_gate.migrate_exemption_active() — module state set ONLY
-    # by _run_migrate around its main() re-invocation, so the bypass is not
-    # reachable from the CLI.
-    if not args.dry_run and args.overwrite and not security_gate.migrate_exemption_active():
+    # pre-fencing-snapshot git tag + --revert-migration). The exemption arrives as an
+    # explicit PARAMETER from _run_migrate, not as module state — see the removal note in
+    # security_gate.py. A caller that does not pass it cannot enable it.
+    if not args.dry_run and args.overwrite and not migrate_exemption:
         try:
             security_gate._assert_destructive_action_allowed(output_dir, action="overwrite")
         except RuntimeError as exc:
             print(f"[SEC-GATE/DESTRUCTIVE:overwrite] blocked: {exc}", file=sys.stderr)
             return 1
-    elif not args.dry_run and args.overwrite and security_gate.migrate_exemption_active():
+    elif not args.dry_run and args.overwrite and migrate_exemption:
         print(
             "  ℹ  Security-decision gate exempted for --migrate "
             "(rollback point is the 'pre-fencing-snapshot' tag).",
@@ -837,6 +890,8 @@ def _run_generate_inner(args: argparse.Namespace, strict_manual_placeholders: bo
     )
     emit.print_summary(result, manifest)
     build_team._persist_shrink_events(args, result, manifest, output_dir)
+
+    _sweep_capability_key(output_dir, result, dry_run=args.dry_run)
 
     # Durable record of this run's decisions; silent when nothing to attribute.
     if not args.dry_run:

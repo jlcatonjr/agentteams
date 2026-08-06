@@ -70,6 +70,7 @@ nav:
       - emit: api-reference/emit.md
       - fences: api-reference/fences.md
       - convert: api-reference/convert.md
+      - integrity: api-reference/integrity.md
       - interop: api-reference/interop.md
       - bridge: api-reference/bridge.md
       - fleet: api-reference/fleet.md

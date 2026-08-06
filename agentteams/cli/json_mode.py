@@ -57,8 +57,9 @@ def run_with_json_stdout(
     inner: Callable[..., int],
     args: argparse.Namespace,
     *rest: Any,
+    **kwargs: Any,
 ) -> int:
-    """Run ``inner(args, *rest)``, redirecting human output to stderr when in JSON mode.
+    """Run ``inner(args, *rest, **kwargs)``, redirecting human output to stderr in JSON mode.
 
     Outside JSON mode this is a straight call, so a caller running plain ``--dry-run`` sees
     byte-identical output to before and nothing parsing the text report is affected. (The JSON
@@ -80,13 +81,13 @@ def run_with_json_stdout(
     """
     global _JSON_STDOUT
     if not is_json_mode(args) or _JSON_STDOUT is not None:
-        return inner(args, *rest)
+        return inner(args, *rest, **kwargs)
 
     previous = _JSON_STDOUT
     _JSON_STDOUT = sys.stdout
     try:
         with contextlib.redirect_stdout(sys.stderr):
-            return inner(args, *rest)
+            return inner(args, *rest, **kwargs)
     finally:
         # Restored rather than cleared: tests drive main() repeatedly in one process, and a
         # stale handle would leak into the next run.

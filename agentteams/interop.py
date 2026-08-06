@@ -66,8 +66,19 @@ def detect_framework(source_dir: Path) -> str:
         except OSError:
             continue
         if content.startswith("---\n"):
-            if "allowed-tools:" in content:
-                has_claude_front_matter = True
+            # Accept BOTH capability keys. `tools:` is what a Claude subagent file carries
+            # since 2026-08-06; `allowed-tools:` is what every previously generated team
+            # still carries on disk, and detection must keep working on those. Matched at
+            # line start so `allowed-tools:` is not read as a `tools:` hit, and so a
+            # copilot-vscode `tools: ['read']` line is excluded by the bracket test below.
+            for line in content.splitlines():
+                stripped = line.strip()
+                if stripped.startswith("allowed-tools:"):
+                    has_claude_front_matter = True
+                elif stripped.startswith("tools:") and "[" not in stripped:
+                    # copilot-vscode writes an inline list (`tools: ['read']`); Claude
+                    # writes a bare comma-separated scalar. The bracket discriminates.
+                    has_claude_front_matter = True
             if "user-invokable:" in content or "handoffs:" in content:
                 has_yaml_keys = True
 
