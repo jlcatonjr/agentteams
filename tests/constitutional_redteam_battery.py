@@ -24,7 +24,7 @@ import json
 import os
 import sys
 import tempfile
-from dataclasses import asdict, dataclass, field
+from dataclasses import asdict
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
 
@@ -42,31 +42,19 @@ from agentteams.front_matter_merge import (  # noqa: E402
 from agentteams.fences import _merge_fenced_content  # noqa: E402
 from agentteams.backup import BACKUP_DIR_NAME  # noqa: E402
 
-DEFENDED = "DEFENDED"
-PARTIAL = "PARTIAL"        # control fired, but with degraded / mis-framed signal
-EXPLOITED = "EXPLOITED"
-DOC_LIMIT = "DOCUMENTED-LIMIT"
-OUT_OF_TIER = "OUT-OF-TIER"
-
-
-@dataclass
-class Probe:
-    pid: str
-    name: str
-    article: str
-    tier: str
-    outcome: str
-    expected_if_sound: str
-    evidence: str
-    control: str | None = None
-    notes: str = ""
-
-
-RESULTS: list[Probe] = []
-
-
-def record(**kw) -> None:
-    RESULTS.append(Probe(**kw))
+# The vocabulary lives in the package, not here. `agentteams/redteam/registry.py` holds the
+# outcome classes, the Probe model and the collector; this module supplies the probes. The
+# direction matters: the standing daily audit ships in the package and must not import a test
+# tree that consumers do not install, so the data model moved and the battery imports it.
+from agentteams.redteam.registry import (  # noqa: E402
+    DEFENDED,
+    DOC_LIMIT,
+    EXPLOITED,
+    OUT_OF_TIER,
+    PARTIAL,
+    RESULTS,
+    record,
+)
 
 
 # ---------------------------------------------------------------------------

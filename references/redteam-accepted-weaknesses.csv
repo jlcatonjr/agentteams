@@ -1,0 +1,6 @@
+pid,outcome,reason
+A5,PARTIAL,"the `scope` column narrows when present, and a scope-SHAPED action_reviewed suffix with no scope column now warns that it restricts nothing. Still PARTIAL because `scope` is opt-in: making it mandatory would invalidate every existing clearance row in every deployed team"
+A9,OUT-OF-TIER,"T2 (operator shell) is out of scope for every control here; the HMAC is sound and the key is the trust anchor. The sub-finding closed: an off-roster approver is now refused, and key custody is documented in docs_src/security-hardening-guide.md"
+A10,PARTIAL,"producer and verifier now agree (the digest is emitted AND checked, and the intel-key constant was pointed at keys that exist - see tests/test_security_intel_digest.py). Still PARTIAL because a payload carrying no digest cannot be verified, so pre-2026-08-06 caches remain unbound: a ratchet on new payloads, not a guarantee about old ones"
+B4,DOCUMENTED-LIMIT,"semantic (non-literal) overrides are outside the deterministic scanner by design; scan.py states this explicitly"
+C3,DOCUMENTED-LIMIT,"front matter cannot be fenced, so a capability grant has no restore-on-update guarantee; the escalation is reported rather than reverted"

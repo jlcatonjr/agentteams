@@ -25,6 +25,7 @@ from agentteams.cli.commands import (
     _run_stale_check,
     _run_stale_restore,
     _run_verify_backup,
+    _run_redteam,
     _run_verify_integrity,
     _run_verify_waivers,
 )
@@ -168,6 +169,14 @@ def _main_dispatch(
     # --verify-integrity / --verify-backup: standalone read-only integrity
     # checks (no description/generation needed). The exit code IS the verdict.
     # -----------------------------------------------------------------------
+    # -----------------------------------------------------------------------
+    # --redteam: the standing red-team audit. Read-only against the repository;
+    # writes only under the report dir. Dispatched before the generation
+    # pipeline because it needs no description and renders no templates.
+    # -----------------------------------------------------------------------
+    if getattr(args, "redteam", False) or getattr(args, "accept_probe_baseline", False):
+        return _run_redteam(args)
+
     if getattr(args, "verify_integrity", False):
         return _run_verify_integrity(args)
     if getattr(args, "verify_backup", None) is not None:

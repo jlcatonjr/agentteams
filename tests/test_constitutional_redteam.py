@@ -15,44 +15,33 @@ fix that quietly downgrades itself to "documented limitation" also fails.
 
 from __future__ import annotations
 
+from pathlib import Path
+
 import pytest
 
+from agentteams.redteam.registry import (
+    ACCEPTED_WEAKNESSES_REL,
+    MIN_REASON_CHARS,
+    load_accepted_weaknesses,
+)
 from tests.constitutional_redteam_battery import (  # noqa: E402
     DEFENDED,
-    DOC_LIMIT,
     EXPLOITED,
-    OUT_OF_TIER,
-    PARTIAL,
     PROBES,
     RESULTS,
 )
 
+REPO_ROOT = Path(__file__).resolve().parents[1]
+
 #: Probes allowed to return something other than DEFENDED, each with the reason. A probe not in
 #: this map MUST be DEFENDED. Adding an entry is a deliberate act that has to state a reason —
 #: which is the point: it makes accepting a weakness visible in a diff rather than in a tally.
-ALLOWED_NON_DEFENDED: dict[str, tuple[str, str]] = {
-    "A5": (PARTIAL,
-           "the `scope` column narrows when present, and a scope-SHAPED action_reviewed suffix "
-           "with no scope column now warns that it restricts nothing. Still PARTIAL because "
-           "`scope` is opt-in: making it mandatory would invalidate every existing clearance "
-           "row in every deployed team"),
-    "A9": (OUT_OF_TIER,
-           "T2 (operator shell) is out of scope for every control here; the HMAC is sound and "
-           "the key is the trust anchor. The sub-finding closed: an off-roster approver is now "
-           "refused, and key custody is documented in docs_src/security-hardening-guide.md"),
-    "A10": (PARTIAL,
-            "producer and verifier now agree (the digest is emitted AND checked, and the "
-            "intel-key constant was pointed at keys that exist — see "
-            "tests/test_security_intel_digest.py). Still PARTIAL because a payload carrying no "
-            "digest cannot be verified, so pre-2026-08-06 caches remain unbound: a ratchet on "
-            "new payloads, not a guarantee about old ones"),
-    "B4": (DOC_LIMIT,
-           "semantic (non-literal) overrides are outside the deterministic scanner by design; "
-           "scan.py states this explicitly"),
-    "C3": (DOC_LIMIT,
-           "front matter cannot be fenced, so a capability grant has no restore-on-update "
-           "guarantee; the escalation is reported rather than reverted"),
-}
+#:
+#: **Read from CSV rather than declared here** since the standing daily audit shipped: F-6 in
+#: ``agentteams/redteam/checks_report.py`` enforces the same property on every daily run, and
+#: two copies of an exemption list drift the moment someone edits one. The four assertions
+#: below are unchanged; only where they read the ledger from moved.
+ALLOWED_NON_DEFENDED: dict[str, tuple[str, str]] = load_accepted_weaknesses(REPO_ROOT)
 
 
 @pytest.fixture(scope="module")
@@ -131,3 +120,24 @@ def test_controls_still_pass(results: dict) -> None:
         if p.name.startswith("CONTROL:") and p.outcome != DEFENDED
     ]
     assert not failed_controls, f"control probes failed: {failed_controls}"
+
+
+def test_the_ledger_is_populated_and_every_reason_is_substantive() -> None:
+    """Anti-vacuity for the CSV move: an empty or unreadable ledger must not read as clean.
+
+    Before the move, ``ALLOWED_NON_DEFENDED`` was a literal in this file, so it could not
+    silently become empty. Read from CSV it can — a renamed file, a bad header, a botched
+    merge — and an empty exemption map makes `test_every_non_defended_probe_is_explicitly_
+    accepted` *stricter*, which looks like a pass right up until it fails loudly for the wrong
+    reason. This asserts the ledger is actually there and actually says something.
+    """
+    assert ALLOWED_NON_DEFENDED, (
+        f"{ACCEPTED_WEAKNESSES_REL} read as empty; the accepted-weakness ledger is the single "
+        f"source of truth for both this suite and the daily audit's F-6 check"
+    )
+    thin = {
+        pid: len(reason)
+        for pid, (_, reason) in ALLOWED_NON_DEFENDED.items()
+        if len(reason) < MIN_REASON_CHARS
+    }
+    assert not thin, f"exemptions with a reason shorter than {MIN_REASON_CHARS} chars: {thin}"

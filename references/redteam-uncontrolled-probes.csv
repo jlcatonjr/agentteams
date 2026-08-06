@@ -1,0 +1,4 @@
+pid,reason
+B9,"The paired control is B8 (plain credential IS caught), which sits one probe away and establishes that the detector fires at all; B9 measures the allowlist suppression on top of it rather than the detector itself, so a dedicated control would restate B8"
+B11,"The orphan-skip behaviour has no meaningful negative: an agent file that IS expected is scanned by every other probe in Layer B, so the whole of Layer B is this probe's control surface"
+E4,"An umbrella finding about enforcement code living inside the agents' own blast radius, not a discrete mechanism with an on/off state; there is no configuration under which the referee plays outside the sandbox, so no control probe can express the negative"

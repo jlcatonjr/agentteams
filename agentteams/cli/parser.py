@@ -723,6 +723,56 @@ def _build_parser() -> argparse.ArgumentParser:
         ),
     )
     parser.add_argument(
+        "--redteam",
+        action="store_true",
+        dest="redteam",
+        default=False,
+        help=(
+            "Run the standing red-team audit: the probe battery (phase 1), the review "
+            "(phase 2), a remediation skeleton (phase 3) and the six self-audit checks that "
+            "evaluate the red team itself (phase 6). Never remediates. Exits 0 clean, 1 on a "
+            "finding, 2 when the HARNESS is broken — a failed control probe, an unimportable "
+            "probe module, a corpus claim that no longer matches the scanner, or a run that "
+            "modified the live agent tree. Honours --dry-run."
+        ),
+    )
+    parser.add_argument(
+        "--redteam-probes",
+        default=None,
+        metavar="MODULE",
+        dest="redteam_probes",
+        help=(
+            "Dotted import path of the probe module (e.g. "
+            "tests.constitutional_redteam_battery). There is deliberately no default: a "
+            "consumer of this package has no such module, and a command whose default target "
+            "does not exist would hand every consumer a permanently red check. Omitted, "
+            "--redteam runs phase 6 only and reports the probe population as unmeasured."
+        ),
+    )
+    parser.add_argument(
+        "--redteam-report",
+        default=None,
+        metavar="DIR",
+        dest="redteam_report",
+        help=(
+            "Where to write findings.json, discoveries.md, remediation.plan.md and "
+            "selfaudit.md. Defaults to tmp/redteam/YYYY-MM-DD under --project (else CWD)."
+        ),
+    )
+    parser.add_argument(
+        "--accept-probe-baseline",
+        action="store_true",
+        dest="accept_probe_baseline",
+        default=False,
+        help=(
+            "Re-record references/redteam-probe-baseline.json from a fresh probe run, then "
+            "exit. OPERATOR COMMAND: the daily audit never does this. A probe can start "
+            "passing because the control got better or because the probe got blinder, and "
+            "only a reviewed diff tells those apart — so accepting a changed outcome costs "
+            "one. Refused under --dry-run."
+        ),
+    )
+    parser.add_argument(
         "--verify-integrity",
         action="store_true",
         dest="verify_integrity",

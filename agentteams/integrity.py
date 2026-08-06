@@ -39,6 +39,14 @@ ENFORCEMENT_MODULES: tuple[str, ...] = (
     "agentteams/unfenced.py",            # C-1: constraint ratchet
     "agentteams/front_matter_merge.py",  # C-3: capability comparison
     "agentteams/front_matter_reconcile.py",
+    # The standing red-team audit's phase-6 checks. These are controls, not reporters: a
+    # silent edit to any of them turns a check that fires into one that cannot, which is the
+    # F-1 defect applied to the machinery built to catch F-1. Registry is included because it
+    # holds the evidence normalisation the intent check compares against — widen the
+    # normaliser far enough and every probe's evidence digests to the same value.
+    "agentteams/redteam/checks_static.py",
+    "agentteams/redteam/checks_report.py",
+    "agentteams/redteam/registry.py",
     "agentteams/integrity.py",           # self, so removing an entry is itself detectable
 )
 

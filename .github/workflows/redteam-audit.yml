@@ -1,0 +1,198 @@
+name: Standing Red-Team Audit (Daily)
+
+# Runs the constitutional probe battery and the six phase-6 self-audit checks that evaluate
+# the red team itself, every day. It measures and reports; it never remediates.
+#
+# Procedure: references/redteam-audit.procedure.md
+# Driver:    scripts/run_daily_redteam_audit.sh
+# Engine:    agentteams/redteam/
+# Origin:    the 2026-08-06 constitutional red-team audit and its handoff. The audit worked —
+#            21 measured exploits, all closed — but the process around it failed four times,
+#            and every failure was caught late or by accident. Phase 6 is those four failures
+#            turned into checks.
+#
+# ---------------------------------------------------------------------------------------
+# RELIABILITY CONTRACT — inherited from docs-freshness-watch.yml, which earned it.
+# ---------------------------------------------------------------------------------------
+#
+#   * NO `concurrency:` with cancel-in-progress. A cancelled run leaves no verdict, and on a
+#     busy push day that would be every run.
+#   * NO step writes state that a later run reads back. The probe baseline
+#     (references/redteam-probe-baseline.json) is NOT such a state file: it is a committed,
+#     reviewed artifact updated only by an operator running `--accept-probe-baseline`, never
+#     by this workflow. A dropped, cancelled or crashed run has zero effect on it. If this
+#     workflow ever re-baselined itself, every probe whose meaning drifted overnight would be
+#     silently absorbed and the F-5 intent check would measure nothing — a check that clears
+#     its own flag. tests/test_redteam_audit_workflow.py asserts no step here writes under
+#     references/.
+#   * The report step is `if: always()` so a crashed audit still reports.
+#   * A crash routes to the DISTINCT "harness broken" outcome rather than being read as
+#     "no findings". Indeterminate is not a pass.
+#
+# No `push` trigger, deliberately, and the asymmetry with docs-freshness-watch is not an
+# oversight: tests/test_constitutional_redteam.py already runs the battery on every CI run, so
+# a push trigger here would duplicate the regression net without adding a signal. What the
+# cron adds is the phase-6 self-audit and the dated artifact trail.
+
+on:
+  schedule:
+    # 06:41 UTC daily. Off the top of the hour because GitHub queues heavily at :00, and far
+    # from the 13:00 UTC security-maintenance job so the two never contend.
+    - cron: "41 6 * * *"
+  workflow_dispatch:
+    inputs:
+      probe_module:
+        description: "Dotted path to the probe module"
+        required: false
+        default: "tests.constitutional_redteam_battery"
+
+permissions:
+  contents: read
+  issues: write
+
+jobs:
+  redteam-audit:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install package and test dependencies
+        run: pip install -e ".[test]"
+
+      - name: Run the standing red-team audit
+        id: audit
+        continue-on-error: true
+        env:
+          REDTEAM_PROBE_MODULE: ${{ github.event.inputs.probe_module || 'tests.constitutional_redteam_battery' }}
+        run: |
+          set +e
+          bash scripts/run_daily_redteam_audit.sh 2>&1 | tee /tmp/redteam-audit.log
+          echo "verdict=${PIPESTATUS[0]}" >> "$GITHUB_OUTPUT"
+
+      - name: Upload the audit artifacts
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: redteam-audit-${{ github.run_id }}
+          path: tmp/redteam/
+          if-no-files-found: warn
+          retention-days: 30
+
+      - name: Publish the verdict to the job summary
+        if: always()
+        run: |
+          verdict="${{ steps.audit.outputs.verdict }}"
+          {
+            echo "## Standing red-team audit"
+            echo
+            case "$verdict" in
+              0) echo "**Clean.** No live exploit, no self-audit finding, live agent tree untouched." ;;
+              1) echo "**Findings.** See the uploaded artifacts: \`selfaudit.md\` and \`remediation.plan.md\`." ;;
+              2) echo "**HARNESS BROKEN.** These results measure the instrument, not the target, and must not be read as a clean run." ;;
+              *) echo "**HARNESS BROKEN.** The audit produced no verdict (exit \`$verdict\`). Indeterminate is not a pass." ;;
+            esac
+            echo
+            echo '```'
+            tail -n 60 /tmp/redteam-audit.log 2>/dev/null || echo "(no log captured)"
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Open, update or close the audit issue
+        if: always()
+        uses: actions/github-script@v7
+        env:
+          VERDICT: ${{ steps.audit.outputs.verdict }}
+        with:
+          script: |
+            const fs = require('fs');
+            const verdict = process.env.VERDICT || '2';
+            const owner = context.repo.owner;
+            const repo = context.repo.repo;
+
+            // Two DISTINCT labels. A broken harness and a live finding are different
+            // problems with different first actions, and one issue thread covering both
+            // would let "the battery is broken" sit under a title about exploits.
+            const LABEL = verdict === '1' ? 'redteam-findings' : 'redteam-harness-broken';
+            const TITLE = verdict === '1'
+              ? 'Red-team audit: findings open'
+              : 'Red-team audit: HARNESS BROKEN';
+
+            let log = '(no log captured)';
+            try { log = fs.readFileSync('/tmp/redteam-audit.log', 'utf8').slice(-6000); } catch (e) {}
+
+            const body = [
+              `Run: ${context.serverUrl}/${owner}/${repo}/actions/runs/${context.runId}`,
+              '',
+              verdict === '1'
+                ? 'The audit found something. Artifacts are attached to the run: `selfaudit.md` lists the phase-6 findings, `remediation.plan.md` is the skeleton to take through phases 3-5 and 7. Rehearse each fix against an isolated copy of a real target and assert the complete expected end state.'
+                : 'The audit could not produce a trustworthy verdict. A control probe failed, the probe module would not import, a corpus claim no longer matches the scanner, the run touched the live agent tree, or the audit died with a traceback. **These results say nothing about whether the constitution holds.**',
+              '',
+              '<details><summary>Audit log (tail)</summary>',
+              '',
+              '```',
+              log,
+              '```',
+              '',
+              '</details>',
+            ].join('\n');
+
+            // Dedupe by label + title. This suppresses DUPLICATE ISSUES only, never the
+            // check itself: closing the issue wrongly reopens it on the next run, closing it
+            // rightly keeps it closed because the condition went false.
+            for (const name of ['redteam-findings', 'redteam-harness-broken']) {
+              try {
+                await github.rest.issues.getLabel({ owner, repo, name });
+              } catch (e) {
+                await github.rest.issues.createLabel({
+                  owner, repo, name,
+                  color: name === 'redteam-harness-broken' ? 'b60205' : 'd93f0b',
+                  description: 'Opened by the standing red-team audit',
+                });
+              }
+            }
+
+            const existing = await github.rest.issues.listForRepo({
+              owner, repo, state: 'open', labels: LABEL,
+            });
+            const match = existing.data.find(i => i.title === TITLE);
+
+            if (verdict === '0') {
+              // Clean: close whatever is open. The condition went false.
+              for (const name of ['redteam-findings', 'redteam-harness-broken']) {
+                const open = await github.rest.issues.listForRepo({
+                  owner, repo, state: 'open', labels: name,
+                });
+                for (const issue of open.data) {
+                  await github.rest.issues.createComment({
+                    owner, repo, issue_number: issue.number,
+                    body: `Resolved: the audit is clean as of run ${context.runId}.`,
+                  });
+                  await github.rest.issues.update({
+                    owner, repo, issue_number: issue.number, state: 'closed',
+                  });
+                }
+              }
+              return;
+            }
+
+            if (match) {
+              await github.rest.issues.createComment({
+                owner, repo, issue_number: match.number, body,
+              });
+            } else {
+              await github.rest.issues.create({
+                owner, repo, title: TITLE, body, labels: [LABEL],
+              });
+            }
+
+      - name: Fail the job on a harness failure
+        if: always() && steps.audit.outputs.verdict != '0' && steps.audit.outputs.verdict != '1'
+        run: |
+          echo "The red-team harness is broken; failing the job so this is not read as a pass." >&2
+          exit 1

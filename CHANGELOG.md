@@ -6,6 +6,68 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### added (the red-team audit became a standing daily check, and one that audits itself)
+
+- **`agentteams --redteam` — a standing red-team audit on a daily cadence.** The 2026-08-06
+  constitutional audit found and closed 21 measured exploits, but it was a one-off, and the
+  *process* around it failed four times — each failure caught late, by accident, or only when
+  the operator asked a pointed question. This turns the audit into a scheduled check
+  (`.github/workflows/redteam-audit.yml`, 06:41 UTC daily; driver
+  `scripts/run_daily_redteam_audit.sh`) and turns those four failures into mechanical checks.
+  Engine: `agentteams/redteam/`. Procedure: `references/redteam-audit.procedure.md`.
+- **Phase 6 — the audit evaluates the red team, not just the target.** Six checks, each with a
+  test proving it *fires* and a second proving it stays silent, because a self-audit that
+  cannot fail is the exact defect it was written to catch:
+  **F-1** every verifier has a sensitivity test and a negative control;
+  **F-2** every guard reaches every call site, measured per *branch* (both `emit_all` sites
+  live in one function, so a function-level rule sees one host and passes);
+  **F-3** no hand-rolled workspace enumeration, descriptor lookup, or `.git` status check in
+  fleet-consuming code;
+  **F-4** every count carries the population it was computed over, from a canonical
+  enumerator;
+  **F-5** every probe whose outcome *or normalised evidence* changed is re-validated for
+  intent;
+  **F-6** every accepted weakness has a named reason, and a probe that now defends loses its
+  exemption.
+- **F-1 found four controls with no sensitivity test at all**, now written in
+  `tests/test_redteam_verifiers.py`: `integrity.verify` — the hash manifest over every *other*
+  control — had none; `security_gate.check_clearance`, added specifically so inspecting a
+  clearance would not spend it, had nothing pinning that property; `scan._check_line` and
+  `scan._check_injection` were exercised only through `scan_content`, so a regression in
+  either could be masked by a change in the caller.
+- **Three exit codes, kept distinguishable.** 0 clean, 1 findings, 2 **harness broken** — a
+  failed control probe, an unimportable probe module, a corpus claim that no longer matches
+  the scanner, a run that touched the live agent tree, or a death by traceback. A battery
+  whose controls fail reports "no exploits" exactly as loudly as one that found none.
+  Indeterminate is not a pass, and code 2 outranks code 1.
+- **`agentteams/redteam/realcopy.py` — attack the real agent infrastructure, in an isolated
+  copy of it.** Synthetic fixtures measure each control against inputs its author imagined.
+  This snapshots the genuine `.github/agents/` and `.claude/agents/` into a temp root, attacks
+  that, and asserts afterwards — as a git *delta*, not an absolute cleanliness check — that
+  the live tree is byte-identical. `--update --merge` is deliberately **not** used as the
+  restore: probe `C3` measured that an escalated capability grant *survives* it (front matter
+  cannot be fenced), `D3` that deleting fence markers makes the merge refuse to write at all,
+  and `D4` that renaming a fence keeps the weakened body alongside the real one. The merge is
+  instead a *measurement*: `classify_restorability` reports each mutation as `RESTORED`,
+  `PRESERVED` or `REFUSED`.
+- **`redteam-methodology.reference.template.md` ships with every generated team**, carrying
+  the seven phases, the T0/T1/T2 tier model, the outcome classes and the six failure modes.
+  Delivered as an extension to `@adversarial` rather than a 31st agent: the judgment work is
+  *"does this control actually measure what it claims"*, which is presupposition critique
+  applied to a control. Not added to `_TEMPLATE_AUTHORITATIVE_FENCES` — the documented bar
+  there is "the project has no legitimate reason to extend its body", and a downstream project
+  plainly has a reason to add its own probes.
+- **The accepted-weakness list moved from a Python literal to
+  `references/redteam-accepted-weaknesses.csv`**, so the standing suite and the daily audit
+  read one ledger instead of two. `tests/test_constitutional_redteam.py` keeps all four of its
+  assertions and gains an anti-vacuity check: an empty or unreadable ledger makes the strictest
+  assertion *pass*, so the ledger being present and substantive is now asserted directly.
+- **`agentteams/integrity.py` covers the phase-6 check modules**, and
+  `tests/test_redteam_integrity_coverage.py` pins the membership list — nothing referenced
+  `ENFORCEMENT_MODULES` before, so an entry could be deleted and every remaining hash would
+  still verify clean.
+
+
 ### fixed (the audit backlog cleared, and two standing checks so it cannot reopen)
 
 - **`docs_src/cli-reference.md`: 71/90 → 90/90.** The page opened by claiming it documented

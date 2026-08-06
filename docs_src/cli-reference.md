@@ -30,6 +30,8 @@ agentteams [--description PATH] [--project PATH] [--framework NAME]
            [--add-fence-markers PATH] [--in-place]
            [--prune-backups [KEEP]] [--keep-within-days DAYS] [--backup-mirror DIR]
            [--verify-waivers] [--verify-integrity] [--verify-backup [TIMESTAMP]]
+           [--redteam] [--redteam-probes MODULE] [--redteam-report DIR]
+           [--accept-probe-baseline]
            [--stale-check] [--stale-remediate] [--stale-no-git] [--stale-restore TS]
            [--recipe-check]
            [--target-host-features TOKENS]
@@ -552,6 +554,62 @@ Modifier for `--update` (and the other write modes): after each automatic backup
 ## Integrity Verification
 
 Read-only checks that detect silent corruption of generated files and confirm a backup is restorable. Both resolve the output directory from `--output`/`--project` (else CWD) and require no `--description`.
+
+### `--redteam`
+
+Run the **standing red-team audit** and exit: the constitutional probe battery (phase 1), the
+review (phase 2), a remediation skeleton (phase 3) and the six self-audit checks that evaluate
+the red team itself (phase 6). It **measures and reports — it never remediates.** Phases 4, 5
+and 7 are human- or agent-driven off the emitted artifacts; an unattended job that writes
+remediation code is a larger risk than the one it closes.
+
+Artifacts land in `tmp/redteam/YYYY-MM-DD/` (or `--redteam-report`): `findings.json`
+(schema: `schemas/redteam-findings.schema.json`), `discoveries.md`, `remediation.plan.md`,
+`selfaudit.md`.
+
+**Exit code:**
+
+| Code | Meaning |
+|---|---|
+| `0` | clean — no live exploit, no self-audit finding, live agent tree untouched |
+| `1` | a finding — a measured attack is live, or phase 6 found a defect in the red team |
+| `2` | **the harness is broken** — a control probe failed, the probe module would not import, a corpus claim no longer matches the scanner, the run modified the live agent tree, or the audit died with a traceback |
+
+Code `2` outranks `1`. A battery whose controls fail reports "no exploits" exactly as loudly as
+one that found none, so *indeterminate is never a pass*. Honours `--dry-run`, which computes
+everything and writes nothing.
+
+Runs daily via `.github/workflows/redteam-audit.yml`. Procedure:
+`references/redteam-audit.procedure.md`.
+
+### `--redteam-probes MODULE`
+
+Dotted import path of the probe module, e.g. `tests.constitutional_redteam_battery`.
+
+**There is deliberately no default.** A consumer of this package has no
+`tests.constitutional_redteam_battery`, and a command whose default target does not exist would
+hand every consumer a permanently red check. Omitted, `--redteam` runs **phase 6 only** — the
+six self-audit checks are repo-agnostic — and reports the probe population as *unmeasured*
+rather than clean. A *named* module that fails to import is exit `2`.
+
+### `--redteam-report DIR`
+
+Where to write the four artifacts. Defaults to `tmp/redteam/YYYY-MM-DD` under `--project`
+(else CWD) — gitignored and ephemeral, per `references/filing-conventions.md`.
+
+### `--accept-probe-baseline`
+
+Re-record `references/redteam-probe-baseline.json` from a fresh probe run, then exit. Requires
+`--redteam-probes`.
+
+**Operator command. The daily audit never does this**, and
+`tests/test_redteam_audit_workflow.py` asserts that no step in the workflow can. A probe can
+start passing because the control got better *or because the probe got blinder* — two probes
+flipped to a false `DEFENDED` exactly that way — and only a reviewed diff tells those apart. A
+scheduled job that re-baselined itself would clear its own flag every night and measure
+nothing. Refused under `--dry-run`.
+
+Record what you concluded in the affected probe's `note` field before committing.
 
 ### `--verify-waivers`
 

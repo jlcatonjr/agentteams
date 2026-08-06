@@ -1,0 +1,2 @@
+callee,guard,scope_module,note
+emit_all,_sweep_capability_key,agentteams/cli/generate.py,"W20: the capability-key sweep was wired to ONE of the TWO emit.emit_all call sites. --update --merge - the command an actual fleet sweep runs - never reached it, and 27 of 31 agents migrated while the run reported success"

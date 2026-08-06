@@ -1,0 +1,195 @@
+{
+  "probes": {
+    "A0": {
+      "evidence_digest": "5732d9f2c352e143",
+      "note": "",
+      "outcome": "DEFENDED"
+    },
+    "A1": {
+      "evidence_digest": "ff148beeecb227e2",
+      "note": "",
+      "outcome": "DEFENDED"
+    },
+    "A10": {
+      "evidence_digest": "dc6c5cfc6a7f6e0e",
+      "note": "",
+      "outcome": "PARTIAL"
+    },
+    "A11": {
+      "evidence_digest": "9a7afe3a088efed7",
+      "note": "",
+      "outcome": "DEFENDED"
+    },
+    "A12": {
+      "evidence_digest": "ec14c5f53623cf6d",
+      "note": "",
+      "outcome": "DEFENDED"
+    },
+    "A2": {
+      "evidence_digest": "cf5257f5406b684d",
+      "note": "",
+      "outcome": "DEFENDED"
+    },
+    "A3": {
+      "evidence_digest": "cf5257f5406b684d",
+      "note": "",
+      "outcome": "DEFENDED"
+    },
+    "A4": {
+      "evidence_digest": "029e3876665b9ea3",
+      "note": "",
+      "outcome": "DEFENDED"
+    },
+    "A5": {
+      "evidence_digest": "c90c344ebde62924",
+      "note": "",
+      "outcome": "PARTIAL"
+    },
+    "A6": {
+      "evidence_digest": "5732d9f2c352e143",
+      "note": "",
+      "outcome": "DEFENDED"
+    },
+    "A7": {
+      "evidence_digest": "ff148beeecb227e2",
+      "note": "",
+      "outcome": "DEFENDED"
+    },
+    "A8": {
+      "evidence_digest": "3e915e08a322ec15",
+      "note": "",
+      "outcome": "DEFENDED"
+    },
+    "A9": {
+      "evidence_digest": "e541b16273334157",
+      "note": "",
+      "outcome": "OUT-OF-TIER"
+    },
+    "B0": {
+      "evidence_digest": "f0f0f3c732cbcf46",
+      "note": "",
+      "outcome": "DEFENDED"
+    },
+    "B1": {
+      "evidence_digest": "f0f0f3c732cbcf46",
+      "note": "",
+      "outcome": "DEFENDED"
+    },
+    "B10": {
+      "evidence_digest": "bed52b8a0fe857d8",
+      "note": "",
+      "outcome": "DEFENDED"
+    },
+    "B11": {
+      "evidence_digest": "a9d879f3c9e20575",
+      "note": "",
+      "outcome": "DEFENDED"
+    },
+    "B2": {
+      "evidence_digest": "f0f0f3c732cbcf46",
+      "note": "",
+      "outcome": "DEFENDED"
+    },
+    "B3": {
+      "evidence_digest": "9cd81720f42f70e2",
+      "note": "",
+      "outcome": "DEFENDED"
+    },
+    "B4": {
+      "evidence_digest": "14cd80e96d1176ff",
+      "note": "",
+      "outcome": "DOCUMENTED-LIMIT"
+    },
+    "B5": {
+      "evidence_digest": "f0f0f3c732cbcf46",
+      "note": "",
+      "outcome": "DEFENDED"
+    },
+    "B6": {
+      "evidence_digest": "f0f0f3c732cbcf46",
+      "note": "",
+      "outcome": "DEFENDED"
+    },
+    "B7": {
+      "evidence_digest": "3816a47c193e5967",
+      "note": "",
+      "outcome": "DEFENDED"
+    },
+    "B8": {
+      "evidence_digest": "bbf263a7211297ba",
+      "note": "",
+      "outcome": "DEFENDED"
+    },
+    "B9": {
+      "evidence_digest": "e7547234dd685bab",
+      "note": "",
+      "outcome": "DEFENDED"
+    },
+    "C0": {
+      "evidence_digest": "db9af91f130f57b6",
+      "note": "",
+      "outcome": "DEFENDED"
+    },
+    "C1": {
+      "evidence_digest": "8300a7753529b194",
+      "note": "",
+      "outcome": "DEFENDED"
+    },
+    "C2": {
+      "evidence_digest": "679dba2c586402d9",
+      "note": "",
+      "outcome": "DEFENDED"
+    },
+    "C3": {
+      "evidence_digest": "4731d07582a74947",
+      "note": "",
+      "outcome": "DOCUMENTED-LIMIT"
+    },
+    "D0": {
+      "evidence_digest": "5b0b9f2333b409c9",
+      "note": "",
+      "outcome": "DEFENDED"
+    },
+    "D1": {
+      "evidence_digest": "5d5250a36c69b1b0",
+      "note": "",
+      "outcome": "DEFENDED"
+    },
+    "D2": {
+      "evidence_digest": "067067f266382c01",
+      "note": "",
+      "outcome": "DEFENDED"
+    },
+    "D3": {
+      "evidence_digest": "b5bdbe3af71084e2",
+      "note": "",
+      "outcome": "DEFENDED"
+    },
+    "D4": {
+      "evidence_digest": "6ac03c69025dbd37",
+      "note": "",
+      "outcome": "DEFENDED"
+    },
+    "E1": {
+      "evidence_digest": "8c9ece5dda22a5f8",
+      "note": "",
+      "outcome": "DEFENDED"
+    },
+    "E2": {
+      "evidence_digest": "c37da458e110ae1f",
+      "note": "",
+      "outcome": "DEFENDED"
+    },
+    "E3": {
+      "evidence_digest": "73691722c63dcb56",
+      "note": "",
+      "outcome": "DEFENDED"
+    },
+    "E4": {
+      "evidence_digest": "6859b3d7f8bf542c",
+      "note": "2026-08-06: evidence changed because ENFORCEMENT_MODULES grew from 7 to 10 entries (the three phase-6 check modules were added), and E4 reports that list. Re-read the probe: it still asserts that enforcement code sits inside the agents' own blast radius, which is what it has always measured. The control did not change; its subject list did.",
+      "outcome": "DEFENDED"
+    }
+  },
+  "schema_version": 1
+}
