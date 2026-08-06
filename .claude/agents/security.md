@@ -273,11 +273,11 @@ Apply only the baseline(s) matching the actual deployment target(s); skip this g
 ### Current Threat Intelligence Snapshot
 
 <!-- AGENTTEAMS:BEGIN threat_intelligence v=1 -->
-Generated at: `2026-08-03T17:37:08Z`
+Generated at: `2026-08-06T19:16:40Z`
 
 **Sources:**
 
-- CISA KEV: ok (catalog 2026.07.29, items 1656) — https://www.cisa.gov/sites/default/files/feeds/known_exploited_vulnerabilities.json
+- CISA KEV: ok (catalog 2026.08.06, items 1661) — https://www.cisa.gov/sites/default/files/feeds/known_exploited_vulnerabilities.json
 - MITRE CVE: metadata_only — https://cveawg.mitre.org/api/cve/
 - FIRST EPSS: ok (items 15) — https://api.first.org/data/v1/epss
 - NVD (NIST): ok (items 5) — https://services.nvd.nist.gov/rest/json/cves/2.0
@@ -288,21 +288,21 @@ Generated at: `2026-08-03T17:37:08Z`
 
 **Current major vulnerabilities:**
 
-- `CVE-2026-20316` | Cisco Secure Firewall Management Center (FMC) | Cisco Secure Firewall Management Center Use of Hard-coded Password Vulnerability | added 2026-07-29 | EPSS 0.007880000, percentile 0.526510000 | CVSS 5.3 MEDIUM
-- `CVE-2025-68686` | Fortinet FortiOS | Fortinet FortiOS Exposure of Sensitive Information to an Unauthorized Actor Vulnerability | added 2026-07-27 | EPSS 0.012640000, percentile 0.668120000 | CVSS 5.9 MEDIUM
-- `CVE-2026-16812` | Arista VeloCloud Orchestrator | Arista VeloCloud Orchestrator On-Prem OS Command Injection Vulnerability | added 2026-07-27 | EPSS 0.008840000, percentile 0.556870000 | CVSS 10.0 CRITICAL
-- `CVE-2026-16232` | Check Point SmartConsole | Check Point SmartConsole Improper Authentication Vulnerability | added 2026-07-22 | EPSS 0.713910000, percentile 0.993540000 | CVSS 9.1 CRITICAL
-- `CVE-2026-50522` | Microsoft SharePoint | Microsoft SharePoint Deserialization of Untrusted Data Vulnerability | added 2026-07-22 | EPSS 0.757600000, percentile 0.994740000 | CVSS 9.8 CRITICAL
+- `CVE-2026-63077` | JetBrains TeamCity | JetBrains TeamCity Deserialization of Untrusted Data Vulnerability | added 2026-08-05 | EPSS 0.010100000, percentile 0.597830000 | CVSS 9.8 CRITICAL
+- `CVE-2026-18556` | N-able N-central | N-able N-central Authentication Bypass Using an Alternate Path or Channel Vulnerability | added 2026-08-04 | EPSS 0.004920000, percentile 0.396460000 | CVSS 7.4 HIGH
+- `CVE-2026-34486` | Apache Tomcat | Apache Tomcat Missing Encryption of Sensitive Data Vulnerability | added 2026-08-04 | EPSS 0.799380000, percentile 0.995740000 | CVSS 9.8 CRITICAL
+- `CVE-2026-9198` | IBM Langflow | IBM Langflow Code Injection Vulnerability | added 2026-08-04 | EPSS 0.170530000, percentile 0.967740000 | CVSS 9.8 CRITICAL
+- `CVE-2026-18577` | N-able N-central | N-able N-central Authentication Bypass Using an Alternate Path or Channel Vulnerability | added 2026-08-03 | EPSS 0.041030000, percentile 0.897690000 | CVSS 8.1 HIGH
+- `CVE-2026-20316` | Cisco Secure Firewall Management Center (FMC) | Cisco Secure Firewall Management Center Use of Hard-coded Password Vulnerability | added 2026-07-29 | EPSS 0.007880000, percentile 0.527360000
+- `CVE-2025-68686` | Fortinet FortiOS | Fortinet FortiOS Exposure of Sensitive Information to an Unauthorized Actor Vulnerability | added 2026-07-27 | EPSS 0.012640000, percentile 0.668790000
+- `CVE-2026-16812` | Arista VeloCloud Orchestrator | Arista VeloCloud Orchestrator On-Prem OS Command Injection Vulnerability | added 2026-07-27 | EPSS 0.008840000, percentile 0.557700000
+- `CVE-2026-16232` | Check Point SmartConsole | Check Point SmartConsole Improper Authentication Vulnerability | added 2026-07-22 | EPSS 0.713910000, percentile 0.993540000
+- `CVE-2026-50522` | Microsoft SharePoint | Microsoft SharePoint Deserialization of Untrusted Data Vulnerability | added 2026-07-22 | EPSS 0.757600000, percentile 0.994750000
 - `CVE-2026-60137` | WordPress Core | WordPress Core SQL Injection Vulnerability | added 2026-07-21 | EPSS 0.790290000, percentile 0.995590000
 - `CVE-2026-63030` | WordPress Core | WordPress Core Interpretation Conflict Vulnerability | added 2026-07-21 | EPSS 0.984170000, percentile 0.999150000
-- `CVE-2026-0770` | Langflow Langflow | Langflow Inclusion of Functionality from Untrusted Control Sphere Vulnerability | added 2026-07-21 | EPSS 0.562670000, percentile 0.989540000
-- `CVE-2021-27137` | DD-WRT DD-WRT | DD-WRT Stack-Based Buffer Overflow Vulnerability | added 2026-07-21 | EPSS 0.164880000, percentile 0.966670000
-- `CVE-2026-58644` | Microsoft SharePoint | Microsoft SharePoint Deserialization of Untrusted Data Vulnerability | added 2026-07-16 | EPSS 0.059850000, percentile 0.925770000
-- `CVE-2026-25089` | Fortinet FortiSandbox | Fortinet FortiSandbox OS Command Injection Vulnerability | added 2026-07-16 | EPSS 0.698270000, percentile 0.993050000
-- `CVE-2026-39808` | Fortinet FortiSandbox | Fortinet FortiSandbox OS Command Injection Vulnerability | added 2026-07-16 | EPSS 0.896910000, percentile 0.997760000
-- `CVE-2026-46817` | Oracle E-Business Suite | Oracle E-Business Suite Improper Privilege Management Vulnerability | added 2026-07-15 | EPSS 0.133090000, percentile 0.960060000
-- `CVE-2023-4346` | KNX Association KNX Protocol Connection Authorization Option 1 | KNX Association KNX Protocol Connection Authorization Option 1 Overly Restrictive Account Lockout Mechanism Vulnerability | added 2026-07-15 | EPSS 0.009070000, percentile 0.563820000
-- `CVE-2026-56155` | Microsoft Active Directory Federation Services | Microsoft Active Directory Federation Services Insufficient Granularity of Access Control Vulnerability | added 2026-07-14 | EPSS 0.023330000, percentile 0.818630000
+- `CVE-2026-0770` | Langflow Langflow | Langflow Inclusion of Functionality from Untrusted Control Sphere Vulnerability | added 2026-07-21 | EPSS 0.562670000, percentile 0.989550000
+- `CVE-2021-27137` | DD-WRT DD-WRT | DD-WRT Stack-Based Buffer Overflow Vulnerability | added 2026-07-21 | EPSS 0.164880000, percentile 0.966760000
+- `CVE-2026-58644` | Microsoft SharePoint | Microsoft SharePoint Deserialization of Untrusted Data Vulnerability | added 2026-07-16 | EPSS 0.059850000, percentile 0.925950000
 
 **Prevention and mitigation playbook:**
 

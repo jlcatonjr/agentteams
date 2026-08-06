@@ -34,7 +34,7 @@ SECTION MANIFEST — copilot-instructions.template.md
 
 | Path | Purpose |
 |------|---------|
-| `agentteams/` | Primary authored deliverables (the installable package) |
+| `agentteams/` | Primary authored deliverables |
 | `dist/` | Compiled/converted output artifacts |
 | `docs_src/book/figures/` | Diagrams and figures |
 | `references/` | Reference/bibliography database |
