@@ -19,7 +19,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   contract degrades to grep without warning, so an unreachable index and a working one produce
   identical output — correct answers, more tokens. No error, no test failure. The flat layout
   was additionally **regression-protected in the wrong direction** by `tests/test_bridge.py`
-  and two golden baselines.
+  and two consumer bridge baselines. The tests are fixed; `tests/baselines/*-claude-bridge.json`
+  still record the flat path and are **knowingly left stale** — they are `path`+`sha256`
+  snapshots of real consumer repositories, and regenerating them requires a cross-repository
+  bridge run that this change deliberately does not perform. Nothing under `tests/` reads them.
   All four emitted skills move together (`recall`, `code-recall`, `todo-from-plan`,
   `parallelize-plan`), plus every tool-doc skill via `output_plan.py` — each of those becomes a
   genuinely invocable `/tool-<name>`. `agentteams/bridge_skills.py` is carved out of `bridge.py`
