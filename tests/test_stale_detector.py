@@ -561,3 +561,87 @@ class TestBackupsGuard:
 
 # fleet._git for the helper test
 from agentteams.fleet import _git as fleet_git  # noqa: E402
+
+
+# ---------------------------------------------------------------------------
+# Repo-wide guard: no tracked file may carry an unresolved conflict triad.
+# ---------------------------------------------------------------------------
+
+def _tracked_conflict_findings() -> list:
+    """Run the shipped conflict detector over every tracked file in this repo.
+
+    Reuses ``detect_conflict_markers`` rather than re-implementing marker
+    matching: that function is already fence-aware, prose-aware and diff3-aware,
+    and a second detector would drift from it (CH-07/CH-27).
+    """
+    import subprocess
+    from agentteams import stale_detector as sd
+
+    root = Path(__file__).resolve().parents[1]
+    out = subprocess.run(
+        ["git", "ls-files"], cwd=root, capture_output=True, text=True, check=False
+    ).stdout
+    findings = []
+    for rel in out.splitlines():
+        rel = rel.strip()
+        if not rel or sd._skip_rel(rel, conflict_only=True):
+            continue
+        path = root / rel
+        if not path.is_file() or path.suffix.lower() not in (
+            set(sd._DOC_SUFFIXES) | set(sd._SCRIPT_SUFFIXES)
+            | {".json", ".csv", ".yml", ".yaml"}
+        ):
+            continue
+        text = sd._safe_read_text(path)
+        if text is None:
+            continue
+        findings.extend(sd.detect_conflict_markers(text, rel))
+    return findings
+
+
+def test_no_tracked_file_carries_an_unresolved_conflict_triad():
+    """A merge-conflict triad must never reach a tracked file.
+
+    Regression guard for 2026-08-07: an unresolved stash pop sat in
+    ``agentteams/templates/domain/code-hygiene-rules-reference.template.md`` —
+    **authority hierarchy Tier 1** — and was then propagated into all four
+    ``examples/*/expected/references/code-hygiene-rules.reference.md`` fixtures by
+    routine snapshot regeneration. Eight other tracked files were affected,
+    including ``bridge-manifest.json``, which stopped being parseable JSON.
+
+    The whole suite stayed green throughout: no test scanned tracked files for
+    markers, and ``scan_staleness`` skipped ``examples/`` at enumeration.
+    """
+    findings = _tracked_conflict_findings()
+    assert not findings, (
+        "unresolved merge-conflict triad(s) in tracked files: "
+        + ", ".join(sorted({f"{f.file}:{f.line}" for f in findings}))
+        + ". Resolve by hand — conflict triads are never auto-resolved."
+    )
+
+
+def test_the_conflict_guard_actually_fires(tmp_path: Path):
+    """Prove the guard detects a triad — a guard that only ever passes proves nothing.
+
+    Feeds the detector a known-corrupt body directly. The repo-wide test above
+    passes when the tree is clean, which is indistinguishable from a detector that
+    never fires; this pins the positive case.
+    """
+    from agentteams import stale_detector as sd
+
+    corrupt = (
+        "# Doc\n"
+        "<<<<<<< Updated upstream\n"
+        "left side\n"
+        "=======\n"
+        "right side\n"
+        ">>>>>>> Stashed changes\n"
+    )
+    findings = sd.detect_conflict_markers(corrupt, "fixture/corrupt.md")
+    assert findings, "detector failed to report a complete conflict triad"
+    assert any("conflict" in f.signal.lower() for f in findings)
+
+    clean = "# Doc\n\nA paragraph discussing `<<<<<<< HEAD` inside backticks.\n"
+    assert not sd.detect_conflict_markers(clean, "fixture/clean.md"), (
+        "detector false-positived on prose that merely mentions markers"
+    )

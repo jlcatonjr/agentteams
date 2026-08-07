@@ -1,10 +1,6 @@
 {
   "schema_version": "1.0",
-<<<<<<< Updated upstream
-  "generated_at": "2026-08-06T14:05:55.292015+00:00",
-=======
-  "generated_at": "2026-07-13T13:36:44.488591+00:00",
->>>>>>> Stashed changes
+  "generated_at": "2026-08-07T21:59:30.638161+00:00",
   "source_framework": "copilot-vscode",
   "target_framework": "claude",
   "source_dir": ".github/agents",
@@ -67,11 +63,7 @@
     },
     {
       "path": "agents/navigator.agent.md",
-<<<<<<< Updated upstream
       "sha256": "c1aeb3f282b66715c1cd540b48fe76f93376793847112170963c507a648c9e3f"
-=======
-      "sha256": "583bd5e0d63033820a2a0af99cc58cee6049e410e0a04bc8f022dd21c974ff83"
->>>>>>> Stashed changes
     },
     {
       "path": "agents/orchestrator.agent.md",
@@ -115,11 +107,7 @@
     },
     {
       "path": "agents/retrieval-integrator.agent.md",
-<<<<<<< Updated upstream
       "sha256": "073dd31ffda068e4d9658779b5cf9f609c06d1df75e79e80ca6045e1226397e7"
-=======
-      "sha256": "155e4f425029c492681fefc66a547db98c9d9282e461beb8add559f5e80054aa"
->>>>>>> Stashed changes
     },
     {
       "path": "agents/schemas-expert.agent.md",
@@ -127,11 +115,7 @@
     },
     {
       "path": "agents/security.agent.md",
-<<<<<<< Updated upstream
-      "sha256": "ff592597159910a9f7420dd19a5911e5a0edc43bf44f74f2888526746054492e"
-=======
-      "sha256": "8ead552504eb72367c6405fee0f3579943b5592f4b0f3c924cec0117a855c508"
->>>>>>> Stashed changes
+      "sha256": "dc67e264ee12852d97684c50f98f919b7aeca51f0e3ce46cac95762ebf6f6e16"
     },
     {
       "path": "agents/team-builder.agent.md",

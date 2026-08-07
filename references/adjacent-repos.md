@@ -45,6 +45,7 @@ Each entry documents:
 | ~/githubrepositories/data-pipeline | .github/agents | secondary | no | full_update | orchestrator | 2026-05-08 | Data engineering with agent infrastructure |
 | ~/githubrepositories/research-project-1 | .github/agents | secondary | no | full_update | orchestrator | 2026-05-08 | Academic research with agent infrastructure |
 | ~/githubrepositories/researchteam | .github/agents | secondary | yes | full_update | repo-liaison | 2026-07-23 | Real, actively-updated consumer. Also has native `.goose/recipes/` and bridged `.claude/agents/`. Uses its own `researchteam` CLI wrapper (`.researchteam` marker) which auto-integrates on commit (pre-commit hook, layer1-only) and via `researchteam update` (layer1 + layer-2 project-specific file sync from `researchteam@main`). |
+| ~/githubrepositories/visualknowledge/collector-management | .github/agents | secondary | yes | full_update | repo-liaison | 2026-08-07 | Real, actively-updated consumer with a bridged `.claude/agents/`. **Was unregistered until 2026-08-07** despite appearing in `git-procedures.md`, `bridge-refresh-safety.md` and `security-decisions.log.csv` — Gate 1 of the fleet-update authorization policy HALTs on missing registry entries, so the gap silently blocked cleared work. Subject of the 2026-05-27 `--bridge-refresh` incident that destroyed user content in `.claude/skills/recall.md`: **merge-only, never refresh**. |
 | ~/githubrepositories/researchRepositories/OrthodoxLLM | .github/agents | secondary | yes | full_update | repo-liaison | 2026-07-23 | Real, actively-updated consumer; sibling of researchteam (same descriptor lineage — forked/customized brief.json, not a technical dependency). Also has native `.goose/recipes/` and bridged `.claude/agents/`. Uses the same `researchteam` CLI wrapper (`.researchteam` marker → `researchteam@main`). |
 
 ### Vendor & Archived
@@ -86,6 +87,7 @@ Each entry documents:
 | Date | Agent | Change | Reason |
 |---|---|---|---|
 | 2026-05-08 | Orchestrator | Initial creation with 38 repos | Fleet-update-all-repositories discovery phase |
+| 2026-08-07 | Repo Liaison | Added `visualknowledge/collector-management` as a named row | Named throughout the safety docs and the 2026-05-27 incident record, but never registered. Found while gating the skill-layout cross-repo fix — Gate 1 would have HALTed on it. |
 | 2026-07-23 | Repo Liaison | Added `researchteam` and `researchRepositories/OrthodoxLLM` as named rows | Both were real, actively-updated consumers of today's agentteams changes but were unregistered — discovered while integrating Rule S-9/CLI-competency updates into both repos |
 
 ## 2026-07-24 — `agentteams.research` behavior change (consumers should be aware)

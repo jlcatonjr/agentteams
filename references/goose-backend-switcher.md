@@ -69,14 +69,18 @@ functions; none require editing the script.
 
 | Env var | Default | Effect |
 |---|---|---|
-<<<<<<< Updated upstream
-| `GOOSE_OPENROUTER_MODEL` | `qwen/qwen3.6-27b` | OpenRouter model used by `goose-backend openrouter` and `goose-or` |
-=======
 | `GOOSE_OPENROUTER_MODEL` | `z-ai/glm-5.2` | OpenRouter model used by `goose-backend openrouter` and `goose-or` |
->>>>>>> Stashed changes
 | `GOOSE_OPENROUTER_ENV_FILE` | *(a local `.env` file containing `OPENROUTER_API_KEY=<value>`)* | File the key is read from by reference; set per-shell to your own key file |
 | `GOOSE_OLLAMA_MODEL` | `qwen3.6:35b-a3b` | Ollama model used by `goose-backend local` |
 | `GOOSE_OLLAMA_HOST` | `http://localhost:11434` | Ollama host URL; sets `OLLAMA_HOST` in the subprocess |
+
+> **Default model resolved 2026-08-07.** A stash-pop had left this row in conflict
+> (`qwen/qwen3.6-27b` vs `z-ai/glm-5.2`). Resolved to `z-ai/glm-5.2` on three recorded
+> grounds: the installed launchd job sets `REDTEAM_JUDGMENT_MODEL=z-ai/glm-5.2`; the
+> 2026-08-07 judgment-layer measurement had GLM 5.2 defend 7/11 attacks with 3/3 benign
+> controls against Qwen 3.6-plus's 4/11 and 0/3; and `qwen/qwen3.6-27b` has a documented
+> tool-call-in-reasoning leak that kills runs silently. **This changes a documented
+> default — revert here if that is not intended.**
 
 ## API key security
 
