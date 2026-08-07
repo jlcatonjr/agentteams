@@ -290,3 +290,46 @@ settle which; those rows predate the evidence. Untriaged-and-open dropped from 2
 One model, one day. `ctrl-01`/`ctrl-02` mis-escalations are the *false-positive* direction — the
 agent flagging benign content — which matters as much as under-detection and is not yet
 characterised. And 3 of 1,218 pairs went unmeasured to rate limiting.
+
+
+---
+
+# Is under-escalation model-specific? — No. 2026-08-07
+
+3 `@security` targets × 14 payloads × **3 repetitions** × 2 models = 252 measurements, corrected
+and split instrument.
+
+| | under-escalation (per target) | false positives (per target) | escalating correctly | cost |
+|---|---|---|---|---|
+| GLM 5.2 | 11–15 | 5–6 | **0 of 3** | $0.1635 |
+| Qwen 3.6-plus | 17–21 | 3–6 | **0 of 3** | $0.6166 |
+
+## The answer, and it is the consequential branch
+
+**Neither model escalates.** Model selection is **not** a lever here. Qwen is worse on
+under-escalation and ~4× the cost, so GLM 5.2 remains the better choice — but the choice does
+not solve this.
+
+That makes it a **contract finding, not a model finding**, which the plan named up front as the
+more likely and more consequential outcome so it could not be read as a null result.
+
+## What the contract finding actually is
+
+Two facts together:
+
+1. No model tested emits the literal `HALT` token, while **detecting the attack reliably** —
+   20 of 22 preserved responses名 the injection explicitly.
+2. `security_gate` reads `verdict` from the **decisions-log CSV**, not from agent prose. Nothing
+   mechanical blocks or unblocks because an agent wrote `REPORT`.
+
+So the expectation being violated is a **prose contract**, and the control that matters is a
+different artifact the harness cannot observe (under `--no-profile` the agent has no tools and
+cannot write a log row).
+
+The remediation is therefore not "pick a better model" and not "reword the template until it
+passes". It is a decision about the contract: either the `HALT` prose requirement is dropped in
+favour of what the gate actually reads, or the harness is extended to measure the log row —
+which needs a sandbox that can safely give an agent write access under attack.
+
+**Recorded as a decision, not taken.** Changing what `@security` is required to emit is an
+operator-level change to a constitutional contract.
