@@ -79,9 +79,14 @@ fi
 log "no report for $STAMP yet — running the judgment audit."
 
 # --- 1. the key, by reference, never hardcoded ----------------------------------------------
+# No default path. This repository is PUBLIC, and a baked-in default would (a) publish where an
+# operator's credential lives and (b) couple this repo to an unrelated project's checkout. The
+# operator names their own key file via GOOSE_OPENROUTER_ENV_FILE, which is exactly the contract
+# references/goose-backend-switcher.md already documents ("set per-shell to your own key file").
+# Unset is not silently tolerated — the CRITICAL branch below exits 2.
 if [[ -z "${OPENROUTER_API_KEY:-}" ]]; then
-  ENV_FILE="${GOOSE_OPENROUTER_ENV_FILE:-$HOME/githubrepositories/visualknowledge/colorado-collectors/.env}"
-  if [[ -f "$ENV_FILE" ]]; then
+  ENV_FILE="${GOOSE_OPENROUTER_ENV_FILE:-}"
+  if [[ -n "$ENV_FILE" && -f "$ENV_FILE" ]]; then
     _val=$(grep -m1 -E "^[[:space:]]*(export[[:space:]]+)?OPENROUTER_API_KEY=" "$ENV_FILE" 2>/dev/null \
       | sed -E "s/^[[:space:]]*(export[[:space:]]+)?OPENROUTER_API_KEY=//; s/\r$//; s/^\"(.*)\"$/\1/; s/^'(.*)'$/\1/")
     [[ -n "$_val" ]] && export OPENROUTER_API_KEY="$_val"
@@ -126,10 +131,29 @@ fi
 
 # --- 4. run ----------------------------------------------------------------------------------
 mkdir -p "$OUT_DIR"
-log "model=$MODEL budget=\$$BUDGET out=$OUT_DIR"
-"$PYTHON" scripts/redteam_judgment_run.py \
-    --model "$MODEL" --budget "$BUDGET" --out "$OUT_DIR" --timeout 300
+
+# Cadence is DERIVED FROM THE DATE, not stored: full sweep on Mondays, rotation otherwise.
+# Same reasoning as the catch-up guard and the rotation slice — a stored cursor that resets
+# starves whatever sits past the reset point, silently. `date +%u` is 1 on Monday.
+MODE="rotation"
+[ "$(date +%u)" = "1" ] && MODE="full"
+PER_DAY="${REDTEAM_SWEEP_PER_DAY:-3}"
+
+log "model=$MODEL mode=$MODE budget=\$$BUDGET out=$OUT_DIR"
+if [ "$MODE" = "full" ]; then
+  log "Monday: sweeping EVERY agent on every framework (~87 targets)."
+  "$PYTHON" scripts/redteam_sweep_run.py --model "$MODEL" --mode full --timeout 300
+else
+  log "rotation: today's slice of $PER_DAY target(s)."
+  "$PYTHON" scripts/redteam_sweep_run.py --model "$MODEL" --mode rotation \
+      --per-day "$PER_DAY" --timeout 300
+fi
 rc=$?
+
+# The single-agent judgment report is still produced, because the daily marker and the spend
+# log key on it and because @security remains the agent with the most specific contract.
+"$PYTHON" scripts/redteam_judgment_run.py \
+    --model "$MODEL" --budget "$BUDGET" --out "$OUT_DIR" --timeout 300 || rc=$?
 
 # --- 5. spend log ----------------------------------------------------------------------------
 # One line per run so a month of cost is one awk away, and a drift is visible before it is a
