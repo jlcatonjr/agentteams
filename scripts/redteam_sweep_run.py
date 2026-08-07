@@ -25,6 +25,7 @@ Usage::
 from __future__ import annotations
 
 import argparse
+import concurrent.futures
 import datetime
 import json
 import os
@@ -57,6 +58,8 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--frameworks", default=",".join(instantiate.DEFAULT_FRAMEWORKS))
     parser.add_argument("--limit-targets", type=int, default=0, help="bound the run (testing)")
     parser.add_argument("--timeout", type=int, default=300)
+    parser.add_argument("--concurrency", type=int, default=6,
+                        help="targets measured in parallel; 1 is the old sequential path")
     parser.add_argument("--dry-run", action="store_true")
     args = parser.parse_args(argv)
 
@@ -116,29 +119,58 @@ def main(argv: list[str] | None = None) -> int:
     results: list[sweep.TargetResult] = []
     failures: list[fl.Finding] = []
 
-    for index, target in enumerate(targets, start=1):
-        contract_text = target.path.read_text(encoding="utf-8", errors="replace")
+    def measure(target: sweep.Target) -> tuple[sweep.TargetResult, list[fl.Finding]]:
+        """Measure one target across the whole corpus. Pure per-target, so it parallelises."""
+        contract_text = sweep.agent_system_prompt(target.path)
         outcome = sweep.TargetResult(target=target)
+        found: list[fl.Finding] = []
+        # Each target gets its own prompt directory: run_payload writes <pid>.prompt.txt, and
+        # two workers on the same directory would overwrite each other's prompt between the
+        # write and the read — a race that would silently measure the wrong payload.
+        target_dir = workdir / f"{target.framework}__{target.agent}"
+        target_dir.mkdir(parents=True, exist_ok=True)
         for payload in corpus:
-            r = run_payload(args.model, payload, workdir, args.timeout, contract_text)
+            r = run_payload(args.model, payload, target_dir, args.timeout, contract_text)
             if r.observed == "NO-CALL":
                 outcome.errors.append(f"{payload['id']}: {r.error}")
                 continue
             verdict = sweep.score_for_target(target, payload, r.observed, r.acceptable)
             getattr(outcome, verdict).append(payload["id"])
             if verdict != "clean":
-                failures.append(fl.Finding(
+                found.append(fl.Finding(
                     layer="judgment", finding_id=payload["id"], interface="goose",
                     model=args.model, expected=payload["expected"], observed=r.observed,
                     framework=target.framework, agent=target.agent,
                 ))
-        results.append(outcome)
-        flag = "" if outcome.ok else "  <-- FAILURES"
-        print(f"  [{index}/{len(targets)}] {target.label:<34} "
-              f"complied={len(outcome.complied)} misesc={len(outcome.misescalated)}{flag}")
+        return outcome, found
+
+    # Bounded concurrency. Sequential throughput was measured at 9.5s/call, so the full 1,218
+    # -call sweep took 3.2 HOURS — not a run anyone sits through, and a 3-hour unattended
+    # Monday job that any interruption kills with nothing recorded.
+    #
+    # The budget is NOT re-checked per target here. With N workers in flight the ledger read
+    # lags N targets of spend, and the provider's own ledger lags further still — the first
+    # sweep reported $0.0000 while genuinely spending. So the cap is enforced on the planned
+    # call count BEFORE starting and between batches; the ledger delta stays the authoritative
+    # post-hoc figure.
+    batch = max(1, args.concurrency)
+    completed = 0
+    for start in range(0, len(targets), batch):
+        chunk = targets[start:start + batch]
+        with concurrent.futures.ThreadPoolExecutor(max_workers=batch) as pool:
+            for outcome, found in pool.map(measure, chunk):
+                results.append(outcome)
+                failures.extend(found)
+                completed += 1
+                flag = "" if outcome.ok else "  <-- FAILURES"
+                noise = f"  ({len(outcome.errors)} NO-CALL)" if outcome.errors else ""
+                print(f"  [{completed}/{len(targets)}] {outcome.target.label:<38} "
+                      f"complied={len(outcome.complied)} "
+                      f"misesc={len(outcome.misescalated)}{noise}{flag}", flush=True)
         spent = before - (read_remaining_credit(token) or before)
         if spent > budget:
-            print(f"  ABORTING: ${spent:.4f} exceeded the ${budget:.2f} cap.", file=sys.stderr)
+            print(f"  ABORTING after {completed} targets: ${spent:.4f} exceeded the "
+                  f"${budget:.2f} cap.", file=sys.stderr)
             break
 
     after = read_remaining_credit(token)
@@ -146,6 +178,11 @@ def main(argv: list[str] | None = None) -> int:
 
     print()
     print("\n".join(sweep.render_counts(results, payloads=len(corpus))))
+    no_call = sum(len(r.errors) for r in results)
+    if no_call:
+        print(f"\n  UNMEASURED: {no_call} of {len(results) * len(corpus)} agent/payload "
+              f"pairs returned NO-CALL (rate limits or transport). Stated rather than "
+              f"dropped — a shrunken denominator that goes unreported is the F-4 defect.")
     print()
     print(f"  ledger     : {len(promotion.added)} new, {len(promotion.transitioned)} changed")
     if before is not None and after is not None:

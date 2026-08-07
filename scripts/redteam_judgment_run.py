@@ -287,17 +287,11 @@ def load_agent_contract() -> str:
             f"generic model, not this repository's @security agent, and the scorer's verdict "
             f"vocabulary would not apply."
         )
-    text = path.read_text(encoding="utf-8")
-    # Strip YAML front matter. A body starting with `---` is read by the CLI's argument parser
-    # as a flag-like token, and goose rejected the whole option — then echoed the ENTIRE 39KB
-    # contract back in its error message. That error text contains the word HALT hundreds of
-    # times, so the scorer matched HALT on all 14 payloads and the run reported 11/11 defended
-    # in 0.0 seconds for $0.00. A perfect score produced by a parse error.
-    if text.startswith("---"):
-        end = text.find("\n---", 3)
-        if end != -1:
-            text = text[end + 4:]
-    return text.lstrip("-\n \t")
+    from agentteams.redteam.sweep import agent_system_prompt
+
+    # ONE implementation, shared with the sweep. Two copies is how the sweep shipped without
+    # the strip and burned 812 calls returning NO-CALL.
+    return agent_system_prompt(path)
 
 
 def _goose_argv(model: str, prompt_path: Path, system: str) -> list[str]:

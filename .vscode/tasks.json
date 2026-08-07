@@ -423,9 +423,33 @@
       "detail": "AGENTTEAMS"
     },
     {
+      "label": "script: run_daily_judgment_audit",
+      "type": "shell",
+      "command": "bash scripts/run_daily_judgment_audit.sh",
+      "group": "none",
+      "presentation": {
+        "reveal": "always",
+        "panel": "shared"
+      },
+      "problemMatcher": [],
+      "detail": "AGENTTEAMS"
+    },
+    {
       "label": "script: run_daily_security_maintenance",
       "type": "shell",
       "command": "bash scripts/run_daily_security_maintenance.sh",
+      "group": "none",
+      "presentation": {
+        "reveal": "always",
+        "panel": "shared"
+      },
+      "problemMatcher": [],
+      "detail": "AGENTTEAMS"
+    },
+    {
+      "label": "script: run_redteam_audit",
+      "type": "shell",
+      "command": "bash scripts/run_redteam_audit.sh",
       "group": "none",
       "presentation": {
         "reveal": "always",

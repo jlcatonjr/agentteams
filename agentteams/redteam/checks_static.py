@@ -331,7 +331,7 @@ def check_callpath_parity(root: Path) -> list[SelfAuditFinding]:
     findings: list[SelfAuditFinding] = []
     rows = read_csv_ledger(
         root / CALLPATH_PARITY_REL,
-        required_columns=("callee", "guard", "scope_module", "note"),
+        required_columns=("callee", "guard", "scope_module", "position", "note"),
     )
     for row in rows:
         callee, guard, rel = row["callee"], row["guard"], row["scope_module"]
@@ -358,12 +358,38 @@ def check_callpath_parity(root: Path) -> list[SelfAuditFinding]:
                 ),
             ))
             continue
+        # One call site per CALL, not per enclosing suite. `_statement_calls` walks into loops
+        # and conditionals (it stops only at function boundaries), so a call inside a `for`
+        # registers in the loop body AND in the function body that contains the loop. That
+        # double-counts: it inflates the site count past the anti-vacuity threshold and emits
+        # the same finding twice. A statement that merely CONTAINS a nested suite holding the
+        # callee is skipped, because that inner suite is the one that will register it.
+        position = (row.get("position") or "after").strip() or "after"
         call_sites: list[tuple[list[ast.stmt], int, int]] = []
         for suite in _suites(tree):
             for index, statement in enumerate(suite):
-                if callee in _statement_calls(statement):
-                    call_sites.append((suite, index, statement.lineno))
-        if len(call_sites) < 2:
+                if callee not in _statement_calls(statement):
+                    continue
+                own_suites = [
+                    getattr(statement, attr, None)
+                    for attr in ("body", "orelse", "finalbody")
+                ]
+                inner_statements = [
+                    inner
+                    for suite_ in own_suites
+                    if isinstance(suite_, list) and suite_ and isinstance(suite_[0], ast.stmt)
+                    for inner in suite_
+                ]
+                if any(callee in _statement_calls(inner) for inner in inner_statements):
+                    continue
+                call_sites.append((suite, index, statement.lineno))
+        # The anti-vacuity threshold applies to POST-CONDITION parity only. "A guard must follow
+        # every call" over a single call site proves nothing — that is the W20 shape, where the
+        # whole risk is one path being missed. A PRECONDITION is different: "this call must be
+        # preceded by preparation" is meaningful at one site, because the risk is the input not
+        # being prepared at all, which is exactly the defect that motivated the `function`
+        # position (the sweep read agent files raw and burned 812 calls).
+        if position == "after" and len(call_sites) < 2:
             findings.append(SelfAuditFinding(
                 check="F-2",
                 subject=f"{rel}::{callee}",
@@ -377,17 +403,38 @@ def check_callpath_parity(root: Path) -> list[SelfAuditFinding]:
                 ),
             ))
             continue
+        # `position` declares WHERE the guard must be relative to the callee, because both
+        # directions are real controls with different meanings:
+        #
+        #   after    — a post-condition. `_sweep_capability_key` must run AFTER `emit_all`,
+        #              because it migrates what emit just wrote. A guard before it would
+        #              migrate the previous state and prove nothing.
+        #   function — an input precondition. `agent_system_prompt` must have run somewhere in
+        #              the enclosing function before `run_payload` uses its result; it prepares
+        #              the argument rather than reacting to the call, and it sits in an OUTER
+        #              suite while the call sits inside a loop.
+        #
+        # Defaulting to `after` keeps the original row's semantics unchanged.
         for suite, index, lineno in call_sites:
-            guarded = any(
-                guard in _statement_calls(statement) for statement in suite[index:]
-            )
+            if position == "function":
+                host = next(
+                    (fn for fn in functions
+                     if fn.lineno <= lineno <= (fn.end_lineno or fn.lineno)),
+                    None,
+                )
+                guarded = host is not None and guard in _called_names(host)
+            else:
+                guarded = any(
+                    guard in _statement_calls(statement) for statement in suite[index:]
+                )
             if not guarded:
                 findings.append(SelfAuditFinding(
                     check="F-2",
                     subject=f"{rel}:{lineno}",
                     detail=(
-                        f"calls {callee} but no call to the guard {guard} follows it in the "
-                        f"same branch"
+                        f"calls {callee} but no call to the guard {guard} appears "
+                        + ("anywhere in the enclosing function"
+                           if position == "function" else "after it in the same branch")
                     ),
                     remedy=(
                         f"add the {guard} call to this path — a guard on one of two paths is "

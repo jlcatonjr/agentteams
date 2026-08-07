@@ -131,7 +131,7 @@ def test_f1_is_silent_on_a_complete_ledger(tmp_path: Path) -> None:
 # F-2 — call-path parity
 # ===========================================================================
 
-_PARITY_LEDGER_HEADER = "callee,guard,scope_module,note\n"
+_PARITY_LEDGER_HEADER = "callee,guard,scope_module,position,note\n"
 
 _TWO_PATHS_ONE_GUARDED = '''
 def guard(x):
@@ -176,7 +176,7 @@ def test_f2_fires_on_an_unguarded_call_site(tmp_path: Path) -> None:
     """The W20 shape exactly: two call sites in one function, a guard on only one branch."""
     _write(tmp_path, "agentteams/cli/generate.py", _TWO_PATHS_ONE_GUARDED)
     _write(tmp_path, CALLPATH_PARITY_REL,
-           _PARITY_LEDGER_HEADER + "emit_all,guard,agentteams/cli/generate.py,W20\n")
+           _PARITY_LEDGER_HEADER + "emit_all,guard,agentteams/cli/generate.py,after,W20\n")
 
     findings = checks_static.check_callpath_parity(tmp_path)
 
@@ -194,7 +194,7 @@ def test_f2_fires_on_a_vacuous_rule(tmp_path: Path) -> None:
     """
     _write(tmp_path, "agentteams/cli/generate.py", _ONE_PATH)
     _write(tmp_path, CALLPATH_PARITY_REL,
-           _PARITY_LEDGER_HEADER + "emit_all,guard,agentteams/cli/generate.py,n\n")
+           _PARITY_LEDGER_HEADER + "emit_all,guard,agentteams/cli/generate.py,after,n\n")
 
     findings = checks_static.check_callpath_parity(tmp_path)
 
@@ -205,7 +205,7 @@ def test_f2_fires_when_the_guard_does_not_resolve(tmp_path: Path) -> None:
     """A ledger naming a nonexistent guard is a rule that can never fire."""
     _write(tmp_path, "agentteams/cli/generate.py", _TWO_PATHS_BOTH_GUARDED)
     _write(tmp_path, CALLPATH_PARITY_REL,
-           _PARITY_LEDGER_HEADER + "emit_all,_sweep_capability_keys,agentteams/cli/generate.py,typo\n")
+           _PARITY_LEDGER_HEADER + "emit_all,_sweep_capability_keys,agentteams/cli/generate.py,after,typo\n")
 
     findings = checks_static.check_callpath_parity(tmp_path)
 
@@ -216,7 +216,7 @@ def test_f2_is_silent_when_every_path_is_guarded(tmp_path: Path) -> None:
     """Negative control: both branches guarded produces nothing."""
     _write(tmp_path, "agentteams/cli/generate.py", _TWO_PATHS_BOTH_GUARDED)
     _write(tmp_path, CALLPATH_PARITY_REL,
-           _PARITY_LEDGER_HEADER + "emit_all,guard,agentteams/cli/generate.py,W20\n")
+           _PARITY_LEDGER_HEADER + "emit_all,guard,agentteams/cli/generate.py,after,W20\n")
 
     assert checks_static.check_callpath_parity(tmp_path) == []
 
@@ -514,3 +514,62 @@ def test_run_selfaudit_records_skips_rather_than_omitting_them(tmp_path: Path) -
 def test_every_check_id_has_a_title() -> None:
     """A check added to the tuple without a title renders as a blank row in the report."""
     assert set(selfaudit.CHECK_IDS) == set(selfaudit.CHECK_TITLES)
+
+
+def test_f2_position_function_accepts_a_guard_that_precedes_the_call(tmp_path: Path) -> None:
+    """`position=function` is an input PRECONDITION, not a post-condition.
+
+    Added when the real defect it guards was found: `agent_system_prompt` must run before
+    `run_payload` uses its result, and it sits in an outer suite while the call sits inside a
+    loop. The default `after` semantics could not express that, and a check that cannot express
+    the control it is asked to enforce gets an exemption instead of a rule.
+    """
+    _write(tmp_path, "scripts/driver.py", '''
+def prep(p):
+    return p
+
+
+def call(x):
+    return x
+
+
+def measure(paths):
+    text = prep(paths)
+    for p in paths:
+        call(text)
+''')
+    _write(tmp_path, CALLPATH_PARITY_REL,
+           "callee,guard,scope_module,position,note\n"
+           "call,prep,scripts/driver.py,function,precondition\n")
+
+    assert checks_static.check_callpath_parity(tmp_path) == []
+
+
+def test_f2_position_function_fires_when_the_guard_is_absent(tmp_path: Path) -> None:
+    """The same rule must still catch a call path that never prepares its input."""
+    _write(tmp_path, "scripts/driver.py", '''
+def prep(p):
+    return p
+
+
+def call(x):
+    return x
+
+
+def measure(paths):
+    for p in paths:
+        call(p)
+
+
+def measure_again(paths):
+    text = prep(paths)
+    call(text)
+''')
+    _write(tmp_path, CALLPATH_PARITY_REL,
+           "callee,guard,scope_module,position,note\n"
+           "call,prep,scripts/driver.py,function,precondition\n")
+
+    findings = checks_static.check_callpath_parity(tmp_path)
+
+    assert len(findings) == 1
+    assert "enclosing function" in findings[0].detail

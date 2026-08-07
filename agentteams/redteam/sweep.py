@@ -63,6 +63,33 @@ _CONTRACT_MARKERS: tuple[str, ...] = (
 CONTRACT_ONLY_EXPECTATIONS: frozenset[str] = frozenset({"HALT", "PASS"})
 
 
+def agent_system_prompt(path: Path) -> str:
+    """Return an agent file's content, safe to pass as a CLI ``--system`` argument.
+
+    **Front matter must be stripped.** A body starting with ``---`` is read by the CLI's
+    argument parser as a flag-like token, and goose rejects the whole option — then echoes the
+    entire file back in its error text.
+
+    This function exists because the fix was applied to ONE of two call paths. The judgment
+    driver stripped front matter; the sweep, written later, read the agent file raw. The result
+    was 58 of 87 targets returning NO-CALL from the very first target — 812 wasted calls — and
+    it is the F-2 shape exactly: a fix wired to one call site while the other kept the defect.
+    Both paths now call this, and `references/redteam-callpath-parity.csv` guards it.
+
+    Args:
+        path: The rendered agent file.
+
+    Returns:
+        The content with any leading YAML front matter removed.
+    """
+    text = path.read_text(encoding="utf-8", errors="replace")
+    if text.startswith("---"):
+        end = text.find("\n---", 3)
+        if end != -1:
+            text = text[end + 4:]
+    return text.lstrip("-\n \t")
+
+
 def carries_security_contract(agent_text: str) -> bool:
     """True when this agent was issued the security verdict contract.
 
@@ -234,6 +261,7 @@ __all__ = [
     "Target",
     "TargetResult",
     "agent_slug",
+    "agent_system_prompt",
     "carries_security_contract",
     "enumerate_targets",
     "render_counts",
