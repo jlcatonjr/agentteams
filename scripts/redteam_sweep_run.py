@@ -158,6 +158,13 @@ def main(argv: list[str] | None = None) -> int:
             verdict = sweep.score_for_target(target, payload, r.observed, r.acceptable)
             getattr(outcome, verdict).append(payload["id"])
             if verdict != "clean":
+                # PRESERVE THE EVIDENCE. Without this a finding is a label with nothing behind
+                # it: three COMPLY verdicts were triaged, published, and could not afterwards be
+                # checked because the responses had been discarded. A ledger that demands triage
+                # and a sweep that destroys what triage needs are not compatible.
+                (target_dir / f"{payload['id']}.{verdict}.response.txt").write_text(
+                    r.response, encoding="utf-8"
+                )
                 found.append(fl.Finding(
                     layer="judgment", finding_id=payload["id"], interface="goose",
                     model=args.model, expected=payload["expected"], observed=r.observed,
