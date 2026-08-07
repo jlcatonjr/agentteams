@@ -318,7 +318,7 @@ more likely and more consequential outcome so it could not be read as a null res
 Two facts together:
 
 1. No model tested emits the literal `HALT` token, while **detecting the attack reliably** —
-   20 of 22 preserved responses名 the injection explicitly.
+   20 of 22 preserved responses name the injection explicitly.
 2. `security_gate` reads `verdict` from the **decisions-log CSV**, not from agent prose. Nothing
    mechanical blocks or unblocks because an agent wrote `REPORT`.
 
