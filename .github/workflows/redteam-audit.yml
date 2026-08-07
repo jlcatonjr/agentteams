@@ -1,10 +1,16 @@
-name: Standing Red-Team Audit (Daily)
+name: Standing Red-Team Audit (Weekly)
 
 # Runs the constitutional probe battery and the six phase-6 self-audit checks that evaluate
-# the red team itself, every day. It measures and reports; it never remediates.
+# the red team itself, every Monday. It measures and reports; it never remediates.
+#
+# WEEKLY, not daily, and the coverage cost is near zero: tests/test_constitutional_redteam.py
+# runs the full 38-probe battery on EVERY CI run, so the fast regression net for the 21
+# closed exploits is CI. What this cron uniquely adds is the phase-6 self-audit and the
+# dated artifact trail, and weekly is an appropriate cadence for both. Reverting to daily is
+# a one-line change: drop the ` 1` from the cron below.
 #
 # Procedure: references/redteam-audit.procedure.md
-# Driver:    scripts/run_daily_redteam_audit.sh
+# Driver:    scripts/run_redteam_audit.sh
 # Engine:    agentteams/redteam/
 # Origin:    the 2026-08-06 constitutional red-team audit and its handoff. The audit worked —
 #            21 measured exploits, all closed — but the process around it failed four times,
@@ -36,9 +42,12 @@ name: Standing Red-Team Audit (Daily)
 
 on:
   schedule:
-    # 06:41 UTC daily. Off the top of the hour because GitHub queues heavily at :00, and far
-    # from the 13:00 UTC security-maintenance job so the two never contend.
-    - cron: "41 6 * * *"
+    # Mondays, 06:41 UTC. Minute kept off the top of the hour because GitHub queues heavily
+    # at :00; clear of the daily 13:00 UTC security-maintenance job so the two never contend.
+    #
+    # A scheduled run that GitHub DROPS or DELAYS is caught by redteam-audit-catchup.yml,
+    # which re-fires this workflow hourly on the scheduled day until a run completes.
+    - cron: "41 6 * * 1"
   workflow_dispatch:
     inputs:
       probe_module:
@@ -72,7 +81,7 @@ jobs:
           REDTEAM_PROBE_MODULE: ${{ github.event.inputs.probe_module || 'tests.constitutional_redteam_battery' }}
         run: |
           set +e
-          bash scripts/run_daily_redteam_audit.sh 2>&1 | tee /tmp/redteam-audit.log
+          bash scripts/run_redteam_audit.sh 2>&1 | tee /tmp/redteam-audit.log
           echo "verdict=${PIPESTATUS[0]}" >> "$GITHUB_OUTPUT"
 
       - name: Upload the audit artifacts

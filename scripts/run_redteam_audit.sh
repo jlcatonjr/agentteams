@@ -1,6 +1,13 @@
 #!/usr/bin/env bash
 #
-# run_daily_redteam_audit.sh — the standing red-team audit, once a day.
+# run_redteam_audit.sh — the standing red-team audit.
+#
+# Cadence lives in the workflow, not here: this script runs the audit once and classifies
+# the outcome. .github/workflows/redteam-audit.yml fires it weekly (Mondays 06:41 UTC) and
+# .github/workflows/redteam-audit-catchup.yml re-fires it hourly on the scheduled day if
+# that run never happened. Renamed from run_daily_redteam_audit.sh when the cadence moved:
+# a script whose NAME asserts a cadence it no longer has is stale content in the most
+# load-bearing place there is (Rule 7).
 #
 # Runs the probe battery, the review, the remediation skeleton and the six phase-6 self-audit
 # checks that evaluate the red team itself. It MEASURES AND REPORTS. It never remediates:

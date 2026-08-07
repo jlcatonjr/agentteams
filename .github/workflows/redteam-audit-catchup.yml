@@ -1,0 +1,150 @@
+name: Red-Team Audit Catch-Up
+
+# Re-fires the weekly red-team audit when its scheduled run never happened.
+#
+# Audit:     .github/workflows/redteam-audit.yml  (Mondays 06:41 UTC)
+# Procedure: references/redteam-audit.procedure.md
+#
+# ---------------------------------------------------------------------------------------
+# WHY THIS EXISTS
+# ---------------------------------------------------------------------------------------
+# The audit runs on GitHub-hosted runners, so no local machine being off can stop it. Two
+# things can, and both are silent:
+#
+#   * GitHub documents that scheduled workflows may be DELAYED OR DROPPED during periods of
+#     high load. A dropped run leaves no record, no failure, and no notification — it is
+#     indistinguishable from a week in which nothing was wrong.
+#   * GitHub DISABLES scheduled workflows after 60 days of repository inactivity.
+#
+# This guard fires hourly on the scheduled day, asks whether the weekly audit actually ran,
+# and dispatches it if not. It self-terminates: a dispatched run appears in the same history
+# the guard reads, so the next hour's guard sees it and exits.
+#
+# ---------------------------------------------------------------------------------------
+# THREE DECISIONS THAT CARRY THE RISK
+# ---------------------------------------------------------------------------------------
+#
+# 1. "RAN" MEANS COMPLETED, NOT SUCCEEDED. The audit exits 1 on findings and 2 on a broken
+#    harness; both are `conclusion: failure` to GitHub, and both mean IT RAN. A guard keyed on
+#    conclusion would re-fire the audit every hour for the rest of the day on any Monday with
+#    a real finding — 17 runs, 17 issue comments — turning a working alarm into noise. That is
+#    the failure this whole subsystem exists to prevent, so the query keys on
+#    `status === 'completed'` and IGNORES conclusion entirely.
+#
+# 2. IT FAILS OPEN. If the API query errors or returns nothing usable, the guard RUNS THE
+#    AUDIT. "I could not tell whether it ran" must never resolve to "it must have run": that
+#    is indeterminate read as a pass, relocated into the thing that decides whether a security
+#    audit happens at all. A spurious extra audit costs one runner-minute; a wrongly suppressed
+#    one is silent and looks exactly like success.
+#
+# 3. IT WRITES NO STATE. The verdict is a pure function of GitHub's own run history and the
+#    wall clock. redteam-audit.yml's contract already prohibits a step writing state a later
+#    run reads back, and a "last successful run" marker would be precisely that — a cursor that,
+#    once stale or corrupted, silently suppresses every future audit.
+#    tests/test_redteam_audit_workflow.py asserts this.
+#
+# ---------------------------------------------------------------------------------------
+# WHAT THIS CANNOT FIX
+# ---------------------------------------------------------------------------------------
+# The 60-day inactivity disable stops the guard as surely as it stops the audit — a guard
+# cannot fire to report that guards are not firing. Stated rather than papered over. It is
+# partly self-correcting for the same reason docs-freshness-watch.yml gives: 60 days of
+# inactivity means nothing is changing, and the first commit that resumes activity re-enables
+# schedules.
+#
+# ---------------------------------------------------------------------------------------
+# THE WINDOW
+# ---------------------------------------------------------------------------------------
+# Hourly on the scheduled day only — 17 guard runs per week, each a few seconds when the audit
+# already ran. The original request bounded retries by "the next cycle", which under a weekly
+# cadence would mean 168 hourly guards, multiplying the cost the move to weekly was meant to
+# cut. The next weekly run remains the ultimate fallback, exactly as requested. Widening is one
+# line: `17 * * * 1,2` for two days, `17 * * * *` for the full week.
+
+on:
+  schedule:
+    - cron: "17 7-23 * * 1"
+  workflow_dispatch:
+
+# `actions: write` is required to dispatch the audit; `read` alone cannot.
+permissions:
+  contents: read
+  actions: write
+
+jobs:
+  catchup:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Did the weekly audit run?
+        id: decide
+        # continue-on-error is HALF of the fail-open contract: a crashed step must not fail the
+        # job, so the dispatch step below still evaluates. The other half is the `if:` on that
+        # step, which treats an unset output as "missing" rather than as "present".
+        continue-on-error: true
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const WORKFLOW = 'redteam-audit.yml';
+
+            // Most recent Monday 06:41 UTC at or before now. Computed from the wall clock;
+            // nothing is read from or written to the repository.
+            const now = new Date();
+            const boundary = new Date(Date.UTC(
+              now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate(), 6, 41, 0, 0));
+            boundary.setUTCDate(boundary.getUTCDate() - ((boundary.getUTCDay() + 6) % 7));
+            if (boundary > now) boundary.setUTCDate(boundary.getUTCDate() - 7);
+            core.info(`weekly boundary: ${boundary.toISOString()}`);
+
+            // Filtered client-side on created_at rather than via the `created:` search
+            // qualifier: the qualifier's timestamp handling is a second thing that can be
+            // subtly wrong, and a query that silently matches nothing would read as "the audit
+            // ran" — the exact failure decision 2 is written to prevent.
+            const runs = await github.rest.actions.listWorkflowRuns({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              workflow_id: WORKFLOW,
+              per_page: 100,
+            });
+
+            // `status === 'completed'` and NOT `conclusion`. A run that completed with
+            // findings or with a broken harness has RUN; re-firing it would spam.
+            const since = runs.data.workflow_runs.filter(
+              r => new Date(r.created_at) >= boundary && r.status === 'completed');
+
+            core.info(`completed audit runs since the boundary: ${since.length}`);
+            for (const r of since.slice(0, 5)) {
+              core.info(`  ${r.created_at}  conclusion=${r.conclusion}  ${r.html_url}`);
+            }
+            core.setOutput('missing', since.length === 0 ? 'true' : 'false');
+
+      - name: Fire the audit (catch-up)
+        # FAIL OPEN. `!= 'false'` rather than `== 'true'`: if the step above crashed, the
+        # output is unset and this fires. Only an explicit, successful "the audit already ran"
+        # suppresses the catch-up.
+        if: steps.decide.outputs.missing != 'false'
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const reason = '${{ steps.decide.outputs.missing }}' === 'true'
+              ? 'no completed run since the weekly boundary'
+              : 'the check could not determine whether the audit ran (failing open)';
+            core.notice(`Dispatching the red-team audit: ${reason}.`);
+            await github.rest.actions.createWorkflowDispatch({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              workflow_id: 'redteam-audit.yml',
+              ref: context.ref,
+            });
+
+      - name: Report what this guard decided
+        if: always()
+        run: |
+          {
+            echo "## Red-team audit catch-up"
+            echo
+            case "${{ steps.decide.outputs.missing }}" in
+              false) echo "The weekly audit has already run. Nothing to do." ;;
+              true)  echo "**No completed audit run since the weekly boundary — dispatched one.**" ;;
+              *)     echo "**The check could not determine whether the audit ran, so it dispatched one (fail-open).** Indeterminate is not a pass." ;;
+            esac
+          } >> "$GITHUB_STEP_SUMMARY"

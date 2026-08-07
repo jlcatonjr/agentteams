@@ -1,8 +1,9 @@
 # Standing Red-Team Audit — Procedure
 
-**Cadence:** daily, 06:41 UTC
+**Cadence:** weekly — Mondays, 06:41 UTC
 **Workflow:** [.github/workflows/redteam-audit.yml](../.github/workflows/redteam-audit.yml)
-**Driver:** [scripts/run_daily_redteam_audit.sh](../scripts/run_daily_redteam_audit.sh)
+**Catch-up:** [.github/workflows/redteam-audit-catchup.yml](../.github/workflows/redteam-audit-catchup.yml)
+**Driver:** [scripts/run_redteam_audit.sh](../scripts/run_redteam_audit.sh)
 **Engine:** [agentteams/redteam/](../agentteams/redteam/)
 **Methodology (shipped to every generated team):**
 [templates/universal/redteam-methodology.reference.template.md](../agentteams/templates/universal/redteam-methodology.reference.template.md)
@@ -12,17 +13,23 @@
 ## What it is
 
 A **standing red-team audit**: the constitutional probe battery, plus six checks that evaluate
-the red team itself, run on a daily cadence against this repository.
+the red team itself, run weekly against this repository.
+
+**Why weekly is enough.** `tests/test_constitutional_redteam.py` runs the full 38-probe
+battery on **every CI run**, so the fast regression net for the 21 closed exploits is CI, not
+this cron. What the cron uniquely provides is the phase-6 self-audit and the dated artifact
+trail, and weekly is an appropriate cadence for both. Reverting to daily is one line — drop
+the trailing ` 1` from the workflow's cron.
 
 It **measures and reports. It never remediates.** An unattended job that writes remediation
 code is a larger risk than the one it closes. Phases 4, 5 and 7 of the cycle are human- or
-agent-driven, off the artifacts the daily run leaves behind.
+agent-driven, off the artifacts the scheduled run leaves behind.
 
 ## Running it by hand
 
 ```bash
-# The full daily run, exactly as CI does it
-bash scripts/run_daily_redteam_audit.sh
+# The full run, exactly as CI does it
+bash scripts/run_redteam_audit.sh
 
 # Or directly, with control over the target
 agentteams --redteam --redteam-probes tests.constitutional_redteam_battery
@@ -61,6 +68,38 @@ days' retention):
 | `remediation.plan.md` | one row per open item, verifier and rehearsal target left blank on purpose |
 | `selfaudit.md` | phase 6 — the six checks, including any that could not run and why |
 
+## When a scheduled run does not happen
+
+The audit runs on GitHub-hosted runners, so no local machine being off can stop it. Two things
+can, and both are **silent**:
+
+- GitHub documents that scheduled workflows may be **delayed or dropped** under high load. A
+  dropped run leaves no record and no notification — indistinguishable from a quiet week.
+- GitHub **disables scheduled workflows after 60 days of repository inactivity**.
+
+`redteam-audit-catchup.yml` fires **hourly on the scheduled day** (`17 7-23 * * 1`, 17 runs),
+asks whether a `redteam-audit.yml` run has *completed* since the most recent Monday-06:41-UTC
+boundary, and dispatches one if not. It self-terminates: a dispatched run lands in the same
+history the guard reads.
+
+Three decisions carry the risk, and each has a test:
+
+| Decision | Why |
+|---|---|
+| **"Ran" means `status: completed`, never `conclusion: success`** | The audit exits `1` on findings and `2` on a broken harness. Both mean *it ran*. A guard keyed on conclusion would re-fire the audit hourly for the rest of any day with a real finding — 17 runs, 17 issue comments — turning a working alarm into noise. |
+| **It fails OPEN** | If the query errors, the guard **runs the audit**. "I could not tell whether it ran" must never resolve to "it must have run": that is indeterminate read as a pass, moved into the thing that decides whether the audit happens at all. A spurious audit costs a runner-minute; a suppressed one is silent. |
+| **It writes no state** | The verdict is GitHub's own run history plus the wall clock. A "last run" marker is a cursor that, once stale, suppresses every future audit. |
+
+**What the catch-up cannot fix:** the 60-day inactivity disable stops the guard as surely as
+the audit — a guard cannot fire to report that guards are not firing. Partly self-correcting:
+60 days of inactivity means nothing is changing, and the first commit that resumes activity
+re-enables schedules.
+
+**Widening the window** is one line in the guard's cron: `17 * * * 1,2` for two days,
+`17 * * * *` for the whole week. It is bounded to the scheduled day because 168 hourly guards
+would multiply the cost the move to weekly was made to cut.
+
+
 ## The ledgers
 
 Five files, all tracked, all human-edited, each single-purpose. **Every row must resolve**: a
@@ -86,7 +125,7 @@ agentteams --redteam --accept-probe-baseline --redteam-probes tests.constitution
 git diff references/redteam-probe-baseline.json    # review it
 ```
 
-**The daily job never does this**, and `tests/test_redteam_audit_workflow.py` asserts that no
+**The scheduled job never does this**, and `tests/test_redteam_audit_workflow.py` asserts that no
 step in the workflow can. If the scheduled run re-baselined itself, a probe that flipped from
 `PARTIAL` to a *false* `DEFENDED` would be absorbed overnight and the check written to catch
 that would report clean forever — a check that clears its own flag.
@@ -113,7 +152,7 @@ attack class:
 A merge preserves on-disk divergence by design; an attack *is* on-disk divergence. Three
 further reasons the live tree is the wrong target: `.claude/agents/` is what the agents running
 the audit read, so mutating it means attacking the control plane while standing on it; the
-daily job is unattended, so a crashed run would leave the repository mutated with nothing
+scheduled job is unattended, so a crashed run would leave the repository mutated with nothing
 scheduled to clean up; and `git` already gives a byte-exact restore the merge cannot match.
 
 `agentteams/redteam/realcopy.py` does it correctly: snapshot the real infrastructure into a
@@ -125,20 +164,20 @@ The merge is still useful, as a **measurement** rather than a safety net:
 `classify_restorability` runs it against the copy and reports each mutation as `RESTORED`,
 `PRESERVED` or `REFUSED`. That turns "can the pipeline heal this?" into a number.
 
-## Not measured by the daily run
+## Not measured by the scheduled run
 
 Stated as populations rather than omitted, because a coverage number that quietly excludes what
 it did not look at is the F-4 defect:
 
 - **The judgment layer.** The 14-payload corpus is loaded and its `scanner_matches` claims are
-  verified daily, but it is **not run against live subagents** — that spawns agents and needs
+  verified on every run, but it is **not run against live subagents** — that spawns agents and needs
   explicit operator authorization (W14). `tests/redteam/run_harness.py` is the operator-driven
   path.
 - **Hand-written historical documents.** F-4 sweeps `references/plans/*redteam*.md` and reports
   what it finds under an *advisory* heading. Not gating: the handoff's own rule is that *a
   finding report* must fail its own audit gate — the report being produced, not every report
-  ever written. Gating on immutable historical documents would leave the daily job permanently
-  red, and a permanently red job is one nobody reads.
+  ever written. Gating on immutable historical documents would leave the scheduled job
+  permanently red, and a permanently red job is one nobody reads.
 
 ## Related
 

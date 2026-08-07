@@ -6,6 +6,41 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### changed (the red-team audit moved to weekly, and gained a catch-up for a missed trigger)
+
+- **Cadence: daily → weekly, Mondays 06:41 UTC.** Operator instruction, on cost grounds. Two
+  facts recorded because they change the calculus and were verified rather than assumed: this
+  repository is **public**, so GitHub Actions minutes are not billed; and the audit **spends no
+  tokens at all** — the engine is deterministic Python (38 mechanical probes plus six
+  AST/CSV/regex checks) with no HTTP client, no LLM SDK and no API key. The one component that
+  would need live agents, `tests/redteam/run_harness.py` (W14), is invoked by no workflow and
+  no script. **The coverage cost is near zero regardless:**
+  `tests/test_constitutional_redteam.py` runs the full battery on *every CI run*, so the fast
+  regression net for the 21 closed exploits is CI, not the cron; the cron uniquely provides the
+  phase-6 self-audit and the dated artifact trail. Reverting is one line.
+- **New `redteam-audit-catchup.yml` — hourly retry when the scheduled run never happened.**
+  The audit runs on GitHub-hosted runners, so no local machine being off can stop it; but
+  GitHub documents that scheduled workflows may be **delayed or dropped** under load, and
+  **disables them after 60 days of repository inactivity**. Both are silent, which is worse
+  than the machine-off case. The guard fires hourly on the scheduled day, asks whether a run
+  has *completed* since the weekly boundary, and dispatches one if not. It self-terminates.
+- **Three decisions carry the risk, each with a mutation-tested contract test:**
+  **"Ran" means `status: completed`, never `conclusion: success`** — the audit exits `1` on
+  findings and `2` on a broken harness and both mean it ran, so a conclusion-keyed guard would
+  re-fire 17 times and post 17 issue comments on any day with a real finding, turning a working
+  alarm into noise. **It fails open** — an unusable API answer runs the audit, because "I could
+  not tell whether it ran" resolving to "it must have run" is indeterminate read as a pass,
+  relocated into the thing that decides whether a security audit happens at all. **It writes no
+  state** — the verdict is GitHub's own run history plus the wall clock, since a "last run"
+  marker is a cursor that once stale suppresses every future audit.
+- **What the catch-up cannot fix, stated rather than papered over:** the 60-day inactivity
+  disable stops the guard as surely as the audit — a guard cannot fire to report that guards
+  are not firing.
+- `scripts/run_daily_redteam_audit.sh` → **`scripts/run_redteam_audit.sh`**. A script whose
+  name asserts a cadence it no longer has is stale content in the most load-bearing place
+  there is (Rule 7), and a new test fails if any live surface still calls the audit daily.
+
+
 ### added (the red-team audit became a standing daily check, and one that audits itself)
 
 - **`agentteams --redteam` — a standing red-team audit on a daily cadence.** The 2026-08-06
