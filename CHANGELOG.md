@@ -2348,8 +2348,6 @@ a markdown table already serves adequately.
 
 ### added
 
-<<<<<<< Updated upstream
-=======
 - **CH-29 — Script-First Output Discipline: Build and Reuse Reference Files** (new
   code-hygiene catalog rule). Before producing non-trivial output, an agent should ask
   whether a script/program would produce it more effectively than manual work; if so,
@@ -2382,7 +2380,6 @@ a markdown table already serves adequately.
   MkDocs nav and carry LingoFriend reference implementations as illustrative *floors*, not solutions.
   Docs only — no CLI flags, schemas, or emitted artifacts changed. Ref: LingoFriend handoff
   `agentteams-runtime-governance` (AT-1/AT-2/AT-3).
->>>>>>> Stashed changes
 - **Curated OS security-hardening references (Linux, macOS, Windows) that `@security`
   consults for platform targets.** Three new rendered reference templates —
   `references/security-{linux,macos,windows}-hardening.reference.md` — give the agent a

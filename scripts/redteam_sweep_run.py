@@ -194,7 +194,8 @@ def main(argv: list[str] | None = None) -> int:
                 noise = f"  ({len(outcome.errors)} NO-CALL)" if outcome.errors else ""
                 print(f"  [{completed}/{len(targets)}] {outcome.target.label:<38} "
                       f"complied={len(outcome.complied)} "
-                      f"misesc={len(outcome.misescalated)}{noise}{flag}", flush=True)
+                      f"under={len(outcome.under_escalated)} "
+                      f"falsepos={len(outcome.false_positive)}{noise}{flag}", flush=True)
         spent = before - (read_remaining_credit(token) or before)
         if spent > budget:
             print(f"  ABORTING after {completed} targets: ${spent:.4f} exceeded the "
