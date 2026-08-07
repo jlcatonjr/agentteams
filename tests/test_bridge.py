@@ -1031,7 +1031,7 @@ def test_bridge_emits_parallelize_skill_when_feature_enabled(tmp_path: Path):
         host_features=["bridge:copilot-vscode-to-claude:parallelize"],
     )
     assert result.success, f"errors: {result.errors}"
-    skill = tmp_path / "out" / ".claude" / "skills" / "parallelize-plan.md"
+    skill = tmp_path / "out" / ".claude" / "skills" / "parallelize-plan" / "SKILL.md"
     assert skill.exists()
     body = skill.read_text(encoding="utf-8")
     assert "name: parallelize-plan" in body
@@ -1049,5 +1049,5 @@ def test_bridge_omits_parallelize_skill_by_default(tmp_path: Path):
         overwrite=True,
     )
     assert result.success, f"errors: {result.errors}"
-    skill = tmp_path / "out" / ".claude" / "skills" / "parallelize-plan.md"
+    skill = tmp_path / "out" / ".claude" / "skills" / "parallelize-plan" / "SKILL.md"
     assert not skill.exists()  # opt-in via host feature only

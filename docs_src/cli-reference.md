@@ -175,7 +175,7 @@ Non-destructive bridge update. Regenerates bridge-internal artifacts under `refe
 
 ### `--bridge-no-skills`
 
-Suppress emission of `.claude/skills/recall.md` (Claude target only). The recall skill wraps `agentteams --query-index` for in-session memory-index retrieval; disable when your team manages skills via another channel.
+Suppress emission of `.claude/skills/recall/SKILL.md` (Claude target only). The recall skill wraps `agentteams --query-index` for in-session memory-index retrieval; disable when your team manages skills via another channel.
 
 ---
 
@@ -499,7 +499,7 @@ when omitted. Recognised tokens:
 | `bridge:copilot-vscode-to-claude:hooks` | `.claude/settings.agentteams.example.json` + `.claude/hook-guard.sh`. |
 | `bridge:copilot-vscode-to-claude:cache-split` | Cache-aware `CLAUDE.md` (preamble + boundary + dynamic stanza). |
 | `bridge:copilot-vscode-to-claude:schedule` | `.claude/schedules.agentteams.json` for the `/schedule` skill. |
-| `bridge:copilot-vscode-to-claude:todo-projection` | `.claude/skills/todo-from-plan.md` skill. |
+| `bridge:copilot-vscode-to-claude:todo-projection` | `.claude/skills/todo-from-plan/SKILL.md` skill. |
 
 Unknown tokens are syntactically valid but produce no emission.
 See [`host_features`](api-reference/host-features.md) for parser

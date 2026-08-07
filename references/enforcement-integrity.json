@@ -6,7 +6,7 @@
     "agentteams/front_matter_reconcile.py": "2ac319de5c2e19aae6ba1616946a1c0c9dbbe9966661a8a17eac85b15780d31e",
     "agentteams/integrity.py": "1b0269204f99874be9095ffd7f1ca4107e2c7c45c03f5da2300518c450205b0e",
     "agentteams/redteam/checks_report.py": "3e13cc5ebf19b4b393ef0a2ee663d097ff2be3666d38b7f61203503ee77ffd24",
-    "agentteams/redteam/checks_static.py": "d6bb131c72715da867cec68778477c5c9ac8274f412399bb9dbd99202b05343b",
+    "agentteams/redteam/checks_static.py": "44b3f830ad5b23a2f16f9938b9fa282a4cd5847e677703fb611208be7b37f738",
     "agentteams/redteam/registry.py": "7513eb18341e5998d041d0efabd22ca86c8bc632d9e8c2afc89863883023b5e2",
     "agentteams/scan.py": "82776eee08fab3e747b6b9782be64ee57d0f44f1d94b8888b4c3b360f6fe7033",
     "agentteams/unfenced.py": "f93ba361487463aa51f3124da7421a77f87ee0e617a59248b231d9a08f077905"

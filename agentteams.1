@@ -187,7 +187,7 @@ Refresh bridge artifacts AND overwrite target\-framework entry files (e.g. CLAUD
 Non\-destructive update: regenerate bridge\-internal artifacts, and for target\-framework entry files only re\-render content inside <!\-\- AGENTTEAMS\-BRIDGE:BEGIN ... \-\-> fences. Files lacking any bridge fence are skipped with notices in bridge\-merge.report.md. First\-time consumers should use \-\-bridge\-refresh.
 .TP
 .B \-\-bridge\-no\-skills
-Suppress emission of .claude/skills/recall.md (Claude target only). The recall skill wraps `agentteams \-\-query\-index` for in\-session memory\-index retrieval; disable if your team manages skills separately.
+Suppress emission of .claude/skills/recall/SKILL.md (Claude target only). The recall skill wraps `agentteams \-\-query\-index` for in\-session memory\-index retrieval; disable if your team manages skills separately.
 .TP
 .B \-\-recipe\-check
 Validate generated Goose recipe YAML files in the \-\-output directory (or .goose/recipes/ by default). Checks: version string, no model: key, non\-empty instructions, sub_recipe path resolution. Writes recipe\-check.report.md. Requires \-\-framework goose.

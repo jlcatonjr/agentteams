@@ -2,7 +2,7 @@
 
 CSV plan-steps ↔ Claude TodoWrite projection. The canonical plan-steps CSV remains the audit-bearing plan-of-record; this module projects it into TodoWrite-shaped dicts for runtime visibility in Claude. Status writeback is **append-only** and mutates only the `status` column — every other column's values and the column order are preserved (the CSV is re-serialized with minimal quoting) via atomic write.
 
-Opt-in (for the bridge skill artifact) via [`--target-host-features bridge:copilot-vscode-to-claude:todo-projection`](host-features.md). The module is importable regardless of the host-feature flag; the flag only gates emission of the `.claude/skills/todo-from-plan.md` skill file.
+Opt-in (for the bridge skill artifact) via [`--target-host-features bridge:copilot-vscode-to-claude:todo-projection`](host-features.md). The module is importable regardless of the host-feature flag; the flag only gates emission of the `.claude/skills/todo-from-plan/SKILL.md` skill file.
 
 ## Required CSV Columns
 
