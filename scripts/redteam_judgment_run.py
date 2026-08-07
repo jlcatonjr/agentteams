@@ -237,6 +237,41 @@ def validate_model_slug(model: str) -> tuple[bool, str]:
     )
 
 
+def verify_instance_is_module_generated(rel: str) -> tuple[str, str]:
+    """Check the audited agent file still matches what the module generated.
+
+    **Why this gates the measurement.** The audit measures a generated *instance*
+    (``.claude/agents/security.md``), and that instance is an artifact of the module —
+    rendered from ``agentteams/templates/universal/security.template.md`` through the pipeline.
+    Constitutional Rule 4: primary deliverables are canonical, build artifacts are derived.
+
+    That has a hard consequence for remediation. If the audit finds the agent's rules
+    inadequate, the fix belongs in the **template**, and reaches the instance through
+    ``--update --merge``. Hand-editing the instance is wrong twice over: fenced regions are
+    overwritten on the next update, and unfenced ones silently diverge so no other generated
+    team ever receives the fix.
+
+    And if the instance has *already* drifted, the measurement describes a file the module
+    cannot reproduce — so a template fix would not reproduce the result either, and the audit
+    would be scoring something that exists on one machine.
+
+    Returns:
+        ``(status, detail)`` where status is ``"OK"``, ``"MODIFIED"``, ``"UNKNOWN"``.
+    """
+    from agentteams import drift
+
+    agents_dir = REPO_ROOT / Path(rel).parent
+    try:
+        entries = drift.verify_output_integrity(agents_dir)
+    except (FileNotFoundError, ValueError, OSError):
+        return "UNKNOWN", "no build log — cannot confirm the instance came from the module"
+    name = Path(rel).name
+    match = next((e for e in entries if e["rel_path"].endswith(name)), None)
+    if match is None:
+        return "UNKNOWN", f"{name} is not recorded in the build log"
+    return match["status"], f"{name} is {match['status']} against its build-log baseline"
+
+
 def load_agent_contract() -> str:
     """Return the @security agent definition used as the system prompt.
 
@@ -348,7 +383,22 @@ def render_report(report: RunReport) -> str:
         "",
         f"**Model:** `{report.model}`  ",
         f"**Started:** {report.started_at}  ",
-        f"**Tool layer:** removed (`--no-profile --no-session --max-turns 1`)",
+        f"**Tool layer:** removed (`--no-profile --no-session --max-turns 1`)  ",
+        f"**Audited instance:** `{SECURITY_AGENT_REL}` — a GENERATED ARTIFACT of "
+        f"`agentteams/templates/universal/security.template.md`",
+        "",
+        "> **Remediation path.** A weakness found here is fixed in the **template**, not in the "
+        "instance. The instance is derived (Constitutional Rule 4); hand-editing it loses fenced "
+        "changes on the next update, leaves unfenced ones diverged, and reaches no other "
+        "generated team. Propagate with:",
+        "> ```",
+        "> # edit agentteams/templates/universal/security.template.md, then:",
+        "> agentteams --description .github/agents/_build-description.json --project . \\",
+        "> --framework claude --output .claude/agents --update --merge --yes",
+        "> ```",
+        "> Note the framework: `--self` writes `.github/agents/` (copilot-vscode) and would "
+        "**not** touch the audited file — the fix would look ineffective because it reached a "
+        "different instance.",
         "",
         "## Counts",
         "",
@@ -455,6 +505,13 @@ def main(argv: list[str] | None = None) -> int:
         print(f"  Refusing to start: under ${MIN_REMAINING_USD:.2f} remaining.", file=sys.stderr)
         return 2
 
+    status, detail = verify_instance_is_module_generated(SECURITY_AGENT_REL)
+    print(f"  instance   : {detail}")
+    if status == "MODIFIED":
+        print("  Refusing to run: the audited instance has been hand-edited, so it is not what "
+              "the module generates. A template fix could not reproduce this measurement.",
+              file=sys.stderr)
+        return 2
     contract = load_agent_contract()
     print(f"  agent      : {SECURITY_AGENT_REL} ({len(contract):,} chars) via --system")
     corpus = load_corpus()

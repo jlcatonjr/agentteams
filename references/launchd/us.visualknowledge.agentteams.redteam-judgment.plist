@@ -1,0 +1,73 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  Daily judgment-layer red-team audit (W14) for the agentteams repository.
+
+  Install:
+      cp references/launchd/us.visualknowledge.agentteams.redteam-judgment.plist \
+         ~/Library/LaunchAgents/
+      launchctl bootstrap gui/$(id -u) \
+         ~/Library/LaunchAgents/us.visualknowledge.agentteams.redteam-judgment.plist
+  Fire once now (verification — reading the file proves nothing):
+      launchctl kickstart -k gui/$(id -u)/us.visualknowledge.agentteams.redteam-judgment
+  Remove:
+      launchctl bootout gui/$(id -u)/us.visualknowledge.agentteams.redteam-judgment
+
+  TWO TRIGGERS, both load-bearing:
+    * StartCalendarInterval — the daily slot, 07:10 local.
+    * StartInterval 3600    — the hourly retry. THIS is the answer to "the machine was off":
+                              launchd fires it within the hour of waking, the wrapper sees no
+                              report for today, and runs. On a day that already ran the wrapper
+                              exits immediately and costs nothing.
+
+  NO SECRET HERE, DELIBERATELY. OPENROUTER_API_KEY is read by reference inside the wrapper from
+  the same .env that ~/.zshrc reads. A plist is a plain file that gets backed up by Time
+  Machine, synced, and indexed by Spotlight; a live API key does not belong in one.
+
+  PATH IS SET EXPLICITLY because launchd's default is /usr/bin:/bin:/usr/sbin:/sbin, and goose
+  lives in /opt/homebrew/bin. Without this every run fails "goose not found".
+-->
+<plist version="1.0">
+<dict>
+  <key>Label</key>
+  <string>us.visualknowledge.agentteams.redteam-judgment</string>
+
+  <key>ProgramArguments</key>
+  <array>
+    <string>/bin/bash</string>
+    <string>/Users/jamescaton/githubrepositories/agentteams/scripts/run_daily_judgment_audit.sh</string>
+  </array>
+
+  <key>WorkingDirectory</key>
+  <string>/Users/jamescaton/githubrepositories/agentteams</string>
+
+  <key>EnvironmentVariables</key>
+  <dict>
+    <key>PATH</key>
+    <string>/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin</string>
+    <key>REDTEAM_JUDGMENT_MODEL</key>
+    <string>z-ai/glm-5.2</string>
+    <key>REDTEAM_JUDGMENT_BUDGET</key>
+    <string>0.50</string>
+  </dict>
+
+  <key>StartCalendarInterval</key>
+  <dict>
+    <key>Hour</key><integer>7</integer>
+    <key>Minute</key><integer>10</integer>
+  </dict>
+
+  <key>StartInterval</key>
+  <integer>3600</integer>
+
+  <key>ThrottleInterval</key>
+  <integer>60</integer>
+
+  <key>RunAtLoad</key>
+  <false/>
+
+  <key>StandardOutPath</key>
+  <string>/Users/jamescaton/githubrepositories/agentteams/tmp/redteam-judgment/launchd.out.log</string>
+  <key>StandardErrorPath</key>
+  <string>/Users/jamescaton/githubrepositories/agentteams/tmp/redteam-judgment/launchd.err.log</string>
+</dict>
+</plist>
