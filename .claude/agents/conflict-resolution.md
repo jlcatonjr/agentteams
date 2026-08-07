@@ -1,7 +1,7 @@
 ---
 name: Conflict Resolution — AgentTeamsModule
 description: "Makes ACCEPT/REJECT/REVISE decisions on conflicts flagged by the conflict auditor in AgentTeamsModule"
-allowed-tools: Edit, Write, Grep, Glob, Read
+tools: Edit, Write, Grep, Glob, Read
 ---
 
 # Conflict Resolution — AgentTeamsModule
@@ -45,6 +45,8 @@ Before deciding, check whether a structurally similar conflict has been resolved
 ```bash
 agentteams --query-index "<conflict claim, terminology, or identifiers>" --query-strategy lexical --query-k 5 --description .agentteams/brief.json --project . --output .github/agents --no-scan --yes
 ```
+
+> **Self-maintained repos (agentteams itself):** `.agentteams/brief.json` does not exist there. Use `--self` instead of `--description ... --project . --output ...`; it resolves the brief and the output root together. Everywhere else the form above is correct.
 
 Fall back to `--query-strategy vector` when **either** (a) lexical returns zero hits, **or** (b) the lexical top-1 has no content-word overlap with the query (single-term false-positive guard).
 

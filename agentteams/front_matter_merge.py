@@ -103,34 +103,142 @@ def _detect_front_matter_drift(new_rendered: str, existing_on_disk: str) -> list
 #: application even when three-way provenance proves the project never edited the key: proving
 #: nobody touched `tools:` is not the same as having authority to grant a downstream agent shell
 #: access. These are always reported as proposals for a human to apply.
-_CAPABILITY_FRONT_MATTER_KEYS: frozenset[str] = frozenset({"tools", "model", "agents"})
+#:
+#: Every front-matter key that carries a capability grant, across every framework this module
+#: emits. ONE constant, deliberately: the module previously carried two disagreeing sets — this
+#: one (which omitted ``allowed-tools``) and ``front_matter_reconcile.CAPABILITY_KEYS`` (which
+#: included it). The escalation check below keys on this set, so omitting the key the Claude
+#: adapter actually emitted meant a widened Claude grant never reached the check at all. See
+#: references/plans/constitutional-redteam-audit-2026-08-06.report.md finding W8.
+#:
+#: ``front_matter_reconcile`` imports this rather than defining its own.
+CAPABILITY_FRONT_MATTER_KEYS: frozenset[str] = frozenset({
+    "tools",            # copilot-vscode, and Claude subagents since 2026-08-06
+    "allowed-tools",    # Claude subagents before 2026-08-06; still on disk everywhere
+    "disallowedTools",  # Claude deny-list
+    "capabilities",
+    "model",
+    "agents",
+})
+
+#: Back-compat alias for the private name this module used before the sets were unified.
+_CAPABILITY_FRONT_MATTER_KEYS = CAPABILITY_FRONT_MATTER_KEYS
 
 #: A front-matter list value, e.g. ``['read', 'search']``. Quoted items only — an unquoted or
 #: block-style list is not this shape and must not be guessed at.
 _FM_LIST_RE = re.compile(r"^\[(.*)\]$", re.DOTALL)
 _FM_LIST_ITEM_RE = re.compile(r"""['"]([^'"]+)['"]""")
 
+#: A bare comma-separated scalar, e.g. ``Read, Grep, Bash(python -m agentteams.research:*)`` —
+#: the shape Claude subagent front matter uses. Items may contain parentheses, colons, dots and
+#: asterisks (scoped Bash permissions), but never a bracket or a quote, which would mean this is
+#: really one of the other two shapes.
+_FM_SCALAR_LIST_ITEM_RE = re.compile(r"^[A-Za-z][A-Za-z0-9_.\-]*(?:\([^()]*\))?$")
 
-def _parse_capability_list(raw: str) -> frozenset[str] | None:
-    """Parse a bracketed front-matter list into a set of items.
 
-    Used to decide whether a capability change *narrows* a grant. The comparison must be a
-    parsed-set subset test and never a substring one: ``['read']`` is a substring of both
-    ``['read', 'edit']`` and ``['read', 'ed']``, and only the first of those is a real narrowing.
+#: Capability keys whose value is a SCALAR, not a list. `model:` sits in the capability key set
+#: because changing it is privileged, but `model: opus` is one value rather than a one-item
+#: grant, and reading it as a set would let a model change be scored as a capability widening.
+_SCALAR_CAPABILITY_KEYS: frozenset[str] = frozenset({"model"})
+
+
+def _parse_capability_list(raw: str, *, key: str | None = None) -> frozenset[str] | None:
+    """Parse a front-matter capability value into a set of items.
+
+    Used to decide whether a capability change *narrows* or *widens* a grant. The comparison
+    must be a parsed-set subset test and never a substring one: ``['read']`` is a substring of
+    both ``['read', 'edit']`` and ``['read', 'ed']``, and only the first of those is a real
+    narrowing.
+
+    Two shapes are recognised:
+
+    * bracketed and quoted — ``['read', 'search']`` (copilot-vscode);
+    * bare comma-separated — ``Read, Grep, Glob`` (Claude subagents).
+
+    The second was added 2026-08-06. Without it every Claude capability value returned ``None``,
+    which made the widening check structurally unreachable for Claude teams even once the key
+    itself was recognised — the two halves of finding W8 had to be fixed together or neither
+    worked.
 
     Args:
-        raw: The raw front-matter value, e.g. ``"['read', 'search']"``.
+        raw: The raw front-matter value.
+        key: The front-matter key the value belongs to, when the caller knows it. It
+            disambiguates a bare single token: ``Read`` under ``tools:`` is a one-item grant,
+            while ``opus`` under ``model:`` is a scalar. **Without a key a bare single token is
+            treated as unparseable**, because guessing wrong in that direction would let a
+            model change be scored as a capability widening — and a caller that does not know
+            its own key has no business asserting either reading.
 
     Returns:
-        The item set, or ``None`` when the value is not a quoted bracketed list — a scalar like
-        ``model: opus`` or an unrecognised shape. ``None`` makes every caller fall through to the
-        existing propose-only path, so an unparseable value can never be treated as narrowing.
+        The item set, or ``None`` when the value matches neither shape. ``None`` makes every
+        caller fall through to the propose-only path, so an unparseable value can never be read
+        as narrowing.
     """
-    match = _FM_LIST_RE.match(raw.strip())
-    if not match:
+    text = raw.strip()
+    if not text:
         return None
-    items = _FM_LIST_ITEM_RE.findall(match.group(1))
-    return frozenset(items) if items else None
+    if key is not None and key in _SCALAR_CAPABILITY_KEYS:
+        return None
+
+    match = _FM_LIST_RE.match(text)
+    if match:
+        items = _FM_LIST_ITEM_RE.findall(match.group(1))
+        return frozenset(items) if items else None
+
+    if "[" in text or "]" in text or "'" in text or '"' in text:
+        return None  # a malformed list shape, not a scalar list — do not guess
+
+    parts = [p.strip() for p in text.split(",")]
+    if not all(parts) or not all(_FM_SCALAR_LIST_ITEM_RE.match(p) for p in parts):
+        return None
+    if len(parts) == 1 and key is None:
+        return None  # ambiguous without a key — see Args
+    return frozenset(parts)
+
+
+#: Capability keys that name the SAME grant across framework generations, newest first. When a
+#: template declares the new key and the deployed file carries only the old one, the merge
+#: renames in place rather than adding a second, contradictory declaration.
+_CAPABILITY_KEY_SUCCESSION: tuple[tuple[str, str], ...] = (
+    ("tools", "allowed-tools"),
+)
+
+
+def _migrate_superseded_capability_keys(
+    fresh: dict[str, str], current: dict[str, str]
+) -> tuple[dict[str, str], list[str]]:
+    """Rename a deployed capability key when the template has moved to its successor.
+
+    Front matter is preserved verbatim by ``--update --merge``, so a change to the *name* of a
+    capability key would otherwise never reach a deployed team: the file would keep the old key
+    forever, and if the new key were merely added the file would carry two capability
+    declarations with nothing saying which the runtime honours.
+
+    The rename is provenance-keyed and narrow. It fires only when the template declares the
+    successor key and the deployed file carries only the superseded one. **The value is carried
+    across untouched** — the template owns the key's NAME, the project owns its VALUE, and a
+    rename must not become a back door for silently applying a template's grant.
+
+    Args:
+        fresh: Front-matter keys of the freshly rendered file.
+        current: Front-matter keys of the on-disk file.
+
+    Returns:
+        ``(migrated_current, notices)``. ``migrated_current`` is a copy; ``current`` is not
+        mutated.
+    """
+    migrated = dict(current)
+    notices: list[str] = []
+    for new_key, old_key in _CAPABILITY_KEY_SUCCESSION:
+        if new_key in fresh and old_key in migrated and new_key not in migrated:
+            value = migrated.pop(old_key)
+            migrated[new_key] = value
+            notices.append(
+                f"front matter: capability key {old_key!r} renamed to {new_key!r} "
+                f"(value preserved: {value!r}). {old_key!r} is not read by this framework's "
+                f"runtime, so the grant it declared was never enforced."
+            )
+    return migrated, notices
 
 
 def _merge_front_matter(
@@ -175,8 +283,12 @@ def _merge_front_matter(
     if not fresh or not current:
         return current, [], []
 
+    # A capability key the template has RENAMED is migrated before anything else, so the
+    # comparisons below see one declaration rather than an old key and a new key that disagree.
+    current, key_migrations = _migrate_superseded_capability_keys(fresh, current)
+
     merged = dict(current)
-    applied: list[str] = []
+    applied: list[str] = list(key_migrations)
     proposals: list[str] = []
 
     for key, template_value in fresh.items():
@@ -197,8 +309,8 @@ def _merge_front_matter(
         # the review's §4.3 had it, but entirely silent. The merge still does not touch the value;
         # naming it is the whole remediation.
         if key in _CAPABILITY_FRONT_MATTER_KEYS:
-            _t = _parse_capability_list(template_value)
-            _d = _parse_capability_list(disk_value or "")
+            _t = _parse_capability_list(template_value, key=key)
+            _d = _parse_capability_list(disk_value or "", key=key)
             if _t is not None and _d is not None and _t < _d and not (untouched and template_moved):
                 proposals.append(
                     f"front matter: {key!r} on disk GRANTS MORE than the template — extra: "
@@ -212,8 +324,8 @@ def _merge_front_matter(
             continue                                    # template unchanged; project's value wins
 
         if key in _CAPABILITY_FRONT_MATTER_KEYS:
-            template_set = _parse_capability_list(template_value)
-            disk_set = _parse_capability_list(disk_value or "")
+            template_set = _parse_capability_list(template_value, key=key)
+            disk_set = _parse_capability_list(disk_value or "", key=key)
             narrowing = (
                 template_set is not None
                 and disk_set is not None

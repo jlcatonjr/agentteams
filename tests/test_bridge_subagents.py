@@ -144,7 +144,7 @@ def test_emit_stubs_empty_source_dir_noop(tmp_path: Path):
 
 
 # ---------------------------------------------------------------------------
-# allowed-tools emission from source tools: field.
+# capability-key emission from source tools: field.
 # ---------------------------------------------------------------------------
 
 
@@ -170,22 +170,22 @@ def test_tools_to_allowed_empty_returns_empty():
     assert bs._tools_to_allowed("") == []
 
 
-def test_emit_stubs_maps_tools_to_allowed_tools(tmp_path: Path):
-    """tools: in source front matter → allowed-tools: in Claude stub."""
+def test_emit_stubs_maps_tools_to_capability_key(tmp_path: Path):
+    """tools: in source front matter -> tools: in Claude stub (the key Claude Code reads)."""
     src = tmp_path / ".github" / "agents"
     _src_agent(src, "work-summarizer", tools="['read', 'search', 'execute', 'edit', 'agent']")
     bs.emit_subagent_stubs(source_dir=src, output_root=tmp_path)
     stub = (tmp_path / ".claude" / "agents" / "work-summarizer.md").read_text(encoding="utf-8")
-    assert "allowed-tools: Read, Grep, Glob, Bash, Edit, Write, Task" in stub
+    assert "tools: Read, Grep, Glob, Bash, Edit, Write, Task" in stub
 
 
-def test_emit_stubs_no_tools_no_allowed_tools(tmp_path: Path):
-    """No tools: in source → no allowed-tools: in stub (backward compat)."""
+def test_emit_stubs_no_tools_no_capability_key(tmp_path: Path):
+    """No tools: in source -> no capability key in stub (backward compat)."""
     src = tmp_path / ".github" / "agents"
     _src_agent(src, "orchestrator")
     bs.emit_subagent_stubs(source_dir=src, output_root=tmp_path)
     stub = (tmp_path / ".claude" / "agents" / "orchestrator.md").read_text(encoding="utf-8")
-    assert "allowed-tools" not in stub
+    assert "tools:" not in stub.split("---")[1]
 
 
 def test_emit_stubs_edit_only_includes_edit_and_write(tmp_path: Path):
@@ -194,11 +194,11 @@ def test_emit_stubs_edit_only_includes_edit_and_write(tmp_path: Path):
     _src_agent(src, "cleanup", tools="['read', 'edit']")
     bs.emit_subagent_stubs(source_dir=src, output_root=tmp_path)
     stub = (tmp_path / ".claude" / "agents" / "cleanup.md").read_text(encoding="utf-8")
-    assert "allowed-tools: Read, Edit, Write" in stub
+    assert "tools: Read, Edit, Write" in stub
 
 
 # ---------------------------------------------------------------------------
-# MAP-05: block-style tools: in source front matter must produce allowed-tools:
+# MAP-05: block-style tools: in source front matter must produce a capability key
 # ---------------------------------------------------------------------------
 
 _BLOCK_STYLE_AGENT = """\
@@ -252,8 +252,8 @@ def test_parse_front_matter_block_style_mixed_with_scalar_keys():
     assert bs._parse_tools_list(meta["tools"]) == ["execute", "search"]
 
 
-def test_emit_stubs_block_style_tools_emits_allowed_tools(tmp_path: Path):
-    """Agent file with block-style tools: -> allowed-tools: in Claude stub."""
+def test_emit_stubs_block_style_tools_emits_capability_key(tmp_path: Path):
+    """Agent file with block-style tools: -> tools: in Claude stub."""
     src = tmp_path / ".github" / "agents"
     src.mkdir(parents=True)
     agent_text = _BLOCK_STYLE_AGENT.format(slug="work-summarizer")
@@ -263,7 +263,7 @@ def test_emit_stubs_block_style_tools_emits_allowed_tools(tmp_path: Path):
         encoding="utf-8"
     )
     # read -> Read; edit -> Edit, Write
-    assert "allowed-tools: Read, Edit, Write" in stub
+    assert "tools: Read, Edit, Write" in stub
 
 
 def test_emit_stubs_block_style_tools_quoted_items(tmp_path: Path):
@@ -287,16 +287,16 @@ def test_emit_stubs_block_style_tools_quoted_items(tmp_path: Path):
         encoding="utf-8"
     )
     # read -> Read; execute -> Bash
-    assert "allowed-tools: Read, Bash" in stub
+    assert "tools: Read, Bash" in stub
 
 
 # ---------------------------------------------------------------------------
-# MAP-13: parametric workstream-expert stub must emit allowed-tools.
+# MAP-13: parametric workstream-expert stub must emit the capability key.
 # ---------------------------------------------------------------------------
 
 
 def test_expert_stub_emits_union_of_tools(tmp_path: Path):
-    """allowed-tools in parametric stub = union of all collapsed expert tools."""
+    """tools in parametric stub = union of all collapsed expert tools."""
     src = tmp_path / ".github" / "agents"
     _src_agent(src, "auth-module-expert", tools="['read', 'edit']")
     _src_agent(src, "tasks-api-expert", tools="['read', 'execute', 'search']")
@@ -306,11 +306,11 @@ def test_expert_stub_emits_union_of_tools(tmp_path: Path):
     )
     # Union of read+edit and read+execute+search, deduplicated, ordered first-seen.
     # read -> Read; edit -> Edit, Write; execute -> Bash; search -> Grep, Glob
-    assert "allowed-tools: Read, Edit, Write, Bash, Grep, Glob" in stub
+    assert "tools: Read, Edit, Write, Bash, Grep, Glob" in stub
 
 
-def test_expert_stub_no_tools_field_emits_no_allowed_tools(tmp_path: Path):
-    """Expert source files with no tools: field → no allowed-tools: in stub."""
+def test_expert_stub_no_tools_field_emits_no_capability_key(tmp_path: Path):
+    """Expert source files with no tools: field -> no capability key in stub."""
     src = tmp_path / ".github" / "agents"
     _src_agent(src, "auth-module-expert")   # no tools= kwarg -> no tools: line
     _src_agent(src, "billing-expert")
@@ -318,7 +318,7 @@ def test_expert_stub_no_tools_field_emits_no_allowed_tools(tmp_path: Path):
     stub = (tmp_path / ".claude" / "agents" / "workstream-expert.md").read_text(
         encoding="utf-8"
     )
-    assert "allowed-tools" not in stub
+    assert "tools:" not in stub.split("---")[1]
 
 
 def test_expert_stub_deduplicates_overlapping_tools(tmp_path: Path):
@@ -331,7 +331,7 @@ def test_expert_stub_deduplicates_overlapping_tools(tmp_path: Path):
     stub = (tmp_path / ".claude" / "agents" / "workstream-expert.md").read_text(
         encoding="utf-8"
     )
-    line = next(l for l in stub.splitlines() if l.startswith("allowed-tools:"))
+    line = next(l for l in stub.splitlines() if l.startswith("tools:"))
     tools = [t.strip() for t in line.split(":", 1)[1].split(",")]
     # No duplicates.
     assert tools == list(dict.fromkeys(tools))
@@ -351,8 +351,8 @@ def test_expert_stub_partial_tools_field_covers_superset(tmp_path: Path):
     )
     # read+edit -> Read, Edit, Write; execute -> Bash
     # The expert with no tools: field must not suppress the other experts' tools.
-    assert "allowed-tools:" in stub
-    line = next(l for l in stub.splitlines() if l.startswith("allowed-tools:"))
+    assert "tools:" in stub
+    line = next(l for l in stub.splitlines() if l.startswith("tools:"))
     tools = {t.strip() for t in line.split(":", 1)[1].split(",")}
     assert tools == {"Read", "Edit", "Write", "Bash"}
 

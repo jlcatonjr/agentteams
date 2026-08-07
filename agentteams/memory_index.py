@@ -610,6 +610,35 @@ def query_index(
 
     Each hit also carries a ``confidence`` field ("reliable" / "candidate" / "weak"),
     computed from the same per-strategy thresholds callers previously had to apply by hand.
+
+    **Duplicate documents are returned as separate hits, deliberately.** Byte-identical files at
+    different paths score identically and can therefore occupy consecutive slots — measured
+    2026-07-31, when ``references/bridges/<pair>/agent-inventory.md`` (the same 8,999-byte file,
+    identical sha256, in three bridge directories) filled all three top-3 slots and pushed the
+    correct answer to fourth by a 0.006% margin.
+
+    Collapsing them was considered and **rejected**: a collapsed hit must report *one* path, and
+    which path is right depends on the caller. An agent resolving a reference wants the one in
+    its own bridge directory; an auditor counting exposure wants all three. Picking silently
+    would be wrong for one of them with no way to tell which.
+
+    Callers that need de-duplication should do it on content hash at their own layer and choose
+    their own representative path — which is what
+    ``tests/test_memory_index_relevance.py`` does for its benchmark corpus. Raising ``k`` is the
+    other option when duplicates are expected.
+
+    Args:
+        index: A built memory index.
+        query: The query text.
+        k: Maximum hits to return. Duplicates count against this budget.
+        strategy: ``"lexical"`` or ``"vector"``.
+
+    Returns:
+        Up to *k* hits, highest score first. **May contain byte-identical documents at
+        different paths.**
+
+    Raises:
+        ValueError: If *strategy* is not a known strategy.
     """
     if strategy == "lexical":
         return _query_index_lexical(index, query, k=k)

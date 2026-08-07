@@ -34,10 +34,10 @@ SECTION MANIFEST — copilot-instructions.template.md
 
 | Path | Purpose |
 |------|---------|
-| `agentteams/` | Primary authored deliverables (the installable package) |
+| `agentteams/` | Primary authored deliverables |
 | `dist/` | Compiled/converted output artifacts |
-| `docs/figures/` | Diagrams and figures |
-| `docs/` | Reference/bibliography database |
+| `docs_src/book/figures/` | Diagrams and figures |
+| `references/` | Reference/bibliography database |
 | `.github/agents/` | Agent definition files |
 | `.github/agents/references/` | Shared reference data |
 <!-- AGENTTEAMS:END directory_structure -->
@@ -49,7 +49,7 @@ SECTION MANIFEST — copilot-instructions.template.md
 
 - All primary deliverables are authored in `agentteams/` as `Python pipeline modules (ingest, analyze, render, emit), Agent template library (.template.md files), JSON schemas for project description and team manifest, Framework adapters (copilot-vscode, copilot-cli, claude), CLI entry point (build_team.py), Example project briefs and Test suite`
 - Compiled output lives in `dist/` and is **never edited directly**
-- Figures are generated from source files in `docs/figures/` — source files are authoritative
+- Figures are generated from source files in `docs_src/book/figures/` — source files are authoritative
 - Every deliverable must correspond to a Component Spec defined by a workstream expert
 - Work summaries are authored in `workSummaries/` from canonical `tmp/by-week/` plan artifacts, legacy `tmp/` fallbacks, and git history
 <!-- AGENTTEAMS:END output_conventions -->
@@ -158,7 +158,7 @@ ordering, including where operator instructions and read content sit:
 2. **Code hygiene second** — code changes require `@code-hygiene` audit before merge
 3. **Authority hierarchy is ground truth** — no agent may contradict a higher-authority source
 4. **Primary deliverables are the canonical output** — build artifacts are derived, never primary
-5. **No fabricated references** — every citation must be verifiable in `docs/`
+5. **No fabricated references** — every citation must be verifiable in `references/`
 6. **Voice fidelity** — style governance rulings are authoritative when a style-governance agent is present
 7. **Living documentation** — agent docs must not accumulate stale content
 8. **Always close with `@conflict-auditor`** — required after any multi-file change session

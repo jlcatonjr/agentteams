@@ -314,8 +314,7 @@ def test_refactor_modules_are_fully_type_annotated() -> None:
     """CH-22: every module-level function in the refactor's cli/* + registry + errors
     modules must annotate its parameters (except self/cls) and its return type.
     Coverage is currently 100%; this ratchet keeps new code from regressing it.
-    (Runtime CH-22 guards are used where misuse is plausible, e.g.
-    security_gate.set_migrate_exemption raising TypeError on a non-bool.)"""
+    (Runtime CH-22 guards are used where misuse is plausible.)"""
     gaps = []
     for rel in _REFACTOR_MODULES:
         tree = ast.parse((REPO_ROOT / rel).read_text(encoding="utf-8"), filename=rel)

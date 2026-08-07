@@ -6,6 +6,260 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### fixed (emitted Claude skills were never discoverable — the retrieval layer was unreachable, not absent)
+
+- **Skills now emit as `.claude/skills/<name>/SKILL.md`, not flat `.claude/skills/<name>.md`.**
+  Claude Code discovers a project skill only as a directory containing `SKILL.md`, and the
+  **directory name is the invocable command name**
+  ([docs](https://code.claude.com/docs/en/skills.md)). Every skill this project has ever
+  emitted to a Claude target was flat, and therefore **never loaded** — `/recall` and
+  `/code-recall` did not exist in any bridged session. The memory index and code index both
+  worked fine from the CLI the whole time; nothing could reach them.
+  The failure was silent by construction: the retrieval layer's `non-blocking-file-read-then-search`
+  contract degrades to grep without warning, so an unreachable index and a working one produce
+  identical output — correct answers, more tokens. No error, no test failure. The flat layout
+  was additionally **regression-protected in the wrong direction** by `tests/test_bridge.py`
+  and two consumer bridge baselines. The tests are fixed; `tests/baselines/*-claude-bridge.json`
+  still record the flat path and are **knowingly left stale** — they are `path`+`sha256`
+  snapshots of real consumer repositories, and regenerating them requires a cross-repository
+  bridge run that this change deliberately does not perform. Nothing under `tests/` reads them.
+  All four emitted skills move together (`recall`, `code-recall`, `todo-from-plan`,
+  `parallelize-plan`), plus every tool-doc skill via `output_plan.py` — each of those becomes a
+  genuinely invocable `/tool-<name>`. `agentteams/bridge_skills.py` is carved out of `bridge.py`
+  for the CH-07 ceiling.
+- **The skill slug is now taken from the directory, not the filename.** `render_pipeline.py`
+  derived it from the file stem, which under the new layout is the literal `SKILL` — it would
+  have written `name: SKILL` into every skill's front matter.
+- **Migration is a notice, never a delete.** A stale flat file at a bridged target is reported
+  and left in place. It is inert, and it cannot be told apart from hand-authored content: these
+  skill files carry no `AGENTTEAMS-BRIDGE` fence, the new path's first-time-create fires even
+  under the non-destructive `--bridge-merge`, and the delete would be unbacked.
+  `.claude/skills/recall.md` is the exact path whose user content was destroyed in the
+  2026-05-27 incident (`references/bridge-refresh-safety.md`); shipping an automatic delete for
+  it would regress the incident that document exists to prevent.
+- **The `--bridge-refresh` Pre-Flight inventory was updated in the same change** across all five
+  sites that hard-code the path. Moving the emitter without moving the guard would have left a
+  C-5 clearance check inventorying a path that no longer exists, silently unchecking the real
+  file on a destructive cross-repository write.
+- **`recall` no longer contradicts the agent protocols.** It led with `--query-strategy vector`
+  while `navigator`/`quality-auditor` mandate lexical-first with vector as the low-confidence
+  retry, and the CLI defaults to lexical. Now lexical-first, with the sparse-tf-idf caveat
+  stated plainly: `vector` is cosine over sparse tf-idf term vectors, not embeddings
+  (`vector_model_id` is null).
+- **Read-only auditors are no longer told a skill can run a query for them.**
+  `quality-auditor`, `technical-validator`, and `adversarial` declare `tools: Read, Grep, Glob`
+  and were pointed at "the `recall` skill" as an executing affordance. A skill is injected
+  prompt text; it confers no capability. The gate now names `@navigator` — which holds `Bash` —
+  as the real escalation route. **No `tools:` grant was widened** (C-3).
+- **`**/references/code-index/` added to `.gitignore`.** The rule was root-anchored, so a code
+  index built under the explicitly-tracked `.claude/` tree was committable — it embeds absolute
+  machine paths and installed dependency versions.
+
+### changed (the red-team audit moved to weekly, and gained a catch-up for a missed trigger)
+
+- **Cadence: daily → weekly, Mondays 06:41 UTC.** Operator instruction, on cost grounds. Two
+  facts recorded because they change the calculus and were verified rather than assumed: this
+  repository is **public**, so GitHub Actions minutes are not billed; and the audit **spends no
+  tokens at all** — the engine is deterministic Python (38 mechanical probes plus six
+  AST/CSV/regex checks) with no HTTP client, no LLM SDK and no API key. The one component that
+  would need live agents, `tests/redteam/run_harness.py` (W14), is invoked by no workflow and
+  no script. **The coverage cost is near zero regardless:**
+  `tests/test_constitutional_redteam.py` runs the full battery on *every CI run*, so the fast
+  regression net for the 21 closed exploits is CI, not the cron; the cron uniquely provides the
+  phase-6 self-audit and the dated artifact trail. Reverting is one line.
+- **New `redteam-audit-catchup.yml` — hourly retry when the scheduled run never happened.**
+  The audit runs on GitHub-hosted runners, so no local machine being off can stop it; but
+  GitHub documents that scheduled workflows may be **delayed or dropped** under load, and
+  **disables them after 60 days of repository inactivity**. Both are silent, which is worse
+  than the machine-off case. The guard fires hourly on the scheduled day, asks whether a run
+  has *completed* since the weekly boundary, and dispatches one if not. It self-terminates.
+- **Three decisions carry the risk, each with a mutation-tested contract test:**
+  **"Ran" means `status: completed`, never `conclusion: success`** — the audit exits `1` on
+  findings and `2` on a broken harness and both mean it ran, so a conclusion-keyed guard would
+  re-fire 17 times and post 17 issue comments on any day with a real finding, turning a working
+  alarm into noise. **It fails open** — an unusable API answer runs the audit, because "I could
+  not tell whether it ran" resolving to "it must have run" is indeterminate read as a pass,
+  relocated into the thing that decides whether a security audit happens at all. **It writes no
+  state** — the verdict is GitHub's own run history plus the wall clock, since a "last run"
+  marker is a cursor that once stale suppresses every future audit.
+- **What the catch-up cannot fix, stated rather than papered over:** the 60-day inactivity
+  disable stops the guard as surely as the audit — a guard cannot fire to report that guards
+  are not firing.
+- `scripts/run_daily_redteam_audit.sh` → **`scripts/run_redteam_audit.sh`**. A script whose
+  name asserts a cadence it no longer has is stale content in the most load-bearing place
+  there is (Rule 7), and a new test fails if any live surface still calls the audit daily.
+
+
+### added (the red-team audit became a standing daily check, and one that audits itself)
+
+- **`agentteams --redteam` — a standing red-team audit on a daily cadence.** The 2026-08-06
+  constitutional audit found and closed 21 measured exploits, but it was a one-off, and the
+  *process* around it failed four times — each failure caught late, by accident, or only when
+  the operator asked a pointed question. This turns the audit into a scheduled check
+  (`.github/workflows/redteam-audit.yml`, 06:41 UTC daily; driver
+  `scripts/run_daily_redteam_audit.sh`) and turns those four failures into mechanical checks.
+  Engine: `agentteams/redteam/`. Procedure: `references/redteam-audit.procedure.md`.
+- **Phase 6 — the audit evaluates the red team, not just the target.** Six checks, each with a
+  test proving it *fires* and a second proving it stays silent, because a self-audit that
+  cannot fail is the exact defect it was written to catch:
+  **F-1** every verifier has a sensitivity test and a negative control;
+  **F-2** every guard reaches every call site, measured per *branch* (both `emit_all` sites
+  live in one function, so a function-level rule sees one host and passes);
+  **F-3** no hand-rolled workspace enumeration, descriptor lookup, or `.git` status check in
+  fleet-consuming code;
+  **F-4** every count carries the population it was computed over, from a canonical
+  enumerator;
+  **F-5** every probe whose outcome *or normalised evidence* changed is re-validated for
+  intent;
+  **F-6** every accepted weakness has a named reason, and a probe that now defends loses its
+  exemption.
+- **F-1 found four controls with no sensitivity test at all**, now written in
+  `tests/test_redteam_verifiers.py`: `integrity.verify` — the hash manifest over every *other*
+  control — had none; `security_gate.check_clearance`, added specifically so inspecting a
+  clearance would not spend it, had nothing pinning that property; `scan._check_line` and
+  `scan._check_injection` were exercised only through `scan_content`, so a regression in
+  either could be masked by a change in the caller.
+- **Three exit codes, kept distinguishable.** 0 clean, 1 findings, 2 **harness broken** — a
+  failed control probe, an unimportable probe module, a corpus claim that no longer matches
+  the scanner, a run that touched the live agent tree, or a death by traceback. A battery
+  whose controls fail reports "no exploits" exactly as loudly as one that found none.
+  Indeterminate is not a pass, and code 2 outranks code 1.
+- **`agentteams/redteam/realcopy.py` — attack the real agent infrastructure, in an isolated
+  copy of it.** Synthetic fixtures measure each control against inputs its author imagined.
+  This snapshots the genuine `.github/agents/` and `.claude/agents/` into a temp root, attacks
+  that, and asserts afterwards — as a git *delta*, not an absolute cleanliness check — that
+  the live tree is byte-identical. `--update --merge` is deliberately **not** used as the
+  restore: probe `C3` measured that an escalated capability grant *survives* it (front matter
+  cannot be fenced), `D3` that deleting fence markers makes the merge refuse to write at all,
+  and `D4` that renaming a fence keeps the weakened body alongside the real one. The merge is
+  instead a *measurement*: `classify_restorability` reports each mutation as `RESTORED`,
+  `PRESERVED` or `REFUSED`.
+- **`redteam-methodology.reference.template.md` ships with every generated team**, carrying
+  the seven phases, the T0/T1/T2 tier model, the outcome classes and the six failure modes.
+  Delivered as an extension to `@adversarial` rather than a 31st agent: the judgment work is
+  *"does this control actually measure what it claims"*, which is presupposition critique
+  applied to a control. Not added to `_TEMPLATE_AUTHORITATIVE_FENCES` — the documented bar
+  there is "the project has no legitimate reason to extend its body", and a downstream project
+  plainly has a reason to add its own probes.
+- **The accepted-weakness list moved from a Python literal to
+  `references/redteam-accepted-weaknesses.csv`**, so the standing suite and the daily audit
+  read one ledger instead of two. `tests/test_constitutional_redteam.py` keeps all four of its
+  assertions and gains an anti-vacuity check: an empty or unreadable ledger makes the strictest
+  assertion *pass*, so the ledger being present and substantive is now asserted directly.
+- **`agentteams/integrity.py` covers the phase-6 check modules**, and
+  `tests/test_redteam_integrity_coverage.py` pins the membership list — nothing referenced
+  `ENFORCEMENT_MODULES` before, so an entry could be deleted and every remaining hash would
+  still verify clean.
+
+
+### fixed (the audit backlog cleared, and two standing checks so it cannot reopen)
+
+- **`docs_src/cli-reference.md`: 71/90 → 90/90.** The page opened by claiming it documented
+  *all* flags while missing 19 — including `--pin-templates` (the S4.6 trust root) and
+  `--reconcile-front-matter` (which gates a capability-grant change under C-3). Four new
+  sections carry them: Code & API Index, Generated Maps and Git Hooks, Output Safety /
+  Template Trust / Front-Matter Reconciliation, and Goose Source/Model Switch. The Synopsis
+  block was 19 short too.
+- **`README.md` acknowledged `agents-md`.** The framework appeared **zero times** in the
+  README while being a first-class registry entry documented on the site — so the landing
+  page and the docs contradicted each other on what the tool supports. Added to the support
+  table, the `--framework` choices and the default-locations list. The CLI block no longer
+  claims to be `agentteams --help` output: it is labelled "Most-used options" and points at
+  the complete surface, because a curated subset presented as verbatim `--help` gives a reader
+  no signal that it is partial. The structure tree showed 9 modules for a 76-module package
+  and omitted four subpackages.
+- **`api-reference/cli.md` — the page documenting the CLI carve was behind the carve.** It
+  cited a two-entry `LENGTH_ALLOWLIST` that is now **empty** and four line counts that were
+  all wrong, and its module map was missing six modules including `standalone_modes.py`, the
+  direct product of the refactor it narrates. Line counts are now a pointer to `wc -l` rather
+  than restated — restating them is what went stale.
+- **Seven pages that build and deploy were reachable from no navigation.** `interoperability.md`
+  was the sharp one: three pages send readers to a "dedicated Interoperability tab" that did
+  not exist. `template-pins` and `front-matter-reconcile` compounded the flag gap — both
+  features were missing from the CLI docs *and* off the nav, so both were undiscoverable.
+  All 57 API pages are now linked from the overview, whose own coverage-gap list was also
+  stale (claimed 14; the ratchet says 20).
+- **Two standing checks, both seeded EMPTY.** `test_cli_reference_flag_parity.py` and
+  `test_docs_nav_completeness.py`. The empty seed is the point: writing the docs first is what
+  let the ratchets start at zero instead of enshrining the debt in the instrument meant to
+  retire it. Nav exclusions are **derived** by scanning for `--8<--` snippet includes, never
+  declared, with a guard test asserting the scan still finds something — otherwise a silent
+  regression would push snippet targets into a declared exclusion list and lose the property.
+- **Bridge Tier-1 drift: 3 → 0** (`--stale-check --self`); Tier-2 advisory 45 → 37.
+  **An ordering defect found by running it:** the remediation plan sequenced the bridge
+  refresh *before* `--self --update`, which rewrites the very tree the bridge manifests
+  digest. The Tier-1 count went 3 → 0 → 3 → 0 before the order was corrected.
+  `run_daily_bridge_maintenance.sh` already encodes the right order; the plan did not copy it.
+- **The self brief named three paths that do not exist** — `primary_output_dir: "src/"`,
+  `figures_dir: "docs/figures/"`, and a null `reference_db_path` while the rendered table
+  named `docs/` as the reference database. Constitutional Rule 5 pointed agents at a
+  directory of generated HTML.
+- Generated `--recipe-check` output is now gitignored — it was untracked but *not* ignored,
+  so the next `git add -A` would have committed a build artifact (Rule 4).
+
+### known (logged to `references/agentteams-remediation-log.csv`, not fixed here)
+
+- **`--update --merge` does not propagate brief placeholder changes to fenced regions.** After
+  the three path fields above were corrected, the run reported "No structural or
+  template-content changes detected" and left the fence showing the old values. This is not a
+  stale-manifest artifact: `analyze.build_manifest` re-read from disk and resolved the new
+  values correctly, so the loss is downstream of analyze, in the drift/merge decision — which
+  appears to compare template content and structure but not resolved placeholder values. The
+  operator sees a successful run and a silently unchanged file.
+- **The `tone_and_style` template hardcodes agent names.** `@post-production-auditor`,
+  `@module-doc-validator` and `@module-doc-author` are named with no roster parameterisation,
+  so every generated team is told about teammates it may not have. Fixing it touches every
+  generated team plus the template ledger and the unfenced-constraint ratchet.
+
+### added (a documentation-refresh procedure, and a trigger that cannot latch itself off)
+
+- **The 2026-08-06 staleness audit found one pattern, not a list of defects.** Every
+  documentation surface with a standing check was current — `agentteams.1` at 90/90 flags
+  because CI diffs it, zero stale API-reference pages, zero broken internal links. Every
+  surface without one had drifted: `docs_src/cli-reference.md` claims "All flags" and is
+  **19 of 90 short**; `README.md` documents 37 of 90 and omits the `agents-md` framework
+  entirely; `api-reference/cli.md` cites a `LENGTH_ALLOWLIST` that is now empty and four
+  line counts that are all wrong. Report:
+  `references/plans/documentation-staleness-audit-2026-08-06.report.md`.
+- **`references/documentation-refresh.procedure.md`** — the per-document procedure. Stage 1
+  is mechanical and scripted (man-page regen, flag parity, API parity, nav completeness,
+  link check, `--stale-check`, fenced-file regeneration via the brief). Stage 2 is authored
+  and routes each surface to the agent that owns it, against the authority it must match.
+  A firing trigger with a clean Stage 1 and nothing in Stage 2 is a **legitimate no-op** —
+  the procedure says so explicitly, because a cosmetic commit to reset the clock is exactly
+  the metric-gaming the audit warned about.
+- **`scripts/docs_freshness_watch.py`** — fires when `docs_age > 24h AND src_age <= 24h`.
+  Both sets are derived from `git ls-files` by what a path *is*; a guide added tomorrow is
+  watched tomorrow. stdlib-only and imports nothing from the package, so a dependency
+  failure cannot take the watcher down. Advisory: **always exits 0** except under opt-in
+  `--check`, the same instrument class as `check_session_obligations.py`.
+- **The reliability property is that the verdict is a pure function of git history and the
+  clock.** No cursor, no marker commit, no cache participates in it — so a dropped,
+  cancelled or crashed run has *zero* effect on the next one, and an unmerged remediation
+  cannot silence anything because the docs are still stale. Three prohibitions are asserted
+  by tests rather than asked for in a comment: no `cancel-in-progress`, no state file read
+  back by a later run, reporting steps stay `if: always()`. `git` failing yields
+  **indeterminate**, routed to a distinct "watcher broken" issue — never mapped onto "docs
+  are fine".
+- **Five trigger channels across three mechanisms**, two of them load-bearing rather than
+  redundant: `push` catches `src_age` dropping to 0 while `docs_age` is already past the
+  window; the 6h `cron` catches `docs_age` *crossing* the window with no new push, which
+  push cannot observe at all. Plus `workflow_dispatch`, a third execution path in
+  `run_daily_bridge_maintenance.sh`, and `docs-freshness-watchdog.yml` on a separate cron
+  for the case the watcher stops running entirely. Nothing watches the watchdog; that
+  residual is stated in the procedure rather than papered over.
+- **The adversarial pass found a design-killing defect that reading would not have.**
+  `CHANGELOG.md` was in the documentation set — and `changelog-link.yml` forces a changelog
+  edit on nearly every code PR, so it acted as a freshness alibi for every other doc. The
+  first live run showed the signature: both ages 60.18h, both from the same commit.
+  Backtested over 90 days at the real 6h cadence (361 evaluations): **13 firings with it,
+  34 without — 62% of the signal suppressed.** `CHANGELOG.md` is now inert (neither doc nor
+  source), losing nothing, since it is the one doc surface already covered by a failing
+  gate. Eight further findings applied, all recorded in the procedure's audit section.
+- **60 tests** in `tests/test_docs_freshness_watch.py` covering the truth table, both
+  window boundaries, set derivation, idempotence, the write-nothing property, the
+  indeterminate branches, and the three workflow prohibitions.
+
 ### added (standing checks for three things that were only ever found by hand)
 
 - **The suite now names any test that mutates a tracked artifact.** One full run rewrote a
@@ -2094,6 +2348,38 @@ a markdown table already serves adequately.
 
 ### added
 
+- **CH-29 — Script-First Output Discipline: Build and Reuse Reference Files** (new
+  code-hygiene catalog rule). Before producing non-trivial output, an agent should ask
+  whether a script/program would produce it more effectively than manual work; if so,
+  enumerate the languages/libraries needed, build the script, and create/update a
+  `references/ref-<library>-reference.md` file per language/library used so the same
+  research is reused on the current and any similar future task. Extends (does not
+  duplicate) [[CH-27]] (recurring-logic promotion, judged by foreseeable recurrence)
+  and the existing `@tool-doc-researcher`/`detect_reference_tools()` tool-reference
+  system (which only fires for tools pre-declared in `.agentteams/brief.json`) — CH-29
+  fires generically at output-production time regardless of recurrence or
+  pre-declaration. Added to
+  `agentteams/templates/domain/code-hygiene-rules-reference.template.md`, cross-referenced
+  in `unix-philosophy-mapping-reference.template.md`, and wired as an explicit step into
+  `primary-producer.template.md`'s Production Workflow — the one domain agent always
+  included in every generated team regardless of project archetype — so it propagates to
+  new teams and, via `--update --merge`, to existing ones. New regression tests in
+  `tests/test_agent_feature_wiring.py` guard the wiring.
+
+- **Runtime-governance guidance for generated apps that serve LLM output (docs-only;
+  scope boundary + two new guides).** Building the LingoFriend project (an agentteams-generated
+  team) surfaced a class of concern that lives in a *produced application's runtime*, not in the
+  design-time team — which agentteams, being "a generator, not a runtime," does not cover. This
+  release documents that boundary rather than expanding scope into runtime code:
+  a **Design-time vs runtime governance** note in `SECURITY.md` and `README.md`; a new
+  **"Runtime Security for Served Apps"** guide (`docs_src/runtime-security-guide.md` — output-safety
+  gate as a *floor* not moderation, applying "data-not-instructions" to a served app's own runtime
+  prompts, input sanitization + bounds); and a new **"Per-User Runtime Goose Pattern"** guide
+  (`docs_src/goose-runtime-pattern-guide.md` — per-user named-session isolation, and a binding rule
+  to keep latency-critical/interactive paths *off* `goose run`). Both guides are registered in the
+  MkDocs nav and carry LingoFriend reference implementations as illustrative *floors*, not solutions.
+  Docs only — no CLI flags, schemas, or emitted artifacts changed. Ref: LingoFriend handoff
+  `agentteams-runtime-governance` (AT-1/AT-2/AT-3).
 - **Curated OS security-hardening references (Linux, macOS, Windows) that `@security`
   consults for platform targets.** Three new rendered reference templates —
   `references/security-{linux,macos,windows}-hardening.reference.md` — give the agent a

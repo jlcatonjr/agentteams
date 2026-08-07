@@ -14,7 +14,7 @@ def _write_pass_security_decision(output_dir: Path, action: str = "overwrite") -
     refs.mkdir(parents=True, exist_ok=True)
     (refs / "security-decisions.log.csv").write_text(
         "timestamp,requesting_agent,action_reviewed,verdict,conditions,conditions_verified\n"
-        f"2026-04-24T00:00:00Z,test,{action}-001,PASS,,verified\n",
+        f"2026-04-24T00:00:00Z,security,{action}-001,PASS,,verified\n",
         encoding="utf-8",
     )
 
@@ -29,7 +29,7 @@ def _write_freshness_waiver(output_dir: Path, key: str) -> None:
         "expires_at": "2099-01-01T00:00:00Z",
         "max_uses": "10",
         "uses": "0",
-        "approver": "test",
+        "approver": "security",
         "ticket_id": "REMED-1",
         "reason_code": "TEST",
         "conditions_verified": "verified",

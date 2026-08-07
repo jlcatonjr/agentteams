@@ -496,21 +496,40 @@ def _relpath(path: Path, root: Path) -> str:
         return str(path)
 
 
-def _skip_rel(rel: str) -> bool:
-    if any(rel == s or rel.startswith(s) for s in _SKIP_PREFIXES):
+def _skip_rel(rel: str, *, conflict_only: bool = False) -> bool:
+    """Whether ``rel`` is excluded from scanning.
+
+    ``conflict_only`` relaxes ``_SKIP_PREFIXES`` — and only that list. A fixture
+    tree's *references* to past state are expected to age, which is why
+    ``examples/`` and ``workSummaries/`` are skipped; an unresolved merge-conflict
+    triad inside one is never expected and is never suppressible. This module
+    already says so everywhere else (a complete triad is exempt from volatile
+    suppression and from ignore rules); excluding those trees at enumeration was
+    the one place that silently disagreed, and it hid conflict markers in all four
+    ``examples/*/expected/`` fixtures on 2026-08-07.
+
+    ``_PRUNE_DIRS`` is still honoured — backup and vendor trees legitimately hold
+    conflicted copies that are not the working tree's problem.
+    """
+    if not conflict_only and any(rel == s or rel.startswith(s) for s in _SKIP_PREFIXES):
         return True
     parts = set(Path(rel).parts)
     return bool(parts & _PRUNE_DIRS)
 
 
-def _iter_scan_files(root: Path, git: GitRunner = fleet._git) -> list[Path]:
-    """Tracked files via ``git ls-files`` in a work-tree; else a pruned walk."""
+def _iter_scan_files(
+    root: Path, git: GitRunner = fleet._git, *, conflict_only: bool = False
+) -> list[Path]:
+    """Tracked files via ``git ls-files`` in a work-tree; else a pruned walk.
+
+    ``conflict_only`` widens the sweep to fixture/summary trees; see ``_skip_rel``.
+    """
     files: list[Path] = []
     if fleet._is_git_repo(root):
         out = _git_out(git, root, "ls-files")
         for rel in (out or "").splitlines():
             rel = rel.strip()
-            if not rel or _skip_rel(rel):
+            if not rel or _skip_rel(rel, conflict_only=conflict_only):
                 continue
             p = root / rel
             if p.is_file():
@@ -520,7 +539,7 @@ def _iter_scan_files(root: Path, git: GitRunner = fleet._git) -> list[Path]:
         if not p.is_file():
             continue
         rel = _relpath(p, root)
-        if _skip_rel(rel):
+        if _skip_rel(rel, conflict_only=conflict_only):
             continue
         files.append(p)
     return files

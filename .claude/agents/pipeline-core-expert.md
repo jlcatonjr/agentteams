@@ -1,7 +1,7 @@
 ---
 name: Pipeline Core (ingest → analyze → render → emit) Expert — AgentTeamsModule
 description: "Component expert for Pipeline Core (ingest → analyze → render → emit) in AgentTeamsModule — prepares Component Briefs, reviews drafts against brief checklist, approves deliverables"
-allowed-tools: Read, Grep, Glob, Task
+tools: Read, Grep, Glob, Task
 ---
 
 <!--

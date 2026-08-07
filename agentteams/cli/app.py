@@ -25,6 +25,7 @@ from agentteams.cli.commands import (
     _run_stale_check,
     _run_stale_restore,
     _run_verify_backup,
+    _run_redteam,
     _run_verify_integrity,
     _run_verify_waivers,
 )
@@ -59,7 +60,7 @@ def _deprecated_build_team_entry(argv: list[str] | None = None) -> int:
     return main(argv)
 
 
-def main(argv: list[str] | None = None) -> int:
+def main(argv: list[str] | None = None, *, migrate_exemption: bool = False) -> int:
     """CLI entry point.
 
     The ``--dry-run --json`` stdout contract is enforced here rather than deeper in the pipeline.
@@ -81,13 +82,17 @@ def main(argv: list[str] | None = None) -> int:
     parser = _build_parser()
     args = parser.parse_args(argv)
     _validate_option_combinations(parser, args)
-    return run_with_json_stdout(_main_dispatch, args, parser, argv)
+    return run_with_json_stdout(
+        _main_dispatch, args, parser, argv, migrate_exemption=migrate_exemption
+    )
 
 
 def _main_dispatch(
     args: argparse.Namespace,
     parser: argparse.ArgumentParser,
     argv: list[str] | None,
+    *,
+    migrate_exemption: bool = False,
 ) -> int:
     import build_team  # lazy: resident helpers (events/migrate/etc.) stay in build_team
 
@@ -164,6 +169,14 @@ def _main_dispatch(
     # --verify-integrity / --verify-backup: standalone read-only integrity
     # checks (no description/generation needed). The exit code IS the verdict.
     # -----------------------------------------------------------------------
+    # -----------------------------------------------------------------------
+    # --redteam: the standing red-team audit. Read-only against the repository;
+    # writes only under the report dir. Dispatched before the generation
+    # pipeline because it needs no description and renders no templates.
+    # -----------------------------------------------------------------------
+    if getattr(args, "redteam", False) or getattr(args, "accept_probe_baseline", False):
+        return _run_redteam(args)
+
     if getattr(args, "verify_integrity", False):
         return _run_verify_integrity(args)
     if getattr(args, "verify_backup", None) is not None:
@@ -417,4 +430,6 @@ def _main_dispatch(
     if not args.description:
         parser.error("--description is required (or use --self for self-maintenance)")
 
-    return run_generate(args, strict_manual_placeholders)
+    return run_generate(
+        args, strict_manual_placeholders, migrate_exemption=migrate_exemption
+    )

@@ -855,7 +855,7 @@ def build_security_placeholders(
     # write-side call is a bonus runtime signal, not a hard gate.
     _validate_vuln_watch_payload(json_payload, context="write")
 
-    return {
+    placeholders = {
         "SECURITY_DATA_GENERATED_AT": generated_at,
         "SECURITY_SOURCE_REGISTRY": source_registry,
         "SECURITY_CURRENT_THREATS_SUMMARY": threat_summary,
@@ -868,3 +868,18 @@ def build_security_placeholders(
         "SECURITY_DATA_TTL_HOURS": "24",
         "SECURITY_VULNERABILITY_WATCH_JSON": json.dumps(json_payload, indent=2),
     }
+
+    # Bind the freshness CLAIM to the DATA it describes (audit W10 / probe A10). Before this,
+    # `SECURITY_DATA_GENERATED_AT` was the only thing the gate authenticated, so rewriting that
+    # one string relabelled a months-old snapshot as fresh and the gate passed. With a digest,
+    # relabelling additionally requires regenerating the digest — which means actually having
+    # the data.
+    #
+    # Computed LAST, from the assembled dict, so it certifies exactly what ships rather than an
+    # intermediate. The function is IMPORTED from the verifier rather than reimplemented here
+    # (CH-05): two copies of a digest definition drift, and the copy that drifts is the one that
+    # silently starts passing. Imported locally to keep this module off the CLI import path.
+    from agentteams.cli.security_gate import security_intelligence_digest
+
+    placeholders["SECURITY_DATA_PAYLOAD_DIGEST"] = security_intelligence_digest(placeholders)
+    return placeholders

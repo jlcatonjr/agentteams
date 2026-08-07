@@ -38,9 +38,21 @@ The following checks **must all pass** before invoking `--bridge-refresh` agains
 
 ```bash
 # claude target:
-for f in CLAUDE.md .claude/README.md .claude/agent-team.md .claude/quickstart-snippet.md .claude/skills/recall.md; do
+# Skills are directory-per-skill (`<name>/SKILL.md`) — that is the only shape
+# Claude Code loads. A legacy flat `.claude/skills/recall.md` from a pre-2026-08-07
+# bridge run is inert and is NEVER deleted automatically (it carries no
+# AGENTTEAMS-BRIDGE fence, so hand-authored content is indistinguishable from
+# pristine — see the 2026-05-27 incident above). Inventory it so the operator sees it.
+for f in CLAUDE.md .claude/README.md .claude/agent-team.md .claude/quickstart-snippet.md \
+         .claude/skills/recall/SKILL.md .claude/skills/code-recall/SKILL.md \
+         .claude/skills/todo-from-plan/SKILL.md .claude/skills/parallelize-plan/SKILL.md \
+         .claude/skills/recall.md .claude/skills/code-recall.md \
+         .claude/skills/todo-from-plan.md .claude/skills/parallelize-plan.md; do
   [ -f "$target_project/$f" ] && echo "PRESENT: $f"
 done
+# Tool-doc skills are per-project (`.claude/skills/tool-<name>/SKILL.md`, emitted by
+# output_plan.py) — enumerate them too; --bridge-refresh overwrites what it emits.
+ls -d "$target_project"/.claude/skills/*/ 2>/dev/null | sed 's|.*|PRESENT (skill dir): &|'
 # goose target (AGENTS.md is SHARED across tools — treat its presence as high-risk):
 # .goose/recipes/bridge-orchestrator.yaml is a bridge-OWNED generated recipe:
 # regenerated on every --bridge-merge AND --bridge-refresh (so newly-selected MCP

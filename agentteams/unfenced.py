@@ -174,6 +174,73 @@ def _detect_deleted_constraints(new_rendered: str, existing_on_disk: str) -> lis
     return notices
 
 
+def detect_deleted_fenced_constraints(new_rendered: str, existing_on_disk: str) -> list[str]:
+    """Report template rules from FENCED regions that are absent from the deployed file.
+
+    The complement of :func:`_detect_deleted_constraints`, which deliberately checks unfenced
+    text only, on the reasoning that "fenced content is restored by the merge anyway, so its
+    absence is self-healing and not worth a notice".
+
+    That reasoning holds while the fence markers are intact. It fails in exactly one case, and
+    it is the case an attacker picks: **delete the markers along with the rule.** The merge then
+    takes the legacy-file path, refuses with a parse error, restores nothing — and says nothing
+    about the constitutional rule that went missing. Measured 2026-08-06 as probe D3, where
+    "HALT is final" was deleted with its fence and `deleted_constraint_notices` came back empty.
+
+    Scoped to that refusal path by its caller, not applied to ordinary merges: on a normal merge
+    the original reasoning is still correct, and firing there would produce a notice on every
+    run for content the merge is about to restore anyway — which is how a notice gets muted.
+
+    Args:
+        new_rendered: Freshly rendered file content (the template's view).
+        existing_on_disk: Current on-disk content.
+
+    Returns:
+        One notice per missing fenced rule, capped like its unfenced counterpart. Empty when
+        nothing is missing.
+    """
+    haystack = " ".join(existing_on_disk.split())
+
+    missing: list[str] = []
+    for raw_line in _fenced_lines(new_rendered):
+        line = " ".join(raw_line.split())
+        if not is_trackable_constraint_line(raw_line):
+            continue
+        if not (CONSTRAINT_BEARING_RE.search(line) or NUMBERED_RULE_RE.match(line)):
+            continue
+        if line not in haystack:
+            missing.append(line)
+
+    if not missing:
+        return []
+    shown = missing[:3]
+    notices = [
+        f"deleted constitutional rule: fenced template text {m[:110]!r} is absent from this "
+        f"file, and its fence markers are gone too — so the merge cannot restore it"
+        for m in shown
+    ]
+    if len(missing) > len(shown):
+        notices.append(
+            f"deleted constitutional rule: {len(missing) - len(shown)} further fenced "
+            f"constraint-bearing line(s) are also absent"
+        )
+    return notices
+
+
+def _fenced_lines(content: str):
+    """Yield each line of *content* that lies INSIDE a fence. The complement of unfenced_lines."""
+    in_fence = False
+    for line in content.splitlines():
+        if _FENCE_BEGIN_RE.search(line):
+            in_fence = True
+            continue
+        if _FENCE_END_RE.search(line):
+            in_fence = False
+            continue
+        if in_fence:
+            yield line
+
+
 def unfenced_lines(content: str):
     """Yield each line of *content* that lies outside every fence and outside the front matter.
 

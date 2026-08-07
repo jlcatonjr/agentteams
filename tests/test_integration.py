@@ -75,7 +75,11 @@ def _run_pipeline(brief_path: Path, tmp_path: Path, framework: str = "copilot-vs
         elif rel_path.startswith("../skills/") or "/skills/" in rel_path:
             from pathlib import Path as _Path
             file_type = "skill"
-            content = adapter.render_skill_file(content, _Path(rel_path).stem, manifest)
+            # Mirrors render_pipeline.py: skills are `<slug>/SKILL.md`, so the slug is
+            # the DIRECTORY name. Using the file stem would yield the literal "SKILL".
+            _sp = _Path(rel_path)
+            _slug = _sp.parent.name if _sp.stem == "SKILL" else _sp.stem
+            content = adapter.render_skill_file(content, _slug, manifest)
         else:
             from pathlib import Path as _Path
             slug = _Path(rel_path).stem.replace(".agent", "")
@@ -598,7 +602,7 @@ def test_update_restores_missing_expected_standard_file(tmp_path, monkeypatch):
         "expires_at": "2099-01-01T00:00:00Z",
         "max_uses": "5",
         "uses": "0",
-        "approver": "test-harness",
+        "approver": "security",
         "ticket_id": "INT-1",
         "reason_code": "TEST",
         "conditions_verified": "verified",
@@ -643,7 +647,7 @@ def test_update_restores_missing_expected_standard_file(tmp_path, monkeypatch):
     decision_log = refs / "security-decisions.log.csv"
     decision_log.write_text(
         "timestamp,requesting_agent,action_reviewed,verdict,conditions,conditions_verified\n"
-        "2026-05-03T00:00:00Z,test-harness,overwrite,PASS,,verified\n",
+        "2026-05-03T00:00:00Z,security,overwrite,PASS,,verified\n",
         encoding="utf-8",
     )
 
@@ -699,7 +703,7 @@ def test_blocked_overwrite_update_creates_no_backup(tmp_path, monkeypatch, capsy
         "expires_at": "2099-01-01T00:00:00Z",
         "max_uses": "5",
         "uses": "0",
-        "approver": "test-harness",
+        "approver": "security",
         "ticket_id": "INT-2",
         "reason_code": "TEST",
         "conditions_verified": "verified",
@@ -874,7 +878,7 @@ def test_stale_fingerprint_with_identical_content_does_not_rerender(tmp_path, mo
     waiver = {
         "timestamp": "2026-05-03T00:00:00Z", "waiver_id": "waiver-freshness-003",
         "action_reviewed": "security-intel-freshness", "expires_at": "2099-01-01T00:00:00Z",
-        "max_uses": "9", "uses": "0", "approver": "test-harness", "ticket_id": "INT-3",
+        "max_uses": "9", "uses": "0", "approver": "security", "ticket_id": "INT-3",
         "reason_code": "TEST", "conditions_verified": "verified", "signature": "",
     }
     payload = "|".join([
@@ -902,7 +906,7 @@ def test_stale_fingerprint_with_identical_content_does_not_rerender(tmp_path, mo
     # Allow the destructive overwrite gate.
     (refs / "security-decisions.log.csv").write_text(
         "timestamp,requesting_agent,action_reviewed,verdict,conditions,conditions_verified\n"
-        "2026-05-03T00:00:00Z,test-harness,overwrite,PASS,,verified\n",
+        "2026-05-03T00:00:00Z,security,overwrite,PASS,,verified\n",
         encoding="utf-8",
     )
 
@@ -971,7 +975,7 @@ def test_stale_fingerprint_converges_in_two_updates(tmp_path, monkeypatch, capsy
     waiver = {
         "timestamp": "2026-05-03T00:00:00Z", "waiver_id": "waiver-freshness-p0heal",
         "action_reviewed": "security-intel-freshness", "expires_at": "2099-01-01T00:00:00Z",
-        "max_uses": "9", "uses": "0", "approver": "test-harness", "ticket_id": "P0-HEAL",
+        "max_uses": "9", "uses": "0", "approver": "security", "ticket_id": "P0-HEAL",
         "reason_code": "TEST", "conditions_verified": "verified", "signature": "",
     }
     payload = "|".join([
@@ -998,7 +1002,7 @@ def test_stale_fingerprint_converges_in_two_updates(tmp_path, monkeypatch, capsy
 
     (refs / "security-decisions.log.csv").write_text(
         "timestamp,requesting_agent,action_reviewed,verdict,conditions,conditions_verified\n"
-        "2026-05-03T00:00:00Z,test-harness,overwrite,PASS,,verified\n",
+        "2026-05-03T00:00:00Z,security,overwrite,PASS,,verified\n",
         encoding="utf-8",
     )
 
@@ -1033,7 +1037,7 @@ def test_stale_fingerprint_converges_in_two_updates(tmp_path, monkeypatch, capsy
     # row because the first --update consumed it.
     (refs / "security-decisions.log.csv").write_text(
         "timestamp,requesting_agent,action_reviewed,verdict,conditions,conditions_verified\n"
-        "2026-05-03T00:00:00Z,test-harness,overwrite,PASS,,verified\n",
+        "2026-05-03T00:00:00Z,security,overwrite,PASS,,verified\n",
         encoding="utf-8",
     )
     capsys.readouterr()
@@ -1122,7 +1126,7 @@ def test_check_parity_with_update_dry_run(tmp_path, monkeypatch, capsys):
     waiver = {
         "timestamp": "2026-05-03T00:00:00Z", "waiver_id": "waiver-parity-001",
         "action_reviewed": "security-intel-freshness", "expires_at": "2099-01-01T00:00:00Z",
-        "max_uses": "9", "uses": "0", "approver": "test-harness", "ticket_id": "PARITY",
+        "max_uses": "9", "uses": "0", "approver": "security", "ticket_id": "PARITY",
         "reason_code": "TEST", "conditions_verified": "verified", "signature": "",
     }
     payload = "|".join([
@@ -1219,7 +1223,7 @@ def test_initialization_writes_baseline_inventory_artifacts(tmp_path, monkeypatc
         "expires_at": "2099-01-01T00:00:00Z",
         "max_uses": "5",
         "uses": "0",
-        "approver": "test-harness",
+        "approver": "security",
         "ticket_id": "INT-2",
         "reason_code": "TEST",
         "conditions_verified": "verified",
@@ -1322,7 +1326,7 @@ def test_claude_operational_tool_becomes_skill(tmp_path):
         pytest.skip("data-pipeline example not found")
     _run_pipeline(brief, tmp_path, framework="claude")
     # Skill lands one level above the agents dir (../skills/), mirroring CLAUDE.md.
-    skill = tmp_path.parent / "skills" / "tool-postgresql.md"
+    skill = tmp_path.parent / "skills" / "tool-postgresql" / "SKILL.md"
     assert skill.exists(), "operational tool must be emitted as a skill"
     text = skill.read_text(encoding="utf-8")
     assert text.startswith("---\nname: tool-postgresql\n")

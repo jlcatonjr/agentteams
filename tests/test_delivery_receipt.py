@@ -44,7 +44,7 @@ def _seed_waiver_and_decision(output_dir: Path, monkeypatch, *, ticket: str) -> 
         "timestamp": "2026-05-03T00:00:00Z", "waiver_id": f"waiver-{ticket}",
         "action_reviewed": "security-intel-freshness",
         "expires_at": "2099-01-01T00:00:00Z",
-        "max_uses": "9", "uses": "0", "approver": "test-harness",
+        "max_uses": "9", "uses": "0", "approver": "security",
         "ticket_id": ticket, "reason_code": "TEST",
         "conditions_verified": "verified", "signature": "",
     }
@@ -71,7 +71,7 @@ def _seed_pass_decision(output_dir: Path) -> None:
     refs.mkdir(parents=True, exist_ok=True)
     (refs / "security-decisions.log.csv").write_text(
         "timestamp,requesting_agent,action_reviewed,verdict,conditions,conditions_verified\n"
-        "2026-05-03T00:00:00Z,test-harness,overwrite,PASS,,verified\n",
+        "2026-05-03T00:00:00Z,security,overwrite,PASS,,verified\n",
         encoding="utf-8",
     )
 

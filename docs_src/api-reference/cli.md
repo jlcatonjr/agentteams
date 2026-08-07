@@ -16,9 +16,14 @@ carved into this package. `build_team.py` **re-exports** what it moved, so
 carve was behaviour-preserving by construction, and the re-exports are what let the
 existing test suite pin that.
 
-Two modules remain on the `LENGTH_ALLOWLIST`: `artifacts.py` (976) and `generate.py`
-(998) sit just under the ceiling, and `app.py` came down from 1174 to 388 when the
-pipeline moved out.
+The `LENGTH_ALLOWLIST` in `tests/test_code_hygiene.py` is now **empty** — every module in
+this package is under the 1000-line CH-07 ceiling on its own merits. `app.py` came down from
+1174 to 420 when the pipeline moved out, and `generate.py` from 979 to 917 when the
+standalone modes moved to `standalone_modes.py`.
+
+Line counts are deliberately not restated per module here: they change on every carve, and a
+doc that hard-codes them goes stale the way this paragraph did. Run
+`wc -l agentteams/cli/*.py` for current figures.
 
 ## Module map
 
@@ -35,6 +40,12 @@ pipeline moved out.
 | `schema_cache.py` | Shared JSON-Schema validation plus a content-hash cache, so re-validating unchanged bytes is free. |
 | `goose_switch.py` | Glue for `--goose-source` / `--goose-model` / `--goose-show`. |
 | `recipe_check.py` | Standalone structural validator for Goose recipe YAML. |
+| `standalone_modes.py` | The "do one thing and exit" modes carved out of `generate.py`: restore-backup, scan-security, check-budget, template pinning, and the retrieval utilities. They were never part of the generate pipeline. |
+| `output_target.py` | Resolves and validates the output directory, including the foreign-output refusal behind `--allow-foreign-output`. |
+| `post_emit_checks.py` | Checks that run after the write phase and cannot change its outcome. |
+| `code_index_artifacts.py` | Writers for the code & API index cache (`references/code-index/`, gitignored). |
+| `json_mode.py` | `--json` output shaping. |
+| `exit_codes.py` | The named exit-code constants, so a status is set in one place and read everywhere. |
 
 ## Two behaviours worth knowing when reading this package
 

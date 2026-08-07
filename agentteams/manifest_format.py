@@ -268,7 +268,8 @@ def _collect_tool_metadata_manual_required(
                 slug = spec["slug"]
                 base = slug[len("tool-"):] if slug.startswith("tool-") else slug
                 if framework == "claude":
-                    rel_path = f"../skills/{slug}.md"
+                    # Directory-per-skill: Claude Code loads only `<name>/SKILL.md`.
+                    rel_path = f"../skills/{slug}/SKILL.md"
                     doc_label = "skill document"
                 else:
                     rel_path = f"references/ref-{base}-reference.md"
@@ -434,7 +435,7 @@ def _format_unresolved_tool_list(
             slug = spec["slug"]
             base = slug[len("tool-"):] if slug.startswith("tool-") else slug
             if framework == "claude":
-                doc_ref = f"skill `.claude/skills/{slug}.md`"
+                doc_ref = f"skill `.claude/skills/{slug}/SKILL.md`"
             else:
                 doc_ref = f"reference doc `references/ref-{base}-reference.md`"
             lines.append(

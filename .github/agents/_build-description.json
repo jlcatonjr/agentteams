@@ -12,9 +12,9 @@
     "Documentation site sources (docs_src/) and the served book"
   ],
   "output_format": "Python 3.11 modules",
-  "primary_output_dir": "src/",
+  "primary_output_dir": "agentteams/",
   "build_output_dir": "dist/",
-  "figures_dir": "docs/figures/",
+  "figures_dir": "docs_src/book/figures/",
   "existing_project_path": ".",
   "authority_sources": [
     {
@@ -52,7 +52,7 @@
   "pip_package_name": "agentteams",
   "doc_site_config_file": "mkdocs.yml",
   "style_reference": null,
-  "reference_db_path": null,
+  "reference_db_path": "references/",
   "reference_key_convention": "AuthorYear",
   "memory_index_extra_dirs": [
     "agentteams/templates",

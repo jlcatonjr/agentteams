@@ -1,7 +1,7 @@
 ---
 name: Navigator — AgentTeamsModule
 description: "Repository structure navigation, project map maintenance, file location lookups, and dependency queries for AgentTeamsModule"
-allowed-tools: Read, Grep, Glob, Bash
+tools: Read, Grep, Glob, Bash
 ---
 
 <!--
@@ -120,6 +120,8 @@ The **code index** is the structural retrieval layer over *code* — the reposit
 ```bash
 agentteams --query-code "<function, class, API symbol, or capability>" --code-kind all --description .agentteams/brief.json --output .github/agents
 ```
+
+> **Self-maintained repos (agentteams itself):** `.agentteams/brief.json` does not exist there. Use `--self` instead of `--description ... --project . --output ...`; it resolves the brief and the output root together. Everywhere else the form above is correct.
 
 - Filter by label: `--code-kind local` (repo scripts) / `api` (external API modules) / `doc` (API docs). Each hit is tagged `[local-script]` / `[api-module]` / `[api-doc]`.
 - Default strategy is `lexical` (best for identifiers); add `--code-query-strategy vector` for thematic queries.

@@ -1,7 +1,7 @@
 ---
 name: Reference Manager — AgentTeamsModule
 description: "Manages the bibliography and reference database for AgentTeamsModule — CRUD operations, citation verification, anti-fabrication enforcement"
-allowed-tools: Read, Edit, Write, Grep, Glob, Bash(python -m agentteams.research:*)
+tools: Read, Edit, Write, Grep, Glob, Bash(python -m agentteams.research:*)
 ---
 <!-- AGENTTEAMS:BEGIN content v=1 -->
 

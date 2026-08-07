@@ -21,6 +21,7 @@ import argparse
 import json
 import re
 import sys
+import unicodedata
 from collections.abc import Iterable
 from dataclasses import dataclass, field
 from pathlib import Path
@@ -181,12 +182,12 @@ def scan_directory(
 
     Args:
         agents_dir: Path to the .github/agents/ directory.
-        expected_agent_names: When provided, `.agent.md` files whose basename
-            is NOT in this set are treated as orphans from a prior team
-            configuration and skipped. The orphan advisory at
-            build_team.py:1304 surfaces them separately so they remain
-            visible; double-flagging them here only blocks the daily
-            pipeline without adding actionable signal. (T3a.2 v4.)
+        expected_agent_names: When provided, `.agent.md` files whose basename is NOT in
+            this set are reported as `orphan-agent` findings at `medium` severity — and are
+            still scanned. They were skipped entirely until 2026-08-06, which made an
+            injected agent file the one class of agent file the scanner never read (probe
+            B11). `medium` is deliberate: non-blocking under `verdict_for_findings`, so the
+            daily pipeline is not gated on stale-taxonomy leftovers, but no longer silent.
 
     Returns:
         ScanReport with all findings.
@@ -204,18 +205,50 @@ def scan_directory(
     # surfaced when that content was live, so re-flagging them only
     # produces stale-looking false positives.
     # Plan: references/plans/T3a-2-scan-skip-backups-2026-05-25.plan.md
-    files_to_scan = [
-        p for p in files_to_scan
-        if _BACKUP_DIR_NAME not in p.parts
-    ]
+    #
+    # Anchored to the ONE backup root this run would use, not to any directory named
+    # `.agentteams-backups` at any depth. The `_BACKUP_DIR_NAME not in p.parts` form let an
+    # agent with write access create a directory of that name anywhere and drop a payload into
+    # a permanent scanner blind spot (probe B10). The rationale above — "already surfaced when
+    # that content was live" — is only true of the real backup root, which is precisely the
+    # provenance the name alone cannot establish.
+    backup_root = (agents_dir / _BACKUP_DIR_NAME).resolve()
+    kept: list[Path] = []
+    for p in files_to_scan:
+        # No try/except here (CH-24): these paths came from rglob so they exist, and resolve()
+        # is non-strict. The one thing that would still raise is a symlink loop — which is a
+        # real condition worth surfacing, not one to swallow into a skipped file.
+        resolved = p.resolve()
+        if resolved.is_relative_to(backup_root):
+            continue
+        if _BACKUP_DIR_NAME in p.parts:
+            # A backup-named directory somewhere OTHER than the real backup root. Scan it, and
+            # say why it drew attention.
+            report.findings.append(ScanFinding(
+                file=str(p), line=1, category="scanner-evasion", severity="medium",
+                message=(f"directory named {_BACKUP_DIR_NAME!r} outside the run's backup root "
+                         f"({backup_root}) — scanned rather than skipped"),
+                snippet="",
+            ))
+        kept.append(p)
+    files_to_scan = kept
 
-    # T3a.2 v4: drop orphan .agent.md files when the caller provided the
-    # current team's expected agent-name set.
+    # T3a.2 v4: orphan .agent.md files -- present on disk, absent from the current team's
+    # manifest. These used to be dropped from the scan entirely, on the reasoning that the
+    # orphan advisory in build_team already surfaces them. But an INJECTED agent file is
+    # exactly the case least likely to appear in a manifest, so the one class of agent file
+    # most worth scanning was the one class exempted (probe B11). They are scanned now, and
+    # their orphan status is itself reported at `medium` -- non-blocking, so the daily
+    # pipeline still is not gated on stale-taxonomy leftovers, but no longer invisible.
     if expected_agent_names is not None:
-        files_to_scan = [
-            p for p in files_to_scan
-            if not p.name.endswith(".agent.md") or p.name in expected_agent_names
-        ]
+        for p in files_to_scan:
+            if p.name.endswith(".agent.md") and p.name not in expected_agent_names:
+                report.findings.append(ScanFinding(
+                    file=str(p), line=1, category="orphan-agent", severity="medium",
+                    message=("agent file not in the current team manifest — a stale taxonomy "
+                             "leftover, or a file nothing generated"),
+                    snippet="",
+                ))
 
     # Also scan copilot-instructions.md one level up
     instructions = agents_dir.parent / "copilot-instructions.md"
@@ -239,20 +272,29 @@ def scan_content(content: str, filename: str = "<string>") -> list[ScanFinding]:
 
     Args:
         content:  Text content to scan.
-        filename: Filename for reporting purposes.
+        filename: Filename for reporting purposes, and for the provenance decisions in
+            :func:`_is_module_owned_path`. **A path the module does not own gets no
+            exemptions** — the default is strict, so an unknown or synthetic filename cannot
+            inherit the suppressions that exist for this module's own documentation.
 
     Returns:
         List of ScanFinding objects.
     """
     findings: list[ScanFinding] = []
-    in_front_matter = False
-    fm_delims = 0
-    for line_num, line in enumerate(content.splitlines(), start=1):
-        if line.strip() == "---" and fm_delims < 2:
-            fm_delims += 1
-            in_front_matter = fm_delims == 1
-        _check_injection(line, line_num, filename, findings, in_front_matter=in_front_matter)
+    module_owned = _is_module_owned_path(filename)
+    lines = content.splitlines()
+    previous_norm = ""
+    for line_num, line in enumerate(lines, start=1):
+        norm = _normalize_for_matching(line)
+        _check_injection(
+            norm, line_num, filename, findings,
+            in_front_matter=_line_in_front_matter(lines, line_num),
+            module_owned=module_owned,
+            previous_line=previous_norm,
+            raw_line=line,
+        )
         _check_line(line, line_num, filename, findings)
+        previous_norm = norm
     return findings
 
 
@@ -308,6 +350,109 @@ _OPERATIONAL_JSON_NAMES = frozenset({
     "security-vulnerability-watch.json",
 })
 
+#: Directory, relative to the scanned agents dir, where the pipeline writes those files.
+#:
+#: The exemption was keyed on BASENAME and applied via `rglob`, so any file anywhere in the
+#: tree named `memory-index.json` inherited it — an agent with write access could pre-blind the
+#: scanner to its own payload simply by choosing the filename (probe B9, the LLM08
+#: retrieval-poisoning path). Anchoring to the one directory the pipeline actually writes them
+#: to makes the exemption a statement about provenance rather than about spelling.
+_OPERATIONAL_JSON_DIR = "references"
+
+
+def _is_operational_json(file_path: Path, agents_dir: Path) -> bool:
+    """True when *file_path* is a pipeline-written operational JSON file.
+
+    Requires BOTH the known basename AND residence directly in the agents dir's
+    ``references/`` directory. A file that satisfies only one is scanned normally.
+    """
+    if file_path.name not in _OPERATIONAL_JSON_NAMES:
+        return False
+    try:
+        return file_path.resolve().parent == (agents_dir / _OPERATIONAL_JSON_DIR).resolve()
+    except OSError:
+        return False
+
+
+#: Unicode categories stripped before pattern matching. `Cf` is the format-character class —
+#: zero-width space, zero-width joiner, the bidi overrides, the TAG block. None of them render,
+#: all of them break a literal `str.find`, and a model reading the file sees the phrase intact.
+#: Measured 2026-08-06 (probe B3): one U+200B inside "ignore previous instructions" defeated
+#: Rule S-5 entirely.
+_FORMAT_CHAR_CATEGORY = "Cf"
+
+
+def _normalize_for_matching(line: str) -> str:
+    """Return *line* canonicalised for literal pattern matching.
+
+    Two transforms, in order:
+
+    1. **NFKC** — folds compatibility forms (fullwidth Latin, ligatures, styled math letters)
+       onto their plain equivalents, so a payload written in fullwidth characters matches.
+    2. **Format-character removal** — drops every `Cf` codepoint.
+
+    Offsets shift as a result, which is why every caller matches *and* runs its code-span test
+    against this same normalised string. Only the reported snippet comes from the original
+    line, so a finding still quotes what a human would see in the file.
+
+    NFKC deliberately, not NFKD: NFKD would decompose accented characters into base + combining
+    mark, which changes lengths without helping, since no attack in this class depends on it.
+    """
+    normalized = unicodedata.normalize("NFKC", line)
+    return "".join(
+        ch for ch in normalized if unicodedata.category(ch) != _FORMAT_CHAR_CATEGORY
+    )
+
+
+def _line_in_front_matter(lines: list[str], line_num: int) -> bool:
+    """True when 1-indexed *line_num* falls inside a genuine YAML front-matter block.
+
+    Front matter is front matter only when the opening ``---`` is the file's **first line**.
+    The previous implementation counted the first two ``---`` lines appearing anywhere, which
+    a reviewed document controls: two markdown horizontal rules forged a front-matter block,
+    and every identity-override phrase between them was suppressed (probe B5). YAML has no
+    such flexibility — a front-matter block that does not start at byte 0 is not front matter
+    to any parser either, so this is a correctness fix as much as a security one.
+    """
+    if not lines or lines[0].strip() != "---":
+        return False
+    for index in range(1, len(lines)):
+        if lines[index].strip() == "---":
+            return 2 <= line_num <= index          # between the delimiters, exclusive
+    return False
+
+
+#: Path fragments identifying files THIS MODULE authors or ships. Only these inherit the
+#: code-span exemption in :func:`_check_injection`.
+#:
+#: The exemption exists so `security.template.md` does not HALT on its own Rule S-5 text, which
+#: lists every override phrase in backticks. That is legitimate for the module's own
+#: documentation and indefensible as a blanket rule: a 2026-08-06 probe (B1) wrapped a live
+#: payload in backticks and the scanner fell silent. Backticks are formatting — the reading
+#: model still sees the words. So the exemption is now keyed on *who wrote the file* rather
+#: than on *what the text looks like*, and reviewed content from outside the module gets none.
+_MODULE_OWNED_PATH_FRAGMENTS: tuple[str, ...] = (
+    "agentteams/templates/",
+    ".github/agents/",
+    ".claude/agents/",
+    ".github/copilot/",
+)
+
+
+def _is_module_owned_path(filename: str) -> bool:
+    """True when *filename* is a file this module authors, ships, or generates.
+
+    Args:
+        filename: Path as supplied to the scan entry point. Separators are normalised so a
+            Windows path is classified the same way.
+
+    Returns:
+        Whether documentation exemptions apply. Unknown, relative, or synthetic names
+        (``<string>``, ``<stdin>``) return False — strict by default.
+    """
+    normalized = filename.replace("\\", "/")
+    return any(fragment in normalized for fragment in _MODULE_OWNED_PATH_FRAGMENTS)
+
 
 def _match_inside_code_span(line: str, start: int, end: int) -> bool:
     """Return True when [start, end) on *line* lies fully inside a
@@ -343,21 +488,26 @@ def _scan_file(file_path: Path, agents_dir: Path, report: ScanReport) -> None:
     except ValueError:
         rel_path = str(file_path)
 
-    is_operational_json = file_path.name in _OPERATIONAL_JSON_NAMES
-    in_front_matter = False
-    fm_delims = 0
-    for line_num, line in enumerate(content.splitlines(), start=1):
-        if line.strip() == "---" and fm_delims < 2:
-            fm_delims += 1
-            in_front_matter = fm_delims == 1
-        _check_injection(line, line_num, rel_path, report.findings,
-                         in_front_matter=in_front_matter)
+    is_operational_json = _is_operational_json(file_path, agents_dir)
+    module_owned = _is_module_owned_path(rel_path)
+    lines = content.splitlines()
+    previous_norm = ""
+    for line_num, line in enumerate(lines, start=1):
+        norm = _normalize_for_matching(line)
+        _check_injection(
+            norm, line_num, rel_path, report.findings,
+            in_front_matter=_line_in_front_matter(lines, line_num),
+            module_owned=module_owned,
+            previous_line=previous_norm,
+            raw_line=line,
+        )
         _check_line(
             line, line_num, rel_path, report.findings,
             skip_pii_path=is_operational_json,
             skip_entropy=is_operational_json,
             skip_placeholders=is_operational_json,
         )
+        previous_norm = norm
 
 
 #: Rule S-5's literal instruction-override patterns, verbatim from security.template.md. These
@@ -403,54 +553,111 @@ _TIER_CLAIM_PATTERNS: tuple[str, ...] = (
 )
 
 
+def _find_pattern(
+    line: str, pattern: str, *, module_owned: bool
+) -> int:
+    """Return the index of *pattern* in *line*, or -1 when absent or legitimately quoted.
+
+    The code-span exemption applies only to files this module owns. See
+    :data:`_MODULE_OWNED_PATH_FRAGMENTS` for why quoting cannot be trusted in reviewed content.
+    """
+    idx = line.lower().find(pattern)
+    if idx == -1:
+        return -1
+    if module_owned and _match_inside_code_span(line, idx, idx + len(pattern)):
+        return -1
+    return idx
+
+
+def _find_pattern_across_lines(
+    previous_line: str, line: str, pattern: str, *, module_owned: bool
+) -> bool:
+    """True when *pattern* spans the boundary between *previous_line* and *line*.
+
+    Rule S-5 matched per line, so a payload split at a newline — "ignore previous\\ninstructions"
+    — passed cleanly (probe B2). A reading model sees prose reflowed; the scanner saw two
+    innocuous fragments.
+
+    Whitespace is collapsed across the join so any line break, indentation, or list-marker
+    wrapping is normalised away. Only the two-line window is considered: it covers the natural
+    wrap and every observed payload, and widening it would start matching phrases assembled
+    from unrelated paragraphs.
+
+    The "not already on one line" test uses **raw containment**, not :func:`_find_pattern`.
+    Using the latter conflated *absent* with *suppressed*: a module-owned doc that quotes
+    ``ignore previous instructions`` in backticks has the phrase present-but-exempt on one
+    line, `_find_pattern` returns -1 for it, and the join then reported a phantom
+    "split across a line break" on the module's own Rule S-5 text. Raw containment asks the
+    right question — is this pattern whole on either line? — and only a genuine straddle
+    survives it.
+
+    ``module_owned`` deliberately does not suppress a genuine straddle. The
+    instruction-authority reference already forbids a code span wrapping across a line break
+    for exactly this reason, so a real split inside a module-owned file is a formatting defect
+    worth surfacing, not a false positive.
+    """
+    if not previous_line:
+        return False
+    joined = " ".join(f"{previous_line} {line}".split()).lower()
+    if pattern not in joined:
+        return False
+    return pattern not in previous_line.lower() and pattern not in line.lower()
+
+
 def _check_injection(line: str, line_num: int, filepath: str,
-                     findings: list[ScanFinding], *, in_front_matter: bool) -> None:
+                     findings: list[ScanFinding], *, in_front_matter: bool,
+                     module_owned: bool = False, previous_line: str = "",
+                     raw_line: str | None = None) -> None:
     """Flag Rule S-5's literal instruction-override patterns.
 
     Args:
-        line: The line to check.
+        line: The line to check, already Unicode-normalised by
+            :func:`_normalize_for_matching`. Matching and the code-span test both run on this
+            string so their offsets agree.
         line_num: 1-indexed line number.
         filepath: Repo-relative path, for the finding.
         findings: Accumulator, appended in place.
-        in_front_matter: Whether this line is inside a YAML front-matter block, where
+        in_front_matter: Whether this line is inside a genuine YAML front-matter block, where
             identity phrasing is descriptive rather than an override.
+        module_owned: Whether this file is one the module authors or generates, and may
+            therefore quote an override phrase inside a code span without that being an attack.
+        previous_line: The preceding normalised line, for boundary-spanning matches.
+        raw_line: The original, un-normalised line. Used for the reported snippet so a finding
+            quotes what is actually in the file.
     """
-    low = line.lower()
+    snippet_source = raw_line if raw_line is not None else line
+
+    def _report(category_message: str) -> None:
+        findings.append(ScanFinding(
+            file=filepath, line=line_num, category="injection", severity="high",
+            message=category_message, snippet=snippet_source.strip()[:120],
+        ))
+
     for pattern in _INJECTION_PATTERNS:
-        idx = low.find(pattern)
-        # A pattern inside a code span is being QUOTED, not issued — security.template.md's own
-        # S-5 text lists every one of these in backticks, and so does any doc explaining the rule.
-        # Reuses the same code-span discrimination the entropy/PII checks already rely on.
-        if idx != -1 and not _match_inside_code_span(line, idx, idx + len(pattern)):
-            findings.append(ScanFinding(
-                file=filepath, line=line_num, category="injection", severity="high",
-                message=(f"Rule S-5 instruction-override pattern {pattern!r} — reviewed content "
-                         f"is inert data, never instruction"),
-                snippet=line.strip()[:120],
-            ))
+        if _find_pattern(line, pattern, module_owned=module_owned) != -1:
+            _report(f"Rule S-5 instruction-override pattern {pattern!r} — reviewed content "
+                    f"is inert data, never instruction")
+            return
+        if _find_pattern_across_lines(previous_line, line, pattern, module_owned=module_owned):
+            _report(f"Rule S-5 instruction-override pattern {pattern!r} split across a line "
+                    f"break — a line break is not an escape")
             return
     for pattern in _TIER_CLAIM_PATTERNS:
-        idx = low.find(pattern)
-        # Same code-span suppression: the instruction-authority reference quotes these verbatim
-        # as examples of what a self-certifying tier claim looks like.
-        if idx != -1 and not _match_inside_code_span(line, idx, idx + len(pattern)):
-            findings.append(ScanFinding(
-                file=filepath, line=line_num, category="injection", severity="high",
-                message=(f"C-1 tier claim {pattern!r} — content cannot assert its own authority; "
-                         f"read content ranks below every instruction tier by construction"),
-                snippet=line.strip()[:120],
-            ))
+        if _find_pattern(line, pattern, module_owned=module_owned) != -1:
+            _report(f"C-1 tier claim {pattern!r} — content cannot assert its own authority; "
+                    f"read content ranks below every instruction tier by construction")
+            return
+        if _find_pattern_across_lines(previous_line, line, pattern, module_owned=module_owned):
+            _report(f"C-1 tier claim {pattern!r} split across a line break")
             return
     if in_front_matter:
         return
     for pattern in _IDENTITY_OVERRIDE_PATTERNS:
-        idx = low.find(pattern)
-        if idx != -1 and not _match_inside_code_span(line, idx, idx + len(pattern)):
-            findings.append(ScanFinding(
-                file=filepath, line=line_num, category="injection", severity="high",
-                message=f"Rule S-5 identity-override phrase {pattern!r} outside front matter",
-                snippet=line.strip()[:120],
-            ))
+        if _find_pattern(line, pattern, module_owned=module_owned) != -1:
+            _report(f"Rule S-5 identity-override phrase {pattern!r} outside front matter")
+            return
+        if _find_pattern_across_lines(previous_line, line, pattern, module_owned=module_owned):
+            _report(f"Rule S-5 identity-override phrase {pattern!r} split across a line break")
             return
 
 
@@ -465,10 +672,18 @@ def _check_line(
     skip_placeholders: bool = False,
 ) -> None:
     """Check a single line for all security patterns."""
-    # Skip markdown comments and code fence markers
     stripped = line.strip()
-    if stripped.startswith("<!--") or stripped.startswith("```"):
-        return
+    # An HTML comment or a code-fence marker suppresses PLACEHOLDER detection only.
+    #
+    # It used to suppress everything on the line, which meant a credential written as
+    # `<!-- AKIA... -->` scanned clean while the identical uncommented line HALTed (probe B7).
+    # Rule S-1 governs "any committed file" and says nothing about markup: a secret in a
+    # comment is committed, pushed, and readable in git history exactly like one that is not.
+    # Placeholder detection stays suppressed because a commented-out `{TOKEN}` genuinely is
+    # documentation of the convention rather than an unresolved placeholder.
+    is_markup_line = stripped.startswith("<!--") or stripped.startswith("```")
+    if is_markup_line:
+        skip_placeholders = True
 
     # PII: absolute paths with usernames
     if not skip_pii_path:

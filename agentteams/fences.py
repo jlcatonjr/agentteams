@@ -26,6 +26,7 @@ from agentteams.unfenced import (  # noqa: F401
     _UNFENCED_DRIFT_MIN_CHARS,
     _detect_deleted_constraints,
     _detect_unfenced_drift,
+    detect_deleted_fenced_constraints,
     _unfenced_regions,
     is_trackable_constraint_line,
     unfenced_lines,
@@ -177,6 +178,80 @@ _TEMPLATE_AUTHORITATIVE_FENCES: frozenset[str] = frozenset([
     "security_rules_invariant",
     "security_verdict_contract",
 ])
+
+
+#: Files whose EVERY fence is template-authoritative, identified by basename.
+#:
+#: The set above is keyed on section id, which works while the section id is distinctive. It
+#: does not reach a file emitted inside a single whole-file `content` fence — and
+#: `instruction-authority.reference.md` is exactly that. A 2026-08-06 red-team probe (D2)
+#: appended three backticked tokens to its body and `--shrink-policy=preserve` then pinned the
+#: attacker's version indefinitely: the file that DEFINES the precedence ordering C-1 depends
+#: on was the one fence the shrink-preserve fix did not cover.
+#:
+#: Membership applies the criterion already stated for `_TEMPLATE_AUTHORITATIVE_FENCES`: a file
+#: belongs here only when the project has **no legitimate reason to extend its body**. Exactly
+#: one of the 24 reference files in a generated team meets that today. The other 17 that share
+#: the `content` fence — the code-hygiene rules, the retrospective procedure, the retrieval
+#: contracts — are files a project may reasonably add to, so blanket-listing the `content`
+#: section id would trade one defect for a worse one. Add entries deliberately, one at a time,
+#: and say why here.
+_CONSTITUTIONAL_FILES: frozenset[str] = frozenset([
+    # The instruction-authority ordering. Its own header states the whole file is module-owned
+    # and restored on every `--update --merge`; before this entry that claim was false under
+    # the preserve policy.
+    "instruction-authority.reference.md",
+])
+
+
+def _is_template_authoritative(sid: str, rel_path: str) -> bool:
+    """True when the template owns this fence body outright and must never yield to disk.
+
+    Args:
+        sid: The fence's section id.
+        rel_path: Repo-relative path of the file being merged. May be empty when a caller
+            does not know it, in which case only the section-id rule applies — the
+            conservative direction, since it can only *fail to protect*, never wrongly
+            overwrite a file the project owns.
+
+    Returns:
+        Whether shrink-preserve must be refused for this fence.
+    """
+    if sid in _TEMPLATE_AUTHORITATIVE_FENCES:
+        return True
+    return bool(rel_path) and Path(rel_path).name in _CONSTITUTIONAL_FILES
+
+
+def _rename_suspect_sid(orphan_sid: str, new_sids: set[str]) -> str | None:
+    """Return the authoritative section id an orphan looks like a rename of, if any.
+
+    A fence whose body the template owns can be escaped simply by renaming it: the deployed
+    file's `security_rules_invariant` becomes `security_rules_invariant_local`, the merge treats
+    it as an orphan and preserves it verbatim, and the template's real body is *also* inserted.
+    The result is one agent file carrying two contradictory rule sets, with the contradiction
+    left for a reading model to resolve — which is the thing C-1 exists to avoid relying on.
+    Measured 2026-08-06 as probe D4.
+
+    Matching is prefix/suffix containment rather than an edit distance: the realistic evasions
+    are decorations (`_local`, `_v2`, `project_`), and a fuzzy matcher would start flagging
+    unrelated sections whose names merely share a stem.
+
+    Args:
+        orphan_sid: A section id present on disk but absent from the new render.
+        new_sids: Section ids the new render defines.
+
+    Returns:
+        The authoritative section id it appears to shadow, or ``None``.
+    """
+    normalized = orphan_sid.strip().lower()
+    for authoritative in sorted(_TEMPLATE_AUTHORITATIVE_FENCES):
+        if authoritative not in new_sids:
+            continue
+        if normalized == authoritative:
+            continue
+        if normalized.startswith(authoritative) or normalized.endswith(authoritative):
+            return authoritative
+    return None
 
 
 #: Timestamp line the security payload stamps into every rendered file carrying live data.
@@ -519,6 +594,7 @@ def _merge_fenced_content(
     preserve_on_shrink: bool = False,
     *,
     file_is_unmodified: bool = False,
+    rel_path: str = "",
 ) -> MergeResult:
     """Merge fenced sections from *new_rendered* into *existing_on_disk*.
 
@@ -612,6 +688,13 @@ def _merge_fenced_content(
                 "Use --overwrite to replace unconditionally, or add "
                 "AGENTTEAMS fence markers manually."
             )
+        # W13: the refusal above is safe but says nothing about WHAT was lost. Deleting a fence's
+        # markers along with its rule is how a constitutional rule leaves a file without the
+        # merge restoring it (probe D3) — the ordinary deleted-constraint detector checks only
+        # unfenced text, precisely because fenced text is normally self-healing. Here it is not.
+        result.deleted_constraint_notices += detect_deleted_fenced_constraints(
+            new_rendered, existing_on_disk
+        )
         return result
 
     # Parse new render
@@ -652,7 +735,7 @@ def _merge_fenced_content(
                     if (
                         notice
                         and preserve_on_shrink
-                        and sid not in _TEMPLATE_AUTHORITATIVE_FENCES
+                        and not _is_template_authoritative(sid, rel_path)
                     ):
                         # Respectful update: the new render would drop enriched
                         # content. Keep the existing body verbatim; surface a
@@ -673,7 +756,22 @@ def _merge_fenced_content(
                             )
                 replaced_sids.add(sid)
             else:
-                # Orphaned: in existing but not in new render — leave in place
+                # Orphaned: in existing but not in new render — leave in place.
+                shadowed = _rename_suspect_sid(sid, set(new_regions))
+                if shadowed is not None:
+                    # A renamed template-authoritative fence. Preserving it would write a file
+                    # carrying two contradictory copies of a security contract, so refuse the
+                    # merge instead and name what happened. Refusing is safe: nothing is
+                    # written, and the operator sees the rename rather than a duplicate-section
+                    # notice framed as housekeeping (probe D4).
+                    result.parse_errors.append(
+                        f"security fence rename detected: on-disk section {sid!r} shadows "
+                        f"template-authoritative section {shadowed!r}, whose body the template "
+                        f"owns. Merging would leave BOTH bodies in the file. Rename {sid!r} "
+                        f"back to {shadowed!r} (keeping any project additions outside the "
+                        f"fence), or delete it so the template's copy is authoritative."
+                    )
+                    return result
                 output_lines.append(existing_regions[sid])
                 result.sections_orphaned.append(sid)
         else:

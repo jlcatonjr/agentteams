@@ -27,11 +27,14 @@ from __future__ import annotations
 import ast
 import hashlib
 import re
+import warnings
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Iterable
 
-# Mapping from copilot-vscode tools declaration to Claude allowed-tools names.
+from agentteams.frameworks.claude import CLAUDE_CAPABILITY_KEY
+
+# Mapping from copilot-vscode tools declaration to Claude subagent tool names.
 # Source: AUTHORING-GUIDE.md tool-mapping table.
 _TOOLS_MAP: dict[str, list[str]] = {
     "read":    ["Read"],
@@ -207,6 +210,35 @@ def _stub_body(*, source_rel_path: str, role_desc: str) -> str:
     )
 
 
+def _warn_no_capability_key(slug: str, source_rel_path: str, *, reason: str) -> None:
+    """Warn that a bridged subagent is being written with NO capability declaration.
+
+    **A file with no capability key inherits every tool** — exactly as a file carrying the
+    superseded key did, and for the same reason: the runtime reads one key, and the absence of
+    that key is not a restriction. This was measured fleet-wide on 2026-08-06 (W19) after the
+    capability-key migration reported `superseded=0` and looked complete: 23 bridged agents
+    across 4 teams declared no key at all, so the exposure the migration was written to close
+    was still open in a third state nobody had enumerated.
+
+    **What this does NOT do is invent a grant.** Which tools these agents should carry is an
+    operator decision — a conservative default guessed here would either break agents that
+    need more or silently hand a grant to agents that need less, and both are worse than
+    saying so out loud. So the emission is unchanged and the silence is what ends.
+
+    Warns rather than raising: refusing to bridge would break every source agent that has no
+    `tools:` block, which is a legitimate and common shape in the copilot-vscode format.
+    """
+    warnings.warn(
+        f"bridged subagent {slug!r} ({source_rel_path}) is written with no "
+        f"{CLAUDE_CAPABILITY_KEY!r} because {reason}. A subagent with no capability key "
+        f"INHERITS EVERY TOOL, the same exposure as the superseded key the migration closed. "
+        f"Deciding the right grant is an operator decision — see W19 in "
+        f"references/agentteams-remediation-log.csv — so nothing is defaulted here.",
+        UserWarning,
+        stacklevel=3,
+    )
+
+
 def _render_subagent_stub(
     *,
     slug: str,
@@ -227,7 +259,11 @@ def _render_subagent_stub(
     if tools_raw:
         allowed = _tools_to_allowed(tools_raw)
         if allowed:
-            fm_lines.append(f"allowed-tools: {', '.join(allowed)}")
+            fm_lines.append(f"{CLAUDE_CAPABILITY_KEY}: {', '.join(allowed)}")
+        else:
+            _warn_no_capability_key(slug, source_rel_path, reason="its tools list mapped to nothing")
+    else:
+        _warn_no_capability_key(slug, source_rel_path, reason="it declares no `tools:` block")
     fm_lines += ["---", ""]
     body = _stub_body(
         source_rel_path=source_rel_path,
@@ -254,7 +290,7 @@ def _render_workstream_expert_stub(
         "bridge: copilot-vscode-to-claude",
     ]
     if tools_union:
-        fm_lines.append(f"allowed-tools: {', '.join(tools_union)}")
+        fm_lines.append(f"{CLAUDE_CAPABILITY_KEY}: {', '.join(tools_union)}")
     fm_lines += ["---", ""]
     body = (
         "# Workstream Expert (parametric, bridged)\n\n"

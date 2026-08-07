@@ -42,7 +42,7 @@ def _claude_agent(slug: str) -> str:
         "---\n"
         f"name: {slug} — Demo\n"
         "description: \"demo\"\n"
-        "allowed-tools: Bash, Read, Write, Edit\n"
+        "tools: Bash, Read, Write, Edit\n"
         "---\n\n"
         f"# {slug}\n\n"
         "Body line one.\n\n"
@@ -200,7 +200,7 @@ def test_interop_direct_all_six_directions(
         assert agent_out.exists()
         content = agent_out.read_text(encoding="utf-8")
         assert content.startswith("---")
-        assert "allowed-tools:" in content
+        assert "\ntools:" in content
     else:
         agent_out = target_dir / "orchestrator.md"
         assert agent_out.exists()

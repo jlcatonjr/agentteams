@@ -15,6 +15,12 @@ agentteams [--description PATH] [--project PATH] [--framework NAME]
            [--dry-run] [--json] [--overwrite] [--merge] [--yes]
            [--no-scan] [--cost-routing] [--update] [--prune] [--adopt-orphans] [--check]
            [--refresh-index] [--query-index TEXT] [--query-k N] [--query-strategy {lexical,vector}]
+           [--refresh-code-index] [--query-code TEXT] [--code-query-k N]
+           [--code-query-strategy {lexical,vector}] [--code-kind {local,api,doc,all}]
+           [--refresh-graph] [--refresh-architecture]
+           [--install-git-hooks] [--no-git-hooks] [--code-index-hook]
+           [--allow-foreign-output] [--pin-templates]
+           [--reconcile-front-matter] [--reconcile-apply]
            [--fail-on-legacy-skip] [--no-vscode-tasks] [--no-add-fence-markers]
            [--scan-security] [--check-budget] [--self] [--allow-external-self-output]
            [--post-audit] [--auto-correct] [--enrich]
@@ -24,6 +30,8 @@ agentteams [--description PATH] [--project PATH] [--framework NAME]
            [--add-fence-markers PATH] [--in-place]
            [--prune-backups [KEEP]] [--keep-within-days DAYS] [--backup-mirror DIR]
            [--verify-waivers] [--verify-integrity] [--verify-backup [TIMESTAMP]]
+           [--redteam] [--redteam-probes MODULE] [--redteam-report DIR]
+           [--accept-probe-baseline]
            [--stale-check] [--stale-remediate] [--stale-no-git] [--stale-restore TS]
            [--recipe-check]
            [--target-host-features TOKENS]
@@ -31,6 +39,8 @@ agentteams [--description PATH] [--project PATH] [--framework NAME]
            [--security-offline] [--security-max-items N] [--security-no-nvd]
            [--migrate] [--revert-migration]
            [--fleet DIR] [--fleet-frameworks {github,claude,goose,both,all}] [--fleet-report DIR]
+           [--fleet-allow-no-verify]
+           [--goose-source NAME] [--goose-model ID] [--goose-show] [--goose-config PATH]
            [--version]
 ```
 
@@ -165,7 +175,7 @@ Non-destructive bridge update. Regenerates bridge-internal artifacts under `refe
 
 ### `--bridge-no-skills`
 
-Suppress emission of `.claude/skills/recall.md` (Claude target only). The recall skill wraps `agentteams --query-index` for in-session memory-index retrieval; disable when your team manages skills via another channel.
+Suppress emission of `.claude/skills/recall/SKILL.md` (Claude target only). The recall skill wraps `agentteams --query-index` for in-session memory-index retrieval; disable when your team manages skills via another channel.
 
 ---
 
@@ -285,6 +295,83 @@ Retrieval strategy for `--query-index`. Default: `lexical`.
 - `vector` — Sparse tf·idf cosine similarity. Better recall for thematic/semantic queries ("what's our policy on error handling?", "find prior work on resource management"). Returns documents related to ALL query terms. Stdlib-only, <100ms at typical corpus sizes.
 
 Start with `lexical`; if results are low-confidence, retry with `vector`.
+
+---
+
+## Code & API Index
+
+A second index, separate from the memory index above. It covers repository scripts and the
+external API modules and documentation they use. The cache lives in `references/code-index/`
+and is **gitignored** — it is a local artifact, never committed.
+
+### `--refresh-code-index`
+
+Rebuild the code & API index only, then exit. Useful after editing scripts or bumping
+dependencies. Standalone: no `--description` required.
+
+### `--query-code TEXT`
+
+Query the code & API index and print ranked hits. Auto-refreshes a stale local partition
+first. Requires a pre-existing cache — run `--refresh-code-index` (or one `--update`) once
+before the first query.
+
+### `--code-query-k N`
+
+Number of ranked results to return with `--query-code`. Default: `5`.
+
+### `--code-query-strategy {lexical,vector}`
+
+Query strategy for `--query-code`. Default: `lexical` (BM25 — better for identifier and
+keyword matching); `vector` uses cosine similarity. Same trade-off as
+`--query-strategy` for the memory index.
+
+### `--code-kind {local,api,doc,all}`
+
+Filter `--query-code` by source kind — `local` (repository scripts), `api` (external API
+modules), `doc` (API documentation), or `all`. Default: `all`.
+
+---
+
+## Generated Maps and Git Hooks
+
+Both maps are regenerated on every `--update`. Between updates they drift whenever an agent
+file or module is edited by hand, which is what the pre-commit hook closes.
+
+### `--refresh-graph`
+
+Standalone: regenerate `references/pipeline-graph.md` — the agent topology — from the agent
+files on disk (`.github/agents/` or `.claude/agents/`), then exit. Writes only when the
+topology actually changed. Offline; no `--description` needed. This is what the installed
+pre-commit hook calls. The target tree is resolved from `--output` / `--project`, defaulting
+to the current directory.
+
+### `--refresh-architecture`
+
+Standalone: regenerate `references/architecture-graph.md` — a module-dependency map of the
+repository's own Python package, auto-detected and built from its import statements — then
+exit. Writes only when the module graph changed. Offline. Refreshed by the same pre-commit
+hook on any staged `.py` change.
+
+### `--install-git-hooks`
+
+Standalone: install (or sentinel-merge) the pre-commit hook that refreshes
+`references/pipeline-graph.md` whenever agent files are part of a commit, then exit.
+Idempotent, and it preserves any pre-existing hook body outside its sentinel markers. Target
+repo resolved from `--output` / `--project`, defaulting to the current directory.
+
+### `--no-git-hooks`
+
+Opt **out** of the default behaviour where a successful generate or update auto-installs that
+pre-commit hook. Pass this for repositories that manage git hooks manually, or in
+environments where hooks are undesirable.
+
+### `--code-index-hook`
+
+Opt **in** to a pre-commit warm-up that refreshes the code & API index cache when scripts or
+dependency manifests are committed. The cache is gitignored, so this clause never stages
+anything — unlike the graph refreshes. Off by default, because `--query-code` already
+rebuilds a stale partition on demand. Applies both to `--install-git-hooks` and to the
+auto-install on generate/update.
 
 ### `--fail-on-legacy-skip`
 
@@ -412,7 +499,7 @@ when omitted. Recognised tokens:
 | `bridge:copilot-vscode-to-claude:hooks` | `.claude/settings.agentteams.example.json` + `.claude/hook-guard.sh`. |
 | `bridge:copilot-vscode-to-claude:cache-split` | Cache-aware `CLAUDE.md` (preamble + boundary + dynamic stanza). |
 | `bridge:copilot-vscode-to-claude:schedule` | `.claude/schedules.agentteams.json` for the `/schedule` skill. |
-| `bridge:copilot-vscode-to-claude:todo-projection` | `.claude/skills/todo-from-plan.md` skill. |
+| `bridge:copilot-vscode-to-claude:todo-projection` | `.claude/skills/todo-from-plan/SKILL.md` skill. |
 
 Unknown tokens are syntactically valid but produce no emission.
 See [`host_features`](api-reference/host-features.md) for parser
@@ -467,6 +554,62 @@ Modifier for `--update` (and the other write modes): after each automatic backup
 ## Integrity Verification
 
 Read-only checks that detect silent corruption of generated files and confirm a backup is restorable. Both resolve the output directory from `--output`/`--project` (else CWD) and require no `--description`.
+
+### `--redteam`
+
+Run the **standing red-team audit** and exit: the constitutional probe battery (phase 1), the
+review (phase 2), a remediation skeleton (phase 3) and the six self-audit checks that evaluate
+the red team itself (phase 6). It **measures and reports — it never remediates.** Phases 4, 5
+and 7 are human- or agent-driven off the emitted artifacts; an unattended job that writes
+remediation code is a larger risk than the one it closes.
+
+Artifacts land in `tmp/redteam/YYYY-MM-DD/` (or `--redteam-report`): `findings.json`
+(schema: `schemas/redteam-findings.schema.json`), `discoveries.md`, `remediation.plan.md`,
+`selfaudit.md`.
+
+**Exit code:**
+
+| Code | Meaning |
+|---|---|
+| `0` | clean — no live exploit, no self-audit finding, live agent tree untouched |
+| `1` | a finding — a measured attack is live, or phase 6 found a defect in the red team |
+| `2` | **the harness is broken** — a control probe failed, the probe module would not import, a corpus claim no longer matches the scanner, the run modified the live agent tree, or the audit died with a traceback |
+
+Code `2` outranks `1`. A battery whose controls fail reports "no exploits" exactly as loudly as
+one that found none, so *indeterminate is never a pass*. Honours `--dry-run`, which computes
+everything and writes nothing.
+
+Runs daily via `.github/workflows/redteam-audit.yml`. Procedure:
+`references/redteam-audit.procedure.md`.
+
+### `--redteam-probes MODULE`
+
+Dotted import path of the probe module, e.g. `tests.constitutional_redteam_battery`.
+
+**There is deliberately no default.** A consumer of this package has no
+`tests.constitutional_redteam_battery`, and a command whose default target does not exist would
+hand every consumer a permanently red check. Omitted, `--redteam` runs **phase 6 only** — the
+six self-audit checks are repo-agnostic — and reports the probe population as *unmeasured*
+rather than clean. A *named* module that fails to import is exit `2`.
+
+### `--redteam-report DIR`
+
+Where to write the four artifacts. Defaults to `tmp/redteam/YYYY-MM-DD` under `--project`
+(else CWD) — gitignored and ephemeral, per `references/filing-conventions.md`.
+
+### `--accept-probe-baseline`
+
+Re-record `references/redteam-probe-baseline.json` from a fresh probe run, then exit. Requires
+`--redteam-probes`.
+
+**Operator command. The daily audit never does this**, and
+`tests/test_redteam_audit_workflow.py` asserts that no step in the workflow can. A probe can
+start passing because the control got better *or because the probe got blinder* — two probes
+flipped to a false `DEFENDED` exactly that way — and only a reviewed diff tells those apart. A
+scheduled job that re-baselined itself would clear its own flag every night and measure
+nothing. Refused under `--dry-run`.
+
+Record what you concluded in the affected probe's `note` field before committing.
 
 ### `--verify-waivers`
 
@@ -613,7 +756,53 @@ Directory for the fleet report. Default: `<DIR>/.agentteams-fleet/<run-id>/`.
 
 ---
 
+## Output Safety
+
+### `--allow-foreign-output`
+
+Permit a relative `--output` that resolves onto a non-empty, git-tracked directory showing no
+sign of being an agentteams-generated tree. Without this the run **refuses**: a relative path
+resolves against the current working directory, which is how a scratch render once overwrote
+a real agent tree.
+
+---
+
+## Template Trust
+
+### `--pin-templates`
+
+Record the installed template digests this project trusts, in
+`.agentteams/template-pins.json`, and commit that file. This is the **only** thing that
+writes the pin. Every later run compares against it and reports a mismatch, but never updates
+it — a pin that follows what it checks records nothing.
+
+---
+
+## Front-Matter Reconciliation
+
+### `--reconcile-front-matter`
+
+Report where a deployed team's YAML front matter diverges from its templates, and change
+nothing. Front matter cannot be fenced, so an edited file keeps its own values and a
+template's capability change stops there silently. This makes that visible without a full
+update run.
+
+### `--reconcile-apply`
+
+With `--reconcile-front-matter`, take the template's value for each diverging key.
+**Never implied by the report.** `allowed-tools` is a capability grant, and widening one is a
+privileged change (Constitutional C-3), so it requires saying so explicitly.
+
+---
+
 ## Other Options
+
+### `--fleet-allow-no-verify`
+
+Allow fleet snapshot commits to bypass pre-commit hooks (`--no-verify` /
+`core.hooksPath=/dev/null`). Off by default — hooks run normally and a warning is printed if
+a hook blocks the snapshot. Use only when workspace hooks are known-safe to skip, e.g. a
+commit-signing hook that would reject the ephemeral internal snapshot commit.
 
 ### `--recipe-check`
 
@@ -622,6 +811,32 @@ Validate generated Goose recipe YAML files in the `--output` directory (or `.goo
 ### `--version`
 
 Print the version and exit.
+
+---
+
+## Goose Source / Model Switch **(beta)**
+
+Standalone helpers that edit Goose's own `config.yaml`. They do not generate or update a
+team; they change which provider and model the Goose CLI will use.
+
+### `--goose-source NAME`
+
+Switch Goose's provider in `config.yaml` (e.g. `ollama`, `openrouter`). Applies that source's
+default model unless `--goose-model` is also given.
+
+### `--goose-model ID`
+
+Set Goose's model in `config.yaml`. With `--goose-source`, that source's model; alone, the
+current provider's model.
+
+### `--goose-show`
+
+Show the resolved `config.yaml` path, the current provider and model, any masking environment
+override, and the known sources.
+
+### `--goose-config PATH`
+
+Override the `config.yaml` path. Otherwise resolved via `goose info` / XDG.
 
 ---
 

@@ -1,7 +1,7 @@
 ---
 name: Conflict Auditor — AgentTeamsModule
 description: "Detects logical conflicts across deliverables, agent documentation, reference files, and source material in AgentTeamsModule"
-allowed-tools: Read, Grep, Glob
+tools: Read, Grep, Glob
 ---
 
 <!--
@@ -86,6 +86,8 @@ Before adjudicating a conflict whose shape is **"has this been decided / accepte
 ```bash
 agentteams --query-index "<conflict identifiers, file paths, or terminology>" --query-strategy lexical --query-k 5 --description .agentteams/brief.json --project . --output .github/agents --no-scan --yes
 ```
+
+> **Self-maintained repos (agentteams itself):** `.agentteams/brief.json` does not exist there. Use `--self` instead of `--description ... --project . --output ...`; it resolves the brief and the output root together. Everywhere else the form above is correct.
 
 Fall back to `--query-strategy vector` when **either** (a) lexical returns zero hits, **or** (b) the lexical top-1 has no content-word overlap with the query (high score on a wrong document via a single rare term match — protects against single-term false positives).
 

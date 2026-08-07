@@ -237,7 +237,7 @@ def _seed_gates(output_dir: Path, monkeypatch):
         "timestamp": "2026-05-03T00:00:00Z", "waiver_id": "wf-mi",
         "action_reviewed": "security-intel-freshness",
         "expires_at": "2099-01-01T00:00:00Z", "max_uses": "9", "uses": "0",
-        "approver": "t", "ticket_id": "MI", "reason_code": "T",
+        "approver": "security", "ticket_id": "MI", "reason_code": "T",
         "conditions_verified": "verified", "signature": "",
     }
     payload = "|".join(w[k] for k in [
@@ -328,7 +328,7 @@ def test_update_path_reemits_memory_index(tmp_path, monkeypatch):
     # Seed the destructive-gate PASS and add a new summary, then --update.
     (output_dir / "references" / "security-decisions.log.csv").write_text(
         "timestamp,requesting_agent,action_reviewed,verdict,conditions,conditions_verified\n"
-        "2026-05-03T00:00:00Z,t,overwrite,PASS,,verified\n",
+        "2026-05-03T00:00:00Z,security,overwrite,PASS,,verified\n",
         encoding="utf-8",
     )
     (ws / "2026-05-20.md").write_text("# Daily\n\nSecond summary, distinct content.\n")

@@ -3,9 +3,9 @@
 
 > **Auto-generated.** Regenerated on every commit that touches the `agentteams` package. Do not edit manually — changes will be overwritten.
 
-- Modules mapped: **120**
-- Packages: **6**
-- Internal import edges: **228**
+- Modules mapped: **136**
+- Packages: **7**
+- Internal import edges: **257**
 - Distinct external dependencies: **4**
 
 ---
@@ -22,11 +22,12 @@ Inter-package import dependencies (module-level detail in the tables below).
 
 | Package | Modules | Depends on |
 | --- | --- | --- |
-| `agentteams` | 78 | `agentteams.cli`, `agentteams.enrich`, `agentteams.frameworks`, `agentteams.research` |
-| `agentteams.cli` | 17 | `agentteams`, `agentteams.frameworks` |
+| `agentteams` | 81 | `agentteams.cli`, `agentteams.enrich`, `agentteams.frameworks`, `agentteams.research` |
+| `agentteams.cli` | 18 | `agentteams`, `agentteams.frameworks`, `agentteams.redteam` |
 | `agentteams.enrich` | 6 | `agentteams` |
 | `agentteams.eval_adapters` | 2 | — |
 | `agentteams.frameworks` | 8 | `agentteams` |
+| `agentteams.redteam` | 12 | `agentteams`, `agentteams.frameworks` |
 | `agentteams.research` | 9 | — |
 
 ---
@@ -56,9 +57,10 @@ Every module, coloured by package (full adjacency in the table below).
 | `agentteams.backup` | `agentteams`, `agentteams.atomicio`, `agentteams.liaison_logs` | `agentteams.architecture`, `agentteams.audit`, `agentteams.bridge`, `agentteams.cli.artifacts`, `agentteams.cli.code_index_artifacts`, `agentteams.cli.commands`, `agentteams.cli.output_target`, `agentteams.emit`, `agentteams.fence_inject`, `agentteams.fleet`, `agentteams.interop`, `agentteams.scan`, `agentteams.stale_detector`, `agentteams.stale_remediate` |
 | `agentteams.baseline` | — | `agentteams.cli.app` |
 | `agentteams.behavioral_drift` | `agentteams.handoff_payloads` | — |
-| `agentteams.bridge` | `agentteams.backup`, `agentteams.bridge_sources`, `agentteams.bridge_subagents`, `agentteams.bridge_subagents_goose`, `agentteams.capability_hints`, `agentteams.frameworks.goose`, `agentteams.hooks_emit`, `agentteams.instructions_split`, `agentteams.interop`, `agentteams.parallel_plan`, `agentteams.plan_steps_todo`, `agentteams.schedule_emit` | `agentteams.cli.commands`, `agentteams.stale_detector` |
-| `agentteams.bridge_sources` | — | `agentteams.bridge` |
-| `agentteams.bridge_subagents` | — | `agentteams.bridge`, `agentteams.bridge_subagents_goose` |
+| `agentteams.bridge` | `agentteams.backup`, `agentteams.bridge_skills`, `agentteams.bridge_sources`, `agentteams.bridge_subagents`, `agentteams.bridge_subagents_goose`, `agentteams.capability_hints`, `agentteams.frameworks.goose`, `agentteams.hooks_emit`, `agentteams.instructions_split`, `agentteams.interop`, `agentteams.parallel_plan`, `agentteams.plan_steps_todo`, `agentteams.schedule_emit` | `agentteams.cli.commands`, `agentteams.stale_detector` |
+| `agentteams.bridge_skills` | — | `agentteams.bridge` |
+| `agentteams.bridge_sources` | — | `agentteams.bridge`, `agentteams.redteam.instantiate` |
+| `agentteams.bridge_subagents` | `agentteams.frameworks.claude` | `agentteams.bridge`, `agentteams.bridge_subagents_goose` |
 | `agentteams.bridge_subagents_goose` | `agentteams.bridge_subagents`, `agentteams.frameworks.goose` | `agentteams.bridge` |
 | `agentteams.budget` | — | `agentteams.cli.standalone_modes` |
 | `agentteams.capability_hints` | — | `agentteams.bridge`, `agentteams.frameworks.goose_docs` |
@@ -66,7 +68,8 @@ Every module, coloured by package (full adjacency in the table below).
 | `agentteams.cli.app` | `agentteams.baseline`, `agentteams.cli.commands`, `agentteams.cli.generate`, `agentteams.cli.goose_switch`, `agentteams.cli.json_mode`, `agentteams.cli.parser`, `agentteams.cli.recipe_check`, `agentteams.cli.render_pipeline`, `agentteams.fence_inject`, `agentteams.fleet`, `agentteams.frameworks.goose`, `agentteams.git_hooks`, `agentteams.host_features` | — |
 | `agentteams.cli.artifacts` | `agentteams`, `agentteams.atomicio`, `agentteams.backup`, `agentteams.cli.code_index_artifacts`, `agentteams.cli.schema_cache`, `agentteams.drift`, `agentteams.errors`, `agentteams.eval_suite`, `agentteams.fences`, `agentteams.mcp_emit`, `agentteams.memory_index`, `agentteams.memory_index_incremental`, `agentteams.model_routing` | `agentteams.cli.generate`, `agentteams.cli.standalone_modes`, `agentteams.git_hooks` |
 | `agentteams.cli.code_index_artifacts` | `agentteams.backup`, `agentteams.cli.schema_cache`, `agentteams.code_index`, `agentteams.code_sources`, `agentteams.errors` | `agentteams.cli.artifacts` |
-| `agentteams.cli.commands` | `agentteams.backup`, `agentteams.bridge`, `agentteams.cli.security_gate`, `agentteams.convert`, `agentteams.drift`, `agentteams.emit`, `agentteams.frameworks.registry`, `agentteams.interop`, `agentteams.security_refs`, `agentteams.stale_detector`, `agentteams.stale_remediate` | `agentteams.cli.app`, `agentteams.stale_remediate` |
+| `agentteams.cli.commands` | `agentteams.backup`, `agentteams.bridge`, `agentteams.cli.security_gate`, `agentteams.convert`, `agentteams.drift`, `agentteams.emit`, `agentteams.frameworks.registry`, `agentteams.interop`, `agentteams.redteam.cycle`, `agentteams.security_refs`, `agentteams.stale_detector`, `agentteams.stale_remediate` | `agentteams.cli.app`, `agentteams.stale_remediate` |
+| `agentteams.cli.decision_log` | — | `agentteams.cli.security_gate` |
 | `agentteams.cli.exit_codes` | `agentteams.emit` | `agentteams.cli.generate` |
 | `agentteams.cli.generate` | `agentteams.ai_bad_habits`, `agentteams.analyze`, `agentteams.audit`, `agentteams.cli.artifacts`, `agentteams.cli.exit_codes`, `agentteams.cli.json_mode`, `agentteams.cli.output_target`, `agentteams.cli.post_emit_checks`, `agentteams.cli.render_pipeline`, `agentteams.cli.security_gate`, `agentteams.cli.standalone_modes`, `agentteams.drift`, `agentteams.emit`, `agentteams.enrich`, `agentteams.errors`, `agentteams.framework_research`, `agentteams.frameworks.registry`, `agentteams.front_matter_reconcile`, `agentteams.git_hooks`, `agentteams.graph`, `agentteams.ingest`, `agentteams.liaison_logs`, `agentteams.render`, `agentteams.security_refs`, `agentteams.template_pins`, `agentteams.update_report` | `agentteams.cli.app` |
 | `agentteams.cli.goose_switch` | `agentteams.goose_config` | `agentteams.cli.app`, `agentteams.cli.parser` |
@@ -78,7 +81,7 @@ Every module, coloured by package (full adjacency in the table below).
 | `agentteams.cli.recipe_check` | `agentteams.frameworks.goose` | `agentteams.cli.app` |
 | `agentteams.cli.render_pipeline` | `agentteams.emit`, `agentteams.frameworks.agents_md`, `agentteams.frameworks.base`, `agentteams.frameworks.claude`, `agentteams.frameworks.copilot_cli`, `agentteams.frameworks.copilot_vscode`, `agentteams.frameworks.goose`, `agentteams.graph`, `agentteams.render`, `agentteams.vscode_tasks` | `agentteams.cli.app`, `agentteams.cli.generate` |
 | `agentteams.cli.schema_cache` | `agentteams.atomicio` | `agentteams.cli.artifacts`, `agentteams.cli.code_index_artifacts`, `agentteams.security_refs` |
-| `agentteams.cli.security_gate` | — | `agentteams.cli.commands`, `agentteams.cli.generate`, `agentteams.cli.standalone_modes` |
+| `agentteams.cli.security_gate` | `agentteams.cli.decision_log` | `agentteams.cli.commands`, `agentteams.cli.generate`, `agentteams.cli.standalone_modes`, `agentteams.security_refs` |
 | `agentteams.cli.standalone_modes` | `agentteams.budget`, `agentteams.cli.artifacts`, `agentteams.cli.security_gate`, `agentteams.emit`, `agentteams.scan`, `agentteams.template_pins` | `agentteams.cli.generate` |
 | `agentteams.code_index` | — | `agentteams.cli.code_index_artifacts`, `agentteams.code_sources` |
 | `agentteams.code_sources` | `agentteams.code_index` | `agentteams.cli.code_index_artifacts` |
@@ -99,19 +102,19 @@ Every module, coloured by package (full adjacency in the table below).
 | `agentteams.eval_suite` | — | `agentteams.cli.artifacts` |
 | `agentteams.fence_inject` | `agentteams.atomicio`, `agentteams.backup`, `agentteams.emit` | `agentteams.cli.app`, `agentteams.emit` |
 | `agentteams.fences` | `agentteams.atomicio`, `agentteams.front_matter_merge`, `agentteams.unfenced` | `agentteams.cli.artifacts`, `agentteams.emit` |
-| `agentteams.fleet` | `agentteams.backup` | `agentteams.cli.app`, `agentteams.stale_detector`, `agentteams.stale_remediate` |
+| `agentteams.fleet` | `agentteams.backup` | `agentteams.cli.app`, `agentteams.redteam.realcopy`, `agentteams.stale_detector`, `agentteams.stale_remediate` |
 | `agentteams.framework_research` | — | `agentteams.cli.generate` |
 | `agentteams.frameworks` | — | — |
 | `agentteams.frameworks.agents_md` | `agentteams.frameworks.base`, `agentteams.yaml_frontmatter` | `agentteams.cli.render_pipeline`, `agentteams.frameworks.registry` |
 | `agentteams.frameworks.base` | `agentteams.yaml_frontmatter` | `agentteams.cli.render_pipeline`, `agentteams.convert`, `agentteams.frameworks.agents_md`, `agentteams.frameworks.claude`, `agentteams.frameworks.copilot_cli`, `agentteams.frameworks.copilot_vscode`, `agentteams.frameworks.goose`, `agentteams.frameworks.registry` |
-| `agentteams.frameworks.claude` | `agentteams.frameworks.base`, `agentteams.yaml_frontmatter` | `agentteams.cli.render_pipeline`, `agentteams.frameworks.registry` |
+| `agentteams.frameworks.claude` | `agentteams.frameworks.base`, `agentteams.yaml_frontmatter` | `agentteams.bridge_subagents`, `agentteams.cli.render_pipeline`, `agentteams.frameworks.registry` |
 | `agentteams.frameworks.copilot_cli` | `agentteams.frameworks.base` | `agentteams.cli.render_pipeline`, `agentteams.frameworks.registry` |
 | `agentteams.frameworks.copilot_vscode` | `agentteams.frameworks.base`, `agentteams.yaml_frontmatter` | `agentteams.cli.render_pipeline`, `agentteams.frameworks.registry` |
 | `agentteams.frameworks.goose` | `agentteams.frameworks.base`, `agentteams.frameworks.goose_docs`, `agentteams.yaml_frontmatter` | `agentteams.bridge`, `agentteams.bridge_subagents_goose`, `agentteams.cli.app`, `agentteams.cli.recipe_check`, `agentteams.cli.render_pipeline`, `agentteams.frameworks.registry` |
 | `agentteams.frameworks.goose_docs` | `agentteams.capability_hints` | `agentteams.frameworks.goose` |
-| `agentteams.frameworks.registry` | `agentteams.frameworks.agents_md`, `agentteams.frameworks.base`, `agentteams.frameworks.claude`, `agentteams.frameworks.copilot_cli`, `agentteams.frameworks.copilot_vscode`, `agentteams.frameworks.goose` | `agentteams.audit_types`, `agentteams.cli.commands`, `agentteams.cli.generate`, `agentteams.cli.parser`, `agentteams.convert`, `agentteams.interop` |
-| `agentteams.front_matter_merge` | — | `agentteams.fences`, `agentteams.unfenced` |
-| `agentteams.front_matter_reconcile` | `agentteams.yaml_frontmatter` | `agentteams.cli.generate` |
+| `agentteams.frameworks.registry` | `agentteams.frameworks.agents_md`, `agentteams.frameworks.base`, `agentteams.frameworks.claude`, `agentteams.frameworks.copilot_cli`, `agentteams.frameworks.copilot_vscode`, `agentteams.frameworks.goose` | `agentteams.audit_types`, `agentteams.cli.commands`, `agentteams.cli.generate`, `agentteams.cli.parser`, `agentteams.convert`, `agentteams.interop`, `agentteams.redteam.instantiate`, `agentteams.redteam.sweep` |
+| `agentteams.front_matter_merge` | — | `agentteams.fences`, `agentteams.front_matter_reconcile`, `agentteams.unfenced` |
+| `agentteams.front_matter_reconcile` | `agentteams.front_matter_merge`, `agentteams.yaml_frontmatter` | `agentteams.cli.generate` |
 | `agentteams.git_hooks` | `agentteams`, `agentteams.architecture`, `agentteams.cli.artifacts`, `agentteams.emit`, `agentteams.errors`, `agentteams.graph` | `agentteams.cli.app`, `agentteams.cli.generate` |
 | `agentteams.goose_config` | — | `agentteams.cli.goose_switch` |
 | `agentteams.graph` | `agentteams._utils`, `agentteams.graph_inputs`, `agentteams.svg_render` | `agentteams.cli.generate`, `agentteams.cli.render_pipeline`, `agentteams.git_hooks` |
@@ -121,6 +124,7 @@ Every module, coloured by package (full adjacency in the table below).
 | `agentteams.host_features` | — | `agentteams.cli.app` |
 | `agentteams.ingest` | `agentteams._utils` | `agentteams.cli.generate` |
 | `agentteams.instructions_split` | — | `agentteams.bridge` |
+| `agentteams.integrity` | — | `agentteams.redteam.checks_static`, `agentteams.redteam.runner` |
 | `agentteams.interop` | `agentteams.backup`, `agentteams.frameworks.registry`, `agentteams.yaml_frontmatter` | `agentteams.bridge`, `agentteams.cli.commands` |
 | `agentteams.liaison_logs` | — | `agentteams.backup`, `agentteams.cli.generate` |
 | `agentteams.living_doc` | — | `agentteams.audit` |
@@ -137,6 +141,19 @@ Every module, coloured by package (full adjacency in the table below).
 | `agentteams.plan_steps_todo` | — | `agentteams.bridge` |
 | `agentteams.pr_management` | — | — |
 | `agentteams.recipe_fields` | — | `agentteams.analyze` |
+| `agentteams.redteam` | — | — |
+| `agentteams.redteam.checks_report` | `agentteams.redteam.registry` | `agentteams.redteam.cycle`, `agentteams.redteam.selfaudit` |
+| `agentteams.redteam.checks_static` | `agentteams.integrity`, `agentteams.redteam.registry` | `agentteams.redteam.selfaudit` |
+| `agentteams.redteam.corpus` | `agentteams.scan` | `agentteams.redteam.runner` |
+| `agentteams.redteam.cycle` | `agentteams.redteam.checks_report`, `agentteams.redteam.realcopy`, `agentteams.redteam.registry`, `agentteams.redteam.report`, `agentteams.redteam.runner`, `agentteams.redteam.selfaudit` | `agentteams.cli.commands` |
+| `agentteams.redteam.findings_ledger` | — | — |
+| `agentteams.redteam.instantiate` | `agentteams.bridge_sources`, `agentteams.frameworks.registry` | — |
+| `agentteams.redteam.realcopy` | `agentteams.fleet` | `agentteams.redteam.cycle` |
+| `agentteams.redteam.registry` | — | `agentteams.redteam.checks_report`, `agentteams.redteam.checks_static`, `agentteams.redteam.cycle`, `agentteams.redteam.report`, `agentteams.redteam.runner`, `agentteams.redteam.selfaudit` |
+| `agentteams.redteam.report` | `agentteams.redteam.registry`, `agentteams.redteam.runner`, `agentteams.redteam.selfaudit` | `agentteams.redteam.cycle` |
+| `agentteams.redteam.runner` | `agentteams.integrity`, `agentteams.redteam.corpus`, `agentteams.redteam.registry` | `agentteams.redteam.cycle`, `agentteams.redteam.report` |
+| `agentteams.redteam.selfaudit` | `agentteams.redteam.checks_report`, `agentteams.redteam.checks_static`, `agentteams.redteam.registry` | `agentteams.redteam.cycle`, `agentteams.redteam.report` |
+| `agentteams.redteam.sweep` | `agentteams.frameworks.registry` | — |
 | `agentteams.remediate` | — | — |
 | `agentteams.render` | — | `agentteams.cli.generate`, `agentteams.cli.render_pipeline`, `agentteams.template_pins` |
 | `agentteams.research` | `agentteams.research.backends`, `agentteams.research.news`, `agentteams.research.reputable`, `agentteams.research.scholarly`, `agentteams.research.search`, `agentteams.research.verify` | — |
@@ -149,10 +166,10 @@ Every module, coloured by package (full adjacency in the table below).
 | `agentteams.research.scholarly` | `agentteams.research.cache` | `agentteams.research`, `agentteams.research.__main__` |
 | `agentteams.research.search` | `agentteams.research.backends`, `agentteams.research.cache` | `agentteams.research`, `agentteams.research.__main__`, `agentteams.research.browser`, `agentteams.research.reputable` |
 | `agentteams.research.verify` | — | `agentteams.research` |
-| `agentteams.scan` | `agentteams.backup` | `agentteams.cli.post_emit_checks`, `agentteams.cli.standalone_modes` |
+| `agentteams.scan` | `agentteams.backup` | `agentteams.cli.post_emit_checks`, `agentteams.cli.standalone_modes`, `agentteams.redteam.corpus` |
 | `agentteams.schedule_emit` | `agentteams.atomicio` | `agentteams.bridge` |
 | `agentteams.security_feed_render` | — | `agentteams.security_refs` |
-| `agentteams.security_refs` | `agentteams.cli.schema_cache`, `agentteams.security_feed_render` | `agentteams.cli.commands`, `agentteams.cli.generate` |
+| `agentteams.security_refs` | `agentteams.cli.schema_cache`, `agentteams.cli.security_gate`, `agentteams.security_feed_render` | `agentteams.cli.commands`, `agentteams.cli.generate` |
 | `agentteams.session_scan` | `agentteams.plan_steps` | — |
 | `agentteams.stale_detector` | `agentteams.backup`, `agentteams.bridge`, `agentteams.drift`, `agentteams.fleet` | `agentteams.cli.commands`, `agentteams.stale_remediate` |
 | `agentteams.stale_remediate` | `agentteams.backup`, `agentteams.cli.commands`, `agentteams.fleet`, `agentteams.stale_detector` | `agentteams.cli.commands` |
@@ -195,6 +212,8 @@ flowchart LR
     class agentteams_eval_adapters sub
     agentteams_frameworks["agentteams.frameworks"]
     class agentteams_frameworks sub
+    agentteams_redteam["agentteams.redteam"]
+    class agentteams_redteam sub
     agentteams_research["agentteams.research"]
     class agentteams_research sub
     agentteams --> agentteams_cli
@@ -203,8 +222,11 @@ flowchart LR
     agentteams --> agentteams_research
     agentteams_cli --> agentteams
     agentteams_cli --> agentteams_frameworks
+    agentteams_cli --> agentteams_redteam
     agentteams_enrich --> agentteams
     agentteams_frameworks --> agentteams
+    agentteams_redteam --> agentteams
+    agentteams_redteam --> agentteams_frameworks
 ```
 
 ```dot
@@ -217,6 +239,7 @@ digraph "agentteams architecture" {
     "agentteams.enrich" [fillcolor="#eef6ee"];
     "agentteams.eval_adapters" [fillcolor="#eef6ee"];
     "agentteams.frameworks" [fillcolor="#eef6ee"];
+    "agentteams.redteam" [fillcolor="#eef6ee"];
     "agentteams.research" [fillcolor="#eef6ee"];
     "agentteams" -> "agentteams.cli";
     "agentteams" -> "agentteams.enrich";
@@ -224,8 +247,11 @@ digraph "agentteams architecture" {
     "agentteams" -> "agentteams.research";
     "agentteams.cli" -> "agentteams";
     "agentteams.cli" -> "agentteams.frameworks";
+    "agentteams.cli" -> "agentteams.redteam";
     "agentteams.enrich" -> "agentteams";
     "agentteams.frameworks" -> "agentteams";
+    "agentteams.redteam" -> "agentteams";
+    "agentteams.redteam" -> "agentteams.frameworks";
 }
 ```
 
@@ -374,6 +400,7 @@ digraph "agentteams architecture" {
       "is_package": false,
       "imports_internal": [
         "agentteams.backup",
+        "agentteams.bridge_skills",
         "agentteams.bridge_sources",
         "agentteams.bridge_subagents",
         "agentteams.bridge_subagents_goose",
@@ -389,6 +416,14 @@ digraph "agentteams architecture" {
       "external": [],
       "repo_local": []
     },
+    "agentteams.bridge_skills": {
+      "package": "agentteams",
+      "path": "agentteams/bridge_skills.py",
+      "is_package": false,
+      "imports_internal": [],
+      "external": [],
+      "repo_local": []
+    },
     "agentteams.bridge_sources": {
       "package": "agentteams",
       "path": "agentteams/bridge_sources.py",
@@ -401,7 +436,9 @@ digraph "agentteams architecture" {
       "package": "agentteams",
       "path": "agentteams/bridge_subagents.py",
       "is_package": false,
-      "imports_internal": [],
+      "imports_internal": [
+        "agentteams.frameworks.claude"
+      ],
       "external": [],
       "repo_local": []
     },
@@ -513,10 +550,19 @@ digraph "agentteams architecture" {
         "agentteams.emit",
         "agentteams.frameworks.registry",
         "agentteams.interop",
+        "agentteams.redteam.cycle",
         "agentteams.security_refs",
         "agentteams.stale_detector",
         "agentteams.stale_remediate"
       ],
+      "external": [],
+      "repo_local": []
+    },
+    "agentteams.cli.decision_log": {
+      "package": "agentteams.cli",
+      "path": "agentteams/cli/decision_log.py",
+      "is_package": false,
+      "imports_internal": [],
       "external": [],
       "repo_local": []
     },
@@ -673,7 +719,9 @@ digraph "agentteams architecture" {
       "package": "agentteams.cli",
       "path": "agentteams/cli/security_gate.py",
       "is_package": false,
-      "imports_internal": [],
+      "imports_internal": [
+        "agentteams.cli.decision_log"
+      ],
       "external": [],
       "repo_local": []
     },
@@ -1017,6 +1065,7 @@ digraph "agentteams architecture" {
       "path": "agentteams/front_matter_reconcile.py",
       "is_package": false,
       "imports_internal": [
+        "agentteams.front_matter_merge",
         "agentteams.yaml_frontmatter"
       ],
       "external": [],
@@ -1108,6 +1157,14 @@ digraph "agentteams architecture" {
     "agentteams.instructions_split": {
       "package": "agentteams",
       "path": "agentteams/instructions_split.py",
+      "is_package": false,
+      "imports_internal": [],
+      "external": [],
+      "repo_local": []
+    },
+    "agentteams.integrity": {
+      "package": "agentteams",
+      "path": "agentteams/integrity.py",
       "is_package": false,
       "imports_internal": [],
       "external": [],
@@ -1252,6 +1309,143 @@ digraph "agentteams architecture" {
       "path": "agentteams/recipe_fields.py",
       "is_package": false,
       "imports_internal": [],
+      "external": [],
+      "repo_local": []
+    },
+    "agentteams.redteam": {
+      "package": "agentteams",
+      "path": "agentteams/redteam/__init__.py",
+      "is_package": true,
+      "imports_internal": [],
+      "external": [],
+      "repo_local": []
+    },
+    "agentteams.redteam.checks_report": {
+      "package": "agentteams.redteam",
+      "path": "agentteams/redteam/checks_report.py",
+      "is_package": false,
+      "imports_internal": [
+        "agentteams.redteam.registry"
+      ],
+      "external": [],
+      "repo_local": []
+    },
+    "agentteams.redteam.checks_static": {
+      "package": "agentteams.redteam",
+      "path": "agentteams/redteam/checks_static.py",
+      "is_package": false,
+      "imports_internal": [
+        "agentteams.integrity",
+        "agentteams.redteam.registry"
+      ],
+      "external": [],
+      "repo_local": []
+    },
+    "agentteams.redteam.corpus": {
+      "package": "agentteams.redteam",
+      "path": "agentteams/redteam/corpus.py",
+      "is_package": false,
+      "imports_internal": [
+        "agentteams.scan"
+      ],
+      "external": [],
+      "repo_local": []
+    },
+    "agentteams.redteam.cycle": {
+      "package": "agentteams.redteam",
+      "path": "agentteams/redteam/cycle.py",
+      "is_package": false,
+      "imports_internal": [
+        "agentteams.redteam.checks_report",
+        "agentteams.redteam.realcopy",
+        "agentteams.redteam.registry",
+        "agentteams.redteam.report",
+        "agentteams.redteam.runner",
+        "agentteams.redteam.selfaudit"
+      ],
+      "external": [],
+      "repo_local": []
+    },
+    "agentteams.redteam.findings_ledger": {
+      "package": "agentteams.redteam",
+      "path": "agentteams/redteam/findings_ledger.py",
+      "is_package": false,
+      "imports_internal": [],
+      "external": [],
+      "repo_local": []
+    },
+    "agentteams.redteam.instantiate": {
+      "package": "agentteams.redteam",
+      "path": "agentteams/redteam/instantiate.py",
+      "is_package": false,
+      "imports_internal": [
+        "agentteams.bridge_sources",
+        "agentteams.frameworks.registry"
+      ],
+      "external": [],
+      "repo_local": []
+    },
+    "agentteams.redteam.realcopy": {
+      "package": "agentteams.redteam",
+      "path": "agentteams/redteam/realcopy.py",
+      "is_package": false,
+      "imports_internal": [
+        "agentteams.fleet"
+      ],
+      "external": [],
+      "repo_local": []
+    },
+    "agentteams.redteam.registry": {
+      "package": "agentteams.redteam",
+      "path": "agentteams/redteam/registry.py",
+      "is_package": false,
+      "imports_internal": [],
+      "external": [],
+      "repo_local": []
+    },
+    "agentteams.redteam.report": {
+      "package": "agentteams.redteam",
+      "path": "agentteams/redteam/report.py",
+      "is_package": false,
+      "imports_internal": [
+        "agentteams.redteam.registry",
+        "agentteams.redteam.runner",
+        "agentteams.redteam.selfaudit"
+      ],
+      "external": [],
+      "repo_local": []
+    },
+    "agentteams.redteam.runner": {
+      "package": "agentteams.redteam",
+      "path": "agentteams/redteam/runner.py",
+      "is_package": false,
+      "imports_internal": [
+        "agentteams.integrity",
+        "agentteams.redteam.corpus",
+        "agentteams.redteam.registry"
+      ],
+      "external": [],
+      "repo_local": []
+    },
+    "agentteams.redteam.selfaudit": {
+      "package": "agentteams.redteam",
+      "path": "agentteams/redteam/selfaudit.py",
+      "is_package": false,
+      "imports_internal": [
+        "agentteams.redteam.checks_report",
+        "agentteams.redteam.checks_static",
+        "agentteams.redteam.registry"
+      ],
+      "external": [],
+      "repo_local": []
+    },
+    "agentteams.redteam.sweep": {
+      "package": "agentteams.redteam",
+      "path": "agentteams/redteam/sweep.py",
+      "is_package": false,
+      "imports_internal": [
+        "agentteams.frameworks.registry"
+      ],
       "external": [],
       "repo_local": []
     },
@@ -1416,6 +1610,7 @@ digraph "agentteams architecture" {
       "is_package": false,
       "imports_internal": [
         "agentteams.cli.schema_cache",
+        "agentteams.cli.security_gate",
         "agentteams.security_feed_render"
       ],
       "external": [
@@ -1547,12 +1742,24 @@ digraph "agentteams architecture" {
       "target": "agentteams.frameworks"
     },
     {
+      "source": "agentteams.cli",
+      "target": "agentteams.redteam"
+    },
+    {
       "source": "agentteams.enrich",
       "target": "agentteams"
     },
     {
       "source": "agentteams.frameworks",
       "target": "agentteams"
+    },
+    {
+      "source": "agentteams.redteam",
+      "target": "agentteams"
+    },
+    {
+      "source": "agentteams.redteam",
+      "target": "agentteams.frameworks"
     }
   ],
   "module_edges": [
@@ -1634,6 +1841,10 @@ digraph "agentteams architecture" {
     },
     {
       "source": "agentteams.bridge",
+      "target": "agentteams.bridge_skills"
+    },
+    {
+      "source": "agentteams.bridge",
       "target": "agentteams.bridge_sources"
     },
     {
@@ -1675,6 +1886,10 @@ digraph "agentteams architecture" {
     {
       "source": "agentteams.bridge",
       "target": "agentteams.schedule_emit"
+    },
+    {
+      "source": "agentteams.bridge_subagents",
+      "target": "agentteams.frameworks.claude"
     },
     {
       "source": "agentteams.bridge_subagents_goose",
@@ -1839,6 +2054,10 @@ digraph "agentteams architecture" {
     {
       "source": "agentteams.cli.commands",
       "target": "agentteams.interop"
+    },
+    {
+      "source": "agentteams.cli.commands",
+      "target": "agentteams.redteam.cycle"
     },
     {
       "source": "agentteams.cli.commands",
@@ -2043,6 +2262,10 @@ digraph "agentteams architecture" {
     {
       "source": "agentteams.cli.schema_cache",
       "target": "agentteams.atomicio"
+    },
+    {
+      "source": "agentteams.cli.security_gate",
+      "target": "agentteams.cli.decision_log"
     },
     {
       "source": "agentteams.cli.standalone_modes",
@@ -2270,6 +2493,10 @@ digraph "agentteams architecture" {
     },
     {
       "source": "agentteams.front_matter_reconcile",
+      "target": "agentteams.front_matter_merge"
+    },
+    {
+      "source": "agentteams.front_matter_reconcile",
       "target": "agentteams.yaml_frontmatter"
     },
     {
@@ -2345,6 +2572,98 @@ digraph "agentteams architecture" {
       "target": "agentteams.analyze"
     },
     {
+      "source": "agentteams.redteam.checks_report",
+      "target": "agentteams.redteam.registry"
+    },
+    {
+      "source": "agentteams.redteam.checks_static",
+      "target": "agentteams.integrity"
+    },
+    {
+      "source": "agentteams.redteam.checks_static",
+      "target": "agentteams.redteam.registry"
+    },
+    {
+      "source": "agentteams.redteam.corpus",
+      "target": "agentteams.scan"
+    },
+    {
+      "source": "agentteams.redteam.cycle",
+      "target": "agentteams.redteam.checks_report"
+    },
+    {
+      "source": "agentteams.redteam.cycle",
+      "target": "agentteams.redteam.realcopy"
+    },
+    {
+      "source": "agentteams.redteam.cycle",
+      "target": "agentteams.redteam.registry"
+    },
+    {
+      "source": "agentteams.redteam.cycle",
+      "target": "agentteams.redteam.report"
+    },
+    {
+      "source": "agentteams.redteam.cycle",
+      "target": "agentteams.redteam.runner"
+    },
+    {
+      "source": "agentteams.redteam.cycle",
+      "target": "agentteams.redteam.selfaudit"
+    },
+    {
+      "source": "agentteams.redteam.instantiate",
+      "target": "agentteams.bridge_sources"
+    },
+    {
+      "source": "agentteams.redteam.instantiate",
+      "target": "agentteams.frameworks.registry"
+    },
+    {
+      "source": "agentteams.redteam.realcopy",
+      "target": "agentteams.fleet"
+    },
+    {
+      "source": "agentteams.redteam.report",
+      "target": "agentteams.redteam.registry"
+    },
+    {
+      "source": "agentteams.redteam.report",
+      "target": "agentteams.redteam.runner"
+    },
+    {
+      "source": "agentteams.redteam.report",
+      "target": "agentteams.redteam.selfaudit"
+    },
+    {
+      "source": "agentteams.redteam.runner",
+      "target": "agentteams.integrity"
+    },
+    {
+      "source": "agentteams.redteam.runner",
+      "target": "agentteams.redteam.corpus"
+    },
+    {
+      "source": "agentteams.redteam.runner",
+      "target": "agentteams.redteam.registry"
+    },
+    {
+      "source": "agentteams.redteam.selfaudit",
+      "target": "agentteams.redteam.checks_report"
+    },
+    {
+      "source": "agentteams.redteam.selfaudit",
+      "target": "agentteams.redteam.checks_static"
+    },
+    {
+      "source": "agentteams.redteam.selfaudit",
+      "target": "agentteams.redteam.registry"
+    },
+    {
+      "source": "agentteams.redteam.sweep",
+      "target": "agentteams.frameworks.registry"
+    },
+    {
       "source": "agentteams.research",
       "target": "agentteams.research.backends"
     },
@@ -2415,6 +2734,10 @@ digraph "agentteams architecture" {
     {
       "source": "agentteams.security_refs",
       "target": "agentteams.cli.schema_cache"
+    },
+    {
+      "source": "agentteams.security_refs",
+      "target": "agentteams.cli.security_gate"
     },
     {
       "source": "agentteams.security_refs",

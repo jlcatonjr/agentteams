@@ -61,12 +61,14 @@ You perform read-only quality audits on deliverables in ProjectRepositories. You
 
 When a deliverable's defect shape looks recurrent — "have we flagged this LLM pattern / structural defect before?", or "did a prior audit on this deliverable's predecessor adjudicate this passage?" — consult the index before opening a new finding. Lexical-first when the query contains a quoted passage, file path, or specific terminology; vector for thematic recurrence questions.
 
-If your runtime provides an index-access affordance (a search/recall capability over `references/memory-index.json`, e.g. the `recall` skill or the `agentteams --query-index` task), it performs the query — you do **not** execute this yourself (this agent's grant is read/search-only). If no such affordance is available, skip to the three-pass protocol below. The command is illustrative of what the runtime issues:
+A skill is **injected prompt text, not an executor** — it confers no capability. If your runtime provides an index-access affordance that can actually *run* a query (a Bash-capable agent such as `@navigator`, or a host task bound to the `agentteams --query-index` task), it performs the query — you do **not** execute this yourself (this agent's grant is read/search-only). If no such affordance is available, skip to the three-pass protocol below. The command is illustrative of what the runtime issues:
 
 ```bash
 # illustrative — the runtime's index affordance performs this; the agent does not run it
 agentteams --query-index "<defect description, quoted passage, or deliverable name>" --query-strategy lexical --query-k 5 --description .agentteams/brief.json --project . --output .github/agents --no-scan --yes
 ```
+
+> **Self-maintained repos (agentteams itself):** `.agentteams/brief.json` does not exist there. Use `--self` instead of `--description ... --project . --output ...`; it resolves the brief and the output root together. Everywhere else the form above is correct.
 
 Fall back to `--query-strategy vector` when **either** (a) lexical returns zero hits, **or** (b) the lexical top-1 has no content-word overlap with the query (single-term false-positive guard), **or** (c) the question is purely thematic ("structural defect," "filler phrases") with no concrete handle to lexical-match on.
 

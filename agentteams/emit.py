@@ -456,6 +456,7 @@ def emit_all(
                     normalized_content,
                     existing_text,
                     preserve_on_shrink=(shrink_policy == "preserve"),
+                    rel_path=rel_path,
                 )
                 # Plan 3: dry-run preview also surfaces the notices that the
                 # real run would emit (D-4 from update-dry-run plan).
@@ -521,6 +522,49 @@ def emit_all(
                         if _pv_applied
                         else mr.merged_content
                     )
+                    # ...and SURFACE what that merge decided. Classifying the file as MERGE
+                    # instead of UNCHANGED (below) tells an operator that *something* changed;
+                    # it does not tell them a capability grant widened. The real run emits
+                    # "front matter: 'allowed-tools' updated to ... (unmodified since
+                    # generation)"; before this, --dry-run computed those exact notices and
+                    # threw them away.
+                    #
+                    # That gap is the reason this matters more than an ordinary preview
+                    # improvement: C-3 makes a capability change privileged, --dry-run is what
+                    # an operator reads before authorising one, and the preview was silent
+                    # about precisely the change that most needs review. It was found only
+                    # because a merge was rehearsed against an isolated copy of a real tree
+                    # rather than trusted from its dry run (2026-08-03).
+                    #
+                    # Both streams, matching the real path: `_pv_applied` is what the merge
+                    # WILL do, `_pv_props` is what it proposes but cannot do on its own
+                    # authority (an escalation it will report rather than apply).
+                    for notice in list(_pv_applied) + list(_pv_props):
+                        annotated = f"{rel_path}: {notice}"
+                        result.notices.append(annotated)
+                        if result.dry_run_report is not None:
+                            result.dry_run_report.notices.append(annotated)
+                    # Drift on front matter the merge did NOT apply. The real path suppresses
+                    # this when the key was applied, because reporting an applied change as
+                    # unresolved drift describes the opposite of what happened.
+                    for notice in mr.front_matter_drift:
+                        if "front matter:" in notice and _pv_applied:
+                            continue
+                        annotated = (
+                            f"{rel_path}: {notice} — preserved on-disk value; edit the file "
+                            f"directly if the template's version is wanted"
+                        )
+                        result.notices.append(annotated)
+                        if result.dry_run_report is not None:
+                            result.dry_run_report.notices.append(annotated)
+                    # A constraint-bearing line deleted from an unfenced region is never
+                    # restored by a merge, and the drift notice above is silent on edited
+                    # files — which is every tampered file. Same reasoning as the real path.
+                    for notice in mr.deleted_constraint_notices:
+                        annotated = f"{rel_path}: {notice}"
+                        result.notices.append(annotated)
+                        if result.dry_run_report is not None:
+                            result.dry_run_report.notices.append(annotated)
                     migrated = _ensure_project_notes_section(rel_path, _pv_content)
                     if (
                         not mr.content_changed
@@ -584,6 +628,7 @@ def emit_all(
                 existing_text,
                 preserve_on_shrink=(shrink_policy == "preserve"),
                 file_is_unmodified=(rel_path in _unmodified),
+                rel_path=rel_path,
             )
             # Front-matter drift: the template's front matter moved on while this file kept its
             # own. Merge cannot fix it — front matter lies outside every fence and is preserved

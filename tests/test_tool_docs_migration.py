@@ -110,10 +110,11 @@ def test_backup_restore_preserves_out_of_tree_skills(tmp_path):
     skills.mkdir(parents=True)
 
     (agents / "orchestrator.md").write_text("# orch v1\n", encoding="utf-8")
-    skill = skills / "tool-postgresql.md"
+    skill = skills / "tool-postgresql" / "SKILL.md"
+    skill.parent.mkdir(parents=True, exist_ok=True)
     skill.write_text("# pg skill v1\n", encoding="utf-8")
 
-    rels = ["orchestrator.md", "../skills/tool-postgresql.md"]
+    rels = ["orchestrator.md", "../skills/tool-postgresql/SKILL.md"]
     result = emit.backup_output_dir(agents, files_to_backup=rels, reason="test", framework="claude")
     assert result.backup_path is not None
 

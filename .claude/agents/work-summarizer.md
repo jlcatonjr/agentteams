@@ -1,7 +1,7 @@
 ---
 name: Work Summarizer — AgentTeamsModule
 description: "Synthesizes daily, weekly, and monthly work summaries from canonical plan artifacts and git evidence for AgentTeamsModule; supports append-first daily capture, legacy tmp/ fallback, and required adversarial/conflict audits"
-allowed-tools: Read, Grep, Glob, Bash, Edit, Write, Task
+tools: Read, Grep, Glob, Bash, Edit, Write, Task
 ---
 <!-- AGENTTEAMS:BEGIN content v=1 -->
 

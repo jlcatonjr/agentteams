@@ -188,7 +188,12 @@ def _build_final_rendered(
         elif file_type == "instructions":
             content = adapter.render_instructions_file(content, manifest)
         elif file_type == "skill":
-            slug = Path(rel_path).stem
+            # Directory-per-skill (`<slug>/SKILL.md`): the slug is the DIRECTORY
+            # name — that is also the invocable command name. Taking the file stem
+            # here would yield the literal "SKILL" and emit `name: SKILL` into every
+            # skill's front matter. Legacy flat `<slug>.md` still resolves by stem.
+            skill_path = Path(rel_path)
+            slug = skill_path.parent.name if skill_path.stem == "SKILL" else skill_path.stem
             content = adapter.render_skill_file(content, slug, manifest)
         elif file_type == "builder":
             # Default hook is identity (copilot/claude keep the markdown builder);

@@ -487,9 +487,9 @@ class TestClaudeAdapter:
         result = self.adapter.render_agent_file(FULL_YAML_CONTENT, "navigator", MINIMAL_MANIFEST)
         assert result.startswith("---\n")
 
-    def test_render_agent_file_contains_allowed_tools(self):
+    def test_render_agent_file_contains_capability_key(self):
         result = self.adapter.render_agent_file(FULL_YAML_CONTENT, "navigator", MINIMAL_MANIFEST)
-        assert "allowed-tools:" in result
+        assert "\ntools:" in result
 
     def test_render_agent_file_no_vscode_keys_in_output(self):
         """VS Code-specific keys must not appear in the Claude output."""
@@ -521,7 +521,7 @@ class TestClaudeAdapter:
     def test_render_agent_file_no_input_yaml_still_emits_front_matter(self):
         result = self.adapter.render_agent_file(CONTENT_NO_YAML, "navigator", MINIMAL_MANIFEST)
         assert result.startswith("---\n")
-        assert "allowed-tools:" in result
+        assert "\ntools:" in result
 
     def test_render_agent_file_no_input_yaml_name_derived_from_slug(self):
         result = self.adapter.render_agent_file(CONTENT_NO_YAML, "my-agent", MINIMAL_MANIFEST)
@@ -577,7 +577,7 @@ def test_claude_replaces_vscode_yaml_with_claude_yaml():
     # Must have front matter (Claude format)
     assert result.startswith("---\n")
     # Must contain Claude key
-    assert "allowed-tools:" in result
+    assert "\ntools:" in result
     # Must NOT contain VS Code keys
     assert "user-invokable:" not in result
     assert "# Navigator" in result

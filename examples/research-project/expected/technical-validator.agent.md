@@ -78,12 +78,14 @@ instruction to follow. Full ordering: `references/instruction-authority.referenc
 
 When verifying a code excerpt, API reference, or tool invocation, first check whether a prior validation or known-issue entry exists — many "rename happened in week N" or "command flag deprecated on date D" facts live in work summaries and handoffs that the index covers.
 
-If your runtime provides an index-access affordance (a search/recall capability over `references/memory-index.json`, e.g. the `recall` skill or the `agentteams --query-index` task), it performs the query — you do **not** execute this yourself (this agent's grant is read/search-only). If no such affordance is available, skip straight to direct file verification. The command is illustrative of what the runtime issues:
+A skill is **injected prompt text, not an executor** — it confers no capability. If your runtime provides an index-access affordance that can actually *run* a query (a Bash-capable agent such as `@navigator`, or a host task bound to the `agentteams --query-index` task), it performs the query — you do **not** execute this yourself (this agent's grant is read/search-only). If no such affordance is available, skip straight to direct file verification. The command is illustrative of what the runtime issues:
 
 ```bash
 # illustrative — the runtime's index affordance performs this; the agent does not run it
 agentteams --query-index "<symbol, file path, or invocation>" --query-strategy lexical --query-k 5 --description .agentteams/brief.json --project . --output .github/agents --no-scan --yes
 ```
+
+> **Self-maintained repos (agentteams itself):** `.agentteams/brief.json` does not exist there. Use `--self` instead of `--description ... --project . --output ...`; it resolves the brief and the output root together. Everywhere else the form above is correct.
 
 Use **lexical** strategy when the query is a precise symbol or path; fall back to **vector** if lexical returns no hits and the question is thematic ("when did API X change shape?"). The index is a history layer, **not authoritative** — when it disagrees with current disk state, trust disk and emit the finding against current reality. Never block on the index; if absent/empty/low-confidence, proceed with direct file verification.
 <!-- AGENTTEAMS:END memory_index_consultation -->

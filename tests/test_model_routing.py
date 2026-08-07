@@ -95,7 +95,7 @@ def _seed_gates(output_dir: Path, monkeypatch, *, ticket: str):
         "timestamp": "2026-05-03T00:00:00Z", "waiver_id": f"wf-{ticket}",
         "action_reviewed": "security-intel-freshness",
         "expires_at": "2099-01-01T00:00:00Z", "max_uses": "9", "uses": "0",
-        "approver": "t", "ticket_id": ticket, "reason_code": "T",
+        "approver": "security", "ticket_id": ticket, "reason_code": "T",
         "conditions_verified": "verified", "signature": "",
     }
     payload = "|".join(w[k] for k in [

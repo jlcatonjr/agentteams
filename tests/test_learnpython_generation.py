@@ -182,8 +182,8 @@ def test_path_a_fresh_generation_claude(tmp_path):
     orch_content = orch.read_text(encoding="utf-8")
     assert "LearnPythonStatsEcon" in orch_content
 
-    # Claude front matter: must have name and allowed-tools, no user-invokable
-    assert "allowed-tools:" in orch_content
+    # Claude front matter: must have name and the capability key `tools:`, no user-invokable
+    assert "\ntools:" in orch_content
     assert "user-invokable:" not in orch_content
     assert "handoffs:" not in orch_content
 
@@ -292,7 +292,7 @@ def _make_minimal_claude_agent(slug: str, project_name: str = "TestProject") -> 
         f"---\n"
         f"name: {slug} — {project_name}\n"
         f'description: "Test agent for {slug}"\n'
-        f"allowed-tools: Bash, Read, Write, Edit\n"
+        f"tools: Bash, Read, Write, Edit\n"
         f"---\n"
         f"\n"
         f"# {slug} — {project_name}\n"
@@ -385,7 +385,7 @@ def test_path_b_convert_vscode_to_claude(tmp_path):
     # Must have Claude front matter
     assert orch_content.startswith("---")
     assert "name:" in orch_content
-    assert "allowed-tools:" in orch_content
+    assert "\ntools:" in orch_content
 
     # Must NOT have VS Code keys
     assert "user-invokable:" not in orch_content
@@ -532,7 +532,12 @@ def test_path_b_dry_run_writes_nothing(tmp_path):
     )
 
     assert result.dry_run is True
-    assert len(result.converted) == 1  # Would convert adversarial.md
+    converted_names = {Path(p).name for p in result.converted}
+    assert "adversarial.md" in converted_names
+    # The Claude adapter also ships the constitutional PreToolUse hook with every team, so the
+    # preview lists it too. The property under test is unchanged and is the next line: a dry
+    # run writes NOTHING, however many files it says it would write.
+    assert converted_names >= {"constitutional-gate.py", "settings.hooks.example.json"}
     assert not target_dir.exists()     # Nothing written
 
 
@@ -592,10 +597,15 @@ def test_path_b_overwrite_true_replaces_existing(tmp_path):
     )
 
     assert result.success
-    assert len(result.converted) == 1
+    # 1 agent + the 2 constitutional-hook artifacts the Claude adapter now ships with every
+    # team (hook script + settings example). Asserted by NAME rather than by count so the
+    # agent conversion stays pinned if the artifact set changes again.
+    converted_names = {Path(p).name for p in result.converted}
+    assert "navigator.md" in converted_names
+    assert converted_names >= {"constitutional-gate.py", "settings.hooks.example.json"}
     content = existing.read_text(encoding="utf-8")
     assert "EXISTING CONTENT" not in content
-    assert "allowed-tools:" in content
+    assert "\ntools:" in content
 
 
 def test_path_b_unknown_framework_raises(tmp_path):
@@ -685,7 +695,7 @@ def test_path_b_live_repo_actual_conversion(tmp_path):
 
     # Claude front matter present
     assert orch_content.startswith("---")
-    assert "allowed-tools:" in orch_content
+    assert "\ntools:" in orch_content
 
     # No VS Code keys
     assert "user-invokable:" not in orch_content
@@ -707,7 +717,7 @@ def test_path_b_live_repo_actual_conversion(tmp_path):
         agent_file = target_dir / f"{slug}.md"
         assert agent_file.exists(), f"Converted {slug}.md not found"
         content = agent_file.read_text(encoding="utf-8")
-        assert "allowed-tools:" in content, f"Missing Claude front matter in {slug}.md"
+        assert "\ntools:" in content, f"Missing Claude front matter in {slug}.md"
         assert "user-invokable:" not in content, f"VS Code key found in converted {slug}.md"
 
 
@@ -749,7 +759,7 @@ def test_path_b_convert_claude_to_vscode(tmp_path):
     assert "user-invokable:" in content
     assert "tools:" in content
     assert "model:" in content
-    # allowed-tools from claude source may be present (harmless) but VS Code keys injected
+    # a claude-source capability key may be present (harmless) but VS Code keys injected
     assert "name:" in content
     # Prose body preserved
     assert "Responsibility one" in content
@@ -854,7 +864,7 @@ def test_path_b_convert_cli_to_claude(tmp_path):
 
     # Claude front matter injected (source had none)
     assert content.startswith("---")
-    assert "allowed-tools:" in content
+    assert "\ntools:" in content
     assert "name:" in content
     # No VS Code keys
     assert "user-invokable:" not in content
@@ -919,7 +929,7 @@ def test_path_b_nested_subdir_agents_are_converted(tmp_path):
     converted = target_dir / "domain" / "navigator.md"
     assert converted.exists(), "Nested navigator.md not written"
     content = converted.read_text(encoding="utf-8")
-    assert "allowed-tools:" in content
+    assert "\ntools:" in content
     assert "Responsibility one" in content
 
 

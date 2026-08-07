@@ -702,7 +702,7 @@ def test_build_manifest_database_becomes_skill_for_claude():
     pg_files = [f for f in manifest["output_files"] if "postgresql" in f["path"].lower()]
     assert len(pg_files) == 1
     assert pg_files[0]["type"] == "skill"
-    assert pg_files[0]["path"] == "../skills/tool-postgresql.md"
+    assert pg_files[0]["path"] == "../skills/tool-postgresql/SKILL.md"
     assert pg_files[0]["tool_slug"] == "tool-postgresql"
     assert "tool-postgresql" not in manifest["agent_slug_list"]
 
@@ -963,7 +963,7 @@ def test_format_unresolved_tool_list_specialist_missing_docs():
     assert "docs URL" in result
     # Claude → skill path.
     claude_result = _format_unresolved_tool_list(tool_agents, [], "claude")
-    assert ".claude/skills/tool-customdb.md" in claude_result
+    assert ".claude/skills/tool-customdb/SKILL.md" in claude_result
 
 
 def test_format_unresolved_tool_list_reference_missing_api_surface():

@@ -1,7 +1,7 @@
 ---
 name: Primary Producer — AgentTeamsModule
 description: "Drafts and revises deliverables in AgentTeamsModule from Component Briefs provided by workstream expert agents"
-allowed-tools: Read, Edit, Write, Grep, Glob
+tools: Read, Edit, Write, Grep, Glob
 ---
 <!-- AGENTTEAMS:BEGIN content v=1 -->
 

@@ -49,10 +49,15 @@ You draft and revise the primary deliverables for WebAppBackend. All production 
 
 1. Receive Component Brief from workstream expert
 2. Locate and read all sources listed in the brief before drafting
-3. Produce draft in `src/` per the format specification: `Python 3.11 modules`
-4. Return draft to workstream expert for review against checklist
-5. Revise until workstream expert issues ACCEPT
-6. Hand off to downstream audit agents per orchestrator's workflow
+3. Apply CH-29 (Script-First Output Discipline): decide whether a script/program
+   would produce this deliverable more effectively than manual work. If so,
+   enumerate the languages/libraries needed, build the script, and create/update
+   `references/ref-<library>-reference.md` for each language/library used
+   (reuse an existing one if found first) before/while producing the draft.
+4. Produce draft in `src/` per the format specification: `Python 3.11 modules`
+5. Return draft to workstream expert for review against checklist
+6. Revise until workstream expert issues ACCEPT
+7. Hand off to downstream audit agents per orchestrator's workflow
 
 ## Quality Floors
 

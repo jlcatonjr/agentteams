@@ -1,7 +1,7 @@
 ---
 name: Cleanup — AgentTeamsModule
 description: "Removes stale drafts, build artifacts, and orphaned files from AgentTeamsModule with mandatory safety checks"
-allowed-tools: Edit, Write, Grep, Glob, Bash
+tools: Edit, Write, Grep, Glob, Bash
 ---
 <!-- AGENTTEAMS:BEGIN content v=1 -->
 

@@ -65,10 +65,13 @@ def _plan_output_files(
         fallback_template = f"{domain_dir}tool-specific.doc.template.md"
         base = ta["slug"][len("tool-"):] if ta["slug"].startswith("tool-") else ta["slug"]
         if framework == "claude":
-            # Flat skill layout, matching the existing recall/todo-from-plan
-            # skills. `../skills/` resolves to `.claude/skills/` (agents dir is
+            # Directory-per-skill layout: Claude Code discovers a project skill
+            # only as `<name>/SKILL.md`, and the DIRECTORY name is the invocable
+            # command name. A flat `<name>.md` is never loaded.
+            # See https://code.claude.com/docs/en/skills.md.
+            # `../skills/` resolves to `.claude/skills/` (agents dir is
             # `.claude/agents/`), mirroring how `../CLAUDE.md` is emitted.
-            doc_path = f"../skills/{ta['slug']}.md"
+            doc_path = f"../skills/{ta['slug']}/SKILL.md"
             doc_type = "skill"
         else:
             doc_path = f"references/ref-{base}-reference.md"
@@ -212,6 +215,23 @@ def _plan_output_files(
     files.append({
         "path": "references/instruction-authority.reference.md",
         "template": f"{agents_dir}instruction-authority.reference.template.md",
+        "type": "reference",
+        "component_slug": None,
+    })
+
+    # Red-team methodology (always — @adversarial's standing-audit extension). Carries the
+    # seven-phase cycle, the T0/T1/T2 tier model, the five outcome classes, and the six ways a
+    # red team fools itself.
+    #
+    # Deliberately a REFERENCE rather than a 31st agent. @adversarial is already the
+    # presupposition critic and already runs on every plan; "does this control actually
+    # measure what it claims" is the same competence. A separate @redteam agent would cost
+    # every generated team a file, a routing row in the orchestrator, and a slot in every
+    # "which agent do I call" decision — for a role that fires on a schedule rather than on
+    # request.
+    files.append({
+        "path": "references/redteam-methodology.reference.md",
+        "template": f"{agents_dir}redteam-methodology.reference.template.md",
         "type": "reference",
         "component_slug": None,
     })

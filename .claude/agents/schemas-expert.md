@@ -1,7 +1,7 @@
 ---
 name: JSON Schemas Expert — AgentTeamsModule
 description: "Component expert for JSON Schemas in AgentTeamsModule — prepares Component Briefs, reviews drafts against brief checklist, approves deliverables"
-allowed-tools: Read, Grep, Glob, Task
+tools: Read, Grep, Glob, Task
 ---
 
 <!--

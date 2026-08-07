@@ -569,3 +569,92 @@ def _run_bridge(
             print(f"  Notice: {notice}", file=sys.stderr)
 
     return 0 if result.success else 1
+
+
+def _run_redteam(args: argparse.Namespace) -> int:
+    """``--redteam`` / ``--accept-probe-baseline``: the standing red-team audit.
+
+    Runs phases 1, 2, 3-skeleton and 6 against the repository, writes the four artifacts, and
+    returns the exit code that distinguishes *clean* from *finding* from *harness broken*.
+    Phases 4, 5 and 7 are not run: an unattended job that writes remediation code is a larger
+    risk than the one it closes, and the emitted skeleton is what a human or agent takes
+    through them.
+
+    Args:
+        args: Parsed CLI namespace. Reads ``redteam_probes``, ``redteam_report``,
+            ``accept_probe_baseline``, ``project``/``output`` and ``dry_run``.
+
+    Returns:
+        ``0`` clean, ``1`` on a finding, ``2`` when the harness itself is broken.
+    """
+    from datetime import UTC, datetime
+
+    from agentteams.redteam import cycle
+
+    root = Path(getattr(args, "project", None) or Path.cwd()).resolve()
+    now = datetime.now(UTC)
+    generated_at = now.isoformat().replace("+00:00", "Z")
+    dry_run = bool(getattr(args, "dry_run", False))
+
+    if getattr(args, "accept_probe_baseline", False):
+        module = getattr(args, "redteam_probes", None)
+        if not module:
+            print(
+                "Error: --accept-probe-baseline needs --redteam-probes MODULE; there is "
+                "nothing to baseline without probes.",
+                file=sys.stderr,
+            )
+            return 2
+        count, path = cycle.accept_probe_baseline(
+            root, probe_module_path=module, generated_at=generated_at, dry_run=dry_run
+        )
+        print(f"  ✓  Recorded {count} probe outcome(s) to {path}")
+        print("     Review the diff before committing: this is what accepting a changed "
+              "probe outcome costs.")
+        return 0
+
+    report_dir = (
+        Path(args.redteam_report).resolve()
+        if getattr(args, "redteam_report", None)
+        else cycle.report_dir_for(root, now.strftime("%Y-%m-%d"))
+    )
+    result = cycle.run_cycle(
+        root,
+        probe_module_path=getattr(args, "redteam_probes", None),
+        report_dir=report_dir,
+        generated_at=generated_at,
+        dry_run=dry_run,
+    )
+
+    print("Standing red-team audit")
+    for line in result.summary_lines():
+        print(f"  {line}")
+    if result.selfaudit.advisory:
+        print(f"  advisory          : {len(result.selfaudit.advisory)} finding(s) in "
+              f"hand-written historical documents (not gating)")
+    if dry_run:
+        print("  --dry-run: nothing written.")
+    else:
+        print(f"  artifacts         : {report_dir}")
+
+    if result.exit_code == cycle.EXIT_HARNESS_BROKEN:
+        print(
+            "  HARNESS BROKEN — these results measure the instrument, not the target, and "
+            "must not be read as a clean run.",
+            file=sys.stderr,
+        )
+        for item in (
+            result.findings.control_failures
+            + result.findings.registration_problems
+            + result.findings.corpus_mismatches
+            + [f"live agent tree modified during the run: {p}"
+               for p in result.live_tree_modifications]
+        ):
+            print(f"    - {item}", file=sys.stderr)
+    elif result.exit_code == cycle.EXIT_FINDINGS:
+        for finding in result.selfaudit.findings:
+            print(f"    - {finding.render()}", file=sys.stderr)
+        for pid in result.findings.exploited:
+            print(f"    - probe {pid} returned EXPLOITED", file=sys.stderr)
+
+    return result.exit_code

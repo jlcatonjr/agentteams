@@ -326,7 +326,7 @@ def _component_placeholder_map(component: dict[str, Any], manifest: dict[str, An
                 slug = tool_doc_slugs[t]  # tool-<base>
                 base = slug[len("tool-"):] if slug.startswith("tool-") else slug
                 if framework == "claude":
-                    tool_lines.append(f"- `{slug}` skill (`.claude/skills/{slug}.md`)")
+                    tool_lines.append(f"- `{slug}` skill (`.claude/skills/{slug}/SKILL.md`)")
                 else:
                     tool_lines.append(f"- `references/ref-{base}-reference.md`")
             elif t in ref_tool_names:

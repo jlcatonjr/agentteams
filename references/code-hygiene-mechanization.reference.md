@@ -59,6 +59,8 @@ reads as conformance and suppresses the judgment that was actually required.
 | CH-26 Least authority in tool declarations | **mechanizable** | Declared tools against a role's required set; `audit.py::_check_readonly_tool_declarations` already does the read-only case. |
 | CH-27 Long-lived utilities over ad-hoc scripts | judgment | Same intent problem as CH-02. |
 | CH-28 Minimal, scoped edits | judgment | A property of a change, not of a tree. Not checkable from a snapshot. |
+| CH-29 Script-first output discipline | partly mechanizable | Half is tree-visible: a script's imports can be read and checked against `references/ref-<lib>-reference.md`, the same shape as the CH-19 retention check. The other half — whether the reference was *consulted before* the script was authored — is a fact about the order of an agent's actions, which no snapshot records. Classified above CH-27 (`judgment`) despite CH-29 firing more broadly, because CH-27 turns entirely on foreseen recurrence (intent) whereas CH-29's duty produces a **file**, and a file's absence is checkable. |
+| CH-30 No exemption without provenance | judgment | Requires asking whether the thing being exempted can CHOOSE to look like the exempted shape. That is a question about an adversary's options, not about the tree. The five instances that motivated the rule (scan.py's code-span, comment-line, basename, backup-dir and orphan exemptions) were each found by attacking them, not by matching them. |
 
 ## Summary
 
@@ -70,8 +72,8 @@ them by suffix: **-ed = a check exists**, **-able = a check could exist**.
 | mechanized | 6 | A check exists and covers the rule |
 | partly mechanized | 5 | A check exists and covers **part** of the rule; the row says which part |
 | mechanizable | 3 | No check; the decision procedure is fully specifiable |
-| partly mechanizable | 5 | No check; only part of the decision procedure is specifiable |
-| judgment | 9 | No check is possible; the information is not in what a checker can see |
+| partly mechanizable | 6 | No check; only part of the decision procedure is specifiable |
+| judgment | 10 | No check is possible; the information is not in what a checker can see |
 
 These counts are **derived from the table by
 `tests/test_code_hygiene.py::test_mechanization_summary_counts_match_the_table`**,
@@ -124,8 +126,8 @@ shipped check — both are the classification describing itself accurately.
 one named mapping; CH-06 enforces its heredoc half outright but ratchets its length
 half over 10 pre-existing blocks; CH-07 covers size but not structure; CH-22 covers
 a fixed module list; CH-24 counts handlers against a baseline. Each PASS is narrower than
-its rule, and the row states how. **Five more are partly mechanizable** — CH-09,
-CH-10, CH-16, CH-19, CH-25 — which is a different claim: nothing is built, and
+its rule, and the row states how. **Six more are partly mechanizable** — CH-09,
+CH-10, CH-16, CH-19, CH-25, CH-29 — which is a different claim: nothing is built, and
 only part of the procedure could be.
 
 **Two rules have tests that name them and mechanize nothing.**

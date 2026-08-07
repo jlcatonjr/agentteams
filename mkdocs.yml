@@ -5,7 +5,7 @@ repo_url: https://github.com/jlcatonjr/agentteams
 repo_name: jlcatonjr/agentteams
 edit_uri: edit/main/docs_src/
 docs_dir: docs_src
-site_dir: docs
+site_dir: _site
 use_directory_urls: true
 site_author: jlcatonjr
 extra:
@@ -36,6 +36,7 @@ nav:
   - How It Works: how-it-works.md
   - Examples: examples.md
   - CLI Reference: cli-reference.md
+  - Interoperability: interoperability.md
   - Guides:
       - Post-Production Auditor: post-production-auditor-guide.md
       - Security Hardening & Threat Intelligence: security-hardening-guide.md
@@ -51,6 +52,10 @@ nav:
       - Cross-Repository Coordination: cross-repository-coordination-guide.md
       - Working with Your Generated Team: working-with-your-generated-team-guide.md
       - Verification Environment: verification-environment.md
+  - Claude & Copilot:
+      - Claude Code Cheat Sheet: claude-code-cheat-sheet.md
+      - Claude Privileges: claude-privileges.md
+      - Copilot Privileges: copilot-privileges.md
   - Goose:
       - System Prep & Source/Model Switch: goose-system-prep.md
       - Cheat Sheet: goose-cheat-sheet.md
@@ -65,8 +70,10 @@ nav:
       - emit: api-reference/emit.md
       - fences: api-reference/fences.md
       - convert: api-reference/convert.md
+      - integrity: api-reference/integrity.md
       - interop: api-reference/interop.md
       - bridge: api-reference/bridge.md
+      - bridge-skills: api-reference/bridge-skills.md
       - fleet: api-reference/fleet.md
       - drift: api-reference/drift.md
       - behavioral-drift: api-reference/behavioral-drift.md
@@ -84,6 +91,7 @@ nav:
       - living-doc: api-reference/living-doc.md
       - cli: api-reference/cli.md
       - code-index: api-reference/code-index.md
+      - feature-inventory: api-reference/feature-inventory.md
       - code-sources: api-reference/code-sources.md
       - fence-inject: api-reference/fence-inject.md
       - graph: api-reference/graph.md
@@ -101,6 +109,8 @@ nav:
       - liaison-logs: api-reference/liaison-logs.md
       - host-features: api-reference/host-features.md
       - baseline: api-reference/baseline.md
+      - template-pins: api-reference/template-pins.md
+      - front-matter-reconcile: api-reference/front-matter-reconcile.md
       - bridge-subagents: api-reference/bridge-subagents.md
       - bridge-subagents-goose: api-reference/bridge-subagents-goose.md
       - bridge-sources: api-reference/bridge-sources.md

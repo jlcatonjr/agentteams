@@ -1,0 +1,3 @@
+file,function,construct,reason
+agentteams/cli/app.py,_main_dispatch,descriptor-lookup,"--self resolves THIS repository's own maintenance descriptor against _SCRIPT_DIR, not a fleet target's descriptor. fleet._resolve_descriptor answers 'which descriptor describes that workspace'; there is no workspace here, only the module's own source tree"
+agentteams/redteam/checks_static.py,<module>,descriptor-lookup,"_DESCRIPTOR_LITERALS is the detector's own rule data - the set of literals F-3 searches FOR. Flagging a rule for naming the thing it forbids would make the rule unstateable; this is provenance-keyed (the detector authored it), not shape-keyed, per CH-30"

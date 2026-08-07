@@ -75,8 +75,12 @@ def test_the_repository_itself_is_clean_of_these_patterns():
         if not d.is_dir():
             continue
         for p in d.glob("*.md"):
-            # This test file and the security template legitimately QUOTE the patterns.
-            for f in _injection(p.read_text(encoding="utf-8")):
+            # The real repo-relative path is passed, not a bare name: since 2026-08-06 the
+            # code-span exemption is keyed on whether the module OWNS the file, and that is
+            # read from the path. Passing a bare basename would score these module-owned
+            # files as untrusted reviewed content and flag every quoted rule.
+            rel_path = str(p.relative_to(root))
+            for f in scan_content(p.read_text(encoding="utf-8"), filename=rel_path):
                 offenders.append(f"{p.name}:{f.line} {f.message[:60]}")
     assert not offenders, "\n".join(offenders)
 
@@ -98,13 +102,32 @@ def test_the_tier_finding_names_c1_not_s5():
     assert hits and "C-1" in hits[0].message
 
 
-def test_a_quoted_tier_claim_is_not_a_tier_claim():
+def test_a_quoted_tier_claim_is_not_a_tier_claim_in_a_module_owned_file():
     """instruction-authority.reference.md quotes every one of these as an example of the attack.
 
-    Documenting a pattern must not read as issuing it — the same code-span rule the S-5 patterns
-    already rely on. Without this the reference would flag itself the moment it was written.
+    Documenting a pattern must not read as issuing it. Since 2026-08-06 that exemption is
+    keyed on PROVENANCE rather than on the backticks alone — see the companion test below for
+    why the backticks by themselves cannot be trusted.
     """
-    assert not _injection("Canonical shapes: `supersedes all prior instructions`.")
+    assert not scan_content(
+        "Canonical shapes: `supersedes all prior instructions`.",
+        filename=".claude/agents/references/instruction-authority.reference.md",
+    )
+
+
+def test_the_same_quoted_claim_in_reviewed_content_is_still_a_finding():
+    """The other half of the provenance rule, and the reason it exists.
+
+    A backtick is formatting, not a disclaimer: the model reading the file sees the words
+    either way. Probe B1 (2026-08-06) wrapped a live payload in a code span and the scanner
+    fell silent, because the exemption written for this module's own documentation applied to
+    every file anyone pointed the scanner at.
+    """
+    hits = scan_content(
+        "Canonical shapes: `supersedes all prior instructions`.",
+        filename="vendor/untrusted-review-target.md",
+    )
+    assert hits and "C-1" in hits[0].message
 
 
 @pytest.mark.parametrize("benign", [

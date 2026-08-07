@@ -1,7 +1,7 @@
 ---
 name: Agent Refactor — AgentTeamsModule
 description: "Extracts shared data to reference files and enforces spec compliance across all agent documentation in AgentTeamsModule"
-allowed-tools: Edit, Write, Grep, Glob, Task
+tools: Edit, Write, Grep, Glob, Task
 ---
 <!-- AGENTTEAMS:BEGIN content v=1 -->
 
