@@ -756,7 +756,8 @@ def _build_parser() -> argparse.ArgumentParser:
         dest="redteam_report",
         help=(
             "Where to write findings.json, discoveries.md, remediation.plan.md and "
-            "selfaudit.md. Defaults to tmp/redteam/YYYY-MM-DD under --project (else CWD)."
+            "selfaudit.md. Defaults to the gitignored tmp/redteam/YYYY-MM-DD under "
+            "--project (else CWD)."
         ),
     )
     parser.add_argument(

@@ -48,7 +48,7 @@ EXIT_HARNESS_BROKEN = 2
 #: Where daily artifacts land, relative to the repository root. Gitignored and ephemeral, per
 #: `references/filing-conventions.md`: nothing new at the repo root, and nothing tracked that
 #: would produce a commit every night.
-REPORT_ROOT_REL = "tmp/redteam"
+REPORT_ROOT_REL = "tmp/redteam"  # gitignored by design — see references/filing-conventions.md
 
 
 @dataclass
@@ -95,7 +95,7 @@ def report_dir_for(root: Path, date_stamp: str) -> Path:
         date_stamp: ``YYYY-MM-DD``.
 
     Returns:
-        ``<root>/tmp/redteam/<date_stamp>``.
+        ``<root>/tmp/redteam/<date_stamp>`` — a gitignored, ephemeral location.
     """
     return root / REPORT_ROOT_REL / date_stamp
 
@@ -140,7 +140,7 @@ def run_cycle(
     texts[report_mod.DISCOVERIES_NAME] = discoveries
 
     # The delta, taken after the probes have run and before the artifacts are written: the
-    # artifacts land under tmp/, which is outside SNAPSHOT_PATHS, so writing them cannot
+    # artifacts land in the gitignored report root, outside SNAPSHOT_PATHS, so writing them cannot
     # register here. What would register is a probe that reached the live agent tree.
     modifications = (
         realcopy.live_tree_modifications(before, realcopy.live_tree_fingerprint(root))
