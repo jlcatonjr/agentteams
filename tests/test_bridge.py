@@ -446,7 +446,7 @@ def test_goose_bridge_entry_advertises_research_capability(tmp_path: Path):
 
 
 def test_bridge_emits_recall_skill_for_claude_target(tmp_path: Path):
-    """Claude target with emit_skills=True (default) emits .claude/skills/recall.md."""
+    """Claude target with emit_skills=True (default) emits .claude/skills/recall/SKILL.md."""
     source_dir = tmp_path / "src" / ".github" / "agents"
     _build_source("copilot-vscode", source_dir)
     out_root = tmp_path / "out"
@@ -460,7 +460,57 @@ def test_bridge_emits_recall_skill_for_claude_target(tmp_path: Path):
         overwrite=True,
         check_only=False,
     )
-    assert (out_root / ".claude" / "skills" / "recall.md").exists()
+    assert (out_root / ".claude" / "skills" / "recall" / "SKILL.md").exists()
+
+
+def test_every_emitted_claude_skill_matches_the_discovery_contract(tmp_path: Path):
+    """Every emitted skill must be `<name>/SKILL.md` — the only shape Claude Code loads.
+
+    Regression guard for the 2026-08-07 finding: skills were emitted as flat
+    `.claude/skills/<name>.md`, which Claude Code never discovers. The failure was
+    silent — the retrieval layer degrades to grep by design, so an unreachable
+    index and a working one look identical from the outside. Nothing failed; the
+    feature was simply never used.
+
+    This asserts the shape for ALL emitted skills, not just `recall` — the original
+    defect spanned four (`recall`, `code-recall`, `todo-from-plan`, `parallelize-plan`)
+    and a fix covering only the first two would have left it live.
+
+    Contract: https://code.claude.com/docs/en/skills.md — "Each skill is a directory
+    with SKILL.md as the entrypoint." The DIRECTORY name is the invocable command
+    name, not the `name:` front-matter key.
+    """
+    source_dir = tmp_path / "src" / ".github" / "agents"
+    _build_source("copilot-vscode", source_dir)
+    out_root = tmp_path / "out"
+
+    run_bridge(
+        source_dir=source_dir,
+        source_framework="copilot-vscode",
+        target_framework="claude",
+        output_root=out_root,
+        dry_run=False,
+        overwrite=True,
+        check_only=False,
+    )
+
+    skills_root = out_root / ".claude" / "skills"
+    assert skills_root.is_dir(), "claude bridge must emit a .claude/skills/ tree"
+
+    flat = sorted(p.name for p in skills_root.glob("*.md"))
+    assert not flat, (
+        f"flat skill files are never discovered by Claude Code: {flat}. "
+        "Emit `<name>/SKILL.md` instead."
+    )
+
+    emitted = sorted(p.name for p in skills_root.iterdir() if p.is_dir())
+    assert emitted, "expected at least one emitted skill directory"
+    for name in emitted:
+        entry = skills_root / name / "SKILL.md"
+        assert entry.is_file(), (
+            f"skill directory {name!r} must contain SKILL.md exactly "
+            f"(found: {sorted(p.name for p in (skills_root / name).iterdir())})"
+        )
 
 
 def test_bridge_quickstart_and_entrypoint_advertise_retrieval(tmp_path: Path):
@@ -496,7 +546,7 @@ def test_bridge_quickstart_and_entrypoint_advertise_retrieval(tmp_path: Path):
 
 
 def test_bridge_skips_recall_skill_when_disabled(tmp_path: Path):
-    """emit_skills=False suppresses recall.md emission."""
+    """emit_skills=False suppresses recall/SKILL.md emission."""
     source_dir = tmp_path / "src" / ".github" / "agents"
     _build_source("copilot-vscode", source_dir)
     out_root = tmp_path / "out"
@@ -511,7 +561,7 @@ def test_bridge_skips_recall_skill_when_disabled(tmp_path: Path):
         check_only=False,
         emit_skills=False,
     )
-    assert not (out_root / ".claude" / "skills" / "recall.md").exists()
+    assert not (out_root / ".claude" / "skills" / "recall" / "SKILL.md").exists()
 
 
 # --------------------------------------------------------------------------

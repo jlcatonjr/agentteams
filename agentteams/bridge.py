@@ -164,9 +164,10 @@ def run_bridge(
             (--bridge-merge). For files containing `AGENTTEAMS-BRIDGE` fences,
             only fenced regions are re-rendered; content outside fences is
             preserved. Files without fences are skipped with notices.
-        emit_skills: For claude target only — emit the recall skill template
-            at `.claude/skills/recall.md`. Default True. Has no effect on
-            non-claude targets.
+        emit_skills: For claude target only — emit the recall and code-recall
+            skill templates at `.claude/skills/recall/SKILL.md` and
+            `.claude/skills/code-recall/SKILL.md`. Default True. Has no effect
+            on non-claude targets.
 
     Returns:
         BridgeResult.
@@ -295,12 +296,34 @@ def run_bridge(
                 f"{copilot_instr_path} not found; default CLAUDE.md retained."
             )
     if target_framework == "claude" and emit_skills:
+        # Claude Code discovers a project skill as `.claude/skills/<name>/SKILL.md` —
+        # a directory per skill. A flat `<name>.md` is not discovered and is inert.
+        # The DIRECTORY name is the invocable command name (`/recall`), not the
+        # `name:` front-matter key. See https://code.claude.com/docs/en/skills.md.
         target_files.append(
-            (output_root / ".claude" / "skills" / "recall.md", _render_recall_skill()),
+            (output_root / ".claude" / "skills" / "recall" / "SKILL.md", _render_recall_skill()),
         )
         target_files.append(
-            (output_root / ".claude" / "skills" / "code-recall.md", _render_code_recall_skill()),
+            (
+                output_root / ".claude" / "skills" / "code-recall" / "SKILL.md",
+                _render_code_recall_skill(),
+            ),
         )
+        # A pre-existing flat file from an older bridge run is inert, not harmful.
+        # Report it; never delete it. These skill files carry no AGENTTEAMS-BRIDGE
+        # fence, so there is no way to tell hand-edited content from pristine — and
+        # `.claude/skills/recall.md` is the exact path whose user-authored content
+        # was destroyed in the 2026-05-27 incident (references/bridge-refresh-safety.md).
+        # Cleanup is an operator decision, not a side effect of a routine bridge run.
+        for _stale_slug in ("recall", "code-recall"):
+            _stale = output_root / ".claude" / "skills" / f"{_stale_slug}.md"
+            if _stale.exists():
+                result.notices.append(
+                    f"stale flat skill retained: {_stale} — superseded by "
+                    f"{_stale_slug}/SKILL.md and no longer loaded by Claude Code. "
+                    "Not removed automatically (may hold hand-authored content); "
+                    "delete manually once reviewed."
+                )
 
     # Goose target: emit a bridge-orchestrator recipe so the bridged project has the
     # `developer` (CLI) extension by default and, opt-in, the operator-selected MCP
@@ -515,7 +538,7 @@ def run_bridge(
     ):
         from agentteams.plan_steps_todo import render_skill as _render_todo_skill
 
-        skill_path = output_root / ".claude" / "skills" / "todo-from-plan.md"
+        skill_path = output_root / ".claude" / "skills" / "todo-from-plan" / "SKILL.md"
         if skill_path.exists() and not (overwrite or merge_only):
             result.skipped.append(str(skill_path))
         else:
@@ -535,7 +558,7 @@ def run_bridge(
     ):
         from agentteams.parallel_plan import render_skill as _render_parallelize_skill
 
-        skill_path = output_root / ".claude" / "skills" / "parallelize-plan.md"
+        skill_path = output_root / ".claude" / "skills" / "parallelize-plan" / "SKILL.md"
         if skill_path.exists() and not (overwrite or merge_only):
             result.skipped.append(str(skill_path))
         else:
@@ -851,20 +874,31 @@ def _render_recall_skill() -> str:
         "---\n\n"
         "# /recall — Memory-Index Retrieval\n\n"
         "For broad 'where is X' or thematic questions, query the agentteams "
-        "memory-index before falling back to grep:\n\n"
+        "memory-index before falling back to grep. **Lexical first** — it is "
+        "the default and the shipped agent protocol:\n\n"
         "```\n"
         "agentteams --query-index \"<the user's question, quoted>\" "
-        "--query-strategy vector --query-k 5\n"
+        "--query-k 5\n"
         "```\n\n"
+        "Retry with `--query-strategy vector` when **either** (a) lexical "
+        "returns zero hits, **or** (b) the lexical top-1 has no content-word "
+        "overlap with the query, **or** (c) the question is purely thematic "
+        "with no concrete term to match on.\n\n"
         "(Some installations require `--description PATH` for read-only "
-        "queries — pass the project brief if so.)\n\n"
+        "queries — pass the project brief if so; use `--self` when maintaining "
+        "agentteams itself.)\n\n"
         "## Fallback policy\n\n"
         "`non-blocking-file-read-then-search` (declared in the index): if "
-        "vector returns no/weak hits, try `--query-strategy lexical`, then "
+        "lexical returns no/weak hits, try `--query-strategy vector`, then "
         "fall back to Grep / Glob. Never block on the index.\n\n"
+        "Each hit carries a `confidence` field — treat `reliable` as "
+        "actionable, `candidate` as worth opening before relying on it, and "
+        "`weak` as noise.\n\n"
         "## Caveats\n\n"
         "- Index mode is `sparse-tfidf-cosine` — keyword-aware, NOT semantic "
-        "  embeddings. Synonyms and paraphrases may miss.\n"
+        "  embeddings. There is no embedding model (`vector_model_id` is null); "
+        "  `vector` means cosine over sparse tf-idf term vectors. Synonyms and "
+        "  paraphrases may miss.\n"
         "- Index covers durable sources (work summaries, CHANGELOG, plans), "
         "  NOT code or the gitignored `tmp/` scratch tree.\n"
         "- Index is rebuilt explicitly via `--refresh-index`, not on file save.\n"

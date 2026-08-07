@@ -367,7 +367,7 @@ Need to recover something?
 `agentteams … --bridge-refresh` is **destructive at the target project** — it
 unconditionally overwrites `CLAUDE.md`, `.claude/README.md`,
 `.claude/agent-team.md`, `.claude/quickstart-snippet.md`, and
-`.claude/skills/recall.md`. Before any such invocation against an external
+`.claude/skills/recall/SKILL.md`. Before any such invocation against an external
 project (including the `researchteam` and `collector-management` test
 teams), the full Pre-Flight in `references/bridge-refresh-safety.md` §II
 MUST pass:

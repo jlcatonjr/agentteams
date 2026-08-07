@@ -38,7 +38,12 @@ The following checks **must all pass** before invoking `--bridge-refresh` agains
 
 ```bash
 # claude target:
-for f in CLAUDE.md .claude/README.md .claude/agent-team.md .claude/quickstart-snippet.md .claude/skills/recall.md; do
+# Skills are directory-per-skill (`<name>/SKILL.md`) — that is the only shape
+# Claude Code loads. A legacy flat `.claude/skills/recall.md` from a pre-2026-08-07
+# bridge run is inert and is NEVER deleted automatically (it carries no
+# AGENTTEAMS-BRIDGE fence, so hand-authored content is indistinguishable from
+# pristine — see the 2026-05-27 incident above). Inventory it so the operator sees it.
+for f in CLAUDE.md .claude/README.md .claude/agent-team.md .claude/quickstart-snippet.md .claude/skills/recall/SKILL.md .claude/skills/code-recall/SKILL.md .claude/skills/recall.md .claude/skills/code-recall.md; do
   [ -f "$target_project/$f" ] && echo "PRESENT: $f"
 done
 # goose target (AGENTS.md is SHARED across tools — treat its presence as high-risk):

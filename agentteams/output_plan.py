@@ -65,10 +65,13 @@ def _plan_output_files(
         fallback_template = f"{domain_dir}tool-specific.doc.template.md"
         base = ta["slug"][len("tool-"):] if ta["slug"].startswith("tool-") else ta["slug"]
         if framework == "claude":
-            # Flat skill layout, matching the existing recall/todo-from-plan
-            # skills. `../skills/` resolves to `.claude/skills/` (agents dir is
+            # Directory-per-skill layout: Claude Code discovers a project skill
+            # only as `<name>/SKILL.md`, and the DIRECTORY name is the invocable
+            # command name. A flat `<name>.md` is never loaded.
+            # See https://code.claude.com/docs/en/skills.md.
+            # `../skills/` resolves to `.claude/skills/` (agents dir is
             # `.claude/agents/`), mirroring how `../CLAUDE.md` is emitted.
-            doc_path = f"../skills/{ta['slug']}.md"
+            doc_path = f"../skills/{ta['slug']}/SKILL.md"
             doc_type = "skill"
         else:
             doc_path = f"references/ref-{base}-reference.md"

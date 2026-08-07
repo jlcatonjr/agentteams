@@ -67,7 +67,12 @@ references/bridges/**/bridge-merge.report.md
 # rebuilt on demand (agentteams --refresh-code-index / --query-code / --update).
 # The api-* partitions embed machine-specific resolved paths & installed
 # versions; keep local, never commit. See references/plans/code-api-vector-index.plan.md.
+# The `**/` form matters: `.claude/` is an explicitly TRACKED tree, so a
+# `.claude/agents/references/code-index/` build would otherwise be committable.
+# (The `.github/agents/` copy escapes only incidentally, via the `.github/agents/*`
+# rule above.) Root-anchored `references/code-index/` alone is not enough.
 references/code-index/
+**/references/code-index/
 
 # External-retrieval TTL cache (agentteams/research/cache.py) — search/fetch/scholar responses
 # from third-party endpoints, keyed by SHA-256 digest. Untrusted external bytes and

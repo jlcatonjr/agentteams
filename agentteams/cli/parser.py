@@ -565,10 +565,10 @@ def _build_parser() -> argparse.ArgumentParser:
         action="store_true",
         dest="bridge_no_skills",
         help=(
-            "Suppress emission of .claude/skills/recall.md (Claude target "
-            "only). The recall skill wraps `agentteams --query-index` for "
-            "in-session memory-index retrieval; disable if your team manages "
-            "skills separately."
+            "Suppress emission of .claude/skills/recall/SKILL.md (Claude "
+            "target only). The recall skill wraps `agentteams --query-index` "
+            "for in-session memory-index retrieval; disable if your team "
+            "manages skills separately."
         ),
     )
     parser.add_argument(

@@ -126,8 +126,14 @@ class ClaudeAdapter(FrameworkAdapter):
         Tool docs are authored without front matter (so the Copilot target can
         reuse them verbatim as reference docs). For Claude we strip any stray
         front matter / handoffs and prepend a minimal skill front matter block
-        (name + description) — the same flat-file shape as the recall and
-        todo-from-plan skills.
+        (name + description) — the same shape as the recall and todo-from-plan
+        skills.
+
+        This renders the *body* only. The caller writes it to
+        ``.claude/skills/<slug>/SKILL.md``: Claude Code discovers a project
+        skill only as a directory containing ``SKILL.md``, and the directory
+        name — not the ``name:`` key — is the invocable command name.
+        See https://code.claude.com/docs/en/skills.md.
         """
         content = self._strip_yaml_front_matter(content)
         content = self._strip_handoffs_section(content)

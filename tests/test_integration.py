@@ -1322,7 +1322,7 @@ def test_claude_operational_tool_becomes_skill(tmp_path):
         pytest.skip("data-pipeline example not found")
     _run_pipeline(brief, tmp_path, framework="claude")
     # Skill lands one level above the agents dir (../skills/), mirroring CLAUDE.md.
-    skill = tmp_path.parent / "skills" / "tool-postgresql.md"
+    skill = tmp_path.parent / "skills" / "tool-postgresql" / "SKILL.md"
     assert skill.exists(), "operational tool must be emitted as a skill"
     text = skill.read_text(encoding="utf-8")
     assert text.startswith("---\nname: tool-postgresql\n")

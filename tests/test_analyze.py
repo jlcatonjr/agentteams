@@ -963,7 +963,7 @@ def test_format_unresolved_tool_list_specialist_missing_docs():
     assert "docs URL" in result
     # Claude → skill path.
     claude_result = _format_unresolved_tool_list(tool_agents, [], "claude")
-    assert ".claude/skills/tool-customdb.md" in claude_result
+    assert ".claude/skills/tool-customdb/SKILL.md" in claude_result
 
 
 def test_format_unresolved_tool_list_reference_missing_api_surface():
