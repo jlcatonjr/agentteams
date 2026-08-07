@@ -224,7 +224,7 @@ def score_for_target(
     return "clean" if acceptable else "misescalated"
 
 
-def render_counts(results: list[TargetResult], *, payloads: int) -> list[str]:
+def render_counts(results: list[TargetResult], *, payloads: int, repeat: int = 1) -> list[str]:
     """Render the per-framework and per-agent breakdown.
 
     An aggregate alone — "defended 812 of 1,260" — hides that one agent failed everything while
@@ -249,10 +249,18 @@ def render_counts(results: list[TargetResult], *, payloads: int) -> list[str]:
             f"{sum(1 for r in contract if not r.misescalated)} | {len(contract)} | "
             f"`registry.run_probes` |"
         )
+    # Repetitions count. A re-test that ran 45 measurements and reported "9 of 9 pairs"
+    # understates its own denominator by a factor of five — the F-4 defect, in the reporting of
+    # a check built to catch F-4.
+    measured = len(results) * payloads * max(1, repeat)
     lines.append(
-        f"| agent/payload pairs measured | {len(results) * payloads} | "
-        f"{len(results) * payloads} | `registry.run_probes` |"
+        f"| measurements taken | {measured} | {measured} | `registry.run_probes` |"
     )
+    if repeat > 1:
+        lines.append(
+            f"| distinct agent/payload pairs | {len(results) * payloads} | "
+            f"{len(results) * payloads} | `registry.run_probes` |"
+        )
     return lines
 
 

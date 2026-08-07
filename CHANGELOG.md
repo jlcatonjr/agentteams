@@ -6,6 +6,52 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### fixed (emitted Claude skills were never discoverable — the retrieval layer was unreachable, not absent)
+
+- **Skills now emit as `.claude/skills/<name>/SKILL.md`, not flat `.claude/skills/<name>.md`.**
+  Claude Code discovers a project skill only as a directory containing `SKILL.md`, and the
+  **directory name is the invocable command name**
+  ([docs](https://code.claude.com/docs/en/skills.md)). Every skill this project has ever
+  emitted to a Claude target was flat, and therefore **never loaded** — `/recall` and
+  `/code-recall` did not exist in any bridged session. The memory index and code index both
+  worked fine from the CLI the whole time; nothing could reach them.
+  The failure was silent by construction: the retrieval layer's `non-blocking-file-read-then-search`
+  contract degrades to grep without warning, so an unreachable index and a working one produce
+  identical output — correct answers, more tokens. No error, no test failure. The flat layout
+  was additionally **regression-protected in the wrong direction** by `tests/test_bridge.py`
+  and two golden baselines.
+  All four emitted skills move together (`recall`, `code-recall`, `todo-from-plan`,
+  `parallelize-plan`), plus every tool-doc skill via `output_plan.py` — each of those becomes a
+  genuinely invocable `/tool-<name>`. `agentteams/bridge_skills.py` is carved out of `bridge.py`
+  for the CH-07 ceiling.
+- **The skill slug is now taken from the directory, not the filename.** `render_pipeline.py`
+  derived it from the file stem, which under the new layout is the literal `SKILL` — it would
+  have written `name: SKILL` into every skill's front matter.
+- **Migration is a notice, never a delete.** A stale flat file at a bridged target is reported
+  and left in place. It is inert, and it cannot be told apart from hand-authored content: these
+  skill files carry no `AGENTTEAMS-BRIDGE` fence, the new path's first-time-create fires even
+  under the non-destructive `--bridge-merge`, and the delete would be unbacked.
+  `.claude/skills/recall.md` is the exact path whose user content was destroyed in the
+  2026-05-27 incident (`references/bridge-refresh-safety.md`); shipping an automatic delete for
+  it would regress the incident that document exists to prevent.
+- **The `--bridge-refresh` Pre-Flight inventory was updated in the same change** across all five
+  sites that hard-code the path. Moving the emitter without moving the guard would have left a
+  C-5 clearance check inventorying a path that no longer exists, silently unchecking the real
+  file on a destructive cross-repository write.
+- **`recall` no longer contradicts the agent protocols.** It led with `--query-strategy vector`
+  while `navigator`/`quality-auditor` mandate lexical-first with vector as the low-confidence
+  retry, and the CLI defaults to lexical. Now lexical-first, with the sparse-tf-idf caveat
+  stated plainly: `vector` is cosine over sparse tf-idf term vectors, not embeddings
+  (`vector_model_id` is null).
+- **Read-only auditors are no longer told a skill can run a query for them.**
+  `quality-auditor`, `technical-validator`, and `adversarial` declare `tools: Read, Grep, Glob`
+  and were pointed at "the `recall` skill" as an executing affordance. A skill is injected
+  prompt text; it confers no capability. The gate now names `@navigator` — which holds `Bash` —
+  as the real escalation route. **No `tools:` grant was widened** (C-3).
+- **`**/references/code-index/` added to `.gitignore`.** The rule was root-anchored, so a code
+  index built under the explicitly-tracked `.claude/` tree was committable — it embeds absolute
+  machine paths and installed dependency versions.
+
 ### changed (the red-team audit moved to weekly, and gained a catch-up for a missed trigger)
 
 - **Cadence: daily → weekly, Mondays 06:41 UTC.** Operator instruction, on cost grounds. Two

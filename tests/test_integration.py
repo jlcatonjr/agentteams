@@ -75,7 +75,11 @@ def _run_pipeline(brief_path: Path, tmp_path: Path, framework: str = "copilot-vs
         elif rel_path.startswith("../skills/") or "/skills/" in rel_path:
             from pathlib import Path as _Path
             file_type = "skill"
-            content = adapter.render_skill_file(content, _Path(rel_path).stem, manifest)
+            # Mirrors render_pipeline.py: skills are `<slug>/SKILL.md`, so the slug is
+            # the DIRECTORY name. Using the file stem would yield the literal "SKILL".
+            _sp = _Path(rel_path)
+            _slug = _sp.parent.name if _sp.stem == "SKILL" else _sp.stem
+            content = adapter.render_skill_file(content, _slug, manifest)
         else:
             from pathlib import Path as _Path
             slug = _Path(rel_path).stem.replace(".agent", "")

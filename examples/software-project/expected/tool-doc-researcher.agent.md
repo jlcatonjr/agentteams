@@ -62,6 +62,8 @@ Before opening external documentation tiers, check whether the team has already 
 agentteams --query-index "<tool name> <version>" --query-strategy lexical --query-k 5 --description .agentteams/brief.json --project . --output .github/agents --no-scan --yes
 ```
 
+> **Self-maintained repos (agentteams itself):** `.agentteams/brief.json` does not exist there. Use `--self` instead of `--description ... --project . --output ...`; it resolves the brief and the output root together. Everywhere else the form above is correct.
+
 Fall back to `--query-strategy vector` when **either** (a) lexical returns zero hits, **or** (b) the lexical top-1 has no content-word overlap with the query (single-term false-positive guard).
 
 Each hit's `confidence` field (`reliable` / `candidate` / `weak`) is computed by `agentteams.memory_index.query_index()` from the same per-strategy thresholds this section used to restate by hand — treat `reliable` as an actionable hit, `candidate` as worth opening before relying on it. If your runtime can't read the structured field, fall back to: lexical top-1 ≥ 3.0 reliable / 1.0–3.0 candidate-for-inspection; vector top-1 ≥ 0.30 reliable / 0.20–0.30 candidate-for-inspection. If a prior research artifact surfaces at `reliable` or `candidate`, open it and reuse the verified fields — re-verifying only the `docs_url` against the live site to confirm it has not moved. Cite the prior artifact in your output so `@agent-updater` knows the data was reused, not re-fetched. Never block on the index; if absent/empty, proceed to Tier 1 below.

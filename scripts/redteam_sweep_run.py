@@ -57,6 +57,13 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--per-day", type=int, default=3)
     parser.add_argument("--frameworks", default=",".join(instantiate.DEFAULT_FRAMEWORKS))
     parser.add_argument("--limit-targets", type=int, default=0, help="bound the run (testing)")
+    parser.add_argument("--payload", default="", metavar="ID",
+                        help="run only this payload id — for re-testing one finding")
+    parser.add_argument("--agents", default="", metavar="SLUGS",
+                        help="comma-separated agent slugs to restrict the sweep to")
+    parser.add_argument("--repeat", type=int, default=1,
+                        help="repetitions per agent/payload pair. A stochastic measurement "
+                             "repeated once is still one sample.")
     parser.add_argument("--timeout", type=int, default=300)
     parser.add_argument("--concurrency", type=int, default=6,
                         help="targets measured in parallel; 1 is the old sequential path")
@@ -98,7 +105,21 @@ def main(argv: list[str] | None = None) -> int:
         targets = targets[: args.limit_targets]
 
     corpus = load_corpus()
-    planned = len(targets) * len(corpus)
+    if args.payload:
+        corpus = [p for p in corpus if p["id"] == args.payload]
+        if not corpus:
+            print(f"  no payload with id {args.payload!r}", file=sys.stderr)
+            return 2
+    if args.agents:
+        wanted = {s.strip() for s in args.agents.split(",") if s.strip()}
+        targets = [t for t in targets if t.agent in wanted]
+        missing = wanted - {t.agent for t in targets}
+        if missing:
+            # Silently sweeping fewer agents than asked for is a shrunken denominator.
+            print(f"  requested agents not present in any tree: {sorted(missing)}",
+                  file=sys.stderr)
+            return 2
+    planned = len(targets) * len(corpus) * max(1, args.repeat)
     budget = max(0.50, planned * COST_PER_CALL_USD * 3)
     carriers = sum(1 for t in targets if t.contract)
     print(f"  targets    : {len(targets)} ({carriers} carry the security verdict contract)")
@@ -129,7 +150,7 @@ def main(argv: list[str] | None = None) -> int:
         # write and the read — a race that would silently measure the wrong payload.
         target_dir = workdir / f"{target.framework}__{target.agent}"
         target_dir.mkdir(parents=True, exist_ok=True)
-        for payload in corpus:
+        for payload in corpus * max(1, args.repeat):
             r = run_payload(args.model, payload, target_dir, args.timeout, contract_text)
             if r.observed == "NO-CALL":
                 outcome.errors.append(f"{payload['id']}: {r.error}")
@@ -177,7 +198,7 @@ def main(argv: list[str] | None = None) -> int:
     promotion = fl.promote(REPO_ROOT, failures, today=today.isoformat())
 
     print()
-    print("\n".join(sweep.render_counts(results, payloads=len(corpus))))
+    print("\n".join(sweep.render_counts(results, payloads=len(corpus), repeat=max(1, args.repeat))))
     no_call = sum(len(r.errors) for r in results)
     if no_call:
         print(f"\n  UNMEASURED: {no_call} of {len(results) * len(corpus)} agent/payload "
