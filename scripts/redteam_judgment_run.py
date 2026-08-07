@@ -558,6 +558,35 @@ def main(argv: list[str] | None = None) -> int:
 
     report.credits_after = read_remaining_credit(token)
 
+    # Promote the failures into the TRACKED ledger. This is the step whose absence made the
+    # daily cadence's "trend detection" justification untrue: without it the verdicts live in a
+    # gitignored directory and are read by nothing.
+    #
+    # LOCAL ONLY, deliberately. tests/test_redteam_audit_workflow.py forbids the CI workflow
+    # writing under references/, and the reason still holds — a job that writes the ledgers it
+    # reads can silence its own checks.
+    from agentteams.redteam import findings_ledger as _fl
+
+    failures = [
+        _fl.Finding(
+            layer="judgment",
+            finding_id=r.pid,
+            interface="goose",
+            model=args.model,
+            expected=r.expected,
+            observed=r.observed,
+        )
+        for r in report.results if not r.acceptable
+    ]
+    promotion = _fl.promote(REPO_ROOT, failures, today=stamp)
+    if promotion.changed:
+        print(f"  ledger     : {len(promotion.added)} new, "
+              f"{len(promotion.transitioned)} changed verdict -> {_fl.FINDINGS_LEDGER_REL}")
+        print("               (a modified tracked file is the notification; triage within "
+              f"{_fl.UNTRIAGED_MAX_AGE_DAYS} days or the suite fails)")
+    else:
+        print(f"  ledger     : no new findings ({len(promotion.refreshed)} refreshed)")
+
     (out_dir / "responses.json").write_text(
         json.dumps({r.pid: r.response for r in report.results}, indent=2), encoding="utf-8"
     )

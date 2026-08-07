@@ -2,9 +2,15 @@
 <!--
   Daily judgment-layer red-team audit (W14) for the agentteams repository.
 
+  PLACEHOLDER: __AGENTTEAMS_ROOT__ is substituted at install time. The tracked copy carries
+  no absolute home path, because a machine-specific path in a tracked file is unusable by
+  anyone else and is forbidden by tests/test_code_hygiene.py. launchd itself requires
+  absolute paths, so the substitution happens on the way in rather than in the repository.
+
   Install:
-      cp references/launchd/us.visualknowledge.agentteams.redteam-judgment.plist \
-         ~/Library/LaunchAgents/
+      sed "s|__AGENTTEAMS_ROOT__|$(pwd)|g" \
+        references/launchd/us.visualknowledge.agentteams.redteam-judgment.plist \
+        > ~/Library/LaunchAgents/us.visualknowledge.agentteams.redteam-judgment.plist
       launchctl bootstrap gui/$(id -u) \
          ~/Library/LaunchAgents/us.visualknowledge.agentteams.redteam-judgment.plist
   Fire once now (verification — reading the file proves nothing):
@@ -34,11 +40,11 @@
   <key>ProgramArguments</key>
   <array>
     <string>/bin/bash</string>
-    <string>/Users/jamescaton/githubrepositories/agentteams/scripts/run_daily_judgment_audit.sh</string>
+    <string>__AGENTTEAMS_ROOT__/scripts/run_daily_judgment_audit.sh</string>
   </array>
 
   <key>WorkingDirectory</key>
-  <string>/Users/jamescaton/githubrepositories/agentteams</string>
+  <string>__AGENTTEAMS_ROOT__</string>
 
   <key>EnvironmentVariables</key>
   <dict>
@@ -66,8 +72,8 @@
   <false/>
 
   <key>StandardOutPath</key>
-  <string>/Users/jamescaton/githubrepositories/agentteams/tmp/redteam-judgment/launchd.out.log</string>
+  <string>__AGENTTEAMS_ROOT__/tmp/redteam-judgment/launchd.out.log</string>
   <key>StandardErrorPath</key>
-  <string>/Users/jamescaton/githubrepositories/agentteams/tmp/redteam-judgment/launchd.err.log</string>
+  <string>__AGENTTEAMS_ROOT__/tmp/redteam-judgment/launchd.err.log</string>
 </dict>
 </plist>

@@ -3,7 +3,7 @@
 
 > **Auto-generated.** Regenerated on every commit that touches the `agentteams` package. Do not edit manually — changes will be overwritten.
 
-- Modules mapped: **132**
+- Modules mapped: **133**
 - Packages: **7**
 - Internal import edges: **253**
 - Distinct external dependencies: **4**
@@ -27,7 +27,7 @@ Inter-package import dependencies (module-level detail in the tables below).
 | `agentteams.enrich` | 6 | `agentteams` |
 | `agentteams.eval_adapters` | 2 | — |
 | `agentteams.frameworks` | 8 | `agentteams` |
-| `agentteams.redteam` | 9 | `agentteams` |
+| `agentteams.redteam` | 10 | `agentteams` |
 | `agentteams.research` | 9 | — |
 
 ---
@@ -145,6 +145,7 @@ Every module, coloured by package (full adjacency in the table below).
 | `agentteams.redteam.checks_static` | `agentteams.integrity`, `agentteams.redteam.registry` | `agentteams.redteam.selfaudit` |
 | `agentteams.redteam.corpus` | `agentteams.scan` | `agentteams.redteam.runner` |
 | `agentteams.redteam.cycle` | `agentteams.redteam.checks_report`, `agentteams.redteam.realcopy`, `agentteams.redteam.registry`, `agentteams.redteam.report`, `agentteams.redteam.runner`, `agentteams.redteam.selfaudit` | `agentteams.cli.commands` |
+| `agentteams.redteam.findings_ledger` | — | — |
 | `agentteams.redteam.realcopy` | `agentteams.fleet` | `agentteams.redteam.cycle` |
 | `agentteams.redteam.registry` | — | `agentteams.redteam.checks_report`, `agentteams.redteam.checks_static`, `agentteams.redteam.cycle`, `agentteams.redteam.report`, `agentteams.redteam.runner`, `agentteams.redteam.selfaudit` |
 | `agentteams.redteam.report` | `agentteams.redteam.registry`, `agentteams.redteam.runner`, `agentteams.redteam.selfaudit` | `agentteams.redteam.cycle` |
@@ -1348,6 +1349,14 @@ digraph "agentteams architecture" {
         "agentteams.redteam.runner",
         "agentteams.redteam.selfaudit"
       ],
+      "external": [],
+      "repo_local": []
+    },
+    "agentteams.redteam.findings_ledger": {
+      "package": "agentteams.redteam",
+      "path": "agentteams/redteam/findings_ledger.py",
+      "is_package": false,
+      "imports_internal": [],
       "external": [],
       "repo_local": []
     },

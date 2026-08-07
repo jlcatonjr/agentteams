@@ -107,7 +107,7 @@ Separate job, separate cadence, separate thing measured.
 | | Deterministic battery | Judgment layer |
 |---|---|---|
 | Where | GitHub Actions | **this machine** (launchd) |
-| Cadence | weekly | **daily** |
+| Cadence | weekly | **daily** (judgment layer) |
 | Cost | free (public repo) | ~$0.02/run ≈ $0.60/month |
 | Changes when | *this repo* changes — and CI runs it on every push anyway | a *vendor's model* changes, silently, with no commit here |
 
@@ -116,7 +116,9 @@ per-push net; the deterministic one does.
 
 **Install:**
 ```bash
-cp references/launchd/us.visualknowledge.agentteams.redteam-judgment.plist ~/Library/LaunchAgents/
+sed "s|__AGENTTEAMS_ROOT__|$(pwd)|g" \
+  references/launchd/us.visualknowledge.agentteams.redteam-judgment.plist \
+  > ~/Library/LaunchAgents/us.visualknowledge.agentteams.redteam-judgment.plist
 launchctl bootstrap gui/$(id -u) ~/Library/LaunchAgents/us.visualknowledge.agentteams.redteam-judgment.plist
 launchctl kickstart -k gui/$(id -u)/us.visualknowledge.agentteams.redteam-judgment   # verify
 ```

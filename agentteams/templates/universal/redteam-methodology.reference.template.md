@@ -4,6 +4,7 @@ SECTION MANIFEST — redteam-methodology.reference.template.md
 |---------------------------|---------------|---------------------------------------------|
 | redteam_cycle             | FENCED        | The seven phases, the tier model, the outcome classes |
 | redteam_failure_modes     | FENCED        | F-1..F-6: the six ways a red team fools itself |
+| redteam_finding_triage    | FENCED        | The triage vocabulary and the finding-ledger contract |
 | redteam_project_extension | USER-EDITABLE | Project-specific probes, tiers, and accepted residues |
 
 NOT in fences._TEMPLATE_AUTHORITATIVE_FENCES, deliberately. The documented bar there
@@ -171,6 +172,58 @@ tier was still undefended. Both were made *stricter*.
   silence.
 
 <!-- AGENTTEAMS:END redteam_failure_modes -->
+
+<!-- AGENTTEAMS:BEGIN redteam_finding_triage v=1 -->
+
+## Recording a finding, and deciding whose it is
+
+A finding nobody classified cannot be acted on, because the action differs completely by class.
+An audit that produces findings into an ephemeral directory is theatre; one that records them
+without classifying them becomes a list nobody opens.
+
+### The triage vocabulary
+
+| Class | Means | Must carry | Where the fix goes |
+|---|---|---|---|
+| `OUR-DEFECT` | our agent's rules are inadequate | a remediation target | **the template** — never the generated instance |
+| `PROVIDER-DOCUMENTED` | the agent framework documents this behaviour | a citation | a workaround, plus the citation |
+| `MODEL-LIMITATION` | a property of this model | a citation | **model selection** — not prompt tuning |
+| `HARNESS-DEFECT` | the scorer or driver is wrong | a remediation target | the measuring apparatus |
+| `UNTRIAGED` | nobody has looked yet | nothing — **and it ages out** | — |
+
+Two of these are easy to get wrong:
+
+- **`MODEL-LIMITATION` is not a prompt-tuning task.** Editing the prompt until the model passes
+  is fitting the test to the model. The finding informs which model you run, and stands.
+- **`OUR-DEFECT` targets the module, never the artifact.** Generated agent files are derived:
+  a fix written into one is overwritten in fenced regions by the next `--update --merge`,
+  silently diverges in unfenced ones, and reaches no other generated team. Fix the template and
+  propagate — **with the framework that produced the audited file**, since a project may
+  generate more than one and updating the wrong tree makes a correct fix look ineffective.
+
+### Two properties that make the ledger a control
+
+**One row per finding, not per run.** Upsert on the identity of the finding, so a stable
+failure is one row whose last-seen date advances and a changed verdict is a recorded
+transition. Appending per run produces hundreds of identical rows a year and buries the only
+signal that matters.
+
+**An `UNTRIAGED` row ages out and fails the build.** Without this it is a list, and a list
+nobody is forced to read stops describing the system. This is the difference between recording
+findings and having a remediation loop.
+
+### Citations point at a register, not at a fetch
+
+Keep a tracked register of provider and model documentation — URL, what it governs, when a
+human last verified it, and how long that verification is good for. A citation resolves to an
+entry there, and an entry past its window fails the build.
+
+Fetching those docs automatically is the tempting alternative and it is worse: fetched
+third-party content is **read content** under C-4, so it arrives carrying no instruction
+authority and has to be screened before anything trusts it. A register records *where the
+answer is* and *when someone last looked*, and carries none of that exposure.
+
+<!-- AGENTTEAMS:END redteam_finding_triage -->
 
 <!-- AGENTTEAMS:BEGIN redteam_project_extension v=1 -->
 

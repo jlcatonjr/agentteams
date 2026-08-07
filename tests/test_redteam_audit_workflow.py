@@ -170,19 +170,68 @@ def test_the_driver_never_accepts_the_baseline(driver_text: str) -> None:
     assert "--accept-probe-baseline" not in driver_text
 
 
-def test_the_redteam_package_contains_no_except_clauses() -> None:
+#: Modules on the MEASUREMENT EXECUTION PATH. A raise here must propagate so the driver can
+#: classify the run as a broken harness rather than as a result — catching it would recreate
+#: the PROBE-ERROR row the battery's own comment warns about, where a battery of broken probes
+#: finishes and reports all-clear.
+#:
+#: Scoped by role rather than by "the whole package", because the package later gained a
+#: LEDGER VALIDATOR whose contract is the opposite: `findings_ledger` exists to turn malformed
+#: input into a reported problem, and a malformed date crashing the suite instead of being
+#: reported would be the worse behaviour. That is not an exemption from the rule — the rule is
+#: about the execution path — and the validator is held to a stricter general rule below.
+_EXECUTION_PATH_MODULES: tuple[str, ...] = (
+    "registry.py", "runner.py", "cycle.py", "corpus.py",
+    "checks_static.py", "checks_report.py", "selfaudit.py", "report.py", "realcopy.py",
+)
+
+
+def test_the_execution_path_contains_no_except_clauses() -> None:
     """CH-24, and the property the driver's traceback handling depends on."""
     import ast
 
     offenders: list[str] = []
     for path in sorted((REPO_ROOT / "agentteams" / "redteam").rglob("*.py")):
+        if path.name not in _EXECUTION_PATH_MODULES:
+            continue
         tree = ast.parse(path.read_text(encoding="utf-8"), filename=str(path))
         for node in ast.walk(tree):
             if isinstance(node, ast.ExceptHandler):
                 offenders.append(f"{path.relative_to(REPO_ROOT)}:{node.lineno}")
     assert not offenders, (
-        "the red-team engine must contain no exception handlers — a probe that raises has to "
-        f"propagate so the driver can classify it as a broken harness. Found: {offenders}"
+        "the red-team execution path must contain no exception handlers — a probe that raises "
+        f"has to propagate so the driver can classify it as a broken harness. Found: {offenders}"
+    )
+
+
+def test_every_handler_in_the_package_is_narrow_and_reports() -> None:
+    """The rest of the package may catch, but never broadly and never silently.
+
+    Added when `findings_ledger` legitimately needed to catch a malformed date. This is a
+    STRICTER rule than the one above applied to new ground, not a hole cut in it: a bare or
+    `Exception` handler is forbidden anywhere, and a handler whose body only passes or
+    continues is the swallow CH-24 ratchets against.
+    """
+    import ast
+
+    broad: list[str] = []
+    swallowed: list[str] = []
+    for path in sorted((REPO_ROOT / "agentteams" / "redteam").rglob("*.py")):
+        tree = ast.parse(path.read_text(encoding="utf-8"), filename=str(path))
+        for node in ast.walk(tree):
+            if not isinstance(node, ast.ExceptHandler):
+                continue
+            where = f"{path.relative_to(REPO_ROOT)}:{node.lineno}"
+            if node.type is None or (
+                isinstance(node.type, ast.Name) and node.type.id in {"Exception", "BaseException"}
+            ):
+                broad.append(where)
+            if len(node.body) == 1 and isinstance(node.body[0], (ast.Pass, ast.Continue)):
+                swallowed.append(where)
+    assert not broad, f"broad exception handlers in the red-team package: {broad}"
+    assert not swallowed, (
+        f"handlers that swallow without reporting: {swallowed}. A caught condition that "
+        f"produces no finding is indistinguishable from a condition that never occurred."
     )
 
 
@@ -335,6 +384,10 @@ def test_nothing_still_calls_the_audit_daily() -> None:
     _NOT_A_CADENCE_CLAIM = (
         "security-maintenance", "security_maintenance", "run_daily_security",
         "not daily", "was daily", "reverting", "renamed from",
+        # The procedure file documents TWO jobs: the weekly deterministic audit in CI and
+        # the DAILY judgment-layer audit on the operator's machine. A line about the
+        # latter saying "daily" is accurate, not stale.
+        "judgment",
     )
     offenders = {}
     for path in live_surfaces:
