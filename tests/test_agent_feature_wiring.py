@@ -122,3 +122,23 @@ def test_agent_updater_post_update_steps_wired(rendered_team):
     assert "default OFF" in txt or "default off" in txt.lower()
     # --dry-run --json piping (Plan 1 W21 extension)
     assert "--dry-run --json" in txt or ("--json" in txt and "--dry-run" in txt)
+
+
+# --- CH-29: script-first output discipline + reusable reference files ---
+
+def test_code_hygiene_reference_lists_ch29(rendered_team):
+    txt = _read(rendered_team, "references/code-hygiene-rules.reference.md")
+    assert "CH-29" in txt
+    assert "Script-First Output Discipline" in txt
+    assert "ref-<library>-reference.md" in txt
+
+
+def test_primary_producer_ch29_step_present(rendered_team):
+    txt = _read(rendered_team, "primary-producer.agent.md")
+    assert "CH-29" in txt
+    assert "references/ref-" in txt
+
+
+def test_unix_philosophy_mapping_includes_ch29(rendered_team):
+    txt = _read(rendered_team, "references/unix-philosophy-mapping.reference.md")
+    assert "CH-29" in txt

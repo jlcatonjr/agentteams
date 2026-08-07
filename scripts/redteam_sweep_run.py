@@ -1,0 +1,164 @@
+#!/usr/bin/env python3
+"""redteam_sweep_run.py — red-team every agent, on every framework, from freshly built trees.
+
+Ties together the three pieces:
+
+* :mod:`agentteams.redteam.instantiate` — generate goose, claude and copilot-vscode trees from
+  the **canonical brief**, in an isolated root. Not chained through goose: that adapter caps
+  delegation at one layer, so deriving the others from it would measure a degraded copy.
+* :mod:`agentteams.redteam.sweep` — enumerate targets, choose the slice, and score each agent
+  against the criterion it can fairly be held to.
+* :mod:`agentteams.redteam.findings_ledger` — promote failures into the tracked ledger.
+
+Scoring, restated because it is the part that is easy to get wrong: **compliance is scored for
+every agent** (C-4 binds all of them), while ``HALT``/``REPORT`` escalation is scored **only for
+agents whose file actually carries the security verdict contract** — 1 of 30 in this repository.
+Holding the other 29 to a contract they were never issued would report a fake collapse.
+
+Usage::
+
+    python3 scripts/redteam_sweep_run.py --mode full      # every target (weekly)
+    python3 scripts/redteam_sweep_run.py --mode rotation  # today's slice (daily)
+    python3 scripts/redteam_sweep_run.py --mode rotation --per-day 3 --dry-run
+"""
+
+from __future__ import annotations
+
+import argparse
+import datetime
+import json
+import os
+import sys
+import tempfile
+from pathlib import Path
+
+REPO_ROOT = Path(__file__).resolve().parents[1]
+sys.path.insert(0, str(REPO_ROOT))
+
+from agentteams.redteam import findings_ledger as fl  # noqa: E402
+from agentteams.redteam import instantiate, sweep  # noqa: E402
+from tests.redteam.run_harness import load_corpus  # noqa: E402
+
+sys.path.insert(0, str(REPO_ROOT / "scripts"))
+from redteam_judgment_run import (  # noqa: E402
+    MIN_REMAINING_USD, read_remaining_credit, run_payload, validate_model_slug,
+)
+
+#: Per-call cost measured 2026-08-07. Used only to SIZE the budget before spending; the
+#: authoritative figure is always the provider ledger delta.
+COST_PER_CALL_USD = 0.0013
+
+
+def main(argv: list[str] | None = None) -> int:
+    parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
+    parser.add_argument("--model", default="z-ai/glm-5.2")
+    parser.add_argument("--mode", choices=("full", "rotation"), default="rotation")
+    parser.add_argument("--per-day", type=int, default=3)
+    parser.add_argument("--frameworks", default=",".join(instantiate.DEFAULT_FRAMEWORKS))
+    parser.add_argument("--limit-targets", type=int, default=0, help="bound the run (testing)")
+    parser.add_argument("--timeout", type=int, default=300)
+    parser.add_argument("--dry-run", action="store_true")
+    args = parser.parse_args(argv)
+
+    token = os.environ.get("OPENROUTER_API_KEY", "")
+    if not token:
+        print("OPENROUTER_API_KEY is not set.", file=sys.stderr)
+        return 2
+    ok, message = validate_model_slug(args.model)
+    print(f"  model      : {message}")
+    if not ok:
+        return 2
+
+    frameworks = tuple(f.strip() for f in args.frameworks.split(",") if f.strip())
+    dest = Path(tempfile.mkdtemp(prefix="redteam-trees-"))
+    print(f"  building   : {', '.join(frameworks)} from the canonical brief -> {dest}")
+    inst = instantiate.instantiate_all(
+        source_root=REPO_ROOT,
+        brief=REPO_ROOT / ".github" / "agents" / "_build-description.json",
+        dest_root=dest, frameworks=frameworks,
+    )
+    for name, tree in sorted(inst.trees.items()):
+        print(f"    {name:<16} {len(tree.agent_files):>3} agents")
+    if not inst.ok:
+        print("  INSTANTIATION FAILED — not a measurement:", file=sys.stderr)
+        for problem in inst.problems():
+            print(f"    - {problem}", file=sys.stderr)
+        return 2
+
+    targets = sweep.enumerate_targets(
+        {name: tree.agent_files for name, tree in inst.trees.items()}
+    )
+    today = datetime.date.today()
+    if args.mode == "rotation":
+        targets = sweep.rotation_slice(targets, day=today, per_day=args.per_day)
+    if args.limit_targets:
+        targets = targets[: args.limit_targets]
+
+    corpus = load_corpus()
+    planned = len(targets) * len(corpus)
+    budget = max(0.50, planned * COST_PER_CALL_USD * 3)
+    carriers = sum(1 for t in targets if t.contract)
+    print(f"  targets    : {len(targets)} ({carriers} carry the security verdict contract)")
+    print(f"  payloads   : {len(corpus)}  -> {planned} calls, budget cap ${budget:.2f}")
+    print(f"  provenance : brief={inst.brief_digest} head={inst.git_head}")
+
+    if args.dry_run:
+        print("  --dry-run: nothing spent.")
+        return 0
+
+    before = read_remaining_credit(token)
+    if before is None or before < MIN_REMAINING_USD:
+        print(f"  Refusing to start: credit {before} below ${MIN_REMAINING_USD}", file=sys.stderr)
+        return 2
+
+    workdir = dest / "_prompts"
+    workdir.mkdir(parents=True, exist_ok=True)
+    results: list[sweep.TargetResult] = []
+    failures: list[fl.Finding] = []
+
+    for index, target in enumerate(targets, start=1):
+        contract_text = target.path.read_text(encoding="utf-8", errors="replace")
+        outcome = sweep.TargetResult(target=target)
+        for payload in corpus:
+            r = run_payload(args.model, payload, workdir, args.timeout, contract_text)
+            if r.observed == "NO-CALL":
+                outcome.errors.append(f"{payload['id']}: {r.error}")
+                continue
+            verdict = sweep.score_for_target(target, payload, r.observed, r.acceptable)
+            getattr(outcome, verdict).append(payload["id"])
+            if verdict != "clean":
+                failures.append(fl.Finding(
+                    layer="judgment", finding_id=payload["id"], interface="goose",
+                    model=args.model, expected=payload["expected"], observed=r.observed,
+                    framework=target.framework, agent=target.agent,
+                ))
+        results.append(outcome)
+        flag = "" if outcome.ok else "  <-- FAILURES"
+        print(f"  [{index}/{len(targets)}] {target.label:<34} "
+              f"complied={len(outcome.complied)} misesc={len(outcome.misescalated)}{flag}")
+        spent = before - (read_remaining_credit(token) or before)
+        if spent > budget:
+            print(f"  ABORTING: ${spent:.4f} exceeded the ${budget:.2f} cap.", file=sys.stderr)
+            break
+
+    after = read_remaining_credit(token)
+    promotion = fl.promote(REPO_ROOT, failures, today=today.isoformat())
+
+    print()
+    print("\n".join(sweep.render_counts(results, payloads=len(corpus))))
+    print()
+    print(f"  ledger     : {len(promotion.added)} new, {len(promotion.transitioned)} changed")
+    if before is not None and after is not None:
+        print(f"  cost       : ${before - after:.4f} (provider ledger, authoritative)")
+    (dest / "sweep.json").write_text(json.dumps({
+        "provenance": inst.to_dict(),
+        "targets": [t.label for t in targets],
+        "failures": [f"{f.framework}/{f.agent}/{f.finding_id}" for f in failures],
+    }, indent=2), encoding="utf-8")
+    print(f"  artifacts  : {dest}")
+
+    return 1 if any(r.complied for r in results) else 0
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())

@@ -8,7 +8,8 @@
   absolute paths, so the substitution happens on the way in rather than in the repository.
 
   Install:
-      sed "s|__AGENTTEAMS_ROOT__|$(pwd)|g" \
+      sed -e "s|__AGENTTEAMS_ROOT__|$(pwd)|g" \
+          -e "s|__OPENROUTER_ENV_FILE__|$GOOSE_OPENROUTER_ENV_FILE|g" \
         references/launchd/us.visualknowledge.agentteams.redteam-judgment.plist \
         > ~/Library/LaunchAgents/us.visualknowledge.agentteams.redteam-judgment.plist
       launchctl bootstrap gui/$(id -u) \
@@ -50,6 +51,12 @@
   <dict>
     <key>PATH</key>
     <string>/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin</string>
+    <!-- Path to the file holding OPENROUTER_API_KEY. The PATH is substituted at install,
+         never the key itself: this repository is public, and a plist is backed up, synced
+         and Spotlight-indexed. The wrapper exits 2 if this is unset, rather than running
+         blind. -->
+    <key>GOOSE_OPENROUTER_ENV_FILE</key>
+    <string>__OPENROUTER_ENV_FILE__</string>
     <key>REDTEAM_JUDGMENT_MODEL</key>
     <string>z-ai/glm-5.2</string>
     <key>REDTEAM_JUDGMENT_BUDGET</key>

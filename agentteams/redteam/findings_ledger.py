@@ -42,7 +42,7 @@ FINDINGS_LEDGER_REL = "references/redteam-findings.log.csv"
 PROVIDER_DOCS_REL = "references/agent-provider-docs.reference.md"
 
 FIELDNAMES: tuple[str, ...] = (
-    "first_seen", "last_seen", "layer", "finding_id", "interface", "model",
+    "first_seen", "last_seen", "layer", "framework", "agent", "finding_id", "interface", "model",
     "expected", "observed", "triage", "citation", "remediation_target", "status", "note",
 )
 
@@ -94,6 +94,10 @@ class Finding:
     model: str
     expected: str
     observed: str
+    # Defaulted for backward compatibility with the 15 rows written before the sweep existed,
+    # which were all @security on claude. New rows always set them explicitly.
+    framework: str = "claude"
+    agent: str = "security"
     first_seen: str = ""
     last_seen: str = ""
     triage: str = UNTRIAGED
@@ -103,9 +107,17 @@ class Finding:
     note: str = ""
 
     @property
-    def key(self) -> tuple[str, str, str, str]:
-        """The upsert identity: same payload, same model, same verdict = same finding."""
-        return (self.layer, self.finding_id, self.model, self.observed)
+    def key(self) -> tuple[str, str, str, str, str, str]:
+        """The upsert identity.
+
+        ``framework`` and ``agent`` are part of it, and leaving them out was a real defect
+        caught in the plan audit: with 30 agents across 3 frameworks, ``auth-01`` on
+        ``@orchestrator/goose`` and ``auth-01`` on ``@security/claude`` would have upserted into
+        the same row. Ninety findings would have collapsed into one, and the ledger would have
+        under-reported by that factor while looking perfectly tidy.
+        """
+        return (self.layer, self.framework, self.agent, self.finding_id, self.model,
+                self.observed)
 
 
 def read_ledger(root: Path) -> list[Finding]:
@@ -128,7 +140,8 @@ def write_ledger(root: Path, findings: list[Finding]) -> Path:
     """Write the ledger, sorted so a diff shows a change rather than a reshuffle."""
     path = root / FINDINGS_LEDGER_REL
     path.parent.mkdir(parents=True, exist_ok=True)
-    ordered = sorted(findings, key=lambda f: (f.layer, f.finding_id, f.model, f.observed))
+    ordered = sorted(findings, key=lambda f: (f.layer, f.framework, f.agent, f.finding_id,
+                                              f.model, f.observed))
     with path.open("w", encoding="utf-8", newline="") as handle:
         writer = csv.DictWriter(handle, fieldnames=list(FIELDNAMES))
         writer.writeheader()
@@ -171,7 +184,8 @@ def promote(root: Path, observed: list[Finding], *, today: str) -> PromotionResu
     # A prior verdict for the same payload+model, whatever it was: used to record transitions.
     prior_verdicts: dict[tuple[str, str, str], Finding] = {}
     for finding in existing:
-        prior_verdicts[(finding.layer, finding.finding_id, finding.model)] = finding
+        prior_verdicts[(finding.layer, finding.framework, finding.agent,
+                        finding.finding_id, finding.model)] = finding
 
     result = PromotionResult()
     for finding in observed:
@@ -182,7 +196,8 @@ def promote(root: Path, observed: list[Finding], *, today: str) -> PromotionResu
             continue
         finding.first_seen = today
         finding.last_seen = today
-        previous = prior_verdicts.get((finding.layer, finding.finding_id, finding.model))
+        previous = prior_verdicts.get((finding.layer, finding.framework, finding.agent,
+                                       finding.finding_id, finding.model))
         if previous is not None and previous.observed != finding.observed:
             finding.note = (
                 f"verdict changed {previous.observed} -> {finding.observed} "
@@ -257,7 +272,7 @@ def ledger_problems(root: Path, *, today: date) -> list[str]:
     problems: list[str] = []
     doc_ids = set(read_provider_doc_ids(root))
     for finding in read_ledger(root):
-        label = f"{finding.layer}/{finding.finding_id}/{finding.model}"
+        label = f"{finding.layer}/{finding.framework}/{finding.agent}/{finding.finding_id}"
         if finding.triage not in TRIAGE_CLASSES:
             problems.append(f"{label}: unknown triage {finding.triage!r}")
             continue
