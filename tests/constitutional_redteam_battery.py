@@ -1003,50 +1003,47 @@ def e2_control_runtime_does_restrict_when_asked() -> None:
 
 
 def e3_no_harness_level_clearance_hook() -> None:
-    """C-5's harness-level gate — and a probe that used to measure the wrong machine.
+    """C-5's harness-level gate, measured on the REPOSITORY rather than on a laptop.
 
-    ``.claude/settings.json`` is **gitignored** (`.gitignore:50`) and has never been committed.
-    Reading it from disk meant this probe scored `DEFENDED` on the operator's workstation, where
-    the file exists with hooks wired, and `EXPLOITED` in every clean checkout — so the battery,
-    the standing regression net for 21 closed exploits, **could not go green in CI and never
-    had.** Two earlier CI failures masked it; it surfaced only when they were fixed.
+    The first version read ``.claude/settings.json`` from disk. That file is **gitignored**
+    (`.gitignore:50`) and has never been committed, so the probe scored `DEFENDED` on the
+    workstation where it exists with hooks wired and `EXPLOITED` in every clean checkout — the
+    standing regression net for 21 closed exploits **could not go green in CI and never had.**
+    Two earlier CI failures masked it.
 
-    "DEFENDED because this laptop happens to be configured" is not a statement about the
-    repository. The three states are now distinguished:
+    The second version reported `OUT-OF-TIER` when the file was absent. That fixed CI and broke
+    something quieter: the outcome then varied by environment, so the accepted-weakness ledger
+    (which assumes one outcome per probe) was simultaneously stale on the laptop and required in
+    CI. A probe whose verdict depends on where it runs cannot be governed by a ledger that costs
+    a diff to change.
 
-    * settings present **with** hooks  -> `DEFENDED` (the operator wired it)
-    * settings present **without** hooks -> `EXPLOITED` (real, measurable exposure)
-    * settings **absent** -> `OUT-OF-TIER` — wiring a harness hook is a **T2** act in the
-      operator's environment, and a clean checkout cannot report on an environment it has no
-      view of. This is the same call `A9` already makes for a T2 concern.
+    So the subject is now the thing a repository can actually answer: **does this repo ship
+    harness-level enforcement, and can it wire itself?** The hook is committed; the wiring lives
+    in a gitignored, machine-local file by design. That is a real and permanent limit, identical
+    in every checkout — `DOCUMENTED-LIMIT`, not a laptop-dependent verdict.
 
-    The control keeps its teeth: the exploit verdict still fires wherever the file exists and
-    lacks hooks, which is every environment that has actually been configured.
+    Teeth retained: if the hook itself disappears from the repository, there is no enforcement to
+    wire and the probe reports `EXPLOITED`.
     """
-    settings = REPO / ".claude" / "settings.json"
-    present = settings.exists()
-    txt = settings.read_text(encoding="utf-8") if present else ""
-    has_hooks = '"hooks"' in txt
-    if not present:
-        outcome = OUT_OF_TIER
-    elif has_hooks:
-        outcome = DEFENDED
-    else:
-        outcome = EXPLOITED
+    hook = REPO / ".claude" / "hooks" / "constitutional-gate.py"
+    ships_hook = hook.exists()
     record(
         pid="E3",
         name="C-5 has no mechanical enforcement for agent-initiated destruction",
-        article="C-5", tier="T2" if not present else "T1",
-        outcome=outcome,
+        article="C-5", tier="T1",
+        outcome=DOC_LIMIT if ships_hook else EXPLOITED,
         expected_if_sound="a PreToolUse gate mediates destructive tool calls",
         evidence=("_assert_destructive_action_allowed is reachable from exactly 4 call sites, "
-                  "all inside the agentteams CLI (build_team.py:571 prune; "
-                  "cli/generate.py:337,795 overwrite; cli/standalone_modes.py:62 restore-backup). "
-                  f".claude/settings.json present: {present}, defines hooks: {has_hooks}. An agent deleting or "
-                  "rewriting a file with Write/Edit/Bash never reaches the gate."),
+                  "all inside the agentteams CLI (build_team.py prune; cli/generate.py "
+                  "overwrite; cli/standalone_modes.py restore-backup). The repository ships "
+                  f".claude/hooks/constitutional-gate.py: {ships_hook}. Its wiring lives in "
+                  ".claude/settings.json, which is gitignored and machine-local, so a checkout "
+                  "cannot wire itself and cannot observe whether an operator has. An agent "
+                  "deleting or rewriting a file with Write/Edit/Bash never reaches the CLI gate."),
         control="A0",
         notes="The gate is real and fail-closed (A0/A2/A7/A8 all DEFENDED) — but it guards the "
-              "CLI, not the agents. For agent-initiated actions C-5 is procedural text only.",
+              "CLI, not the agents. For agent-initiated actions C-5 is procedural text plus an "
+              "operator-wired hook.",
     )
 
 
