@@ -49,6 +49,10 @@ from typing import Any
 REGISTRY_REL_PATH = "references/feature-registry.csv"
 INVENTORY_REL_PATH = "docs_src/api-reference/feature-inventory.md"
 
+#: Features belonging to the audit itself. Broken out in the coverage line so the audit
+#: proving its own machinery works is never mistaken for the product being covered.
+SELF_CHECK_CATEGORY = "Feature Audit"
+
 #: Environment override so tests can point the audit at a fixture registry instead of
 #: mutating the tracked one. Mirrors ``REDTEAM_PROBE_MODULE`` / ``REDTEAM_REPORT_DIR``.
 REGISTRY_ENV_VAR = "FEATURE_REGISTRY"
@@ -76,6 +80,9 @@ VALID_TIER = frozenset({TIER_UNIT, TIER_E2E, TIER_LIVE})
 PASS = "PASS"
 FAIL = "FAIL"
 UNREACHABLE = "UNREACHABLE"
+#: The proof could not execute at all (missing dependency, unimportable harness). Distinct
+#: from FAIL: the feature is not known to be broken, it is not known at all.
+HARNESS_BROKEN_OUTCOME = "HARNESS-BROKEN"
 
 # Exit classification (the shell driver turns these into process exit codes).
 CLEAN = 0
@@ -156,6 +163,10 @@ class AuditReport:
     @property
     def failed(self) -> list[ProofResult]:
         return [r for r in self.results if r.outcome == FAIL]
+
+    @property
+    def harness_broken(self) -> list[ProofResult]:
+        return [r for r in self.results if r.outcome == HARNESS_BROKEN_OUTCOME]
 
     @property
     def unreachable(self) -> list[ProofResult]:
@@ -335,12 +346,14 @@ def run_proof(row: FeatureRow, repo_root: Path, timeout: int = 300) -> ProofResu
     detail = tail[-1] if tail else f"exit {proc.returncode}"
     combined = proc.stdout + proc.stderr
     if _looks_like_broken_harness(combined):
-        # Raised, not returned: a harness that cannot import its own dependencies must not
-        # be summarised as one failed feature. It routes to HARNESS_BROKEN, where
-        # "indeterminate is not a pass" applies.
-        raise RegistryError(
-            f"{row.feature_id}: proof could not run — missing dependency. "
-            f"Install the research extra (`pip install -e '.[research]'`). {detail}"
+        # Returned as a per-row outcome, NOT raised. Raising killed the whole run and
+        # discarded every other row's result, so one bad row produced no verdict about
+        # anything else. The report still classifies HARNESS_BROKEN if any row is broken —
+        # indeterminate is not a pass — but the remaining rows are executed and reported.
+        return ProofResult(
+            row.feature_id, HARNESS_BROKEN_OUTCOME,
+            f"proof could not run — missing dependency (try `pip install -e '.[research]'`). {detail}",
+            row.tier,
         )
     if row.tier == TIER_LIVE and _looks_unreachable(combined):
         return ProofResult(row.feature_id, UNREACHABLE, detail, row.tier)
@@ -390,6 +403,10 @@ def _ran_nothing(output: str) -> bool:
     # "3 skipped" with no passed/failed count means nothing actually executed.
     if re.search(r"\b\d+ skipped\b", output) and not re.search(r"\b\d+ (passed|failed)\b", output):
         return True
+    # xfail/xpass also exit 0 while demonstrating the OPPOSITE of a proof. Marking a
+    # flaky live probe xfail is the cheapest possible way to turn it permanently green.
+    if re.search(r"\b\d+ x(failed|passed)\b", output) and not re.search(r"\b\d+ passed\b", output):
+        return True
     return False
 
 
@@ -402,7 +419,13 @@ def _looks_like_broken_harness(output: str) -> bool:
     reader hunting a regression that does not exist. Indeterminate is not a pass, and it is
     not a failure either.
     """
-    return any(n in output for n in ("ModuleNotFoundError", "ImportError"))
+    # Anchored to a line start. An unanchored substring match swallowed the e2e tier's
+    # entire purpose: those probes capture the CLI's own output, so a genuine packaging
+    # regression surfacing as ModuleNotFoundError would have been misreported as
+    # "install the research extra" — hiding exactly what that tier exists to catch.
+    import re
+
+    return bool(re.search(r"^(E\s+)?(ModuleNotFoundError|ImportError):", output, re.M))
 
 
 def audit(
@@ -438,6 +461,19 @@ def audit(
         if row.tier not in tiers or not row.claims_proof or row.status != PROVEN:
             continue
         report.results.append(run_proof(row, repo_root))
+        # M3: the negative control is EXECUTED, not merely named. Until now `proven` was
+        # enforced by string-inequality and collectability alone — nothing checked that
+        # the control ran, so a row could name a deleted-in-spirit control and stay green.
+        # A control that does not pass today means the pair no longer describes reality.
+        control = run_proof(
+            FeatureRow(**{**row.__dict__, "proof_test": row.negative_control}), repo_root
+        )
+        if control.outcome != PASS:
+            report.findings.append(
+                f"{row.feature_id}: negative control '{row.negative_control}' did not pass "
+                f"({control.outcome}) — the proof/control pair no longer holds, so "
+                "'proven' is not currently justified"
+            )
     return report
 
 
@@ -459,6 +495,10 @@ def classify(report: AuditReport) -> int:
     # parity drift mask "the live tier proved nothing" — one finding hiding another, the
     # same shape as the global-vs-per-tier bug this check exists to fix. Parity churn is
     # routine during coverage work, so that masking would fire in practice.
+    # Code 2 outranks code 1: a run that could not execute its proofs is indeterminate,
+    # and indeterminate is not a pass. Checked before findings for that reason.
+    if any(r.outcome == HARNESS_BROKEN_OUTCOME for r in report.results):
+        return HARNESS_BROKEN
     report.findings.extend(_empty_tier_findings(report))
     if report.findings:
         return FINDINGS
@@ -518,7 +558,16 @@ def format_report(report: AuditReport) -> str:
     # build; see tests/test_feature_registry.py.
     if provable:
         pct = 100.0 * len(proven) / len(provable)
-        lines.append(f"  COVERAGE           : {len(proven)}/{len(provable)} proven ({pct:.1f}%)")
+        # Split, because a single number overstated product assurance ~6x: five of the
+        # first six proven features were the audit's OWN machinery. Registering them is
+        # legitimate (parity demands it) but letting them move the coverage figure
+        # unremarked is self-congratulation, not measurement.
+        self_check = [r for r in proven if r.category == SELF_CHECK_CATEGORY]
+        product = [r for r in proven if r.category != SELF_CHECK_CATEGORY]
+        lines.append(
+            f"  COVERAGE           : {len(proven)}/{len(provable)} proven ({pct:.1f}%) — "
+            f"{len(product)} product, {len(self_check)} audit self-check"
+        )
         if pct < 100.0:
             lines.append(
                 "  NOTE: a CLEAN verdict means no PROVEN feature regressed. It does not "
@@ -553,6 +602,12 @@ def _main(argv: list[str] | None = None) -> int:
 
     root = Path(args.repo_root) if args.repo_root else Path(__file__).resolve().parents[1]
     tiers = tuple(t.strip() for t in args.tiers.split(",") if t.strip())
+    if TIER_LIVE in tiers:
+        # The live probes are env-gated, and a skipped proof is FAIL. Without this the
+        # documented `python -m agentteams.feature_audit --tiers live` reported a healthy
+        # feature as broken — the exact inverse of the defect this tool exists to find,
+        # and equally corrosive to trust. The shell driver also exports it; belt and braces.
+        os.environ.setdefault("FEATURE_AUDIT_LIVE", "1")
     unknown = [t for t in tiers if t not in VALID_TIER]
     if unknown:
         print(f"unknown tier(s): {unknown}", flush=True)

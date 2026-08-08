@@ -69,6 +69,11 @@ CANONICAL_POPULATION_SOURCES: frozenset[str] = frozenset({
     "corpus.load_corpus",            # every judgment-layer payload
     "integrity.ENFORCEMENT_MODULES",  # every module a control depends on
     "registry.load_accepted_weaknesses",
+    # Every model the matrix evaluated, not the ones that returned a usable answer. A model
+    # that timed out, refused the context length, or was dropped after the pilot still belongs
+    # in the denominator — otherwise "0 of 9 models complied" quietly means "0 of the 9 that
+    # survived", and the four that fell over on the way are the interesting ones.
+    "model_matrix.evaluated_models",
 })
 
 

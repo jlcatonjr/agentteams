@@ -356,13 +356,24 @@ def test_a_missing_dependency_is_harness_broken_not_a_failed_feature():
     assert not fa._looks_like_broken_harness("AssertionError: expected 3 results, got 0")
 
 
-def test_run_proof_raises_harness_broken_on_a_missing_dependency(tmp_path):
-    """End-to-end: the harness-broken path must reach RegistryError, not a FAIL result."""
+def test_a_missing_dependency_is_a_row_outcome_not_a_run_killing_raise(tmp_path):
+    """One unimportable proof must not discard every other row's result.
+
+    Raising killed the whole run, so a single bad row produced no verdict about anything
+    else. The outcome stays distinct from FAIL — the feature is not known to be broken, it
+    is not known at all — and the report still classifies HARNESS_BROKEN overall.
+    """
     probe = tmp_path / "test_missing_dep.py"
     probe.write_text("import definitely_not_a_real_module_xyz\n", encoding="utf-8")
     row = _row("live", f"{probe}::nothing")
-    with pytest.raises(fa.RegistryError, match="missing dependency"):
-        fa.run_proof(row, REPO)
+    result = fa.run_proof(row, REPO)
+    assert result.outcome == fa.HARNESS_BROKEN_OUTCOME
+    assert result.outcome != fa.FAIL, "an unrunnable proof is not a failed feature"
+
+    report = fa.AuditReport(rows=[row], tiers_run=("live",), results=[result])
+    assert fa.classify(report) == fa.HARNESS_BROKEN, (
+        "a broken harness must outrank findings — indeterminate is not a pass"
+    )
 
 
 def test_exhausted_search_backends_are_unreachable_not_a_regression():
@@ -399,3 +410,48 @@ def test_a_skipped_proof_is_not_a_pass(tmp_path):
     result = fa.run_proof(row, REPO)
     assert result.outcome == fa.FAIL, "a skipped proof must not report PASS"
     assert "did not run" in result.detail
+
+
+def test_a_negative_control_that_does_not_pass_is_a_finding(tmp_path):
+    """The control is EXECUTED, not merely named.
+
+    Until this landed, `proven` was enforced by string-inequality and collectability
+    alone — nothing checked that the control still ran, so a row could name a control
+    that had rotted and stay green. That made "non-tautological" a naming convention.
+    """
+    failing = tmp_path / "test_broken_control.py"
+    failing.write_text("def test_ctl():\n    assert False\n", encoding="utf-8")
+    passing = tmp_path / "test_ok_proof.py"
+    passing.write_text("def test_p():\n    assert True\n", encoding="utf-8")
+
+    reg = _write(
+        tmp_path / "rotted-control.csv", GOOD_HEADER,
+        f"F-1,C,N,,feature,unit,none,{passing}::test_p,{failing}::test_ctl,proven,\n",
+    )
+    report = fa.audit(REPO, tiers=("unit",))  # sanity: the real registry still works
+    assert report is not None
+
+    import os
+    os.environ[fa.REGISTRY_ENV_VAR] = str(reg)
+    try:
+        rotted = fa.audit(REPO, tiers=("unit",))
+    finally:
+        del os.environ[fa.REGISTRY_ENV_VAR]
+
+    assert any("negative control" in f for f in rotted.findings), (
+        f"a non-passing negative control must be a finding; got {rotted.findings}"
+    )
+    assert fa.classify(rotted) == fa.FINDINGS
+
+
+def test_the_coverage_line_separates_product_from_audit_self_check():
+    """A single coverage number overstated product assurance ~6x.
+
+    Five of the first six proven features were the audit's own machinery. Registering
+    them is legitimate; letting them move the headline unremarked is not.
+    """
+    report = fa.audit(REPO, tiers=(), execute=False)
+    line = fa.format_report(report)
+    assert "product" in line and "audit self-check" in line, (
+        f"coverage must be split by provenance:\n{line}"
+    )

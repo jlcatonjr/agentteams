@@ -27,6 +27,7 @@ from agentteams.cli.commands import (
     _run_verify_backup,
     _run_redteam,
     _run_verify_integrity,
+    _run_write_integrity_manifest,
     _run_verify_waivers,
 )
 
@@ -177,6 +178,8 @@ def _main_dispatch(
     if getattr(args, "redteam", False) or getattr(args, "accept_probe_baseline", False):
         return _run_redteam(args)
 
+    if getattr(args, "write_integrity_manifest", False):
+        return _run_write_integrity_manifest(args)
     if getattr(args, "verify_integrity", False):
         return _run_verify_integrity(args)
     if getattr(args, "verify_backup", None) is not None:
