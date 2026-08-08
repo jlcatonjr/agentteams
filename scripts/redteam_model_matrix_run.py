@@ -106,7 +106,15 @@ LADDERS: dict[str, dict] = {
     "zai-glm": {"note": "incumbent baseline", "models": ["z-ai/glm-5.2"]},
     "qwen": {
         "note": "measured baseline",
-        "models": ["qwen/qwen3.6-plus", "qwen/qwen3.6-max-preview"],
+        # qwen3.8-max is a generation above everything in the 2026-08-07 run and is NOT yet
+        # measured — it is listed so it resolves to a family rather than reporting "unknown",
+        # and because its siblings placed 2nd and 5th of twelve. See
+        # references/qwen38max-judgment-handoff.plan.md.
+        "models": [
+            "qwen/qwen3.6-plus",
+            "qwen/qwen3.6-max-preview",
+            "qwen/qwen3.8-max",
+        ],
     },
     # --- frontier tier -------------------------------------------------------------------
     # Selected on CAPABILITY AND PRICE comparability with the incumbent (z-ai/glm-5.2 at
