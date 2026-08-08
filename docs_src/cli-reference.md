@@ -615,6 +615,18 @@ Record what you concluded in the affected probe's `note` field before committing
 
 Read-only: report the validity (signature, expiry, use-limit, conditions) of every security waiver in `references/security-waivers.log.csv` under `--output`/`--project` (else CWD). Never mints or consumes a waiver. Exits non-zero if any waiver is invalid. Requires `AGENTTEAMS_WAIVER_SIGNING_KEY` to verify signatures; without it, rows report as unverifiable.
 
+### `--write-integrity-manifest`
+
+Re-record `references/enforcement-integrity.json` from the enforcement modules on disk, then exit.
+
+`agentteams/integrity.py` keeps a SHA-256 manifest over the modules that enforce C-1..C-5. The red-team battery's probe E4 compares the modules against it, so an unrecorded edit to a control shows up as a measured exploit.
+
+**Run this only *after* an intended change to a control, then review the diff.** Regenerating first turns the manifest into a record of whatever happens to be on disk — which is precisely what an attacker would want it to be. Keeping regeneration a separate, deliberate act is what makes the resulting `git diff` the actual control; an auto-refreshed manifest verifies nothing.
+
+**Exit code:** `0` after a successful write whose verification comes back clean; `1` if verification still reports mismatches, which would mean the write did not take.
+
+> The manifest's own `note` field has named this command since the manifest was written, and the flag was not implemented until 2026-08-07 — found when probe E4 correctly flagged an intended change and the documented recovery path turned out to be unavailable. `tests/test_integrity_manifest_cli.py` now asserts every command the manifest names is one the parser accepts.
+
 ### `--verify-integrity`
 
 Classify every generated output file against the build-log `file_hashes` baseline and exit. Each recorded file is reported as one of:

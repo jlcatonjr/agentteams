@@ -88,7 +88,8 @@
               "registry.run_probes",
               "corpus.load_corpus",
               "integrity.ENFORCEMENT_MODULES",
-              "registry.load_accepted_weaknesses"
+              "registry.load_accepted_weaknesses",
+              "model_matrix.evaluated_models"
             ]
           },
           "note": {"type": "string", "description": "Why a numerator is zero, or what a population excludes."}

@@ -66,6 +66,11 @@ def test_the_repository_manifest_is_current() -> None:
     Regenerate with ``agentteams --write-integrity-manifest`` **after** an intended change,
     never before: regenerating first turns the manifest into a record of whatever is currently
     on disk, which is exactly what an attacker would want it to be.
+
+    That flag was documented in three places and implemented in none until 2026-08-07, when
+    probe E4 correctly flagged an intended change and the documented remedy was rejected by
+    argparse. ``test_integrity_manifest_cli.py`` now asserts every command this manifest names
+    is one the parser accepts.
     """
     manifest = REPO_ROOT / integrity.MANIFEST_REL_PATH
     if not manifest.exists():
