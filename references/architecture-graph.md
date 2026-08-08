@@ -3,7 +3,7 @@
 
 > **Auto-generated.** Regenerated on every commit that touches the `agentteams` package. Do not edit manually — changes will be overwritten.
 
-- Modules mapped: **136**
+- Modules mapped: **137**
 - Packages: **7**
 - Internal import edges: **257**
 - Distinct external dependencies: **4**
@@ -22,7 +22,7 @@ Inter-package import dependencies (module-level detail in the tables below).
 
 | Package | Modules | Depends on |
 | --- | --- | --- |
-| `agentteams` | 81 | `agentteams.cli`, `agentteams.enrich`, `agentteams.frameworks`, `agentteams.research` |
+| `agentteams` | 82 | `agentteams.cli`, `agentteams.enrich`, `agentteams.frameworks`, `agentteams.research` |
 | `agentteams.cli` | 18 | `agentteams`, `agentteams.frameworks`, `agentteams.redteam` |
 | `agentteams.enrich` | 6 | `agentteams` |
 | `agentteams.eval_adapters` | 2 | — |
@@ -100,6 +100,7 @@ Every module, coloured by package (full adjacency in the table below).
 | `agentteams.eval_adapters.inspect_ai` | — | — |
 | `agentteams.eval_adapters.openai_evals` | — | — |
 | `agentteams.eval_suite` | — | `agentteams.cli.artifacts` |
+| `agentteams.feature_audit` | — | — |
 | `agentteams.fence_inject` | `agentteams.atomicio`, `agentteams.backup`, `agentteams.emit` | `agentteams.cli.app`, `agentteams.emit` |
 | `agentteams.fences` | `agentteams.atomicio`, `agentteams.front_matter_merge`, `agentteams.unfenced` | `agentteams.cli.artifacts`, `agentteams.emit` |
 | `agentteams.fleet` | `agentteams.backup` | `agentteams.cli.app`, `agentteams.redteam.realcopy`, `agentteams.stale_detector`, `agentteams.stale_remediate` |
@@ -905,6 +906,14 @@ digraph "agentteams architecture" {
     "agentteams.eval_suite": {
       "package": "agentteams",
       "path": "agentteams/eval_suite.py",
+      "is_package": false,
+      "imports_internal": [],
+      "external": [],
+      "repo_local": []
+    },
+    "agentteams.feature_audit": {
+      "package": "agentteams",
+      "path": "agentteams/feature_audit.py",
       "is_package": false,
       "imports_internal": [],
       "external": [],
