@@ -129,7 +129,15 @@ class ProofResult:
 
     feature_id: str
     outcome: str
-    detail: str = ""
+    detail: str
+    #: The tier this proof belongs to. Needed so :func:`classify` can detect an EMPTY
+    #: tier rather than only an empty run — see the per-tier check there.
+    #:
+    #: REQUIRED, with no default, deliberately. A default of ``""`` would let a dropped
+    #: stamp silently make every tier read empty — turning every run into FINDINGS while
+    #: the suite stayed green. As a required field the same mistake is a TypeError at
+    #: construction.
+    tier: str
 
 
 @dataclass
@@ -309,15 +317,15 @@ def run_proof(row: FeatureRow, repo_root: Path, timeout: int = 300) -> ProofResu
     except subprocess.TimeoutExpired:
         # Constraint 3: a hang on a live dependency is unreachable, not failed.
         if row.tier == TIER_LIVE:
-            return ProofResult(row.feature_id, UNREACHABLE, f"timed out after {timeout}s")
-        return ProofResult(row.feature_id, FAIL, f"timed out after {timeout}s")
+            return ProofResult(row.feature_id, UNREACHABLE, f"timed out after {timeout}s", row.tier)
+        return ProofResult(row.feature_id, FAIL, f"timed out after {timeout}s", row.tier)
     if proc.returncode == 0:
-        return ProofResult(row.feature_id, PASS)
+        return ProofResult(row.feature_id, PASS, "", row.tier)
     tail = (proc.stdout or proc.stderr or "").strip().splitlines()
     detail = tail[-1] if tail else f"exit {proc.returncode}"
     if row.tier == TIER_LIVE and _looks_unreachable(proc.stdout + proc.stderr):
-        return ProofResult(row.feature_id, UNREACHABLE, detail)
-    return ProofResult(row.feature_id, FAIL, detail)
+        return ProofResult(row.feature_id, UNREACHABLE, detail, row.tier)
+    return ProofResult(row.feature_id, FAIL, detail, row.tier)
 
 
 def _looks_unreachable(output: str) -> str | bool:
@@ -385,17 +393,44 @@ def classify(report: AuditReport) -> int:
     can see that a live dependency went dark, without a third-party outage turning into
     a red build.
     """
+    # Computed FIRST, unconditionally. Early-returning on `report.findings` would let a
+    # parity drift mask "the live tier proved nothing" — one finding hiding another, the
+    # same shape as the global-vs-per-tier bug this check exists to fix. Parity churn is
+    # routine during coverage work, so that masking would fire in practice.
+    report.findings.extend(_empty_tier_findings(report))
     if report.findings:
         return FINDINGS
     if report.failed:
         return FINDINGS
-    if report.tiers_run and report.executed == 0:
-        report.findings.append(
-            f"no proof executed for tier(s) {', '.join(report.tiers_run)} — "
-            "a tier that proves nothing is a finding, not a pass"
-        )
-        return FINDINGS
+    # PER-TIER, not global. The global form (`report.executed == 0`) let a single unit
+    # proof mask two entirely empty tiers: `--tiers unit,e2e,live` exited CLEAN while
+    # nothing at all probed the external surface that justifies running daily — which is
+    # exactly the combination the daily workflow runs. That is "success declared over
+    # nothing proven" reproduced inside the check written to prevent it.
     return CLEAN
+
+
+def _empty_tier_findings(report: AuditReport) -> list[str]:
+    """One finding per requested tier that executed no proof.
+
+    A tier is **exempt** only when it has at least one row and every one of them is
+    deliberately unprovable (``waived`` or ``kind=not-provable``) — there is genuinely
+    nothing to prove, and saying otherwise would make a considered decision look like a
+    defect. A tier with **no rows at all** is NOT exempt: being asked to run a tier that
+    does not exist is precisely the defect this check was written for.
+    """
+    out: list[str] = []
+    for tier in report.tiers_run:
+        if any(r.tier == tier for r in report.results):
+            continue
+        rows = [r for r in report.rows if r.tier == tier]
+        if rows and all(r.status == WAIVED or r.kind == KIND_NOT_PROVABLE for r in rows):
+            continue
+        out.append(
+            f"no proof executed for tier '{tier}' — a tier that proves nothing is a "
+            "finding, not a pass"
+        )
+    return out
 
 
 def format_report(report: AuditReport) -> str:

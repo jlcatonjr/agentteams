@@ -207,7 +207,10 @@ def test_unreachable_is_not_a_failure():
     """
     report = fa.AuditReport(
         rows=[], tiers_run=("live",),
-        results=[fa.ProofResult("F-1", fa.UNREACHABLE, "ConnectionError")],
+        # The tier must be stamped: an UNREACHABLE result still counts as the live tier
+        # having EXECUTED. Leaving it blank would make the tier look empty and trip the
+        # per-tier zero-proof finding instead — a different failure wearing this one's name.
+        results=[fa.ProofResult("F-1", fa.UNREACHABLE, "ConnectionError", "live")],
     )
     assert fa.classify(report) == fa.CLEAN
     assert not report.failed
@@ -220,3 +223,98 @@ def test_unreachable_classification_does_not_swallow_a_real_regression():
     """
     assert fa._looks_unreachable("requests.exceptions.ConnectionError: ...")
     assert not fa._looks_unreachable("AssertionError: expected 3 results, got 0")
+
+
+def test_an_empty_tier_is_a_finding_even_when_another_tier_proved_something(tmp_path):
+    """Per-tier, not global.
+
+    The global form (`report.executed == 0`) let one unit proof mask two entirely empty
+    tiers: `--tiers unit,e2e,live` exited CLEAN while nothing probed the external surface
+    that justifies running daily — and that is precisely the combination the daily
+    workflow runs.
+
+    Uses a synthetic registry rather than the real one on purpose: pinning this to "the
+    current registry" would make the test wrong the moment real e2e/live rows land.
+    """
+    reg = _write(
+        tmp_path / "one-proven-unit-row.csv", GOOD_HEADER,
+        "F-1,C,Proven unit,,feature,unit,none,tests/a.py::x,tests/a.py::y,proven,\n"
+        "F-2,C,Unproven e2e,,feature,e2e,none,,,UNPROVEN,\n"
+    )
+    rows = fa.load_registry(reg)
+    report = fa.AuditReport(rows=rows, tiers_run=("unit", "e2e", "live"))
+    # The unit tier produced a result; e2e and live produced none.
+    report.results.append(fa.ProofResult("F-1", fa.PASS, "", "unit"))
+
+    assert fa.classify(report) == fa.FINDINGS, (
+        "a tier that executed zero proofs must be a finding even when another tier passed"
+    )
+    empty_named = " ".join(report.findings)
+    assert "'e2e'" in empty_named and "'live'" in empty_named, (
+        f"both empty tiers must be named individually; got: {report.findings}"
+    )
+    assert "'unit'" not in empty_named, "the tier that DID prove something must not be flagged"
+
+
+# ---------------------------------------------------------------------------
+# run_proof tier stamping.
+#
+# The whole per-tier check rests on run_proof stamping row.tier onto every result it
+# returns. That was asserted and never tested: a dropped stamp would make every tier read
+# empty, turning every run into FINDINGS while the suite stayed green.
+# ---------------------------------------------------------------------------
+
+def _row(tier: str, proof: str) -> fa.FeatureRow:
+    return fa.FeatureRow(
+        feature_id="F-1", category="C", name="N", surface="", kind=fa.KIND_FEATURE,
+        tier=tier, external_dep="none", proof_test=proof,
+        negative_control="tests/x.py::neg", status=fa.PROVEN, notes="",
+    )
+
+
+def test_run_proof_stamps_the_tier_on_a_passing_result(tmp_path):
+    row = _row("unit", "tests/test_feature_registry.py::test_registry_parses_and_has_no_duplicate_ids")
+    result = fa.run_proof(row, REPO)
+    assert result.outcome == fa.PASS
+    assert result.tier == "unit", "a passing result must carry its row's tier"
+
+
+def test_run_proof_stamps_the_tier_on_a_failing_result(tmp_path):
+    row = _row("e2e", "tests/does_not_exist.py::nope")
+    result = fa.run_proof(row, REPO)
+    assert result.outcome == fa.FAIL
+    assert result.tier == "e2e", "a failing result must carry its row's tier"
+
+
+def test_proof_result_requires_a_tier():
+    """A missing stamp must be a loud construction error, not a silent empty tier."""
+    with pytest.raises(TypeError):
+        fa.ProofResult("F-1", fa.PASS, "")  # type: ignore[call-arg]
+
+
+def test_an_all_waived_tier_is_exempt_rather_than_a_finding(tmp_path):
+    """A considered decision must not look like a defect.
+
+    A tier whose every row is deliberately unprovable has nothing to prove. A tier with no
+    rows at all is a different thing and stays a finding.
+    """
+    reg = _write(tmp_path / "waived.csv", GOOD_HEADER,
+                 "F-1,C,N,,not-provable,live,network:nvd,,,UNPROVEN,inherently manual\n")
+    report = fa.AuditReport(rows=fa.load_registry(reg), tiers_run=("live",))
+    assert fa.classify(report) == fa.CLEAN, "an all-not-provable tier must be exempt"
+
+
+def test_an_empty_tier_finding_is_not_masked_by_a_parity_finding(tmp_path):
+    """One finding must not hide another.
+
+    classify() used to early-return on any pre-existing finding, so routine parity churn
+    during coverage work would suppress 'the live tier proved nothing' entirely.
+    """
+    reg = _write(tmp_path / "m2.csv", GOOD_HEADER,
+                 "F-1,C,N,,feature,unit,none,,,UNPROVEN,\n")
+    report = fa.AuditReport(rows=fa.load_registry(reg), tiers_run=("live",))
+    report.findings.append("pre-existing parity drift")
+    fa.classify(report)
+    assert any("tier 'live'" in f for f in report.findings), (
+        f"the empty-tier finding was masked by the parity finding: {report.findings}"
+    )
