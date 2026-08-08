@@ -72,6 +72,40 @@ def _resolve_output_dir(args: argparse.Namespace) -> Path:
     return Path.cwd()
 
 
+def _run_write_integrity_manifest(args: argparse.Namespace) -> int:
+    """``--write-integrity-manifest``: re-record the enforcement-module manifest.
+
+    Deliberately a separate, explicit act rather than part of any build. An
+    auto-refreshed manifest verifies nothing: it would record whatever is on disk at
+    the moment it runs, including an attacker's edit. Keeping regeneration manual is
+    what makes the resulting ``git diff`` the actual control.
+
+    This exists because the manifest's ``note`` has always instructed operators to run
+    exactly this command, and the flag was never wired up. Probe E4 flagged a
+    legitimate change to ``agentteams/redteam/registry.py``, the documented remedy was
+    rejected by argparse, and the only working path was calling the library directly.
+    A control whose recovery path is broken teaches operators to route around it.
+
+    Returns:
+        0 after writing the manifest, 1 if verification still reports a mismatch —
+        which would mean the write did not take, not that the tree is dirty.
+    """
+    from agentteams import integrity
+
+    repo_root = _resolve_output_dir(args)
+    path = integrity.write_manifest(repo_root)
+    findings = integrity.verify(repo_root)
+    print(f"Wrote {path.relative_to(repo_root) if path.is_relative_to(repo_root) else path}")
+    print(f"  modules recorded : {len(integrity.ENFORCEMENT_MODULES)}")
+    if findings:
+        print("  REFUSING to report success: verification still reports mismatches:")
+        for finding in findings:
+            print(f"    {finding}")
+        return 1
+    print("  Review the diff before committing — the diff IS the control.")
+    return 0
+
+
 def _run_verify_integrity(args: argparse.Namespace) -> int:
     """``--verify-integrity``: read-only classification of every generated output
     file against the build-log ``file_hashes`` baseline.

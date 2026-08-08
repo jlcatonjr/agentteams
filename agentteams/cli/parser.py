@@ -774,6 +774,22 @@ def _build_parser() -> argparse.ArgumentParser:
         ),
     )
     parser.add_argument(
+        "--write-integrity-manifest",
+        action="store_true",
+        dest="write_integrity_manifest",
+        default=False,
+        help=(
+            "Re-record references/enforcement-integrity.json from the enforcement "
+            "modules on disk. Run this ONLY after an intended change to a control, "
+            "then review the resulting diff — regenerating first turns the manifest "
+            "into a record of whatever happens to be on disk, which is exactly what "
+            "an attacker would want. The manifest's own note has named this command "
+            "since it was written; the flag did not exist until a red-team probe "
+            "flagged a legitimate change and the documented recovery path turned out "
+            "to be unavailable."
+        ),
+    )
+    parser.add_argument(
         "--verify-integrity",
         action="store_true",
         dest="verify_integrity",
