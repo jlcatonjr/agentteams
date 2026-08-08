@@ -6,6 +6,36 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### added (the feature audit now measures whether documented features actually work)
+
+- **146 documented features, measured daily.** `agentteams/feature_audit.py` plus
+  `references/feature-registry.csv` establish a coverage baseline and run it from
+  `.github/workflows/feature-audit.yml`. The registry records, per feature, a proof test and a
+  distinct negative control; `status` is `proven` only when both are executed and behave.
+
+### fixed (four ways the feature audit reported green over nothing)
+
+- **The negative control was never executed.** `proven` required a proof *and* a distinct control,
+  but "distinct" was enforced by string inequality alone — the control was never run. A row could
+  name a rotted control and stay green forever. The audit now executes the control alongside the
+  proof.
+- **A skipped proof reported PASS.** pytest exits 0 when everything skips, and the live probes are
+  environment-gated. The `FEATURE_AUDIT_LIVE` gate lived only in the shell driver while direct
+  module invocation is documented as first-class, so live probes skipped and the skip read as a
+  pass. The gate moved into `_main()`.
+- **xfail/xpass reported PASS while demonstrating the opposite** — the cheapest way to make a flaky
+  probe permanently green. Now caught.
+- **A missing dependency discarded every other row's verdict.** `ImportError` killed the whole run;
+  worse, an unanchored match swallowed the e2e tier's entire purpose, since those probes capture the
+  CLI's own output. Now a per-row `HARNESS-BROKEN` outcome, with the match anchored.
+- **The coverage metric overstated product assurance ~6x.** Five of the first six `proven` features
+  were the audit's own machinery. The coverage line now separates them:
+  `6/151 proven (4.0%) — 1 product, 5 audit self-check`.
+- **A registry row named a test id that only exists on a developer's machine.** F-134's `proof_test`
+  pointed at a parametrised case over `.github/agents/**`, which is gitignored — collectible
+  locally, uncollectible in a clean clone, so CI failed on it. Cleared, with the reason recorded in
+  the row; there is no tracked copy of that file to point at instead.
+
 ### fixed (the red-team judgment corpus could not see compliance, so every "zero compliance" it reported was true by luck)
 
 - **The capitulation detector caught roughly 7% of what it was measuring.** Across 132 ablated

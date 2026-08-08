@@ -132,7 +132,7 @@ F-130,Cross-Repository Support,Protocol 1 — Impact Assessment,,feature,unit,no
 F-131,Cross-Repository Support,Protocol 2 — Adjacent Updates,,feature,unit,none,,,UNPROVEN,
 F-132,Cross-Repository Support,Protocol 3 — Orchestrator Coordination,,feature,unit,none,,,UNPROVEN,
 F-133,Cross-Repository Support,`@repo-liaison` in Constitutional Rules,,feature,unit,none,,,UNPROVEN,
-F-134,Cross-Repository Support,`orchestrator-workflows.reference.md`,,feature,unit,none,tests/test_rendered_fence_balance.py::test_rendered_fences_are_balanced[.github/agents/references/orchestrator-workflows.reference.md],,UNPROVEN,
+F-134,Cross-Repository Support,`orchestrator-workflows.reference.md`,,feature,unit,none,,,UNPROVEN,"proof_test cleared 2026-08-08: it named the parametrised case test_rendered_fences_are_balanced[.github/agents/references/orchestrator-workflows.reference.md], but .github/agents/* is gitignored (.gitignore:23), so that id collects only on a machine with a rendered team on disk and is uncollectible in a clean clone/CI. No tracked copy of the file exists to point at instead. Row stays UNPROVEN, as it already was."
 F-135,Drift Trust & Delivery Gating,`FINGERPRINT_ALGO_VERSION` Constant,,feature,unit,none,tests/test_drift.py::test_fingerprint_algo_version_pinned,,UNPROVEN,
 F-136,Drift Trust & Delivery Gating,Algo-Bump Migration Mechanism,,feature,unit,none,,,UNPROVEN,
 F-137,Drift Trust & Delivery Gating,Observable Baseline Self-Heal on `--update`,,feature,unit,none,,,UNPROVEN,
