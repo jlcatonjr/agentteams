@@ -30,6 +30,8 @@ The generated team includes:
 The generated team governs *how your project gets built* — it does not run inside the project
 itself. If your app serves LLM output to end users, you're responsible for adding your own runtime
 governance; the generated team reviews the code as it's written, not the app's live behavior.
+See the [Runtime Security for Served Apps](docs_src/runtime-security-guide.md) guide for what that
+responsibility involves.
 **One exception, disclosed:** `pip install agentteams[research]` installs
 `agentteams.research` — a small, real Python library (no-key web search, curated-source rating,
 dual-lens claim verification) a project may add as its own runtime dependency and call directly.
