@@ -320,10 +320,29 @@ def run_proof(row: FeatureRow, repo_root: Path, timeout: int = 300) -> ProofResu
             return ProofResult(row.feature_id, UNREACHABLE, f"timed out after {timeout}s", row.tier)
         return ProofResult(row.feature_id, FAIL, f"timed out after {timeout}s", row.tier)
     if proc.returncode == 0:
+        # pytest exits 0 when every selected test SKIPPED. Treating that as PASS would make
+        # any env-gated proof a tautology: the live probes skip without FEATURE_AUDIT_LIVE,
+        # so the audit would have reported the whole live tier green while running nothing.
+        # A proof that did not run proved nothing.
+        if _ran_nothing(proc.stdout + proc.stderr):
+            return ProofResult(
+                row.feature_id, FAIL,
+                "proof was skipped or deselected — a proof that did not run proves nothing",
+                row.tier,
+            )
         return ProofResult(row.feature_id, PASS, "", row.tier)
     tail = (proc.stdout or proc.stderr or "").strip().splitlines()
     detail = tail[-1] if tail else f"exit {proc.returncode}"
-    if row.tier == TIER_LIVE and _looks_unreachable(proc.stdout + proc.stderr):
+    combined = proc.stdout + proc.stderr
+    if _looks_like_broken_harness(combined):
+        # Raised, not returned: a harness that cannot import its own dependencies must not
+        # be summarised as one failed feature. It routes to HARNESS_BROKEN, where
+        # "indeterminate is not a pass" applies.
+        raise RegistryError(
+            f"{row.feature_id}: proof could not run — missing dependency. "
+            f"Install the research extra (`pip install -e '.[research]'`). {detail}"
+        )
+    if row.tier == TIER_LIVE and _looks_unreachable(combined):
         return ProofResult(row.feature_id, UNREACHABLE, detail, row.tier)
     return ProofResult(row.feature_id, FAIL, detail, row.tier)
 
@@ -338,9 +357,52 @@ def _looks_unreachable(output: str) -> str | bool:
     needles = (
         "ConnectionError", "ConnectTimeout", "ReadTimeout", "TimeoutError",
         "Temporary failure in name resolution", "Name or service not known",
-        "SSLError", "Max retries exceeded", "HTTP 429", "HTTP 503",
+        "SSLError", "Max retries exceeded",
+        # Rate limiting and service outage.
+        "HTTP 429", "HTTP 503",
+        # Anti-bot challenges. `references/retrieval-transport-policy.md` records that the
+        # search chain is "two free DuckDuckGo endpoints" with no managed rate limiting,
+        # and those endpoints serve 403/202 challenges to shared datacenter IPs — which a
+        # GitHub runner always is. Without these, a challenge classifies FAIL and the daily
+        # job goes permanently red for a third party's bot policy.
+        "HTTP 403", "HTTP 202",
+        # The research CLI's own exhausted-backends signal. It exits 0 and prints
+        # `backend=none ... tried=duckduckgo,ddg_lite` with an empty result list — the
+        # degrade-don't-raise contract working as designed. Every backend was tried and
+        # none answered, which is availability, not a regression in this repository, so it
+        # must not gate. Observed 2026-08-07 from a residential IP, so it is not merely a
+        # datacenter-IP effect.
+        "backend=none",
     )
     return any(n in output for n in needles)
+
+
+def _ran_nothing(output: str) -> bool:
+    """Whether pytest selected no test, or skipped every test it selected.
+
+    ``pytest`` exits 0 in both cases, so without this a gated or renamed proof reports
+    PASS while executing nothing at all.
+    """
+    import re
+
+    if re.search(r"\bno tests ran\b", output):
+        return True
+    # "3 skipped" with no passed/failed count means nothing actually executed.
+    if re.search(r"\b\d+ skipped\b", output) and not re.search(r"\b\d+ (passed|failed)\b", output):
+        return True
+    return False
+
+
+def _looks_like_broken_harness(output: str) -> bool:
+    """Whether a proof failed because the harness itself cannot run.
+
+    A missing dependency is not a broken feature. `httpx` lives in the ``research`` extra,
+    so an environment installed with a bare ``pip install -e .`` cannot import
+    ``agentteams.research`` at all — and reporting that as a FAILED feature would send the
+    reader hunting a regression that does not exist. Indeterminate is not a pass, and it is
+    not a failure either.
+    """
+    return any(n in output for n in ("ModuleNotFoundError", "ImportError"))
 
 
 def audit(

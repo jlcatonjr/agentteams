@@ -14,5 +14,6 @@
 | **Cross-Repository Support** | 7 | `@repo-liaison` agent, adjacent-repo tracking, impact/update/coordination protocols |
 | **Drift Trust & Delivery Gating** | 9 | Structural drift diff, delivery receipts, behavioural-drift detection, trust gating |
 | **Retrieval & Review-Time Utilities** | 3 | Memory index, code & API index, session scan |
+| **Feature Audit** | 5 | Machine-readable feature registry, per-tier proof enforcement, reachability classification, end-to-end CLI probes |
 
-**Total:** 146 documented features across 14 capability areas — generated from `references/feature-registry.csv`, which is itself derived from the body of `feature-inventory.md`. Checked by `tests/test_feature_registry.py::test_the_summary_table_is_generated_from_the_registry`. It read `125 across 12` until 2026-08-07, having silently omitted two whole capability areas and undercounted the rest by nine: the only check compared the total to *its own column*, so a table that agreed with itself and with nothing else passed.
+**Total:** 151 documented features across 15 capability areas — generated from `references/feature-registry.csv`, which is itself derived from the body of `feature-inventory.md`. Checked by `tests/test_feature_registry.py::test_the_summary_table_is_generated_from_the_registry`. It read `125 across 12` until 2026-08-07, having silently omitted two whole capability areas and undercounted the rest by nine: the only check compared the total to *its own column*, so a table that agreed with itself and with nothing else passed.

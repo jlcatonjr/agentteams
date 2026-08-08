@@ -28,7 +28,7 @@ REPO = Path(__file__).resolve().parents[1]
 #
 # MIN_PROVEN may only ever be raised. MAX_UNPROVEN may only ever be lowered.
 # ---------------------------------------------------------------------------
-MIN_PROVEN = 1
+MIN_PROVEN = 6
 MAX_UNPROVEN = 145
 
 
@@ -318,3 +318,84 @@ def test_an_empty_tier_finding_is_not_masked_by_a_parity_finding(tmp_path):
     assert any("tier 'live'" in f for f in report.findings), (
         f"the empty-tier finding was masked by the parity finding: {report.findings}"
     )
+
+
+# ---------------------------------------------------------------------------
+# Live-tier classification.
+#
+# Three outcomes must stay distinguishable, because conflating any two of them either
+# hides a regression or makes the daily job permanently red for someone else's reason.
+# ---------------------------------------------------------------------------
+
+def test_anti_bot_challenges_are_unreachable_not_failures():
+    """DuckDuckGo serves 403/202 to shared datacenter IPs — which a runner always is.
+
+    `references/retrieval-transport-policy.md` records the search chain as two free
+    endpoints with no managed rate limiting. Classifying a challenge as FAIL would make
+    the daily job permanently red for a third party's bot policy, which is precisely how
+    a red build stops meaning anything.
+    """
+    for signature in ("HTTP 403", "HTTP 202", "HTTP 429", "HTTP 503"):
+        assert fa._looks_unreachable(f"backend returned {signature}"), signature
+
+
+def test_a_real_assertion_failure_is_never_excused_as_unreachable():
+    """The excuse must stay narrow, or the live tier is worthless."""
+    assert not fa._looks_unreachable("AssertionError: expected 3 results, got 0")
+    assert not fa._looks_unreachable("ValueError: malformed response payload")
+
+
+def test_a_missing_dependency_is_harness_broken_not_a_failed_feature():
+    """`httpx` lives in the research extra.
+
+    Reporting an uninstalled dependency as a FAILED feature sends the reader hunting a
+    regression that does not exist.
+    """
+    assert fa._looks_like_broken_harness("ModuleNotFoundError: No module named 'httpx'")
+    assert fa._looks_like_broken_harness("ImportError: cannot import name 'search'")
+    assert not fa._looks_like_broken_harness("AssertionError: expected 3 results, got 0")
+
+
+def test_run_proof_raises_harness_broken_on_a_missing_dependency(tmp_path):
+    """End-to-end: the harness-broken path must reach RegistryError, not a FAIL result."""
+    probe = tmp_path / "test_missing_dep.py"
+    probe.write_text("import definitely_not_a_real_module_xyz\n", encoding="utf-8")
+    row = _row("live", f"{probe}::nothing")
+    with pytest.raises(fa.RegistryError, match="missing dependency"):
+        fa.run_proof(row, REPO)
+
+
+def test_exhausted_search_backends_are_unreachable_not_a_regression():
+    """`backend=none` is the research CLI's exhausted-backends signal.
+
+    It exits 0 with an empty list — degrade-don't-raise working as designed. Every backend
+    was tried and none answered: availability, not a defect in this repository. Observed
+    2026-08-07 from a residential IP, so it is not only a datacenter-IP effect.
+    """
+    assert fa._looks_unreachable(
+        "provenance: backend=none cached=false tried=duckduckgo,ddg_lite"
+    )
+    assert not fa._looks_unreachable("provenance: backend=duckduckgo cached=false")
+
+
+def test_a_skipped_proof_is_not_a_pass(tmp_path):
+    """pytest exits 0 when every selected test skipped.
+
+    The live probes are env-gated, so without this the audit would report the entire live
+    tier green while running nothing — a proof that cannot fail, which is the defect this
+    whole workstream exists to find.
+    """
+    assert fa._ran_nothing("1 skipped in 0.01s")
+    assert fa._ran_nothing("no tests ran in 0.01s")
+    assert not fa._ran_nothing("1 passed in 0.01s")
+    assert not fa._ran_nothing("1 passed, 2 skipped in 0.01s")
+
+    probe = tmp_path / "test_skipped.py"
+    probe.write_text(
+        "import pytest\n@pytest.mark.skip(reason='gated')\ndef test_x():\n    assert True\n",
+        encoding="utf-8",
+    )
+    row = _row("live", str(probe))
+    result = fa.run_proof(row, REPO)
+    assert result.outcome == fa.FAIL, "a skipped proof must not report PASS"
+    assert "did not run" in result.detail

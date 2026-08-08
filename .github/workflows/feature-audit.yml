@@ -81,19 +81,23 @@ jobs:
       - name: Install
         run: |
           python -m pip install --upgrade pip
-          pip install -e .
+          # `.[research]`, not `.` — httpx and pypdf live in the research extra
+          # (pyproject.toml), and the live tier reaches the network only through
+          # `python -m agentteams.research`. With a bare `pip install -e .` that import
+          # raises ImportError on every run, which classified as FAIL: a red daily job
+          # caused by packaging, not by any feature being broken.
+          pip install -e '.[research]'
+          pip install -e '.[test]' 
 
       - name: Run feature audit
         id: audit
         env:
-          # TEMPORARILY "unit" ONLY. The registry currently has no e2e or live rows, so
-          # requesting those tiers is a correct-but-permanent daily FINDINGS warning — and
-          # a warning that fires every day for a known reason is how operators learn to
-          # ignore this job, which is the failure this whole workstream exists to prevent.
-          # Restore to "unit,e2e,live" in the same change that lands the e2e/live rows
-          # (plan feature-audit-effectiveness, step E.9). Until then the per-tier guard is
-          # armed and tested; it simply has nothing yet to guard.
-          FEATURE_AUDIT_TIERS: "unit"
+          # unit is the harness self-check; e2e and live are the substance. All three
+          # tiers now have registry rows, so the per-tier guard has something to guard.
+          # The driver exports FEATURE_AUDIT_LIVE=1 when `live` is requested — without it
+          # the live probes skip, and a skipped proof is reported as FAIL because it
+          # proved nothing.
+          FEATURE_AUDIT_TIERS: "unit,e2e,live"
         run: |
           set +e
           bash scripts/run_feature_audit.sh

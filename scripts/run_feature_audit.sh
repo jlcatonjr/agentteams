@@ -58,6 +58,13 @@ REPORT_DIR="${FEATURE_AUDIT_REPORT_DIR:-tmp/feature-audit/${STAMP}}"
 mkdir -p "$REPORT_DIR"
 REPORT="${REPORT_DIR}/report.txt"
 
+# The live probes are env-gated so ordinary CI stays deterministic. If the live tier is
+# requested we must enable them, or every live proof SKIPS — and a skipped proof is now
+# reported as FAIL (it proved nothing), which would read as a broken feature.
+case "$TIERS" in
+  *live*) export FEATURE_AUDIT_LIVE=1 ;;
+esac
+
 echo "[INFO] feature audit — tiers: ${TIERS}"
 echo "[INFO] report: ${REPORT}"
 
