@@ -1,0 +1,131 @@
+name: Standing Feature Audit (Daily)
+
+# Verifies that features documented in docs_src/api-reference/feature-inventory.md still
+# function, via the machine-readable registry at references/feature-registry.csv.
+# It measures and reports; it never remediates.
+#
+# Procedure: references/feature-audit.procedure.md
+# Driver:    scripts/run_feature_audit.sh
+# Engine:    agentteams/feature_audit.py
+#
+# ---------------------------------------------------------------------------------------
+# WHY DAILY, when the red-team audit deliberately went WEEKLY
+# ---------------------------------------------------------------------------------------
+# The red team went weekly because tests/test_constitutional_redteam.py already runs its
+# battery on every CI run, so a daily cron would have duplicated the regression net. That
+# reasoning does not transfer here, but the honest gap is NARROWER than it first appears
+# and worth stating precisely, because most of it is already covered:
+#
+#   * security-maintenance.yml ALREADY runs daily at 13:00 UTC and drops --security-offline
+#     when the snapshot is >=24h stale. CISA-KEV/EPSS live refresh is covered.
+#   * bridge-maintenance (05:41), bridge-watchdog (06:11), advisory-pr (07:47),
+#     pr-reminders (08:00) are likewise already daily.
+#
+# What is genuinely NOT covered by any existing schedule, and is the whole reason this job
+# exists:
+#
+#   * agentteams.research — search / fetch / browser / scholar host allowlists. These rot
+#     with no commit, and CI only fires on push/PR.
+#   * NVD proper — both existing security flag sets pass --security-no-nvd.
+#   * live PyPI metadata enrichment.
+#   * registry <-> inventory <-> code drift on an idle repository.
+#
+# goose/OpenRouter is deliberately NOT exercised here. Neither the binary nor the key
+# exists on a runner, and adding that secret would create a standing credential surface
+# days after 3901093 ("no default credential path") removed one. It is a `local` tier,
+# run from an operator machine like the red-team judgment plist.
+#
+# ---------------------------------------------------------------------------------------
+# RELIABILITY CONTRACT — inherited from docs-freshness-watch.yml and redteam-audit.yml,
+# which earned it.
+# ---------------------------------------------------------------------------------------
+#
+#   * NO `concurrency:` with cancel-in-progress. A cancelled run leaves no verdict.
+#   * NO step writes state that a later run reads back. The coverage ratchet lives in
+#     tests/test_feature_registry.py as operator-maintained constants, NOT in a file this
+#     workflow updates. A job that re-baselines itself silently absorbs the drift it exists
+#     to detect. tests/test_feature_audit_workflow.py asserts no step here writes under
+#     references/.
+#   * The report step is `if: always()` so a crashed audit still reports.
+#   * A crash routes to the DISTINCT "harness broken" outcome. Indeterminate is not a pass.
+#   * UNREACHABLE never fails the job — a third-party outage is not a regression here.
+#
+# No `push` trigger: the structural checks (registry<->inventory parity, test-id
+# resolution, the coverage ratchet) already run in CI as ordinary tests. What the cron adds
+# is execution against the outside world and the dated artifact trail.
+
+on:
+  schedule:
+    # 04:37 UTC daily. Deliberately clear of every existing schedule (05:41 bridge,
+    # 06:11 watchdog, 07:23 framework, 07:47 advisory+docs-watchdog, 08:00 reminders,
+    # 13:00 security, */6 at :23 docs-freshness) and off the top of the hour, where
+    # GitHub queues heavily.
+    - cron: "37 4 * * *"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  feature-audit:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install
+        run: |
+          python -m pip install --upgrade pip
+          # `.[research]`, not `.` — httpx and pypdf live in the research extra
+          # (pyproject.toml), and the live tier reaches the network only through
+          # `python -m agentteams.research`. With a bare `pip install -e .` that import
+          # raises ImportError on every run, which classified as FAIL: a red daily job
+          # caused by packaging, not by any feature being broken.
+          pip install -e '.[research]'
+          pip install -e '.[test]' 
+
+      - name: Run feature audit
+        id: audit
+        env:
+          # unit is the harness self-check; e2e and live are the substance. All three
+          # tiers now have registry rows, so the per-tier guard has something to guard.
+          # The driver exports FEATURE_AUDIT_LIVE=1 when `live` is requested — without it
+          # the live probes skip, and a skipped proof is reported as FAIL because it
+          # proved nothing.
+          FEATURE_AUDIT_TIERS: "unit,e2e,live"
+        run: |
+          set +e
+          bash scripts/run_feature_audit.sh
+          echo "rc=$?" >> "$GITHUB_OUTPUT"
+          exit 0
+
+      - name: Report
+        if: always()
+        run: |
+          rc="${{ steps.audit.outputs.rc }}"
+          case "$rc" in
+            0) echo "::notice::Feature audit CLEAN — no proven feature regressed" ;;
+            1) echo "::warning::Feature audit FINDINGS — see the job log" ;;
+            2) echo "::error::Feature audit HARNESS BROKEN — no verdict was produced" ;;
+            *) echo "::error::Feature audit exited '$rc' — unclassified"; exit 1 ;;
+          esac
+
+      - name: Upload report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: feature-audit-report
+          path: tmp/feature-audit/
+          if-no-files-found: warn
+          retention-days: 30
+
+      - name: Fail the job on harness-broken
+        if: always() && steps.audit.outputs.rc == '2'
+        run: |
+          echo "Indeterminate is not a pass." >&2
+          exit 1

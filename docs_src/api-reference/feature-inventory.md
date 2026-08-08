@@ -300,6 +300,17 @@ Workflows are step sequences embedded in the generated Orchestrator agent. Every
 145. **`agentteams.scan` Review-Time Invocability** — `verdict_for_findings()` (`HALT` / `CONDITIONAL_PASS` / `PASS`) and a `python -m agentteams.scan <path>` entrypoint let a shell-only runtime invoke the deterministic PII/credential scanner at review time, not only at generation time via `--scan-security`. `security.template.md` Rules S-1/S-8 cite it as the preferred check. See [`scan`](scan.md).
 146. **`session_scan` Module** — `scan_repo_issues()` consolidates the orchestrator's Workflow 11 Part B closeout scan (CHANGELOG "Known Issues", plan-steps pending/blocked rows, `git status` anomalies) into one call, with a `python -m agentteams.session_scan` entrypoint. See [`session_scan`](session_scan.md).
 
+
+---
+
+## Feature Audit
+
+147. **Machine-Readable Feature Registry** — `references/feature-registry.csv` binds every documented feature to the test that proves it works and a **distinct** test that fails when it breaks. Derived from this document's own body, so the prose stays the single authored source. See [`feature-audit`](feature-audit.md).
+148. **Per-Tier Proof Enforcement** — `feature_audit.classify()` reports a finding for any requested tier that executed zero proofs, so an empty tier cannot hide behind a populated one. A tier whose rows are all waived or not-provable is exempt.
+149. **Live-Tier Reachability Classification** — transport failures, anti-bot challenges (`HTTP 403`/`202`) and the research CLI's own `backend=none` exhausted-backends signal classify as `UNREACHABLE`, which reports but never gates. A missing dependency classifies as harness-broken, not as a failed feature.
+150. **End-to-End CLI Probes** — `tests/test_e2e_probes.py` drives the packaged entrypoint against a real tree (generate, `--dry-run`, `--json`), covering the gap where in-process tests pass but an installed package does not.
+151. **Live-Tier External Probes** — `tests/test_live_probes.py` exercises the `agentteams.research` egress path (search, scholar) against the real network, asserting **positive content** rather than absence of error, because the research CLI degrades rather than raising. Env-gated on `FEATURE_AUDIT_LIVE` so ordinary CI stays deterministic.
+
 ---
 
 ## Getting Started

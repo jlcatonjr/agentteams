@@ -92,6 +92,7 @@ nav:
       - cli: api-reference/cli.md
       - code-index: api-reference/code-index.md
       - feature-inventory: api-reference/feature-inventory.md
+      - feature-audit: api-reference/feature-audit.md
       - code-sources: api-reference/code-sources.md
       - fence-inject: api-reference/fence-inject.md
       - graph: api-reference/graph.md
