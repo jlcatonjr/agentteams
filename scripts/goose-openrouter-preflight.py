@@ -62,14 +62,35 @@ DEFAULT_CONFIG = Path("~/.config/goose/config.yaml").expanduser()
 # hyphen form is independently catalog-confirmed.
 KNOWN_VARIANTS = frozenset({"free", "nitro", "thinking", "beta", "online", "extended", "floor"})
 
-# Sentinel for the live probe. The literal "42" only appears if the model actually
-# invoked the shell tool (it must evaluate ``$((6*7))``); the prompt itself carries
-# only the arithmetic, so an echoed prompt cannot fake a PASS.
-_SENTINEL = "GOOSE_OR_PREFLIGHT_OK_42"
-_PROBE_TEXT = (
-    "Use the developer shell tool to run exactly this command: "
-    "echo GOOSE_OR_PREFLIGHT_OK_$((6*7)) — then reply with the exact line it printed."
-)
+# Sentinel for the live probe. 2026-08-08 found the previous design ($((6*7)) -> "42")
+# produced FALSE PASSES: the probe ran under GOOSE_MODE=chat, where goose intercepts the
+# tool call and asks the model to narrate a plan instead — and trivial arithmetic is
+# narratable, so the "sentinel" appeared from text prediction with no execution at all.
+# The fix is two-part: the probe now runs in auto mode, and the sentinel is a random
+# nonce written to a temp file the model is only told the PATH of. Chat-mode narration,
+# prompt echoes, and mental arithmetic cannot produce the file's contents; only a real
+# read can. (Remediation log 2026-08-08 row; closed 2026-08-09.)
+_SENTINEL_PREFIX = "GOOSE_OR_PREFLIGHT_OK_"
+
+
+def _probe_fixture() -> tuple[str, str, str]:
+    """Create the nonce file for one live probe.
+
+    Returns:
+        ``(probe_text, expected_sentinel, fixture_path)``. Caller deletes the file.
+    """
+    import tempfile
+    import uuid
+    nonce = uuid.uuid4().hex[:20]
+    sentinel = _SENTINEL_PREFIX + nonce
+    fd, path = tempfile.mkstemp(prefix="goose-preflight-", suffix=".txt")
+    with os.fdopen(fd, "w", encoding="utf-8") as fh:
+        fh.write(sentinel + "\n")
+    text = (
+        f"Use the developer shell tool to run exactly this command: cat {path} — "
+        f"then reply with the exact line it printed."
+    )
+    return text, sentinel, path
 
 _GOOSE_KV_RE = re.compile(r"^(GOOSE_[A-Z0-9_]+):\s*(.*?)\s*$")
 _ACTIVE_PROVIDER_RE = re.compile(r"^active_provider:\s*(.+?)\s*$")
@@ -269,11 +290,16 @@ def suggest_fix(model: str, index: dict[str, bool]) -> str | None:
     return candidate if index.get(candidate, False) else None
 
 
-def classify_goose_output(text: str) -> dict[str, object]:
+def classify_goose_output(text: str, sentinel: str) -> dict[str, object]:
     """Classify goose stdout+stderr into a verdict (exit code not usable: goose
     exits 0 on 400/401/max-turns/success alike).
+
+    Args:
+        text: Combined stdout+stderr of the probe run.
+        sentinel: The per-run nonce sentinel from :func:`_probe_fixture`. Only real tool
+            execution can put it in the transcript — it never appears in the prompt.
     """
-    if _SENTINEL in text:
+    if sentinel in text:
         return {"verdict": "pass", "exit": 0, "detail": "tool sentinel reached"}
     low = text.lower()
     if "not a valid model" in low or "bad request (400)" in low or ("400" in low and "model" in low):
@@ -411,11 +437,15 @@ def live_probe(model: str, key: str, max_turns: int, timeout: float) -> dict[str
     """Run a tiny tool-using goose task on OpenRouter and classify the output."""
     env = dict(os.environ)
     env["OPENROUTER_API_KEY"] = key
-    env["GOOSE_MODE"] = "chat"  # pin: 'auto' can alter one-shot behavior
+    # auto, NOT chat: chat mode intercepts the tool call and invites the model to narrate
+    # what it would have printed — the measured false-pass mechanism (2026-08-08). The probe
+    # exists to certify tool execution, so it must run in the mode where tools execute.
+    env["GOOSE_MODE"] = "auto"
+    probe_text, sentinel, fixture = _probe_fixture()
     cmd = [
         "goose", "run", "--no-session", "--quiet",
         "--provider", "openrouter", "--model", model,
-        "--max-turns", str(max_turns), "-t", _PROBE_TEXT,
+        "--max-turns", str(max_turns), "-t", probe_text,
     ]
     try:
         proc = subprocess.run(
@@ -425,7 +455,12 @@ def live_probe(model: str, key: str, max_turns: int, timeout: float) -> dict[str
         raise SetupError("goose binary not found on PATH") from exc
     except subprocess.TimeoutExpired:
         return {"verdict": "inconclusive", "exit": 2, "detail": f"goose probe timed out after {timeout:.0f}s"}
-    return classify_goose_output((proc.stdout or "") + "\n" + (proc.stderr or ""))
+    finally:
+        try:
+            os.unlink(fixture)
+        except OSError:
+            pass
+    return classify_goose_output((proc.stdout or "") + "\n" + (proc.stderr or ""), sentinel)
 
 
 def apply_fix(path: Path, old_model: str, new_model: str) -> str:

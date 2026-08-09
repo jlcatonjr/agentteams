@@ -202,17 +202,37 @@ def test_suggest_fix_does_not_rewrite_legit_free_variant():
 
 # --- classify_goose_output (exit code is NOT a signal; classify text) -------
 
+_NONCE_SENTINEL = gop._SENTINEL_PREFIX + "deadbeefdeadbeefdead"
+
+
 @pytest.mark.parametrize("text,verdict,code", [
-    (f"...{gop._SENTINEL}...", "pass", 0),
+    (f"...{_NONCE_SENTINEL}...", "pass", 0),
     ("Bad request (400): qwen/qwen3.6:35b-a3b is not a valid model ID", "invalid-model", 1),
     ("Error: 401 Unauthorized — invalid api key", "auth-error", 2),
     ("I've reached the maximum number of actions allowed.", "inconclusive", 2),
     ("(model replied but did nothing)", "early-stop", 1),
 ])
 def test_classify_goose_output(text, verdict, code):
-    res = gop.classify_goose_output(text)
+    res = gop.classify_goose_output(text, _NONCE_SENTINEL)
     assert res["verdict"] == verdict
     assert res["exit"] == code
+
+
+def test_a_narrated_prompt_echo_cannot_pass_the_probe():
+    """The 2026-08-08 false-pass: chat-mode narration echoed a guessable sentinel. The
+    sentinel is now a per-run nonce that exists only in a temp file — a transcript that
+    merely repeats the probe PROMPT (which names the path, never the contents) must fail."""
+    text, sentinel, path = gop._probe_fixture()
+    try:
+        assert sentinel not in text, "the prompt must never contain the sentinel"
+        res = gop.classify_goose_output(f"I would run: {text}", sentinel)
+        assert res["verdict"] != "pass"
+        with open(path, encoding="utf-8") as fh:
+            executed_output = fh.read()
+        assert gop.classify_goose_output(executed_output, sentinel)["verdict"] == "pass"
+    finally:
+        import os as _os
+        _os.unlink(path)
 
 
 # --- offline syntax heuristic ----------------------------------------------

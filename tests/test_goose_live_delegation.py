@@ -75,6 +75,12 @@ def _classify(text: str) -> str:
         return "setup"
     if "maximum number of" in low or "max turns" in low or "max-turns" in low:
         return "inconclusive"
+    # Executed delegation first (2026-08-09): goose's transcript marks a real spawned child
+    # with a subagent id and a structured delegate tool line. Only execution produces these;
+    # narration cannot. The name-based check remains as the weaker fallback verdict so the
+    # assertion message can distinguish "routed but did not execute" from a genuine early stop.
+    if "subagent" in low or ("delegate" in low and "▸" in text):
+        return "delegated-live"
     names_agent = any(h in low for h in _EXPECTED_AGENT_HINTS)
     names_workflow = any(h in low for h in _EXPECTED_WORKFLOW_HINTS)
     if names_agent and names_workflow:
@@ -140,6 +146,20 @@ def _generate_goose_team(project: Path) -> Path:
     assert any(h in recipe for h in _EXPECTED_AGENT_HINTS), (
         "generated orchestrator.yaml does not name primary-producer (probe target)"
     )
+    # 2026-08-09 (remediation of the 08-08 finding): the shipped prompt only asks the model
+    # to NAME the workflow and first agent, so the test could pass without any tool call ever
+    # being attempted — it was structurally incapable of catching a tool-call leak. Rewrite
+    # the scratch copy's prompt (never the template) to demand an actual delegation, the same
+    # forced-delegation methodology the 08-08 Tier-5 harness test validated. Round-trip
+    # through the YAML writer so arbitrary text stays structurally safe.
+    import yaml
+    doc = yaml.safe_load(recipe)
+    doc["prompt"] = (
+        "Do not describe or plan. Actually delegate now: invoke your delegate/sub-recipe "
+        "tool to hand the first workflow's first task to the primary producer agent, then "
+        "report what the sub-agent returned."
+    )
+    orch.write_text(yaml.safe_dump(doc, sort_keys=False, allow_unicode=True), encoding="utf-8")
     return orch
 
 
@@ -164,7 +184,10 @@ def test_generated_orchestrator_delegates_live(tmp_path):
     env["OPENROUTER_API_KEY"] = key
     env["GOOSE_PROVIDER"] = "openrouter"
     env.setdefault("GOOSE_MODEL", os.environ.get("GOOSE_OPENROUTER_MODEL", "qwen/qwen3.6-35b-a3b"))
-    env["GOOSE_MODE"] = "chat"  # pin: 'auto' can alter one-shot behavior
+    # auto, NOT chat (2026-08-09): chat mode disables all tool use, so goose intercepts the
+    # delegation and asks the model to narrate a plan — the measured false-pass mechanism.
+    # A delegation test must run in the mode where delegation can actually happen.
+    env["GOOSE_MODE"] = "auto"
 
     cmd = [
         "goose", "run",
@@ -192,10 +215,10 @@ def test_generated_orchestrator_delegates_live(tmp_path):
     if verdict == "inconclusive":
         pytest.skip(f"hit --max-turns ({_MAX_TURNS}) before delegating; transient — raise N and re-run")
 
-    assert verdict == "delegated", (
-        "orchestrator did not demonstrate delegation: expected it to name the "
-        f"correct workflow (one of {_EXPECTED_WORKFLOW_HINTS}) and the first agent "
-        f"(one of {_EXPECTED_AGENT_HINTS}). verdict={verdict!r}.\n"
+    assert verdict == "delegated-live", (
+        "orchestrator did not EXECUTE a delegation (a spawned subagent in the transcript). "
+        f"verdict={verdict!r} — 'delegated' alone means it only narrated the routing, which "
+        "is the false-pass this test was rebuilt to catch.\n"
         "--- goose output (key never injected here) ---\n"
         f"{captured}"
     )

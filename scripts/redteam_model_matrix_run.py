@@ -315,6 +315,24 @@ def read_remaining_credit(token: str) -> float | None:
     return float(total) - float(used)
 
 
+def read_total_usage(token: str) -> float | None:
+    """Return lifetime account spend in USD, or ``None`` when the endpoint cannot answer.
+
+    Spend must be measured against this monotonic figure, not the credit balance: a mid-run
+    auto-top-up raises ``total_credits``, so a credits-delta reports negative spend and the
+    cumulative ceiling silently never fires (measured −$49.86 on 2026-08-09).
+    """
+    request = urllib.request.Request("https://openrouter.ai/api/v1/credits")
+    request.add_header("Authorization", f"Bearer {token}")
+    try:
+        with urllib.request.urlopen(request, timeout=30) as response:  # noqa: S310
+            data = json.loads(response.read().decode("utf-8")).get("data", {})
+    except (urllib.error.URLError, urllib.error.HTTPError, ValueError, KeyError, TimeoutError):
+        return None
+    used = data.get("total_usage")
+    return None if used is None else float(used)
+
+
 def summarise(report: dict) -> dict:
     """Reduce a child run-report to the counts the matrix compares."""
     results = report.get("results", [])
@@ -504,7 +522,7 @@ def main(argv: list[str] | None = None) -> int:
     # which closed the hole for this caller and left it open for the next script to loop the
     # judgment runner.
     ceiling = SpendCeiling(total_budget=args.total_budget)
-    refusal = ceiling.start(remaining)
+    refusal = ceiling.start(remaining, read_total_usage(token))
     if refusal:
         print(f"  Refusing to start: {refusal}", file=sys.stderr)
         return 2
@@ -525,7 +543,7 @@ def main(argv: list[str] | None = None) -> int:
 
         # Cumulative gate, between models. The child's own budget is per invocation and cannot
         # see the loop; without this the matrix is bounded only by the floor.
-        verdict = ceiling.check(read_remaining_credit(token))
+        verdict = ceiling.check(read_remaining_credit(token), read_total_usage(token))
         print(f"      {ceiling.render()}")
         if verdict:
             matrix.aborted = verdict

@@ -58,7 +58,14 @@ if [[ ! -f "build_team.py" || "$(basename "$ROOT_DIR")" != "agentteams" ]]; then
   exit 2
 fi
 
-MODEL="${REDTEAM_JUDGMENT_MODEL:-z-ai/glm-5.2}"
+# 2026-08-08: was z-ai/glm-5.2. Moved to the model the fleet actually runs on, so the
+# daily audit measures the deployed configuration rather than a retired one. The fallback
+# is kept in step with the plist's REDTEAM_JUDGMENT_MODEL -- if they disagree, an install
+# from references/launchd/ and a bare manual run silently measure different models.
+# Comparability note: rows measured before this date carry model=z-ai/glm-5.2 in
+# references/redteam-findings.log.csv, and the ledger keys on model, so a verdict change
+# across this boundary is a MODEL change, not necessarily a regression.
+MODEL="${REDTEAM_JUDGMENT_MODEL:-qwen/qwen3.8-max}"
 BUDGET="${REDTEAM_JUDGMENT_BUDGET:-0.50}"
 PROXY_PORT="${REDTEAM_PROXY_PORT:-8791}"
 STAMP="$(date +%Y-%m-%d)"
@@ -128,6 +135,29 @@ if ! nc -z 127.0.0.1 "$PROXY_PORT" 2>/dev/null; then
   echo "           endpoint, so the audit would score nothing and report it as a result." >&2
   exit 2
 fi
+
+# --- 3b. transport canary: is the configured model actually served through this route? ------
+# Closes defect D3 (2026-08-09). The proxy filters providers; the day the allow-listed provider
+# stops serving $MODEL, every request 404s and — measured — a full run scores 14/14 MISS at
+# $0.0000 and reports it as a result. One ~1-token completion distinguishes "route serves the
+# model" from "we are about to measure the allow-list". Non-200 is CRITICAL, not a MISS.
+# Key passed via a mode-600 header file (-H @file), not argv — argv is visible to same-user
+# `ps` for the duration of the call (@security residual, 2026-08-09).
+_canary_hdr=$(mktemp) && chmod 600 "$_canary_hdr"
+printf 'Authorization: Bearer %s\n' "$OPENROUTER_API_KEY" > "$_canary_hdr"
+canary_code=$(curl -s -o /dev/null -w '%{http_code}' -m 60 \
+  -H @"$_canary_hdr" -H "Content-Type: application/json" \
+  -d "{\"model\":\"$MODEL\",\"max_tokens\":1,\"messages\":[{\"role\":\"user\",\"content\":\"hi\"}]}" \
+  "http://127.0.0.1:$PROXY_PORT/api/v1/chat/completions" 2>/dev/null)
+rm -f "$_canary_hdr"
+if [[ "$canary_code" != "200" ]]; then
+  echo "[CRITICAL] transport canary got HTTP ${canary_code:-none} for $MODEL through the route" >&2
+  echo "           proxy on $PROXY_PORT. The route does not serve this model right now; a run" >&2
+  echo "           would score an all-MISS day and report it as a measurement. Refusing." >&2
+  printf '%s\t%s\t%s\t%s\n' "$STAMP" "$MODEL" "unknown" "exit=2-canary" >> "$SPEND_LOG"
+  exit 2
+fi
+log "transport canary OK: $MODEL answers through 127.0.0.1:$PROXY_PORT."
 
 # --- 4. run ----------------------------------------------------------------------------------
 mkdir -p "$OUT_DIR"
