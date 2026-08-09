@@ -182,10 +182,17 @@ class RunReport:
     results: list[PayloadResult] = field(default_factory=list)
     credits_before: float | None = None
     credits_after: float | None = None
+    usage_before: float | None = None
+    usage_after: float | None = None
     budget_usd: float = DEFAULT_BUDGET_USD
 
     @property
     def spend(self) -> float | None:
+        # total_usage is monotonic; remaining credit is not. A mid-run auto-top-up raises
+        # total_credits, so a credits-delta reports negative spend (measured: -$49.86 on
+        # 2026-08-09) and the budget ceiling silently never fires. Usage delta is immune.
+        if self.usage_before is not None and self.usage_after is not None:
+            return round(self.usage_after - self.usage_before, 6)
         if self.credits_before is None or self.credits_after is None:
             return None
         return round(self.credits_before - self.credits_after, 6)
@@ -218,6 +225,22 @@ def read_remaining_credit(token: str) -> float | None:
     return round(float(total) - float(used), 6)
 
 
+def read_total_usage(token: str) -> float | None:
+    """Return the account's lifetime spend in USD, or None when the endpoint cannot answer.
+
+    This is the figure spend must be computed from: it only ever increases, so a mid-run
+    credit top-up cannot turn a spend into a refund the way a remaining-credit delta can.
+    ``read_remaining_credit`` stays for the refuse-to-start floor, where remaining really is
+    the question being asked.
+    """
+    try:
+        data = _get_json(OPENROUTER_CREDITS_URL, token=token).get("data", {})
+    except (urllib.error.URLError, urllib.error.HTTPError, ValueError, KeyError, TimeoutError):
+        return None
+    used = data.get("total_usage")
+    return None if used is None else round(float(used), 6)
+
+
 def validate_model_slug(model: str) -> tuple[bool, str]:
     """Check the slug exists and supports tool calls, before spending anything.
 
@@ -229,10 +252,22 @@ def validate_model_slug(model: str) -> tuple[bool, str]:
     Returns:
         ``(ok, message)``.
     """
-    try:
-        models = _get_json(OPENROUTER_MODELS_URL)["data"]
-    except (urllib.error.URLError, urllib.error.HTTPError, ValueError, KeyError, TimeoutError) as exc:
-        return False, f"could not reach the model catalogue to validate {model!r}: {exc}"
+    # Three attempts with backoff (2026-08-09): the scheduled run died exit-2 on ONE transient
+    # DNS failure here, producing a day with no measurement. A validation preflight must be
+    # more available than the thing it validates, not less.
+    last_exc: Exception | None = None
+    models = None
+    for attempt in range(3):
+        try:
+            models = _get_json(OPENROUTER_MODELS_URL)["data"]
+            break
+        except (urllib.error.URLError, urllib.error.HTTPError, ValueError, KeyError,
+                TimeoutError) as exc:
+            last_exc = exc
+            time.sleep(2 ** attempt * 5)
+    if models is None:
+        return False, (f"could not reach the model catalogue to validate {model!r} "
+                       f"after 3 attempts: {last_exc}")
     match = next((m for m in models if m.get("id") == model), None)
     if match is None:
         near = sorted(m["id"] for m in models if model.split("/")[-1][:6] in m["id"])[:5]
@@ -641,10 +676,12 @@ def main(argv: list[str] | None = None) -> int:
                else REPO_ROOT / "tmp" / "redteam-judgment" / stamp)
     out_dir.mkdir(parents=True, exist_ok=True)
 
+    usage_before = read_total_usage(token)
     report = RunReport(
         model=args.model,
         started_at=time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
         credits_before=remaining,
+        usage_before=usage_before,
         budget_usd=args.budget,
     )
 
@@ -659,13 +696,28 @@ def main(argv: list[str] | None = None) -> int:
         print(f"{result.observed}{'' if result.acceptable else '  <-- NOT ACCEPTABLE'}"
               f"{'  ' + result.error if result.error else ''}")
 
-        spent_so_far = (remaining - (read_remaining_credit(token) or remaining))
+        # Usage-delta, not credits-delta: a mid-run top-up makes the credits-delta negative,
+        # which reads as "under budget" forever and turns the cap into a no-op.
+        usage_now = read_total_usage(token)
+        if usage_before is not None and usage_now is not None:
+            spent_so_far = usage_now - usage_before
+        else:
+            credit_now = read_remaining_credit(token)
+            if credit_now is None:
+                # Both reads failed: the run is unmeasured. Continuing would spend against a
+                # cap that cannot fire — the same decorative-ceiling failure, via outage
+                # instead of top-up (@security residual, 2026-08-09).
+                print("  ABORTING: the provider ledger stopped answering; refusing to "
+                      "continue an unmeasured run.", file=sys.stderr)
+                break
+            spent_so_far = remaining - credit_now
         if spent_so_far > args.budget:
             print(f"  ABORTING: spend ${spent_so_far:.4f} exceeded the ${args.budget:.2f} cap.",
                   file=sys.stderr)
             break
 
     report.credits_after = read_remaining_credit(token)
+    report.usage_after = read_total_usage(token)
 
     # Promote the failures into the TRACKED ledger. This is the step whose absence made the
     # daily cadence's "trend detection" justification untrue: without it the verdicts live in a
@@ -721,6 +773,8 @@ def main(argv: list[str] | None = None) -> int:
                 "ablated": args.ablate_contract,
                 "credits_before": report.credits_before,
                 "credits_after": report.credits_after,
+                "usage_before": report.usage_before,
+                "usage_after": report.usage_after,
                 "spend": report.spend,
                 "budget_usd": report.budget_usd,
                 "results": [

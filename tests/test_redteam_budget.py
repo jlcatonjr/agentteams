@@ -104,3 +104,38 @@ def test_the_matrix_runner_uses_the_shared_ceiling_not_its_own() -> None:
         "the caller is tracking its own opening balance again; the ceiling has been "
         "re-implemented locally and the next caller will not inherit it"
     )
+
+
+# ===========================================================================
+# a mid-run credit top-up must not disarm the ceiling
+# ===========================================================================
+
+def test_a_midrun_topup_does_not_turn_spend_negative() -> None:
+    """Fires: the measured 2026-08-09 incident.
+
+    A +$50 auto-top-up landed during a run. The credits-delta reported spend as −$49.86, the
+    ceiling read that as "under budget", and the cap became decorative. With usage observations
+    supplied, spend is the monotonic usage delta and the top-up is invisible to the ceiling.
+    """
+    ceiling = SpendCeiling(total_budget=0.50)
+    assert ceiling.start(10.00, usage=245.00) == ""
+    # Top-up: credit jumps to 58.00 while usage advanced by 2.00 — over the $0.50 ceiling.
+    verdict = ceiling.check(58.00, usage=247.00)
+    assert "exceeded" in verdict
+    assert ceiling.spent(58.00, 247.00) == 2.00
+
+
+def test_without_usage_observations_the_credit_delta_still_works() -> None:
+    """The legacy call shape (credit only) keeps its meaning for callers not yet migrated."""
+    ceiling = SpendCeiling(total_budget=1.00)
+    assert ceiling.start(10.00) == ""
+    assert ceiling.check(8.50) != ""            # $1.50 spent > $1.00 ceiling
+    assert ceiling.spent(8.50) == 1.50
+
+
+def test_usage_going_backwards_is_not_treated_as_spend() -> None:
+    """A provider re-reporting a lower lifetime usage yields a negative delta, not an abort —
+    the ceiling only ever aborts on spend ABOVE the budget, and the floor check still runs."""
+    ceiling = SpendCeiling(total_budget=1.00)
+    assert ceiling.start(10.00, usage=100.00) == ""
+    assert ceiling.check(9.99, usage=99.50) == ""
