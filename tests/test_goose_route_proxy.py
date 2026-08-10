@@ -53,6 +53,49 @@ def test_empty_block_when_no_routing_requested():
     assert grp.build_provider_block([], [], {}) == {}
 
 
+def test_prefer_sets_order_and_composes_with_only():
+    # 2026-08-10: "route through X" needs provider.order, not --sort, which re-picks
+    # whichever allowed backend is cheapest today and silently drifts as prices move.
+    #
+    # order must list every `only` backend, not just `prefer`: OpenRouter treats `order`
+    # + allow_fallbacks:false as the ENTIRE candidate set (live-verified), so an order of
+    # just ["CoreWeave"] silently drops Z.AI/Alibaba as fallback candidates -- a hard pin
+    # on CoreWeave alone, not a preference. That caused a same-day outage: CoreWeave has
+    # no endpoint for qwen/qwen3.8-max, so every request 404'd instead of falling over to
+    # Alibaba.
+    block = grp.build_provider_block(["Z.AI", "Alibaba", "CoreWeave"], [], {},
+                                     prefer=["CoreWeave"])
+    assert block["order"] == ["CoreWeave", "Z.AI", "Alibaba"]
+    assert block["only"] == ["Z.AI", "Alibaba", "CoreWeave"]
+    assert block["allow_fallbacks"] is False  # still hard-restricted to the allowlist
+
+
+def test_prefer_alone_sets_order_without_restricting():
+    # Live-verified: bare `order` with no `only` falls back past an unreachable entry
+    # on its own (OpenRouter defaults allow_fallbacks to true there), so passing
+    # `prefer` through unchanged is safe -- unlike the `only`-present case above.
+    block = grp.build_provider_block([], [], {}, prefer=["CoreWeave"])
+    assert block == {"order": ["CoreWeave"]}
+
+
+def test_no_prefer_omits_order():
+    assert "order" not in grp.build_provider_block(["Alibaba"], [], {})
+
+
+def test_prefer_outside_only_is_refused():
+    # A `--prefer` backend absent from `--only` would otherwise ride into `order` and,
+    # since `only` + allow_fallbacks:false makes `order` the entire candidate set, could
+    # let an unvetted backend serve requests -- silently defeating the allowlist.
+    with pytest.raises(ValueError, match="not in --only allowlist"):
+        grp.build_provider_block(["Alibaba"], [], {}, prefer=["CoreWeave"])
+
+
+def test_prefer_duplicates_are_deduped():
+    block = grp.build_provider_block(["Z.AI", "Alibaba", "CoreWeave"], [], {},
+                                     prefer=["CoreWeave", "CoreWeave"])
+    assert block["order"] == ["CoreWeave", "Z.AI", "Alibaba"]
+
+
 def test_default_allowlist_is_the_measured_clean_set():
     # Guards against silently drifting the shipped default away from what was measured
     # (2026-07-24: these three were 12/12 clean; Chutes/Phala/SiliconFlow leaked).
@@ -273,6 +316,27 @@ def test_relay_sends_502_when_upstream_fails_before_streaming(monkeypatch):
     assert b"connection refused" in sent[0][1]
 
 
+# --- local health endpoint --------------------------------------------------
+
+def test_healthz_identifies_proxy_without_upstream_relay():
+    h = _handler_for({"only": ["Alibaba"], "allow_fallbacks": False})
+    h.path = "/healthz"
+    relayed = []
+    sent = []
+    h._relay = lambda method: relayed.append(method)
+    h._send_bytes = lambda status, payload, content_type: sent.append(
+        (status, json.loads(payload), content_type)
+    )
+
+    h.do_GET()
+
+    assert relayed == []
+    assert sent == [(200, {
+        "service": "goose-openrouter-route-proxy",
+        "provider": {"only": ["Alibaba"], "allow_fallbacks": False},
+    }, "application/json")]
+
+
 # --- main() argument handling ------------------------------------------------
 
 def test_main_refuses_when_no_routing_requested(capsys):
@@ -280,3 +344,32 @@ def test_main_refuses_when_no_routing_requested(capsys):
     # believes they configured -- refuse loudly instead.
     assert grp.main(["--only", "", "--ignore", ""]) == 2
     assert "no routing requested" in capsys.readouterr().err
+
+
+def test_main_refuses_prefer_outside_only(capsys):
+    with pytest.raises(SystemExit) as excinfo:
+        grp.main(["--only", "Alibaba", "--prefer", "CoreWeave"])
+    assert excinfo.value.code == 2
+    assert "not in --only allowlist" in capsys.readouterr().err
+
+
+def test_prefer_flag_reaches_the_provider_block(monkeypatch):
+    # End-to-end through argument parsing, not just the helper -- pins the standing job's
+    # actual invocation shape (`--only "Z.AI,Alibaba,CoreWeave" --prefer "CoreWeave"`).
+    captured = {}
+
+    class _FakeServer:
+        def __init__(self, *_a, **_k): pass
+        def serve_forever(self): raise SystemExit(0)
+
+    def _fake_handler(upstream, provider, verbose):  # noqa: ARG001 - matches make_handler's
+        del upstream, verbose                        # keyword-arg call site exactly
+        captured["provider"] = provider
+        return object
+
+    monkeypatch.setattr(grp, "make_handler", _fake_handler)
+    monkeypatch.setattr(grp, "ThreadingHTTPServer", _FakeServer)
+    with pytest.raises(SystemExit):
+        grp.main(["--only", "Z.AI,Alibaba,CoreWeave", "--prefer", "CoreWeave"])
+    assert captured["provider"]["order"] == ["CoreWeave", "Z.AI", "Alibaba"]
+    assert captured["provider"]["only"] == ["Z.AI", "Alibaba", "CoreWeave"]
