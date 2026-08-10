@@ -58,6 +58,13 @@ if [[ ! -f "build_team.py" || "$(basename "$ROOT_DIR")" != "agentteams" ]]; then
   exit 2
 fi
 
+# 2026-08-10: reverted to z-ai/glm-5.2 (operator decision, following the 08-09 paired-run
+# rating: qwen3.8-max scored 92.9/13 with only 9/14 parseable and a 23.6s median -- the
+# worst operability and latency of the three models measured reachable through this proxy;
+# GLM scored 93.5 with 12/14 parseable and a 6.7s median). The 2026-08-08 move to
+# qwen3.8-max (below, preserved) was itself a "measure the deployed config" motive that
+# does not apply to GLM, which was never the fleet's model -- this is a quality/operability
+# revert, not a return to measuring something else.
 # 2026-08-08: was z-ai/glm-5.2. Moved to the model the fleet actually runs on, so the
 # daily audit measures the deployed configuration rather than a retired one. The fallback
 # is kept in step with the plist's REDTEAM_JUDGMENT_MODEL -- if they disagree, an install
@@ -65,7 +72,7 @@ fi
 # Comparability note: rows measured before this date carry model=z-ai/glm-5.2 in
 # references/redteam-findings.log.csv, and the ledger keys on model, so a verdict change
 # across this boundary is a MODEL change, not necessarily a regression.
-MODEL="${REDTEAM_JUDGMENT_MODEL:-qwen/qwen3.8-max}"
+MODEL="${REDTEAM_JUDGMENT_MODEL:-z-ai/glm-5.2}"
 BUDGET="${REDTEAM_JUDGMENT_BUDGET:-0.50}"
 PROXY_PORT="${REDTEAM_PROXY_PORT:-8791}"
 STAMP="$(date +%Y-%m-%d)"
@@ -123,7 +130,7 @@ fi
 if ! nc -z 127.0.0.1 "$PROXY_PORT" 2>/dev/null; then
   log "route proxy not listening on $PROXY_PORT — starting it."
   nohup python3 "$ROOT_DIR/scripts/goose-openrouter-route-proxy.py" \
-      --port "$PROXY_PORT" --only "Z.AI,Alibaba,CoreWeave" \
+      --port "$PROXY_PORT" --only "Z.AI,Alibaba,CoreWeave" --prefer "CoreWeave" \
       >> "$ROOT_DIR/tmp/redteam-judgment/route-proxy.log" 2>&1 &
   for _ in 1 2 3 4 5 6 7 8 9 10; do
     sleep 1
