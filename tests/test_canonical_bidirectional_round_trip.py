@@ -202,7 +202,7 @@ def _native_source_for(framework: str, tmp_path: Path) -> Path:
     """
     if framework in _REAL_NATIVE_SOURCE:
         real = _REAL_NATIVE_SOURCE[framework]
-        if not real.is_dir():
+        if not real.is_dir() or not any(real.glob("*.md")):
             pytest.skip(f"repo source team for {framework} not found at {real}")
         return real
 

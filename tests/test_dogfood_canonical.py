@@ -27,7 +27,8 @@ REPO = Path(__file__).resolve().parents[1]
 _SOURCE = REPO / ".github" / "agents"
 
 pytestmark = pytest.mark.skipif(
-    not _SOURCE.is_dir(), reason="repo copilot-vscode source team not found"
+    not any(_SOURCE.glob("*.agent.md")),
+    reason="repo copilot-vscode source team not found or gitignored",
 )
 
 _FRAMEWORK_AGENTS_REL = {

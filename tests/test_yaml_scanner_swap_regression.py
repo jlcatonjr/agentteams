@@ -116,8 +116,8 @@ class TestGraphScannerSwapByteIdentity:
         assert body == "Body only.\n"
 
     @pytest.mark.skipif(
-        not (REPO / ".github" / "agents").is_dir(),
-        reason="repo copilot-vscode source team not found",
+        not any((REPO / ".github" / "agents").glob("*.agent.md")),
+        reason="repo copilot-vscode source team not found or gitignored",
     )
     def test_every_repo_agent_file_splits_identically_to_shared_scanner(self):
         """Byte-identity pin on production content: for every agent file the

@@ -31,8 +31,8 @@ def test_raw_front_matter_captures_unmodeled_keys(tmp_path: Path):
     into raw_front_matter — specifically user-invokable, model, and agents:
     for copilot-vscode."""
     source = Path(".github/agents")
-    if not source.is_dir():
-        pytest.skip("repo .github/agents not found")
+    if not any(source.glob("*.agent.md")):
+        pytest.skip("repo .github/agents has no agent files (gitignored/CI)")
     cai = export_to_cai(source, "copilot-vscode")
     orch = [a for a in cai["agents"] if a["slug"] == "orchestrator"][0]
     rfm = orch.get("raw_front_matter", {})
@@ -45,8 +45,8 @@ def test_raw_front_matter_captures_unmodeled_keys(tmp_path: Path):
 def test_raw_front_matter_survives_canonical_round_trip(tmp_path: Path):
     """raw_front_matter survives export → materialize → load."""
     source = Path(".github/agents")
-    if not source.is_dir():
-        pytest.skip("repo .github/agents not found")
+    if not any(source.glob("*.agent.md")):
+        pytest.skip("repo .github/agents has no agent files (gitignored/CI)")
     cai = export_to_cai(source, "copilot-vscode")
     canon = tmp_path / "canon"
     materialize_canonical(cai, canon)
@@ -65,8 +65,8 @@ def test_raw_front_matter_survives_canonical_round_trip(tmp_path: Path):
 def test_capabilities_raw_captures_original_tool_string(tmp_path: Path):
     """capabilities.raw captures the original tools: string per framework."""
     source = Path(".github/agents")
-    if not source.is_dir():
-        pytest.skip("repo .github/agents not found")
+    if not any(source.glob("*.agent.md")):
+        pytest.skip("repo .github/agents has no agent files (gitignored/CI)")
     cai = export_to_cai(source, "copilot-vscode")
     orch = [a for a in cai["agents"] if a["slug"] == "orchestrator"][0]
     caps = orch.get("capabilities", {})
@@ -80,8 +80,8 @@ def test_capabilities_raw_captures_original_tool_string(tmp_path: Path):
 def test_model_hint_captured(tmp_path: Path):
     """capabilities.model_hint captures the model: front-matter value."""
     source = Path(".github/agents")
-    if not source.is_dir():
-        pytest.skip("repo .github/agents not found")
+    if not any(source.glob("*.agent.md")):
+        pytest.skip("repo .github/agents has no agent files (gitignored/CI)")
     cai = export_to_cai(source, "copilot-vscode")
     orch = [a for a in cai["agents"] if a["slug"] == "orchestrator"][0]
     caps = orch.get("capabilities", {})
@@ -93,8 +93,8 @@ def test_model_hint_captured(tmp_path: Path):
 def test_capabilities_raw_and_model_hint_survive_canonical_round_trip(tmp_path: Path):
     """capabilities.raw and model_hint survive export → materialize → load."""
     source = Path(".github/agents")
-    if not source.is_dir():
-        pytest.skip("repo .github/agents not found")
+    if not any(source.glob("*.agent.md")):
+        pytest.skip("repo .github/agents has no agent files (gitignored/CI)")
     cai = export_to_cai(source, "copilot-vscode")
     canon = tmp_path / "canon"
     materialize_canonical(cai, canon)
@@ -113,8 +113,8 @@ def test_capabilities_raw_and_model_hint_survive_canonical_round_trip(tmp_path: 
 def test_references_captured_from_native_source(tmp_path: Path):
     """references[] captures files from the source team's references/ directory."""
     source = Path(".github/agents")
-    if not source.is_dir():
-        pytest.skip("repo .github/agents not found")
+    if not any(source.glob("*.agent.md")):
+        pytest.skip("repo .github/agents has no agent files (gitignored/CI)")
     cai = export_to_cai(source, "copilot-vscode")
     refs = cai.get("references", [])
     assert len(refs) > 0, "no references captured"
@@ -128,8 +128,8 @@ def test_references_captured_from_native_source(tmp_path: Path):
 def test_references_survive_canonical_round_trip(tmp_path: Path):
     """references[] survive export → materialize → load."""
     source = Path(".github/agents")
-    if not source.is_dir():
-        pytest.skip("repo .github/agents not found")
+    if not any(source.glob("*.agent.md")):
+        pytest.skip("repo .github/agents has no agent files (gitignored/CI)")
     cai = export_to_cai(source, "copilot-vscode")
     canon = tmp_path / "canon"
     materialize_canonical(cai, canon)

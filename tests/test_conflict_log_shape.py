@@ -25,8 +25,15 @@ import csv
 import re
 from pathlib import Path
 
+import pytest
+
 REPO_ROOT = Path(__file__).resolve().parents[1]
 LOG_PATH = REPO_ROOT / ".github/agents/references/conflict-log.csv"
+
+pytestmark = pytest.mark.skipif(
+    not LOG_PATH.exists(),
+    reason="conflict-log.csv is gitignored and absent from this checkout (CI)",
+)
 
 _EXPECTED_HEADER = ["date", "category", "code", "severity", "file", "description", "status", "resolution"]
 _ISO_DATE_RE = re.compile(r"^\d{4}-\d{2}-\d{2}$")

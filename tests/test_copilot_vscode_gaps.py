@@ -23,8 +23,8 @@ from agentteams.interop import export_to_cai, import_from_cai
 def _round_trip_copilot_vscode(tmp_path: Path):
     """Export → materialize → load → import back to copilot-vscode."""
     source = Path(".github/agents")
-    if not source.is_dir():
-        pytest.skip("repo .github/agents not found")
+    if not any(source.glob("*.agent.md")):
+        pytest.skip("repo .github/agents has no agent files (gitignored/CI)")
     cai = export_to_cai(source, "copilot-vscode")
     canon_dir = tmp_path / "canon"
     materialize_canonical(cai, canon_dir)

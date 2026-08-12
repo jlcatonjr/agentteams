@@ -21,7 +21,8 @@ _COPILOT = REPO / ".github" / "agents"
 _CLAUDE = REPO / ".claude" / "agents"
 
 pytestmark = pytest.mark.skipif(
-    not _COPILOT.is_dir(), reason="repo source team (.github/agents) not found"
+    not any(_COPILOT.glob("*.agent.md")),
+    reason="repo source team (.github/agents) not found or gitignored",
 )
 
 
