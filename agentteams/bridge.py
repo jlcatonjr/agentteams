@@ -30,6 +30,7 @@ from pathlib import Path
 from typing import Any
 
 from agentteams import backup
+from agentteams.canonical import DEFAULT_CANONICAL_SUBDIR
 from agentteams.interop import detect_framework
 from agentteams.capability_hints import RESEARCH_CAPABILITY_BULLET
 from agentteams.bridge_skills import (  # noqa: F401  (carved for CH-07; re-exported)
@@ -49,6 +50,11 @@ from agentteams.bridge_sources import (  # noqa: F401  (carved for CH-07; re-exp
     _run_bridge_check,
     _slug_from_name,
     _slug_to_name,
+)
+from agentteams.bridge_pair_docs import (  # noqa: F401  (carved for CH-07; re-exported)
+    _render_domain_boundary,
+    _render_entrypoint,
+    _render_quickstart,
 )
 
 
@@ -180,9 +186,9 @@ def run_bridge(
         raise FileNotFoundError(f"Source directory not found: {source_dir}")
 
     src_fw = source_framework or detect_framework(source_dir)
-    if src_fw not in {"copilot-vscode", "copilot-cli", "claude", "goose"}:
+    if src_fw not in {"copilot-vscode", "copilot-cli", "claude", "goose", "canonical"}:
         raise ValueError(f"Unknown source framework {src_fw!r}")
-    if target_framework not in {"copilot-vscode", "copilot-cli", "claude", "goose"}:
+    if target_framework not in {"copilot-vscode", "copilot-cli", "claude", "goose", "generic"}:
         raise ValueError(f"Unknown target framework {target_framework!r}")
     if src_fw == "goose" and target_framework == "goose":
         raise ValueError(
@@ -243,11 +249,16 @@ def run_bridge(
     # Kept a notice, not a hard error: a legitimately nascent team may have no
     # agents yet, and failing would break a previously-passing input (STABILITY.md).
     if len(inventory) == 0:
+        hint = (
+            f"the canonical root directory itself, e.g. <project>/{DEFAULT_CANONICAL_SUBDIR} "
+            "(the one holding team.cai.json) — not its agents/ subdirectory"
+            if src_fw == "canonical"
+            else "the agents directory, e.g. <project>/.github/agents for copilot-vscode sources"
+        )
         result.notices.append(
             f"Empty bridge inventory: no agents found in source dir {source_dir} — "
             f"the generated bridge has nothing to route to. Re-run with "
-            f"--bridge-from pointing at the agents directory (e.g. "
-            f"<project>/.github/agents for copilot-vscode sources)."
+            f"--bridge-from pointing at {hint}."
         )
 
     # Bridge-internal artifacts: always regenerated regardless of mode.
@@ -623,71 +634,6 @@ def run_bridge(
     return result
 
 
-def _render_quickstart(source_framework: str, target_framework: str) -> str:
-    goose_check_note = ""
-    if target_framework == "goose":
-        # W5: clarify that --bridge-check only validates source-side hashes, not
-        # generated recipe YAML content.  Users sometimes assume bridge-check covers
-        # the full output; this callout prevents false confidence.
-        goose_check_note = (
-            "\n## Bridge check scope\n\n"
-            "`--bridge-check` verifies that source `.agent.md` files match their\n"
-            "SHA-256 hashes recorded at bridge-generation time. It does NOT validate\n"
-            "generated recipe YAML files, `.goosehints` enrichment, or AGENTS.md content.\n"
-            "To validate recipe structure: `agentteams --framework goose --recipe-check --output <recipes-dir>`\n"
-            "checks version string, no model: key, sub_recipe path resolution, and non-empty instructions.\n"
-            "For full recipe generation (alternative to bridge): "
-            "`agentteams --convert-from .github/agents --framework goose --output .goose/recipes`\n"
-            "\n## CLI + MCP entry recipe\n\n"
-            "The bridge emits `.goose/recipes/bridge-orchestrator.yaml` — run it with\n"
-            "`goose run --recipe .goose/recipes/bridge-orchestrator.yaml` to start the\n"
-            "bridged team WITH the `developer` (CLI) extension by default. Pass\n"
-            "`--target-host-features bridge:<source>-to-goose:mcp` and build the source\n"
-            "with an MCP token first to also wire the selected (first-party, read-only,\n"
-            "orchestrator-scoped) MCP servers into that recipe.\n"
-        )
-    return (
-        "# Bridge Quickstart Snippet\n\n"
-        "Use this as your first prompt:\n\n"
-        "```text\n"
-        f"Use the {source_framework} agent infrastructure through this {target_framework} bridge.\n"
-        "Start with the source orchestrator and follow source governance rules.\n"
-        "Do not bypass orchestrator for multi-step, destructive, or cross-repo work.\n"
-        "\n"
-        "Retrieval-first: for 'where is X' / 'have we seen Y before' / thematic\n"
-        "questions, run `agentteams --query-index \"<question>\" --query-strategy vector`\n"
-        "before grep. The memory-index covers durable prose (work summaries,\n"
-        "plans, CHANGELOG). See references/bridges/<src>-to-<target>/domain-boundary.md\n"
-        "for the boundary vs project-level retrieval contracts.\n"
-        "```\n"
-        + goose_check_note
-    )
-
-
-def _render_entrypoint(source_framework: str, target_framework: str) -> str:
-    return (
-        f"# Bridge Entrypoint: {source_framework} -> {target_framework}\n\n"
-        "This is a lightweight interface bridge.\n"
-        "Canonical agent definitions remain in source framework files.\n"
-        "Use orchestrator-first routing for team-based work.\n"
-        "\n"
-        "## Retrieval Surface\n\n"
-        "Before falling back to grep / filesystem search for thematic or\n"
-        "cross-summary questions, query the agentteams memory-index:\n\n"
-        "```\n"
-        "agentteams --query-index \"<the user's question>\" --query-strategy vector --query-k 5\n"
-        "```\n\n"
-        "Some installations require `--description PATH` for read-only queries —\n"
-        "pass the project brief if so. The index covers durable prose (work\n"
-        "summaries, plans, CHANGELOG, references), NOT code. For code-symbol\n"
-        "lookups, grep remains primary.\n\n"
-        "See `domain-boundary.md` (this directory) for the boundary between the\n"
-        "memory-index vector mode and project-level retrieval-integrator\n"
-        "validation contracts — they address different questions and must not\n"
-        "be conflated.\n"
-    )
-
-
 def _render_target_files(
     *,
     source_framework: str,
@@ -816,6 +762,16 @@ def _render_target_files(
             (agents_dir / "bridge-orchestrator.agent.md", bridge_agent),
         ]
 
+    if target_framework == "generic":
+        # No native consumer entry files: a generic target has no framework to
+        # write CLAUDE.md/AGENTS.md/.github/copilot-instructions.md style files
+        # for. Without this explicit branch, generic would silently fall through
+        # to the copilot-cli shape below — the pair-dir artifacts (manifest,
+        # inventory, entrypoint, domain-boundary — framework-agnostic by
+        # construction; quickstart carries an explicit generic-specific section,
+        # see _render_quickstart) carry the full picture on their own.
+        return []
+
     gh_dir = root / ".github"
     copilot_dir = gh_dir / "copilot"
     instructions = (
@@ -842,30 +798,6 @@ def _wrap_fence(region_id: str, body: str, version: int = 1) -> str:
         f"<!-- AGENTTEAMS-BRIDGE:BEGIN {region_id} v={version} -->\n"
         f"{body}"
         f"<!-- AGENTTEAMS-BRIDGE:END {region_id} -->\n"
-    )
-
-
-def _render_domain_boundary(source_framework: str, target_framework: str) -> str:
-    return (
-        "# Domain Boundary — Three Retrieval Surfaces\n\n"
-        "AgentTeams exposes three **distinct** retrieval surfaces that address "
-        "different questions and **must not be conflated**:\n\n"
-        "1. **Memory-index** (`memory_index`, `--query-index`) — a stdlib-only "
-        "sparse tf-idf vector-space ranking over **durable prose** (work "
-        "summaries, CHANGELOG, durable plans). `vector_runtime_mode: "
-        "sparse-tfidf-cosine`.\n"
-        "2. **Code index** (`code_index`, `--query-code`) — a stdlib-only sparse "
-        "tf-idf ranking over **code**: local scripts (`local-script`), the "
-        "external API modules they import (`api-module`), and API documentation "
-        "(`api-doc`), filterable with `--code-kind`. A **gitignored local "
-        "cache** (`references/code-index/`), never committed.\n"
-        "3. **Project retrieval-integrator** — a project-level validation "
-        "contract (e.g. `mode: relational-metadata` against project data "
-        "tables). Independent of both indexes above.\n\n"
-        "The memory-index (prose) and the code-index (code) are siblings but "
-        "cover disjoint content; neither participates in the single-slot "
-        "project retrieval-integrator contract.\n\n"
-        f"Bridge direction: `{source_framework}` → `{target_framework}`.\n"
     )
 
 

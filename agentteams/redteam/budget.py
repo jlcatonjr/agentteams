@@ -41,12 +41,18 @@ class SpendCeiling:
     floor_usd: float = MIN_REMAINING_USD
     opening_credit: float | None = field(default=None)
     last_credit: float | None = field(default=None)
+    opening_usage: float | None = field(default=None)
+    last_usage: float | None = field(default=None)
 
-    def start(self, credit: float | None) -> str:
-        """Record the opening balance and decide whether the loop may begin.
+    def start(self, credit: float | None, usage: float | None = None) -> str:
+        """Record the opening balances and decide whether the loop may begin.
 
         Args:
             credit: Remaining credit in USD, or ``None`` when the provider could not answer.
+            usage: Lifetime account spend in USD (``total_usage``), or ``None``. When
+                supplied, spend is measured against this instead of the credit balance —
+                usage only ever increases, so a mid-run credit top-up cannot turn spend
+                negative and quietly disarm the ceiling (measured: −$49.86 on 2026-08-09).
 
         Returns:
             An empty string when the loop may proceed, otherwise the reason to refuse.
@@ -57,15 +63,23 @@ class SpendCeiling:
             return f"credit ${credit:.4f} is already under the ${self.floor_usd:.2f} floor"
         self.opening_credit = credit
         self.last_credit = credit
+        self.opening_usage = usage
+        self.last_usage = usage
         return ""
 
-    def spent(self, credit: float | None) -> float | None:
-        """Return cumulative spend against the opening balance, or ``None`` if unknown."""
+    def spent(self, credit: float | None, usage: float | None = None) -> float | None:
+        """Return cumulative spend against the opening observation, or ``None`` if unknown.
+
+        Prefers the usage delta (top-up-immune) whenever both usage observations exist;
+        falls back to the credit delta otherwise.
+        """
+        if usage is not None and self.opening_usage is not None:
+            return usage - self.opening_usage
         if credit is None or self.opening_credit is None:
             return None
         return self.opening_credit - credit
 
-    def check(self, credit: float | None) -> str:
+    def check(self, credit: float | None, usage: float | None = None) -> str:
         """Decide whether the loop may continue after an invocation.
 
         An unreadable balance **stops** the loop. The alternative — treating "unknown" as
@@ -74,6 +88,7 @@ class SpendCeiling:
 
         Args:
             credit: Remaining credit in USD, or ``None``.
+            usage: Lifetime account spend in USD, or ``None``. See :meth:`start`.
 
         Returns:
             An empty string to continue, otherwise the reason to abort.
@@ -83,8 +98,10 @@ class SpendCeiling:
         if credit is None:
             return "credit endpoint stopped answering; refusing to continue unmeasured"
         self.last_credit = credit
-        spent = self.opening_credit - credit
-        if spent > self.total_budget:
+        if usage is not None:
+            self.last_usage = usage
+        spent = self.spent(credit, usage)
+        if spent is not None and spent > self.total_budget:
             return f"cumulative spend ${spent:.4f} exceeded the ${self.total_budget:.2f} ceiling"
         if credit < self.floor_usd:
             return f"credit fell to ${credit:.4f}, under the ${self.floor_usd:.2f} floor"
@@ -92,7 +109,7 @@ class SpendCeiling:
 
     def render(self) -> str:
         """Return a one-line progress summary for the console."""
-        spent = self.spent(self.last_credit)
+        spent = self.spent(self.last_credit, self.last_usage)
         if spent is None:
             return f"cumulative spend unknown of ${self.total_budget:.2f}"
         return f"cumulative spend ${spent:.4f} of ${self.total_budget:.2f}"

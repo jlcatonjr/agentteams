@@ -113,6 +113,41 @@ Bridge artifacts appear in `references/bridges/copilot-vscode-to-claude/`:
 
 Source agent documentation is never modified. The bridge references it by path.
 
+### Bridging From a Canonical Source
+
+If your source of truth is already a durable canonical directory (see
+[Interoperability: The Durable Canonical Format](interoperability.md#the-durable-canonical-format-canonical)),
+point `--bridge-from` at its root — the directory holding `team.cai.json`, not the `agents/`
+subdirectory underneath it:
+
+```bash
+agentteams \
+  --bridge-from /path/to/project/.agentteams/canonical \
+  --bridge-source-framework canonical \
+  --framework claude \
+  --output /path/to/project
+```
+
+`--bridge-check` against a canonical source covers both `agents/*.md` and `team.cai.json`
+itself, so a hand-edit to instructions/MCP/framework-extension data (which lives inside
+`team.cai.json`, not as a sibling file) is caught, not just agent-file changes.
+
+### Bridging to a Consumer With No Adapter
+
+`--framework generic` is a bridge-only target for a consumer with no `agentteams`
+framework adapter of its own — it writes only the framework-agnostic pair-dir artifacts
+(manifest, inventory, quickstart, entrypoint, domain-boundary), zero native entry files:
+
+```bash
+agentteams \
+  --bridge-from /path/to/project/.github/agents \
+  --framework generic \
+  --output /path/to/project
+```
+
+The generated quickstart points the consumer at the durable canonical tree as the fuller
+source of truth, and at the command to generate one if it doesn't already exist.
+
 ### Checking Bridge Freshness
 
 ```bash
@@ -139,6 +174,33 @@ agentteams \
 
 ---
 
+## Pattern 4: Portable Team Package
+
+**Goal:** You want to hand a team to someone outside your project — a different machine,
+a different organization — as one file, without them needing your project checked out.
+
+```bash
+agentteams \
+  --package-team /path/to/project/.github/agents \
+  --package-source-framework copilot-vscode \
+  --output /path/to/project/dist/my-team.zip
+```
+
+What happens:
+1. The source team is exported to the durable canonical format (Mode B) and bridged to a
+   `generic` target (Mode C) in a temporary staging area.
+2. Both trees are zipped together at the requested output path.
+3. The recipient unzips it, gets `.agentteams/canonical/` plus a generic bridge pair-dir,
+   and can import the canonical tree into their own framework of choice with `--interop-from`.
+
+This is not a fourth interoperability mode — it composes Mode B's canonical export with
+Mode C's generic-target bridge into one distributable artifact. It cannot be combined with
+any other standalone CLI operation (fleet, goose-switch, recipe-check, stale-check, etc.).
+See [CLI Reference: Portable Team Package](cli-reference.md#portable-team-package) for the
+full flag list.
+
+---
+
 ## Security Preflight Behaviour
 
 All write-path interoperability operations (convert, interop direct, interop bundle, bridge-refresh) run the same live security freshness preflight as main generation. If threat intelligence is stale and no valid signed waiver exists, the write is blocked.
@@ -149,7 +211,10 @@ All write-path interoperability operations (convert, interop direct, interop bun
 
 ## Supported Conversion Directions
 
-All six directional combinations are supported:
+The CAI interop pipeline (`--interop-from`) supports every registered framework as both
+source and target, plus the durable `canonical` pseudo-framework
+(durable-canonical-agent-format plan, Phases F/G). Convert and bridge cover the
+original three-framework core plus `goose` as target:
 
 | Source → Target | `--convert-from` | `--interop-from` | `--bridge-from` |
 |---|---|---|---|
@@ -159,6 +224,22 @@ All six directional combinations are supported:
 | `copilot-cli` → `claude` | ✓ | ✓ | ✓ |
 | `claude` → `copilot-vscode` | ✓ | ✓ | ✓ |
 | `claude` → `copilot-cli` | ✓ | ✓ | ✓ |
+| any of the three → `goose` | ✓ | ✓ | ✓ |
+| any registered framework → `canonical` | ✗ | ✓ | ✗ |
+| `canonical` → any registered framework | ✗ | ✓ | ✗ |
+| `goose` / `agents-md` / `codex` sources → any target | ✗ | ✓ <sup>*</sup> | ✗ |
+
+<sup>*</sup> `goose` sources parse recipe YAML (title/description/instructions, extension
+scoping, `sub_recipes`/`load(...)` handoffs, recipe parameters/response/retry).
+`agents-md` and `codex` sources carry no front matter, so capabilities/handoffs land
+inferred-or-empty — best-effort by nature, surfaced via `compatibility-report.md` in
+bundle mode.
+
+`canonical` is interop-only: export with `--interop-from <src> --framework canonical`,
+import with `--interop-from <canonical dir> --interop-source-framework canonical`.
+The canonical round trip is lossless (byte-identical re-render for every framework —
+pinned by `tests/test_dogfood_canonical.py`), and its carried MCP servers re-validate
+against `mcp-server.schema.json` (security-review hard gates included) at import time.
 
 ---
 

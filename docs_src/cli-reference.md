@@ -58,7 +58,7 @@ Existing project directory to scan. Overrides `existing_project_path` in the des
 
 ### `--framework NAME` / `-f NAME`
 
-Target agent framework. Choices: `copilot-vscode` (default), `copilot-cli`, `claude`, `goose`, `agents-md`.
+Target agent framework. Choices: `copilot-vscode` (default), `copilot-cli`, `claude`, `goose`, `agents-md`, `codex`, plus `canonical` (interop-only pseudo-framework — pair with `--interop-from`).
 
 | Value | Format | Description |
 |-------|--------|-------------|
@@ -66,7 +66,9 @@ Target agent framework. Choices: `copilot-vscode` (default), `copilot-cli`, `cla
 | `copilot-cli` | Plain `.md` | Copilot CLI system prompts; inline YAML and handoff sections stripped, with handoffs preserved in `references/runtime-handoffs.json` when present |
 | `claude` | Claude front matter `.md` | Claude Projects; output includes `CLAUDE.md` instructions and preserves handoffs in `references/runtime-handoffs.json` when present |
 | `goose` **(beta)** | Recipe YAML (`.goose/recipes/*.yaml`) | Block / AAIF Goose recipes; orchestrator delegates via `sub_recipes`, deeper edges become `summon` `load(...)`; team brief written to repo-root `AGENTS.md` + `.goosehints`. Handoffs are encoded natively in the recipes (no `runtime-handoffs.json` sidecar). **Beta** — see the feature-support matrix below |
-| `agents-md` | Plain `.md` | Cross-tool **AGENTS.md** standard (AAIF / Linux Foundation). Emits a single framework-neutral repo-root `AGENTS.md` — the canonical file read by ~10 tools (Continue, Cursor, Cline, Codex, Zed, Aider, …) — plus per-specialist detail under `.agents/`. Routing preserved in `references/runtime-handoffs.json`. **Generate-only** (not a `--convert-from`/`--interop-from`/`--bridge-from` target). |
+| `agents-md` | Plain `.md` | Cross-tool **AGENTS.md** standard (AAIF / Linux Foundation). Emits a single framework-neutral repo-root `AGENTS.md` — the canonical file read by ~10 tools (Continue, Cursor, Cline, Codex, Zed, Aider, …) — plus per-specialist detail under `.agents/`. Routing preserved in `references/runtime-handoffs.json`. Generate-only for convert/bridge; the CAI interop path supports it as a target (best-effort: its rendered output carries no front matter). |
+| `codex` | Plain `.md` | OpenAI Codex CLI (thin, prep-scoped target). Delegates AGENTS.md rendering to the agents-md adapter; the generated notice documents Codex's nested-directory `AGENTS.md` walk. `config.toml` MCP server emission is opt-in via `--target-host-features codex:mcp` (see [`codex_mcp_emit`](api-reference/codex-mcp-emit.md)). Same generate-only convert/bridge posture as `agents-md`. |
+| `canonical` | Exploded CAI directory | Durable on-disk canonical format (`team.cai.json` + `agents/<slug>.md` + `skills/<slug>/SKILL.md` + `references/**`), default `<project>/.agentteams/canonical/`. Interop-only: there is no generate/convert/bridge path for it. |
 
 `references/runtime-handoffs.json` is a framework-neutral sidecar manifest emitted when extracted handoffs exist for frameworks that do not keep inline VS Code handoff syntax in the final agent file.
 
@@ -79,12 +81,14 @@ Target agent framework. Choices: `copilot-vscode` (default), `copilot-cli`, `cla
 | `copilot-vscode` | ✓ | ✓ | ✓ | ✓ |
 | `copilot-cli` | ✓ | ✓ | ✓ | ✓ |
 | `claude` | ✓ | ✓ | ✓ | ✓ |
-| `goose` **(beta)** | ✓ | ✓ <sup>1</sup> | ✗ *(planned)* <sup>2</sup> | ✓ |
-| `agents-md` | ✓ | ✗ <sup>3</sup> | ✗ <sup>3</sup> | ✗ <sup>3</sup> |
+| `goose` **(beta)** | ✓ | ✓ <sup>1</sup> | ✓ <sup>2</sup> | ✓ |
+| `agents-md` | ✓ | ✗ <sup>3</sup> | ✓ <sup>3</sup> | ✗ <sup>3</sup> |
+| `codex` | ✓ | ✗ <sup>3</sup> | ✓ <sup>3</sup> | ✗ <sup>3</sup> |
+| `canonical` | ✗ <sup>4</sup> | ✗ <sup>4</sup> | ✓ <sup>4</sup> | ✗ <sup>4</sup> |
 
-**✓** available · **✗** not a valid target (by design) · **✗ *(planned)*** not yet developed
+**✓** available · **✗** not a valid target (by design)
 
-> **`goose` is in beta** — generate/convert/bridge are validated against the Goose CLI, but the integration is still maturing (interop and full delegation from `claude`/`copilot-cli` convert sources are in development) and the `goose` adapter API is not yet covered by the [stability policy](https://github.com/jlcatonjr/agentteams/blob/main/STABILITY.md).
+> **`goose` is in beta** — generate/convert/bridge are validated against the Goose CLI, and the interop path (CAI) now preserves the handoff graph Goose needs; the `goose` adapter API is not yet covered by the [stability policy](https://github.com/jlcatonjr/agentteams/blob/main/STABILITY.md).
 
 - **Generate** — `--framework X --description …` (or `--self`).
 - **Convert target** — `--convert-from <team> --framework X` (format migration).
@@ -93,11 +97,13 @@ Target agent framework. Choices: `copilot-vscode` (default), `copilot-cli`, `cla
 
 <sup>1</sup> `goose` convert wires full orchestrator delegation (`sub_recipes`) from `copilot-vscode` sources (which keep handoffs inline in their agent files). `claude` / `copilot-cli` sources strip handoffs at their own generation, so they currently convert to valid but **flat (un-delegated)** recipes; recovering that delegation from the `runtime-handoffs.json` sidecar is part of the planned handoff-recovery work.
 
-<sup>2</sup> `--interop-from … --framework goose` is **not yet developed**: the canonical interop (CAI) representation drops the handoff graph Goose needs for `sub_recipes` delegation, so the result would be unwired. Use `--convert-from … --framework goose` instead. Enabling interop-to-goose (by preserving handoffs through the CAI) is planned.
+<sup>2</sup> `--interop-from … --framework goose` is supported as of the durable-canonical-agent-format plan (Phase F): CAI captures handoffs and the goose adapter renders `sub_recipes` from them natively. Goose recipe configuration (`recipe_parameters` / `recipe_response` / `recipe_retry`, builtin extension scoping) round-trips through the CAI `framework_extensions.goose` bucket.
 
-<sup>3</sup> `agents-md` is **generate-only** by design — it emits the cross-tool `AGENTS.md` standard and is intentionally not a convert/interop/bridge target.
+<sup>3</sup> `agents-md` / `codex` are generate-only for the convert/bridge paths (their instructions-file emission would mislabel there), but the CAI interop path supports them as targets: `import_from_cai` writes the framework-owned `AGENTS.md` beside the target agents dir. Import from an agents-md/codex source is best-effort by nature — no front matter means capabilities/handoffs land inferred-or-empty, surfaced via `compatibility-report.md` in bundle mode.
 
-Auto-detected **source** frameworks (for `--convert-from` / `--interop-from` / `--bridge-from` without an explicit `--*-source-framework`) are `copilot-vscode`, `copilot-cli`, and `claude`; `goose` and `agents-md` are not auto-detected as sources.
+<sup>4</sup> `canonical` is an interop-only pseudo-framework — the durable exploded CAI directory (`team.cai.json` + `agents/` + `skills/` + `references/`). Export: `--interop-from <src> --framework canonical`. Import: `--interop-from <canonical dir> --interop-source-framework canonical --framework <target>`. Bundle mode is refused for the canonical target; its carried MCP servers re-validate against `mcp-server.schema.json` (security-review hard gates included) at import time.
+
+Auto-detected **source** frameworks (for `--convert-from` / `--interop-from` / `--bridge-from` without an explicit `--*-source-framework`) are `copilot-vscode`, `copilot-cli`, `claude`, `goose` (`.goose/recipes`), `agents-md` (`.agents`), and `canonical` (any directory holding `team.cai.json`). `codex` shares the agents-md source shape and takes an explicit `--interop-source-framework codex`.
 
 ### `--output DIR` / `-o DIR`
 
@@ -125,12 +131,12 @@ Run the CAI-based interop pipeline from an existing source team.
 
 - `direct` mode writes target framework files.
 - `bundle` mode writes target files and compatibility artifacts under `references/interop/<source>-to-<target>/`.
-- **`--framework goose` is not supported as an interop target** — the canonical interop representation (CAI) does not carry the handoff graph Goose needs for `sub_recipe` delegation, so the result would be unwired. Use `--convert-from … --framework goose` instead (it preserves delegation from the source agent files).
+- All six registered frameworks (`copilot-vscode`, `copilot-cli`, `claude`, `goose`, `agents-md`, `codex`) are valid interop targets, as is `canonical` (the durable exploded CAI directory). `--framework canonical` is interop-only and requires `--interop-from`; bundle mode is refused for the canonical target.
 - Non-dry-run interop runs also enforce the live security freshness preflight before writing, with the same signed-waiver exception path.
 
 ### `--interop-source-framework NAME`
 
-Optional source framework override for interop runs. When omitted, source framework is auto-detected.
+Optional source framework override for interop runs. When omitted, source framework is auto-detected (directory shape; a directory holding `team.cai.json` detects as `canonical`). Accepted values are the registered frameworks plus `canonical` — the latter reads an exploded canonical directory as the interop source.
 
 ### `--interop-mode MODE`
 
@@ -807,6 +813,37 @@ privileged change (Constitutional C-3), so it requires saying so explicitly.
 
 ---
 
+## Canonical Absorb (Bidirectional Sync)
+
+### `--absorb-from DIR`
+
+Source directory to absorb native framework edits from. The framework is
+auto-detected by directory shape when `--absorb-source-framework` is omitted.
+Requires a canonical directory (auto-detected as
+`<parent>/<parent>/.agentteams/canonical/` or specified via
+`--absorb-canonical-dir`).
+
+### `--absorb-source-framework NAME`
+
+Explicit source framework for `--absorb-from` (auto-detected when omitted).
+Accepts any registered framework: `copilot-vscode`, `copilot-cli`, `claude`,
+`goose`, `agents-md`, `codex`.
+
+### `--absorb-canonical-dir DIR`
+
+Explicit canonical directory path. Defaults to
+`<source_dir>/../../.agentteams/canonical/` when omitted.
+
+### `--absorb-apply`
+
+Apply native-moved (non-capability) changes to canonical. Without this
+flag, the absorb is report-only — nothing is written. Capability-bearing
+fields (tools, model, user-invokable, permissionMode, agents) are **never**
+auto-applied; they always appear in the report as proposals for human
+review (§6.1 capability carve-out).
+
+---
+
 ## Other Options
 
 ### `--fleet-allow-no-verify`
@@ -849,6 +886,39 @@ override, and the known sources.
 ### `--goose-config PATH`
 
 Override the `config.yaml` path. Otherwise resolved via `goose info` / XDG.
+
+---
+
+## Portable Team Package
+
+Package a native-framework source team as one portable `.zip`: a durable canonical directory
+(`.agentteams/canonical/` — `team.cai.json` plus one `agents/<slug>.md` file per agent, plus
+`skills/<slug>/SKILL.md` when the source has first-class skills) plus its generic bridge
+(framework-agnostic inventory, quickstart, entrypoint, and domain-boundary prose), both derived
+from the same source read. A repo with zero `agentteams` integration can unpack the zip and read
+the canonical tree and generic bridge directly; a repo with a native adapter can later get
+full-fidelity native rendering via `--interop-source-framework canonical`. Standalone mode,
+mutually exclusive with every other standalone op (`--convert-from`/`--interop-from`/
+`--bridge-from`/`--self`/`--fleet`/the Goose switch flags/`--recipe-check`/`--stale-check`/and
+the other integrity-and-retention standalone ops) — see [`package_team`](api-reference/team-package.md)
+for the full list.
+
+### `--package-team SOURCE_DIR`
+
+Source team directory to package. Must be a native framework source (`.github/agents`,
+`.claude/agents`, etc.), not a canonical directory — a canonical source has no native framework
+left to render the bundled generic bridge from; use `--bridge-from <canonical dir>
+--bridge-source-framework canonical --framework generic` directly for that case instead.
+
+### `--package-source-framework NAME`
+
+Optional source framework override for `--package-team` (auto-detected when omitted). Requires
+`--package-team`.
+
+With `--package-team`, `--output` names the destination `.zip` **file** path (default:
+`./team-package.zip`), not a directory as it does for every other mode. `--overwrite` allows
+replacing an existing zip; without it, a second run against the same path fails rather than
+silently clobbering the first.
 
 ---
 

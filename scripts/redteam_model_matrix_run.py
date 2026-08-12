@@ -101,16 +101,26 @@ LADDERS: dict[str, dict] = {
         "note": "ShieldGemma, Responsible AI toolkit",
         "models": ["google/gemma-3-27b-it"],
     },
-    # glm-4.7 is deliberately absent: it is the incumbent's previous generation, and the
-    # capability floor for this comparison is "at least as capable as glm-5.2, and no less".
-    "zai-glm": {"note": "incumbent baseline", "models": ["z-ai/glm-5.2"]},
+    # glm-4.5-air added 2026-08-12 as the incumbent's own weak-tier sibling (lightweight MoE
+    # variant of the same flagship family), for the family-ladder probe in
+    # references/plans/redteam-weak-model-baseline-eval.report.md. glm-4.7 remains deliberately
+    # absent for the unrelated, original reason above: it is a prior generation, and the
+    # capability floor for the frontier-tier comparison below is "at least as capable as
+    # glm-5.2, and no less" — that constraint does not apply to this weak-tier addition.
+    "zai-glm": {"note": "incumbent baseline", "models": ["z-ai/glm-4.5-air", "z-ai/glm-5.2"]},
     "qwen": {
         "note": "measured baseline",
         # qwen3.8-max is a generation above everything in the 2026-08-07 run and is NOT yet
         # measured — it is listed so it resolves to a family rather than reporting "unknown",
         # and because its siblings placed 2nd and 5th of twelve. See
         # references/qwen38max-judgment-handoff.plan.md.
+        # qwen3-30b-a3b and qwen3-8b added 2026-08-12: one generation behind qwen3.6/3.8 (same
+        # caveat as qwen3.8-max above, opposite direction — this is the family's weak tier, not
+        # its frontier), for the family-ladder probe in
+        # references/plans/redteam-weak-model-baseline-eval.report.md.
         "models": [
+            "qwen/qwen3-8b",
+            "qwen/qwen3-30b-a3b",
             "qwen/qwen3.6-plus",
             "qwen/qwen3.6-max-preview",
             "qwen/qwen3.8-max",
@@ -124,8 +134,17 @@ LADDERS: dict[str, dict] = {
     # published safety programme stand in for a result. These families are here because they
     # are the same class of model as the one the standing job already runs.
     "deepseek": {
-        "note": "frontier tier, comparable capability/price",
-        "models": ["deepseek/deepseek-v3.2", "deepseek/deepseek-r1"],
+        # deepseek-v4-flash added 2026-08-12, wave 2 of the family-ladder probe: a genuine
+        # smaller sibling in DeepSeek's OWN v4 lineage (284B total / 13B active MoE, per its
+        # OpenRouter catalogue description — same architecture family as deepseek-v4-pro, not a
+        # distillation onto another vendor's base). This corrects an error from wave 1 of the
+        # same probe: the "deepseek-r1-distill" family below claimed "OpenRouter's live
+        # catalogue has no smaller model under the deepseek/ namespace itself" — false; the
+        # wave-1 catalogue query had already listed deepseek-v4-flash, it just wasn't checked
+        # against the "is this a real smaller sibling" question at the time. Caught on
+        # `@adversarial` review before wave 2 ran.
+        "note": "frontier tier, comparable capability/price, plus a same-lineage weak-tier sibling",
+        "models": ["deepseek/deepseek-v4-flash", "deepseek/deepseek-v3.2", "deepseek/deepseek-r1"],
     },
     "moonshot": {
         "note": "frontier tier, comparable capability/price",
@@ -136,12 +155,34 @@ LADDERS: dict[str, dict] = {
         "models": ["minimax/minimax-m2"],
     },
     "mistral-large": {
-        "note": "frontier tier, comparable capability/price",
-        "models": ["mistralai/mistral-large-2512", "mistralai/mistral-medium-3-5"],
+        # mistral-small-2603 added 2026-08-12: same general-purpose Mistral lineage as
+        # mistral-large/medium, deliberately NOT paired from "mistral-ministral" above — that
+        # line is branded "Mistral moderation/guardrails" (a different alignment objective, not
+        # simply a smaller general model), which would confound size with alignment approach.
+        # See references/plans/redteam-weak-model-baseline-eval.report.md.
+        "note": "frontier tier, comparable capability/price, plus a same-lineage weak-tier sibling",
+        "models": [
+            "mistralai/mistral-small-2603",
+            "mistralai/mistral-large-2512",
+            "mistralai/mistral-medium-3-5",
+        ],
     },
     "ai21": {
         "note": "frontier tier, comparable capability/price",
         "models": ["ai21/jamba-large-1.7"],
+    },
+    # Added 2026-08-12 for wave 1 of the family-ladder probe in
+    # references/plans/redteam-weak-model-baseline-eval.report.md. Deliberately its own family
+    # key, not folded into "deepseek" above: this is an R1 distillation onto a Llama-3 base, not
+    # a smaller native DeepSeek pretrain. CORRECTION (still 2026-08-12, wave 2, caught on
+    # `@adversarial` review): this entry's original comment claimed no smaller native-DeepSeek
+    # model existed on the live catalogue — that was wrong; see deepseek-v4-flash added to the
+    # "deepseek" family above. This entry is kept, unmodified, as the record of wave 1's actual
+    # run (deepseek-r1-distill-llama-70b), not retargeted at v4-flash after the fact.
+    "deepseek-r1-distill": {
+        "note": "R1 distillation onto a Llama-3 base -- not a smaller native DeepSeek model; "
+                "caveated weak-tier proxy only, included by explicit 2026-08-12 operator decision",
+        "models": ["deepseek/deepseek-r1-distill-llama-70b"],
     },
 }
 
@@ -313,6 +354,24 @@ def read_remaining_credit(token: str) -> float | None:
     if total is None or used is None:
         return None
     return float(total) - float(used)
+
+
+def read_total_usage(token: str) -> float | None:
+    """Return lifetime account spend in USD, or ``None`` when the endpoint cannot answer.
+
+    Spend must be measured against this monotonic figure, not the credit balance: a mid-run
+    auto-top-up raises ``total_credits``, so a credits-delta reports negative spend and the
+    cumulative ceiling silently never fires (measured −$49.86 on 2026-08-09).
+    """
+    request = urllib.request.Request("https://openrouter.ai/api/v1/credits")
+    request.add_header("Authorization", f"Bearer {token}")
+    try:
+        with urllib.request.urlopen(request, timeout=30) as response:  # noqa: S310
+            data = json.loads(response.read().decode("utf-8")).get("data", {})
+    except (urllib.error.URLError, urllib.error.HTTPError, ValueError, KeyError, TimeoutError):
+        return None
+    used = data.get("total_usage")
+    return None if used is None else float(used)
 
 
 def summarise(report: dict) -> dict:
@@ -504,7 +563,7 @@ def main(argv: list[str] | None = None) -> int:
     # which closed the hole for this caller and left it open for the next script to loop the
     # judgment runner.
     ceiling = SpendCeiling(total_budget=args.total_budget)
-    refusal = ceiling.start(remaining)
+    refusal = ceiling.start(remaining, read_total_usage(token))
     if refusal:
         print(f"  Refusing to start: {refusal}", file=sys.stderr)
         return 2
@@ -525,7 +584,7 @@ def main(argv: list[str] | None = None) -> int:
 
         # Cumulative gate, between models. The child's own budget is per invocation and cannot
         # see the loop; without this the matrix is bounded only by the floor.
-        verdict = ceiling.check(read_remaining_credit(token))
+        verdict = ceiling.check(read_remaining_credit(token), read_total_usage(token))
         print(f"      {ceiling.render()}")
         if verdict:
             matrix.aborted = verdict

@@ -86,6 +86,48 @@ Bundle artifacts are written under `references/interop/<source>-to-<target>/` an
 4. `instructions-map.json`
 5. `compatibility-report.md`
 
+### The Durable Canonical Format (`canonical`)
+
+`canonical` is a recognized value for `--framework` (as an interop **target**) and
+`--interop-source-framework` (as a source) — an interop-only pseudo-framework, not a
+rendering target. It writes/reads the durable exploded on-disk form of the CAI document
+(default location `<project>/.agentteams/canonical/`):
+
+1. `team.cai.json` — project-level data (schema version, instructions binding, MCP servers,
+   framework-owned configuration, source metadata).
+2. `agents/<slug>.md` — human-editable Markdown with YAML front matter (canonical capability
+   vocabulary + handoffs).
+3. `skills/<slug>/SKILL.md` — first-class skills with co-located files.
+4. `references/**` — carried non-agent reference content.
+
+Export to canonical:
+
+```bash
+agentteams \
+  --interop-from /path/to/source/agents \
+  --interop-source-framework copilot-vscode \
+  --framework canonical \
+  --output /path/to/project/.agentteams/canonical
+```
+
+Import from canonical:
+
+```bash
+agentteams \
+  --interop-from /path/to/project/.agentteams/canonical \
+  --interop-source-framework canonical \
+  --framework claude \
+  --output /path/to/project/.claude/agents
+```
+
+Both dispatch through the same CAI pipeline and the same live security freshness preflight
+as every other interop write path. `--interop-mode` keeps its existing two values and
+meanings; `bundle` mode is refused for the canonical target (bundle artifacts would land
+inside the canonical directory and corrupt its `references/` tree on load). MCP servers
+carried in a canonical `team.cai.json` re-validate against `mcp-server.schema.json` —
+including the `security_review` hard gates — at import time, so a hand-edited weakening
+fails re-import instead of silently round-tripping.
+
 ---
 
 ## Mode C: Lightweight Bridge (`--bridge-from`)
@@ -129,20 +171,70 @@ agentteams \
 
 `--bridge-refresh` overwrites consumer `CLAUDE.md` / `.claude/*` with terse bridge-stub content. If your team has rich entry files, use `--bridge-merge`. Consumer-managed sections should live OUTSIDE the bridge's `<!-- AGENTTEAMS-BRIDGE:BEGIN ... -->` fences so the merge logic preserves them.
 
+### Canonical as a bridge source
+
+`canonical` is also a recognized `--bridge-source-framework` value: point `--bridge-from` at
+a canonical directory's root (the one holding `team.cai.json`, not its `agents/` subdirectory
+— pointing at the subdirectory misdetects as `copilot-vscode`) and the bridge reads
+`agents/*.md` directly. `--bridge-check` against a canonical source covers both `agents/*.md`
+and `team.cai.json` itself, so a hand-edit to instructions/MCP/framework-extension data (which
+lives inside `team.cai.json`, not as sibling files) is caught, not just agent-file changes.
+
+### Generic bridge target — no native adapter required
+
+`--framework generic` is a bridge-only target (pair with `--bridge-from`) for a consumer with
+no `agentteams` framework adapter of its own. It emits only the framework-agnostic pair-dir
+artifacts (manifest, inventory, quickstart, entrypoint, domain-boundary) — zero native consumer
+entry files (no `CLAUDE.md`, no `AGENTS.md`). The generated quickstart points the consumer at
+the durable canonical tree (`.agentteams/canonical/`, see above) as the fuller source of truth,
+and at the exact command to generate one if it doesn't already exist alongside the bridge.
+
+### Portable team package (`--package-team`)
+
+A durable canonical directory plus its generic bridge can also be packaged as one portable
+`.zip` — see [CLI Reference: Portable Team Package](cli-reference.md#portable-team-package).
+Standalone mode (mutually exclusive with all three modes above and every other standalone CLI
+op), not part of the three interoperability modes proper: it composes Mode B's canonical export
+with Mode C's generic-target bridge into one distributable artifact rather than adding a fourth
+mode of its own.
+
 ---
 
 ## Directional Coverage
 
-These three round-trippable frameworks are supported in all six directional pairings:
+All six registered frameworks are valid CAI interop **sources and targets**
+(durable-canonical-agent-format plan, Phase F):
 
-1. `copilot-vscode -> copilot-cli`
-2. `copilot-vscode -> claude`
-3. `copilot-cli -> copilot-vscode`
-4. `copilot-cli -> claude`
-5. `claude -> copilot-vscode`
-6. `claude -> copilot-cli`
+1. `copilot-vscode`
+2. `copilot-cli`
+3. `claude`
+4. `goose`
+5. `agents-md`
+6. `codex` (thin, prep-scoped: delegates AGENTS.md rendering to the agents-md adapter)
 
-The framework set is larger than these three: `goose` is also a one-way convert/bridge **target** (`--convert-from … --framework goose`, `--bridge-from … --framework goose`), and `agents-md` is **generate-only**. Neither is a round-trip interop source — see the [CLI Reference](cli-reference.md#feature-support-by-framework) feature-support matrix and the per-mode API pages for their coverage.
+Round-trip fidelity is exact where a target has an equivalent concept and honestly
+degraded where it doesn't — surfaced via `compatibility-report.md` in bundle mode, never
+silently. Notes per framework:
+
+1. `goose` recipes capture title/description/instructions plus recipe-level configuration
+   (`recipe_parameters` / `recipe_response` / `recipe_retry`, builtin extension scoping)
+   through the CAI `framework_extensions.goose` bucket; handoffs round-trip as `sub_recipes`
+   (true delegation) and `load(...)` context references.
+2. `agents-md` and `codex` sources carry no front matter, so capabilities/handoffs land
+   inferred-or-empty on export (best-effort by nature).
+3. `canonical` additionally serves as the durable intermediate: any framework can export to
+   it and import back from it with near-lossless fidelity (see the canonical section above).
+   Modeled fields (name, description, body, capabilities/handoffs, skills, MCP servers)
+   round-trip exactly; framework-specific keys not yet modeled travel through the
+   `raw_front_matter` and `capabilities.raw` escape hatches so they are preserved rather
+   than silently dropped. Known remaining coarseness (documented per framework in
+   `capability_map.py`'s module docstring) is surfaced, not hidden.
+
+Convert (`--convert-from`) and bridge (`--bridge-from`) coverage is narrower than interop:
+`goose` is a convert/bridge target, while `agents-md`/`codex` remain generate-only for those
+two paths (their interop support is the CAI path). See the
+[CLI Reference](cli-reference.md#feature-support-by-framework) feature-support matrix for the
+per-path detail.
 
 ---
 

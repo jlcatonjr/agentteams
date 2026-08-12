@@ -16,6 +16,7 @@ from __future__ import annotations
 from agentteams.frameworks.agents_md import AgentsMdAdapter
 from agentteams.frameworks.base import FrameworkAdapter
 from agentteams.frameworks.claude import ClaudeAdapter
+from agentteams.frameworks.codex import CodexAdapter
 from agentteams.frameworks.copilot_cli import CopilotCLIAdapter
 from agentteams.frameworks.copilot_vscode import CopilotVSCodeAdapter
 from agentteams.frameworks.goose import GooseAdapter
@@ -26,4 +27,15 @@ FRAMEWORKS: dict[str, type[FrameworkAdapter]] = {
     "claude": ClaudeAdapter,
     "goose": GooseAdapter,
     "agents-md": AgentsMdAdapter,
+    # F.4: thin prep-scoped Codex target (AGENTS.md rendering delegated to
+    # agents_md; config.toml MCP emission is implemented separately — see
+    # agentteams/codex_mcp_emit.py). The schema framework enums must carry
+    # this id too — pinned by tests/test_framework_enum_consistency.py.
+    "codex": CodexAdapter,
 }
+
+# Ordered framework-id list derived from FRAMEWORKS (insertion order).
+# Schema enums (team-manifest.schema.json, agent-cai.schema.json) must match
+# this exactly — pinned by tests/test_framework_enum_consistency.py so the
+# recurring enum-staleness bug cannot return silently (CH-05 extension).
+FRAMEWORK_IDS: tuple[str, ...] = tuple(FRAMEWORKS.keys())

@@ -1,6 +1,6 @@
 {
   "schema_version": "1.0",
-  "generated_at": "2026-08-07T21:59:30.638161+00:00",
+  "generated_at": "2026-08-12T20:59:26.287660+00:00",
   "source_framework": "copilot-vscode",
   "target_framework": "claude",
   "source_dir": ".github/agents",
@@ -39,11 +39,11 @@
     },
     {
       "path": "agents/conflict-auditor.agent.md",
-      "sha256": "ba643b3b0a5d564b1182a8d38ec107ba66b109043fe358f1fb17d01162008610"
+      "sha256": "422671f71c8033a4688987ef8a1c70786c6053fd5f6581c19449af8df9c83750"
     },
     {
       "path": "agents/conflict-resolution.agent.md",
-      "sha256": "6c985d3cd729c1d7a3a9f395b86b15d623e28a75e35b3995fa11202619172e39"
+      "sha256": "2957010567a19236b10aa0bfe8f263b0123762b8ff0493f84c5a8344dbefcee6"
     },
     {
       "path": "agents/content-enricher.agent.md",
@@ -63,7 +63,7 @@
     },
     {
       "path": "agents/navigator.agent.md",
-      "sha256": "c1aeb3f282b66715c1cd540b48fe76f93376793847112170963c507a648c9e3f"
+      "sha256": "dbaa8f3debf6c1011e5abe8dd74d46e6f969b3d8c0605b081c450c0e32682375"
     },
     {
       "path": "agents/orchestrator.agent.md",
@@ -107,7 +107,7 @@
     },
     {
       "path": "agents/retrieval-integrator.agent.md",
-      "sha256": "073dd31ffda068e4d9658779b5cf9f609c06d1df75e79e80ca6045e1226397e7"
+      "sha256": "b30401008b09317c6581ee637803421c808bb36cc97e0d02a2d574ac543dca4b"
     },
     {
       "path": "agents/schemas-expert.agent.md",
@@ -115,7 +115,7 @@
     },
     {
       "path": "agents/security.agent.md",
-      "sha256": "dc67e264ee12852d97684c50f98f919b7aeca51f0e3ce46cac95762ebf6f6e16"
+      "sha256": "baebbd9e4410a6104c63090a011bbcb52964aa4bd69858694b61a52f4ecba11e"
     },
     {
       "path": "agents/team-builder.agent.md",
@@ -135,15 +135,15 @@
     },
     {
       "path": "agents/tool-doc-researcher.agent.md",
-      "sha256": "07659c48433e9c8dafbd242f4a78290f22f03dae7ce8de9958142568d972fab8"
+      "sha256": "c5c4cea9510b7ab90c98fcc3ac481667d6623d5252fa4e3f516ac9c3aabd05cf"
     },
     {
       "path": "agents/work-summarizer.agent.md",
-      "sha256": "dc39525640edaba17c5c71fb4c73d3ef065f653dbea30b226e8b4638aa4d86c0"
+      "sha256": "4be04dd134c82965b710986c3ea8c455e01b8e83b4e756dd14a5c2f67923db94"
     },
     {
       "path": "copilot-instructions.md",
-      "sha256": "75cf434a82003740475a9947e2f47940c8f2a77f1f9f48d7b50c9b92bef422e1"
+      "sha256": "080f1bcea086c0773fb5e1c8fce8a9110296391ff5636d68ae792bd786ae5cd2"
     }
   ],
   "inventory_count": 34,

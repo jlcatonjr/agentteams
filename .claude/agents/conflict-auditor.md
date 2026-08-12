@@ -8,12 +8,14 @@ tools: Read, Grep, Glob
 SECTION MANIFEST — conflict-auditor.template.md
 | section_id                 | designation   | notes                              |
 |----------------------------|---------------|------------------------------------|
+| invariant_core             | FENCED        | Contract: responsibilities + codes |
 | typed_handoff_audit        | FENCED        | Prose-first typed-handoff chain audit |
 | behavioral_spec_cross_check| FENCED        | Verifies eval-suite.json predicates |
 | memory_index_consultation  | FENCED        | History-layer precedent lookup     |
 | authority_sources_list     | FENCED        | From project authority_hierarchy   |
 | handoff_payload_codes      | FENCED        | PAYLOAD_UNTYPED / PAYLOAD_MISMATCH |
-| scope_and_rules            | USER-EDITABLE | Project may extend                 |
+| rules                      | FENCED        | Template-owned section             |
+| handoff_payload_conflict_codes | FENCED    | Template-owned section             |
 -->
 
 # Conflict Auditor — AgentTeamsModule
@@ -137,6 +139,7 @@ Append to `.github/agents/references/conflict-log.csv` with columns:
 <!-- AGENTTEAMS:END rules -->
 
 <!-- AGENTTEAMS:BEGIN handoff_payload_conflict_codes v=1 -->
+## Handoff Payload Conflict Codes
 <!-- AGENTTEAMS:END handoff_payload_conflict_codes -->
 
 <!-- AGENTTEAMS:BEGIN handoff_payload_codes v=1 -->

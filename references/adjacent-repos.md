@@ -2,7 +2,7 @@
 
 **Purpose:** Authoritative inventory of all repositories affected by AgentTeamsModule cross-repository operations. Required by Orchestrator Authority Hierarchy and Workflow 9 (Cross-Repository Coordination).
 
-**Last Updated:** 2026-05-08 by Orchestrator (fleet-update-all-repositories, Step 0)
+**Last Updated:** 2026-08-10 by Orchestrator (durable-canonical-agent-format plan J.1 registration of 7 adjacent repos; prior fleet audit 2026-05-08)
 
 **Maintenance:** @repo-liaison → Protocol 4 (Registry Maintenance)
 
@@ -47,6 +47,13 @@ Each entry documents:
 | ~/githubrepositories/researchteam | .github/agents | secondary | yes | full_update | repo-liaison | 2026-07-23 | Real, actively-updated consumer. Also has native `.goose/recipes/` and bridged `.claude/agents/`. Uses its own `researchteam` CLI wrapper (`.researchteam` marker) which auto-integrates on commit (pre-commit hook, layer1-only) and via `researchteam update` (layer1 + layer-2 project-specific file sync from `researchteam@main`). |
 | ~/githubrepositories/visualknowledge/collector-management | .github/agents | secondary | yes | full_update | repo-liaison | 2026-08-07 | Real, actively-updated consumer with a bridged `.claude/agents/`. **Was unregistered until 2026-08-07** despite appearing in `git-procedures.md`, `bridge-refresh-safety.md` and `security-decisions.log.csv` — Gate 1 of the fleet-update authorization policy HALTs on missing registry entries, so the gap silently blocked cleared work. Subject of the 2026-05-27 `--bridge-refresh` incident that destroyed user content in `.claude/skills/recall.md`: **merge-only, never refresh**. |
 | ~/githubrepositories/researchRepositories/OrthodoxLLM | .github/agents | secondary | yes | full_update | repo-liaison | 2026-07-23 | Real, actively-updated consumer; sibling of researchteam (same descriptor lineage — forked/customized brief.json, not a technical dependency). Also has native `.goose/recipes/` and bridged `.claude/agents/`. Uses the same `researchteam` CLI wrapper (`.researchteam` marker → `researchteam@main`). |
+| ~/githubrepositories/visualknowledge/vk-services-local | .github/agents | secondary | yes | full_update | repo-liaison | 2026-08-10 | Real consumer with bridged `.claude/agents/`; registered 2026-08-10 (durable-canonical-agent-format plan J.1). Sibling work-copies `vk-services-local-gn0` / `vk-services-local-fix` remain unregistered derivatives. |
+| ~/githubrepositories/visualknowledge/vk-api-utils | .github/agents | secondary | yes | full_update | repo-liaison | 2026-08-10 | Real consumer with bridged `.claude/agents/`; registered 2026-08-10 (plan J.1). Sibling work-copy `vk-api-utils-margin` remains an unregistered derivative. |
+| ~/githubrepositories/visualknowledge/vk-support | .github/agents | secondary | yes | full_update | repo-liaison | 2026-08-10 | Real consumer with bridged `.claude/agents/`; registered 2026-08-10 (plan J.1). |
+| ~/githubrepositories/visualknowledge/colorado-collectors | .github/agents | secondary | yes | full_update | repo-liaison | 2026-08-10 | Real consumer with bridged `.claude/agents/`; registered 2026-08-10 (plan J.1). |
+| ~/githubrepositories/visualknowledge/tucson_data_collection | .github/agents | secondary | yes | full_update | repo-liaison | 2026-08-10 | Real data-collection consumer with bridged `.claude/agents/`; registered 2026-08-10 (plan J.1). |
+| ~/githubrepositories/GeneralResearchTeam | .github/agents | secondary | yes | full_update | repo-liaison | 2026-08-10 | Real research consumer; also has native `.goose/recipes/`; registered 2026-08-10 (plan J.1). |
+| ~/githubrepositories/CoPilotAgentDocumentation | .github/agents | secondary | yes | full_update | repo-liaison | 2026-08-10 | Documentation consumer with bridged `.claude/agents/`; registered 2026-08-10 (plan J.1). |
 
 ### Vendor & Archived
 
@@ -59,14 +66,14 @@ Each entry documents:
 
 ## Summary Statistics
 
-- **Total repos registered (enumerated below):** 13
-- **Orchestrator present:** 1 (agentteams)
-- **Update scope: full_update:** 11
+- **Total repos registered (enumerated below):** 20
+- **Orchestrator present:** 8 (agentteams + 7 consumer repos registered 2026-08-10)
+- **Update scope: full_update:** 18
 - **Update scope: security_only:** 1 (vendor)
 - **Update scope: manual_review:** 1 (archived)
 - **Last fleet audit:** 2026-05-08 (fleet-update-all-repositories)
 
-> The 13 rows above are the **named, individually-tracked** repositories. The broader 2026-W19 fleet discovery enumerated ~38 in-scope repos under `~/githubrepositories/` (see `references/fleet-update-scope-boundary.md` §I); only the named representatives plus the vendor/archived exceptions are tracked by row here. The remaining in-scope repos are governed by the `full_update` default and are not individually listed.
+> The 20 rows above are the **named, individually-tracked** repositories. The broader 2026-W19 fleet discovery enumerated ~38 in-scope repos under `~/githubrepositories/` (see `references/fleet-update-scope-boundary.md` §I); only the named representatives plus the vendor/archived exceptions are tracked by row here. The remaining in-scope repos are governed by the `full_update` default and are not individually listed.
 
 ---
 

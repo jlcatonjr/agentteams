@@ -632,3 +632,148 @@ class TestFrontmatterValueEmbeddedDashes:
 
     def test_returns_empty_when_no_front_matter(self):
         assert _frontmatter_value("# No front matter\n", "name") == ""
+
+
+# ---------------------------------------------------------------------------
+# MAP-16 (H.2): parametrized canonical round trips — every registered
+# framework to the durable canonical format and back to the SAME framework.
+# ---------------------------------------------------------------------------
+
+from agentteams.canonical import load_canonical, materialize_canonical
+
+_MAP16_FRAMEWORKS = ("copilot-vscode", "copilot-cli", "claude", "goose", "agents-md", "codex")
+
+
+def _map16_goose_recipe(slug: str, title: str, body: str, sub_paths: list[str] | None = None) -> str:
+    lines = [
+        'version: "1.0.0"',
+        f'title: "{title}"',
+        f'description: "{title} recipe for MAP-16 round trip"',
+        "instructions: |",
+    ]
+    lines += [f"  {b}" for b in body.splitlines()]
+    lines += [
+        "extensions:",
+        "  - type: builtin",
+        "    name: developer",
+        "    bundled: true",
+        "    timeout: 300",
+    ]
+    if sub_paths:
+        lines.append("sub_recipes:")
+        for p in sub_paths:
+            name = Path(p).stem
+            lines += [f"  - name: {name}", f'    path: "./{p}"', '    description: ""']
+    return "\n".join(lines) + "\n"
+
+
+def _build_map16_source(framework: str, root: Path) -> Path:
+    """Build a synthetic source team for *framework* under *root*; return its agents dir."""
+    if framework in ("copilot-vscode", "copilot-cli", "claude"):
+        rel = {
+            "copilot-vscode": ".github/agents",
+            "copilot-cli": ".github/copilot",
+            "claude": ".claude/agents",
+        }[framework]
+        source_dir = root / rel
+        _build_source(framework, source_dir)
+        return source_dir
+    if framework == "goose":
+        recipes = root / ".goose" / "recipes"
+        recipes.mkdir(parents=True)
+        (root / "AGENTS.md").write_text("# Instructions\n\nKEEP_INSTRUCTIONS_TOKEN\n", encoding="utf-8")
+        (recipes / "orchestrator.yaml").write_text(
+            _map16_goose_recipe(
+                "orchestrator", "Orchestrator",
+                "You are the orchestrator. KEEP_BODY_TOKEN", ["worker.yaml"]
+            ),
+            encoding="utf-8",
+        )
+        (recipes / "worker.yaml").write_text(
+            _map16_goose_recipe("worker", "Worker", "You do the work. KEEP_WORKER_TOKEN"),
+            encoding="utf-8",
+        )
+        return recipes
+    # agents-md and codex share the .agents detail-file layout.
+    agents_dir = root / ".agents"
+    agents_dir.mkdir(parents=True)
+    (root / "AGENTS.md").write_text("# Instructions\n\nKEEP_INSTRUCTIONS_TOKEN\n", encoding="utf-8")
+    (agents_dir / "orchestrator.md").write_text(
+        "# Orchestrator\n\nBody one. KEEP_BODY_TOKEN\n", encoding="utf-8"
+    )
+    (agents_dir / "worker.md").write_text("# Worker\n\nBody two. KEEP_WORKER_TOKEN\n", encoding="utf-8")
+    return agents_dir
+
+
+def _map16_target_dir(framework: str, root: Path) -> Path:
+    return {
+        "copilot-vscode": root / ".github" / "agents",
+        "copilot-cli": root / ".github" / "copilot",
+        "claude": root / ".claude" / "agents",
+        "goose": root / ".goose" / "recipes",
+        "agents-md": root / ".agents",
+        "codex": root / ".agents",
+    }[framework]
+
+
+@pytest.mark.parametrize("framework", _MAP16_FRAMEWORKS)
+def test_map16_framework_to_canonical_and_back(tmp_path: Path, framework: str):
+    """source(fw) -> CAI -> canonical dir -> CAI -> target(fw), losslessly."""
+    source_dir = _build_map16_source(framework, tmp_path / "src")
+
+    cai = export_to_cai(source_dir, framework)
+    assert cai["source_framework"] == framework
+    assert cai["agents"], f"{framework}: discovery must yield agents"
+
+    # Leg 1: the CAI document survives the exploded canonical form exactly.
+    canonical_dir = tmp_path / "canon"
+    materialize_canonical(cai, canonical_dir)
+    cai2 = load_canonical(canonical_dir)
+    assert cai2 == cai
+
+    # Leg 2: the canonical CAI imports into the same framework without errors
+    # and re-lands every agent file.
+    target_dir = _map16_target_dir(framework, tmp_path / "dst")
+    result = import_from_cai(cai2, framework, target_dir, overwrite=True)
+    assert result.errors == []
+    adapter_ext = {
+        "copilot-vscode": ".agent.md",
+        "goose": ".yaml",
+    }.get(framework, ".md")
+    for slug in (a["slug"] for a in cai["agents"]):
+        assert (target_dir / f"{slug}{adapter_ext}").is_file(), f"{framework}: {slug} missing"
+
+    # Body fidelity: the KEEP tokens survive the full trip. Shared builders
+    # carry KEEP_ME_ALWAYS; the goose/agents-md synthetic sources built here
+    # carry KEEP_BODY_TOKEN.
+    token = "KEEP_ME_ALWAYS" if framework in ("copilot-vscode", "copilot-cli", "claude") else "KEEP_BODY_TOKEN"
+    orch = (target_dir / f"orchestrator{adapter_ext}").read_text(encoding="utf-8")
+    assert token in orch
+    assert "KEEP_INSTRUCTIONS_TOKEN" in cai2["instructions_binding"]["content"]
+
+
+# ---------------------------------------------------------------------------
+# H.3: goose-source discovery + agents-md instructions classification
+# ---------------------------------------------------------------------------
+
+def test_goose_source_discovery_yields_agents(tmp_path: Path):
+    """F.1 regression: a .goose/recipes source yields non-zero agents."""
+    source_dir = _build_map16_source("goose", tmp_path)
+    cai = export_to_cai(source_dir)  # auto-detection, no explicit framework
+    assert cai["source_framework"] == "goose"
+    assert len(cai["agents"]) == 2
+    slugs = {a["slug"] for a in cai["agents"]}
+    assert slugs == {"orchestrator", "worker"}
+    # instructions found two levels up at the project root (F.1)
+    assert cai["instructions_binding"]["source_name"] == "AGENTS.md"
+    assert "KEEP_INSTRUCTIONS_TOKEN" in cai["instructions_binding"]["content"]
+
+
+def test_agents_md_instructions_classified_not_agent(tmp_path: Path):
+    """F.1 regression: AGENTS.md is instructions binding, never a spurious agent."""
+    source_dir = _build_map16_source("agents-md", tmp_path)
+    cai = export_to_cai(source_dir)  # auto-detection via .agents dir shape
+    assert cai["source_framework"] == "agents-md"
+    assert cai["instructions_binding"]["source_name"] == "AGENTS.md"
+    slugs = {a["slug"] for a in cai["agents"]}
+    assert slugs == {"orchestrator", "worker"}

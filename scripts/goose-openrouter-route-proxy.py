@@ -99,13 +99,43 @@ _HOP = frozenset({
 })
 
 
-def build_provider_block(only: list[str], ignore: list[str], extra: dict) -> dict:
+def build_provider_block(only: list[str], ignore: list[str], extra: dict,
+                          prefer: list[str] | None = None) -> dict:
     """Assemble the OpenRouter ``provider`` routing object.
 
     Args:
         only: Backend names to restrict routing to (allowlist).
         ignore: Backend names to exclude (denylist).
         extra: Additional provider-object fields (e.g. ``{"sort": "throughput"}``).
+        prefer: Backend names to try first, as ``provider.order``. Added 2026-08-10: an
+            unordered ``only`` list lets OpenRouter's own price-sort pick whichever allowed
+            backend is cheapest *today*, which silently drifts as prices move (measured:
+            this exact allowlist's cheapest member changed twice in four days). "Use
+            provider X" needs `order`, not `only`.
+
+            CORRECTED 2026-08-10 (same day, live-verified against the API): OpenRouter does
+            NOT treat ``order`` as a preference within ``only`` when ``allow_fallbacks`` is
+            false — ``order`` alone becomes the entire candidate set, and anything in
+            ``only`` but not in ``order`` is never tried. An initial version of this
+            function set ``order`` to ``prefer`` verbatim, which is a hard single-backend
+            pin in disguise: when the preferred backend later stops serving a model (as
+            happened the same day -- CoreWeave has no endpoint for qwen/qwen3.8-max),
+            every request 404s with "No endpoints found", not a fallback. Fixed by
+            appending the rest of ``only`` (in its given order) after ``prefer``, so
+            ``order`` always lists every allowed backend and ``prefer`` only affects which
+            is tried first. Verified against the live API: with
+            ``order: [CoreWeave, Alibaba, Z.AI]`` and ``allow_fallbacks: false``, a
+            qwen/qwen3.8-max request (Alibaba-only today) succeeds via Alibaba. Also
+            verified: bare ``order`` with no ``only`` falls back past an unreachable
+            entry on its own (OpenRouter defaults ``allow_fallbacks`` to true there),
+            so a ``prefer`` given without ``only`` is passed through as-is.
+
+    Raises:
+        ValueError: ``prefer`` names a backend not present in ``only`` (when ``only``
+            is non-empty). Silently dropping it could mask a typo the caller believes
+            is taking effect; silently keeping it would let an unvetted backend into
+            the candidate set, defeating the allowlist the same way the order-only-pin
+            bug defeated fallback.
 
     Returns:
         The provider routing dict; empty when no routing is requested.
@@ -117,6 +147,21 @@ def build_provider_block(only: list[str], ignore: list[str], extra: dict) -> dic
         block["allow_fallbacks"] = False
     if ignore:
         block["ignore"] = list(ignore)
+    if prefer:
+        prefer = list(dict.fromkeys(prefer))  # de-dupe, preserve priority order
+        if only:
+            unknown = [backend for backend in prefer if backend not in only]
+            if unknown:
+                raise ValueError(
+                    f"--prefer backend(s) not in --only allowlist: {unknown}; "
+                    "add them to --only or remove them from --prefer"
+                )
+            # order must cover every allowed backend, or allow_fallbacks:false turns a
+            # preference into a hard pin on `prefer` alone -- see docstring above.
+            rest = [backend for backend in only if backend not in prefer]
+            block["order"] = prefer + rest
+        else:
+            block["order"] = prefer
     block.update(extra)
     return block
 
@@ -251,6 +296,13 @@ def make_handler(upstream: str, provider: dict, verbose: bool):
             self._relay("POST")
 
         def do_GET(self) -> None:  # noqa: N802
+            if self.path == "/healthz":
+                payload = json.dumps({
+                    "service": "goose-openrouter-route-proxy",
+                    "provider": provider,
+                }).encode()
+                self._send_bytes(200, payload, "application/json")
+                return
             self._relay("GET")
 
     return Handler
@@ -267,14 +319,23 @@ def main(argv: list[str] | None = None) -> int:
                         help="comma-separated backend denylist (prefer --only)")
     parser.add_argument("--sort", default=None, choices=["price", "throughput", "latency"],
                         help="OpenRouter routing preference among permitted backends")
+    parser.add_argument("--prefer", default="",
+                        help="comma-separated backend(s) to try first (provider.order), "
+                             "still restricted to --only and still failing over within it — "
+                             "use this for 'route through X specifically', not --sort, which "
+                             "re-picks whichever allowed backend is cheapest today")
     parser.add_argument("--upstream", default=DEFAULT_UPSTREAM, help="upstream base URL")
     parser.add_argument("--quiet", action="store_true", help="do not log injections")
     args = parser.parse_args(argv)
 
     only = [p.strip() for p in args.only.split(",") if p.strip()]
     ignore = [p.strip() for p in args.ignore.split(",") if p.strip()]
+    prefer = [p.strip() for p in args.prefer.split(",") if p.strip()]
     extra = {"sort": args.sort} if args.sort else {}
-    provider = build_provider_block(only, ignore, extra)
+    try:
+        provider = build_provider_block(only, ignore, extra, prefer)
+    except ValueError as exc:
+        parser.error(str(exc))
 
     if not provider:
         print("route-proxy: no routing requested (--only and --ignore both empty); "

@@ -19,7 +19,9 @@ from pathlib import Path
 from agentteams import analyze, emit, ingest, liaison_logs, render, template_pins
 from agentteams.cli import security_gate
 from agentteams.cli.artifacts import (
-    _emit_mcp_servers_if_enabled,
+    _emit_codex_mcp_if_enabled,  # noqa: F401  (re-exported: tests reach it via generate.)
+    _emit_host_mcp_artifacts_if_enabled,
+    _emit_mcp_servers_if_enabled,  # noqa: F401  (re-exported: tests reach it via generate.)
     _refresh_existing_code_index,
     _run_retrieval_utility_modes,
     _write_delivery_receipt,
@@ -573,7 +575,7 @@ def _run_generate_inner(
                             f"  !  Model-routing write failed: {exc}",
                             file=sys.stderr,
                         )
-                _emit_mcp_servers_if_enabled(manifest, project_root)
+                _emit_host_mcp_artifacts_if_enabled(manifest, project_root)
                 print(
                     "  ✓  Healed build-log baseline (no material drift; "
                     "fingerprint refreshed)."
@@ -734,7 +736,7 @@ def _run_generate_inner(
                         f"  !  Model-routing write failed: {exc}",
                         file=sys.stderr,
                     )
-            _emit_mcp_servers_if_enabled(manifest, project_root)
+            _emit_host_mcp_artifacts_if_enabled(manifest, project_root)
             from agentteams import git_hooks as _git_hooks
             _git_hooks.maybe_install_git_hooks(args, project_root)
             _git_hooks.maybe_refresh_architecture_map(args, project_root)
@@ -962,7 +964,7 @@ def _run_generate_inner(
                     f"  !  Model-routing write failed: {exc}",
                     file=sys.stderr,
                 )
-        _emit_mcp_servers_if_enabled(manifest, project_root)
+        _emit_host_mcp_artifacts_if_enabled(manifest, project_root)
         from agentteams import git_hooks as _git_hooks
         _git_hooks.maybe_install_git_hooks(args, project_root)
         _git_hooks.maybe_refresh_architecture_map(args, project_root)

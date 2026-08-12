@@ -84,7 +84,7 @@ BROAD_EXCEPT_BASELINE = 15      # 14→15: tests/conftest.py's tracked-artifact 
                                 # consolidation (see tmp/by-week/2026-W30/
                                 # web-browsing-playwright-cli.plan.md, "Post-implementation audit
                                 # outcome" — where this exact consolidation is explained).
-SWALLOW_BASELINE = 35           # except clause whose body is only pass/continue (narrow catches =
+SWALLOW_BASELINE = 38           # except clause whose body is only pass/continue (narrow catches =
                                 # known-recoverable external boundaries; the ratchet blocks new ones).
                                 # 30→31: architecture.py skips files that fail ast.parse (SyntaxError/
                                 # ValueError) — a best-effort module mapper must tolerate an

@@ -1,11 +1,11 @@
 {
   "project_name": "AgentTeamsModule",
-  "project_goal": "A Python module that automatically generates complete, coordinated AI agent teams for any project from a single description file. The module provides a 4-tier agent taxonomy (orchestrator, governance, domain, workstream expert), a template library, a rendering pipeline, and framework adapters for VS Code Copilot, Copilot CLI, and Claude.",
+  "project_goal": "A Python module that automatically generates complete, coordinated AI agent teams for any project from a single description file. The module provides a 4-tier agent taxonomy (orchestrator, governance, domain, workstream expert), a template library, a rendering pipeline, and framework adapters for VS Code Copilot, Copilot CLI, Claude, Goose, agents-md, and Codex, plus Canonical Agent Interface (CAI) interop and the durable canonical exploded format.",
   "deliverables": [
     "Python pipeline modules (ingest, analyze, render, emit)",
     "Agent template library (.template.md files)",
     "JSON schemas for project description and team manifest",
-    "Framework adapters (copilot-vscode, copilot-cli, claude)",
+    "Framework adapters (copilot-vscode, copilot-cli, claude, goose, agents-md, codex), Canonical Agent Interface (CAI) interop, and the durable canonical exploded format",
     "CLI entry point (build_team.py)",
     "Example project briefs",
     "Test suite",

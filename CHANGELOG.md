@@ -6,6 +6,88 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### fixed (canonical round-trip: capabilities were captured on export but never applied on import)
+
+- **`import_from_cai` silently dropped `capabilities.tool_scopes` for every target framework.**
+  Restricting an agent to read-only tools in a canonical `team.cai.json` and re-importing to
+  copilot-vscode, claude, or goose did not actually restrict the rendered agent — each framework's
+  renderer fell back to its own default tool grant instead, since the capability was never
+  threaded into the front matter/manifest the renderer consumes. Fixed by wiring `tool_scopes`
+  into the shared bracket-format line copilot-vscode/claude already know how to parse, and into
+  goose's `recipe_extensions` (unioned with, not overwriting, any project-level bucket). Found by
+  a new bidirectional round-trip test suite
+  (`tests/test_canonical_bidirectional_round_trip.py`) that closes a gap the existing suite left
+  open: prior tests proved the canonical *serialization* losslessly round-trips a CAI document,
+  but nothing closed the loop all the way back to native content with a real equality assertion.
+- **`agents_md.py`'s renderer (also used by `codex`) was not idempotent.** Prepending a synthesized
+  `# {name}` heading unconditionally duplicated it for any body that already started with its own
+  heading — the normal shape for content from every other framework — and compounded further on
+  repeated `--interop-from ... --framework agents-md` re-runs against the same source.
+- **`agentteams/bridge.py`'s generic-target artifacts instructed a zero-tooling consumer to run
+  `agentteams` CLI commands.** `--framework generic` exists specifically for a consumer with no
+  agentteams tooling; its quickstart/entrypoint text now gives framework-neutral guidance instead.
+- **A non-canonical directory passed as `--bridge-source-framework canonical` silently produced a
+  plausible-looking partial bridge** instead of erroring. Now raises clearly when
+  `team.cai.json` is missing, matching `canonical.load_canonical`'s own existing convention.
+- **No safe primitive existed for rewriting a CSV ledger's rows** — a naive `csv.DictWriter`
+  rewrite opens its target in truncating mode before it can raise on a malformed row, and this
+  project's own `conflict-log.csv` was truncated by exactly that failure mode this session (149
+  rows to 132; 12 recovered from conversation context, 5 permanently lost). New
+  `agentteams/atomicio.py::atomic_rewrite_csv_rows` verifies a rewrite in memory before ever
+  opening the destination file.
+
+### added (durable-canonical-format system report: all six open items remediated)
+
+- **Canonical as a bridge source.** `--bridge-from` now accepts `--bridge-source-framework
+  canonical`, reading `agents/*.md` directly from a durable canonical directory (point it at
+  the directory holding `team.cai.json`, not the `agents/` subdirectory — that misdetects as
+  `copilot-vscode`). `--bridge-check` covers both the agent files and `team.cai.json` itself,
+  so hand-edited instructions/MCP/framework-extension data is caught, not just agent-file
+  changes.
+- **Generic bridge target.** `--framework generic` is a new bridge-only target for a consumer
+  with no `agentteams` framework adapter of its own: it writes zero native entry files (no
+  `CLAUDE.md`, no `AGENTS.md`) — only the framework-agnostic pair-dir artifacts (manifest,
+  inventory, quickstart, entrypoint, domain-boundary). The quickstart points the consumer at
+  the durable canonical tree as the fuller source of truth.
+- **Portable team package.** `--package-team` (`agentteams/team_package.py`) exports a native
+  source to canonical (Mode B) and bridges it to a `generic` target (Mode C) in one temp
+  staging area, then zips both trees into one distributable `.zip` — see
+  [CLI Reference: Portable Team Package](docs_src/cli-reference.md#portable-team-package). It
+  is mutually exclusive with every other standalone CLI operation (fleet, goose-switch,
+  recipe-check, stale-check, and ~20 others) — an initial version closed the guard against
+  only two of them, live-reproduced against `--recipe-check`/`--stale-check` before the fix
+  landed comprehensively.
+- **Codex `.codex/config.toml` MCP emission.** `--target-host-features codex:mcp`
+  (`agentteams/codex_mcp_emit.py`) writes first-party, all-read-only, no-review-required MCP
+  servers into a managed `[mcp_servers.*]` block, mirroring Goose's wirable bar (independently
+  confirmed against Codex's actual default sandbox/approval posture, not assumed by analogy).
+  A splice into a pre-existing `config.toml` runs a post-write content-preservation check —
+  parses old and new TOML, refuses the write if anything outside `[mcp_servers.*]` changed —
+  and keeps a `.bak` backup; any pre-existing hand-authored `[mcp_servers.*]` table this run
+  doesn't own is reported via `dropped_unmanaged`, never silently replaced.
+- **Hand-rolled TOML table writer.** `agentteams/toml_write.py` — the project is stdlib-only
+  and `tomllib` (3.11+) is read-only, so Codex MCP emission needed its own bounded
+  str/int/bool/list table serializer.
+
+### fixed (stale 3-framework project description, four locations)
+
+- **`.claude/CLAUDE.md` / `.github/copilot-instructions.md` bridge-managed fences and their
+  `references/_self-build-description.template.json` / `.github/agents/_build-description.json`
+  sources** still described a 3-framework, 7-item deliverable list from before the `goose`,
+  `agents-md`, and `codex` adapters landed. Root-caused to a shrink-policy defect in
+  `agentteams/fences.py` that fails to detect backtick-wrapped placeholders, so `--self --merge`
+  silently skipped updating them. All four locations corrected; the underlying fences.py defect
+  logged to `references/agentteams-remediation-log.csv` for separate remediation.
+
+- **`scripts/goose-recover.py`.** The stdlib-only utility checks the Goose project tracker and
+  local OpenRouter proxy, repairs only the observed schema-valid tracker plus corrupt-tail shape,
+  creates a private exclusive backup before atomic replacement, and starts a missing route proxy
+  detached. `--restart` preserves the exact command of an identity-verified route proxy;
+  unknown listeners and unsupported tracker corruption are refused.
+- **Local route-proxy identity endpoint.** The tracked route proxy now answers `GET /healthz`
+  on its relay port without contacting OpenRouter. Recovery uses the service
+  identity together with OS process ownership before it can signal a process.
+
 ### added (the feature audit now measures whether documented features actually work)
 
 - **146 documented features, measured daily.** `agentteams/feature_audit.py` plus

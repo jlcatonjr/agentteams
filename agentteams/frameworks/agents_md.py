@@ -57,6 +57,39 @@ _AGENTS_MD_NOTICE = (
 )
 
 
+def _strip_leading_synthesized_header(body: str, description: str) -> str:
+    """Remove a leading ``# Heading`` line, and — if *description* is non-empty
+    and immediately follows it — that paragraph too, so re-rendering content
+    that already starts with its own heading (either because a prior pass of
+    this exact function already ran, or simply because a source agent's own
+    body normally opens with ``# {Name}``) doesn't compound into duplicate
+    headers on every render (2026-08-11 finding: this was previously
+    unconditional, so it duplicated even on a single fresh conversion for the
+    normal case, and compounded further on every repeated
+    ``--interop-from ... --framework agents-md``/``codex`` re-run).
+    """
+    lines = body.split("\n")
+    if not lines or not lines[0].startswith("# "):
+        return body
+    idx = 1
+    while idx < len(lines) and lines[idx].strip() == "":
+        idx += 1
+    remainder = "\n".join(lines[idx:])
+    if description:
+        # Compare the first PARAGRAPH (bounded by the next blank line) to
+        # description for equality, not a raw prefix match over the whole
+        # remainder (2026-08-11 code-hygiene finding: a prefix match would
+        # truncate mid-sentence for a real first paragraph that merely starts
+        # with the same text as description but continues, e.g.
+        # description="Routes work" against a body paragraph "Routes work to
+        # three teams.").
+        stripped = remainder.lstrip("\n")
+        first_para, _, rest = stripped.partition("\n\n")
+        if first_para.strip() == description.strip():
+            remainder = rest
+    return remainder.strip()
+
+
 class AgentsMdAdapter(FrameworkAdapter):
 
     @property
@@ -69,12 +102,16 @@ class AgentsMdAdapter(FrameworkAdapter):
         Strips the VS Code YAML front matter and handoff blocks (no consumer of
         these detail files parses them), rewrites ``.github/agents`` path references
         to the ``.agents`` layout, and prepends a ``# {Name}`` heading so each file
-        is well-formed standalone Markdown.
+        is well-formed standalone Markdown. Idempotent: re-rendering already-
+        rendered content (or content that simply already opens with its own
+        heading, the normal shape) produces exactly one heading + description,
+        not a compounding duplicate — see `_strip_leading_synthesized_header`.
         """
         name, description = _extract_name_description(content, agent_slug, manifest)
         body = self._strip_yaml_front_matter(content)
         body = self._strip_handoffs_section(body)
         body = body.replace(".github/agents", ".agents").strip()
+        body = _strip_leading_synthesized_header(body, description)
         header = f"# {name}\n"
         if description:
             header += f"\n{description}\n"

@@ -14,6 +14,20 @@ from pathlib import Path
 from typing import Any
 
 
+def _adapter_for_framework(framework: str):
+    """Resolve the adapter instance for a framework id, or None if unknown.
+
+    Lazy registry import: render.py is imported deep in the render pipeline
+    and the registry imports adapters — keeping this import inside the call
+    avoids any import-order coupling. (D.1: replaces hardcoded
+    ``framework == "claude"`` placement branches with adapter hooks.)
+    """
+    from agentteams.frameworks.registry import FRAMEWORKS
+
+    adapter_cls = FRAMEWORKS.get(framework)
+    return adapter_cls() if adapter_cls is not None else None
+
+
 # ---------------------------------------------------------------------------
 # Constants
 # ---------------------------------------------------------------------------
@@ -321,13 +335,20 @@ def _component_placeholder_map(component: dict[str, Any], manifest: dict[str, An
         tool_doc_slugs = {ta["tool_name"]: ta["slug"] for ta in manifest.get("tool_agents", [])}
         ref_tool_names = {rt["tool_name"]: rt["slug"] for rt in manifest.get("reference_tools", [])}
         tool_lines = []
+        adapter = _adapter_for_framework(framework)
         for t in comp_tools:
             if t in tool_doc_slugs:
                 slug = tool_doc_slugs[t]  # tool-<base>
-                base = slug[len("tool-"):] if slug.startswith("tool-") else slug
-                if framework == "claude":
-                    tool_lines.append(f"- `{slug}` skill (`.claude/skills/{slug}/SKILL.md`)")
+                if adapter is not None:
+                    ref = adapter.tool_doc_rel_path(slug)
+                    if adapter.has_skill_concept():
+                        prefix = adapter.framework_root_prefix()
+                        display = f"{prefix}/{ref}" if prefix else ref
+                        tool_lines.append(f"- `{slug}` skill (`{display}`)")
+                    else:
+                        tool_lines.append(f"- `{ref}`")
                 else:
+                    base = slug[len("tool-"):] if slug.startswith("tool-") else slug
                     tool_lines.append(f"- `references/ref-{base}-reference.md`")
             elif t in ref_tool_names:
                 tool_lines.append(f"- `references/{ref_tool_names[t]}-reference.md`")

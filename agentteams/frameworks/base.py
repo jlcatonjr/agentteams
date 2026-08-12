@@ -71,6 +71,40 @@ class FrameworkAdapter(ABC):
         """
         return content
 
+    def has_skill_concept(self) -> bool:
+        """Whether this framework has a first-class skill concept.
+
+        Today only Claude Code (``skills/<slug>/SKILL.md`` directories) does.
+        Drives the doc-text phrasing ("skill" vs "reference doc") where render
+        paths name an operational tool doc; frameworks without one never get
+        skill phrasing. (D.1: replaces hardcoded ``framework == "claude"``
+        branches in render.py / manifest_format.py.)
+        """
+        return False
+
+    def tool_doc_rel_path(self, slug: str) -> str:
+        """Project-root-relative placement path for an operational tool doc.
+
+        Frameworks with a skill concept place it as a per-slug skill directory;
+        every other framework places it as a reference document under
+        ``references/``. Callers derive display forms from this single path
+        instead of duplicating per-framework placement logic. (D.1: replaces
+        hardcoded ``framework == "claude"`` branches in render.py /
+        manifest_format.py.)
+        """
+        base = slug[len("tool-"):] if slug.startswith("tool-") else slug
+        return f"references/ref-{base}-reference.md"
+
+    def framework_root_prefix(self) -> str:
+        """Project-root-relative prefix of this framework's root dir.
+
+        Empty for frameworks whose emitted paths are already project-root
+        relative; ``.claude`` for Claude Code. Used to build display paths
+        (e.g. ``.claude/skills/<slug>/SKILL.md``) from ``tool_doc_rel_path``
+        without re-hardcoding framework roots at call sites. (D.1)
+        """
+        return ""
+
     def render_builder_file(self, content: str, manifest: dict[str, Any]) -> str:
         """Post-process the rendered team-builder meta-agent for this framework.
 
@@ -161,6 +195,41 @@ class FrameworkAdapter(ABC):
             or `none` when no handoff delivery is supported.
         """
         return "native" if self.supports_handoffs() else "none"
+
+    def parse_agent_source(self, content: str) -> dict[str, Any] | None:
+        """Framework-native source parse for CAI export (F.1).
+
+        Frameworks whose agent files are NOT front-matter Markdown — goose
+        recipes are YAML — override this and return pre-shaped fields::
+
+            {"name": str, "description": str, "body": str,
+             "capabilities": dict, "handoffs": list[{"agent", "label",
+             "prompt", "send"}]}
+
+        Returning ``None`` (the default) tells ``interop.export_to_cai`` to
+        use its standard Markdown path: front-matter name/description,
+        wrapper-stripped body, capability/handoff extraction per framework.
+        """
+        return None
+
+    def framework_extensions_from_sources(
+        self, parsed_sources: list[dict[str, Any]]
+    ) -> dict[str, Any]:
+        """Project-level framework-owned config captured on CAI export (F.3).
+
+        Receives every non-``None`` ``parse_agent_source`` result collected
+        during discovery and returns the ``framework_extensions`` object for
+        the CAI document (keyed by framework id). Default: no project-level
+        config. goose overrides to fill the ``framework_extensions.goose``
+        bucket (recipe_parameters/response/retry + non-MCP extension names).
+        """
+        return {}
+
+    def apply_framework_extensions(self, manifest: dict[str, Any], cai: dict[str, Any]) -> None:
+        """Merge this framework's CAI framework_extensions bucket into the
+        import manifest stub (F.3). Default: no framework-owned config.
+        goose overrides to restore recipe configuration at render time."""
+        return
 
     def extract_handoffs(self, content: str) -> list[dict[str, Any]]:
         """Extract YAML handoff entries from rendered agent content.

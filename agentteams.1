@@ -2,7 +2,7 @@
 .SH NAME
 agentteams \- Generate a complete agent team for any project.
 .SH SYNOPSIS
-.B agentteams [--description PATH] [--project PATH] [--framework NAME] [--output DIR] [--dry-run] [--json] [--overwrite] [--merge] [--yes] [--no-scan] [--cost-routing] [--update] [--prune] [--adopt-orphans] [--check] [--refresh-index] [--query-index TEXT] [--query-k N] [--query-strategy QUERY_STRATEGY] [--refresh-code-index] [--query-code TEXT] [--code-query-k N] [--code-query-strategy CODE_QUERY_STRATEGY] [--code-kind CODE_KIND] [--fail-on-legacy-skip] [--no-vscode-tasks] [--refresh-graph] [--refresh-architecture] [--install-git-hooks] [--no-git-hooks] [--code-index-hook] [--no-add-fence-markers] [--scan-security] [--check-budget] [--self] [--allow-foreign-output] [--allow-external-self-output] [--post-audit] [--auto-correct] [--enrich] [--strict-manual-placeholders] [--no-strict-manual-placeholders] [--security-offline] [--security-max-items N] [--security-no-nvd] [--migrate] [--convert-from DIR] [--interop-from DIR] [--interop-source-framework INTEROP_SOURCE_FRAMEWORK] [--interop-mode INTEROP_MODE] [--bridge-from DIR] [--bridge-source-framework BRIDGE_SOURCE_FRAMEWORK] [--pin-templates] [--reconcile-front-matter] [--reconcile-apply] [--bridge-check] [--bridge-refresh] [--bridge-merge] [--bridge-no-skills] [--recipe-check] [--revert-migration] [--version] [--no-backup] [--shrink-policy SHRINK_POLICY] [--list-backups] [--restore-backup TIMESTAMP] [--add-fence-markers PATH] [--in-place] [--target-host-features TOKENS] [--capture-baseline PATH] [--baseline-label LABEL] [--check-baseline PATH] [--verify-waivers] [--redteam] [--redteam-probes MODULE] [--redteam-report DIR] [--accept-probe-baseline] [--write-integrity-manifest] [--verify-integrity] [--verify-backup TIMESTAMP] [--stale-check] [--stale-remediate] [--stale-no-git] [--stale-restore TS] [--prune-backups KEEP] [--keep-within-days DAYS] [--backup-mirror DIR] [--fleet DIR] [--fleet-frameworks FLEET_FRAMEWORKS] [--fleet-report DIR] [--fleet-allow-no-verify] [--goose-source NAME] [--goose-model ID] [--goose-show] [--goose-config PATH]
+.B agentteams [--description PATH] [--project PATH] [--framework NAME] [--output DIR] [--dry-run] [--json] [--overwrite] [--merge] [--yes] [--no-scan] [--cost-routing] [--update] [--prune] [--adopt-orphans] [--check] [--refresh-index] [--query-index TEXT] [--query-k N] [--query-strategy QUERY_STRATEGY] [--refresh-code-index] [--query-code TEXT] [--code-query-k N] [--code-query-strategy CODE_QUERY_STRATEGY] [--code-kind CODE_KIND] [--fail-on-legacy-skip] [--no-vscode-tasks] [--refresh-graph] [--refresh-architecture] [--install-git-hooks] [--no-git-hooks] [--code-index-hook] [--no-add-fence-markers] [--scan-security] [--check-budget] [--self] [--allow-foreign-output] [--allow-external-self-output] [--post-audit] [--auto-correct] [--enrich] [--strict-manual-placeholders] [--no-strict-manual-placeholders] [--security-offline] [--security-max-items N] [--security-no-nvd] [--migrate] [--convert-from DIR] [--interop-from DIR] [--interop-source-framework INTEROP_SOURCE_FRAMEWORK] [--interop-mode INTEROP_MODE] [--bridge-from DIR] [--bridge-source-framework BRIDGE_SOURCE_FRAMEWORK] [--pin-templates] [--reconcile-front-matter] [--reconcile-apply] [--absorb-from DIR] [--absorb-source-framework ABSORB_SOURCE_FRAMEWORK] [--absorb-apply] [--absorb-canonical-dir DIR] [--bridge-check] [--bridge-refresh] [--bridge-merge] [--bridge-no-skills] [--recipe-check] [--revert-migration] [--version] [--no-backup] [--shrink-policy SHRINK_POLICY] [--list-backups] [--restore-backup TIMESTAMP] [--add-fence-markers PATH] [--in-place] [--target-host-features TOKENS] [--capture-baseline PATH] [--baseline-label LABEL] [--check-baseline PATH] [--verify-waivers] [--redteam] [--redteam-probes MODULE] [--redteam-report DIR] [--accept-probe-baseline] [--write-integrity-manifest] [--verify-integrity] [--verify-backup TIMESTAMP] [--stale-check] [--stale-remediate] [--stale-no-git] [--stale-restore TS] [--prune-backups KEEP] [--keep-within-days DAYS] [--backup-mirror DIR] [--fleet DIR] [--fleet-frameworks FLEET_FRAMEWORKS] [--fleet-report DIR] [--fleet-allow-no-verify] [--goose-source NAME] [--goose-model ID] [--goose-show] [--goose-config PATH] [--package-team SOURCE_DIR] [--package-source-framework NAME]
 .SH DESCRIPTION
 .PP
 Generate a complete agent team for any project.
@@ -19,10 +19,10 @@ Project description file (.json or .md). Required unless \-\-self is used.
 Project directory to scan and use as base (overrides existing_project_path in description)
 .TP
 .B \-\-framework, \-f NAME
-Target framework: copilot\-vscode, copilot\-cli, claude, goose, agents\-md (default: copilot\-vscode)
+Target framework: copilot\-vscode, copilot\-cli, claude, goose, agents\-md, codex (default: copilot\-vscode). 'canonical' is the durable on\-disk canonical format (interop\-only, pair with \-\-interop\-from; not a rendering target). 'generic' emits only framework\-agnostic bridge artifacts (bridge\-only, pair with \-\-bridge\-from; no native consumer entry files).
 .TP
 .B \-\-output, \-o DIR
-Output directory for agent files. Default: <project>/.github/agents/ (copilot\-vscode), <project>/.github/copilot/ (copilot\-cli), <project>/.claude/agents/ (claude), <project>/.goose/recipes/ (goose), <project>/.agents/ (agents\-md; team brief also written to repo\-root AGENTS.md).
+Output directory for agent files. Default: <project>/.github/agents/ (copilot\-vscode), <project>/.github/copilot/ (copilot\-cli), <project>/.claude/agents/ (claude), <project>/.goose/recipes/ (goose), <project>/.agents/ (agents\-md; team brief also written to repo\-root AGENTS.md). With \-\-package\-team: the destination .zip FILE path, not a directory (default: ./team\-package.zip).
 .TP
 .B \-\-dry\-run
 Show what would be generated without writing files
@@ -31,7 +31,7 @@ Show what would be generated without writing files
 With \-\-dry\-run: emit the per\-file action plan as a single JSON document on stdout (no\-op without \-\-dry\-run).
 .TP
 .B \-\-overwrite
-Overwrite existing agent files unconditionally (full\-file replacement). Use \-\-merge instead to preserve user\-authored content in fenced files.
+Overwrite existing agent files unconditionally (full\-file replacement). Use \-\-merge instead to preserve user\-authored content in fenced files. With \-\-package\-team: replace an existing output zip file instead of refusing to run.
 .TP
 .B \-\-merge
 Update only template\-fenced regions in existing agent files, preserving all user\-authored content outside fence markers. Skips legacy files (no fence markers) with a warning.
@@ -156,8 +156,8 @@ Convert an existing agent team from DIR to the target \-\-framework. Reads each 
 .B \-\-interop\-from DIR
 Run cross\-framework interop pipeline from an existing team directory. Uses Canonical Agent Interface (CAI) normalization before writing target output.
 .TP
-.B \-\-interop\-source\-framework {copilot\-vscode,copilot\-cli,claude,goose,agents\-md}
-Optional source framework override for \-\-interop\-from (auto\-detected when omitted).
+.B \-\-interop\-source\-framework {copilot\-vscode,copilot\-cli,claude,goose,agents\-md,codex,canonical}
+Optional source framework override for \-\-interop\-from (auto\-detected when omitted). 'canonical' reads an exploded canonical directory (team.cai.json + agents/ + skills/).
 .TP
 .B \-\-interop\-mode {direct,bundle}
 Interop mode: direct conversion only, or bundle (conversion + interop artifacts).
@@ -165,8 +165,8 @@ Interop mode: direct conversion only, or bundle (conversion + interop artifacts)
 .B \-\-bridge\-from DIR
 Generate a lightweight interface bridge from an existing source team directory without regenerating source agent documentation.
 .TP
-.B \-\-bridge\-source\-framework {copilot\-vscode,copilot\-cli,claude,goose,agents\-md}
-Optional source framework override for \-\-bridge\-from (auto\-detected when omitted).
+.B \-\-bridge\-source\-framework {copilot\-vscode,copilot\-cli,claude,goose,canonical}
+Optional source framework override for \-\-bridge\-from (auto\-detected when omitted). 'canonical' sources from a durable canonical directory (team.cai.json + agents/*.md) instead of a native framework's files.
 .TP
 .B \-\-pin\-templates
 Record the installed template digests this project trusts, in .agentteams/template\-pins.json, and commit that file. The ONLY thing that writes the pin: every later run compares against it and reports a mismatch, but never updates it — a pin that follows what it checks records nothing.
@@ -176,6 +176,18 @@ Report where a deployed team's YAML front matter diverges from its templates, an
 .TP
 .B \-\-reconcile\-apply
 With \-\-reconcile\-front\-matter, take the template's value for each diverging key. Never implied by the report: `allowed\-tools` is a capability grant and widening one is a privileged change, so it requires saying so explicitly.
+.TP
+.B \-\-absorb\-from DIR
+Absorb native framework edits back into the canonical baseline. Reads the native deployment, compares against canonical and the last sync baseline using a three\-way classifier, and prints a report. Default behavior writes nothing to canonical; pass \-\-absorb\-apply to write clean native\-moved changes. Capability\-bearing fields are NEVER auto\-applied (§6.1).
+.TP
+.B \-\-absorb\-source\-framework {copilot\-vscode,copilot\-cli,claude,goose,agents\-md,codex}
+Source framework for \-\-absorb\-from (auto\-detected when omitted). Any registered framework is accepted.
+.TP
+.B \-\-absorb\-apply
+With \-\-absorb\-from, write classified native\-moved\-clean changes into canonical. Never implied by the report: capability\-bearing fields (tools, model, agents, capabilities, raw_front_matter with capability keys) are always routed to human review regardless of classification cleanliness (§6.1).
+.TP
+.B \-\-absorb\-canonical\-dir DIR
+Canonical directory to absorb into (defaults to .agentteams/canonical/ relative to the native source's project root).
 .TP
 .B \-\-bridge\-check
 Check bridge freshness against source files without regenerating bridge artifacts.
@@ -296,6 +308,12 @@ Show the resolved config.yaml path, current provider/model, any masking env over
 .TP
 .B \-\-goose\-config PATH
 Override the goose config.yaml path (else resolved via goose info / XDG).
+.TP
+.B \-\-package\-team SOURCE_DIR
+Package a native\-framework source team as a portable zip: a durable canonical directory (.agentteams/canonical/) plus its generic bridge, both derived from the same export — not a canonical directory itself (use \-\-bridge\-from ... \-\-bridge\-source\-framework canonical \-\-framework generic for that case).
+.TP
+.B \-\-package\-source\-framework NAME
+Optional source framework override for \-\-package\-team (auto\-detected when omitted).
 .SH EXIT STATUS
 .TP
 .B 0

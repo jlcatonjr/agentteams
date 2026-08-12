@@ -514,7 +514,12 @@ def build_manifest(description: dict[str, Any], *, framework: str = "copilot-vsc
     # (mcp_emit._inert_problems); inert here — nothing is provisioned.
     declared_servers = description.get("mcp_servers")
     if isinstance(declared_servers, list) and declared_servers:
-        manifest["mcp_servers"] = list(declared_servers)
+        # D.3 bug fix: mcp-server.schema.json requires mcp_server_schema_version
+        # but no production code wrote it — fill the current default at adoption
+        # so operator-declared servers satisfy the schema even when they omit it.
+        from agentteams.mcp_emit import normalize_mcp_server_defaults
+
+        manifest["mcp_servers"] = [normalize_mcp_server_defaults(s) for s in declared_servers]
     # Phase-4a goose-native (opt-in): copy operator-DECLARED Goose recipe parameters
     # through to the manifest. Added only when non-empty, so manifests for briefs
     # that declare none are byte-identical (mirrors the mcp_servers pattern above).

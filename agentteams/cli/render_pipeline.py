@@ -290,7 +290,7 @@ def _stale_tool_agent_paths(
     team carries (copilot: `tool-<slug>.agent.md`; claude: `tool-<slug>.md` in
     the agents dir) — never touches unrelated agents.
     """
-    suffix = ".md" if framework_id in ("claude", "agents-md") else ".agent.md"
+    suffix = ".md" if framework_id in ("claude", "agents-md", "codex") else ".agent.md"
     paths: list[Path] = []
     for ta in manifest.get("tool_agents", []):
         slug = ta.get("slug", "")

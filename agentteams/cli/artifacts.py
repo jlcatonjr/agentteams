@@ -43,6 +43,7 @@ from agentteams.errors import (
 )
 
 if TYPE_CHECKING:
+    from agentteams.codex_mcp_emit import CodexMCPEmissionResult
     from agentteams.mcp_emit import MCPEmissionResult
 
 def _compute_file_hashes(written_abs_paths: list[str], output_dir: Path) -> dict[str, str]:
@@ -51,6 +52,7 @@ def _compute_file_hashes(written_abs_paths: list[str], output_dir: Path) -> dict
     Paths are stored relative to output_dir so the build-log is portable.
     """
     import hashlib
+    import os
     hashes: dict[str, str] = {}
     for abs_path_str in written_abs_paths:
         abs_path = Path(abs_path_str)
@@ -59,12 +61,12 @@ def _compute_file_hashes(written_abs_paths: list[str], output_dir: Path) -> dict
         try:
             rel = str(abs_path.relative_to(output_dir))
         except ValueError:
-            # File is outside output_dir (e.g. ../copilot-instructions.md)
-            try:
-                rel = str(abs_path.relative_to(output_dir.parent))
-                rel = "../" + rel
-            except ValueError:
-                rel = abs_path_str
+            # File is outside output_dir (e.g. ../copilot-instructions.md, or
+            # further out still, e.g. .vscode/tasks.json) — os.path.relpath
+            # handles any number of ../ segments, unlike relative_to, so the
+            # build-log never falls back to a raw absolute path (that would
+            # leak the operator's home-directory username into a tracked file).
+            rel = os.path.relpath(abs_path, output_dir)
         digest = hashlib.sha256(abs_path.read_bytes()).hexdigest()[:16]
         hashes[rel] = digest
     return hashes
@@ -304,6 +306,70 @@ def _emit_mcp_servers_if_enabled(manifest: dict, project_root: Path) -> None:
         print(
             "  ⚠  MCP servers needing operator security authorization before "
             f"activation: {', '.join(res.activation_blocked)}"
+        )
+    for err in res.errors:
+        print(f"  !  MCP server skipped (non-conformant): {err}", file=sys.stderr)
+
+
+def _write_codex_mcp_servers(manifest: dict, project_root: Path) -> "CodexMCPEmissionResult":
+    """Splice wirable MCP servers into ``.codex/config.toml`` (open-items
+    remediation OPEN-6). Output base is the PROJECT ROOT, same convention as
+    ``_write_mcp_servers``, since this is a Codex-host config location.
+
+    Unlike the Claude sidecar, ``.codex/config.toml`` is a real, live config
+    Codex reads to launch servers — reuses ``codex_mcp_emit.emit_codex_mcp_config``,
+    which applies Goose's stricter first-party/read-only/no-review-required
+    auto-wire bar rather than Claude's inert-write bar, and text-splices only
+    the ``[mcp_servers.*]`` tables. A content-preservation check verifies the
+    rest of a hand-authored config.toml (sandbox/profile settings, comments)
+    is unchanged before writing, refusing the write rather than risk silent
+    data loss if not.
+    """
+    from agentteams.codex_mcp_emit import emit_codex_mcp_config
+
+    return emit_codex_mcp_config(
+        servers=manifest.get("mcp_servers", []) or [],
+        features=manifest.get("host_features", []) or [],
+        output_root=project_root,
+    )
+
+
+def _emit_host_mcp_artifacts_if_enabled(manifest: dict, project_root: Path) -> None:
+    """Emit every host's MCP artifact whose feature token is active — the one
+    call site's worth of pipeline wiring, so adding a future host's MCP
+    emitter never means touching generate.py's 3 call sites again."""
+    _emit_mcp_servers_if_enabled(manifest, project_root)
+    _emit_codex_mcp_if_enabled(manifest, project_root)
+
+
+def _emit_codex_mcp_if_enabled(manifest: dict, project_root: Path) -> None:
+    """Emit the Codex MCP config splice when the codex:mcp host-feature token is on.
+
+    Mirrors ``_emit_mcp_servers_if_enabled``'s gate/best-effort shape. Fires
+    independently of which ``--framework`` this generate call is rendering —
+    like the Claude sidecar, this is a host-scoped artifact (which local
+    tools read MCP config from), not a per-framework rendering output.
+    """
+    from agentteams.codex_mcp_emit import codex_mcp_enabled
+
+    features = manifest.get("host_features", []) or []
+    if not codex_mcp_enabled(features) or not manifest.get("mcp_servers"):
+        return
+    try:
+        res = _write_codex_mcp_servers(manifest, project_root)
+    except OSError as exc:
+        print(f"  !  Codex MCP config write failed: {exc}", file=sys.stderr)
+        return
+    for path in res.written:
+        print(f"  ✓  Spliced Codex MCP server config: {path}")
+    if res.not_wired:
+        blocked = ", ".join(f"{sid} ({reason})" for sid, reason in res.not_wired.items())
+        print(f"  ⚠  MCP servers not auto-wired into config.toml: {blocked}")
+    if res.dropped_unmanaged:
+        print(
+            "  ⚠  Pre-existing [mcp_servers.*] entries not declared to agentteams were "
+            f"replaced: {', '.join(res.dropped_unmanaged)} (hand-author these outside "
+            "the agentteams-managed block, or add them to mcp_servers[] to keep them)"
         )
     for err in res.errors:
         print(f"  !  MCP server skipped (non-conformant): {err}", file=sys.stderr)

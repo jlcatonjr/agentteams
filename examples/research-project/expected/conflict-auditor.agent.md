@@ -34,7 +34,6 @@ SECTION MANIFEST — conflict-auditor.template.md
 | memory_index_consultation  | FENCED        | History-layer precedent lookup     |
 | authority_sources_list     | FENCED        | From project authority_hierarchy   |
 | handoff_payload_codes      | FENCED        | PAYLOAD_UNTYPED / PAYLOAD_MISMATCH |
-| scope_and_rules            | USER-EDITABLE | Project may extend                 |
 | rules                      | FENCED        | Template-owned section             |
 | handoff_payload_conflict_codes| FENCED        | Template-owned section             |
 -->
