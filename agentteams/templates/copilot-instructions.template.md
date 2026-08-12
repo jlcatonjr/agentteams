@@ -12,7 +12,7 @@ SECTION MANIFEST — copilot-instructions.template.md
 | constitutional_rules  | USER-EDITABLE | Project may extend or customise          |
 | project_specific_rules| USER-EDITABLE | Extension home for instruction files     |
 | style_rules           | USER-EDITABLE | Project may extend or customise          |
-| tone_and_style       | FENCED       |
+| tone_and_style        | FENCED        | Tone, style, and formatting conventions  |
 -->
 
 # {PROJECT_NAME} — Copilot Instructions

@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import builtins
 import json
 from pathlib import Path
 
@@ -1019,6 +1020,175 @@ def test_goose_to_goose_forbidden(tmp_path: Path):
                    output_root=tmp_path / "out", overwrite=True)
 
 
+# ---------------------------------------------------------------------------
+# Canonical-as-SOURCE bridging (open-items remediation OPEN-2/OPEN-4): a durable
+# canonical directory (team.cai.json + agents/*.md) as a --bridge-source-framework
+# value, with --bridge-check covering both agent files and team.cai.json itself.
+# ---------------------------------------------------------------------------
+
+from agentteams import canonical as _canonical_mod  # noqa: E402
+from agentteams.interop import export_to_cai  # noqa: E402
+
+
+def _canonical_source(tmp_path: Path) -> Path:
+    """Build a real materialized canonical directory from a synthetic copilot-vscode
+    source, so the fixture has the exact shape the real pipeline produces rather than
+    hand-rolled YAML that might drift from it."""
+    native = tmp_path / "native" / ".github" / "agents"
+    _build_source("copilot-vscode", native)
+    cai = export_to_cai(native, "copilot-vscode")
+    canon_root = tmp_path / "proj" / ".agentteams" / "canonical"
+    _canonical_mod.materialize_canonical(cai, canon_root)
+    return canon_root
+
+
+def test_canonical_source_collect_and_inventory(tmp_path: Path):
+    canon_root = _canonical_source(tmp_path)
+    collected = sorted(p.name for p in _collect_source_files(canon_root, "canonical"))
+    assert collected == ["orchestrator.md", "team.cai.json"]
+
+    inv = _extract_inventory(canon_root, "canonical")
+    assert [r["display_name"] for r in inv] == ["orchestrator — Demo"]
+    # Canonical front matter has no user-invokable key — honest "no", not a guess.
+    assert inv[0]["invokable"] == "no"
+
+
+def test_collect_source_files_canonical_hashes_team_cai_json(tmp_path: Path):
+    # OPEN-4: team.cai.json must be in the hashed set, or a hand-edit to
+    # instructions/mcp_servers/framework_extensions would be invisible to --bridge-check.
+    canon_root = _canonical_source(tmp_path)
+    hashed_names = {p.name for p in _collect_source_files(canon_root, "canonical")}
+    assert "team.cai.json" in hashed_names
+
+
+def test_canonical_source_collect_and_inventory_without_pyyaml(tmp_path: Path):
+    """2026-08-10 coverage gap: the canonical-source fix (reusing canonical.py's
+    _load_agent_file for correct JSON-escape decoding) was verified only under
+    this repo's default PyYAML-installed test posture. This repo's own declared
+    default is stdlib-only (PyYAML is a test-only dependency) — reuses
+    test_canonical.py's own builtins.__import__ refusal pattern. The fixture's
+    orchestrator name already carries a real em dash ("orchestrator — Demo",
+    from _build_source's _vscode_agent), so a mangled-escape regression (the
+    literal 6 characters \\u2014 instead of the real character) would be caught
+    without a custom fixture."""
+    canon_root = _canonical_source(tmp_path)
+
+    real_import = builtins.__import__
+
+    def refuse_yaml(name, *args, **kwargs):
+        if name == "yaml":
+            raise ImportError("simulated PyYAML absence")
+        return real_import(name, *args, **kwargs)
+
+    builtins.__import__ = refuse_yaml
+    try:
+        collected = sorted(p.name for p in _collect_source_files(canon_root, "canonical"))
+        inv = _extract_inventory(canon_root, "canonical")
+    finally:
+        builtins.__import__ = real_import
+
+    assert collected == ["orchestrator.md", "team.cai.json"]
+    assert inv[0]["display_name"] == "orchestrator — Demo"
+
+
+def test_canonical_source_without_team_cai_json_fails_clearly(tmp_path: Path):
+    """2026-08-10 finding: a dir with no team.cai.json but a coincidentally
+    agents/*.md-shaped folder must error, not silently produce a plausible-
+    looking partial bridge."""
+    fake_root = tmp_path / "not-canonical"
+    (fake_root / "agents").mkdir(parents=True)
+    (fake_root / "agents" / "orchestrator.md").write_text("# Orchestrator\n", encoding="utf-8")
+
+    with pytest.raises(FileNotFoundError, match="team.cai.json"):
+        _collect_source_files(fake_root, "canonical")
+    with pytest.raises(FileNotFoundError, match="team.cai.json"):
+        _extract_inventory(fake_root, "canonical")
+
+
+def test_canonical_to_claude_bridge_end_to_end_and_check(tmp_path: Path):
+    canon_root = _canonical_source(tmp_path)
+    out = tmp_path / "out"
+    gen = run_bridge(source_dir=canon_root, target_framework="claude", output_root=out, overwrite=True)
+    assert gen.success
+    manifest = json.loads(
+        (out / "references" / "bridges" / "canonical-to-claude" / "bridge-manifest.json").read_text())
+    assert manifest["source_framework"] == "canonical" and manifest["inventory_count"] == 1
+
+    # fresh -> PASS
+    chk = run_bridge(source_dir=canon_root, target_framework="claude", output_root=out, check_only=True)
+    assert chk.check_ok is True
+
+    # mutate an agents/*.md file -> FAIL
+    agent_file = canon_root / "agents" / "orchestrator.md"
+    agent_file.write_text(agent_file.read_text() + "\nExtra line.\n", encoding="utf-8")
+    chk2 = run_bridge(source_dir=canon_root, target_framework="claude", output_root=out, check_only=True)
+    assert chk2.check_ok is False
+
+    # re-baseline against the still-mutated agent file (not a revert — this
+    # isolates the next assertion to team.cai.json alone), then mutate
+    # team.cai.json itself -> FAIL
+    gen2 = run_bridge(source_dir=canon_root, target_framework="claude", output_root=out, overwrite=True)
+    assert gen2.success
+    chk2b = run_bridge(source_dir=canon_root, target_framework="claude", output_root=out, check_only=True)
+    assert chk2b.check_ok is True  # confirms gen2 actually re-baselined before the next mutation
+    team_file = canon_root / _canonical_mod.TEAM_FILE_NAME
+    team_file.write_text(team_file.read_text() + " ", encoding="utf-8")
+    chk3 = run_bridge(source_dir=canon_root, target_framework="claude", output_root=out, check_only=True)
+    assert chk3.check_ok is False
+
+
+def test_canonical_cannot_be_a_bridge_target(tmp_path: Path):
+    canon_root = _canonical_source(tmp_path)
+    with pytest.raises(ValueError, match="Unknown target framework"):
+        run_bridge(source_dir=canon_root, source_framework="canonical", target_framework="canonical",
+                   output_root=tmp_path / "out", overwrite=True)
+
+
+def test_canonical_agents_subdir_misdetects_as_copilot_vscode(tmp_path: Path):
+    """Named trap (plan section 2.2): team.cai.json detection only fires at the
+    canonical ROOT. Pointing --bridge-from at its agents/ subdirectory instead
+    skips that marker check entirely, and a canonical agent file's handoffs:
+    front-matter key then trips detect_framework's copilot-vscode content-sniff
+    heuristic (interop.py) — silently, not with an error. --bridge-from for a
+    canonical source MUST be the root, never its agents/ subdirectory."""
+    canon_root = _canonical_source(tmp_path)
+    assert detect_framework(canon_root / "agents") == "copilot-vscode"
+    # ...and because copilot-vscode's own filter requires *.agent.md (canonical
+    # emits plain *.md), the misdetected read yields zero agents, not wrong ones.
+    assert _extract_inventory(canon_root / "agents", "copilot-vscode") == []
+
+
+def test_canonical_bridge_directory_depth_resolves_to_project_root(tmp_path: Path):
+    """Pin the coincidence: .agentteams/canonical sits at the same depth below
+    project root as .github/agents / .claude/agents, so cli/commands.py's
+    project_root = source_dir.parent.parent resolution (used when --output is
+    omitted) lands artifacts at the project root, not somewhere unexpected."""
+    from agentteams.cli.commands import _run_bridge
+
+    canon_root = _canonical_source(tmp_path)
+    project_root = canon_root.parent.parent
+    assert project_root == tmp_path / "proj"
+
+    # check_only=True (not dry_run): avoids the live security-freshness gate
+    # (cli/commands.py only invokes it when both dry_run and check_only are
+    # False) while still writing a real bridge-check.report.md, so the depth
+    # math is pinned by an on-disk path rather than coupled to a print
+    # statement's exact wording.
+    rc = _run_bridge(
+        source_dir=canon_root,
+        source_framework="canonical",
+        target_framework="claude",
+        output=None,
+        dry_run=False,
+        overwrite=False,
+        check_only=True,
+        merge_only=False,
+    )
+    assert rc in (0, 1)  # 1 = "stale" (no prior manifest yet) — still proves the path
+    report = project_root / "references" / "bridges" / "canonical-to-claude" / "bridge-check.report.md"
+    assert report.exists()
+
+
 def test_bridge_emits_parallelize_skill_when_feature_enabled(tmp_path: Path):
     source_dir = tmp_path / "src" / ".github" / "agents"
     _build_source("copilot-vscode", source_dir)
@@ -1051,3 +1221,142 @@ def test_bridge_omits_parallelize_skill_by_default(tmp_path: Path):
     assert result.success, f"errors: {result.errors}"
     skill = tmp_path / "out" / ".claude" / "skills" / "parallelize-plan" / "SKILL.md"
     assert not skill.exists()  # opt-in via host feature only
+
+
+# ---------------------------------------------------------------------------
+# Generic bridge TARGET (open-items remediation OPEN-3): a bridge-any-target
+# flavor with no native adapter of its own — only the framework-agnostic
+# pair-dir artifacts, zero native consumer entry files.
+# ---------------------------------------------------------------------------
+
+_GENERIC_PAIR_ARTIFACTS = (
+    "bridge-manifest.json",
+    "agent-inventory.md",
+    "quickstart-snippet.md",
+    "entrypoint.md",
+    "domain-boundary.md",
+)
+
+
+def test_bridge_generic_target_allowed(tmp_path: Path):
+    """target_framework='generic' does not raise ValueError."""
+    source_dir = tmp_path / "src" / ".github" / "agents"
+    _build_source("copilot-vscode", source_dir)
+    result = run_bridge(
+        source_dir=source_dir, source_framework="copilot-vscode",
+        target_framework="generic", output_root=tmp_path / "out",
+    )
+    assert result.success, f"errors: {result.errors}"
+
+
+def test_bridge_generic_target_writes_zero_native_files(tmp_path: Path):
+    """A generic target has no native framework to write consumer entry files
+    for — without the explicit generic branch in _render_target_files, this
+    would silently fall through to the copilot-cli file shape instead."""
+    source_dir = tmp_path / "src" / ".github" / "agents"
+    _build_source("copilot-vscode", source_dir)
+    out_root = tmp_path / "out"
+    result = run_bridge(
+        source_dir=source_dir, source_framework="copilot-vscode",
+        target_framework="generic", output_root=out_root, overwrite=True,
+    )
+    # Airtight against any native target-file path, known or future: everything
+    # written must live under the pair-dir artifacts directory (target_files is
+    # [] for generic, so _render_target_files contributes nothing to `written`).
+    pair_dir = out_root / "references" / "bridges" / "copilot-vscode-to-generic"
+    assert result.written
+    for path_str in result.written:
+        assert Path(path_str).is_relative_to(pair_dir), f"unexpected write outside pair-dir: {path_str}"
+    for native in ("CLAUDE.md", "AGENTS.md", ".goosehints", ".github/copilot-instructions.md",
+                   ".github/copilot", ".github/agents", ".claude", ".goose"):
+        assert not (out_root / native).exists(), f"unexpected native file/dir: {native}"
+
+
+def test_bridge_generic_pair_dir_artifacts_present(tmp_path: Path):
+    """The pair-dir artifacts (manifest/inventory/quickstart/entrypoint/
+    domain-boundary) are all framework-agnostic already and carry the full
+    picture on their own — kept for generic targets too, not trimmed down to
+    the bare inventory+quickstart+entrypoint trio, since domain-boundary.md
+    costs nothing extra (zero target-framework branching in its renderer) and
+    is genuinely useful retrieval-surface guidance for a no-adapter consumer."""
+    source_dir = tmp_path / "src" / ".github" / "agents"
+    _build_source("copilot-vscode", source_dir)
+    out_root = tmp_path / "out"
+    run_bridge(
+        source_dir=source_dir, source_framework="copilot-vscode",
+        target_framework="generic", output_root=out_root, overwrite=True,
+    )
+    pair_dir = out_root / "references" / "bridges" / "copilot-vscode-to-generic"
+    for artifact in _GENERIC_PAIR_ARTIFACTS:
+        assert (pair_dir / artifact).is_file(), f"missing {artifact}"
+
+
+def test_bridge_generic_artifacts_do_not_invoke_agentteams_cli(tmp_path: Path):
+    """2026-08-10 finding: a generic target's whole point is a consumer with
+    zero agentteams tooling — quickstart/entrypoint must not instruct them to
+    run one. domain-boundary.md is deliberately exempt (test_bridge_generic_
+    pair_dir_artifacts_present's own docstring): it only *describes* the three
+    retrieval surfaces conceptually, never tells the reader to run a command."""
+    source_dir = tmp_path / "src" / ".github" / "agents"
+    _build_source("copilot-vscode", source_dir)
+    out_root = tmp_path / "out"
+    run_bridge(
+        source_dir=source_dir, source_framework="copilot-vscode",
+        target_framework="generic", output_root=out_root, overwrite=True,
+    )
+    pair_dir = out_root / "references" / "bridges" / "copilot-vscode-to-generic"
+    for artifact in ("quickstart-snippet.md", "entrypoint.md"):
+        text = (pair_dir / artifact).read_text(encoding="utf-8")
+        assert "agentteams --query-" not in text, f"{artifact} still invokes the CLI: {text}"
+
+
+def test_bridge_generic_quickstart_names_canonical_tree(tmp_path: Path):
+    source_dir = tmp_path / "src" / ".github" / "agents"
+    _build_source("copilot-vscode", source_dir)
+    out_root = tmp_path / "out"
+    run_bridge(
+        source_dir=source_dir, source_framework="copilot-vscode",
+        target_framework="generic", output_root=out_root, overwrite=True,
+    )
+    quickstart = (out_root / "references" / "bridges" / "copilot-vscode-to-generic"
+                  / "quickstart-snippet.md").read_text(encoding="utf-8")
+    assert ".agentteams/canonical/" in quickstart
+    assert "team.cai.json" in quickstart
+    assert "--framework canonical" in quickstart
+
+
+def test_canonical_source_to_generic_target_end_to_end(tmp_path: Path):
+    """The combination the plan's own risk analysis named as untested: a
+    canonical source bridged to a generic target. Also pins the fix for a
+    degenerate self-referential command this combination used to produce
+    (the generic quickstart note would tell the operator to regenerate the
+    canonical tree from itself)."""
+    canon_root = _canonical_source(tmp_path)
+    out = tmp_path / "out"
+    result = run_bridge(source_dir=canon_root, target_framework="generic", output_root=out, overwrite=True)
+    assert result.success
+
+    quickstart = (out / "references" / "bridges" / "canonical-to-generic"
+                  / "quickstart-snippet.md").read_text(encoding="utf-8")
+    assert "--interop-source-framework canonical --framework canonical" not in quickstart
+    assert "it is the source of this bridge" in quickstart
+
+
+def test_generic_requires_bridge_from_at_parse_time():
+    """Mirrors canonical's existing --interop-from-only restriction: generic is
+    bridge-only, so --framework generic combined with --convert-from (which
+    would otherwise reach cli/commands.py's unguarded FRAMEWORKS[...] lookup,
+    since generic has no frameworks/registry.py entry) must be rejected before
+    any pipeline code runs, not left to crash further down."""
+    from agentteams.cli.parser import _build_parser
+    from agentteams.cli.parser_validate import _validate_option_combinations
+
+    parser = _build_parser()
+    args = parser.parse_args(["--framework", "generic", "--convert-from", "some/dir"])
+    with pytest.raises(SystemExit):
+        _validate_option_combinations(parser, args)
+
+    # paired with --bridge-from, the same combination is accepted
+    parser2 = _build_parser()
+    args2 = parser2.parse_args(["--framework", "generic", "--bridge-from", "some/dir"])
+    _validate_option_combinations(parser2, args2)  # must not raise

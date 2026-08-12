@@ -306,6 +306,91 @@ or serialized.
 | stdio MCP server won't start | install its runner (`uv`/`uvx` or `npx`); export its `env_keys` creds |
 | validate a recipe before running | `goose recipe validate .goose/recipes/<slug>.yaml` |
 
+### Recover a broken project tracker and local route proxy
+
+Two independent faults can appear together:
+
+Run the bounded recovery utility first from the AgentTeamsModule repository:
+
+```sh
+python3 scripts/goose-recover.py --check  # diagnose only
+python3 scripts/goose-recover.py          # repair/start when safe
+```
+
+The check performs no writes, process signals, credential reads, or non-loopback requests. It
+returns `0` when both components are healthy, `1` when a recognized repair or proxy start is
+needed, `2` when the state is unsupported or unsafe to change, and `3` for an operating-system
+or subprocess failure. Normal mode can repair only the observed tracker corruption shape: a
+schema-valid `projects` object followed by `: null` and extra closing braces. It refuses
+truncated, non-UTF-8, structurally invalid, or otherwise unknown content.
+
+When port `8791` is empty, normal mode starts
+`scripts/goose-openrouter-route-proxy.py` detached with that proxy's built-in provider defaults.
+Those defaults may differ from a prior narrowed `--only` command; use the manual command below
+when exact backend selection matters. When the tracked route proxy is already healthy,
+`--restart` preserves its exact command. It refuses an empty port, an unknown listener, a
+process/health identity mismatch, or a proxy that cannot answer its local `/healthz` endpoint.
+An older proxy started before this endpoint was added forwards `/healthz` upstream and commonly
+returns HTTP `403`; treat that as a legacy process requiring the verified-owner manual migration
+below, not as proof that an unknown listener is safe to terminate.
+The process identity check and `SIGTERM` remain separate operating-system operations, so an
+unavoidable PID-reuse race exists despite the immediate recheck.
+
+The utility prints the exact mode-`0600` tracker backup and proxy log paths it creates. It does
+not install a login service, so a reboot can require another normal invocation.
+
+- `Failed to parse projects.json file` means Goose cannot decode
+  `~/.local/share/goose/projects.json`. In the observed failure, a complete valid object was
+  followed by `: null` and extra closing braces. Back up the file, retain only the first valid
+  top-level object, then validate it with both a general JSON parser and Goose itself:
+
+  ```sh
+  tracker="$HOME/.local/share/goose/projects.json"
+  cp -p "$tracker" "$tracker.bak-$(date +%Y%m%d-%H%M%S)"
+  python3 - "$tracker" <<'PY'
+  import json
+  import os
+  from pathlib import Path
+  import sys
+
+  path = Path(sys.argv[1])
+  value, end = json.JSONDecoder().raw_decode(path.read_text())
+  if not isinstance(value, dict) or not isinstance(value.get("projects"), dict):
+      raise SystemExit("refusing repair: first JSON value is not a Goose project tracker")
+  temporary = path.with_suffix(path.suffix + ".tmp")
+  temporary.write_text(json.dumps(value, indent=2) + "\n")
+  os.replace(temporary, path)
+  PY
+  jq empty "$tracker"
+  goose projects
+  ```
+
+  `goose projects` must show the project menu instead of a parse error. If it does not, restore
+  the timestamped backup rather than making further speculative edits.
+
+- An immediate connection refusal on port `8791` means `OPENROUTER_HOST` points to the local
+  route proxy but nothing is listening. The proxy is **opt-in and nonpersistent**: it is not a
+  login service and does not survive a reboot. Confirm the configuration and listener, then
+  restart it with a backend that currently serves the configured model:
+
+  ```sh
+  grep '^OPENROUTER_HOST:' ~/.config/goose/config.yaml
+  lsof -nP -iTCP:8791 -sTCP:LISTEN
+  python3 scripts/goose-openrouter-preflight.py --providers <openrouter-model>
+  python3 scripts/goose-openrouter-route-proxy.py --port 8791 --only "<current-backend>"
+  ```
+
+  If `goose-recover.py --restart` reports `proxy health endpoint failed`, first confirm the PID
+  and command shown by `lsof -nP -iTCP:8791 -sTCP:LISTEN` and
+  `ps -ww -p <pid> -o command=`. Stop it with `kill <pid>` only when it resolves to one of the
+  tracked route-proxy script, then run `python3 scripts/goose-recover.py`. Do not kill an
+  unknown listener. Avoid restarting while an active Goose turn is using port `8791`; the
+  in-flight request will be interrupted.
+
+  Keep that process running. Alternatively, remove `OPENROUTER_HOST` from `config.yaml` and
+  restart Goose to use OpenRouter directly without backend pinning. The proxy is a reliability
+  layer for provider selection, not a universal OpenRouter connectivity requirement.
+
 > **Ollama tag vs OpenRouter slug — the #1 early-stop trap.** The same model is
 > addressed differently per provider: Ollama uses `name:tag` (e.g. `qwen3.6:35b-a3b`,
 > correct in §2a), OpenRouter uses `vendor/model-variant` with **hyphens** (e.g.

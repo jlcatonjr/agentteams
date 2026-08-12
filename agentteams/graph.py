@@ -32,7 +32,6 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
 
-from agentteams._utils import _split_yaml_front_matter  # shared YAML splitter (MAP-17)
 from agentteams import svg_render
 
 # Front-matter extraction lives in graph_inputs.py (CH-07 carve): this module owns the graph

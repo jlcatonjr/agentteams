@@ -21,7 +21,7 @@ from __future__ import annotations
 
 import re
 
-from agentteams._utils import _split_yaml_front_matter  # shared YAML splitter (MAP-17)
+from agentteams.yaml_frontmatter import parse_yaml_front_matter  # shared YAML splitter (MAP-17)
 
 #: Matches the 'handoffs:' top-level key on its own line (block YAML sequence)
 _HANDOFFS_SECTION_RE = re.compile(r"^handoffs:\s*$", re.MULTILINE)
@@ -44,10 +44,13 @@ _INVOKABLE_RE = re.compile(r"^user-invokable:\s*(true|false)", re.MULTILINE | re
 def _split_yaml(content: str) -> tuple[str | None, str]:
     """Split file content into YAML front matter and body.
 
-    Delegates to ``_utils._split_yaml_front_matter``, which uses a line-by-line
-    scan to locate the closing ``---`` delimiter only at column 0.  This prevents
-    the false-positive split that occurred when ``---`` appeared inside a YAML
-    scalar value (e.g. ``description: 'foo---bar'``).  See MAP-17.
+    Delegates to ``yaml_frontmatter.parse_yaml_front_matter`` — the single
+    shared line-anchored, block-scalar-aware scanner also used by interop.py
+    (MAP-06) — for boundary detection (MAP-17; the duplicate scanner that used
+    to live in ``_utils._split_yaml_front_matter`` was retired by the
+    durable-canonical-agent-format plan, step B.1). The yaml block is returned
+    without a trailing newline to preserve the historical return shape this
+    module's regex extractors were written against.
 
     Args:
         content: Full file text.
@@ -55,7 +58,14 @@ def _split_yaml(content: str) -> tuple[str | None, str]:
     Returns:
         Tuple of (yaml_block, body). yaml_block is None if no front matter.
     """
-    return _split_yaml_front_matter(content)
+    yaml_block, body = parse_yaml_front_matter(content)
+    if yaml_block is None:
+        return None, body
+    if yaml_block.endswith("\r\n"):
+        yaml_block = yaml_block[:-2]
+    elif yaml_block.endswith("\n"):
+        yaml_block = yaml_block[:-1]
+    return yaml_block, body
 def _extract_name(yaml_block: str, fallback_slug: str) -> str:
     """Extract the display name from YAML, stripping the ' — Project' suffix.
 

@@ -26,9 +26,9 @@ DOCS = REPO_ROOT / "docs_src" / "api-reference"
 _UNDOCUMENTED: frozenset[str] = frozenset({
     "advisory", "ai_bad_habits", "atomicio", "audit_agent_contract", "audit_types",
     "backup", "budget", "capability_hints", "errors", "front_matter_merge",
-    "graph_inputs", "recipe_fields", "security_feed_render", "stale_detector",
-    "stale_remediate", "svg_render", "tool_metadata_catalog", "unfenced",
-    "vscode_tasks", "yaml_frontmatter",
+    "graph_inputs", "interop_helpers", "recipe_fields", "security_feed_render",
+    "stale_detector", "stale_remediate", "svg_render", "tool_metadata_catalog",
+    "unfenced", "vscode_tasks", "yaml_frontmatter",
 })
 
 

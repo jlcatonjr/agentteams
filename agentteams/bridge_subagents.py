@@ -421,6 +421,16 @@ def detect_stub_drift(
 
     Each record: ``{slug, stub_path, source_path, recorded_sha, current_sha}``.
     Empty list means no drift.
+
+    .. note::
+
+        **D.3 — dormant.** This function is fully tested (3 tests in
+        ``test_bridge_subagents.py``) but is **not wired to any CLI flag**.
+        The canonical absorb workflow (``commands._run_absorb``) superseded
+        this per-stub SHA comparison with a whole-baseline three-way merge
+        (``sync_classifier.classify_sync``).  The function is retained for
+        potential future use (e.g. a lightweight ``--stub-drift-check`` flag)
+        but is intentionally not called from production code paths.
     """
     drift: list[dict[str, str]] = []
     target_dir = (output_root / ".claude" / "agents").resolve()

@@ -392,6 +392,13 @@ def _run_interop(
     detected = source_framework or detect_framework(source_dir)
     if output is not None:
         target_dir = output
+    elif target_framework == "canonical":
+        # G.1 (plan §5.5): canonical is not a registry adapter, so
+        # get_agents_dir doesn't apply — default to the established
+        # .agentteams/canonical/ control-directory convention.
+        from agentteams.canonical import DEFAULT_CANONICAL_SUBDIR
+
+        target_dir = source_dir.parent.parent / DEFAULT_CANONICAL_SUBDIR
     else:
         project_root = source_dir.parent.parent
         target_dir = FRAMEWORKS[target_framework]().get_agents_dir(project_root)
@@ -450,6 +457,142 @@ def _run_interop(
         print(f"  {bundle_verb} {len(result.bundle_files)} interop bundle file(s).")
 
     return 0 if result.success else 1
+def _run_absorb(
+    native_dir: Path,
+    canonical_dir: Path,
+    source_framework: str | None,
+    apply: bool,
+    dry_run: bool,
+) -> int:
+    """Execute the --absorb-from path: native→canonical three-way sync.
+
+    Phase C of the canonical bidirectional sync plan. Reads current native
+    state, current canonical state, and the last sync baseline, classifies
+    every agent field using the three-way classifier (B.1), and either prints
+    a report (default) or writes clean native-moved changes to canonical
+    (with --absorb-apply).
+
+    Capability-bearing fields are NEVER auto-applied (§6.1); they always
+    appear in the report as proposals for human review.
+    """
+    from agentteams.interop import detect_framework, export_to_cai
+    from agentteams.canonical import load_canonical, DEFAULT_CANONICAL_SUBDIR
+    from agentteams.sync_classifier import classify_sync, Action
+    from agentteams.sync_baseline import (
+        load_baseline, write_baseline,
+    )
+
+    # Auto-detect framework if not specified
+    framework = source_framework or detect_framework(native_dir)
+    from agentteams.frameworks.registry import FRAMEWORK_IDS
+    if framework not in FRAMEWORK_IDS:
+        print(
+            f"Error: --absorb-from framework {framework!r} is not registered. "
+            f"Registered frameworks: {', '.join(FRAMEWORK_IDS)}.",
+            file=sys.stderr,
+        )
+        return 1
+
+    # Resolve canonical directory
+    if not canonical_dir:
+        canonical_dir = native_dir.parent.parent / DEFAULT_CANONICAL_SUBDIR
+    canonical_dir = Path(canonical_dir)
+
+    if not canonical_dir.is_dir():
+        print(
+            f"Error: canonical directory not found: {canonical_dir}\n"
+            f"Run --interop-from <native_dir> --framework canonical first "
+            f"to create the canonical baseline.",
+            file=sys.stderr,
+        )
+        return 1
+
+    dry_label = " (dry-run)" if dry_run else ""
+    apply_label = " + --absorb-apply" if apply else ""
+    print(
+        f"Running absorb{dry_label}{apply_label}:\n"
+        f"  native:       {native_dir}\n"
+        f"  framework:    {framework}\n"
+        f"  canonical:    {canonical_dir}"
+    )
+
+    # 1. Read current native state
+    try:
+        native_cai = export_to_cai(native_dir, framework)
+    except (ValueError, FileNotFoundError) as exc:
+        print(f"Error exporting native: {exc}", file=sys.stderr)
+        return 1
+
+    # 2. Read current canonical state
+    try:
+        canonical_cai = load_canonical(canonical_dir)
+    except FileNotFoundError as exc:
+        print(f"Error loading canonical: {exc}", file=sys.stderr)
+        return 1
+
+    # 3. Read baseline (may be None — no-baseline → report only)
+    baseline = load_baseline(canonical_dir, framework)
+    if baseline is None:
+        print(f"\n  ⚠  No sync baseline for {framework!r} — "
+              f"reporting only, nothing will be applied.")
+
+    # 4. Classify
+    report = classify_sync(
+        canonical_cai, native_cai, baseline,
+        canonical_dir=str(canonical_dir),
+        native_dir=str(native_dir),
+        framework=framework,
+    )
+
+    # 5. Print report
+    print()
+    print(report.to_text())
+
+    # 6. Apply (if --absorb-apply and not dry-run)
+    if apply and not dry_run and report.has_changes:
+        applied_count = 0
+        proposal_count = report.total_proposals
+
+        for ar in report.agent_reports:
+            for fr in ar.field_results:
+                if fr.action == Action.APPLY:
+                    # Write the native value into the canonical agent dict
+                    for agent in canonical_cai.get("agents", []):
+                        if agent.get("slug") == ar.agent_slug:
+                            agent[fr.field_name] = fr.native_value
+                            applied_count += 1
+                            break
+
+        if applied_count > 0:
+            # Write the updated canonical back to disk
+            from agentteams.canonical import materialize_canonical
+            materialize_canonical(canonical_cai, canonical_dir)
+            print(
+                f"\n  Applied {applied_count} field(s) to canonical.\n"
+                f"  {proposal_count} proposal(s) require human review "
+                f"(not applied — capability keys or conflicts)."
+            )
+        else:
+            print("\n  No auto-applicable fields found.")
+
+        # Update the baseline to reflect the post-sync state
+        write_baseline(canonical_dir, framework, native_cai,
+                       native_source_dir=str(native_dir))
+        print(f"  Sync baseline updated for {framework!r}.")
+
+    elif apply and dry_run:
+        print(f"\n  (dry-run) Would apply {report.total_applied} field(s), "
+              f"would report {report.total_proposals} proposal(s) for review.")
+
+    if not apply and report.has_changes:
+        print(
+            f"\n  Report-only mode. Pass --absorb-apply to write "
+            f"{report.total_applied} clean field(s) to canonical."
+        )
+
+    return 0
+
+
 _BRIDGE_AGENTS_DIR_SUFFIXES: dict[str, tuple[tuple[str, ...], ...]] = {
     "copilot-vscode": ((".github", "agents"),),
     "copilot-cli": ((".github", "copilot"),),

@@ -12,9 +12,12 @@ from __future__ import annotations
 import argparse
 
 from agentteams import __version__
+from agentteams.cli.backup_switch import add_stale_and_backup_arguments
+from agentteams.cli.fleet_switch import add_fleet_arguments
 from agentteams.cli.goose_switch import add_goose_arguments
+from agentteams.cli.package_switch import add_package_arguments
 from agentteams.emit import DEFAULT_BACKUP_KEEP_LAST
-from agentteams.frameworks.registry import FRAMEWORKS
+from agentteams.frameworks.registry import FRAMEWORKS, FRAMEWORK_IDS
 
 def _build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
@@ -38,10 +41,16 @@ def _build_parser() -> argparse.ArgumentParser:
     )
     parser.add_argument(
         "--framework", "-f",
-        choices=list(FRAMEWORKS.keys()),
+        choices=list(FRAMEWORKS.keys()) + ["canonical", "generic"],
         default="copilot-vscode",
         metavar="NAME",
-        help=f"Target framework: {', '.join(FRAMEWORKS)} (default: copilot-vscode)",
+        help=(
+            f"Target framework: {', '.join(FRAMEWORKS)} (default: copilot-vscode). "
+            "'canonical' is the durable on-disk canonical format (interop-only, "
+            "pair with --interop-from; not a rendering target). 'generic' emits "
+            "only framework-agnostic bridge artifacts (bridge-only, pair with "
+            "--bridge-from; no native consumer entry files)."
+        ),
     )
     parser.add_argument(
         "--output", "-o",
@@ -53,7 +62,9 @@ def _build_parser() -> argparse.ArgumentParser:
             "<project>/.github/copilot/ (copilot-cli), "
             "<project>/.claude/agents/ (claude), "
             "<project>/.goose/recipes/ (goose), "
-            "<project>/.agents/ (agents-md; team brief also written to repo-root AGENTS.md)."
+            "<project>/.agents/ (agents-md; team brief also written to repo-root AGENTS.md). "
+            "With --package-team: the destination .zip FILE path, not a directory "
+            "(default: ./team-package.zip)."
         ),
     )
     parser.add_argument(
@@ -72,7 +83,9 @@ def _build_parser() -> argparse.ArgumentParser:
         "--overwrite",
         action="store_true",
         help="Overwrite existing agent files unconditionally (full-file replacement). "
-             "Use --merge instead to preserve user-authored content in fenced files.",
+             "Use --merge instead to preserve user-authored content in fenced files. "
+             "With --package-team: replace an existing output zip file instead of "
+             "refusing to run.",
     )
     overwrite_group.add_argument(
         "--merge",
@@ -470,9 +483,13 @@ def _build_parser() -> argparse.ArgumentParser:
     parser.add_argument(
         "--interop-source-framework",
         dest="interop_source_framework",
-        choices=list(FRAMEWORKS.keys()),
+        choices=list(FRAMEWORKS.keys()) + ["canonical"],
         default=None,
-        help="Optional source framework override for --interop-from (auto-detected when omitted).",
+        help=(
+            "Optional source framework override for --interop-from (auto-detected "
+            "when omitted). 'canonical' reads an exploded canonical directory "
+            "(team.cai.json + agents/ + skills/)."
+        ),
     )
     parser.add_argument(
         "--interop-mode",
@@ -494,9 +511,16 @@ def _build_parser() -> argparse.ArgumentParser:
     parser.add_argument(
         "--bridge-source-framework",
         dest="bridge_source_framework",
-        choices=list(FRAMEWORKS.keys()),
+        # A2.1: Narrowed to match bridge.py's run_bridge accepted source set —
+        # agents-md/codex are accepted at the argparse level but raise ValueError
+        # at runtime, the same declared-vs-accepted mismatch this fix exists to close.
+        choices=["copilot-vscode", "copilot-cli", "claude", "goose", "canonical"],
         default=None,
-        help="Optional source framework override for --bridge-from (auto-detected when omitted).",
+        help=(
+            "Optional source framework override for --bridge-from (auto-detected when "
+            "omitted). 'canonical' sources from a durable canonical directory "
+            "(team.cai.json + agents/*.md) instead of a native framework's files."
+        ),
     )
     parser.add_argument(
         "--pin-templates",
@@ -528,6 +552,58 @@ def _build_parser() -> argparse.ArgumentParser:
             "With --reconcile-front-matter, take the template's value for each diverging key. "
             "Never implied by the report: `allowed-tools` is a capability grant and widening "
             "one is a privileged change, so it requires saying so explicitly."
+        ),
+    )
+    # -----------------------------------------------------------------------
+    # --absorb-from: native→canonical sync (report-only default, explicit apply)
+    # -----------------------------------------------------------------------
+    parser.add_argument(
+        "--absorb-from",
+        metavar="DIR",
+        dest="absorb_from",
+        default=None,
+        help=(
+            "Absorb native framework edits back into the canonical baseline. "
+            "Reads the native deployment, compares against canonical and the "
+            "last sync baseline using a three-way classifier, and prints a "
+            "report. Default behavior writes nothing to canonical; pass "
+            "--absorb-apply to write clean native-moved changes. "
+            "Capability-bearing fields are NEVER auto-applied (§6.1)."
+        ),
+    )
+    parser.add_argument(
+        "--absorb-source-framework",
+        dest="absorb_source_framework",
+        # F.3: Widened from v1 (goose, claude) to all registered frameworks.
+        # FRAMEWORK_IDS is the single source of truth (registry.py).
+        choices=list(FRAMEWORK_IDS),
+        default=None,
+        help=(
+            "Source framework for --absorb-from (auto-detected when omitted). "
+            "Any registered framework is accepted."
+        ),
+    )
+    parser.add_argument(
+        "--absorb-apply",
+        action="store_true",
+        dest="absorb_apply",
+        help=(
+            "With --absorb-from, write classified native-moved-clean changes "
+            "into canonical. Never implied by the report: capability-bearing "
+            "fields (tools, model, agents, capabilities, raw_front_matter "
+            "with capability keys) are always routed to human review "
+            "regardless of classification cleanliness (§6.1)."
+        ),
+    )
+    parser.add_argument(
+        "--absorb-canonical-dir",
+        metavar="DIR",
+        dest="absorb_canonical_dir",
+        default=None,
+        help=(
+            "Canonical directory to absorb into (defaults to "
+            ".agentteams/canonical/ relative to the native source's "
+            "project root)."
         ),
     )
     parser.add_argument(
@@ -817,119 +893,12 @@ def _build_parser() -> argparse.ArgumentParser:
             "bit-rot/tamper mismatch."
         ),
     )
-    parser.add_argument(
-        "--stale-check", action="store_true", dest="stale_check", default=False,
-        help="Read-only: scan --output/--project (else CWD) for stale agent docs and "
-             "code/scripts (VCS conflict markers, broken references, git-recency "
-             "divergence, provenance-gated generated-file integrity). Exits non-zero "
-             "on any Tier-1 (blocking) finding. Never edits files.",
-    )
-    parser.add_argument(
-        "--stale-remediate", action="store_true", dest="stale_remediate", default=False,
-        help="Modifier for --stale-check: also print a guided remediation plan "
-             "(suggestions only; does NOT edit files, unlike --auto-correct).",
-    )
-    parser.add_argument(
-        "--stale-no-git", action="store_true", dest="stale_no_git", default=False,
-        help="Modifier for --stale-check: skip the Tier-2 git-recency signal "
-             "(hermetic/CI or non-git targets).",
-    )
-    parser.add_argument(
-        "--stale-restore", nargs="?", const="latest", default=None, metavar="TS",
-        dest="stale_restore",
-        help="Standalone: restore files from a --stale-remediate --yes safety snapshot "
-             "(.agentteams-backups/stale-fix-<TS>/; default: latest). Recovery path for a "
-             "revision that went wrong.",
-    )
-    parser.add_argument(
-        "--prune-backups",
-        nargs="?",
-        type=int,
-        const=DEFAULT_BACKUP_KEEP_LAST,
-        default=None,
-        metavar="KEEP",
-        dest="prune_backups",
-        help=(
-            "Standalone: delete old timestamped backups under --output/--project "
-            f"(else CWD) .agentteams-backups/, keeping the newest KEEP (default "
-            f"{DEFAULT_BACKUP_KEEP_LAST}). The single newest backup is NEVER "
-            "deleted, even with KEEP 0. Combine with --keep-within-days to also "
-            "retain anything younger than N days, and --dry-run to preview. This "
-            "bounds backup growth; distinct from --prune (which removes stale "
-            "*agents*, not backups)."
-        ),
-    )
-    parser.add_argument(
-        "--keep-within-days",
-        type=int,
-        default=None,
-        metavar="DAYS",
-        dest="keep_within_days",
-        help=(
-            "Modifier for --prune-backups: in addition to the newest KEEP, retain "
-            "any backup younger than DAYS (a backup with an unparseable timestamp "
-            "is always kept, fail-safe)."
-        ),
-    )
-    parser.add_argument(
-        "--backup-mirror",
-        default=None,
-        metavar="DIR",
-        dest="backup_mirror",
-        help=(
-            "Modifier for --update: after a backup is written, also copy it to "
-            "DIR/<output-slug>/<timestamp>/ (e.g. a NAS or synced folder) so the "
-            "recovery net survives local disk loss. Best-effort and non-fatal — a "
-            "mirror failure warns but never breaks the update. Overrides the "
-            "AGENTTEAMS_BACKUP_MIRROR environment variable."
-        ),
-    )
+    add_stale_and_backup_arguments(parser)
 
     # -- Fleet update: run --update --merge across every workspace under a dir --
-    fleet_group = parser.add_argument_group("fleet update (multi-workspace)")
-    fleet_group.add_argument(
-        "--fleet",
-        metavar="DIR",
-        default=None,
-        help=(
-            "Update every agent-infrastructure workspace under DIR and its "
-            "subfolders with --update --merge. Discovers .github/agents/ and "
-            ".claude/ targets, snapshots each git workspace via a commit, applies "
-            "the merge, then analyses the diff. Default is a DRY-RUN preview; pass "
-            "--yes to apply. Non-destructive: merge-only; .claude is bridge-merged."
-        ),
-    )
-    fleet_group.add_argument(
-        "--fleet-frameworks",
-        choices=["github", "claude", "goose", "both", "all"],
-        default="both",
-        help=(
-            "Which infrastructures to update per workspace (default: both). "
-            "`both` = copilot-vscode + claude (backward-compatible). "
-            "`all` = copilot-vscode + claude + goose. "
-            "`goose` = Goose workspaces only."
-        ),
-    )
-    fleet_group.add_argument(
-        "--fleet-report",
-        metavar="DIR",
-        default=None,
-        help="Directory for the fleet report (default: <DIR>/.agentteams-fleet/<run-id>/).",
-    )
-    fleet_group.add_argument(
-        "--fleet-allow-no-verify",
-        action="store_true",
-        default=False,
-        dest="fleet_allow_no_verify",
-        help=(
-            "Allow snapshot commits to bypass pre-commit hooks (--no-verify / "
-            "core.hooksPath=/dev/null). Off by default — hooks run normally and a "
-            "warning is printed if a hook blocks the snapshot. Use this flag only "
-            "when workspace hooks are known-safe to skip (e.g., a commit-signing "
-            "hook that would reject the ephemeral internal snapshot commit)."
-        ),
-    )
+    add_fleet_arguments(parser)
     add_goose_arguments(parser)
+    add_package_arguments(parser)
     return parser
 
 # _BRIDGE_USAGE_HINT + _validate_option_combinations were carved into

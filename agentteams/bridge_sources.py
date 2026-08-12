@@ -14,8 +14,29 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
+from agentteams.canonical import TEAM_FILE_NAME, _load_agent_file
+from agentteams.yaml_frontmatter import parse_yaml_front_matter
+
 
 _INSTRUCTIONS_NAMES = {"copilot-instructions.md", "CLAUDE.md"}
+
+
+def _require_canonical_team_file(source_dir: Path) -> None:
+    """Raise clearly when *source_dir* isn't actually a canonical directory.
+
+    Without this, a dir with no `team.cai.json` but some coincidentally
+    `.md`-shaped files under `agents/` silently produced a plausible-looking
+    partial bridge instead of erroring (2026-08-10 finding) — inconsistent
+    with how canonical-ness is checked everywhere else in this feature
+    (`detect_framework`'s own marker check, `load_canonical`'s hard
+    `FileNotFoundError`).
+    """
+    if not (source_dir / TEAM_FILE_NAME).is_file():
+        raise FileNotFoundError(
+            f"{source_dir} is not a canonical directory: no {TEAM_FILE_NAME} found. "
+            "Point --bridge-source-framework canonical at the directory holding "
+            f"{TEAM_FILE_NAME}, not a plain agents/*.md-shaped folder."
+        )
 
 # Goose-source recipe metadata (hand-built YAML; regex parse, no YAML dep).
 _RECIPE_TITLE_RE = re.compile(r"^title:\s*(.+?)\s*$", re.MULTILINE)
@@ -40,7 +61,15 @@ def _parse_recipe_meta(text: str) -> tuple[str, str, str]:
 def _extract_inventory(source_dir: Path, source_framework: str) -> list[dict[str, str]]:
     rows: list[dict[str, str]] = []
 
-    for file in sorted(source_dir.iterdir()):
+    if source_framework == "canonical":
+        _require_canonical_team_file(source_dir)
+        # Canonical agent files live under agents/*.md, not flat in source_dir.
+        agents_dir = source_dir / "agents"
+        candidates = sorted(agents_dir.glob("*.md")) if agents_dir.is_dir() else []
+    else:
+        candidates = sorted(source_dir.iterdir())
+
+    for file in candidates:
         if not file.is_file():
             continue
         name = file.name
@@ -58,6 +87,26 @@ def _extract_inventory(source_dir: Path, source_framework: str) -> list[dict[str
                     "display_name": display_name,
                     "invokable": invokable,
                     "role": desc,
+                    "source_file": str(file),
+                }
+            )
+            continue
+
+        if source_framework == "canonical":
+            # Canonical front matter uses JSON-escaped string values (canonical.py's
+            # own narrow YAML subset) - _parse_front_matter below only strips quotes,
+            # it doesn't decode escapes, so non-ASCII/quoted content would come back
+            # mangled: the literal 6 characters backslash-u-2-0-1-4 instead of a
+            # real em dash. Reuse canonical.py's own reader, which already decodes
+            # this correctly.
+            entry = _load_agent_file(file)
+            rows.append(
+                {
+                    "display_name": entry["name"] or _slug_to_name(_slug_from_name(name)),
+                    # No user-invokable concept in canonical front matter — honest
+                    # "no" rather than a guess.
+                    "invokable": "no",
+                    "role": entry["description"] or "",
                     "source_file": str(file),
                 }
             )
@@ -93,6 +142,19 @@ def _collect_source_files(source_dir: Path, source_framework: str = "copilot-vsc
     # a `.json`), OS/editor junk (`.DS_Store`), and any other file that would
     # otherwise enter the manifest and trip `--bridge-check` on changes unrelated
     # to the agent team — for every source framework.
+    if source_framework == "canonical":
+        _require_canonical_team_file(source_dir)
+        # A canonical root has a different shape entirely: agent files live under
+        # agents/*.md (not flat in source_dir), and instructions/MCP/framework
+        # extensions live inside team.cai.json rather than as sibling files — so
+        # team.cai.json itself must be hashed too, or a hand-edit there would be
+        # invisible to --bridge-check.
+        agents_dir = source_dir / "agents"
+        files: list[Path] = sorted(agents_dir.glob("*.md")) if agents_dir.is_dir() else []
+        team_file = source_dir / TEAM_FILE_NAME
+        if team_file.is_file():
+            files.append(team_file)
+        return files
     ext = ".yaml" if source_framework == "goose" else ".md"
     files: list[Path] = []
     for p in sorted(source_dir.iterdir()):
@@ -273,24 +335,58 @@ def _render_inventory_md(rows: list[dict[str, str]], output_root: Path | None = 
 
 
 def _parse_front_matter(text: str) -> tuple[dict[str, Any], str]:
-    if not text.startswith("---\n"):
+    """Parse YAML front matter into a flat dict plus body.
+
+    Boundary detection delegates to ``yaml_frontmatter.parse_yaml_front_matter``
+    — the shared line-anchored, block-scalar-aware scanner — replacing the old
+    naive ``text.split("\\n---\\n", 1)`` boundary scan. That naive split was the
+    one remaining MAP-06-class bug in production (it fired on any ``---`` line
+    anywhere in the text, including inside block scalars) and is fixed here by
+    the durable-canonical-agent-format plan (step B.2).
+
+    Block-style sequences (``key:`` followed by indented ``- item`` lines) are
+    captured as lists, matching ``bridge_subagents._parse_front_matter``'s
+    MAP-05 behavior. The call signature and scalar-value semantics (strings,
+    ``true``/``false`` → bool) are unchanged.
+    """
+    yaml_block, body = parse_yaml_front_matter(text)
+    if yaml_block is None:
         return {}, text
-    parts = text.split("\n---\n", 1)
-    if len(parts) != 2:
-        return {}, text
-    raw = parts[0][4:]
-    body = parts[1]
     data: dict[str, Any] = {}
-    for line in raw.splitlines():
-        m = re.match(r"^([A-Za-z][A-Za-z0-9_-]*)\s*:\s*(.*)$", line.strip())
+    lines = yaml_block.splitlines()
+    i = 0
+    while i < len(lines):
+        m = re.match(r"^([A-Za-z][A-Za-z0-9_-]*)\s*:\s*(.*)$", lines[i].strip())
         if not m:
+            i += 1
             continue
         key = m.group(1)
-        value = m.group(2).strip().strip('"\'')
+        value = m.group(2).strip()
+        if not value:
+            # Possibly a block-style sequence: consume subsequent indented
+            # ``- item`` lines and store them as a list.
+            items: list[str] = []
+            j = i + 1
+            while j < len(lines):
+                bm = re.match(r"^\s+-\s*(.*)$", lines[j])
+                if bm:
+                    items.append(bm.group(1).strip().strip('"\''))
+                    j += 1
+                else:
+                    break
+            if items:
+                data[key] = items
+                i = j
+                continue
+            data[key] = ""
+            i += 1
+            continue
+        value = value.strip('"\'')
         if value.lower() in {"true", "false"}:
             data[key] = value.lower() == "true"
         else:
             data[key] = value
+        i += 1
     return data, body
 
 

@@ -14,7 +14,7 @@ _BRIDGE_USAGE_HINT = (
     " Bridge mode is independent of description/project-driven generation.\n"
     "  Example:\n"
     "    agentteams --bridge-from <source-agents-dir> \\\n"
-    "               --bridge-source-framework <claude|copilot-cli|copilot-vscode> \\\n"
+    "               --bridge-source-framework <claude|copilot-cli|copilot-vscode|goose|canonical> \\\n"
     "               --framework <target-framework> \\\n"
     "               [--bridge-check | --bridge-refresh]"
 )
@@ -33,8 +33,10 @@ def _validate_option_combinations(parser: argparse.ArgumentParser, args: argpars
                 ("--bridge-from", bool(getattr(args, "bridge_from", None))),
                 ("--convert-from", bool(getattr(args, "convert_from", None))),
                 ("--interop-from", bool(getattr(args, "interop_from", None))),
+                ("--absorb-from", bool(getattr(args, "absorb_from", None))),
                 ("--self", bool(getattr(args, "self_update", False))),
                 ("--fleet", getattr(args, "fleet", None) is not None),
+                ("--package-team", bool(getattr(args, "package_team", None))),
             ) if on
         ]
         if _goose_conflicts:
@@ -104,7 +106,7 @@ def _validate_option_combinations(parser: argparse.ArgumentParser, args: argpars
             ("project", "--project"), ("output", "--output"),
             ("add_fence_markers", "--add-fence-markers"),
             ("capture_baseline", "--capture-baseline"), ("check_baseline", "--check-baseline"),
-            ("stale_check", "--stale-check"),
+            ("stale_check", "--stale-check"), ("package_team", "--package-team"),
         ]
         for attr, flag in _fleet_incompatible:
             val = getattr(args, attr, None)
@@ -127,35 +129,74 @@ def _validate_option_combinations(parser: argparse.ArgumentParser, args: argpars
                 "(adopt integrates orphan agents; prune deletes them)"
             )
 
-    # agents-md is a generate-only AGENTS.md emitter. The convert/interop/bridge
-    # paths hardcode the instructions filename (copilot-instructions.md / CLAUDE.md)
-    # and would emit a mislabeled file for this target, so reject those combinations
-    # with a clear message rather than producing wrong output.
-    if getattr(args, "framework", None) == "agents-md":
+    # agents-md / codex are generate-only AGENTS.md emitters for the
+    # convert/bridge paths (their instructions-file emission still hardcodes
+    # copilot/claude names and would mislabel the file). The interop path IS
+    # supported as of F.2: import_from_cai writes the framework-owned
+    # AGENTS.md next to the target agents dir, and both are valid CAI
+    # source/target values (agent-cai.schema.json v2 enum). agents-md import
+    # is best-effort by nature — its rendered output carries no front matter,
+    # so capabilities/handoffs land inferred-or-empty (surfaced via
+    # compatibility-report.md). codex (F.4) is thin and delegates to the same
+    # agents-md rendering, so it shares this guard.
+    if getattr(args, "framework", None) in ("agents-md", "codex"):
         for attr, flag in (
             ("convert_from", "--convert-from"),
-            ("interop_from", "--interop-from"),
             ("bridge_from", "--bridge-from"),
         ):
             if getattr(args, attr, None):
+                fw = getattr(args, "framework")
                 parser.error(
-                    f"--framework agents-md is a generate-only AGENTS.md emitter and "
+                    f"--framework {fw} is a generate-only AGENTS.md emitter and "
                     f"cannot be a {flag} target. Generate a team with "
-                    f"`--framework agents-md --description …`, or pick a convertible "
-                    f"target framework (copilot-vscode, copilot-cli, claude, goose)."
+                    f"`--framework {fw} --description …`, or use the interop "
+                    f"path (`--interop-from`), which supports {fw} targets."
                 )
 
-    # interop-to-goose is refused: the canonical interop representation (CAI) drops
-    # the handoff graph (export_to_cai strips handoff blocks + sets handoffs=[]), so
-    # the Goose orchestrator would emit zero sub_recipes — a disconnected pile of
-    # recipes that is not a working team. --convert-from preserves handoffs (from the
-    # source agent content) and IS supported. (Bridge-to-goose has its own path.)
-    if getattr(args, "framework", None) == "goose" and getattr(args, "interop_from", None):
+    # F.2: interop-to-goose is now supported — the old refusal predates C.3
+    # (CAI captures handoffs and the goose adapter renders sub_recipes from
+    # them natively), so the "disconnected pile of recipes" failure mode no
+    # longer applies. goose is a valid CAI source/target value
+    # (agent-cai.schema.json v2 enum).
+
+    # G.1 (plan §5.7): canonical is an INTEROP-ONLY pseudo-framework — the
+    # durable on-disk CAI directory (team.cai.json + agents/ + skills/). It
+    # has no generation template and no convert/bridge path; it dispatches to
+    # canonical.py (materialize/load). Bundle mode is refused here too (the
+    # run-time refusal in interop.run_interop stays as the backstop).
+    if getattr(args, "framework", None) == "canonical":
+        if not getattr(args, "interop_from", None):
+            parser.error(
+                "--framework canonical is interop-only: pair it with "
+                "--interop-from <source team dir> to export the durable "
+                "canonical format (there is no generate/convert/bridge path "
+                "for canonical)."
+            )
+        if getattr(args, "interop_mode", None) == "bundle":
+            parser.error(
+                "--framework canonical does not support --interop-mode bundle: "
+                "bundle artifacts would land inside the canonical directory and "
+                "corrupt its references/ tree on load. Use --interop-mode direct."
+            )
+    if (
+        getattr(args, "interop_source_framework", None) == "canonical"
+        and not getattr(args, "interop_from", None)
+    ):
         parser.error(
-            "--interop-from with --framework goose is not supported: the interop "
-            "representation drops the handoff graph Goose needs for sub_recipe "
-            "delegation, so the result would be unwired. Use "
-            "`--convert-from <team> --framework goose` instead (it preserves delegation)."
+            "--interop-source-framework canonical requires --interop-from "
+            "<canonical dir> (a directory holding team.cai.json)."
+        )
+
+    # Open-items remediation OPEN-3: generic is a BRIDGE-ONLY target — it has no
+    # registry.py adapter entry (FRAMEWORKS[...] lookups in cli/commands.py's
+    # _run_convert/_run_interop would KeyError on it, the same reachability gap
+    # canonical already needed the block above to avoid), so it must be rejected
+    # here rather than left to crash further down.
+    if getattr(args, "framework", None) == "generic" and not getattr(args, "bridge_from", None):
+        parser.error(
+            "--framework generic is bridge-only: pair it with --bridge-from "
+            "<source team dir> (there is no generate/convert/interop path for "
+            "generic)."
         )
 
     if args.convert_from and args.interop_from:
@@ -166,6 +207,17 @@ def _validate_option_combinations(parser: argparse.ArgumentParser, args: argpars
 
     if args.bridge_from and args.interop_from:
         parser.error("--bridge-from and --interop-from are mutually exclusive")
+
+    if args.bridge_from and args.interop_from:
+        parser.error("--bridge-from and --interop-from are mutually exclusive")
+
+    # C.1: --absorb-from is mutually exclusive with the other source-dir flags
+    if args.absorb_from and args.convert_from:
+        parser.error("--absorb-from and --convert-from are mutually exclusive")
+    if args.absorb_from and args.interop_from:
+        parser.error("--absorb-from and --interop-from are mutually exclusive")
+    if args.absorb_from and args.bridge_from:
+        parser.error("--absorb-from and --bridge-from are mutually exclusive")
 
     if args.bridge_check and args.bridge_refresh:
         parser.error("--bridge-check cannot be combined with --bridge-refresh")
@@ -200,6 +252,7 @@ def _validate_option_combinations(parser: argparse.ArgumentParser, args: argpars
             ("bridge_from", "--bridge-from"),
             ("bridge_check", "--bridge-check"),
             ("bridge_refresh", "--bridge-refresh"),
+            ("absorb_from", "--absorb-from"),
         ]
         for attr, flag in refresh_incompatible:
             val = getattr(args, attr)
@@ -227,6 +280,7 @@ def _validate_option_combinations(parser: argparse.ArgumentParser, args: argpars
             ("bridge_from", "--bridge-from"),
             ("bridge_check", "--bridge-check"),
             ("bridge_refresh", "--bridge-refresh"),
+            ("absorb_from", "--absorb-from"),
         ]
         for attr, flag in query_incompatible:
             val = getattr(args, attr)
@@ -334,3 +388,35 @@ def _validate_option_combinations(parser: argparse.ArgumentParser, args: argpars
                     parser.error(f"{flag} cannot be used with --bridge-from." + _BRIDGE_USAGE_HINT)
             elif val:
                 parser.error(f"{flag} cannot be used with --bridge-from." + _BRIDGE_USAGE_HINT)
+
+    # Open-items remediation OPEN-5: --package-team is its own standalone mode
+    # (like --bridge-from/--convert-from/--interop-from), mutually exclusive
+    # with every other standalone op that dispatches earlier in app.py's
+    # if-chain (D.7 finding: unlike the other three modes, --package-team is
+    # new rather than inherited, so this closes the full dispatch-shadowing
+    # set here rather than only the two combinations D.6 originally covered
+    # — a silent no-op, not an error, is what happens without this: whichever
+    # branch app.py reaches first wins and --package-team is dropped).
+    _package_team_incompatible = [
+        ("backup_mirror", "--backup-mirror"), ("fleet", "--fleet"),
+        ("capture_baseline", "--capture-baseline"), ("check_baseline", "--check-baseline"),
+        ("verify_waivers", "--verify-waivers"), ("redteam", "--redteam"),
+        ("accept_probe_baseline", "--accept-probe-baseline"),
+        ("write_integrity_manifest", "--write-integrity-manifest"),
+        ("verify_integrity", "--verify-integrity"), ("verify_backup", "--verify-backup"),
+        ("prune_backups", "--prune-backups"), ("stale_check", "--stale-check"),
+        ("stale_restore", "--stale-restore"), ("add_fence_markers", "--add-fence-markers"),
+        ("refresh_graph", "--refresh-graph"), ("refresh_architecture", "--refresh-architecture"),
+        ("install_git_hooks", "--install-git-hooks"), ("self_update", "--self"),
+        ("revert_migration", "--revert-migration"), ("migrate", "--migrate"),
+        ("convert_from", "--convert-from"), ("interop_from", "--interop-from"),
+        ("goose_source", "--goose-source"), ("goose_model", "--goose-model"),
+        ("goose_show", "--goose-show"), ("recipe_check", "--recipe-check"),
+        ("bridge_from", "--bridge-from"), ("absorb_from", "--absorb-from"),
+    ]
+    if getattr(args, "package_team", None):
+        for attr, flag in _package_team_incompatible:
+            if getattr(args, attr, None):
+                parser.error(f"--package-team and {flag} are mutually exclusive")
+    elif getattr(args, "package_source_framework", None):
+        parser.error("--package-source-framework requires --package-team")

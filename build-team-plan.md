@@ -1,5 +1,15 @@
 # Agent Team Builder — Implementation Plan
 
+> **Status note (2026-08-10):** This plan remains the historical design record for the
+> AgentTeamsModule and stays root-allowlisted per the living-document policy. Its framework
+> coverage has since been substantially extended: the **durable-canonical-agent-format plan**
+> (`references/plans/durable-canonical-agent-format.plan.md`) defines the CAI v2
+> intermediate representation, the durable exploded `canonical` on-disk format, and the
+> current six-framework registry (`copilot-vscode`, `copilot-cli`, `claude`, `goose`,
+> `agents-md`, `codex`) plus the `canonical` interop pseudo-framework. Where this document
+> describes framework support, treat it as the original scope; the durable plan and
+> `docs_src/interoperability.md` carry the current behavior.
+
 **Repository:** `agentteams/`  
 **Date:** April 10, 2026  
 **Purpose:** A module that auto-generates a fully configured CoPilot agent team for any specified project, following the structural and constitutional patterns established in *Agent Teams: A Theoretically Grounded Approach*.

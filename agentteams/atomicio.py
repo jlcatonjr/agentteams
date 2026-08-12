@@ -14,13 +14,19 @@ destination. CH-24: no broad except — cleanup uses finally + suppress(OSError)
 from __future__ import annotations
 
 import contextlib
+import csv
+import io
 import os
 import shutil
 import stat
 import tempfile
 from pathlib import Path
+from typing import Any
 
-__all__ = ["_target_mode", "_atomic_write_text", "_atomic_copy", "_resolve_path"]
+__all__ = [
+    "_target_mode", "_atomic_write_text", "_atomic_copy", "_resolve_path",
+    "atomic_rewrite_csv_rows",
+]
 
 
 def _target_mode(path: Path) -> int:
@@ -76,6 +82,65 @@ def _atomic_copy(src: Path, dest: Path) -> None:
         if not success:
             with contextlib.suppress(OSError):
                 tmp.unlink()
+
+def atomic_rewrite_csv_rows(
+    path: Path, rows: list[dict[str, Any]], fieldnames: list[str],
+) -> None:
+    """Rewrite a CSV ledger's rows safely: verify-in-memory, then write once.
+
+    2026-08-11 finding: this project's audit/remediation CSV ledgers
+    (``conflict-log.csv``, ``agentteams-remediation-log.csv``, plan
+    ``steps.csv`` files) have hit the same failure class three times —
+    unescaped commas in a free-text field split a row into extra columns,
+    and a naive ``csv.DictWriter`` rewrite (``open(path, 'w')`` truncates
+    immediately, before the writer can raise on the bad row) destroys the
+    file rather than just failing to update it. This function renders
+    *rows* to a CSV string in memory, re-parses that string and refuses to
+    touch disk at all if any row doesn't round-trip to exactly
+    ``len(fieldnames)`` columns, and only then delegates to
+    `_atomic_write_text` (temp-file-in-same-dir + ``os.replace``) — so a
+    malformed row already present in *rows*, or a bug in the caller that
+    would produce one, is caught before the destination file is ever
+    opened for writing, not after.
+
+    Raises:
+        ValueError: a row holds a non-``str`` value for a declared field, or
+            a rendered row didn't round-trip to exactly ``len(fieldnames)``
+            columns — *path* is left untouched either way.
+    """
+    for i, row in enumerate(rows):
+        for key in fieldnames:
+            if key in row and not isinstance(row[key], str):
+                raise ValueError(
+                    f"row {i} field {key!r} is {type(row[key]).__name__}, not str "
+                    f"({row[key]!r}) — csv.DictWriter would silently str()-convert "
+                    f"this instead of erroring, so refusing to write {path}"
+                )
+
+    buf = io.StringIO()
+    writer = csv.DictWriter(buf, fieldnames=fieldnames, lineterminator="\n")
+    writer.writeheader()
+    writer.writerows(rows)
+    text = buf.getvalue()
+
+    reparsed = list(csv.reader(io.StringIO(text)))
+    header, data_rows = reparsed[0], reparsed[1:]
+    if header != fieldnames:
+        raise ValueError(f"rendered header {header!r} != expected {fieldnames!r}")
+    bad = [i for i, r in enumerate(data_rows) if len(r) != len(fieldnames)]
+    if bad:
+        raise ValueError(
+            f"{len(bad)} rendered row(s) did not round-trip to {len(fieldnames)} "
+            f"columns (first bad index: {bad[0]}) — refusing to write {path}"
+        )
+    if len(data_rows) != len(rows):
+        raise ValueError(
+            f"rendered {len(data_rows)} data rows but {len(rows)} were given — "
+            f"refusing to write {path}"
+        )
+
+    _atomic_write_text(path, text)
+
 
 def _resolve_path(output_dir: Path, rel_path: str) -> Path:
     """Resolve a relative path that may start with '../', with a containment guard.

@@ -36,6 +36,7 @@ Raised by `parse_tokens` / `validate` for any malformed token.
 | `bridge:copilot-vscode-to-claude:schedule` | Emit `.claude/schedules.agentteams.json` (see [`schedule_emit`](schedule-emit.md)). |
 | `bridge:copilot-vscode-to-claude:todo-projection` | Emit `.claude/skills/todo-from-plan/SKILL.md` (see [`plan_steps_todo`](plan-steps-todo.md)). |
 | `goose:mcp` | Wire operator-specified `mcp_servers[]` into Goose recipes as `stdio`/`streamable_http` extensions (opt-in; Goose already grants CLI via the `developer` builtin, so this is never a default). Only first-party read-only servers scoped to an agent are auto-wired; others are surfaced as recipe comments (see [`mcp_emit`](mcp-emit.md)). |
+| `codex:mcp` | Splice operator-specified `mcp_servers[]` into `.codex/config.toml`'s `[mcp_servers.*]` tables — a real, live config Codex reads to launch servers, so the same first-party/read-only/no-review-required auto-wire bar as `goose:mcp` applies. Unrelated file content (comments, sandbox/profile settings) is verified unchanged before any write, refusing the write rather than risk data loss if not (see [`codex_mcp_emit`](codex-mcp-emit.md)). |
 
 > **Namespace scope:** this table lists only the tokens in the `bridge:copilot-vscode-to-claude:*` namespace that have a wired-up effect today. `validate` / `parse_tokens` accept any syntactically valid `<ns>:<feature>` token (the namespace may itself contain colons), so tokens in other namespaces — e.g. `claude:*` — also pass validation. They simply produce no emission unless an emitter is looking for them.
 

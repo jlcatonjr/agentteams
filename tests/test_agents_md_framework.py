@@ -12,10 +12,50 @@ from pathlib import Path
 import pytest
 
 import build_team
-from agentteams.frameworks.agents_md import AgentsMdAdapter
+from agentteams.frameworks.agents_md import AgentsMdAdapter, _strip_leading_synthesized_header
 from agentteams.frameworks.registry import FRAMEWORKS
 
 _BRIEF = "examples/data-pipeline/brief.json"
+
+
+# --- render_agent_file idempotency (open-items backlog, D2) -----------------
+
+def test_render_agent_file_is_idempotent_across_two_passes():
+    """A body that already starts with its own heading (the normal shape)
+    must not gain a duplicate heading+description on render, and re-rendering
+    the already-rendered output a second time must not compound further.
+
+    Pass 2's exact heading text legitimately differs from pass 1's (agents-md
+    output carries no YAML front matter, so _extract_name_description falls
+    back to a slug+project_name-derived name on re-render — a separate,
+    pre-existing, documented mechanism unrelated to D2). What must hold
+    across both passes is the absence of duplication, not byte-for-byte
+    output equality.
+    """
+    adapter = AgentsMdAdapter()
+    manifest = {"project_name": "P"}
+    content = (
+        "---\nname: Orchestrator\ndescription: \"Routes work.\"\n---\n\n"
+        "# Orchestrator\n\nBody paragraph.\n"
+    )
+    once = adapter.render_agent_file(content, "orchestrator", manifest)
+    assert once.count("# ") == 1, f"pass 1 duplicated a heading: {once!r}"
+    assert once.count("Routes work.") == 1
+
+    twice = adapter.render_agent_file(once, "orchestrator", manifest)
+    assert twice.count("# ") == 1, f"pass 2 duplicated a heading: {twice!r}"
+    assert twice.count("Body paragraph.") == 1, f"pass 2 duplicated the body: {twice!r}"
+
+
+def test_strip_leading_header_does_not_truncate_a_paragraph_that_merely_starts_with_description():
+    """2026-08-11 code-hygiene finding: comparing description against the full
+    remainder via startswith() would truncate mid-sentence when the body's
+    real first paragraph happens to start with the same words as description
+    but continues. Must compare the bounded first paragraph for equality."""
+    body = "Routes work to three teams, not just one.\n\nSecond paragraph stays.\n"
+    result = _strip_leading_synthesized_header(body, "Routes work")
+    assert "Routes work to three teams, not just one." in result
+    assert "Second paragraph stays." in result
 
 
 # ---------------------------------------------------------------------------
@@ -128,10 +168,12 @@ class TestAgentsMdGenerate:
 
 
 # ---------------------------------------------------------------------------
-# Generate-only guard (agents-md is not a convert/interop/bridge target)
+# Generate-only guard (agents-md is not a convert/bridge target; the interop
+# path IS supported as of F.2 — import_from_cai writes the framework-owned
+# AGENTS.md, so the mislabeling rationale no longer applies there)
 # ---------------------------------------------------------------------------
 
-@pytest.mark.parametrize("flag", ["--convert-from", "--interop-from", "--bridge-from"])
+@pytest.mark.parametrize("flag", ["--convert-from", "--bridge-from"])
 def test_agents_md_rejects_non_generate_targets(tmp_path, flag):
     err = io.StringIO()
     with pytest.raises(SystemExit) as exc, redirect_stderr(err):
@@ -139,3 +181,9 @@ def test_agents_md_rejects_non_generate_targets(tmp_path, flag):
                          "--output", str(tmp_path / "o")])
     assert exc.value.code == 2
     assert "generate-only AGENTS.md emitter" in err.getvalue()
+
+
+def test_agents_md_allows_interop_target(tmp_path):
+    # F.2: agents-md is a valid CAI target — validation must NOT raise.
+    build_team.main(["--framework", "agents-md", "--interop-from", str(tmp_path),
+                     "--output", str(tmp_path / "o"), "--dry-run"])

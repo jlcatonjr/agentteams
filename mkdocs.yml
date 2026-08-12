@@ -74,8 +74,11 @@ nav:
       - convert: api-reference/convert.md
       - integrity: api-reference/integrity.md
       - interop: api-reference/interop.md
+      - capability-map: api-reference/capability-map.md
+      - canonical: api-reference/canonical.md
       - bridge: api-reference/bridge.md
       - bridge-skills: api-reference/bridge-skills.md
+      - bridge-pair-docs: api-reference/bridge-pair-docs.md
       - fleet: api-reference/fleet.md
       - drift: api-reference/drift.md
       - behavioral-drift: api-reference/behavioral-drift.md
@@ -125,6 +128,11 @@ nav:
       - goose-config: api-reference/goose-config.md
       - pr-management: api-reference/pr-management.md
       - research: api-reference/research.md
+      - toml-write: api-reference/toml-write.md
+      - codex-mcp-emit: api-reference/codex-mcp-emit.md
+      - team-package: api-reference/team-package.md
+      - sync-baseline: api-reference/sync-baseline.md
+      - sync-classifier: api-reference/sync-classifier.md
   - Template Authoring: template-authoring.md
   - Description Format: DESCRIPTION-FORMAT.md
   - Structural Update Plan: structural-update-plan.md

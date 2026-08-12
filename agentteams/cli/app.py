@@ -18,6 +18,7 @@ import sys
 from pathlib import Path
 
 from agentteams.cli.commands import (
+    _run_absorb,
     _run_bridge,
     _run_convert,
     _run_interop,
@@ -379,6 +380,18 @@ def _main_dispatch(
         )
 
     # -----------------------------------------------------------------------
+    # --absorb-from: native→canonical three-way sync (report-only default)
+    # -----------------------------------------------------------------------
+    if args.absorb_from:
+        return _run_absorb(
+            native_dir=Path(args.absorb_from).resolve(),
+            canonical_dir=Path(args.absorb_canonical_dir).resolve() if args.absorb_canonical_dir else None,
+            source_framework=args.absorb_source_framework,
+            apply=args.absorb_apply,
+            dry_run=args.dry_run,
+        )
+
+    # -----------------------------------------------------------------------
     # --goose-source/--goose-model/--goose-show: standalone Goose config switch
     # -----------------------------------------------------------------------
     if (
@@ -429,6 +442,13 @@ def _main_dispatch(
             emit_skills=not args.bridge_no_skills,
             host_features=getattr(args, "host_features", []) or [],
         )
+
+    # -----------------------------------------------------------------------
+    # --package-team: portable canonical + generic-bridge zip (standalone)
+    # -----------------------------------------------------------------------
+    if getattr(args, "package_team", False):
+        from agentteams.cli.package_switch import run_package_team
+        return run_package_team(args)
 
     if not args.description:
         parser.error("--description is required (or use --self for self-maintenance)")

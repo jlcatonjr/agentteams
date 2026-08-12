@@ -218,8 +218,25 @@ def emit_mcp_artifact(
     return result
 
 
+def normalize_mcp_server_defaults(server: Any) -> Any:
+    """Fill ``mcp_server_schema_version`` when absent (D.3 bug fix).
+
+    ``mcp-server.schema.json`` lists the field as ``required``, but no
+    production code ever wrote it — operator-declared servers omitting it
+    could only ever fail validation, never pass. Adoption paths (analyze
+    manifest copy-through, CAI capture/apply) call this so every server
+    entering the pipeline satisfies the schema with the current version.
+    Non-dict entries pass through unchanged for downstream shape errors.
+    """
+    if isinstance(server, dict) and not str(server.get("mcp_server_schema_version", "")).strip():
+        server = dict(server)
+        server["mcp_server_schema_version"] = "1.0"
+    return server
+
+
 __all__ = [
     "MCPEmissionResult",
     "mcp_enabled",
     "emit_mcp_artifact",
+    "normalize_mcp_server_defaults",
 ]

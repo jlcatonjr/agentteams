@@ -104,17 +104,28 @@ class ClaudeAdapter(FrameworkAdapter):
         """Produce a Claude Code sub-agent file from VS Code Copilot template content.
 
         Transformation steps:
-        1. Extract name and description from the VS Code YAML front matter (if present).
-        2. Strip the VS Code YAML front matter entirely (keys are incompatible).
-        3. Strip handoffs sections (Claude Code does not support them).
-        4. Prepend a Claude Code-compatible front matter block.
+        1. Extract name, description, and optional Claude-specific keys
+           (model, disallowedTools, permissionMode) from the YAML front matter
+           (if present).
+        2. Map the per-agent tool scope BEFORE the front matter is stripped.
+        3. Strip the VS Code YAML front matter entirely (keys are incompatible).
+        4. Strip handoffs sections (Claude Code does not support them).
+        5. Prepend a Claude Code-compatible front matter block, including the
+           optional keys captured in step 1 (A.5).
         """
         name, description = _extract_name_description(content, agent_slug, manifest)
         # Map the per-agent tool scope BEFORE the VS Code front matter is stripped.
         allowed_tools = _map_allowed_tools(content)
+        # A.5: Extract optional Claude-specific keys before stripping front matter.
+        model, disallowed_tools, permission_mode = _extract_claude_optional_keys(content)
         content = self._strip_yaml_front_matter(content)
         content = self._strip_handoffs_section(content)
-        content = _inject_claude_front_matter(content, name, description, allowed_tools)
+        content = _inject_claude_front_matter(
+            content, name, description, allowed_tools,
+            model=model,
+            disallowed_tools=disallowed_tools,
+            permission_mode=permission_mode,
+        )
         return content.strip() + "\n"
 
     def render_instructions_file(self, content: str, manifest: dict[str, Any]) -> str:
@@ -139,6 +150,16 @@ class ClaudeAdapter(FrameworkAdapter):
         content = self._strip_handoffs_section(content)
         description = _skill_description(slug, manifest)
         return _inject_skill_front_matter(content, slug, description).strip() + "\n"
+
+    def has_skill_concept(self) -> bool:
+        return True
+
+    def tool_doc_rel_path(self, slug: str) -> str:
+        # Directory-per-skill: Claude Code loads only `<name>/SKILL.md`.
+        return f"skills/{slug}/SKILL.md"
+
+    def framework_root_prefix(self) -> str:
+        return ".claude"
 
     def get_file_extension(self, file_type: str) -> str:
         return ".md"
@@ -255,6 +276,34 @@ def _map_allowed_tools(content: str) -> str:
     return ", ".join(mapped) if mapped else _CLAUDE_DEFAULT_ALLOWED_TOOLS
 
 
+def _extract_claude_optional_keys(content: str) -> tuple[str | None, str | None, str | None]:
+    """Extract optional Claude-specific front-matter keys (A.5).
+
+    Returns ``(model, disallowedTools, permissionMode)`` — each ``None`` when
+    absent. These keys are recognized by Claude Code's subagent schema but were
+    previously dropped on round trip because ``render_agent_file`` stripped all
+    front matter before re-injecting only name/description/tools.
+    """
+    model: str | None = None
+    disallowed: str | None = None
+    permission: str | None = None
+
+    yaml_body, _ = _parse_yaml_front_matter(content)
+    if yaml_body is None:
+        return model, disallowed, permission
+    for key_match in _YAML_SCALAR_RE.finditer(yaml_body):
+        key = key_match.group(1).strip()
+        val = key_match.group(2).strip().strip('"\'')
+        if key == "model" and not model:
+            model = val
+        elif key == "disallowedTools" and not disallowed:
+            disallowed = val
+        elif key == "permissionMode" and not permission:
+            permission = val
+
+    return model, disallowed, permission
+
+
 def _extract_name_description(
     content: str,
     agent_slug: str,
@@ -291,6 +340,10 @@ def _inject_claude_front_matter(
     name: str,
     description: str,
     allowed_tools: str = _CLAUDE_DEFAULT_ALLOWED_TOOLS,
+    *,
+    model: str | None = None,
+    disallowed_tools: str | None = None,
+    permission_mode: str | None = None,
 ) -> str:
     """Prepend a Claude Code-compatible YAML front matter block to content.
 
@@ -298,11 +351,23 @@ def _inject_claude_front_matter(
     It was ``allowed-tools`` until 2026-08-06; that key is not part of Claude Code's
     subagent schema, so every grant emitted under it was inert and every agent inherited
     the full tool pool. See :meth:`ClaudeAdapter.required_front_matter_keys`.
+
+    A.5: ``model``, ``disallowedTools``, and ``permissionMode`` are optional
+    Claude Code front-matter keys recognized per Claude's subagent schema but
+    previously dropped on round trip. When provided, they are emitted after
+    ``tools`` so the output carries the full Claude front-matter contract.
     """
     lines = ["---", f"name: {name}"]
     if description:
         lines.append(f'description: "{description}"')
     lines.append(f"{CLAUDE_CAPABILITY_KEY}: {allowed_tools}")
+    # A.5: emit optional Claude-specific front-matter keys when provided.
+    if model:
+        lines.append(f"model: {model}")
+    if disallowed_tools:
+        lines.append(f"disallowedTools: {disallowed_tools}")
+    if permission_mode:
+        lines.append(f"permissionMode: {permission_mode}")
     lines.append("---")
     lines.append("")
     return "\n".join(lines) + content

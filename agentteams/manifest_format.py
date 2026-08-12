@@ -9,6 +9,19 @@ from __future__ import annotations
 import re
 from typing import Any
 
+
+def _adapter_for_framework(framework: str):
+    """Resolve the adapter instance for a framework id, or None if unknown.
+
+    D.1: replaces hardcoded ``framework == "claude"`` tool-doc placement
+    branches with the adapter's ``has_skill_concept()`` /
+    ``tool_doc_rel_path()`` / ``framework_root_prefix()`` hooks.
+    """
+    from agentteams.frameworks.registry import FRAMEWORKS
+
+    adapter_cls = FRAMEWORKS.get(framework)
+    return adapter_cls() if adapter_cls is not None else None
+
 _RETRIEVAL_MODES: set[str] = {
     "none",
     "relational-metadata",
@@ -250,6 +263,7 @@ def _collect_tool_metadata_manual_required(
 ) -> list[dict[str, str]]:
     """Return setup items for tool metadata fields still missing after enrichment."""
     manual: list[dict[str, str]] = []
+    adapter = _adapter_for_framework(framework)
     seen: set[tuple[str, str]] = set()
     field_specs = (
         ("docs_url", "TOOL_DOCS_URL", "official documentation URL"),
@@ -265,14 +279,20 @@ def _collect_tool_metadata_manual_required(
             else:
                 # Operational tool doc — a skill (Claude) or reference doc (Copilot),
                 # never an agent. Point setup items at the actual emitted path.
+                # D.1: placement comes from the adapter hooks, not a hardcoded
+                # framework string comparison.
                 slug = spec["slug"]
-                base = slug[len("tool-"):] if slug.startswith("tool-") else slug
-                if framework == "claude":
+                if adapter is not None and adapter.has_skill_concept():
                     # Directory-per-skill: Claude Code loads only `<name>/SKILL.md`.
-                    rel_path = f"../skills/{slug}/SKILL.md"
+                    # Setup docs sit one level below the framework root.
+                    rel_path = "../" + adapter.tool_doc_rel_path(slug)
                     doc_label = "skill document"
                 else:
-                    rel_path = f"references/ref-{base}-reference.md"
+                    rel_path = (
+                        adapter.tool_doc_rel_path(slug)
+                        if adapter is not None
+                        else f"references/ref-{slug[len('tool-'):] if slug.startswith('tool-') else slug}-reference.md"
+                    )
                     doc_label = "reference document"
 
             for field_name, placeholder, description in field_specs:
@@ -428,16 +448,24 @@ def _format_unresolved_tool_list(
     """
     fields_checked = (("docs_url", "docs URL"), ("api_surface", "API surface"), ("common_patterns", "usage patterns"))
     lines: list[str] = []
+    adapter = _adapter_for_framework(framework)
 
     for spec in tool_agents:
         gaps = [label for field, label in fields_checked if not spec.get(field)]
         if gaps:
             slug = spec["slug"]
-            base = slug[len("tool-"):] if slug.startswith("tool-") else slug
-            if framework == "claude":
-                doc_ref = f"skill `.claude/skills/{slug}/SKILL.md`"
+            if adapter is not None and adapter.has_skill_concept():
+                prefix = adapter.framework_root_prefix()
+                ref = adapter.tool_doc_rel_path(slug)
+                doc_ref = f"skill `{prefix + '/' + ref if prefix else ref}`"
             else:
-                doc_ref = f"reference doc `references/ref-{base}-reference.md`"
+                base = slug[len("tool-"):] if slug.startswith("tool-") else slug
+                ref = (
+                    adapter.tool_doc_rel_path(slug)
+                    if adapter is not None
+                    else f"references/ref-{base}-reference.md"
+                )
+                doc_ref = f"reference doc `{ref}`"
             lines.append(
                 f"- **{spec['tool_name']}** ({doc_ref}) "
                 f"— missing: {', '.join(gaps)}"

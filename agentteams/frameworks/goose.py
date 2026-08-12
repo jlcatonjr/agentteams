@@ -36,7 +36,19 @@ from pathlib import Path
 from typing import Any
 
 from .base import FrameworkAdapter
+from agentteams import capability_map as _capability_map
 from agentteams.yaml_frontmatter import parse_yaml_front_matter as _parse_yaml_front_matter
+
+# 2026-08-12 A.1: Strip a pre-existing "## Delegation & references (Goose)" block
+# before appending a fresh one, so the block doesn't compound on every
+# native→canonical→native cycle for non-orchestrator agents with their own
+# handoffs (depth-2 delegation). Mirrors agents_md.py's
+# _strip_leading_synthesized_header fix for the same class of bug.
+_DELEGATION_REF_HEADING_RE = re.compile(
+    r"^#{1,3}\s+Delegation & references \(Goose\).*?(?=^#{1,3}\s|^<!--\s*AGENTTEAMS(?:-BRIDGE)?:|\Z)",
+    re.MULTILINE | re.DOTALL,
+)
+
 
 # Document-content generators live in goose_docs.py (CH-07 carve, 2026-07-31): they build files
 # the adapter emits, while everything here is adapter behaviour. Re-exported so existing
@@ -46,6 +58,15 @@ from agentteams.frameworks.goose_docs import (
     _goose_capabilities_content,
     _goosehints_content,
     _resilient_runner_content,
+)
+
+# Recipe READ-side parse carved to goose_recipe_read.py (CH-07 carve, F.1/F.3
+# of the durable-canonical-agent-format plan): parse_recipe_fields stayed
+# importable from this module for compatibility, and _RECIPE_SUB_PATH_RE is
+# shared with _validate_recipe_yaml's sub-recipe existence check.
+from agentteams.frameworks.goose_recipe_read import (
+    _RECIPE_SUB_PATH_RE,
+    parse_recipe_fields,
 )
 
 __all__ = [
@@ -76,7 +97,8 @@ _RECIPE_VERSION_RE = re.compile(r'^version:\s*"1\.0\.0"', re.MULTILINE)
 _RECIPE_MODEL_KEY_RE = re.compile(r"^\s*model:", re.MULTILINE)
 _RECIPE_TITLE_RE = re.compile(r'^title:\s*".+?"', re.MULTILINE)
 _RECIPE_INSTRUCTIONS_RE = re.compile(r"^instructions:\s*\|", re.MULTILINE)
-_RECIPE_SUB_PATH_RE = re.compile(r'path:\s*"([^"]+)"')
+# _RECIPE_SUB_PATH_RE moved to goose_recipe_read.py (F.1/F.3 carve); imported
+# at the top of this module so the sub_recipes path check below shares it.
 # Phase-4a: a `parameters:` block (when present) must list `- key:` entries.
 _RECIPE_PARAMETERS_RE = re.compile(r"^parameters:\s*$", re.MULTILINE)
 _RECIPE_PARAM_KEY_RE = re.compile(r'^\s+-\s+key:\s*"', re.MULTILINE)
@@ -167,7 +189,6 @@ def _validate_recipe_yaml(yaml_text: str, recipes_dir: Path | None = None) -> li
                 violations.append(f"sub_recipe path not found: {path_val}")
     return violations
 
-
 def _scoped_builtin_extensions(manifest: dict[str, Any]) -> list[str]:
     """Resolve the builtin extension list for an agent's recipe (Gap 1).
 
@@ -225,6 +246,9 @@ class GooseAdapter(FrameworkAdapter):
 
         body = self._strip_yaml_front_matter(content)
         body = self._strip_handoffs_section(body).strip()
+        # A.1: Strip any pre-existing "## Delegation & references (Goose)" block
+        # so it doesn't compound on re-render (native→canonical→native cycle).
+        body = _DELEGATION_REF_HEADING_RE.sub("", body).strip()
         if not body:
             body = description or name
 
@@ -372,6 +396,106 @@ class GooseAdapter(FrameworkAdapter):
         # Handoffs are encoded directly into recipes (sub_recipes / load), so no
         # sidecar manifest is needed.
         return "native"
+
+    def parse_agent_source(self, content: str) -> dict[str, Any]:
+        """Parse a goose recipe YAML into CAI export fields (F.1).
+
+        Recipes are YAML, not front-matter Markdown, so the interop default
+        Markdown path cannot extract fields from them. Mapping: title -> name,
+        description -> description, instructions -> body; extension names map
+        coarse to the canonical capability vocabulary
+        (``capability_map.goose_extensions_to_canonical``); sub_recipes become
+        true-delegation handoffs (send=True) and ``load("<slug>")`` references
+        become context-load handoffs (send=False), deduped one-per-agent with
+        sub_recipes winning.
+        """
+        fields = parse_recipe_fields(content)
+        tokens = _capability_map.goose_extensions_to_canonical(fields["extension_names"])
+        handoffs: list[dict[str, Any]] = []
+        seen: set[str] = set()
+        for slug in fields["sub_recipe_slugs"]:
+            if slug in seen:
+                continue
+            seen.add(slug)
+            handoffs.append({"agent": slug, "label": None, "prompt": "", "send": True})
+        for slug in fields["load_refs"]:
+            if slug in seen:
+                continue
+            seen.add(slug)
+            handoffs.append({"agent": slug, "label": None, "prompt": "", "send": False})
+        return {
+            "name": fields["title"],
+            "description": fields["description"],
+            "body": fields["instructions"],
+            "capabilities": _capability_map.capabilities_from_tokens(tokens, "goose"),
+            "handoffs": handoffs,
+            # F.3: recipe-level configuration travels to the adapter's
+            # framework_extensions_from_sources aggregation.
+            "recipe_config": {
+                "builtin_extension_names": fields["builtin_extension_names"],
+                "parameters": fields["parameters"],
+                "response": fields["response"],
+                "retry": fields["retry"],
+            },
+        }
+
+    def framework_extensions_from_sources(
+        self, parsed_sources: list[dict[str, Any]]
+    ) -> dict[str, Any]:
+        """Aggregate captured recipe config into framework_extensions.goose (F.3).
+
+        Builtin extension names union across recipes; parameters/response/
+        retry take the first recipe that declares each (Gap 2 allows any
+        agent to declare them; the orchestrator conventionally does). A
+        recipe set WITHOUT developer signals the source ran in replace mode
+        (least-privilege, no shell) — recorded so import re-applies it
+        instead of silently re-adding developer.
+        """
+        ext_names: dict[str, None] = {}
+        parameters: list[dict[str, str]] | None = None
+        response: dict[str, Any] | None = None
+        retry: dict[str, Any] | None = None
+        for parsed in parsed_sources:
+            cfg = parsed.get("recipe_config") if isinstance(parsed, dict) else None
+            if not cfg:
+                continue
+            for n in cfg.get("builtin_extension_names") or []:
+                ext_names.setdefault(str(n), None)
+            if parameters is None and cfg.get("parameters"):
+                parameters = cfg["parameters"]
+            if response is None and cfg.get("response"):
+                response = cfg["response"]
+            if retry is None and cfg.get("retry"):
+                retry = cfg["retry"]
+        bucket: dict[str, Any] = {}
+        if ext_names:
+            bucket["recipe_extensions"] = list(ext_names)
+            if "developer" not in ext_names:
+                bucket["recipe_extensions_mode"] = "replace"
+        if parameters is not None:
+            bucket["recipe_parameters"] = parameters
+        if response is not None:
+            bucket["recipe_response"] = response
+        if retry is not None:
+            bucket["recipe_retry"] = retry
+        return {"goose": bucket} if bucket else {}
+
+    def apply_framework_extensions(self, manifest: dict[str, Any], cai: dict[str, Any]) -> None:
+        """Merge the CAI framework_extensions.goose bucket into the import
+        manifest stub (F.3) so render_agent_file re-emits the captured
+        recipe configuration instead of silently dropping it."""
+        bucket = (cai.get("framework_extensions") or {}).get("goose")
+        if not isinstance(bucket, dict):
+            return
+        for key in (
+            "recipe_parameters",
+            "recipe_response",
+            "recipe_retry",
+            "recipe_extensions",
+            "recipe_extensions_mode",
+        ):
+            if key in bucket:
+                manifest[key] = bucket[key]
 
     def get_agents_dir(self, project_path: Path) -> Path:
         return project_path / ".goose" / "recipes"

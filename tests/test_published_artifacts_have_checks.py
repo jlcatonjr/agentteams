@@ -36,7 +36,9 @@ REPO_ROOT = Path(__file__).resolve().parents[1]
 #: Being listed here does not mean the schema is unused — it means no test validates any real
 #: artifact against it, so a change to either could not be caught.
 _UNCHECKED_SCHEMAS: frozenset[str] = frozenset({
-    "agent-cai.schema.json",
+    # agent-cai.schema.json left this baseline 2026-08-10: Phase A of the
+    # durable-canonical-agent-format plan added tests/test_framework_enum_consistency.py,
+    # which validates the schema's framework enum against the registry.
     "post-production-audit-closure-gate-status.schema.json",
 })
 

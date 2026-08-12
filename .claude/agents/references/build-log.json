@@ -46,7 +46,7 @@
     "domain/output-compiler.template.md": "fd90f3a13765386a",
     "domain/retrieval-integrator.template.md": "8ff8da9c4e4f9e92",
     "domain/tool-reference.template.md": "5ce5638b7094cc86",
-    "domain/code-hygiene-rules-reference.template.md": "f685abda1e6b900c",
+    "domain/code-hygiene-rules-reference.template.md": "cf49b61dc45e4ca4",
     "domain/unix-philosophy-mapping-reference.template.md": "702af6b4e9e2b952",
     "universal/security-vulnerability-watch.reference.template.md": "269cdacb3d94fdfa",
     "universal/security-vulnerability-watch.json.template": "ebcec1b04ad46caa",
@@ -474,32 +474,18 @@
     "repo-liaison",
     "git-operations"
   ],
-  "manifest_fingerprint": "159ac78ce092881d",
+  "manifest_fingerprint": "604568a2d3982695",
   "fingerprint_algo_version": 1,
   "file_hashes": {
-    "references/security-vulnerability-watch.json": "c2e7b9a948cc1cfc",
+    "security.md": "f429cb1e9018d1db",
+    "references/security-vulnerability-watch.json": "9aaba2a77c142474",
+    "references/framework-watch.reference.md": "0f53525f0c1c8a68",
+    "orchestrator.md": "bbd7dd9d92f655ed",
     "navigator.md": "0f15b4c7c627b6f2",
-    "security.md": "2161081e678c063f",
+    "code-hygiene.md": "2031bb609e90da47",
+    "adversarial.md": "0174b275c5fb7b2d",
     "conflict-auditor.md": "88c6819112c0ca4c",
     "conflict-resolution.md": "7a070111f68324fc",
-    "retrieval-integrator.md": "494949c227e137ae",
-    "references/code-hygiene-rules.reference.md": "4619d004d000dafc",
-    "references/unix-philosophy-mapping.reference.md": "dae1e088560a2336",
-    "references/security-vulnerability-watch.reference.md": "490ece472bc3bcba",
-    "references/security-linux-hardening.reference.md": "0e91aeed201cf710",
-    "references/security-macos-hardening.reference.md": "b785636b62c484f9",
-    "references/security-windows-hardening.reference.md": "e38d9e654e80f83c",
-    "references/ai-bad-habits-watch.reference.md": "51487a0c1aef349d",
-    "references/framework-watch.reference.md": "33c303bd68a09c02",
-    "references/adjacent-repos.md": "cd33efa6ab392c33",
-    "references/github-workflows-merge.reference.md": "c4d84237da7bca5a",
-    "references/retrieval-integration.reference.md": "b69a6be42636a3c9",
-    "references/retrieval-trigger-contract.reference.md": "461a3cf4e58a2521",
-    "../CLAUDE.md": "48541cb93dfbc386",
-    "references/runtime-handoffs.json": "368f6e784b20b0c8",
-    "orchestrator.md": "bbd7dd9d92f655ed",
-    "code-hygiene.md": "2031bb609e90da47",
-    "adversarial.md": "ab332272bbe12eda",
     "cleanup.md": "dbda0e68c51e14f3",
     "agent-updater.md": "292aec03102633d4",
     "agent-refactor.md": "8de65e6cb5749178",
@@ -507,43 +493,78 @@
     "git-operations.md": "c26c371259d7ba3a",
     "work-summarizer.md": "f47abf0b9ab2595f",
     "primary-producer.md": "de695c574e3cab21",
-    "quality-auditor.md": "6e07185ec26703a2",
+    "quality-auditor.md": "671d5b5f1c831471",
     "cohesion-repairer.md": "68fc4405fe0ff312",
-    "technical-validator.md": "d995abb23209ec68",
+    "technical-validator.md": "316b60fe958d608a",
     "format-converter.md": "d69e6aa1b8483d9b",
     "reference-manager.md": "799079498655a535",
     "output-compiler.md": "e48e35de379fc579",
+    "retrieval-integrator.md": "494949c227e137ae",
     "references/ref-pytest-reference.md": "785da59ae0fcefa5",
     "references/ref-json-schema-reference.md": "64ee7849298b80d9",
+    "references/code-hygiene-rules.reference.md": "4619d004d000dafc",
+    "references/unix-philosophy-mapping.reference.md": "dae1e088560a2336",
+    "references/security-vulnerability-watch.reference.md": "18b796b897a391a3",
+    "references/security-linux-hardening.reference.md": "0e91aeed201cf710",
+    "references/security-macos-hardening.reference.md": "b785636b62c484f9",
+    "references/security-windows-hardening.reference.md": "e38d9e654e80f83c",
+    "references/ai-bad-habits-watch.reference.md": "51487a0c1aef349d",
+    "references/adjacent-repos.md": "cd33efa6ab392c33",
+    "references/github-workflows-merge.reference.md": "c4d84237da7bca5a",
     "references/work-summary-spec.reference.md": "96232231a1f7c6be",
     "references/work-summary-tooling.reference.md": "f3656972717153a9",
     "references/work-summary-backfill.reference.md": "845ee35bc64ee727",
     "references/parallelization.reference.md": "d2321bf5ac1ed2f8",
     "references/instruction-authority.reference.md": "93da11dadb623013",
+    "references/redteam-methodology.reference.md": "8d34451560d2498f",
     "references/retrospective-remediation.reference.md": "74b01f27f58ba52a",
     "references/cli-tool-discovery.reference.md": "ebf4a4f64eb2dfb7",
     "references/skill-generation.reference.md": "5dc99a3a146ba505",
     "references/external-retrieval-quality-gate.reference.md": "14a48ec3ba3fe3ff",
+    "references/retrieval-integration.reference.md": "b69a6be42636a3c9",
+    "references/retrieval-trigger-contract.reference.md": "461a3cf4e58a2521",
     "template-library-expert.md": "9f412dad9fe22fff",
     "pipeline-core-expert.md": "fccf325ab2da14b3",
     "framework-adapters-expert.md": "234c6c00b1016747",
     "schemas-expert.md": "fd7bd590cb01ef0b",
     "cli-and-examples-expert.md": "f0d219bdee45fca8",
     "test-suite-expert.md": "01bc66c2b214726e",
+    "../CLAUDE.md": "51159d2981307f74",
     "team-builder.md": "6300b8496c357225",
     "SETUP-REQUIRED.md": "642394d04b332357",
     "content-enricher.md": "546d796eb4e8805c",
-    "references/pipeline-graph.md": "21579e6e275596ff"
+    "../hooks/constitutional-gate.py": "53021881aa1d094e",
+    "../settings.hooks.example.json": "700bf14dce3ba97a",
+    "../../.vscode/tasks.json": "c73918a98093da2e",
+    "references/runtime-handoffs.json": "368f6e784b20b0c8",
+    "references/pipeline-graph.md": "21579e6e275596ff",
+    "references/pipeline-graph.svg": "7d9c7a34f6963688",
+    "references/pipeline-handoffs.svg": "dd19dfad487e5cad"
   },
   "front_matter_baseline": {
+    "security.md": {
+      "name": "Security \u2014 AgentTeamsModule",
+      "description": "\"Top-priority security sentinel: reviews actions for credential exposure, destructive operations, sensitive content leakage, and reference integrity before any sensitive action proceeds\"",
+      "tools": "Read, Grep, Glob"
+    },
+    "orchestrator.md": {
+      "name": "Orchestrator \u2014 AgentTeamsModule",
+      "description": "\"Coordinates all agent operations for AgentTeamsModule: routes work to domain agents, enforces constitutional rules, and closes every multi-file session with a consistency check.\"",
+      "tools": "Read, Edit, Write, Grep, Glob, Bash, TodoWrite, Task"
+    },
     "navigator.md": {
       "name": "Navigator \u2014 AgentTeamsModule",
       "description": "\"Repository structure navigation, project map maintenance, file location lookups, and dependency queries for AgentTeamsModule\"",
       "tools": "Read, Grep, Glob, Bash"
     },
-    "security.md": {
-      "name": "Security \u2014 AgentTeamsModule",
-      "description": "\"Top-priority security sentinel: reviews actions for credential exposure, destructive operations, sensitive content leakage, and reference integrity before any sensitive action proceeds\"",
+    "code-hygiene.md": {
+      "name": "Code Hygiene \u2014 AgentTeamsModule",
+      "description": "\"Read-only auditor that enforces modular architecture, file hygiene, script lifecycle, anti-sprawl rules, and agent documentation quality. Delegates removals to @cleanup; delegates structural extraction to @agent-refactor.\"",
+      "tools": "Read, Grep, Glob"
+    },
+    "adversarial.md": {
+      "name": "Adversarial \u2014 AgentTeamsModule",
+      "description": "\"Presupposition critic: challenges the assumptions underlying any plan, proposal, or diagnosis produced by the agent team. Traces how justified changes in presuppositions cascade through dependent logic.\"",
       "tools": "Read, Grep, Glob"
     },
     "conflict-auditor.md": {
@@ -555,26 +576,6 @@
       "name": "Conflict Resolution \u2014 AgentTeamsModule",
       "description": "\"Makes ACCEPT/REJECT/REVISE decisions on conflicts flagged by the conflict auditor in AgentTeamsModule\"",
       "tools": "Edit, Write, Grep, Glob, Read"
-    },
-    "retrieval-integrator.md": {
-      "name": "Retrieval Integrator \u2014 AgentTeamsModule",
-      "description": "\"Validates retrieval integration contracts in AgentTeamsModule \u2014 query entrypoints, maintenance entrypoints, trigger channels, and freshness obligations\"",
-      "tools": "Read, Grep, Glob, Bash"
-    },
-    "orchestrator.md": {
-      "name": "Orchestrator \u2014 AgentTeamsModule",
-      "description": "\"Coordinates all agent operations for AgentTeamsModule: routes work to domain agents, enforces constitutional rules, and closes every multi-file session with a consistency check.\"",
-      "tools": "Read, Edit, Write, Grep, Glob, Bash, TodoWrite, Task"
-    },
-    "code-hygiene.md": {
-      "name": "Code Hygiene \u2014 AgentTeamsModule",
-      "description": "\"Read-only auditor that enforces modular architecture, file hygiene, script lifecycle, anti-sprawl rules, and agent documentation quality. Delegates removals to @cleanup; delegates structural extraction to @agent-refactor.\"",
-      "tools": "Read, Grep, Glob"
-    },
-    "adversarial.md": {
-      "name": "Adversarial \u2014 AgentTeamsModule",
-      "description": "\"Presupposition critic: challenges the assumptions underlying any plan, proposal, or diagnosis produced by the agent team. Traces how justified changes in presuppositions cascade through dependent logic.\"",
-      "tools": "Read, Grep, Glob"
     },
     "cleanup.md": {
       "name": "Cleanup \u2014 AgentTeamsModule",
@@ -640,6 +641,11 @@
       "name": "Output Compiler \u2014 AgentTeamsModule",
       "description": "\"Assembles all converted components into a final deliverable package for AgentTeamsModule \u2014 dependency check, ordering, build manifest\"",
       "tools": "Read, Edit, Write, Bash"
+    },
+    "retrieval-integrator.md": {
+      "name": "Retrieval Integrator \u2014 AgentTeamsModule",
+      "description": "\"Validates retrieval integration contracts in AgentTeamsModule \u2014 query entrypoints, maintenance entrypoints, trigger channels, and freshness obligations\"",
+      "tools": "Read, Grep, Glob, Bash"
     },
     "template-library-expert.md": {
       "name": "Template Library Expert \u2014 AgentTeamsModule",

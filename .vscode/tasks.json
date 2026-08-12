@@ -447,6 +447,18 @@
       "detail": "AGENTTEAMS"
     },
     {
+      "label": "script: run_feature_audit",
+      "type": "shell",
+      "command": "bash scripts/run_feature_audit.sh",
+      "group": "none",
+      "presentation": {
+        "reveal": "always",
+        "panel": "shared"
+      },
+      "problemMatcher": [],
+      "detail": "AGENTTEAMS"
+    },
+    {
       "label": "script: run_redteam_audit",
       "type": "shell",
       "command": "bash scripts/run_redteam_audit.sh",

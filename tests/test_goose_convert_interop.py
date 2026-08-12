@@ -2,8 +2,10 @@
 
 `--convert-from <team> --framework goose` produces valid Goose recipes + a repo-root
 AGENTS.md + .goosehints; delegation (orchestrator sub_recipes) wires from sources that
-preserve handoffs (copilot-vscode). `--interop-from … --framework goose` is intentionally
-REFUSED (the CAI representation drops the handoff graph → zero delegation)."""
+preserve handoffs (copilot-vscode). `--interop-from … --framework goose` is supported
+as of F.2 (durable-canonical-agent-format plan): CAI captures handoffs (C.3) and the
+goose adapter renders sub_recipes from them natively, so the old zero-delegation
+refusal no longer applies."""
 from __future__ import annotations
 
 import io
@@ -109,7 +111,8 @@ def test_convert_to_claude_still_places_claude_md_at_legacy_location(copilot_sou
 
 
 # ---------------------------------------------------------------------------
-# interop-to-goose is refused (zero-delegation guard)
+# interop-to-goose is allowed (F.2: CAI captures handoffs; goose renders
+# sub_recipes from them natively — the old zero-delegation refusal is gone)
 # ---------------------------------------------------------------------------
 
 def _validate(argv):
@@ -118,13 +121,10 @@ def _validate(argv):
     _validate_option_combinations(parser, parser.parse_args(argv))
 
 
-def test_interop_to_goose_is_refused(tmp_path):
-    err = io.StringIO()
-    with pytest.raises(SystemExit) as exc, redirect_stderr(err):
-        _validate(["--interop-from", str(tmp_path), "--framework", "goose",
-                   "--output", str(tmp_path / "o")])
-    assert exc.value.code == 2
-    assert "interop-from with --framework goose is not supported" in err.getvalue()
+def test_interop_to_goose_is_allowed(tmp_path):
+    # F.2: goose is a valid CAI target — validation must NOT raise.
+    _validate(["--interop-from", str(tmp_path), "--framework", "goose",
+               "--output", str(tmp_path / "o")])
 
 
 def test_convert_to_goose_is_not_refused(tmp_path):
