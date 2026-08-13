@@ -133,6 +133,8 @@ nav:
       - team-package: api-reference/team-package.md
       - sync-baseline: api-reference/sync-baseline.md
       - sync-classifier: api-reference/sync-classifier.md
+      - sync-pin: api-reference/sync-pin.md
+      - multi-sync: api-reference/multi-sync.md
   - Template Authoring: template-authoring.md
   - Description Format: DESCRIPTION-FORMAT.md
   - Structural Update Plan: structural-update-plan.md
