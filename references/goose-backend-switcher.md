@@ -94,6 +94,33 @@ to the inherited `OPENROUTER_API_KEY` env var.
 in its output). Prefer `goose-or` for one-off runs to avoid key exposure in
 `env` listings.
 
+## Route-proxy image interception (2026-08-13)
+
+The OpenRouter path runs through `scripts/goose-openrouter-route-proxy.py` on
+`127.0.0.1:8791` (see the comment block in `config.yaml` for the exact start
+command). Since 2026-08-13 the proxy must be started with the dedicated
+interpreter `~/.config/goose/ocr-venv/bin/python3` (pins `pytesseract`,
+`Pillow`, `opencv-python-headless`): it replaces every image content part
+(`image_url` and `input_image` shapes) with locally-extracted OCR text + a cv2
+color/layout summary before relaying.
+
+- **Why:** standing operator policy — raw image content never leaves the
+  machine — and a concrete breakage: `z-ai/glm-5.2` (active since 2026-08-11)
+  is text-only on every OpenRouter backend, so any image-bearing turn 404'd
+  with "No endpoints found that support image input". Images previously worked
+  only because `qwen/qwen3.8-max` happened to be multimodal.
+- **Fail-closed semantics** (per the change's security + adversarial reviews):
+  an image part that cannot be OCR'd — decode failure, oversize, a remote
+  http(s) URL — becomes an explicit `[image withheld: ...]` text notice, never
+  a raw forward. If started with plain `python3` (no OCR libs) the proxy
+  **refuses to start** (exit 2) instead of silently serving raw-passthrough;
+  `--allow-raw-images` is the explicit escape hatch. Verify the running mode
+  anytime: `curl -s http://127.0.0.1:8791/healthz` → `"image_interception":
+  "ocr"`.
+- Do **not** add `cv2`-dependent code relying on the ambient interpreter: the
+  only ambient `cv2` on this machine resolves via an Anaconda `$PATH` entry,
+  which is an accident of shell configuration, not a dependency.
+
 ## Provider/model name formats
 
 OpenRouter and Ollama use different name formats for the same model family:
