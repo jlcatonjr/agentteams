@@ -3,6 +3,7 @@ name: Agent Updater — AgentTeamsModule
 description: "Synchronizes agent documentation after project structure, deliverable, or reference changes in AgentTeamsModule"
 tools: Edit, Write, Grep, Glob, Bash, Task
 ---
+
 <!-- AGENTTEAMS:BEGIN content v=1 -->
 
 # Agent Updater — AgentTeamsModule

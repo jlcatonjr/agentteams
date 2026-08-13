@@ -3,6 +3,7 @@ name: Cohesion Repairer — AgentTeamsModule
 description: "Repairs within-section cohesion failures in AgentTeamsModule deliverables — disjointedness, broken transitions, and missing argumentative spine; does not reorganize across sections"
 tools: Read, Edit, Write
 ---
+
 <!-- AGENTTEAMS:BEGIN content v=1 -->
 
 # Cohesion Repairer — AgentTeamsModule

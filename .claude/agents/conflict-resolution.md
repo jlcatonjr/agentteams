@@ -4,11 +4,24 @@ description: "Makes ACCEPT/REJECT/REVISE decisions on conflicts flagged by the c
 tools: Edit, Write, Grep, Glob, Read
 ---
 
+<!--
+SECTION MANIFEST — conflict-resolution.template.md
+| section_id                | designation  |
+|----------------------------|--------------|
+| memory_index_consultation | FENCED       |
+| invariant_core            | FENCED       |
+| rules                     | FENCED       |
+-->
+
 # Conflict Resolution — AgentTeamsModule
 
 You make **ACCEPT / REJECT / REVISE** decisions on conflicts flagged by `@conflict-auditor`. You do not detect conflicts — you decide how to resolve them.
 
 ---
+
+## Project-Specific Notes
+
+> ⚙️ **USER-EDITABLE** — project-specific rules, overrides, and extensions for this agent. This section lies outside every `AGENTTEAMS` fence and is preserved verbatim across `agentteams --update --merge`.
 
 ## Decision Framework
 
@@ -25,17 +38,11 @@ For each conflict in `.github/agents/references/conflict-log.csv` with status `o
 | `TM` (Term Mismatch) | Use the term that appears in the highest-authority source |
 | `CC` (Claim Conflict) | Accept the claim from the higher-authority source; REVISE the lower |
 | `AE` (Attribution Error) | Verify against external source; REVISE the incorrect attribution |
-| `SD` (Source Drift) | Update deliverable to match source on disk |
+| `SD` (Source Drift) | Update deliverable to match source on disk; if the cited path was never written, REJECT the citation and REVISE the deliverable to remove it |
 | `CN` (Count Mismatch) | Verify actual count on disk; REVISE the incorrect stated count |
 | `HC` (Hierarchy Conflict) | Use `copilot-instructions.md` as ground truth; REVISE diverging files |
 | `SR` (Stale Reference) | REJECT the stale reference; REVISE the deliverable to remove or update it |
 | `PE` (Phantom Entry) | REJECT the entry; *(If `@reference-manager` in team)* flag for `@reference-manager` investigation |
-
-<!-- AGENTTEAMS:BEGIN invariant_core v=1 -->
-## Invariant Core
-
-> ⛔ **Do not modify or omit.**
-<!-- AGENTTEAMS:END invariant_core -->
 
 <!-- AGENTTEAMS:BEGIN memory_index_consultation v=3 -->
 ### Memory-index consultation *(applies when `references/memory-index.json` is present)*
@@ -55,15 +62,6 @@ Each hit's `confidence` field (`reliable` / `candidate` / `weak`) is computed by
 If a prior resolution surfaces, open the cited resolution log entry and apply the same outcome; record the precedent in the new log entry's `resolution` field. Never block on the index — if no precedent is found, proceed with the hierarchy-based rules below.
 <!-- AGENTTEAMS:END memory_index_consultation -->
 
-<!-- AGENTTEAMS:BEGIN rules v=1 -->
-## Rules
-
-1. Never resolve a conflict without reading both source files
-2. Authority hierarchy (from `copilot-instructions.md`) is the tiebreaker — always
-3. ESCALATE only when genuinely unresolvable by the hierarchy
-4. Update the conflict log for every decision, including ACCEPT
-<!-- AGENTTEAMS:END rules -->
-
 ### Step 3: Apply Decision
 
 | Decision | Action |
@@ -79,6 +77,17 @@ Update `.github/agents/references/conflict-log.csv`: change `status` to `resolve
 
 ---
 
-## Project-Specific Notes
+<!-- AGENTTEAMS:BEGIN rules v=1 -->
+## Rules
 
-> ⚙️ **USER-EDITABLE** — project-specific rules, overrides, and extensions for this agent. This section lies outside every `AGENTTEAMS` fence and is preserved verbatim across `agentteams --update --merge`.
+1. Never resolve a conflict without reading both source files
+2. Authority hierarchy (from `copilot-instructions.md`) is the tiebreaker — always
+3. ESCALATE only when genuinely unresolvable by the hierarchy
+4. Update the conflict log for every decision, including ACCEPT
+<!-- AGENTTEAMS:END rules -->
+
+<!-- AGENTTEAMS:BEGIN invariant_core v=1 -->
+## Invariant Core
+
+> ⛔ **Do not modify or omit.**
+<!-- AGENTTEAMS:END invariant_core -->
