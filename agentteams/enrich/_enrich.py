@@ -9,6 +9,8 @@ import subprocess
 from pathlib import Path
 from typing import Any
 
+from agentteams.atomicio import atomic_rewrite_csv_rows
+
 from ._fills import _RULE_BASED_FILLS
 from ._models import DefaultFinding
 from ._notebooks import _build_component_fills
@@ -342,20 +344,20 @@ def export_csv(findings: list[DefaultFinding], csv_path: Path) -> None:
         csv_path: Absolute path of the output CSV file. Parent directory must exist.
     """
     csv_path.parent.mkdir(parents=True, exist_ok=True)
-    with csv_path.open("w", newline="", encoding="utf-8") as fh:
-        writer = csv.DictWriter(fh, fieldnames=_CSV_FIELDS)
-        writer.writeheader()
-        for f in findings:
-            writer.writerow({
-                "file": f.file,
-                "category": f.category,
-                "token": f.token,
-                "line_no": f.line_no,
-                "section": f.section,
-                "context_snippet": f.context_snippet,
-                "auto_suggestion": f.auto_suggestion,
-                "status": f.status,
-            })
+    rows = [
+        {
+            "file": f.file,
+            "category": f.category,
+            "token": f.token,
+            "line_no": str(f.line_no),
+            "section": f.section,
+            "context_snippet": f.context_snippet,
+            "auto_suggestion": f.auto_suggestion,
+            "status": f.status,
+        }
+        for f in findings
+    ]
+    atomic_rewrite_csv_rows(csv_path, rows, _CSV_FIELDS)
 
 
 def load_csv(csv_path: Path) -> list[DefaultFinding]:

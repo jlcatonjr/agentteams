@@ -19,6 +19,8 @@ import warnings
 from datetime import UTC, datetime
 from pathlib import Path
 
+from agentteams.atomicio import atomic_rewrite_csv_rows
+
 # --- migrate destructive-gate exemption -----------------------------------
 #
 # REMOVED 2026-08-06 (audit W4 / probe A12). This was a module-level boolean plus a public
@@ -252,11 +254,8 @@ def _consume_security_decision_use(output_dir: Path, decision: dict[str, str], *
         raise RuntimeError(f"validated decision for action '{action}' could not be updated")
 
     try:
-        with log_path.open("w", encoding="utf-8", newline="") as fh:
-            writer = csv.DictWriter(fh, fieldnames=fieldnames)
-            writer.writeheader()
-            writer.writerows(rows)
-    except OSError as exc:
+        atomic_rewrite_csv_rows(log_path, rows, fieldnames)
+    except (OSError, ValueError) as exc:
         raise RuntimeError(f"unable to persist security decision log: {exc}") from exc
 
 
@@ -473,11 +472,8 @@ def _consume_security_waiver_use(output_dir: Path, waiver: dict[str, str], *, ac
         raise RuntimeError(f"validated waiver '{target_id}' could not be updated")
 
     try:
-        with log_path.open("w", encoding="utf-8", newline="") as fh:
-            writer = csv.DictWriter(fh, fieldnames=fieldnames)
-            writer.writeheader()
-            writer.writerows(rows)
-    except OSError as exc:
+        atomic_rewrite_csv_rows(log_path, rows, fieldnames)
+    except (OSError, ValueError) as exc:
         raise RuntimeError(f"unable to persist security waiver log: {exc}") from exc
 
 

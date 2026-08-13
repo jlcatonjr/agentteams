@@ -33,6 +33,8 @@ import re
 from dataclasses import dataclass, field
 from pathlib import Path
 
+from agentteams.atomicio import atomic_rewrite_csv_rows
+
 # ---------------------------------------------------------------------------
 # Constants
 # ---------------------------------------------------------------------------
@@ -434,9 +436,7 @@ def _tag_repo_rows(rows: list[list[str]], repo_name: str) -> list[list[str]]:
 
 def _write_csv_header(path: Path, headers: list[str]) -> None:
     """Write a CSV file containing only the header row."""
-    with path.open("w", newline="", encoding="utf-8") as fh:
-        writer = csv.writer(fh)
-        writer.writerow(headers)
+    atomic_rewrite_csv_rows(path, [], headers)
 
 
 def _ensure_csv(path: Path, headers: list[str]) -> None:
@@ -451,23 +451,36 @@ def _append_csv_rows(path: Path, headers: list[str], rows: list[list[str]]) -> N
     Rows that already exist in the file (exact match on all columns) are skipped
     to prevent duplicates when a pre-migration backup is restored and migration
     is re-run.
+
+    2026-08-13: rewritten to build the full row set in memory and rewrite the file
+    once via `atomic_rewrite_csv_rows` (verify-then-commit, preserves the file's
+    existing line-ending convention) instead of a raw `"a"`-mode append -- the
+    append form had no atomicity guard at all (a crash mid-append could leave a
+    truncated final row).
     """
     _ensure_csv(path, headers)
 
     # Read existing rows for deduplication
     existing: set[tuple[str, ...]] = set()
+    existing_ordered: list[tuple[str, ...]] = []
     with path.open("r", newline="", encoding="utf-8") as fh:
         reader = csv.reader(fh)
         next(reader, None)  # skip header
         for existing_row in reader:
-            existing.add(tuple(existing_row))
+            key = tuple(existing_row)
+            existing.add(key)
+            existing_ordered.append(key)
 
-    with path.open("a", newline="", encoding="utf-8") as fh:
-        writer = csv.writer(fh)
-        for row in rows:
-            # Pad/trim to match expected column count
-            padded = (list(row) + [""] * len(headers))[: len(headers)]
-            key = tuple(padded)
-            if key not in existing:
-                writer.writerow(padded)
-                existing.add(key)  # guard against duplicates within the same batch
+    for row in rows:
+        # Pad/trim to match expected column count
+        padded = (list(row) + [""] * len(headers))[: len(headers)]
+        key = tuple(padded)
+        if key not in existing:
+            existing_ordered.append(key)
+            existing.add(key)  # guard against duplicates within the same batch
+
+    atomic_rewrite_csv_rows(
+        path,
+        [dict(zip(headers, row_tuple)) for row_tuple in existing_ordered],
+        headers,
+    )
