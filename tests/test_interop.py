@@ -473,6 +473,41 @@ def test_export_to_cai_excludes_reference_and_backup_md(tmp_path):
     assert not any("pipeline" in s or "reference" in s or "pandas" in s for s in slugs)
 
 
+def test_strip_framework_wrappers_does_not_consume_adjacent_fence_on_handoff_prefixed_heading():
+    """Regression: interop.py's own _strip_handoffs_section re-introduced a bug already
+    fixed once in FrameworkAdapter._strip_handoffs_section (tests/test_handoff_strip_fence_
+    safety.py). A naive `^#{1,3}\\s+Handoff.*?(?=^#{1,3}\\s|\\Z)` regex matches ANY heading
+    merely starting with the word "Handoff" -- not just a literal "## Handoffs" section --
+    and, lacking a fence-marker stop condition, ran past a heading-only fenced section
+    (`## Handoff Payload Conflict Codes`) straight through to the next real `##` heading,
+    silently deleting an entire adjacent fenced section (its END marker, and a whole
+    unrelated `handoff_payload_codes` fence) in the process. Reproduces the exact shape
+    that corrupted .claude/agents/conflict-auditor.md and .github/agents/conflict-auditor.
+    agent.md this session.
+    """
+    body = (
+        "<!-- AGENTTEAMS:BEGIN handoff_payload_conflict_codes v=1 -->\n"
+        "## Handoff Payload Conflict Codes\n"
+        "<!-- AGENTTEAMS:END handoff_payload_conflict_codes -->\n"
+        "\n"
+        "<!-- AGENTTEAMS:BEGIN handoff_payload_codes v=1 -->\n"
+        "Body of the payload-codes fence that must survive stripping.\n"
+        "<!-- AGENTTEAMS:END handoff_payload_codes -->\n"
+        "\n"
+        "---\n"
+        "\n"
+        "## Project-Specific Notes\n"
+        "notes here\n"
+    )
+    content = "---\nname: x\ndescription: y\n---\n" + body
+    stripped = _strip_framework_wrappers(content)
+    assert "AGENTTEAMS:END handoff_payload_conflict_codes" in stripped
+    assert "AGENTTEAMS:BEGIN handoff_payload_codes" in stripped
+    assert "AGENTTEAMS:END handoff_payload_codes" in stripped
+    assert "Body of the payload-codes fence that must survive stripping." in stripped
+    assert "## Project-Specific Notes" in stripped
+
+
 @pytest.mark.parametrize(
     "source_framework,middle_framework",
     [

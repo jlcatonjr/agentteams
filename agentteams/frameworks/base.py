@@ -34,8 +34,14 @@ _BODY_HANDOFFS_SECTION_RE = re.compile(
 # steps from its cause, and one that got this file misdiagnosed twice.
 #
 # A strip may leave a fence empty. It must never leave one unbalanced.
+#
+# The heading must ALSO be an exact section title — `Handoffs`, `Handoff`, or
+# `Handoff Instructions` — not merely prefixed by the word. Template-owned sections like
+# `## Handoff Payload Conflict Codes` share the prefix; before the title was anchored to
+# end-of-line, the only thing keeping those headings on disk was `preserve_on_shrink`
+# coincidentally suppressing the emptied render — protection by accident, not design.
 _HANDOFFS_HEADING_RE = re.compile(
-    r"^#{1,3}\s+Handoff.*?(?=^#{1,3}\s|^<!--\s*AGENTTEAMS(?:-BRIDGE)?:|\Z)",
+    r"^#{1,3}\s+Handoffs?(?: Instructions)?\s*$.*?(?=^#{1,3}\s|^<!--\s*AGENTTEAMS(?:-BRIDGE)?:|\Z)",
     re.MULTILINE | re.DOTALL,
 )
 
