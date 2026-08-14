@@ -647,6 +647,8 @@ Classify every generated output file against the build-log `file_hashes` baselin
 
 **Exit code:** non-zero on any `TRUNCATED` / `MISSING` / `FENCE-BROKEN`; `0` otherwise (`MODIFIED` does not fail). Unlike `--update` — where a non-zero exit can be a benign post-merge attestation crash — **`--verify-integrity`'s exit code IS the integrity verdict and must be heeded.** If no build-log baseline exists yet, it reports "cannot verify" and exits `0` (run `--update` to establish one).
 
+**Enforcement manifest:** when `references/enforcement-integrity.json` exists at the resolved root, `--verify-integrity` also re-checks every enforcement module against it and exits non-zero on any mismatch — the CLI counterpart to [`--write-integrity-manifest`](#--write-integrity-manifest)'s "review the diff before regenerating" contract. (Before 2026-08-13 the only check of that manifest lived inside the red-team battery.)
+
 ### `--verify-backup [TIMESTAMP]`
 
 Verify a backup's own integrity — each backed-up file's bytes against the `source_sha256` recorded in the backup's `_manifest.json` — confirming the backup is restorable (catches bit-rot/tamper). Defaults to the latest backup; pass a `TIMESTAMP` (as shown by `--list-backups`) for a specific one. Exits non-zero on any mismatch.
