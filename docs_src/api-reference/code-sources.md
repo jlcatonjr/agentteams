@@ -32,7 +32,7 @@ docstring is *data*, not an instruction).
 
 1. **`extract_imports(py_text)`** — static top-level imports of a script;
    relative imports are skipped (they are local, not external).
-2. **`classify_external(names, project_root)`** — an import is *external* when it
+2. **`classify_external(import_names, project_root)`** — an import is *external* when it
    is neither stdlib (`sys.stdlib_module_names`, advisory against the repo's
    `requires-python`) nor a repo-local module.
 3. **Resolve metadata-only** — import-name → distribution via
@@ -64,7 +64,7 @@ same value cheaply (no source reads) for the query-time staleness check.
 - `collect_api(local_sources, project_root) -> ApiCollection`
 - `compute_dependency_fingerprint(local_sources, project_root) -> str`
 - `dependency_manifest_texts(project_root) -> list[str]`
-- `ApiCollection` — `external_imports`, `api_module_units`, `api_doc_units`,
+- `ApiCollection` — `external_imports`, `dist_versions`, `api_module_units`, `api_doc_units`,
   `declared_only`, `resolved_source`, `dependency_fingerprint`, `declared_only_rate`.
 
 See [`code_index`](code-index.md) for the index this feeds and

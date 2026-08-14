@@ -22,7 +22,7 @@ only the narrow scope cleared it.
 
 ## API
 
-### `unfenced_spans(text) -> list[str]`
+### `unfenced_spans(text) -> list[tuple[int, int]]`
 
 Return the regions of *text* that lie **outside** every `AGENTTEAMS:BEGIN … END`
 fence.
@@ -31,11 +31,13 @@ fence.
 
 - `text` (`str`) — Full document text.
 
-**Returns:** `list[str]` — Unfenced spans, in document order.
+**Returns:** `list[tuple[int, int]]` — `(start, end)` character-offset spans, in document order.
 
 ### `find_dated_prose(file_map) -> list[tuple[str, str, str]]`
 
-Find dated content in unfenced prose across a set of documents.
+Find dated content in unfenced prose across a set of documents. Scoped to paths
+ending in `.agent.md`; paths containing `references/` or `.reference.` are
+excluded even when they end in `.agent.md`.
 
 **Args:**
 
@@ -48,8 +50,7 @@ finding.
 
 - `FENCE_RE` — Matches `AGENTTEAMS:BEGIN`/`END` markers, used to compute the unfenced
   complement.
-- `DATE_RE` — Matches the date forms that appear in practice (ISO `2026-07-29`, and
-  written month-day-year).
+- `DATE_RE` — Matches the date forms that appear in practice (ISO `2026-07-29`).
 
 ## Integration
 

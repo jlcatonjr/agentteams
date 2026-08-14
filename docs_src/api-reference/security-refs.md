@@ -40,6 +40,7 @@ Build security intelligence placeholders for rendering into agent/reference temp
 - `SECURITY_DATA_AGE_HOURS`: Age of the data in hours (string, 2 decimals), or empty if unknown.
 - `SECURITY_DATA_TTL_HOURS`: TTL in hours (currently `"24"`).
 - `SECURITY_VULNERABILITY_WATCH_JSON`: The full machine-readable snapshot as a JSON string (also persisted to the cache file under `output_dir/references/`).
+- `SECURITY_DATA_PAYLOAD_DIGEST`: Digest of the assembled placeholder payload, computed last (from the fully-built dict) via `security_intelligence_digest()` (imported from `agentteams.cli.security_gate`). Exists to bind the freshness claim to the data it describes — relabelling a stale snapshot as fresh by rewriting `SECURITY_DATA_GENERATED_AT` alone no longer passes, since doing so also requires regenerating this digest.
 
 **Behavior Notes:**
 
@@ -51,7 +52,7 @@ Build security intelligence placeholders for rendering into agent/reference temp
 
 **Raises:**
 
-- `OSError` — Raised for all supply-chain size-bound violations (response smaller than the per-host minimum, larger than the per-host maximum, or no bounds configured for the response host).
+- Nothing propagates out of this function in normal use. Internally, `OSError` is the signal used for supply-chain integrity violations (response smaller than the per-host minimum, larger than the per-host maximum, no bounds configured for the response host, wrong domain, non-HTTPS scheme), but every call site that can raise it (`_fetch_kev`, `_fetch_epss`, `_fetch_nvd_cvss`, `_fetch_osv_packages`, and the cache-file reads) is wrapped in its own local `try`/`except OSError`, which degrades to the stale-cache fallback or an `"unavailable"`/`"skipped"` source status rather than letting the exception escape `build_security_placeholders`.
 
 ---
 

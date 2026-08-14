@@ -132,9 +132,15 @@ Routed to: @module-doc-author <items> | @conflict-auditor <items>
 - This agent specializes the generic `@module-doc-validator` for agentteams' *real*
   layout (`agentteams/` ↔ `docs_src/api-reference/`, `agentteams.1`) and wires it to
   concrete CI scripts; `@module-doc-validator` remains the framework-neutral persona.
-- Current advisory `COVERAGE_GAP` modules (no api-reference page yet) include
-  `stale_detector`, `stale_remediate`, `vscode_tasks`, `advisory`, `ai_bad_habits`,
-  `backup`, `budget`, `memory_index_incremental`, and `output_plan`. Closing these
-  is the natural backlog for `@module-doc-author`. (`mcp_detect`/`mcp_emit` were
-  documented with the specified-server-automation work; `cli` is intentionally
-  exempt — documented via the man-page, not api-reference.)
+- Current advisory `COVERAGE_GAP` modules (no api-reference page yet; re-run
+  `python scripts/check_api_doc_parity.py` for the live count — this list drifts
+  and was last corrected 2026-08-14 during the api-doc-conformity-sweep plan,
+  which found it stale by then too): `advisory`, `ai_bad_habits`,
+  `audit_agent_contract`, `audit_types`, `backup`, `budget`, `capability_hints`,
+  `front_matter_merge`, `graph_inputs`, `interop_helpers`, `recipe_fields`,
+  `redteam`, `security_feed_render`, `stale_detector`, `stale_remediate`,
+  `svg_render`, `tool_metadata_catalog`, `unfenced`, `vscode_tasks`,
+  `yaml_frontmatter`. Closing these is the natural backlog for
+  `@module-doc-author`. (`mcp_detect`/`mcp_emit`, `memory_index_incremental`, and
+  `output_plan` have since gained pages and are no longer gaps; `cli` is
+  intentionally exempt — documented via the man-page, not api-reference.)

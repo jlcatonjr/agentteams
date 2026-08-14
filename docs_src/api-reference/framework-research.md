@@ -81,12 +81,12 @@ Fetches (or reuses) the multi-framework snapshot.
 snapshot when all fetches were skipped/failed). Schema 1.1:
 
 - top-level `framework`, `source_url`, `generated_at`,
-  `generated_on`, `fetch_status`, `upstream_tokens`,
-  `local_adapter`, `keys_diff` — preserved for back-compat with the
-  schema-1.0 single-framework readers.
+  `generated_on`, `fetch_status`, `fetch_error`, `raw_bytes`,
+  `upstream_tokens`, `local_adapter`, `keys_diff` — preserved for
+  back-compat with the schema-1.0 single-framework readers.
 - `frameworks` — dict keyed by framework id; each value carries
   `label`, `source_url`, `expert_ref`, `expected_keys`,
-  `fetch_status`, `upstream_tokens`.
+  `fetch_status`, `fetch_error`, `raw_bytes`, `upstream_tokens`.
 
 **Notes:**
 
@@ -139,8 +139,12 @@ reference Markdown files only — never mutates
 
 **Returns:** dict with `schema_version: "1.2"`, `generated_at`,
 `snapshot_generated_on`, `frameworks` (list of framework ids
-covered), and `changes` — a list of one change per affected expert
-reference. Each change is:
+covered), `dedup_hash` — a sha256-based signature (first 12 hex
+chars) over upstream tokens and adapter constants, excluding
+`generated_on` and the rendered text, so identical day-over-day
+observations produce the same hash and the auto-PR workflow can
+recognise "no real drift" and skip a duplicate PR — and `changes` —
+a list of one change per affected expert reference. Each change is:
 
 ```
 {

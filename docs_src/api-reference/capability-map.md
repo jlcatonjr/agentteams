@@ -28,7 +28,7 @@ This matches the forward map in `agentteams/frameworks/claude.py` (`_VSCODE_TO_C
 
 ### `canonical_tools_for_copilot_vscode(content)`
 
-Extracts the canonical tool scopes declared in a copilot-vscode agent file's YAML front matter (`tools:` list). Returns the tokens in canonical order, or `None` when no front matter or no `tools:` key is present. Unknown tokens are ignored; the result is identity-plus-validation.
+Extracts the canonical tool scopes declared in a copilot-vscode agent file's YAML front matter (`tools:` list). Returns the tokens in canonical order, or `None` when no front matter is present, no `tools:` key is present, or `tools:` uses YAML block-list style (e.g. `tools:\n  - read`) rather than the inline bracket form (`tools: [read, edit]`) the extractor matches. Unknown tokens are ignored; the result is identity-plus-validation.
 
 ### `claude_allowed_tools_to_canonical(claude_tools)`
 
@@ -36,7 +36,7 @@ Reverse-maps Claude tool names (`Read`, `Edit`, `Write`, `Grep`, `Glob`, `Bash`,
 
 ### `canonical_tools_for_claude(content)`
 
-Extracts the `allowed-tools:` front-matter line from a Claude agent file and reverse-maps it via `claude_allowed_tools_to_canonical`. Bracket-form lists are skipped. Returns `None` when absent or empty.
+Extracts the `tools:` (current key since 2026-08-06) or legacy `allowed-tools:` front-matter line from a Claude agent file and reverse-maps it via `claude_allowed_tools_to_canonical`. Bracket-form lists are skipped. Returns `None` when absent or empty.
 
 ### `goose_extensions_to_canonical(extension_names)`
 
@@ -56,4 +56,4 @@ Builds the CAI `capabilities` object: `{"tool_scopes": [...]}` when tokens are p
 
 - copilot-cli and agents-md have no native capability channel; their capabilities travel only via the CAI `raw` escape hatch.
 - All front-matter extraction delegates to the shared scanner `agentteams.yaml_frontmatter.parse_yaml_front_matter` (Phase B consolidation).
-- `export_to_cai` / `import_from_cai` in `agentteams/interop.py` are the only callers; capabilities survive round-trips as typed CAI data.
+- `export_to_cai` / `import_from_cai` in `agentteams/interop.py` are the primary callers; `agentteams/frameworks/goose.py` also calls `goose_extensions_to_canonical` and `capabilities_from_tokens` directly when parsing a native goose recipe (`parse_agent_source`). Capabilities survive round-trips as typed CAI data.

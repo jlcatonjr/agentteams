@@ -40,18 +40,27 @@ needing operator authorization unless it is unambiguously first-party with only
 `read`/`write` tools and no `security_review.required`. `overwrite` defaults to
 `False` so operator-authorization records are never clobbered on re-run.
 
+`normalize_mcp_server_defaults(server)` fills a missing `mcp_server_schema_version`
+with the current version (`"1.0"`) when a server entry omits it — the field is
+`required` by `mcp-server.schema.json`, but no production writer ever set it, so an
+operator-declared server without it could only ever fail validation. The manifest
+copy-through ([`analyze.build_manifest`](analyze.md)) and the CAI capture/apply paths
+call it so every server entering the pipeline satisfies the schema before validation
+runs. Non-dict entries pass through unchanged.
+
 ## Public Surface
 
 ```python
 @dataclass
 class MCPEmissionResult:
-    written: list[str]
-    skipped: list[str]
-    errors: list[str]
-    gated_off: bool
-    activation_blocked: list[str]
+    written: list[str] = []
+    skipped: list[str] = []
+    errors: list[str] = []
+    gated_off: bool = False
+    activation_blocked: list[str] = []
     success: bool  # property: len(errors) == 0
 ```
+Every field defaults, so `MCPEmissionResult()` takes zero arguments.
 
 ```python
 mcp_enabled(features: list[str]) -> bool

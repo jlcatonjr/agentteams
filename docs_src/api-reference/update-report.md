@@ -25,7 +25,7 @@ and the artifacts on disk are the truth.
 ### `has_attributable_events(result) -> bool`
 
 Whether the run made any decision worth recording — a preserved fence, a skipped
-legacy file, a retrofitted marker, a shrink notice.
+legacy file, a retrofitted marker, a shrink notice, or a prior body set aside.
 
 **Args:**
 
@@ -40,7 +40,7 @@ Render the report body. Pure — no I/O.
 **Args:**
 
 - `result` — The emit result for the run.
-- `backup_path` (`Path | None`, keyword-only) — Backup directory for this run, cited in
+- `backup_path` (`str | None`, keyword-only) — Backup directory for this run, cited in
   the report so a reader can recover a preserved or lost body. `None` when
   `--no-backup` was passed.
 

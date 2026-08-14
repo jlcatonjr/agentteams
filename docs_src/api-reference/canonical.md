@@ -56,7 +56,8 @@ Writes the exploded directory form:
    recorded `rel_path`.
 
 All writes go through `atomicio._atomic_write_text`; `dry_run=True` collects the planned writes
-with zero filesystem side effects (not even `mkdir`). Raises `ValueError` on malformed input
+with zero filesystem side effects (not even `mkdir`). Raises `ValueError` when the CAI dict fails
+schema validation (`_validate_cai`, checked before any write) or contains other malformed input
 (missing/invalid agents, unsafe slugs, escaping reference paths) so bad input never half-writes.
 
 ### `load_canonical(dir_path)`
@@ -66,7 +67,8 @@ emits. `team.cai.json` supplies project-level fields; agents are reassembled fro
 `agents/*.md` (the invariant-core span re-lifted with the same capture helper so the export
 shape is reproduced exactly); skills from `skills/*/SKILL.md`; references from the
 `references/` tree when present. Agents and skills are sorted by slug. Raises
-`FileNotFoundError` when `team.cai.json` is absent.
+`FileNotFoundError` when `team.cai.json` is absent, and `ValueError` when the reassembled CAI
+dict fails schema validation (`_validate_cai`, called after reassembly).
 
 ---
 

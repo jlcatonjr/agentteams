@@ -59,6 +59,9 @@ Results of an emit operation.
 - `dry_run` (`bool`) — `True` if this result is from a dry-run invocation.
 - `dry_run_report` (`DryRunReport | None`) — Structured dry-run preview (only when `dry_run=True`).
 - `notices` (`list[str]`) — Aggregated notices from all operations (Plan 3 extension point). May include shrink alerts, deprecation warnings, etc.
+- `skipped_legacy` (`list[str]`) — Subset of `skipped` containing files skipped because they had no fence markers (unfenced legacy files); template updates targeting these files were **not** applied.
+- `skipped_legacy_drift` (`list[bool]`) — Parallel list to `skipped_legacy`: `True` when the rendered content actually differs from what's on disk (the template change was lost), `False` for a harmless skip.
+- `fence_injected` (`list[str]`) — Relative paths of legacy files that were (or, in dry-run, would be) retrofitted with a `content` fence — via `auto_fence_legacy=True` — so their template region became mergeable this run instead of being skipped.
 - `shrink_blocked` (`list[str]`) — *(T2.D5)* Absolute paths whose merge was skipped because `shrink_policy="halt"` detected a destructive shrink. Distinct from `skipped` (overwrite declined) and `errors` (true failures) — these are intentional non-writes the operator can review.
 
 **Properties:**
@@ -69,7 +72,7 @@ Results of an emit operation.
 
 ### `MergeResult`
 
-> *Source: `agentteams/emit.py`*
+> *Source: `agentteams/fences.py` (re-exported from `agentteams/emit.py`)*
 
 Result for a single fenced-content merge operation.
 
@@ -86,6 +89,9 @@ Result for a single fenced-content merge operation.
 - `merged_content` (`str`) — Final merged file content. Empty string when parse fails.
 - `shrink_notices` (`list[str]`) — Per-section human-readable notices (Plan 3) when a regenerated fence body is materially shorter or less specific than the existing on-disk version. Used for alerting on potential loss of detail during merge.
 - `lost_fence_bodies` (`dict[str, str]`) — W22 data-loss recovery: full pre-merge body of every fence that fired a shrink notice, keyed by `section_id`. Persisted as a `<rel_path>.lost.<sid>.md` sidecar inside the backup dir by `emit_all` when `backup_path` is provided. Empty when no shrink fired.
+- `front_matter_drift` (`list[str]`) — Front-matter keys whose template value moved on while the on-disk file kept its own. Merge preserves everything outside a fence by design — that never changes what is written — so this exists purely to surface an otherwise-silent drift (e.g. a new tool added to a template's `tools:` list that an already-generated team never receives).
+- `duplicate_section_notices` (`list[str]`) — Sections a newly-added fence duplicates: the deployed file already carries the same heading unfenced, from before the template fenced it. Reported, never auto-resolved.
+- `deleted_constraint_notices` (`list[str]`) — Template rules absent from the deployed file. Fires regardless of modification state.
 
 **Properties:**
 
@@ -107,6 +113,20 @@ Result of a backup operation.
 - `files_backed_up` (`int`) — Number of files copied into the backup.
 - `extra_files_removed` (`int`) — Number of output files removed during restore when `remove_extra=True`.
 - `skipped` (`bool`) — `True` if the backup was suppressed (`--no-backup` or `dry_run=True`).
+
+---
+
+### `PruneResult`
+
+> *Source: `agentteams/backup.py` (re-exported from `agentteams/emit.py`)*
+
+Outcome of `prune_backups()`.
+
+**Attributes:**
+
+- `deleted` (`list[str]`) — Backup timestamps deleted (or that would be deleted, under `dry_run`).
+- `kept` (`list[str]`) — Backup timestamps retained.
+- `dry_run` (`bool`) — `True` if this result is from a dry-run invocation.
 
 ---
 
@@ -212,6 +232,39 @@ Return all available backups for `output_dir`, newest first.
 
 ---
 
+### `verify_backup(backup_path)`
+
+> *Source: `agentteams/backup.py` (re-exported from `agentteams/emit.py`)*
+
+Verify a backup's own integrity (read-only): each backed-up file's bytes against its recorded `source_sha256` in `_manifest.json`. Confirms the backup is restorable (catches backup bit-rot/tamper).
+
+**Args:**
+
+- `backup_path` (`Path`) — Absolute path to the timestamped backup directory.
+
+**Returns:** `list[dict[str, str]]` — One entry per recorded file with keys `source_path`, `status` (`PASS` / `FAIL` / `MISSING`), and `note`. Empty list when the backup has no `_manifest.json` (older backup; cannot verify). The manifest stores the full SHA-256 (not the 16-char build-log form).
+
+---
+
+### `prune_backups(output_dir, *, keep_last=DEFAULT_BACKUP_KEEP_LAST, keep_within_days=None, dry_run=False)`
+
+> *Source: `agentteams/backup.py` (re-exported from `agentteams/emit.py`)*
+
+Delete old backups under `output_dir`, keeping the recovery net bounded.
+
+Retain rule (union, fail-safe): a backup is kept if it is among the `keep_last` newest **or** (when `keep_within_days` is set) its timestamp is within `keep_within_days` days. Everything else is deleted. The single most-recent backup is always kept (even `keep_last == 0`). A backup whose age cannot be determined (unparseable name and no mtime) is kept (fail-safe).
+
+**Args:**
+
+- `output_dir` (`Path`) — Absolute path to the agents output directory.
+- `keep_last` (`int`, keyword-only) — Number of most-recent backups to always keep. Default: `DEFAULT_BACKUP_KEEP_LAST` (`10`).
+- `keep_within_days` (`int | None`, keyword-only) — When set, also keep any backup within this many days of now. Default: `None`.
+- `dry_run` (`bool`, keyword-only) — If `True`, report what would be deleted without deleting. Default: `False`.
+
+**Returns:** `PruneResult`
+
+---
+
 ### `restore_backup(backup_path, output_dir, *, remove_extra=False)`
 
 > *Source: `agentteams/backup.py` (re-exported from `agentteams/emit.py`)*
@@ -243,3 +296,38 @@ Return the SHA-256 hex digest of a file's contents.
 - `path` (`Path`) — Path to the file to hash.
 
 **Returns:** `str` — First 8 characters of the SHA-256 hex digest of the file's contents (used for change-detection comparisons).
+
+---
+
+## Module Constants
+
+### `BACKUP_MANIFEST_NAME`
+
+> *Source: `agentteams/backup.py` (re-exported from `agentteams/emit.py`)*
+
+Filename of the per-backup manifest written alongside each timestamped backup directory, consumed by `verify_backup()`.
+
+**Type:** `str`  
+**Value:** `"_manifest.json"`
+
+---
+
+### `BACKUP_MANIFEST_SCHEMA_VERSION`
+
+> *Source: `agentteams/backup.py` (re-exported from `agentteams/emit.py`)*
+
+Schema version recorded in each backup's manifest (`BACKUP_MANIFEST_NAME`).
+
+**Type:** `str`  
+**Value:** `"1.0"`
+
+---
+
+### `DEFAULT_BACKUP_KEEP_LAST`
+
+> *Source: `agentteams/backup.py` (re-exported from `agentteams/emit.py`)*
+
+Default number of most-recent backups `prune_backups()` keeps.
+
+**Type:** `int`  
+**Value:** `10`

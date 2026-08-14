@@ -67,7 +67,10 @@ Load `build-log.json` from an agents directory.
 
 **Returns:** `dict[str, Any]` — Parsed build-log.json dict.
 
-**Raises:** `FileNotFoundError` — If `build-log.json` does not exist in `agents_dir`.
+**Raises:**
+
+- `FileNotFoundError` — If `build-log.json` does not exist in `agents_dir`.
+- `ValueError` — If `build-log.json` exists but is malformed JSON.
 
 ---
 
@@ -191,6 +194,29 @@ The check reports modified files that still exist on disk; missing files are ski
 Returns an empty list when the build log is missing, invalid, or has no recorded file hashes.
 
 Read-path OS errors while hashing existing files are not suppressed and may propagate to callers.
+
+---
+
+### `verify_output_integrity(agents_dir, *, build_log=None)`
+
+> *Source: `agentteams/drift.py`*
+
+Classify each build-recorded output file's current integrity (read-only).
+
+Compares every file in `build-log.json`'s `file_hashes` against its current on-disk state and returns one entry per recorded file with keys `rel_path`, `path`, `status`, and `note`. `status` is one of:
+
+- `OK` — current 16-char SHA-256 matches the recorded hash.
+- `MODIFIED` — content changed since build (a legitimate USER-EDITABLE edit OR drift — undifferentiated, because a whole-file hash cannot say *where* the change is). Advisory, not a failure.
+- `TRUNCATED` — recorded file is now empty (size 0) though it was non-empty at build — a strong corruption tell.
+- `MISSING` — recorded file is absent (or unreadable).
+- `FENCE-BROKEN` — content changed AND the file's `AGENTTEAMS` fences no longer parse (unclosed/duplicate/mismatched) — a strong corruption tell.
+
+**Args:**
+
+- `agents_dir` (`Path`) — Path to the `.github/agents/` directory.
+- `build_log` (`dict[str, Any] | None`, keyword-only) — Optional pre-loaded build-log dict. If `None`, `build-log.json` is loaded from `agents_dir`.
+
+**Returns:** `list[dict[str, str]]` — One entry per build-recorded file. Returns an empty list when the build-log or its `file_hashes` is absent (the caller treats that as `UNKNOWN` — cannot verify — not a failure).
 
 ---
 

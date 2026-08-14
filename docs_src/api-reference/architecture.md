@@ -52,6 +52,18 @@ Build the graph and return the full Markdown document (auto-detecting the
 package when `package_dir` is omitted). Returns `None` when no importable package
 is found.
 
+### `generate_architecture_svg(repo_root, package_dir=None) -> str | None`
+
+Build the graph and return the package-level dependency SVG (auto-detecting the
+package when `package_dir` is omitted). Returns `None` when no importable package
+is found.
+
+### `generate_architecture_module_svg(repo_root, package_dir=None) -> str | None`
+
+Build the graph and return the module-level dependency SVG (auto-detecting the
+package when `package_dir` is omitted). Returns `None` when no importable package
+is found.
+
 ---
 
 ### `module_level_edges(package_dir, root_pkg) -> set[tuple[str, str]]`
@@ -104,7 +116,7 @@ cycle is not modelled.
 ```
 python -m agentteams.architecture .                    # auto-detect package
 python -m agentteams.architecture . --package agentteams
-python -m agentteams.architecture . --format mermaid|dot|json|markdown [-o FILE]
+python -m agentteams.architecture . --format mermaid|dot|json|markdown|svg [-o FILE]
 ```
 
 Also available as `agentteams --refresh-architecture` (standalone; no

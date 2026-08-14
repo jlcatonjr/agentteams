@@ -138,6 +138,21 @@ Return the top-*k* documents for *query* using the specified retrieval strategy.
 - Passage scoring is intra-document only (relative ranking within each document); best paragraphs are ranked independently.
 - Backward-compat: v1.1 indexes (no `paragraphs` field) return the stored static `snippet` for all results.
 - Both strategies are stdlib-only with no external dependencies.
+- **Duplicate documents are returned as separate hits, deliberately.** Byte-identical files at different paths can score identically and occupy consecutive slots; collapsing them was considered and rejected because a collapsed hit must report one path, and which path is right depends on the caller. Callers that need de-duplication should do it on content hash at their own layer, or raise `k`.
+
+---
+
+### `redact_local_paths(text)`
+
+> *Source: `agentteams/memory_index.py`*
+
+Replace absolute home-directory paths (`/Users/...`, `/home/...`, `C:\Users\...`) in *text* with a `<path>` marker before it is stored. Snippet text is committed inside the index artifact, so any such path surviving in a source document would otherwise be republished into version control — measured 2026-07-30, 49 occurrences naming an unrelated repository. Called on every paragraph/snippet `build_memory_index` extracts (and by the legacy single-snippet fallback), so this is the one choke point every stored passage passes through. Only the leading home-prefixed path component is matched; a repository-relative tail elsewhere in the sentence survives.
+
+**Args:**
+
+- `text` (`str`) — A snippet or paragraph about to be stored in the index.
+
+**Returns:** `str` — *text* with every absolute home path replaced by `<path>`.
 
 ---
 
@@ -370,6 +385,7 @@ Empirically: corpus expanded 69 → 198 docs on `collector-management`, lexical 
 The index is forward-compatible within major versions:
 
 - **v1.1 → v1.2 upgrade:** Index built with v1.1 can be queried with v1.2 reader (fallback to static snippet if `paragraphs` missing).
-- **v1.2 → v2.0 (hypothetical):** Schema version bump indicates breaking change; consumer must opt-in.
+- **v1.2 → v1.3 upgrade (current):** Adds explicit contract metadata (`index_format_version`, `index_build_id`, `index_write_owner`, `vector_runtime_mode`, `fallback_policy`, `source_fingerprint`) and per-document `source_hash`. Additive: a v1.2 index still queries correctly (readers ignore fields they don't recognize), though `is_index_stale()` falls back to mtime-only staleness detection until the index is rebuilt and gains `source_hash` per document.
+- **v1.3 → v2.0 (hypothetical):** Schema version bump indicates breaking change; consumer must opt-in.
 
 Always check `memory_index_schema_version` before consuming an index artifact.

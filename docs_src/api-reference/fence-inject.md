@@ -33,7 +33,7 @@ Outcome of a fence marker injection attempt.
 
 **Attributes:**
 
-- `output_path` (`Path | None`) — Path of the written file (sidecar or in-place). `None` if the call was a no-op (already fenced).
+- `output_path` (`Path | None`) — Path of the written file (sidecar or in-place). On a no-op (already fenced), set to the **original** file's path — not `None` — since nothing new was written.
 - `injected` (`bool`) — `True` if markers were added; `False` if no-op (idempotent).
 - `backup_path` (`Path | None`) — Set only on successful in-place injection. `None` for sidecar mode or no-ops.
 - `fence_id` (`str`) — The fence ID used (base + numeric suffix if collision detected).
@@ -53,13 +53,13 @@ Add canonical `AGENTTEAMS:BEGIN`/`END` markers to a legacy markdown file.
 - `path` (`Path | str`) — Path to the legacy file to process
 - `mode` (`str`, keyword-only) — `"sidecar"` (default) or `"in-place"`. Default: `"sidecar"`
 - `confirm_in_place` (`bool`, keyword-only) — Required for `mode="in-place"` (safety gate). Default: `False`
-- `fence_id` (`str | None`, keyword-only) — Custom fence ID (must match `[a-z][a-z0-9_]*`). Default: uses `DEFAULT_RETROFIT_FENCE_ID`
+- `fence_id` (`str`, keyword-only) — Custom fence ID (must match `[a-z][a-z0-9_]*`). Default: `DEFAULT_RETROFIT_FENCE_ID`
 
 **Returns:** `InjectResult` — Result of the injection operation
 
 **Behavior:**
 
-- **Idempotent:** If the file already contains any AGENTTEAMS fence markers, this is a no-op; `injected=False` and `output_path=None`
+- **Idempotent:** If the file already contains any AGENTTEAMS fence markers, this is a no-op; `injected=False` and `output_path` is set to the original file's path (not `None`)
 - **Sidecar mode:** Writes to `<original-name>.fenced.md` alongside the source; never modifies the original
 - **In-place mode:** Modifies the original file; requires `confirm_in_place=True` and creates a timestamped `.agentteams-backups/` backup before mutating
 - **Fence ID collision:** If the requested `fence_id` already exists in the file, appends a numeric suffix (e.g., `content_1`, `content_2`)
@@ -69,6 +69,7 @@ Add canonical `AGENTTEAMS:BEGIN`/`END` markers to a legacy markdown file.
 
 - `ValueError` — If `fence_id` doesn't match `[a-z][a-z0-9_]*`
 - `FileNotFoundError` — If the target file doesn't exist
+- `ValueError` — If `mode` is neither `"sidecar"` nor `"in-place"`
 - `ValueError` — If `mode="in-place"` but `confirm_in_place=False`
 
 ---
