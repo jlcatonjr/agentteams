@@ -109,6 +109,7 @@ Given a newly-rendered file and an existing on-disk file:
 | Mismatched `section_id` on END marker | Parse error; merge is aborted for that file. |
 | `v=` value differs between on-disk and new render | Expected, not an error — merge replaces the section body by `section_id` and adopts the new render's `v=` verbatim (see Versioning Strategy). |
 | File is new (does not exist on disk) | Written fresh; no merge needed. |
+| Converting an `AGENTTEAMS-BRIDGE:BEGIN/END` fence (see `bridge.py`) to a native `AGENTTEAMS:BEGIN/END` fence | The two fence types use **different `section_id` patterns**: bridge fences accept `[A-Za-z0-9_-]+` (hyphens and mixed case allowed; e.g. `goose-bridge-entry`), native fences require `[a-z][a-z0-9_]*` (lowercase + underscores only, no hyphens). Swapping only the `AGENTTEAMS-BRIDGE`→`AGENTTEAMS` prefix while keeping a hyphenated id produces a marker that *looks* native but silently fails to parse — `_extract_fenced_regions` returns an empty region dict, not an error. Convert the id to underscore form (`goose_bridge_entry`) in both the BEGIN and END markers at the same time as the prefix. Caught during `agentteams-self-bridge-deprecation` (2026-08-14, `tmp/by-week/2026-W33/`) via the `_extract_fenced_regions` verification step itself — always re-run that check after any bridge→native fence conversion, don't assume the prefix swap alone is sufficient. |
 
 ---
 
