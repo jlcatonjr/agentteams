@@ -1,4 +1,6 @@
-# Bridge Entry
+# Copilot CLI Entry Point
 
-Use source framework `copilot-vscode` through this bridge.
-Read `references/bridges/copilot-vscode-to-copilot-cli/agent-inventory.md` and `references/bridges/copilot-vscode-to-copilot-cli/quickstart-snippet.md`.
+The native Copilot CLI instruction set lives at
+`.github/copilot-instructions.md`, with per-agent files under
+`.github/copilot/*.md`. Start with `.github/copilot/orchestrator.md` for
+routing.
