@@ -27,10 +27,6 @@ Runtime enforcement also consumes machine-readable freshness metadata from the s
 
 ---
 
-## Invariant Core
-
-> ⛔ **Do not modify or omit.** All triggers, rules, the HALT directive, and the AI-authored-code screening guidance below are the immutable contract for this agent.
-
 <!-- AGENTTEAMS:BEGIN security_authority v=1 -->
 > **PRIORITY LEVEL: HIGHEST.** The orchestrator MUST consult this agent BEFORE executing any action matching a row of the *Mandatory Review Triggers* table in this agent's Invariant Core. No other agent, rule, or delegation overrides this agent's HALT directives.
 
@@ -42,6 +38,12 @@ Use the generated reference `references/security-vulnerability-watch.reference.m
 
 Runtime enforcement also consumes machine-readable freshness metadata from the security intelligence payload. If the intelligence is stale, privileged write paths must HALT unless a signed waiver exists in `references/security-waivers.log.csv` and the signing key has been configured.
 <!-- AGENTTEAMS:END security_authority -->
+
+<!-- AGENTTEAMS:BEGIN invariant_core v=2 -->
+## Invariant Core
+
+> ⛔ **Do not modify or omit.** All triggers, rules, the HALT directive, and the AI-authored-code screening guidance carried in this file's fenced sections are the immutable contract for this agent. Sections are referenced by name, never by position: the merge engine places a fenced region relative to whichever fences already exist on disk, so a deployed file may carry them in a different order than this template.
+<!-- AGENTTEAMS:END invariant_core -->
 
 <!-- AGENTTEAMS:BEGIN security_rules_invariant v=4 -->
 ### Mandatory Review Triggers
@@ -279,11 +281,11 @@ Apply only the baseline(s) matching the actual deployment target(s); skip this g
 ### Current Threat Intelligence Snapshot
 
 <!-- AGENTTEAMS:BEGIN threat_intelligence v=1 -->
-Generated at: `2026-08-13T15:42:02Z`
+Generated at: `2026-08-11T02:45:56Z`
 
 **Sources:**
 
-- CISA KEV: ok (catalog 2026.08.11, items 1665) — https://www.cisa.gov/sites/default/files/feeds/known_exploited_vulnerabilities.json
+- CISA KEV: ok (catalog 2026.08.10, items 1662) — https://www.cisa.gov/sites/default/files/feeds/known_exploited_vulnerabilities.json
 - MITRE CVE: metadata_only — https://cveawg.mitre.org/api/cve/
 - FIRST EPSS: ok (items 15) — https://api.first.org/data/v1/epss
 - NVD (NIST): ok (items 5) — https://services.nvd.nist.gov/rest/json/cves/2.0
@@ -294,21 +296,21 @@ Generated at: `2026-08-13T15:42:02Z`
 
 **Current major vulnerabilities:**
 
-- `CVE-2026-20349` | Cisco Secure Firewall Adaptive Security Appliance (ASA) and Secure Firewall Threat Defense (FTD) | Cisco Secure Firewall Adaptive Security Appliance (ASA) and Secure Firewall Threat Defense (FTD) Heap Inspection Vulnerability | added 2026-08-11 | EPSS 0.008740000, percentile 0.557500000 | CVSS 8.6 HIGH
-- `CVE-2026-68820` | Microsoft Windows Ancillary Function Driver for WinSock | Microsoft Windows Ancillary Function Driver for WinSock Use-After-Free Vulnerability | added 2026-08-11 | EPSS 0.003320000, percentile 0.259430000 | CVSS 7.0 HIGH
-- `CVE-2026-72898` | Metabase Metabase | Metabase SQL Injection Vulnerability | added 2026-08-11 | EPSS 0.104000000, percentile 0.953110000 | CVSS 10.0 CRITICAL
-- `CVE-2026-8037` | Progress LoadMaster | Progress LoadMaster Command Injection Vulnerability | added 2026-08-07 | EPSS 0.993110000, percentile 0.999360000 | CVSS 9.6 CRITICAL
-- `CVE-2026-63077` | JetBrains TeamCity | JetBrains TeamCity Deserialization of Untrusted Data Vulnerability | added 2026-08-05 | EPSS 0.107220000, percentile 0.954120000 | CVSS 9.8 CRITICAL
-- `CVE-2026-18556` | N-able N-central | N-able N-central Authentication Bypass Using an Alternate Path or Channel Vulnerability | added 2026-08-04 | EPSS 0.004920000, percentile 0.399010000
-- `CVE-2026-34486` | Apache Tomcat | Apache Tomcat Missing Encryption of Sensitive Data Vulnerability | added 2026-08-04 | EPSS 0.829330000, percentile 0.996440000
-- `CVE-2026-9198` | IBM Langflow | IBM Langflow Code Injection Vulnerability | added 2026-08-04 | EPSS 0.173520000, percentile 0.968350000
-- `CVE-2026-18577` | N-able N-central | N-able N-central Authentication Bypass Using an Alternate Path or Channel Vulnerability | added 2026-08-03 | EPSS 0.041030000, percentile 0.898420000
-- `CVE-2026-20316` | Cisco Secure Firewall Management Center (FMC) | Cisco Secure Firewall Management Center Use of Hard-coded Password Vulnerability | added 2026-07-29 | EPSS 0.007880000, percentile 0.529840000
-- `CVE-2025-68686` | Fortinet FortiOS | Fortinet FortiOS Exposure of Sensitive Information to an Unauthorized Actor Vulnerability | added 2026-07-27 | EPSS 0.012640000, percentile 0.670750000
-- `CVE-2026-16812` | Arista VeloCloud Orchestrator | Arista VeloCloud Orchestrator On-Prem OS Command Injection Vulnerability | added 2026-07-27 | EPSS 0.008840000, percentile 0.560260000
-- `CVE-2026-16232` | Check Point SmartConsole | Check Point SmartConsole Improper Authentication Vulnerability | added 2026-07-22 | EPSS 0.732960000, percentile 0.994120000
-- `CVE-2026-50522` | Microsoft SharePoint | Microsoft SharePoint Deserialization of Untrusted Data Vulnerability | added 2026-07-22 | EPSS 0.769810000, percentile 0.995060000
-- `CVE-2026-60137` | WordPress Core | WordPress Core SQL Injection Vulnerability | added 2026-07-21 | EPSS 0.731000000, percentile 0.994070000
+- `CVE-2026-8037` | Progress LoadMaster | Progress LoadMaster Command Injection Vulnerability | added 2026-08-07 | EPSS 0.993110000, percentile 0.999350000 | CVSS 9.6 CRITICAL
+- `CVE-2026-63077` | JetBrains TeamCity | JetBrains TeamCity Deserialization of Untrusted Data Vulnerability | added 2026-08-05 | EPSS 0.107220000, percentile 0.953890000 | CVSS 9.8 CRITICAL
+- `CVE-2026-18556` | N-able N-central | N-able N-central Authentication Bypass Using an Alternate Path or Channel Vulnerability | added 2026-08-04 | EPSS 0.004920000, percentile 0.396870000 | CVSS 7.4 HIGH
+- `CVE-2026-34486` | Apache Tomcat | Apache Tomcat Missing Encryption of Sensitive Data Vulnerability | added 2026-08-04 | EPSS 0.811600000, percentile 0.995980000 | CVSS 7.5 HIGH
+- `CVE-2026-9198` | IBM Langflow | IBM Langflow Code Injection Vulnerability | added 2026-08-04 | EPSS 0.170530000, percentile 0.967780000 | CVSS 9.8 CRITICAL
+- `CVE-2026-18577` | N-able N-central | N-able N-central Authentication Bypass Using an Alternate Path or Channel Vulnerability | added 2026-08-03 | EPSS 0.041030000, percentile 0.897900000
+- `CVE-2026-20316` | Cisco Secure Firewall Management Center (FMC) | Cisco Secure Firewall Management Center Use of Hard-coded Password Vulnerability | added 2026-07-29 | EPSS 0.007880000, percentile 0.527930000
+- `CVE-2025-68686` | Fortinet FortiOS | Fortinet FortiOS Exposure of Sensitive Information to an Unauthorized Actor Vulnerability | added 2026-07-27 | EPSS 0.012640000, percentile 0.669260000
+- `CVE-2026-16812` | Arista VeloCloud Orchestrator | Arista VeloCloud Orchestrator On-Prem OS Command Injection Vulnerability | added 2026-07-27 | EPSS 0.008840000, percentile 0.558290000
+- `CVE-2026-16232` | Check Point SmartConsole | Check Point SmartConsole Improper Authentication Vulnerability | added 2026-07-22 | EPSS 0.713910000, percentile 0.993550000
+- `CVE-2026-50522` | Microsoft SharePoint | Microsoft SharePoint Deserialization of Untrusted Data Vulnerability | added 2026-07-22 | EPSS 0.769810000, percentile 0.995030000
+- `CVE-2026-60137` | WordPress Core | WordPress Core SQL Injection Vulnerability | added 2026-07-21 | EPSS 0.731000000, percentile 0.994040000
+- `CVE-2026-63030` | WordPress Core | WordPress Core Interpretation Conflict Vulnerability | added 2026-07-21 | EPSS 0.956050000, percentile 0.998630000
+- `CVE-2026-0770` | Langflow Langflow | Langflow Inclusion of Functionality from Untrusted Control Sphere Vulnerability | added 2026-07-21 | EPSS 0.562670000, percentile 0.989570000
+- `CVE-2021-27137` | DD-WRT DD-WRT | DD-WRT Stack-Based Buffer Overflow Vulnerability | added 2026-07-21 | EPSS 0.164880000, percentile 0.966810000
 
 **Prevention and mitigation playbook:**
 
@@ -389,35 +391,6 @@ Cleared for: [specific action cleared, or NONE if HALT]
 > **HALT is final.** If this agent returns HALT, the operation must stop. The orchestrator must surface the finding to the user before any alternative path is attempted.
 <!-- AGENTTEAMS:END security_verdict_contract -->
 
-### Output Format
-
-```
-SECURITY REVIEW — {action summary}
-
-STATUS: PASS | HALT | CONDITIONAL PASS
-
-Findings:
-- [finding 1]
-- [finding 2]
-
-Required mitigations (if CONDITIONAL PASS):
-- [mitigation 1]
-
-Cleared for: [specific action cleared, or NONE if HALT]
-```
-
-**Security Decisions Log** — After every verdict (including PASS), append one row to `references/security-decisions.log.csv` with columns: `timestamp,requesting_agent,action_reviewed,verdict,conditions,conditions_verified`. The runtime accepts both the legacy schema above and the current repository schema with additional provenance fields. For CONDITIONAL PASS verdicts, set `conditions_verified` to `pending`. The orchestrator must update this to `verified` after confirming all conditions are satisfied — unverified CONDITIONAL PASS conditions block subsequent related operations as if HALT had been issued.
-
-**Signed Waivers** — Controlled exceptions are recorded in `references/security-waivers.log.csv` and must be signed with `AGENTTEAMS_WAIVER_SIGNING_KEY`. Waivers must be time-bounded, scoped to a specific action, and marked `conditions_verified=verified` before they can authorize a blocked destructive or stale-intelligence gate.
-
-> **HALT is final.** If this agent returns HALT, the operation must stop. The orchestrator must surface the finding to the user before any alternative path is attempted.
-
 ## Project-Specific Notes
 
 > ⚙️ **USER-EDITABLE** — project-specific rules, overrides, and extensions for this agent. This section lies outside every `AGENTTEAMS` fence and is preserved verbatim across `agentteams --update --merge`.
-
-<!-- AGENTTEAMS:BEGIN invariant_core v=2 -->
-## Invariant Core
-
-> ⛔ **Do not modify or omit.** All triggers, rules, the HALT directive, and the AI-authored-code screening guidance carried in this file's fenced sections are the immutable contract for this agent. Sections are referenced by name, never by position: the merge engine places a fenced region relative to whichever fences already exist on disk, so a deployed file may carry them in a different order than this template.
-<!-- AGENTTEAMS:END invariant_core -->

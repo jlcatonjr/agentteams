@@ -20,7 +20,15 @@ from pathlib import Path
 
 
 def add_sync_arguments(parser: argparse.ArgumentParser) -> None:
-    """Register the multi-framework pinned-sync flags on the main parser."""
+    """Register the multi-framework pinned-sync flags on the main parser.
+
+    Args:
+        parser: The main CLI argument parser to extend in place.
+
+    Returns:
+        None. The parser gains a "multi-framework pinned sync" group
+        (--sync-init, --pin, --sync, --sync-since).
+    """
     group = parser.add_argument_group("multi-framework pinned sync")
     group.add_argument(
         "--sync-init",
@@ -65,7 +73,15 @@ def add_sync_arguments(parser: argparse.ArgumentParser) -> None:
 
 
 def run_sync_cli(args: argparse.Namespace) -> int:
-    """Dispatch --sync-init / --sync. Returns a process exit code."""
+    """Dispatch --sync-init / --sync.
+
+    Args:
+        args: Parsed CLI namespace carrying sync_init/sync/pin/sync_since,
+            plus the shared project/dry_run flags.
+
+    Returns:
+        Process exit code: 0 on success, non-zero on validation or sync failure.
+    """
     from agentteams.multi_sync import CONFLICT_LOG_SUBPATH, run_sync, sync_init
 
     root = Path(getattr(args, "project", None) or ".").resolve()
