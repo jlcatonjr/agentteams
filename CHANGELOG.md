@@ -6,6 +6,25 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### added (2026-W33 consolidated remediation: pinned-sync)
+
+- **Multi-framework pinned-sync** — new `agentteams/sync_pin.py` and `agentteams/multi_sync.py`
+  modules with CLI carves (`agentteams/cli/sync_switch.py`, parser/app wiring) for keeping
+  pinned framework renders in sync from one canonical source.
+- **Wrong-value-bleed detector** — projection defect confirmed live and logged; brief corrected;
+  a detector guards against manifest values bleeding into unrelated rendered surfaces.
+
+### fixed (2026-W33 consolidated remediation: fence-safe strip contract)
+
+- **`_HANDOFFS_HEADING_RE` over-matched heading prefixes.** The handoffs-strip regex now matches
+  exact section titles only; previously only a shrink-guard coincidence protected template-owned
+  `Handoff *` headings from removal.
+- **`interop.py` kept its own naive strip regex** — the J1 fence-collapse root cause. It now
+  delegates to the shared fence-safe stripper; regression tests pin both behaviors, including a
+  documented deliberate contract change.
+- **Security-gate and red-team ledger CSV rewrites** now use `atomicio.atomic_rewrite_csv_rows`
+  instead of truncate-then-write, closing the ledger-truncation failure mode.
+
 ### fixed (canonical round-trip: capabilities were captured on export but never applied on import)
 
 - **`import_from_cai` silently dropped `capabilities.tool_scopes` for every target framework.**
