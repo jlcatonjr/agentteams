@@ -24,6 +24,7 @@ This reference defines the **supported public API surface** (documented modules 
 | [`convert`](convert.md) | Direct format migration between framework outputs |
 | [`interop`](interop.md) | Canonical Agent Interface (CAI) interop pipeline |
 | [`bridge`](bridge.md) | Lightweight runtime compatibility bridge artifacts |
+| [`team_package`](team-package.md) | Portable team package: a durable canonical directory plus its generic bridge, zipped for a repo with zero `agentteams` integration |
 | [`cli`](cli.md) | CLI package decomposition — which module owns which stage (flags live in the CLI Reference) |
 | [`output-plan`](output-plan.md) | Plans which files a manifest produces, before anything renders |
 | [`update-report`](update-report.md) | `update.report.md` — durable record of an `--update` run's decisions |
@@ -38,6 +39,8 @@ This reference defines the **supported public API surface** (documented modules 
 | [`scan`](scan.md) | Proactive security scan for generated agent files |
 | [`session_scan`](session_scan.md) | Repo at-large issue scan (CHANGELOG Known Issues, plan-steps pending/blocked, git status) for orchestrator closeout |
 | [`audit`](audit.md) | Post-generation static and AI-powered audit |
+| [`integrity`](integrity.md) | Hash manifest over the modules that enforce the constitution itself |
+| [`feature_audit`](feature-audit.md) | Verifies features documented in Feature Inventory still function, via the machine-readable feature registry |
 | [`living-doc`](living-doc.md) | Living-document conformance (Rule 7) over unfenced agent prose |
 | [`remediate`](remediate.md) | Auto-correct audit findings via standalone Copilot CLI |
 | [`security-refs`](security-refs.md) | Build live security intelligence placeholders for templates |
@@ -95,6 +98,21 @@ This reference defines the **supported public API surface** (documented modules 
 | [`goose_config`](goose-config.md) | Locate + safely mutate Goose's `config.yaml` for source/model switching (no key handling) |
 | [`mcp_detect`](mcp-detect.md) | Detect MCP server configuration available to the target host |
 | [`mcp_emit`](mcp-emit.md) | Emit MCP server wiring into generated teams |
+| [`codex_mcp_emit`](codex-mcp-emit.md) | MCP server emission into Codex's `.codex/config.toml` |
+| [`toml_write`](toml-write.md) | Minimal hand-rolled TOML serializer bounded to what Codex's MCP config tables need |
+| [`bridge_pair_docs`](bridge-pair-docs.md) | Prose renderers for the bridge's framework-agnostic pair-dir artifacts (carved out of `bridge`) |
+| [`bridge_skills`](bridge-skills.md) | Claude skill bodies emitted by the bridge (carved out of `bridge`) |
+
+## Multi-Framework Pinned Sync
+
+| Module | Role |
+|--------|------|
+| [`multi_sync`](multi-sync.md) | Pinned-sync orchestrator: keeps every agentic interface in sync through the canonical hub, pin authoritative on conflict |
+| [`sync_pin`](sync-pin.md) | The pinned-source contract for multi-framework sync |
+| [`sync_baseline`](sync-baseline.md) | Real-content baseline snapshot writer for native ↔ canonical synchronization |
+| [`sync_classifier`](sync-classifier.md) | Generalized three-way classifier for native ↔ canonical synchronization |
+| [`canonical`](canonical.md) | Durable exploded on-disk canonical agent format — the hub `multi_sync` reconciles through |
+| [`capability_map`](capability-map.md) | Canonical tool-scope vocabulary and framework ↔ canonical capability mapping, shared by `interop` and this family |
 
 ## PR Management
 
@@ -132,13 +150,23 @@ emit.print_summary(result, manifest)
 
 ## Interoperability API Family
 
-The interoperability feature family has three dedicated modules:
+The interoperability feature family has four approaches, each a dedicated module or module
+group:
 
 1. [`convert`](convert.md) for format migration.
 2. [`interop`](interop.md) for CAI normalization and transfer.
-3. [`bridge`](bridge.md) for lightweight source-canonical runtime bridging.
+3. [`bridge`](bridge.md) for lightweight, one-directional source-canonical runtime bridging.
+4. [Multi-Framework Pinned Sync](#multi-framework-pinned-sync) (`multi_sync` and peers) for
+   continuous, bidirectional multi-framework consistency through a canonical hub, rather than a
+   one-directional mirror of a single source.
 
-For workflow-level usage and mode selection, see the [Interoperability](../interoperability.md) page.
+Bridge and pinned-sync solve related but different problems and are not layered on each other —
+pick bridge for a lightweight, one-directional mirror of one canonical source into another
+framework's directory (re-running to pick up source changes is a normal, supported workflow —
+see `bridge.md`'s own Mode Selection Guidance); pick pinned-sync when every framework is a peer
+that needs to stay reconciled as any of them changes. For bridge's own workflow-level usage and
+mode selection, see the [Interoperability](../interoperability.md) page (which does not yet
+cover pinned-sync).
 
 ---
 
