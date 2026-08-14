@@ -133,3 +133,26 @@ docs/
 
 # Red-team battery results, written only when the battery is run standalone.
 tests/constitutional-redteam-results.json
+
+# Multi-framework pinned-sync artifacts — instance/operational state (the exploded
+# canonical team, the pin, per-framework baselines, and the conflict log). These
+# describe THIS repo's own agent instance and must never be published.
+.agentteams/canonical/
+.agentteams/pin.json
+.agentteams/sync-conflicts.log.csv
+
+# Instance-privacy (operator decision 2026-08-13, land-uncommitted-tree plan step 1):
+# further instance-state surfaces of this repo's own agent teams — the durable
+# canonical exploded team at the root, the copilot-cli renders, and runtime handoff
+# state. Same never-publish class as .agentteams/ above. At decision time these
+# also carried unremediated wrong-value-bleed content (remediation-log 2026-08-13).
+# Known exception: .github/copilot/bridge-entry.md was committed before this rule
+# (6c284e1) and stays tracked — gitignore does not untrack it. It is the generic
+# 4-line bridge-entry pointer (no instance data), kept published deliberately.
+.agents/
+.github/copilot/
+.claude/references/runtime-handoffs.json
+.claude/agents/references/runtime-handoffs.json
+.goose/recipes/
+references/runtime-handoffs.json
+.github/references/

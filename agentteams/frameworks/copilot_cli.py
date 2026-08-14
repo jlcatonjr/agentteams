@@ -18,7 +18,7 @@ agents:, handoffs:) must be stripped before delivery; only the prose body
 is passed to the model.
 
 VS Code Copilot YAML keys       → stripped (incompatible)
-Handoff sections (## Handoff…)  → stripped from prompt body
+Handoff sections (exact titles: ## Handoffs / ## Handoff Instructions) → stripped from prompt body
 Runtime handoff manifest        → emitted by build pipeline when handoffs exist
 Body Markdown                   → preserved verbatim
 """

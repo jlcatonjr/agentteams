@@ -103,6 +103,12 @@ def atomic_rewrite_csv_rows(
     would produce one, is caught before the destination file is ever
     opened for writing, not after.
 
+    2026-08-13 finding: the ``lineterminator="\\n"`` below was hardcoded regardless of
+    *path*'s existing convention, so rewriting even one row of an otherwise
+    CRLF-terminated CSV silently reformatted the entire file to LF — an unrequested,
+    unrelated-to-the-edit reformat. Fixed by sniffing *path*'s current line ending (if
+    it already exists) and preserving it; a brand-new file still defaults to LF.
+
     Raises:
         ValueError: a row holds a non-``str`` value for a declared field, or
             a rendered row didn't round-trip to exactly ``len(fieldnames)``
@@ -117,8 +123,15 @@ def atomic_rewrite_csv_rows(
                     f"this instead of erroring, so refusing to write {path}"
                 )
 
+    line_terminator = "\n"
+    if path.exists():
+        with open(path, "rb") as existing:
+            raw = existing.read()
+        if b"\r\n" in raw:
+            line_terminator = "\r\n"
+
     buf = io.StringIO()
-    writer = csv.DictWriter(buf, fieldnames=fieldnames, lineterminator="\n")
+    writer = csv.DictWriter(buf, fieldnames=fieldnames, lineterminator=line_terminator)
     writer.writeheader()
     writer.writerows(rows)
     text = buf.getvalue()

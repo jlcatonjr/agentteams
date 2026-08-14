@@ -1,6 +1,6 @@
 {
   "modules": {
-    "agentteams/cli/security_gate.py": "e709d457aac85bd802bf4604c5b5cf48458a2f6d9522969ba4a556698eaf1c8d",
+    "agentteams/cli/security_gate.py": "5adcec4ecec679ddb4761fc30173b72c0628fa72a0caa23c352c021ea4c864f5",
     "agentteams/fences.py": "08291a71a07355649c6f432d1d50ca81fb4012911351a190fba10cc3f2a580fe",
     "agentteams/front_matter_merge.py": "4e50590d65d284f4d63d37875d3d84cf31b2596d6088c260ec57b2c4f0f1973f",
     "agentteams/front_matter_reconcile.py": "2ac319de5c2e19aae6ba1616946a1c0c9dbbe9966661a8a17eac85b15780d31e",

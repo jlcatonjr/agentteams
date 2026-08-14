@@ -3,6 +3,7 @@ name: Agent Refactor — AgentTeamsModule
 description: "Extracts shared data to reference files and enforces spec compliance across all agent documentation in AgentTeamsModule"
 tools: Edit, Write, Grep, Glob, Task
 ---
+
 <!-- AGENTTEAMS:BEGIN content v=1 -->
 
 # Agent Refactor — AgentTeamsModule

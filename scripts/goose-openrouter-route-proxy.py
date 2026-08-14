@@ -72,10 +72,37 @@ CAVEATS
   unmeasured. That is deliberate -- a silent fallback would defeat the allowlist --
   but it does mean a stale list turns into hard errors, not degraded routing.
 * Secrets: the ``Authorization`` header is relayed verbatim and never logged.
+
+IMAGE INTERCEPTION (2026-08-13)
+-------------------------------
+Standing operator policy: **raw image content never leaves this machine.** Every
+``image_url`` content part in a relayed ``/chat/completions`` body is replaced with
+locally-extracted text (tesseract OCR plus an OpenCV dominant-color / layout-block
+summary) before forwarding — regardless of whether the active model supports vision.
+This both enforces the policy and fixes the 404 that motivated it: the active model
+(``z-ai/glm-5.2`` since 2026-08-11) is text-only on every backend that serves it, so
+any image-bearing turn died with "No endpoints found that support image input".
+
+Requires ``pytesseract``, ``Pillow``, and ``opencv-python-headless``, pinned in the
+dedicated venv ``~/.config/goose/ocr-venv`` (the ambient interpreter resolving
+``cv2`` via an Anaconda ``$PATH`` entry is an accident, not a dependency). Run the
+proxy with that interpreter::
+
+    ~/.config/goose/ocr-venv/bin/python3 scripts/goose-openrouter-route-proxy.py ...
+
+The policy **fails closed** (2026-08-13 security + adversarial review): an image
+part that cannot be OCR'd — decode failure, oversize, a remote http(s) URL, an
+``input_image``-shaped part — is replaced with a ``[image withheld: ...]`` text
+notice, never forwarded raw. Likewise at startup: if the OCR libraries are not
+importable the proxy **refuses to start** rather than silently running in a mode
+that forwards raw images (and 404s against text-only models anyway). The explicit
+escape hatch is ``--allow-raw-images``, which restores verbatim relay of image
+parts and prints a warning banner.
 """
 from __future__ import annotations
 
 import argparse
+import base64
 import json
 import sys
 import urllib.error
@@ -166,6 +193,198 @@ def build_provider_block(only: list[str], ignore: list[str], extra: dict,
     return block
 
 
+def _ocr_available() -> bool:
+    """Report whether the OCR/vision libraries are importable in this interpreter."""
+    try:
+        import cv2  # noqa: F401
+        import pytesseract  # noqa: F401
+        from PIL import Image  # noqa: F401
+    except ImportError:
+        return False
+    return True
+
+
+#: Refuse to decode absurdly large inline images (decompression-bomb guard).
+#: 20MB of base64 is ~15MB of image — far beyond any legitimate screenshot.
+MAX_IMAGE_B64_BYTES = 20 * 1024 * 1024
+
+#: Pixel-count ceiling enforced via ``Image.MAX_IMAGE_PIXELS`` before full decode.
+#: PIL's default (~178M px) still admits a ~500MB-RAM decompression bomb per
+#: request (2026-08-13 security review); 40M px covers any real screenshot
+#: (a 5K display is ~14.7M px) at a bounded ~120MB decode.
+MAX_IMAGE_PIXELS = 40_000_000
+
+#: The ceiling we *resize down to* before OCR, for bounded CPU.
+_OCR_MAX_DIM = 2200
+
+
+def describe_image_bytes(raw: bytes) -> str:
+    """OCR + structural summary for one decoded image, as a single text block.
+
+    Runs tesseract for text and OpenCV for dominant colors and layout blocks,
+    mirroring the collector-management 2026-08-13 script's approach so the model
+    gets some non-text visual context despite never seeing pixels.
+
+    Args:
+        raw: Decoded image bytes (any format PIL can open).
+
+    Returns:
+        A formatted description block.
+
+    Raises:
+        Exception: Propagates any decode/OCR failure; callers decide fallback.
+    """
+    import io
+
+    import cv2
+    import numpy as np
+    import pytesseract
+    from PIL import Image
+
+    img = Image.open(io.BytesIO(raw))
+    # Header-only check before the full decode: PIL's own bomb ceiling (~178M px)
+    # still admits a ~500MB-RAM decode, and a degenerate aspect ratio (1 x 10M)
+    # passes the base64 size cap while being useless to OCR.
+    if img.width * img.height > MAX_IMAGE_PIXELS:
+        raise ValueError(
+            f"image too large: {img.width}x{img.height} exceeds {MAX_IMAGE_PIXELS} px"
+        )
+    img.load()
+    if img.mode != "RGB":
+        img = img.convert("RGB")
+    if max(img.size) > _OCR_MAX_DIM:
+        scale = _OCR_MAX_DIM / max(img.size)
+        img = img.resize((max(1, int(img.width * scale)), max(1, int(img.height * scale))))
+
+    text = pytesseract.image_to_string(img).strip()
+
+    arr = cv2.cvtColor(np.array(img), cv2.COLOR_RGB2BGR)
+
+    # Dominant colors: k-means over a downsampled pixel set (k=4, bounded cost).
+    small = cv2.resize(arr, (64, 64), interpolation=cv2.INTER_AREA)
+    pixels = small.reshape(-1, 3).astype(np.float32)
+    k = 4
+    _, labels, centers = cv2.kmeans(
+        pixels, k, None,
+        (cv2.TERM_CRITERIA_EPS + cv2.TERM_CRITERIA_MAX_ITER, 10, 1.0),
+        3, cv2.KMEANS_PP_CENTERS,
+    )
+    counts = np.bincount(labels.flatten(), minlength=k)
+    order = np.argsort(counts)[::-1]
+    colors = []
+    for i in order:
+        b, g, r = (int(c) for c in centers[i])
+        share = counts[i] * 100 // pixels.shape[0]
+        colors.append(f"#{r:02x}{g:02x}{b:02x} ({share}%)")
+
+    # Layout blocks: large contours on an edge map, as rough UI regions.
+    gray = cv2.cvtColor(arr, cv2.COLOR_BGR2GRAY)
+    edges = cv2.Canny(gray, 50, 150)
+    contours, _ = cv2.findContours(edges, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
+    min_area = (img.width * img.height) * 0.005
+    blocks = []
+    for c in contours:
+        x, y, w, h = cv2.boundingRect(c)
+        if w * h >= min_area:
+            blocks.append((x, y, w, h))
+    blocks.sort(key=lambda b: (b[1], b[0]))
+    block_lines = [f"  - block at ({x},{y}) size {w}x{h}" for x, y, w, h in blocks[:12]]
+
+    parts = [
+        f"[image replaced by local OCR — {img.width}x{img.height}px; "
+        "raw image content is never sent to the model]",
+        "",
+        "OCR text:",
+        text if text else "(no text detected)",
+        "",
+        f"Dominant colors: {', '.join(colors)}",
+    ]
+    if block_lines:
+        parts.append(f"Layout blocks ({len(blocks)} detected, top {len(block_lines)}):")
+        parts.extend(block_lines)
+    return "\n".join(parts)
+
+
+def _describe_data_url(url: str) -> str | None:
+    """Decode a ``data:image/...;base64,...`` URL and describe it; None on any failure."""
+    try:
+        _, _, b64 = url.partition(";base64,")
+        if not b64 or len(b64) > MAX_IMAGE_B64_BYTES:
+            return None
+        return describe_image_bytes(base64.b64decode(b64, validate=True))
+    except Exception as exc:  # noqa: BLE001 — any failure means withhold, never a crash
+        print(f"[route-proxy] image OCR failed ({type(exc).__name__}: {exc}); "
+              "withholding the image (fail-closed)", file=sys.stderr, flush=True)
+        return None
+
+
+#: Content-part ``type`` values treated as image content. ``image_url`` is the
+#: chat-completions shape; ``input_image`` is the Responses-API shape — matched
+#: too so a client speaking that dialect cannot slip an image past the policy.
+_IMAGE_PART_TYPES = frozenset({"image_url", "input_image"})
+
+_WITHHELD_OCR_FAILED = (
+    "[image withheld: local OCR failed; raw image content is never sent to the model]"
+)
+_WITHHELD_REMOTE = (
+    "[remote image withheld (URL not relayed or fetched); raw image content is "
+    "never sent to the model]"
+)
+_WITHHELD_MALFORMED = (
+    "[image withheld: unrecognized image part shape; raw image content is never "
+    "sent to the model]"
+)
+
+
+def strip_images(body: bytes) -> tuple[bytes, int]:
+    """Replace image content parts in a chat body with local OCR text.
+
+    Standing policy (2026-08-13): raw image content never leaves this machine —
+    and the policy **fails closed**. A data-URL image whose OCR succeeds becomes
+    its description; anything else that is recognizably an image part (OCR
+    failure, oversize, remote URL, malformed shape) becomes an explicit
+    ``[image withheld: ...]`` notice, never a raw forward. The notice is visible
+    to the model, so the loss is announced rather than silent. (An earlier
+    draft passed failures through raw; both the security and adversarial
+    reviews flagged that as quietly falsifying the policy on every error path.)
+
+    Args:
+        body: Raw request body bytes.
+
+    Returns:
+        ``(new_body, replaced_count)``; the body is unchanged when count is 0.
+    """
+    try:
+        payload = json.loads(body)
+    except (ValueError, UnicodeDecodeError):
+        return body, 0
+    if not isinstance(payload, dict) or not isinstance(payload.get("messages"), list):
+        return body, 0
+
+    replaced = 0
+    for message in payload["messages"]:
+        if not isinstance(message, dict) or not isinstance(message.get("content"), list):
+            continue
+        content = message["content"]
+        for i, part in enumerate(content):
+            if not (isinstance(part, dict) and part.get("type") in _IMAGE_PART_TYPES):
+                continue
+            image_url = part.get("image_url")
+            url = image_url.get("url") if isinstance(image_url, dict) else image_url
+            if isinstance(url, str) and url.startswith("data:image"):
+                description = _describe_data_url(url) or _WITHHELD_OCR_FAILED
+            elif isinstance(url, str):
+                description = _WITHHELD_REMOTE
+            else:
+                description = _WITHHELD_MALFORMED
+            content[i] = {"type": "text", "text": description}
+            replaced += 1
+
+    if not replaced:
+        return body, 0
+    return json.dumps(payload).encode(), replaced
+
+
 def inject_provider(body: bytes, provider: dict) -> tuple[bytes, dict | None]:
     """Return ``(new_body, applied_provider)`` for one request body.
 
@@ -197,13 +416,17 @@ def inject_provider(body: bytes, provider: dict) -> tuple[bytes, dict | None]:
     return json.dumps(payload).encode(), payload["provider"]
 
 
-def make_handler(upstream: str, provider: dict, verbose: bool):
+def make_handler(upstream: str, provider: dict, verbose: bool,
+                 intercept_images: bool = True):
     """Build the request handler class bound to this proxy's configuration.
 
     Args:
         upstream: Base URL to relay to.
         provider: Provider routing block to inject into chat-completion bodies.
         verbose: Whether to log each injection.
+        intercept_images: Replace image content parts with local OCR text
+            (the fail-closed standing policy). ``False`` only via
+            ``--allow-raw-images``.
 
     Returns:
         A ``BaseHTTPRequestHandler`` subclass.
@@ -220,6 +443,11 @@ def make_handler(upstream: str, provider: dict, verbose: bool):
             body = self.rfile.read(length) if length else b""
 
             if method == "POST" and self.path.endswith("/chat/completions") and body:
+                if intercept_images:
+                    body, n_images = strip_images(body)
+                    if n_images and verbose:
+                        print(f"[route-proxy] replaced {n_images} image part(s) "
+                              "with local OCR", flush=True)
                 body, applied = inject_provider(body, provider)
                 if applied and verbose:
                     print(f"[route-proxy] injected {json.dumps(applied)}", flush=True)
@@ -297,9 +525,14 @@ def make_handler(upstream: str, provider: dict, verbose: bool):
 
         def do_GET(self) -> None:  # noqa: N802
             if self.path == "/healthz":
+                # image_interception is part of health, not decoration: the
+                # 2026-08-13 adversarial review found the startup banner alone
+                # is lost when the proxy is hand-started/backgrounded, and a
+                # raw-passthrough proxy exactly reproduces the image-404 incident.
                 payload = json.dumps({
                     "service": "goose-openrouter-route-proxy",
                     "provider": provider,
+                    "image_interception": "ocr" if intercept_images else "raw-passthrough",
                 }).encode()
                 self._send_bytes(200, payload, "application/json")
                 return
@@ -326,6 +559,11 @@ def main(argv: list[str] | None = None) -> int:
                              "re-picks whichever allowed backend is cheapest today")
     parser.add_argument("--upstream", default=DEFAULT_UPSTREAM, help="upstream base URL")
     parser.add_argument("--quiet", action="store_true", help="do not log injections")
+    parser.add_argument("--allow-raw-images", action="store_true",
+                        help="relay image content parts verbatim instead of replacing "
+                             "them with local OCR text — explicitly abandons the "
+                             "raw-images-never-leave-this-machine policy for this run, "
+                             "and image-bearing requests will 404 against text-only models")
     args = parser.parse_args(argv)
 
     only = [p.strip() for p in args.only.split(",") if p.strip()]
@@ -342,8 +580,28 @@ def main(argv: list[str] | None = None) -> int:
               "this would be a plain passthrough.", file=sys.stderr)
         return 2
 
+    intercept_images = not args.allow_raw_images
+    if intercept_images and not _ocr_available():
+        # Fail closed (2026-08-13 adversarial review): a banner-only warning is
+        # lost when the proxy is hand-started from the config.yaml comment and
+        # backgrounded, and a silently raw-passthrough proxy exactly reproduces
+        # the image-404 incident this feature exists to fix.
+        print("route-proxy: pytesseract/PIL/cv2 are not importable in this "
+              "interpreter, so the raw-images-never-leave-this-machine policy "
+              "cannot be enforced. Run under ~/.config/goose/ocr-venv/bin/python3, "
+              "or pass --allow-raw-images to explicitly run without interception.",
+              file=sys.stderr)
+        return 2
+
     print(f"[route-proxy] 127.0.0.1:{args.port} -> {args.upstream}")
     print(f"[route-proxy] injecting provider={json.dumps(provider)}")
+    if intercept_images:
+        print("[route-proxy] image interception ON: image parts are replaced with "
+              "local OCR text, failing closed to a withheld-notice (raw images "
+              "never leave this machine)")
+    else:
+        print("[route-proxy] WARNING: --allow-raw-images — image parts relay "
+              "verbatim and will 404 against text-only models.", file=sys.stderr)
     if only == list(DEFAULT_ONLY):
         # A stale allowlist is the realistic failure mode here: backend rosters and
         # behavior change, and `only` + allow_fallbacks:false hard-fails (loudly, by
@@ -354,7 +612,8 @@ def main(argv: list[str] | None = None) -> int:
               "(roster only -- it does not measure reliability).")
     print(f"[route-proxy] set OPENROUTER_HOST: http://127.0.0.1:{args.port} in config.yaml, "
           "then restart goose (VS Code: reload window)")
-    handler = make_handler(args.upstream, provider, verbose=not args.quiet)
+    handler = make_handler(args.upstream, provider, verbose=not args.quiet,
+                           intercept_images=intercept_images)
     try:
         ThreadingHTTPServer(("127.0.0.1", args.port), handler).serve_forever()
     except KeyboardInterrupt:

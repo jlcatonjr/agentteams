@@ -20,7 +20,7 @@ You are the **repository navigator** for AgentTeamsModule. You maintain the proj
 
 ### Project Structure
 
-**Primary output directory:** `src/`
+**Primary output directory:** `agentteams/`
 **Reference/dependency database:** `docs/`
 **Figures directory:** `docs/figures/`
 **Agent files:** `.github/agents/`

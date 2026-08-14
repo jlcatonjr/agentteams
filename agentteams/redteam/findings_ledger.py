@@ -34,6 +34,8 @@ from dataclasses import asdict, dataclass, field
 from datetime import date, datetime, timedelta
 from pathlib import Path
 
+from agentteams.atomicio import atomic_rewrite_csv_rows
+
 #: Where the ledger lives. **Tracked**, unlike the run artifacts it is promoted from: a finding
 #: that only exists in a gitignored directory is a finding that did not survive the week.
 FINDINGS_LEDGER_REL = "references/redteam-findings.log.csv"
@@ -142,11 +144,11 @@ def write_ledger(root: Path, findings: list[Finding]) -> Path:
     path.parent.mkdir(parents=True, exist_ok=True)
     ordered = sorted(findings, key=lambda f: (f.layer, f.framework, f.agent, f.finding_id,
                                               f.model, f.observed))
-    with path.open("w", encoding="utf-8", newline="") as handle:
-        writer = csv.DictWriter(handle, fieldnames=list(FIELDNAMES))
-        writer.writeheader()
-        for finding in ordered:
-            writer.writerow({k: v for k, v in asdict(finding).items() if k in FIELDNAMES})
+    rows = [
+        {k: str(v) for k, v in asdict(finding).items() if k in FIELDNAMES}
+        for finding in ordered
+    ]
+    atomic_rewrite_csv_rows(path, rows, list(FIELDNAMES))
     return path
 
 

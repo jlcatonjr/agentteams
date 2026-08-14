@@ -119,10 +119,10 @@ Append to `.github/agents/references/conflict-log.csv` with columns:
 
 ### Source Layer (authoritative — read-only)
 <!-- AGENTTEAMS:BEGIN authority_sources_list v=1 -->
-- `templates/` — agent file structure, placeholder conventions, agent taxonomy patterns
+- `agentteams/templates/` — agent file structure, placeholder conventions, agent taxonomy patterns
 - `schemas/` — input/output contract accuracy (project-description.schema.json, team-manifest.schema.json)
-- `src/` — pipeline logic, placeholder resolution, framework adapter behavior
-- `templates/PLACEHOLDER-CONVENTIONS.md` — placeholder syntax rules (auto-resolved and manual-required token formats)
+- `agentteams/` — pipeline logic, placeholder resolution, framework adapter behavior
+- `agentteams/templates/PLACEHOLDER-CONVENTIONS.md` — placeholder syntax rules (auto-resolved and manual-required token formats)
 - `build-team-plan.md` — architectural decisions, agent taxonomy, module design rationale
 <!-- AGENTTEAMS:END authority_sources_list -->
 

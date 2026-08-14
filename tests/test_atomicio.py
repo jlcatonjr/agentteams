@@ -95,3 +95,23 @@ def test_uses_unix_line_endings(tmp_path: Path):
     atomic_rewrite_csv_rows(path, [{"a": "1", "b": "2", "c": "3"}], _FIELDS)
     raw = path.read_bytes()
     assert b"\r\n" not in raw
+
+
+def test_preserves_existing_crlf_line_endings(tmp_path: Path):
+    """2026-08-13 regression: rewriting one row of a CRLF file must not silently
+    reformat the whole file to LF -- an unrequested reformat unrelated to the edit."""
+    path = tmp_path / "ledger.csv"
+    path.write_bytes(b"a,b,c\r\n1,2,3\r\n")
+    atomic_rewrite_csv_rows(path, [{"a": "1", "b": "2", "c": "3"}, {"a": "4", "b": "5", "c": "6"}], _FIELDS)
+    raw = path.read_bytes()
+    assert raw == b"a,b,c\r\n1,2,3\r\n4,5,6\r\n", raw
+    assert _read(path) == [{"a": "1", "b": "2", "c": "3"}, {"a": "4", "b": "5", "c": "6"}]
+
+
+def test_a_brand_new_file_still_defaults_to_unix_line_endings(tmp_path: Path):
+    """No existing file to sniff a convention from -> LF default, unchanged behavior."""
+    path = tmp_path / "new-ledger.csv"
+    assert not path.exists()
+    atomic_rewrite_csv_rows(path, [{"a": "1", "b": "2", "c": "3"}], _FIELDS)
+    raw = path.read_bytes()
+    assert b"\r\n" not in raw

@@ -29,14 +29,14 @@
     "universal/security.template.md": "f0903dbb0ec12bbb",
     "universal/code-hygiene.template.md": "7b1eae41ef75358d",
     "universal/adversarial.template.md": "3923a13f4fb1ae6a",
-    "universal/conflict-auditor.template.md": "371d5304d8a0f5fe",
+    "universal/conflict-auditor.template.md": "435941d404f59376",
     "universal/conflict-resolution.template.md": "ff21ac7e7e1fc63c",
     "universal/cleanup.template.md": "bf795b64968349f6",
     "universal/agent-updater.template.md": "c9636a2efa322a6d",
     "universal/agent-refactor.template.md": "a9717cc56c35f4ac",
     "universal/repo-liaison.template.md": "a41269c1204528f3",
     "universal/git-operations.template.md": "82546b5e807d9c98",
-    "domain/work-summarizer.template.md": "893bc7338f0336a6",
+    "domain/work-summarizer.template.md": "a5ec071b36f88a5c",
     "domain/primary-producer.template.md": "35bf874350a29a94",
     "domain/quality-auditor.template.md": "bc44c5742a92d831",
     "domain/cohesion-repairer.template.md": "a2c3b4844110b04a",
@@ -70,7 +70,7 @@
     "universal/retrieval-integration.reference.template.md": "71cbf701c97a6e22",
     "universal/retrieval-trigger-contract.reference.template.md": "b5934b1f48552945",
     "workstream-expert.template.md": "95f33fe5d05d80e7",
-    "copilot-instructions.template.md": "a7835a86e5366798",
+    "copilot-instructions.template.md": "bc94e8e32a6b2cff",
     "builder/team-builder-claude.template.md": "d6158978f4955fc1",
     "domain/content-enricher.template.md": "8176cebe85aace8f"
   },
@@ -474,72 +474,66 @@
     "repo-liaison",
     "git-operations"
   ],
-  "manifest_fingerprint": "604568a2d3982695",
+  "manifest_fingerprint": "2864e29645acceac",
   "fingerprint_algo_version": 1,
   "file_hashes": {
-    "security.md": "f429cb1e9018d1db",
-    "references/security-vulnerability-watch.json": "9aaba2a77c142474",
-    "references/framework-watch.reference.md": "0f53525f0c1c8a68",
-    "orchestrator.md": "bbd7dd9d92f655ed",
-    "navigator.md": "0f15b4c7c627b6f2",
-    "code-hygiene.md": "2031bb609e90da47",
-    "adversarial.md": "0174b275c5fb7b2d",
-    "conflict-auditor.md": "88c6819112c0ca4c",
-    "conflict-resolution.md": "7a070111f68324fc",
-    "cleanup.md": "dbda0e68c51e14f3",
-    "agent-updater.md": "292aec03102633d4",
-    "agent-refactor.md": "8de65e6cb5749178",
-    "repo-liaison.md": "0370c754509d73e5",
-    "git-operations.md": "c26c371259d7ba3a",
-    "work-summarizer.md": "f47abf0b9ab2595f",
-    "primary-producer.md": "de695c574e3cab21",
-    "quality-auditor.md": "671d5b5f1c831471",
-    "cohesion-repairer.md": "68fc4405fe0ff312",
-    "technical-validator.md": "316b60fe958d608a",
-    "format-converter.md": "d69e6aa1b8483d9b",
-    "reference-manager.md": "799079498655a535",
-    "output-compiler.md": "e48e35de379fc579",
-    "retrieval-integrator.md": "494949c227e137ae",
-    "references/ref-pytest-reference.md": "785da59ae0fcefa5",
-    "references/ref-json-schema-reference.md": "64ee7849298b80d9",
+    "references/security-vulnerability-watch.reference.md": "38a7955ed1466000",
+    "references/security-vulnerability-watch.json": "e9b59f36fa8771dc",
+    "references/framework-watch.reference.md": "2cb704571c70cd1b",
+    "security.md": "d2ecd4d63d0d063b",
     "references/code-hygiene-rules.reference.md": "4619d004d000dafc",
     "references/unix-philosophy-mapping.reference.md": "dae1e088560a2336",
-    "references/security-vulnerability-watch.reference.md": "18b796b897a391a3",
     "references/security-linux-hardening.reference.md": "0e91aeed201cf710",
     "references/security-macos-hardening.reference.md": "b785636b62c484f9",
     "references/security-windows-hardening.reference.md": "e38d9e654e80f83c",
     "references/ai-bad-habits-watch.reference.md": "51487a0c1aef349d",
     "references/adjacent-repos.md": "cd33efa6ab392c33",
     "references/github-workflows-merge.reference.md": "c4d84237da7bca5a",
+    "references/retrieval-integration.reference.md": "b69a6be42636a3c9",
+    "references/retrieval-trigger-contract.reference.md": "461a3cf4e58a2521",
+    "../CLAUDE.md": "080f1bcea086c077",
+    "references/runtime-handoffs.json": "368f6e784b20b0c8",
+    "orchestrator.md": "ea895d0d50065331",
+    "navigator.md": "0f15b4c7c627b6f2",
+    "code-hygiene.md": "e5552d65481f4070",
+    "adversarial.md": "df8196f00d07ef75",
+    "conflict-auditor.md": "8ca4022c2473a617",
+    "conflict-resolution.md": "4b64e9bec4ebd0fd",
+    "cleanup.md": "1f6e18bbd3033bb5",
+    "agent-updater.md": "5906f984922b19b0",
+    "agent-refactor.md": "9dad355e21d543f3",
+    "repo-liaison.md": "3a25c21d4e126e51",
+    "git-operations.md": "95dea3e4d3c3c3ee",
+    "work-summarizer.md": "adac9563429f8570",
+    "primary-producer.md": "09c439f5dd293488",
+    "quality-auditor.md": "c694d77c4a2911d9",
+    "cohesion-repairer.md": "8a5eb23204a2c78b",
+    "technical-validator.md": "74ae6f36d53d695f",
+    "format-converter.md": "e272f52a204eed1e",
+    "reference-manager.md": "747449941f5c768a",
+    "output-compiler.md": "a7200e4865a2fe9c",
+    "retrieval-integrator.md": "645475612dbc87c0",
+    "references/ref-pytest-reference.md": "785da59ae0fcefa5",
+    "references/ref-json-schema-reference.md": "64ee7849298b80d9",
     "references/work-summary-spec.reference.md": "96232231a1f7c6be",
     "references/work-summary-tooling.reference.md": "f3656972717153a9",
     "references/work-summary-backfill.reference.md": "845ee35bc64ee727",
     "references/parallelization.reference.md": "d2321bf5ac1ed2f8",
     "references/instruction-authority.reference.md": "93da11dadb623013",
-    "references/redteam-methodology.reference.md": "8d34451560d2498f",
     "references/retrospective-remediation.reference.md": "74b01f27f58ba52a",
     "references/cli-tool-discovery.reference.md": "ebf4a4f64eb2dfb7",
     "references/skill-generation.reference.md": "5dc99a3a146ba505",
     "references/external-retrieval-quality-gate.reference.md": "14a48ec3ba3fe3ff",
-    "references/retrieval-integration.reference.md": "b69a6be42636a3c9",
-    "references/retrieval-trigger-contract.reference.md": "461a3cf4e58a2521",
-    "template-library-expert.md": "9f412dad9fe22fff",
-    "pipeline-core-expert.md": "fccf325ab2da14b3",
-    "framework-adapters-expert.md": "234c6c00b1016747",
-    "schemas-expert.md": "fd7bd590cb01ef0b",
-    "cli-and-examples-expert.md": "f0d219bdee45fca8",
-    "test-suite-expert.md": "01bc66c2b214726e",
-    "../CLAUDE.md": "51159d2981307f74",
-    "team-builder.md": "6300b8496c357225",
+    "template-library-expert.md": "960d901d36ca13e3",
+    "pipeline-core-expert.md": "9308306786e277fb",
+    "framework-adapters-expert.md": "0ad3a05250e80e78",
+    "schemas-expert.md": "3ed53f7533cb7a16",
+    "cli-and-examples-expert.md": "49b1eecfdf6476db",
+    "test-suite-expert.md": "49639d5f7144442b",
+    "team-builder.md": "e5e9e156155f5ec0",
     "SETUP-REQUIRED.md": "642394d04b332357",
-    "content-enricher.md": "546d796eb4e8805c",
-    "../hooks/constitutional-gate.py": "53021881aa1d094e",
-    "../settings.hooks.example.json": "700bf14dce3ba97a",
-    "../../.vscode/tasks.json": "c73918a98093da2e",
-    "references/runtime-handoffs.json": "368f6e784b20b0c8",
-    "references/pipeline-graph.md": "21579e6e275596ff",
-    "references/pipeline-graph.svg": "7d9c7a34f6963688",
-    "references/pipeline-handoffs.svg": "dd19dfad487e5cad"
+    "content-enricher.md": "953024180cf5e7e3",
+    "references/pipeline-graph.md": "21579e6e275596ff"
   },
   "front_matter_baseline": {
     "security.md": {
@@ -575,12 +569,12 @@
     "conflict-resolution.md": {
       "name": "Conflict Resolution \u2014 AgentTeamsModule",
       "description": "\"Makes ACCEPT/REJECT/REVISE decisions on conflicts flagged by the conflict auditor in AgentTeamsModule\"",
-      "tools": "Edit, Write, Grep, Glob, Read"
+      "tools": "Read, Edit, Write, Grep, Glob"
     },
     "cleanup.md": {
       "name": "Cleanup \u2014 AgentTeamsModule",
       "description": "\"Removes stale drafts, build artifacts, and orphaned files from AgentTeamsModule with mandatory safety checks\"",
-      "tools": "Edit, Write, Grep, Glob, Bash"
+      "tools": "Edit, Write, Grep, Glob"
     },
     "agent-updater.md": {
       "name": "Agent Updater \u2014 AgentTeamsModule",
@@ -595,17 +589,17 @@
     "repo-liaison.md": {
       "name": "Repo Liaison \u2014 AgentTeamsModule",
       "description": "\"Tracks agent documentation in repositories adjacent to AgentTeamsModule, communicates cross-repository impacts, maintains the adjacent-repos registry, and coordinates between orchestrators when this project's activity affects neighboring agent infrastructures.\"",
-      "tools": "Read, Edit, Write, Grep, Glob, Bash, Task"
+      "tools": "Read, Edit, Write, Grep, Glob, Task"
     },
     "git-operations.md": {
       "name": "Git Operations \u2014 AgentTeamsModule",
       "description": "\"Executes and governs Git and GitHub operations in AgentTeamsModule, including commit/push, pull/merge/rebase, conflict handling, and recovery workflows.\"",
-      "tools": "Read, Bash, Grep, Glob"
+      "tools": "Read, Grep, Glob, Bash"
     },
     "work-summarizer.md": {
       "name": "Work Summarizer \u2014 AgentTeamsModule",
       "description": "\"Synthesizes daily, weekly, and monthly work summaries from canonical plan artifacts and git evidence for AgentTeamsModule; supports append-first daily capture, legacy tmp/ fallback, and required adversarial/conflict audits\"",
-      "tools": "Read, Grep, Glob, Bash, Edit, Write, Task"
+      "tools": "Read, Edit, Write, Grep, Glob, Bash, Task"
     },
     "primary-producer.md": {
       "name": "Primary Producer \u2014 AgentTeamsModule",
@@ -635,7 +629,7 @@
     "reference-manager.md": {
       "name": "Reference Manager \u2014 AgentTeamsModule",
       "description": "\"Manages the bibliography and reference database for AgentTeamsModule \u2014 CRUD operations, citation verification, anti-fabrication enforcement\"",
-      "tools": "Read, Edit, Write, Grep, Glob, Bash(python -m agentteams.research:*)"
+      "tools": "Read, Edit, Write, Grep, Glob"
     },
     "output-compiler.md": {
       "name": "Output Compiler \u2014 AgentTeamsModule",
@@ -679,8 +673,8 @@
     },
     "team-builder.md": {
       "name": "Team Builder \u2014 Agent Teams Module",
-      "description": "\"Interactively constructs a complete agent team for a new or existing Claude project by conducting an intake interview and invoking the build_team pipeline\"",
-      "tools": "Read, Edit, Write, Grep, Glob, Bash"
+      "description": "\"Interactively constructs a complete agent team for a new or existing VS Code Copilot project by conducting an intake interview and invoking the build_team pipeline\"",
+      "tools": "Read, Edit, Write, Grep, Glob, Bash, TodoWrite"
     },
     "content-enricher.md": {
       "name": "Content Enricher \u2014 AgentTeamsModule",

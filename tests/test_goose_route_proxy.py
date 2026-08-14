@@ -102,6 +102,135 @@ def test_default_allowlist_is_the_measured_clean_set():
     assert set(grp.DEFAULT_ONLY) == {"Alibaba", "CoreWeave", "Morph"}
 
 
+# --- strip_images (image interception, 2026-08-13) ---------------------------
+#
+# Policy under test: raw image content never leaves the machine — image_url parts
+# are replaced with local OCR text before relay. These tests are offline: real OCR
+# needs the ~/.config/goose/ocr-venv interpreter (pytesseract/PIL/cv2), so the
+# describe step is monkeypatched here and only the pure rewriting logic is pinned.
+# The one test that exercises real OCR skips when the deps are absent, matching
+# the repo's existing environment-dependent-skip pattern.
+
+def _image_body(url, extra_part=None):
+    parts = [{"type": "text", "text": "what does this show?"},
+             {"type": "image_url", "image_url": {"url": url}}]
+    if extra_part:
+        parts.append(extra_part)
+    return json.dumps({"model": "m", "messages": [
+        {"role": "user", "content": parts},
+    ]}).encode()
+
+
+_TINY_PNG_B64 = (  # 1x1 white pixel, a valid PNG
+    "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR4nGP4//8/AwAI/AL+"
+    "hc2rNAAAAABJRU5ErkJggg=="
+)
+
+
+def test_strip_images_replaces_data_url_with_description(monkeypatch):
+    monkeypatch.setattr(grp, "_describe_data_url", lambda url: "OCR SAYS HELLO")
+    body, n = grp.strip_images(_image_body("data:image/png;base64," + _TINY_PNG_B64))
+    assert n == 1
+    payload = json.loads(body)
+    parts = payload["messages"][0]["content"]
+    assert parts[1] == {"type": "text", "text": "OCR SAYS HELLO"}
+    assert parts[0]["type"] == "text"  # sibling part untouched
+    assert not any(p.get("type") == "image_url" for p in parts)
+
+
+def test_strip_images_fails_closed_on_describe_failure(monkeypatch):
+    # OCR failure must NOT forward the raw image (2026-08-13 security +
+    # adversarial reviews: pass-through quietly falsified the never-send-raw-
+    # images policy on every error path). The withheld notice keeps the loss
+    # visible to the model instead of silent.
+    monkeypatch.setattr(grp, "_describe_data_url", lambda url: None)
+    body, n = grp.strip_images(_image_body("data:image/png;base64," + _TINY_PNG_B64))
+    assert n == 1
+    part = json.loads(body)["messages"][0]["content"][1]
+    assert part["type"] == "text"
+    assert "image withheld" in part["text"]
+    assert _TINY_PNG_B64 not in body.decode()
+
+
+def test_strip_images_withholds_remote_urls(monkeypatch):
+    # A remote URL is image content by reference — relaying it hands the
+    # upstream something to fetch. Fail closed: withhold, never relay.
+    called = []
+    monkeypatch.setattr(grp, "_describe_data_url", lambda url: called.append(url))
+    body, n = grp.strip_images(_image_body("https://example.com/x.png"))
+    assert n == 1 and called == []
+    part = json.loads(body)["messages"][0]["content"][1]
+    assert part["type"] == "text" and "withheld" in part["text"]
+    assert "example.com" not in body.decode()
+
+
+def test_strip_images_matches_input_image_parts(monkeypatch):
+    # Responses-API dialect: {"type": "input_image", "image_url": "<data-url>"} —
+    # a client speaking this shape must not slip an image past the policy.
+    monkeypatch.setattr(grp, "_describe_data_url", lambda url: "DESC")
+    raw = json.dumps({"messages": [{"role": "user", "content": [
+        {"type": "input_image", "image_url": "data:image/png;base64," + _TINY_PNG_B64},
+    ]}]}).encode()
+    body, n = grp.strip_images(raw)
+    assert n == 1
+    assert json.loads(body)["messages"][0]["content"][0] == {"type": "text", "text": "DESC"}
+
+
+def test_strip_images_handles_string_form_image_url(monkeypatch):
+    # Some clients send image_url as a bare string, not {"url": ...}.
+    monkeypatch.setattr(grp, "_describe_data_url", lambda url: "DESC")
+    raw = json.dumps({"messages": [{"role": "user", "content": [
+        {"type": "image_url", "image_url": "data:image/png;base64," + _TINY_PNG_B64},
+    ]}]}).encode()
+    body, n = grp.strip_images(raw)
+    assert n == 1
+    assert json.loads(body)["messages"][0]["content"][0]["type"] == "text"
+
+
+@pytest.mark.parametrize("raw", [
+    b"not json",
+    b"[1,2,3]",
+    b'{"messages": "not a list"}',
+    b'{"messages": [{"role": "user", "content": "plain string"}]}',
+    b'{"no_messages": true}',
+])
+def test_strip_images_passes_through_non_image_bodies(raw, monkeypatch):
+    monkeypatch.setattr(grp, "_describe_data_url", lambda url: "DESC")
+    body, n = grp.strip_images(raw)
+    assert body == raw and n == 0
+
+
+def test_describe_data_url_refuses_oversized_payload(monkeypatch):
+    # Decompression-bomb guard: refuse before decoding, not after.
+    big = "data:image/png;base64," + "A" * (grp.MAX_IMAGE_B64_BYTES + 1)
+    assert grp._describe_data_url(big) is None
+
+
+def test_describe_data_url_rejects_invalid_base64(capsys):
+    assert grp._describe_data_url("data:image/png;base64,!!!not-base64!!!") is None
+    assert "image OCR failed" in capsys.readouterr().err
+
+
+@pytest.mark.skipif(not grp._ocr_available(), reason="pytesseract/PIL/cv2 not installed "
+                    "(the live proxy runs under ~/.config/goose/ocr-venv, which has them)")
+def test_describe_image_bytes_real_ocr_end_to_end():
+    # Renders text into a PNG and reads it back through the real OCR path,
+    # certifying the venv contract (tesseract binary + PIL + cv2 all working).
+    import io
+    from PIL import Image, ImageDraw
+    img = Image.new("RGB", (600, 80), "white")
+    ImageDraw.Draw(img).text((10, 25), "ROUTE PROXY OCR TEST 99", fill="black")
+    buf = io.BytesIO()
+    img.save(buf, format="PNG")
+    out = grp.describe_image_bytes(buf.getvalue())
+    # PIL's default bitmap font is tiny and tesseract garbles some glyphs
+    # (measured: "TEST 99" -> "TESTSS"), so assert on a reliably-read word,
+    # not exact transcription — the test certifies the pipeline, not accuracy.
+    assert "PROXY" in out                 # OCR reached the rendered text
+    assert "Dominant colors:" in out      # cv2 color pass ran
+    assert "never sent to the model" in out
+
+
 # --- inject_provider ---------------------------------------------------------
 
 def test_inject_adds_provider_to_json_body():
@@ -334,6 +463,10 @@ def test_healthz_identifies_proxy_without_upstream_relay():
     assert sent == [(200, {
         "service": "goose-openrouter-route-proxy",
         "provider": {"only": ["Alibaba"], "allow_fallbacks": False},
+        # Health must expose interception mode: the startup banner is lost when
+        # the proxy is hand-started and backgrounded, and a raw-passthrough
+        # proxy exactly reproduces the image-404 incident.
+        "image_interception": "ocr",
     }, "application/json")]
 
 
@@ -353,23 +486,50 @@ def test_main_refuses_prefer_outside_only(capsys):
     assert "not in --only allowlist" in capsys.readouterr().err
 
 
-def test_prefer_flag_reaches_the_provider_block(monkeypatch):
-    # End-to-end through argument parsing, not just the helper -- pins the standing job's
-    # actual invocation shape (`--only "Z.AI,Alibaba,CoreWeave" --prefer "CoreWeave"`).
-    captured = {}
+class _FakeServer:
+    def __init__(self, *_a, **_k): pass
+    def serve_forever(self): raise SystemExit(0)
 
-    class _FakeServer:
-        def __init__(self, *_a, **_k): pass
-        def serve_forever(self): raise SystemExit(0)
 
-    def _fake_handler(upstream, provider, verbose):  # noqa: ARG001 - matches make_handler's
-        del upstream, verbose                        # keyword-arg call site exactly
+def _capture_handler_call(monkeypatch, captured):
+    def _fake_handler(upstream, provider, verbose, intercept_images=True):
+        del upstream, verbose  # matches make_handler's keyword-arg call site exactly
         captured["provider"] = provider
+        captured["intercept_images"] = intercept_images
         return object
 
     monkeypatch.setattr(grp, "make_handler", _fake_handler)
     monkeypatch.setattr(grp, "ThreadingHTTPServer", _FakeServer)
+
+
+def test_prefer_flag_reaches_the_provider_block(monkeypatch):
+    # End-to-end through argument parsing, not just the helper -- pins the standing job's
+    # actual invocation shape (`--only "Z.AI,Alibaba,CoreWeave" --prefer "CoreWeave"`).
+    captured = {}
+    _capture_handler_call(monkeypatch, captured)
+    # This test's subject is routing, not OCR; don't let the host env decide it.
+    monkeypatch.setattr(grp, "_ocr_available", lambda: True)
     with pytest.raises(SystemExit):
         grp.main(["--only", "Z.AI,Alibaba,CoreWeave", "--prefer", "CoreWeave"])
     assert captured["provider"]["order"] == ["CoreWeave", "Z.AI", "Alibaba"]
     assert captured["provider"]["only"] == ["Z.AI", "Alibaba", "CoreWeave"]
+    assert captured["intercept_images"] is True
+
+
+def test_main_refuses_to_start_without_ocr_deps(monkeypatch, capsys):
+    # Fail closed: a banner-only warning is lost when the proxy is hand-started
+    # and backgrounded; running raw-passthrough silently reproduces the
+    # image-404 incident the interception exists to fix.
+    monkeypatch.setattr(grp, "_ocr_available", lambda: False)
+    assert grp.main(["--only", "Alibaba"]) == 2
+    err = capsys.readouterr().err
+    assert "ocr-venv" in err and "--allow-raw-images" in err
+
+
+def test_main_allow_raw_images_is_the_explicit_escape_hatch(monkeypatch):
+    captured = {}
+    _capture_handler_call(monkeypatch, captured)
+    monkeypatch.setattr(grp, "_ocr_available", lambda: False)
+    with pytest.raises(SystemExit):
+        grp.main(["--only", "Alibaba", "--allow-raw-images"])
+    assert captured["intercept_images"] is False

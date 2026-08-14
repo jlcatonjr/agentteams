@@ -450,6 +450,13 @@ def _main_dispatch(
         from agentteams.cli.package_switch import run_package_team
         return run_package_team(args)
 
+    # -----------------------------------------------------------------------
+    # --sync-init / --sync: multi-framework pinned sync (standalone)
+    # -----------------------------------------------------------------------
+    if getattr(args, "sync_init", False) or getattr(args, "sync", False):
+        from agentteams.cli.sync_switch import run_sync_cli
+        return run_sync_cli(args)
+
     if not args.description:
         parser.error("--description is required (or use --self for self-maintenance)")
 

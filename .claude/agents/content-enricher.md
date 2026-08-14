@@ -3,6 +3,7 @@ name: Content Enricher — AgentTeamsModule
 description: "Fills in default template placeholders and underdeveloped sections in generated agent files for AgentTeamsModule using the project's source materials"
 tools: Read, Edit, Write, Grep, Glob
 ---
+
 <!-- AGENTTEAMS:BEGIN content v=1 -->
 
 # Content Enricher — AgentTeamsModule

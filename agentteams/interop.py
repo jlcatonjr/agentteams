@@ -10,12 +10,13 @@ from __future__ import annotations
 import json
 import re
 from dataclasses import dataclass, field
-from datetime import datetime, timezone
+from datetime import date, datetime, timezone
 from pathlib import Path
 from typing import Any
 
 # Single source of truth for the framework-id -> adapter map (CH-05).
 from agentteams import capability_map as _capability_map
+from agentteams.frameworks.base import FrameworkAdapter as _FrameworkAdapter
 from agentteams.frameworks.registry import FRAMEWORKS as _ADAPTERS
 from agentteams.yaml_frontmatter import (
     parse_yaml_front_matter as _parse_yaml_front_matter,
@@ -300,7 +301,26 @@ def export_to_cai(source_dir: Path, source_framework: str | None = None) -> dict
     framework_extensions = adapter.framework_extensions_from_sources(parsed_sources)
     if framework_extensions:
         cai_doc["framework_extensions"] = framework_extensions
-    return cai_doc
+    return _json_safe(cai_doc)
+
+
+def _json_safe(obj: Any) -> Any:
+    """Recursively coerce a CAI value to JSON-serializable types.
+
+    PyYAML parses an unquoted ISO date in agent front matter (``date: 2026-08-12``)
+    as a ``datetime.date`` object, which then rides into ``raw_front_matter``. Left
+    alone it raises ``TypeError: Object of type date is not JSON serializable`` at
+    the first ``json.dumps`` — canonical materialize, sync baselines, interop
+    bundles. Coercing dates/datetimes to ISO strings at the CAI boundary keeps the
+    representation JSON-safe by construction for every downstream writer.
+    """
+    if isinstance(obj, dict):
+        return {k: _json_safe(v) for k, v in obj.items()}
+    if isinstance(obj, (list, tuple)):
+        return [_json_safe(v) for v in obj]
+    if isinstance(obj, (datetime, date)):
+        return obj.isoformat()
+    return obj
 
 
 def _capture_mcp_servers(source_dir: Path) -> list[dict[str, Any]]:
@@ -830,8 +850,20 @@ def _strip_framework_wrappers(content: str) -> str:
 
 
 def _strip_handoffs_section(content: str) -> str:
-    handoff_re = re.compile(r"^#{1,3}\s+Handoff.*?(?=^#{1,3}\s|\Z)", re.MULTILINE | re.DOTALL)
-    return handoff_re.sub("", content)
+    """Strip a literal ``## Handoffs``-style section from *content*.
+
+    Reuses ``FrameworkAdapter._strip_handoffs_section`` (``agentteams/frameworks/
+    base.py``) rather than a locally re-derived regex. That shared implementation
+    was hardened (see its ``_HANDOFFS_HEADING_RE`` docstring) after its own naive
+    predecessor over-matched any heading merely starting with the word "Handoff"
+    -- e.g. `conflict-auditor.template.md`'s `## Handoff Payload Conflict Codes` --
+    and, lacking a fence-marker stop condition, ran past the intended heading and
+    consumed an entire adjacent fenced section. This module had re-introduced
+    exactly that same naive pattern independently; delegating to the shared,
+    already-fixed helper closes the regression and prevents the two copies from
+    drifting apart again.
+    """
+    return _FrameworkAdapter._strip_handoffs_section(content)
 
 
 def _first_heading_or_title(content: str, slug: str) -> str:

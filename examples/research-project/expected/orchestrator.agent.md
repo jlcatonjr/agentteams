@@ -319,7 +319,7 @@ Before executing Step 1 of any such plan:
 
 The plan slug is a lowercase-hyphenated name derived from the workflow trigger (e.g., `produce-chapter-3`, `dependency-audit-2026-04`). Legacy undated plans already present in `tmp/` remain readable and should be considered fallback inputs during review and summary workflows.
 
-Prefer generating or editing `.steps.csv`/`.github/agents/references/conflict-log.csv` rows programmatically (`csv.writer` or equivalent) over manual text edits. When a manual edit is unavoidable, re-parse the file with `agentteams.plan_steps.read_steps()` (or an equivalent real CSV parser) before considering it final — an unquoted embedded comma or a stray quote can silently shift every subsequent column in a way visual inspection won't reliably catch.
+Prefer generating or editing `.steps.csv`/`.github/agents/references/conflict-log.csv` rows programmatically (`agentteams.atomicio.atomic_rewrite_csv_rows()`, or an equivalent verify-then-commit CSV writer, not a raw `csv.writer`/`open(path, "w")`) over manual text edits. When a manual edit is unavoidable, re-parse the file with `agentteams.plan_steps.read_steps()` (or an equivalent real CSV parser) before considering it final — an unquoted embedded comma or a stray quote can silently shift every subsequent column in a way visual inspection won't reliably catch.
 
 ---
 

@@ -23,12 +23,11 @@ Design constraints
 from __future__ import annotations
 
 import csv
-import io
-import os
-import tempfile
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
+
+from agentteams.atomicio import atomic_rewrite_csv_rows
 
 _REQUIRED_COLUMNS = (
     "phase_id",
@@ -152,22 +151,11 @@ def update_status(csv_path: Path, step_id: str, new_status: str) -> bool:
     if not updated:
         return False
 
-    # Atomic write: write to a sibling temp file, then os.replace.
-    buf = io.StringIO()
-    writer = csv.DictWriter(buf, fieldnames=fieldnames)
-    writer.writeheader()
-    writer.writerows(rows)
-    fd, tmp_path = tempfile.mkstemp(
-        prefix=csv_path.name + ".", suffix=".tmp", dir=str(csv_path.parent),
-    )
-    try:
-        with os.fdopen(fd, "w", encoding="utf-8", newline="") as tmp_fh:
-            tmp_fh.write(buf.getvalue())
-        os.replace(tmp_path, csv_path)
-    except Exception:  # noqa: BLE001 — CH-24: cleanup-then-reraise (re-raises; hides nothing)
-        if os.path.exists(tmp_path):
-            os.unlink(tmp_path)
-        raise
+    # 2026-08-13: delegate to the shared atomic-CSV-rewrite helper instead of a
+    # locally hand-rolled temp-file+os.replace dance -- this one had no round-trip
+    # verification before committing (a malformed row would have been written as-is)
+    # and no line-ending preservation (see atomic_rewrite_csv_rows' own docstring).
+    atomic_rewrite_csv_rows(csv_path, rows, fieldnames)
     return True
 
 

@@ -19,7 +19,7 @@
   "authority_sources": [
     {
       "name": "Template library",
-      "path": "templates/",
+      "path": "agentteams/templates/",
       "scope": "agent file structure, placeholder conventions, agent taxonomy patterns",
       "rank": 1
     },
@@ -31,13 +31,13 @@
     },
     {
       "name": "Python source pipeline",
-      "path": "src/",
+      "path": "agentteams/",
       "scope": "pipeline logic, placeholder resolution, framework adapter behavior",
       "rank": 3
     },
     {
       "name": "PLACEHOLDER-CONVENTIONS.md",
-      "path": "templates/PLACEHOLDER-CONVENTIONS.md",
+      "path": "agentteams/templates/PLACEHOLDER-CONVENTIONS.md",
       "scope": "placeholder syntax rules (auto-resolved and manual-required token formats)",
       "rank": 4
     },
@@ -82,7 +82,7 @@
     }
   ],
   "style_rules": [
-    "stdlib-only: no external dependencies in src/ (pytest is dev-only)",
+    "stdlib-only: no external dependencies in agentteams/ (pytest is dev-only; the agentteams[research] extra is the one disclosed exception)",
     "All public functions must have docstrings with Args/Returns/Raises",
     "Type annotations required on all public function signatures",
     "Templates use `{UPPER_SNAKE_CASE}` for auto-resolved placeholders and `{MANUAL:UPPER_SNAKE_CASE}` for human-required",

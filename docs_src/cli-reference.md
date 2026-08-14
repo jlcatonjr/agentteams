@@ -922,6 +922,40 @@ silently clobbering the first.
 
 ---
 
+## Multi-Framework Pinned Sync
+
+Keep every agentic interface in sync through the canonical hub under one model: frameworks are
+peers, a clean one-sided change in any framework projects to all others, and a genuine conflict
+is **always** decided in favor of the bootstrap pin (and logged to
+`.agentteams/sync-conflicts.log.csv` for after-the-fact review). Change detection is
+commit-to-commit. See [`multi_sync`](api-reference/multi-sync.md) and
+[`sync_pin`](api-reference/sync-pin.md).
+
+### `--sync-init`
+
+Bootstrap pinned multi-framework sync: seed the canonical hub from the `--pin` framework, project
+it to every framework in the sync set, and record per-framework baselines. Writes
+`.agentteams/pin.json`. Requires `--pin`.
+
+### `--pin FRAMEWORK`
+
+The bootstrap-pin framework for `--sync-init`. It seeds canonical and wins every conflict
+thereafter (each conflict is logged for review). Peer *capability* changes are never silently
+fanned out — they are withheld and logged, so capability grants only originate from the pin.
+
+### `--sync`
+
+Run one on-demand sync pass: detect the frameworks changed since the last synced commit,
+reconcile each into canonical (pin first, authoritatively; peers absorb clean non-capability
+changes), project canonical to every framework, log conflicts, and advance the sync anchor. A
+no-op when nothing changed.
+
+### `--sync-since COMMIT`
+
+Override the change-detection anchor (default: the pin's recorded `last_synced_commit`).
+
+---
+
 ## Exit Codes
 
 | Code | Meaning |

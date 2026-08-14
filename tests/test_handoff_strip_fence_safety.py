@@ -67,7 +67,12 @@ def test_the_specific_case_that_was_misdiagnosed_twice() -> None:
 
 
 def test_a_fenced_handoff_heading_strips_only_inside_its_fence() -> None:
-    """The heading goes; the fence that contained it stays, and so does the next fence."""
+    """Fences survive; and since the exact-title fix (2026-W33), so does the heading.
+
+    Contract change, made deliberately: `## Handoff Payload Codes` is a template-owned
+    section merely PREFIXED by "Handoff", not a handoffs section. The original assertion
+    ("the heading itself should still be stripped") codified the over-match this test's
+    sibling `test_handoff_prefixed_headings_survive_a_direct_strip` now forbids."""
     text = (
         "<!-- AGENTTEAMS:BEGIN a v=1 -->\n"
         "## Handoff Payload Codes\n"
@@ -79,7 +84,7 @@ def test_a_fenced_handoff_heading_strips_only_inside_its_fence() -> None:
     out = FrameworkAdapter._strip_handoffs_section(text)
     assert _balance(out) == (2, 2), out
     assert "Body of b that must survive." in out
-    assert "## Handoff Payload Codes" not in out, "the heading itself should still be stripped"
+    assert "## Handoff Payload Codes" in out, "template-owned heading must survive the strip"
 
 
 def test_unfenced_handoff_sections_are_still_fully_stripped() -> None:
@@ -168,3 +173,36 @@ def test_every_rendered_agent_file_is_fence_balanced(framework: str, tmp_path) -
     assert not unbalanced, (
         f"[{framework}] rendered file(s) have unbalanced fences:\n  " + "\n  ".join(unbalanced)
     )
+
+
+# --------------------------------------------------------------------------------------
+# handoffs-heading-overmatch-fix (2026-W33): exact-title match, no prefix over-match
+# --------------------------------------------------------------------------------------
+
+
+def test_handoff_prefixed_headings_survive_a_direct_strip() -> None:
+    """A heading merely PREFIXED by "Handoff" is template-owned content, not a handoffs
+    section — it must survive `_strip_handoffs_section` called directly, with no
+    shrink-guard in the loop. Before this fix the only thing keeping these headings on
+    disk was `preserve_on_shrink` coincidentally suppressing the emptied render."""
+    text = (
+        "## Handoff Payload Conflict Codes\n\n"
+        "| code | meaning |\n|---|---|\n| X | y |\n\n"
+        "## Handoff Payload Codes\n\nBody.\n\n"
+        "## Handoffs\n\n- `@navigator` -> locate\n\n"
+        "## Rules\n\nFollow them.\n"
+    )
+    out = FrameworkAdapter._strip_handoffs_section(text)
+    assert "## Handoff Payload Conflict Codes" in out, "prefix over-match: conflict-codes heading stripped"
+    assert "| X | y |" in out, "prefix over-match consumed template-owned body"
+    assert "## Handoff Payload Codes" in out, "prefix over-match: payload-codes heading stripped"
+    assert "## Handoffs" not in out and "@navigator" not in out, "the real section must still go"
+    assert "## Rules" in out
+
+
+def test_handoff_instructions_section_is_still_stripped() -> None:
+    """`## Handoff Instructions` is a genuine handoffs section title — keep stripping it."""
+    text = "## Rules\n\nFollow.\n\n## Handoff Instructions\n\n- `@security` -> clear\n"
+    out = FrameworkAdapter._strip_handoffs_section(text)
+    assert "Handoff Instructions" not in out and "@security" not in out
+    assert "## Rules" in out

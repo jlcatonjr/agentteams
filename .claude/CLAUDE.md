@@ -87,6 +87,13 @@ SECTION MANIFEST — copilot-instructions.template.md
 - `@reference-manager` — manages the reference/bibliography database
 - `@output-compiler` — assembles components into the final deliverable package
 - `@retrieval-integrator` — validates retrieval query, maintenance, and trigger contracts
+- `@api-conformity-tracker` — read-only automation agent tracking conformity between the API reference, CLI man-page, and Python modules
+- `@tool-doc-researcher` — locates and verifies official documentation, API surfaces, and usage patterns for tools missing metadata
+
+### PR Lifecycle Agents
+- `@pr-manager` — coordinates the GitHub PR lifecycle: branch policy, PR opening, reviewer/assignee wiring, end-of-task disposition
+- `@pr-notifier` — notifies recipients when a PR is opened: reviewers, assignees, labels, @-mention comment
+- `@pr-reminder` — scans open PRs and posts reminder comments to assignees past the reminder interval
 
 ### Workstream Experts
 - `@template-library-expert` — Template Library
