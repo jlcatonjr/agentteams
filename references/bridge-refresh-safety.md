@@ -152,6 +152,13 @@ If Checks 1–4 all pass AND the user has explicitly authorized destruction in t
 
 ## V. Test-Team Special Case
 
+> **⚠ collector-management is BRIDGE-DEPRECATED as of 2026-08-14** (operator instruction;
+> plan `tmp/by-week/2026-W33/collector-management-bridge-deprecation`). Its bridge layer
+> (entry files, pair dirs, wrapper script, bridge-orchestrator agent) was removed; every
+> provider there runs native renders synced via the canonical pinned-sync. **Never run any
+> `--bridge-*` invocation against it** — a bare `--bridge-from` would recreate the deleted
+> entry files. The guidance below no longer applies to that repo.
+
 The two designated test teams (`researchteam`, `collector-management`) are **not disposable**. They are real working repositories with user-authored documentation and active project history. Treat them like any other external consumer repository:
 
 - Default to `--bridge-merge`.
