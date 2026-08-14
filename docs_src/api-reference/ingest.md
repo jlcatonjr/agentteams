@@ -89,7 +89,7 @@ Validate a project description dict and return a list of error strings.
 
 ### Trigger-source inference
 
-- `workflow`: `workflow_dispatch`, `schedule`, `cron`
+- `workflow`: `workflow_dispatch` (bare match), or colon-suffixed `schedule:` / `cron:`
 - `cli`: `argparse` or command-style markers such as `--service`
 - `env`: `os.environ`, `getenv(...)`, or env-var cues
 - `script`: shell file suffixes such as `.sh`/`.bash`

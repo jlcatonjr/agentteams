@@ -27,7 +27,7 @@ A single security finding.
 
 - `file` (`str`) — Relative path of the file containing the finding.
 - `line` (`int`) — Line number (1-based).
-- `category` (`str`) — Finding category (e.g., `'PII path'`, `'API key'`, `'Unresolved placeholder'`).
+- `category` (`str`) — Finding category (e.g., `'PII'`, `'credential'`, `'unresolved-placeholder'`).
 - `severity` (`str`) — `'high'`, `'medium'`, or `'low'`.
 - `message` (`str`) — Human-readable description of the finding.
 - `snippet` (`str`) — The offending line content (truncated).
@@ -61,7 +61,7 @@ Results of a security scan.
 
 > *Source: `agentteams/scan.py`*
 
-The three verdict strings `verdict_for_findings()` returns. Mirror the `HALT` / `CONDITIONAL PASS` / `PASS` verdicts in `security.template.md`'s escalation table — specifically the Credential and Machine-specific-information rows, the scan-derivable subset of that table. The remaining rows (destructive-op confirmation, external writes, injection attempts, scope violations) are procedural and stay a judgment call this module doesn't attempt to mechanize.
+The three verdict strings `verdict_for_findings()` returns. Mirror the `HALT` / `CONDITIONAL PASS` / `PASS` verdicts in `security.template.md`'s escalation table — specifically the Credential, PII-path, and Machine-specific-information rows, plus (since 2026-07-31) Rule S-5's literal instruction-override/identity-override patterns and C-1's tier-claim patterns, the scan-derivable subset of that table. `_check_injection()` runs on every scanned line against `_INJECTION_PATTERNS`, `_IDENTITY_OVERRIDE_PATTERNS`, and `_TIER_CLAIM_PATTERNS`, emitting `category="injection"`, `severity="high"` findings — which means a matched injection attempt is mechanized and HALT-triggering, not a judgment call left to the agent. What remains genuinely out of scan-derivable scope: destructive-op confirmation, external-repo writes, scope violations, and S-5's third bullet (a heading that redefines agent identity), which needs judgment rather than pattern matching.
 
 ---
 
@@ -79,12 +79,15 @@ security issues.
 - `agents_dir` (`Path`) — Path to the `.github/agents/` directory.
 - `expected_agent_names` (`set[str] | None`, keyword-only) — *(T3a.2 v4)*
   When provided, `.agent.md` files whose basename is NOT in this
-  set are treated as orphans from a prior team configuration and
-  skipped. The build_team orphan advisory at `build_team.py:1304`
-  surfaces them separately so they remain visible; double-flagging
-  them in the security scan only blocks the daily pipeline without
-  adding actionable signal. Default: `None` (scan every
-  `.agent.md` found).
+  set are **not** skipped: they are scanned normally, like every
+  other file, and additionally flagged as an `"orphan-agent"`
+  finding at `medium` severity (non-blocking under
+  `verdict_for_findings`, but no longer silent). Orphans were
+  skipped entirely until 2026-08-06, which made an injected agent
+  file the one class of agent file the scanner never read. Default:
+  `None` — no orphan-flagging occurs, but scanning coverage is
+  unaffected either way; every `.agent.md` found is always scanned
+  regardless of this parameter.
 
 **Walk semantics:**
 
@@ -93,12 +96,19 @@ security issues.
   (already-surfaced) content and should not gate the live scan.
 - `_OPERATIONAL_JSON_NAMES` (`build-log.json`,
   `delivery-receipt.json`, `memory-index.json`, `eval-suite.json`,
-  `doc-hashes.json`) suppresses the absolute-path PII detector,
+  `doc-hashes.json`, `security-vulnerability-watch.json`) suppresses the absolute-path PII detector,
   the entropy-based detectors, and unresolved-placeholder
   detection in those files. These are pipeline-controlled
   artefacts that legitimately carry paths, content hashes, and
   indexed copies of documentation. Pattern-based credential
-  detection (`sk_live_*`, `xoxb-*`, etc.) still applies.
+  detection (`sk_live_*`, `xoxb-*`, etc.) still applies. The
+  exemption additionally requires the file to reside directly in
+  the agents dir's `references/` subdirectory (`_is_operational_json`)
+  — a basename match alone is not enough. This is a deliberate
+  anti-spoofing design point: keying the exemption on basename
+  alone would let an agent with write access pre-blind the scanner
+  to its own payload just by choosing a matching filename anywhere
+  else in the tree.
 - Placeholder matches that fall entirely inside an inline-code
   span (`` `…` ``) on the same line are skipped — those are
   documentation prose mentioning placeholder names, not real

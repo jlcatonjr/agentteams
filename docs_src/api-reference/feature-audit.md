@@ -48,5 +48,5 @@ FEATURE_REGISTRY=/path/to/fixture.csv python -m agentteams.feature_audit   # tes
 
 ## Current coverage
 
-**1 of 146 proven.** `UNPROVEN` means nothing specifically demonstrates the feature — not
+**6 of 151 proven.** `UNPROVEN` means nothing specifically demonstrates the feature — not
 that it is broken. See the procedure doc for how to close a row correctly.

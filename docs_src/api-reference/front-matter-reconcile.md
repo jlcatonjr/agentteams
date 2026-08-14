@@ -28,6 +28,16 @@ run_reconcile(args, rendered: list[tuple[str, str]], output_dir: Path) -> int
 ```
 CLI entry. Always returns 0: divergence is a finding to read, not an error.
 
+```python
+migrate_capability_key(agents_dir: Path, *, dry_run: bool = True) -> list[CapabilityKeyMigration]
+```
+Rename a superseded capability key (`allowed-tools` → `tools`) in every agent file under `agents_dir`, in place. Existing Claude teams generated before 2026-08-06 declare `allowed-tools:` — a key Claude Code's subagent schema does not define — so they grant every agent every tool regardless of what the file's body claims; this is the standalone migration for teams `--update --merge` cannot reach, since front matter is preserved verbatim. Only the key name is renamed — the value is carried across byte-for-byte. `dry_run=True` by default: writing must be asked for, so with it nothing is written and the result describes what would change.
+
+```python
+survey_capability_keys(agents_dir: Path) -> dict[str, int]
+```
+Read-only census of which capability key (`tools` vs. the superseded `allowed-tools`) a deployed team's agent files use. Separate from `migrate_capability_key` so a survey across other people's repositories is provably incapable of writing. Returns `{"agents": n, "superseded": n, "current": n, "none": n}`.
+
 ## Types
 
-`Divergence` — `rel_path`, `key`, `deployed`, `template`. `is_capability` is true for `tools`, `allowed-tools` and `capabilities`, because a diverging grant is a different kind of finding from a diverging description.
+`Divergence` — `rel_path`, `key`, `deployed`, `template`. `is_capability` is true for `tools`, `allowed-tools`, `capabilities`, `disallowedTools`, `model`, and `agents`, because a diverging grant is a different kind of finding from a diverging description.

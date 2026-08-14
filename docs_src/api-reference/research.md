@@ -48,9 +48,9 @@ No-API-key DuckDuckGo HTML-endpoint search.
 redirect wrapper), and `snippet`. Empty list on any failure (network down, blocked, parse error) —
 never raises.
 
-When the endpoint *challenges* a request rather than answering it, this retries once with a
-broadened query before giving up (see `web_search_verbose` for why, and for how to tell the two
-cases apart).
+When the endpoint *challenges* a request rather than answering it, this retries with
+progressively broadened queries, down to a floor, before giving up (see `web_search_verbose` for
+why, and for how to tell the two cases apart).
 
 ### `web_search_verbose(query, k=5, timeout_s=8.0)`
 
@@ -131,6 +131,8 @@ rejection — never raises.
   steadily can exceed `timeout_s` in total elapsed time without tripping it. The separate
   `pdf_timeout_s` wall-clock deadline exists specifically because a real PDF transfer can take
   meaningfully longer than typical HTML front-matter.
+- `python -m agentteams.research fetch <url> [--max-chars N] [--max-bytes N] [--timeout-s S]`
+  invokes this function directly and prints `{"url": ..., "text": ...}` as JSON to stdout.
 
 ### `extract_published_date(html) -> str | None`
 
@@ -151,6 +153,15 @@ for two fetches. Additive: does not change `fetch_text`'s own signature or behav
 
 **Returns:** `(text, published_at)`. A PDF response always has `published_at=None` — PDF structure
 has no HTML meta/JSON-LD for this module's regexes to reach.
+
+### `strip_html_to_text(html, max_chars) -> str`
+
+Shared HTML→text extraction: drops `script`/`style`/`nav`/`footer`/`header` blocks, strips the
+remaining tags, unescapes entities, collapses whitespace, and caps the result at `max_chars`.
+Public (not module-private) specifically because `agentteams.research.browser` reuses this exact
+extraction — applied there to a browser's rendered `page.content()` instead of a raw HTTP response
+body — so `fetch_text` and `browser_fetch` return text in the same shape regardless of which one a
+caller used.
 
 ### `is_public_https(url) -> bool`
 
@@ -274,6 +285,18 @@ contract: filenames are SHA-256 digests only (no external text reaches a path co
 are atomic, and a corrupt, oversized, or expired entry is treated as a **miss** rather than an
 error. A broken cache degrades to "no cache", never to a broken call.
 
+### `cache_enabled() -> bool`
+
+Whether caching is active in this process — implements the `AGENTTEAMS_RESEARCH_NO_CACHE` behavior
+described above: `False` when that variable is set to anything other than an explicit
+`"0"`/`"false"`/empty value, `True` otherwise.
+
+### `cache_dir() -> Path`
+
+The directory cache entries live in — implements the `AGENTTEAMS_RESEARCH_CACHE_DIR` behavior
+described above: the path it names when set, else `references/research-cache` under the current
+working directory. Not created here; `store()` creates it lazily on first write.
+
 ### `make_key(kind, *parts)`
 
 Every part participates in the digest, so changing `k` or the backend set produces a different
@@ -298,6 +321,10 @@ with a DOI. All three are key-free — no credential is read, required, or suppo
 
 Queries the chosen indexes concurrently and deduplicates by DOI, then by normalised title for
 records that reach one index without a DOI. One index failing never loses the others' results.
+
+`python -m agentteams.research scholar <query> [-k N] [--sources ...] [--timeout-s S]
+[--citations]` invokes this and prints the works as JSON to stdout; `--citations` additionally
+attaches a `format_citation()` line to each record.
 
 ### `search_openalex(query, k=5, timeout_s=10.0)`
 
@@ -337,7 +364,10 @@ their decision to make explicitly.
 Frozen dataclass — the full, data-driven shape a `ReputableSourceAllowlist` is built from:
 `tier_by_domain`, `type_by_domain`, `topic_primary_repos`, `path_scope`, `tier_rank`,
 `default_repos`. No domain data is hardcoded into the library itself — every consumer supplies its
-own config, or uses `DEFAULT_CONFIG`.
+own config, or uses `DEFAULT_CONFIG`. `type_by_domain` values are drawn from the module's
+`VALID_TYPES` frozenset (`"news"`, `"academic"`, `"government"`, `"encyclopedia"`,
+`"primary-text"`, `"book"`) — additive to `tier`: it describes what kind of source a domain is,
+never how much to trust it.
 
 ### `DEFAULT_CONFIG`
 
@@ -395,16 +425,59 @@ domain present in `tier_by_domain` but absent from `type_by_domain`), `license` 
 
 ---
 
+## `news` — perspective attribution for news-typed sources
+
+> *Source: `agentteams/research/news.py`*
+
+News is a contemporaneous account of *perspective* on an event — not verified fact, and not the
+same epistemic class as an encyclopedia or government source. This module gives the `type="news"`
+tag (already present in `reputable.py`'s `VALID_TYPES`, previously inert — stored and returned but
+never read for behavior) its first real behavior: a consistent attribution string a caller can
+present instead of stating a news claim as settled fact. It never adjudicates between outlets
+reporting the same event differently.
+
+### `PerspectiveKind`
+
+`Literal["reported", "contested"]`. `"reported"` — a plain factual claim a news source is the
+origin of (what happened). `"contested"` — a claim about how a source *characterized* something
+(e.g. an outlet's editorializing description of a person or event), which deserves more hedging
+than a bare factual report. This module doesn't decide which applies to a given claim — that
+judgment needs the claim's own text — it only exports the shared vocabulary so callers across the
+framework use the same two labels rather than independently-invented near-synonyms.
+
+### `is_news_source(source) -> bool`
+
+`True` when `source.type == "news"`. Exists so callers don't hardcode the string literal `"news"`
+in more than one place.
+
+### `perspective_attribution(source, published_at) -> str`
+
+The single, shared place that formats a consistent attribution string for a news-typed source —
+`"{domain} reported ({published_at})"`, or `"{domain} reported (date not available)"` when no date
+was extractable. Degrades honestly rather than fabricating a date.
+
+Publish-date extraction itself lives in `search.py`'s `extract_published_date` — a
+content-parsing concern kept alongside that module's other HTML/PDF extraction, and separated here
+specifically to avoid an import cycle (`search` → `news` → `reputable` → `search`, since
+`reputable.py` already imports from `search.py`).
+
+---
+
 ## `verify` — claim extraction and dual-lens fact verification
 
 > *Source: `agentteams/research/verify.py`*
+
+`extract_claims`, `audit_claims`, and `revise` below are all `async def` coroutines — call each
+with `await`; every one of them awaits its own `chat_fn` call internally.
 
 ### `ChatFn`
 
 A `Protocol` — the minimal chat-completion callable every function below takes as a parameter.
 This module has no hardcoded model client; every function that needs an LLM call takes a
-caller-supplied `ChatFn`. Supports an optional `want_json` hint the callable may honor, but every
-function below stays correct even when it's ignored (see `extract_claims`'s Behavior Notes).
+caller-supplied `ChatFn`. Its `__call__` returns `Awaitable[str]`, so the supplied callable must
+itself be `async` (or otherwise return an awaitable). Supports an optional `want_json` hint the
+callable may honor, but every function below stays correct even when it's ignored (see
+`extract_claims`'s Behavior Notes).
 
 ### `extract_claims(text, chat_fn) -> list[Claim]`
 

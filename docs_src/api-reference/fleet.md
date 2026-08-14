@@ -26,7 +26,7 @@ agentteams --fleet /path/to/parent --update --merge --yes --fleet-report /tmp/fl
 
 ### What one run does, per discovered workspace
 
-1. **Discover** — find directories containing `.github/agents/` and/or `.claude/`, pruning `node_modules`, `.git`, `.worktrees`, and `archive`, and never recursing into `.github`/`.claude` internals.
+1. **Discover** — find directories containing `.github/agents/` and/or `.claude/`, pruning `node_modules`, `.git`, `.agentteams-backups`, `__pycache__`, `.venv`, `venv`, `.goose`, `tmp`, `.worktrees`, and `archive`, and never recursing into `.github`/`.claude` internals.
 2. **Snapshot (git commit)** — before applying, commit the workspace's agent-infra state as `chore(fleet): pre-update snapshot` (or stay at `HEAD` when already clean). This is the recoverable rollback point and the diff base. Non-git workspaces fall back to the automatic `<output_dir>/.agentteams-backups/<ts>/` snapshot.
 3. **Update in-process** — re-enter the standard update path per target (`--update --merge` for `.github/agents/` and native `.claude/agents/` teams; `--bridge-merge` for bridge-consumer `.claude/`). No subprocess is spawned, so a successful merge is never misreported because of an interpreter/exit-code quirk, and a failure in one target is isolated.
 4. **Diff analysis** — after applying, `git diff <snapshot>` is classified by the **authoritative content signals** — shrink Notices and deletions inside `USER-EDITABLE` regions — **not** the process exit code. Per-workspace `.diff` files plus `report.json` and `summary.md` are written under `<DIR>/.agentteams-fleet/<run-id>/`.
@@ -94,7 +94,7 @@ Aggregate result for one workspace.
 
 > *Source: `agentteams/fleet.py`*
 
-Return the sorted list of workspace directories under `parent` (recursively) that contain `.github/agents/` and/or `.claude/` (and, for `goose`/`all`, a Goose-bridged workspace). `frameworks` (`"github"` | `"claude"` | `"goose"` | `"both"` | `"all"`) filters which infrastructure qualifies a directory: `"both"` is the legacy default (copilot + claude only); `"all"` adds Goose. Prunes `node_modules`, `.git`, `.worktrees`, and `archive`, and never recurses into `.github`/`.claude` internals.
+Return the sorted list of workspace directories under `parent` (recursively) that contain `.github/agents/` and/or `.claude/` (and, for `goose`/`all`, a Goose-bridged workspace). `frameworks` (`"github"` | `"claude"` | `"goose"` | `"both"` | `"all"`) filters which infrastructure qualifies a directory: `"both"` is the legacy default (copilot + claude only); `"all"` adds Goose. Prunes `node_modules`, `.git`, `.agentteams-backups`, `__pycache__`, `.venv`, `venv`, `.goose`, `tmp`, `.worktrees`, and `archive`, and never recurses into `.github`/`.claude` internals.
 
 **Returns:** `list[Path]`
 
@@ -106,7 +106,7 @@ Entry point dispatched from `build_team.main()` when `--fleet` is set. Discovers
 
 **Parameters:**
 
-- `args` (`argparse.Namespace`) — Parsed CLI arguments (reads `fleet`, `fleet_frameworks`, `fleet_report`, `yes`, `dry_run`, `shrink_policy`).
+- `args` (`argparse.Namespace`) — Parsed CLI arguments (reads `fleet`, `fleet_frameworks`, `fleet_report`, `yes`, `dry_run`, `shrink_policy`, `fleet_allow_no_verify`).
 - `parser` (`argparse.ArgumentParser`) — The CLI parser (reserved for error reporting).
 
 **Returns:** `int` — Process exit code.

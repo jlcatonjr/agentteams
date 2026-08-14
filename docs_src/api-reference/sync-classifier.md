@@ -74,6 +74,13 @@ Check whether a CAI agent field is capability-bearing. Inspects `raw_front_matte
 contents to determine if it actually carries capability data (e.g. `tools`, `model`,
 `disallowedTools` keys).
 
+### `is_capability_field_any_side(field_name, canonical_value, native_value, baseline_value) -> bool`
+
+The security-critical check the classifier actually calls (`_classify_field` calls
+this, not `is_capability_field`, to enforce §6.1). Checks all three sides — not just
+the native value — so a native-side removal of a capability key from
+`raw_front_matter` isn't missed and misclassified as safe to auto-apply.
+
 ### `classify_agent(agent_slug, framework, canonical_agent, native_agent, baseline_agent) -> AgentSyncReport`
 
 Classify all fields of a single agent. Handles agents present in canonical but not
