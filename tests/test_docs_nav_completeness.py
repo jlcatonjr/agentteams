@@ -96,6 +96,45 @@ def test_the_measurement_is_not_vacuous() -> None:
     assert len(_nav_targets()) > 50, "mkdocs.yml nav parse regressed"
 
 
+#: api-reference pages that are legitimately not expected on docs_src/api-reference/index.md's
+#: own tables — index.md documenting itself would be circular, and the coverage-gaps writeup
+#: names missing-page modules by module name (not by a link to a page that doesn't exist), so it
+#: can't satisfy a link-based check for pages that DO exist.
+_INDEX_SELF_EXCLUDED: frozenset[str] = frozenset({"api-reference/index.md"})
+
+
+def test_every_api_reference_page_is_linked_from_the_index() -> None:
+    """The ratchet, one layer above test_every_page_is_reachable.
+
+    That test proves every page is in mkdocs.yml's nav — the site won't 404. It says nothing
+    about docs_src/api-reference/index.md's own hand-curated tables, which is the page a reader
+    actually browses to get oriented. The 2026-08-14 audit found 13 real, accurate, fully-navved
+    pages with zero mentions anywhere in index.md — present on the site, invisible unless you
+    already knew the filename: the six-module multi-framework pinned-sync family (multi_sync,
+    sync_pin, sync_baseline, sync_classifier, canonical, capability_map), found by manual grep,
+    plus seven more (bridge-pair-docs, bridge-skills, codex-mcp-emit, toml-write, feature-audit,
+    integrity, team-package) that this test itself caught the first time it ran. mkdocs's nav
+    check could not have caught any of them; it isn't the same claim.
+    """
+    index_text = (DOCS_SRC / "api-reference" / "index.md").read_text(encoding="utf-8")
+    api_nav_pages = {
+        p for p in _nav_targets() if p.startswith("api-reference/") and p not in _INDEX_SELF_EXCLUDED
+    }
+    # Match the actual link target, `](name.md`, not bare substring containment: several page
+    # names are substrings of others in this corpus (`emit.md` inside `mcp-emit.md`, `mcp-emit.md`
+    # inside `codex-mcp-emit.md`, `baseline.md` inside `sync-baseline.md`) — a bare `in` check
+    # would let a dropped row for one hide behind a surviving link to the other.
+    unlinked = sorted(
+        p for p in api_nav_pages if f"]({Path(p).name}" not in index_text
+    )
+    assert not unlinked, (
+        f"{len(unlinked)} api-reference page(s) are in mkdocs.yml's nav but never linked from "
+        f"docs_src/api-reference/index.md, so a reader browsing the index can't discover them: "
+        f"{unlinked}. Add each to an index.md table (or to the 'Coverage gaps' list if it "
+        "genuinely has no home yet)."
+    )
+
+
 def test_interoperability_has_the_tab_three_pages_promise() -> None:
     """Regression pin for the audit's sharpest instance.
 
