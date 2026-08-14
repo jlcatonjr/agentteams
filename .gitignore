@@ -152,3 +152,7 @@ tests/constitutional-redteam-results.json
 .agents/
 .github/copilot/
 .claude/references/runtime-handoffs.json
+.claude/agents/references/runtime-handoffs.json
+.goose/recipes/
+references/runtime-handoffs.json
+.github/references/
