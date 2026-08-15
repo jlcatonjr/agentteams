@@ -39,12 +39,12 @@ need re-triage — that is the point of the window.
 
 | doc_id | provider | url | governs | last_verified | window_days |
 |---|---|---|---|---|---|
-| `goose-cli-run` | Goose | https://block.github.io/goose/docs/guides/goose-cli-commands | `goose run` flags: `--no-profile`, `--no-session`, `--max-turns`, `--system`. The isolation contract the judgment audit depends on | 2026-08-07 | 90 |
-| `goose-recipes` | Goose | https://block.github.io/goose/docs/guides/recipes/recipe-reference | Recipe and sub-recipe structure; how goose delegates via structured tool calls — the mechanism that leaks as text when a backend mishandles it | 2026-08-07 | 90 |
-| `goose-providers` | Goose | https://block.github.io/goose/docs/getting-started/providers | Provider configuration, `OPENROUTER_HOST`, and which surfaces honour it | 2026-08-07 | 90 |
+| `goose-cli-run` | Goose | https://goose-docs.ai/docs/guides/goose-cli-commands | `goose run` flags: `--no-profile`, `--no-session`, `--max-turns`, `--system`. The isolation contract the judgment audit depends on | 2026-08-07 | 90 |
+| `goose-recipes` | Goose | https://goose-docs.ai/docs/guides/recipes/recipe-reference/ | Recipe and sub-recipe structure; how goose delegates via structured tool calls — the mechanism that leaks as text when a backend mishandles it | 2026-08-15 | 90 |
+| `goose-providers` | Goose | https://goose-docs.ai/docs/getting-started/providers | Provider configuration, `OPENROUTER_HOST`, and which surfaces honour it | 2026-08-07 | 90 |
 | `claude-subagents` | Anthropic | https://docs.anthropic.com/en/docs/claude-code/sub-agents | Claude Code sub-agent front matter: `name`, `description`, `tools`, `model`. The capability-declaration contract C-3 rests on | 2026-08-07 | 90 |
-| `copilot-cli` | GitHub | https://docs.github.com/en/copilot/github-copilot-in-the-cli/about-github-copilot-in-the-cli | Copilot CLI agent behaviour and configuration | 2026-08-07 | 90 |
-| `copilot-chatmodes` | Microsoft | https://code.visualstudio.com/docs/copilot/customization/custom-chat-modes | VS Code custom chat modes: the `.agent.md` front-matter schema | 2026-08-07 | 90 |
+| `copilot-cli` | GitHub | https://docs.github.com/en/copilot/how-tos/copilot-cli/customize-copilot/create-custom-agents-for-cli | Copilot CLI agent behaviour and configuration | 2026-08-15 | 90 |
+| `copilot-chatmodes` | Microsoft | https://code.visualstudio.com/docs/copilot/customization/custom-agents | VS Code custom agents (chat modes are legacy): the `.agent.md` front-matter schema | 2026-08-15 | 90 |
 | `openrouter-params` | OpenRouter | https://openrouter.ai/docs/api-reference/parameters | Request parameters, `require_parameters`, and provider routing semantics | 2026-08-07 | 90 |
 | `openrouter-provider-routing` | OpenRouter | https://openrouter.ai/docs/features/provider-routing | Backend selection and `allow_fallbacks` — the mechanism the route proxy pins, after backends were measured mangling tool calls at different rates | 2026-08-07 | 90 |
 | `glm-5.2-card` | Z.AI (via OpenRouter) | https://openrouter.ai/z-ai/glm-5.2 | GLM 5.2 context window, tool-calling support, pricing. The model the daily judgment audit runs on | 2026-08-07 | 90 |

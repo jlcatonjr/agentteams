@@ -9,7 +9,17 @@ Handoffs:     Inline handoffs removed from output; extracted handoffs can be
 
 GitHub Copilot CLI system prompt specification
 ----------------------------------------------
-Source: https://docs.github.com/en/copilot/github-copilot-in-the-cli/about-github-copilot-in-the-cli
+Source: https://docs.github.com/en/copilot/how-tos/copilot-cli/customize-copilot/create-custom-agents-for-cli
+(the former about-github-copilot-in-the-cli URL now 301s to a generic
+responsible-use page — verified 2026-08-15).
+
+KNOWN UPSTREAM DIVERGENCE (P1, 2026-08-15): current docs give the CLI the SAME
+custom-agent surface as VS Code — `.github/agents/<slug>.agent.md` WITH YAML
+front matter; no upstream doc mentions `.github/copilot/`. This adapter's
+plain-Markdown emission predates that convergence and is not read by the modern
+CLI. Redesign is tracked in references/copilot-cli-agent-infrastructure-expert.md
+and references/agentteams-remediation-log.csv; until it lands, the shipped
+behavior below remains the tested contract.
 
 The Copilot CLI consumes agent files as plain Markdown system prompts.
 No YAML front matter is defined or recognized by the CLI runtime.  All

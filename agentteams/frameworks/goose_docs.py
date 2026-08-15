@@ -36,6 +36,18 @@ def _goosehints_content(project_name: str) -> str:
     `goose session`, or any ACP session — without requiring `goose run --recipe`.
     It lives outside the managed fence so it survives --bridge-merge and --merge
     cycles unchanged.  See W7 in the integration plan.
+
+    KNOWN REDUNDANCY (G5, verified 2026-08-15 —
+    references/goose-agent-infrastructure-expert.md): the leading `@AGENTS.md`
+    import is likely no longer necessary — current Goose docs show
+    `CONTEXT_FILE_NAMES` defaults to `["AGENTS.md", ".goosehints"]`, i.e. Goose
+    reads both files natively without an explicit import. Left as-is rather
+    than removed in the same pass that discovered it: 4 test assertions across
+    3 files (test_frameworks.py, test_goose_integration_improvements.py,
+    test_bridge.py) pin this exact string, and the bridge-entry `.goosehints`
+    (a separate code path, not this function) carries the same import for a
+    related but distinct reason — removal needs its own scoped pass, not a
+    same-session edit alongside unrelated fixes.
     """
     return (
         "@AGENTS.md\n\n"

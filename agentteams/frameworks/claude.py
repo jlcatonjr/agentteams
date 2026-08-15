@@ -59,6 +59,17 @@ CLAUDE_CAPABILITY_KEY = "tools"
 #: the emitter that no longer WRITES it.
 CLAUDE_LEGACY_CAPABILITY_KEY = "allowed-tools"
 
+#: DELIBERATE narrow-by-default (C1, decided 2026-08-15 —
+#: references/claude-agent-infrastructure-expert.md): current upstream docs
+#: state that omitting `tools:` entirely grants inheritance of every tool
+#: available to sub-agents. This fallback default is applied only on the
+#: no-front-matter / no-tools-block / empty-mapping paths in
+#: `_map_allowed_tools` below — never on a normal render with a real tools
+#: vocabulary — and intentionally stays narrower than upstream's inherit-all
+#: semantics: a fallback path is exactly where a silent capability grant is
+#: least likely to be reviewed, and this project's own C-3 ("capability
+#: declarations are binding, widening one is privileged") favors the
+#: conservative reading when the source data gives no explicit signal.
 _CLAUDE_DEFAULT_ALLOWED_TOOLS = "Bash, Read, Write, Edit"
 
 # The command the `retrieval` token grants, and nothing else. Scoped `Bash(<prefix>:*)` rather
