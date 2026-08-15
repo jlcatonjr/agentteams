@@ -6,6 +6,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### added (`--verify-integrity` now checks the enforcement manifest)
+
+- **`--verify-integrity` re-checks `references/enforcement-integrity.json`** when one exists at
+  the resolved root, printing `MISMATCH`/per-module findings and exiting 1 on drift. Previously
+  the only check of that manifest lived inside the red-team battery, so there was no CLI path
+  to act on the man page's "review the diff, then `--write-integrity-manifest`" guidance
+  (remediation log, 2026-08-13).
+
 ### fixed (api-doc-conformity-sweep: host-features codex namespace)
 
 - **`--target-host-features codex:mcp` was rejected at validation, even though `codex_mcp_emit.py`
