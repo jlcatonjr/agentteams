@@ -160,6 +160,41 @@ _LIVE_DATA_FENCES: frozenset[str] = frozenset([
 ])
 
 
+# Fences whose body is derived wholesale from the project brief on every run —
+# the authority hierarchy and its mirrored source-repository list, both built
+# from `authority_sources` in the description/brief (see
+# `analyze.build_authority_hierarchy`). A path renamed in the brief (e.g. a
+# package rename like src/ -> agentteams/) makes the old path vanish from the
+# rendered body; _detect_fence_shrink rule (c) reads that as "lost a concrete
+# reference", and under the default shrink_policy=preserve the OLD (previous)
+# behavior kept the stale body indefinitely — a brief-level rename could never
+# reach these two fences through the sanctioned --update --merge path.
+# Confirmed live 2026-08-15 (agent-doc-optimal-structure plan): a full
+# copilot-vscode --update --merge left `src/` in both fences of
+# .github/copilot-instructions.md although .claude/CLAUDE.md — never stale to
+# begin with, so no shrink was ever detected there — already rendered the
+# correct `agentteams/` paths from the same brief.
+#
+# NOT wired the same way as _LIVE_DATA_FENCES (see _detect_fence_shrink):
+# these fences ARE consulted via _is_template_authoritative below, on
+# purpose. A first version of this fix short-circuited _detect_fence_shrink
+# itself for these two sids, the same way _LIVE_DATA_FENCES does — that
+# silently disabled the shrink NOTICE and the .lost.<sid>.md sidecar recovery
+# too, not just the preserve decision, which also weakens
+# --shrink-policy=halt (scripts/run_daily_security_maintenance.sh runs with
+# halt specifically so a real content loss stops the run) for a fence that
+# can genuinely regress if the brief itself is ever wrong or hand-edited.
+# _LIVE_DATA_FENCES's silence is correct there because feed rotation happens
+# every run and a notice every time is alert fatigue; a brief-derived rename
+# is rare and deliberate, so the notice is exactly the useful signal.
+# Caught by the adversarial audit of this fix (2026-08-15) — see
+# references/agentteams-remediation-log.csv row 178.
+_BRIEF_DERIVED_FENCES: frozenset[str] = frozenset([
+    "authority_hierarchy",
+    "source_repositories",
+])
+
+
 #: Fences whose body the TEMPLATE owns outright — never preserved from disk on shrink.
 #:
 #: `--shrink-policy=preserve` resolves in favour of on-disk content whenever the template
@@ -207,6 +242,16 @@ _CONSTITUTIONAL_FILES: frozenset[str] = frozenset([
 def _is_template_authoritative(sid: str, rel_path: str) -> bool:
     """True when the template owns this fence body outright and must never yield to disk.
 
+    Also true for :data:`_BRIEF_DERIVED_FENCES`: those fences meet the exact
+    criterion this function already names ("no legitimate reason to extend
+    its body") for a different reason (brief-derived, not security-critical)
+    — kept as a separate, distinctly-commented set for that documentation
+    value, but wired through the same never-preserve decision. Unlike
+    :data:`_LIVE_DATA_FENCES`, membership here does NOT suppress
+    `_detect_fence_shrink` itself — the notice and `.lost.<sid>.md` sidecar
+    still fire on a real shrink; only the preserve-on-shrink outcome is
+    refused, exactly like every other template-authoritative fence.
+
     Args:
         sid: The fence's section id.
         rel_path: Repo-relative path of the file being merged. May be empty when a caller
@@ -217,7 +262,7 @@ def _is_template_authoritative(sid: str, rel_path: str) -> bool:
     Returns:
         Whether shrink-preserve must be refused for this fence.
     """
-    if sid in _TEMPLATE_AUTHORITATIVE_FENCES:
+    if sid in _TEMPLATE_AUTHORITATIVE_FENCES or sid in _BRIEF_DERIVED_FENCES:
         return True
     return bool(rel_path) and Path(rel_path).name in _CONSTITUTIONAL_FILES
 
@@ -312,10 +357,15 @@ def _detect_fence_shrink(sid: str, existing_block: str, new_block: str) -> str |
       (c) existing body contained concrete file paths or backtick-quoted
           identifiers that the new body does not.
 
-    Live-feed fences (`_LIVE_DATA_FENCES`) are exempt: their bodies are
-    refreshed each run from upstream feeds and rotation is expected. The
-    sidecar mechanism in `lost_fence_bodies` still preserves the prior body
-    on disk if real recovery is ever needed.
+    Live-feed fences (`_LIVE_DATA_FENCES`) are exempt from detection
+    entirely: their bodies are refreshed every run and a notice on every run
+    would be alert fatigue, not signal. Brief-derived fences
+    (`_BRIEF_DERIVED_FENCES`) are deliberately NOT exempted here — a
+    brief-driven shrink is rare, and the notice is exactly the useful signal
+    an operator (or --shrink-policy=halt) needs; they are instead routed
+    through `_is_template_authoritative` at the call site, so detection,
+    the notice, and the `.lost.<sid>.md` sidecar all still fire — only the
+    preserve-on-shrink outcome is refused.
     """
     if sid in _LIVE_DATA_FENCES:
         return None

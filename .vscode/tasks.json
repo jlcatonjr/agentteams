@@ -523,19 +523,6 @@
       "detail": "AGENTTEAMS"
     },
     {
-      "label": "Goose: Bridge Orchestrator (copilot Vscode → Goose)",
-      "type": "shell",
-      "command": "zsh -c '. ~/.config/goose/goose-backend.sh && goose-or run --recipe .goose/recipes/bridge-orchestrator.yaml'",
-      "group": "none",
-      "presentation": {
-        "reveal": "always",
-        "panel": "dedicated",
-        "focus": true
-      },
-      "problemMatcher": [],
-      "detail": "AGENTTEAMS"
-    },
-    {
       "label": "Goose: Cleanup",
       "type": "shell",
       "command": "zsh -c '. ~/.config/goose/goose-backend.sh && goose-or run --recipe .goose/recipes/cleanup.yaml'",

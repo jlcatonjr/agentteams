@@ -55,18 +55,49 @@ FRAMEWORK_REGISTRY = {
         "expected_locations": [".claude/agents", "CLAUDE.md"],
     },
     "copilot_vscode": {
-        "label": "GitHub Copilot — VS Code Chat Modes",
-        "source_url": "https://code.visualstudio.com/docs/copilot/customization/custom-chat-modes",
-        "expert_ref": "references/copilot-agent-infrastructure-expert.md",
+        "label": "GitHub Copilot — VS Code Custom Agents",
+        # custom-agents is the current page; custom-chat-modes is explicitly legacy
+        # (verified 2026-08-15, agent-doc-optimal-structure plan).
+        "source_url": "https://code.visualstudio.com/docs/copilot/customization/custom-agents",
+        "expert_ref": "references/copilot-vscode-agent-infrastructure-expert.md",
         "expected_keys": ["description", "tools", "model"],
-        "expected_locations": [".github/agents", ".github/chatmodes"],
+        "expected_locations": [".github/agents"],
     },
     "copilot_cli": {
-        "label": "GitHub Copilot — CLI",
-        "source_url": "https://docs.github.com/en/copilot/github-copilot-in-the-cli/about-github-copilot-in-the-cli",
-        "expert_ref": "references/copilot-agent-infrastructure-expert.md",
-        "expected_keys": ["gh", "copilot"],
-        "expected_locations": [".github/copilot"],
+        "label": "GitHub Copilot — CLI Custom Agents",
+        # The old about-github-copilot-in-the-cli URL 301s to a generic
+        # responsible-use page (verified 2026-08-15). The CLI's agent surface is
+        # .github/agents/*.agent.md — the P1 delta against our adapter's
+        # .github/copilot/ emission is tracked in the expert reference.
+        "source_url": "https://docs.github.com/en/copilot/how-tos/copilot-cli/customize-copilot/create-custom-agents-for-cli",
+        "expert_ref": "references/copilot-cli-agent-infrastructure-expert.md",
+        "expected_keys": ["description", "tools", "model"],
+        "expected_locations": [".github/agents", ".github/copilot"],
+    },
+    "goose": {
+        "label": "Goose (AAIF) Recipes",
+        # Docs moved to goose-docs.ai when Goose joined AAIF (2026-04);
+        # block.github.io URLs are dead.
+        "source_url": "https://goose-docs.ai/docs/guides/recipes/recipe-reference/",
+        "expert_ref": "references/goose-agent-infrastructure-expert.md",
+        "expected_keys": ["title", "description", "instructions", "prompt"],
+        "expected_locations": [".goose/recipes", "AGENTS.md", ".goosehints"],
+    },
+    "agents_md": {
+        "label": "AGENTS.md Cross-Tool Standard",
+        "source_url": "https://agents.md",
+        "expert_ref": "references/agents-md-agent-infrastructure-expert.md",
+        # The standard has no schema; watch for these structural tokens instead.
+        "expected_keys": [],
+        "expected_locations": ["AGENTS.md"],
+    },
+    "codex": {
+        "label": "OpenAI Codex CLI",
+        # developers.openai.com/codex 308s to learn.chatgpt.com (verified 2026-08-15).
+        "source_url": "https://learn.chatgpt.com/docs/agent-configuration/agents-md",
+        "expert_ref": "references/codex-agent-infrastructure-expert.md",
+        "expected_keys": ["project_doc_max_bytes", "mcp_servers"],
+        "expected_locations": ["AGENTS.md", ".codex"],
     },
 }
 
@@ -345,8 +376,21 @@ def build_framework_placeholders(output_dir: Path, offline: bool = True) -> dict
 # ---------------------------------------------------------------------------
 
 EXPERT_REF_REL = "references/claude-agent-infrastructure-expert.md"
+# Superseded shared pointer (references/copilot-agent-infrastructure-expert.md
+# — see that file). Kept here, not as a live target, but so a patch proposal
+# built from a stale cached snapshot (pre-2026-08-15, before FRAMEWORK_REGISTRY
+# split copilot into copilot_vscode/copilot_cli) still resolves.
 COPILOT_EXPERT_REF_REL = "references/copilot-agent-infrastructure-expert.md"
-ALLOWED_EXPERT_REFS = {EXPERT_REF_REL, COPILOT_EXPERT_REF_REL}
+# Derived from FRAMEWORK_REGISTRY (CH-05 single-source-of-truth) rather than
+# hand-listed: a hand-maintained copy silently fell 4 frameworks behind the
+# registry once goose/agents_md/codex/copilot_cli got their own expert_ref
+# files (2026-08-15 agent-doc-optimal-structure closeout) — every proposal
+# for those frameworks would have been rejected by apply_module_patch's
+# allow-list check below despite being legitimate.
+ALLOWED_EXPERT_REFS = frozenset(
+    {EXPERT_REF_REL, COPILOT_EXPERT_REF_REL}
+    | {entry["expert_ref"] for entry in FRAMEWORK_REGISTRY.values()}
+)
 
 
 def propose_module_patch(repo_root: Path) -> dict[str, Any]:

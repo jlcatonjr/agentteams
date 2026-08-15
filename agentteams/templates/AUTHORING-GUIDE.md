@@ -383,9 +383,14 @@ If a template has no front matter, or is missing required keys, the adapter inje
 
 ### `copilot-cli` — Plain Markdown system prompt
 
-Source: [GitHub Copilot in the CLI docs](https://docs.github.com/en/copilot/github-copilot-in-the-cli/about-github-copilot-in-the-cli)
+Source: [Copilot CLI custom agents](https://docs.github.com/en/copilot/how-tos/copilot-cli/customize-copilot/create-custom-agents-for-cli) · [cross-surface configuration reference](https://docs.github.com/en/copilot/reference/custom-agents-configuration)
 
 The adapter (`agentteams/frameworks/copilot_cli.py`) strips all YAML front matter and handoff sections. The output is pure Markdown prose, written to `.github/copilot/<slug>.md`.
+
+> ⚠️ **Known upstream divergence (P1, 2026-08-15):** the modern `copilot` CLI reads
+> `.github/agents/*.agent.md` (the same front-matter surface as VS Code) and does
+> not read `.github/copilot/`. Adapter convergence is tracked in
+> `references/copilot-cli-agent-infrastructure-expert.md` and the remediation log.
 
 | What is stripped | What is preserved |
 |-----------------|------------------|

@@ -1,56 +1,13 @@
-# Copilot Agent Infrastructure Expert Reference
+# Copilot Agent Infrastructure Expert Reference (SUPERSEDED)
 
-Purpose: Canonical guidance for integrating GitHub Copilot agent infrastructure into AgentTeamsModule.
+**Superseded 2026-08-15** (agent-doc-optimal-structure plan; parity report R6).
+This shared file conflated two Copilot surfaces with different upstream docs and
+conventions — a merge that obscured the CLI adapter's divergence from the
+current documented surface. It is retained as a pointer because
+`agentteams/framework_research.py` historically referenced it; the registry now
+points at the split files.
 
-## Authoritative Documentation
+- VS Code surface → `references/copilot-vscode-agent-infrastructure-expert.md`
+- CLI surface → `references/copilot-cli-agent-infrastructure-expert.md`
 
-- VS Code custom chat modes and agents:
-  - https://code.visualstudio.com/docs/copilot/customization/custom-chat-modes
-  - https://code.visualstudio.com/docs/copilot/customization/custom-instructions
-- GitHub Copilot CLI:
-  - https://docs.github.com/en/copilot/github-copilot-in-the-cli/about-github-copilot-in-the-cli
-
-## Canonical Output Conventions
-
-- VS Code Copilot agent files:
-  - Location: .github/agents/
-  - Extension: .agent.md
-  - Structure: YAML front matter + Markdown body
-- Copilot CLI prompt files:
-  - Location: .github/copilot/
-  - Extension: .md
-  - Structure: plain Markdown prompt body (no VS Code metadata front matter)
-- Project instructions:
-  - Filename: copilot-instructions.md
-  - Location: repository root
-
-## Function-Level Conformance Requirements
-
-- Adapter layer must enforce format-specific transformations:
-  - VS Code: ensure required YAML keys exist and are normalized
-  - CLI: strip VS Code-only YAML keys and handoff sections
-- Pipeline must finalize output paths using framework adapter rules so that file names and extensions are framework-native.
-- Emission and tests must validate behavior across both Copilot targets (VS Code and CLI).
-
-## Integration Checklist
-
-1. Ensure framework adapter API covers file content and output path finalization.
-2. Apply adapter-driven path finalization in pipeline before emit.
-3. Keep instructions filename stable as copilot-instructions.md for Copilot frameworks.
-4. Add/maintain tests for extension + content transformation parity.
-
-## Observed Upstream Tokens — `copilot_vscode` (Daily Pipeline)
-
-Recorded by the daily pipeline on `2026-07-02` from `https://code.visualstudio.com/docs/copilot/customization/custom-chat-modes`.
-
-- Upstream tokens observed: —
-- Upstream locations observed: .github/agents
-- Fetch status: `ok`
-
-## Observed Upstream Tokens — `copilot_cli` (Daily Pipeline)
-
-Recorded by the daily pipeline on `2026-07-02` from `https://docs.github.com/en/copilot/github-copilot-in-the-cli/about-github-copilot-in-the-cli`.
-
-- Upstream tokens observed: —
-- Upstream locations observed: —
-- Fetch status: `failed`
+Do not add new content here.

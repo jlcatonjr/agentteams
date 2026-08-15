@@ -115,19 +115,44 @@ def _run_verify_integrity(args: argparse.Namespace) -> int:
     can be a benign post-merge crash), **this exit code IS the integrity verdict
     and must be heeded.** MODIFIED is advisory (a legitimate USER-EDITABLE edit or
     drift; exit 0, listed for review).
+
+    Also verifies the enforcement-integrity manifest
+    (``references/enforcement-integrity.json``) when one exists at the resolved
+    root — previously the ONLY check of that manifest lived inside the red-team
+    battery, leaving no CLI path to heed the man page's "review the diff" guidance
+    (remediation log, 2026-08-13). An enforcement-module mismatch exits 1.
     """
     from collections import Counter
 
-    from agentteams import drift
+    from agentteams import drift, integrity
 
     output_dir = _resolve_output_dir(args)
+
+    enforcement_rc = 0
+    manifest_path = output_dir / integrity.MANIFEST_REL_PATH
+    if manifest_path.exists():
+        enf_findings = integrity.verify(output_dir)
+        if enf_findings:
+            enforcement_rc = 1
+            print(f"Enforcement manifest ({integrity.MANIFEST_REL_PATH}): MISMATCH", file=sys.stderr)
+            for finding in enf_findings:
+                print(f"  [ENFORCEMENT] {finding.describe()}", file=sys.stderr)
+            print(
+                "  An unreviewed enforcement-code change, or a reviewed one whose manifest "
+                "regen was skipped. Review the module diff, then --write-integrity-manifest.",
+                file=sys.stderr,
+            )
+        else:
+            covered = len(integrity.compute_digests(output_dir))
+            print(f"Enforcement manifest: OK ({covered} modules match)")
+
     results = drift.verify_output_integrity(output_dir)
     if not results:
         print(
             f"No build-log file_hashes under {output_dir}/references/ — cannot verify "
-            "(run --update to establish a baseline)."
+            "generated outputs (run --update to establish a baseline)."
         )
-        return 0
+        return enforcement_rc
 
     counts = dict(Counter(e["status"] for e in results))
     suspect = [e for e in results if e["status"] in ("TRUNCATED", "MISSING", "FENCE-BROKEN")]
@@ -143,7 +168,7 @@ def _run_verify_integrity(args: argparse.Namespace) -> int:
             file=sys.stderr,
         )
         return 1
-    return 0
+    return enforcement_rc
 
 
 def _run_stale_check(args: argparse.Namespace) -> int:

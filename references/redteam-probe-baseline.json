@@ -171,8 +171,8 @@
       "outcome": "DEFENDED"
     },
     "E1": {
-      "evidence_digest": "8c9ece5dda22a5f8",
-      "note": "",
+      "evidence_digest": "24ee3b8bda398444",
+      "note": "2026-08-14: evidence changed because the agent-file count grew from 30 to 35 (api-conformity-tracker.md, pr-manager.md, pr-notifier.md, pr-reminder.md, tool-doc-researcher.md added; zero removed, all five are named, roster-listed agents). Outcome unchanged (DEFENDED); the probe still measures the same thing over a larger population.",
       "outcome": "DEFENDED"
     },
     "E2": {
@@ -181,9 +181,9 @@
       "outcome": "DEFENDED"
     },
     "E3": {
-      "evidence_digest": "73691722c63dcb56",
-      "note": "",
-      "outcome": "DEFENDED"
+      "evidence_digest": "4c91c2e8e3df3b66",
+      "note": "2026-08-14: re-validated against redteam-accepted-weaknesses.csv's E3 row. The probe still reads the tracked .claude/hooks/constitutional-gate.py (not the gitignored settings.json) and correctly reports DOCUMENTED-LIMIT: harness-level enforcement ships in the repo, but the PreToolUse wiring lives in a machine-local file a checkout cannot self-install. This is the fix from 572b3a6 (2026-08-07); the baseline was simply never re-accepted until now. Teeth intact: EXPLOITED if the hook file leaves the repo.",
+      "outcome": "DOCUMENTED-LIMIT"
     },
     "E4": {
       "evidence_digest": "6859b3d7f8bf542c",
