@@ -18,7 +18,7 @@ existing test suite pin that.
 
 The `LENGTH_ALLOWLIST` in `tests/test_code_hygiene.py` is now **empty** — every module in
 this package is under the 1000-line CH-07 ceiling on its own merits. `app.py` came down from
-1174 to 420 when the pipeline moved out, and `generate.py` from 979 to 917 when the
+1174 to 465 when the pipeline moved out, and `generate.py` from 979 to 974 when the
 standalone modes moved to `standalone_modes.py`.
 
 Line counts are deliberately not restated per module here: they change on every carve, and a
@@ -37,8 +37,13 @@ doc that hard-codes them goes stale the way this paragraph did. Run
 | `artifacts.py` | Writers for the generator-owned artifacts: delivery receipt, eval suite, model routing, memory index, code index. Also owns the memory index's source-scope rules. |
 | `commands.py` | Sub-command runners for `--convert`, `--interop-*` and `--bridge-*`. |
 | `security_gate.py` | The destructive-action gate: requires a recorded PASS decision, or an explicit waiver, before a destructive operation proceeds. |
+| `decision_log.py` | Authenticates rows in the security-decisions log (HMAC signing/verification, chain-intactness checks); carved from `security_gate.py` at its own CH-07 ceiling. |
 | `schema_cache.py` | Shared JSON-Schema validation plus a content-hash cache, so re-validating unchanged bytes is free. |
 | `goose_switch.py` | Glue for `--goose-source` / `--goose-model` / `--goose-show`. |
+| `backup_switch.py` | Glue for `--stale-check` / `--stale-remediate` / `--prune-backups` / `--backup-mirror`. |
+| `fleet_switch.py` | Glue for `--fleet` / `--fleet-frameworks` / `--fleet-report`. |
+| `package_switch.py` | Glue + dispatch for `--package-team` / `--package-source-framework`. |
+| `sync_switch.py` | Glue + dispatch for `--sync-init` / `--sync` / `--sync-since` / `--pin`. |
 | `recipe_check.py` | Standalone structural validator for Goose recipe YAML. |
 | `standalone_modes.py` | The "do one thing and exit" modes carved out of `generate.py`: restore-backup, scan-security, check-budget, template pinning, and the retrieval utilities. They were never part of the generate pipeline. |
 | `output_target.py` | Resolves and validates the output directory, including the foreign-output refusal behind `--allow-foreign-output`. |
@@ -53,8 +58,8 @@ doc that hard-codes them goes stale the way this paragraph did. Run
 `_memory_index_sources` decides *what* to index and `_memory_index_root` decides what
 relative paths are relative *to*; `memory_index.py` only builds an index over whatever
 it is handed. `_SCRATCH_DIR_NAMES` / `_is_durable_source` exclude backup and cache
-directories from every recursive scan — without that filter the index reached 1764
-gitignored files, 1488 of them backup snapshots, in a 51 MB committed artifact.
+directories from every recursive scan — without that filter the index reached 2120
+documents, 1488 of them backup snapshots, in a 51 MB committed artifact.
 
 **Reporting never changes an outcome.** `generate.py` calls
 [`update_report.report_run`](update-report.md) after the write phase and only when

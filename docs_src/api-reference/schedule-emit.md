@@ -8,8 +8,8 @@ Opt-in via [`--target-host-features bridge:copilot-vscode-to-claude:schedule`](h
 
 | Slug | Cron (UTC) | Description |
 |---|---|---|
-| `work-summarizer` | `0 22 * * *` (daily 22:00) | Append the day's events to `workSummaries/daily/<date>.md`. |
-| `drift` | `0 14 * * 1` (Monday 14:00) | Cross-team template→artifact drift scan. |
+| `work-summarizer` | `0 22 * * *` (daily 22:00) | Daily append-first work summary capture (22:00 UTC). |
+| `drift` | `0 14 * * 1` (Monday 14:00) | Weekly template→artifact drift scan (Monday 14:00 UTC). |
 | `post-production-auditor` | `0 18 * * 5` (Friday 18:00) | Weekly post-production sampling audit. |
 | `advisory` | `0 12 1 * *` (1st of month 12:00) | Monthly advisory PR roll-up. |
 

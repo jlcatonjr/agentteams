@@ -1,5 +1,7 @@
-# Goose Bridge
+# Goose — AgentTeamsModule
 
-<!-- AGENTTEAMS-BRIDGE:BEGIN goose-bridge-readme v=2 -->
-Lightweight bridge; source files are canonical. See `references/bridges/copilot-vscode-to-goose/quickstart-snippet.md` for operational guidance (retrieval-first protocol, --bridge-check scope, MCP wiring).
-<!-- AGENTTEAMS-BRIDGE:END goose-bridge-readme -->
+<!-- AGENTTEAMS:BEGIN goose_bridge_readme v=3 -->
+Native Goose entry surface; see `.goosehints`/`AGENTS.md` for the instruction
+set and `.goose/recipes/orchestrator.yaml` for the entry recipe (retrieval-
+first protocol, MCP wiring).
+<!-- AGENTTEAMS:END goose_bridge_readme -->

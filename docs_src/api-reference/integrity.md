@@ -28,7 +28,7 @@ The durable fix is elsewhere: move enforcement into the harness, where agents ca
 
 > *Source: `agentteams/integrity.py`*
 
-Modules whose integrity the constitution depends on. Each is listed because a silent edit to it would disable or weaken a control rather than merely change behaviour: `cli/security_gate.py` (C-2, C-5), `scan.py` (C-4), `fences.py` and `unfenced.py` (C-1), `front_matter_merge.py` and `front_matter_reconcile.py` (C-3), and `integrity.py` itself, so removing an entry is detectable.
+Modules whose integrity the constitution depends on. Each is listed because a silent edit to it would disable or weaken a control rather than merely change behaviour: `cli/security_gate.py` (C-2, C-5), `scan.py` (C-4), `fences.py` and `unfenced.py` (C-1), `front_matter_merge.py` and `front_matter_reconcile.py` (C-3), the standing red-team audit's `redteam/checks_static.py`, `redteam/checks_report.py`, and `redteam/registry.py`, and `integrity.py` itself, so removing an entry is detectable.
 
 ### `MANIFEST_REL_PATH`
 

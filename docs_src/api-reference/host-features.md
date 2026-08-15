@@ -14,7 +14,7 @@ Parse a CSV string of subselectors into a normalized, deduped list. Empty / `Non
 ```python
 validate(token: str) -> None
 ```
-Validate a single `<ns>:<feature>` token. The namespace may itself contain a colon (e.g. `bridge:copilot-vscode-to-claude:subagents`); validation splits on the last colon to separate the feature from the namespace. Raises `HostFeatureError` on empty parts, leading/trailing whitespace, or disallowed characters.
+Validate a single `<ns>:<feature>` token against a fixed allow-list. The namespace may itself contain a colon (e.g. `bridge:copilot-vscode-to-claude:subagents`); validation splits on the last colon to separate the feature from the namespace. Raises `HostFeatureError` when the token has no colon at all, when the namespace is not one of the enumerated `_VALID_NAMESPACES`, or when the feature is not in that namespace's `_KNOWN_FEATURES` set — e.g. `claude:not-a-real-feature` raises even though it is syntactically well-formed.
 
 ```python
 is_enabled(features: Iterable[str], namespace: str, feature: str) -> bool
@@ -38,9 +38,9 @@ Raised by `parse_tokens` / `validate` for any malformed token.
 | `goose:mcp` | Wire operator-specified `mcp_servers[]` into Goose recipes as `stdio`/`streamable_http` extensions (opt-in; Goose already grants CLI via the `developer` builtin, so this is never a default). Only first-party read-only servers scoped to an agent are auto-wired; others are surfaced as recipe comments (see [`mcp_emit`](mcp-emit.md)). |
 | `codex:mcp` | Splice operator-specified `mcp_servers[]` into `.codex/config.toml`'s `[mcp_servers.*]` tables — a real, live config Codex reads to launch servers, so the same first-party/read-only/no-review-required auto-wire bar as `goose:mcp` applies. Unrelated file content (comments, sandbox/profile settings) is verified unchanged before any write, refusing the write rather than risk data loss if not (see [`codex_mcp_emit`](codex-mcp-emit.md)). |
 
-> **Namespace scope:** this table lists only the tokens in the `bridge:copilot-vscode-to-claude:*` namespace that have a wired-up effect today. `validate` / `parse_tokens` accept any syntactically valid `<ns>:<feature>` token (the namespace may itself contain colons), so tokens in other namespaces — e.g. `claude:*` — also pass validation. They simply produce no emission unless an emitter is looking for them.
+> **Namespace scope:** this table lists the tokens — spanning the `bridge:copilot-vscode-to-claude:*`, `goose`, and `codex` namespaces — that have a wired-up effect today. `validate` / `parse_tokens` enforce a fixed allow-list — `_VALID_NAMESPACES` and a per-namespace `_KNOWN_FEATURES` set — not free-form syntactic well-formedness; a namespace or feature absent from those lists raises `HostFeatureError` however well-formed the token otherwise looks (e.g. `claude:not-a-real-feature` raises). Tokens whose namespace and feature are *both* allow-listed but not in this table — e.g. bare `claude:hooks` or `claude:subagents` — pass validation and simply produce no emission unless an emitter is looking for them.
 
-Unknown tokens are *valid syntactically* but produce no emission — emitters perform their own membership test against the active feature list and silently no-op when the flag they look for is absent.
+Genuinely unrecognized tokens do **not** pass through silently: a namespace or feature absent from the allow-list is rejected at `validate()` with `HostFeatureError` and never reaches `manifest["host_features"]`. "No emission" describes only tokens that clear the allow-list but whose `namespace:feature` combination no current emitter checks for — emitters perform their own membership test against the active feature list and silently no-op when the flag they look for is absent.
 
 ## Example
 

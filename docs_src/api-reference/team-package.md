@@ -36,10 +36,10 @@ class PackageResult:
     success: bool
     zip_path: Path
     dry_run: bool
-    source_framework: str
-    agent_count: int
-    errors: list[str]
-    notices: list[str]
+    source_framework: str = ""
+    agent_count: int = 0
+    errors: list[str] = field(default_factory=list)
+    notices: list[str] = field(default_factory=list)
 ```
 
 ```python
@@ -92,7 +92,7 @@ not a directory as it does for every other `--framework` mode.
 
 `--package-team` is mutually exclusive with every other standalone op that
 would otherwise dispatch first in `cli/app.py`'s if-chain and silently shadow
-it: `--convert-from`, `--interop-from`, `--bridge-from`, `--self`,
+it: `--convert-from`, `--interop-from`, `--bridge-from`/`--absorb-from`, `--self`,
 `--fleet`, `--backup-mirror`, `--capture-baseline`/`--check-baseline`,
 `--verify-waivers`, `--redteam`/`--accept-probe-baseline`,
 `--write-integrity-manifest`, `--verify-integrity`, `--verify-backup`,

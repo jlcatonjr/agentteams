@@ -14,7 +14,7 @@ Assigns each agent in a team to a tier role (`cheap`, `primary`, `fallback`) bas
 - **Off by default** — Only emitted when explicitly requested (`--cost-routing` in CLI)
 - **Deterministic** — Pure functions; same manifest always yields same routing
 - **Conservative** — Unknown agents default to `primary` (never downgraded)
-- **Governance-driven** — Tier rule is derived purely from the manifest; no hardcoded archetype lists
+- **Governance-driven, plus a small fixed allowlist** — Tier rule is primarily derived from the manifest (`governance_agents` membership), plus a fixed 5-slug allowlist (`_ALWAYS_CHEAP_SLUGS`) always routed to `cheap` regardless of manifest membership
 
 ---
 
@@ -59,12 +59,25 @@ Determine the tier role for a single agent, pure.
 
 **Rule:**
 
-- If `slug` is in `manifest['governance_agents']` → `"cheap"` (read-only, structured, cost-optimizable)
+- If `slug` is in `manifest['governance_agents']` **or** `slug` is one of 5 hardcoded
+  always-cheap slugs → `"cheap"` (read-only, structured, cost-optimizable)
 - Otherwise → `"primary"` (conservative; unknown agents stay on primary tier)
+
+The always-cheap slugs (`_ALWAYS_CHEAP_SLUGS`) route to `cheap` unconditionally,
+regardless of manifest membership — these roles run per-action or per-query and
+benefit most from a fast cheap-tier model:
+
+- `critic` — Phase 3 PreToolUse safety check
+- `retrieval-policy` — Phase 6 navigator narrowing
+- `navigator` — read-only lookup agent
+- `reference-manager` — citation verify lookups
+- `memory-index-query` — generated lookups
 
 **Notes:**
 
-- No hardcoded archetype list; rule is data-driven from the manifest
+- The tier rule is **not** purely manifest-driven: alongside `governance_agents`
+  membership, a fixed 5-slug allowlist is unconditionally routed to `cheap` even when
+  the slug is absent from the manifest
 - `"fallback"` is declared in `MODEL_TIERS` but currently not assigned (reserved for future use)
 
 ---
@@ -129,7 +142,7 @@ The CLI emits this contract only when `--cost-routing` is passed:
 
 ```bash
 python build_team.py --description brief.json --cost-routing
-# Writes: .github/agents/references/model-routing.json
+# Writes: references/model-routing.json
 ```
 
 ---

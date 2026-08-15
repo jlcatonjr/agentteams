@@ -18,16 +18,21 @@ runtime plan-steps schema (`step,agent,action,inputs,outputs,status,notes` + opt
 - `read_steps(csv_path)` — tolerant, header-keyed reader → `list[PlanStep]`.
 - `PlanStep` — one row; exposes `dep_ids()`, `read_tokens()`, `write_tokens()`,
   `touches_shared_state()`, `has_footprint()`.
+- `PlanFootprint` — a whole-plan footprint (`path`, union `reads`/`writes` token sets,
+  `determinate` — `False` when the plan has no parseable write footprint at all).
 - `compute_waves(steps)` → `WaveSchedule` — Kahn layering over declared `depends_on`
   **plus** footprint-implied edges (read-after-write / write-after-write), then
   conservative refinement: shared-state denylist steps and empty/unparseable-footprint
   steps are forced to singleton waves; dependency cycles are a **blocking error**.
 - `analyze_plan(csv_path)` — read + compute in one call.
+- `plan_footprint(csv_path)` → `PlanFootprint` — union read/write footprint for a whole
+  plan; the building block `independent_plans()` is built on.
 - `independent_plans(csv_paths)` — cross-plan *any-order* (non-blocking) grouping by
   disjoint footprints (a scheduling note, **not** a claim of simultaneous execution).
 - `to_json(schedule)` / `render_markdown(schedule)` — serialise the schedule.
 - `render_skill()` — the `parallelize-plan` Claude skill (emitted via `bridge.py`,
-  gated by the `parallelize` host feature).
+  gated by the `bridge:copilot-vscode-to-claude:parallelize` host-feature token; no
+  direct/non-bridge consumer exists).
 - `main(argv)` — CLI: `python -m agentteams.parallel_plan STEPS.csv [...] [--json]`.
 
 ## Independence heuristic (conservative, fail-safe)

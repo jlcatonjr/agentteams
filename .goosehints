@@ -1,5 +1,7 @@
-<!-- AGENTTEAMS-BRIDGE:BEGIN goose-bridge-hints v=1 -->
+<!-- AGENTTEAMS:BEGIN goose_bridge_hints v=2 -->
 @AGENTS.md
 
-This project bridges the `copilot-vscode` agent team; source files are canonical.
-<!-- AGENTTEAMS-BRIDGE:END goose-bridge-hints -->
+This project's native instruction set is under `.github/copilot-instructions.md`
+and `.agents/`/`.goose/recipes/`; this file and `AGENTS.md` are Goose's own
+native entry surfaces, not a bridge.
+<!-- AGENTTEAMS:END goose_bridge_hints -->

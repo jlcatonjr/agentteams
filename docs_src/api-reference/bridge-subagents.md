@@ -51,4 +51,5 @@ Walk emitted stubs and compare each one's recorded `source_sha256` against the c
 
 - The emitter writes only to `<output_root>/.claude/agents/`. It does not touch any other path under `<output_root>`, including the source canonical agent files.
 - `detect_stub_drift` is a hash check, not a semantic merge — a regenerated source file with whitespace-only changes will still register as `drift`.
+- `detect_stub_drift` is **dormant**: it is fully tested but not wired to any CLI flag. The canonical absorb workflow (`commands._run_absorb`) supersedes this per-stub SHA comparison with a whole-baseline three-way merge (`sync_classifier.classify_sync`). It is retained for potential future use (e.g. a lightweight `--stub-drift-check` flag) but is not called from any production code path today.
 - The parametric workstream-expert stub does not enumerate the collapsed experts; consumers discover them by scanning `source_dir` for `*-expert.agent.md`.

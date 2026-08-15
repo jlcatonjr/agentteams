@@ -46,13 +46,18 @@ Args:
 6. `overwrite` (`bool`): destructively overwrite **existing target-framework entry files** at `output_root` (CLAUDE.md, `.claude/agent-team.md`, etc.) and existing bridge-internal artifacts. Triggered by `--bridge-refresh`.
 7. `check_only` (`bool`): run freshness check only; no writes.
 8. `merge_only` (`bool`): non-destructive update of target-framework entry files. Bridge-internal artifacts under `references/bridges/.../` are always regenerated. For target entry files, only content inside `<!-- AGENTTEAMS-BRIDGE:BEGIN <region> v=N --> ... <!-- AGENTTEAMS-BRIDGE:END <region> -->` fences is re-rendered; content outside fences is preserved verbatim. Files lacking any bridge fence are skipped with notices in `bridge-merge.report.md`. Triggered by `--bridge-merge`.
-9. `emit_skills` (`bool`): emit `.claude/skills/recall/SKILL.md` skill template (claude target only). Default `True`. Set to `False` (via `--bridge-no-skills`) if your team manages skills separately.
+9. `emit_skills` (`bool`): emit `.claude/skills/recall/SKILL.md` and `.claude/skills/code-recall/SKILL.md` skill templates (claude target only). Default `True`. Set to `False` (via `--bridge-no-skills`) if your team manages skills separately.
 10. `host_features` (`list[str] | None`): opt-in subselectors that gate additional emission paths. When `None` or `[]`, default emission is unchanged. Recognised tokens (claude target):
     - `bridge:copilot-vscode-to-claude:subagents` — emit per-agent stubs via [`bridge_subagents`](bridge-subagents.md).
     - `bridge:copilot-vscode-to-claude:hooks` — emit hook settings + guard via [`hooks_emit`](hooks-emit.md).
     - `bridge:copilot-vscode-to-claude:cache-split` — emit cache-aware `CLAUDE.md` via [`instructions_split`](instructions-split.md) in place of the default pointer file.
     - `bridge:copilot-vscode-to-claude:schedule` — emit `.claude/schedules.agentteams.json` via [`schedule_emit`](schedule-emit.md).
     - `bridge:copilot-vscode-to-claude:todo-projection` — emit `.claude/skills/todo-from-plan/SKILL.md` (rendered by [`plan_steps_todo.render_skill`](plan-steps-todo.md)).
+    - `bridge:copilot-vscode-to-claude:parallelize` — emit `.claude/skills/parallelize-plan/SKILL.md` via [`parallel_plan.render_skill`](parallel-plan.md).
+
+    Recognised tokens (goose target; `<source>` is the detected/declared source framework, e.g. `copilot-vscode`):
+    - `bridge:<source>-to-goose:subagents` — emit per-agent Goose recipe stubs via [`bridge_subagents_goose`](bridge-subagents-goose.md).
+    - `bridge:<source>-to-goose:mcp` — wire the source project's declared MCP servers into the `.goose/recipes/bridge-orchestrator.yaml` recipe.
 
     Tokens are parsed and validated by [`host_features`](host-features.md). CLI surface: `--target-host-features TOKENS`.
 
@@ -92,6 +97,7 @@ Merge mode also emits:
 Claude target with `emit_skills=True` (default) also emits at `output_root`:
 
 - `.claude/skills/recall/SKILL.md` — wraps `agentteams --query-index` for in-session retrieval. **Not** under `references/bridges/...`; lives in the consumer's `.claude/skills/` directory.
+- `.claude/skills/code-recall/SKILL.md` — wraps `agentteams --query-code` for in-session code/API index retrieval. Same location convention as `recall/SKILL.md`.
 
 Goose target emits these fenced entry files at `output_root` (regions
 `goose-bridge-entry`/`-hints`/`-readme`):
@@ -100,7 +106,11 @@ Goose target emits these fenced entry files at `output_root` (regions
 - `.goosehints` — `@AGENTS.md` integrator so Goose's default context discovery loads the bridged brief.
 - `.goose/README.md` — bridge note.
 
-Goose is supported as a bridge **target** only (any of copilot-vscode/copilot-cli/claude → goose); bridging *from* a Goose project is not yet supported.
+Goose target also always emits (bridge-owned; not fence-scoped, regenerated on every run regardless of mode):
+
+- `.goose/recipes/bridge-orchestrator.yaml` — Goose recipe stub wiring the `developer` (CLI) extension and, when the `bridge:<source>-to-goose:mcp` host-feature token is set, the source project's declared MCP servers.
+
+Goose is supported as both a bridge **source** and **target**: any of copilot-vscode/copilot-cli/claude/canonical → goose, and goose → claude/copilot-vscode/copilot-cli. Only goose → goose is rejected (raises `ValueError`) as meaningless.
 
 ---
 

@@ -22,7 +22,7 @@ Metadata for a single agent node in the team graph.
 
 - `slug` (`str`) — Machine-readable identifier derived from filename.
 - `display_name` (`str`) — Human-readable name from YAML `name:` field.
-- `agent_type` (`str`) — Categorical type: `'governance'`, `'domain'`, `'workstream-expert'`, `'tool-specialist'`, or `'unknown'`.
+- `agent_type` (`str`) — Categorical type: `'governance'`, `'domain'`, `'workstream_expert'`, `'tool_specialist'`, or `'unknown'`.
 - `user_invokable` (`bool`) — `True` if the agent can be invoked directly by a user.
 - `tools` (`list[str]`) — Declared tool list from YAML.
 
@@ -93,6 +93,12 @@ Render the graph as a standalone, deterministic SVG document (stdlib layered lay
 
 **Returns:** `str` — SVG XML as a plain string.
 
+#### `to_handoff_svg()`
+
+Render the handoff-only control-flow backbone as SVG — the same deterministic layout engine as `to_svg()`, but with `agents-list` edges omitted so only `handoffs:` edges remain. This is the diagram referenced as `pipeline-handoffs.svg` by the Markdown document.
+
+**Returns:** `str` — SVG XML as a plain string.
+
 #### `to_markdown_document()`
 
 Render a full Markdown document that references the standalone SVG diagram (`pipeline-graph.svg`), plus a legend and agent tables, and retains the Mermaid/DOT source under a collapsed `<details>` block. Written to `references/pipeline-graph.md` on every `build_team.py` run.
@@ -133,6 +139,64 @@ Generate the full Markdown graph document combining Mermaid, DOT, and JSON repre
 
 ---
 
+### `generate_graph_svg(file_map, project_name='')`
+
+> *Source: `agentteams/graph.py`*
+
+Build the graph and return the full agent-topology SVG document (equivalent to `build_graph(...).to_svg()`).
+
+**Args:**
+
+- `file_map` (`dict[str, str]`) — Dict mapping relative path → rendered content.
+- `project_name` (`str`) — Display name for the project. Default: `''`.
+
+**Returns:** `str` — SVG XML as a plain string.
+
+---
+
+### `generate_graph_handoff_svg(file_map, project_name='')`
+
+> *Source: `agentteams/graph.py`*
+
+Build the graph and return the handoff-only backbone SVG document (equivalent to `build_graph(...).to_handoff_svg()`).
+
+**Args:**
+
+- `file_map` (`dict[str, str]`) — Dict mapping relative path → rendered content.
+- `project_name` (`str`) — Display name for the project. Default: `''`.
+
+**Returns:** `str` — SVG XML as a plain string.
+
+---
+
+### `load_from_disk(agents_dir)`
+
+> *Source: `agentteams/graph.py`*
+
+Load all `.agent.md` files from an agents directory into a `file_map`. Shared by the CLI entry point and the commit-triggered refresh in [`git_hooks`](git-hooks.md). Skips dot-prefixed subdirectories (e.g. `.agentteams-backups/`) so backup/ghost agents are not parsed as live nodes.
+
+**Args:**
+
+- `agents_dir` (`Path`) — Path to the `.github/agents/` (or `.claude/agents/`) directory.
+
+**Returns:** `dict[str, str]` — Dict mapping relative path → file content.
+
+---
+
+### `infer_project_name(file_map)`
+
+> *Source: `agentteams/graph.py`*
+
+Infer a project name from agent `name:` fields. Agent names follow `<Role> — <Project>` (em dash) or `<Role> - <Project>` (hyphen); the trailing segment is the project name. Shared by the CLI entry point and the commit-triggered refresh in [`git_hooks`](git-hooks.md) so both derive the same heading.
+
+**Args:**
+
+- `file_map` (`dict[str, str]`) — Dict mapping relative path → rendered content.
+
+**Returns:** `str` — The inferred project name, or `''` when no agent carries a splittable name.
+
+---
+
 ### `main(argv=None)`
 
 > *Source: `agentteams/graph.py`*
@@ -144,6 +208,8 @@ python -m agentteams.graph /path/to/.github/agents/
 python -m agentteams.graph /path/to/.github/agents/ --format mermaid
 python -m agentteams.graph /path/to/.github/agents/ --format dot
 python -m agentteams.graph /path/to/.github/agents/ --format json
+python -m agentteams.graph /path/to/.github/agents/ --format svg
+python -m agentteams.graph /path/to/.github/agents/ --output pipeline-graph.md
 ```
 
 **Args:**

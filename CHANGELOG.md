@@ -6,6 +6,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### fixed (api-doc-conformity-sweep: host-features codex namespace)
+
+- **`--target-host-features codex:mcp` was rejected at validation, even though `codex_mcp_emit.py`
+  has always depended on it.** `agentteams/host_features.py`'s `_VALID_NAMESPACES`/
+  `_KNOWN_FEATURES` never had a `"codex"` entry — CLI parsing (`_parse_host_features`) validates
+  against these tables before a token can reach any emitter, so a fully-implemented,
+  documented feature (splicing MCP servers into `.codex/config.toml`) was unreachable. Found
+  during a systematic `docs_src/api-reference/` audit against source. Fixed by adding
+  `"codex": frozenset({"mcp"})`, matching the existing `"goose"` entry's pattern.
+
 ### added (2026-W33 consolidated remediation: pinned-sync)
 
 - **Multi-framework pinned-sync** — new `agentteams/sync_pin.py` and `agentteams/multi_sync.py`

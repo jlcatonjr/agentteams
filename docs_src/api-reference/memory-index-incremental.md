@@ -42,6 +42,15 @@ Attempt the patch; return a non-applied result on any risk.
 | `missing_doc_entry` | A source has no matching document |
 | `eligible_only_single_changed_doc` | Zero or more than one document changed |
 | `invalid_doc_id` | The document's `doc_id` is not an int |
+| `changed_doc_unreadable_or_empty` | The changed source file could not be read, or tokenized to zero terms |
+| `term_set_changed` | The changed document's term vocabulary differs from the indexed version (reliability gate against structural postings adds/deletes) |
+| `doc_anchor_not_found` | The document's line range could not be located in the on-disk index file |
+| `term_anchor_missing:<term>` | A term's postings block could not be located in the on-disk index file |
+| `meta_anchor_missing:<prefix>` | A top-level metadata line (e.g. `built_at`, `avgdl`) could not be located in the on-disk index file |
+| `sed_failed:<exc>` | The `sed` subprocess failed; file restored from backup |
+| `mutated_json_invalid` | The patched file could not be read back or parsed as JSON after the sed patch; restored from backup |
+| `mutated_schema_invalid` | The patched index failed schema validation (`validate_index`); restored from backup |
+| `post_patch_mismatch` | The patched file's parsed contents don't exactly match the expected in-memory result; restored from backup |
 
 ## Migrating an index that stores absolute paths
 

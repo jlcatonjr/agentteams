@@ -96,6 +96,19 @@ contract — the three address different questions and must not be conflated.
 
 ## Public API
 
+`__all__` also exports these constants:
+
+- `CODE_INDEX_SCHEMA_VERSION` (`"1.0"`)
+- `INDEX_FORMAT_VERSION` (`"json-code-bm25-v1"`)
+- `INDEX_WRITE_OWNER` (`"agentteams.code_index"`)
+- `VECTOR_RUNTIME_MODE` (`"sparse-tfidf-cosine"`)
+- `FALLBACK_POLICY` (`"non-blocking-file-read-then-search"`)
+- `MANIFEST_ARTIFACT_TYPE` (`"code-index-manifest"`)
+- `PARTITION_ARTIFACT_TYPE` (`"code-index-partition"`)
+- `SOURCE_KINDS` (`("local-script", "api-module", "api-doc")`)
+
+Functions:
+
 - `build_code_partition(units, *, source_kind, project_name="", framework="", dependency_fingerprint=None) -> dict`
 - `local_units(paths) -> list[dict]`
 - `query_partition(partition, query, *, k=5, strategy="lexical") -> list[dict]`

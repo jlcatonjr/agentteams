@@ -10,11 +10,14 @@ Opt-in (for the bridge skill artifact) via [`--target-host-features bridge:copil
 
 ## Status Projection
 
-| CSV `status` | TodoWrite `status` |
-|---|---|
-| `done`, `completed` | `completed` |
-| `in-progress`, `in_progress`, `wip` | `in_progress` |
-| *(other / blank)* | `pending` |
+| CSV `status` | TodoWrite `status` | Legal for `update_status()`? |
+|---|---|---|
+| `pending` | `pending` | Yes |
+| `in_progress` | `in_progress` | Yes |
+| `completed` | `completed` | Yes |
+| `done` | `completed` (legacy synonym) | Yes |
+| `blocked` | `pending` | Yes |
+| *(anything else — e.g. legacy/typo strings like `in-progress`, `wip`, or blank)* | `pending` (falls through via `.get(status, "pending")`) | **No** — `update_status()` raises `ValueError`; only the five statuses above are valid |
 
 ## Public Surface
 
@@ -48,7 +51,7 @@ Convenience: read CSV and return TodoWrite-shaped dicts with `content`, `activeF
 ```python
 update_status(csv_path: Path, step_id: str, new_status: str) -> bool
 ```
-Mutate the `status` column for a single step, preserving header order and all other column values. The file is re-serialized with minimal quoting, so it is not necessarily byte-identical to the original. Atomic via `os.replace`. Returns `True` if updated; `False` if `step_id` not found. Raises `ValueError` for unknown statuses.
+Mutate the `status` column for a single step, preserving header order and all other column values. The file is re-serialized with minimal quoting, so it is not necessarily byte-identical to the original. Atomic via `os.replace`. Returns `True` if updated; `False` if `step_id` not found. Raises `ValueError` for an unknown `new_status`. Since 2026-08-13 it also delegates the write to `atomic_rewrite_csv_rows` (`agentteams/atomicio.py`), which raises `ValueError` of its own if the write fails round-trip verification (a rendered row or header doesn't parse back exactly as written).
 
 ```python
 detect_divergence(
@@ -61,7 +64,7 @@ Compare a TodoWrite snapshot against the canonical CSV. Returns `{missing_in_tod
 ```python
 render_skill() -> str
 ```
-Return the contents of the `todo-from-plan.md` skill file. Pure function — no filesystem access.
+Return the contents of the `.claude/skills/todo-from-plan/SKILL.md` skill file. Pure function — no filesystem access.
 
 ## Contract
 

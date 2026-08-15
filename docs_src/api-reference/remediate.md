@@ -41,7 +41,7 @@ Invoke the standalone Copilot CLI to repair generated team files.
 - `manifest` (`dict[str, Any]`, keyword-only) — Team manifest from `analyze.build_manifest()`.
 - `audit_result` (keyword-only) — `AuditResult`-like object containing findings.
 
-**Returns:** `RemediationResult` — If the Copilot CLI is absent or exits non-zero, returns a result with `succeeded=False`; no exception is raised for those cases.
+**Returns:** `RemediationResult` — Three possible outcomes: if `audit_result` carries no findings at all, returns immediately with `attempted=False, succeeded=True` — without even checking whether the Copilot CLI is on `PATH`, since there is nothing to remediate; if the Copilot CLI is absent, returns `attempted=False, succeeded=False`; if the CLI runs but exits non-zero (or times out), returns `attempted=True, succeeded=False`. No exception is raised for any of these cases.
 
 **Raises:** `OSError` — Only for unexpected OS-level subprocess failures (e.g. permission errors on the executable path). A missing Copilot CLI returns `succeeded=False`, not `OSError`.
 

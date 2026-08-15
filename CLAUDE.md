@@ -1,8 +1,12 @@
-# Claude Bridge Entry Point
+# Claude Code Entry Point — AgentTeamsModule
 
-Use source framework `copilot-vscode` as canonical agent infrastructure.
-Read `references/bridges/copilot-vscode-to-claude/agent-inventory.md` and `references/bridges/copilot-vscode-to-claude/quickstart-snippet.md`.
-Start with orchestrator routing.
+The full Claude instruction set lives at `.claude/CLAUDE.md` (project memory —
+Claude Code loads it automatically alongside this file; it is NOT imported
+here to avoid double-loading it into the session budget). That file, this
+file, and the agent files under `.claude/agents/` are Claude's native,
+authoritative surfaces — regenerated directly via
+`agentteams --self --update --merge --yes` (see `README.md`'s Self-Maintenance
+section), never mirrored from another framework's files.
 
 ## Mandatory Safety References (read before acting)
 

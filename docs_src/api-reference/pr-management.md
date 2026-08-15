@@ -44,6 +44,30 @@ Load and lightly validate the recipient registry. Missing file → empty registr
 
 ### gh CLI wrappers
 
+Shared return-type shapes for the wrappers below:
+
+```python
+@dataclass(frozen=True)
+class Result:
+    ok: bool
+    code: int
+    stdout: str
+    stderr: str
+    @classmethod
+    def from_completed(cls, cp: CompletedProcess) -> "Result": ...
+
+@dataclass(frozen=True)
+class Pr:
+    number: int
+    title: str
+    author: str
+    assignees: tuple[str, ...]
+    updated_at: str
+    url: str
+    last_comment_body: str = ""
+    last_comment_created_at: str = ""
+```
+
 ```python
 list_stale_prs(
     label: str = "pr-mgmt",

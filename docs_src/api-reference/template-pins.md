@@ -16,6 +16,16 @@ consumer_root(description: dict[str, Any], output_dir: Path) -> Path
 Where the pin lives: the consuming project, never the generated output directory. `resolve_output_dir` returns `project_root == output_dir` whenever `--output` is given, so deriving the location from it would place the trust root inside a directory the tool rewrites every run. Raises `PinLocationError` when no candidate qualifies rather than falling back to a guess.
 
 ```python
+pin_path(project_root: Path) -> Path
+```
+Where the pin file itself lives, relative to the project root: `.agentteams/template-pins.json`.
+
+```python
+load_pin(project_root: Path) -> dict[str, Any] | None
+```
+The consumer's committed pin, or `None` when they have not opted in. Absent is not a failure — pinning is opt-in, so an unpinned project is unprotected, not blocked. `verify` calls this internally to implement that behavior.
+
+```python
 verify(project_root: Path, installed: dict[str, str]) -> PinResult | None
 ```
 Compare installed digests against the committed pin. Returns `None` when the project has not pinned — absent is not a failure, since pinning is opt-in. A corrupt pin also reads as absent, failing toward "unprotected" rather than "verified".

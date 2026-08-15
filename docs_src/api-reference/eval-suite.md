@@ -29,6 +29,17 @@ The standard governance agents every workstream expert must coordinate with.
 
 ---
 
+### `RETURN_TO_ORCHESTRATOR`
+
+> *Source: `agentteams/eval_suite.py`*
+
+The literal edge label every governance scenario checks for in the expert's body — matches the Phase 0 canonical-scenario governance predicate documented in `orchestrator.agent.md` (Workflow 1, steps 6–8).
+
+**Type:** `str`  
+**Value:** `"Return to Orchestrator"`
+
+---
+
 ## Functions
 
 ### `build_eval_suite(manifest)`
@@ -41,9 +52,12 @@ Build a framework-neutral evaluation suite from a team manifest.
 
 - `manifest` (`dict[str, Any]`) — Team manifest from [`analyze.build_manifest()`](analyze.md).
 
-**Returns:** `dict[str, Any]` — Eval-suite dict conforming to `schemas/eval-suite.schema.json`, with keys:
+**Returns:** `dict[str, Any]` — Eval-suite dict conforming to `schemas/eval-suite.schema.json`. All keys below are required by the schema:
 - `artifact_type`: `"eval-suite"`
 - `eval_suite_schema_version`: Current schema version
+- `project_name`: The manifest's `project_name` (empty string if absent)
+- `framework`: The manifest's `framework` (empty string if absent)
+- `generated_from`: Always `"manifest"`
 - `scenarios`: List of behavioral scenario dicts (routing, handoff, governance expectations)
 
 **Behavior Notes:**
@@ -92,6 +106,8 @@ The eval-suite is designed to be **framework-agnostic**: it contains no terms fr
 3. Reusability across eval frameworks without re-derivation
 
 Framework-specific adapters are provided by `agentteams.eval_adapters`; this module remains neutral and adapter-free.
+
+The contract is enforced by the `FRAMEWORK_COUPLED_TOKENS` constant — a tuple of the terms an eval-suite must never contain (`inspect_ai`, `inspect-ai`, `@task`, `openai.evals`, `oaieval`, `evals.elsuite`, `Eval(`, `Solver(`). Tests scan every generated suite for these tokens to catch a framework-specific term leaking into the neutral spec.
 
 ---
 

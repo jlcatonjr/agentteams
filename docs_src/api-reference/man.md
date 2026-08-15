@@ -28,7 +28,7 @@ man ./agentteams.1
 
 Generate a groff man-page source document from an argparse parser.
 
-Produces sections: `NAME`, `SYNOPSIS`, `DESCRIPTION`, `OPTIONS`, `EXIT STATUS`, and `EXAMPLES`. Derives all content from the parser's `prog`, `description`, and registered arguments — no duplication required.
+Produces sections: `NAME`, `SYNOPSIS`, `DESCRIPTION`, `OPTIONS`, `EXIT STATUS`, `EXAMPLES`, and `SEE ALSO`. Derives all content from the parser's `prog`, `description`, and registered arguments — no duplication required.
 
 **Args:**
 
