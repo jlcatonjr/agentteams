@@ -1,9 +1,10 @@
-# Agent Team (Goose bridge)
+# Agent Team — AgentTeamsModule
 
-<!-- AGENTTEAMS-BRIDGE:BEGIN goose-bridge-entry v=1 -->
-Use source framework `copilot-vscode` as canonical agent infrastructure.
-Read `references/bridges/copilot-vscode-to-goose/agent-inventory.md` and `references/bridges/copilot-vscode-to-goose/quickstart-snippet.md`.
-Start with orchestrator routing.
+<!-- AGENTTEAMS:BEGIN goose_bridge_entry v=2 -->
+The native instruction set lives at `.github/copilot-instructions.md`, with
+per-agent files under `.agents/*.md` (agents-md/Codex) and
+`.goose/recipes/*.yaml` (Goose). Start with the orchestrator entry
+(`.agents/orchestrator.md` / `.goose/recipes/orchestrator.yaml`).
 
 These apply to every request in this session, not just project-coordination
 work routed through the orchestrator above:
@@ -31,4 +32,4 @@ work routed through the orchestrator above:
   candidate is clearly the best fit (an obvious misspelling or variant). If
   multiple entities are genuinely comparably plausible, say so and ask instead of
   forcing a guess between real alternatives.
-<!-- AGENTTEAMS-BRIDGE:END goose-bridge-entry -->
+<!-- AGENTTEAMS:END goose_bridge_entry -->

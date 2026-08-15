@@ -59,7 +59,7 @@ Detects: `{MANUAL:TOKEN}` placeholders, tool reference files with incomplete met
 
 Apply all resolvable fills to `file_map`, returning an enriched copy.
 
-Applies three fill strategies in order: rule-based fills for known token patterns, notebook-header scanning for component specs, and the built-in tool metadata catalog for `TOOL_DOCS_URL`, `TOOL_API_SURFACE`, and `TOOL_COMMON_PATTERNS` tokens.
+Applies three fill strategies in order: rule-based fills for known token patterns, the built-in tool metadata catalog for `TOOL_DOCS_URL`, `TOOL_API_SURFACE`, and `TOOL_COMMON_PATTERNS` tokens, and notebook-header scanning for component specs.
 
 **Args:**
 
@@ -159,7 +159,7 @@ Scan Python source files in `project_path` for import statements and return a ma
 
 - `project_path` (`Path`) — Root directory to scan (walks recursively).
 
-**Returns:** `dict[str, str]` — `{import_name: pypi_package_name}`
+**Returns:** `dict[str, str]` — `{package_name: alias}` — the canonical package name found in source, mapped to the import alias used.
 
 ---
 
@@ -174,6 +174,7 @@ Build a metadata catalog for a list of packages, combining the built-in static c
 **Args:**
 
 - `package_names` (`list[str]`) — PyPI package names to look up.
-- `fetch_pypi` (`bool`, keyword-only) — If `True`, fetch live metadata from PyPI for packages not in the static catalog. Default: `True`.
+- `fetch_registries` (`bool`, keyword-only) — Whether to fall back to a live registry lookup (PyPI, then npm) when the static catalog has no entry. Default: `True`.
+- `fetch_pypi` (`bool | None`, keyword-only) — Deprecated alias for `fetch_registries` (see note above). When given (not `None`), it wins over `fetch_registries`. Default: `None`.
 
 **Returns:** `dict[str, dict[str, str]]` — Keyed by the package names exactly as supplied in `packages` (no normalization of the key); values contain `docs_url`, `api_surface`, and `common_patterns`.

@@ -35,7 +35,7 @@ Args:
 
 1. `source_dir` (`Path`): source agent directory.
 2. `target_dir` (`Path`): destination agent directory.
-3. `target_framework` (`str`): one of `copilot-vscode`, `copilot-cli`, `claude`, or `goose`. (`agents-md` is generate-only and is not a valid convert target.)
+3. `target_framework` (`str`): one of `copilot-vscode`, `copilot-cli`, `claude`, or `goose`. (`convert_team()` itself accepts any framework id registered in `agentteams/frameworks/registry.py`, including `agents-md`; the CLI — `agentteams/cli/parser_validate.py` — separately rejects `agents-md` as a `--convert-from`/`--bridge-from` target, since its instructions-file emission is generate-only.)
 4. `project_manifest` (`dict | None`): optional context for adapter rendering.
 5. `dry_run` (`bool`): simulate write operations.
 6. `overwrite` (`bool`): overwrite existing files when true.

@@ -48,4 +48,9 @@ Write `.claude/settings.agentteams.example.json` and `.claude/hook-guard.sh` und
 
 ## Recursion Guard Contract
 
-`hook-guard.sh` reads `AGENTTEAMS_HOOK_DEPTH` from the environment (default `0`), increments it, and exits non-zero (with a log line) if it would exceed `AGENTTEAMS_HOOK_MAX_DEPTH`. The exported depth is inherited by any downstream tool invocation the hook triggers.
+`hook-guard.sh` reads `AGENTTEAMS_HOOK_DEPTH` from the environment (default `0`) and compares it against `AGENTTEAMS_HOOK_MAX_DEPTH` (default `2`). Every path **exits `0`** — the guard never fails a hook or blocks Claude from continuing; "refusal" means silently doing nothing, not signalling an error.
+
+- **At or beyond max depth:** silent no-op. No log line is written and the depth is not incremented — this is the refused path.
+- **Below max depth:** the guard writes a log line to `.claude/hook-notices/<YYYY-MM-DD>.log` (`event`, `slug`, and the depth it fired at), then exports `AGENTTEAMS_HOOK_DEPTH` incremented by one so any downstream tool invocation the hook triggers is inherited at the higher depth.
+
+The log write happens only on the *allowed* path, immediately before that path's own `exit 0` — the guard is silent exactly where it refuses, and logs exactly once where it lets the hook through.

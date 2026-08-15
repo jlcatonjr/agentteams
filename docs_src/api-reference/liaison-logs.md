@@ -6,6 +6,7 @@ Provides utilities to initialize, migrate, and maintain machine-readable CSV log
 - Per-repository changelog entries (file changes across adjacent repos)
 - Cross-orchestrator coordination (inter-team handoff records)
 - Security decisions (audit trail of `@security` verdicts)
+- AgentTeamsModule remediation backlog (Post-Deliverable Retrospective findings about the agentteams tool itself)
 
 > *Source: `agentteams/liaison_logs.py`*
 
@@ -20,6 +21,7 @@ Provides utilities to initialize, migrate, and maintain machine-readable CSV log
 | `CHANGELOG_CSV` | `adjacent-repos-changelog.csv` | Per-repo file change log |
 | `COORD_LOG_CSV` | `adjacent-repos-coordination-log.csv` | Cross-orchestrator coordination records |
 | `SECURITY_DECISIONS_CSV` | `security-decisions.log.csv` | Security decision audit trail |
+| `AGENTTEAMS_REMEDIATION_CSV` | `agentteams-remediation-log.csv` | AgentTeamsModule-itself remediation backlog (Post-Deliverable Retrospective findings) |
 
 ### Column Headers
 
@@ -28,6 +30,7 @@ Provides utilities to initialize, migrate, and maintain machine-readable CSV log
 | **Changelog** | `date`, `repo_name`, `action`, `files_changed`, `summary` |
 | **Coordination Log** | `date`, `adjacent_repo`, `direction`, `outcome` |
 | **Security Decisions** | `timestamp`, `requesting_agent`, `action_reviewed`, `verdict`, `conditions`, `conditions_verified` |
+| **AgentTeamsModule Remediation** | `date`, `source_repo`, `category`, `summary`, `proposed_touch_points`, `status`, `resolved_date`, `resolved_evidence` |
 
 ---
 
@@ -68,7 +71,7 @@ Initialize CSV stub files (header row only) if they do not already exist.
 
 **Behavior:**
 
-- Creates three CSV files: changelog, coordination log, security decisions
+- Creates four CSV files: changelog, coordination log, security decisions, remediation log
 - Safe to call on every generation run (never overwrites existing data)
 - Creates only the header row; no data rows
 

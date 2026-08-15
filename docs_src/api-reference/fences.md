@@ -19,3 +19,6 @@ and tests resolve these symbols from `agentteams.emit` unchanged.
 - `_detect_fence_shrink(...)` — heuristic that flags a regenerated fence body as materially
   shorter / less specific than the on-disk body (list-item / path / backtick-ident loss).
 - `_write_lost_fence_sidecars(...)` — persist pre-merge bodies of shrunk fences for recovery.
+- `redact_live_data(text)` — blanks the parts of a rendered file that legitimately differ on every
+  run (live-feed fence bodies, the `Generated at:` stamp) so snapshot/golden comparisons can cover
+  the rest of the file byte-for-byte.

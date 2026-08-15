@@ -4,10 +4,11 @@ Commit-triggered refresh of the repository maps. Installs a `pre-commit` hook
 that regenerates the maps from the *staged* files and stages the result into the
 same commit — so the committed maps are always in step with the committed source.
 
-Two maps are refreshed, each under its own guard:
+Two maps are refreshed, each under its own guard, plus an optional third capability:
 
 - agent files staged → `<agent-dir>/references/pipeline-graph.md` (agent topology, kept *with the team* — same location `--update`/emit writes — via [`graph`](graph.md))
 - `*.py` files staged → `references/architecture-graph.md` (repo-level module architecture, via [`architecture`](architecture.md))
+- (opt-in via `--code-index-hook`) script/dependency files staged → warm the code & API index cache (`references/code-index/`, gitignored — never staged) via `refresh_code_index()`
 
 > *Source: `agentteams/git_hooks.py`*
 
@@ -40,18 +41,38 @@ changed. Backup/ghost agents under dot-prefixed directories are excluded. When
 Rebuild `references/architecture-graph.md` from the repo's primary Python package
 (auto-detected). Same write-if-changed contract.
 
-### `install_pre_commit_hook(repo_root, *, agentteams_path=None, hooks_dir=None) -> InstallResult`
+### `refresh_code_index(repo_root, *, agents_dir=None, dry_run=False, stage=False) -> RefreshResult`
+
+The optional pre-commit warm-up (off by default; opt in via `--code-index-hook`).
+Refreshes the code & API index cache (`references/code-index/`) from the working
+tree. Unlike the two graph refreshes, this is a **gitignored local cache** — it is
+never staged (`stage` is accepted for a uniform job signature but ignored), and
+correctness never depends on it since `--query-code` rebuilds a stale partition on
+demand. Best-effort and non-raising.
+
+### `install_pre_commit_hook(repo_root, *, agentteams_path=None, hooks_dir=None, code_index_hook=False) -> InstallResult`
 
 Write (or sentinel-merge) the refresh block into the repo's `pre-commit` hook,
 preserving any pre-existing hook body. Idempotent. The block is non-blocking
 (`|| true`) so a refresh failure never aborts a commit, and each guard fires only
 when relevant files are staged. Resolves the hooks directory via
 `git rev-parse --git-path hooks` (honours `core.hooksPath`, worktrees, submodules).
+`code_index_hook` (default `False`) additionally installs the opt-in code-index
+warm-up guard described above.
 
 ### `maybe_install_git_hooks(args, project_root) -> None`
 
 Default-on auto-install called from the generate/update success path; opt out
 with `--no-git-hooks`. No-op outside a git repository.
+
+### `maybe_refresh_architecture_map(args, project_root) -> None`
+
+Auto-invoked alongside `maybe_install_git_hooks` from the generate/update success
+path: regenerates `references/architecture-graph.md` (+ SVGs) at the repo root
+after every build, not just when the `*.py`-staged pre-commit hook fires. Closes
+the gap where a repo whose Python changed via a fleet `--update` (rather than a
+hook-fired commit) would otherwise keep a stale architecture map indefinitely.
+No-op when the repo has no importable package; never fails the build.
 
 ---
 
@@ -62,7 +83,9 @@ agentteams --install-git-hooks [--project DIR]     # install the hook
 agentteams --refresh-graph        [--project DIR]  # refresh agent topology map
 agentteams --refresh-architecture [--project DIR]  # refresh module architecture map
 agentteams --update --no-git-hooks                 # opt out of auto-install
+agentteams --update --code-index-hook              # opt IN to the code-index cache warm-up guard
 ```
 
 The installed hook calls `python -m agentteams.git_hooks --refresh` /
-`--refresh-architecture`.
+`--refresh-architecture` / `--refresh-code-index` (the last only when the
+`--code-index-hook` guard was installed).

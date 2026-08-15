@@ -21,6 +21,7 @@ _VALID_NAMESPACES = frozenset(
         "copilot-vscode",
         "copilot-cli",
         "goose",
+        "codex",
         "bridge:copilot-vscode-to-claude",
         "bridge:copilot-vscode-to-copilot-cli",
         "bridge:copilot-cli-to-claude",
@@ -39,6 +40,13 @@ _KNOWN_FEATURES: dict[str, frozenset[str]] = {
     # this is never a default). The `goose` namespace lands here ahead of the goose
     # bridge phase (goose-integration.plan §5); bridge `goose:` tokens are still owed.
     "goose": frozenset({"mcp"}),
+    # codex: only `mcp` so far — wires operator-specified mcp_servers[] into
+    # .codex/config.toml (codex_mcp_emit.py). That module has always parsed the
+    # literal "codex:mcp" token itself, but the token could never reach it: CLI
+    # parsing validates against this table first (see host-features.md audit,
+    # api-doc-conformity-sweep, 2026-08-14) — this entry was simply never added
+    # when codex support landed elsewhere, so the token was rejected before emission.
+    "codex": frozenset({"mcp"}),
     "bridge:copilot-vscode-to-claude": frozenset(
         {"subagents", "hooks", "schedule", "mcp", "critic", "cache-split", "todo-projection", "parallelize"}
     ),

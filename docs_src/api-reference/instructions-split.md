@@ -9,7 +9,7 @@ Opt-in via [`--target-host-features bridge:copilot-vscode-to-claude:cache-split`
 ```
 <cache header preamble>
 <canonical copilot-instructions.md, bytes verbatim, rstripped>
-SYSTEM_PROMPT_DYNAMIC_BOUNDARY
+<!-- SYSTEM_PROMPT_DYNAMIC_BOUNDARY -->
 - Source: `.github/copilot-instructions.md`
 - Source SHA-256: `<sha256 of canonical body>`
 - Build timestamp (UTC): `<iso-8601>`
@@ -37,7 +37,7 @@ verify_equivalence(*, cache_split_text: str, original: str) -> bool
 Confirm the rendered file contains `original` (rstripped) as a contiguous substring AND the boundary marker appears exactly once after it. Used by the Phase-7 regression contract.
 
 ```python
-DYNAMIC_BOUNDARY_MARKER: str = "SYSTEM_PROMPT_DYNAMIC_BOUNDARY"
+DYNAMIC_BOUNDARY_MARKER: str = "<!-- SYSTEM_PROMPT_DYNAMIC_BOUNDARY -->"
 ```
 Public constant for downstream tools that split on the marker.
 

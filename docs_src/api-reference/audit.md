@@ -12,13 +12,13 @@ Performs two types of checks after the emit phase: static structural checks (con
 
 ### `AuditFinding`
 
-> *Source: `agentteams/audit.py`*
+> *Source: `agentteams/audit_types.py`* (re-exported from `agentteams/audit.py`)
 
 A single audit finding.
 
 **Attributes:**
 
-- `category` (`str`) — `'CONFLICT'`, `'PRESUPPOSITION'`, or `'WARNING'`.
+- `category` (`str`) — `'CONFLICT'`, `'PRESUPPOSITION'`, `'WARNING'`, `'AGENT_REFACTOR'`, or `'CODE_HYGIENE'`.
 - `code` (`str`) — Short machine-readable code (e.g., `'AR_UNRESOLVED_PLACEHOLDER'`).
 - `severity` (`str`) — `'error'`, `'warning'`, or `'info'`.
 - `file` (`str`) — Relative path or `'(team)'` for team-level findings.
