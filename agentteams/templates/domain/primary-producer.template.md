@@ -1,7 +1,7 @@
 ---
 name: Primary Producer — {PROJECT_NAME}
 description: "Drafts and revises deliverables in {PROJECT_NAME} from Component Briefs provided by workstream expert agents"
-user-invokable: false
+user-invocable: false
 tools: ['read', 'edit', 'search']
 agents: ['style-guardian', 'cohesion-repairer', 'quality-auditor', 'conflict-auditor']
 model: ["Claude Sonnet 4.6 (copilot)"]

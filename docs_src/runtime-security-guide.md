@@ -25,7 +25,7 @@ concrete reference implementation (a *floor*, not a solved safety problem) is ci
 ## Design-time vs runtime: the boundary this guide exists to close
 
 The team agentteams generates is a **design-time** artifact. Its `security` agent is
-read-only, `user-invokable: false`, and HALTs at review time; its agents review the code you
+read-only, `user-invocable: false`, and HALTs at review time; its agents review the code you
 and your AI assistants write. **None of it runs inside the application you ship.** So the
 moment your app serves LLM output to a user, you are outside the generated team's reach — the
 team governed the *building* of the app, not the app's *runtime behavior*.

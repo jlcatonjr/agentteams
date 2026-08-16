@@ -1,7 +1,7 @@
 ---
 name: Content Enricher — ProjectRepositories
 description: "Fills in default template placeholders and underdeveloped sections in generated agent files for ProjectRepositories using the project's source materials"
-user-invokable: true
+user-invocable: true
 tools: ['read', 'edit', 'search']
 agents: ['primary-producer', 'technical-validator', 'adversarial', 'conflict-auditor']
 model: ["Claude Sonnet 4.6 (copilot)"]

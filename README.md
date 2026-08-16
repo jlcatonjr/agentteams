@@ -125,7 +125,7 @@ Output: agent files in `/path/to/your/project/.github/agents/`
 
 Framework-specific default output directories:
 - `copilot-vscode` → `<project>/.github/agents/`
-- `copilot-cli` → `<project>/.github/copilot/`
+- `copilot-cli` → `<project>/.github/agents/` (same directory as `copilot-vscode` — see the caution below)
 - `claude` → `<project>/.claude/agents/`
 - `goose` → `<project>/.goose/recipes/` (team brief written to repo-root `AGENTS.md` + `.goosehints`)
 
@@ -150,7 +150,7 @@ See the [Agent-Assisted Setup guide](https://jlcatonjr.github.io/agentteams/agen
 | Framework | Format | Handoffs | Builder Agent |
 |-----------|--------|----------|---------------|
 | `copilot-vscode` | `.agent.md` with YAML front matter | Native inline YAML | VS Code Copilot `.agent.md` |
-| `copilot-cli` | Plain `.md` system prompts | Runtime manifest when handoffs are present (`references/runtime-handoffs.json`) | CLI prompt `.md` |
+| `copilot-cli` | `.agent.md` with YAML front matter (same shape as `copilot-vscode`, since the P1 convergence 2026-08-15) | Runtime manifest when handoffs are present (`references/runtime-handoffs.json`) — handoffs are stripped from the rendered file itself | CLI prompt `.agent.md` |
 | `claude` | Claude Code front matter `.md` + `CLAUDE.md` instructions | Runtime manifest when handoffs are present (`references/runtime-handoffs.json`) | Claude Code system prompt |
 | `goose` **(beta)** | Recipe YAML (`.goose/recipes/*.yaml`) | Native inline (orchestrator `sub_recipes`; specialists `summon` `load`) | `team-builder.yaml` recipe |
 | `agents-md` | Cross-tool **AGENTS.md** standard (plain `.md`) | Routing preserved in `references/runtime-handoffs.json` | `.agents/team-builder.md` |
@@ -159,9 +159,15 @@ See the [Agent-Assisted Setup guide](https://jlcatonjr.github.io/agentteams/agen
 
 For `copilot-cli` and `claude`, inline handoff sections are still stripped from the emitted agent prompts. When AgentTeams extracts handoffs from the rendered source content, it preserves that routing metadata in `references/runtime-handoffs.json` so bridge layers or external tooling can consume the handoff contract without relying on VS Code-specific YAML. `goose` encodes handoffs natively inside each recipe (orchestrator → `sub_recipes`, deeper edges → `summon` `load(...)`), so it emits **no** `runtime-handoffs.json` sidecar.
 
+> **Multi-framework sync caution:** `copilot-vscode` and `copilot-cli` write to the
+> same physical `.github/agents` directory. `--sync-init`/`--sync` refuse a sync set
+> containing both — their rendered content can genuinely differ (handoffs kept vs.
+> stripped) and there is no correct merge for one file being two shapes at once. Pass
+> `--frameworks` to name only one of the two.
+
 Default framework locations:
 - `copilot-vscode`: agents in `.github/agents/`, instructions in `.github/copilot-instructions.md`
-- `copilot-cli`: agents in `.github/copilot/`, instructions in `.github/copilot-instructions.md`
+- `copilot-cli`: agents in `.github/agents/` (same directory as `copilot-vscode`), instructions in `.github/copilot-instructions.md`
 - `claude`: agents in `.claude/agents/`, instructions in `.claude/CLAUDE.md`
 - `goose`: recipes in `.goose/recipes/`, team brief in repo-root `AGENTS.md` (+ `.goosehints` integrator)
 - `agents-md`: repo-root `AGENTS.md` (the cross-tool standard) plus per-specialist detail under `.agents/`
@@ -566,7 +572,7 @@ agentteams \
 agentteams \
   --description brief.json \
   --framework copilot-cli
-# Output: .github/copilot/ in the current directory
+# Output: .github/agents/ in the current directory (same directory as copilot-vscode)
 
 agentteams \
   --description brief.json \

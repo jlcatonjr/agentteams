@@ -1,7 +1,7 @@
 ---
 name: "More Prairie Prosperity — Fiscal and Economic Policy in North Dakota Expert — ProjectRepositories"
 description: "Component expert for More Prairie Prosperity — Fiscal and Economic Policy in North Dakota in ProjectRepositories — prepares Component Briefs, reviews drafts against brief checklist, approves deliverables"
-user-invokable: false
+user-invocable: false
 tools: ['read', 'search', 'agent']
 agents: ['primary-producer', 'adversarial', 'reference-manager']
 model: ["Claude Sonnet 4.6 (copilot)"]

@@ -198,5 +198,5 @@ ordering, including where operator instructions and read content sit:
 - All public functions must have docstrings with Args/Returns/Raises
 - Type annotations required on all public function signatures
 - Templates use `{UPPER_SNAKE_CASE}` for auto-resolved placeholders and `{MANUAL:UPPER_SNAKE_CASE}` for human-required
-- Agent templates must include YAML front matter with required keys: name, description, user-invokable, tools, model
+- Agent templates must include YAML front matter with required keys: name, description, user-invocable, tools, model
 - Every agent template must contain an Invariant Core section marked with the stop-sign emoji

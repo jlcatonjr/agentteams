@@ -208,7 +208,7 @@ _CAPABILITY_RAW_FM_KEYS: frozenset[str] = frozenset({
     "agents",
     "capabilities",
     "permissionMode",
-    "user-invokable",  # copilot-vscode: controls agent visibility in VS Code UI
+    "user-invocable",  # copilot-vscode: controls agent visibility in VS Code UI
 })
 
 
@@ -224,7 +224,7 @@ def is_capability_field(field_name: str, value: Any) -> bool:
 
     For ``capabilities`` and ``raw_front_matter``, inspects the value's
     contents to determine if it actually carries capability data.  A
-    ``raw_front_matter`` dict with only ``user-invokable: true`` is NOT
+    ``raw_front_matter`` dict with only ``user-invocable: true`` is NOT
     capability-bearing (it's a metadata field); one with ``tools: [...]`` IS.
 
     Args:

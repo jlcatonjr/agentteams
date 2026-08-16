@@ -28,7 +28,7 @@ FULL_YAML_CONTENT = """\
 ---
 name: Navigator — TestProject
 description: "Navigate the project"
-user-invokable: false
+user-invocable: false
 tools: ['read', 'edit', 'search']
 model: ["Claude Sonnet 4.6 (copilot)"]
 ---
@@ -48,7 +48,7 @@ CONTENT_WITH_HANDOFFS = """\
 ---
 name: Orchestrator — TestProject
 description: "Coordinate all agents"
-user-invokable: true
+user-invocable: true
 tools: ['read', 'edit', 'search']
 model: ["Claude Sonnet 4.6 (copilot)"]
 ---
@@ -71,7 +71,7 @@ CONTENT_WITH_YAML_HANDOFFS = """\
 ---
 name: Orchestrator — TestProject
 description: "Coordinate all agents"
-user-invokable: true
+user-invocable: true
 tools: ['read', 'edit', 'search']
 model: ["Claude Sonnet 4.6 (copilot)"]
 handoffs:
@@ -163,7 +163,7 @@ class TestCopilotVSCodeAdapter:
             "---\n"
             "name: Navigator — TestProject\n"
             "description: \"Navigate\"\n"
-            "user-invokable: false\n"
+            "user-invocable: false\n"
             "tools: ['read']\n"
             "---\n\n"
             "# Body\n"
@@ -176,7 +176,7 @@ class TestCopilotVSCodeAdapter:
             "---\n"
             "name: Navigator — TestProject\n"
             "description: \"Navigate\"\n"
-            "user-invokable: false\n"
+            "user-invocable: false\n"
             "model: [\"Claude Sonnet 4.6 (copilot)\"]\n"
             "---\n\n"
             "# Body\n"
@@ -203,7 +203,7 @@ class TestCopilotVSCodeAdapter:
             "---\n"
             "name: Expert — TestProject\n"
             "description: 'Expert'\n"
-            "user-invokable: false\n"
+            "user-invocable: false\n"
             "tools: ['read', 'search']\n"
             "model: [\"Claude Sonnet 4.6 (copilot)\"]\n"
             "agents: ['primary-producer', 'reference-manager', 'adversarial']\n"
@@ -228,7 +228,7 @@ class TestCopilotVSCodeAdapter:
             "---\n"
             "name: Expert — TestProject\n"
             "description: 'Expert'\n"
-            "user-invokable: false\n"
+            "user-invocable: false\n"
             "tools: ['read', 'search']\n"
             "model: [\"Claude Sonnet 4.6 (copilot)\"]\n"
             "agents: [\"primary-producer\", adversarial, \"reference-manager\"]\n"
@@ -252,7 +252,7 @@ class TestCopilotVSCodeAdapter:
             "---\n"
             "name: Expert — TestProject\n"
             "description: 'Expert'\n"
-            "user-invokable: false\n"
+            "user-invocable: false\n"
             "tools: ['read', 'search']\n"
             "model: [\"Claude Sonnet 4.6 (copilot)\"]\n"
             "agents:\n"
@@ -279,7 +279,7 @@ class TestCopilotVSCodeAdapter:
             "---\n"
             "name: Expert — TestProject\n"
             "description: 'Expert'\n"
-            "user-invokable: false\n"
+            "user-invocable: false\n"
             "tools: ['read', 'search']\n"
             "model: [\"Claude Sonnet 4.6 (copilot)\"]\n"
             "handoffs:\n"
@@ -312,7 +312,7 @@ class TestCopilotVSCodeAdapter:
             "---\n"
             "name: Expert — TestProject\n"
             "description: 'Expert'\n"
-            "user-invokable: false\n"
+            "user-invocable: false\n"
             "tools: ['read', 'search']\n"
             "model: [\"Claude Sonnet 4.6 (copilot)\"]\n"
             "handoffs:\n"
@@ -343,7 +343,7 @@ class TestCopilotVSCodeAdapter:
             "---\n"
             "name: Expert — TestProject\n"
             "description: 'Expert'\n"
-            "user-invokable: false\n"
+            "user-invocable: false\n"
             "tools: ['read', 'search']\n"
             "model: [\"Claude Sonnet 4.6 (copilot)\"]\n"
             "handoffs:\n"
@@ -378,23 +378,32 @@ class TestCopilotCLIAdapter:
         assert self.adapter.handoff_delivery_mode() == "manifest"
 
     def test_get_file_extension(self):
-        assert self.adapter.get_file_extension("agent") == ".md"
+        """P1 (2026-08-15): converged onto VS Code's `.agent.md` surface — current upstream
+        docs give the CLI the same custom-agent format, not a plain-Markdown one."""
+        assert self.adapter.get_file_extension("agent") == ".agent.md"
 
     def test_get_agents_dir(self):
+        """P1: same physical path as VS Code — see references/agentteams-remediation-log.csv
+        for why two framework ids sharing one path is safe here (mirrors codex/agents-md)."""
         result = self.adapter.get_agents_dir(Path("/project"))
-        assert result == Path("/project/.github/copilot")
+        assert result == Path("/project/.github/agents")
 
-    def test_finalize_output_path_maps_agent_to_plain_markdown(self):
+    def test_finalize_output_path_does_not_remap_agent_extension(self):
+        """P1: `.agent.md` is now the CLI's own extension too, so no remapping happens —
+        contrast with the pre-P1 behavior this test used to assert (mapped to plain `.md`)."""
         result = self.adapter.finalize_output_path("orchestrator.agent.md", "agent")
-        assert result == "orchestrator.md"
+        assert result == "orchestrator.agent.md"
 
-    # --- render_agent_file: YAML stripped ---
+    # --- render_agent_file: YAML preserved (P1: no longer stripped) ---
 
-    def test_render_agent_file_strips_yaml_front_matter(self):
+    def test_render_agent_file_preserves_yaml_front_matter(self):
+        """P1: front matter is now the whole point — the CLI reads the same `.agent.md`
+        surface as VS Code. Contrast with the pre-P1 stripping behavior this test used to
+        assert."""
         result = self.adapter.render_agent_file(FULL_YAML_CONTENT, "navigator", MINIMAL_MANIFEST)
-        assert not result.startswith("---")
-        assert "name:" not in result
-        assert "model:" not in result
+        assert result.startswith("---")
+        assert "name:" in result
+        assert "model:" in result
 
     def test_render_agent_file_preserves_body(self):
         result = self.adapter.render_agent_file(FULL_YAML_CONTENT, "navigator", MINIMAL_MANIFEST)
@@ -494,7 +503,7 @@ class TestClaudeAdapter:
     def test_render_agent_file_no_vscode_keys_in_output(self):
         """VS Code-specific keys must not appear in the Claude output."""
         result = self.adapter.render_agent_file(FULL_YAML_CONTENT, "navigator", MINIMAL_MANIFEST)
-        assert "user-invokable:" not in result
+        assert "user-invocable:" not in result
         assert "tools: [" not in result
         # model: from VS Code format should not be passed through
         assert "claude sonnet 4.6 (copilot)" not in result.lower()
@@ -560,14 +569,33 @@ class TestClaudeAdapter:
 # Cross-adapter consistency
 # ===========================================================================
 
-def test_cli_strips_yaml_to_plain_markdown():
-    """CLI adapter produces plain Markdown with no YAML front matter at all."""
+def test_cli_preserves_yaml_and_matches_vscode_shape():
+    """P1 (2026-08-15): CLI adapter converges onto VS Code's `.agent.md` shape — front
+    matter preserved, same as VS Code's own render for identical input (handoff-free case)."""
     cli = CopilotCLIAdapter()
+    vscode = CopilotVSCodeAdapter()
     result = cli.render_agent_file(FULL_YAML_CONTENT, "nav", MINIMAL_MANIFEST)
-    assert not result.startswith("---")
+    vscode_result = vscode.render_agent_file(FULL_YAML_CONTENT, "nav", MINIMAL_MANIFEST)
+    assert result.startswith("---")
     assert "# Navigator" in result
-    assert "name:" not in result
-    assert "model:" not in result
+    assert "name:" in result
+    assert "model:" in result
+    assert result == vscode_result, "no handoffs in this fixture — CLI output must match VS Code exactly"
+
+
+def test_cli_diverges_from_vscode_when_handoffs_present():
+    """P1: the ONE place CLI output must differ from VS Code's — handoffs are documented as
+    unsupported outside the VS Code desktop extension, so CLI strips them, VS Code keeps them.
+    This divergence is exactly what makes the copilot-vscode/copilot-cli path-collision in
+    multi_sync.py's run_sync a real risk (see tests/test_multi_sync.py) — codex/agents-md's
+    byte-identical precedent could never have exposed it."""
+    cli = CopilotCLIAdapter()
+    vscode = CopilotVSCodeAdapter()
+    cli_result = cli.render_agent_file(CONTENT_WITH_HANDOFFS, "orchestrator", MINIMAL_MANIFEST)
+    vscode_result = vscode.render_agent_file(CONTENT_WITH_HANDOFFS, "orchestrator", MINIMAL_MANIFEST)
+    assert "Handoff" not in cli_result
+    assert "Handoff" in vscode_result
+    assert cli_result != vscode_result
 
 
 def test_claude_replaces_vscode_yaml_with_claude_yaml():
@@ -579,7 +607,7 @@ def test_claude_replaces_vscode_yaml_with_claude_yaml():
     # Must contain Claude key
     assert "\ntools:" in result
     # Must NOT contain VS Code keys
-    assert "user-invokable:" not in result
+    assert "user-invocable:" not in result
     assert "# Navigator" in result
 
 
@@ -771,8 +799,11 @@ class TestGooseAdapter:
         extras = self.adapter.extra_output_files(GOOSE_MANIFEST)
         extras_by_path = dict(extras)
         assert "../../.goosehints" in extras_by_path
-        # Integrates AGENTS.md via the @file content-include.
-        assert extras_by_path["../../.goosehints"].startswith("@AGENTS.md")
+        # G5 fix (2026-08-15): no @AGENTS.md import — Goose reads AGENTS.md
+        # natively via its default CONTEXT_FILE_NAMES, so the explicit import
+        # was redundant. Starts with the managed fence instead.
+        assert extras_by_path["../../.goosehints"].startswith("<!-- AGENTTEAMS:BEGIN")
+        assert "@AGENTS.md" not in extras_by_path["../../.goosehints"]
 
     # --- capabilities reference ---
 

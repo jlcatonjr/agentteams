@@ -1,7 +1,7 @@
 ---
 name: Cleanup — SalesDataPipeline
 description: "Removes stale drafts, build artifacts, and orphaned files from SalesDataPipeline with mandatory safety checks"
-user-invokable: false
+user-invocable: false
 tools: ['edit', 'search', 'execute']
 model: ["Claude Sonnet 4.6 (copilot)"]
 handoffs:

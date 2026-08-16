@@ -5,7 +5,7 @@
 
 - Modules mapped: **155**
 - Packages: **7**
-- Internal import edges: **317**
+- Internal import edges: **319**
 - Distinct external dependencies: **6**
 
 ---
@@ -118,8 +118,8 @@ Every module, coloured by package (full adjacency in the table below).
 | `agentteams.frameworks.base` | `agentteams.yaml_frontmatter` | `agentteams.cli.render_pipeline`, `agentteams.convert`, `agentteams.frameworks.agents_md`, `agentteams.frameworks.claude`, `agentteams.frameworks.copilot_cli`, `agentteams.frameworks.copilot_vscode`, `agentteams.frameworks.goose`, `agentteams.frameworks.registry`, `agentteams.interop` |
 | `agentteams.frameworks.claude` | `agentteams.frameworks.base`, `agentteams.yaml_frontmatter` | `agentteams.bridge_subagents`, `agentteams.cli.render_pipeline`, `agentteams.frameworks.registry` |
 | `agentteams.frameworks.codex` | `agentteams.frameworks.agents_md` | `agentteams.frameworks.registry` |
-| `agentteams.frameworks.copilot_cli` | `agentteams.frameworks.base` | `agentteams.cli.render_pipeline`, `agentteams.frameworks.registry` |
-| `agentteams.frameworks.copilot_vscode` | `agentteams.frameworks.base`, `agentteams.yaml_frontmatter` | `agentteams.cli.render_pipeline`, `agentteams.frameworks.registry` |
+| `agentteams.frameworks.copilot_cli` | `agentteams.frameworks.base`, `agentteams.frameworks.copilot_vscode`, `agentteams.yaml_frontmatter` | `agentteams.cli.render_pipeline`, `agentteams.frameworks.registry` |
+| `agentteams.frameworks.copilot_vscode` | `agentteams.frameworks.base`, `agentteams.yaml_frontmatter` | `agentteams.cli.render_pipeline`, `agentteams.frameworks.copilot_cli`, `agentteams.frameworks.registry` |
 | `agentteams.frameworks.goose` | `agentteams.capability_map`, `agentteams.frameworks.base`, `agentteams.frameworks.goose_docs`, `agentteams.frameworks.goose_recipe_read`, `agentteams.yaml_frontmatter` | `agentteams.bridge`, `agentteams.bridge_subagents_goose`, `agentteams.cli.app`, `agentteams.cli.recipe_check`, `agentteams.cli.render_pipeline`, `agentteams.frameworks.registry` |
 | `agentteams.frameworks.goose_docs` | `agentteams.capability_hints` | `agentteams.frameworks.goose` |
 | `agentteams.frameworks.goose_recipe_read` | — | `agentteams.frameworks.goose` |
@@ -198,7 +198,7 @@ Every module, coloured by package (full adjacency in the table below).
 | `agentteams.unfenced` | `agentteams.front_matter_merge` | `agentteams.fences` |
 | `agentteams.update_report` | — | `agentteams.cli.generate` |
 | `agentteams.vscode_tasks` | — | `agentteams.cli.render_pipeline` |
-| `agentteams.yaml_frontmatter` | — | `agentteams.bridge_sources`, `agentteams.canonical`, `agentteams.capability_map`, `agentteams.frameworks.agents_md`, `agentteams.frameworks.base`, `agentteams.frameworks.claude`, `agentteams.frameworks.copilot_vscode`, `agentteams.frameworks.goose`, `agentteams.front_matter_reconcile`, `agentteams.graph_inputs`, `agentteams.interop`, `agentteams.interop_helpers` |
+| `agentteams.yaml_frontmatter` | — | `agentteams.bridge_sources`, `agentteams.canonical`, `agentteams.capability_map`, `agentteams.frameworks.agents_md`, `agentteams.frameworks.base`, `agentteams.frameworks.claude`, `agentteams.frameworks.copilot_cli`, `agentteams.frameworks.copilot_vscode`, `agentteams.frameworks.goose`, `agentteams.front_matter_reconcile`, `agentteams.graph_inputs`, `agentteams.interop`, `agentteams.interop_helpers` |
 
 ---
 
@@ -1143,7 +1143,9 @@ digraph "agentteams architecture" {
       "path": "agentteams/frameworks/copilot_cli.py",
       "is_package": false,
       "imports_internal": [
-        "agentteams.frameworks.base"
+        "agentteams.frameworks.base",
+        "agentteams.frameworks.copilot_vscode",
+        "agentteams.yaml_frontmatter"
       ],
       "external": [],
       "repo_local": []
@@ -2825,6 +2827,14 @@ digraph "agentteams architecture" {
     {
       "source": "agentteams.frameworks.copilot_cli",
       "target": "agentteams.frameworks.base"
+    },
+    {
+      "source": "agentteams.frameworks.copilot_cli",
+      "target": "agentteams.frameworks.copilot_vscode"
+    },
+    {
+      "source": "agentteams.frameworks.copilot_cli",
+      "target": "agentteams.yaml_frontmatter"
     },
     {
       "source": "agentteams.frameworks.copilot_vscode",

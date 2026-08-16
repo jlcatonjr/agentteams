@@ -225,7 +225,7 @@ class TestEndToEndClaude:
             _make_agent(
                 slug="reviewer",
                 body_markdown="Original Claude instructions.\n",
-                raw_front_matter={"user-invokable": "true"},
+                raw_front_matter={"user-invocable": "true"},
             ),
         ]
         canonical_dir, cai, baseline = _setup_canonical_and_baseline(
@@ -237,7 +237,7 @@ class TestEndToEndClaude:
             _make_agent(
                 slug="reviewer",
                 body_markdown="Updated Claude instructions.\n",
-                raw_front_matter={"user-invokable": "true"},
+                raw_front_matter={"user-invocable": "true"},
             ),
         ], "claude")
 
@@ -257,7 +257,7 @@ class TestEndToEndClaude:
         agents = [
             _make_agent(
                 slug="reviewer",
-                raw_front_matter={"tools": "['Read', 'Grep']", "user-invokable": "true"},
+                raw_front_matter={"tools": "['Read', 'Grep']", "user-invocable": "true"},
             ),
         ]
         canonical_dir, cai, baseline = _setup_canonical_and_baseline(
@@ -268,7 +268,7 @@ class TestEndToEndClaude:
         native_cai = _make_cai([
             _make_agent(
                 slug="reviewer",
-                raw_front_matter={"tools": "['Read', 'Grep', 'Edit', 'Bash']", "user-invokable": "true"},
+                raw_front_matter={"tools": "['Read', 'Grep', 'Edit', 'Bash']", "user-invocable": "true"},
             ),
         ], "claude")
 
@@ -555,7 +555,7 @@ class TestEndToEndCopilotVSCode:
     """F.4: End-to-end scenario test for copilot-vscode framework.
 
     copilot-vscode uses YAML front matter with capability-bearing keys:
-    tools, model, user-invokable. These must route to proposal; body
+    tools, model, user-invocable. These must route to proposal; body
     edits and non-capability front matter can auto-apply.
     """
 
@@ -566,7 +566,7 @@ class TestEndToEndCopilotVSCode:
                 slug="orchestrator",
                 body_markdown="Original instructions.\n",
                 raw_front_matter={
-                    "user-invokable": "true",
+                    "user-invocable": "true",
                     "tools": "['Read', 'Grep']",
                     "model": "gpt-4",
                 },
@@ -581,7 +581,7 @@ class TestEndToEndCopilotVSCode:
                 slug="orchestrator",
                 body_markdown="Updated instructions.\n",
                 raw_front_matter={
-                    "user-invokable": "true",
+                    "user-invocable": "true",
                     "tools": "['Read', 'Grep']",
                     "model": "gpt-4",
                 },
@@ -604,7 +604,7 @@ class TestEndToEndCopilotVSCode:
         agents = [
             _make_agent(
                 slug="orchestrator",
-                raw_front_matter={"tools": "['Read']", "user-invokable": "true"},
+                raw_front_matter={"tools": "['Read']", "user-invocable": "true"},
             ),
         ]
         canonical_dir, cai, baseline = _setup_canonical_and_baseline(
@@ -616,7 +616,7 @@ class TestEndToEndCopilotVSCode:
                 slug="orchestrator",
                 raw_front_matter={
                     "tools": "['Read', 'Edit', 'Bash']",
-                    "user-invokable": "true",
+                    "user-invocable": "true",
                 },
             ),
         ], "copilot-vscode")
@@ -635,11 +635,11 @@ class TestEndToEndCopilotVSCode:
         assert report.total_applied == 0
 
     def test_copilot_vscode_user_invokable_change_routes_to_proposal(self, tmp_path: Path):
-        """F.2: user-invokable is capability-bearing → must route to proposal."""
+        """F.2: user-invocable is capability-bearing → must route to proposal."""
         agents = [
             _make_agent(
                 slug="orchestrator",
-                raw_front_matter={"user-invokable": "true", "description": "test"},
+                raw_front_matter={"user-invocable": "true", "description": "test"},
             ),
         ]
         canonical_dir, cai, baseline = _setup_canonical_and_baseline(
@@ -649,7 +649,7 @@ class TestEndToEndCopilotVSCode:
         native_cai = _make_cai([
             _make_agent(
                 slug="orchestrator",
-                raw_front_matter={"user-invokable": "false", "description": "test"},
+                raw_front_matter={"user-invocable": "false", "description": "test"},
             ),
         ], "copilot-vscode")
 

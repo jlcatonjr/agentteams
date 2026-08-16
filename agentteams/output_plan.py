@@ -360,7 +360,7 @@ def _plan_output_files(
         "component_slug": None,
     })
 
-    # Content enricher — user-invokable agent for filling MANUAL placeholders
+    # Content enricher — user-invocable agent for filling MANUAL placeholders
     files.append({
         "path": "content-enricher.agent.md",
         "template": "domain/content-enricher.template.md",

@@ -10,6 +10,7 @@ Handoffs:     Supported
 from __future__ import annotations
 
 import re
+import warnings
 from pathlib import Path
 from typing import Any
 
@@ -40,8 +41,19 @@ class CopilotVSCodeAdapter(FrameworkAdapter):
         return True
 
     def required_front_matter_keys(self) -> tuple[str, ...]:
-        """The original `_REQUIRED_YAML_KEYS`, now named as this framework's contract."""
-        return ("name", "description", "user-invokable", "tools", "model")
+        """The original `_REQUIRED_YAML_KEYS`, now named as this framework's contract.
+
+        P3 (2026-08-15): the invokability key was renamed from the 'k'
+        spelling to the 'c' spelling to match current upstream docs (both VS
+        Code's page and GitHub's cross-surface reference use 'c'). Renamed
+        together with
+        `_REQUIRED_YAML_KEYS`/`_YAML_DEFAULTS` below in the same change — this
+        method feeds `audit.py`'s compliance check, and a fresh render would
+        fail its own audit for the gap between them if renamed separately.
+        Already-deployed files migrate via the succession-tuple mechanism in
+        `agentteams/front_matter_merge.py` and `front_matter_reconcile.py`.
+        """
+        return ("name", "description", "user-invocable", "tools", "model")
 
     def get_agents_dir(self, project_path: Path) -> Path:
         return project_path / ".github" / "agents"
@@ -55,11 +67,11 @@ class CopilotVSCodeAdapter(FrameworkAdapter):
 # ---------------------------------------------------------------------------
 
 # Required YAML keys for VS Code Copilot agent files
-_REQUIRED_YAML_KEYS = {"name", "description", "user-invokable", "tools", "model"}
+_REQUIRED_YAML_KEYS = {"name", "description", "user-invocable", "tools", "model"}
 
 # Default values for missing required fields
 _YAML_DEFAULTS = {
-    "user-invokable": "false",
+    "user-invocable": "false",
     "tools": "['read', 'edit', 'search']",
     "model": '["Claude Sonnet 4.6 (copilot)"]',
 }
@@ -187,24 +199,56 @@ def _split_handoff_entries(block: str) -> list[str]:
     return ["".join(entry) for entry in entries]
 
 
+#: P8 (2026-08-15): GitHub's cross-surface custom-agents configuration reference
+#: documents a 30,000-character limit on the agent body (the system-prompt content,
+#: not the YAML front matter). Unenforced at render time until now.
+#:
+#: A warning, not a raise: a first implementation raised ValueError here and broke
+#: fresh generation entirely — this project's OWN orchestrator template already
+#: renders a ~46,500-character body (55% over the limit) before this check existed,
+#: and every project generated from it inherits that size. Raising would make
+#: `agentteams --framework copilot-vscode`/`copilot-cli` unable to generate ANY
+#: team, not flag an edge case. Shrinking the orchestrator template to fit is real
+#: content-editing work with its own blast radius (every generated team, every
+#: golden snapshot) — out of scope for adding enforcement — logged as a separate
+#: remediation-log follow-up instead. Warning still closes the actual P8 gap: the
+#: limit was previously invisible at render time; now it is surfaced, non-fatally,
+#: at every call site that would otherwise ship an oversized file silently.
+_MAX_BODY_CHARS = 30_000
+
+
+def _check_body_length(body_text: str, agent_slug: str) -> None:
+    if len(body_text) > _MAX_BODY_CHARS:
+        warnings.warn(
+            f"{agent_slug}: agent body is {len(body_text):,} characters, exceeding "
+            f"GitHub's {_MAX_BODY_CHARS:,}-character limit for custom-agent bodies "
+            "(cross-surface configuration reference). The platform may truncate or "
+            "reject this file. Front matter does not count toward this limit.",
+            UserWarning,
+            stacklevel=2,
+        )
+
+
 def _ensure_yaml_front_matter(content: str, agent_slug: str, manifest: dict[str, Any]) -> str:
     """Verify YAML front matter is present and has required keys; add defaults if not."""
     yaml_text, body_text = _parse_yaml_front_matter(content)
     if yaml_text is None:
         # No front matter — prepend minimal YAML
+        _check_body_length(content, agent_slug)
         project_name = manifest.get("project_name", "Project")
         agent_name = FrameworkAdapter._slug_to_name(agent_slug)
         front_matter = (
             f"---\n"
             f"name: {agent_name} — {project_name}\n"
             f"description: \"{agent_name} agent for {project_name}\"\n"
-            f"user-invokable: false\n"
+            f"user-invocable: false\n"
             f"tools: ['read', 'edit', 'search']\n"
             f"model: [\"Claude Sonnet 4.6 (copilot)\"]\n"
             f"---\n\n"
         )
         return front_matter + content
 
+    _check_body_length(body_text, agent_slug)
     yaml_body = yaml_text
     changed = False
 

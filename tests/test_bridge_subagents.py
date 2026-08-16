@@ -15,7 +15,7 @@ def _src_agent(dir_path: Path, slug: str, description: str = "", tools: str | No
         f"name: {slug}\n"
         f"description: {desc}\n"
         f"{tools_line}"
-        "user-invokable: false\n"
+        "user-invocable: false\n"
         "---\n\n"
         f"# {slug}\n\nCanonical {slug} agent body.\n"
     )
@@ -208,7 +208,7 @@ description: {slug} agent
 tools:
   - read
   - edit
-user-invokable: false
+user-invocable: false
 ---
 
 # {slug}
@@ -243,12 +243,12 @@ def test_parse_front_matter_block_style_mixed_with_scalar_keys():
         "tools:\n"
         "  - execute\n"
         "  - search\n"
-        "user-invokable: false\n"
+        "user-invocable: false\n"
         "---\nbody\n"
     )
     meta, _ = bs._parse_front_matter(text)
     assert meta["name"] == "mixed-agent"
-    assert meta["user-invokable"] == "false"
+    assert meta["user-invocable"] == "false"
     assert bs._parse_tools_list(meta["tools"]) == ["execute", "search"]
 
 
@@ -277,7 +277,7 @@ def test_emit_stubs_block_style_tools_quoted_items(tmp_path: Path):
         "tools:\n"
         "  - 'read'\n"
         "  - 'execute'\n"
-        "user-invokable: false\n"
+        "user-invocable: false\n"
         "---\n\n"
         "# Agent body\n"
     )

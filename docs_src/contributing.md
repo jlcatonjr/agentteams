@@ -51,7 +51,7 @@ See the [Template Authoring Guide](template-authoring.md) for full instructions.
 
 1. Use `{UPPER_SNAKE_CASE}` for tokens the pipeline auto-resolves
 2. Use `{MANUAL:UPPER_SNAKE_CASE}` for tokens that require human input
-3. Every `.template.md` file must include a valid YAML front matter block with `name`, `description`, `user-invokable`, `tools`, and `model` fields
+3. Every `.template.md` file must include a valid YAML front matter block with `name`, `description`, `user-invocable`, `tools`, and `model` fields
 4. Every agent template must contain an **Invariant Core** section marked with ⛔
 
 To register a new template for use in the rendering pipeline, add it to the appropriate section in `agentteams/emit.py`'s template routing logic.

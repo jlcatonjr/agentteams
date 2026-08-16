@@ -39,8 +39,8 @@ _HANDOFF_AGENT_KEY_RE = re.compile(r"^\s*(?:-\s+)?agent:\s*['\"]?([\w][\w-]*)['\
 _HANDOFF_LABEL_KEY_RE = re.compile(r"^\s*(?:-\s+)?label:\s*['\"]?([^'\"\n]+?)['\"]?\s*$", re.MULTILINE)
 #: 'name: "<role> — <project>"'
 _NAME_RE = re.compile(r"^name:\s*['\"]?(.+?)['\"]?\s*$", re.MULTILINE)
-#: 'user-invokable: true/false'
-_INVOKABLE_RE = re.compile(r"^user-invokable:\s*(true|false)", re.MULTILINE | re.IGNORECASE)
+#: 'user-invocable: true/false'
+_INVOKABLE_RE = re.compile(r"^user-invocable:\s*(true|false)", re.MULTILINE | re.IGNORECASE)
 def _split_yaml(content: str) -> tuple[str | None, str]:
     """Split file content into YAML front matter and body.
 
@@ -87,13 +87,13 @@ def _extract_name(yaml_block: str, fallback_slug: str) -> str:
         return raw.split(" - ")[0].strip()
     return raw
 def _extract_user_invokable(yaml_block: str) -> bool:
-    """Extract the user-invokable boolean from YAML.
+    """Extract the user-invocable boolean from YAML.
 
     Args:
         yaml_block: YAML front matter text.
 
     Returns:
-        True if user-invokable is 'true', False otherwise.
+        True if user-invocable is 'true', False otherwise.
     """
     m = _INVOKABLE_RE.search(yaml_block)
     if not m:

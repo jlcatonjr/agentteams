@@ -1,7 +1,7 @@
 ---
 name: Output Compiler — ProjectRepositories
 description: "Assembles all converted components into a final deliverable package for ProjectRepositories — dependency check, ordering, build manifest"
-user-invokable: false
+user-invocable: false
 tools: ['read', 'edit', 'execute']
 agents: ['format-converter', 'technical-validator']
 model: ["Claude Sonnet 4.6 (copilot)"]

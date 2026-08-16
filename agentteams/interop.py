@@ -87,7 +87,7 @@ def detect_framework(source_dir: Path) -> str:
                     # copilot-vscode writes an inline list (`tools: ['read']`); Claude
                     # writes a bare comma-separated scalar. The bracket discriminates.
                     has_claude_front_matter = True
-            if "user-invokable:" in content or "handoffs:" in content:
+            if "user-invocable:" in content or "handoffs:" in content:
                 has_yaml_keys = True
 
     if has_agent_ext or has_yaml_keys:
@@ -174,10 +174,12 @@ def export_to_cai(source_dir: Path, source_framework: str | None = None) -> dict
                 # C.2: real capability capture. copilot-vscode's tools list already
                 # uses the canonical 7-token vocabulary; claude files carry Claude
                 # tool names reverse-mapped via capability_map (with claude.py's
-                # execute-subsumes-retrieval dedup rule reproduced). copilot-cli and
-                # agents-md have no capability channel (plan §5.2); goose's coarse
+                # execute-subsumes-retrieval dedup rule reproduced). copilot-cli
+                # shares copilot-vscode's tools: shape byte-for-byte since the P1
+                # convergence (2026-08-15) — same extraction applies. agents-md
+                # has no capability channel (plan §5.2); goose's coarse
                 # recipe-extension mapping lands with its discovery fix (Phase F).
-                if framework == "copilot-vscode":
+                if framework in ("copilot-vscode", "copilot-cli"):
                     capabilities = _capability_map.capabilities_from_tokens(
                         _capability_map.canonical_tools_for_copilot_vscode(content), framework
                     )
@@ -522,9 +524,10 @@ def import_from_cai(
         if invariant_core:
             body = body.rstrip("\n") + "\n\n" + invariant_core + "\n"
         # Re-attach the CAI name/description as front matter so adapters that
-        # derive them from front matter (claude / copilot-vscode / goose) preserve
-        # the metadata instead of falling back to a slug-derived name. copilot-cli
-        # strips all front matter by design, so its output stays body-only.
+        # derive them from front matter (claude / copilot-vscode / copilot-cli /
+        # goose) preserve the metadata instead of falling back to a slug-derived
+        # name. Since the P1 convergence (2026-08-15) copilot-cli shares
+        # copilot-vscode's front-matter channel; it no longer strips it.
         cai_name = str(agent.get("name", "")).strip()
         cai_desc = str(agent.get("description", "")).strip()
         cai_handoffs = [
@@ -537,14 +540,19 @@ def import_from_cai(
             for h in agent.get("handoffs", [])
             if str(h.get("to", "")).strip()
         ]
-        # Thread capabilities.tool_scopes through to the two frameworks with a
+        # Thread capabilities.tool_scopes through to the frameworks with a
         # native per-agent tool-scope channel (2026-08-11 finding: this was
         # captured on export but never applied on import, so every target
         # silently fell back to its own default tool grant regardless of what
         # the CAI actually specified — a least-privilege-relevant gap when the
-        # source restricts an agent's tools deliberately). goose's channel is
-        # the recipe-level `extensions:` list, wired separately below via
-        # manifest['recipe_extensions'], not through this front-matter header.
+        # source restricts an agent's tools deliberately). copilot-cli joined
+        # this set at the P1 convergence (2026-08-15) — omitting it here would
+        # silently re-default every copilot-cli import's tools/user-invocable/
+        # model to _YAML_DEFAULTS regardless of what the CAI specified, the
+        # exact gap this comment describes, just for a framework added later.
+        # goose's channel is the recipe-level `extensions:` list, wired
+        # separately below via manifest['recipe_extensions'], not through this
+        # front-matter header.
         cai_tool_scopes = [
             str(t) for t in (agent.get("capabilities") or {}).get("tool_scopes") or []
         ]
@@ -557,7 +565,7 @@ def import_from_cai(
             else:
                 manifest.pop("recipe_extensions", None)
         cai_tools_line: str | None = None
-        if cai_tool_scopes and target_framework in ("copilot-vscode", "claude"):
+        if cai_tool_scopes and target_framework in ("copilot-vscode", "copilot-cli", "claude"):
             # Both adapters' own render_agent_file already knows how to turn a
             # VS Code-shaped bracket list of canonical tokens into their native
             # tool declaration (copilot-vscode: pass-through, since its own
@@ -591,12 +599,16 @@ def import_from_cai(
                     header.append(f'    prompt: "{h["prompt"].replace(chr(34), chr(39))}"')
                     header.append(f'    send: {"true" if h["send"] else "false"}')
             # A.2: Restore raw_front_matter escape-hatch keys into the header
-            # for frameworks with a front-matter channel (copilot-vscode, claude).
-            # This closes the user-invokable/model/agents:roster gaps by writing
-            # the captured values back so _ensure_yaml_front_matter doesn't
-            # overwrite them with hardcoded defaults.
+            # for frameworks with a front-matter channel (copilot-vscode,
+            # copilot-cli since the P1 convergence, claude). This closes the
+            # user-invocable/model/agents:roster gaps by writing the captured
+            # values back so _ensure_yaml_front_matter doesn't overwrite them
+            # with hardcoded defaults — the same defaulting CopilotCLIAdapter
+            # would otherwise silently apply on every cross-framework import,
+            # since its render_agent_file delegates straight to
+            # CopilotVSCodeAdapter's _ensure_yaml_front_matter.
             cai_raw_fm = agent.get("raw_front_matter")
-            if isinstance(cai_raw_fm, dict) and cai_raw_fm and target_framework in ("copilot-vscode", "claude"):
+            if isinstance(cai_raw_fm, dict) and cai_raw_fm and target_framework in ("copilot-vscode", "copilot-cli", "claude"):
                 # Sort keys so direct import and via-canonical import produce
                 # byte-identical output regardless of dict insertion order
                 # (export preserves YAML order; canonical load is JSON-sorted).

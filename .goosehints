@@ -1,6 +1,4 @@
 <!-- AGENTTEAMS:BEGIN goose_bridge_hints v=2 -->
-@AGENTS.md
-
 This project's native instruction set is under `.github/copilot-instructions.md`
 and `.agents/`/`.goose/recipes/`; this file and `AGENTS.md` are Goose's own
 native entry surfaces, not a bridge.

@@ -1,7 +1,7 @@
 ---
 name: "Authentication Module Expert — WebAppBackend"
 description: "Component expert for Authentication Module in WebAppBackend — prepares Component Briefs, reviews drafts against brief checklist, approves deliverables"
-user-invokable: false
+user-invocable: false
 tools: ['read', 'search', 'agent']
 agents: ['primary-producer', 'adversarial']
 model: ["Claude Sonnet 4.6 (copilot)"]

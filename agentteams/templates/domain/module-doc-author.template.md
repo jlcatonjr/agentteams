@@ -1,7 +1,7 @@
 ---
 name: Module Doc Author — {PROJECT_NAME}
 description: "Drafts and revises pip-compatible module documentation for {PROJECT_NAME} — pyproject.toml, API reference, CLI reference, CHANGELOG, and doc site configuration"
-user-invokable: false
+user-invocable: false
 tools: ['read', 'edit', 'search']
 agents: ['module-doc-validator', 'conflict-auditor']
 model: ["Claude Sonnet 4.6 (copilot)"]

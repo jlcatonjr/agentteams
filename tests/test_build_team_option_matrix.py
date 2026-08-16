@@ -262,8 +262,9 @@ def test_main_finalizes_framework_specific_output_paths(
         assert "team-builder.agent.md" in final_paths
         assert "../copilot-instructions.md" in final_paths
     elif framework == "copilot-cli":
-        assert "orchestrator.md" in final_paths
-        assert "team-builder.md" in final_paths
+        # P1 (2026-08-15): converged onto VS Code's `.agent.md` surface/path.
+        assert "orchestrator.agent.md" in final_paths
+        assert "team-builder.agent.md" in final_paths
         assert "../copilot-instructions.md" in final_paths
     else:
         assert "orchestrator.md" in final_paths
@@ -351,7 +352,7 @@ def test_main_accepts_interop_pipeline_modes(tmp_path: Path, interop_mode: str):
         "---\n"
         "name: orchestrator\n"
         "description: \"d\"\n"
-        "user-invokable: false\n"
+        "user-invocable: false\n"
         "tools: ['read']\n"
         "model: [\"Claude Sonnet 4.6 (copilot)\"]\n"
         "---\n\n"
@@ -395,7 +396,7 @@ def test_main_accepts_bridge_pipeline(tmp_path: Path, bridge_check: bool):
         "---\n"
         "name: orchestrator\n"
         "description: \"d\"\n"
-        "user-invokable: true\n"
+        "user-invocable: true\n"
         "tools: ['read']\n"
         "model: [\"Claude Sonnet 4.6 (copilot)\"]\n"
         "---\n\n"
@@ -457,7 +458,7 @@ def _make_claude_source(root: Path) -> Path:
         "---\n"
         "name: orchestrator\n"
         "description: \"d\"\n"
-        "user-invokable: true\n"
+        "user-invocable: true\n"
         "tools: ['read']\n"
         "model: [\"Claude Sonnet 4.6 (copilot)\"]\n"
         "---\n\n"

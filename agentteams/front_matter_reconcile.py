@@ -63,10 +63,15 @@ class Divergence:
         )
 
 
-#: Capability keys that name the same grant across framework generations, newest first.
-#: Mirrors ``front_matter_merge._CAPABILITY_KEY_SUCCESSION`` — kept as a separate constant only
-#: because this module is the standalone/fleet path and must not import merge internals.
-_CAPABILITY_KEY_SUCCESSION: tuple[tuple[str, str], ...] = (("tools", "allowed-tools"),)
+#: Front-matter keys that name the same field across framework generations, newest first.
+#: Mirrors ``front_matter_merge._KEY_SUCCESSION`` — kept as a separate constant only because this
+#: module is the standalone/fleet path and must not import merge internals. Not restricted to
+#: capability keys (the mechanism only renames): ``user-invocable`` (P3, 2026-08-15) is the
+#: first non-capability entry.
+_CAPABILITY_KEY_SUCCESSION: tuple[tuple[str, str], ...] = (
+    ("tools", "allowed-tools"),
+    ("user-invocable", "user-invokable"),
+)
 
 
 @dataclass(frozen=True)
@@ -124,20 +129,27 @@ def migrate_capability_key(
             continue
         fm, rest = text[4:end + 1], text[end + 1:]
 
+        # P3 (2026-08-15): iterate every succession entry per file, not just the first match.
+        # A single `break` here was correct while the table had one entry — with two (tools/
+        # allowed-tools and user-invocable/user-invokable), it silently migrated only whichever
+        # entry matched first and skipped the other; worse, a second migration recomputed its
+        # `new_fm` from the pre-migration `fm`, so writing it would have discarded the first
+        # migration's change entirely. Caught by a test exercising a file needing both renames.
+        fm_changed = False
         for new_key, old_key in _CAPABILITY_KEY_SUCCESSION:
             if re.search(rf"^{re.escape(new_key)}:", fm, re.MULTILINE):
                 continue  # already migrated; never touch a file twice
             match = re.search(rf"^{re.escape(old_key)}:(.*)$", fm, re.MULTILINE)
             if not match:
                 continue
-            new_fm = fm[:match.start()] + f"{new_key}:{match.group(1)}" + fm[match.end():]
-            if not dry_run:
-                path.write_text("---\n" + new_fm + rest, encoding="utf-8")
+            fm = fm[:match.start()] + f"{new_key}:{match.group(1)}" + fm[match.end():]
+            fm_changed = True
             results.append(CapabilityKeyMigration(
                 rel_path=path.name, old_key=old_key, new_key=new_key,
                 value=match.group(1).strip(), migrated=not dry_run,
             ))
-            break
+        if fm_changed and not dry_run:
+            path.write_text("---\n" + fm + rest, encoding="utf-8")
     return results
 
 

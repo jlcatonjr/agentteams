@@ -130,7 +130,7 @@ def test_path_a_fresh_generation_vscode(tmp_path):
     assert "LearnPythonStatsEcon" in orch_content
     # Must have VS Code YAML front matter
     assert orch_content.startswith("---")
-    assert "user-invokable: true" in orch_content
+    assert "user-invocable: true" in orch_content
 
     # All 9 chapter expert agents must exist
     for i in range(1, 10):
@@ -182,9 +182,9 @@ def test_path_a_fresh_generation_claude(tmp_path):
     orch_content = orch.read_text(encoding="utf-8")
     assert "LearnPythonStatsEcon" in orch_content
 
-    # Claude front matter: must have name and the capability key `tools:`, no user-invokable
+    # Claude front matter: must have name and the capability key `tools:`, no user-invocable
     assert "\ntools:" in orch_content
-    assert "user-invokable:" not in orch_content
+    assert "user-invocable:" not in orch_content
     assert "handoffs:" not in orch_content
 
     # CLAUDE.md instructions file at parent of agents_dir (i.e. tmp_path)
@@ -230,25 +230,44 @@ def test_path_a_fresh_generation_cli(tmp_path):
 
     assert manifest["project_name"] == "LearnPythonStatsEcon"
 
-    # CLI agents use .md extension, not .agent.md
-    orch = agents_dir / "orchestrator.md"
-    assert orch.exists(), "orchestrator.md not found (copilot-cli format)"
+    # P1 convergence (2026-08-15): CLI agents share VS Code's .agent.md shape.
+    orch = agents_dir / "orchestrator.agent.md"
+    assert orch.exists(), "orchestrator.agent.md not found (copilot-cli format)"
     orch_content = orch.read_text(encoding="utf-8")
     assert "LearnPythonStatsEcon" in orch_content
 
-    # No YAML front matter — CLI agents are plain Markdown
-    assert not orch_content.startswith("---"), "copilot-cli agent must not have YAML front matter"
+    # YAML front matter IS present post-convergence — same surface as copilot-vscode.
+    assert orch_content.startswith("---"), "copilot-cli agent must have YAML front matter"
+    assert "user-invocable:" in orch_content
 
-    # No handoff sections
+    # Handoffs are still stripped — CLI doesn't support them (VS-Code-desktop-only).
     assert "## Handoffs" not in orch_content
 
-    # team-builder uses .md extension for CLI
-    team_builder = agents_dir / "team-builder.md"
-    assert team_builder.exists(), "team-builder.md not found (copilot-cli format)"
+    # team-builder uses .agent.md extension for CLI post-convergence.
+    team_builder = agents_dir / "team-builder.agent.md"
+    assert team_builder.exists(), "team-builder.agent.md not found (copilot-cli format)"
 
     # copilot-instructions.md at parent of agents_dir
     instructions = tmp_path / "copilot-instructions.md"
     assert instructions.exists(), "copilot-instructions.md not found for copilot-cli framework"
+
+    # Regression guard: real generated agents carry their native handoff as a
+    # front-matter `handoffs:` block with NO corresponding body heading at all
+    # (confirmed directly against a real dogfooded .github/agents/*.agent.md
+    # file) — a body-heading-only strip left this leaking straight through
+    # every specialist agent that has a "return to orchestrator" handoff.
+    # Scan every real generated file's FRONT MATTER only (not just
+    # orchestrator, which typically has no return handoff to itself) — the
+    # body legitimately discusses "handoffs:"/"agent: orchestrator" as prose
+    # in spec-compliance references like agent-refactor.template.md.
+    leaked = []
+    for f in sorted(agents_dir.glob("*.agent.md")):
+        text = f.read_text(encoding="utf-8")
+        end = text.find("\n---", 4) if text.startswith("---") else -1
+        front_matter = text[:end] if end != -1 else ""
+        if "handoffs:" in front_matter or "agent: orchestrator" in front_matter or "agent: 'orchestrator'" in front_matter:
+            leaked.append(f.name)
+    assert not leaked, f"copilot-cli output must not carry handoff front matter: {leaked}"
 
 
 # ---------------------------------------------------------------------------
@@ -262,7 +281,7 @@ def _make_minimal_vscode_agent(slug: str, project_name: str = "TestProject") -> 
         f"---\n"
         f"name: {slug} — {project_name}\n"
         f'description: "Test agent for {slug}"\n'
-        f"user-invokable: false\n"
+        f"user-invocable: false\n"
         f"tools: ['read', 'search']\n"
         f"model: [\"Claude Sonnet 4.6 (copilot)\"]\n"
         f"handoffs:\n"
@@ -388,7 +407,7 @@ def test_path_b_convert_vscode_to_claude(tmp_path):
     assert "\ntools:" in orch_content
 
     # Must NOT have VS Code keys
-    assert "user-invokable:" not in orch_content
+    assert "user-invocable:" not in orch_content
     assert "handoffs:" not in orch_content
 
     # Prose body must be preserved
@@ -455,12 +474,13 @@ def test_path_b_convert_vscode_to_cli(tmp_path):
     )
 
     assert result.success
-    converted = target_dir / "primary-producer.md"
+    # P1 convergence (2026-08-15): CLI output shares VS Code's .agent.md shape.
+    converted = target_dir / "primary-producer.agent.md"
     assert converted.exists()
 
     content = converted.read_text(encoding="utf-8")
-    # No YAML front matter
-    assert not content.startswith("---")
+    # YAML front matter IS present post-convergence.
+    assert content.startswith("---")
     # Body prose preserved
     assert "Responsibility one" in content
 
@@ -698,7 +718,7 @@ def test_path_b_live_repo_actual_conversion(tmp_path):
     assert "\ntools:" in orch_content
 
     # No VS Code keys
-    assert "user-invokable:" not in orch_content
+    assert "user-invocable:" not in orch_content
     assert "handoffs:" not in orch_content
 
     # Prose body preserved (orchestrator has an Invariant Core section)
@@ -718,7 +738,7 @@ def test_path_b_live_repo_actual_conversion(tmp_path):
         assert agent_file.exists(), f"Converted {slug}.md not found"
         content = agent_file.read_text(encoding="utf-8")
         assert "\ntools:" in content, f"Missing Claude front matter in {slug}.md"
-        assert "user-invokable:" not in content, f"VS Code key found in converted {slug}.md"
+        assert "user-invocable:" not in content, f"VS Code key found in converted {slug}.md"
 
 
 # ---------------------------------------------------------------------------
@@ -756,7 +776,7 @@ def test_path_b_convert_claude_to_vscode(tmp_path):
 
     # VS Code YAML front matter must be present with required keys
     assert content.startswith("---")
-    assert "user-invokable:" in content
+    assert "user-invocable:" in content
     assert "tools:" in content
     assert "model:" in content
     # a claude-source capability key may be present (harmless) but VS Code keys injected
@@ -789,12 +809,14 @@ def test_path_b_convert_claude_to_cli(tmp_path):
     )
 
     assert result.success, f"convert_team errors: {result.errors}"
-    converted = target_dir / "security.md"
-    assert converted.exists(), "security.md not found (claude→cli)"
+    # P1 convergence (2026-08-15): CLI output shares VS Code's .agent.md shape.
+    converted = target_dir / "security.agent.md"
+    assert converted.exists(), "security.agent.md not found (claude→cli)"
     content = converted.read_text(encoding="utf-8")
 
-    # CLI: no YAML front matter
-    assert not content.startswith("---"), "copilot-cli output must not have YAML front matter"
+    # YAML front matter IS present post-convergence.
+    assert content.startswith("---"), "copilot-cli output must have YAML front matter"
+    assert "user-invocable:" in content
     # Prose body preserved
     assert "Responsibility one" in content
     assert "Responsibility two" in content
@@ -829,7 +851,7 @@ def test_path_b_convert_cli_to_vscode(tmp_path):
 
     # VS Code YAML front matter injected (source had none)
     assert content.startswith("---")
-    assert "user-invokable:" in content
+    assert "user-invocable:" in content
     assert "name:" in content
     # Prose body preserved
     assert "Responsibility one" in content
@@ -867,7 +889,7 @@ def test_path_b_convert_cli_to_claude(tmp_path):
     assert "\ntools:" in content
     assert "name:" in content
     # No VS Code keys
-    assert "user-invokable:" not in content
+    assert "user-invocable:" not in content
     # Prose body preserved
     assert "Responsibility one" in content
 

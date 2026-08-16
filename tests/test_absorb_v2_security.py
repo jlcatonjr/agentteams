@@ -134,20 +134,20 @@ class TestCapabilityNarrowingAllFrameworks:
 # ---------------------------------------------------------------------------
 
 class TestRawFrontMatterCapabilityKeys:
-    """raw_front_matter with capability keys (tools, model, user-invokable,
+    """raw_front_matter with capability keys (tools, model, user-invocable,
     permissionMode) must route to PROPOSAL when changed."""
 
     def test_tools_change_in_raw_front_matter_routes_to_proposal(self, tmp_path):
         """Tools change in raw_front_matter → PROPOSAL (via any-side check)."""
         agents = [_make_agent(
             slug="alpha",
-            raw_front_matter={"tools": "['Read']", "user-invokable": "true"},
+            raw_front_matter={"tools": "['Read']", "user-invocable": "true"},
         )]
         canonical_dir, _, baseline = _setup(agents, "copilot-vscode", tmp_path)
 
         native_cai = _make_cai([_make_agent(
             slug="alpha",
-            raw_front_matter={"tools": "['Read', 'Edit', 'Bash']", "user-invokable": "true"},
+            raw_front_matter={"tools": "['Read', 'Edit', 'Bash']", "user-invocable": "true"},
         )], "copilot-vscode")
 
         report = classify_sync(
@@ -162,13 +162,13 @@ class TestRawFrontMatterCapabilityKeys:
         """Model change in raw_front_matter → PROPOSAL."""
         agents = [_make_agent(
             slug="alpha",
-            raw_front_matter={"model": "gpt-4", "user-invokable": "true"},
+            raw_front_matter={"model": "gpt-4", "user-invocable": "true"},
         )]
         canonical_dir, _, baseline = _setup(agents, "copilot-vscode", tmp_path)
 
         native_cai = _make_cai([_make_agent(
             slug="alpha",
-            raw_front_matter={"model": "claude-3.5-sonnet", "user-invokable": "true"},
+            raw_front_matter={"model": "claude-3.5-sonnet", "user-invocable": "true"},
         )], "copilot-vscode")
 
         report = classify_sync(
@@ -180,16 +180,16 @@ class TestRawFrontMatterCapabilityKeys:
         assert rfm.action == Action.PROPOSAL
 
     def test_user_invokable_change_routes_to_proposal(self, tmp_path):
-        """F.2: user-invokable change → PROPOSAL (new capability key)."""
+        """F.2: user-invocable change → PROPOSAL (new capability key)."""
         agents = [_make_agent(
             slug="alpha",
-            raw_front_matter={"user-invokable": "true", "description": "test"},
+            raw_front_matter={"user-invocable": "true", "description": "test"},
         )]
         canonical_dir, _, baseline = _setup(agents, "copilot-vscode", tmp_path)
 
         native_cai = _make_cai([_make_agent(
             slug="alpha",
-            raw_front_matter={"user-invokable": "false", "description": "test"},
+            raw_front_matter={"user-invocable": "false", "description": "test"},
         )], "copilot-vscode")
 
         report = classify_sync(
@@ -229,7 +229,7 @@ class TestRawFrontMatterCapabilityKeys:
         """
         agents = [_make_agent(
             slug="alpha",
-            raw_front_matter={"tools": "['Read', 'Edit']", "user-invokable": "true"},
+            raw_front_matter={"tools": "['Read', 'Edit']", "user-invocable": "true"},
         )]
         canonical_dir, _, baseline = _setup(agents, "copilot-vscode", tmp_path)
 

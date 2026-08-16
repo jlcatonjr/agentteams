@@ -55,13 +55,18 @@ REPO = Path(__file__).resolve().parents[1]
 RUNTIME_CAPABILITY_KEYS: dict[str, frozenset[str]] = {
     "claude": frozenset({"tools", "disallowedTools"}),
     "copilot-vscode": frozenset({"tools"}),
+    # P1 (2026-08-15): copilot-cli converged onto copilot-vscode's front-matter surface
+    # (delegates render_agent_file), so it carries the same capability key.
+    "copilot-cli": frozenset({"tools"}),
 }
 
 #: Frameworks whose agent files carry NO front matter by design, so there is no capability key
-#: to get wrong. copilot-cli emits a bare prompt body — see its `required_front_matter_keys`
-#: docstring. Named explicitly rather than omitted, so adding a framework forces a decision
-#: about which list it belongs on instead of silently escaping this contract.
-FRAMEWORKS_WITHOUT_FRONT_MATTER: frozenset[str] = frozenset({"copilot-cli"})
+#: to get wrong. Named explicitly rather than omitted, so adding a framework forces a decision
+#: about which list it belongs on instead of silently escaping this contract. Empty as of P1
+#: (2026-08-15) — copilot-cli was the only member and now has front matter (see
+#: RUNTIME_CAPABILITY_KEYS above); kept as a frozenset rather than removed so a future
+#: no-front-matter framework has an obvious place to register.
+FRAMEWORKS_WITHOUT_FRONT_MATTER: frozenset[str] = frozenset()
 
 #: Keys a runtime silently ignores in an agent file. Emitting one of these as the capability
 #: declaration is the defect, so they are named rather than merely absent from the set above.

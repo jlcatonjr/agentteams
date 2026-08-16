@@ -1,7 +1,7 @@
 ---
 name: Agent Updater — ResearchPaperProject
 description: "Synchronizes agent documentation after project structure, deliverable, or reference changes in ResearchPaperProject"
-user-invokable: false
+user-invocable: false
 tools: ['edit', 'search', 'execute', 'agent']
 agents: ['adversarial', 'conflict-auditor', 'agent-refactor']
 model: ["Claude Sonnet 4.6 (copilot)"]

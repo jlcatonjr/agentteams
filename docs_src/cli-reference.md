@@ -63,7 +63,7 @@ Target agent framework. Choices: `copilot-vscode` (default), `copilot-cli`, `cla
 | Value | Format | Description |
 |-------|--------|-------------|
 | `copilot-vscode` | `.agent.md` with YAML front matter | VS Code Copilot agents with full handoff support |
-| `copilot-cli` | Plain `.md` | Copilot CLI system prompts; inline YAML and handoff sections stripped, with handoffs preserved in `references/runtime-handoffs.json` when present |
+| `copilot-cli` | `.agent.md` with YAML front matter (same shape as `copilot-vscode` since the P1 convergence 2026-08-15) | Copilot CLI custom agents; handoff sections/keys stripped (VS-Code-desktop-only), preserved in `references/runtime-handoffs.json` when present |
 | `claude` | Claude front matter `.md` | Claude Projects; output includes `CLAUDE.md` instructions and preserves handoffs in `references/runtime-handoffs.json` when present |
 | `goose` **(beta)** | Recipe YAML (`.goose/recipes/*.yaml`) | Block / AAIF Goose recipes; orchestrator delegates via `sub_recipes`, deeper edges become `summon` `load(...)`; team brief written to repo-root `AGENTS.md` + `.goosehints`. Handoffs are encoded natively in the recipes (no `runtime-handoffs.json` sidecar). **Beta** — see the feature-support matrix below |
 | `agents-md` | Plain `.md` | Cross-tool **AGENTS.md** standard (AAIF / Linux Foundation). Emits a single framework-neutral repo-root `AGENTS.md` — the canonical file read by ~10 tools (Continue, Cursor, Cline, Codex, Zed, Aider, …) — plus per-specialist detail under `.agents/`. Routing preserved in `references/runtime-handoffs.json`. Generate-only for convert/bridge; the CAI interop path supports it as a target (best-effort: its rendered output carries no front matter). |
@@ -110,7 +110,7 @@ Auto-detected **source** frameworks (for `--convert-from` / `--interop-from` / `
 Output directory for generated agent files. Defaults by framework:
 
 - `copilot-vscode`: `<project>/.github/agents/`
-- `copilot-cli`: `<project>/.github/copilot/`
+- `copilot-cli`: `<project>/.github/agents/` (same directory as `copilot-vscode` — see the multi-framework sync caution in the README before pinning both together)
 - `claude`: `<project>/.claude/agents/`
 - `goose`: `<project>/.goose/recipes/` (team brief written to repo-root `AGENTS.md` + `.goosehints`)
 - `agents-md`: `<project>/.agents/` (canonical team brief written to repo-root `AGENTS.md`)
@@ -840,7 +840,7 @@ Explicit canonical directory path. Defaults to
 
 Apply native-moved (non-capability) changes to canonical. Without this
 flag, the absorb is report-only — nothing is written. Capability-bearing
-fields (tools, model, user-invokable, permissionMode, agents) are **never**
+fields (tools, model, user-invocable, permissionMode, agents) are **never**
 auto-applied; they always appear in the report as proposals for human
 review (§6.1 capability carve-out).
 
@@ -944,6 +944,15 @@ it to every framework in the sync set, and record per-framework baselines. Write
 The bootstrap-pin framework for `--sync-init`. It seeds canonical and wins every conflict
 thereafter (each conflict is logged for review). Peer *capability* changes are never silently
 fanned out — they are withheld and logged, so capability grants only originate from the pin.
+
+### `--frameworks FW1,FW2,...`
+
+Comma-separated sync set for `--sync-init` (default: every registered framework). Required
+whenever the default set would collide: `copilot-vscode` and `copilot-cli` render to the same
+physical `.github/agents` directory and can genuinely disagree (handoffs kept vs. stripped), so
+`--sync-init` refuses that combination outright rather than risk one silently overwriting the
+other. List only one of the two. `--sync` reuses whatever set was recorded by `--sync-init`; it
+has no separate `--frameworks` flag of its own.
 
 ### `--sync`
 

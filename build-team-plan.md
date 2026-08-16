@@ -94,7 +94,7 @@ One expert agent is instantiated for each major project component (analogous to 
 
 **Characteristics:**
 - One per major workstream or project component
-- Not user-invokable directly; invoked by the orchestrator or Primary Producer
+- Not user-invocable directly; invoked by the orchestrator or Primary Producer
 - Owns the component's thesis/specification, evidence inventory, cross-reference obligations, and quality criteria
 - Commissions work from the Primary Producer; reviews and approves output
 - Maintains an "Invariant Core" section specifying the component specification that cannot be changed without orchestrator approval
@@ -115,7 +115,7 @@ Every generated agent file follows this structure:
 ---
 name: {Agent Name} — {Project Name}
 description: "{One-sentence description}"
-user-invokable: true|false
+user-invocable: true|false
 tools: ['read', 'edit', 'search', 'execute', 'todo', 'agent']
 agents: [downstream-agent-slugs]
 model: ["Claude Sonnet 4.6 (copilot)"]

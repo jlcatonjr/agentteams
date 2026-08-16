@@ -1,7 +1,7 @@
 ---
 name: Style Guardian — ResearchPaperProject
 description: "Enforces voice and style fidelity in ResearchPaperProject deliverables using calibrated voice samples; sole arbiter of style deviation rulings"
-user-invokable: false
+user-invocable: false
 tools: ['read', 'edit', 'search']
 agents: ['primary-producer']
 model: ["Claude Sonnet 4.6 (copilot)"]

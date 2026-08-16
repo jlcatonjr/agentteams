@@ -31,7 +31,7 @@ MINIMAL_AGENT = """\
 ---
 name: Orchestrator — TestProject
 description: "Coordinates all agents"
-user-invokable: true
+user-invocable: true
 tools: ['read', 'search']
 model: ["Claude Sonnet 4.6"]
 ---
@@ -42,7 +42,7 @@ DOMAIN_AGENT = """\
 ---
 name: Primary Producer — TestProject
 description: "Produces primary deliverables"
-user-invokable: false
+user-invocable: false
 tools: ['read', 'write']
 model: ["Claude Sonnet 4.6"]
 ---
@@ -53,7 +53,7 @@ AGENT_WITH_HANDOFFS = """\
 ---
 name: Orchestrator — TestProject
 description: "Coordinates all agents"
-user-invokable: true
+user-invocable: true
 tools: ['read', 'search', 'execute']
 model: ["Claude Sonnet 4.6"]
 handoffs:
@@ -73,7 +73,7 @@ AGENT_WITH_AGENTS_LIST = """\
 ---
 name: Navigator — TestProject
 description: "Navigates the repo"
-user-invokable: false
+user-invocable: false
 tools: ['read', 'search']
 model: ["Claude Sonnet 4.6"]
 agents: ['orchestrator', 'primary-producer']
@@ -85,7 +85,7 @@ AGENT_WITH_UNQUOTED_AGENTS_LIST = """\
 ---
 name: Navigator — TestProject
 description: "Navigates the repo"
-user-invokable: false
+user-invocable: false
 tools: ['read', 'search']
 model: ["Claude Sonnet 4.6"]
 agents: [orchestrator, primary-producer]
@@ -97,7 +97,7 @@ AGENT_WITH_DOUBLE_QUOTED_AGENTS_LIST = """\
 ---
 name: Navigator — TestProject
 description: "Navigates the repo"
-user-invokable: false
+user-invocable: false
 tools: ['read', 'search']
 model: ["Claude Sonnet 4.6"]
 agents: ["orchestrator", "primary-producer"]
@@ -109,7 +109,7 @@ WORKSTREAM_EXPERT = """\
 ---
 name: Pipeline Core Expert — TestProject
 description: "Owns the pipeline workstream"
-user-invokable: false
+user-invocable: false
 tools: ['read', 'write']
 model: ["Claude Sonnet 4.6"]
 ---
@@ -120,7 +120,7 @@ AGENT_WITH_BLOCK_TOOLS = """\
 ---
 name: Navigator — TestProject
 description: "Navigates the repo"
-user-invokable: false
+user-invocable: false
 tools:
   - read
   - search
@@ -134,7 +134,7 @@ AGENT_WITH_BLOCK_AGENTS_LIST = """\
 ---
 name: Navigator — TestProject
 description: "Navigates the repo"
-user-invokable: false
+user-invocable: false
 tools: ['read']
 model: ["Claude Sonnet 4.6"]
 agents:
@@ -148,7 +148,7 @@ AGENT_WITH_BLOCK_AGENTS_THEN_HANDOFFS = """\
 ---
 name: Navigator — TestProject
 description: "Navigates the repo"
-user-invokable: false
+user-invocable: false
 tools: ['read']
 model: ["Claude Sonnet 4.6"]
 agents:
@@ -166,7 +166,7 @@ AGENT_WITH_AGENT_FIRST_HANDOFFS = """\
 ---
 name: Orchestrator — TestProject
 description: "Coordinates all agents"
-user-invokable: true
+user-invocable: true
 tools: ['read', 'search', 'execute']
 model: ["Claude Sonnet 4.6"]
 handoffs:
@@ -186,7 +186,7 @@ AGENT_WITH_MIXED_LABEL_PRESENCE = """\
 ---
 name: Orchestrator — TestProject
 description: "Coordinates all agents"
-user-invokable: true
+user-invocable: true
 tools: ['read', 'search', 'execute']
 model: ["Claude Sonnet 4.6"]
 handoffs:
@@ -282,23 +282,23 @@ class TestSplitYaml:
             "---\n"
             "name: My Agent\n"
             "description: 'Use range notation foo---bar in your queries'\n"
-            "user-invokable: true\n"
+            "user-invocable: true\n"
             "---\n"
             "# My Agent\n"
         )
         yaml, body = _split_yaml(content)
         assert yaml is not None, "yaml_block must not be None"
         assert "description: 'Use range notation foo---bar" in yaml
-        assert "user-invokable: true" in yaml
+        assert "user-invocable: true" in yaml
         assert "# My Agent" in body
 
     def test_embedded_dashes_in_name_value_not_split(self):
         """'---' embedded directly in a YAML name value does not terminate front matter."""
-        content = "---\nname: My---Agent\nuser-invokable: false\n---\n# Body"
+        content = "---\nname: My---Agent\nuser-invocable: false\n---\n# Body"
         yaml, body = _split_yaml(content)
         assert yaml is not None
         assert "name: My---Agent" in yaml
-        assert "user-invokable: false" in yaml
+        assert "user-invocable: false" in yaml
         assert "# Body" in body
 
     def test_closing_delimiter_without_trailing_newline(self):
@@ -382,16 +382,16 @@ class TestExtractName:
 
 class TestExtractUserInvokable:
     def test_true(self):
-        assert _extract_user_invokable("user-invokable: true\n") is True
+        assert _extract_user_invokable("user-invocable: true\n") is True
 
     def test_false(self):
-        assert _extract_user_invokable("user-invokable: false\n") is False
+        assert _extract_user_invokable("user-invocable: false\n") is False
 
     def test_missing_defaults_false(self):
         assert _extract_user_invokable("name: Foo\n") is False
 
     def test_case_insensitive_true(self):
-        assert _extract_user_invokable("user-invokable: True\n") is True
+        assert _extract_user_invokable("user-invocable: True\n") is True
 
 
 # ---------------------------------------------------------------------------
@@ -671,7 +671,7 @@ class TestBuildGraphEdges:
 ---
 name: Navigator — TestProject
 description: "Navigates"
-user-invokable: false
+user-invocable: false
 tools: ['read']
 model: ["Claude Sonnet 4.6"]
 agents: ['navigator', 'orchestrator']
@@ -720,7 +720,7 @@ agents: ['navigator', 'orchestrator']
         mixed_agent = """---
 name: Navigator — TestProject
 description: "Mixed quoting"
-user-invokable: false
+user-invocable: false
 tools: ['read']
 model: ["Claude Sonnet 4.6"]
 agents: ['orchestrator', primary-producer]
@@ -742,7 +742,7 @@ agents: ['orchestrator', primary-producer]
         single_agent = """---
 name: Navigator — TestProject
 description: "Single target"
-user-invokable: false
+user-invocable: false
 tools: ['read']
 model: ["Claude Sonnet 4.6"]
 agents: [orchestrator]
@@ -1098,7 +1098,7 @@ class TestExtractYamlSequence:
         assert "agent" not in result
 
     def test_key_absent_returns_empty(self):
-        yaml = "name: Foo\nuser-invokable: true\n"
+        yaml = "name: Foo\nuser-invocable: true\n"
         assert _extract_yaml_sequence(yaml, "tools") == []
 
     def test_block_last_key_no_terminator(self):
@@ -1182,7 +1182,7 @@ class TestBuildGraphEdgeCornerCases:
 ---
 name: Builder — TestProject
 description: "Builds things"
-user-invokable: false
+user-invocable: false
 tools:
   - read
   - write
@@ -1203,7 +1203,7 @@ model: ["Claude Sonnet 4.6"]
 ---
 name: Navigator — TestProject
 description: "Navigates"
-user-invokable: false
+user-invocable: false
 tools: ['read']
 model: ["Claude Sonnet 4.6"]
 agents:
@@ -1231,7 +1231,7 @@ agents:
 ---
 name: Navigator — TestProject
 description: "Navigates"
-user-invokable: false
+user-invocable: false
 tools: ['read']
 model: ["Claude Sonnet 4.6"]
 agents: [orchestrator, primary-producer]
@@ -1257,7 +1257,7 @@ agents: [orchestrator, primary-producer]
 ---
 name: Orchestrator — TestProject
 description: "Coordinates all agents"
-user-invokable: true
+user-invocable: true
 tools: ['read']
 model: ["Claude Sonnet 4.6"]
 handoffs:
@@ -1294,7 +1294,7 @@ handoffs:
 ---
 name: Orchestrator — TestProject
 description: "Coordinates all agents"
-user-invokable: true
+user-invocable: true
 tools: ['read']
 model: ["Claude Sonnet 4.6"]
 handoffs:
@@ -1324,7 +1324,7 @@ handoffs:
             "---\n"
             "name: Foo — TestProject\n"
             'description: "covers --- many --- cases"\n'
-            "user-invokable: false\n"
+            "user-invocable: false\n"
             "---\n"
             "# Body\n"
         )

@@ -1,7 +1,7 @@
 ---
 name: Navigator — ResearchPaperProject
 description: "Repository structure navigation, project map maintenance, file location lookups, and dependency queries for ResearchPaperProject"
-user-invokable: false
+user-invocable: false
 tools: ['read', 'search', 'execute']
 model: ["Claude Sonnet 4.6 (copilot)"]
 handoffs:

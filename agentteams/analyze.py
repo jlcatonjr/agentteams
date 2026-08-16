@@ -538,6 +538,16 @@ def build_manifest(description: dict[str, Any], *, framework: str = "copilot-vsc
     recipe_retry = _normalize_recipe_retry(description.get("recipe_retry"))
     if recipe_retry:
         manifest["recipe_retry"] = recipe_retry
+    # A1 (2026-08-15, scoped): raw style_rules, alongside the existing formatted
+    # style_rules_summary string. agents_md.py's code-style section needs to tell
+    # "no rules declared" apart from "rules declared" to omit cleanly when absent —
+    # style_rules_summary's placeholder text ("No project-specific style rules
+    # defined.") is not a safe presence signal to branch on. Added only when
+    # non-empty, so manifests for briefs that declare none are byte-identical
+    # (mirrors the mcp_servers/recipe_* pattern above).
+    style_rules = description.get("style_rules")
+    if isinstance(style_rules, list) and style_rules:
+        manifest["style_rules"] = list(style_rules)
     return manifest
 
 

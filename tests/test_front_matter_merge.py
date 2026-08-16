@@ -41,25 +41,25 @@ def test_untouched_metadata_key_is_applied():
     """Template moved, project never touched it, not a capability ⇒ apply."""
     baseline = dict(_BASE)
     on_disk = _doc(**_BASE)
-    rendered = _doc(**{**_BASE, "user-invokable": "true"})
+    rendered = _doc(**{**_BASE, "user-invocable": "true"})
 
     merged, applied, proposals = _merge_front_matter(rendered, on_disk, baseline)
 
-    assert merged["user-invokable"] == "true"
-    assert any("user-invokable" in a for a in applied)
+    assert merged["user-invocable"] == "true"
+    assert any("user-invocable" in a for a in applied)
     assert proposals == []
 
 
 def test_a_key_the_project_edited_is_never_overwritten():
     """The failure the withdrawn design would have caused."""
     baseline = dict(_BASE)
-    on_disk = _doc(**{**_BASE, "user-invokable": "false"})       # project chose false
-    rendered = _doc(**{**_BASE, "user-invokable": "true"})       # template says true
-    baseline["user-invokable"] = "maybe"                          # neither — both moved
+    on_disk = _doc(**{**_BASE, "user-invocable": "false"})       # project chose false
+    rendered = _doc(**{**_BASE, "user-invocable": "true"})       # template says true
+    baseline["user-invocable"] = "maybe"                          # neither — both moved
 
     merged, applied, proposals = _merge_front_matter(rendered, on_disk, baseline)
 
-    assert merged["user-invokable"] == "false", "the project's choice must survive"
+    assert merged["user-invocable"] == "false", "the project's choice must survive"
     assert applied == []
     assert any("BOTH" in p for p in proposals)
 
@@ -116,11 +116,11 @@ def test_every_capability_key_is_carved_out(key):
 def test_no_baseline_means_nothing_is_applied():
     """An older build log predates the baseline field; unknown must mean 'assume edited'."""
     on_disk = _doc(**_BASE)
-    rendered = _doc(**{**_BASE, "user-invokable": "true"})
+    rendered = _doc(**{**_BASE, "user-invocable": "true"})
 
     merged, applied, _ = _merge_front_matter(rendered, on_disk, None)
 
-    assert "user-invokable" not in merged
+    assert "user-invocable" not in merged
     assert applied == []
 
 
@@ -145,6 +145,97 @@ def test_rendering_keeps_the_body_untouched():
     content = _doc(**_BASE)
     out = _render_front_matter(content, _BASE)
     assert out.endswith("\nbody\n")
+
+
+# --- key-succession rename (_migrate_superseded_keys) ----------------------
+#
+# P3 (2026-08-15): this mechanism previously had zero dedicated coverage at
+# this layer — confirmed by two independent audits before it was extended
+# for the user-invocable/user-invokable rename. These tests lock down the
+# EXISTING tools/allowed-tools entry first, then cover the new entry.
+
+from agentteams.front_matter_merge import _KEY_SUCCESSION, _migrate_superseded_keys  # noqa: E402
+
+
+def test_key_succession_table_has_the_expected_entries():
+    """A change to this tuple is a behavior change; pin its shape."""
+    assert ("tools", "allowed-tools") in _KEY_SUCCESSION
+    assert ("user-invocable", "user-invokable") in _KEY_SUCCESSION
+
+
+def test_existing_allowed_tools_rename_still_works():
+    """Locks down the pre-existing entry before/after generalizing the mechanism."""
+    on_disk = "---\nname: A\nallowed-tools: Read, Grep\n---\n\nbody\n"
+    rendered = "---\nname: A\ntools: Read, Grep, Bash\n---\n\nbody\n"
+
+    merged, applied, proposals = _merge_front_matter(rendered, on_disk, None)
+
+    assert merged["tools"] == "Read, Grep"
+    assert "allowed-tools" not in merged
+    assert any("allowed-tools" in a and "renamed to" in a and "'tools'" in a for a in applied)
+    assert any("grant it declared was never enforced" in a for a in applied), (
+        "tools/allowed-tools is a real capability key — its notice must still use capability "
+        "language after the mechanism was generalized"
+    )
+
+
+def test_user_invocable_rename_old_key_only():
+    """Scenario 1: old key only -> new key applied, value preserved."""
+    on_disk = "---\nname: A\nuser-invokable: false\n---\n\nbody\n"
+    rendered = "---\nname: A\nuser-invocable: true\n---\n\nbody\n"
+
+    merged, applied, _ = _merge_front_matter(rendered, on_disk, None)
+
+    assert merged["user-invocable"] == "false", "the deployed VALUE must survive the rename"
+    assert "user-invokable" not in merged
+    assert any(
+        "user-invokable" in a and "renamed to" in a and "'user-invocable'" in a for a in applied
+    )
+    assert not any("grant it declared was never enforced" in a for a in applied), (
+        "user-invocable is NOT a capability key — its notice must not use capability/grant "
+        "language"
+    )
+
+
+def test_user_invocable_rename_hand_edited_value_preserved():
+    """Scenario 2: old key hand-edited (differs from baseline) -> new key gets the edited
+    value, not silently dropped."""
+    baseline = {"name": "A", "user-invokable": "false"}
+    on_disk = "---\nname: A\nuser-invokable: true\n---\n\nbody\n"  # project flipped it to true
+    rendered = "---\nname: A\nuser-invocable: false\n---\n\nbody\n"  # template still says false
+
+    merged, applied, _ = _merge_front_matter(rendered, on_disk, baseline)
+
+    assert merged["user-invocable"] == "true", "the project's hand-edit must survive the rename"
+
+
+def test_user_invocable_rename_both_keys_present_is_not_double_declared():
+    """Scenario 3: both keys present (a file mid-migration) -> not touched again."""
+    on_disk = "---\nname: A\nuser-invokable: false\nuser-invocable: true\n---\n\nbody\n"
+    rendered = "---\nname: A\nuser-invocable: true\n---\n\nbody\n"
+
+    merged, applied, _ = _merge_front_matter(rendered, on_disk, None)
+
+    assert merged["user-invocable"] == "true"
+    assert not any("user-invokable" in a and "renamed" in a for a in applied), (
+        "a file that already carries the new key must not be rewritten again"
+    )
+
+
+def test_user_invocable_fresh_file_neither_key_present():
+    """Scenario 4: brand-new file, neither key present -> template default applies via the
+    ordinary (non-rename) path, not the migration path.
+
+    This exercises copilot_vscode.py's _ensure_yaml_front_matter fallback, a genuinely
+    different code path from _merge_front_matter (which only runs once a file already has
+    SOME front matter) — confirmed via emit.py's dispatch before writing this test.
+    """
+    from agentteams.frameworks.copilot_vscode import _ensure_yaml_front_matter
+
+    fresh_body = "no front matter here\n"
+    out = _ensure_yaml_front_matter(fresh_body, "some-agent", {"project_name": "P"})
+    assert "user-invocable: false" in out
+    assert "user-invokable" not in out
 
 
 def test_rendering_a_document_without_front_matter_is_a_no_op():

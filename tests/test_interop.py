@@ -17,7 +17,7 @@ def _vscode_agent(slug: str) -> str:
         "---\n"
         f"name: {slug} — Demo\n"
         "description: \"demo\"\n"
-        "user-invokable: false\n"
+        "user-invocable: false\n"
         "tools: ['read']\n"
         "model: [\"Claude Sonnet 4.6 (copilot)\"]\n"
         "handoffs:\n"
@@ -54,7 +54,17 @@ def _claude_agent(slug: str) -> str:
 
 
 def _cli_agent(slug: str) -> str:
+    """P1 (2026-08-15): a real on-disk copilot-cli file now carries front matter (same
+    surface as VS Code) and NEVER has a '## Handoffs' section — the adapter strips it
+    before writing, so a realistic source fixture cannot have one either."""
     return (
+        "---\n"
+        f"name: {slug} — Demo\n"
+        "description: \"demo\"\n"
+        "user-invocable: false\n"
+        "tools: ['read']\n"
+        "model: [\"Claude Sonnet 4.6 (copilot)\"]\n"
+        "---\n\n"
         f"# {slug}\n\n"
         "Body line one.\n\n"
         "Body line two with token KEEP_ME_ALWAYS.\n\n"
@@ -73,7 +83,7 @@ def _build_source(source_framework: str, source_dir: Path) -> None:
             encoding="utf-8",
         )
     elif source_framework == "copilot-cli":
-        (source_dir / "orchestrator.md").write_text(_cli_agent("orchestrator"), encoding="utf-8")
+        (source_dir / "orchestrator.agent.md").write_text(_cli_agent("orchestrator"), encoding="utf-8")
         (source_dir.parent / "copilot-instructions.md").write_text(
             "# Instructions\n\nKEEP_INSTRUCTIONS_TOKEN\n",
             encoding="utf-8",
@@ -90,12 +100,12 @@ def _agents_rel(framework: str) -> Path:
     if framework == "copilot-vscode":
         return Path(".github/agents")
     if framework == "copilot-cli":
-        return Path(".github/copilot")
+        return Path(".github/agents")
     return Path(".claude/agents")
 
 
 def _agent_filename(slug: str, framework: str) -> str:
-    if framework == "copilot-vscode":
+    if framework in ("copilot-vscode", "copilot-cli"):  # P1: same extension now
         return f"{slug}.agent.md"
     return f"{slug}.md"
 
@@ -158,12 +168,12 @@ def _extract_agent_body(cai: dict, slug: str) -> str:
 @pytest.mark.parametrize(
     "source_framework,target_framework,source_rel,target_rel,inst_name",
     [
-        ("copilot-vscode", "copilot-cli", ".github/agents", ".github/copilot", "copilot-instructions.md"),
+        ("copilot-vscode", "copilot-cli", ".github/agents", ".github/agents", "copilot-instructions.md"),
         ("copilot-vscode", "claude", ".github/agents", ".claude/agents", "CLAUDE.md"),
-        ("copilot-cli", "copilot-vscode", ".github/copilot", ".github/agents", "copilot-instructions.md"),
-        ("copilot-cli", "claude", ".github/copilot", ".claude/agents", "CLAUDE.md"),
+        ("copilot-cli", "copilot-vscode", ".github/agents", ".github/agents", "copilot-instructions.md"),
+        ("copilot-cli", "claude", ".github/agents", ".claude/agents", "CLAUDE.md"),
         ("claude", "copilot-vscode", ".claude/agents", ".github/agents", "copilot-instructions.md"),
-        ("claude", "copilot-cli", ".claude/agents", ".github/copilot", "copilot-instructions.md"),
+        ("claude", "copilot-cli", ".claude/agents", ".github/agents", "copilot-instructions.md"),
     ],
 )
 def test_interop_direct_all_six_directions(
@@ -194,13 +204,21 @@ def test_interop_direct_all_six_directions(
         assert agent_out.exists()
         content = agent_out.read_text(encoding="utf-8")
         assert content.startswith("---")
-        assert "user-invokable:" in content
+        assert "user-invocable:" in content
     elif target_framework == "claude":
         agent_out = target_dir / "orchestrator.md"
         assert agent_out.exists()
         content = agent_out.read_text(encoding="utf-8")
         assert content.startswith("---")
         assert "\ntools:" in content
+    elif target_framework == "copilot-cli":
+        # P1 convergence (2026-08-15): copilot-cli now shares copilot-vscode's
+        # .agent.md-with-front-matter shape rather than plain Markdown.
+        agent_out = target_dir / "orchestrator.agent.md"
+        assert agent_out.exists()
+        content = agent_out.read_text(encoding="utf-8")
+        assert content.startswith("---")
+        assert "user-invocable:" in content
     else:
         agent_out = target_dir / "orchestrator.md"
         assert agent_out.exists()
@@ -213,12 +231,12 @@ def test_interop_direct_all_six_directions(
 @pytest.mark.parametrize(
     "source_framework,target_framework,source_rel,target_rel",
     [
-        ("copilot-vscode", "copilot-cli", ".github/agents", ".github/copilot"),
+        ("copilot-vscode", "copilot-cli", ".github/agents", ".github/agents"),
         ("copilot-vscode", "claude", ".github/agents", ".claude/agents"),
-        ("copilot-cli", "copilot-vscode", ".github/copilot", ".github/agents"),
-        ("copilot-cli", "claude", ".github/copilot", ".claude/agents"),
+        ("copilot-cli", "copilot-vscode", ".github/agents", ".github/agents"),
+        ("copilot-cli", "claude", ".github/agents", ".claude/agents"),
         ("claude", "copilot-vscode", ".claude/agents", ".github/agents"),
-        ("claude", "copilot-cli", ".claude/agents", ".github/copilot"),
+        ("claude", "copilot-cli", ".claude/agents", ".github/agents"),
     ],
 )
 def test_interop_bundle_all_six_directions(
@@ -473,6 +491,59 @@ def test_export_to_cai_excludes_reference_and_backup_md(tmp_path):
     assert not any("pipeline" in s or "reference" in s or "pandas" in s for s in slugs)
 
 
+def test_export_to_cai_captures_copilot_cli_tool_scopes(tmp_path):
+    """P1 fix (2026-08-15): before this fix, export_to_cai's capability-capture
+    branch treated copilot-cli like agents-md (no capability channel at all),
+    so capabilities.tool_scopes was always []. copilot-cli's tools: line is
+    byte-identical in shape to copilot-vscode's since the convergence and must
+    be captured the same way."""
+    agents_dir = tmp_path / ".github" / "agents"
+    agents_dir.mkdir(parents=True)
+    (agents_dir / "orchestrator.agent.md").write_text(_cli_agent("orchestrator"), encoding="utf-8")
+
+    cai = export_to_cai(agents_dir, source_framework="copilot-cli")
+    agent = cai["agents"][0]
+    assert agent["capabilities"].get("tool_scopes") == ["read"], agent["capabilities"]
+
+
+def test_import_to_copilot_cli_preserves_capabilities_not_defaults(tmp_path):
+    """P1 fix (2026-08-15) regression guard: import_from_cai's tool_scopes and
+    raw_front_matter threading were gated to ("copilot-vscode", "claude"),
+    excluding copilot-cli even after it gained the identical front-matter
+    channel. The result was silent: every cross-framework import INTO
+    copilot-cli reverted user-invocable/tools/model to
+    copilot_vscode._YAML_DEFAULTS regardless of what the source specified.
+    Reproduced directly against a source with non-default values so a
+    defaulted output cannot pass by accident."""
+    source_dir = tmp_path / "source"
+    target_dir = tmp_path / "target"
+    source_dir.mkdir()
+
+    (source_dir / "orchestrator.agent.md").write_text(
+        "---\n"
+        "name: Orchestrator\n"
+        "description: Coordinates the team\n"
+        "user-invocable: true\n"
+        "tools: ['read', 'edit']\n"
+        'model: ["Claude Sonnet 4.6 (copilot)"]\n'
+        "---\n\n"
+        "Body prose.\n",
+        encoding="utf-8",
+    )
+
+    cai = export_to_cai(source_dir, source_framework="copilot-vscode")
+    result = import_from_cai(cai, "copilot-cli", target_dir, overwrite=True)
+    assert result.errors == []
+
+    content = (target_dir / "orchestrator.agent.md").read_text(encoding="utf-8")
+    assert "user-invocable: true" in content, content
+    assert "tools: ['read', 'edit']" in content, content
+    # The pre-fix defaulting fallback added 'search' and flipped to false —
+    # neither may appear now that the real source value threads through.
+    assert "user-invocable: false" not in content
+    assert "'search'" not in content
+
+
 def test_strip_framework_wrappers_does_not_consume_adjacent_fence_on_handoff_prefixed_heading():
     """Regression: interop.py's own _strip_handoffs_section re-introduced a bug already
     fixed once in FrameworkAdapter._strip_handoffs_section (tests/test_handoff_strip_fence_
@@ -707,7 +778,7 @@ def _build_map16_source(framework: str, root: Path) -> Path:
     if framework in ("copilot-vscode", "copilot-cli", "claude"):
         rel = {
             "copilot-vscode": ".github/agents",
-            "copilot-cli": ".github/copilot",
+            "copilot-cli": ".github/agents",
             "claude": ".claude/agents",
         }[framework]
         source_dir = root / rel
@@ -743,7 +814,8 @@ def _build_map16_source(framework: str, root: Path) -> Path:
 def _map16_target_dir(framework: str, root: Path) -> Path:
     return {
         "copilot-vscode": root / ".github" / "agents",
-        "copilot-cli": root / ".github" / "copilot",
+        # P1 (2026-08-15): converged onto VS Code's path.
+        "copilot-cli": root / ".github" / "agents",
         "claude": root / ".claude" / "agents",
         "goose": root / ".goose" / "recipes",
         "agents-md": root / ".agents",
@@ -773,6 +845,7 @@ def test_map16_framework_to_canonical_and_back(tmp_path: Path, framework: str):
     assert result.errors == []
     adapter_ext = {
         "copilot-vscode": ".agent.md",
+        "copilot-cli": ".agent.md",  # P1 convergence (2026-08-15)
         "goose": ".yaml",
     }.get(framework, ".md")
     for slug in (a["slug"] for a in cai["agents"]):

@@ -714,11 +714,11 @@ def _render_target_files(
             "# Agent Team (Goose bridge)\n\n"
             + _wrap_fence("goose-bridge-entry", agents_entry_body)
         )
-        # .goosehints pulls the bridged AGENTS.md into Goose's prompt via @AGENTS.md
-        # (Goose's default CONTEXT_FILE_NAMES is ['.goosehints', 'AGENTS.md']).
+        # G5 fix (2026-08-15): no @AGENTS.md import needed — Goose's default
+        # CONTEXT_FILE_NAMES (['AGENTS.md', '.goosehints']) already reads both
+        # files natively; the explicit import was redundant (plausible double-load).
         goosehints = _wrap_fence(
             "goose-bridge-hints",
-            "@AGENTS.md\n\n"
             f"This project bridges the `{source_framework}` agent team; source files are canonical.\n",
         )
         return [
@@ -750,7 +750,7 @@ def _render_target_files(
             "---\n"
             "name: Bridge Orchestrator\n"
             "description: \"Bridge entrypoint into source framework agent team\"\n"
-            "user-invokable: true\n"
+            "user-invocable: true\n"
             "tools: ['read', 'search']\n"
             "model: [\"Claude Sonnet 4.6 (copilot)\"]\n"
             "---\n\n"

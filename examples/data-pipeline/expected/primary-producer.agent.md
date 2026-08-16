@@ -1,7 +1,7 @@
 ---
 name: Primary Producer — SalesDataPipeline
 description: "Drafts and revises deliverables in SalesDataPipeline from Component Briefs provided by workstream expert agents"
-user-invokable: false
+user-invocable: false
 tools: ['read', 'edit', 'search']
 agents: ['cohesion-repairer', 'quality-auditor', 'conflict-auditor']
 model: ["Claude Sonnet 4.6 (copilot)"]

@@ -1,6 +1,9 @@
 ---
 name: Team Builder CLI — Agent Teams Module
 description: "Constructs a complete agent team via Copilot CLI by guiding an interactive intake session and invoking build_team.py"
+user-invocable: true
+tools: ['read', 'edit', 'search', 'execute', 'todo']
+model: ["Claude Sonnet 4.6 (copilot)"]
 ---
 
 # Team Builder — Agent Teams Module (Copilot CLI)

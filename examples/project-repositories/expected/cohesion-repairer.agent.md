@@ -1,7 +1,7 @@
 ---
 name: Cohesion Repairer — ProjectRepositories
 description: "Repairs within-section cohesion failures in ProjectRepositories deliverables — disjointedness, broken transitions, and missing argumentative spine; does not reorganize across sections"
-user-invokable: false
+user-invocable: false
 tools: ['read', 'edit']
 agents: ['quality-auditor']
 model: ["Claude Sonnet 4.6 (copilot)"]

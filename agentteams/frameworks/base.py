@@ -167,7 +167,7 @@ class FrameworkAdapter(ABC):
         filter surfaced the real disagreement — the three frameworks emit three genuinely
         different headers:
 
-            copilot-vscode   name, description, user-invokable, tools, model
+            copilot-vscode   name, description, user-invocable, tools, model
             claude           name, description, allowed-tools
             copilot-cli      no front matter at all
 

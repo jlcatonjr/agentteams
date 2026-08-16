@@ -120,10 +120,15 @@ def test_the_per_file_checks_actually_run_on_a_dot_md_framework(audits) -> None:
     code, assert the per-file checks reach a comparable number of files on both.
     """
     from agentteams import audit as audit_mod
+    from agentteams.frameworks.registry import FRAMEWORKS as _ADAPTERS
 
     for framework in FRAMEWORKS:
         result, names = audits[framework]
-        ext = ".agent.md" if framework == "copilot-vscode" else ".md"
+        # Derived from the real adapter, not a hardcoded per-framework ternary — P1
+        # (2026-08-15) converged copilot-cli onto copilot-vscode's `.agent.md` extension,
+        # and a hardcoded assumption here would have gone stale exactly the way this test's
+        # own docstring warns against.
+        ext = _ADAPTERS[framework]().get_file_extension("agent")
         agent_files = [
             n for n in names if n.endswith(ext) and n != "SETUP-REQUIRED.md"
         ]

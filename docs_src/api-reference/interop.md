@@ -37,7 +37,7 @@ Best-effort framework detection from directory shape and file signatures. Checks
 3. `goose` — `.goose` appears among the path parts (a Goose-native `.goose/recipes` source team).
 4. `agents-md` — `.agents` appears among the path parts (an `.agents/<name>.md` source team).
 5. `copilot-cli` — both `.github` and `copilot` appear among the path parts.
-6. Otherwise, falls back to scanning `*.md` files directly under `source_dir`: `copilot-vscode` if any file's name ends `.agent.md` or its front matter has `user-invokable:`/`handoffs:`; `claude` if any file's front matter has `allowed-tools:` or a bracket-free `tools:` scalar; `copilot-cli` if none of the above match.
+6. Otherwise, falls back to scanning `*.md` files directly under `source_dir`: `copilot-vscode` if any file's name ends `.agent.md` or its front matter has `user-invocable:`/`handoffs:`; `claude` if any file's front matter has `allowed-tools:` or a bracket-free `tools:` scalar; `copilot-cli` if none of the above match.
 
 Pass `--interop-source-framework` to override detection when the heuristics guess wrong.
 

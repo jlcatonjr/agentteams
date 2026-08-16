@@ -28,7 +28,7 @@ from agentteams.interop import export_to_cai, import_from_cai
 
 def test_raw_front_matter_captures_unmodeled_keys(tmp_path: Path):
     """Front-matter keys not in {name, description, handoffs} are captured
-    into raw_front_matter — specifically user-invokable, model, and agents:
+    into raw_front_matter — specifically user-invocable, model, and agents:
     for copilot-vscode."""
     source = Path(".github/agents")
     if not any(source.glob("*.agent.md")):
@@ -36,8 +36,8 @@ def test_raw_front_matter_captures_unmodeled_keys(tmp_path: Path):
     cai = export_to_cai(source, "copilot-vscode")
     orch = [a for a in cai["agents"] if a["slug"] == "orchestrator"][0]
     rfm = orch.get("raw_front_matter", {})
-    assert "user-invokable" in rfm, f"user-invokable missing from raw_front_matter: {rfm}"
-    assert rfm["user-invokable"] is True or rfm["user-invokable"] == "true"
+    assert "user-invocable" in rfm, f"user-invocable missing from raw_front_matter: {rfm}"
+    assert rfm["user-invocable"] is True or rfm["user-invocable"] == "true"
     assert "model" in rfm, f"model missing from raw_front_matter: {rfm}"
     assert "agents" in rfm, f"agents roster missing from raw_front_matter: {rfm}"
 
@@ -53,7 +53,7 @@ def test_raw_front_matter_survives_canonical_round_trip(tmp_path: Path):
     loaded = load_canonical(canon)
     orch = [a for a in loaded["agents"] if a["slug"] == "orchestrator"][0]
     rfm = orch.get("raw_front_matter", {})
-    assert "user-invokable" in rfm
+    assert "user-invocable" in rfm
     assert "model" in rfm
     assert "agents" in rfm
 

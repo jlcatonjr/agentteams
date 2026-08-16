@@ -5,10 +5,20 @@ Agent files:  .agents/<slug>.md         (plain Markdown, per-specialist detail �
               Codex has no user-authored persona-file format analogous to
               .claude/agents/*.md or .github/agents/*.agent.md; AGENTS.md content
               is the primary user-facing lever)
-Instructions: AGENTS.md (repo root) — Codex loads global instructions from
-              ~/.codex/AGENTS.md (or AGENTS.override.md), then walks APPLICABLE
-              PROJECT AND NESTED-DIRECTORY AGENTS.md files toward the working
-              directory. The team file therefore belongs at the project root;
+Instructions: AGENTS.md (repo root) — Codex's real discovery order (X1,
+              verified 2026-08-15, references/codex-agent-infrastructure-expert.md):
+              global tier checks ~/.codex/AGENTS.override.md first, then
+              ~/.codex/AGENTS.md (first non-empty file only, not a merge of
+              both). Project tier walks from the git root DOWN toward the
+              working directory; at EACH level it checks, in order,
+              AGENTS.override.md -> AGENTS.md -> project_doc_fallback_filenames
+              (e.g. CLAUDE.md) — again first-match, not merged, at that level.
+              Files from different levels then merge root-downward, with a
+              closer (deeper) file's content overriding on conflict. The
+              combined result is capped at 32 KiB (project_doc_max_bytes) —
+              docs advise raising the limit or splitting content across
+              nested-directory files if a team's brief+roster grows past it.
+              The team file therefore belongs at the project root;
               nested-directory AGENTS.md files are subdirectory-scoped refinements
               that Codex layers on top when working below the root — operator
               concerns the team pipeline does not emit (documented, not built).

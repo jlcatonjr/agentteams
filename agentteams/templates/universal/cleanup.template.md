@@ -1,7 +1,7 @@
 ---
 name: Cleanup — {PROJECT_NAME}
 description: "Removes stale drafts, build artifacts, and orphaned files from {PROJECT_NAME} with mandatory safety checks"
-user-invokable: false
+user-invocable: false
 tools: ['edit', 'search', 'execute']
 model: ["Claude Sonnet 4.6 (copilot)"]
 handoffs:

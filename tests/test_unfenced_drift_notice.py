@@ -115,9 +115,9 @@ def test_a_file_with_no_front_matter_reports_nothing():
 # --- the parser ------------------------------------------------------------
 
 def test_front_matter_keys_reads_flat_scalars_and_inline_lists():
-    keys = _front_matter_keys(_doc("['read', 'search']", extra="user-invokable: false\n"))
+    keys = _front_matter_keys(_doc("['read', 'search']", extra="user-invocable: false\n"))
     assert keys["tools"] == "['read', 'search']"
-    assert keys["user-invokable"] == "false"
+    assert keys["user-invocable"] == "false"
     assert keys["model"] == '["m"]'
 
 

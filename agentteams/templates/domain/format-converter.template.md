@@ -1,7 +1,7 @@
 ---
 name: Format Converter — {PROJECT_NAME}
 description: "Converts deliverables from their source format to {OUTPUT_FORMAT} for final output in {PROJECT_NAME}"
-user-invokable: false
+user-invocable: false
 tools: ['read', 'edit', 'execute']
 agents: ['output-compiler', 'quality-auditor']
 model: ["Claude Sonnet 4.6 (copilot)"]

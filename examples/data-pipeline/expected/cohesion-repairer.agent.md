@@ -1,7 +1,7 @@
 ---
 name: Cohesion Repairer — SalesDataPipeline
 description: "Repairs within-section cohesion failures in SalesDataPipeline deliverables — disjointedness, broken transitions, and missing argumentative spine; does not reorganize across sections"
-user-invokable: false
+user-invocable: false
 tools: ['read', 'edit']
 agents: ['quality-auditor']
 model: ["Claude Sonnet 4.6 (copilot)"]

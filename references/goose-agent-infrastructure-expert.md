@@ -47,14 +47,16 @@ repo moved `block/goose` → `aaif-goose/goose`; docs moved to goose-docs.ai.
 | ID | Delta | Verification | Disposition |
 |----|-------|--------------|-------------|
 | G1 | Docs/repo home moved to AAIF; no dead URLs found in `agentteams/` (adapter header already says "Block / AAIF"), but `references/agent-provider-docs.reference.md` carried a dead block.github.io row. | **re-verified** locally | Tranche 1 — register row updated 2026-08-15 |
-| G2 | `.goose/recipes/` is not a documented discovery location; invocation needs an explicit path or `GOOSE_RECIPE_PATH`. | researcher-claimed | Tranche 2 — document/emit `GOOSE_RECIPE_PATH` guidance; consider `goose recipe validate` in CI |
-| G3 | We emit no `prompt:` — recipes can't run headless (`goose run --recipe` non-interactive requires it). | researcher-claimed | Tranche 2 |
+| G2 | `.goose/recipes/` is not a documented discovery location; invocation needs an explicit path or `GOOSE_RECIPE_PATH`. | researcher-claimed | **Closed 2026-08-15** — discovery order documented above (line 31) and in `agentteams/templates/AUTHORING-GUIDE.md`'s goose section; `goose recipe validate` in CI remains a separate, unscheduled idea |
+| G3 | ~~We emit no `prompt:` — recipes can't run headless.~~ **Already shipped, table was stale.** Re-verified 2026-08-15 directly against `agentteams/frameworks/goose.py::_emit_recipe`'s `prompt` parameter (W6) and a live `.goose/recipes/orchestrator.yaml`: every orchestrator recipe carries `prompt: "State your role...."` (`_ORCHESTRATOR_PROBE_PROMPT`), and non-orchestrator agents get one via `_task_prompt`. No code change was needed this pass. | **re-verified** (direct fetch + live file, 2026-08-15) | Closed — was already implemented |
 | G4 | Unexploited optional schema surface: sub_recipes `values`/`sequential_when_repeated`/`description`; `retry`; `response.json_schema`; `parameters`; `settings.max_turns`. Optional features, not conformance gaps. | researcher-claimed | Recorded only |
-| G5 | Goose natively reads AGENTS.md (default CONTEXT_FILE_NAMES) → our `.goosehints` `@AGENTS.md` import is redundant; double-loading is plausible but not documented. | **re-verified** (default quoted 2026-08-15) | Tranche 2 — emit `.goosehints` only for Goose-specific extras |
+| G5 | ~~Goose natively reads AGENTS.md (default CONTEXT_FILE_NAMES) → our `.goosehints` `@AGENTS.md` import is redundant.~~ **Closed 2026-08-15.** Removed the leading `@AGENTS.md` line from both `goose_docs.py::_goosehints_content` and `bridge.py`'s bridge-entry `.goosehints` generator (the plan's audit found two independent generators carrying the same redundancy, not one). | **re-verified** (default quoted 2026-08-15) | Closed — see `references/agentteams-remediation-log.csv` |
 
 ## Integration Checklist
 
 1. Keep the one-layer sub_recipes cap (now platform-confirmed).
-2. Tranche 2: add `prompt:` emission for headless support; de-duplicate
-   `.goosehints` vs native AGENTS.md; document recipe discovery.
+2. ~~Tranche 2: add `prompt:` emission for headless support; de-duplicate
+   `.goosehints` vs native AGENTS.md; document recipe discovery.~~ **Done
+   2026-08-15** — `prompt:` was already shipped (G3); `.goosehints`
+   de-duplicated (G5); discovery documented (G2).
 3. Point all references at goose-docs.ai URLs.

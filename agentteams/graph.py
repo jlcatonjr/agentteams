@@ -479,7 +479,7 @@ def build_graph(
     """Infer the directed agent team graph from rendered file content.
 
     Parses YAML front matter in every ``.agent.md`` file to extract:
-    - Node metadata (name, type, user-invokable, tools)
+    - Node metadata (name, type, user-invocable, tools)
     - Directed edges from ``handoffs:`` declarations (source → target)
     - Directed edges from ``agents:`` list entries (source → target)
 

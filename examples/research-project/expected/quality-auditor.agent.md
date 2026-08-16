@@ -1,7 +1,7 @@
 ---
 name: Quality Auditor — ResearchPaperProject
 description: "Read-only audit agent that inspects deliverables in ResearchPaperProject for structural defects, logical inconsistencies, and LLM-generated prose patterns; does not rewrite"
-user-invokable: false
+user-invocable: false
 tools: ['read', 'search']
 agents: ['primary-producer', 'cohesion-repairer', 'style-guardian']
 model: ["Claude Sonnet 4.6 (copilot)"]

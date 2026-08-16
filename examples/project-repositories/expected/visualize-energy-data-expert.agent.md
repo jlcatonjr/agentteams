@@ -1,7 +1,7 @@
 ---
 name: "Visualize Energy Data Expert — ProjectRepositories"
 description: "Component expert for Visualize Energy Data in ProjectRepositories — prepares Component Briefs, reviews drafts against brief checklist, approves deliverables"
-user-invokable: false
+user-invocable: false
 tools: ['read', 'search', 'agent']
 agents: ['primary-producer', 'adversarial', 'reference-manager']
 model: ["Claude Sonnet 4.6 (copilot)"]

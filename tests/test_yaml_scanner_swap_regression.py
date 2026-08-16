@@ -45,7 +45,7 @@ _BLOCK_SCALAR_WITH_DASHES = (
     "tools:\n"
     "  - read\n"
     "  - search\n"
-    "user-invokable: false\n"
+    "user-invocable: false\n"
     "---\n"
     "# Demo Agent\n\nBody text.\n"
 )
@@ -69,7 +69,7 @@ class TestBridgeSourcesBlockStyleRegression:
     def test_scalar_semantics_unchanged(self):
         meta, _ = _bridge_parse_front_matter(_BLOCK_SCALAR_WITH_DASHES)
         assert meta["name"] == "Demo Agent — Demo"
-        assert meta["user-invokable"] is False  # 'false' -> bool
+        assert meta["user-invocable"] is False  # 'false' -> bool
 
     def test_flow_list_stays_a_string(self):
         # Inline (copilot-vscode style) lists are scalars for this parser —
