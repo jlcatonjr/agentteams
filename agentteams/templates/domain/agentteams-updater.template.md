@@ -1,7 +1,7 @@
 ---
 name: AgentTeams Updater — {PROJECT_NAME}
 description: "Proposes — never applies — updates to deployed agentteams instances for {PROJECT_NAME}, covering the judgment cases the deterministic merge deliberately refuses"
-user-invokable: true
+user-invocable: true
 tools: ['read', 'search']
 model: ["Claude Sonnet 4.6 (copilot)"]
 handoffs:

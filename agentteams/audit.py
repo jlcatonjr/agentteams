@@ -43,7 +43,7 @@ from agentteams.backup import BACKUP_DIR_NAME as _BACKUP_DIR_NAME
 # ---------------------------------------------------------------------------
 
 #: Required YAML front matter keys for every agent file
-_REQUIRED_YAML_KEYS: tuple[str, ...] = ("name", "description", "user-invokable", "tools", "model")
+_REQUIRED_YAML_KEYS: tuple[str, ...] = ("name", "description", "user-invocable", "tools", "model")
 
 #: Agents that must be present in every generated team
 _REQUIRED_AGENTS: frozenset[str] = frozenset({

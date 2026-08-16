@@ -1,0 +1,267 @@
+{
+  "schema_version": "1.0",
+  "generated_at": "2026-08-16T01:00:19.217082+00:00",
+  "source_framework": "copilot-vscode",
+  "target_framework": "agents-md",
+  "source_dir": ".github/agents",
+  "source_hashes": [
+    {
+      "path": "agents/adversarial.agent.md",
+      "sha256": "4d6a884cceed65b3c41e3a14ba788a88e75d9932820093a2d352ddd3aa574833"
+    },
+    {
+      "path": "agents/adversarial.md",
+      "sha256": "0174b275c5fb7b2dbc145fc0642baa294e9ab396ea468b1979aaa9ebafe9bb74"
+    },
+    {
+      "path": "agents/agent-refactor.agent.md",
+      "sha256": "68b1b694ddf15fbf2f6ea43af367ff31fe1748f9180699de94ecdbf37833dde3"
+    },
+    {
+      "path": "agents/agent-refactor.md",
+      "sha256": "8de65e6cb5749178bb467e0e1b00e9d4e8fbdc4bb33300833ef4edba44371cf3"
+    },
+    {
+      "path": "agents/agent-updater.agent.md",
+      "sha256": "8603865a50980c68ef314526a6631ae0bfb8856115e8071ce70dd179847f1679"
+    },
+    {
+      "path": "agents/agent-updater.md",
+      "sha256": "0cea081789d6a1204ec58a700b9b85698726d3943d6e7f2cae777396e4ef8518"
+    },
+    {
+      "path": "agents/api-conformity-tracker.agent.md",
+      "sha256": "ad5a193bd95373ceef3c8c65bbc2bab6d6f4713ff1e47f30454dac6400759ccc"
+    },
+    {
+      "path": "agents/cleanup.agent.md",
+      "sha256": "b03530468357fba75f118fa857a0b855ceaced95dc621dfef80810acb625bdb7"
+    },
+    {
+      "path": "agents/cleanup.md",
+      "sha256": "1fff32cc9ea7eb721d23dd4b0ef328c27ddfeb1b549fe81ad3f2b928b4e3878f"
+    },
+    {
+      "path": "agents/cli-and-examples-expert.agent.md",
+      "sha256": "00144a451c4b3f23b159d471475bab5016df3f21937d48c13d2d78e21f6239f6"
+    },
+    {
+      "path": "agents/cli-and-examples-expert.md",
+      "sha256": "db0cc132e2d8743be75fb0599e5310ef76037b524c51d3c0477a176a57de06ca"
+    },
+    {
+      "path": "agents/code-hygiene.agent.md",
+      "sha256": "a0276e2a4117dbe5d138e5b235739fc423d2a1ade3ed3298cbc76c437e40fa53"
+    },
+    {
+      "path": "agents/code-hygiene.md",
+      "sha256": "d6dd1001f71fcdfb01fd31b582b3ef586dc438d9eb2e5850d0113a3ea1186b12"
+    },
+    {
+      "path": "agents/cohesion-repairer.agent.md",
+      "sha256": "f326f26f2487efdfd5088da5c78331129b857efd65667362fe50f78df2e64e5d"
+    },
+    {
+      "path": "agents/cohesion-repairer.md",
+      "sha256": "68fc4405fe0ff312e49da97e0fd273cca3513d34da9452464a61e49037759d31"
+    },
+    {
+      "path": "agents/conflict-auditor.agent.md",
+      "sha256": "1166fbda5d1f7cbb7bd6afcd8c4670349aa3a978c511b8d96c6f5b630a634d23"
+    },
+    {
+      "path": "agents/conflict-auditor.md",
+      "sha256": "70a4aced608f4235118f48c2ebef62db0cd49129414139849642232f44ce731a"
+    },
+    {
+      "path": "agents/conflict-resolution.agent.md",
+      "sha256": "e0eecd5bc356a6ce951216030ef895d480e5543fe3100d2fbc87488c9a747d12"
+    },
+    {
+      "path": "agents/conflict-resolution.md",
+      "sha256": "e5c5a9835aef24538ac7bf235cbd20643bb70097c2f3c7baee7fbe277261b38e"
+    },
+    {
+      "path": "agents/content-enricher.agent.md",
+      "sha256": "96ca2082ed1dc2472ac28077b534ac81bc8e5788494dd2b4c944a8bb16ba7e7c"
+    },
+    {
+      "path": "agents/content-enricher.md",
+      "sha256": "a34705e1ab92d5b389c1d3b57a81bf254e1ebaee72c09e7ed50617b321610a86"
+    },
+    {
+      "path": "agents/format-converter.agent.md",
+      "sha256": "a2a5ffde205e6d849515b5e180db2181c38a844f1d786cb48e2cf2416bf9a6f4"
+    },
+    {
+      "path": "agents/format-converter.md",
+      "sha256": "b25cfc037b76acb56e3df06311515fdc5617a1104e70ff0e4dfbb7d094a0c3a8"
+    },
+    {
+      "path": "agents/framework-adapters-expert.agent.md",
+      "sha256": "fd19dad86fd1e395f264ac7c7d6d8049503a61bfbaba34d2687b177294cbc4db"
+    },
+    {
+      "path": "agents/framework-adapters-expert.md",
+      "sha256": "92bae9944dac8479d750c09d30f502ead39eabdbfcb7fd22876accc8ed1c5d2c"
+    },
+    {
+      "path": "agents/git-operations.agent.md",
+      "sha256": "2822b6b226d20928d4a94010f5a1720f4eb66f79978ebc707545ecfe17dae6ea"
+    },
+    {
+      "path": "agents/git-operations.md",
+      "sha256": "0f0ce27cff15025eb7da9742cd4a1889f5c21777b670da2580e3e1029df80c83"
+    },
+    {
+      "path": "agents/navigator.agent.md",
+      "sha256": "7d1e93b6eb51a2cbbdac16c337a802157cbc7b2908cce0825562b589bab4ba32"
+    },
+    {
+      "path": "agents/navigator.md",
+      "sha256": "327233e1ad28ab35bcf13aeaa3abc5651c4872dd784aeb73f2915337ab5e58dd"
+    },
+    {
+      "path": "agents/orchestrator.agent.md",
+      "sha256": "7f10050ba39908baa483a86727354061ffecd7b1cc4a5b3194cf737a00a2bd3a"
+    },
+    {
+      "path": "agents/orchestrator.md",
+      "sha256": "2066b03e88f02452144a3502cf2eecb689f2910b32212f6fb3b1c76eade5a0a6"
+    },
+    {
+      "path": "agents/output-compiler.agent.md",
+      "sha256": "2937e233b0775d64228f5d3bf4b7ae6c1332c5b8dd771c920be8267c786bbf30"
+    },
+    {
+      "path": "agents/output-compiler.md",
+      "sha256": "3b5a22ead4d9c15df40aabb125fc0ce600e20191478675fc530d2c7292416778"
+    },
+    {
+      "path": "agents/pipeline-core-expert.agent.md",
+      "sha256": "08317772bb58440d03089b1de9bfa73bd8457d89cb6ce1def0cceafe5061329e"
+    },
+    {
+      "path": "agents/pipeline-core-expert.md",
+      "sha256": "8df3d6c81c3cbc94cb42c6699a0d9981d636743ba0101f2fe538abad5f569096"
+    },
+    {
+      "path": "agents/pr-manager.agent.md",
+      "sha256": "e9f4aa464230c102398cb29550b57b346cc4183147f205892d91fec1f60c272a"
+    },
+    {
+      "path": "agents/pr-notifier.agent.md",
+      "sha256": "d51a920abe55bb3250d75e87bd39df782ee40cea67c3308091561d5ce2372325"
+    },
+    {
+      "path": "agents/pr-reminder.agent.md",
+      "sha256": "a10bf82a2802dac1875f4301bb12b188761cc072ffa8d00f2169ba137bc7011e"
+    },
+    {
+      "path": "agents/primary-producer.agent.md",
+      "sha256": "873a2fbe9e82fc6a3268ca098fc7386f32c68a06ca79d52087b3a07520d73c30"
+    },
+    {
+      "path": "agents/primary-producer.md",
+      "sha256": "e1ba94c8bfa434470c4d39c1b4952ef69c6576a7fa7eb39918ef5bca9880292f"
+    },
+    {
+      "path": "agents/quality-auditor.agent.md",
+      "sha256": "76352da6455806bfd80f655c1c562e9d5d689c7e7f92999ff77eba7cdc9c6ef1"
+    },
+    {
+      "path": "agents/quality-auditor.md",
+      "sha256": "e74365bb931c8047810751c3a9b54ff508150af69f2a02b1d216251f4b9d67e7"
+    },
+    {
+      "path": "agents/reference-manager.agent.md",
+      "sha256": "ceee5fbef5caeca114d3558befe9231dd51ce568c15954625fc8802507b8b7da"
+    },
+    {
+      "path": "agents/reference-manager.md",
+      "sha256": "97db1d8490c889eeee79fcf7b90851e5d94c2c1aa315d07d6690bf04f0dc4611"
+    },
+    {
+      "path": "agents/repo-liaison.agent.md",
+      "sha256": "0b843decec359ebd26daf0b22c0adc3d230d67e8cc9b26ede309f5225748981d"
+    },
+    {
+      "path": "agents/repo-liaison.md",
+      "sha256": "70ab475064bd70af144a2a89427422b27c18bb7e3cf8de873657b43247644a46"
+    },
+    {
+      "path": "agents/retrieval-integrator.agent.md",
+      "sha256": "8ae34f8fb6b507c218a1956ee0f12e493ae9b679f58f83ab05805369a08eec5d"
+    },
+    {
+      "path": "agents/retrieval-integrator.md",
+      "sha256": "92572f1557e1e120ed11c480fd4fd6a66069d6108c552f0b66330056c62a4ebb"
+    },
+    {
+      "path": "agents/schemas-expert.agent.md",
+      "sha256": "79eb70dfefcff3471f92d37242583b89405079c0713bd2ded4bc7223f206bfd3"
+    },
+    {
+      "path": "agents/schemas-expert.md",
+      "sha256": "815edb48d6a85094beac10f524347b1f451d4a0af9baa343c409e6aeb5374835"
+    },
+    {
+      "path": "agents/security.agent.md",
+      "sha256": "2737261f3ee84dc37a042714b3262328351cc6b4c1aa56f210fa70917c81df11"
+    },
+    {
+      "path": "agents/security.md",
+      "sha256": "0bf3ca65243068ae646fa660551b910a4b356c7e6525ee70f73e4c27f363c3d0"
+    },
+    {
+      "path": "agents/team-builder.agent.md",
+      "sha256": "2f55769179a86e690e911412ff9cd8867ded06c4a85aea36c6ddaece72bb36a4"
+    },
+    {
+      "path": "agents/team-builder.md",
+      "sha256": "3dcd8502318653c771ce26616829b80754c7a8c552df0bff454dde7a5e8229f9"
+    },
+    {
+      "path": "agents/technical-validator.agent.md",
+      "sha256": "cd4bf2f3ff09d5a4c17d2a5056d16ded45e3636126fdadcd67d96df78586780a"
+    },
+    {
+      "path": "agents/technical-validator.md",
+      "sha256": "66237e5729f306cf3b8a3fa32bb5f8f99ae6270f37e642039b0168d9ee7b1ea0"
+    },
+    {
+      "path": "agents/template-library-expert.agent.md",
+      "sha256": "7822ca3167f228644ef257302a8b9e7468f2a958329e8d7738a8cd48b32acd42"
+    },
+    {
+      "path": "agents/template-library-expert.md",
+      "sha256": "4d8bab1b1506080a3253ff9680fd68dec1bd7f65abb1a2cc045f26d4cd472042"
+    },
+    {
+      "path": "agents/test-suite-expert.agent.md",
+      "sha256": "1560d5019cd5be547f3f4b0d3c1f6f611f259c511b7415b693af426b0910d6c4"
+    },
+    {
+      "path": "agents/test-suite-expert.md",
+      "sha256": "c19ac390b0683a30adbaa14251685a3e35c085a3803e2e5fe3bdd6201790d311"
+    },
+    {
+      "path": "agents/tool-doc-researcher.agent.md",
+      "sha256": "2d81f4911dbfde3265b2be69be799493c293d59925d6a773b38338a9d7c9a040"
+    },
+    {
+      "path": "agents/work-summarizer.agent.md",
+      "sha256": "40068d99ca0aff8318d4c88ae6d510c37fbaeab6437c2d42cbad9b56f701022a"
+    },
+    {
+      "path": "agents/work-summarizer.md",
+      "sha256": "d4f045ad7aadc855b58ad6e9ab44c03593914dc987bac6083aa1462a20c61cc7"
+    },
+    {
+      "path": "copilot-instructions.md",
+      "sha256": "28d34b28988b7d4a05b1327ba3ce3ea0e96626b72dac26e8702fb62f8bd54e67"
+    }
+  ],
+  "inventory_count": 34,
+  "bridge_version": "1"
+}

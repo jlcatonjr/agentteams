@@ -1,7 +1,7 @@
 ---
 name: Technical Validator — SalesDataPipeline
 description: "Read-only audit agent that verifies technical accuracy in SalesDataPipeline — code examples, file excerpts, API references, and tool invocations match what exists on disk"
-user-invokable: false
+user-invocable: false
 tools: ['read', 'search']
 agents: ['primary-producer', 'conflict-auditor']
 model: ["Claude Sonnet 4.6 (copilot)"]

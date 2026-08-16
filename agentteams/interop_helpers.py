@@ -115,11 +115,11 @@ def capture_references(source_dir: Path) -> list[dict[str, Any]]:
 def serialize_raw_fm_key(key: str, value: Any) -> str:
     """Serialize a raw_front_matter key-value pair into a YAML header line.
 
-    A.2: Restores captured escape-hatch front-matter keys (user-invokable,
+    A.2: Restores captured escape-hatch front-matter keys (user-invocable,
     model, agents:, etc.) back into the import-side YAML header so framework
     adapters like _ensure_yaml_front_matter don't overwrite them with defaults.
 
-    Handles scalars (``user-invokable: true``), flow lists
+    Handles scalars (``user-invocable: true``), flow lists
     (``model: ["Claude Sonnet 4.6 (copilot)"]``), and block lists
     (``agents:\\n  - slug1\\n  - slug2``).
     """

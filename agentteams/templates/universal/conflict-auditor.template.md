@@ -1,7 +1,7 @@
 ---
 name: Conflict Auditor — {PROJECT_NAME}
 description: "Detects logical conflicts across deliverables, agent documentation, reference files, and source material in {PROJECT_NAME}"
-user-invokable: false
+user-invocable: false
 tools: ['read', 'search']
 agents: ['conflict-resolution', 'agent-updater', 'technical-validator']
 model: ["Claude Sonnet 4.6 (copilot)"]

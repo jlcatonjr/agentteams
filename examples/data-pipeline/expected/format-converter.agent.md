@@ -1,7 +1,7 @@
 ---
 name: Format Converter — SalesDataPipeline
 description: "Converts deliverables from their source format to Python 3.11 modules and PDF reports for final output in SalesDataPipeline"
-user-invokable: false
+user-invocable: false
 tools: ['read', 'edit', 'execute']
 agents: ['output-compiler', 'quality-auditor']
 model: ["Claude Sonnet 4.6 (copilot)"]

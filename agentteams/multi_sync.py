@@ -111,6 +111,39 @@ def framework_agents_dir(root: Path, framework: str) -> Path:
     return FRAMEWORKS[framework]().get_agents_dir(Path(root))
 
 
+def _reject_directory_collisions(root: Path, frameworks: list[str]) -> None:
+    """Refuse a sync set where two framework ids resolve to one physical directory.
+
+    Harmless while every framework sharing a path renders byte-identical content
+    (codex/agents-md: proven precedent, always identical). It stops being
+    harmless once two frameworks can render DIFFERENT content for the same
+    agent at the same path — copilot-vscode and copilot-cli, since the P1
+    convergence (2026-08-15), share `.github/agents` but copilot-cli strips
+    handoffs that copilot-vscode keeps. `_project_and_rebaseline` writes each
+    framework in turn with no dedup guard, so whichever runs last would
+    silently overwrite the other's legitimately different content — and the
+    victim's own `write_baseline` call would then absorb the winner's output
+    as if it were its own native state. There is no correct merge here (one
+    file cannot be both shapes at once), so this fails fast instead of risking
+    the silent loss. See references/agentteams-remediation-log.csv (P1 row).
+    """
+    by_dir: dict[Path, list[str]] = {}
+    for fw in frameworks:
+        d = framework_agents_dir(root, fw).resolve()
+        by_dir.setdefault(d, []).append(fw)
+    collisions = {d: fws for d, fws in by_dir.items() if len(fws) > 1}
+    if not collisions:
+        return
+    detail = "\n".join(f"  {d}: {', '.join(fws)}" for d, fws in collisions.items())
+    raise ValueError(
+        "cannot sync frameworks that share one physical agents directory — "
+        "their rendered content can genuinely differ, so whichever is "
+        "processed last would silently overwrite the other:\n" + detail +
+        "\nDrop one of each colliding pair from `frameworks`, or sync them "
+        "as separate pinned sets."
+    )
+
+
 # ---------------------------------------------------------------------------
 # git change detection
 # ---------------------------------------------------------------------------
@@ -340,7 +373,9 @@ def sync_init(
         A :class:`SyncResult`.
 
     Raises:
-        ValueError: If ``pin`` is unregistered or absent from ``frameworks``.
+        ValueError: If ``pin`` is unregistered or absent from ``frameworks``,
+            or if two frameworks in ``frameworks`` resolve to the same
+            physical agents directory (see :func:`_reject_directory_collisions`).
     """
     root = Path(root)
     fws = list(frameworks) if frameworks else list(FRAMEWORK_IDS)
@@ -348,6 +383,7 @@ def sync_init(
         raise ValueError(f"pin {pin!r} is not a registered framework")
     if pin not in fws:
         raise ValueError(f"pin {pin!r} must be in the sync set {fws!r}")
+    _reject_directory_collisions(root, fws)
 
     canonical_dir = root / canonical_rel
     pin_dir = framework_agents_dir(root, pin)
@@ -391,7 +427,9 @@ def run_sync(
         ``did_work == False`` and performs no writes.
 
     Raises:
-        ValueError: If the project is not pinned (run :func:`sync_init` first).
+        ValueError: If the project is not pinned (run :func:`sync_init` first),
+            or if two frameworks in the pinned sync set resolve to the same
+            physical agents directory (see :func:`_reject_directory_collisions`).
     """
     root = Path(root)
     pin_doc = read_pin(root)
@@ -400,6 +438,7 @@ def run_sync(
 
     pin = pin_doc["pinned_framework"]
     fws: list[str] = list(pin_doc["frameworks"])
+    _reject_directory_collisions(root, fws)
     canonical_rel = pin_doc.get("canonical_dir", DEFAULT_CANONICAL_REL)
     canonical_dir = root / canonical_rel
     anchor = since if since is not None else pin_doc.get("last_synced_commit", "")

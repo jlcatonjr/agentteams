@@ -304,13 +304,13 @@ class TestClassifierCases:
     def test_case5_raw_front_matter_with_capability_key(self):
         """raw_front_matter containing a capability key (tools) is capability-bearing."""
         canonical_agent = _make_agent(
-            raw_front_matter={"tools": "['read', 'search']", "user-invokable": "true"},
+            raw_front_matter={"tools": "['read', 'search']", "user-invocable": "true"},
         )
         native_agent = _make_agent(
-            raw_front_matter={"tools": "['read', 'search', 'edit']", "user-invokable": "true"},
+            raw_front_matter={"tools": "['read', 'search', 'edit']", "user-invocable": "true"},
         )
         baseline_agent = _make_agent(
-            raw_front_matter={"tools": "['read', 'search']", "user-invokable": "true"},
+            raw_front_matter={"tools": "['read', 'search']", "user-invocable": "true"},
         )
         baseline = {"agents": [baseline_agent]}
 
@@ -373,14 +373,14 @@ class TestClassifierCases:
         the field is treated as capability-bearing.
         """
         canonical_agent = _make_agent(
-            raw_front_matter={"tools": "['read', 'search', 'edit']", "user-invokable": "true"},
+            raw_front_matter={"tools": "['read', 'search', 'edit']", "user-invocable": "true"},
         )
         # Native DROPPED the tools key — only metadata remains
         native_agent = _make_agent(
-            raw_front_matter={"user-invokable": "false"},
+            raw_front_matter={"user-invocable": "false"},
         )
         baseline_agent = _make_agent(
-            raw_front_matter={"tools": "['read', 'search', 'edit']", "user-invokable": "true"},
+            raw_front_matter={"tools": "['read', 'search', 'edit']", "user-invocable": "true"},
         )
         baseline = {"agents": [baseline_agent]}
 
@@ -410,13 +410,13 @@ class TestClassifierCases:
         capability-bearing because the baseline says so.
         """
         canonical_agent = _make_agent(
-            raw_front_matter={"user-invokable": "false"},
+            raw_front_matter={"user-invocable": "false"},
         )
         native_agent = _make_agent(
-            raw_front_matter={"user-invokable": "true"},
+            raw_front_matter={"user-invocable": "true"},
         )
         baseline_agent = _make_agent(
-            raw_front_matter={"tools": "['read']", "user-invokable": "false"},
+            raw_front_matter={"tools": "['read']", "user-invocable": "false"},
         )
         baseline = {"agents": [baseline_agent]}
 
@@ -485,10 +485,10 @@ class TestIsCapabilityField:
         ) is True
 
     def test_raw_front_matter_with_user_invokable_is_capability(self):
-        # F.2: user-invokable is a copilot-vscode capability key (controls
+        # F.2: user-invocable is a copilot-vscode capability key (controls
         # agent visibility in VS Code chat UI).  Must route to human review.
         assert is_capability_field(
-            "raw_front_matter", {"user-invokable": "true"}
+            "raw_front_matter", {"user-invocable": "true"}
         ) is True
 
     def test_raw_front_matter_without_capability_keys_is_not(self):

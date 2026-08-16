@@ -1,7 +1,7 @@
 ---
 name: Retrieval Integrator — {PROJECT_NAME}
 description: "Validates retrieval integration contracts in {PROJECT_NAME} — query entrypoints, maintenance entrypoints, trigger channels, and freshness obligations"
-user-invokable: false
+user-invocable: false
 tools: ['read', 'search', 'execute']
 agents: ['technical-validator', 'adversarial', 'conflict-auditor']
 model: ["Claude Sonnet 4.6 (copilot)"]

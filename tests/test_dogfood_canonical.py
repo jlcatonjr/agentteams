@@ -33,7 +33,8 @@ pytestmark = pytest.mark.skipif(
 
 _FRAMEWORK_AGENTS_REL = {
     "copilot-vscode": Path(".github") / "agents",
-    "copilot-cli": Path(".github") / "copilot",
+    # P1 (2026-08-15): converged onto VS Code's path — same physical directory.
+    "copilot-cli": Path(".github") / "agents",
     "claude": Path(".claude") / "agents",
     "goose": Path(".goose") / "recipes",
     "agents-md": Path(".agents"),
@@ -53,7 +54,8 @@ def _tree_bytes(root: Path) -> dict[str, str]:
 
 
 def _agent_ext(framework: str) -> str:
-    if framework == "copilot-vscode":
+    # P1 (2026-08-15): copilot-cli converged onto copilot-vscode's `.agent.md` extension.
+    if framework in ("copilot-vscode", "copilot-cli"):
         return ".agent.md"
     if framework == "goose":
         return ".yaml"

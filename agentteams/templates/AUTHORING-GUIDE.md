@@ -112,7 +112,7 @@ Templates are always authored with VS Code Copilot YAML front matter. Framework 
 ---
 name: Agent Name — {PROJECT_NAME}
 description: "One-sentence description of the agent's role."
-user-invokable: true|false
+user-invocable: true|false
 tools: ['read', 'edit', 'search']     # Use flow sequence — always valid YAML
 agents:{AGENT_SLUG_LIST}               # Block sequence via placeholder — no brackets
 model: ["Claude Sonnet 4.6 (copilot)"]
@@ -124,7 +124,7 @@ handoffs:
 ---
 ```
 
-Required YAML fields for VS Code Copilot: `name`, `description`, `user-invokable`, `tools`, `model`.
+Required YAML fields for VS Code Copilot: `name`, `description`, `user-invocable`, `tools`, `model`.
 
 ### Invariant Core (required — mark with ⛔ stop-sign emoji)
 
@@ -359,6 +359,22 @@ A third check applies specifically to `extra_output_files` generators, and it ha
 
 ---
 
+### `goose` — Recipe YAML, non-discovery-directory output path
+
+Source: [Goose recipe reference](https://goose-docs.ai/docs/guides/recipes/recipe-reference/)
+
+Goose's own recipe discovery order is: current directory → `GOOSE_RECIPE_PATH`
+directories → `GOOSE_RECIPE_GITHUB_REPO`. **`.goose/recipes/` (our adapter's
+output directory) is not itself a documented discovery location** — invoking a
+generated recipe needs either an explicit path (`goose run --recipe
+.goose/recipes/orchestrator.yaml`, what our own `.goosehints` Session Startup
+block instructs) or a `GOOSE_RECIPE_PATH` entry pointing at that directory for
+bare-name invocation (`goose run --recipe orchestrator`). See
+`references/goose-agent-infrastructure-expert.md` (G2) for the full
+verification.
+
+---
+
 ### `copilot-vscode` — `.agent.md` with VS Code YAML front matter
 
 Source: [VS Code Copilot agent customization docs](https://code.visualstudio.com/docs/copilot/copilot-customization#_agent-mode-instructions)
@@ -369,7 +385,7 @@ The adapter (`agentteams/frameworks/copilot_vscode.py`) validates and supplement
 |-------|------|-------|
 | `name` | string | `"Agent Name — {PROJECT_NAME}"` |
 | `description` | string | Quoted, single sentence |
-| `user-invokable` | boolean | `true` for user-facing agents, `false` for governance |
+| `user-invocable` | boolean | `true` for user-facing agents, `false` for governance |
 | `tools` | flow sequence | `['read', 'edit', 'search']` — valid YAML flow sequence |
 | `model` | flow sequence | `["Claude Sonnet 4.6 (copilot)"]` |
 
@@ -381,24 +397,39 @@ If a template has no front matter, or is missing required keys, the adapter inje
 
 ---
 
-### `copilot-cli` — Plain Markdown system prompt
+### `copilot-cli` — `.agent.md` with VS Code YAML front matter, minus handoffs
 
 Source: [Copilot CLI custom agents](https://docs.github.com/en/copilot/how-tos/copilot-cli/customize-copilot/create-custom-agents-for-cli) · [cross-surface configuration reference](https://docs.github.com/en/copilot/reference/custom-agents-configuration)
 
-The adapter (`agentteams/frameworks/copilot_cli.py`) strips all YAML front matter and handoff sections. The output is pure Markdown prose, written to `.github/copilot/<slug>.md`.
+**P1 convergence (2026-08-15):** the modern `copilot` CLI reads the same
+`.github/agents/*.agent.md` surface as VS Code — front matter and all — and does
+not read `.github/copilot/`. `CopilotCLIAdapter.render_agent_file`
+(`agentteams/frameworks/copilot_cli.py`) delegates to `CopilotVSCodeAdapter`
+for that shape, then strips handoffs before returning. Pre-existing
+`.github/copilot/*.md` files from before this convergence are left in place
+as harmless orphans — no auto-deletion.
 
-> ⚠️ **Known upstream divergence (P1, 2026-08-15):** the modern `copilot` CLI reads
-> `.github/agents/*.agent.md` (the same front-matter surface as VS Code) and does
-> not read `.github/copilot/`. Adapter convergence is tracked in
-> `references/copilot-cli-agent-infrastructure-expert.md` and the remediation log.
+`copilot-cli` and `copilot-vscode` therefore share the exact same required
+fields (`name`, `description`, `user-invocable`, `tools`, `model` — see the
+`copilot-vscode` table above) and the same physical output directory
+(`.github/agents`). The only behavioral difference is handoffs:
 
-| What is stripped | What is preserved |
+| What differs from `copilot-vscode` output | Why |
 |-----------------|------------------|
-| All YAML front matter (`---` block) | All prose body sections |
-| `## Handoff …` heading blocks | All non-handoff headings and content |
-| `user-invokable`, `tools`, `model`, `agents` keys | N/A — entire YAML block is removed |
+| `## Handoff …` heading blocks | Stripped — handoffs/argument-hint are documented as unsupported outside the VS Code desktop extension |
+| `handoffs:` front-matter key | Stripped for the same reason |
+| Everything else (`name`, `description`, `user-invocable`, `tools`, `model`, `agents:`, prose body) | Identical to `copilot-vscode`'s output |
 
-No metadata header of any kind is added. The file is the system prompt verbatim.
+`supports_handoffs()` returns `False` and `handoff_delivery_mode()` returns
+`"manifest"` — correctly, since handoffs are genuinely absent from the
+rendered output rather than merely unmarked.
+
+> ⚠️ **Multi-framework sync caution:** because `copilot-vscode` and
+> `copilot-cli` now resolve to the same physical `.github/agents` directory,
+> `agentteams.multi_sync.sync_init`/`run_sync` refuse to include both in one
+> sync set — their content can genuinely differ (handoffs kept vs. stripped),
+> and there is no correct merge for one file being two shapes at once. Use
+> `--frameworks` to name only one of the two when running `--sync-init`.
 
 ---
 
@@ -422,7 +453,7 @@ Claude Code front matter keys written by the adapter:
 | `description` | Extracted from VS Code `description:` key | Omitted if blank |
 | `allowed-tools` | **Mapped** from the VS Code `tools:` list | `read`→`Read`; `search`→`Grep, Glob`; `edit`→`Edit, Write`; `execute`→`Bash`; `todo`→`TodoWrite`; `agent`→`Task`. Falls back to `Bash, Read, Write, Edit` only when the agent declares no `tools:` block. This preserves per-agent least privilege — a read-only governance agent (`tools: ['read', 'search']`) gets `Read, Grep, Glob`, not write/shell. |
 
-VS Code keys **not** passed through verbatim: `user-invokable`, `agents`, `model`, `handoffs`. The `tools:` list is **mapped** to `allowed-tools` (see above), not dropped.
+VS Code keys **not** passed through verbatim: `user-invocable`, `agents`, `model`, `handoffs`. The `tools:` list is **mapped** to `allowed-tools` (see above), not dropped.
 
 Example Claude Code output (for a `navigator` whose VS Code `tools: ['read', 'search', 'execute']`):
 ```yaml
@@ -446,11 +477,10 @@ Before submitting a new template:
 1. Run `python build_team.py --description examples/software-project/brief.json --dry-run` and verify the template is rendered without errors.
 2. Run `python -m pytest tests/test_integration.py -v` and verify all snapshot tests pass. If the template changes output, regenerate snapshots with `--overwrite`.
 3. Check `SETUP-REQUIRED.md` in the output — no `{MANUAL:}` tokens should appear unexpectedly.
-4. **VS Code Copilot only** — Verify YAML front matter is valid:
+4. **VS Code Copilot and copilot-cli** — Verify YAML front matter is valid (same command for both since the P1 convergence, 2026-08-15 — copilot-cli shares copilot-vscode's `.agent.md` shape):
    ```bash
    python -c "import yaml; yaml.safe_load(open('.github/agents/your-agent.agent.md').read().split('---')[1])"
    ```
-   For `copilot-cli` framework output, no YAML front matter is present and this check does not apply.
    For `claude` framework output, YAML front matter is present but uses Claude Code keys (`allowed-tools`) that differ from VS Code format — validate with:
    ```bash
    python -c "import yaml; yaml.safe_load(open('.claude/agents/your-agent.md').read().split('---', 2)[1])"

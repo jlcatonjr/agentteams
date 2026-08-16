@@ -1,7 +1,7 @@
 ---
 name: "Load Module Expert — SalesDataPipeline"
 description: "Component expert for Load Module in SalesDataPipeline — prepares Component Briefs, reviews drafts against brief checklist, approves deliverables"
-user-invokable: false
+user-invocable: false
 tools: ['read', 'search', 'agent']
 agents: ['primary-producer', 'adversarial']
 model: ["Claude Sonnet 4.6 (copilot)"]

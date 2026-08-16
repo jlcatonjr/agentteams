@@ -1,7 +1,7 @@
 ---
 name: Tool Documentation Researcher — {PROJECT_NAME}
 description: "Locates and verifies official documentation, API surfaces, and usage patterns for tools in {PROJECT_NAME} that are missing metadata"
-user-invokable: false
+user-invocable: false
 tools: ['read', 'search', 'retrieval']
 agents: ['adversarial', 'conflict-auditor']
 model: ["Claude Sonnet 4.6 (copilot)"]

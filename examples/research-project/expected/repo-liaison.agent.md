@@ -1,7 +1,7 @@
 ---
 name: Repo Liaison — ResearchPaperProject
 description: "Tracks agent documentation in repositories adjacent to ResearchPaperProject, communicates cross-repository impacts, maintains the adjacent-repos registry, and coordinates between orchestrators when this project's activity affects neighboring agent infrastructures."
-user-invokable: false
+user-invocable: false
 tools: ['read', 'edit', 'search', 'execute', 'agent']
 model: ["Claude Sonnet 4.6 (copilot)"]
 handoffs:

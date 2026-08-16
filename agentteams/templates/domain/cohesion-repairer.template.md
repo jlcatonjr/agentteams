@@ -1,7 +1,7 @@
 ---
 name: Cohesion Repairer — {PROJECT_NAME}
 description: "Repairs within-section cohesion failures in {PROJECT_NAME} deliverables — disjointedness, broken transitions, and missing argumentative spine; does not reorganize across sections"
-user-invokable: false
+user-invocable: false
 tools: ['read', 'edit']
 agents: ['style-guardian', 'quality-auditor']
 model: ["Claude Sonnet 4.6 (copilot)"]

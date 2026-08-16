@@ -1,7 +1,7 @@
 ---
 name: Cohesion Repairer — WebAppBackend
 description: "Repairs within-section cohesion failures in WebAppBackend deliverables — disjointedness, broken transitions, and missing argumentative spine; does not reorganize across sections"
-user-invokable: false
+user-invocable: false
 tools: ['read', 'edit']
 agents: ['quality-auditor']
 model: ["Claude Sonnet 4.6 (copilot)"]

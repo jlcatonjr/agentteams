@@ -1,7 +1,7 @@
 ---
 name: Technical Validator — ProjectRepositories
 description: "Read-only audit agent that verifies technical accuracy in ProjectRepositories — code examples, file excerpts, API references, and tool invocations match what exists on disk"
-user-invokable: false
+user-invocable: false
 tools: ['read', 'search']
 agents: ['primary-producer', 'reference-manager', 'conflict-auditor']
 model: ["Claude Sonnet 4.6 (copilot)"]

@@ -1,7 +1,7 @@
 ---
 name: Code Hygiene — WebAppBackend
 description: "Read-only auditor that enforces modular architecture, file hygiene, script lifecycle, anti-sprawl rules, and agent documentation quality. Delegates removals to @cleanup; delegates structural extraction to @agent-refactor."
-user-invokable: false
+user-invocable: false
 tools: ['read', 'search']
 model: ["Claude Sonnet 4.6 (copilot)"]
 handoffs:

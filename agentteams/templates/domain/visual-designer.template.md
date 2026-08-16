@@ -1,7 +1,7 @@
 ---
 name: Visual Designer — {PROJECT_NAME}
 description: "Creates and revises diagrams and figures for {PROJECT_NAME} using the approved diagram toolchain"
-user-invokable: false
+user-invocable: false
 tools: ['read', 'edit', 'execute', 'search']
 agents: ['format-converter', 'quality-auditor']
 model: ["Claude Sonnet 4.6 (copilot)"]

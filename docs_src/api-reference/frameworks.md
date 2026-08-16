@@ -153,7 +153,7 @@ Project-root-relative prefix of this framework's root dir. **Default implementat
 
 #### `required_front_matter_keys()`
 
-Front-matter keys every agent file of this framework must declare. **Default implementation:** empty tuple — this framework asserts no front-matter contract. Every adapter overrides this explicitly so "examined, and the answer is none" is distinguishable from "not yet examined": `CopilotVSCodeAdapter` → `(name, description, user-invokable, tools, model)`; `ClaudeAdapter` → `(name, description, tools)`; `CopilotCLIAdapter`, `GooseAdapter`, and `AgentsMdAdapter` → `()` (no front matter at all). `CodexAdapter` inherits `AgentsMdAdapter`'s override.
+Front-matter keys every agent file of this framework must declare. **Default implementation:** empty tuple — this framework asserts no front-matter contract. Every adapter overrides this explicitly so "examined, and the answer is none" is distinguishable from "not yet examined": `CopilotVSCodeAdapter` → `(name, description, user-invocable, tools, model)`; `ClaudeAdapter` → `(name, description, tools)`; `CopilotCLIAdapter`, `GooseAdapter`, and `AgentsMdAdapter` → `()` (no front matter at all). `CodexAdapter` inherits `AgentsMdAdapter`'s override.
 
 **Returns:** `tuple[str, ...]`
 

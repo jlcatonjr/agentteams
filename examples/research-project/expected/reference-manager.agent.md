@@ -1,7 +1,7 @@
 ---
 name: Reference Manager — ResearchPaperProject
 description: "Manages the bibliography and reference database for ResearchPaperProject — CRUD operations, citation verification, anti-fabrication enforcement"
-user-invokable: false
+user-invocable: false
 tools: ['read', 'edit', 'search', 'retrieval']
 agents: ['conflict-auditor']
 model: ["Claude Sonnet 4.6 (copilot)"]

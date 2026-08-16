@@ -36,7 +36,7 @@ _VALID_AGENT_CONTENT = """\
 ---
 name: Orchestrator — TestProject
 description: "Coordinates all agents."
-user-invokable: false
+user-invocable: false
 tools: ['read', 'edit']
 model: ["Claude Sonnet 4.6 (copilot)"]
 ---
@@ -426,7 +426,7 @@ _AGENT_WITH_INVARIANT = """\
 ---
 name: Auditor — TestProject
 description: "Does things."
-user-invokable: false
+user-invocable: false
 tools: ['read']
 model: ["Claude Sonnet 4.6 (copilot)"]
 ---
@@ -472,7 +472,7 @@ _AGENT_WITH_RETURN_HANDOFF = """\
 ---
 name: Navigator — TestProject
 description: "Routes things."
-user-invokable: false
+user-invocable: false
 tools: ['read']
 model: ["Claude Sonnet 4.6 (copilot)"]
 handoffs:
@@ -514,6 +514,90 @@ def test_return_handoff_skips_reference_files():
 
 
 # ---------------------------------------------------------------------------
+# P1 convergence (2026-08-15): copilot-cli now renders the same .agent.md
+# shape as copilot-vscode, so audit.py's caller passes
+# supports_handoffs=_adapter.supports_handoffs() from the real registry
+# (agentteams/audit.py:181). The risk the original "wholesale delegation"
+# design would have shipped: CopilotCLIAdapter.render_agent_file keeps
+# handoffs (like copilot-vscode's) while supports_handoffs() stayed False,
+# so this check would report zero findings on files that genuinely needed
+# it — blind exactly when it should start mattering. These tests render
+# through the REAL adapters (not hand-typed fixtures) to prove the check's
+# zero-findings verdict for copilot-cli reflects content that's genuinely
+# handoff-free, not a flag silencing a check that would otherwise fire.
+# ---------------------------------------------------------------------------
+
+_SOURCE_WITH_RETURN_HANDOFF = """\
+---
+name: Navigator — TestProject
+description: "Routes things."
+user-invocable: false
+tools: ['read']
+model: ["Claude Sonnet 4.6 (copilot)"]
+handoffs:
+  - label: Return to Orchestrator
+    agent: orchestrator
+    prompt: "Done."
+    send: false
+---
+
+# Navigator
+
+Body.
+"""
+
+
+def test_copilot_cli_return_handoff_check_passes_because_content_is_genuinely_stripped():
+    from agentteams.frameworks.copilot_cli import CopilotCLIAdapter
+
+    adapter = CopilotCLIAdapter()
+    manifest = {"project_name": "TestProject", "output_files": [{"path": "navigator.agent.md"}]}
+    rendered = adapter.render_agent_file(_SOURCE_WITH_RETURN_HANDOFF, "navigator", manifest)
+    file_map = {"navigator.agent.md": rendered}
+
+    findings = _check_return_handoff_present(
+        file_map, agent_ext=".agent.md", supports_handoffs=adapter.supports_handoffs(),
+    )
+    assert not findings, findings
+
+
+def test_copilot_cli_rendered_output_has_no_handoff_content_not_merely_a_disabled_check():
+    """Deliberately pass supports_handoffs=True (the wrong flag) against the same
+    real copilot-cli rendered output. If this were still clean, the zero-findings
+    result above could be explained by the flag alone rather than by the content
+    genuinely lacking a handoff — the exact blindness the P1 fix had to avoid."""
+    from agentteams.frameworks.copilot_cli import CopilotCLIAdapter
+
+    adapter = CopilotCLIAdapter()
+    manifest = {"project_name": "TestProject", "output_files": [{"path": "navigator.agent.md"}]}
+    rendered = adapter.render_agent_file(_SOURCE_WITH_RETURN_HANDOFF, "navigator", manifest)
+    file_map = {"navigator.agent.md": rendered}
+
+    findings = _check_return_handoff_present(file_map, agent_ext=".agent.md", supports_handoffs=True)
+    assert any(f.code == "AR_MISSING_RETURN_HANDOFF" for f in findings), (
+        "expected a finding proving the handoff is genuinely absent from copilot-cli "
+        f"output, got none: {rendered!r}"
+    )
+
+
+def test_copilot_vscode_same_source_keeps_the_handoff_and_passes():
+    """Contrast case: the identical source rendered through copilot-vscode keeps
+    the handoff (real content difference), and its own supports_handoffs()=True
+    correctly finds nothing wrong because the handoff really is present."""
+    from agentteams.frameworks.copilot_vscode import CopilotVSCodeAdapter
+
+    adapter = CopilotVSCodeAdapter()
+    manifest = {"project_name": "TestProject", "output_files": [{"path": "navigator.agent.md"}]}
+    rendered = adapter.render_agent_file(_SOURCE_WITH_RETURN_HANDOFF, "navigator", manifest)
+    assert "agent: orchestrator" in rendered or "agent: 'orchestrator'" in rendered
+
+    findings = _check_return_handoff_present(
+        {"navigator.agent.md": rendered}, agent_ext=".agent.md", supports_handoffs=adapter.supports_handoffs(),
+    )
+    assert not findings, findings
+
+
+# ---------------------------------------------------------------------------
 # _check_readonly_tool_declarations (AR-03)
 # ---------------------------------------------------------------------------
 
@@ -522,7 +606,7 @@ def test_readonly_tool_violation_detected():
 ---
 name: Reader — TestProject
 description: "x"
-user-invokable: false
+user-invocable: false
 tools: ['read', 'edit', 'search']
 model: ["x"]
 ---
@@ -543,7 +627,7 @@ def test_readonly_tool_no_violation_when_clean():
 ---
 name: Reader — TestProject
 description: "x"
-user-invokable: false
+user-invocable: false
 tools: ['read', 'search']
 model: ["x"]
 ---
@@ -565,7 +649,7 @@ def test_readonly_tool_skips_agents_not_declaring_readonly():
 ---
 name: Producer — TestProject
 description: "x"
-user-invokable: false
+user-invocable: false
 tools: ['read', 'edit', 'execute']
 model: ["x"]
 ---
@@ -590,7 +674,7 @@ def test_dangling_slug_detected():
 ---
 name: Agent — TestProject
 description: "x"
-user-invokable: false
+user-invocable: false
 tools: ['read']
 model: ["x"]
 agents: ['nonexistent-agent']
@@ -610,7 +694,7 @@ def test_no_dangling_slug_when_file_exists():
 ---
 name: Agent — TestProject
 description: "x"
-user-invokable: false
+user-invocable: false
 tools: ['read']
 model: ["x"]
 agents: ['other-agent']
@@ -643,7 +727,7 @@ def _make_large_table(rows: int) -> str:
         "---",
         "name: Agent — TestProject",
         "description: x",
-        "user-invokable: false",
+        "user-invocable: false",
         "tools: ['read']",
         "model: [x]",
         "---",
@@ -693,7 +777,7 @@ def test_ch14_allow_marked_block_not_flagged():
     content = """---
 name: Agent — TestProject
 description: x
-user-invokable: false
+user-invocable: false
 tools: ['read']
 model: [x]
 ---
@@ -726,7 +810,7 @@ def test_ch14_still_flags_unmarked_large_block():
     content = """---
 name: Agent — TestProject
 description: x
-user-invokable: false
+user-invocable: false
 tools: ['read']
 model: [x]
 ---

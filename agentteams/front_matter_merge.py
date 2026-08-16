@@ -196,28 +196,34 @@ def _parse_capability_list(raw: str, *, key: str | None = None) -> frozenset[str
     return frozenset(parts)
 
 
-#: Capability keys that name the SAME grant across framework generations, newest first. When a
-#: template declares the new key and the deployed file carries only the old one, the merge
-#: renames in place rather than adding a second, contradictory declaration.
-_CAPABILITY_KEY_SUCCESSION: tuple[tuple[str, str], ...] = (
+#: Front-matter keys that name the SAME field across framework/upstream-doc generations, newest
+#: first. When a template declares the new key and the deployed file carries only the old one,
+#: the merge renames in place rather than adding a second, contradictory declaration.
+#:
+#: NOT restricted to capability keys despite the historical name below — the mechanism only
+#: renames, it never reads :data:`CAPABILITY_FRONT_MATTER_KEYS`. ``user-invocable`` (P3,
+#: 2026-08-15) is the first non-capability entry; the notice text branches on capability-ness
+#: (see :func:`_migrate_superseded_keys`) so a UI-visibility toggle isn't described as a "grant".
+_KEY_SUCCESSION: tuple[tuple[str, str], ...] = (
     ("tools", "allowed-tools"),
+    ("user-invocable", "user-invokable"),
 )
 
 
-def _migrate_superseded_capability_keys(
+def _migrate_superseded_keys(
     fresh: dict[str, str], current: dict[str, str]
 ) -> tuple[dict[str, str], list[str]]:
-    """Rename a deployed capability key when the template has moved to its successor.
+    """Rename a deployed front-matter key when the template has moved to its successor.
 
     Front matter is preserved verbatim by ``--update --merge``, so a change to the *name* of a
-    capability key would otherwise never reach a deployed team: the file would keep the old key
-    forever, and if the new key were merely added the file would carry two capability
-    declarations with nothing saying which the runtime honours.
+    key would otherwise never reach a deployed team: the file would keep the old key forever,
+    and if the new key were merely added the file would carry two declarations with nothing
+    saying which the runtime honours.
 
     The rename is provenance-keyed and narrow. It fires only when the template declares the
     successor key and the deployed file carries only the superseded one. **The value is carried
     across untouched** — the template owns the key's NAME, the project owns its VALUE, and a
-    rename must not become a back door for silently applying a template's grant.
+    rename must not become a back door for silently applying a template's value.
 
     Args:
         fresh: Front-matter keys of the freshly rendered file.
@@ -229,15 +235,22 @@ def _migrate_superseded_capability_keys(
     """
     migrated = dict(current)
     notices: list[str] = []
-    for new_key, old_key in _CAPABILITY_KEY_SUCCESSION:
+    for new_key, old_key in _KEY_SUCCESSION:
         if new_key in fresh and old_key in migrated and new_key not in migrated:
             value = migrated.pop(old_key)
             migrated[new_key] = value
-            notices.append(
-                f"front matter: capability key {old_key!r} renamed to {new_key!r} "
-                f"(value preserved: {value!r}). {old_key!r} is not read by this framework's "
-                f"runtime, so the grant it declared was never enforced."
-            )
+            if old_key in CAPABILITY_FRONT_MATTER_KEYS:
+                notices.append(
+                    f"front matter: capability key {old_key!r} renamed to {new_key!r} "
+                    f"(value preserved: {value!r}). {old_key!r} is not read by this "
+                    f"framework's runtime, so the grant it declared was never enforced."
+                )
+            else:
+                notices.append(
+                    f"front matter: key {old_key!r} renamed to {new_key!r} "
+                    f"(value preserved: {value!r}). {old_key!r} is not recognised by this "
+                    f"framework's runtime, so its value was never honoured."
+                )
     return migrated, notices
 
 
@@ -283,9 +296,9 @@ def _merge_front_matter(
     if not fresh or not current:
         return current, [], []
 
-    # A capability key the template has RENAMED is migrated before anything else, so the
-    # comparisons below see one declaration rather than an old key and a new key that disagree.
-    current, key_migrations = _migrate_superseded_capability_keys(fresh, current)
+    # A key the template has RENAMED is migrated before anything else, so the comparisons below
+    # see one declaration rather than an old key and a new key that disagree.
+    current, key_migrations = _migrate_superseded_keys(fresh, current)
 
     merged = dict(current)
     applied: list[str] = list(key_migrations)

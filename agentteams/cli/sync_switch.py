@@ -10,6 +10,11 @@ Flags:
 - ``--sync`` runs one on-demand pass (detects changed frameworks from commit
   diffs, reconciles to the pin, projects to all, logs conflicts).
 - ``--sync-since <commit>`` overrides the change-detection anchor.
+- ``--frameworks <fw1,fw2,...>`` narrows --sync-init's sync set (default: every
+  registered framework). Needed since the P1 convergence (2026-08-15):
+  copilot-vscode and copilot-cli now share one physical agents directory, so
+  the unqualified default set is rejected — see
+  ``multi_sync._reject_directory_collisions``.
 """
 
 from __future__ import annotations
@@ -70,6 +75,19 @@ def add_sync_arguments(parser: argparse.ArgumentParser) -> None:
         dest="sync_since",
         help="Override the change-detection anchor (default: pin's last_synced_commit).",
     )
+    group.add_argument(
+        "--frameworks",
+        metavar="FW1,FW2,...",
+        default=None,
+        dest="sync_frameworks",
+        help=(
+            "Comma-separated sync set for --sync-init (default: every registered "
+            "framework). Required whenever the default set would collide — "
+            "copilot-vscode and copilot-cli render to the same physical "
+            "'.github/agents' directory and can genuinely disagree (handoffs), "
+            "so --sync-init refuses that combination; list only one of the two."
+        ),
+    )
 
 
 def run_sync_cli(args: argparse.Namespace) -> int:
@@ -93,8 +111,10 @@ def run_sync_cli(args: argparse.Namespace) -> int:
         if not pin:
             print("Error: --sync-init requires --pin <framework>", file=sys.stderr)
             return 2
+        raw_fws = getattr(args, "sync_frameworks", None)
+        fws = [f.strip() for f in raw_fws.split(",") if f.strip()] if raw_fws else None
         try:
-            result = sync_init(root, pin=pin, dry_run=dry)
+            result = sync_init(root, pin=pin, frameworks=fws, dry_run=dry)
         except ValueError as exc:
             print(f"Error: {exc}", file=sys.stderr)
             return 2

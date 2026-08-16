@@ -431,6 +431,10 @@ def _line_in_front_matter(lines: list[str], line_num: int) -> bool:
 #: payload in backticks and the scanner fell silent. Backticks are formatting — the reading
 #: model still sees the words. So the exemption is now keyed on *who wrote the file* rather
 #: than on *what the text looks like*, and reviewed content from outside the module gets none.
+#: `.github/copilot/` is retained deliberately even though copilot-cli's active output
+#: moved to `.github/agents/` (2026-08-15 convergence): this module authored the
+#: pre-convergence files still sitting there in already-deployed repos, and the
+#: exemption is keyed on authorship, not on where new output currently lands.
 _MODULE_OWNED_PATH_FRAGMENTS: tuple[str, ...] = (
     "agentteams/templates/",
     ".github/agents/",

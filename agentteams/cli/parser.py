@@ -59,8 +59,7 @@ def _build_parser() -> argparse.ArgumentParser:
         default=None,
         help=(
             "Output directory for agent files. "
-            "Default: <project>/.github/agents/ (copilot-vscode), "
-            "<project>/.github/copilot/ (copilot-cli), "
+            "Default: <project>/.github/agents/ (copilot-vscode, copilot-cli), "
             "<project>/.claude/agents/ (claude), "
             "<project>/.goose/recipes/ (goose), "
             "<project>/.agents/ (agents-md; team brief also written to repo-root AGENTS.md). "

@@ -1,7 +1,7 @@
 ---
 name: Format Converter — ProjectRepositories
 description: "Converts deliverables from their source format to Jupyter notebooks and HTML reports for final output in ProjectRepositories"
-user-invokable: false
+user-invocable: false
 tools: ['read', 'edit', 'execute']
 agents: ['output-compiler', 'quality-auditor']
 model: ["Claude Sonnet 4.6 (copilot)"]

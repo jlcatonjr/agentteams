@@ -139,6 +139,63 @@ def test_every_emit_call_site_is_followed_by_the_capability_sweep() -> None:
     )
 
 
+# --- P3 (2026-08-15): the succession table now carries a second, non-capability
+# entry (user-invocable/user-invokable) — prove the mechanism generalizes rather
+# than assuming it, and prove it reaches copilot-vscode's .agent.md extension
+# (this module's helpers/other tests only ever exercise Claude's bare .md).
+
+INVOKABLE_OLD = (
+    "---\nname: Orchestrator\ndescription: sentinel\nuser-invokable: true\n---\n\n# Body\n"
+)
+INVOKABLE_NEW = (
+    "---\nname: Orchestrator\ndescription: sentinel\nuser-invocable: true\n---\n\n# Body\n"
+)
+
+
+def _copilot_vscode_team(tmp_path: Path, **files: str) -> Path:
+    agents = tmp_path / ".github" / "agents"
+    agents.mkdir(parents=True)
+    for name, text in files.items():
+        (agents / f"{name}.agent.md").write_text(text, encoding="utf-8")
+    return agents
+
+
+def test_user_invocable_migration_renames_the_key_and_preserves_the_value(
+    tmp_path: Path,
+) -> None:
+    agents = _copilot_vscode_team(tmp_path, orchestrator=INVOKABLE_OLD)
+    result = migrate_capability_key(agents, dry_run=False)
+    assert len(result) == 1 and result[0].migrated is True
+    assert (agents / "orchestrator.agent.md").read_text(encoding="utf-8") == INVOKABLE_NEW
+
+
+def test_migration_reaches_copilot_vscode_agent_md_extension(tmp_path: Path) -> None:
+    """`*.md` globbing must match `<slug>.agent.md`, not just Claude's bare `<slug>.md`."""
+    agents = _copilot_vscode_team(tmp_path, orchestrator=INVOKABLE_OLD)
+    counts_before = survey_capability_keys(agents)
+    assert counts_before["superseded"] == 0 and counts_before["current"] == 0, (
+        "survey_capability_keys only knows the tools/allowed-tools pair — user-invocable is "
+        "invisible to it by design; this assertion documents that scope, not a defect"
+    )
+    migrated = {m.rel_path for m in migrate_capability_key(agents, dry_run=False)}
+    assert "orchestrator.agent.md" in migrated
+
+
+def test_user_invocable_and_allowed_tools_migrate_independently_in_one_file(
+    tmp_path: Path,
+) -> None:
+    """Two succession-table entries firing on the same file must not interfere."""
+    both_old = (
+        "---\nname: Security\ndescription: sentinel\n"
+        "allowed-tools: Read, Grep\nuser-invokable: false\n---\n\n# Body\n"
+    )
+    agents = _team(tmp_path, security=both_old)
+    migrate_capability_key(agents, dry_run=False)
+    result = (agents / "security.md").read_text(encoding="utf-8")
+    assert "tools: Read, Grep" in result and "allowed-tools" not in result
+    assert "user-invocable: false" in result and "user-invokable:" not in result
+
+
 def test_the_sweep_reaches_bridge_written_files(tmp_path: Path) -> None:
     """The concrete case the call-site gap hid.
 

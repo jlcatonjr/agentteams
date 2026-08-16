@@ -1,7 +1,7 @@
 ---
 name: Post-Production Auditor — {PROJECT_NAME}
 description: "Outcome-verification specialist for {PROJECT_NAME}: validates claimed completed work against source-of-truth state using risk-tiered sampling and evidence-backed verdicts"
-user-invokable: false
+user-invocable: false
 tools: ['read', 'search', 'execute']
 agents: ['orchestrator', 'adversarial', 'conflict-auditor', 'technical-validator', 'security']
 model: ["Claude Sonnet 4.6 (copilot)"]

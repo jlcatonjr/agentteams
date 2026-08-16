@@ -1,7 +1,7 @@
 ---
 name: Conflict Resolution — ResearchPaperProject
 description: "Makes ACCEPT/REJECT/REVISE decisions on conflicts flagged by the conflict auditor in ResearchPaperProject"
-user-invokable: false
+user-invocable: false
 tools: ['edit', 'search', 'read']
 model: ["Claude Sonnet 4.6 (copilot)"]
 handoffs:

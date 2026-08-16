@@ -126,10 +126,27 @@ class AgentsMdAdapter(FrameworkAdapter):
         path references, and rewords Copilot-specific phrasing — so the published
         AGENTS.md carries no tool-specific branding. The AGENTTEAMS fence markers
         are preserved (``--update --merge`` re-renders only the fenced regions).
+
+        A1 (2026-08-15, scoped): appends a ``## Code Style`` section sourced from
+        ``manifest["style_rules"]`` when the brief declares any — AGENTS.md's own
+        convention (agents.md) is a repo-root file consumers read for exactly this
+        kind of project-specific guidance, and ``style_rules`` is a real, populated
+        schema field. Cleanly omitted when absent (checks the raw list, not the
+        always-non-empty ``style_rules_summary`` placeholder string) rather than
+        emitting a hollow "no rules" heading. Scoped to code style only: a
+        build/test-commands section was considered and deliberately deferred — no
+        schema field exists to source one from (checked directly against
+        schemas/project-description.schema.json) — see
+        references/agentteams-remediation-log.csv for that follow-up.
         """
         body = self._strip_yaml_front_matter(content)
         body = _neutralize_instructions(body)
-        return f"{_AGENTS_MD_NOTICE}\n\n{body}".strip() + "\n"
+        rendered = f"{_AGENTS_MD_NOTICE}\n\n{body}".strip() + "\n"
+        style_rules = manifest.get("style_rules")
+        if isinstance(style_rules, list) and style_rules:
+            lines = "\n".join(f"- {rule}" for rule in style_rules)
+            rendered = rendered.rstrip("\n") + f"\n\n## Code Style\n\n{lines}\n"
+        return rendered
 
     def render_builder_file(self, content: str, manifest: dict[str, Any]) -> str:
         """Emit the team-builder meta-agent as a plain-Markdown ``.agents`` detail file."""

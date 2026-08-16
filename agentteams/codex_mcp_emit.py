@@ -30,8 +30,20 @@ first-party/read-only server into ``[mcp_servers.*]`` therefore does not, by
 itself, grant Codex any capability its own default sandbox/approval layer
 wouldn't still gate — the borrowed bar is not under-calibrated in the
 direction originally worried about (a server getting network reach Codex's
-default posture wouldn't otherwise allow). Sources: developers.openai.com
-(redirects to learn.chatgpt.com/docs/extend/mcp and .../agent-approvals-security).
+default posture wouldn't otherwise allow). Sources (X4, re-verified
+2026-08-15 — the old developers.openai.com citation 308-redirects, so cited
+directly at its current location): learn.chatgpt.com/docs/extend/mcp and
+learn.chatgpt.com/docs/extend/agent-approvals-security.
+
+PROJECT TRUST GATE (X2, documented 2026-08-15): project-level
+``.codex/config.toml`` — the file this module splices into — is loaded by
+Codex **only when the project is marked trusted**; layering is system
+defaults -> ``~/.codex/config.toml`` -> project ``.codex/config.toml``
+(trusted only) -> CLI overrides. An untrusted project's splice is therefore
+written to disk correctly but silently inert until the operator trusts the
+project — this module has no visibility into (and does not attempt to
+change) that trust state; it is a Codex-side gate, not one this codebase
+enforces or can query.
 
 ``.codex/config.toml`` is a shared, multi-purpose file (sandbox/profile
 settings live alongside ``[mcp_servers.*]``) that cannot be blind-overwritten.

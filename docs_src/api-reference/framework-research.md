@@ -32,7 +32,12 @@ Dict[str, dict] keyed by framework id. Each entry declares:
 - `expected_locations` — allow-listed filesystem locations whose
   mention is scanned for.
 
-Three frameworks ship: `claude`, `copilot_vscode`, `copilot_cli`.
+Six frameworks ship: `claude`, `copilot_vscode`, `copilot_cli`, `goose`,
+`agents_md`, `codex` — each with its own `expert_ref` file (split from a
+single shared `claude`/`copilot` pair on 2026-08-15, agent-doc-optimal-
+structure plan, so drift tracking and observation stanzas stay
+framework-specific instead of conflating surfaces with different
+upstream docs).
 
 ### `SNAPSHOT_REL`
 
@@ -52,12 +57,32 @@ Default `7`; override via `AGENTTEAMS_STALE_DAYS` environment variable. A non-nu
 
 > *Source: `agentteams/framework_research.py`*
 
-The allow-list `apply_module_patch` enforces. Currently:
+The allow-list `apply_module_patch` enforces. Derived (CH-05
+single-source-of-truth), not hand-maintained: `{entry["expert_ref"] for
+entry in FRAMEWORK_REGISTRY.values()}` — one path per registry entry —
+unioned with two legacy pointer constants kept for backward
+compatibility only:
 
-- `references/claude-agent-infrastructure-expert.md`
-- `references/copilot-agent-infrastructure-expert.md`
+- `EXPERT_REF_REL` = `references/claude-agent-infrastructure-expert.md`
+  (byte-identical to the registry's own `claude` entry; kept as an
+  explicitly named constant since call sites already referenced it by
+  name).
+- `COPILOT_EXPERT_REF_REL` = `references/copilot-agent-infrastructure-expert.md`
+  — the pre-split shared Copilot file, superseded by
+  `copilot-vscode-agent-infrastructure-expert.md` /
+  `copilot-cli-agent-infrastructure-expert.md` (now the registry's actual
+  `copilot_vscode`/`copilot_cli` targets). The superseded file still exists
+  on disk as a pointer stub ("SUPERSEDED", do not add content) so a patch
+  proposal built from a stale, pre-split cached snapshot still resolves to
+  an allow-listed path instead of being rejected.
 
-Any change targeting a path outside this set is rejected.
+A hand-maintained copy of this list previously fell 4 frameworks behind
+the registry once `goose`/`agents_md`/`codex`/`copilot_cli` got their own
+`expert_ref` files — every proposal for those frameworks was silently
+rejected by `apply_module_patch`'s allow-list check despite being
+legitimate. Deriving from the registry closes that drift permanently:
+any change targeting a path outside this set is still rejected, but the
+set itself can no longer go stale independently of `FRAMEWORK_REGISTRY`.
 
 ---
 

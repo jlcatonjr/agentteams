@@ -1,7 +1,7 @@
 ---
 name: Reference Manager — {PROJECT_NAME}
 description: "Manages the bibliography and reference database for {PROJECT_NAME} — CRUD operations, citation verification, anti-fabrication enforcement"
-user-invokable: false
+user-invocable: false
 tools: ['read', 'edit', 'search', 'retrieval']
 agents: ['conflict-auditor']
 model: ["Claude Sonnet 4.6 (copilot)"]

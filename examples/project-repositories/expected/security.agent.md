@@ -1,7 +1,7 @@
 ---
 name: Security — ProjectRepositories
 description: "Top-priority security sentinel: reviews actions for credential exposure, destructive operations, sensitive content leakage, and reference integrity before any sensitive action proceeds"
-user-invokable: false
+user-invocable: false
 tools: ['read', 'search']
 model: ["Claude Sonnet 4.6 (copilot)"]
 handoffs:

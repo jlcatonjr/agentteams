@@ -103,7 +103,7 @@ def _extract_inventory(source_dir: Path, source_framework: str) -> list[dict[str
             rows.append(
                 {
                     "display_name": entry["name"] or _slug_to_name(_slug_from_name(name)),
-                    # No user-invokable concept in canonical front matter — honest
+                    # No user-invocable concept in canonical front matter — honest
                     # "no" rather than a guess.
                     "invokable": "no",
                     "role": entry["description"] or "",
@@ -121,7 +121,7 @@ def _extract_inventory(source_dir: Path, source_framework: str) -> list[dict[str
         meta, body = _parse_front_matter(text)
         display_name = str(meta.get("name") or _first_heading(body) or _slug_to_name(_slug_from_name(name)))
         role = str(meta.get("description") or _first_non_heading_line(body) or "")
-        invokable = "yes" if _is_invokable(meta.get("user-invokable")) else "no"
+        invokable = "yes" if _is_invokable(meta.get("user-invocable")) else "no"
         rows.append(
             {
                 "display_name": display_name,

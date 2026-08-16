@@ -36,21 +36,30 @@ Dead citation (do not use): `docs.github.com/en/copilot/github-copilot-in-the-cl
 
 | ID | Delta | Verification | Disposition |
 |----|-------|--------------|-------------|
-| P1 | **High.** We emit plain-Markdown `.github/copilot/<slug>.md` with all front matter stripped. Current CLI reads `.github/agents/*.agent.md` with YAML front matter — our emitted files sit in a location the CLI does not read; the convention appears in no upstream doc. Correct fix is convergence: one `.agent.md` emission serves both Copilot adapters (differentiable via `target:`). | **re-verified** (direct fetch 2026-08-15) | Tranche 2 — adapter redesign (remediation log) |
+| P1 | ~~**High.** We emit plain-Markdown `.github/copilot/<slug>.md` with all front matter stripped. Current CLI reads `.github/agents/*.agent.md` with YAML front matter.~~ **Closed 2026-08-15.** `CopilotCLIAdapter.render_agent_file` now delegates to `CopilotVSCodeAdapter` for the `.agent.md`-with-front-matter shape, then strips handoffs (still VS-Code-desktop-only per upstream). Output path, `interop.py`'s capability round-trip, and `multi_sync`'s path-collision handling all updated together — see the remediation log. | **re-verified** (direct fetch 2026-08-15) | Closed — see `references/agentteams-remediation-log.csv` (P1 row) |
 | P2 | Stale citation URL in adapter docstring / registry / AUTHORING-GUIDE template. | **re-verified** (301 confirmed) | Tranche 1 — fixed 2026-08-15 |
-| P7 | The CLI natively reads `AGENTS.md` and scoped instructions files — emitting AGENTS.md (already done by agents-md/goose adapters) makes teams legible to the CLI at zero cost. | researcher-claimed | Tranche 2 note |
+| P7 | The CLI natively reads `AGENTS.md` and scoped instructions files — emitting AGENTS.md (already done by agents-md/goose adapters) makes teams legible to the CLI at zero cost. | researcher-claimed | Open — not part of the P1 convergence, still a candidate item |
 
-## Function-Level Conformance Requirements (current adapter, pending P1)
+## Function-Level Conformance Requirements (current adapter, post-P1)
 
-- The shipped adapter still emits plain-Markdown prompts to `.github/copilot/`;
-  until the P1 redesign lands, tests must continue to validate that behavior —
-  the delta is tracked in the remediation log, not silently half-migrated.
-- Handoff extraction to `references/runtime-handoffs.json` is unaffected by P1.
+- The shipped adapter emits `.agent.md` files with YAML front matter to
+  `.github/agents/` — the same physical directory and shape as `copilot-vscode`,
+  minus handoffs. Tests validate this directly (`tests/test_frameworks.py`,
+  `tests/test_interop.py`, `tests/test_learnpython_generation.py`).
+  Pre-existing `.github/copilot/*.md` files from before the convergence are left
+  in place as harmless orphans — no auto-deletion.
+- Handoff extraction to `references/runtime-handoffs.json` is unaffected by P1:
+  `handoff_delivery_mode()` still returns `"manifest"`.
+- **Multi-framework sync caution:** because `copilot-cli` and `copilot-vscode` now
+  share one physical output directory, `agentteams.multi_sync` refuses to sync
+  both in the same set — see that module's `_reject_directory_collisions` and the
+  CLI's `--frameworks` flag for the escape hatch.
 
 ## Integration Checklist
 
-1. Treat the P1 convergence (CLI ← `.agent.md` shared surface) as the headline
-   Tranche-2 item for this framework; coordinate with the copilot-vscode adapter.
-2. Until then, document clearly in generated output that `.github/copilot/` files
-   are NOT read by the modern CLI.
-3. Point all references at the four live URLs above.
+1. ~~Treat the P1 convergence (CLI ← `.agent.md` shared surface) as the headline
+   Tranche-2 item for this framework~~ — **done 2026-08-15.** Any future adapter
+   change here should keep `copilot_cli.py` delegating to `copilot_vscode.py`
+   rather than reintroducing an independent render path, per the precedent this
+   fix established (matching `codex.py`'s delegation to `agents_md.py`).
+2. Point all references at the four live URLs above.

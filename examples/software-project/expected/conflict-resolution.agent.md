@@ -1,7 +1,7 @@
 ---
 name: Conflict Resolution — WebAppBackend
 description: "Makes ACCEPT/REJECT/REVISE decisions on conflicts flagged by the conflict auditor in WebAppBackend"
-user-invokable: false
+user-invocable: false
 tools: ['edit', 'search', 'read']
 model: ["Claude Sonnet 4.6 (copilot)"]
 handoffs:

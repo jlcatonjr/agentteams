@@ -67,12 +67,14 @@ FRAMEWORK_REGISTRY = {
         "label": "GitHub Copilot — CLI Custom Agents",
         # The old about-github-copilot-in-the-cli URL 301s to a generic
         # responsible-use page (verified 2026-08-15). The CLI's agent surface is
-        # .github/agents/*.agent.md — the P1 delta against our adapter's
-        # .github/copilot/ emission is tracked in the expert reference.
+        # .github/agents/*.agent.md — same directory as copilot_vscode. Our
+        # adapter converged onto it 2026-08-15 (P1, closed — see the expert
+        # reference); .github/copilot/ is no longer emitted and is deliberately
+        # absent below, matching copilot_vscode's single-location entry.
         "source_url": "https://docs.github.com/en/copilot/how-tos/copilot-cli/customize-copilot/create-custom-agents-for-cli",
         "expert_ref": "references/copilot-cli-agent-infrastructure-expert.md",
         "expected_keys": ["description", "tools", "model"],
-        "expected_locations": [".github/agents", ".github/copilot"],
+        "expected_locations": [".github/agents"],
     },
     "goose": {
         "label": "Goose (AAIF) Recipes",

@@ -14,6 +14,73 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   to act on the man page's "review the diff, then `--write-integrity-manifest`" guidance
   (remediation log, 2026-08-13).
 
+### changed (2026-08-15 optimization-parity remediation: copilot-cli converges onto the VS Code surface)
+
+- **`copilot-cli` output moved from plain-Markdown `.github/copilot/<slug>.md` to
+  `.github/agents/<slug>.agent.md` with full YAML front matter — the same surface
+  `copilot-vscode` uses.** Current upstream docs give the CLI the same custom-agent
+  format as VS Code; the old adapter predated that convergence. `CopilotCLIAdapter.render_agent_file`
+  now delegates to `CopilotVSCodeAdapter` for the shape, then strips handoffs (still
+  documented as VS-Code-desktop-only). Pre-existing `.github/copilot/*.md` files in
+  already-deployed repos are left in place as harmless orphans.
+- **`multi_sync.sync_init`/`run_sync` now refuse a sync set containing both
+  `copilot-vscode` and `copilot-cli`.** The two now write to the same physical
+  directory and can render genuinely different content (handoffs kept vs. stripped);
+  there is no correct merge for one file being two shapes at once, so the sync now
+  fails fast instead of risking one silently overwriting the other. A new `--frameworks`
+  CLI flag lets `--sync-init` name a narrower, non-colliding set.
+- **`interop.py`'s capability round-trip (`export_to_cai`/`import_from_cai`) now
+  treats `copilot-cli` like `copilot-vscode`.** Before this fix, converting or
+  syncing INTO `copilot-cli` silently reverted every agent's `user-invocable`/
+  `tools`/`model`/roster fields to hardcoded defaults regardless of the source
+  value, because the interop plumbing still gated capability threading to
+  `("copilot-vscode", "claude")` from before the convergence.
+
+### changed (2026-08-15 optimization-parity remediation: LOW-priority framework-conformance batch)
+
+- **Goose**: removed the redundant leading `@AGENTS.md` import from both
+  `.goosehints` generators (`goose_docs.py`'s native path and `bridge.py`'s
+  bridge-entry path) — Goose's default `CONTEXT_FILE_NAMES` already reads
+  `AGENTS.md` natively, so the import was a plausible double-load. Documented
+  the `GOOSE_RECIPE_PATH` discovery order in `AUTHORING-GUIDE.md`'s new `###
+  goose` section. (The headless `prompt:` emission this batch also
+  investigated turned out already shipped — no code change needed there.)
+- **copilot-vscode**: added a non-fatal `UserWarning` when a rendered agent
+  body exceeds GitHub's documented 30,000-character limit
+  (`CopilotVSCodeAdapter._check_body_length`), surfaced at every real call
+  site (`render_pipeline.py`, `convert.py`, `interop.py`). Deliberately a
+  warning, not a hard failure: this project's own orchestrator template
+  already renders ~55% over the limit, and raising would have broken fresh
+  `copilot-vscode`/`copilot-cli` generation entirely. (Optional-key
+  pass-through and the required-front-matter-key contract were re-examined
+  and confirmed already correct — no code change needed there either.)
+- **agents-md/codex**: `AGENTS.md` now carries a `## Code Style` section
+  sourced from a brief's `style_rules`, cleanly omitted when the brief
+  declares none. `codex.py`'s docstring now documents the real
+  `AGENTS.override.md` discovery order, fallback-filename semantics, and the
+  32 KiB combined cap; `codex_mcp_emit.py` documents the `.codex/config.toml`
+  project-trust gate and cites `learn.chatgpt.com` directly instead of the
+  redirecting `developers.openai.com`.
+- **Bridges**: added the two missing `references/bridges/copilot-vscode-to-{agents-md,codex}/`
+  pairs (agent inventory, quickstart, entrypoint, domain-boundary, manifest,
+  check report, merge report — the full 7-file set every other bridge pair
+  carries), generated via the same generator functions the other three
+  pairs use.
+- **Retrospective procedure**: the Post-Deliverable Retrospective reference
+  now names an explicit failure mode — hand-editing Constitutional Rules or
+  a roster directly in one framework's output without running `--sync`
+  before closeout, which leaves the project's other pinned frameworks
+  silently unreconciled.
+
+### fixed (2026-08-15 optimization-parity remediation: user-invocable spelling)
+
+- **VS Code Copilot / Copilot CLI front matter used `user-invokable` (misspelled);
+  current upstream docs use `user-invocable`.** Renamed in the template library,
+  both framework adapters, and both front-matter merge mechanisms
+  (`front_matter_merge.py`, `front_matter_reconcile.py`), with a provenance-safe
+  key-succession rename so already-deployed files migrate the value across
+  automatically rather than silently losing it.
+
 ### fixed (api-doc-conformity-sweep: host-features codex namespace)
 
 - **`--target-host-features codex:mcp` was rejected at validation, even though `codex_mcp_emit.py`
@@ -807,7 +874,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Fixing the filter exposed a second layer, and fixing only the filter would have been
   worse.** With the checks finally running, they produced **83 new findings** — because
   `_REQUIRED_YAML_KEYS` was a copilot-vscode contract applied as if universal. The three
-  frameworks emit three genuinely different headers (`name, description, user-invokable, tools,
+  frameworks emit three genuinely different headers (`name, description, user-invocable, tools,
   model` / `name, description, allowed-tools` / none at all), and `AR_MISSING_RETURN_HANDOFF`
   demanded a section the pipeline deliberately strips on frameworks that do not support
   handoffs. Adapters now declare their own contract via `required_front_matter_keys()`,

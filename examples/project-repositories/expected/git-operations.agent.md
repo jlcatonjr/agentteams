@@ -1,7 +1,7 @@
 ---
 name: Git Operations — ProjectRepositories
 description: "Executes and governs Git and GitHub operations in ProjectRepositories, including commit/push, pull/merge/rebase, conflict handling, and recovery workflows."
-user-invokable: true
+user-invocable: true
 tools: ['read', 'execute', 'search']
 model: ["Claude Sonnet 4.6 (copilot)"]
 handoffs:

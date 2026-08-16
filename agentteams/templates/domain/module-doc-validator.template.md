@@ -1,7 +1,7 @@
 ---
 name: Module Doc Validator — {PROJECT_NAME}
 description: "Read-only audit agent that verifies documentation-source parity for {PROJECT_NAME} — detects undocumented API, stale entries, version mismatches, and produces change-impact reports"
-user-invokable: false
+user-invocable: false
 tools: ['read', 'search']
 agents: ['module-doc-author', 'conflict-auditor']
 model: ["Claude Sonnet 4.6 (copilot)"]

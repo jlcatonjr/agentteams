@@ -1,6 +1,6 @@
 """A.2 regression tests: copilot-vscode export/import gaps.
 
-Report section 4.2: user-invokable silently flips to false, model is silently
+Report section 4.2: user-invocable silently flips to false, model is silently
 dropped and replaced by a hardcoded default, and the agents: cross-reference
 roster vanishes entirely on a native→canonical→native cycle.
 
@@ -36,18 +36,18 @@ def _round_trip_copilot_vscode(tmp_path: Path):
 
 
 def test_user_invokable_survives_round_trip(tmp_path: Path):
-    """user-invokable: true must survive native→canonical→native, not flip to false."""
+    """user-invocable: true must survive native→canonical→native, not flip to false."""
     cai, native_dir = _round_trip_copilot_vscode(tmp_path)
-    # Find an agent with user-invokable: true (orchestrator)
+    # Find an agent with user-invocable: true (orchestrator)
     orch_cai = [a for a in cai["agents"] if a["slug"] == "orchestrator"][0]
     rfm = orch_cai.get("raw_front_matter", {})
-    assert rfm.get("user-invokable") is True or rfm.get("user-invokable") == "true", (
-        f"user-invokable not captured as true: {rfm.get('user-invokable')}"
+    assert rfm.get("user-invocable") is True or rfm.get("user-invocable") == "true", (
+        f"user-invocable not captured as true: {rfm.get('user-invocable')}"
     )
     # Check the reimported file
     reimported = (native_dir / "orchestrator.agent.md").read_text()
-    assert "user-invokable: true" in reimported, (
-        "user-invokable: true not found in reimported file — was overwritten with default"
+    assert "user-invocable: true" in reimported, (
+        "user-invocable: true not found in reimported file — was overwritten with default"
     )
 
 

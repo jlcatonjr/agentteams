@@ -1,7 +1,7 @@
 ---
 name: Navigator — SalesDataPipeline
 description: "Repository structure navigation, project map maintenance, file location lookups, and dependency queries for SalesDataPipeline"
-user-invokable: false
+user-invocable: false
 tools: ['read', 'search', 'execute']
 model: ["Claude Sonnet 4.6 (copilot)"]
 handoffs:

@@ -1,7 +1,7 @@
 ---
 name: Research Analyst — {PROJECT_NAME}
 description: "Orchestrates the optional agentteams[research] runtime library in {PROJECT_NAME} — web search, reputable-source rating, and dual-lens claim verification"
-user-invokable: true
+user-invocable: true
 tools: ['read', 'edit', 'search', 'execute']
 agents: ['technical-validator', 'adversarial', 'conflict-auditor']
 model: ["Claude Sonnet 4.6 (copilot)"]

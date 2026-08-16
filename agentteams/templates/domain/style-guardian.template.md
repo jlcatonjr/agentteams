@@ -1,7 +1,7 @@
 ---
 name: Style Guardian — {PROJECT_NAME}
 description: "Enforces voice and style fidelity in {PROJECT_NAME} deliverables using calibrated voice samples; sole arbiter of style deviation rulings"
-user-invokable: false
+user-invocable: false
 tools: ['read', 'edit', 'search']
 agents: ['primary-producer']
 model: ["Claude Sonnet 4.6 (copilot)"]

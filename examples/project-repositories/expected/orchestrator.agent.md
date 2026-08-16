@@ -1,7 +1,7 @@
 ---
 name: Orchestrator — ProjectRepositories
 description: "Coordinates all agent operations for ProjectRepositories: routes work to domain agents, enforces constitutional rules, and closes every multi-file session with a consistency check."
-user-invokable: true
+user-invocable: true
 tools: ['read', 'edit', 'search', 'execute', 'todo', 'agent']
 agents:
   - orchestrator

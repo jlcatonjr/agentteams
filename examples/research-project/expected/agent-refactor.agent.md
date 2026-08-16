@@ -1,7 +1,7 @@
 ---
 name: Agent Refactor — ResearchPaperProject
 description: "Extracts shared data to reference files and enforces spec compliance across all agent documentation in ResearchPaperProject"
-user-invokable: false
+user-invocable: false
 tools: ['edit', 'search', 'agent']
 agents: ['conflict-auditor']
 model: ["Claude Sonnet 4.6 (copilot)"]
@@ -55,7 +55,7 @@ Check every agent file for:
 
 | Check | Requirement |
 |-------|-------------|
-| YAML front matter | Must have: `name`, `description`, `user-invokable`, `tools`, `model` |
+| YAML front matter | Must have: `name`, `description`, `user-invocable`, `tools`, `model` |
 | Invariant Core | Must be present and marked with `⛔` |
 | Handoff completeness | Every downstream agent in `agents:` list must have a corresponding `handoffs:` entry |
 | Return handoff | Every agent must have a "Return to Orchestrator" handoff |

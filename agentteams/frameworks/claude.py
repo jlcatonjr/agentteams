@@ -24,7 +24,7 @@ Recognised front matter keys (all optional, but name + description are strongly 
   disallowedTools: Comma-separated deny list, subtracted from the inherited pool
   model:         Claude model variant (e.g. claude-opus-4-5, claude-sonnet-4-5)
 
-VS Code Copilot keys (user-invokable:, agents:) are NOT recognised by Claude Code and
+VS Code Copilot keys (user-invocable:, agents:) are NOT recognised by Claude Code and
 must NOT be passed through. `tools:` IS recognised, but its VALUE FORMAT differs: copilot
 writes an inline quoted list, Claude a bare comma-separated scalar.
 

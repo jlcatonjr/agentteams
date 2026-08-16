@@ -1,7 +1,7 @@
 ---
 name: Work Summarizer — ProjectRepositories
 description: "Synthesizes daily, weekly, and monthly work summaries from canonical plan artifacts and git evidence for ProjectRepositories; supports append-first daily capture, legacy tmp/ fallback, and required adversarial/conflict audits"
-user-invokable: true
+user-invocable: true
 tools: ['read', 'search', 'execute', 'edit', 'agent']
 agents: ['technical-validator', 'adversarial', 'conflict-auditor']
 model: ["Claude Sonnet 4.6 (copilot)"]

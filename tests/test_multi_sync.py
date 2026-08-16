@@ -186,3 +186,96 @@ def test_unquoted_yaml_date_in_front_matter_stays_json_safe(tmp_path: Path):
     # Must not raise TypeError: Object of type date is not JSON serializable.
     json.dumps(cai)
 
+
+# ---------------------------------------------------------------------------
+# Directory-collision guard (P1, 2026-08-15): copilot-vscode and copilot-cli
+# now share one physical agents directory. Two frameworks writing genuinely
+# different content (handoffs kept vs. stripped) to the same path is a real
+# data-loss risk with no correct merge — see the module docstring on
+# _reject_directory_collisions for the full reproduction.
+# ---------------------------------------------------------------------------
+
+def _write_agent(agents_dir: Path, slug: str, *, with_handoff: bool) -> None:
+    agents_dir.mkdir(parents=True, exist_ok=True)
+    handoff_fm = "handoffs:\n  - label: \"Security review\"\n    agent: security\n" if with_handoff else ""
+    handoff_body = "\n\n## Handoffs\n\n- **Security review** -> `security`\n" if with_handoff else ""
+    (agents_dir / f"{slug}.agent.md").write_text(
+        "---\n"
+        f"name: {slug.title()}\n"
+        "description: d\n"
+        "user-invocable: true\n"
+        "tools: ['read', 'edit']\n"
+        f"{handoff_fm}"
+        "---\n\n"
+        "Body prose.\n"
+        f"{handoff_body}",
+        encoding="utf-8",
+    )
+
+
+def test_reject_directory_collisions_flags_copilot_vscode_and_cli(tmp_path: Path):
+    with pytest.raises(ValueError, match="share one physical agents directory"):
+        ms._reject_directory_collisions(tmp_path, ["copilot-vscode", "copilot-cli"])
+
+
+def test_reject_directory_collisions_allows_non_colliding_set(tmp_path: Path):
+    ms._reject_directory_collisions(tmp_path, ["copilot-vscode", "claude", "goose"])  # must not raise
+
+
+def test_sync_init_default_frameworks_now_collides(tmp_path: Path):
+    """Calling sync_init with no explicit `frameworks=` now always includes
+    both copilot-vscode and copilot-cli (both are core-registered), so the
+    unqualified default must raise rather than silently corrupt the shared
+    directory. Callers must narrow `frameworks=` explicitly."""
+    _write_agent(tmp_path / ".github" / "agents", "orchestrator", with_handoff=False)
+    with pytest.raises(ValueError, match="share one physical agents directory"):
+        ms.sync_init(tmp_path, pin="copilot-vscode")
+
+
+def test_sync_init_rejects_before_any_write(tmp_path: Path):
+    """The guard must fire before touching disk — no partial/corrupted output
+    from a rejected sync_init call."""
+    agents = tmp_path / ".github" / "agents"
+    _write_agent(agents, "orchestrator", with_handoff=True)
+    before = (agents / "orchestrator.agent.md").read_text(encoding="utf-8")
+
+    with pytest.raises(ValueError):
+        ms.sync_init(tmp_path, pin="copilot-vscode", frameworks=["copilot-vscode", "copilot-cli"])
+
+    after = (agents / "orchestrator.agent.md").read_text(encoding="utf-8")
+    assert after == before
+    assert not (tmp_path / ".agentteams" / "pin.json").exists()
+
+
+def test_run_sync_rejects_collision_from_persisted_pin(tmp_path: Path):
+    """Defense in depth: a pin document can be hand-authored or written via
+    sync_pin.save_pin directly, bypassing sync_init's own guard. run_sync must
+    independently refuse a colliding persisted sync set too."""
+    _write_agent(tmp_path / ".github" / "agents", "orchestrator", with_handoff=False)
+    sync_pin.save_pin(
+        tmp_path,
+        pinned_framework="copilot-vscode",
+        frameworks=["copilot-vscode", "copilot-cli"],
+        last_synced_commit="",
+    )
+    with pytest.raises(ValueError, match="share one physical agents directory"):
+        ms.run_sync(tmp_path)
+
+
+def test_sync_init_two_frameworks_sharing_a_path_with_real_handoff_content(tmp_path: Path):
+    """End-to-end reproduction of the original risk (kept here as a regression
+    guard, not just a code-path check): before the fix, copilot-cli's
+    handoff-stripped write silently clobbered copilot-vscode's handoff-bearing
+    write at the shared path. Now sync_init must refuse outright instead."""
+    agents = tmp_path / ".github" / "agents"
+    _write_agent(agents, "orchestrator", with_handoff=True)
+    _write_agent(agents, "security", with_handoff=False)
+    before = (agents / "orchestrator.agent.md").read_text(encoding="utf-8")
+    assert "handoffs:" in before  # sanity: the fixture really has one
+
+    with pytest.raises(ValueError):
+        ms.sync_init(tmp_path, pin="copilot-vscode", frameworks=["copilot-vscode", "copilot-cli"])
+
+    # Untouched — not silently stripped of its handoffs.
+    assert (agents / "orchestrator.agent.md").read_text(encoding="utf-8") == before
+

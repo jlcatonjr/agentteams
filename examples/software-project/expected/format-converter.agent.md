@@ -1,7 +1,7 @@
 ---
 name: Format Converter — WebAppBackend
 description: "Converts deliverables from their source format to Python 3.11 modules for final output in WebAppBackend"
-user-invokable: false
+user-invocable: false
 tools: ['read', 'edit', 'execute']
 agents: ['output-compiler', 'quality-auditor']
 model: ["Claude Sonnet 4.6 (copilot)"]
