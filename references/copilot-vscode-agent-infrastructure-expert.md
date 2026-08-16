@@ -60,3 +60,11 @@ agent — `target: vscode` warranted where used.
 2. Track the `user-invocable` migration (Tranche 2) before widening the front-matter contract.
 3. When adding new-key pass-through, follow the cross-surface reference's cloud-agent caveats (`target`).
 4. Maintain transformation-parity tests across Copilot targets.
+
+## Observed Upstream Tokens — `copilot_vscode` (Daily Pipeline)
+
+Recorded by the daily pipeline on `2026-08-16` from `https://code.visualstudio.com/docs/copilot/customization/custom-agents`.
+
+- Upstream tokens observed: —
+- Upstream locations observed: .github/agents
+- Fetch status: `ok`
