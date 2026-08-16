@@ -8,7 +8,7 @@
     "agentteams/redteam/checks_report.py": "3e13cc5ebf19b4b393ef0a2ee663d097ff2be3666d38b7f61203503ee77ffd24",
     "agentteams/redteam/checks_static.py": "44b3f830ad5b23a2f16f9938b9fa282a4cd5847e677703fb611208be7b37f738",
     "agentteams/redteam/registry.py": "94e2499d58e926ec5325d536ba1952f933597f4317039b9e8cabf4b0820b8a9d",
-    "agentteams/scan.py": "82776eee08fab3e747b6b9782be64ee57d0f44f1d94b8888b4c3b360f6fe7033",
+    "agentteams/scan.py": "ec05a9c812a456f13eaa84efd976b136a06e3d9b4f5b34ee75f6b2688a0e07b2",
     "agentteams/unfenced.py": "f93ba361487463aa51f3124da7421a77f87ee0e617a59248b231d9a08f077905"
   },
   "note": "SHA-256 of the modules that enforce C-1..C-5. Regenerate deliberately, with `agentteams --write-integrity-manifest`, only after an intended change to a control. See agentteams/integrity.py for what this does and does not guarantee.",
