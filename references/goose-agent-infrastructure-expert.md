@@ -58,3 +58,11 @@ repo moved `block/goose` → `aaif-goose/goose`; docs moved to goose-docs.ai.
 2. Tranche 2: add `prompt:` emission for headless support; de-duplicate
    `.goosehints` vs native AGENTS.md; document recipe discovery.
 3. Point all references at goose-docs.ai URLs.
+
+## Observed Upstream Tokens — `goose` (Daily Pipeline)
+
+Recorded by the daily pipeline on `2026-08-16` from `https://goose-docs.ai/docs/guides/recipes/recipe-reference/`.
+
+- Upstream tokens observed: —
+- Upstream locations observed: —
+- Fetch status: `ok`

@@ -48,3 +48,11 @@ report R6).
 3. This surface serves goose (native context file), codex (instructions), and
    the Copilot CLI (native custom-instructions source) simultaneously — changes
    here propagate to three consumers.
+
+## Observed Upstream Tokens — `agents_md` (Daily Pipeline)
+
+Recorded by the daily pipeline on `2026-08-16` from `https://agents.md`.
+
+- Upstream tokens observed: —
+- Upstream locations observed: AGENTS.md
+- Fetch status: `ok`

@@ -54,3 +54,11 @@ Dead citation (do not use): `docs.github.com/en/copilot/github-copilot-in-the-cl
 2. Until then, document clearly in generated output that `.github/copilot/` files
    are NOT read by the modern CLI.
 3. Point all references at the four live URLs above.
+
+## Observed Upstream Tokens — `copilot_cli` (Daily Pipeline)
+
+Recorded by the daily pipeline on `2026-08-16` from `https://docs.github.com/en/copilot/how-tos/copilot-cli/customize-copilot/create-custom-agents-for-cli`.
+
+- Upstream tokens observed: —
+- Upstream locations observed: .github/agents
+- Fetch status: `ok`
