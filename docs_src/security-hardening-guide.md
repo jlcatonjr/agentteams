@@ -26,6 +26,37 @@ AgentTeams incorporates live threat intelligence (CVE, CISA KEV, EPSS) into ever
 | **NVD** | National Vulnerability Database (CVSS 3.1) | Daily official, real-time via third-party services | Comprehensive CVE coverage, severity scoring |
 | **EPSS** | Exploit Prediction Scoring System (0-1 probability) | Daily | Predictive exploit likelihood |
 
+### Static Advisory References
+
+Alongside the network feeds, the generated Source Registry cites static advisory
+references (no network fetch): OWASP LLM Top 10, MITRE ATLAS, MITRE CWE, the
+[Snyk Vulnerability Database](https://security.snyk.io/), and the
+[npm dependency auditing documentation](https://docs.npmjs.com/auditing-package-dependencies-for-security-vulnerabilities).
+The last two back the dependency-vetting defaults below.
+
+### Dependency Vetting Defaults (Rule S-10)
+
+Every generated `@security` agent carries two install-time defaults
+(`security.template.md`, Rule S-10):
+
+1. **Pre-install vulnerability review** — before any package/module/program
+   install, search reliable sources (OSV.dev, Snyk Vulnerability DB, NVD,
+   GitHub Advisories, `npm audit` / `pip-audit` / `cargo audit`) for known
+   vulnerabilities in the exact name and version being adopted.
+2. **Package-release cooldown** — do not adopt a release published less than
+   **14 days** ago (a configurable default; npm especially, given the recent
+   wave of registry supply-chain compromises). Enforce mechanically where
+   tooling allows: `npm install --before=<date>`, pnpm `minimumReleaseAge`,
+   Renovate/Dependabot cooldown; check age with `npm view <pkg> time`; pin
+   exact versions with a lockfile.
+
+The cooldown never delays remediating an already-installed vulnerable version —
+KEV/patch-urgency guidance takes precedence. A release that itself fixes a
+vulnerability affecting the project may be adopted inside the window only when
+the fix maps to a published CVE/GHSA/OSV advisory that predates the release or
+originates from the ecosystem's advisory database (not solely from the package
+maintainer), and `@security` review is recorded in `security-decisions.log.csv`.
+
 ### Generated Security Reference Files
 
 When `@security` agent is included, the pipeline generates:
@@ -381,6 +412,8 @@ op-2026-05-10-001,2026-05-10T14:30:00Z,cross-repo-write,CONDITIONAL_PASS,"waiver
 3. **Audit waivers** — Review `references/security-waivers.log.csv` during security reviews
 4. **Monitor EPSS trends** — Generated `security.agent.md` shows exploit likelihood; escalate high values
 5. **Document exceptions** — Use `notes` column in `security-decisions.log.csv` to explain policy overrides
+6. **Vet before install** — Search OSV.dev / Snyk DB / NVD / `npm audit` for known vulnerabilities in the exact name@version before any install (Rule S-10)
+7. **Respect the release cooldown** — Default to adopting package releases only after 14 days, with advisory-backed security fixes as the reviewed exception (Rule S-10)
 
 ---
 
@@ -390,3 +423,5 @@ op-2026-05-10-001,2026-05-10T14:30:00Z,cross-repo-write,CONDITIONAL_PASS,"waiver
 - **Security Agent Template:** `agentteams/templates/universal/security.template.md`
 - **Threat Intelligence Module:** `agentteams/security_refs.py`
 - **Audit & Scan Modules:** `agentteams/audit.py`, `agentteams/scan.py`
+- **Snyk Vulnerability Database:** https://security.snyk.io/
+- **npm Dependency Auditing:** https://docs.npmjs.com/auditing-package-dependencies-for-security-vulnerabilities

@@ -116,6 +116,14 @@ Each summary type must include these machine-parseable fields:
   - `Commits Count`
   - `Plans Touched Count`
   - `Files Changed Count`
+
+**`Commits Count` evidence rule:** the count must be read from `git log --oneline
+--since=midnight` output you actually ran in this session, not restated from a
+prompt, an earlier block, or memory; quote at least the latest short hash alongside
+the count so the claim is checkable (precedent: 2026-08-12, ~20 blocks asserted "0
+commits, confirmed via git log" while 5 commits existed — the count had been
+inherited from a stale prompt, and no block could prove otherwise).
+
 2. Weekly:
   - `ISO Week`
   - `Daily Summaries Consumed`

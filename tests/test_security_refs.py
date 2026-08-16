@@ -243,6 +243,11 @@ def test_build_security_placeholders_offline_from_cache(tmp_path: Path) -> None:
 
     assert "CVE-2026-1111" in placeholders["SECURITY_CURRENT_THREATS_SUMMARY"]
     assert "cached" in placeholders["SECURITY_SOURCE_REGISTRY"]
+    # The cache payload above predates the static advisory entries — the restore path must
+    # merge them back in (union by name), or stale-cache runs silently drop the citations
+    # Rule S-10 relies on.
+    assert "Snyk Vulnerability DB" in placeholders["SECURITY_SOURCE_REGISTRY"]
+    assert "npm audit docs" in placeholders["SECURITY_SOURCE_REGISTRY"]
 
 
 def test_offline_round_trip_through_real_write_path(monkeypatch, tmp_path: Path) -> None:

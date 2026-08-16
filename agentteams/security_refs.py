@@ -610,6 +610,37 @@ def _format_llm_threats(include_references: bool = True) -> str:
     return "\n".join(lines)
 
 
+_STATIC_SOURCE_ENTRIES: list[dict] = [
+    {"name": "OWASP LLM Top 10", "url": "https://owasp.org/www-project-top-10-for-large-language-model-applications/", "status": "static"},
+    {"name": "MITRE ATLAS", "url": "https://atlas.mitre.org/", "status": "static"},
+    {"name": "MITRE CWE", "url": "https://cwe.mitre.org/", "status": "static"},
+    {"name": "Snyk Vulnerability DB", "url": "https://security.snyk.io/", "status": "static"},
+    {"name": "npm audit docs", "url": "https://docs.npmjs.com/auditing-package-dependencies-for-security-vulnerabilities", "status": "static"},
+]
+
+
+def _merge_static_sources(sources: list[dict]) -> list[dict]:
+    """Append any missing static advisory entries to a source list (union by name).
+
+    A cache payload written by an older module version replaces the whole ``sources``
+    list on restore; without this merge, statically declared advisory references would
+    silently vanish from the rendered Source Registry on every offline or stale-cache
+    run, breaking citation verifiability for rules that cite them.
+
+    Args:
+        sources: Source-registry entries, typically restored from a cache payload.
+            Mutated in place.
+
+    Returns:
+        The same list, with a copy of each missing static entry appended.
+    """
+    present = {s.get("name") for s in sources}
+    for entry in _STATIC_SOURCE_ENTRIES:
+        if entry["name"] not in present:
+            sources.append(dict(entry))
+    return sources
+
+
 def _format_source_registry(sources: list[dict]) -> str:
     lines: list[str] = []
     for src in sources:
@@ -701,15 +732,16 @@ def build_security_placeholders(
     generated_at = _utc_now_iso()
     cache_json = output_dir / "references" / "security-vulnerability-watch.json"
 
+    # The fetch code below slot-updates sources[0]/[2]/[3]/[4] by position — the first five
+    # rows are load-bearing by index. New entries must only ever be appended to the static
+    # tail (via _STATIC_SOURCE_ENTRIES), never inserted before it.
     sources: list[dict] = [
         {"name": "CISA KEV", "url": _KEV_URL, "status": "not_fetched"},
         {"name": "MITRE CVE", "url": _MITRE_CVE_ROOT, "status": "metadata_only"},
         {"name": "FIRST EPSS", "url": _EPSS_URL, "status": "not_fetched"},
         {"name": "NVD (NIST)", "url": _NVD_CVE_URL, "status": "skipped"},
         {"name": "OSV.dev", "url": _OSV_QUERYBATCH_URL, "status": "not_fetched"},
-        {"name": "OWASP LLM Top 10", "url": "https://owasp.org/www-project-top-10-for-large-language-model-applications/", "status": "static"},
-        {"name": "MITRE ATLAS", "url": "https://atlas.mitre.org/", "status": "static"},
-        {"name": "MITRE CWE", "url": "https://cwe.mitre.org/", "status": "static"},
+        *[dict(entry) for entry in _STATIC_SOURCE_ENTRIES],
     ]
     vulnerabilities: list[dict] = []
     epss_map: dict[str, dict[str, str]] = {}
@@ -731,7 +763,7 @@ def build_security_placeholders(
                 # resilience guard against a cache degraded by a pre-fix version of this module
                 # (blank cve/vendor/name fields): drop those records rather than render them.
                 vulnerabilities = [v for v in cached.get("vulnerabilities", [])[:max_items] if v.get("cve")]
-                sources = cached.get("sources", sources)
+                sources = _merge_static_sources(cached.get("sources", sources))
                 generated_at = cached.get("generated_at", generated_at)
                 osv_findings = cached.get("osv_packages", [])
         else:
@@ -780,7 +812,7 @@ def build_security_placeholders(
                     # Preserve previous source status context when available
                     cached_sources = cached.get("sources", [])
                     if cached_sources:
-                        sources = cached_sources
+                        sources = _merge_static_sources(cached_sources)
             else:
                 _fetch_failed_without_cache = True
 

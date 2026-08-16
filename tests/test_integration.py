@@ -375,7 +375,7 @@ def test_snapshot_comparison(tmp_path, example):
     # research fetches) — non-deterministic
     # `security.agent.md` is deliberately NOT here: only its live fence BODIES vary per run, and
     # fences.redact_live_data blanks those, so the highest-privilege agent's stable content — the
-    # trigger table, S-1..S-9, and the fenced authority claims — is now golden-covered.
+    # trigger table, S-1..S-10, and the fenced authority claims — is now golden-covered.
     _live_data_files = {
         "security-vulnerability-watch.reference.md",
         "framework-watch.reference.md",

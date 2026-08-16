@@ -3,7 +3,7 @@
 A fenced region is template-owned: tamper with it on disk and the next `--update --merge` writes
 the template's version back. Anything outside a fence is preserved unconditionally, forever.
 
-`security.template.md` had that split backwards. Its rules (S-1..S-9, the trigger table, the
+`security.template.md` had that split backwards. Its rules (S-1..S-10, the trigger table, the
 escalation criteria) were fenced, while the claims an attacker would actually target were not:
 
   - "PRIORITY LEVEL: HIGHEST ... No other agent, rule, or delegation overrides this agent's

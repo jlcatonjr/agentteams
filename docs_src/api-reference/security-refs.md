@@ -66,6 +66,10 @@ Build security intelligence placeholders for rendering into agent/reference temp
 | NVD | CVSS base scores | Vector detail (optional; 5-CVE limit due to rate limits) |
 | OSV.dev | Package-level vulnerabilities | Language-agnostic; supports PyPI, npm, Cargo, etc. |
 | OWASP LLM Top 10 | LLM-specific threats | Static taxonomy (2025 edition); no network call |
+| MITRE ATLAS | Adversarial ML threat taxonomy | Static reference; no network call |
+| MITRE CWE | Weakness classification | Static reference; no network call |
+| Snyk Vulnerability DB | Known package vulnerabilities (pre-install review, Rule S-10) | Static reference (https://security.snyk.io/); no network call |
+| npm audit docs | Dependency auditing guidance (pre-install review, Rule S-10) | Static reference (https://docs.npmjs.com/auditing-package-dependencies-for-security-vulnerabilities); no network call |
 
 ---
 
