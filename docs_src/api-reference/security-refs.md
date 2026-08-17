@@ -63,7 +63,7 @@ Build security intelligence placeholders for rendering into agent/reference temp
 | CISA KEV | Actively exploited CVEs | Global; high-confidence confirmed exploits |
 | FIRST EPSS | Exploit probability | 0–1 score; empirically calibrated |
 | MITRE CVE | CVE metadata | Canonical CVE records with descriptions |
-| NVD | CVSS base scores | Vector detail (optional; 5-CVE limit due to rate limits) |
+| NVD (NIST) | CVSS base scores | Vector detail (optional; 5-CVE limit due to rate limits) |
 | OSV.dev | Package-level vulnerabilities | Language-agnostic; supports PyPI, npm, Cargo, etc. |
 | OWASP LLM Top 10 | LLM-specific threats | Static taxonomy (2025 edition); no network call |
 | MITRE ATLAS | Adversarial ML threat taxonomy | Static reference; no network call |

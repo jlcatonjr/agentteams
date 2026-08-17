@@ -308,7 +308,7 @@ def redact_live_data(text: str) -> str:
 
     Snapshot comparison excluded ``security.agent.md`` *whole-file* because one of its fences
     carries a live vulnerability feed and a generation timestamp. The consequence was that the
-    ~90% of that file which is stable — the trigger table, Rules S-1..S-9, the escalation
+    ~90% of that file which is stable — the trigger table, Rules S-1..S-10, the escalation
     criteria, and the fenced authority claims — shipped with no golden coverage at all, on the
     highest-privilege agent in the team.
 

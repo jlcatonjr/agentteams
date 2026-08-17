@@ -59,11 +59,15 @@ def test_model_survives_round_trip(tmp_path: Path):
     assert "model" in rfm, f"model not captured in raw_front_matter: {rfm}"
     # Check the reimported file has the real model value, not the default
     reimported = (native_dir / "orchestrator.agent.md").read_text()
-    model_value = str(rfm["model"])
-    # The value should be present (either as a flow list or quoted string)
-    assert "Claude Sonnet 4.6" in reimported, (
-        f"model value not found in reimported file"
-    )
+    # Assert the SOURCE's model value round-trips, whatever it currently is —
+    # a hardcoded model name here goes stale the first time the surface is
+    # regenerated with a newer default (it did: "Claude Sonnet 4.6").
+    model_value = rfm["model"]
+    expected = model_value if isinstance(model_value, list) else [model_value]
+    for v in expected:
+        assert str(v) in reimported, (
+            f"model value {v!r} not found in reimported file"
+        )
 
 
 def test_agents_roster_survives_round_trip(tmp_path: Path):

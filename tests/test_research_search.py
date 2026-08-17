@@ -295,6 +295,7 @@ def _build_minimal_pdf(text: str) -> bytes:
 
 
 def test_extract_pdf_text_round_trips_real_content() -> None:
+    pytest.importorskip("pypdf", reason="research optional-dependency group not installed")
     pdf_bytes = _build_minimal_pdf("Hello agentteams research test")
     assert "Hello agentteams research test" in _extract_pdf_text(pdf_bytes)
 
@@ -394,6 +395,7 @@ def test_fetch_text_and_date_pdf_response_has_no_date() -> None:
     """PDF structure has no HTML meta/JSON-LD to extract a date from -- confirms this is treated
     as an honest empty, not an error, for the one content-type this module's date regexes cannot
     reach."""
+    pytest.importorskip("pypdf", reason="research optional-dependency group not installed")
     pdf_bytes = _build_minimal_pdf("PDF body text")
     with patch(
         "agentteams.research.search._fetch_raw",

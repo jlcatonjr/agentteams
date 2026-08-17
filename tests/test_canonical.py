@@ -228,3 +228,23 @@ class TestFallbackParser:
         assert parsed["handoffs"] == [
             {"to": "x", "prompt": "line one\nline two", "send": True}
         ]
+
+
+def test_minimal_yaml_load_scalar_block_list_round_trips():
+    """A block list of plain scalars (the agents: roster shape) must parse to
+    the scalar values, not collapse to empty dicts — the collapse silently
+    destroyed every roster on a PyYAML-less export (found 2026-08-16 while
+    reproducing the model round-trip failure)."""
+    from agentteams.canonical import _minimal_yaml_load
+
+    fm = _minimal_yaml_load(
+        "name: x\n"
+        "agents:\n"
+        "  - orchestrator\n"
+        "  - navigator\n"
+        "handoffs:\n"
+        "  - label: \"L\"\n"
+        "    agent: \"a\"\n"
+    )
+    assert fm["agents"] == ["orchestrator", "navigator"]
+    assert fm["handoffs"] == [{"label": "L", "agent": "a"}]

@@ -63,9 +63,34 @@ Keep checks orthogonal: the preflight is for *environment* preconditions
 (interpreters, OS-level tools, platform constraints). Behavioral
 correctness lives in the test suite.
 
+## Local verification environment (dev dependencies)
+
+The runtime is stdlib-only, but the **test suite** needs a few dev-only
+packages that CI installs and a bare system Python typically lacks. On a
+PEP 668 "externally managed" interpreter (Homebrew/macOS system Python),
+`pip install --user` is refused — use a venv:
+
+```bash
+python3 -m venv .venv-test
+.venv-test/bin/pip install -e '.[test,research]'
+.venv-test/bin/python -m pytest tests/
+```
+
+The extras are the canonical dep lists (`pyproject.toml`): base supplies
+`jsonschema`, `[test]` supplies `pytest` + `PyYAML`, `[research]` supplies
+`httpx` + `pypdf`. What breaks without each (observed 2026-08-16):
+
+| Package | Absent → |
+|---|---|
+| `jsonschema` (base) | `agentteams.canonical` fails at import; schema-validation tests and every test importing `canonical`/`absorb` error at collection |
+| `httpx` (`[research]`) | all `tests/test_research_*.py` error at collection |
+| `pypdf` (`[research]`) | the two PDF-extraction tests skip (guarded with `pytest.importorskip`) |
+| `PyYAML` (`[test]`) | `canonical._load_yaml_block` uses the built-in minimal-subset parser instead — covered by its own tests either way |
+
 ## Out of scope
 
 - Containerisation (Dockerfile / devcontainer) — separate future work.
 - Network reachability checks — CI runners have their own contract.
-- Python package presence — handled by `pip install -e .`; the preflight
-  must remain runnable on a bare interpreter to deliver a useful error.
+- Python package presence for the *preflight* — handled by `pip install -e .`
+  and the venv recipe above; the preflight itself must remain runnable on a
+  bare interpreter to deliver a useful error.
