@@ -174,7 +174,7 @@ def test_cooldown_is_unconditional_across_ecosystems():
     next_section = text.index("### HALT vs. CONDITIONAL PASS Escalation Criteria")
     body = text[rule_start:next_section]
     assert "wait before installing" in body
-    assert "all\n  ecosystems" in body or "all ecosystems" in body.replace("\n  ", " ")
+    assert "all ecosystems" in body.replace("\n  ", " ")
     # Distro-curated security updates of installed packages are remediation, not adoption.
     assert "remediation, not adoption" in body
     playbook = _format_prevention_playbook([])

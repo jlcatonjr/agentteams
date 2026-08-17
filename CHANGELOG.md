@@ -17,9 +17,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   npm: the PyPI JSON API's `upload_time_iso_8601` for age checks (`pip index versions` lists
   no dates), and uv `--exclude-newer <date>` alongside `npm install --before`, pnpm
   `minimumReleaseAge`, and Renovate/Dependabot cooldowns. New clarification: upgrading an
-  already-installed package through its distribution's curated security channel
-  (apt/dnf/apk, DSA/USN/RHSA-backed) is remediation, not adoption — the cooldown does not
-  apply there.
+  already-installed package through its distribution's **own** curated security channel
+  (apt/dnf/apk with a DSA/USN/RHSA-backed update) is remediation, not adoption — the
+  cooldown does not apply there; third-party repositories, PPAs, and vendor-added apt/dnf
+  sources are not that channel.
 
 ### fixed (2026-08-16 open-items remediation: hook import crash, YAML roster loss, bridge reports)
 

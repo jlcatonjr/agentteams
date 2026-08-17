@@ -53,7 +53,9 @@ Every generated `@security` agent carries two install-time defaults
    `npm view <pkg> time` or the PyPI JSON API's `upload_time_iso_8601`; pin
    exact versions with a lockfile. Distro-curated security updates of
    already-installed packages (apt/dnf/apk, DSA/USN/RHSA-backed) are
-   remediation, not adoption — the cooldown does not apply to them.
+   remediation, not adoption — the cooldown does not apply to them
+   (third-party repositories, PPAs, and vendor-added sources are not that
+   channel).
 
 The cooldown never delays remediating an already-installed vulnerable version —
 KEV/patch-urgency guidance takes precedence. A release that itself fixes a

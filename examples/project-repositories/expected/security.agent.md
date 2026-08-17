@@ -230,7 +230,8 @@ known-vulnerable or too new to trust.
   Renovate/Dependabot cooldown settings). Upgrading an already-installed package through
   its distribution's own curated security channel (apt/dnf/apk with a DSA/USN/RHSA-backed
   update) is remediation, not adoption — the cooldown and its per-release review do not
-  apply there; the cooldown governs artifacts new to the system
+  apply there (third-party repositories, PPAs, and vendor-added apt/dnf sources are not
+  that channel); the cooldown governs artifacts new to the system
 - ✅ Pin exact versions with a lockfile so both checks are enforceable and reproducible
 - ✅ **Exception:** a release that itself fixes a vulnerability affecting this project may be
   adopted inside the cooldown window only when the fix maps to an independently published
