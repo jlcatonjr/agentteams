@@ -43,12 +43,19 @@ Every generated `@security` agent carries two install-time defaults
    install, search reliable sources (OSV.dev, Snyk Vulnerability DB, NVD,
    GitHub Advisories, `npm audit` / `pip-audit` / `cargo audit`) for known
    vulnerabilities in the exact name and version being adopted.
-2. **Package-release cooldown** — do not adopt a release published less than
-   **14 days** ago (a configurable default; npm especially, given the recent
-   wave of registry supply-chain compromises). Enforce mechanically where
-   tooling allows: `npm install --before=<date>`, pnpm `minimumReleaseAge`,
-   Renovate/Dependabot cooldown; check age with `npm view <pkg> time`; pin
-   exact versions with a lockfile.
+2. **Package-release cooldown** — if a release is less than **14 days** old,
+   wait before installing it (a configurable default that governs every
+   update and installation in every ecosystem — npm, PyPI, crates.io,
+   Homebrew, …; npm is the motivating precedent after the recent registry
+   supply-chain wave, not the scope). Enforce mechanically where tooling
+   allows: `npm install --before=<date>`, pnpm `minimumReleaseAge`,
+   uv `--exclude-newer <date>`, Renovate/Dependabot cooldown; check age with
+   `npm view <pkg> time` or the PyPI JSON API's `upload_time_iso_8601`; pin
+   exact versions with a lockfile. Distro-curated security updates of
+   already-installed packages (apt/dnf/apk, DSA/USN/RHSA-backed) are
+   remediation, not adoption — the cooldown does not apply to them
+   (third-party repositories, PPAs, and vendor-added sources are not that
+   channel).
 
 The cooldown never delays remediating an already-installed vulnerable version —
 KEV/patch-urgency guidance takes precedence. A release that itself fixes a

@@ -1,10 +1,10 @@
 {
   "artifact_type": "delivery-receipt",
   "receipt_schema_version": "1.0",
-  "delivered_at": "2026-08-16T21:44:54Z",
+  "delivered_at": "2026-08-17T12:04:30Z",
   "project_name": "WebAppBackend",
   "framework": "copilot-vscode",
-  "manifest_fingerprint": "e01258bde37f0409",
+  "manifest_fingerprint": "96ca5b822cffe03d",
   "fingerprint_algo_version": 1,
   "output_dir": "examples/software-project/expected",
   "agentteams_version": "1.0.0rc6"

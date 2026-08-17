@@ -21,14 +21,12 @@
     "cli-and-examples",
     "test-suite"
   ],
-  "files_written": [
-    ".claude/agents/references/runtime-handoffs.json"
-  ],
+  "files_written": [],
   "manual_required": 0,
   "template_hashes": {
     "universal/orchestrator.template.md": "7cb6cc382bcde9ca",
     "universal/navigator.template.md": "5a0d707a9f3f5cec",
-    "universal/security.template.md": "480c75c5d6b0975d",
+    "universal/security.template.md": "468196372c0b8aab",
     "universal/code-hygiene.template.md": "72e2a1f9ec316852",
     "universal/adversarial.template.md": "0dbc3c4284139780",
     "universal/conflict-auditor.template.md": "d0e6ed3e98ba1f86",
@@ -476,16 +474,13 @@
     "repo-liaison",
     "git-operations"
   ],
-  "manifest_fingerprint": "c804df111e3d70be",
+  "manifest_fingerprint": "c37fe6023b1cd3ef",
   "fingerprint_algo_version": 1,
   "file_hashes": {
-    "references/runtime-handoffs.json": "368f6e784b20b0c8",
-    "references/security-vulnerability-watch.reference.md": "cdd9dfce23161a4b",
-    "references/security-vulnerability-watch.json": "3cc2f095ecb483e8",
-    "references/framework-watch.reference.md": "b708f4754fbbe5a4",
-    "orchestrator.md": "94a76a977f57b6eb",
-    "security.md": "5a21d266df66b102",
-    "work-summarizer.md": "b97624d6eb50c18c",
+    "references/security-vulnerability-watch.reference.md": "b94fdd4829657386",
+    "references/security-vulnerability-watch.json": "5f6dd8174b8c6c41",
+    "references/framework-watch.reference.md": "981fd00a5167717d",
+    "security.md": "428b2b9f12e808eb",
     "references/code-hygiene-rules.reference.md": "4619d004d000dafc",
     "references/unix-philosophy-mapping.reference.md": "dae1e088560a2336",
     "references/security-linux-hardening.reference.md": "0e91aeed201cf710",
@@ -494,10 +489,11 @@
     "references/ai-bad-habits-watch.reference.md": "51487a0c1aef349d",
     "references/adjacent-repos.md": "cd33efa6ab392c33",
     "references/github-workflows-merge.reference.md": "c4d84237da7bca5a",
-    "references/retrospective-remediation.reference.md": "8cba9df961b711f2",
     "references/retrieval-integration.reference.md": "b69a6be42636a3c9",
     "references/retrieval-trigger-contract.reference.md": "461a3cf4e58a2521",
     "../CLAUDE.md": "3e1ba7adc42b78ce",
+    "references/runtime-handoffs.json": "368f6e784b20b0c8",
+    "orchestrator.md": "94a76a977f57b6eb",
     "navigator.md": "8f3b1d022dbc1357",
     "code-hygiene.md": "e5552d65481f4070",
     "adversarial.md": "0174b275c5fb7b2d",
@@ -508,6 +504,7 @@
     "agent-refactor.md": "8d4c98d56a175597",
     "repo-liaison.md": "7dfe570ce4b24ca5",
     "git-operations.md": "c26c371259d7ba3a",
+    "work-summarizer.md": "b97624d6eb50c18c",
     "primary-producer.md": "de695c574e3cab21",
     "quality-auditor.md": "671d5b5f1c831471",
     "cohesion-repairer.md": "8a5eb23204a2c78b",
@@ -523,6 +520,7 @@
     "references/work-summary-backfill.reference.md": "845ee35bc64ee727",
     "references/parallelization.reference.md": "d2321bf5ac1ed2f8",
     "references/instruction-authority.reference.md": "93da11dadb623013",
+    "references/retrospective-remediation.reference.md": "8cba9df961b711f2",
     "references/cli-tool-discovery.reference.md": "ebf4a4f64eb2dfb7",
     "references/skill-generation.reference.md": "5dc99a3a146ba505",
     "references/external-retrieval-quality-gate.reference.md": "14a48ec3ba3fe3ff",
@@ -538,20 +536,15 @@
     "references/pipeline-graph.md": "21579e6e275596ff"
   },
   "front_matter_baseline": {
-    "orchestrator.md": {
-      "name": "Orchestrator \u2014 AgentTeamsModule",
-      "description": "\"Coordinates all agent operations for AgentTeamsModule: routes work to domain agents, enforces constitutional rules, and closes every multi-file session with a consistency check.\"",
-      "tools": "Read, Edit, Write, Grep, Glob, Bash, TodoWrite, Task"
-    },
     "security.md": {
       "name": "Security \u2014 AgentTeamsModule",
       "description": "\"Top-priority security sentinel: reviews actions for credential exposure, destructive operations, sensitive content leakage, and reference integrity before any sensitive action proceeds\"",
       "tools": "Read, Grep, Glob"
     },
-    "work-summarizer.md": {
-      "name": "Work Summarizer \u2014 AgentTeamsModule",
-      "description": "\"Synthesizes daily, weekly, and monthly work summaries from canonical plan artifacts and git evidence for AgentTeamsModule; supports append-first daily capture, legacy tmp/ fallback, and required adversarial/conflict audits\"",
-      "tools": "Read, Grep, Glob, Bash, Edit, Write, Task"
+    "orchestrator.md": {
+      "name": "Orchestrator \u2014 AgentTeamsModule",
+      "description": "\"Coordinates all agent operations for AgentTeamsModule: routes work to domain agents, enforces constitutional rules, and closes every multi-file session with a consistency check.\"",
+      "tools": "Read, Edit, Write, Grep, Glob, Bash, TodoWrite, Task"
     },
     "navigator.md": {
       "name": "Navigator \u2014 AgentTeamsModule",
@@ -602,6 +595,11 @@
       "name": "Git Operations \u2014 AgentTeamsModule",
       "description": "\"Executes and governs Git and GitHub operations in AgentTeamsModule, including commit/push, pull/merge/rebase, conflict handling, and recovery workflows.\"",
       "tools": "Read, Bash, Grep, Glob"
+    },
+    "work-summarizer.md": {
+      "name": "Work Summarizer \u2014 AgentTeamsModule",
+      "description": "\"Synthesizes daily, weekly, and monthly work summaries from canonical plan artifacts and git evidence for AgentTeamsModule; supports append-first daily capture, legacy tmp/ fallback, and required adversarial/conflict audits\"",
+      "tools": "Read, Grep, Glob, Bash, Edit, Write, Task"
     },
     "primary-producer.md": {
       "name": "Primary Producer \u2014 AgentTeamsModule",

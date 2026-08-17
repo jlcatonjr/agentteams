@@ -1,10 +1,10 @@
 {
   "artifact_type": "delivery-receipt",
   "receipt_schema_version": "1.0",
-  "delivered_at": "2026-08-16T21:44:17Z",
+  "delivered_at": "2026-08-17T12:03:51Z",
   "project_name": "ResearchPaperProject",
   "framework": "copilot-vscode",
-  "manifest_fingerprint": "68b49afcd6c81751",
+  "manifest_fingerprint": "bb34582f9b791ef4",
   "fingerprint_algo_version": 1,
   "output_dir": "examples/research-project/expected",
   "agentteams_version": "1.0.0rc6"

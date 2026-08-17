@@ -116,7 +116,7 @@ def _format_prevention_playbook(vulns: list[dict]) -> str:
         "- When patching is blocked, define compensating controls (WAF rules, ACL tightening, feature disablement).",
         "- Add detections for exploitation attempts and verify telemetry coverage for affected assets.",
         "- Before any package/module install, search reliable sources (OSV.dev, Snyk Vulnerability DB, NVD, GitHub Advisories, `npm audit`/`pip-audit`) for known vulnerabilities in the exact name and version being adopted.",
-        "- Apply a package-release cooldown (default 14 days) before adopting a newly published release — npm especially — so registry scanners can catch malicious releases first; the cooldown never delays remediating an already-installed vulnerable version, and a security fix backed by a published CVE/GHSA/OSV advisory may bypass it after review.",
+        "- Apply a package-release cooldown (default 14 days) before adopting a newly published release — every ecosystem and installer, not only npm — so registry scanners can catch malicious releases first; the cooldown never delays remediating an already-installed vulnerable version, and a security fix backed by a published CVE/GHSA/OSV advisory may bypass it after review.",
     ]
     if actions:
         base.append("- Vendor/CISA required actions:")
