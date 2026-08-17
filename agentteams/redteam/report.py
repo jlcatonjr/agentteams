@@ -113,12 +113,22 @@ def render_discoveries(findings: Findings) -> str:
     return "\n".join(lines) + "\n"
 
 
-def render_remediation_skeleton(findings: Findings, selfaudit: SelfAuditResult) -> str:
+def render_remediation_skeleton(
+    findings: Findings,
+    selfaudit: SelfAuditResult,
+    kev_terms: frozenset[str] | None = None,
+) -> str:
     """Render ``remediation.plan.md`` — one row per open item, no decisions made.
 
     Args:
         findings: Phase 1 + 2 results.
         selfaudit: Phase 6 results.
+        kev_terms: Product/vendor/package names from the @security agent's already-fetched
+            threat-intel cache (improvement item I3), or ``None`` when unavailable. Purely
+            data — this function does no filesystem access itself; the caller (``cycle.py``)
+            loads the cache, this only does a best-effort case-insensitive substring match
+            against each row's own text and appends an ADVISORY note on a hit. Never changes
+            a row's content, ordering, or implies a decision — the skeleton stays a skeleton.
 
     Returns:
         The document text.
@@ -140,28 +150,49 @@ def render_remediation_skeleton(findings: Findings, selfaudit: SelfAuditResult) 
         "| # | source | item | verifier (fill in) | rehearsal target (fill in) |",
         "|---|---|---|---|---|",
     ]
+    def _row(row_num: int, source: str, item_text: str) -> str:
+        note = _kev_correlation_note(item_text, kev_terms)
+        return f"| {row_num} | {source} | {item_text}{note} | | |"
+
     row = 0
     for pid in findings.exploited:
         row += 1
-        lines.append(f"| {row} | probe | {pid} returned EXPLOITED — a measured attack is live | | |")
+        lines.append(_row(row, "probe", f"{pid} returned EXPLOITED — a measured attack is live"))
     for item in findings.control_failures:
         row += 1
-        lines.append(f"| {row} | harness | control probe {item} failed | | |")
+        lines.append(_row(row, "harness", f"control probe {item} failed"))
     for item in findings.registration_problems:
         row += 1
-        lines.append(f"| {row} | harness | {item} | | |")
+        lines.append(_row(row, "harness", item))
     for item in findings.corpus_mismatches:
         row += 1
-        lines.append(f"| {row} | harness | {item} | | |")
+        lines.append(_row(row, "harness", item))
     for finding in selfaudit.findings:
         row += 1
         lines.append(
-            f"| {row} | {finding.check} | {finding.subject}: {finding.detail} "
-            f"(→ {finding.remedy}) | | |"
+            _row(row, finding.check, f"{finding.subject}: {finding.detail} (→ {finding.remedy})")
         )
     if row == 0:
         lines.append("| — | — | nothing open | — | — |")
     return "\n".join(lines) + "\n"
+
+
+def _kev_correlation_note(item_text: str, kev_terms: frozenset[str] | None) -> str:
+    """Best-effort, advisory-only substring correlation (improvement item I3).
+
+    Never a claim of certainty — a matched term means the finding's own text happens to
+    contain a product/vendor/package name the @security agent's cache also flags, nothing
+    more. No match, or no cache available, renders no note at all.
+    """
+    if not kev_terms:
+        return ""
+    lowered = item_text.lower()
+    # A short/common term (e.g. a 2-3 char vendor abbreviation) would match almost any
+    # sentence and turn an advisory signal into noise — require a minimum length.
+    hit = next((t for t in kev_terms if t and len(t) >= 4 and t.lower() in lowered), None)
+    if hit is None:
+        return ""
+    return f" *(advisory: '{hit}' also appears in the cached threat-intel watch — not a claim of relevance, worth a look)*"
 
 
 def render_selfaudit(selfaudit: SelfAuditResult, generated_at: str) -> str:
@@ -233,23 +264,30 @@ def render_selfaudit(selfaudit: SelfAuditResult, generated_at: str) -> str:
     return "\n".join(lines).rstrip() + "\n"
 
 
-def artifact_texts(findings: Findings, selfaudit: SelfAuditResult) -> dict[str, str]:
+def artifact_texts(
+    findings: Findings,
+    selfaudit: SelfAuditResult,
+    kev_terms: frozenset[str] | None = None,
+) -> dict[str, str]:
     """Return every artifact as ``filename -> text``, written by nothing here.
 
     Rendering and writing are separated so ``--dry-run`` is a property of the caller rather
     than a flag threaded through the renderers — the renderers have no filesystem access at
     all, which is the only way "a dry run writes nothing" is provable rather than promised.
+    ``kev_terms`` (improvement item I3) keeps that guarantee: it is pure data the caller
+    already loaded, not a path this function would read itself.
 
     Args:
         findings: Phase 1 + 2 results.
         selfaudit: Phase 6 results.
+        kev_terms: See :func:`render_remediation_skeleton`.
 
     Returns:
         ``{filename: text}`` for the three markdown artifacts.
     """
     return {
         DISCOVERIES_NAME: render_discoveries(findings),
-        REMEDIATION_NAME: render_remediation_skeleton(findings, selfaudit),
+        REMEDIATION_NAME: render_remediation_skeleton(findings, selfaudit, kev_terms),
         SELFAUDIT_NAME: render_selfaudit(selfaudit, findings.generated_at),
     }
 

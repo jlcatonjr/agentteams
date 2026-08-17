@@ -798,6 +798,26 @@ def _run_redteam(args: argparse.Namespace) -> int:
     generated_at = now.isoformat().replace("+00:00", "Z")
     dry_run = bool(getattr(args, "dry_run", False))
 
+    if getattr(args, "redteam_freshness_check", False):
+        from agentteams.redteam.freshness import run_freshness_check
+
+        try:
+            import agentteams.research  # noqa: F401
+        except ImportError:
+            print(
+                "Error: --redteam-freshness-check needs the optional research extra. "
+                "Install with: pip install agentteams[research]",
+                file=sys.stderr,
+            )
+            return 2
+        path = run_freshness_check(root, dry_run=dry_run)
+        if dry_run:
+            print(f"  --dry-run: would write candidates to {path}")
+        else:
+            print(f"  ✓  Candidates written to {path}")
+            print("     Human triage only — nothing here was added to the probe corpus.")
+        return 0
+
     if getattr(args, "accept_probe_baseline", False):
         module = getattr(args, "redteam_probes", None)
         if not module:

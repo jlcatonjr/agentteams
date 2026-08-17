@@ -37,6 +37,7 @@ from pathlib import Path
 
 from agentteams.redteam import realcopy, report as report_mod
 from agentteams.redteam.checks_report import build_probe_baseline
+from agentteams.redteam.kev_correlation import load_kev_terms
 from agentteams.redteam.registry import PROBE_BASELINE_REL
 from agentteams.redteam.runner import Findings, run_attack_phase
 from agentteams.redteam.selfaudit import SelfAuditResult, run_selfaudit
@@ -136,7 +137,8 @@ def run_cycle(
         report_dir=report_dir,
         rendered={report_mod.DISCOVERIES_NAME: discoveries},
     )
-    texts = report_mod.artifact_texts(findings, selfaudit)
+    kev_terms = load_kev_terms(root)
+    texts = report_mod.artifact_texts(findings, selfaudit, kev_terms)
     texts[report_mod.DISCOVERIES_NAME] = discoveries
 
     # The delta, taken after the probes have run and before the artifacts are written: the

@@ -617,6 +617,20 @@ nothing. Refused under `--dry-run`.
 
 Record what you concluded in the affected probe's `note` field before committing.
 
+### `--redteam-freshness-check`
+
+Search for newly disclosed AI-adversary techniques and write candidate strings — for **human
+triage only** — to `references/redteam-freshness-candidates.md`.
+
+**Operator command, not part of the standing audit or any cycle phase.** Requires
+`pip install agentteams[research]`; without it, exits `2` with a clear message. Uses
+`agentteams.research.search` (a small, fixed, declared query set — never open-ended) but not
+`agentteams.research.verify`'s automated corroboration, which needs a caller-supplied LLM chat
+function this command has no plumbing for. Results are raw search output, never claimed as
+verified, and never written to the probe corpus or the registry — this measures and reports,
+exactly like the standing audit, it just does so on demand instead of on a schedule. Honours
+`--dry-run`.
+
 ### `--verify-waivers`
 
 Read-only: report the validity (signature, expiry, use-limit, conditions) of every security waiver in `references/security-waivers.log.csv` under `--output`/`--project` (else CWD). Never mints or consumes a waiver. Exits non-zero if any waiver is invalid. Requires `AGENTTEAMS_WAIVER_SIGNING_KEY` to verify signatures; without it, rows report as unverifiable.

@@ -172,11 +172,17 @@ def _main_dispatch(
     # checks (no description/generation needed). The exit code IS the verdict.
     # -----------------------------------------------------------------------
     # -----------------------------------------------------------------------
-    # --redteam: the standing red-team audit. Read-only against the repository;
-    # writes only under the report dir. Dispatched before the generation
-    # pipeline because it needs no description and renders no templates.
+    # --redteam / --redteam-freshness-check: the standing red-team audit, or the
+    # separate operator-only corpus-freshness search. Both read-only against the
+    # repository, writing only under the report dir (or references/); dispatched
+    # before the generation pipeline because neither needs a description or renders
+    # templates.
     # -----------------------------------------------------------------------
-    if getattr(args, "redteam", False) or getattr(args, "accept_probe_baseline", False):
+    if (
+        getattr(args, "redteam", False)
+        or getattr(args, "accept_probe_baseline", False)
+        or getattr(args, "redteam_freshness_check", False)
+    ):
         return _run_redteam(args)
 
     if getattr(args, "write_integrity_manifest", False):

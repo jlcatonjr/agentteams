@@ -837,6 +837,21 @@ def _build_parser() -> argparse.ArgumentParser:
         ),
     )
     parser.add_argument(
+        "--redteam-freshness-check",
+        action="store_true",
+        dest="redteam_freshness_check",
+        default=False,
+        help=(
+            "OPERATOR COMMAND, not part of the standing audit or any cycle phase: search "
+            "for newly disclosed AI-adversary techniques (via the optional `agentteams"
+            "[research]` extra) and write candidate strings for human triage to "
+            "references/redteam-freshness-candidates.md. Never writes to the probe corpus "
+            "or the registry — measures and reports only. Requires "
+            "`pip install agentteams[research]`; without it, exits 2 with a clear message. "
+            "Honours --dry-run."
+        ),
+    )
+    parser.add_argument(
         "--accept-probe-baseline",
         action="store_true",
         dest="accept_probe_baseline",

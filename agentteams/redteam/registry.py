@@ -117,6 +117,10 @@ class Probe:
         evidence: The observed behaviour, verbatim where possible.
         control: The paired control probe's ``pid``, or ``None`` for a control probe.
         notes: Free-text context.
+        external_refs: External taxonomy ids this probe corresponds to (e.g.
+            ``"LLM06"``, ``"AML.TA0003"``), where a defensible mapping exists. Empty by
+            default — never guessed; see :mod:`agentteams.redteam.coverage` for how
+            this is used to report taxonomy coverage.
     """
 
     pid: str
@@ -128,6 +132,7 @@ class Probe:
     evidence: str
     control: str | None = None
     notes: str = ""
+    external_refs: tuple[str, ...] = ()
 
     @property
     def is_control(self) -> bool:

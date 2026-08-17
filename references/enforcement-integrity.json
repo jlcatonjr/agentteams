@@ -7,7 +7,7 @@
     "agentteams/integrity.py": "1b0269204f99874be9095ffd7f1ca4107e2c7c45c03f5da2300518c450205b0e",
     "agentteams/redteam/checks_report.py": "3e13cc5ebf19b4b393ef0a2ee663d097ff2be3666d38b7f61203503ee77ffd24",
     "agentteams/redteam/checks_static.py": "44b3f830ad5b23a2f16f9938b9fa282a4cd5847e677703fb611208be7b37f738",
-    "agentteams/redteam/registry.py": "94e2499d58e926ec5325d536ba1952f933597f4317039b9e8cabf4b0820b8a9d",
+    "agentteams/redteam/registry.py": "6e0f0f86105265eb0345d4e9b3d38fede491c033d71e7773d93507ee5a41a2a8",
     "agentteams/scan.py": "ec05a9c812a456f13eaa84efd976b136a06e3d9b4f5b34ee75f6b2688a0e07b2",
     "agentteams/unfenced.py": "f93ba361487463aa51f3124da7421a77f87ee0e617a59248b231d9a08f077905"
   },
