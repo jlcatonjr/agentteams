@@ -21,30 +21,32 @@
     "cli-and-examples",
     "test-suite"
   ],
-  "files_written": [],
+  "files_written": [
+    ".claude/agents/references/runtime-handoffs.json"
+  ],
   "manual_required": 0,
   "template_hashes": {
-    "universal/orchestrator.template.md": "a2e46ef24984366c",
-    "universal/navigator.template.md": "be2f562228ea5e1f",
-    "universal/security.template.md": "f0903dbb0ec12bbb",
-    "universal/code-hygiene.template.md": "7b1eae41ef75358d",
-    "universal/adversarial.template.md": "3923a13f4fb1ae6a",
-    "universal/conflict-auditor.template.md": "435941d404f59376",
-    "universal/conflict-resolution.template.md": "ff21ac7e7e1fc63c",
-    "universal/cleanup.template.md": "bf795b64968349f6",
-    "universal/agent-updater.template.md": "c9636a2efa322a6d",
-    "universal/agent-refactor.template.md": "a9717cc56c35f4ac",
-    "universal/repo-liaison.template.md": "a41269c1204528f3",
-    "universal/git-operations.template.md": "82546b5e807d9c98",
-    "domain/work-summarizer.template.md": "a5ec071b36f88a5c",
-    "domain/primary-producer.template.md": "35bf874350a29a94",
-    "domain/quality-auditor.template.md": "bc44c5742a92d831",
-    "domain/cohesion-repairer.template.md": "a2c3b4844110b04a",
-    "domain/technical-validator.template.md": "8cc603acf4b577e6",
-    "domain/format-converter.template.md": "ecf8c801f1d66dab",
-    "domain/reference-manager.template.md": "e5541ea9e2cb7560",
-    "domain/output-compiler.template.md": "fd90f3a13765386a",
-    "domain/retrieval-integrator.template.md": "8ff8da9c4e4f9e92",
+    "universal/orchestrator.template.md": "7cb6cc382bcde9ca",
+    "universal/navigator.template.md": "5a0d707a9f3f5cec",
+    "universal/security.template.md": "480c75c5d6b0975d",
+    "universal/code-hygiene.template.md": "72e2a1f9ec316852",
+    "universal/adversarial.template.md": "0dbc3c4284139780",
+    "universal/conflict-auditor.template.md": "d0e6ed3e98ba1f86",
+    "universal/conflict-resolution.template.md": "fd74ccfd546065c4",
+    "universal/cleanup.template.md": "dd3c78f2548c4686",
+    "universal/agent-updater.template.md": "1462c430bf7051c7",
+    "universal/agent-refactor.template.md": "fb1956da5b1140a2",
+    "universal/repo-liaison.template.md": "57b1c8654c320d59",
+    "universal/git-operations.template.md": "c000c51feb44ad64",
+    "domain/work-summarizer.template.md": "90b19b91ff48a953",
+    "domain/primary-producer.template.md": "e02c72f74753e2a3",
+    "domain/quality-auditor.template.md": "6ce15b22e2a72237",
+    "domain/cohesion-repairer.template.md": "58bee448f014dfde",
+    "domain/technical-validator.template.md": "a8ebdc034168749f",
+    "domain/format-converter.template.md": "779aa293419a88ef",
+    "domain/reference-manager.template.md": "7eae1ecba0c1e819",
+    "domain/output-compiler.template.md": "c08d60a4578e90a4",
+    "domain/retrieval-integrator.template.md": "025d959fa51b86ae",
     "domain/tool-reference.template.md": "5ce5638b7094cc86",
     "domain/code-hygiene-rules-reference.template.md": "cf49b61dc45e4ca4",
     "domain/unix-philosophy-mapping-reference.template.md": "702af6b4e9e2b952",
@@ -63,16 +65,16 @@
     "universal/parallelization.reference.template.md": "2c872341050a7781",
     "universal/instruction-authority.reference.template.md": "72149ab5244f9be3",
     "universal/redteam-methodology.reference.template.md": "a0443337a9796294",
-    "universal/retrospective-remediation.reference.template.md": "2ee97598dca23e68",
+    "universal/retrospective-remediation.reference.template.md": "f79be49ac31f6266",
     "universal/cli-tool-discovery.reference.template.md": "203004e771c8b2fd",
     "universal/skill-generation.reference.template.md": "47bcf76ed8f69a80",
     "universal/external-retrieval-quality-gate.reference.template.md": "3922b0a2e99e75a3",
     "universal/retrieval-integration.reference.template.md": "71cbf701c97a6e22",
     "universal/retrieval-trigger-contract.reference.template.md": "b5934b1f48552945",
-    "workstream-expert.template.md": "95f33fe5d05d80e7",
+    "workstream-expert.template.md": "145061461736b92b",
     "copilot-instructions.template.md": "bc94e8e32a6b2cff",
     "builder/team-builder-claude.template.md": "d6158978f4955fc1",
-    "domain/content-enricher.template.md": "8176cebe85aace8f"
+    "domain/content-enricher.template.md": "79ddbbf48720bcc7"
   },
   "output_files_map": [
     {
@@ -474,13 +476,16 @@
     "repo-liaison",
     "git-operations"
   ],
-  "manifest_fingerprint": "2864e29645acceac",
+  "manifest_fingerprint": "c804df111e3d70be",
   "fingerprint_algo_version": 1,
   "file_hashes": {
-    "references/security-vulnerability-watch.reference.md": "38a7955ed1466000",
-    "references/security-vulnerability-watch.json": "e9b59f36fa8771dc",
-    "references/framework-watch.reference.md": "2cb704571c70cd1b",
-    "security.md": "d2ecd4d63d0d063b",
+    "references/runtime-handoffs.json": "368f6e784b20b0c8",
+    "references/security-vulnerability-watch.reference.md": "cdd9dfce23161a4b",
+    "references/security-vulnerability-watch.json": "3cc2f095ecb483e8",
+    "references/framework-watch.reference.md": "b708f4754fbbe5a4",
+    "orchestrator.md": "94a76a977f57b6eb",
+    "security.md": "5a21d266df66b102",
+    "work-summarizer.md": "b97624d6eb50c18c",
     "references/code-hygiene-rules.reference.md": "4619d004d000dafc",
     "references/unix-philosophy-mapping.reference.md": "dae1e088560a2336",
     "references/security-linux-hardening.reference.md": "0e91aeed201cf710",
@@ -489,30 +494,28 @@
     "references/ai-bad-habits-watch.reference.md": "51487a0c1aef349d",
     "references/adjacent-repos.md": "cd33efa6ab392c33",
     "references/github-workflows-merge.reference.md": "c4d84237da7bca5a",
+    "references/retrospective-remediation.reference.md": "8cba9df961b711f2",
     "references/retrieval-integration.reference.md": "b69a6be42636a3c9",
     "references/retrieval-trigger-contract.reference.md": "461a3cf4e58a2521",
-    "../CLAUDE.md": "080f1bcea086c077",
-    "references/runtime-handoffs.json": "368f6e784b20b0c8",
-    "orchestrator.md": "ea895d0d50065331",
-    "navigator.md": "0f15b4c7c627b6f2",
+    "../CLAUDE.md": "3e1ba7adc42b78ce",
+    "navigator.md": "8f3b1d022dbc1357",
     "code-hygiene.md": "e5552d65481f4070",
-    "adversarial.md": "df8196f00d07ef75",
-    "conflict-auditor.md": "8ca4022c2473a617",
-    "conflict-resolution.md": "4b64e9bec4ebd0fd",
-    "cleanup.md": "1f6e18bbd3033bb5",
+    "adversarial.md": "0174b275c5fb7b2d",
+    "conflict-auditor.md": "7ae76b7462380e38",
+    "conflict-resolution.md": "327bb02fc8743f97",
+    "cleanup.md": "9539f1bfbf9bd05e",
     "agent-updater.md": "5906f984922b19b0",
-    "agent-refactor.md": "9dad355e21d543f3",
-    "repo-liaison.md": "3a25c21d4e126e51",
-    "git-operations.md": "95dea3e4d3c3c3ee",
-    "work-summarizer.md": "adac9563429f8570",
-    "primary-producer.md": "09c439f5dd293488",
-    "quality-auditor.md": "c694d77c4a2911d9",
+    "agent-refactor.md": "8d4c98d56a175597",
+    "repo-liaison.md": "7dfe570ce4b24ca5",
+    "git-operations.md": "c26c371259d7ba3a",
+    "primary-producer.md": "de695c574e3cab21",
+    "quality-auditor.md": "671d5b5f1c831471",
     "cohesion-repairer.md": "8a5eb23204a2c78b",
-    "technical-validator.md": "74ae6f36d53d695f",
+    "technical-validator.md": "316b60fe958d608a",
     "format-converter.md": "e272f52a204eed1e",
-    "reference-manager.md": "747449941f5c768a",
+    "reference-manager.md": "fb05312cd62dd693",
     "output-compiler.md": "a7200e4865a2fe9c",
-    "retrieval-integrator.md": "645475612dbc87c0",
+    "retrieval-integrator.md": "494949c227e137ae",
     "references/ref-pytest-reference.md": "785da59ae0fcefa5",
     "references/ref-json-schema-reference.md": "64ee7849298b80d9",
     "references/work-summary-spec.reference.md": "96232231a1f7c6be",
@@ -520,31 +523,35 @@
     "references/work-summary-backfill.reference.md": "845ee35bc64ee727",
     "references/parallelization.reference.md": "d2321bf5ac1ed2f8",
     "references/instruction-authority.reference.md": "93da11dadb623013",
-    "references/retrospective-remediation.reference.md": "74b01f27f58ba52a",
     "references/cli-tool-discovery.reference.md": "ebf4a4f64eb2dfb7",
     "references/skill-generation.reference.md": "5dc99a3a146ba505",
     "references/external-retrieval-quality-gate.reference.md": "14a48ec3ba3fe3ff",
-    "template-library-expert.md": "960d901d36ca13e3",
-    "pipeline-core-expert.md": "9308306786e277fb",
-    "framework-adapters-expert.md": "0ad3a05250e80e78",
-    "schemas-expert.md": "3ed53f7533cb7a16",
-    "cli-and-examples-expert.md": "49b1eecfdf6476db",
-    "test-suite-expert.md": "49639d5f7144442b",
-    "team-builder.md": "e5e9e156155f5ec0",
+    "template-library-expert.md": "9f412dad9fe22fff",
+    "pipeline-core-expert.md": "fccf325ab2da14b3",
+    "framework-adapters-expert.md": "234c6c00b1016747",
+    "schemas-expert.md": "fd7bd590cb01ef0b",
+    "cli-and-examples-expert.md": "f0d219bdee45fca8",
+    "test-suite-expert.md": "01bc66c2b214726e",
+    "team-builder.md": "6300b8496c357225",
     "SETUP-REQUIRED.md": "642394d04b332357",
     "content-enricher.md": "953024180cf5e7e3",
     "references/pipeline-graph.md": "21579e6e275596ff"
   },
   "front_matter_baseline": {
+    "orchestrator.md": {
+      "name": "Orchestrator \u2014 AgentTeamsModule",
+      "description": "\"Coordinates all agent operations for AgentTeamsModule: routes work to domain agents, enforces constitutional rules, and closes every multi-file session with a consistency check.\"",
+      "tools": "Read, Edit, Write, Grep, Glob, Bash, TodoWrite, Task"
+    },
     "security.md": {
       "name": "Security \u2014 AgentTeamsModule",
       "description": "\"Top-priority security sentinel: reviews actions for credential exposure, destructive operations, sensitive content leakage, and reference integrity before any sensitive action proceeds\"",
       "tools": "Read, Grep, Glob"
     },
-    "orchestrator.md": {
-      "name": "Orchestrator \u2014 AgentTeamsModule",
-      "description": "\"Coordinates all agent operations for AgentTeamsModule: routes work to domain agents, enforces constitutional rules, and closes every multi-file session with a consistency check.\"",
-      "tools": "Read, Edit, Write, Grep, Glob, Bash, TodoWrite, Task"
+    "work-summarizer.md": {
+      "name": "Work Summarizer \u2014 AgentTeamsModule",
+      "description": "\"Synthesizes daily, weekly, and monthly work summaries from canonical plan artifacts and git evidence for AgentTeamsModule; supports append-first daily capture, legacy tmp/ fallback, and required adversarial/conflict audits\"",
+      "tools": "Read, Grep, Glob, Bash, Edit, Write, Task"
     },
     "navigator.md": {
       "name": "Navigator \u2014 AgentTeamsModule",
@@ -569,12 +576,12 @@
     "conflict-resolution.md": {
       "name": "Conflict Resolution \u2014 AgentTeamsModule",
       "description": "\"Makes ACCEPT/REJECT/REVISE decisions on conflicts flagged by the conflict auditor in AgentTeamsModule\"",
-      "tools": "Read, Edit, Write, Grep, Glob"
+      "tools": "Edit, Write, Grep, Glob, Read"
     },
     "cleanup.md": {
       "name": "Cleanup \u2014 AgentTeamsModule",
       "description": "\"Removes stale drafts, build artifacts, and orphaned files from AgentTeamsModule with mandatory safety checks\"",
-      "tools": "Edit, Write, Grep, Glob"
+      "tools": "Edit, Write, Grep, Glob, Bash"
     },
     "agent-updater.md": {
       "name": "Agent Updater \u2014 AgentTeamsModule",
@@ -589,17 +596,12 @@
     "repo-liaison.md": {
       "name": "Repo Liaison \u2014 AgentTeamsModule",
       "description": "\"Tracks agent documentation in repositories adjacent to AgentTeamsModule, communicates cross-repository impacts, maintains the adjacent-repos registry, and coordinates between orchestrators when this project's activity affects neighboring agent infrastructures.\"",
-      "tools": "Read, Edit, Write, Grep, Glob, Task"
+      "tools": "Read, Edit, Write, Grep, Glob, Bash, Task"
     },
     "git-operations.md": {
       "name": "Git Operations \u2014 AgentTeamsModule",
       "description": "\"Executes and governs Git and GitHub operations in AgentTeamsModule, including commit/push, pull/merge/rebase, conflict handling, and recovery workflows.\"",
-      "tools": "Read, Grep, Glob, Bash"
-    },
-    "work-summarizer.md": {
-      "name": "Work Summarizer \u2014 AgentTeamsModule",
-      "description": "\"Synthesizes daily, weekly, and monthly work summaries from canonical plan artifacts and git evidence for AgentTeamsModule; supports append-first daily capture, legacy tmp/ fallback, and required adversarial/conflict audits\"",
-      "tools": "Read, Edit, Write, Grep, Glob, Bash, Task"
+      "tools": "Read, Bash, Grep, Glob"
     },
     "primary-producer.md": {
       "name": "Primary Producer \u2014 AgentTeamsModule",
@@ -629,7 +631,7 @@
     "reference-manager.md": {
       "name": "Reference Manager \u2014 AgentTeamsModule",
       "description": "\"Manages the bibliography and reference database for AgentTeamsModule \u2014 CRUD operations, citation verification, anti-fabrication enforcement\"",
-      "tools": "Read, Edit, Write, Grep, Glob"
+      "tools": "Read, Edit, Write, Grep, Glob, Bash(python -m agentteams.research:*)"
     },
     "output-compiler.md": {
       "name": "Output Compiler \u2014 AgentTeamsModule",
@@ -673,8 +675,8 @@
     },
     "team-builder.md": {
       "name": "Team Builder \u2014 Agent Teams Module",
-      "description": "\"Interactively constructs a complete agent team for a new or existing VS Code Copilot project by conducting an intake interview and invoking the build_team pipeline\"",
-      "tools": "Read, Edit, Write, Grep, Glob, Bash, TodoWrite"
+      "description": "\"Interactively constructs a complete agent team for a new or existing Claude project by conducting an intake interview and invoking the build_team pipeline\"",
+      "tools": "Read, Edit, Write, Grep, Glob, Bash"
     },
     "content-enricher.md": {
       "name": "Content Enricher \u2014 AgentTeamsModule",

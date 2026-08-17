@@ -72,10 +72,10 @@ including where operator instructions and read content sit: `references/instruct
 <!-- AGENTTEAMS:BEGIN authority_hierarchy v=1 -->
 ### Authority Hierarchy
 
-1. **Template library** (`templates/`) — agent file structure, placeholder conventions, agent taxonomy patterns
+1. **Template library** (`agentteams/templates/`) — agent file structure, placeholder conventions, agent taxonomy patterns
 2. **JSON schemas** (`schemas/`) — input/output contract accuracy (project-description.schema.json, team-manifest.schema.json)
-3. **Python source pipeline** (`src/`) — pipeline logic, placeholder resolution, framework adapter behavior
-4. **PLACEHOLDER-CONVENTIONS.md** (`templates/PLACEHOLDER-CONVENTIONS.md`) — placeholder syntax rules (auto-resolved and manual-required token formats)
+3. **Python source pipeline** (`agentteams/`) — pipeline logic, placeholder resolution, framework adapter behavior
+4. **PLACEHOLDER-CONVENTIONS.md** (`agentteams/templates/PLACEHOLDER-CONVENTIONS.md`) — placeholder syntax rules (auto-resolved and manual-required token formats)
 5. **Implementation plan** (`build-team-plan.md`) — architectural decisions, agent taxonomy, module design rationale
 <!-- AGENTTEAMS:END authority_hierarchy -->
 
