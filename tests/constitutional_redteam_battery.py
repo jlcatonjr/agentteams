@@ -586,6 +586,7 @@ def b9_operational_json_allowlist() -> None:
         notes="_OPERATIONAL_JSON_NAMES matches on BASENAME via rglob. Writing a payload to any "
               "path named memory-index.json / doc-hashes.json / build-log.json inherits the "
               "exemption. Directly relevant to LLM08 (poisoned retrieval store).",
+        external_refs=("LLM08",),
     )
 
 
@@ -667,6 +668,7 @@ def c0_control_tools_widening_reported() -> None:
         evidence=f"proposals={proposals}; merged tools={merged.get('tools')!r}",
         control=None,
         notes="Reported, never reverted — the merge keeps the on-disk (wider) value by design.",
+        external_refs=("LLM06",),
     )
 
 
@@ -700,6 +702,7 @@ def c1_allowed_tools_widening_silent() -> None:
               "escalation-specific 'GRANTS MORE than the template' proposal never runs for a "
               "Claude team. A privilege escalation is reported in the same words, and the same "
               "list, as a reworded description.",
+        external_refs=("LLM06",),
     )
 
 
@@ -717,6 +720,7 @@ def c2_capability_parser_format_gap() -> None:
         notes="Second, independent half of the C1 gap: even after adding 'allowed-tools' to the "
               "key set, widening detection would still be dead because the value never parses "
               "to a set. Both must be fixed together.",
+        external_refs=("LLM06",),
     )
 
 
@@ -741,6 +745,7 @@ def c3_no_revert_of_widened_grant() -> None:
               "it does not have. What changed in remediation is that the escalation is now "
               "REPORTED for every capability key including the Claude one (C0/C1/C2); the "
               "non-reversion is the deliberate residue.",
+        external_refs=("LLM06",),
     )
 
 
@@ -915,6 +920,54 @@ def d4_fence_rename() -> None:
               "('the deployed file already carried this section unfenced. Delete the unfenced "
               "copy') — it does not identify a renamed security fence, and the merge writes the "
               "contradictory file regardless.",
+    )
+
+
+def d5_s10_cooldown_text_survives_tamper() -> None:
+    """Reads the REAL live security.template.md fence — not a synthetic paraphrase like
+    SEC_FENCE — so this tests whether THIS SPECIFIC, currently-shipped rule (S-10) survives
+    a merge-attack, closing the gap that D0-D4 only ever exercise a generic hand-typed
+    example. Adjusted scope from the original I6 wording (references/plans/
+    redteam-osint-ost-benchmark-improvements.csv): tests mechanical fence-tamper survival of
+    S-10's text, not whether an LLM agent can be talked into ignoring the rule via injected
+    content -- the latter is a live-model judgment-layer question
+    (references/redteam-judgment-layer.report.md), not something this deterministic-scanner
+    battery can test; security.template.md itself says S-9/S-10-class content 'stays
+    procedural like Rule S-4' (not reducible to a deterministic scanner)."""
+    live_path = REPO / "agentteams" / "templates" / "universal" / "security.template.md"
+    live_text = live_path.read_text(encoding="utf-8")
+    begin_marker = "<!-- AGENTTEAMS:BEGIN security_rules_invariant"
+    end_marker = "<!-- AGENTTEAMS:END security_rules_invariant -->"
+    begin_idx = live_text.index(begin_marker)
+    end_idx = live_text.index(end_marker) + len(end_marker)
+    pristine_fence = live_text[begin_idx:end_idx]
+
+    cooldown_phrase = "if a release is less than 14 days old, wait before installing it"
+    weakened_phrase = "installing a release immediately after publication is fine"
+    assert cooldown_phrase in pristine_fence, (
+        "S-10 cooldown text not found in the live fence — probe target moved, fix the "
+        "anchor string before trusting this probe's result"
+    )
+    weakened_fence = pristine_fence.replace(cooldown_phrase, weakened_phrase)
+    assert weakened_fence != pristine_fence, "tamper produced no change — probe is inert"
+
+    res = _merge_fenced_content(pristine_fence, weakened_fence, False)
+    restored = (
+        cooldown_phrase in res.merged_content and weakened_phrase not in res.merged_content
+    )
+    record(
+        pid="D5",
+        name="S-10's live cooldown text is restored when a deployed copy is tampered",
+        article="C-1", tier="T1",
+        outcome=DEFENDED if restored else EXPLOITED,
+        expected_if_sound="restored",
+        evidence=f"cooldown phrase present={cooldown_phrase in res.merged_content}; "
+                 f"weakened phrase present={weakened_phrase in res.merged_content}",
+        control="D0",
+        notes="Uses the same mechanism D0 already establishes as a control, applied to a "
+              "specific, currently-shipped rule rather than a synthetic example — see the "
+              "docstring above for the full scope-adjustment rationale.",
+        external_refs=("LLM03",),
     )
 
 
@@ -1102,6 +1155,7 @@ PROBES = [
     c2_capability_parser_format_gap, c3_no_revert_of_widened_grant,
     d0_control_tampered_invariant_restored, d1_shrink_preserve_on_security_fence,
     d2_shrink_preserve_on_instruction_authority, d3_fence_marker_deletion, d4_fence_rename,
+    d5_s10_cooldown_text_survives_tamper,
     e1_capability_key_not_honoured, e2_control_runtime_does_restrict_when_asked,
     e3_no_harness_level_clearance_hook, e4_enforcement_code_inside_blast_radius,
 ]

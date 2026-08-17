@@ -21,6 +21,13 @@ this cron. What the cron uniquely provides is the phase-6 self-audit and the dat
 trail, and weekly is an appropriate cadence for both. Reverting to daily is one line — drop
 the trailing ` 1` from the workflow's cron.
 
+**This is also the change-triggered re-test cadence, not only a schedule.** A template or
+corpus edit ships through PR → CI, and CI runs the full battery on every one — so "repeated
+whenever the instructions change" (the recommendation behind item I7,
+`references/plans/redteam-osint-ost-benchmark-improvements.csv`) is already satisfied by the
+existing CI trigger, not something separate to add. Stated here explicitly so the alignment
+is legible to a reader rather than left to infer.
+
 It **measures and reports. It never remediates.** An unattended job that writes remediation
 code is a larger risk than the one it closes. Phases 4, 5 and 7 of the cycle are human- or
 agent-driven, off the artifacts the scheduled run leaves behind.
@@ -234,9 +241,49 @@ it did not look at is the F-4 defect:
   finding report* must fail its own audit gate — the report being produced, not every report
   ever written. Gating on immutable historical documents would leave the scheduled job
   permanently red, and a permanently red job is one nobody reads.
+- **Taxonomy coverage** (item I1). `python -m agentteams.redteam.coverage` diffs which probes
+  are tagged against MITRE ATLAS / OWASP LLM Top 10 (`references/redteam-external-taxonomy.json`,
+  refreshed quarterly, manually). Run separately — an untagged probe is not a defect, and this
+  is corpus-maintenance signal, not a gate.
+- **Corpus freshness search** (item I2). `agentteams --redteam-freshness-check` searches for
+  newly disclosed AI-adversary techniques (needs `agentteams[research]`) and writes candidates
+  to `references/redteam-freshness-candidates.md` for human triage. Deliberately excluded from
+  the cron: it makes network calls, and the standing job must stay network-independent and
+  deterministic.
+
+## Before revising the corpus
+
+Two checklist steps from the OSINT/OST benchmark
+(`references/plans/redteam-osint-ost-benchmark.report.md`), added here rather than as new
+tooling — both are lightweight enough to stay a documented habit:
+
+**Surface inventory (item I4).** Before adding or changing a probe, check what changed in the
+generated-agent surface since the corpus was last revised — a new template section, a new
+fence type, a new CLI flag. `git diff --stat` / `git log` against the last corpus-touching
+commit is enough; the point is to notice new attack surface by inventory, not only reactively
+via an incident (which is how all 38 existing probes were found).
+
+**Inclusion bar (item I10).** A new probe should satisfy the same signal-over-noise bar CISA's
+KEV catalog uses for what it lists: (a) traces to a real observed technique or an external
+taxonomy entry (an ATLAS technique id or OWASP LLM Top-10 risk id — tag it via `external_refs`,
+see `agentteams/redteam/coverage.py`), (b) has a clear, reproducible test procedure, (c) has a
+paired negative control. **(c) is already enforced mechanically** by
+`registry.validate_registration()` — (a) and (b) are not, and stay a human judgment call at
+review time. The same bar is restated as a PR checklist in
+`.github/PULL_REQUEST_TEMPLATE.md`.
+
+## Publishing a novel finding
+
+Informal judgment call (item I5), proportionate to a single-maintainer OSS project — not a new
+gate. Before writing a novel injection-defense pattern discovered here into CHANGELOG or public
+docs, apply the same "the source decides how far this travels" discipline FIRST's Traffic Light
+Protocol states for threat intelligence: is this safe to publish now, or does it describe a
+weakness worth keeping internal until whatever it exploits is actually closed?
 
 ## Related
 
+- `references/plans/redteam-osint-ost-benchmark.report.md` — OSINT/open-threat-intel/AI-redteam
+  best-practice benchmark and the improvement items (I1-I11) referenced above
 - `references/plans/redteam-automation-handoff.plan.md` — the brief this was built from
 - `references/plans/constitutional-redteam-audit-2026-08-06.report.md` — the audit that found the 21 exploits
 - `references/agentteams-remediation-log.csv` — rows with `category=constitutional-redteam`

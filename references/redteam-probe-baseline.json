@@ -170,6 +170,11 @@
       "note": "",
       "outcome": "DEFENDED"
     },
+    "D5": {
+      "evidence_digest": "01e225a5d0cbff3f",
+      "note": "",
+      "outcome": "DEFENDED"
+    },
     "E1": {
       "evidence_digest": "24ee3b8bda398444",
       "note": "2026-08-14: evidence changed because the agent-file count grew from 30 to 35 (api-conformity-tracker.md, pr-manager.md, pr-notifier.md, pr-reminder.md, tool-doc-researcher.md added; zero removed, all five are named, roster-listed agents). Outcome unchanged (DEFENDED); the probe still measures the same thing over a larger population.",

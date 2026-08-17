@@ -1,30 +1,31 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1000 214" width="1000" height="214" font-family="monospace">
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 984 194" width="984" height="194" font-family="monospace">
   <title>agentteams — Architecture</title>
   <defs>
     <marker id="arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
       <polygon points="0,0 10,5 0,10" fill="#8a8a8a"/>
     </marker>
   </defs>
-  <path d="M176,83 L232,83 C268,83 268,155 304,155 L324,155" fill="none" stroke="#8a8a8a" stroke-width="1.5" marker-start="url(#arrow)" marker-end="url(#arrow)"/>
-  <path d="M176,83 L232,83 C268,83 268,31 304,31 L312,31" fill="none" stroke="#8a8a8a" stroke-width="1.5" marker-start="url(#arrow)" marker-end="url(#arrow)"/>
-  <path d="M176,83 L232,83 C268,83 268,117 304,117 L480,117 C516,117 516,69 552,69 L720,69 C756,69 756,107 792,107" fill="none" stroke="#8a8a8a" stroke-width="1.5" marker-start="url(#arrow)" marker-end="url(#arrow)"/>
-  <path d="M176,83 L232,83 C268,83 268,79 304,79" fill="none" stroke="#8a8a8a" stroke-width="1.5" marker-end="url(#arrow)"/>
-  <path d="M460,155 L480,155 C516,155 516,97 552,97 L720,97 C756,97 756,107 792,107" fill="none" stroke="#8a8a8a" stroke-width="1.5" marker-end="url(#arrow)"/>
-  <path d="M460,155 L480,155 C516,155 516,135 552,135" fill="none" stroke="#8a8a8a" stroke-width="1.5" marker-end="url(#arrow)"/>
-  <path d="M552,135 C516,135 516,193 480,193 L304,193 C268,193 268,83 232,83 L176,83" fill="none" stroke="#8a8a8a" stroke-width="1.5" stroke-dasharray="4,3" marker-end="url(#arrow)"/>
-  <path d="M720,135 C756,135 756,107 792,107" fill="none" stroke="#8a8a8a" stroke-width="1.5" marker-end="url(#arrow)"/>
-  <rect x="72" y="68" width="104" height="30" rx="6" fill="#e8eefb" stroke="#1b3fa0" stroke-width="1.5"/>
-  <text x="124" y="88" font-size="13" text-anchor="middle" fill="#000000">agentteams</text>
-  <rect x="324" y="140" width="136" height="30" rx="6" fill="#eef6ee" stroke="#3f8f4f" stroke-width="1.5"/>
-  <text x="392" y="160" font-size="13" text-anchor="middle" fill="#000000">agentteams.cli</text>
-  <rect x="312" y="16" width="160" height="30" rx="6" fill="#eef6ee" stroke="#3f8f4f" stroke-width="1.5"/>
-  <text x="392" y="36" font-size="13" text-anchor="middle" fill="#000000">agentteams.enrich</text>
-  <rect x="16" y="116" width="216" height="30" rx="6" fill="#eef6ee" stroke="#3f8f4f" stroke-width="1.5"/>
-  <text x="124" y="136" font-size="13" text-anchor="middle" fill="#000000">agentteams.eval_adapters</text>
-  <rect x="792" y="92" width="192" height="30" rx="6" fill="#eef6ee" stroke="#3f8f4f" stroke-width="1.5"/>
-  <text x="888" y="112" font-size="13" text-anchor="middle" fill="#000000">agentteams.frameworks</text>
-  <rect x="552" y="120" width="168" height="30" rx="6" fill="#eef6ee" stroke="#3f8f4f" stroke-width="1.5"/>
-  <text x="636" y="140" font-size="13" text-anchor="middle" fill="#000000">agentteams.redteam</text>
-  <rect x="304" y="64" width="176" height="30" rx="6" fill="#eef6ee" stroke="#3f8f4f" stroke-width="1.5"/>
-  <text x="392" y="84" font-size="13" text-anchor="middle" fill="#000000">agentteams.research</text>
+  <path d="M176,73 L232,73 C268,73 268,135 304,135 L316,135" fill="none" stroke="#8a8a8a" stroke-width="1.5" marker-start="url(#arrow)" marker-end="url(#arrow)"/>
+  <path d="M176,73 L232,73 C268,73 268,31 304,31" fill="none" stroke="#8a8a8a" stroke-width="1.5" marker-start="url(#arrow)" marker-end="url(#arrow)"/>
+  <path d="M176,73 L232,73 C268,73 268,69 304,69 L464,69 C500,69 500,45 536,45 L704,45 C740,45 740,73 776,73" fill="none" stroke="#8a8a8a" stroke-width="1.5" marker-start="url(#arrow)" marker-end="url(#arrow)"/>
+  <path d="M176,73 L232,73 C268,73 268,173 304,173 L464,173 C500,173 500,149 536,149 L704,149 C740,149 740,121 776,121 L784,121" fill="none" stroke="#8a8a8a" stroke-width="1.5" marker-end="url(#arrow)"/>
+  <path d="M452,135 L464,135 C500,135 500,121 536,121 L704,121 C740,121 740,73 776,73" fill="none" stroke="#8a8a8a" stroke-width="1.5" marker-end="url(#arrow)"/>
+  <path d="M452,135 L464,135 C500,135 500,83 536,83" fill="none" stroke="#8a8a8a" stroke-width="1.5" marker-end="url(#arrow)"/>
+  <path d="M536,83 C500,83 500,97 464,97 L304,97 C268,97 268,73 232,73 L176,73" fill="none" stroke="#8a8a8a" stroke-width="1.5" stroke-dasharray="4,3" marker-end="url(#arrow)"/>
+  <path d="M704,83 C740,83 740,73 776,73" fill="none" stroke="#8a8a8a" stroke-width="1.5" marker-end="url(#arrow)"/>
+  <path d="M704,83 C740,83 740,121 776,121 L784,121" fill="none" stroke="#8a8a8a" stroke-width="1.5" marker-end="url(#arrow)"/>
+  <rect x="72" y="58" width="104" height="30" rx="6" fill="#e8eefb" stroke="#1b3fa0" stroke-width="1.5"/>
+  <text x="124" y="78" font-size="13" text-anchor="middle" fill="#000000">agentteams</text>
+  <rect x="316" y="120" width="136" height="30" rx="6" fill="#eef6ee" stroke="#3f8f4f" stroke-width="1.5"/>
+  <text x="384" y="140" font-size="13" text-anchor="middle" fill="#000000">agentteams.cli</text>
+  <rect x="304" y="16" width="160" height="30" rx="6" fill="#eef6ee" stroke="#3f8f4f" stroke-width="1.5"/>
+  <text x="384" y="36" font-size="13" text-anchor="middle" fill="#000000">agentteams.enrich</text>
+  <rect x="16" y="106" width="216" height="30" rx="6" fill="#eef6ee" stroke="#3f8f4f" stroke-width="1.5"/>
+  <text x="124" y="126" font-size="13" text-anchor="middle" fill="#000000">agentteams.eval_adapters</text>
+  <rect x="776" y="58" width="192" height="30" rx="6" fill="#eef6ee" stroke="#3f8f4f" stroke-width="1.5"/>
+  <text x="872" y="78" font-size="13" text-anchor="middle" fill="#000000">agentteams.frameworks</text>
+  <rect x="536" y="68" width="168" height="30" rx="6" fill="#eef6ee" stroke="#3f8f4f" stroke-width="1.5"/>
+  <text x="620" y="88" font-size="13" text-anchor="middle" fill="#000000">agentteams.redteam</text>
+  <rect x="784" y="106" width="176" height="30" rx="6" fill="#eef6ee" stroke="#3f8f4f" stroke-width="1.5"/>
+  <text x="872" y="126" font-size="13" text-anchor="middle" fill="#000000">agentteams.research</text>
 </svg>

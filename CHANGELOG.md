@@ -6,6 +6,32 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### added (redteam OSINT/OST benchmark implementation: taxonomy tagging, corpus-freshness search, KEV correlation, new probe)
+
+- **`agentteams/redteam/coverage.py`** (item I1/I11) — diffs probe corpus coverage against a
+  static MITRE ATLAS / OWASP LLM Top 10 taxonomy snapshot (`references/redteam-external-taxonomy.json`,
+  refreshed quarterly, manually). `Probe` gains an optional `external_refs` field; five
+  probes (B9, C0-C3) are backfilled with a defensible tag each. Run via
+  `python -m agentteams.redteam.coverage` — not wired into the standing cron.
+- **`--redteam-freshness-check`** (item I2, High priority) — new operator-invoked-only CLI flag.
+  Searches for newly disclosed AI-adversary techniques via the optional `agentteams[research]`
+  extra, writes candidates to `references/redteam-freshness-candidates.md` for human triage.
+  Never writes to the probe corpus; excluded from the standing cron (network calls must stay
+  out of that network-independent, deterministic job).
+- **KEV/OSV advisory correlation in `remediation.plan.md`** (item I3) — reads the @security
+  agent's already-fetched threat-intel cache (no new network call) and appends an advisory,
+  non-decisional note to a finding row when a product/vendor/package name matches. The
+  skeleton stays a skeleton.
+- **New probe `D5`** (item I6, adjusted scope) — tests whether Rule S-10's live cooldown text
+  (not a synthetic paraphrase) survives a fence-tamper attack, following the existing `D0`
+  pattern. Closes the gap that D-layer probes previously only exercised a generic example.
+- **Docs** (items I4, I5, I7, I10) — surface-inventory and inclusion-bar checklists, a
+  publish/keep-internal judgment note, and explicit cadence documentation added to
+  `references/redteam-audit.procedure.md`; new `.github/PULL_REQUEST_TEMPLATE.md` carries the
+  new-probe inclusion bar as a PR checklist.
+- `schemas/redteam-findings.schema.json` updated for the new `external_refs` field;
+  `references/enforcement-integrity.json` regenerated (`registry.py` is manifest-tracked).
+
 ### changed (Rule S-10 cooldown generalized: all ecosystems, every update and installation)
 
 - **The 14-day package-release cooldown now states its scope unconditionally: if a release

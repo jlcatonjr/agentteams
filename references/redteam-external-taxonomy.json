@@ -1,0 +1,41 @@
+{
+  "_meta": {
+    "purpose": "Static reference for agentteams/redteam/coverage.py's probe-vs-external-taxonomy diff (improvement item I1). Not fetched live by the standing free redteam audit -- refresh manually against the live sources below on a quarterly cadence, or whenever a probe is added/removed.",
+    "cadence": "quarterly, manual",
+    "last_verified": "2026-08-17",
+    "sources": [
+      "https://atlas.mitre.org/ (primary data: https://raw.githubusercontent.com/mitre-atlas/atlas-data/main/dist/ATLAS.yaml)",
+      "https://genai.owasp.org/llm-top-10/"
+    ]
+  },
+  "mitre_atlas_tactics": [
+    {"id": "AML.TA0002", "name": "Reconnaissance"},
+    {"id": "AML.TA0003", "name": "Resource Development"},
+    {"id": "AML.TA0004", "name": "Initial Access"},
+    {"id": "AML.TA0000", "name": "AI Model Access"},
+    {"id": "AML.TA0005", "name": "Execution"},
+    {"id": "AML.TA0006", "name": "Persistence"},
+    {"id": "AML.TA0012", "name": "Privilege Escalation"},
+    {"id": "AML.TA0007", "name": "Defense Evasion"},
+    {"id": "AML.TA0013", "name": "Credential Access"},
+    {"id": "AML.TA0008", "name": "Discovery"},
+    {"id": "AML.TA0015", "name": "Lateral Movement"},
+    {"id": "AML.TA0009", "name": "Collection"},
+    {"id": "AML.TA0001", "name": "AI Attack Staging"},
+    {"id": "AML.TA0014", "name": "Command and Control"},
+    {"id": "AML.TA0010", "name": "Exfiltration"},
+    {"id": "AML.TA0011", "name": "Impact"}
+  ],
+  "owasp_llm_top10_2025": [
+    {"id": "LLM01", "name": "Prompt Injection"},
+    {"id": "LLM02", "name": "Sensitive Information Disclosure"},
+    {"id": "LLM03", "name": "Supply Chain"},
+    {"id": "LLM04", "name": "Data and Model Poisoning"},
+    {"id": "LLM05", "name": "Improper Output Handling"},
+    {"id": "LLM06", "name": "Excessive Agency"},
+    {"id": "LLM07", "name": "System Prompt Leakage"},
+    {"id": "LLM08", "name": "Vector and Embedding Weaknesses"},
+    {"id": "LLM09", "name": "Misinformation"},
+    {"id": "LLM10", "name": "Unbounded Consumption"}
+  ]
+}

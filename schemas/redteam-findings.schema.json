@@ -45,7 +45,8 @@
           "control",
           "notes",
           "is_control",
-          "evidence_digest"
+          "evidence_digest",
+          "external_refs"
         ],
         "additionalProperties": false,
         "properties": {
@@ -66,6 +67,11 @@
             "type": "string",
             "description": "SHA-256 prefix over the NORMALISED evidence — temp paths, timestamps, dates, hex digests and set-iteration order removed. Compared against references/redteam-probe-baseline.json by the F-5 intent check. Digesting raw evidence would flag every probe on every run.",
             "pattern": "^[0-9a-f]{16}$"
+          },
+          "external_refs": {
+            "type": "array",
+            "items": {"type": "string"},
+            "description": "External taxonomy ids this probe corresponds to (e.g. 'LLM06', 'AML.TA0003'), where a defensible mapping exists. Empty when none — never guessed. See agentteams/redteam/coverage.py (improvement item I1)."
           }
         }
       }
