@@ -22,7 +22,8 @@ past it (probe E4).
 **Known limitation, stated rather than discovered later.** This hook fails OPEN on internal
 error — an attacker who can make it crash gets an allow. That gap is real and is accepted,
 because a hook that can brick an operator's session gets deleted, and a deleted hook enforces
-nothing. The mitigation is `agentteams.integrity`, which pins this file and the scanner it calls.
+nothing. The mitigation is `agentteams.integrity`, which pins the scanner it calls (this file itself
+is not in the manifest — a gap recorded 2026-08-16 in the remediation log).
 
 The fail-open is supplied by the HARNESS, not by a catch-all here: a PreToolUse hook exiting
 with any code other than 0 or 2 is a non-blocking error and the action proceeds. So this file
@@ -124,7 +125,16 @@ def main() -> int:
         #
         # This does NOT escape E4. An attacker who can edit scan.py can edit the manifest and
         # this file. It raises the cost from one edit to three and makes each visible in git.
-        from agentteams import integrity
+        try:
+            from agentteams import integrity
+        except ModuleNotFoundError:
+            # The interpreter puts this script's own directory on sys.path, not the repo
+            # root, so on a checkout where agentteams isn't pip-installed these imports
+            # crash — and a crash is a silent allow (any exit other than 0/2 is a
+            # non-blocking error), disabling the gate exactly where it matters. Derive
+            # the repo root from this file's location rather than trusting cwd.
+            sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
+            from agentteams import integrity
 
         tampered = [f for f in integrity.verify(Path.cwd()) if f.rel_path.endswith("scan.py")]
         if tampered:

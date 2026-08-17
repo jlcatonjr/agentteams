@@ -370,9 +370,9 @@ def _minimal_yaml_load(yaml_text: str) -> dict[str, Any]:
 
     Fallback used only when PyYAML is unavailable (it is a test-only
     dependency). Handles: top-level ``key: <scalar>``, one-level nested
-    dicts with scalar or flow-list values, and block lists of flat dicts
-    (``- key: value`` + indented continuation keys). Comments and blank
-    lines are ignored.
+    dicts with scalar or flow-list values, and block lists whose items are
+    flat dicts (``- key: value`` + indented continuation keys) or plain
+    scalars (``- name``). Comments and blank lines are ignored.
     """
     result: dict[str, Any] = {}
     lines = yaml_text.splitlines()
@@ -409,16 +409,28 @@ def _minimal_yaml_load(yaml_text: str) -> dict[str, Any]:
             break
         block_content = [b for b in block if b.strip() and not b.strip().startswith("#")]
         if block_content and block_content[0].lstrip().startswith("- "):
-            # List of flat dicts.
-            items: list[dict[str, Any]] = []
+            # Block list: items are flat dicts ("- key: value" + indented
+            # continuation keys) or plain scalars ("- name", e.g. an agents:
+            # roster). Scalar items previously collapsed to {} here, silently
+            # destroying the roster on any PyYAML-less round trip.
+            items: list[Any] = []
             current: dict[str, Any] | None = None
             for b in block_content:
                 content = b.strip()
                 if content.startswith("- "):
                     if current is not None:
                         items.append(current)
-                    current = {}
+                        current = None
                     content = content[2:].strip()
+                    if ":" in content:
+                        current = {}
+                        k, _, v = content.partition(":")
+                        current[k.strip()] = _decode_scalar(v)
+                    elif content:
+                        items.append(_decode_scalar(content))
+                    else:
+                        current = {}
+                    continue
                 if current is not None and ":" in content:
                     k, _, v = content.partition(":")
                     current[k.strip()] = _decode_scalar(v)
