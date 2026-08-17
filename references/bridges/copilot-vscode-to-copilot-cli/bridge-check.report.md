@@ -2,7 +2,7 @@
 
 Result: FAIL
 
-- Source state: 0ecaa5d73234964f9542f8c23cc7bf49b7cde93290f3f63c37df5ff901ca0645
+- Source state: 70db580c5d0464ac6ff5c33ebd28c7f492315d7cc35e3ebc6c73ea727d2f8b2b
 - Manifest generated at: 2026-08-12T20:59:25.046674+00:00
 
 > `Source state` is a digest of the source files this verdict was computed from. It is not a timestamp: if it no longer matches the current tree, the verdict is stale regardless of when it ran. Re-run `--bridge-check`.
