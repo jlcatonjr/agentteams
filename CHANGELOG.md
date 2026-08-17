@@ -6,6 +6,21 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### changed (Rule S-10 cooldown generalized: all ecosystems, every update and installation)
+
+- **The 14-day package-release cooldown now states its scope unconditionally: if a release
+  is less than 14 days old, wait before installing — for every update and installation
+  through any package manager or installer** (npm, PyPI, crates.io, Homebrew, RubyGems, Go
+  modules, container base images, …), invariant fence v=5 → v=6. npm remains the named
+  motivating precedent, not the scope. *(Supersedes the npm-emphasized phrasing in this same
+  release's "Rule S-10" entry below.)* Age-check and enforcement mechanics widened beyond
+  npm: the PyPI JSON API's `upload_time_iso_8601` for age checks (`pip index versions` lists
+  no dates), and uv `--exclude-newer <date>` alongside `npm install --before`, pnpm
+  `minimumReleaseAge`, and Renovate/Dependabot cooldowns. New clarification: upgrading an
+  already-installed package through its distribution's curated security channel
+  (apt/dnf/apk, DSA/USN/RHSA-backed) is remediation, not adoption — the cooldown does not
+  apply there.
+
 ### fixed (2026-08-16 open-items remediation: hook import crash, YAML roster loss, bridge reports)
 
 - **`constitutional-gate.py` hook no longer crashes (= silently allows) on checkouts where

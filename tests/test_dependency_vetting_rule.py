@@ -163,3 +163,19 @@ def test_merge_static_sources_restores_missing_entries_without_duplicating():
     assert names.count("npm audit docs") == 1
     # Idempotent: a second merge adds nothing.
     assert len(_merge_static_sources(restored)) == len(restored)
+
+
+def test_cooldown_is_unconditional_across_ecosystems():
+    """The cooldown applies to every update/installation in every ecosystem — a future
+    edit must not quietly re-narrow it to npm (generalized 2026-08-17 by operator
+    request; npm stays as motivating precedent only)."""
+    text = _template_text()
+    rule_start = text.index("**Rule S-10: Dependency Vetting Before Install**")
+    next_section = text.index("### HALT vs. CONDITIONAL PASS Escalation Criteria")
+    body = text[rule_start:next_section]
+    assert "wait before installing" in body
+    assert "all\n  ecosystems" in body or "all ecosystems" in body.replace("\n  ", " ")
+    # Distro-curated security updates of installed packages are remediation, not adoption.
+    assert "remediation, not adoption" in body
+    playbook = _format_prevention_playbook([])
+    assert "not only npm" in playbook

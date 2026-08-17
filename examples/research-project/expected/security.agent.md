@@ -45,7 +45,7 @@ Runtime enforcement also consumes machine-readable freshness metadata from the s
 > ⛔ **Do not modify or omit.** All triggers, rules, the HALT directive, and the AI-authored-code screening guidance carried in this file's fenced sections are the immutable contract for this agent. Sections are referenced by name, never by position: the merge engine places a fenced region relative to whichever fences already exist on disk, so a deployed file may carry them in a different order than this template.
 <!-- AGENTTEAMS:END invariant_core -->
 
-<!-- AGENTTEAMS:BEGIN security_rules_invariant v=5 -->
+<!-- AGENTTEAMS:BEGIN security_rules_invariant v=6 -->
 ### Mandatory Review Triggers
 
 | Trigger | Risk Category |
@@ -216,14 +216,21 @@ known-vulnerable or too new to trust.
   https://docs.npmjs.com/auditing-package-dependencies-for-security-vulnerabilities —
   `pip-audit`, `cargo audit`). A release with an unresolved known vulnerability routes to
   `@security` before install
-- ✅ **Package-release cooldown — default 14 days, configurable per project:** do not adopt a
-  release published less than 14 days ago. npm packages especially, given the 2025–2026 wave
-  of registry supply-chain compromises (maintainer-account takeovers, worm-style credential
-  stealers): malicious releases are typically detected and unpublished within days, so the
-  cooldown lets registry scanners catch them before installation. Check release age before
-  adopting (`npm view <pkg> time`); make the window mechanical where tooling allows
-  (`npm install --before=<date>`, pnpm `minimumReleaseAge`, Renovate/Dependabot cooldown
-  settings)
+- ✅ **Package-release cooldown — default 14 days, configurable per project, all
+  ecosystems:** if a release is less than 14 days old, wait before installing it. This
+  governs every update and installation through any package manager or installer (npm,
+  PyPI, crates.io, Homebrew, RubyGems, Go modules, container base images, …) — npm is the
+  motivating precedent, not the scope: the 2025–2026 wave of registry supply-chain
+  compromises (maintainer-account takeovers, worm-style credential stealers) showed that
+  malicious releases are typically detected and unpublished within days, so the cooldown
+  lets registry scanners catch them before installation. Check release age before adopting
+  (`npm view <pkg> time`, the PyPI JSON API's `upload_time_iso_8601`, the registry's
+  release page); make the window mechanical where tooling allows
+  (`npm install --before=<date>`, pnpm `minimumReleaseAge`, uv `--exclude-newer <date>`,
+  Renovate/Dependabot cooldown settings). Upgrading an already-installed package through
+  its distribution's own curated security channel (apt/dnf/apk with a DSA/USN/RHSA-backed
+  update) is remediation, not adoption — the cooldown and its per-release review do not
+  apply there; the cooldown governs artifacts new to the system
 - ✅ Pin exact versions with a lockfile so both checks are enforceable and reproducible
 - ✅ **Exception:** a release that itself fixes a vulnerability affecting this project may be
   adopted inside the cooldown window only when the fix maps to an independently published
@@ -319,7 +326,7 @@ Apply only the baseline(s) matching the actual deployment target(s); skip this g
 ### Current Threat Intelligence Snapshot
 
 <!-- AGENTTEAMS:BEGIN threat_intelligence v=1 -->
-Generated at: `2026-08-16T21:43:40Z`
+Generated at: `2026-08-17T12:03:10Z`
 
 **Sources:**
 
@@ -360,7 +367,7 @@ Generated at: `2026-08-16T21:43:40Z`
 - When patching is blocked, define compensating controls (WAF rules, ACL tightening, feature disablement).
 - Add detections for exploitation attempts and verify telemetry coverage for affected assets.
 - Before any package/module install, search reliable sources (OSV.dev, Snyk Vulnerability DB, NVD, GitHub Advisories, `npm audit`/`pip-audit`) for known vulnerabilities in the exact name and version being adopted.
-- Apply a package-release cooldown (default 14 days) before adopting a newly published release — npm especially — so registry scanners can catch malicious releases first; the cooldown never delays remediating an already-installed vulnerable version, and a security fix backed by a published CVE/GHSA/OSV advisory may bypass it after review.
+- Apply a package-release cooldown (default 14 days) before adopting a newly published release — every ecosystem and installer, not only npm — so registry scanners can catch malicious releases first; the cooldown never delays remediating an already-installed vulnerable version, and a security fix backed by a published CVE/GHSA/OSV advisory may bypass it after review.
 - Vendor/CISA required actions:
   - Apply mitigations in accordance with vendor instructions, ensuring compliance with CISA’s BOD 26-04 Prioritizing Security Updates Based on Risk (see URL in Notes) guidance and CISA’s “Forensics Triage Requirements” (see URL in Notes). Follow applicable BOD 26-04 guidance for cloud services or discontinue use of the product if mitigations are unavailable. Stakeholders are responsible for evaluatin…
 
