@@ -6,6 +6,26 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### added (Rule S-10: dependency vetting before install — pre-install vulnerability search + release cooldown)
+
+- **`security.template.md` gains Rule S-10 "Dependency Vetting Before Install"** (invariant
+  fence v=4 → v=5): before any package/module/program install, search reliable sources
+  (OSV.dev, the [Snyk Vulnerability Database](https://security.snyk.io/), NVD, GitHub
+  Advisories, `npm audit`/`pip-audit`/`cargo audit`) for known vulnerabilities in the exact
+  name@version; and apply a **package-release cooldown (default 14 days, configurable)**
+  before adopting newly published releases — npm named as the motivating ecosystem after the
+  2025–2026 registry supply-chain wave. A security-fix exception requires an independently
+  published CVE/GHSA/OSV advisory plus recorded `@security` review; the cooldown never delays
+  remediating already-installed vulnerable versions. Cross-referenced from Rule S-9, the
+  verdict table, the trigger table, and the supply-chain bullet.
+- **Prevention playbook baseline** (`security_feed_render.py`) carries both defaults in every
+  generated `security-vulnerability-watch.reference.md`.
+- **Snyk Vulnerability DB and the npm dependency-auditing docs are static source-registry
+  entries** (`security_refs.py`), with `_merge_static_sources()` restoring them on both
+  cache-restore paths so offline/stale-cache runs keep the citations. Docs:
+  `security-hardening-guide.md` Dependency Vetting Defaults section; api-reference Data
+  Sources table (+ the previously omitted MITRE ATLAS/CWE rows).
+
 ### added (`--verify-integrity` now checks the enforcement manifest)
 
 - **`--verify-integrity` re-checks `references/enforcement-integrity.json`** when one exists at
