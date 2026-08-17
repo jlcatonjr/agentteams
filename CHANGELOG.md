@@ -6,6 +6,28 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### fixed (2026-08-16 open-items remediation: hook import crash, YAML roster loss, bridge reports)
+
+- **`constitutional-gate.py` hook no longer crashes (= silently allows) on checkouts where
+  `agentteams` isn't pip-installed** — the interpreter puts the hook's own directory on
+  `sys.path`, not the repo root, so `from agentteams import integrity` raised
+  `ModuleNotFoundError` and the harness treated the nonzero exit as a non-blocking allow. A
+  repo-root `sys.path` fallback restores the gate; the docstring's false claim that the
+  integrity manifest pins the hook file is corrected (it pins the scanner).
+- **`canonical._minimal_yaml_load` no longer destroys scalar block-list items** — an
+  `agents:` roster (`- orchestrator`) parsed to empty dicts on any PyYAML-less round trip,
+  silently dropping the roster. Fixed with a regression test; the copilot-vscode model
+  round-trip test also stops pinning a hardcoded model name and asserts the source value
+  round-trips.
+- **Bridge-check reports**: claude/copilot-cli/goose pair reports refreshed to the current
+  source digest; the agents-md and codex pair reports removed under `@security` clearance —
+  the CLI refuses those frameworks as `--bridge-from` targets, so those committed verdicts
+  could never be refreshed again.
+- **Docs**: `verification-environment.md` gains a local dev venv recipe
+  (`pip install -e '.[test,research]'`) with a per-dependency failure table; api-reference
+  Data Sources row renamed to `NVD (NIST)` to match the registry. PDF-extraction tests now
+  `importorskip` the optional `pypdf` dependency.
+
 ### added (Rule S-10: dependency vetting before install — pre-install vulnerability search + release cooldown)
 
 - **`security.template.md` gains Rule S-10 "Dependency Vetting Before Install"** (invariant
