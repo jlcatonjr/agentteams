@@ -58,6 +58,11 @@ _CREDENTIAL_PATTERNS: list[tuple[str, re.Pattern[str]]] = [
     ("Connection string", re.compile(r"(?:postgres|mysql|mongodb)://[^\s]+:[^\s]+@", re.IGNORECASE)),
 ]
 
+#: Minimum Shannon entropy (bits/char) for an opaque token to be treated as a
+#: possible secret. Named so the gate and the path-shape guard below share one
+#: source of truth and cannot drift.
+_ENTROPY_MIN_BITS = 3.8
+
 #: High-entropy tokens that look like opaque secrets when they are contiguous
 #: opaque strings rather than human-readable identifiers.
 _HIGH_ENTROPY_TOKEN_RE = re.compile(
@@ -725,7 +730,13 @@ def _check_line(
     for token_match in (token_regex.finditer(line) if token_regex else ()):
         token = token_match.group(0)
         entropy = _token_entropy(token)
-        if entropy < 3.8:
+        if entropy < _ENTROPY_MIN_BITS:
+            continue
+        # A slash-delimited filesystem path is not an opaque secret, even though
+        # ``/`` sits in the base64 token class and inflates the run's entropy.
+        # Suppress only in the context-free case; the sensitive-context matcher
+        # (a secret keyword is on the line) keeps its wider net deliberately.
+        if not secret_context and _looks_like_filesystem_path(token):
             continue
         severity = "high" if secret_context or entropy >= 4.2 else "medium"
         findings.append(ScanFinding(
@@ -783,6 +794,46 @@ def _check_line(
             message=f"Unresolved manual placeholder: {match.group(0)}",
             snippet=stripped,
         ))
+
+
+def _looks_like_filesystem_path(token: str) -> bool:
+    """True when a high-entropy candidate is really a slash-delimited file path
+    rather than an opaque secret.
+
+    The context-free entropy detector's token class includes ``/`` because it is
+    part of the base64 alphabet. That lets a deep repository path such as
+    ``research/workflowTesting/Projects/AgentInfrastructureScoring/04`` match as a
+    single 63-char "token" whose Shannon entropy clears the threshold — even
+    though every ``/``-delimited segment is a human-readable identifier and none
+    is a secret. This recurs for any sufficiently nested path whose slash-joined
+    run reaches a digit-bearing segment (a numbered file, a dated folder), so it
+    is a systematic false positive, not a one-off.
+
+    A genuine base64 blob does not decompose this way: an incidental ``/`` inside
+    it still leaves at least one segment that is itself an opaque high-entropy
+    run, and base64 padding/index chars (``+``, ``=``) never appear in a
+    filesystem path. Suppress (return ``True``) only when ALL hold:
+
+      * the token contains at least one ``/``;
+      * it contains no ``+`` or ``=`` (their presence signals base64, not a path);
+      * no ``/``-delimited segment, re-tested on its own, independently qualifies
+        as a high-entropy opaque token.
+
+    The final clause is what keeps a real secret embedded as a single path
+    component (e.g. ``creds/AKIA...9EXAMPLEkeyBLOB/use``) flagged: that segment
+    still matches on its own, so the token is not suppressed. Applied only to the
+    context-free detector; the sensitive-context matcher (keyword lines) keeps its
+    wider net deliberately.
+    """
+    if "/" not in token or "+" in token or "=" in token:
+        return False
+    for segment in token.split("/"):
+        if not segment:
+            continue
+        match = _HIGH_ENTROPY_TOKEN_RE.search(segment)
+        if match is not None and _token_entropy(match.group(0)) >= _ENTROPY_MIN_BITS:
+            return False
+    return True
 
 
 def _token_entropy(token: str) -> float:

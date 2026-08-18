@@ -156,3 +156,7 @@ tests/constitutional-redteam-results.json
 .goose/recipes/
 references/runtime-handoffs.json
 .github/references/
+
+# research/ holds nested, independently git-managed researchteam repositories (each with its own
+# .git) rather than files this repo's own git should track — e.g. research/workflowTesting/.
+/research/
