@@ -54,8 +54,38 @@ makes the previously-implicit threat model explicit; it does not widen scope.
 - The corpus is **fixed and self-authored**; a defense that passes it is not validated against an
   adaptive adversary (feature F3).
 
-## 5. Change log
+## 5. Attack-generation harnesses — the dual-use surface they add (v2)
 
+The H1/H2/H3 harnesses (`scripts/redteam_new_surface.py`, `redteam_adaptive_attack.py`,
+`redteam_attack_campaign.py`; plan `tmp/by-week/2026-W34/attack-generation-harnesses.plan.md`) add a
+capability the earlier threat model did not contemplate: **generating attack payloads**, not just
+running a fixed corpus. The honest framing (audit finding A2, retracting the plan draft's
+"defensive by construction" claim):
+
+- **The generated output is portable offensive content.** The classes these harnesses target —
+  authority-spoofing, tool-argument manipulation, multi-turn chains, RAG/MCP injection — are generic
+  LLM01 / AML.T0051 attacks that work against *any* similar agent. Nothing binds the payload *text*
+  to our contract.
+- **The rails do not make the output non-weaponizable.** They make it **non-escaping** (delivered
+  only to our own `@security` contract via the `openrouter.ai` host allowlist — S1) and **unpromoted**
+  (never committed to the tracked corpus except by a separate `@security`-reviewed step — S2; a
+  standing test breaks if a quarantined candidate reaches the corpus without a review record).
+- **Live generation is refused without a recorded clearance.** The build (this task) is offline-only;
+  the live path is gated in code (S7) on a verified `references/security-decisions.log.csv` entry that
+  does not yet exist. So the *capability to generate* is present in the repo, but the *act of
+  generating* is a separately-cleared, budget-capped operation — the residual risk is a keyed
+  operator running a live campaign, which the interlock forces through a review, not code that
+  emits attacks by default.
+- **Quarantine is on-disk (gitignored `tmp/`), so it is exfiltratable.** The rail is that it is not
+  *committed* and not *promoted*, not that it is inaccessible to someone with local filesystem access.
+
+This section exists so the portability is owned in the threat model rather than hidden behind the
+harnesses' defensive intent.
+
+## 6. Change log
+
+- **v2 (2026-08-18):** added §5 owning the dual-use surface of the attack-generation harnesses
+  (H1/H2/H3); no change to the *rated* scope (generated payloads are quarantined, unpromoted).
 - **v1 (2026-08-18):** initial explicit statement of the previously-implicit threat model; no scope
   change. Supersedes the scope prose scattered across `scoring-methodology.md` §1 and the corpus
   `_comment`, which now point here for the authoritative version.
