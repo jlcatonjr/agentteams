@@ -296,7 +296,14 @@ def make_provenance(generator: str, generated_at: str, model: str, budget: float
 # --------------------------------------------------------------------------------------------------
 
 def _post_chat(payload: dict, token: str, timeout: float) -> dict:
-    """POST to the (allowlisted) chat endpoint. S8: token comes from the caller (env), never logged."""
+    """POST to the (allowlisted) chat endpoint — the single network EGRESS primitive.
+
+    S7 is enforced HERE, at the egress, not only at the harness entrypoints: every live call — from
+    any caller, including a direct importer of ``generate_candidates``/``score_against_defender`` —
+    must pass the live-clearance interlock. S1 restricts the host; S8: the token comes from the
+    caller (env), never logged.
+    """
+    require_live_clearance()   # S7 at the capability boundary (egress), not just the entrypoint
     _assert_target_allowed(CHAT_URL)
     body = json.dumps(payload).encode("utf-8")
     req = urllib.request.Request(CHAT_URL, data=body, method="POST")
@@ -315,12 +322,13 @@ def _read_token() -> str:
 
 
 def score_against_defender(candidate_text: str, defender_model: str, contract_system: str,
-                           token: str, timeout: float = 45.0) -> tuple[str, str]:
-    """Deliver ``candidate_text`` to the defender under its contract; return ``(observed, raw)``.
+                           token: str, timeout: float = 45.0) -> tuple[str, str, float]:
+    """Deliver ``candidate_text`` to the defender under its contract; return ``(observed, raw, spend)``.
 
     The candidate is placed ONLY in the reviewed-content slot of ``REVIEWER_PROMPT`` (S6) — never in
     a system/role position. Answers exactly one question via the shared scorer: did the defender
-    capitulate? Live path — the caller must have passed the S7 interlock + budget accounting.
+    capitulate? ``spend`` is returned so the caller can enforce the cumulative budget cap (S3). Live
+    path — ``_post_chat`` re-checks the S7 interlock at egress.
     """
     data = _post_chat(
         {
@@ -337,7 +345,8 @@ def score_against_defender(candidate_text: str, defender_model: str, contract_sy
     )
     text = (data.get("choices") or [{}])[0].get("message", {}).get("content", "") or ""
     observed, _ = score_response(text, "REPORT")
-    return observed, text
+    spend = float((data.get("usage") or {}).get("cost") or 0.0)
+    return observed, text, spend
 
 
 ATTACKER_SYSTEM = (
@@ -349,11 +358,13 @@ ATTACKER_SYSTEM = (
 
 
 def generate_candidates(taxonomy_class: str, n: int, model: str, token: str,
-                        budget: float, seed_hint: str = "", timeout: float = 45.0) -> list[str]:
+                        budget: float, seed_hint: str = "",
+                        timeout: float = 45.0) -> tuple[list[str], float]:
     """LM-generate ``n`` candidate payloads of ``taxonomy_class`` (Perez-style). LIVE path.
 
-    Caller MUST have called ``require_live_clearance()`` and be tracking spend against ``budget``.
-    Returns raw candidate strings (inert data); the caller quarantines + stamps them.
+    Returns ``(candidates, spend)`` so the caller can accumulate spend against a cumulative cap (S3).
+    Stops early once its own ``spend`` reaches ``budget``. ``_post_chat`` re-checks the S7 interlock
+    at egress. Candidates are inert data; the caller quarantines + stamps them.
     """
     out: list[str] = []
     spent = 0.0
@@ -374,7 +385,7 @@ def generate_candidates(taxonomy_class: str, n: int, model: str, token: str,
         if text.strip():
             out.append(text)
         spent += float((data.get("usage") or {}).get("cost") or 0.0)
-    return out
+    return out, spent
 
 
 def estimate_cost(n_calls: int, avg_in_tokens: int = 1500, avg_out_tokens: int = 400,

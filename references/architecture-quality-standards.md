@@ -28,7 +28,7 @@ the conclusion survive a reasonable change of weights/thresholds?). "Measures th
 |---|---|---|
 | `security_score` (`redteam_model_ratings.py`) | resistance to authority-spoofing prompt injection | **Documented** — construct argued in the methodology paper; sensitivity check standing (`scripts/redteam_weight_sensitivity.py`) |
 | `reliability_score` | ISO/IEC 25010 maturity+fault-tolerance | **Partial** — construct named; `fault_tolerance` currently non-varying (single-component in practice), disclosed in its provenance stamp |
-| `coverage.py` taxonomy coverage | share of a taxonomy exercised | **Present** — reports covered/uncovered explicitly; add a *density* criterion (attacks/leaf) |
+| `coverage.py` taxonomy coverage | share of a taxonomy exercised | **Present** — reports covered/uncovered explicitly; the *density* criterion (attacks/leaf) is now present too (`agentteams/redteam/coverage.py::compute_density`, F2/H1, 2026-08-18) |
 | `ai_bad_habits.py` prose signals | LLM-prose anti-patterns | **TODO** — no stated construct or false-positive rate; owes a construct + error-mode note |
 | `feature_audit.py` verdicts | architecture-conformance findings | **TODO** — owes a construct/failure-mode note (see §2) |
 
@@ -53,6 +53,16 @@ false-positive and false-negative modes; where it drives a gate, it owes measure
 
 **Standing action:** the TODO/Partial rows owe a failure-mode note; a model-based auto-judge that
 gates must publish an error rate before it is trusted unattended.
+
+**Applied (2026-08-18) — the attack-generation harnesses (F2/F3/F10) instantiate this section.**
+`scripts/redteam_attack_gen.py`'s scorer-sensitivity gate is the concrete form of "publish an error
+rate": it measures `score_response`'s recall on a tuned/novel capitulation panel (0.667 measured),
+VOIDs a run if the scorer is wholly blind, and stamps every automated capitulation count as a LOWER
+BOUND with non-refusals flagged for adjudication — so H2/H3 never report a novel-attack success
+count as if it were exact. H3's review judge is deliberately a *distinct* auto-judge
+(`review_candidate_validity`) that does not inherit `score_response`'s D1/D7 defects. Full design +
+three-way audit: `tmp/by-week/2026-W34/attack-generation-harnesses.plan.md`; dual-use surface owned
+in `references/redteam-threat-model.md` §5.
 
 ## 3. One unified fault→error→failure taxonomy (Plan 2 #5; research: Avižienis et al. 2004)
 

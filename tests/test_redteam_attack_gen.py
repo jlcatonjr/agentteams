@@ -142,6 +142,16 @@ def test_s7_refuses_on_pending_row(tmp_path):
     assert cleared is False and "cleared-for-live" in reason
 
 
+def test_s7_enforced_at_egress_not_just_entrypoint():
+    # The interlock lives in _post_chat, so a DIRECT importer of the live functions is refused too —
+    # it never reaches the network (the real ledger row is pending). This pins the close-out fix for
+    # the "entrypoint-only" residue: every live call is gated at the egress primitive.
+    with pytest.raises(ag.LiveClearanceError):
+        ag.generate_candidates("authority-claim", 1, "m", "dummy-token", budget=1.0)
+    with pytest.raises(ag.LiveClearanceError):
+        ag.score_against_defender("payload", "m", "contract", "dummy-token")
+
+
 def test_s7_clears_only_with_verified_and_cleared_for_live(tmp_path):
     led = tmp_path / "sd.csv"
     _write_ledger(led, [{"date": "2026-09-01", "plan_slug": ag.CAPABILITY_PLAN_SLUG, "step": "P7",

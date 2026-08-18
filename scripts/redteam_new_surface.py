@@ -32,7 +32,7 @@ REPO_ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(REPO_ROOT))
 
 from agentteams.redteam.coverage import compute_density  # noqa: E402
-from scripts.redteam_attack_gen import AttackCandidate, write_quarantine  # noqa: E402
+from scripts.redteam_attack_gen import AttackCandidate, make_provenance, write_quarantine  # noqa: E402
 
 CORPUS = REPO_ROOT / "tests" / "redteam" / "payloads.json"
 
@@ -143,13 +143,15 @@ NEW_SURFACE_PAYLOADS: tuple[dict, ...] = (
 
 def author_to_quarantine(clock_iso: str) -> Path:
     """Write the hand-authored new-surface payloads to a quarantine manifest (S2). No corpus write."""
+    # ONE defender-scoped, list-provisional stamp for the hand-authored set (S5/C1; provisional is a
+    # LIST, not a bool — F4). No model/scorer: these are hand-authored, not generated.
+    stamp = make_provenance("hand-authored", clock_iso, "hand-authored", 0.0).to_dict()
     candidates = []
     for p in NEW_SURFACE_PAYLOADS:
         cand = AttackCandidate(
             id=p["id"], taxonomy_class=p["class"], generator="hand-authored",
             seed="", content=p["content"],
-            provenance={"surface": p["surface"], "authored_at": clock_iso, "provisional": True,
-                        "note": "hand-authored new-surface fixture; unpromoted (S2/C4)."},
+            provenance={**stamp, "surface": p["surface"]},
         )
         candidates.append({
             "id": cand.id, "class": p["class"], "owasp_llm_2026": p["owasp_llm_2026"],

@@ -13,8 +13,11 @@ reported min/max interval, because each rounds-to-capitulation is one draw of a 
 Testable by construction: the loop takes injected ``defender_fn`` / ``attacker_fn`` callables, so
 the offline tests drive it with scripted deterministic functions and make no live calls. The live
 wiring (``main``) builds those callables from the shared core and is gated by the S7 live-clearance
-interlock, a budget, and both S4 controls (scorer-not-blind + corpus-discrimination). Capitulation
-counts are LOWER BOUNDS (the scorer under-detects novel phrasing — S4ii).
+interlock, a cumulative budget cap, and the S4(ii) scorer-not-blind control. S4(i)
+(corpus-discrimination via an ablation arm) is **N/A to this harness** — the adaptive arm has no
+defense-off arm to discriminate; that control lives on the model matrix, not here — so only S4(ii)
+applies. Capitulation counts are LOWER BOUNDS (the scorer under-detects novel phrasing — S4ii); the
+measured scorer recall is stamped into the report so the bound is legible.
 """
 
 from __future__ import annotations
@@ -114,16 +117,25 @@ def run_comparison(seed: str, defender_fn: DefenderFn, attacker_fn: AttackerFn,
 def _live_defender_and_attacker(defender_model: str, attacker_model: str, contract_system: str,
                                 token: str, budget_box: dict, budget: float):
     """Build live callables from the shared core (S7-gated caller). budget_box tracks cumulative spend."""
+    def _remaining() -> float:
+        return max(0.0, budget - budget_box["spent"])
+
     def defender_fn(text: str) -> str:
-        observed, _ = ag.score_against_defender(text, defender_model, contract_system, token)
+        if _remaining() <= 0:
+            return "REPORT"  # budget exhausted — no further spend (S3 cumulative cap)
+        observed, _, spend = ag.score_against_defender(text, defender_model, contract_system, token)
+        budget_box["spent"] += spend
         return observed
 
     def attacker_fn(seed: str, transcript: list[dict]) -> str:
+        if _remaining() <= 0:
+            return seed
         last = transcript[-1]["observed"] if transcript else ""
-        cands = ag.generate_candidates(transcript[-1]["payload"] if transcript else seed,  # class hint
-                                       1, attacker_model, token,
-                                       budget=max(0.0, budget - budget_box["spent"]),
-                                       seed_hint=f"defender responded {last}; make it more evasive")
+        cands, spend = ag.generate_candidates(
+            transcript[-1]["payload"] if transcript else seed,  # class hint
+            1, attacker_model, token, budget=_remaining(),
+            seed_hint=f"defender responded {last}; make it more evasive")
+        budget_box["spent"] += spend
         return cands[0] if cands else seed
 
     return defender_fn, attacker_fn
@@ -156,7 +168,7 @@ def main(argv: list[str] | None = None) -> int:
         return 0
 
     ag.require_live_clearance()          # S7 — refuses unless a verified live clearance is recorded
-    ag.assert_scorer_not_blind()         # S4(ii)
+    sens = ag.assert_scorer_not_blind()  # S4(ii); capture the measured recall for the report
     token = ag._read_token()
     from agentteams.redteam.sweep import agent_system_prompt
     contract = agent_system_prompt(REPO_ROOT / ".claude" / "agents" / "security.md")
@@ -164,6 +176,8 @@ def main(argv: list[str] | None = None) -> int:
     defender_fn, attacker_fn = _live_defender_and_attacker(
         args.defender_model, args.attacker_model, contract, token, budget_box, args.budget)
     report = run_comparison(seed, defender_fn, attacker_fn, args.n, args.repeats)
+    report["scorer_sensitivity"] = {"recall": sens["recall"], "caught": sens["caught"], "n": sens["n"]}
+    report["spend_usd"] = round(budget_box["spent"], 4)
     print(json.dumps(report, indent=2))
     return 0
 

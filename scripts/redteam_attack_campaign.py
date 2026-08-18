@@ -72,13 +72,14 @@ def review_candidate_validity(text: str, claimed_class: str, review_fn: ReviewFn
 
 
 def run_campaign(classes: list[str], n_per_class: int, generate_fn: GenerateFn,
-                 review_fn: ReviewFn, clock_iso: str,
-                 quarantine: bool = True) -> CampaignReport:
+                 review_fn: ReviewFn, clock_iso: str, quarantine: bool = True,
+                 generator_model: str = "campaign", budget: float = 0.0) -> CampaignReport:
     """Generate across classes → dedup → review → report the automated-vs-human split.
 
     ``generate_fn`` produces the automated candidates (each an implicit *automated claim* that it is
     a valid attack of the class); ``review_fn`` is the human-proxy validity judge. The split is the
-    reviewer's acceptance of the automated pool.
+    reviewer's acceptance of the automated pool. Quarantine manifests carry a defender-scoped,
+    list-provisional provenance stamp from the shared core (S5/C1/F4).
     """
     all_candidates: list[dict] = []
     for cls in classes:
@@ -103,9 +104,10 @@ def run_campaign(classes: list[str], n_per_class: int, generate_fn: GenerateFn,
 
     q_path = None
     if quarantine:
-        manifest = [{**c, "provenance": {"generated_at": clock_iso, "provisional": True,
-                                         "note": "auto-generated candidate; unpromoted (S2/C4)."}}
-                    for c in unique]
+        # ONE defender-scoped, list-provisional stamp for the campaign (S5/C1; provisional is a LIST,
+        # not a bool — F4). H3 reports reviewer-acceptance, not capitulation, so no scorer_sensitivity.
+        stamp = ag.make_provenance("campaign-generation", clock_iso, generator_model, budget).to_dict()
+        manifest = [{**c, "provenance": stamp} for c in unique]
         q_path = str(ag.write_quarantine("campaign.candidates.json", json.dumps(manifest, indent=2)))
 
     return CampaignReport(
@@ -128,17 +130,23 @@ def _live_generate_and_review(gen_model: str, review_model: str, token: str,
                               budget_box: dict, budget: float):
     """Build live callables from the shared core (S7-gated caller)."""
     def generate_fn(cls: str, n: int) -> list[str]:
-        return ag.generate_candidates(cls, n, gen_model, token,
-                                       budget=max(0.0, budget - budget_box["spent"]))
+        remaining = max(0.0, budget - budget_box["spent"])
+        if remaining <= 0:
+            return []
+        cands, spend = ag.generate_candidates(cls, n, gen_model, token, budget=remaining)
+        budget_box["spent"] += spend
+        return cands
 
     def review_fn(text: str, claimed_class: str) -> dict:
-        ag._assert_target_allowed(ag.CHAT_URL)
-        data = ag._post_chat(
+        if budget - budget_box["spent"] <= 0:
+            return {"valid": False, "reason": "budget exhausted — not reviewed"}
+        data = ag._post_chat(   # _post_chat re-checks S1 host allowlist + S7 at egress
             {"model": review_model,
              "messages": [{"role": "system", "content": REVIEW_SYSTEM},
                           {"role": "user", "content": f"Class: {claimed_class}\nCandidate:\n{text[:4000]}"}],
-             "max_tokens": 60, "temperature": 0}, token, 45.0)
+             "max_tokens": 60, "temperature": 0, "usage": {"include": True}}, token, 45.0)
         reply = (data.get("choices") or [{}])[0].get("message", {}).get("content", "") or ""
+        budget_box["spent"] += float((data.get("usage") or {}).get("cost") or 0.0)
         valid = reply.strip().upper().startswith("VALID")
         return {"valid": valid, "reason": reply.strip()[:200]}
 
@@ -169,8 +177,10 @@ def main(argv: list[str] | None = None) -> int:
     budget_box = {"spent": 0.0}
     generate_fn, review_fn = _live_generate_and_review(
         args.gen_model, args.review_model, token, budget_box, args.budget)
-    rep = run_campaign(classes, args.n_per_class, generate_fn, review_fn, args.clock)
-    print(json.dumps(rep.__dict__, indent=2))
+    rep = run_campaign(classes, args.n_per_class, generate_fn, review_fn, args.clock,
+                       generator_model=args.gen_model, budget=args.budget)
+    out = {**rep.__dict__, "spend_usd": round(budget_box["spent"], 4)}
+    print(json.dumps(out, indent=2))
     return 0
 
 

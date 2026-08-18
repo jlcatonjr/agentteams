@@ -71,6 +71,11 @@ def test_author_writes_quarantine_not_corpus(tmp_path, monkeypatch):
     items = json.loads(out.read_text())
     assert len(items) == len(ns.NEW_SURFACE_PAYLOADS)
     assert all(it.get("content_sha256") for it in items), "each candidate must carry a content hash"
+    # Provenance must be the shared defender-scoped, LIST-provisional stamp (S5/C1/F4), not a bool.
+    for it in items:
+        prov = it["provenance"]
+        assert isinstance(prov["provisional"], list) and prov["provisional"], "provisional must be a LIST"
+        assert any("@security" in n for n in prov["provisional"]), "defender scope (C1) must be stamped"
     # The tracked corpus file is never opened for writing by this path.
     corpus = REPO_ROOT / "tests" / "redteam" / "payloads.json"
     before = corpus.read_bytes()

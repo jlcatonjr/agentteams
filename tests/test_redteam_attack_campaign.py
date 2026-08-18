@@ -65,7 +65,11 @@ def test_campaign_quarantines_and_never_touches_corpus(tmp_path, monkeypatch):
                             clock_iso="2026-08-18T00:00:00+00:00")
     assert rep.quarantine_path is not None
     manifest = json.loads(Path(rep.quarantine_path).read_text())
-    assert all(m["provenance"]["provisional"] for m in manifest)
+    # Provenance is the shared defender-scoped, LIST-provisional stamp (S5/C1/F4), not a bool.
+    for m in manifest:
+        prov = m["provenance"]
+        assert isinstance(prov["provisional"], list) and prov["provisional"]
+        assert any("@security" in n for n in prov["provisional"]), "defender scope (C1) must be stamped"
     assert (tmp_path / "q").resolve() in Path(rep.quarantine_path).resolve().parents
     assert corpus.read_bytes() == before, "campaign must not modify the tracked corpus"
 
