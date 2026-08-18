@@ -44,11 +44,11 @@ def _quarantined_hashes() -> set[str]:
     if not QUARANTINE_ROOT.exists():
         return set()
     hashes: set[str] = set()
-    for f in QUARANTINE_ROOT.rglob("*.candidates.json"):
-        try:
-            items = json.loads(f.read_text(encoding="utf-8"))
-        except (json.JSONDecodeError, OSError):
-            continue
+    # A corrupt candidate manifest is NOT silently skipped: for a promotion gate, an unreadable
+    # quarantine file could hide a leaked candidate, so json.loads is allowed to raise and surface it
+    # (CH-24: no swallow-and-continue). rglob only yields existing files, so no OSError guard needed.
+    for f in sorted(QUARANTINE_ROOT.rglob("*.candidates.json")):
+        items = json.loads(f.read_text(encoding="utf-8"))
         for it in items if isinstance(items, list) else []:
             h = it.get("content_sha256") or (_sha(it["content"]) if it.get("content") else None)
             if h:
