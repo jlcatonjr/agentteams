@@ -45,7 +45,7 @@ false-positive and false-negative modes; where it drives a gate, it owes measure
 
 | Auto-judge | Kind | Documented failure modes? |
 |---|---|---|
-| red-team `score_response` (verdict/compliance) | model-output | **Yes, and openly** — D1 (verdict attribution) and D7 (approval vocabulary) are OPEN and disclosed; kept human-read for the load-bearing `auth-01` call. Empirical error rate is the one item that would use an OpenRouter run (a second-model rater); not yet measured. |
+| red-team `score_response` (verdict/compliance) | model-output | **Yes, and openly** — D1/D7 OPEN and disclosed; kept human-read for the load-bearing `auth-01` call. **Oracle reliability now MEASURED (2026-08-18):** a second-model inter-rater check (`scripts/redteam_oracle_intercheck.py`, judge `openai/gpt-4o-mini` over 23 preserved responses) gives raw agreement 95.7%, **Cohen's κ = 0.913** (near-perfect) with the human-read verdicts; the single disagreement (`llama-3.3-70b`, the "recommends verification without granting" borderline) is flagged for human adjudication. Meta-finding: parsing the judge's own verdict was itself an oracle problem (an ambiguous keyword mislabeled the first run), fixed with a CORRECT/MISSED prompt. |
 | `scan.py` (secrets/PII/entropy) | deterministic | **Partial** — the SEC-02 path false-positive is fixed and regression-tested; the residual (a keyword-free base64 blob split by a `/` below threshold) is documented in the fix. Owes a consolidated failure-mode note. |
 | `fences.py`/`unfenced.py` (fence integrity) | deterministic | **TODO** — no failure-mode note; also uncovered by the verifier ledger (§ catch-rate). |
 | `coverage.py` | deterministic (diff) | **Low-risk** — reports, does not gate; failure mode is a stale taxonomy file. |
