@@ -138,3 +138,29 @@ its formula suggests, until `fault_tolerance_60` actually varies.
   with one documented exception in the direction the D7 caveat already predicted. A weighting
   scheme that survives this audit is not thereby validated; one that failed it would have been
   disqualified. Absence of a found problem is not proof of absence of one.
+
+## 5. Contract pinning — the scores are tied to a specific @security template version
+
+Every score in `openweights-security-model-ratings.csv` was measured with the `@security` agent
+contract as the system prompt. That contract is **not frozen** — it is regenerated from
+`agentteams/templates/universal/security.template.md`, which evolves. The committed scores are
+therefore pinned to **template v1** (git `7a4013d`, `sha256[:12]=f0903dbb0ec1`, 30,811-char
+template → 40,466-char rendered instance), the state on disk during the 08-07…08-12 runs.
+
+Since then the template advanced to **v2** (`sha256[:12]=9b38b7d5eab9`, 34,699 chars; +11.9%
+instance) when the S-10 dependency-vetting/cooldown rules landed on 2026-08-16/17 — *after* all
+scored runs. This has two consequences a reader must not overlook:
+
+1. **A blind re-run is not a reproducibility check.** Re-running the matrix today measures v2, so
+   any score movement mixes contract drift with model non-determinism. The `redteam_judgment_run`
+   integrity gate refuses to run against the drifted instance precisely to stop that silent
+   conflation — this is the gate working, not a bug.
+2. **Reproducibility under a *fixed* contract is a separate, already-partly-answered question.**
+   The R1 repeat-run data (four models measured twice against the same contract) shows the
+   security-relevant capitulation signal is near-stable across repeats while parseable-verdict
+   counts (operability) vary. Quantifying the v1→v2 *contract* sensitivity is a controlled
+   two-arm experiment (same models × {v1 contract, v2 contract}), not something a single fresh
+   sweep can deliver.
+
+The machine-readable half of this caveat is the `CONTRACT-PINNED` provisional flag in
+`openweights-security-model-ratings.csv.provenance.json`.

@@ -479,6 +479,16 @@ def _write_provenance(rows: list[dict]) -> None:
             "reliability ranking is single-component (maturity) in practice.",
             "the judgment column is human-read and single-rater; the verdict layer's D1/D7 defects "
             "are open, so judge false-positive/negative rates are undocumented (feature F4).",
+            "CONTRACT-PINNED: every score here was measured against @security TEMPLATE v1 "
+            "(security.template.md @ git 7a4013d, sha256[:12]=f0903dbb0ec1, 30,811 chars) rendered "
+            "into a 40,466-char instance. The on-disk template has since advanced to v2 "
+            "(sha256[:12]=9b38b7d5eab9, 34,699 chars; +11.9% instance) with the S-10 dependency-"
+            "vetting/cooldown rules added 2026-08-16/17 — AFTER all scored runs (08-07..08-12). A "
+            "naive re-run today would measure v2 and MISLABEL contract drift as model non-"
+            "determinism; the redteam_judgment_run gate correctly refuses to run against the drifted "
+            "instance. Reproducibility under a FIXED contract is separately evidenced by the R1 "
+            "repeat data (capitulation signal near-stable, operability noisy). Quantifying the "
+            "v1->v2 contract sensitivity is a controlled experiment, not a blind re-run.",
         ],
     )
     prov.inputs["corpus"] = __import__("agentteams.provenance", fromlist=["_digest"])._digest(
