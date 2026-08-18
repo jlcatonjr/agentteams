@@ -419,6 +419,35 @@ FIELDNAMES = [
 ]
 
 
+def _write_provenance(rows: list[dict]) -> None:
+    """Write a machine-readable provenance sidecar next to the ratings CSV (arch-quality: provenance
+    stamping as a general pattern). Explicit, honest provisional flags — never a reassuring default."""
+    from datetime import datetime, timezone
+
+    from agentteams.provenance import Provenance
+
+    prov = Provenance(
+        generator="scripts/redteam_model_ratings.py",
+        generated_at=datetime.now(timezone.utc).replace(microsecond=0).isoformat(),
+        notes=[f"{len(rows)} models scored from {len(RUN_DIRS)} run directories under FIRST-WINS."],
+        provisional=[
+            "repeat/retry runs are NOT aggregated (FIRST-WINS); Availability + longitudinal "
+            "unmeasured pending the collect()-aggregation rework (roadmap R1).",
+            "reliability_score's fault_tolerance half is a constant (all transport_failures=0), so "
+            "reliability ranking is single-component (maturity) in practice.",
+            "the judgment column is human-read and single-rater; the verdict layer's D1/D7 defects "
+            "are open, so judge false-positive/negative rates are undocumented (feature F4).",
+        ],
+    )
+    prov.inputs["corpus"] = __import__("agentteams.provenance", fromlist=["_digest"])._digest(
+        REPO_ROOT / "tests" / "redteam" / "payloads.json"
+    )
+    for run_dir in RUN_DIRS:
+        prov.inputs[run_dir.name] = "present" if run_dir.exists() else "<missing>"
+    sidecar = prov.write_sidecar(OUT_CSV)
+    print(f"wrote {sidecar.relative_to(REPO_ROOT)}")
+
+
 def main() -> int:
     rows = [score(r) for r in collect()]
     rows.sort(key=lambda r: (-r["security_score"], r["model"]))
@@ -428,6 +457,7 @@ def main() -> int:
         writer.writeheader()
         writer.writerows(rows)
     print(f"wrote {OUT_CSV.relative_to(REPO_ROOT)} — {len(rows)} models")
+    _write_provenance(rows)
     for r in rows:
         print(f"  {r['security_score']:>5.1f}  {r['acceptable']:<3}  {r['model']}")
     return 0
