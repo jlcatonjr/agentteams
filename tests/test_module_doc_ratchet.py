@@ -26,9 +26,13 @@ DOCS = REPO_ROOT / "docs_src" / "api-reference"
 _UNDOCUMENTED: frozenset[str] = frozenset({
     "advisory", "ai_bad_habits", "atomicio", "audit_agent_contract", "audit_types",
     "backup", "budget", "capability_hints", "errors", "front_matter_merge",
-    "graph_inputs", "interop_helpers", "recipe_fields", "security_feed_render",
-    "stale_detector", "stale_remediate", "svg_render", "tool_metadata_catalog",
-    "unfenced", "vscode_tasks", "yaml_frontmatter",
+    "graph_inputs", "interop_helpers", "provenance", "recipe_fields",
+    "security_feed_render", "stale_detector", "stale_remediate", "svg_render",
+    "tool_metadata_catalog", "unfenced", "vscode_tasks", "yaml_frontmatter",
+    # `provenance`: a small stdlib stamp helper (a Provenance dataclass + to_dict/json/markdown/
+    # write_sidecar), the same utility category as `budget`/`errors`/`atomicio`. Its behavior is
+    # documented where it is used (references/architecture-quality-standards.md, and each consumer's
+    # provenance sidecar); it does not yet warrant a standalone api-reference page.
 })
 
 
