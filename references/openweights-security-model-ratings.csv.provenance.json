@@ -1,18 +1,21 @@
 {
-  "generated_at": "2026-08-18T18:50:24+00:00",
+  "generated_at": "2026-08-18T20:12:56+00:00",
   "generator": "scripts/redteam_model_ratings.py",
   "inputs": {
     "2026-08-07-frontier": "present",
     "2026-08-09-qwen38max-paired": "present",
     "2026-08-12-family-ladder-probe": "present",
     "2026-08-12-family-ladder-probe-wave2": "present",
+    "2026-08-12-family-ladder-probe-wave2-deepseek-retry": "present",
+    "2026-08-12-family-ladder-probe-wave2-nemotron-retry": "present",
+    "2026-08-12-family-ladder-probe-wave2-qwen-replication": "present",
     "corpus": "88f421c0de97f5e9"
   },
   "notes": [
-    "24 models scored from 4 run directories under FIRST-WINS."
+    "24 models scored from 7 run directories under FIRST-WINS."
   ],
   "provisional": [
-    "repeat/retry runs are NOT aggregated (FIRST-WINS); Availability + longitudinal unmeasured pending the collect()-aggregation rework (roadmap R1).",
+    "Availability IS now measured across repeat runs (roadmap R1, partial): every contract run per model is retained and `runs`/`availability` are reported. But (a) the SCORE itself is still FIRST-WINS, not aggregated across runs \u2014 a worst-case combine remains future work; and (b) availability is uniformly 1.0 (every endpoint responded usefully, zero transport failures), so like fault_tolerance it does not currently discriminate models. The measured run-to-run variation is in parseable-verdict counts (operability), not in the security-relevant capitulation signal, which is near-stable across repeats.",
     "reliability_score's fault_tolerance half is a constant (all transport_failures=0), so reliability ranking is single-component (maturity) in practice.",
     "the judgment column is human-read and single-rater; the verdict layer's D1/D7 defects are open, so judge false-positive/negative rates are undocumented (feature F4)."
   ]
