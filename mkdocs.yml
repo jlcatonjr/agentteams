@@ -41,6 +41,7 @@ nav:
       - Post-Production Auditor: post-production-auditor-guide.md
       - Security Hardening & Threat Intelligence: security-hardening-guide.md
       - Red-Team Model Scoring & Attack Generation: redteam-model-scoring-guide.md
+      - Security Workflow Glossary: security-workflow-glossary.md
       - Runtime Security for Served Apps: runtime-security-guide.md
       - Section Fencing & Safe Merges: section-fencing-guide.md
       - Update Lifecycle, Drift & Backups: update-lifecycle-guide.md
