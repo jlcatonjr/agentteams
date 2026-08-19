@@ -653,9 +653,10 @@ guide.
 in the environment, supports `--dry-run` (validate + estimate cost, spend nothing), and enforces a
 `--budget` hard cap. The **attack-generation** harnesses (H2/H3) additionally refuse to run live until
 a reviewed `cleared-for-live` clearance with verified conditions is recorded in
-`references/security-decisions.log.csv` (the S7 interlock, enforced at the network egress primitive);
-the currently recorded verdict is a conditional pass with pending conditions, so a live run raises and
-sends nothing. Generated payloads are written only to a gitignored quarantine and never to the tracked
+`references/security-decisions.log.csv` (the S7 interlock, enforced at the network egress primitive).
+The code is the source of truth; as of the 2026-08-18 clearance row the recorded verdict is a
+conditional pass with pending conditions (not cleared for live), so a live run raises and sends
+nothing. Generated payloads are written only to a gitignored quarantine and never to the tracked
 corpus. Always `--dry-run` first.
 
 ### `--verify-waivers`

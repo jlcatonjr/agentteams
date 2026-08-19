@@ -71,8 +71,11 @@ running a fixed corpus. The honest framing (audit finding A2, retracting the pla
   (never committed to the tracked corpus except by a separate `@security`-reviewed step — S2; a
   standing test breaks if a quarantined candidate reaches the corpus without a review record).
 - **Live generation is refused without a recorded clearance.** The build (this task) is offline-only;
-  the live path is gated in code (S7) on a verified `references/security-decisions.log.csv` entry that
-  does not yet exist. So the *capability to generate* is present in the repo, but the *act of
+  the live path is gated in code (S7) on a `references/security-decisions.log.csv` row that is both
+  `cleared-for-live` and `conditions_verified`. Such a row does not yet exist — the recorded
+  `attack-generation-harnesses` row is a conditional pass with conditions pending, which is
+  deliberately *not* a live clearance. So the *capability to generate* is present in the repo, but the
+  *act of
   generating* is a separately-cleared, budget-capped operation — the residual risk is a keyed
   operator running a live campaign, which the interlock forces through a review, not code that
   emits attacks by default.
