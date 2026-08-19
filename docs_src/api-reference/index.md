@@ -37,6 +37,7 @@ This reference defines the **supported public API surface** (documented modules 
 | Module | Role |
 |--------|------|
 | [`scan`](scan.md) | Proactive security scan for generated agent files |
+| [`redteam`](redteam.md) | The `agentteams/redteam/` package — audit internals + corpus coverage/density (F2) |
 | [`session_scan`](session_scan.md) | Repo at-large issue scan (CHANGELOG Known Issues, plan-steps pending/blocked, git status) for orchestrator closeout |
 | [`audit`](audit.md) | Post-generation static and AI-powered audit |
 | [`integrity`](integrity.md) | Hash manifest over the modules that enforce the constitution itself |
