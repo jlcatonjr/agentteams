@@ -631,6 +631,34 @@ verified, and never written to the probe corpus or the registry — this measure
 exactly like the standing audit, it just does so on demand instead of on a schedule. Honours
 `--dry-run`.
 
+### Red-team scoring & attack-generation scripts (not `agentteams` subcommands)
+
+Distinct from `--redteam` (the constitutional probe battery above), the **model-scoring** and
+**attack-generation** work ships as standalone scripts under `scripts/`, run directly with
+`python3`. They are not `agentteams` flags because they import the test harness and are operational
+tooling. Full detail: the [Red-Team Model Scoring & Attack Generation](redteam-model-scoring-guide.md)
+guide.
+
+| Script | Purpose | Network |
+|---|---|---|
+| `redteam_model_ratings.py` | Regenerate the `security_score`/`reliability_score` CSV + provenance sidecar | offline |
+| `redteam_weight_sensitivity.py` | Standing weight-sensitivity check on the live ratings | offline |
+| `redteam_contract_sensitivity.py` | Two-arm experiment: how much a `@security` contract change moves scores | live (budget-capped) |
+| `redteam_oracle_intercheck.py` | Second-model inter-rater check on the `auth-01` oracle | live (budget-capped) |
+| `redteam_new_surface.py` (**H1**) | Author new-surface payloads to quarantine + coverage density report | offline |
+| `redteam_adaptive_attack.py` (**H2**) | Adaptive attacker vs a static-best-of-N control | live, **gated** |
+| `redteam_attack_campaign.py` (**H3**) | Automated generation + a distinct review judge | live, **gated** |
+
+**Shared contract for the live scripts.** Every network-touching script requires `OPENROUTER_API_KEY`
+in the environment, supports `--dry-run` (validate + estimate cost, spend nothing), and enforces a
+`--budget` hard cap. The **attack-generation** harnesses (H2/H3) additionally refuse to run live until
+a reviewed `cleared-for-live` clearance with verified conditions is recorded in
+`references/security-decisions.log.csv` (the S7 interlock, enforced at the network egress primitive).
+The code is the source of truth; as of the 2026-08-18 clearance row the recorded verdict is a
+conditional pass with pending conditions (not cleared for live), so a live run raises and sends
+nothing. Generated payloads are written only to a gitignored quarantine and never to the tracked
+corpus. Always `--dry-run` first.
+
 ### `--verify-waivers`
 
 Read-only: report the validity (signature, expiry, use-limit, conditions) of every security waiver in `references/security-waivers.log.csv` under `--output`/`--project` (else CWD). Never mints or consumes a waiver. Exits non-zero if any waiver is invalid. Requires `AGENTTEAMS_WAIVER_SIGNING_KEY` to verify signatures; without it, rows report as unverifiable.

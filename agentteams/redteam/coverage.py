@@ -51,6 +51,60 @@ class CoverageReport:
         return "\n".join(lines)
 
 
+@dataclass
+class DensityReport:
+    """Result of an attacks-per-taxonomy-leaf density check (F2, deferred-plan item 3).
+
+    Coverage asks whether each taxonomy leaf is touched by *any* attack; density asks whether it is
+    touched by *enough* — a leaf exercised by a single payload is a thin, brittle measurement of that
+    surface. Like the coverage check this REPORTS, it does not gate: a thin leaf is a candidate for
+    more authoring, not a defect (mirrors this module's stated stance).
+    """
+
+    min_per_leaf: int
+    per_leaf: dict[str, int]
+    thin: list[tuple[str, int]]  # (leaf, count) for touched leaves below the threshold
+
+    def render(self) -> str:
+        """Return a human-readable density summary."""
+        touched = len(self.per_leaf)
+        lines = [
+            f"Attack density (min {self.min_per_leaf}/leaf): {touched} taxonomy leaf/leaves "
+            f"exercised; {len(self.thin)} below threshold.",
+            "",
+        ]
+        if self.thin:
+            lines.append(f"Thin (under {self.min_per_leaf} attacks — candidates for more authoring):")
+            lines.extend(f"  - {leaf}: {count}" for leaf, count in self.thin)
+        else:
+            lines.append(f"Every exercised leaf has at least {self.min_per_leaf} attacks.")
+        return "\n".join(lines)
+
+
+def compute_density(
+    tags_per_attack: list[tuple[str, ...]], min_per_leaf: int = 2
+) -> DensityReport:
+    """Count attacks per taxonomy leaf and flag touched leaves below ``min_per_leaf``.
+
+    Corpus-agnostic: ``tags_per_attack`` is each attack's taxonomy tags (e.g. a payload's
+    ``owasp_llm_2026``/``mitre_atlas`` values). Only *touched* leaves are reported — an entirely
+    untouched leaf is a *coverage* gap (see :func:`compute_coverage`), not a *density* one.
+
+    Args:
+        tags_per_attack: Each attack's taxonomy-leaf tags (may repeat leaves across attacks).
+        min_per_leaf: The minimum attacks-per-leaf below which a touched leaf is "thin".
+
+    Returns:
+        A :class:`DensityReport` with per-leaf counts and the thin leaves.
+    """
+    per_leaf: dict[str, int] = {}
+    for tags in tags_per_attack:
+        for leaf in tags:
+            per_leaf[leaf] = per_leaf.get(leaf, 0) + 1
+    thin = sorted((leaf, count) for leaf, count in per_leaf.items() if count < min_per_leaf)
+    return DensityReport(min_per_leaf=min_per_leaf, per_leaf=per_leaf, thin=thin)
+
+
 def load_taxonomy(path: Path = TAXONOMY_PATH) -> list[tuple[str, str]]:
     """Return ``(id, name)`` pairs for every entry across both taxonomy lists.
 

@@ -430,6 +430,52 @@ def test_entropy_genuine_mixed_token_still_flagged():
     assert cred, "Genuine mixed-alphanumeric secret token should still be flagged"
 
 
+def test_entropy_fp_deep_path_with_slash_joined_digit_segment():
+    """SEC-02: A deep, slash-delimited filesystem path must NOT trigger the
+    context-free entropy detector even when its slash-joined run reaches a
+    digit-bearing segment.
+
+    Root cause: ``/`` sits in the base64 token class, so a nested path such as
+    ``research/workflowTesting/Projects/AgentInfrastructureScoring/04`` matched
+    as one contiguous 63-char token whose Shannon entropy (4.30) cleared the
+    3.8 gate — a systematic false positive on any numbered file at depth. The
+    guard suppresses a matched token only when it is structurally a path: it
+    contains ``/``, no ``+``/``=`` (base64 markers), and no ``/``-delimited
+    segment independently qualifies as a high-entropy opaque token.
+    """
+    content = (
+        "audit (`research/workflowTesting/Projects/"
+        "AgentInfrastructureScoring/04-adversarial-conflict-audit.md`)"
+    )
+    findings = scan_content(content)
+    cred = [f for f in findings if f.category == "credential"]
+    assert not cred, (
+        f"Deep path with a slash-joined digit segment must not be flagged: {cred}"
+    )
+
+
+def test_entropy_secret_embedded_as_path_segment_still_flagged():
+    """SEC-02: The path-shape guard must NOT hide a genuine opaque secret that
+    appears as one component of a slash path — that segment still qualifies on
+    its own, so the token is not suppressed.
+    """
+    content = "creds/AKIAIOSFODNN7EXAMPLE1234abcd/use"
+    findings = scan_content(content)
+    cred = [f for f in findings if f.category == "credential"]
+    assert cred, "A real high-entropy secret segment inside a path must stay flagged"
+
+
+def test_entropy_base64_with_padding_not_treated_as_path():
+    """SEC-02: A base64-looking token that carries ``+``/``=`` is never treated
+    as a path even if it also contains a ``/`` — those characters do not occur
+    in filesystem paths and signal encoded material.
+    """
+    content = "AbCdEf12GhIj/Kl34MnOpQr56+xY9z="
+    findings = scan_content(content)
+    cred = [f for f in findings if f.category == "credential"]
+    assert cred, "Slash-containing base64 with +/= markers must stay flagged"
+
+
 # ---------------------------------------------------------------------------
 # verdict_for_findings / ScanReport.verdict
 # ---------------------------------------------------------------------------

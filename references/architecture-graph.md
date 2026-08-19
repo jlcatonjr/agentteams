@@ -3,7 +3,7 @@
 
 > **Auto-generated.** Regenerated on every commit that touches the `agentteams` package. Do not edit manually — changes will be overwritten.
 
-- Modules mapped: **158**
+- Modules mapped: **159**
 - Packages: **7**
 - Internal import edges: **324**
 - Distinct external dependencies: **6**
@@ -22,7 +22,7 @@ Inter-package import dependencies (module-level detail in the tables below).
 
 | Package | Modules | Depends on |
 | --- | --- | --- |
-| `agentteams` | 93 | `agentteams.cli`, `agentteams.enrich`, `agentteams.frameworks`, `agentteams.research` |
+| `agentteams` | 94 | `agentteams.cli`, `agentteams.enrich`, `agentteams.frameworks`, `agentteams.research` |
 | `agentteams.cli` | 22 | `agentteams`, `agentteams.frameworks`, `agentteams.redteam` |
 | `agentteams.enrich` | 6 | `agentteams` |
 | `agentteams.eval_adapters` | 2 | — |
@@ -153,6 +153,7 @@ Every module, coloured by package (full adjacency in the table below).
 | `agentteams.plan_steps` | — | `agentteams.session_scan` |
 | `agentteams.plan_steps_todo` | `agentteams.atomicio` | `agentteams.bridge` |
 | `agentteams.pr_management` | — | — |
+| `agentteams.provenance` | — | — |
 | `agentteams.recipe_fields` | — | `agentteams.analyze` |
 | `agentteams.redteam` | — | — |
 | `agentteams.redteam.budget` | — | — |
@@ -1500,6 +1501,14 @@ digraph "agentteams architecture" {
     "agentteams.pr_management": {
       "package": "agentteams",
       "path": "agentteams/pr_management.py",
+      "is_package": false,
+      "imports_internal": [],
+      "external": [],
+      "repo_local": []
+    },
+    "agentteams.provenance": {
+      "package": "agentteams",
+      "path": "agentteams/provenance.py",
       "is_package": false,
       "imports_internal": [],
       "external": [],

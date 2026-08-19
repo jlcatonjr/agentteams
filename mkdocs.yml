@@ -40,6 +40,7 @@ nav:
   - Guides:
       - Post-Production Auditor: post-production-auditor-guide.md
       - Security Hardening & Threat Intelligence: security-hardening-guide.md
+      - Red-Team Model Scoring & Attack Generation: redteam-model-scoring-guide.md
       - Runtime Security for Served Apps: runtime-security-guide.md
       - Section Fencing & Safe Merges: section-fencing-guide.md
       - Update Lifecycle, Drift & Backups: update-lifecycle-guide.md
@@ -83,6 +84,7 @@ nav:
       - drift: api-reference/drift.md
       - behavioral-drift: api-reference/behavioral-drift.md
       - scan: api-reference/scan.md
+      - redteam: api-reference/redteam.md
       - session_scan: api-reference/session_scan.md
       - audit: api-reference/audit.md
       - remediate: api-reference/remediate.md
