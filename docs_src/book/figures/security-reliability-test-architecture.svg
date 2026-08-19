@@ -1,103 +1,114 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 2560 354" width="2560" height="354" font-family="monospace">
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 2408 518" width="2408" height="518" font-family="monospace">
   <title>Security &amp; reliability test architecture</title>
   <defs>
     <marker id="arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
       <polygon points="0,0 10,5 0,10" fill="#8a8a8a"/>
     </marker>
   </defs>
-  <path d="M848,77 C884,77 884,49 920,49 L968,49" fill="none" stroke="#8a8a8a" stroke-width="1.5" marker-end="url(#arrow)"/>
-  <path d="M848,77 C884,77 884,97 920,97 L944,97" fill="none" stroke="#8a8a8a" stroke-width="1.5" marker-end="url(#arrow)"/>
-  <path d="M848,77 C884,77 884,145 920,145" fill="none" stroke="#8a8a8a" stroke-width="1.5" marker-end="url(#arrow)"/>
-  <path d="M848,77 C884,77 884,221 920,221 L932,221" fill="none" stroke="#8a8a8a" stroke-width="1.5" marker-end="url(#arrow)"/>
-  <path d="M240,321 C276,321 276,277 312,277 L552,277 C588,277 588,259 624,259 L848,259 L920,259 L1152,259 C1188,259 1188,149 1224,149 L1252,149" fill="none" stroke="#8a8a8a" stroke-width="1.5" marker-end="url(#arrow)"/>
-  <path d="M240,321 C276,321 276,305 312,305 L552,305 C588,305 588,287 624,287 L848,287 L920,287 L1152,287 C1188,287 1188,225 1224,225" fill="none" stroke="#8a8a8a" stroke-width="1.5" marker-end="url(#arrow)"/>
-  <path d="M1744,111 C1780,111 1780,149 1816,149" fill="none" stroke="#8a8a8a" stroke-width="1.5" marker-end="url(#arrow)"/>
-  <path d="M1428,149 L1456,149 C1492,149 1492,111 1528,111" fill="none" stroke="#8a8a8a" stroke-width="1.5" marker-end="url(#arrow)"/>
-  <path d="M1428,149 L1456,149 C1492,149 1492,159 1528,159 L1556,159" fill="none" stroke="#8a8a8a" stroke-width="1.5" marker-end="url(#arrow)"/>
-  <path d="M1428,149 L1456,149 C1492,149 1492,207 1528,207 L1568,207" fill="none" stroke="#8a8a8a" stroke-width="1.5" marker-end="url(#arrow)"/>
-  <path d="M516,127 L552,127 C588,127 588,77 624,77" fill="none" stroke="#8a8a8a" stroke-width="1.5" marker-end="url(#arrow)"/>
-  <path d="M516,127 L552,127 C588,127 588,125 624,125 L644,125" fill="none" stroke="#8a8a8a" stroke-width="1.5" marker-end="url(#arrow)"/>
-  <path d="M516,127 L552,127 C588,127 588,173 624,173" fill="none" stroke="#8a8a8a" stroke-width="1.5" marker-end="url(#arrow)"/>
-  <path d="M516,127 L552,127 C588,127 588,221 624,221 L660,221" fill="none" stroke="#8a8a8a" stroke-width="1.5" marker-end="url(#arrow)"/>
-  <path d="M828,125 L848,125 C884,125 884,183 920,183 L1152,183 C1188,183 1188,187 1224,187 L1456,187 C1492,187 1492,245 1528,245 L1744,245 C1780,245 1780,187 1816,187 L2032,187 C2068,187 2068,201 2104,201 L2272,201 C2308,201 2308,177 2344,177" fill="none" stroke="#8a8a8a" stroke-width="1.5" marker-end="url(#arrow)"/>
-  <path d="M516,31 L552,31 C588,31 588,39 624,39 L848,39 C884,39 884,49 920,49 L968,49" fill="none" stroke="#8a8a8a" stroke-width="1.5" marker-end="url(#arrow)"/>
-  <path d="M1104,49 L1152,49 C1188,49 1188,101 1224,101 L1236,101" fill="none" stroke="#8a8a8a" stroke-width="1.5" marker-end="url(#arrow)"/>
-  <path d="M1128,97 L1152,97 C1188,97 1188,101 1224,101 L1236,101" fill="none" stroke="#8a8a8a" stroke-width="1.5" marker-end="url(#arrow)"/>
-  <path d="M1152,145 C1188,145 1188,101 1224,101 L1236,101" fill="none" stroke="#8a8a8a" stroke-width="1.5" marker-end="url(#arrow)"/>
-  <path d="M212,177 L240,177 C276,177 276,165 312,165 L552,165 C588,165 588,173 624,173" fill="none" stroke="#8a8a8a" stroke-width="1.5" marker-end="url(#arrow)"/>
-  <path d="M848,173 C884,173 884,221 920,221 L932,221" fill="none" stroke="#8a8a8a" stroke-width="1.5" marker-end="url(#arrow)"/>
-  <path d="M812,221 L848,221 L920,221 L932,221" fill="none" stroke="#8a8a8a" stroke-width="1.5" marker-end="url(#arrow)"/>
-  <path d="M1456,225 C1492,225 1492,301 1528,301 L1744,301 C1780,301 1780,215 1816,215 L2032,215 C2068,215 2068,229 2104,229 L2272,229 C2308,229 2308,177 2344,177" fill="none" stroke="#8a8a8a" stroke-width="1.5" marker-end="url(#arrow)"/>
-  <path d="M216,225 L240,225 C276,225 276,221 312,221 L552,221 C588,221 588,173 624,173" fill="none" stroke="#8a8a8a" stroke-width="1.5" marker-end="url(#arrow)"/>
-  <path d="M216,225 L240,225 C276,225 276,249 312,249 L552,249 C588,249 588,221 624,221 L660,221" fill="none" stroke="#8a8a8a" stroke-width="1.5" marker-end="url(#arrow)"/>
-  <path d="M204,273 L240,273 C276,273 276,193 312,193 L552,193 C588,193 588,77 624,77" fill="none" stroke="#8a8a8a" stroke-width="1.5" marker-end="url(#arrow)"/>
-  <path d="M204,273 L240,273 C276,273 276,333 312,333 L552,333 C588,333 588,315 624,315 L848,315 L920,315 L1152,315 C1188,315 1188,263 1224,263 L1456,263 C1492,263 1492,273 1528,273 L1744,273 C1780,273 1780,149 1816,149" fill="none" stroke="#8a8a8a" stroke-width="1.5" marker-end="url(#arrow)"/>
-  <path d="M1444,101 L1456,101 C1492,101 1492,63 1528,63 L1548,63" fill="none" stroke="#8a8a8a" stroke-width="1.5" marker-end="url(#arrow)"/>
-  <path d="M2032,149 C2068,149 2068,173 2104,173 L2272,173 C2308,173 2308,177 2344,177" fill="none" stroke="#8a8a8a" stroke-width="1.5" marker-end="url(#arrow)"/>
-  <path d="M2032,149 C2068,149 2068,135 2104,135" fill="none" stroke="#8a8a8a" stroke-width="1.5" marker-end="url(#arrow)"/>
-  <path d="M1716,159 L1744,159 C1780,159 1780,149 1816,149" fill="none" stroke="#8a8a8a" stroke-width="1.5" marker-end="url(#arrow)"/>
-  <path d="M552,79 C588,79 588,77 624,77" fill="none" stroke="#8a8a8a" stroke-width="1.5" marker-end="url(#arrow)"/>
-  <path d="M212,129 L240,129 C276,129 276,127 312,127 L348,127" fill="none" stroke="#8a8a8a" stroke-width="1.5" marker-end="url(#arrow)"/>
-  <path d="M1140,221 L1152,221 C1188,221 1188,149 1224,149 L1252,149" fill="none" stroke="#8a8a8a" stroke-width="1.5" marker-end="url(#arrow)"/>
-  <path d="M1140,221 L1152,221 C1188,221 1188,225 1224,225" fill="none" stroke="#8a8a8a" stroke-width="1.5" marker-end="url(#arrow)"/>
-  <path d="M228,33 L240,33 C276,33 276,79 312,79" fill="none" stroke="#8a8a8a" stroke-width="1.5" marker-end="url(#arrow)"/>
-  <path d="M1704,207 L1744,207 C1780,207 1780,149 1816,149" fill="none" stroke="#8a8a8a" stroke-width="1.5" marker-end="url(#arrow)"/>
-  <path d="M208,81 L240,81 C276,81 276,31 312,31 L348,31" fill="none" stroke="#8a8a8a" stroke-width="1.5" marker-end="url(#arrow)"/>
-  <path d="M2272,135 C2308,135 2308,177 2344,177" fill="none" stroke="#8a8a8a" stroke-width="1.5" marker-end="url(#arrow)"/>
-  <rect x="624" y="62" width="224" height="30" rx="6" fill="#f0e8ff" stroke="#8a5cc6" stroke-width="1.5"/>
-  <text x="736" y="82" font-size="13" text-anchor="middle" fill="#000000">attack_gen core (8 rails)</text>
-  <rect x="16" y="306" width="224" height="30" rx="6" fill="#eef6ee" stroke="#3f8f4f" stroke-width="1.5"/>
-  <text x="128" y="326" font-size="13" text-anchor="middle" fill="#000000">AUTH01 human-read verdict</text>
-  <rect x="1528" y="96" width="216" height="30" rx="6" fill="#fff8e8" stroke="#ccaa44" stroke-width="1.5"/>
-  <text x="1636" y="116" font-size="13" text-anchor="middle" fill="#000000">availability / runs (R1)</text>
-  <rect x="1252" y="134" width="176" height="30" rx="6" fill="#fff8e8" stroke="#ccaa44" stroke-width="1.5"/>
-  <text x="1340" y="154" font-size="13" text-anchor="middle" fill="#000000">collect() + score()</text>
-  <rect x="348" y="112" width="168" height="30" rx="6" fill="#e8eefb" stroke="#1b3fa0" stroke-width="1.5"/>
-  <text x="432" y="132" font-size="13" text-anchor="middle" fill="#000000">@security contract</text>
-  <rect x="644" y="110" width="184" height="30" rx="6" fill="#fbe8f4" stroke="#b0559a" stroke-width="1.5"/>
-  <text x="736" y="130" font-size="13" text-anchor="middle" fill="#000000">contract-sensitivity</text>
-  <rect x="348" y="16" width="168" height="30" rx="6" fill="#f0e8ff" stroke="#8a5cc6" stroke-width="1.5"/>
-  <text x="432" y="36" font-size="13" text-anchor="middle" fill="#000000">coverage + density</text>
-  <rect x="968" y="34" width="136" height="30" rx="6" fill="#f0e8ff" stroke="#8a5cc6" stroke-width="1.5"/>
-  <text x="1036" y="54" font-size="13" text-anchor="middle" fill="#000000">H1 new-surface</text>
-  <rect x="944" y="82" width="184" height="30" rx="6" fill="#f0e8ff" stroke="#8a5cc6" stroke-width="1.5"/>
-  <text x="1036" y="102" font-size="13" text-anchor="middle" fill="#000000">H2 adaptive attacker</text>
-  <rect x="920" y="130" width="232" height="30" rx="6" fill="#f0e8ff" stroke="#8a5cc6" stroke-width="1.5"/>
-  <text x="1036" y="150" font-size="13" text-anchor="middle" fill="#000000">H3 auto-gen + review judge</text>
-  <rect x="44" y="162" width="168" height="30" rx="6" fill="#e8fbff" stroke="#3f8f9f" stroke-width="1.5"/>
-  <text x="128" y="182" font-size="13" text-anchor="middle" fill="#000000">integrity manifest</text>
-  <rect x="624" y="158" width="224" height="30" rx="6" fill="#eef6ee" stroke="#3f8f4f" stroke-width="1.5"/>
-  <text x="736" y="178" font-size="13" text-anchor="middle" fill="#000000">judgment run + drift gate</text>
-  <rect x="660" y="206" width="152" height="30" rx="6" fill="#eef6ee" stroke="#3f8f4f" stroke-width="1.5"/>
-  <text x="736" y="226" font-size="13" text-anchor="middle" fill="#000000">model-matrix run</text>
-  <rect x="2344" y="162" width="200" height="30" rx="6" fill="#ffe8e8" stroke="#cc6666" stroke-width="1.5"/>
-  <text x="2444" y="182" font-size="13" text-anchor="middle" fill="#000000">scoring-methodology.md</text>
-  <rect x="1224" y="210" width="232" height="30" rx="6" fill="#fbe8f4" stroke="#b0559a" stroke-width="1.5"/>
-  <text x="1340" y="230" font-size="13" text-anchor="middle" fill="#000000">oracle inter-rater (kappa)</text>
-  <rect x="40" y="210" width="176" height="30" rx="6" fill="#e8eefb" stroke="#1b3fa0" stroke-width="1.5"/>
-  <text x="128" y="230" font-size="13" text-anchor="middle" fill="#000000">payload corpus (14)</text>
-  <rect x="1548" y="48" width="176" height="30" rx="6" fill="#e8fbff" stroke="#3f8f9f" stroke-width="1.5"/>
-  <text x="1636" y="68" font-size="13" text-anchor="middle" fill="#000000">promotion-gate (S2)</text>
-  <rect x="52" y="258" width="152" height="30" rx="6" fill="#ffe8e8" stroke="#cc6666" stroke-width="1.5"/>
-  <text x="128" y="278" font-size="13" text-anchor="middle" fill="#000000">provenance stamp</text>
-  <rect x="1236" y="86" width="208" height="30" rx="6" fill="#f0e8ff" stroke="#8a5cc6" stroke-width="1.5"/>
-  <text x="1340" y="106" font-size="13" text-anchor="middle" fill="#000000">quarantine (gitignored)</text>
-  <rect x="1816" y="134" width="216" height="30" rx="6" fill="#ffe8e8" stroke="#cc6666" stroke-width="1.5"/>
-  <text x="1924" y="154" font-size="13" text-anchor="middle" fill="#000000">ratings.csv + provenance</text>
-  <rect x="1556" y="144" width="160" height="30" rx="6" fill="#fff8e8" stroke="#ccaa44" stroke-width="1.5"/>
-  <text x="1636" y="164" font-size="13" text-anchor="middle" fill="#000000">reliability_score</text>
-  <rect x="312" y="64" width="240" height="30" rx="6" fill="#e8fbff" stroke="#3f8f9f" stroke-width="1.5"/>
-  <text x="432" y="84" font-size="13" text-anchor="middle" fill="#000000">S7 live-clearance interlock</text>
-  <rect x="44" y="114" width="168" height="30" rx="6" fill="#e8fbff" stroke="#3f8f9f" stroke-width="1.5"/>
-  <text x="128" y="134" font-size="13" text-anchor="middle" fill="#000000">secret/PII scanner</text>
-  <rect x="932" y="206" width="208" height="30" rx="6" fill="#eef6ee" stroke="#3f8f4f" stroke-width="1.5"/>
-  <text x="1036" y="226" font-size="13" text-anchor="middle" fill="#000000">score_response (scorer)</text>
-  <rect x="28" y="18" width="200" height="30" rx="6" fill="#e8fbff" stroke="#3f8f9f" stroke-width="1.5"/>
-  <text x="128" y="38" font-size="13" text-anchor="middle" fill="#000000">security-decisions.log</text>
-  <rect x="1568" y="192" width="136" height="30" rx="6" fill="#fff8e8" stroke="#ccaa44" stroke-width="1.5"/>
-  <text x="1636" y="212" font-size="13" text-anchor="middle" fill="#000000">security_score</text>
-  <rect x="48" y="66" width="160" height="30" rx="6" fill="#e8eefb" stroke="#1b3fa0" stroke-width="1.5"/>
-  <text x="128" y="86" font-size="13" text-anchor="middle" fill="#000000">external taxonomy</text>
-  <rect x="2104" y="120" width="168" height="30" rx="6" fill="#fbe8f4" stroke="#b0559a" stroke-width="1.5"/>
-  <text x="2188" y="140" font-size="13" text-anchor="middle" fill="#000000">weight-sensitivity</text>
+  <path d="M616,31 C652,31 652,109 688,109" fill="none" stroke="#8a8a8a" stroke-width="1.5" marker-end="url(#arrow)"/>
+  <path d="M616,31 C652,31 652,157 688,157 L728,157" fill="none" stroke="#8a8a8a" stroke-width="1.5" marker-end="url(#arrow)"/>
+  <path d="M1276,231 L1280,231 C1316,231 1316,227 1352,227 L1400,227" fill="none" stroke="#8a8a8a" stroke-width="1.5" marker-end="url(#arrow)"/>
+  <path d="M1276,231 L1280,231 C1316,231 1316,275 1352,275 L1376,275" fill="none" stroke="#8a8a8a" stroke-width="1.5" marker-end="url(#arrow)"/>
+  <path d="M1276,231 L1280,231 C1316,231 1316,323 1352,323" fill="none" stroke="#8a8a8a" stroke-width="1.5" marker-end="url(#arrow)"/>
+  <path d="M260,283 L280,283 C316,283 316,289 352,289 L616,289 C652,289 652,223 688,223 L976,223 C1012,223 1012,155 1048,155 L1076,155" fill="none" stroke="#8a8a8a" stroke-width="1.5" marker-end="url(#arrow)"/>
+  <path d="M260,283 L280,283 C316,283 316,365 352,365 L616,365 C652,365 652,307 688,307 L976,307 C1012,307 1012,279 1048,279" fill="none" stroke="#8a8a8a" stroke-width="1.5" marker-end="url(#arrow)"/>
+  <path d="M1576,83 L1584,83 C1620,83 1620,193 1656,193" fill="none" stroke="#8a8a8a" stroke-width="1.5" marker-end="url(#arrow)"/>
+  <path d="M1252,155 L1280,155 C1316,155 1316,83 1352,83 L1360,83" fill="none" stroke="#8a8a8a" stroke-width="1.5" marker-end="url(#arrow)"/>
+  <path d="M1252,155 L1280,155 C1316,155 1316,131 1352,131 L1388,131" fill="none" stroke="#8a8a8a" stroke-width="1.5" marker-end="url(#arrow)"/>
+  <path d="M1252,155 L1280,155 C1316,155 1316,179 1352,179 L1400,179" fill="none" stroke="#8a8a8a" stroke-width="1.5" marker-end="url(#arrow)"/>
+  <path d="M232,139 L280,139 C316,139 316,165 352,165 L616,165 C652,165 652,195 688,195 L976,195 C1012,195 1012,231 1048,231 L1052,231" fill="none" stroke="#8a8a8a" stroke-width="1.5" marker-end="url(#arrow)"/>
+  <path d="M232,139 L280,139 C316,139 316,203 352,203 L392,203" fill="none" stroke="#8a8a8a" stroke-width="1.5" marker-end="url(#arrow)"/>
+  <path d="M232,139 L280,139 C316,139 316,79 352,79 L424,79" fill="none" stroke="#8a8a8a" stroke-width="1.5" marker-end="url(#arrow)"/>
+  <path d="M232,139 L280,139 C316,139 316,127 352,127 L408,127" fill="none" stroke="#8a8a8a" stroke-width="1.5" marker-end="url(#arrow)"/>
+  <path d="M576,203 L616,203 C652,203 652,279 688,279 L976,279 C1012,279 1012,317 1048,317 L1280,317 C1316,317 1316,389 1352,389 L1584,389 C1620,389 1620,279 1656,279 L1872,279 C1908,279 1908,259 1944,259 L2120,259 L2192,259" fill="none" stroke="#8a8a8a" stroke-width="1.5" marker-end="url(#arrow)"/>
+  <path d="M568,251 L616,251 L688,251 L976,251 C1012,251 1012,193 1048,193 L1280,193 C1316,193 1316,227 1352,227 L1400,227" fill="none" stroke="#8a8a8a" stroke-width="1.5" marker-end="url(#arrow)"/>
+  <path d="M240,91 L280,91 C316,91 316,79 352,79 L424,79" fill="none" stroke="#8a8a8a" stroke-width="1.5" marker-end="url(#arrow)"/>
+  <path d="M1536,227 L1584,227 C1620,227 1620,241 1656,241 L1660,241" fill="none" stroke="#8a8a8a" stroke-width="1.5" marker-end="url(#arrow)"/>
+  <path d="M1560,275 L1584,275 C1620,275 1620,241 1656,241 L1660,241" fill="none" stroke="#8a8a8a" stroke-width="1.5" marker-end="url(#arrow)"/>
+  <path d="M1584,323 C1620,323 1620,241 1656,241 L1660,241" fill="none" stroke="#8a8a8a" stroke-width="1.5" marker-end="url(#arrow)"/>
+  <path d="M280,331 C316,331 316,327 352,327 L400,327" fill="none" stroke="#8a8a8a" stroke-width="1.5" marker-end="url(#arrow)"/>
+  <path d="M544,79 L616,79 C652,79 652,157 688,157 L728,157" fill="none" stroke="#8a8a8a" stroke-width="1.5" marker-end="url(#arrow)"/>
+  <path d="M560,127 L616,127 C652,127 652,157 688,157 L728,157" fill="none" stroke="#8a8a8a" stroke-width="1.5" marker-end="url(#arrow)"/>
+  <path d="M1280,279 C1316,279 1316,417 1352,417 L1584,417 C1620,417 1620,307 1656,307 L1872,307 C1908,307 1908,287 1944,287 L2120,287 C2156,287 2156,259 2192,259" fill="none" stroke="#8a8a8a" stroke-width="1.5" marker-end="url(#arrow)"/>
+  <path d="M236,187 L280,187 C316,187 316,31 352,31" fill="none" stroke="#8a8a8a" stroke-width="1.5" marker-end="url(#arrow)"/>
+  <path d="M236,187 L280,187 C316,187 316,79 352,79 L424,79" fill="none" stroke="#8a8a8a" stroke-width="1.5" marker-end="url(#arrow)"/>
+  <path d="M236,187 L280,187 C316,187 316,127 352,127 L408,127" fill="none" stroke="#8a8a8a" stroke-width="1.5" marker-end="url(#arrow)"/>
+  <path d="M236,187 L280,187 C316,187 316,393 352,393 L616,393 C652,393 652,391 688,391 L976,391 C1012,391 1012,373 1048,373 L1280,373 C1316,373 1316,445 1352,445 L1584,445 C1620,445 1620,335 1656,335 L1872,335 C1908,335 1908,325 1944,325" fill="none" stroke="#8a8a8a" stroke-width="1.5" marker-end="url(#arrow)"/>
+  <path d="M976,109 C1012,109 1012,155 1048,155 L1076,155" fill="none" stroke="#8a8a8a" stroke-width="1.5" marker-end="url(#arrow)"/>
+  <path d="M224,427 L280,427 C316,427 316,469 352,469 L616,469 C652,469 652,363 688,363 L976,363 C1012,363 1012,231 1048,231 L1052,231" fill="none" stroke="#8a8a8a" stroke-width="1.5" marker-end="url(#arrow)"/>
+  <path d="M224,427 L280,427 C316,427 316,497 352,497 L616,497 C652,497 652,419 688,419 L976,419 C1012,419 1012,345 1048,345 L1280,345 C1316,345 1316,361 1352,361 L1584,361 C1620,361 1620,193 1656,193" fill="none" stroke="#8a8a8a" stroke-width="1.5" marker-end="url(#arrow)"/>
+  <path d="M1868,241 L1872,241 C1908,241 1908,325 1944,325" fill="none" stroke="#8a8a8a" stroke-width="1.5" marker-end="url(#arrow)"/>
+  <path d="M1872,193 C1908,193 1908,231 1944,231 L2120,231 C2156,231 2156,259 2192,259" fill="none" stroke="#8a8a8a" stroke-width="1.5" marker-end="url(#arrow)"/>
+  <path d="M1872,193 L1944,193 L1948,193" fill="none" stroke="#8a8a8a" stroke-width="1.5" marker-end="url(#arrow)"/>
+  <path d="M1548,131 L1584,131 C1620,131 1620,193 1656,193" fill="none" stroke="#8a8a8a" stroke-width="1.5" marker-end="url(#arrow)"/>
+  <path d="M604,431 L616,431 C652,431 652,335 688,335 L976,335 C1012,335 1012,231 1048,231 L1052,231" fill="none" stroke="#8a8a8a" stroke-width="1.5" marker-end="url(#arrow)"/>
+  <path d="M936,157 L976,157 C1012,157 1012,231 1048,231 L1052,231" fill="none" stroke="#8a8a8a" stroke-width="1.5" marker-end="url(#arrow)"/>
+  <path d="M936,157 L976,157 C1012,157 1012,155 1048,155 L1076,155" fill="none" stroke="#8a8a8a" stroke-width="1.5" marker-end="url(#arrow)"/>
+  <path d="M936,157 L976,157 C1012,157 1012,279 1048,279" fill="none" stroke="#8a8a8a" stroke-width="1.5" marker-end="url(#arrow)"/>
+  <path d="M248,379 L280,379 C316,379 316,431 352,431 L364,431" fill="none" stroke="#8a8a8a" stroke-width="1.5" marker-end="url(#arrow)"/>
+  <path d="M1536,179 L1584,179 C1620,179 1620,193 1656,193" fill="none" stroke="#8a8a8a" stroke-width="1.5" marker-end="url(#arrow)"/>
+  <path d="M228,235 L280,235 C316,235 316,251 352,251 L400,251" fill="none" stroke="#8a8a8a" stroke-width="1.5" marker-end="url(#arrow)"/>
+  <path d="M2116,193 L2120,193 C2156,193 2156,259 2192,259" fill="none" stroke="#8a8a8a" stroke-width="1.5" marker-end="url(#arrow)"/>
+  <rect x="352" y="16" width="264" height="30" rx="6" fill="#eef6ee" stroke="#3f8f4f" stroke-width="1.5"/>
+  <text x="484" y="36" font-size="13" text-anchor="middle" fill="#000000">ablated arm (contract removed)</text>
+  <rect x="1052" y="216" width="224" height="30" rx="6" fill="#f0e8ff" stroke="#8a5cc6" stroke-width="1.5"/>
+  <text x="1164" y="236" font-size="13" text-anchor="middle" fill="#000000">attack_gen core (8 rails)</text>
+  <rect x="36" y="268" width="224" height="30" rx="6" fill="#eef6ee" stroke="#3f8f4f" stroke-width="1.5"/>
+  <text x="148" y="288" font-size="13" text-anchor="middle" fill="#000000">AUTH01 human-read verdict</text>
+  <rect x="1360" y="68" width="216" height="30" rx="6" fill="#fff8e8" stroke="#ccaa44" stroke-width="1.5"/>
+  <text x="1468" y="88" font-size="13" text-anchor="middle" fill="#000000">availability / runs (R1)</text>
+  <rect x="1076" y="140" width="176" height="30" rx="6" fill="#fff8e8" stroke="#ccaa44" stroke-width="1.5"/>
+  <text x="1164" y="160" font-size="13" text-anchor="middle" fill="#000000">collect() + score()</text>
+  <rect x="64" y="124" width="168" height="30" rx="6" fill="#e8eefb" stroke="#1b3fa0" stroke-width="1.5"/>
+  <text x="148" y="144" font-size="13" text-anchor="middle" fill="#000000">@security contract</text>
+  <rect x="392" y="188" width="184" height="30" rx="6" fill="#fbe8f4" stroke="#b0559a" stroke-width="1.5"/>
+  <text x="484" y="208" font-size="13" text-anchor="middle" fill="#000000">contract-sensitivity</text>
+  <rect x="400" y="236" width="168" height="30" rx="6" fill="#f0e8ff" stroke="#8a5cc6" stroke-width="1.5"/>
+  <text x="484" y="256" font-size="13" text-anchor="middle" fill="#000000">coverage + density</text>
+  <rect x="56" y="76" width="184" height="30" rx="6" fill="#e8fbff" stroke="#3f8f9f" stroke-width="1.5"/>
+  <text x="148" y="96" font-size="13" text-anchor="middle" fill="#000000">build-log drift gate</text>
+  <rect x="1400" y="212" width="136" height="30" rx="6" fill="#f0e8ff" stroke="#8a5cc6" stroke-width="1.5"/>
+  <text x="1468" y="232" font-size="13" text-anchor="middle" fill="#000000">H1 new-surface</text>
+  <rect x="1376" y="260" width="184" height="30" rx="6" fill="#f0e8ff" stroke="#8a5cc6" stroke-width="1.5"/>
+  <text x="1468" y="280" font-size="13" text-anchor="middle" fill="#000000">H2 adaptive attacker</text>
+  <rect x="1352" y="308" width="232" height="30" rx="6" fill="#f0e8ff" stroke="#8a5cc6" stroke-width="1.5"/>
+  <text x="1468" y="328" font-size="13" text-anchor="middle" fill="#000000">H3 auto-gen + review judge</text>
+  <rect x="16" y="316" width="264" height="30" rx="6" fill="#e8fbff" stroke="#3f8f9f" stroke-width="1.5"/>
+  <text x="148" y="336" font-size="13" text-anchor="middle" fill="#000000">enforcement integrity manifest</text>
+  <rect x="424" y="64" width="120" height="30" rx="6" fill="#eef6ee" stroke="#3f8f4f" stroke-width="1.5"/>
+  <text x="484" y="84" font-size="13" text-anchor="middle" fill="#000000">judgment run</text>
+  <rect x="408" y="112" width="152" height="30" rx="6" fill="#eef6ee" stroke="#3f8f4f" stroke-width="1.5"/>
+  <text x="484" y="132" font-size="13" text-anchor="middle" fill="#000000">model-matrix run</text>
+  <rect x="2192" y="244" width="200" height="30" rx="6" fill="#ffe8e8" stroke="#cc6666" stroke-width="1.5"/>
+  <text x="2292" y="264" font-size="13" text-anchor="middle" fill="#000000">scoring-methodology.md</text>
+  <rect x="1048" y="264" width="232" height="30" rx="6" fill="#fbe8f4" stroke="#b0559a" stroke-width="1.5"/>
+  <text x="1164" y="284" font-size="13" text-anchor="middle" fill="#000000">oracle inter-rater (kappa)</text>
+  <rect x="60" y="172" width="176" height="30" rx="6" fill="#e8eefb" stroke="#1b3fa0" stroke-width="1.5"/>
+  <text x="148" y="192" font-size="13" text-anchor="middle" fill="#000000">payload corpus (14)</text>
+  <rect x="688" y="94" width="288" height="30" rx="6" fill="#e8fbff" stroke="#3f8f9f" stroke-width="1.5"/>
+  <text x="832" y="114" font-size="13" text-anchor="middle" fill="#000000">positive control (ablated COMPLY)</text>
+  <rect x="1944" y="310" width="176" height="30" rx="6" fill="#e8fbff" stroke="#3f8f9f" stroke-width="1.5"/>
+  <text x="2032" y="330" font-size="13" text-anchor="middle" fill="#000000">promotion-gate (S2)</text>
+  <rect x="72" y="412" width="152" height="30" rx="6" fill="#ffe8e8" stroke="#cc6666" stroke-width="1.5"/>
+  <text x="148" y="432" font-size="13" text-anchor="middle" fill="#000000">provenance stamp</text>
+  <rect x="1660" y="226" width="208" height="30" rx="6" fill="#f0e8ff" stroke="#8a5cc6" stroke-width="1.5"/>
+  <text x="1764" y="246" font-size="13" text-anchor="middle" fill="#000000">quarantine (gitignored)</text>
+  <rect x="1656" y="178" width="216" height="30" rx="6" fill="#ffe8e8" stroke="#cc6666" stroke-width="1.5"/>
+  <text x="1764" y="198" font-size="13" text-anchor="middle" fill="#000000">ratings.csv + provenance</text>
+  <rect x="1388" y="116" width="160" height="30" rx="6" fill="#fff8e8" stroke="#ccaa44" stroke-width="1.5"/>
+  <text x="1468" y="136" font-size="13" text-anchor="middle" fill="#000000">reliability_score</text>
+  <rect x="364" y="416" width="240" height="30" rx="6" fill="#e8fbff" stroke="#3f8f9f" stroke-width="1.5"/>
+  <text x="484" y="436" font-size="13" text-anchor="middle" fill="#000000">S7 live-clearance interlock</text>
+  <rect x="400" y="312" width="168" height="30" rx="6" fill="#e8fbff" stroke="#3f8f9f" stroke-width="1.5"/>
+  <text x="484" y="332" font-size="13" text-anchor="middle" fill="#000000">secret/PII scanner</text>
+  <rect x="728" y="142" width="208" height="30" rx="6" fill="#eef6ee" stroke="#3f8f4f" stroke-width="1.5"/>
+  <text x="832" y="162" font-size="13" text-anchor="middle" fill="#000000">score_response (scorer)</text>
+  <rect x="48" y="364" width="200" height="30" rx="6" fill="#e8fbff" stroke="#3f8f9f" stroke-width="1.5"/>
+  <text x="148" y="384" font-size="13" text-anchor="middle" fill="#000000">security-decisions.log</text>
+  <rect x="1400" y="164" width="136" height="30" rx="6" fill="#fff8e8" stroke="#ccaa44" stroke-width="1.5"/>
+  <text x="1468" y="184" font-size="13" text-anchor="middle" fill="#000000">security_score</text>
+  <rect x="68" y="220" width="160" height="30" rx="6" fill="#e8eefb" stroke="#1b3fa0" stroke-width="1.5"/>
+  <text x="148" y="240" font-size="13" text-anchor="middle" fill="#000000">external taxonomy</text>
+  <rect x="1948" y="178" width="168" height="30" rx="6" fill="#fbe8f4" stroke="#b0559a" stroke-width="1.5"/>
+  <text x="2032" y="198" font-size="13" text-anchor="middle" fill="#000000">weight-sensitivity</text>
 </svg>

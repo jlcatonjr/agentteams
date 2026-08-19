@@ -35,7 +35,8 @@ NODES: list[tuple[str, str, str, str]] = [
     ("taxonomy", "external taxonomy", "1-input", "references/redteam-external-taxonomy.json"),
     # --- execution harness ---
     ("matrix", "model-matrix run", "2-harness", "scripts/redteam_model_matrix_run.py"),
-    ("judgment", "judgment run + drift gate", "2-harness", "scripts/redteam_judgment_run.py"),
+    ("judgment", "judgment run", "2-harness", "scripts/redteam_judgment_run.py"),
+    ("ablated", "ablated arm (contract removed)", "2-harness", "scripts/redteam_model_matrix_run.py"),
     ("scorer", "score_response (scorer)", "2-harness", "tests/redteam/run_harness.py"),
     ("authjudge", "AUTH01 human-read verdict", "2-harness", "scripts/redteam_model_ratings.py"),
     # --- scoring ---
@@ -58,7 +59,9 @@ NODES: list[tuple[str, str, str, str]] = [
     ("s7", "S7 live-clearance interlock", "6-gate", "scripts/redteam_attack_gen.py"),
     ("secdecisions", "security-decisions.log", "6-gate", "references/security-decisions.log.csv"),
     ("promotiongate", "promotion-gate (S2)", "6-gate", "tests/test_redteam_promotion_gate.py"),
-    ("integrity", "integrity manifest", "6-gate", "agentteams/integrity.py"),
+    ("poscontrol", "positive control (ablated COMPLY)", "6-gate", "scripts/redteam_model_matrix_run.py"),
+    ("drift", "build-log drift gate", "6-gate", "agentteams/drift.py"),
+    ("integrity", "enforcement integrity manifest", "6-gate", "agentteams/integrity.py"),
     ("scan", "secret/PII scanner", "6-gate", "agentteams/scan.py"),
     # --- meta-validation ---
     ("oracle", "oracle inter-rater (kappa)", "7-meta", "scripts/redteam_oracle_intercheck.py"),
@@ -68,26 +71,31 @@ NODES: list[tuple[str, str, str, str]] = [
 
 #: Directed edges — each a real data-flow (→ feeds) or control/guard relationship.
 EDGES: list[tuple[str, str]] = [
-    # core scoring flow: corpus + contract -> harness -> scorer -> scoring -> outputs
-    ("payloads", "matrix"), ("payloads", "judgment"),
+    # core scoring flow: corpus + contract -> harness -> scorer -> scoring -> outputs. The contract
+    # arm and the contract-REMOVED ablated arm run the same corpus; `resistance` (the dominant
+    # security signal) comes from the ablated arm, so it feeds the scorer separately and is NOT fed
+    # by the contract.
+    ("payloads", "matrix"), ("payloads", "judgment"), ("payloads", "ablated"),
     ("contract", "matrix"), ("contract", "judgment"),
-    ("matrix", "scorer"), ("judgment", "scorer"),
+    ("matrix", "scorer"), ("judgment", "scorer"), ("ablated", "scorer"),
     ("scorer", "collect"), ("authjudge", "collect"),
     ("collect", "secscore"), ("collect", "relscore"), ("collect", "avail"),
     ("secscore", "ratings"), ("relscore", "ratings"), ("avail", "ratings"),
     ("provenance", "ratings"), ("ratings", "methodology"),
-    # attack-generation: core -> H1/H2/H3 -> quarantine; taxonomy -> coverage -> H1
+    # attack-generation: core -> H1/H2/H3 -> quarantine; taxonomy -> coverage -> H1. The shared
+    # scorer primitive FEEDS attackcore (`score_against_defender` calls `score_response`), so the
+    # edge is scorer -> attackcore, not the reverse.
     ("attackcore", "h1"), ("attackcore", "h2"), ("attackcore", "h3"),
     ("taxonomy", "coverage"), ("coverage", "h1"),
     ("h1", "quarantine"), ("h2", "quarantine"), ("h3", "quarantine"),
-    ("contract", "attackcore"), ("attackcore", "scorer"), ("provenance", "attackcore"),
-    # safety / integrity gates. The promotion gate GUARDS the corpus boundary (it checks that no
-    # quarantined candidate reaches `payloads` without review) — a terminal guard, NOT a feed into
-    # the corpus, so there is deliberately no promotiongate->payloads edge (that would rank an input
-    # as downstream of quarantine and misread the flow).
+    ("contract", "attackcore"), ("scorer", "attackcore"), ("provenance", "attackcore"),
+    # safety / integrity gates. The promotion gate READS the corpus to compute the leak set
+    # (payloads -> promotiongate) but deliberately has NO edge INTO the corpus — it *guards* the
+    # boundary (no quarantined candidate reaches payloads without review), it does not feed it.
     ("secdecisions", "s7"), ("s7", "attackcore"),
-    ("quarantine", "promotiongate"),
-    ("integrity", "judgment"), ("scan", "contract"),
+    ("quarantine", "promotiongate"), ("payloads", "promotiongate"),
+    ("ablated", "poscontrol"), ("poscontrol", "collect"),
+    ("drift", "judgment"), ("integrity", "scan"),
     # meta-validation of the instruments
     ("scorer", "oracle"), ("authjudge", "oracle"),
     ("ratings", "weightsens"), ("contract", "contractsens"),
