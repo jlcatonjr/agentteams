@@ -19,6 +19,8 @@ import importlib.util
 import sys
 from pathlib import Path
 
+import pytest
+
 REPO_ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(REPO_ROOT))
 
@@ -37,7 +39,8 @@ def test_availability_floor_is_the_honest_low_bar():
 
 def test_collect_rows_carry_runs_and_availability():
     rows = rm.collect()
-    assert rows, "collect() returned no rows"
+    if not rows:
+        pytest.skip("no local redteam-matrix run artifacts (RUN_DIRS under tmp/ are gitignored; absent in CI)")
     for row in rows:
         assert row["runs"] >= 1, f"{row['model']} has runs<1"
         assert 0.0 <= row["availability"] <= 1.0, f"{row['model']} availability out of range"
@@ -47,6 +50,8 @@ def test_repeat_measured_models_retain_both_runs():
     # These four models were measured twice (a primary run + a retry/replication dir). R1 keeps both
     # measurements; if a retry dir is dropped from RUN_DIRS the count silently falls back to 1.
     rows = {r["model"]: r for r in rm.collect()}
+    if not rows:
+        pytest.skip("no local redteam-matrix run artifacts (RUN_DIRS under tmp/ are gitignored; absent in CI)")
     repeated = [
         "mistralai/mistral-large-2512",
         "qwen/qwen3-30b-a3b",
