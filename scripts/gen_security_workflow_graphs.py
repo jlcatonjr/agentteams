@@ -120,15 +120,16 @@ WORKFLOWS: list[tuple[str, str, list, list]] = [
             ("fault", "fault_tolerance /60", "step"),
             ("repeat", "repeat runs (R1)", "data"),
             ("avail", "availability / runs\n(measured, uniformly 1.0)", "highlight"),
-            ("relscore", "reliability_score\n(2 of 4 characteristics)", "goal"),
-            ("unscored", "availability + recoverability:\nreported, not scored", "data"),
+            ("relscore", "reliability_score\n(maturity + fault_tolerance)", "goal"),
+            ("unscored", "availability: reported, not scored\nrecoverability: NOT measured", "data"),
         ],
         [
             ("runs", "parseable", " 1 "), ("parseable", "maturity", " 2 "),
             ("runs", "transport", " 1 "), ("transport", "fault", " 2 "),
             ("maturity", "relscore", " 3 "), ("fault", "relscore", " 3 "),
             ("repeat", "avail"), ("avail", "unscored", " non-discriminating ", False, True),
-            ("unscored", "relscore", "", False, True),
+            # NOTE: no unscored -> relscore edge — availability/recoverability are excluded from
+            # reliability_total (= maturity + fault_tolerance), not summed into it.
         ],
     ),
     (
@@ -147,12 +148,15 @@ WORKFLOWS: list[tuple[str, str, list, list]] = [
             ("corpus", "payload corpus", "data"),
             ("promo", "promotion-gate:\ncandidate in corpus\nwithout review?", "decision"),
             ("fail", "test FAILS\n(unreviewed promotion)", "void"),
-            ("ok", "corpus unchanged", "step"),
+            ("ok", "no unreviewed\ncandidate in corpus", "step"),
         ],
         [
             ("secdecisions", "s7", " 1 "),
             ("s7", "refused", " no ", True, True), ("s7", "attackcore", " yes (cleared) "),
-            ("attackcore", "h1", " 2 "), ("attackcore", "h2", " 2 "), ("attackcore", "h3", " 2 "),
+            # Only H2/H3 make live calls and pass through the S7-gated core. H1 is hand-authored,
+            # makes NO live call, and uses only the quarantine-write primitive — so it is fed by
+            # coverage/density, NOT by the S7-gated live core.
+            ("attackcore", "h2", " 2 "), ("attackcore", "h3", " 2 "),
             ("coverage", "h1"),
             ("h1", "quarantine", " 3 "), ("h2", "quarantine", " 3 "), ("h3", "quarantine", " 3 "),
             ("quarantine", "promo", " 4 "), ("corpus", "promo"),
@@ -163,21 +167,29 @@ WORKFLOWS: list[tuple[str, str, list, list]] = [
         "security-workflow-04-safety-integrity-gates",
         "Security Workflow 4: Safety & Integrity Gates",
         [
-            ("template", "@security template", "data"),
+            ("instance", "@security instance\n(.claude/agents/security.md)", "data"),
             ("drift", "build-log drift gate:\ninstance drifted?", "decision"),
             ("refuse", "judgment run REFUSED", "void"),
             ("judgment", "judgment run proceeds", "step"),
-            ("manifest", "enforcement integrity\nmanifest", "data"),
-            ("modules", "scan / fences /\nsecurity_gate", "step"),
-            ("hook", "constitutional-gate hook\n(probe E4)", "highlight"),
-            ("tamper", "tamper detected\n(HALT)", "void"),
+            ("manifest", "enforcement integrity\nmanifest (10 modules)", "data"),
+            ("hook", "constitutional-gate hook", "highlight"),
+            ("mismatch", "scan.py hash\nmismatch? (probe E4)", "decision"),
+            ("ask", "ASK\n(operator confirm)", "highlight"),
+            ("content", "content being written", "data"),
+            ("highsev", "high-severity\nsecret/PII finding?", "decision"),
+            ("halt", "HALT (deny)", "void"),
         ],
         [
-            ("template", "drift", " 1 "),
+            ("instance", "drift", " 1 "),
             ("drift", "refuse", " drifted ", True, True), ("drift", "judgment", " clean "),
-            ("manifest", "modules", " covers "),
-            ("modules", "hook", " 2 "),
-            ("hook", "tamper", " hash mismatch ", True, True),
+            # The hook gates two things. (a) scan.py integrity: a hash mismatch triggers ASK
+            # (operator confirm), NOT a hard deny — a stale manifest after a legitimate scan.py edit
+            # must not brick the session. (b) content scan: a high-severity finding on the written
+            # content is the real HALT (deny).
+            ("manifest", "hook", " covers scan.py "),
+            ("hook", "mismatch", " 2 "), ("mismatch", "ask", " yes "),
+            ("content", "hook", " scanned "),
+            ("hook", "highsev"), ("highsev", "halt", " yes ", True, True),
         ],
     ),
     (
@@ -218,9 +230,9 @@ ARTIFACTS: dict[str, str] = {
     "attackcore": "scripts/redteam_attack_gen.py", "coverage": "agentteams/redteam/coverage.py",
     "h1": "scripts/redteam_new_surface.py", "h2": "scripts/redteam_adaptive_attack.py",
     "h3": "scripts/redteam_attack_campaign.py", "promo": "tests/test_redteam_promotion_gate.py",
-    "template": "agentteams/templates/universal/security.template.md", "drift": "agentteams/drift.py",
+    "instance": ".claude/agents/security.md", "drift": "agentteams/drift.py",
     "judgment": "scripts/redteam_judgment_run.py", "manifest": "agentteams/integrity.py",
-    "modules": "agentteams/scan.py", "hook": ".github/hooks/constitutional-gate.py",
+    "content": "agentteams/scan.py", "hook": ".github/hooks/constitutional-gate.py",
     "responses": "scripts/redteam_oracle_intercheck.py", "oracle": "scripts/redteam_oracle_intercheck.py",
     "ratings": "references/openweights-security-model-ratings.csv",
     "weightsens": "scripts/redteam_weight_sensitivity.py",

@@ -9,7 +9,8 @@ integrity gates that make it trustworthy, and the meta-validation that checks th
 
 Every node is a real artifact (a module, script, corpus, output, or gate) and every edge a real
 data-flow or control/guard relationship — verified against the code. Deterministic: same input →
-byte-identical SVG. Writes `docs_src/book/figures/security-reliability-test-architecture.svg`.
+byte-identical SVG. Writes
+`docs_src/book/figures/security-workflows/security-reliability-test-architecture.svg`.
 
 Run: `python3 scripts/gen_security_reliability_graph.py`
 """
