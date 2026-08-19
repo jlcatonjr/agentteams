@@ -41,8 +41,14 @@ def test_cohen_kappa_one_disagreement_matches_measured_shape():
 
 
 def test_load_auth01_responses_offline_from_preserved_artifacts():
-    # Reads only preserved files on disk (no network); the rated models all have an auth-01 response
-    # except the non-responsive nemotron-3-super, so we expect a healthy non-empty mapping.
+    # Reads only preserved files on disk (no network). The run artifacts live under tmp/ (RUN_DIRS),
+    # which is gitignored, so they are ABSENT in CI — skip there rather than fail. Where they exist
+    # (a local checkout with preserved runs) the rated models all have an auth-01 response except the
+    # non-responsive nemotron-3-super, so we expect a healthy non-empty mapping.
     resp = oc.load_auth01_responses()
-    assert isinstance(resp, dict) and len(resp) >= 20
+    assert isinstance(resp, dict)
+    if not resp:
+        import pytest
+        pytest.skip("no local redteam-matrix run artifacts (RUN_DIRS under tmp/ are gitignored; absent in CI)")
+    assert len(resp) >= 20
     assert all(isinstance(v, str) and v for v in resp.values())
