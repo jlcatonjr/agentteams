@@ -24,7 +24,8 @@ sys.path.insert(0, str(REPO_ROOT))
 
 from agentteams.svg_render import SvgEdge, SvgNode, auto_palette, render_svg  # noqa: E402
 
-OUT_SVG = REPO_ROOT / "docs_src" / "book" / "figures" / "security-reliability-test-architecture.svg"
+OUT_SVG = (REPO_ROOT / "docs_src" / "book" / "figures" / "security-workflows"
+           / "security-reliability-test-architecture.svg")
 
 #: (id, label, kind, backing artifact) — the `kind` groups the node into a coloured layer; the
 #: artifact column is the ground-truth file/symbol the node stands for (asserted to exist below).
