@@ -23,6 +23,37 @@ guide is the served overview.
 
 ---
 
+## Architecture at a glance
+
+The directed graph below is the subsystem that facilitates the security and reliability tests — the
+payload corpus and `@security` contract flowing through the execution harness and scorer into the
+scoring pipeline and ratings output, the attack-generation harnesses that extend it, the safety/
+integrity gates that make it trustworthy, and the meta-validation that checks the instruments. It is
+generated deterministically from `scripts/gen_security_reliability_graph.py` via the agentteams
+directed-graph renderer (`agentteams/svg_render.py`) — every node is a real artifact and every edge a
+real data-flow or guard relationship. Read it left-to-right.
+
+![Security & reliability test architecture](book/figures/security-reliability-test-architecture.svg)
+
+**Layers (by colour):** ① inputs/corpus (contract, payloads, taxonomy) · ② execution harness
+(matrix/judgment runs, the **ablated arm** that runs the corpus with the contract *removed*,
+`score_response`, the AUTH01 human-read verdict) · ③ scoring (`collect()`,
+`security_score`/`reliability_score`, availability) · ④ outputs (ratings CSV + provenance stamp,
+methodology) · ⑤ attack-generation (the `attack_gen` core, H1/H2/H3, coverage/density, quarantine) ·
+⑥ safety/integrity gates (S7 interlock, security-decisions log, promotion-gate, the **positive
+control** that validates the detector, the build-log drift gate, the enforcement integrity manifest,
+scanner) · ⑦ meta-validation (oracle inter-rater, weight- and contract-sensitivity).
+
+Two modeling notes the graph is careful about: the dominant security signal (`resistance`) comes from
+the **ablated arm** (contract removed) → **positive control** → scorer, not from the contract arm — so
+the contract does *not* feed the ablated arm. And the promotion-gate *reads* the corpus (to compute
+its leak set) but deliberately has **no** edge *into* it — it *guards* the boundary (a quarantined
+candidate cannot reach `payloads.json` without review), it does not feed it.
+
+To regenerate after an architecture change: `python3 scripts/gen_security_reliability_graph.py`.
+
+---
+
 ## 1. Model scoring
 
 ### What the scores mean
