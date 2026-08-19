@@ -6,6 +6,38 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### added (redteam model-scoring reproducibility + attack-generation harnesses)
+
+- **`agentteams/provenance.py`** (new) — a reusable, stdlib-only provenance stamp (`Provenance`
+  dataclass with `to_dict`/`to_json`/`to_markdown`/`write_sidecar`; caller-supplied clock; explicit
+  `provisional` note list). First consumers: the model-ratings pipeline (emits a
+  `*.provenance.json` sidecar) and the attack-generation harnesses.
+- **`agentteams/redteam/coverage.py`** — adds `compute_density` / `DensityReport` (feature F2): an
+  attacks-per-taxonomy-leaf **density** criterion (coverage asks "leaf touched?", density asks
+  "touched enough?"). Reports, does not gate. Documented in the new
+  `docs_src/api-reference/redteam.md` package page.
+- **Attack-generation harnesses** (scripts, BUILD-only, live runs gated) — `redteam_attack_gen.py`
+  (shared core with eight safety rails incl. an `openrouter.ai`-only egress allowlist, symlink-safe
+  quarantine confinement, and a live-clearance interlock that refuses live runs until a reviewed
+  `references/security-decisions.log.csv` clearance is recorded), plus `redteam_new_surface.py`
+  (H1/F2), `redteam_adaptive_attack.py` (H2/F3, adaptive-vs-static-best-of-N), and
+  `redteam_attack_campaign.py` (H3/F10, generation + a distinct review judge). Generated payloads
+  are quarantined (gitignored) and never enter the tracked corpus; a standing test enforces it.
+- **Model-scoring reproducibility** — `redteam_model_ratings.py::collect()` reworked (roadmap R1) to
+  retain repeat runs and report `runs`/`availability` (scores unchanged); `redteam_contract_sensitivity.py`
+  (new) measures how a `@security` contract change moves scores. Finding: the load-bearing `judgment`
+  verdict is run-to-run non-deterministic for borderline models even at temperature 0, so the
+  methodology now requires N≥3 draws near the acceptance boundary.
+- **Served documentation** — new guide `docs_src/redteam-model-scoring-guide.md`, the
+  `agentteams/redteam` API-reference package page, and a CLI-reference section documenting the
+  scoring pipeline + the three harnesses, with the dual-use surface owned honestly.
+
+### fixed
+
+- **`agentteams/scan.py`** (SEC-02) — a high-entropy slash-path (e.g. a long file path in prose) no
+  longer trips the credential detector as a false-positive HALT; a `_looks_like_filesystem_path`
+  suppressor plus an entropy floor. Regression-tested.
+
 ### added (redteam OSINT/OST benchmark implementation: taxonomy tagging, corpus-freshness search, KEV correlation, new probe)
 
 - **`agentteams/redteam/coverage.py`** (item I1/I11) — diffs probe corpus coverage against a
