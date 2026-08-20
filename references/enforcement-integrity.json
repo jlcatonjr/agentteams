@@ -2,8 +2,8 @@
   "modules": {
     "agentteams/cli/security_gate.py": "5adcec4ecec679ddb4761fc30173b72c0628fa72a0caa23c352c021ea4c864f5",
     "agentteams/fences.py": "d1f525419e54c2d722fc8863c93854ba813d6440fad9ccf20debdcd862d741ab",
-    "agentteams/front_matter_merge.py": "35c0b36b16d304ee64b62f1f3e213f7aa90560fc9fea0b2aa34220e7046389f0",
-    "agentteams/front_matter_reconcile.py": "5c6e94b79c62e8fe8e422a5b0fced33fadef22049dddef095831f98a96b9d34b",
+    "agentteams/front_matter_merge.py": "a65d2e8c6808623bc2cb79f5b6bbca71051c616643fd4608e8d19d1733735e6c",
+    "agentteams/front_matter_reconcile.py": "3395885ee5045e729010f62ebe159653413e869bea8c7c44988addb3f1ad14d8",
     "agentteams/integrity.py": "1b0269204f99874be9095ffd7f1ca4107e2c7c45c03f5da2300518c450205b0e",
     "agentteams/redteam/checks_report.py": "3e13cc5ebf19b4b393ef0a2ee663d097ff2be3666d38b7f61203503ee77ffd24",
     "agentteams/redteam/checks_static.py": "44b3f830ad5b23a2f16f9938b9fa282a4cd5847e677703fb611208be7b37f738",

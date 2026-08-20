@@ -39,16 +39,66 @@ _FM_KEY_RE = re.compile(r"^([A-Za-z][A-Za-z0-9_-]*):(.*)$", re.MULTILINE)
 def _front_matter_keys(content: str) -> dict[str, str]:
     """Return the top-level front-matter keys of ``content`` mapped to their raw values.
 
+    A block-style value (``key:`` alone on its line, with indented lines below it — the shape
+    ``agents:``/``handoffs:`` render in whenever the list is non-trivial) is captured in full,
+    not just its first line. A single-line regex applied to the whole block, as this function
+    used before, matches only the ``key:`` line itself: ``(.*)`` stops at end-of-line, and the
+    indented continuation lines don't start with a letter, so they never become part of the
+    match. That silently produced ``{"agents": ""}`` — an empty value indistinguishable from a
+    genuinely-empty key — which then round-tripped straight back out through
+    :func:`_render_front_matter` and blanked the block on disk the moment any *other*
+    front-matter key changed on the same file (issue #131). Scanning line-by-line and
+    accumulating each key's indented continuation lines keeps the block's raw text intact so it
+    round-trips unchanged when nothing about it actually differs.
+
     Args:
         content: A full file body, with or without a YAML front-matter block.
 
     Returns:
-        ``{key: raw_value}`` for the first front-matter block, or ``{}`` when there is none.
+        ``{key: raw_value}`` for the first front-matter block, or ``{}`` when there is none. A
+        block-style value's raw text is prefixed with ``\\n`` (its continuation lines, verbatim)
+        so :func:`_render_front_matter` can tell it apart from a same-line scalar.
     """
     match = _YAML_FM_RE.match(content)
     if not match:
         return {}
-    return {k: v.strip() for k, v in _FM_KEY_RE.findall(match.group(1))}
+    # match.group(1) is "---\n<body>\n---\n"; splitting on "\n" always leaves the opening
+    # delimiter at index 0 and the closing delimiter followed by a trailing "" at the end.
+    body_lines = match.group(1).split("\n")[1:-2]
+
+    keys: dict[str, str] = {}
+    current_key: str | None = None
+    current_scalar = ""
+    block_lines: list[str] = []
+
+    def _flush() -> None:
+        if current_key is None:
+            return
+        # A line only proves this key is block-style if it is INDENTED and carries real
+        # (non-blank) content — a genuine YAML block item is always indented under its key.
+        # Two failure modes were found under adversarial review of earlier versions of this
+        # fix, both from treating any non-key line as block-content proof:
+        #   - a blank line trailing a same-line scalar (`name: A\n\ntools: [...]`) — `[""]`
+        #     is truthy, so `name` flipped into a phantom empty block;
+        #   - an unindented comment line trailing a same-line scalar (`name: A\n# note\n
+        #     tools: [...]`) — non-blank but not part of any block, same phantom-block result.
+        # Both discarded the scalar's real value, reproducing the exact class of loss this
+        # function exists to close. Blank or comment lines that genuinely sit inside an
+        # already-proven block (between two indented list items) are still preserved verbatim.
+        is_block = any(
+            raw_line.strip() and raw_line[:1] in (" ", "\t") for raw_line in block_lines
+        )
+        keys[current_key] = ("\n" + "\n".join(block_lines)) if is_block else current_scalar.strip()
+
+    for line in body_lines:
+        top_level = _FM_KEY_RE.match(line)
+        if top_level:
+            _flush()
+            current_key, current_scalar, block_lines = top_level.group(1), top_level.group(2), []
+        elif current_key is not None:
+            block_lines.append(line)
+    _flush()
+    return keys
 
 
 def _detect_front_matter_drift(new_rendered: str, existing_on_disk: str) -> list[str]:
@@ -381,6 +431,12 @@ def _render_front_matter(content: str, keys: dict[str, str]) -> str:
     Key order follows the existing block so a merge never reshuffles a file the project reads.
     A key added by the merge is appended after the ones already present.
 
+    A block-style value (see :func:`_front_matter_keys`) carries a leading ``\\n`` sentinel and
+    is written straight after ``key:`` with no separating space, reproducing
+    ``key:\\n  - item`` rather than a scalar's ``key: value`` — the latter would leave a stray
+    trailing space on the ``key:`` line and, worse, is what let issue #131's already-truncated
+    ``""`` render as a visibly blanked key in the first place.
+
     Args:
         content: The file whose front matter is being rewritten.
         keys: The merged key/value mapping.
@@ -393,7 +449,11 @@ def _render_front_matter(content: str, keys: dict[str, str]) -> str:
         return content
     existing_order = list(_front_matter_keys(content))
     ordered = existing_order + [k for k in keys if k not in existing_order]
-    body = "\n".join(f"{k}: {keys[k]}" for k in ordered if k in keys)
+    body = "\n".join(
+        f"{k}:{keys[k]}" if keys[k].startswith("\n") else f"{k}: {keys[k]}"
+        for k in ordered
+        if k in keys
+    )
     return f"---\n{body}\n---\n" + content[match.end():]
 
 
