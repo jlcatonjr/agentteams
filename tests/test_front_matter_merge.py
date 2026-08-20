@@ -240,3 +240,96 @@ def test_user_invocable_fresh_file_neither_key_present():
 
 def test_rendering_a_document_without_front_matter_is_a_no_op():
     assert _render_front_matter("plain\n", {"a": "1"}) == "plain\n"
+
+
+# --- block-style values (agents:/handoffs:) — issue #131 -------------------
+#
+# A block-style list (`key:` alone on its line, items indented below) is the shape `agents:`
+# and `handoffs:` render in whenever the list is non-trivial. The single-line key/value regex
+# used to capture only the `key:` line itself, reading the value as `""` and silently dropping
+# every indented line under it — which then round-tripped straight back out through
+# `_render_front_matter` and blanked the block on disk the moment ANY other front-matter key
+# changed on the same file. These tests change a *scalar* key alongside the *block-style* key in
+# the same file, since the destructive path only triggers when `_fm_applied` is non-empty for
+# some key — a test that only varies the block-style key wouldn't reach `_render_front_matter()`
+# at all and would miss the bug.
+
+from agentteams.front_matter_merge import _front_matter_keys  # noqa: E402
+
+
+_BLOCK_DOC = """---
+name: Orchestrator
+user-invokable: true
+tools: ['read', 'edit']
+agents:
+  - orchestrator
+  - navigator
+  - security
+handoffs:
+  - label: Produce
+    agent: primary-producer
+    prompt: "do the thing"
+    send: false
+model: ["auto"]
+---
+body text unchanged
+"""
+
+
+def test_front_matter_keys_captures_block_style_value_in_full():
+    """The regression at the root: a block value must not read as ''."""
+    keys = _front_matter_keys(_BLOCK_DOC)
+    assert keys["agents"] != ""
+    assert "orchestrator" in keys["agents"]
+    assert "navigator" in keys["agents"]
+    assert "security" in keys["agents"]
+    assert keys["handoffs"] != ""
+    assert "primary-producer" in keys["handoffs"]
+
+
+def test_unrelated_scalar_rename_does_not_blank_block_style_agents_and_handoffs():
+    """End-to-end reproduction of issue #131's real-world trigger: a rename to one unrelated
+    scalar key (user-invokable -> user-invocable) must not blank agents:/handoffs:."""
+    on_disk = _BLOCK_DOC
+    rendered = on_disk.replace("user-invokable: true", "user-invocable: true")
+    baseline = _front_matter_keys(on_disk)
+
+    merged_keys, applied, proposals = _merge_front_matter(rendered, on_disk, baseline)
+    assert any("user-invokable" in a and "renamed" in a for a in applied), (
+        "the rename itself must still be detected — otherwise this test can't reach the "
+        "render path that triggered the bug"
+    )
+    final = _render_front_matter(on_disk, merged_keys) if applied else on_disk
+
+    assert "agents:\n  - orchestrator" in final, "agents: must not render as an empty block"
+    assert "  - orchestrator" in final
+    assert "  - navigator" in final
+    assert "  - security" in final
+    assert "agent: primary-producer" in final, "handoffs: must not be blanked"
+
+
+def test_render_front_matter_round_trips_block_style_value_unchanged():
+    keys = _front_matter_keys(_BLOCK_DOC)
+    out = _render_front_matter(_BLOCK_DOC, keys)
+    assert out == _BLOCK_DOC, "re-rendering with no merge changes must reproduce the file byte-for-byte"
+
+
+def test_a_blank_line_after_a_scalar_key_does_not_blank_it():
+    """Regression found under adversarial review of the first version of this fix: a blank
+    line trailing a same-line scalar (`name: A\\n\\ntools: [...]`) was read as `[""]` —
+    truthy — so `_flush()` treated it as proof of block-style and silently discarded the
+    scalar's real value, reproducing issue #131's failure mode under a different trigger."""
+    doc = '---\nname: A\n\ntools: ["read"]\n---\nbody\n'
+    keys = _front_matter_keys(doc)
+    assert keys["name"] == "A"
+    assert keys["tools"] == '["read"]'
+
+
+def test_an_unindented_comment_line_after_a_scalar_key_does_not_blank_it():
+    """Same failure mode as the blank-line case, for a comment line instead: a `#`-prefixed
+    line at column 0 is non-blank but not part of any block (a genuine block item is always
+    indented), so it must not count as proof this key is block-style either."""
+    doc = '---\nname: A\n# a comment line\ntools: ["read"]\n---\nbody\n'
+    keys = _front_matter_keys(doc)
+    assert keys["name"] == "A"
+    assert keys["tools"] == '["read"]'

@@ -90,6 +90,35 @@ def test_a_key_the_template_does_not_declare_is_not_a_divergence(tmp_path: Path)
     assert [d.key for d in found] == ["tools"]
 
 
+def test_a_block_style_divergence_is_reported_not_masked(tmp_path: Path) -> None:
+    """Sibling of front_matter_merge's issue #131 fix: a block-style value (agents:/handoffs:,
+    `key:` alone on its line with indented items below) must round-trip as real content, not
+    ``""``. Before the fix, both sides of a block key always read as the same empty string, so
+    a genuine divergence in `agents:`/`handoffs:` was silently never reported by this module."""
+    rendered = RENDERED.replace(
+        "---\n\n",
+        "handoffs:\n  - label: Produce\n    agent: primary-producer\n---\n\n",
+    )
+    deployed = DEPLOYED.replace(
+        "---\n\n",
+        "handoffs:\n  - label: Produce\n    agent: someone-else\n---\n\n",
+    )
+    out = _tree(tmp_path, deployed)
+    found = find_divergences([("navigator.md", rendered)], out)
+    assert "handoffs" in [d.key for d in found], "a real block-style divergence must surface"
+
+
+def test_an_untouched_block_style_key_is_not_a_false_divergence(tmp_path: Path) -> None:
+    """The other half of the same fix: identical block content on both sides must not be
+    misread as changed just because it spans multiple lines."""
+    block = "agents:\n  - orchestrator\n  - navigator\n  - security\n"
+    rendered = RENDERED.replace("---\n\n", f"{block}---\n\n")
+    deployed = DEPLOYED.replace("---\n\n", f"{block}---\n\n")
+    out = _tree(tmp_path, deployed)
+    found = find_divergences([("navigator.md", rendered)], out)
+    assert "agents" not in [d.key for d in found]
+
+
 def test_a_deployed_file_with_no_front_matter_is_skipped(tmp_path: Path) -> None:
     """The distinct sub-case from the ledger: a file cannot receive a block it never had.
 

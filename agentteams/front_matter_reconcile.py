@@ -188,17 +188,47 @@ def _front_matter_map(text: str) -> dict[str, str]:
     Deliberately flat and textual. This reports and applies whole values; it does not attempt
     to parse or merge inside a value, because a partial capability grant is not a thing an
     operator can approve meaningfully.
+
+    A block-style value (``key:`` alone on its line, with indented items below it — the shape
+    ``agents:``/``handoffs:`` render in whenever the list is non-trivial) is captured in full
+    rather than read as empty. Reading it as ``""`` was the root cause of issue #131 in the
+    sibling ``front_matter_merge`` module, and this function had the same flaw: skipping every
+    indented line meant ``find_divergences`` always saw ``deployed[key] == template[key] ==
+    ""`` for a block key, so a real divergence in ``agents:``/``handoffs:`` was silently never
+    reported by this reconcile tool either — a masking bug rather than a destructive one, since
+    `apply_divergences` only rewrites a line it finds verbatim and a multi-line value never
+    matches that search, so it fails safe (SKIPPED) rather than corrupting the file.
+
+    Deliberately re-implements the same line-accumulation approach as
+    ``front_matter_merge._front_matter_keys`` rather than importing it: that function is
+    private, and this module is the standalone/fleet path that must not depend on merge
+    internals (see ``_CAPABILITY_KEY_SUCCESSION`` above).
     """
     block, _body = _parse_front_matter(text)
     if not block:
         return {}
     out: dict[str, str] = {}
+    current_key: str | None = None
+    current_scalar = ""
+    cont_lines: list[str] = []
+
+    def _flush() -> None:
+        if current_key is None:
+            return
+        is_block = any(raw_line.strip() for raw_line in cont_lines)
+        out[current_key] = ("\n" + "\n".join(cont_lines)) if is_block else current_scalar.strip()
+
     for line in block.splitlines():
-        if not line.strip() or line.startswith((" ", "\t", "#")):
-            continue
-        key, sep, value = line.partition(":")
-        if sep:
-            out[key.strip()] = value.strip()
+        is_top_level = line.strip() and not line.startswith((" ", "\t", "#")) and ":" in line
+        if is_top_level:
+            key, sep, value = line.partition(":")
+            if sep:
+                _flush()
+                current_key, current_scalar, cont_lines = key.strip(), value, []
+                continue
+        if current_key is not None:
+            cont_lines.append(line)
+    _flush()
     return out
 
 

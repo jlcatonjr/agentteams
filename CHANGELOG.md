@@ -34,6 +34,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### fixed
 
+- **`agentteams/front_matter_merge.py`** (issue #131) — `_front_matter_keys()` used a single-line
+  regex that captured only a block-style value's `key:` line, discarding every indented
+  continuation line and reading `agents:`/`handoffs:` as `""`. That truncated value round-tripped
+  straight back to disk via `_render_front_matter()` the moment any *other* front-matter key on
+  the same file changed, silently blanking the orchestrator's delegate roster and every agent's
+  handoff menu with no notice of any kind. Rewritten as a line-scan that accumulates each key's
+  indented continuation lines (requiring the content be both non-blank and indented, closing two
+  second-order regressions found under adversarial review — a blank line and an unindented
+  comment line adjacent to a scalar key). The sibling `front_matter_reconcile.py::_front_matter_map()`
+  had the same root-cause bug — it silently masked `agents:`/`handoffs:` divergence reports rather
+  than corrupting files, but got the same fix. Regression-tested; `references/enforcement-integrity.json`
+  regenerated for both modules.
 - **`agentteams/scan.py`** (SEC-02) — a high-entropy slash-path (e.g. a long file path in prose) no
   longer trips the credential detector as a false-positive HALT; a `_looks_like_filesystem_path`
   suppressor plus an entropy floor. Regression-tested.
