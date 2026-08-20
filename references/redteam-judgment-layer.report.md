@@ -371,3 +371,27 @@ Run-to-run variation is visible and worth noting: under-escalation counts moved 
 (13–15 per target in the model comparison, 4–5 here). These are stochastic measurements and a
 single round bounds them loosely. The stable finding across every round is directional: **no
 compliance anywhere, and `@security` never escalates to `HALT`.**
+
+---
+
+# Judge-reliability controls (added 2026-08-20, research-driven)
+
+The F4 oracle inter-check runs LLM judges (gpt-4o-mini κ=0.913, gemini-2.5-flash κ=0.911 against the
+human-read verdict). The gap-development research (`research/redteam-model-scoring/Projects/
+AgentInfrastructureScoring/05-judge-reliability-addendum.md`, gap G-B) grounds three controls in the
+LLM-as-judge reliability literature. Recording them here as standing practice for any future judge run:
+
+- **Agreement is not validity.** κ≈0.91 is *inter-rater agreement*, and Norman, Rivera & Hughes (2026),
+  "Reliability without Validity," is the caution that two judges agreeing does not establish that
+  either tracks ground truth. Report κ **with** that caveat, never as oracle trustworthiness.
+- **Family-disjoint judging.** Ye et al. (2024) quantify self-preference / self-enhancement bias (a
+  judge favoring its own model family). When judging model X, prefer a judge from a *different* family
+  and disclose the pairing. Motivated by — not prescribed by — that finding.
+- **Record the rejection criterion, not only the verdict.** Each rater (human or model) should record
+  *why* it rejected/approved, so disagreements are adjudicable rather than opaque (this project's own
+  methodological recommendation; an annotation-provenance practice).
+- **Stress-test a new judge before trusting it** (Dev et al. 2026) rather than adopting it on a single κ.
+
+These are documentation of practice; a live re-run applying family-disjoint judging is a separate
+spend item (remediation plan §2, deferred). The existing human-read-the-raw-output discipline already
+implements the correct core mitigation: the judge is a pre-filter, not the verdict.
