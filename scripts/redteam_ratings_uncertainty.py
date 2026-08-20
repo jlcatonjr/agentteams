@@ -198,13 +198,12 @@ def load_pairs(csv_path: Path, xcol: str, ycol: str) -> tuple[list[float], list[
     xs, ys, labels = [], [], []
     with open(csv_path, newline="") as f:
         for row in csv.DictReader(f):
-            if not row.get(xcol) or not row.get(ycol):
-                continue
-            try:
-                xs.append(float(row[xcol]))
-                ys.append(float(row[ycol]))
-            except ValueError:
-                continue
+            xval, yval = row.get(xcol), row.get(ycol)
+            if not xval or not yval:
+                continue  # skip blank cells; a non-numeric cell is corruption and must fail loud (CH-24)
+            x, y = float(xval), float(yval)  # both parsed before either is kept (pairing stays aligned)
+            xs.append(x)
+            ys.append(y)
             labels.append(row.get("model", "?"))
     return xs, ys, labels
 
