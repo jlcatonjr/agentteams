@@ -60,12 +60,13 @@ def test_permutation_pvalue_large_for_no_association():
 
 
 def test_main_on_live_ratings_csv_reproduces_project_point_estimates(capsys):
-    # Guards gap G-A's own numbers: the point estimates must match the project's reported
-    # r=0.567 / rho=0.581 (validates the stdlib re-implementation against the pipeline's figures).
+    # Guards gap G-A's own numbers: the point estimates must match the pipeline's published figures.
+    # Post the 2026-08-20 nemotron data-quality fix (its failed 0-parseable ablated run corrected via
+    # the retry), the correlation moved to r=0.599 / rho=0.611 (was 0.567 / 0.581 pre-fix).
     rc = u.main(["--iters", "500"])
     assert rc == 0
     import json
     out = json.loads(capsys.readouterr().out)
     assert out["n"] == 24
-    assert abs(out["pearson"]["point"] - 0.567) < 0.005
-    assert abs(out["spearman"]["point"] - 0.581) < 0.005
+    assert abs(out["pearson"]["point"] - 0.599) < 0.005
+    assert abs(out["spearman"]["point"] - 0.611) < 0.005
