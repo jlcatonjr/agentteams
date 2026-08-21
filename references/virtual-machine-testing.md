@@ -87,9 +87,29 @@ attempts; a long cooldown does not obviously help because each new attempt re-ar
 **Cause:** OpenSSH `PerSourcePenalties` / `MaxStartups` (Ubuntu 24.04+ defaults). Under
 NAT **every** host connection appears to come from the single guest-side address, so a
 handful of failed or half-open attempts trips a per-source block that escalates with each
-further attempt. **Recovery:** stop attempting entirely for several minutes (or reboot the
-VM / `sudo systemctl restart ssh` to clear the penalty), then make **one** clean attempt.
-Automated retry loops make this strictly worse — do not poll.
+further attempt — you will see `nc` succeed (TCP accepted) while `ssh` fails at the banner
+with `Connection to UNKNOWN port -1: Socket is not connected`. A human logging in once
+does not trip it; automated repeated connections do. **Recovery:** stop attempting for
+several minutes (or reboot / `sudo systemctl restart ssh`).
+
+**Durable fix for automated testing — run these INSIDE the VM console (not the host).**
+This is essential if a script (not just a human) must connect; combine it with the
+`UseDNS no` line from §3.1 into one drop-in:
+
+```
+sudo tee /etc/ssh/sshd_config.d/99-vmtest.conf >/dev/null <<'EOF'
+UseDNS no
+MaxStartups 100:30:200
+PerSourceMaxStartups none
+PerSourcePenalties no
+EOF
+sudo systemctl restart ssh
+```
+
+`PerSourcePenalties no` disables the escalating per-source block; `PerSourceMaxStartups
+none` removes the per-source connection cap; the high `MaxStartups` tolerates concurrent
+unauthenticated connections. After this, automated SSH from the host connects reliably.
+Treat this VM as test-only — these settings loosen sshd's abuse protections deliberately.
 
 ### 3.3 Why `VBoxManage guestcontrol` was not a workaround
 
