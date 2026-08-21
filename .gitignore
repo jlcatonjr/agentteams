@@ -160,3 +160,6 @@ references/runtime-handoffs.json
 # research/ holds nested, independently git-managed researchteam repositories (each with its own
 # .git) rather than files this repo's own git should track — e.g. research/workflowTesting/.
 /research/
+
+# Local environment / VM credentials (never commit)
+.env
