@@ -6,6 +6,33 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### added (workspace privilege scoping P2 — cross-workspace capability grants)
+
+- **Signed cross-workspace capability grants** — one team (issuer) authorizes another
+  (holder) to write a specific path in the issuer's workspace, via an HMAC-signed,
+  scoped, expiring row deposited in the HOLDER's `references/capability-grants.log.csv`
+  (a bearer capability the holder holds and its own generation reads). When the holder is
+  next generated/updated with the sandbox on, a granted path that permits `write` merges
+  into its sandbox `allowWrite` (verified against Seatbelt: a granted foreign dir is
+  writable, an ungranted one stays denied). The approver roster is enforced at issue time
+  AND at widening, and `permitted_ops` is honored (a read-only grant does not widen a
+  write boundary). New `agentteams/cli/grants.py` + neutral
+  `agentteams/cli/signed_ledger.py` (HMAC sign/verify, ISO expiry, symlink/`..`-safe path
+  containment — the seam where an asymmetric backend would later slot in).
+- **Team identity** — new optional `team_id` on the project description (defaults to the
+  slugified project name), carried on the manifest; the id a grant is issued BY / TO.
+- **CLI** — `--issue-grant SPEC.json` (mint+sign from a JSON spec; needs
+  `AGENTTEAMS_GRANT_SIGNING_KEY` + an approver on the roster) and `--verify-grants`
+  (read-only audit, mirrors `--verify-waivers`). Man page + `cli-reference.md` updated;
+  new reference section in `workspace-privilege-scoping.md`.
+- **Honest trust model, documented** — symmetric HMAC defends a keyless/injected agent,
+  NOT an adversarial peer team (single-trusted-operator model, per the 2026-08-21
+  decision). Enforcement is generation-time only (a grant is inert until the holder
+  re-updates — no runtime path widens an agent's own boundary). A grant never overrides
+  a `@security` HALT (C-2 parity). Filesystem-local; no cross-machine delivery. The
+  fail-open runtime hook considered in design was dropped as advertising protection it
+  could not deliver. Tests in `tests/test_capability_grants.py`.
+
 ### added (workspace privilege scoping — opt-in Claude sandbox write-confinement)
 
 - **`claude:sandbox` host feature + `privilege_profile` project field** — opt-in workspace

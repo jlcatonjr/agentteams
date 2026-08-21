@@ -400,7 +400,8 @@ def _validate_option_combinations(parser: argparse.ArgumentParser, args: argpars
     _package_team_incompatible = [
         ("backup_mirror", "--backup-mirror"), ("fleet", "--fleet"),
         ("capture_baseline", "--capture-baseline"), ("check_baseline", "--check-baseline"),
-        ("verify_waivers", "--verify-waivers"), ("redteam", "--redteam"),
+        ("verify_waivers", "--verify-waivers"), ("verify_grants", "--verify-grants"),
+        ("issue_grant", "--issue-grant"), ("redteam", "--redteam"),
         ("accept_probe_baseline", "--accept-probe-baseline"),
         ("write_integrity_manifest", "--write-integrity-manifest"),
         ("verify_integrity", "--verify-integrity"), ("verify_backup", "--verify-backup"),

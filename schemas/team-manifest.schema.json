@@ -435,6 +435,11 @@
         "type": "string"
       }
     },
+    "team_id": {
+      "type": "string",
+      "description": "Stable identity this team is known by for cross-workspace capability grants (P2). Always emitted by build_manifest: the project-description team_id, or the slugified project_name when absent.",
+      "pattern": "^[a-z0-9][a-z0-9-]*$"
+    },
     "privilege_profile": {
       "type": "string",
       "enum": ["cooperative", "confined", "exclusive"],

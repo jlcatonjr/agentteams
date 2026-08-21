@@ -799,6 +799,35 @@ def _build_parser() -> argparse.ArgumentParser:
         ),
     )
     parser.add_argument(
+        "--verify-grants",
+        action="store_true",
+        dest="verify_grants",
+        default=False,
+        help=(
+            "Read-only: report the validity (signature, expiry, use-limit, approver "
+            "roster) of every cross-workspace capability grant (P2) in "
+            "references/capability-grants.log.csv under --output/--project (else CWD). "
+            "Never consumes a grant. Exits non-zero if any grant is invalid. Requires "
+            "AGENTTEAMS_GRANT_SIGNING_KEY."
+        ),
+    )
+    parser.add_argument(
+        "--issue-grant",
+        dest="issue_grant",
+        default=None,
+        metavar="SPEC.json",
+        help=(
+            "Mint and sign a cross-workspace capability grant (P2) from a JSON spec "
+            "(issuer_team, holder_team, target_path, permitted_ops, expires_at, "
+            "max_uses, approver, ticket_id, reason_code) and append it to the HOLDER "
+            "workspace's ledger under --output/--project (else CWD) — point it at the "
+            "holder, whose generation reads the ledger. Requires "
+            "AGENTTEAMS_GRANT_SIGNING_KEY and an approver on the holder's roster. The "
+            "holder's sandbox allowWrite widens to the granted (write) path when the "
+            "holder team is next generated/updated."
+        ),
+    )
+    parser.add_argument(
         "--redteam",
         action="store_true",
         dest="redteam",

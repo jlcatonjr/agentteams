@@ -316,6 +316,67 @@ def resolve_host_features_and_advise(
         manifest.setdefault("advisories", []).append(advisory)
 
 
+def finalize_privilege_wiring(
+    manifest: dict, explicit_tokens: list[str], framework_id: str, project_root: Path
+) -> None:
+    """Resolve host features + advisory, then widen the sandbox by held grants (P1+P2).
+
+    The single privilege-wiring entry point for the generate flow: unions
+    host-feature tokens with the privilege_profile expansion and surfaces the
+    unenforceable-host advisory (Stage 1), then merges any cross-workspace grants this
+    team holds into the sandbox write roots (P2). Ordering matters — grant-widening
+    runs after host-feature resolution so it can see whether the sandbox is on.
+
+    Args:
+        manifest: The team manifest (mutated: host_features, advisories, workspace_write_roots).
+        explicit_tokens: Tokens from --target-host-features.
+        framework_id: The target framework id.
+        project_root: The holder workspace root (holds the capability-grants ledger).
+    """
+    resolve_host_features_and_advise(manifest, explicit_tokens, framework_id)
+    apply_held_grants_to_write_roots(manifest, project_root)
+
+
+def apply_held_grants_to_write_roots(manifest: dict, project_root: Path) -> list[str]:
+    """Widen a confined team's sandbox write roots by the cross-workspace grants it holds (P2).
+
+    When the Claude sandbox is active for this team, read the workspace's grant ledger
+    for valid grants whose ``holder_team`` is this team's ``team_id`` and merge their
+    target paths into ``manifest['workspace_write_roots']`` — so the emitted
+    ``allowWrite`` covers the granted foreign paths. This is the sole enforcement path:
+    a grant is inert until the holder is (re)generated, and an agent cannot widen its own
+    OS boundary at runtime. No-op unless the sandbox is on.
+
+    Args:
+        manifest: The team manifest (mutated: ``workspace_write_roots`` extended).
+        project_root: The holder workspace root (holds ``references/capability-grants.log.csv``).
+
+    Returns:
+        The list of granted paths that were added (empty when none / sandbox off).
+    """
+    from agentteams.frameworks.claude import _sandbox_feature_enabled
+    from agentteams.cli.grants import GrantError, granted_write_roots
+
+    if not _sandbox_feature_enabled(manifest):
+        return []
+    holder = (manifest.get("team_id") or "").strip()
+    if not holder:
+        return []
+    try:
+        extra = granted_write_roots(project_root, holder_team=holder)
+    except GrantError as exc:
+        print(f"  WARNING: capability-grant ledger unreadable, no grants applied: {exc}", file=sys.stderr)
+        return []
+    if not extra:
+        return []
+    roots = list(manifest.get("workspace_write_roots") or ["."])
+    added = [r for r in extra if r not in roots]
+    manifest["workspace_write_roots"] = roots + added
+    if added:
+        print(f"  Applied {len(added)} capability grant(s) to sandbox allowWrite: {', '.join(added)}")
+    return added
+
+
 def _emit_mcp_servers_if_enabled(manifest: dict, project_root: Path) -> None:
     """Emit the inert MCP server artifact when an MCP host-feature token is on.
 

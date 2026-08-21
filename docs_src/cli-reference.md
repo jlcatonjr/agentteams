@@ -663,6 +663,14 @@ corpus. Always `--dry-run` first.
 
 Read-only: report the validity (signature, expiry, use-limit, conditions) of every security waiver in `references/security-waivers.log.csv` under `--output`/`--project` (else CWD). Never mints or consumes a waiver. Exits non-zero if any waiver is invalid. Requires `AGENTTEAMS_WAIVER_SIGNING_KEY` to verify signatures; without it, rows report as unverifiable.
 
+### `--verify-grants`
+
+Read-only: report the validity (signature, expiry, use-limit, approver roster) of every cross-workspace capability grant (P2) in `references/capability-grants.log.csv` under `--output`/`--project` (else CWD). Never consumes a grant. Exits non-zero if any grant is invalid. Requires `AGENTTEAMS_GRANT_SIGNING_KEY`. See [Workspace Privilege Scoping](api-reference/workspace-privilege-scoping.md).
+
+### `--issue-grant SPEC.json`
+
+Mint and sign a cross-workspace capability grant (P2) from a JSON spec (`issuer_team`, `holder_team`, `target_path`, `permitted_ops`, `expires_at`, `max_uses`, `approver`, `ticket_id`, `reason_code`) and append it to the **holder** workspace's ledger under `--output`/`--project` (else CWD) — point it at the holder, whose generation reads the ledger. Requires `AGENTTEAMS_GRANT_SIGNING_KEY` and an approver on the holder's roster. The holder's sandbox `allowWrite` widens to include the granted (write) path the next time the holder team is generated/updated — a grant is inert until then (there is no runtime path by which an agent widens its own OS boundary).
+
 ### `--write-integrity-manifest`
 
 Re-record `references/enforcement-integrity.json` from the enforcement modules on disk, then exit.

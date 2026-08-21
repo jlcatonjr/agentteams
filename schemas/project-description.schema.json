@@ -259,6 +259,11 @@
         "type": "string"
       }
     },
+    "team_id": {
+      "type": "string",
+      "description": "Stable identity this workspace/team is known by for cross-workspace capability grants (P2). A grant is issued BY one team_id and held BY another; the holder's generation-time sandbox-widening reads grants where holder_team == this id. Defaults to the slugified project_name when absent. IMPORTANT: the id is operator-assigned and must be UNIQUE across your workspaces — two teams sharing a team_id share each other's granted reach. Under the symmetric-key model the holder identity is a name (not key-authenticated); it is safe only because grants are consumed at operator-run generation time, never at agent runtime.",
+      "pattern": "^[a-z0-9][a-z0-9-]*$"
+    },
     "components": {
       "type": "array",
       "description": "Workstream components. One workstream expert agent is generated per component.",

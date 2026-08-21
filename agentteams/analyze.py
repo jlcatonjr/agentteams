@@ -16,7 +16,7 @@ from typing import Any
 from agentteams.output_plan import _plan_output_files  # noqa: F401,E402
 
 from agentteams import tool_metadata_catalog
-from agentteams._utils import _slugify_tool_name
+from agentteams._utils import _slugify, _slugify_tool_name
 from agentteams.mcp_detect import detect_mcp_candidates
 
 from agentteams.recipe_fields import (  # noqa: E402,F401 (carved CH-07; re-exported)
@@ -239,6 +239,11 @@ def build_manifest(description: dict[str, Any], *, framework: str = "copilot-vsc
     # so the emitter and the expansion both read a single source of truth.
     privilege_profile = description.get("privilege_profile") or "cooperative"
     workspace_write_roots = description.get("workspace_write_roots")
+
+    # Stable team identity for cross-workspace capability grants (P2; see schema). The
+    # default slug is made pattern-safe: `_slugify` can leave a leading hyphen or return
+    # "" (non-ASCII names), both of which violate ^[a-z0-9][a-z0-9-]*$.
+    team_id = description.get("team_id") or _slugify(project_name).lstrip("-") or "team"
 
     # Archetype selection
     if "selected_archetypes" in description:
@@ -469,6 +474,7 @@ def build_manifest(description: dict[str, Any], *, framework: str = "copilot-vsc
         "deliverable_type": deliverable_type,
         "output_format": output_format,
         "conversion_pipeline": conversion_pipeline,
+        "team_id": team_id,
         "privilege_profile": privilege_profile,
         **({"workspace_write_roots": list(workspace_write_roots)} if workspace_write_roots else {}),
         "retrieval_trigger_contract_version": retrieval_integration.get("trigger_contract_version", "v1"),
