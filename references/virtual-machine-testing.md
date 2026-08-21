@@ -100,16 +100,19 @@ mix-up). `PerSourcePenalties`/`PerSourceMaxStartups` exist only in **OpenSSH 9.8
 restart — so add them **conditionally** and validate with `sshd -t` before restarting:
 
 ```
+SSHD=$(command -v sshd || echo /usr/sbin/sshd)   # sshd is in /usr/sbin, not a user's PATH
 {
   echo 'UseDNS no'
   echo 'MaxStartups 100:30:200'
-  if sshd -T 2>/dev/null | grep -qi '^persourcepenalties'; then
+  if sudo "$SSHD" -T 2>/dev/null | grep -qi '^persourcepenalties'; then
     echo 'PerSourcePenalties no'
     echo 'PerSourceMaxStartups none'
   fi
 } | sudo tee /etc/ssh/sshd_config.d/99-vmtest.conf >/dev/null
-sudo sshd -t && sudo systemctl restart ssh && echo APPLIED-OK || echo SSHD-CONFIG-ERROR
+sudo "$SSHD" -t && sudo systemctl restart ssh && echo APPLIED-OK || echo SSHD-CONFIG-ERROR
 ```
+(The service unit is `ssh` on Debian/Ubuntu; if `restart ssh` reports no such unit, use
+`sudo systemctl restart sshd`.)
 
 `UseDNS no` kills the banner stall; the high `MaxStartups` and (where supported) the
 per-source directives stop sshd dropping automated repeated connections. `sshd -t`
