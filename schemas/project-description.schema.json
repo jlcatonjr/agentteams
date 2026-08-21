@@ -250,7 +250,7 @@
       "type": "string",
       "enum": ["cooperative", "confined", "exclusive"],
       "default": "cooperative",
-      "description": "Opt-in workspace write-confinement posture. `cooperative` (default) is today's behavior: agents are trusted to respect the workspace, no OS boundary emitted. `confined` and `exclusive` expand to the `claude:sandbox` host feature, which emits Claude Code's native OS-level sandbox block (write-confines Bash and child processes to workspace_write_roots) into the settings example the operator merges — inert until merged. `exclusive` is CURRENTLY IDENTICAL to `confined`: it is reserved for a future stage (excluding other agent teams / sibling processes from the workspace) that is not yet wired, and the `.claude/` self-protection both rely on is Claude Code's own behavior, not something exclusive adds. The effective feature set is the UNION of this expansion and any --target-host-features tokens, so cooperative never strips an explicitly-requested claude:sandbox token. Only the Claude framework enforces this today; on non-sandbox hosts (Goose, Codex, Copilot, native Windows) selecting confined/exclusive emits an advisory notice, not enforcement."
+      "description": "Opt-in workspace write-confinement posture. `cooperative` (default) is today's behavior: agents are trusted to respect the workspace, no OS boundary emitted. `confined` and `exclusive` expand to the `claude:sandbox` host feature, which emits Claude Code's native OS-level sandbox block (write-confines Bash and child processes to workspace_write_roots) into the settings example the operator merges — inert until merged. `exclusive` adds OS read-exclusion on top of `confined` (P3a): it also denies this team reading a default deny set plus any `protected_read_paths`, and prints a P3b inbound-hardening advisory. This is OUTBOUND (it seals this team's reads); keeping OTHER teams out of this workspace is operator filesystem hardening, not something exclusive enforces. The effective feature set is the UNION of this expansion and any --target-host-features tokens, so cooperative never strips an explicitly-requested claude:sandbox token. Only the Claude framework enforces this today; on non-sandbox hosts (Goose, Codex, Copilot, native Windows) selecting confined/exclusive emits an advisory notice, not enforcement."
     },
     "workspace_write_roots": {
       "type": "array",
@@ -263,6 +263,13 @@
       "type": "string",
       "description": "Stable identity this workspace/team is known by for cross-workspace capability grants (P2). A grant is issued BY one team_id and held BY another; the holder's generation-time sandbox-widening reads grants where holder_team == this id. Defaults to the slugified project_name when absent. IMPORTANT: the id is operator-assigned and must be UNIQUE across your workspaces — two teams sharing a team_id share each other's granted reach. Under the symmetric-key model the holder identity is a name (not key-authenticated); it is safe only because grants are consumed at operator-run generation time, never at agent runtime.",
       "pattern": "^[a-z0-9][a-z0-9-]*$"
+    },
+    "protected_read_paths": {
+      "type": "array",
+      "description": "P3a read-exclusion: extra paths the `exclusive` privilege_profile OS-denies this team (and its subprocesses) from reading, on top of a curated default deny set of sensitive dotfile locations. Add sibling-workspace roots here to stop THIS team reading them. Only meaningful with privilege_profile: exclusive. This is OUTBOUND hardening (it seals this team's reads); it does NOT stop other teams from reading THIS workspace, which is operator filesystem hardening (see the exclusive-profile advisory printed at generation and the docs). Paths use the sandbox syntax (home-relative or absolute).",
+      "items": {
+        "type": "string"
+      }
     },
     "components": {
       "type": "array",

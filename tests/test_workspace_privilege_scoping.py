@@ -18,6 +18,7 @@ from agentteams import analyze
 from agentteams.frameworks.claude import (
     ClaudeAdapter,
     _build_sandbox_block,
+    _exclusive_read_deny_paths,
     _inject_sandbox_block,
     _read_template_asset,
     _sandbox_feature_enabled,
@@ -171,6 +172,89 @@ def test_emitted_settings_example_is_valid_json():
 # --------------------------------------------------------------------------
 # advisory: unenforceable profile on a non-sandbox host
 # --------------------------------------------------------------------------
+
+# --------------------------------------------------------------------------
+# P3 — read-exclusion (exclusive profile) + P2×P3 + P3b advisory
+# --------------------------------------------------------------------------
+
+def test_build_sandbox_block_confined_has_no_denyread():
+    # confined stays byte-identical (no denyRead/allowRead) — the exact-equality contract.
+    block = _build_sandbox_block(["."], None)
+    assert "denyRead" not in block["filesystem"]
+    assert "allowRead" not in block["filesystem"]
+
+
+def test_build_sandbox_block_exclusive_adds_denyread_and_allowread():
+    block = _build_sandbox_block(["."], ["~/.ssh", "~/sibling"])
+    fs = block["filesystem"]
+    assert fs["denyRead"] == ["~/.ssh", "~/sibling"]
+    # P2×P3: write roots re-opened for read so a granted write target stays readable.
+    assert fs["allowRead"] == fs["allowWrite"] == ["."]
+
+
+def test_exclusive_read_deny_paths_only_for_exclusive():
+    assert _exclusive_read_deny_paths({"privilege_profile": "confined"}) is None
+    assert _exclusive_read_deny_paths({"privilege_profile": "cooperative"}) is None
+    deny = _exclusive_read_deny_paths({"privilege_profile": "exclusive"})
+    assert deny and "~/.ssh" in deny  # default set present
+    deny2 = _exclusive_read_deny_paths(
+        {"privilege_profile": "exclusive", "protected_read_paths": ["~/sibling", "~/.ssh"]}
+    )
+    assert "~/sibling" in deny2 and deny2.count("~/.ssh") == 1  # operator path added, deduped
+
+
+def test_exclusive_emits_denyread_confined_does_not():
+    ex = dict(ClaudeAdapter().extra_output_files(
+        {"host_features": ["claude:sandbox"], "privilege_profile": "exclusive"}
+    ))
+    fs_ex = json.loads(ex["../settings.hooks.example.json"])["sandbox"]["filesystem"]
+    assert "denyRead" in fs_ex and fs_ex["allowRead"] == fs_ex["allowWrite"]
+
+    conf = dict(ClaudeAdapter().extra_output_files(
+        {"host_features": ["claude:sandbox"], "privilege_profile": "confined"}
+    ))
+    fs_conf = json.loads(conf["../settings.hooks.example.json"])["sandbox"]["filesystem"]
+    assert "denyRead" not in fs_conf
+
+
+def test_p2xp3_granted_path_stays_readable():
+    # A granted foreign write path (in workspace_write_roots) must be in allowRead so
+    # it isn't shadowed by a denyRead of the sibling workspace.
+    manifest = {
+        "host_features": ["claude:sandbox"], "privilege_profile": "exclusive",
+        "workspace_write_roots": [".", "/abs/sibling/shared"],
+        "protected_read_paths": ["/abs/sibling"],
+    }
+    fs = json.loads(dict(ClaudeAdapter().extra_output_files(manifest))[
+        "../settings.hooks.example.json"])["sandbox"]["filesystem"]
+    assert "/abs/sibling/shared" in fs["allowRead"]
+    assert "/abs/sibling" in fs["denyRead"]
+
+
+def test_p3b_inbound_hardening_advisory():
+    from agentteams import analyze
+    from agentteams.cli.artifacts import finalize_privilege_wiring
+    import tempfile
+    from pathlib import Path
+
+    m = analyze.build_manifest(
+        {"project_goal": "x", "project_name": "T", "privilege_profile": "exclusive"},
+        framework="claude",
+    )
+    with tempfile.TemporaryDirectory() as d:
+        finalize_privilege_wiring(m, [], "claude", Path(d))
+    assert any(a["code"] == "privilege-profile-exclusive-inbound-hardening"
+               for a in m.get("advisories", []))
+    # confined does not get the P3b advisory
+    m2 = analyze.build_manifest(
+        {"project_goal": "x", "project_name": "T", "privilege_profile": "confined"},
+        framework="claude",
+    )
+    with tempfile.TemporaryDirectory() as d:
+        finalize_privilege_wiring(m2, [], "claude", Path(d))
+    assert not any(a["code"] == "privilege-profile-exclusive-inbound-hardening"
+                   for a in m2.get("advisories", []))
+
 
 def test_advisory_none_for_cooperative_or_claude():
     from agentteams.host_features import privilege_profile_advisory

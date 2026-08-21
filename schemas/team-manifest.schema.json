@@ -440,6 +440,13 @@
       "description": "Stable identity this team is known by for cross-workspace capability grants (P2). Always emitted by build_manifest: the project-description team_id, or the slugified project_name when absent.",
       "pattern": "^[a-z0-9][a-z0-9-]*$"
     },
+    "protected_read_paths": {
+      "type": "array",
+      "description": "P3a read-exclusion deny paths carried from the project description; only meaningful under privilege_profile: exclusive (emitted only when set).",
+      "items": {
+        "type": "string"
+      }
+    },
     "privilege_profile": {
       "type": "string",
       "enum": ["cooperative", "confined", "exclusive"],

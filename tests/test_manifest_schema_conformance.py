@@ -139,6 +139,9 @@ def test_declared_but_unemitted_fields_are_conditional_not_dead(schema):
         # Emitted only when a confined/exclusive project overrides the default
         # workspace roots; build_manifest omits it otherwise.
         "workspace_write_roots",
+        # Emitted only when an exclusive project supplies extra P3a read-exclusion
+        # paths; build_manifest omits it otherwise.
+        "protected_read_paths",
     }
     emitted: set[str] = set()
     for _, description in _DESCRIPTIONS:

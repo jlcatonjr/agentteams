@@ -240,9 +240,8 @@ def build_manifest(description: dict[str, Any], *, framework: str = "copilot-vsc
     privilege_profile = description.get("privilege_profile") or "cooperative"
     workspace_write_roots = description.get("workspace_write_roots")
 
-    # Stable team identity for cross-workspace capability grants (P2; see schema). The
-    # default slug is made pattern-safe: `_slugify` can leave a leading hyphen or return
-    # "" (non-ASCII names), both of which violate ^[a-z0-9][a-z0-9-]*$.
+    # Stable team identity for cross-workspace capability grants (P2; see schema). Slug
+    # default made pattern-safe (_slugify can leave a leading hyphen or empty for non-ASCII).
     team_id = description.get("team_id") or _slugify(project_name).lstrip("-") or "team"
 
     # Archetype selection
@@ -477,6 +476,7 @@ def build_manifest(description: dict[str, Any], *, framework: str = "copilot-vsc
         "team_id": team_id,
         "privilege_profile": privilege_profile,
         **({"workspace_write_roots": list(workspace_write_roots)} if workspace_write_roots else {}),
+        **({"protected_read_paths": list(description["protected_read_paths"])} if description.get("protected_read_paths") else {}),
         "retrieval_trigger_contract_version": retrieval_integration.get("trigger_contract_version", "v1"),
         "retrieval_integration": retrieval_integration,
         **(

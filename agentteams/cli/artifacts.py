@@ -335,6 +335,40 @@ def finalize_privilege_wiring(
     """
     resolve_host_features_and_advise(manifest, explicit_tokens, framework_id)
     apply_held_grants_to_write_roots(manifest, project_root)
+    _advise_exclusive_inbound_hardening(manifest, framework_id)
+
+
+def _advise_exclusive_inbound_hardening(manifest: dict, framework_id: str) -> None:
+    """Surface the P3b inbound-hardening advisory for an `exclusive` team on a sandbox host.
+
+    P3a (read-exclusion) seals this team's OUTBOUND reads, but the user-facing "exclusive
+    domain" goal — keeping OTHER teams/processes OUT of this workspace — is inbound and is
+    NOT something agentteams enforces. So when `exclusive` is selected on the sandbox-capable
+    Claude target, print and persist an advisory pointing at the operator OS filesystem
+    hardening, mirroring the honest `privilege_profile_advisory` discipline (never a silent
+    claim of protection). No-op for other profiles/hosts (unenforced-host is already warned
+    by resolve_host_features_and_advise).
+
+    Args:
+        manifest: The team manifest (mutated: possibly ``advisories``).
+        framework_id: The target framework id.
+    """
+    from agentteams.host_features import SANDBOX_CAPABLE_FRAMEWORKS
+
+    if manifest.get("privilege_profile") != "exclusive" or framework_id not in SANDBOX_CAPABLE_FRAMEWORKS:
+        return
+    message = (
+        "privilege_profile=exclusive emitted OS read-exclusion (this team cannot READ the "
+        "protected paths) — this is OUTBOUND only. To keep OTHER teams/processes OUT of this "
+        "workspace (the inbound 'exclusive domain' property), apply OS filesystem hardening "
+        "yourself: restrict the workspace to your user (chmod 700 + chown), and optionally run "
+        "this team's harness under a dedicated macOS user account. agentteams cannot enforce "
+        "this; see the Cross-team exclusion section of the workspace-privilege-scoping docs."
+    )
+    print(f"  NOTE (P3b, advisory): {message}", file=sys.stderr)
+    manifest.setdefault("advisories", []).append(
+        {"code": "privilege-profile-exclusive-inbound-hardening", "message": message}
+    )
 
 
 def apply_held_grants_to_write_roots(manifest: dict, project_root: Path) -> list[str]:

@@ -235,7 +235,9 @@ class ClaudeAdapter(FrameworkAdapter):
         if example:
             if _sandbox_feature_enabled(manifest):
                 example = _inject_sandbox_block(
-                    example, manifest.get("workspace_write_roots") or None
+                    example,
+                    manifest.get("workspace_write_roots") or None,
+                    _exclusive_read_deny_paths(manifest),
                 )
             files.append(("../settings.hooks.example.json", example))
         return files
@@ -290,6 +292,46 @@ _SANDBOX_COMMENT_LINES: list[str] = [
 ]
 
 
+#: Comment lines appended when the exclusive profile's read-exclusion (denyRead) is
+#: injected — states honestly that this is OUTBOUND (seals my team's reads), not the
+#: inbound "others can't read my tree" property (which is the operator's filesystem
+#: hardening, see the emitted advisory reference).
+_READ_EXCLUSION_COMMENT_LINES: list[str] = [
+    "",
+    "Read-exclusion (privilege_profile: exclusive) — the `denyRead` list above OS-denies",
+    "THIS team (and its Bash/child processes) from READING those paths (credentials, and",
+    "any sibling workspaces you added via protected_read_paths). `allowRead` re-opens the",
+    "write roots so granted paths stay readable. This is OUTBOUND hardening: it stops YOUR",
+    "team reading out — it does NOT stop OTHER teams from reading THIS workspace. For that",
+    "inbound property, apply the operator OS filesystem hardening printed at generation",
+    "and documented under \"Cross-team exclusion\" in the workspace-privilege-scoping docs",
+    "(operator-run, not enforced by agentteams).",
+]
+
+
+def _exclusive_read_deny_paths(manifest: dict[str, Any]) -> list[str] | None:
+    """Return the read-exclusion deny list for the manifest, or None when not exclusive.
+
+    Only the ``exclusive`` privilege profile carries read-exclusion (P3a). The list is
+    the curated credential-path defaults plus any operator-supplied
+    ``protected_read_paths`` (e.g. sibling-workspace roots), de-duplicated.
+
+    Args:
+        manifest: The team manifest.
+
+    Returns:
+        The deny-read paths for an exclusive team, or ``None`` for any other profile —
+        which keeps the emitted sandbox block byte-identical to the ``confined`` shape.
+    """
+    if manifest.get("privilege_profile") != "exclusive":
+        return None
+    deny: list[str] = list(_DEFAULT_PROTECTED_READ_PATHS)
+    for extra in manifest.get("protected_read_paths") or []:
+        if extra and extra not in deny:
+            deny.append(extra)
+    return deny
+
+
 def _sandbox_feature_enabled(manifest: dict[str, Any]) -> bool:
     """Return True iff workspace write-confinement is requested on this manifest.
 
@@ -315,27 +357,55 @@ def _sandbox_feature_enabled(manifest: dict[str, Any]) -> bool:
     return manifest.get("privilege_profile") in {"confined", "exclusive"}
 
 
-def _build_sandbox_block(write_roots: list[str] | None) -> dict[str, Any]:
+#: Default read-exclusion paths for the `exclusive` profile (P3a). High-value secret
+#: stores an agent has no business reading, chosen to NOT break common authenticated
+#: toolchains: SSH keys, cloud provider creds. Denied OS-level so even a Bash subprocess
+#: cannot read them. `~/` is Claude Code's documented sandbox home-dir prefix. Registry
+#: auth files (~/.npmrc, ~/.pypirc, ~/.netrc, ~/.docker/config.json) are DELIBERATELY
+#: excluded from the default — denying them breaks authenticated npm/pip/git/docker
+#: against private registries; operators who do not use those add them via
+#: `protected_read_paths`. NOTE: this is OUTBOUND read hardening (my team cannot read
+#: these) — it does not stop other teams reading MY tree.
+_DEFAULT_PROTECTED_READ_PATHS: tuple[str, ...] = (
+    "~/.ssh", "~/.aws", "~/.gnupg", "~/.kube", "~/.config/gcloud",
+)
+
+
+def _build_sandbox_block(
+    write_roots: list[str] | None, deny_read: list[str] | None = None
+) -> dict[str, Any]:
     """Build the Claude Code ``sandbox`` settings block for workspace confinement.
 
     Args:
         write_roots: Directories (relative to the merged ``settings.json`` at the
             project root) the agent may write to. Defaults to ``["."]`` — the whole
             generated project tree is the workspace.
+        deny_read: Paths the agent (and its subprocesses) may not READ (P3a read
+            exclusion, ``exclusive`` profile). ``None``/empty emits no read restriction,
+            leaving the block byte-identical to the ``confined`` shape.
 
     Returns:
         The ``sandbox`` settings object: OS-level enforcement on, writes confined to
-        ``write_roots``, and the unsandboxed-command escape hatch closed.
+        ``write_roots``, the unsandboxed-command escape hatch closed, and — when
+        ``deny_read`` is given — reads of those paths denied while ``write_roots`` are
+        re-opened for read via ``allowRead`` (so a P2-granted write target inside a
+        denied region stays readable; read-modify-write keeps working).
     """
     roots = list(write_roots) if write_roots else ["."]
+    filesystem: dict[str, Any] = {"allowWrite": roots}
+    if deny_read:
+        filesystem["denyRead"] = list(deny_read)
+        filesystem["allowRead"] = roots
     return {
         "enabled": True,
-        "filesystem": {"allowWrite": roots},
+        "filesystem": filesystem,
         "allowUnsandboxedCommands": False,
     }
 
 
-def _inject_sandbox_block(example_text: str, write_roots: list[str] | None) -> str:
+def _inject_sandbox_block(
+    example_text: str, write_roots: list[str] | None, deny_read: list[str] | None = None
+) -> str:
     """Return the settings example JSON with a ``sandbox`` block merged in.
 
     Parses the shipped hooks example, adds the ``sandbox`` block and explanatory
@@ -351,6 +421,8 @@ def _inject_sandbox_block(example_text: str, write_roots: list[str] | None) -> s
     Args:
         example_text: The verbatim ``settings.hooks.example.json`` template text.
         write_roots: Optional override of the confined write roots.
+        deny_read: Optional read-exclusion paths (P3a, ``exclusive`` profile); adds a
+            ``denyRead`` restriction and an explanatory comment when present.
 
     Returns:
         The settings example JSON text with the sandbox block merged in.
@@ -371,10 +443,13 @@ def _inject_sandbox_block(example_text: str, write_roots: list[str] | None) -> s
             "settings.hooks.example.json did not parse to a JSON object; cannot inject "
             "the requested sandbox confinement block."
         )
-    data["sandbox"] = _build_sandbox_block(write_roots)
+    data["sandbox"] = _build_sandbox_block(write_roots, deny_read)
     comment = data.get("_comment")
     if isinstance(comment, list):
-        data["_comment"] = comment + _SANDBOX_COMMENT_LINES
+        extra = list(_SANDBOX_COMMENT_LINES)
+        if deny_read:
+            extra += _READ_EXCLUSION_COMMENT_LINES
+        data["_comment"] = comment + extra
     return json.dumps(data, indent=2, sort_keys=True) + "\n"
 
 

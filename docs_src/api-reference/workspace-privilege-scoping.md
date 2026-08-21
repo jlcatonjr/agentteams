@@ -4,11 +4,24 @@ Opt-in **workspace write-confinement** for generated teams. It lets a project
 declare that its agents may only write inside their own workspace, enforced by the
 host's OS-level sandbox rather than by agents choosing to comply.
 
-This covers the first two stages of the privilege model (see the investigation report
+This covers the privilege model (see the investigation report
 `references/plans/workspace-privilege-scoping.report.md`): **P1**, complete write
-confinement on the Claude Code target (below), and **P2**, signed cross-workspace
-capability grants (see "Cross-workspace grants" below). Sibling-team exclusion (**P3**)
-is deferred.
+confinement on the Claude Code target (below); **P2**, signed cross-workspace capability
+grants (see "Cross-workspace grants"); and **P3**, read-exclusion hardening + inbound
+hardening guidance (see "Read-exclusion & cross-team exclusion (P3)"). All three are
+**independently optional** — see the selection matrix directly below.
+
+## Selecting P1 / P2 / P3 (all optional)
+
+| You want | Select | What you get |
+|---|---|---|
+| nothing (default) | `privilege_profile: cooperative` | no OS boundary — agents trusted to respect the workspace |
+| **P1** — confine my team's writes | `privilege_profile: confined` | OS write-confinement to the workspace (Bash + subprocesses) |
+| **P2** — cross-workspace reach by grant | issue grants (any sandbox profile) | holder's `allowWrite` widens to signed-granted paths |
+| **P3** — read-exclusion + inbound hardening | `privilege_profile: exclusive` | P1 **plus** OS read-exclusion of protected paths (P3a) **plus** an operator inbound-hardening advisory (P3b) |
+
+`exclusive` is a superset of `confined`. P2 is orthogonal (issue grants or don't). macOS
+(Seatbelt) is the enforced target today; Linux (bubblewrap) is a follow-out.
 
 ## What it does
 
@@ -59,11 +72,11 @@ In the project description:
 |---|---|
 | `cooperative` (default) | Today's behavior. Agents are trusted to respect the workspace; no OS boundary emitted. |
 | `confined` | Expands to the `claude:sandbox` host feature — emits the sandbox block confining writes to `workspace_write_roots`. |
-| `exclusive` | **Currently identical to `confined`.** Reserved for Stage 2 (excluding *other* agent teams / sibling processes from the workspace — an OS-account/container concern). That stronger semantics is **not wired yet**; no code today treats `exclusive` differently from `confined`. The value exists so a project can declare the intent now. |
+| `exclusive` | `confined` **plus P3**: OS read-exclusion (`denyRead`) of a default deny set + your `protected_read_paths`, and a P3b inbound-hardening advisory. See "Read-exclusion & cross-team exclusion (P3)" below. |
 
-> **Note on `exclusive`:** it is a forward-declaration, not a distinct behavior. The
-> `.claude/` self-protection that both profiles rely on is Claude Code's own sandbox
-> behavior (applies to `confined` too), not something `exclusive` adds.
+> **Note on `exclusive`:** its emitted enforcement is OUTBOUND — it seals *your* team's
+> reads. It does not by itself stop *other* teams from reading your workspace; that
+> inbound property is operator filesystem hardening (P3b).
 
 `workspace_write_roots` (optional, default `["."]`) overrides the confined roots.
 `.` means the whole generated project tree is the workspace.
@@ -137,6 +150,54 @@ asymmetric signatures, which the Python standard library does not provide.
 - Holder identity is a name (`team_id`), safe only because grants are consumed at
   operator-run generation time, not at agent runtime.
 
+## Read-exclusion & cross-team exclusion (P3)
+
+The user goal behind "P3" is an **inbound** property: *only my team accesses my
+workspace.* Be clear about what agentteams can and cannot do here, because the mechanism
+it emits is the **outbound dual**.
+
+### P3a — read-exclusion (emitted, OS-enforced)
+
+Selecting `privilege_profile: exclusive` adds `sandbox.filesystem.denyRead` to the
+emitted sandbox block: the team (and its Bash/child processes) is **OS-denied from
+reading** a curated default deny set (SSH keys + cloud-provider creds) plus any
+`protected_read_paths` you list. The default set is deliberately conservative — it
+excludes registry-auth files (`~/.npmrc`, `~/.pypirc`, `~/.netrc`, `~/.docker/config.json`)
+because denying those **breaks authenticated `npm`/`pip`/`git`/`docker`** against private
+registries; add them yourself if your team does not use authenticated registries.
+
+`allowRead` re-opens the write roots (which include any P2-granted paths) so a granted
+write target stays readable, and — since "more specific wins" — the workspace stays
+readable even if a `protected_read_paths` entry denies one of its ancestors.
+
+The denylist shape is what makes this practical: a read-*allowlist* starves the toolchain
+(a direct Seatbelt spike had python abort under one), whereas a read-denylist keeps the
+toolchain and denies the listed paths — that Seatbelt deny mechanism was verified directly
+(with absolute paths). The `~/`-relative deny entries rely on Claude Code's documented
+sandbox path syntax (`~/` = home); operators who prefer no ambiguity may list absolute
+paths instead.
+
+This seals **your** team's reads (it cannot snoop on or exfiltrate the listed paths /
+sibling workspaces). When *every* team runs `exclusive` and lists the others in
+`protected_read_paths`, teams cannot read each other → mutual isolation.
+
+### P3b — inbound exclusion (operator-run, advisory only)
+
+What P3a does **not** do: stop *another* team from reading *your* workspace. Nothing
+agentteams emits into your config can constrain a different process. Selecting
+`exclusive` therefore also prints and records a
+`privilege-profile-exclusive-inbound-hardening` advisory pointing you at the OS steps
+that *do* deliver inbound exclusion, which you run yourself:
+
+- **Restrict the workspace to your user:** `chmod 700 <workspace>` + `chown` it to you,
+  so other-uid processes are kernel-denied.
+- **(Stronger) dedicated macOS user:** run the owning team's harness under a separate
+  user account (`dscl`/System Settings), and own the workspace as that user — the kernel
+  then excludes every other user, while your admin/human account retains access.
+
+agentteams **cannot verify** you ran these, so P3b is emitted as an honest advisory, not
+a claimed guarantee — the same discipline as the unenforced-host warning.
+
 ## Limits (be honest about these)
 
 - **Inert until merged.** agentteams never writes `settings.json` directly
@@ -148,10 +209,10 @@ asymmetric signatures, which the Python standard library does not provide.
   Windows emits a visible advisory and records a
   `privilege-profile-unenforced-host` manifest advisory — the profile is advisory
   only there, never silently "on".
-- **Scope: P1 + P2, not P3.** P1 confines an agent to its own workspace; P2 (above)
-  grants cross-workspace access by explicit signed request. What remains out of scope is
-  **P3** — excluding *other* agent teams or hostile sibling processes from a tree — which
-  is OS-account/container work outside agentteams' reach.
+- **P3 is read-exclusion (outbound), not enforced inbound exclusion.** The emitted
+  `exclusive` config seals *your* team's reads; the "only my team touches my tree"
+  inbound property is operator filesystem hardening (P3b advisory), which agentteams
+  documents but cannot enforce. See the P3 section below.
 - **`allowWrite` mixes relative and absolute entries.** P1's default root is `["."]`
   (project-relative); a P2 grant adds an absolute foreign path. The emitted `allowWrite`
   therefore carries both forms — expected, and honored by the sandbox (verified against

@@ -118,12 +118,12 @@ def is_enabled(features: Iterable[str], namespace: str, feature: str) -> bool:
 
 
 #: Host-feature tokens each privilege_profile expands to. ``cooperative`` expands to
-#: nothing (today's behavior, no OS boundary). ``confined`` and ``exclusive`` are
-#: CURRENTLY IDENTICAL — both request the Claude sandbox and nothing more. The
-#: ``exclusive`` value is reserved for Stage 2 (excluding *other* agent teams / sibling
-#: processes from the workspace, an OS-account/container concern); that stronger
-#: semantics is NOT wired yet, so no code today treats ``exclusive`` differently from
-#: ``confined``. Kept as a distinct enum value so a project can declare the intent now.
+#: nothing (today's behavior, no OS boundary). ``confined`` and ``exclusive`` both request
+#: the Claude sandbox (same token). They diverge at EMISSION, not here: ``exclusive`` adds
+#: OS read-exclusion (``denyRead`` of protected paths — P3a) in ``claude._build_sandbox_block``
+#: and triggers the P3b inbound-hardening advisory. The read-exclusion seals THIS team's
+#: reads (outbound); the inbound "others can't read my tree" property is operator filesystem
+#: hardening, which agentteams advises but does not enforce.
 _PROFILE_FEATURE_TOKENS: dict[str, tuple[str, ...]] = {
     "cooperative": (),
     "confined": ("claude:sandbox",),

@@ -6,6 +6,28 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### added (workspace privilege scoping P3 — read-exclusion + inbound-hardening, macOS)
+
+- **`exclusive` privilege_profile now does something** (was a `confined` placeholder). It
+  adds OS read-exclusion (P3a): `sandbox.filesystem.denyRead` of a curated default deny
+  set plus any `protected_read_paths`, so the team and its Bash/child processes are
+  OS-denied from reading those paths (macOS Seatbelt / Linux bubblewrap). `allowRead`
+  re-opens the write roots so a P2-granted write target stays readable (P2×P3 fix). A
+  Seatbelt spike confirmed a read-*denylist* works while a read-*allowlist* starves the
+  toolchain — hence denylist.
+- **Honest framing.** P3a is OUTBOUND (it seals *this* team's reads); it does NOT stop
+  other teams reading this workspace. The inbound "only my team touches my tree" property
+  is operator filesystem hardening (P3b) — `chmod 700`/`chown`, optionally a dedicated
+  macOS user — emitted as a `privilege-profile-exclusive-inbound-hardening` advisory
+  (printed + persisted), never a claimed guarantee. The feature is read-exclusion
+  hardening, not enforced domain exclusivity.
+- **All three properties independently optional**, documented as a selection matrix:
+  cooperative (none) / confined (P1) / exclusive (P1+P3); P2 (grants) orthogonal.
+- New optional `protected_read_paths` on the project description + manifest; `exclusive`
+  read-exclusion is emitted only for that profile (confined's block stays byte-identical).
+  macOS enforced today; Linux is a follow-out. Tests in
+  `tests/test_workspace_privilege_scoping.py`.
+
 ### added (workspace privilege scoping P2 — cross-workspace capability grants)
 
 - **Signed cross-workspace capability grants** — one team (issuer) authorizes another
