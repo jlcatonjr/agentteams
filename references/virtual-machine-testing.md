@@ -64,11 +64,15 @@ problems, not client bugs.
 **Symptom:** the TCP port is open (`nc` succeeds) but `ssh` hangs with no version banner,
 or times out "during banner exchange", or reads an empty banner. **Cause:** `sshd` doing a
 reverse-DNS (`UseDNS yes`) lookup on the NAT client `10.0.2.2`, which has no reverse
-record and stalls ~30–60 s **per connection**. **Durable fix (one console edit in the
-VM):**
+record and stalls ~30–60 s **per connection**. **Durable fix — run these commands
+INSIDE the VM (via its VirtualBox/RDP console, logged in as the VM user), NOT on the
+macOS host.** Editing the host's `/etc/ssh/sshd_config` is wrong and affects the Mac's
+own SSH. Use a drop-in file, not `sed` (macOS ships BSD `sed`, which rejects the GNU
+`-i`/`\?` syntax with `bad flag in substitute command`; the drop-in is portable and
+idempotent and Ubuntu's `sshd_config` already `Include`s `sshd_config.d/*.conf`):
 
 ```
-sudo sed -i 's/^#\?UseDNS.*/UseDNS no/' /etc/ssh/sshd_config
+echo 'UseDNS no' | sudo tee /etc/ssh/sshd_config.d/99-vmtest.conf
 sudo systemctl restart ssh
 ```
 
