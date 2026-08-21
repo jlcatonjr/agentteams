@@ -160,10 +160,10 @@ def _run_generate_inner(
     print(f"Analyzing project for {framework_id!r} framework...")
     manifest = analyze.build_manifest(description, framework=framework_id)
     _apply_placeholder_policy(manifest, strict_manual_placeholders=strict_manual_placeholders)
-    # Host-feature subselectors (Phase 0): default [] preserves existing emission.
-    manifest["host_features"] = list(getattr(args, "host_features", []) or [])
-    if manifest["host_features"]:
-        print(f"  Host features: {', '.join(manifest['host_features'])}")
+    # Host features: union tokens + privilege_profile expansion; surface unenforceable-host advisory.
+    from agentteams.cli.artifacts import resolve_host_features_and_advise as _resolve_host_features
+
+    _resolve_host_features(manifest, list(getattr(args, "host_features", []) or []), framework_id)
     manifest["no_vscode_tasks"] = bool(getattr(args, "no_vscode_tasks", False))
 
     project_name = manifest["project_name"]

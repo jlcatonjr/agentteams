@@ -37,6 +37,7 @@ constraint, not an oversight; see references/retrieval-transport-policy.md.
 
 from __future__ import annotations
 
+import json
 import re
 from pathlib import Path
 from typing import Any
@@ -212,6 +213,19 @@ class ClaudeAdapter(FrameworkAdapter):
         ``hooks_emit.py`` and it is right: clobbering an operator's config is a worse failure
         than an unwired hook. It does mean the hook arrives inert until someone wires it, which
         is stated in the example's own comment block rather than left to be discovered.
+
+        When the ``claude:sandbox`` host feature is active, the emitted settings example also
+        carries a ``sandbox`` block (workspace write-confinement). It follows the SAME
+        inert-until-merged convention — the operator must merge it into their own
+        ``settings.json`` for the OS-level boundary to take effect. See
+        :func:`_inject_sandbox_block`.
+
+        Args:
+            manifest: The team manifest. ``host_features`` gates the sandbox block;
+                ``workspace_write_roots`` (optional) overrides the confined roots.
+
+        Returns:
+            List of ``(relative_path, content)`` tuples for the emit phase to write.
         """
         hook = _read_template_asset("hooks/constitutional-gate.py")
         example = _read_template_asset("hooks/settings.hooks.example.json")
@@ -219,6 +233,10 @@ class ClaudeAdapter(FrameworkAdapter):
             return []
         files = [("../hooks/constitutional-gate.py", hook)]
         if example:
+            if _sandbox_feature_enabled(manifest):
+                example = _inject_sandbox_block(
+                    example, manifest.get("workspace_write_roots") or None
+                )
             files.append(("../settings.hooks.example.json", example))
         return files
 
@@ -248,6 +266,116 @@ def _read_template_asset(rel_path: str) -> str:
         return asset.read_text(encoding="utf-8")
     except OSError:
         return ""
+
+
+#: Comment lines appended to the emitted settings example when the sandbox block is
+#: injected. Explains that the boundary is inert until merged (same convention as the
+#: hook), what it confines, and its platform limits — stated in the file rather than
+#: left to be discovered.
+_SANDBOX_COMMENT_LINES: list[str] = [
+    "",
+    "Workspace write-confinement (claude:sandbox) — the `sandbox` block below is part",
+    "of this example and, like the hooks block, is INERT until you merge it into your",
+    "own .claude/settings.json. Once merged, Claude Code's OS-level sandbox (per its",
+    "docs: macOS Seatbelt / Linux + WSL2 bubblewrap) confines file writes to the",
+    "allowWrite roots. Writes to the project root via Bash and child processes were",
+    "verified denied outside the root under macOS Seatbelt; other platforms/versions",
+    "follow Claude Code's own behavior, which this project does not control. Per those",
+    "docs, `.claude/` is protected from agent edits even inside allowWrite, and you —",
+    "editing outside an agent session — are unaffected. `allowUnsandboxedCommands: false`",
+    "closes the escape hatch. allowWrite defaults to [\".\"] — the whole project tree is",
+    "the workspace, so this confines writes to WITHIN the project (it does not restrict",
+    "writes between project subdirectories). Native Windows has no OS enforcement; there",
+    "this block is advisory only. To remove it: delete the `sandbox` key.",
+]
+
+
+def _sandbox_feature_enabled(manifest: dict[str, Any]) -> bool:
+    """Return True iff workspace write-confinement is requested on this manifest.
+
+    Reads BOTH sources of truth so the emitter is self-sufficient on every code path,
+    not only the CLI generate path:
+
+    * ``"claude:sandbox" in host_features`` — the token, set from --target-host-features
+      and from privilege_profile expansion (the established gate convention, ``bridge.py``).
+    * ``privilege_profile in {confined, exclusive}`` — the source field itself. This
+      matters because ``extra_output_files`` is also invoked from ``convert.py`` and
+      ``render_pipeline.py``, which do NOT run the profile→host_features union that
+      ``cli/generate.py`` does; without this a confined manifest would silently emit no
+      sandbox there.
+
+    Args:
+        manifest: The team manifest.
+
+    Returns:
+        Whether the sandbox settings block should be emitted.
+    """
+    if "claude:sandbox" in (manifest.get("host_features") or []):
+        return True
+    return manifest.get("privilege_profile") in {"confined", "exclusive"}
+
+
+def _build_sandbox_block(write_roots: list[str] | None) -> dict[str, Any]:
+    """Build the Claude Code ``sandbox`` settings block for workspace confinement.
+
+    Args:
+        write_roots: Directories (relative to the merged ``settings.json`` at the
+            project root) the agent may write to. Defaults to ``["."]`` — the whole
+            generated project tree is the workspace.
+
+    Returns:
+        The ``sandbox`` settings object: OS-level enforcement on, writes confined to
+        ``write_roots``, and the unsandboxed-command escape hatch closed.
+    """
+    roots = list(write_roots) if write_roots else ["."]
+    return {
+        "enabled": True,
+        "filesystem": {"allowWrite": roots},
+        "allowUnsandboxedCommands": False,
+    }
+
+
+def _inject_sandbox_block(example_text: str, write_roots: list[str] | None) -> str:
+    """Return the settings example JSON with a ``sandbox`` block merged in.
+
+    Parses the shipped hooks example, adds the ``sandbox`` block and explanatory
+    ``_comment`` lines, and re-serializes.
+
+    Fails LOUD, not open: this is called only when confinement was *requested*, and the
+    input is an agentteams-controlled, test-covered asset
+    (``tests/.../test_emitted_settings_example_is_valid_json``). A parse failure is
+    therefore agentteams' own bug — silently shipping a hooks-only example would hand
+    the operator an unconfined team while they believe they asked for confinement, the
+    worst outcome for a security feature. Raising surfaces the corruption instead.
+
+    Args:
+        example_text: The verbatim ``settings.hooks.example.json`` template text.
+        write_roots: Optional override of the confined write roots.
+
+    Returns:
+        The settings example JSON text with the sandbox block merged in.
+
+    Raises:
+        ValueError: If ``example_text`` is not parseable as a JSON object — a corrupted
+            shipped asset that must not be masked when a sandbox was requested.
+    """
+    try:
+        data = json.loads(example_text)
+    except (json.JSONDecodeError, ValueError) as exc:
+        raise ValueError(
+            "settings.hooks.example.json is not valid JSON; cannot inject the requested "
+            f"sandbox confinement block: {exc}"
+        ) from exc
+    if not isinstance(data, dict):
+        raise ValueError(
+            "settings.hooks.example.json did not parse to a JSON object; cannot inject "
+            "the requested sandbox confinement block."
+        )
+    data["sandbox"] = _build_sandbox_block(write_roots)
+    comment = data.get("_comment")
+    if isinstance(comment, list):
+        data["_comment"] = comment + _SANDBOX_COMMENT_LINES
+    return json.dumps(data, indent=2, sort_keys=True) + "\n"
 
 
 # ---------------------------------------------------------------------------

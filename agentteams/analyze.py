@@ -232,6 +232,14 @@ def build_manifest(description: dict[str, Any], *, framework: str = "copilot-vsc
     retrieval_integration = _normalize_retrieval_integration(description.get("retrieval_integration"))
     retrieval_enabled = retrieval_integration.get("mode", "none") != "none"
 
+    # Workspace privilege profile (opt-in write-confinement posture). Default
+    # "cooperative" preserves existing behavior; confined/exclusive expand to the
+    # claude:sandbox host feature in the CLI layer (host_features.expand_privilege_profile),
+    # which emits Claude Code's native OS-level sandbox block. Carried onto the manifest
+    # so the emitter and the expansion both read a single source of truth.
+    privilege_profile = description.get("privilege_profile") or "cooperative"
+    workspace_write_roots = description.get("workspace_write_roots")
+
     # Archetype selection
     if "selected_archetypes" in description:
         archetypes = description["selected_archetypes"]
@@ -461,6 +469,8 @@ def build_manifest(description: dict[str, Any], *, framework: str = "copilot-vsc
         "deliverable_type": deliverable_type,
         "output_format": output_format,
         "conversion_pipeline": conversion_pipeline,
+        "privilege_profile": privilege_profile,
+        **({"workspace_write_roots": list(workspace_write_roots)} if workspace_write_roots else {}),
         "retrieval_trigger_contract_version": retrieval_integration.get("trigger_contract_version", "v1"),
         "retrieval_integration": retrieval_integration,
         **(

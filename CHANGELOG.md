@@ -6,6 +6,32 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### added (workspace privilege scoping — opt-in Claude sandbox write-confinement)
+
+- **`claude:sandbox` host feature + `privilege_profile` project field** — opt-in workspace
+  write-confinement for the Claude Code target (Stage 1 of the privilege model;
+  investigation in `references/plans/workspace-privilege-scoping.report.md`). A project
+  declares `privilege_profile: confined` (or `exclusive`) — or passes
+  `--target-host-features claude:sandbox` directly — and the Claude adapter injects a
+  `sandbox` block into the emitted `.claude/settings.hooks.example.json`. Once the operator
+  merges it, Claude Code's native OS-level sandbox (macOS Seatbelt / Linux + WSL2 bubblewrap)
+  confines every Bash command **and child process** file write to `workspace_write_roots`
+  (default `["."]`), with `allowUnsandboxedCommands: false` and automatic `.claude/`
+  self-protection. Empirically verified against Seatbelt (bash redirect + Python child both
+  denied outside the root).
+- **Honest limits, enforced not just documented** — the block is inert until the operator
+  merges it (agentteams never writes `settings.json` directly, per the standing hooks
+  convention). On non-sandbox frameworks (goose/codex/copilot/native-Windows) a
+  confined/exclusive profile emits a visible `WARNING` and records a
+  `privilege-profile-unenforced-host` manifest advisory rather than silently doing nothing.
+  The effective feature set is the union of `--target-host-features` and the profile
+  expansion; `cooperative` (default) changes nothing and never strips an explicit token.
+- Schema: additive `privilege_profile`/`workspace_write_roots` on
+  `project-description.schema.json`; `host_features`/`privilege_profile`/`workspace_write_roots`
+  represented on `team-manifest.schema.json`. New reference page
+  `docs_src/api-reference/workspace-privilege-scoping.md`; `host-features.md` documents the
+  `claude:sandbox` token. Tests in `tests/test_workspace_privilege_scoping.py`.
+
 ### added (redteam model-scoring reproducibility + attack-generation harnesses)
 
 - **`agentteams/provenance.py`** (new) — a reusable, stdlib-only provenance stamp (`Provenance`

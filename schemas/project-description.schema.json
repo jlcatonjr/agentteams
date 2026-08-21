@@ -246,6 +246,19 @@
         "enum": ["research_verification"]
       }
     },
+    "privilege_profile": {
+      "type": "string",
+      "enum": ["cooperative", "confined", "exclusive"],
+      "default": "cooperative",
+      "description": "Opt-in workspace write-confinement posture. `cooperative` (default) is today's behavior: agents are trusted to respect the workspace, no OS boundary emitted. `confined` and `exclusive` expand to the `claude:sandbox` host feature, which emits Claude Code's native OS-level sandbox block (write-confines Bash and child processes to workspace_write_roots) into the settings example the operator merges — inert until merged. `exclusive` is CURRENTLY IDENTICAL to `confined`: it is reserved for a future stage (excluding other agent teams / sibling processes from the workspace) that is not yet wired, and the `.claude/` self-protection both rely on is Claude Code's own behavior, not something exclusive adds. The effective feature set is the UNION of this expansion and any --target-host-features tokens, so cooperative never strips an explicitly-requested claude:sandbox token. Only the Claude framework enforces this today; on non-sandbox hosts (Goose, Codex, Copilot, native Windows) selecting confined/exclusive emits an advisory notice, not enforcement."
+    },
+    "workspace_write_roots": {
+      "type": "array",
+      "description": "Directories the confined agent may write to, relative to the merged .claude/settings.json at the project root. Only meaningful when privilege_profile is confined/exclusive (or claude:sandbox is selected directly). Defaults to [\".\"] — the whole generated project tree is the workspace.",
+      "items": {
+        "type": "string"
+      }
+    },
     "components": {
       "type": "array",
       "description": "Workstream components. One workstream expert agent is generated per component.",

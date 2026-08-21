@@ -133,6 +133,12 @@ def test_declared_but_unemitted_fields_are_conditional_not_dead(schema):
         "adopted_agents", "mcp_candidates", "mcp_servers",
         "recipe_parameters", "recipe_response", "recipe_retry",
         "advisories",  # emitted only when an advisory fires
+        # Set by the CLI layer (generate.py) after build_manifest returns: the token
+        # list is assembled from --target-host-features + privilege_profile expansion.
+        "host_features",
+        # Emitted only when a confined/exclusive project overrides the default
+        # workspace roots; build_manifest omits it otherwise.
+        "workspace_write_roots",
     }
     emitted: set[str] = set()
     for _, description in _DESCRIPTIONS:

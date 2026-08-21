@@ -32,7 +32,7 @@ _VALID_NAMESPACES = frozenset(
 )
 
 _KNOWN_FEATURES: dict[str, frozenset[str]] = {
-    "claude": frozenset({"hooks", "subagents", "schedule", "mcp", "critic", "cache-split", "todo-projection", "parallelize"}),
+    "claude": frozenset({"hooks", "subagents", "schedule", "mcp", "critic", "cache-split", "todo-projection", "parallelize", "sandbox"}),
     "copilot-vscode": frozenset({"chat-modes", "inline-yaml-handoffs"}),
     "copilot-cli": frozenset({"manifest-routing"}),
     # goose: only `mcp` so far — wires operator-specified mcp_servers[] into recipes
@@ -48,10 +48,10 @@ _KNOWN_FEATURES: dict[str, frozenset[str]] = {
     # when codex support landed elsewhere, so the token was rejected before emission.
     "codex": frozenset({"mcp"}),
     "bridge:copilot-vscode-to-claude": frozenset(
-        {"subagents", "hooks", "schedule", "mcp", "critic", "cache-split", "todo-projection", "parallelize"}
+        {"subagents", "hooks", "schedule", "mcp", "critic", "cache-split", "todo-projection", "parallelize", "sandbox"}
     ),
     "bridge:copilot-vscode-to-copilot-cli": frozenset({"manifest-routing"}),
-    "bridge:copilot-cli-to-claude": frozenset({"subagents", "hooks"}),
+    "bridge:copilot-cli-to-claude": frozenset({"subagents", "hooks", "sandbox"}),
     # goose-target bridges: `mcp` wires selected MCP servers into the emitted
     # bridge-orchestrator recipe (opt-in). `subagents` additionally emits one thin
     # stub recipe per source agent into .goose/recipes/ (pointers to the canonical
@@ -117,9 +117,107 @@ def is_enabled(features: Iterable[str], namespace: str, feature: str) -> bool:
     return target in set(features)
 
 
+#: Host-feature tokens each privilege_profile expands to. ``cooperative`` expands to
+#: nothing (today's behavior, no OS boundary). ``confined`` and ``exclusive`` are
+#: CURRENTLY IDENTICAL — both request the Claude sandbox and nothing more. The
+#: ``exclusive`` value is reserved for Stage 2 (excluding *other* agent teams / sibling
+#: processes from the workspace, an OS-account/container concern); that stronger
+#: semantics is NOT wired yet, so no code today treats ``exclusive`` differently from
+#: ``confined``. Kept as a distinct enum value so a project can declare the intent now.
+_PROFILE_FEATURE_TOKENS: dict[str, tuple[str, ...]] = {
+    "cooperative": (),
+    "confined": ("claude:sandbox",),
+    "exclusive": ("claude:sandbox",),
+}
+
+
+def expand_privilege_profile(profile: str | None) -> list[str]:
+    """Return the host-feature tokens a privilege_profile implies.
+
+    Args:
+        profile: One of ``cooperative`` (or ``None`` → treated as cooperative),
+            ``confined``, ``exclusive``. An unknown value expands to ``[]`` — an
+            unrecognized profile must never silently *grant* confinement it did not
+            ask for, nor error at emit time.
+
+    Returns:
+        The list of ``<ns>:<feature>`` tokens to union into the active feature set.
+    """
+    return list(_PROFILE_FEATURE_TOKENS.get(profile or "cooperative", ()))
+
+
+#: Frameworks for which agentteams can emit OS-enforced write-confinement today.
+#: Only Claude Code exposes a native sandbox (Seatbelt/bubblewrap) that agentteams
+#: configures; every other target degrades a confined/exclusive profile to advisory.
+SANDBOX_CAPABLE_FRAMEWORKS: frozenset[str] = frozenset({"claude"})
+
+
+def privilege_profile_advisory(
+    profile: str | None,
+    framework_id: str,
+    host_features: Iterable[str] | None = None,
+) -> dict[str, str] | None:
+    """Return an advisory dict when confinement is requested but unenforceable on this host.
+
+    Confinement has OS-level enforcement only on a sandbox-capable framework (Claude
+    Code). A request made either way — via ``privilege_profile`` confined/exclusive OR
+    a directly-passed ``claude:sandbox`` host-feature token — on any other target emits
+    no boundary, so it is advisory only: a state that must be surfaced, never silent.
+
+    Args:
+        profile: The active ``privilege_profile`` (``cooperative``/``confined``/``exclusive``).
+        framework_id: The target framework id (e.g. ``claude``, ``goose``).
+        host_features: The effective host-feature tokens; a direct ``claude:sandbox``
+            token here also counts as a confinement request. ``None`` is treated as empty.
+
+    Returns:
+        An advisory ``{"code", "message"}`` dict when confinement is requested that the
+        target cannot enforce, else ``None``.
+    """
+    requested = profile in {"confined", "exclusive"} or "claude:sandbox" in (host_features or [])
+    if requested and framework_id not in SANDBOX_CAPABLE_FRAMEWORKS:
+        how = f"privilege_profile={profile!r}" if profile in {"confined", "exclusive"} else "claude:sandbox"
+        return {
+            "code": "privilege-profile-unenforced-host",
+            "message": (
+                f"{how} requests workspace write-confinement, but the {framework_id!r} "
+                "framework has no OS-level sandbox that agentteams can configure. No "
+                "enforcement is emitted for this target — the request is ADVISORY ONLY "
+                "here. OS-enforced confinement is currently available only on the 'claude' "
+                "framework (Claude Code sandbox)."
+            ),
+        }
+    return None
+
+
+def merge_profile_features(features: Iterable[str], profile: str | None) -> list[str]:
+    """Union explicit feature tokens with a privilege_profile's expansion.
+
+    Order-preserving and idempotent: explicit tokens keep their position and a
+    profile-implied token already present is not duplicated. ``cooperative`` adds
+    nothing and therefore never strips an explicitly requested ``claude:sandbox``.
+
+    Args:
+        features: The explicitly-selected tokens (e.g. from --target-host-features).
+        profile: The privilege_profile whose expansion is unioned in.
+
+    Returns:
+        The merged, deduped token list.
+    """
+    merged = list(features)
+    for tok in expand_privilege_profile(profile):
+        if tok not in merged:
+            merged.append(tok)
+    return merged
+
+
 __all__ = [
     "HostFeatureError",
+    "SANDBOX_CAPABLE_FRAMEWORKS",
+    "expand_privilege_profile",
     "is_enabled",
+    "merge_profile_features",
     "parse_tokens",
+    "privilege_profile_advisory",
     "validate",
 ]

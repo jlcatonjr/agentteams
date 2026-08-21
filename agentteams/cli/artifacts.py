@@ -280,6 +280,42 @@ def _write_mcp_servers(manifest: dict, project_root: Path) -> "MCPEmissionResult
     )
 
 
+def resolve_host_features_and_advise(
+    manifest: dict, explicit_tokens: list[str], framework_id: str
+) -> None:
+    """Set ``manifest['host_features']`` and surface any unenforceable-confinement advisory.
+
+    Unions the explicit ``--target-host-features`` tokens with the ``privilege_profile``
+    expansion (confined/exclusive → ``claude:sandbox``; cooperative adds nothing and never
+    strips an explicit token), prints the active feature list, and — when a confinement
+    request cannot be OS-enforced on this framework — prints a WARNING and appends a
+    ``privilege-profile-unenforced-host`` advisory to the manifest so the gap is recorded,
+    not silently comforting.
+
+    Args:
+        manifest: The team manifest (mutated in place: ``host_features`` and possibly
+            ``advisories``).
+        explicit_tokens: Tokens parsed from ``--target-host-features``.
+        framework_id: The target framework id (e.g. ``claude``, ``goose``).
+
+    Returns:
+        None.
+    """
+    from agentteams.host_features import merge_profile_features, privilege_profile_advisory
+
+    manifest["host_features"] = merge_profile_features(
+        explicit_tokens, manifest.get("privilege_profile")
+    )
+    if manifest["host_features"]:
+        print(f"  Host features: {', '.join(manifest['host_features'])}")
+    advisory = privilege_profile_advisory(
+        manifest.get("privilege_profile"), framework_id, manifest["host_features"]
+    )
+    if advisory is not None:
+        print(f"  WARNING: {advisory['message']}", file=sys.stderr)
+        manifest.setdefault("advisories", []).append(advisory)
+
+
 def _emit_mcp_servers_if_enabled(manifest: dict, project_root: Path) -> None:
     """Emit the inert MCP server artifact when an MCP host-feature token is on.
 

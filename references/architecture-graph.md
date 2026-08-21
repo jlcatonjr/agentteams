@@ -5,7 +5,7 @@
 
 - Modules mapped: **159**
 - Packages: **7**
-- Internal import edges: **324**
+- Internal import edges: **325**
 - Distinct external dependencies: **6**
 
 ---
@@ -69,7 +69,7 @@ Every module, coloured by package (full adjacency in the table below).
 | `agentteams.capability_map` | `agentteams.yaml_frontmatter` | `agentteams.frameworks.goose`, `agentteams.interop` |
 | `agentteams.cli` | — | — |
 | `agentteams.cli.app` | `agentteams.baseline`, `agentteams.cli.commands`, `agentteams.cli.generate`, `agentteams.cli.goose_switch`, `agentteams.cli.json_mode`, `agentteams.cli.package_switch`, `agentteams.cli.parser`, `agentteams.cli.recipe_check`, `agentteams.cli.render_pipeline`, `agentteams.cli.sync_switch`, `agentteams.fence_inject`, `agentteams.fleet`, `agentteams.frameworks.goose`, `agentteams.git_hooks`, `agentteams.host_features` | — |
-| `agentteams.cli.artifacts` | `agentteams`, `agentteams.atomicio`, `agentteams.backup`, `agentteams.cli.code_index_artifacts`, `agentteams.cli.schema_cache`, `agentteams.codex_mcp_emit`, `agentteams.drift`, `agentteams.errors`, `agentteams.eval_suite`, `agentteams.fences`, `agentteams.mcp_emit`, `agentteams.memory_index`, `agentteams.memory_index_incremental`, `agentteams.model_routing` | `agentteams.cli.generate`, `agentteams.cli.standalone_modes`, `agentteams.git_hooks` |
+| `agentteams.cli.artifacts` | `agentteams`, `agentteams.atomicio`, `agentteams.backup`, `agentteams.cli.code_index_artifacts`, `agentteams.cli.schema_cache`, `agentteams.codex_mcp_emit`, `agentteams.drift`, `agentteams.errors`, `agentteams.eval_suite`, `agentteams.fences`, `agentteams.host_features`, `agentteams.mcp_emit`, `agentteams.memory_index`, `agentteams.memory_index_incremental`, `agentteams.model_routing` | `agentteams.cli.generate`, `agentteams.cli.standalone_modes`, `agentteams.git_hooks` |
 | `agentteams.cli.backup_switch` | `agentteams.emit` | `agentteams.cli.parser` |
 | `agentteams.cli.code_index_artifacts` | `agentteams.backup`, `agentteams.cli.schema_cache`, `agentteams.code_index`, `agentteams.code_sources`, `agentteams.errors` | `agentteams.cli.artifacts` |
 | `agentteams.cli.commands` | `agentteams.backup`, `agentteams.bridge`, `agentteams.canonical`, `agentteams.cli.security_gate`, `agentteams.convert`, `agentteams.drift`, `agentteams.emit`, `agentteams.frameworks.registry`, `agentteams.integrity`, `agentteams.interop`, `agentteams.redteam.cycle`, `agentteams.redteam.freshness`, `agentteams.research`, `agentteams.security_refs`, `agentteams.stale_detector`, `agentteams.stale_remediate`, `agentteams.sync_baseline`, `agentteams.sync_classifier` | `agentteams.cli.app`, `agentteams.stale_remediate` |
@@ -132,7 +132,7 @@ Every module, coloured by package (full adjacency in the table below).
 | `agentteams.graph_inputs` | `agentteams.yaml_frontmatter` | `agentteams.graph` |
 | `agentteams.handoff_payloads` | — | `agentteams.behavioral_drift` |
 | `agentteams.hooks_emit` | `agentteams.atomicio` | `agentteams.bridge` |
-| `agentteams.host_features` | — | `agentteams.cli.app` |
+| `agentteams.host_features` | — | `agentteams.cli.app`, `agentteams.cli.artifacts` |
 | `agentteams.ingest` | `agentteams._utils` | `agentteams.cli.generate` |
 | `agentteams.instructions_split` | — | `agentteams.bridge` |
 | `agentteams.integrity` | — | `agentteams.cli.commands`, `agentteams.redteam.checks_static`, `agentteams.redteam.runner` |
@@ -585,6 +585,7 @@ digraph "agentteams architecture" {
         "agentteams.errors",
         "agentteams.eval_suite",
         "agentteams.fences",
+        "agentteams.host_features",
         "agentteams.mcp_emit",
         "agentteams.memory_index",
         "agentteams.memory_index_incremental",
@@ -2344,6 +2345,10 @@ digraph "agentteams architecture" {
     {
       "source": "agentteams.cli.artifacts",
       "target": "agentteams.fences"
+    },
+    {
+      "source": "agentteams.cli.artifacts",
+      "target": "agentteams.host_features"
     },
     {
       "source": "agentteams.cli.artifacts",

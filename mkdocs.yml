@@ -117,6 +117,7 @@ nav:
       - parallel-plan: api-reference/parallel-plan.md
       - liaison-logs: api-reference/liaison-logs.md
       - host-features: api-reference/host-features.md
+      - workspace-privilege-scoping: api-reference/workspace-privilege-scoping.md
       - baseline: api-reference/baseline.md
       - template-pins: api-reference/template-pins.md
       - front-matter-reconcile: api-reference/front-matter-reconcile.md

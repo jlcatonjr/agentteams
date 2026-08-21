@@ -428,6 +428,25 @@
         "type": "string"
       }
     },
+    "host_features": {
+      "type": "array",
+      "description": "Active host-feature subselector tokens (<ns>:<feature>) gating optional per-target emission (e.g. claude:hooks, claude:sandbox). Set from --target-host-features and from privilege_profile expansion. Previously carried on the manifest un-declared; represented here so the schema (authority rank #2) matches the runtime.",
+      "items": {
+        "type": "string"
+      }
+    },
+    "privilege_profile": {
+      "type": "string",
+      "enum": ["cooperative", "confined", "exclusive"],
+      "description": "Workspace write-confinement posture carried from the project description. confined/exclusive imply the claude:sandbox host feature (see project-description.schema.json)."
+    },
+    "workspace_write_roots": {
+      "type": "array",
+      "description": "Directories the confined agent may write to, relative to the merged .claude/settings.json at project root. Defaults to [\".\"] when confinement is active and no override is given.",
+      "items": {
+        "type": "string"
+      }
+    },
     "domain_agent_slugs": {
       "type": "array",
       "items": {
