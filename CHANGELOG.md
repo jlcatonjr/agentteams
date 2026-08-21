@@ -25,7 +25,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   cooperative (none) / confined (P1) / exclusive (P1+P3); P2 (grants) orthogonal.
 - New optional `protected_read_paths` on the project description + manifest; `exclusive`
   read-exclusion is emitted only for that profile (confined's block stays byte-identical).
-  macOS enforced today; Linux is a follow-out. Tests in
+  Enforced via Claude Code's documented sandbox backends — macOS (Seatbelt, additionally
+  spiked directly) and Linux/WSL2 (bubblewrap, doc-verified; a direct bwrap spike is
+  pending, tracked in the remediation log) — from one OS-agnostic emitted config. Tests in
   `tests/test_workspace_privilege_scoping.py`.
 
 ### added (workspace privilege scoping P2 — cross-workspace capability grants)

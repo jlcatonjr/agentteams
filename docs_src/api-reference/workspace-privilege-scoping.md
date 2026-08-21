@@ -20,8 +20,12 @@ hardening guidance (see "Read-exclusion & cross-team exclusion (P3)"). All three
 | **P2** — cross-workspace reach by grant | issue grants (any sandbox profile) | holder's `allowWrite` widens to signed-granted paths |
 | **P3** — read-exclusion + inbound hardening | `privilege_profile: exclusive` | P1 **plus** OS read-exclusion of protected paths (P3a) **plus** an operator inbound-hardening advisory (P3b) |
 
-`exclusive` is a superset of `confined`. P2 is orthogonal (issue grants or don't). macOS
-(Seatbelt) is the enforced target today; Linux (bubblewrap) is a follow-out.
+`exclusive` is a superset of `confined`. P2 is orthogonal (issue grants or don't).
+Enforcement runs on Claude Code's two documented sandbox backends — **macOS (Seatbelt)**
+and **Linux / WSL2 (bubblewrap)** — from the same emitted config (no per-OS agentteams
+logic). The macOS mechanism was additionally verified by a direct Seatbelt spike; a direct
+Linux `bwrap` spike is pending (tracked in the remediation log). Native Windows has no OS
+sandbox and stays advisory-only.
 
 ## What it does
 
@@ -180,6 +184,19 @@ paths instead.
 This seals **your** team's reads (it cannot snoop on or exfiltrate the listed paths /
 sibling workspaces). When *every* team runs `exclusive` and lists the others in
 `protected_read_paths`, teams cannot read each other → mutual isolation.
+
+### Verifying enforcement on your machine
+
+Because the emitted `denyRead` uses home-relative (`~/`) entries and agentteams does not
+run Claude Code, it cannot itself prove the paths resolve and deny on your host. Confirm
+it yourself after merging the block and enabling the sandbox: create a throwaway marker
+file under one of the denied roots, then attempt to read it from inside a sandboxed Bash
+command. A denial (operation not permitted) confirms the boundary is live on your machine;
+a successful read means the entry did not resolve — switch that entry to an absolute path.
+Do this once per host/OS, since the home path resolves per user at sandbox-apply time.
+(The `~/` form is Claude Code's documented sandbox path syntax; the underlying kernel deny
+mechanism was verified directly — macOS Seatbelt with absolute paths — but the config-layer
+`~` resolution is Claude Code's, so a one-time self-check is the honest confirmation.)
 
 ### P3b — inbound exclusion (operator-run, advisory only)
 

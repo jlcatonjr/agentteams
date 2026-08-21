@@ -306,6 +306,9 @@ _READ_EXCLUSION_COMMENT_LINES: list[str] = [
     "inbound property, apply the operator OS filesystem hardening printed at generation",
     "and documented under \"Cross-team exclusion\" in the workspace-privilege-scoping docs",
     "(operator-run, not enforced by agentteams).",
+    "Verify on YOUR machine that these ~/ entries resolve and deny (they rely on Claude",
+    "Code home-path handling) — see the docs \"Verifying enforcement on your machine\";",
+    "switch an entry to an absolute path if a read of it is not denied.",
 ]
 
 
