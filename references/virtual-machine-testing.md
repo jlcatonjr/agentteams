@@ -25,6 +25,50 @@
    certainly has `UseDNS yes` and aggressive per-source penalties that fight automated
    access over NAT. The durable fix is §3.1 (one console edit).
 
+## 0b. Provisioning a fresh VM the agent can SSH into (recommended, headless CLI)
+
+The most reliable path is to **generate the VM unattended** with SSH **key auth** and the
+§3 sshd relaxation baked in, so it boots ready and no password is ever typed. Needs an
+Ubuntu Server ISO matching the host arch (`uname -m`; Apple Silicon = `arm64`). Skeleton:
+
+```bash
+VM=LinuxSandbox
+ISO="$HOME/Downloads/ubuntu-26.04-live-server-arm64.iso"
+VMDIR="$HOME/VirtualBox VMs/$VM"
+VMPW=changeme            # console/backup login value; record it in the gitignored .env
+VBoxManage createvm --name "$VM" --ostype Ubuntu_arm64 --register
+VBoxManage modifyvm "$VM" --memory 4096 --cpus 2 --firmware efi --nic1 nat
+VBoxManage modifyvm "$VM" --natpf1 "ssh,tcp,127.0.0.1,2223,,22"   # pick a free host port
+VBoxManage createmedium disk --filename "$VMDIR/$VM.vdi" --size 20000
+VBoxManage storagectl "$VM" --name SATA --add sata --controller IntelAHCI
+VBoxManage storageattach "$VM" --storagectl SATA --port 0 --device 0 --type hdd --medium "$VMDIR/$VM.vdi"
+
+# Provisioning script that runs as root in the target after install; base64 it to dodge
+# all quoting. Installs openssh + bubblewrap, adds the host public key, relaxes sshd.
+# Home path uses a $U variable so no literal user home path is hard-coded.
+PUB="$(cat ~/.ssh/id_rsa.pub)"
+B64=$(printf '%s\n' \
+  'U=vboxuser; D="/home/$U/.ssh"' \
+  'apt-get update -qq || true' \
+  'apt-get install -y openssh-server bubblewrap || true' \
+  'install -d -m700 -o $U -g $U "$D"' \
+  "printf '%s\n' '$PUB' > \"\$D/authorized_keys\"" \
+  'chmod 600 "$D/authorized_keys"; chown $U:$U "$D/authorized_keys"' \
+  "printf 'UseDNS no\nMaxStartups 100:30:200\n' > /etc/ssh/sshd_config.d/99-vmtest.conf" \
+  'systemctl enable ssh || true' | base64 | tr -d '\n')
+
+VBoxManage unattended install "$VM" --iso="$ISO" \
+  --user=vboxuser --user-password=$VMPW --full-user-name="VBox Sandbox" \
+  --install-additions --locale=en_US --country=US --time-zone=UTC \
+  --post-install-command="echo $B64 | base64 -d | bash" \
+  --start-vm=headless
+```
+
+Then poll for readiness and connect **key-based** (no password):
+`ssh -p 2223 -i ~/.ssh/id_rsa vboxuser@127.0.0.1`. Install takes ~15–20 min; the VM
+auto-reboots into the installed system. Key auth + the baked-in `UseDNS no`/`MaxStartups`
+sidestep §3's banner-stall and rate-limit entirely — no interactive-password dance.
+
 ## 1. VM lifecycle (VBoxManage)
 
 | Task | Command |
