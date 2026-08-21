@@ -92,24 +92,31 @@ with `Connection to UNKNOWN port -1: Socket is not connected`. A human logging i
 does not trip it; automated repeated connections do. **Recovery:** stop attempting for
 several minutes (or reboot / `sudo systemctl restart ssh`).
 
-**Durable fix for automated testing — run these INSIDE the VM console (not the host).**
-This is essential if a script (not just a human) must connect; combine it with the
-`UseDNS no` line from §3.1 into one drop-in:
+**Durable fix for automated testing — run INSIDE the VM console (not the host).** Write to
+the **server** drop-in dir `/etc/ssh/sshd_config.d/` (note the `d` in `sshd`) — **not**
+the client dir `/etc/ssh/ssh_config.d/` (which holds `20-systemd-ssh-proxy.conf`; a common
+mix-up). `PerSourcePenalties`/`PerSourceMaxStartups` exist only in **OpenSSH 9.8+**
+(Ubuntu 24.10+); on 24.04 (OpenSSH 9.6) they are invalid and `sshd` will refuse to
+restart — so add them **conditionally** and validate with `sshd -t` before restarting:
 
 ```
-sudo tee /etc/ssh/sshd_config.d/99-vmtest.conf >/dev/null <<'EOF'
-UseDNS no
-MaxStartups 100:30:200
-PerSourceMaxStartups none
-PerSourcePenalties no
-EOF
-sudo systemctl restart ssh
+{
+  echo 'UseDNS no'
+  echo 'MaxStartups 100:30:200'
+  if sshd -T 2>/dev/null | grep -qi '^persourcepenalties'; then
+    echo 'PerSourcePenalties no'
+    echo 'PerSourceMaxStartups none'
+  fi
+} | sudo tee /etc/ssh/sshd_config.d/99-vmtest.conf >/dev/null
+sudo sshd -t && sudo systemctl restart ssh && echo APPLIED-OK || echo SSHD-CONFIG-ERROR
 ```
 
-`PerSourcePenalties no` disables the escalating per-source block; `PerSourceMaxStartups
-none` removes the per-source connection cap; the high `MaxStartups` tolerates concurrent
-unauthenticated connections. After this, automated SSH from the host connects reliably.
-Treat this VM as test-only — these settings loosen sshd's abuse protections deliberately.
+`UseDNS no` kills the banner stall; the high `MaxStartups` and (where supported) the
+per-source directives stop sshd dropping automated repeated connections. `sshd -t`
+guarantees a bad directive cannot brick sshd. Treat this VM as test-only — these settings
+loosen sshd's abuse protections deliberately. If the drop-in dir is not `Include`d by the
+main config (`grep -i '^include' /etc/ssh/sshd_config` shows nothing), append the same
+lines to `/etc/ssh/sshd_config` instead.
 
 ### 3.3 Why `VBoxManage guestcontrol` was not a workaround
 
