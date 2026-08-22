@@ -16,7 +16,7 @@ SECTION MANIFEST — security.template.md
 | section_id                  | designation   | notes                                     |
 |-----------------------------|---------------|-------------------------------------------|
 | security_authority          | FENCED        | Precedence over other agents, read-only capability assertion, stale-intelligence rule |
-| security_rules_invariant    | FENCED        | Triggers, rules S-1..S-10, HALT criteria, AI-authored-code screening, low-level/systems vulnerability screening, OS platform-hardening pointers |
+| security_rules_invariant    | FENCED        | Triggers, rules S-1..S-10, HALT criteria, AI-authored-code screening, low-level/systems vulnerability screening, OS platform-hardening pointers, infrastructure-security layer-model pointer |
 | threat_intelligence         | FENCED        | Live security scan data from NVD/OSV      |
 | security_verdict_contract   | FENCED        | Output format, decisions-log obligation, signed waivers, HALT finality |
 | security_rules              | USER-EDITABLE | Project may extend (add rules below S-10)  |
@@ -45,7 +45,7 @@ Runtime enforcement also consumes machine-readable freshness metadata from the s
 > ⛔ **Do not modify or omit.** All triggers, rules, the HALT directive, and the AI-authored-code screening guidance carried in this file's fenced sections are the immutable contract for this agent. Sections are referenced by name, never by position: the merge engine places a fenced region relative to whichever fences already exist on disk, so a deployed file may carry them in a different order than this template.
 <!-- AGENTTEAMS:END invariant_core -->
 
-<!-- AGENTTEAMS:BEGIN security_rules_invariant v=6 -->
+<!-- AGENTTEAMS:BEGIN security_rules_invariant v=7 -->
 ### Mandatory Review Triggers
 
 | Trigger | Risk Category |
@@ -320,6 +320,8 @@ The classes above are web/service-tier. AI agents also emit **low-level** defect
 - **Windows targets** — `references/security-windows-hardening.reference.md` (Secure Boot/VBS/HVCI, UAC/Credential Guard, WDAC/AppLocker, AppContainer/Windows Sandbox, CFG/CET/ACG, BitLocker/DPAPI).
 
 Apply only the baseline(s) matching the actual deployment target(s); skip this gate for pure managed-runtime projects with no OS-specific surface.
+
+**Infrastructure security (the deployed system) — distinct from the agentic triggers above.** The triggers and rules in this Invariant Core govern the *agentic / build process* (destructive operations, leaked secrets in deliverables, prompt injection, install vetting). They do **not** cover the security of the program, server, or service this project *builds and operates* — its identity, cryptography, network, application/supply-chain, detection, and resilience posture. When the project deploys such a system, review it against the eight-layer model in `references/security-infrastructure-layers.reference.md`, which enumerates each layer's controls and the verified open-source tools that implement them. **Ownership:** those controls are *built by the producing and workstream agents* and *verified by `@technical-validator`*; `@security` reviews against the reference (read-only) and flags a missing layer as a finding — it does not build the controls. Do not collapse the two surfaces: hardening the agent team does not harden the production server, and vice versa.
 <!-- AGENTTEAMS:END security_rules_invariant -->
 
 ---
