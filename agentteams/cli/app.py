@@ -30,6 +30,8 @@ from agentteams.cli.commands import (
     _run_verify_integrity,
     _run_write_integrity_manifest,
     _run_verify_waivers,
+    _run_verify_grants,
+    _run_issue_grant,
 )
 
 # run_generate holds the generate/update/check pipeline; _finalize_exit_code is
@@ -166,6 +168,12 @@ def _main_dispatch(
     # -----------------------------------------------------------------------
     if getattr(args, "verify_waivers", False):
         return _run_verify_waivers(args)
+
+    # --verify-grants / --issue-grant: standalone cross-workspace capability-grant ops (P2).
+    if getattr(args, "verify_grants", False):
+        return _run_verify_grants(args)
+    if getattr(args, "issue_grant", None):
+        return _run_issue_grant(args)
 
     # -----------------------------------------------------------------------
     # --verify-integrity / --verify-backup: standalone read-only integrity

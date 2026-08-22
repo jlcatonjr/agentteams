@@ -10,6 +10,7 @@ Handoffs:     Supported
 from __future__ import annotations
 
 import re
+import sys
 import warnings
 from pathlib import Path
 from typing import Any
@@ -86,16 +87,27 @@ _SLUG_RE = re.compile(r"^[a-z0-9][a-z0-9\-]*$")
 
 
 def _get_team_slugs(manifest: dict[str, Any]) -> frozenset[str]:
-    """Return the set of agent slugs generated for this project.
+    """Return the set of agent slugs that are valid team cross-reference targets.
 
-    Always includes ``orchestrator`` as a valid cross-reference target even
-    when it is not listed as a discrete output file.
+    Always includes ``orchestrator`` even when it is not a discrete output file.
+
+    The set is the UNION of four sources so the roster pruner never drops a real
+    teammate merely because the current run did not regenerate its file (D1):
+
+    * ``adopted_agents`` — explicit ``--adopt-orphans`` registrations;
+    * ``agent_slug_list`` — the authoritative full brief-defined team (analyze.py);
+    * ``existing_agent_slugs`` — agents already deployed ON DISK, populated during
+      ``--update`` (:mod:`agentteams.cli.generate`). This is the load-bearing addition:
+      an ``--update`` regenerates only part of ``output_files``, so relying on
+      ``output_files`` alone silently prunes deployed teammates the brief did not
+      re-emit. Only ``--prune`` — which DELETES the file — should retire an agent's
+      roster entry, so roster-ref lifecycle tracks file lifecycle;
+    * ``output_files`` — this run's emitted ``.agent.md`` files.
     """
     slugs: set[str] = {"orchestrator"}
-    # Adopted orphan agents (--adopt-orphans) are valid team cross-ref targets
-    # even though they are intentionally absent from output_files (their files
-    # are preserved, not regenerated).
     slugs.update(manifest.get("adopted_agents", []))
+    slugs.update(manifest.get("agent_slug_list", []))
+    slugs.update(manifest.get("existing_agent_slugs", []))
     for f in manifest.get("output_files", []):
         name = Path(f.get("path", "")).name
         if name.endswith(".agent.md"):
@@ -112,7 +124,9 @@ def _filter_yaml_team_refs(yaml_body: str, team_slugs: frozenset[str]) -> str:
         if keep == slugs:
             return m.group(0)
         if not keep:
-            return f"{m.group(1)}[]"
+            # Symmetry with the block form: refuse to blank a populated flow roster to
+            # `[]` — an all-drop is a coverage bug, not intent. Return it unchanged.
+            return m.group(0)
         return f"{m.group(1)}[{', '.join(repr(s) for s in keep)}]"
 
     yaml_body = _AGENTS_FLOW_RE.sub(_filter_agents, yaml_body)
@@ -123,8 +137,29 @@ def _filter_yaml_team_refs(yaml_body: str, team_slugs: frozenset[str]) -> str:
         keep = [s for s in slugs if s in team_slugs]
         if keep == slugs:
             return m.group(0)
+        # A block roster (the orchestrator's team list) is dropping entries. With the
+        # on-disk/brief union in _get_team_slugs, a drop here means the agent is neither
+        # brief-defined, adopted, nor present on disk — i.e. genuinely departed. Surface it
+        # loudly (D1: a silent roster drop is data loss); never emit an empty roster where a
+        # populated one existed.
+        dropped = [s for s in slugs if s not in team_slugs]
+        if dropped:
+            print(
+                "  NOTE: pruned "
+                + str(len(dropped))
+                + " agent(s) from an orchestrator roster (no longer in the team, on disk, "
+                "or adopted): "
+                + ", ".join(dropped)
+                + ". If these are still deployed teammates, re-run with --adopt-orphans or "
+                "add them to the brief; if intentionally retired, use --prune to remove their "
+                "files too.",
+                file=sys.stderr,
+            )
         if not keep:
-            return "agents: []\n"
+            # Refuse to emit a bare empty roster in place of a populated one — return the
+            # original block unchanged rather than "agents: []" (belt-and-suspenders with the
+            # emit-path guard). An all-drop is almost always a coverage bug, not intent.
+            return m.group(0)
         lines = "".join(f"  - '{slug}'\n" for slug in keep)
         return "agents:\n" + lines
 

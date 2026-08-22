@@ -145,6 +145,62 @@ def test_gate_allows_verified_conditional_pass(tmp_path):
     _assert_destructive_action_allowed(tmp_path, action="prune")
 
 
+def _write_privilege_switch(output_dir: Path, *, on: bool) -> None:
+    import json
+
+    refs = output_dir / "references"
+    refs.mkdir(parents=True, exist_ok=True)
+    (refs / "agent-privilege.json").write_text(
+        json.dumps({"enforce_decision_signing": on}) + "\n", encoding="utf-8"
+    )
+
+
+def test_gate_enforce_signing_blocks_unsigned_pass(tmp_path):
+    # Same unsigned CONDITIONAL PASS the gate allows by default (author on the roster,
+    # signing inactive) — but with the strict switch ON it is refused fail-closed, because
+    # an unsigned authorization can be author-spoofed via a writable roster.
+    _write_security_log(
+        tmp_path,
+        [["2026-04-22T10:00:00Z", "security", "prune-001", "CONDITIONAL PASS", "backup", "verified"]],
+    )
+    _write_privilege_switch(tmp_path, on=True)
+    with pytest.raises(RuntimeError, match="enforce_decision_signing"):
+        _assert_destructive_action_allowed(tmp_path, action="prune")
+
+
+def test_gate_enforce_signing_off_allows_unsigned_pass(tmp_path):
+    # Switch explicitly OFF → legacy behavior: the unsigned PASS is honoured.
+    _write_security_log(
+        tmp_path,
+        [["2026-04-22T10:00:00Z", "security", "prune-001", "CONDITIONAL PASS", "backup", "verified"]],
+    )
+    _write_privilege_switch(tmp_path, on=False)
+    _assert_destructive_action_allowed(tmp_path, action="prune")  # must not raise
+
+
+def test_gate_enforce_signing_absent_allows_unsigned_pass(tmp_path):
+    # No switch file (a workspace that predates the feature) → OFF, legacy behavior, no
+    # surprise fail-closed until the team is updated.
+    _write_security_log(
+        tmp_path,
+        [["2026-04-22T10:00:00Z", "security", "prune-001", "CONDITIONAL PASS", "backup", "verified"]],
+    )
+    _assert_destructive_action_allowed(tmp_path, action="prune")  # must not raise
+
+
+def test_gate_enforce_signing_malformed_switch_fails_closed(tmp_path):
+    # A present-but-corrupt switch must not silently disable enforcement.
+    _write_security_log(
+        tmp_path,
+        [["2026-04-22T10:00:00Z", "security", "prune-001", "CONDITIONAL PASS", "backup", "verified"]],
+    )
+    refs = tmp_path / "references"
+    refs.mkdir(parents=True, exist_ok=True)
+    (refs / "agent-privilege.json").write_text("{not valid json", encoding="utf-8")
+    with pytest.raises(RuntimeError, match="unreadable"):
+        _assert_destructive_action_allowed(tmp_path, action="prune")
+
+
 def test_gate_uses_latest_matching_decision(tmp_path):
     _write_security_log(
         tmp_path,

@@ -226,6 +226,44 @@ def _write_eval_suite(manifest: dict, output_dir: Path) -> Path:
     _atomic_write_text(suite_path, json.dumps(suite, indent=2) + "\n")
     return suite_path
 MODEL_ROUTING_REL_PATH = "references/model-routing.json"
+#: Where the strict agent-privilege switch is emitted, relative to the team root. The
+#: security gate reads this at enforcement time; an ABSENT file is treated as OFF (a
+#: workspace that predates the feature is never surprised into fail-closed behavior).
+AGENT_PRIVILEGE_REL_PATH = "references/agent-privilege.json"
+
+
+def _write_agent_privilege_config(manifest: dict, output_dir: Path) -> Path | None:
+    """Emit ``references/agent-privilege.json`` carrying the enforce-signing switch.
+
+    Framework-neutral (the security gate that reads it is framework-neutral). Written on
+    every generate/update so the switch is explicit in the team; the value is
+    ``manifest['enforce_decision_signing']`` (defaulted true in ``analyze.build_manifest``
+    when the brief does not set it). Returns the path written, or ``None`` when the manifest
+    carries no switch (older manifests — nothing to emit).
+
+    Args:
+        manifest: The team manifest.
+        output_dir: The team root.
+
+    Returns:
+        The written path, or ``None`` when there is no switch to emit.
+    """
+    if "enforce_decision_signing" not in manifest:
+        return None
+    payload = {
+        "enforce_decision_signing": bool(manifest.get("enforce_decision_signing")),
+        "note": (
+            "Strict agent-privilege switch. When true, an unsigned AUTHORIZING "
+            "security-decision row is refused (fail-closed) rather than trusted on its "
+            "author name. Read by the security gate. Turn off by setting "
+            "enforce_decision_signing:false in the project brief and re-running --update."
+        ),
+    }
+    config_path = output_dir / AGENT_PRIVILEGE_REL_PATH
+    _atomic_write_text(config_path, json.dumps(payload, indent=2) + "\n")
+    return config_path
+
+
 def _write_model_routing(manifest: dict, output_dir: Path) -> Path:
     """Emit the framework-neutral model-routing contract (F6, opt-in).
 
@@ -278,6 +316,171 @@ def _write_mcp_servers(manifest: dict, project_root: Path) -> "MCPEmissionResult
         features=manifest.get("host_features", []) or [],
         output_root=project_root,
     )
+
+
+class PrivilegeConfinementError(RuntimeError):
+    """A confined/exclusive profile was requested on a host that cannot OS-enforce it.
+
+    Raised (P1-2) when generation is set to fail closed and the run has no sandbox-capable
+    target to enforce the requested confinement. Carries a message that names the
+    ``--allow-unenforced-confinement`` opt-out.
+    """
+
+
+def resolve_host_features_and_advise(
+    manifest: dict, explicit_tokens: list[str], framework_id: str,
+    *, allow_unenforced: bool = True,
+) -> None:
+    """Set ``manifest['host_features']`` and surface any unenforceable-confinement advisory.
+
+    Unions the explicit ``--target-host-features`` tokens with the ``privilege_profile``
+    expansion (confined/exclusive → ``claude:sandbox``; cooperative adds nothing and never
+    strips an explicit token), prints the active feature list, and — when a confinement
+    request cannot be OS-enforced on this framework — records the gap.
+
+    Fail-closed posture (P1-2): when ``allow_unenforced`` is ``False`` and confinement is
+    requested that this framework cannot enforce, raise :class:`PrivilegeConfinementError`
+    instead of merely warning — so a ``confined``/``exclusive`` request on a non-sandbox
+    host (Goose/Codex/Copilot/native Windows) cannot silently no-op. When
+    ``allow_unenforced`` is ``True`` (the default, preserving fleet/convert/render callers),
+    it prints a WARNING and appends a ``privilege-profile-unenforced-host`` advisory.
+
+    Args:
+        manifest: The team manifest (mutated in place: ``host_features`` and possibly
+            ``advisories``).
+        explicit_tokens: Tokens parsed from ``--target-host-features``.
+        framework_id: The target framework id (e.g. ``claude``, ``goose``).
+        allow_unenforced: When ``False``, an unenforceable confinement request raises
+            rather than degrading to an advisory. The interactive ``generate`` path passes
+            the negation of ``--allow-unenforced-confinement`` here.
+
+    Returns:
+        None.
+
+    Raises:
+        PrivilegeConfinementError: ``allow_unenforced`` is ``False`` and the requested
+            confinement cannot be OS-enforced on ``framework_id``.
+    """
+    from agentteams.host_features import merge_profile_features, privilege_profile_advisory
+
+    manifest["host_features"] = merge_profile_features(
+        explicit_tokens, manifest.get("privilege_profile")
+    )
+    if manifest["host_features"]:
+        print(f"  Host features: {', '.join(manifest['host_features'])}")
+    advisory = privilege_profile_advisory(
+        manifest.get("privilege_profile"), framework_id, manifest["host_features"]
+    )
+    if advisory is not None:
+        if not allow_unenforced:
+            raise PrivilegeConfinementError(
+                advisory["message"]
+                + " Refusing to emit an unenforced boundary (fail-closed). Re-run with "
+                "--allow-unenforced-confinement to proceed with the advisory instead, or "
+                "target the 'claude' framework for OS-enforced confinement."
+            )
+        print(f"  WARNING: {advisory['message']}", file=sys.stderr)
+        manifest.setdefault("advisories", []).append(advisory)
+
+
+def finalize_privilege_wiring(
+    manifest: dict, explicit_tokens: list[str], framework_id: str, project_root: Path,
+    *, allow_unenforced: bool = True,
+) -> None:
+    """Resolve host features + advisory, then widen the sandbox by held grants (P1+P2).
+
+    The single privilege-wiring entry point for the generate flow: unions
+    host-feature tokens with the privilege_profile expansion and surfaces the
+    unenforceable-host advisory (Stage 1), then merges any cross-workspace grants this
+    team holds into the sandbox write roots (P2). Ordering matters — grant-widening
+    runs after host-feature resolution so it can see whether the sandbox is on.
+
+    Args:
+        manifest: The team manifest (mutated: host_features, advisories, workspace_write_roots).
+        explicit_tokens: Tokens from --target-host-features.
+        framework_id: The target framework id.
+        project_root: The holder workspace root (holds the capability-grants ledger).
+        allow_unenforced: Forwarded to :func:`resolve_host_features_and_advise`; when
+            ``False``, an unenforceable confinement request raises rather than warning.
+    """
+    resolve_host_features_and_advise(
+        manifest, explicit_tokens, framework_id, allow_unenforced=allow_unenforced
+    )
+    apply_held_grants_to_write_roots(manifest, project_root)
+    _advise_exclusive_inbound_hardening(manifest, framework_id)
+
+
+def _advise_exclusive_inbound_hardening(manifest: dict, framework_id: str) -> None:
+    """Surface the P3b inbound-hardening advisory for an `exclusive` team on a sandbox host.
+
+    P3a (read-exclusion) seals this team's OUTBOUND reads, but the user-facing "exclusive
+    domain" goal — keeping OTHER teams/processes OUT of this workspace — is inbound and is
+    NOT something agentteams enforces. So when `exclusive` is selected on the sandbox-capable
+    Claude target, print and persist an advisory pointing at the operator OS filesystem
+    hardening, mirroring the honest `privilege_profile_advisory` discipline (never a silent
+    claim of protection). No-op for other profiles/hosts (unenforced-host is already warned
+    by resolve_host_features_and_advise).
+
+    Args:
+        manifest: The team manifest (mutated: possibly ``advisories``).
+        framework_id: The target framework id.
+    """
+    from agentteams.host_features import SANDBOX_CAPABLE_FRAMEWORKS
+
+    if manifest.get("privilege_profile") != "exclusive" or framework_id not in SANDBOX_CAPABLE_FRAMEWORKS:
+        return
+    message = (
+        "privilege_profile=exclusive emitted OS read-exclusion (this team cannot READ the "
+        "protected paths) — this is OUTBOUND only. To keep OTHER teams/processes OUT of this "
+        "workspace (the inbound 'exclusive domain' property), apply OS filesystem hardening "
+        "yourself: restrict the workspace to your user (chmod 700 + chown), and optionally run "
+        "this team's harness under a dedicated macOS user account. agentteams cannot enforce "
+        "this; see the Cross-team exclusion section of the workspace-privilege-scoping docs."
+    )
+    print(f"  NOTE (P3b, advisory): {message}", file=sys.stderr)
+    manifest.setdefault("advisories", []).append(
+        {"code": "privilege-profile-exclusive-inbound-hardening", "message": message}
+    )
+
+
+def apply_held_grants_to_write_roots(manifest: dict, project_root: Path) -> list[str]:
+    """Widen a confined team's sandbox write roots by the cross-workspace grants it holds (P2).
+
+    When the Claude sandbox is active for this team, read the workspace's grant ledger
+    for valid grants whose ``holder_team`` is this team's ``team_id`` and merge their
+    target paths into ``manifest['workspace_write_roots']`` — so the emitted
+    ``allowWrite`` covers the granted foreign paths. This is the sole enforcement path:
+    a grant is inert until the holder is (re)generated, and an agent cannot widen its own
+    OS boundary at runtime. No-op unless the sandbox is on.
+
+    Args:
+        manifest: The team manifest (mutated: ``workspace_write_roots`` extended).
+        project_root: The holder workspace root (holds ``references/capability-grants.log.csv``).
+
+    Returns:
+        The list of granted paths that were added (empty when none / sandbox off).
+    """
+    from agentteams.frameworks.claude import _sandbox_feature_enabled
+    from agentteams.cli.grants import GrantError, granted_write_roots
+
+    if not _sandbox_feature_enabled(manifest):
+        return []
+    holder = (manifest.get("team_id") or "").strip()
+    if not holder:
+        return []
+    try:
+        extra = granted_write_roots(project_root, holder_team=holder)
+    except GrantError as exc:
+        print(f"  WARNING: capability-grant ledger unreadable, no grants applied: {exc}", file=sys.stderr)
+        return []
+    if not extra:
+        return []
+    roots = list(manifest.get("workspace_write_roots") or ["."])
+    added = [r for r in extra if r not in roots]
+    manifest["workspace_write_roots"] = roots + added
+    if added:
+        print(f"  Applied {len(added)} capability grant(s) to sandbox allowWrite: {', '.join(added)}")
+    return added
 
 
 def _emit_mcp_servers_if_enabled(manifest: dict, project_root: Path) -> None:

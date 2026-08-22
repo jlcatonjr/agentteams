@@ -333,3 +333,86 @@ def test_an_unindented_comment_line_after_a_scalar_key_does_not_blank_it():
     keys = _front_matter_keys(doc)
     assert keys["name"] == "A"
     assert keys["tools"] == '["read"]'
+
+
+# --- Last line of defense: never blank a populated block (2026-08-21 recurrence) -----------
+#
+# On 2026-08-21 an `--update` of the jameslcaton team blanked the orchestrator's `agents:`
+# roster (28 entries -> `agents: `) while the dict-shaped `handoffs:` block survived. The empty
+# value did NOT come from `_merge_front_matter` (which cannot blank a populated on-disk block);
+# it arrived already-empty from a non-emit (fleet/sync/interop) path whose subset-YAML parser
+# collapses bare-scalar block items. `_restore_blanked_front_matter_blocks` is the write-time
+# guard that refuses such a write regardless of which upstream produced the empty.
+
+from agentteams.fences import _restore_blanked_front_matter_blocks
+
+
+def test_guard_restores_roster_blanked_to_empty_scalar():
+    """The exact incident signature: on disk carries a populated `agents:` block; the content
+    about to be written has `agents: ` (empty scalar). The guard restores the roster."""
+    guarded, notices = _restore_blanked_front_matter_blocks(
+        new_content="---\nname: Orchestrator\nagents: \nhandoffs:\n  - label: Produce\n    agent: primary-producer\n---\nbody\n",
+        existing_content=_BLOCK_DOC,
+    )
+    assert "agents:\n  - orchestrator" in guarded
+    assert "  - navigator" in guarded
+    assert "  - security" in guarded
+    assert any("refused to blank populated block" in n and "agents" in n for n in notices)
+
+
+def test_guard_restores_full_incident_shape_with_key_rename():
+    """Full 2026-08-21 shape: roster blanked AND user-invokable renamed to user-invocable.
+    The rename must survive; the roster must be restored."""
+    blanked = (
+        "---\nname: Orchestrator\nagents: \ntools: ['read', 'edit']\n"
+        "handoffs:\n  - label: Produce\n    agent: primary-producer\n"
+        "user-invocable: true\n---\nbody text unchanged\n"
+    )
+    guarded, notices = _restore_blanked_front_matter_blocks(blanked, _BLOCK_DOC)
+    assert "agents:\n  - orchestrator" in guarded
+    assert "  - navigator" in guarded and "  - security" in guarded
+    assert "user-invocable: true" in guarded, "the legitimate key rename must be preserved"
+    assert notices
+
+
+def test_guard_restores_roster_dropped_entirely():
+    """If the key vanished from the write candidate altogether, the guard still restores it."""
+    dropped = "---\nname: Orchestrator\nhandoffs:\n  - label: P\n    agent: primary-producer\n---\nbody\n"
+    guarded, notices = _restore_blanked_front_matter_blocks(dropped, _BLOCK_DOC)
+    assert "  - orchestrator" in guarded
+    assert notices
+
+
+def test_guard_restores_empty_inline_list():
+    """The copilot-vscode adapter's team-pruner can emit `agents: []` when team_slugs does not
+    cover the roster — that empty list must be refused just like the empty scalar."""
+    inline_empty = "---\nname: Orchestrator\nagents: []\n---\nbody\n"
+    guarded, notices = _restore_blanked_front_matter_blocks(inline_empty, _BLOCK_DOC)
+    assert "  - orchestrator" in guarded
+    assert notices
+
+
+def test_guard_is_a_noop_when_roster_survives():
+    """No false positives: when the write candidate keeps the populated block, the guard does
+    not fire and returns the content untouched (identity)."""
+    guarded, notices = _restore_blanked_front_matter_blocks(_BLOCK_DOC, _BLOCK_DOC)
+    assert notices == []
+    assert guarded == _BLOCK_DOC
+
+
+def test_guard_does_not_fire_on_a_legitimate_partial_narrowing():
+    """A partial change (fewer items but still populated) is narrowing, not blanking — the
+    guard must NOT second-guess it; only a collapse to EMPTY is refused."""
+    narrowed = (
+        "---\nname: Orchestrator\nuser-invokable: true\ntools: ['read', 'edit']\n"
+        "agents:\n  - orchestrator\nhandoffs:\n  - label: Produce\n    agent: primary-producer\n"
+        "    prompt: \"do the thing\"\n    send: false\nmodel: [\"auto\"]\n---\nbody text unchanged\n"
+    )
+    guarded, notices = _restore_blanked_front_matter_blocks(narrowed, _BLOCK_DOC)
+    assert notices == [], "a still-populated (narrowed) block is not a blanking"
+    assert guarded == narrowed
+
+
+def test_guard_no_op_when_existing_has_no_front_matter():
+    guarded, notices = _restore_blanked_front_matter_blocks("---\nagents: \n---\nx\n", "no front matter here\n")
+    assert notices == []

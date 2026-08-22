@@ -2,7 +2,7 @@
 .SH NAME
 agentteams \- Generate a complete agent team for any project.
 .SH SYNOPSIS
-.B agentteams [--description PATH] [--project PATH] [--framework NAME] [--output DIR] [--dry-run] [--json] [--overwrite] [--merge] [--yes] [--no-scan] [--cost-routing] [--update] [--prune] [--adopt-orphans] [--check] [--refresh-index] [--query-index TEXT] [--query-k N] [--query-strategy QUERY_STRATEGY] [--refresh-code-index] [--query-code TEXT] [--code-query-k N] [--code-query-strategy CODE_QUERY_STRATEGY] [--code-kind CODE_KIND] [--fail-on-legacy-skip] [--no-vscode-tasks] [--refresh-graph] [--refresh-architecture] [--install-git-hooks] [--no-git-hooks] [--code-index-hook] [--no-add-fence-markers] [--scan-security] [--check-budget] [--self] [--allow-foreign-output] [--allow-external-self-output] [--post-audit] [--auto-correct] [--enrich] [--strict-manual-placeholders] [--no-strict-manual-placeholders] [--security-offline] [--security-max-items N] [--security-no-nvd] [--migrate] [--convert-from DIR] [--interop-from DIR] [--interop-source-framework INTEROP_SOURCE_FRAMEWORK] [--interop-mode INTEROP_MODE] [--bridge-from DIR] [--bridge-source-framework BRIDGE_SOURCE_FRAMEWORK] [--pin-templates] [--reconcile-front-matter] [--reconcile-apply] [--absorb-from DIR] [--absorb-source-framework ABSORB_SOURCE_FRAMEWORK] [--absorb-apply] [--absorb-canonical-dir DIR] [--bridge-check] [--bridge-refresh] [--bridge-merge] [--bridge-no-skills] [--recipe-check] [--revert-migration] [--version] [--no-backup] [--shrink-policy SHRINK_POLICY] [--list-backups] [--restore-backup TIMESTAMP] [--add-fence-markers PATH] [--in-place] [--target-host-features TOKENS] [--capture-baseline PATH] [--baseline-label LABEL] [--check-baseline PATH] [--verify-waivers] [--redteam] [--redteam-probes MODULE] [--redteam-report DIR] [--redteam-freshness-check] [--accept-probe-baseline] [--write-integrity-manifest] [--verify-integrity] [--verify-backup TIMESTAMP] [--stale-check] [--stale-remediate] [--stale-no-git] [--stale-restore TS] [--prune-backups KEEP] [--keep-within-days DAYS] [--backup-mirror DIR] [--fleet DIR] [--fleet-frameworks FLEET_FRAMEWORKS] [--fleet-report DIR] [--fleet-allow-no-verify] [--sync-init] [--pin FRAMEWORK] [--sync] [--sync-since COMMIT] [--frameworks FW1,FW2,...] [--goose-source NAME] [--goose-model ID] [--goose-show] [--goose-config PATH] [--package-team SOURCE_DIR] [--package-source-framework NAME]
+.B agentteams [--description PATH] [--project PATH] [--framework NAME] [--output DIR] [--dry-run] [--json] [--overwrite] [--merge] [--yes] [--no-scan] [--cost-routing] [--update] [--prune] [--materialize-native] [--adopt-orphans] [--check] [--refresh-index] [--query-index TEXT] [--query-k N] [--query-strategy QUERY_STRATEGY] [--refresh-code-index] [--query-code TEXT] [--code-query-k N] [--code-query-strategy CODE_QUERY_STRATEGY] [--code-kind CODE_KIND] [--fail-on-legacy-skip] [--no-vscode-tasks] [--refresh-graph] [--refresh-architecture] [--install-git-hooks] [--no-git-hooks] [--code-index-hook] [--no-add-fence-markers] [--scan-security] [--check-budget] [--check-rank] [--self] [--allow-foreign-output] [--allow-external-self-output] [--post-audit] [--auto-correct] [--enrich] [--strict-manual-placeholders] [--no-strict-manual-placeholders] [--security-offline] [--security-max-items N] [--security-no-nvd] [--migrate] [--convert-from DIR] [--interop-from DIR] [--interop-source-framework INTEROP_SOURCE_FRAMEWORK] [--interop-mode INTEROP_MODE] [--bridge-from DIR] [--bridge-source-framework BRIDGE_SOURCE_FRAMEWORK] [--pin-templates] [--reconcile-front-matter] [--reconcile-apply] [--absorb-from DIR] [--absorb-source-framework ABSORB_SOURCE_FRAMEWORK] [--absorb-apply] [--absorb-canonical-dir DIR] [--bridge-check] [--bridge-refresh] [--bridge-merge] [--bridge-no-skills] [--recipe-check] [--revert-migration] [--version] [--no-backup] [--shrink-policy SHRINK_POLICY] [--list-backups] [--restore-backup TIMESTAMP] [--add-fence-markers PATH] [--in-place] [--target-host-features TOKENS] [--allow-unenforced-confinement] [--capture-baseline PATH] [--baseline-label LABEL] [--check-baseline PATH] [--verify-waivers] [--verify-grants] [--issue-grant SPEC.json] [--redteam] [--redteam-probes MODULE] [--redteam-report DIR] [--redteam-freshness-check] [--accept-probe-baseline] [--write-integrity-manifest] [--verify-integrity] [--verify-backup TIMESTAMP] [--stale-check] [--stale-remediate] [--stale-no-git] [--stale-restore TS] [--prune-backups KEEP] [--keep-within-days DAYS] [--backup-mirror DIR] [--fleet DIR] [--fleet-frameworks FLEET_FRAMEWORKS] [--fleet-report DIR] [--fleet-allow-no-verify] [--sync-init] [--pin FRAMEWORK] [--sync] [--sync-since COMMIT] [--frameworks FW1,FW2,...] [--goose-source NAME] [--goose-model ID] [--goose-show] [--goose-config PATH] [--package-team SOURCE_DIR] [--package-source-framework NAME]
 .SH DESCRIPTION
 .PP
 Generate a complete agent team for any project.
@@ -50,6 +50,9 @@ Re\-render drifted files and emit new agents added to the taxonomy. Default beha
 .TP
 .B \-\-prune
 Used with \-\-update: also delete agent files that are no longer part of the team.
+.TP
+.B \-\-materialize\-native
+Used with \-\-update against a BRIDGE target (a .claude/ etc. that bridges to a canonical framework elsewhere): opt in to generating a full NATIVE team over the bridge. Without this flag, \-\-update on a detected bridge fails closed with guidance rather than silently materializing a native team (D3). Detection uses a structured bridge marker (references/bridges/<source>\-to\-<framework>/bridge\-manifest.json for the target framework, or an AGENTTEAMS\-BRIDGE HTML\-comment fence in an entry file), never a substring match on agent bodies.
 .TP
 .B \-\-adopt\-orphans
 Register pre\-existing agent files that the generated taxonomy does not produce (e.g. bespoke custom agents) into the team roster — the orchestrator's handoff list and domain routing — WITHOUT generating or overwriting their files. The opposite of \-\-prune: integrate orphans instead of removing them. Requires the orchestrator to be (re)rendered, so use with \-\-overwrite or \-\-migrate (under \-\-merge the orchestrator front matter is preserved and adoption would not surface).
@@ -113,6 +116,9 @@ Scan generated agent files for security issues (PII, credentials, unresolved pla
 .TP
 .B \-\-check\-budget
 Audit live .agent.md files for token\-budget overrun and prompt\-cache prefix volatility. Read\-only. Exits 1 on fail\-class findings; 0 on warn\-class only. Routes remediation to @agent\-refactor.
+.TP
+.B \-\-check\-rank
+AP\-2: audit live agent files for rank\-conformance — flag any agent whose declared tools exceed what its taxonomy rank permits (C\-3 capability surface vs. rank ceiling + recorded per\-agent overrides). Read\-only, warn\-only: always exits 0. Routes real over\-grants to @security.
 .TP
 .B \-\-self
 Operate on the module's own agent team using .github/agents/_build\-description.json
@@ -231,6 +237,9 @@ With \-\-add\-fence\-markers: rewrite the target file directly instead of produc
 .B \-\-target\-host\-features TOKENS
 Comma\-separated host\-feature subselectors gating opt\-in emission. Tokens are <ns>:<feature>; ns is one of claude, copilot\-vscode, copilot\-cli, bridge:copilot\-vscode\-to\-claude, etc. Examples: 'bridge:copilot\-vscode\-to\-claude:subagents,bridge:copilot\-vscode\-to\-claude:hooks'. Default emission is unchanged when omitted.
 .TP
+.B \-\-allow\-unenforced\-confinement
+Permit generation to proceed when a confined/exclusive privilege_profile is requested on a target that has no OS\-level sandbox to enforce it (e.g. Goose, Codex, Copilot, native Windows). Without this flag, generate FAILS CLOSED (non\-zero exit) rather than emit a boundary that silently does not take effect; with it, the request degrades to the advisory notice.
+.TP
 .B \-\-capture\-baseline PATH
 Capture a deterministic SHA\-256 manifest of the output tree and write it to PATH (e.g., tests/baselines/<target>.json). Used by regression tests to detect emission drift across phases. Skips the normal generation pipeline.
 .TP
@@ -242,6 +251,12 @@ Compare the current output tree against the baseline at PATH and exit non\-zero 
 .TP
 .B \-\-verify\-waivers
 Read\-only: report the validity (signature, expiry, use\-limit, conditions) of every security waiver in references/security\-waivers.log.csv under \-\-output/\-\-project (else CWD). Never mints or consumes a waiver. Exits non\-zero if any waiver is invalid. Requires AGENTTEAMS_WAIVER_SIGNING_KEY to verify signatures; without it, rows report as unverifiable.
+.TP
+.B \-\-verify\-grants
+Read\-only: report the validity (signature, expiry, use\-limit, approver roster) of every cross\-workspace capability grant (P2) in references/capability\-grants.log.csv under \-\-output/\-\-project (else CWD). Never consumes a grant. Exits non\-zero if any grant is invalid. Requires AGENTTEAMS_GRANT_SIGNING_KEY.
+.TP
+.B \-\-issue\-grant SPEC.json
+Mint and sign a cross\-workspace capability grant (P2) from a JSON spec (issuer_team, holder_team, target_path, permitted_ops, expires_at, max_uses, approver, ticket_id, reason_code) and append it to the HOLDER workspace's ledger under \-\-output/\-\-project (else CWD) — point it at the holder, whose generation reads the ledger. Requires AGENTTEAMS_GRANT_SIGNING_KEY and an approver on the holder's roster. The holder's sandbox allowWrite widens to the granted (write) path when the holder team is next generated/updated.
 .TP
 .B \-\-redteam
 Run the standing red\-team audit: the probe battery (phase 1), the review (phase 2), a remediation skeleton (phase 3) and the six self\-audit checks that evaluate the red team itself (phase 6). Never remediates. Exits 0 clean, 1 on a finding, 2 when the HARNESS is broken — a failed control probe, an unimportable probe module, a corpus claim that no longer matches the scanner, or a run that modified the live agent tree. Honours \-\-dry\-run.

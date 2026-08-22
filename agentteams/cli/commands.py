@@ -72,6 +72,98 @@ def _resolve_output_dir(args: argparse.Namespace) -> Path:
     return Path.cwd()
 
 
+def _run_verify_grants(args: argparse.Namespace) -> int:
+    """``--verify-grants``: read-only report of every cross-workspace grant's validity.
+
+    Resolves the workspace root from ``--output``/``--project`` (else CWD), validates
+    every row in ``references/capability-grants.log.csv`` (signature, expiry, use-limit,
+    approver roster) without consuming any, and prints one line per problem. Returns 0
+    when all grants are valid (or none exist), 1 otherwise.
+
+    Args:
+        args: Parsed CLI namespace.
+
+    Returns:
+        Process exit code.
+    """
+    from agentteams.cli import grants
+
+    output_dir = _resolve_output_dir(args)
+    log_path = output_dir / grants.GRANT_LOG_REL
+    try:
+        problems = grants.verify_grants(output_dir)
+    except grants.GrantError as exc:
+        print(f"Error: {exc}", file=sys.stderr)
+        return 1
+    if not log_path.exists():
+        print(f"No capability grants found at {log_path}")
+        return 0
+    if not problems:
+        print(f"All capability grants valid at {log_path}")
+        return 0
+    for problem in problems:
+        print(f"  [BAD] {problem}", file=sys.stderr)
+    print(f"\n{len(problems)} invalid capability grant(s).", file=sys.stderr)
+    return 1
+
+
+def _run_issue_grant(args: argparse.Namespace) -> int:
+    """``--issue-grant SPEC.json``: mint and sign a cross-workspace capability grant.
+
+    Reads a JSON spec (issuer_team, holder_team, target_path, permitted_ops, expires_at,
+    max_uses, approver, ticket_id, reason_code), generates a unique grant_id and issue
+    timestamp, signs with ``AGENTTEAMS_GRANT_SIGNING_KEY``, and appends it to the HOLDER
+    workspace's ledger — ``--output``/``--project`` must point at the holder, since the
+    holder's own generation reads its ledger to widen its sandbox. Fails closed if the
+    key is unset, the approver is off the holder's roster, or the spec is malformed.
+
+    Args:
+        args: Parsed CLI namespace (``issue_grant`` holds the spec path).
+
+    Returns:
+        Process exit code (0 on success).
+    """
+    import json
+    import secrets
+    from datetime import datetime, timezone
+
+    from agentteams.cli import grants
+
+    output_dir = _resolve_output_dir(args)
+    try:
+        spec = json.loads(Path(args.issue_grant).read_text(encoding="utf-8"))
+    except (OSError, ValueError) as exc:
+        print(f"Error: unable to read grant spec {args.issue_grant!r}: {exc}", file=sys.stderr)
+        return 1
+    required = ("issuer_team", "holder_team", "target_path", "permitted_ops",
+                "expires_at", "max_uses", "approver", "ticket_id", "reason_code")
+    missing = [k for k in required if k not in spec]
+    if missing:
+        print(f"Error: grant spec missing required field(s): {', '.join(missing)}", file=sys.stderr)
+        return 1
+    try:
+        record = grants.issue_grant(
+            output_dir,
+            issuer_team=str(spec["issuer_team"]), holder_team=str(spec["holder_team"]),
+            target_path=str(spec["target_path"]), permitted_ops=str(spec["permitted_ops"]),
+            expires_at=str(spec["expires_at"]), max_uses=int(spec["max_uses"]),
+            approver=str(spec["approver"]), ticket_id=str(spec["ticket_id"]),
+            reason_code=str(spec["reason_code"]),
+            grant_id=f"grant-{secrets.token_hex(8)}",
+            timestamp=datetime.now(timezone.utc).isoformat(),
+        )
+    except (grants.GrantError, ValueError) as exc:
+        print(f"Error: {exc}", file=sys.stderr)
+        return 1
+    print(
+        f"Issued capability grant {record['grant_id']}: {record['issuer_team']} → "
+        f"{record['holder_team']} may {record['permitted_ops']} {record['target_path']} "
+        f"(expires {record['expires_at']}, max_uses {record['max_uses']})"
+    )
+    print(f"  appended to {output_dir / grants.GRANT_LOG_REL}")
+    return 0
+
+
 def _run_write_integrity_manifest(args: argparse.Namespace) -> int:
     """``--write-integrity-manifest``: re-record the enforcement-module manifest.
 

@@ -428,6 +428,41 @@
         "type": "string"
       }
     },
+    "host_features": {
+      "type": "array",
+      "description": "Active host-feature subselector tokens (<ns>:<feature>) gating optional per-target emission (e.g. claude:hooks, claude:sandbox). Set from --target-host-features and from privilege_profile expansion. Previously carried on the manifest un-declared; represented here so the schema (authority rank #2) matches the runtime.",
+      "items": {
+        "type": "string"
+      }
+    },
+    "team_id": {
+      "type": "string",
+      "description": "Stable identity this team is known by for cross-workspace capability grants (P2). Always emitted by build_manifest: the project-description team_id, or the slugified project_name when absent.",
+      "pattern": "^[a-z0-9][a-z0-9-]*$"
+    },
+    "protected_read_paths": {
+      "type": "array",
+      "description": "P3a read-exclusion deny paths carried from the project description; only meaningful under privilege_profile: exclusive (emitted only when set).",
+      "items": {
+        "type": "string"
+      }
+    },
+    "privilege_profile": {
+      "type": "string",
+      "enum": ["cooperative", "confined", "exclusive"],
+      "description": "Workspace write-confinement posture carried from the project description. confined/exclusive imply the claude:sandbox host feature (see project-description.schema.json)."
+    },
+    "enforce_decision_signing": {
+      "type": "boolean",
+      "description": "Strict agent-privilege switch carried from the project description (defaults true). When true, an unsigned authorizing security-decision row is refused (fail-closed) rather than trusted on its author name. Emitted into the team as references/agent-privilege.json, read by the security gate at enforcement time (see project-description.schema.json)."
+    },
+    "workspace_write_roots": {
+      "type": "array",
+      "description": "Directories the confined agent may write to, relative to the merged .claude/settings.json at project root. Defaults to [\".\"] when confinement is active and no override is given.",
+      "items": {
+        "type": "string"
+      }
+    },
     "domain_agent_slugs": {
       "type": "array",
       "items": {

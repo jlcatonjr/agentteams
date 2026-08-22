@@ -157,6 +157,11 @@ tests/constitutional-redteam-results.json
 references/runtime-handoffs.json
 .github/references/
 
-# research/ holds nested, independently git-managed researchteam repositories (each with its own
-# .git) rather than files this repo's own git should track — e.g. research/workflowTesting/.
+# agentteams-research/ is a single, independent PRIVATE research repository (its own .git),
+# gitignored here so its contents are access-gated by that separate repo rather than tracked by
+# agentteams. Renamed from research/ on 2026-08-21 (consolidated to one research repo).
+/agentteams-research/
 /research/
+
+# Local environment / VM credentials (never commit)
+.env

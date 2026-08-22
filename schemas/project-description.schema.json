@@ -246,6 +246,36 @@
         "enum": ["research_verification"]
       }
     },
+    "privilege_profile": {
+      "type": "string",
+      "enum": ["cooperative", "confined", "exclusive"],
+      "default": "cooperative",
+      "description": "Opt-in workspace write-confinement posture. `cooperative` (default) is today's behavior: agents are trusted to respect the workspace, no OS boundary emitted. `confined` and `exclusive` expand to the `claude:sandbox` host feature, which emits Claude Code's native OS-level sandbox block (write-confines Bash and child processes to workspace_write_roots) into the settings example the operator merges — inert until merged. `exclusive` adds OS read-exclusion on top of `confined` (P3a): it also denies this team reading a default deny set plus any `protected_read_paths`, and prints a P3b inbound-hardening advisory. This is OUTBOUND (it seals this team's reads); keeping OTHER teams out of this workspace is operator filesystem hardening, not something exclusive enforces. The effective feature set is the UNION of this expansion and any --target-host-features tokens, so cooperative never strips an explicitly-requested claude:sandbox token. Only the Claude framework enforces this today; on non-sandbox hosts (Goose, Codex, Copilot, native Windows) selecting confined/exclusive emits an advisory notice, not enforcement."
+    },
+    "workspace_write_roots": {
+      "type": "array",
+      "description": "Directories the confined agent may write to, relative to the merged .claude/settings.json at the project root. Only meaningful when privilege_profile is confined/exclusive (or claude:sandbox is selected directly). Defaults to [\".\"] — the whole generated project tree is the workspace.",
+      "items": {
+        "type": "string"
+      }
+    },
+    "team_id": {
+      "type": "string",
+      "description": "Stable identity this workspace/team is known by for cross-workspace capability grants (P2). A grant is issued BY one team_id and held BY another; the holder's generation-time sandbox-widening reads grants where holder_team == this id. Defaults to the slugified project_name when absent. IMPORTANT: the id is operator-assigned and must be UNIQUE across your workspaces — two teams sharing a team_id share each other's granted reach. Under the symmetric-key model the holder identity is a name (not key-authenticated); it is safe only because grants are consumed at operator-run generation time, never at agent runtime.",
+      "pattern": "^[a-z0-9][a-z0-9-]*$"
+    },
+    "protected_read_paths": {
+      "type": "array",
+      "description": "P3a read-exclusion: extra paths the `exclusive` privilege_profile OS-denies this team (and its subprocesses) from reading, on top of a curated default deny set of sensitive dotfile locations. Add sibling-workspace roots here to stop THIS team reading them. Only meaningful with privilege_profile: exclusive. This is OUTBOUND hardening (it seals this team's reads); it does NOT stop other teams from reading THIS workspace, which is operator filesystem hardening (see the exclusive-profile advisory printed at generation and the docs). Paths use the sandbox syntax (home-relative or absolute).",
+      "items": {
+        "type": "string"
+      }
+    },
+    "enforce_decision_signing": {
+      "type": "boolean",
+      "default": true,
+      "description": "Strict agent-privilege switch (agent-position axis). When true, an AUTHORIZING security-decision row (a PASS or HALT-RETRACTED that clears a destructive/privileged action) is honoured ONLY if decision signing is active and the row's signature verifies; an unsigned authorization is refused (fail-closed) rather than trusted on its author name alone — closing the roster/author-spoof path in the signing-inactive configuration. Emitted into the generated team as references/agent-privilege.json, which the security gate reads at enforcement time. DEFAULTS ON when the team is (re)generated or updated: a post-update notice names how to turn it off (set this field false in your brief and re-update). A workspace with NO emitted config is treated as OFF, so a team that has not yet been updated to this feature never breaks by surprise — the switch turns on precisely when you update. Set false to keep the legacy behavior (an unsigned authorizing row is honoured on its author name)."
+    },
     "components": {
       "type": "array",
       "description": "Workstream components. One workstream expert agent is generated per component.",

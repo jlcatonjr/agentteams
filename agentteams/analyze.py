@@ -16,7 +16,7 @@ from typing import Any
 from agentteams.output_plan import _plan_output_files  # noqa: F401,E402
 
 from agentteams import tool_metadata_catalog
-from agentteams._utils import _slugify_tool_name
+from agentteams._utils import _slugify, _slugify_tool_name
 from agentteams.mcp_detect import detect_mcp_candidates
 
 from agentteams.recipe_fields import (  # noqa: E402,F401 (carved CH-07; re-exported)
@@ -231,6 +231,32 @@ def build_manifest(description: dict[str, Any], *, framework: str = "copilot-vsc
     doc_site_config_file = description.get("doc_site_config_file")
     retrieval_integration = _normalize_retrieval_integration(description.get("retrieval_integration"))
     retrieval_enabled = retrieval_integration.get("mode", "none") != "none"
+
+    # Workspace privilege profile (opt-in write-confinement posture). Default
+    # "cooperative" preserves existing behavior; confined/exclusive expand to the
+    # claude:sandbox host feature in the CLI layer (host_features.expand_privilege_profile),
+    # which emits Claude Code's native OS-level sandbox block. Carried onto the manifest
+    # so the emitter and the expansion both read a single source of truth.
+    from agentteams import host_features
+
+    privilege_profile = host_features.validate_privilege_profile(
+        description.get("privilege_profile")
+    )
+    workspace_write_roots = description.get("workspace_write_roots")
+
+    # Strict agent-privilege switch (enforce decision signing). Defaults ON: an absent field
+    # means the team gets the enforcement when it is (re)generated/updated (the emitted
+    # references/agent-privilege.json is what the gate reads; an absent file is treated as
+    # OFF at read time, so a not-yet-updated workspace never breaks by surprise). Set false
+    # in the brief to keep the legacy behavior.
+    enforce_decision_signing = description.get("enforce_decision_signing")
+    if enforce_decision_signing is None:
+        enforce_decision_signing = True
+    enforce_decision_signing = bool(enforce_decision_signing)
+
+    # Stable team identity for cross-workspace capability grants (P2; see schema). Slug
+    # default made pattern-safe (_slugify can leave a leading hyphen or empty for non-ASCII).
+    team_id = description.get("team_id") or _slugify(project_name).lstrip("-") or "team"
 
     # Archetype selection
     if "selected_archetypes" in description:
@@ -461,6 +487,11 @@ def build_manifest(description: dict[str, Any], *, framework: str = "copilot-vsc
         "deliverable_type": deliverable_type,
         "output_format": output_format,
         "conversion_pipeline": conversion_pipeline,
+        "team_id": team_id,
+        "privilege_profile": privilege_profile,
+        "enforce_decision_signing": enforce_decision_signing,
+        **({"workspace_write_roots": list(workspace_write_roots)} if workspace_write_roots else {}),
+        **({"protected_read_paths": list(description["protected_read_paths"])} if description.get("protected_read_paths") else {}),
         "retrieval_trigger_contract_version": retrieval_integration.get("trigger_contract_version", "v1"),
         "retrieval_integration": retrieval_integration,
         **(

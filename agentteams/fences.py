@@ -46,6 +46,7 @@ from agentteams.front_matter_merge import (  # noqa: F401
     _merge_front_matter,
     _parse_capability_list,
     _render_front_matter,
+    _restore_blanked_front_matter_blocks,
 )
 
 _LIST_ITEM_RE = re.compile(r"^\s*(?:[-*+]\s|\d+\.\s)", re.MULTILINE)

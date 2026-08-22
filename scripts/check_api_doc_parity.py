@@ -50,7 +50,10 @@ _PKG_DIR = _ROOT / "agentteams"
 _DOCS_DIR = _ROOT / "docs_src" / "api-reference"
 
 # Pages that intentionally have no backing module (documentation/landing pages).
-_NON_MODULE_PAGES = frozenset({"index", "feature-inventory"})
+# workspace-privilege-scoping is a cross-cutting feature page spanning several
+# modules (frameworks/claude, host_features, analyze, cli/generate), not a single
+# module's reference — like feature-inventory it documents a capability, not an API.
+_NON_MODULE_PAGES = frozenset({"index", "feature-inventory", "workspace-privilege-scoping"})
 
 # Modules that are intentionally internal and not expected to carry a public
 # API-reference page. Anything starting with ``_`` is treated as private too.

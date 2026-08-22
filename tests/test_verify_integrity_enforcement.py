@@ -58,3 +58,21 @@ def test_absent_manifest_keeps_legacy_behavior(tmp_path) -> None:
     root = tmp_path / "bare"
     root.mkdir()
     assert _run_verify_integrity(_args(root)) == 0
+
+
+def test_source_tree_enforcement_integrity_is_currently_consistent() -> None:
+    """R5/D5: the shipped agentteams source must be manifest-consistent.
+
+    This is the invariant the `--check` integrity gate enforces (fail-closed at CI): every
+    ENFORCEMENT_MODULES entry is present in references/enforcement-integrity.json and its
+    digest matches. A red result here means an enforcement module was edited without
+    regenerating the manifest (`--write-integrity-manifest`) — the exact D5 trap.
+    """
+    from agentteams.cli.generate import _verify_enforcement_integrity
+
+    findings = _verify_enforcement_integrity()
+    assert findings == [], (
+        "enforcement-integrity drift: "
+        + "; ".join(f.describe() for f in findings)
+        + " — regenerate with `agentteams --write-integrity-manifest`."
+    )

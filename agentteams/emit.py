@@ -34,6 +34,7 @@ from agentteams.atomicio import (  # noqa: F401 — re-exported for callers/test
 from agentteams.fences import (  # noqa: E402,F401  (carved for CH-07; re-exported)
     _merge_front_matter,
     _render_front_matter,
+    _restore_blanked_front_matter_blocks,
     MergeResult,
     _BRIDGE_FENCE_BEGIN_RE,
     _FENCE_BEGIN_RE,
@@ -659,6 +660,16 @@ def emit_all(
                     f"{rel_path}: {notice} — preserved on-disk value; edit the file directly if "
                     f"the template's version is wanted"
                 )
+            # Last line of defense against block-collapse (issue #131 recurrence, 2026-08-21):
+            # never write a front matter that BLANKS a roster/list block populated on disk. The
+            # empty value can arrive from a non-emit (fleet/sync/interop) path this merge never
+            # sees, so the guard compares the about-to-be-written content against the real
+            # on-disk file and restores any populated block that collapsed to empty.
+            merge_result.merged_content, _fm_guard_notices = _restore_blanked_front_matter_blocks(
+                merge_result.merged_content, existing_text
+            )
+            for notice in _fm_guard_notices:
+                result.notices.append(f"{rel_path}: {notice}")
             # Partial fence adoption: a template fenced a section this team predates, so the
             # fenced block landed beside the deployed file's unfenced copy. Reported, never
             # auto-resolved — see fences._detect_duplicate_sections.

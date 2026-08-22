@@ -13,6 +13,7 @@ from __future__ import annotations
 import csv
 import hashlib
 import hmac
+import json
 import os
 import re
 from pathlib import Path
@@ -307,6 +308,41 @@ def sign_decision_row(row: dict[str, str], *, key: str | None = None) -> str:
     ).hexdigest()
 
 
+#: Where the strict agent-privilege switch is emitted (mirrors artifacts.AGENT_PRIVILEGE_REL_PATH).
+_AGENT_PRIVILEGE_CONFIG = "agent-privilege.json"
+
+
+def _enforce_decision_signing(output_dir: Path) -> bool:
+    """True when this workspace requires authorizing decision rows to be signed.
+
+    Reads the switch emitted at generate/update (``references/agent-privilege.json``). An
+    ABSENT file is treated as OFF — a workspace that predates this feature keeps the legacy
+    behavior (an unsigned authorizing row honoured on its author name) until it is updated,
+    which is when the switch turns ON by default. A PRESENT-but-unreadable file fails CLOSED
+    (raises): a security switch that cannot be read must not silently disable itself.
+
+    Args:
+        output_dir: The team root.
+
+    Returns:
+        Whether strict enforcement is active.
+
+    Raises:
+        RuntimeError: The config file exists but cannot be parsed.
+    """
+    config_path = output_dir / "references" / _AGENT_PRIVILEGE_CONFIG
+    if not config_path.exists():
+        return False
+    try:
+        payload = json.loads(config_path.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError) as exc:
+        raise RuntimeError(
+            f"agent-privilege switch ({config_path}) is present but unreadable: {exc}. "
+            "Refusing to silently disable strict enforcement — fix or remove the file."
+        ) from exc
+    return bool(payload.get("enforce_decision_signing"))
+
+
 def _assert_authorizing_row_is_authentic(
     row: dict[str, str], *, output_dir: Path, signing_active: bool, action: str
 ) -> None:
@@ -331,6 +367,19 @@ def _assert_authorizing_row_is_authentic(
         )
 
     if not signing_active:
+        # Strict agent-privilege switch (enforce_decision_signing): when ON, an unsigned
+        # authorization is REFUSED rather than honoured on its author name alone — closing
+        # the roster/author-spoof path in the signing-inactive configuration. When OFF (the
+        # switch absent, i.e. a workspace that predates the feature, or explicitly false),
+        # the legacy behavior stands: the author check above is the only gate.
+        if _enforce_decision_signing(output_dir):
+            raise RuntimeError(
+                f"decision authorizing '{action}' is UNSIGNED, but strict agent-privilege "
+                f"enforcement (enforce_decision_signing) is ON for this workspace: an unsigned "
+                f"authorization is refused (fail-closed). Activate decision signing — add a "
+                f"`signature` column to the decisions log or set AGENTTEAMS_DECISION_SIGNING_KEY "
+                f"— or set enforce_decision_signing:false in the brief and re-run --update."
+            )
         return
 
     expected = sign_decision_row(row)

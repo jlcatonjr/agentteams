@@ -6,6 +6,169 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### fixed (source remediation from the securityInfrastructure handoff)
+
+- **`--update` no longer silently blanks an orchestrator's `agents:` roster (D1).** The
+  copilot-vscode and goose team-ref pruners built `team_slugs` only from `output_files` (the
+  regenerated subset during `--update`), so deployed teammates the run did not re-emit were
+  dropped — the empty case wrote `agents: []`. `_get_team_slugs`/`_team_slugs` now union the
+  full brief roster (`agent_slug_list`) and the on-disk deployed agents (`existing_agent_slugs`,
+  populated during `--update`), so roster-ref lifecycle tracks file lifecycle — only `--prune`
+  (which deletes the file) retires a roster entry. The pruner also warns on any drop and never
+  emits `agents: []` for a populated orchestrator roster. Regression test:
+  `tests/test_roster_pruner_survival.py`.
+- **`--update` against a bridge target no longer silently materializes a native team (D3).**
+  A new bridge gate fails closed (with guidance) when `--update` targets a detected bridge,
+  unless `--materialize-native` is passed. Detection is positive and structured (a
+  `references/bridges/<source>-to-<framework>/bridge-manifest.json` for the target, or an
+  `AGENTTEAMS-BRIDGE` HTML-comment fence in a framework entry file) — never a substring match
+  on agent bodies (which would false-positive on constitutional Rule 14 prose). Test:
+  `tests/test_update_bridge_gate.py`.
+- **`--check` now fails closed on enforcement-integrity drift (D5).** It runs
+  `integrity.verify()` against the agentteams source tree and exits non-zero when an
+  ENFORCEMENT_MODULES entry drifts from — or is absent from — the integrity manifest (an
+  unmanifested enforcement module is a silently-unverified control). No-op outside the source
+  tree (a consumer checkout has no manifest).
+
+### added (agent-position privilege — strict decision-signing switch)
+
+- **`enforce_decision_signing`** (project-description field, default `true`) — a strict
+  agent-privilege switch that makes the security gate **refuse an unsigned authorizing
+  decision row** (PASS / CONDITIONAL PASS / HALT-RETRACTED) instead of trusting it on its
+  author name alone, closing the roster/author-spoof path in the signing-inactive
+  configuration. Emitted into each team as `references/agent-privilege.json`; the gate reads
+  it at enforcement time. **Defaults on at `--update`** with a post-update notice naming the
+  opt-out; an **absent** config is treated as off so a not-yet-updated team never breaks by
+  surprise, and a present-but-unreadable config fails closed. `agentteams/cli/decision_log.py`
+  is now integrity-tracked (it carries C-2 HALT-finality and C-5 authorization enforcement).
+  Known residual (documented): the switch file lives in the write root, so an in-sandbox
+  agent can still disable it — the durable harness-level fix is tracked in the remediation
+  log. Tests in `tests/test_build_team_security_gates.py`.
+
+### added (agent-position privilege — rank-conformance validator, AP-2)
+
+- **`--check-rank`** — a read-only validator that enforces the C-3 capability surface
+  *against agent taxonomy rank*: it flags any agent whose declared `tools:` exceeds what
+  its derived rank (orchestrator / governance / domain / workstream-expert) permits. This
+  is the first enforcement on the "strict privilege by agent position" axis — turning the
+  already-binding per-agent `tools:` grant into one checked against position. Policy lives
+  as data in `agentteams/rank_conformance.py` (`TIER_CEILINGS` + per-agent
+  `PER_AGENT_OVERRIDES`, each override the auditable record of a deliberate widening);
+  disposition is **warn-only** (exit 0) while the policy beds in. The shipped Claude team
+  validates clean. Tests: `tests/test_rank_conformance.py`.
+
+### hardened (workspace privilege scoping — close silent-failure paths)
+
+- **Approver roster is now mandatory for cross-workspace grants (P2-2).** Issuing,
+  verifying, and generation-time widening fail closed when `references/security-approvers.txt`
+  is absent or empty, instead of falling back to a built-in `{security,@security}` default
+  that let a grant naming `@security` self-clear.
+- **Unknown `privilege_profile` fails closed (CC-6).** A typo'd profile (e.g. `exclusve`)
+  is rejected at build with a non-zero exit rather than silently downgrading to unconfined.
+- **Confinement on an unenforceable host fails closed (P1-2).** `confined`/`exclusive` on
+  a non-sandbox framework (Goose/Codex/Copilot/native Windows) now exits non-zero unless
+  `--allow-unenforced-confinement` is passed; previously it emitted only an advisory.
+- **Grant hardening.** `target_path` is rejected at issue when empty, `/`, home-rooted, or
+  `..`-escaping (P2-4); a malformed `expires_at` is rejected at issue instead of crashing a
+  later check (P2-8); `max_uses` (validated but not consumed) prints a NOTE at issue so its
+  reusable-until-expiry behavior is not mistaken for one-shot (P2-6).
+- **Grant ledger is now hash-chained (P2-3).** Each row carries a signed `prev_digest`
+  linking it to its predecessor, so deleting or reordering a signed grant row is detected
+  at every read (`--verify-grants`, generation-time widening, and the append path all fail
+  closed on a broken chain) — per-row signatures already prevented forgery but left
+  deletion silent. Audit outcome: relocating the ledger/roster out of the write root and
+  whole-file hashing were **rejected** (a co-located hash is a speed bump the same editor
+  regenerates; whole-file hashing an append-only ledger is a false-positive treadmill). The
+  roster's real fix — enforcing decision signing so a tampered roster cannot authorize — is
+  tracked as a separate follow-up.
+- **`~/.azure` added to the default read-exclusion set (P3-7)**; `~/.config/gh` and
+  `~/.netrc` are deliberately kept out (they break the `gh`/`git` toolchains the PR agents
+  use). Docs now note `denyRead` covers files, not environment variables.
+- **Stronger `~`-expansion self-check guidance (P3-3)** naming the silent-no-op risk if
+  Claude Code does not expand `~` before the OS deny.
+- **New privilege regression probe (CC-7)** — `tests/test_privilege_regression_probe.py`
+  fails if any profile emits an empty or unenforced boundary.
+
+### added (workspace privilege scoping P3 — read-exclusion + inbound-hardening, macOS)
+
+- **`exclusive` privilege_profile now does something** (was a `confined` placeholder). It
+  adds OS read-exclusion (P3a): `sandbox.filesystem.denyRead` of a curated default deny
+  set plus any `protected_read_paths`, so the team and its Bash/child processes are
+  OS-denied from reading those paths (macOS Seatbelt / Linux bubblewrap). `allowRead`
+  re-opens the write roots so a P2-granted write target stays readable (P2×P3 fix). A
+  Seatbelt spike confirmed a read-*denylist* works while a read-*allowlist* starves the
+  toolchain — hence denylist.
+- **Honest framing.** P3a is OUTBOUND (it seals *this* team's reads); it does NOT stop
+  other teams reading this workspace. The inbound "only my team touches my tree" property
+  is operator filesystem hardening (P3b) — `chmod 700`/`chown`, optionally a dedicated
+  macOS user — emitted as a `privilege-profile-exclusive-inbound-hardening` advisory
+  (printed + persisted), never a claimed guarantee. The feature is read-exclusion
+  hardening, not enforced domain exclusivity.
+- **All three properties independently optional**, documented as a selection matrix:
+  cooperative (none) / confined (P1) / exclusive (P1+P3); P2 (grants) orthogonal.
+- New optional `protected_read_paths` on the project description + manifest; `exclusive`
+  read-exclusion is emitted only for that profile (confined's block stays byte-identical).
+  Enforced via Claude Code's documented sandbox backends — macOS (Seatbelt, additionally
+  spiked directly) and Linux/WSL2 (bubblewrap: the kernel deny was observed working once
+  on a real VM — bwrap 0.11.1, Ubuntu 26.04 aarch64, one hand-built invocation — but the
+  Claude-Code-to-`bwrap` **argument construction** from agentteams' `denyRead` JSON stays
+  unverified, so Linux is mechanism-observed, not verified end-to-end; tracked in the
+  remediation log) — from one OS-agnostic emitted config. Tests in
+  `tests/test_workspace_privilege_scoping.py`.
+
+### added (workspace privilege scoping P2 — cross-workspace capability grants)
+
+- **Signed cross-workspace capability grants** — one team (issuer) authorizes another
+  (holder) to write a specific path in the issuer's workspace, via an HMAC-signed,
+  scoped, expiring row deposited in the HOLDER's `references/capability-grants.log.csv`
+  (a bearer capability the holder holds and its own generation reads). When the holder is
+  next generated/updated with the sandbox on, a granted path that permits `write` merges
+  into its sandbox `allowWrite` (verified against Seatbelt: a granted foreign dir is
+  writable, an ungranted one stays denied). The approver roster is enforced at issue time
+  AND at widening, and `permitted_ops` is honored (a read-only grant does not widen a
+  write boundary). New `agentteams/cli/grants.py` + neutral
+  `agentteams/cli/signed_ledger.py` (HMAC sign/verify, ISO expiry, symlink/`..`-safe path
+  containment — the seam where an asymmetric backend would later slot in).
+- **Team identity** — new optional `team_id` on the project description (defaults to the
+  slugified project name), carried on the manifest; the id a grant is issued BY / TO.
+- **CLI** — `--issue-grant SPEC.json` (mint+sign from a JSON spec; needs
+  `AGENTTEAMS_GRANT_SIGNING_KEY` + an approver on the roster) and `--verify-grants`
+  (read-only audit, mirrors `--verify-waivers`). Man page + `cli-reference.md` updated;
+  new reference section in `workspace-privilege-scoping.md`.
+- **Honest trust model, documented** — symmetric HMAC defends a keyless/injected agent,
+  NOT an adversarial peer team (single-trusted-operator model, per the 2026-08-21
+  decision). Enforcement is generation-time only (a grant is inert until the holder
+  re-updates — no runtime path widens an agent's own boundary). A grant never overrides
+  a `@security` HALT (C-2 parity). Filesystem-local; no cross-machine delivery. The
+  fail-open runtime hook considered in design was dropped as advertising protection it
+  could not deliver. Tests in `tests/test_capability_grants.py`.
+
+### added (workspace privilege scoping — opt-in Claude sandbox write-confinement)
+
+- **`claude:sandbox` host feature + `privilege_profile` project field** — opt-in workspace
+  write-confinement for the Claude Code target (Stage 1 of the privilege model;
+  investigation in `references/plans/workspace-privilege-scoping.report.md`). A project
+  declares `privilege_profile: confined` (or `exclusive`) — or passes
+  `--target-host-features claude:sandbox` directly — and the Claude adapter injects a
+  `sandbox` block into the emitted `.claude/settings.hooks.example.json`. Once the operator
+  merges it, Claude Code's native OS-level sandbox (macOS Seatbelt / Linux + WSL2 bubblewrap)
+  confines every Bash command **and child process** file write to `workspace_write_roots`
+  (default `["."]`), with `allowUnsandboxedCommands: false` and automatic `.claude/`
+  self-protection. Empirically verified against Seatbelt (bash redirect + Python child both
+  denied outside the root).
+- **Honest limits, enforced not just documented** — the block is inert until the operator
+  merges it (agentteams never writes `settings.json` directly, per the standing hooks
+  convention). On non-sandbox frameworks (goose/codex/copilot/native-Windows) a
+  confined/exclusive profile emits a visible `WARNING` and records a
+  `privilege-profile-unenforced-host` manifest advisory rather than silently doing nothing.
+  The effective feature set is the union of `--target-host-features` and the profile
+  expansion; `cooperative` (default) changes nothing and never strips an explicit token.
+- Schema: additive `privilege_profile`/`workspace_write_roots` on
+  `project-description.schema.json`; `host_features`/`privilege_profile`/`workspace_write_roots`
+  represented on `team-manifest.schema.json`. New reference page
+  `docs_src/api-reference/workspace-privilege-scoping.md`; `host-features.md` documents the
+  `claude:sandbox` token. Tests in `tests/test_workspace_privilege_scoping.py`.
+
 ### added (redteam model-scoring reproducibility + attack-generation harnesses)
 
 - **`agentteams/provenance.py`** (new) — a reusable, stdlib-only provenance stamp (`Provenance`

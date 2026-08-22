@@ -129,6 +129,18 @@ def _build_parser() -> argparse.ArgumentParser:
         help="Used with --update: also delete agent files that are no longer part of the team.",
     )
     parser.add_argument(
+        "--materialize-native",
+        action="store_true",
+        dest="materialize_native",
+        help="Used with --update against a BRIDGE target (a .claude/ etc. that bridges to a "
+             "canonical framework elsewhere): opt in to generating a full NATIVE team over "
+             "the bridge. Without this flag, --update on a detected bridge fails closed with "
+             "guidance rather than silently materializing a native team (D3). Detection uses "
+             "a structured bridge marker (references/bridges/<source>-to-<framework>/"
+             "bridge-manifest.json for the target framework, or an AGENTTEAMS-BRIDGE "
+             "HTML-comment fence in an entry file), never a substring match on agent bodies.",
+    )
+    parser.add_argument(
         "--adopt-orphans",
         action="store_true",
         dest="adopt_orphans",
@@ -343,6 +355,18 @@ def _build_parser() -> argparse.ArgumentParser:
             "Audit live .agent.md files for token-budget overrun and "
             "prompt-cache prefix volatility. Read-only. Exits 1 on fail-class "
             "findings; 0 on warn-class only. Routes remediation to @agent-refactor."
+        ),
+    )
+    parser.add_argument(
+        "--check-rank",
+        action="store_true",
+        dest="check_rank",
+        help=(
+            "AP-2: audit live agent files for rank-conformance — flag any agent "
+            "whose declared tools exceed what its taxonomy rank permits "
+            "(C-3 capability surface vs. rank ceiling + recorded per-agent "
+            "overrides). Read-only, warn-only: always exits 0. Routes real "
+            "over-grants to @security."
         ),
     )
     parser.add_argument(
@@ -753,6 +777,19 @@ def _build_parser() -> argparse.ArgumentParser:
         ),
     )
     parser.add_argument(
+        "--allow-unenforced-confinement",
+        action="store_true",
+        dest="allow_unenforced_confinement",
+        default=False,
+        help=(
+            "Permit generation to proceed when a confined/exclusive privilege_profile "
+            "is requested on a target that has no OS-level sandbox to enforce it (e.g. "
+            "Goose, Codex, Copilot, native Windows). Without this flag, generate FAILS "
+            "CLOSED (non-zero exit) rather than emit a boundary that silently does not "
+            "take effect; with it, the request degrades to the advisory notice."
+        ),
+    )
+    parser.add_argument(
         "--capture-baseline",
         metavar="PATH",
         dest="capture_baseline",
@@ -796,6 +833,35 @@ def _build_parser() -> argparse.ArgumentParser:
             "CWD). Never mints or consumes a waiver. Exits non-zero if any waiver "
             "is invalid. Requires AGENTTEAMS_WAIVER_SIGNING_KEY to verify "
             "signatures; without it, rows report as unverifiable."
+        ),
+    )
+    parser.add_argument(
+        "--verify-grants",
+        action="store_true",
+        dest="verify_grants",
+        default=False,
+        help=(
+            "Read-only: report the validity (signature, expiry, use-limit, approver "
+            "roster) of every cross-workspace capability grant (P2) in "
+            "references/capability-grants.log.csv under --output/--project (else CWD). "
+            "Never consumes a grant. Exits non-zero if any grant is invalid. Requires "
+            "AGENTTEAMS_GRANT_SIGNING_KEY."
+        ),
+    )
+    parser.add_argument(
+        "--issue-grant",
+        dest="issue_grant",
+        default=None,
+        metavar="SPEC.json",
+        help=(
+            "Mint and sign a cross-workspace capability grant (P2) from a JSON spec "
+            "(issuer_team, holder_team, target_path, permitted_ops, expires_at, "
+            "max_uses, approver, ticket_id, reason_code) and append it to the HOLDER "
+            "workspace's ledger under --output/--project (else CWD) — point it at the "
+            "holder, whose generation reads the ledger. Requires "
+            "AGENTTEAMS_GRANT_SIGNING_KEY and an approver on the holder's roster. The "
+            "holder's sandbox allowWrite widens to the granted (write) path when the "
+            "holder team is next generated/updated."
         ),
     )
     parser.add_argument(
