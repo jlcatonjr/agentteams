@@ -6,6 +6,22 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### added
+
+- **Infrastructure-security layer model for generated teams.** A new
+  `security-infrastructure-layers.reference.md` is emitted into every generated team — the
+  deployed-system companion to the agentic `@security` surface and the per-OS hardening
+  references. It organizes the security of the program/server/service a project *builds and
+  operates* into eight defense-in-depth layers (L0 governance → L7 resilience), each with the
+  infrastructure development, selection criteria, anchor tools, a control verb
+  (detect/reactive-block/inline-prevent/harden/compliance-scan/recover), and a maintenance loop,
+  plus a consolidated catalog of ~70 verified open-source tools with licenses and a dated
+  currency stamp (non-OSS flagged). Wired via `output_plan.py`, template ledger `TA-048`, and a
+  distinct "Infrastructure security (the deployed system)" pointer in `security.template.md`
+  (`security_rules_invariant` v=7) — controls built by the producing/workstream agents and
+  reviewed read-only by `@security`, kept distinct from agent security. Grounded in the
+  `agentteams-research/security-infrastructure` 8-layer, 78-source foundation.
+
 ### fixed (source remediation from the securityInfrastructure handoff)
 
 - **`--update` no longer silently blanks an orchestrator's `agents:` roster (D1).** The
