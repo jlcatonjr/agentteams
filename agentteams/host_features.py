@@ -131,14 +131,46 @@ _PROFILE_FEATURE_TOKENS: dict[str, tuple[str, ...]] = {
 }
 
 
+#: The privilege_profile values the schema accepts. ``None`` is not in the set because a
+#: missing profile is not a typo — it defaults to ``cooperative`` (see
+#: :func:`validate_privilege_profile`). Any OTHER unrecognized value IS a typo and must
+#: fail closed (CC-6): silently downgrading ``"exclusve"`` to unconfined looks like the
+#: operator requested confinement while granting none.
+VALID_PRIVILEGE_PROFILES: frozenset[str] = frozenset(_PROFILE_FEATURE_TOKENS)
+
+
+def validate_privilege_profile(profile: str | None) -> str:
+    """Return the normalized privilege_profile, hard-erroring on an unknown value (CC-6).
+
+    Args:
+        profile: The requested profile, or ``None``. ``None`` and ``""`` normalize to
+            ``"cooperative"`` (a missing profile is a default, not a mistake). Any other
+            value not in :data:`VALID_PRIVILEGE_PROFILES` raises.
+
+    Returns:
+        The validated profile string (one of :data:`VALID_PRIVILEGE_PROFILES`).
+
+    Raises:
+        ValueError: ``profile`` is a non-empty value that is not a recognized profile.
+    """
+    normalized = profile or "cooperative"
+    if normalized not in VALID_PRIVILEGE_PROFILES:
+        allowed = ", ".join(sorted(VALID_PRIVILEGE_PROFILES))
+        raise ValueError(
+            f"unknown privilege_profile {profile!r}; expected one of: {allowed}. "
+            "Refusing to silently downgrade an unrecognized profile to unconfined."
+        )
+    return normalized
+
+
 def expand_privilege_profile(profile: str | None) -> list[str]:
     """Return the host-feature tokens a privilege_profile implies.
 
     Args:
         profile: One of ``cooperative`` (or ``None`` → treated as cooperative),
-            ``confined``, ``exclusive``. An unknown value expands to ``[]`` — an
-            unrecognized profile must never silently *grant* confinement it did not
-            ask for, nor error at emit time.
+            ``confined``, ``exclusive``. An unknown value expands to ``[]``. Callers that
+            parse operator input should first run :func:`validate_privilege_profile` so an
+            unrecognized profile fails closed rather than silently expanding to nothing.
 
     Returns:
         The list of ``<ns>:<feature>`` tokens to union into the active feature set.

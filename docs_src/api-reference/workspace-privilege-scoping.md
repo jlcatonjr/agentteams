@@ -23,9 +23,16 @@ hardening guidance (see "Read-exclusion & cross-team exclusion (P3)"). All three
 `exclusive` is a superset of `confined`. P2 is orthogonal (issue grants or don't).
 Enforcement runs on Claude Code's two documented sandbox backends — **macOS (Seatbelt)**
 and **Linux / WSL2 (bubblewrap)** — from the same emitted config (no per-OS agentteams
-logic). The macOS mechanism was additionally verified by a direct Seatbelt spike; a direct
-Linux `bwrap` spike is pending (tracked in the remediation log). Native Windows has no OS
-sandbox and stays advisory-only.
+logic). The macOS mechanism was additionally verified by a direct Seatbelt spike. On
+Linux, a direct `bwrap` kernel-deny was **observed** working once (bwrap 0.11.1,
+Ubuntu 26.04 aarch64, one protected path, a hand-built invocation): `python3` ran inside
+the sandbox and the protected read returned denied. That confirms only the **kernel
+mechanism** — the still-untested link is **argument construction**: whether Claude Code
+correctly derives the `bwrap` arguments from agentteams' `denyRead` JSON (a kernel that
+denies when handed correct hand-built args says nothing about whether Claude Code's
+*derived* args are correct). So Linux is **not** "verified" end-to-end; treat it as
+mechanism-observed, translation-unverified (tracked in the remediation log). Native
+Windows has no OS sandbox agentteams can configure and stays advisory-only.
 
 ## What it does
 
@@ -85,6 +92,12 @@ In the project description:
 `workspace_write_roots` (optional, default `["."]`) overrides the confined roots.
 `.` means the whole generated project tree is the workspace.
 
+> **Typos fail closed.** Only `cooperative`, `confined`, and `exclusive` are accepted.
+> A misspelled profile (e.g. `"exclusve"`) is **rejected at build with a non-zero exit** —
+> it is never silently downgraded to unconfined, because a value that *looks* like a
+> confinement request while granting none is the worst outcome. A missing profile is not
+> a typo: it defaults to `cooperative`.
+
 ### Via the host-feature token directly
 
 ```bash
@@ -107,7 +120,10 @@ other team issues. Absent a valid grant, there is no reach.
 A grant authorizes team A (the holder) to write a specific path in team B's workspace.
 It is an HMAC-signed row in the **holder's** `references/capability-grants.log.csv` — the
 holder holds the grants issued to it (a bearer-capability model), so the holder's own
-generation can read them. `issuer_team` records who authorized it. When team A is next
+generation can read them. Rows are **hash-chained**: each carries a signed `prev_digest`
+linking it to its predecessor, so deleting or reordering a signed row is detected at every
+read (per-row signatures stop forgery; the chain stops silent deletion). A broken chain
+fails closed — `--verify-grants` reports it, and generation-time widening applies no grants. `issuer_team` records who authorized it. When team A is next
 generated or updated with the sandbox on, the granted path (if it permits `write`) is
 merged into A's sandbox `allowWrite` — so A's kernel-enforced boundary now includes
 exactly that foreign path (verified against Seatbelt: a granted foreign dir is writable,
@@ -127,12 +143,36 @@ A grant spec is JSON: `issuer_team`, `holder_team`, `target_path`, `permitted_op
 is its `team_id` (the `privilege_profile` sibling field; defaults to the slugified
 project name — **keep it unique across your workspaces**).
 
+> **An approver roster is mandatory.** A grant is only honoured when its `approver` is on
+> the holder workspace's `references/security-approvers.txt`. If that roster is **absent
+> or empty**, issuing, verifying, and generation-time widening all **fail closed** — the
+> grant is refused rather than cleared by a built-in `security`/`@security` default.
+> (Without this, a grant naming `@security` as its own approver could self-clear.) Create
+> the roster with at least one named approver before issuing or honouring any grant.
+>
+> `target_path` is also validated at issue: an empty path, `/`, a home-rooted `~/…` path,
+> or a `..`-escaping relative path is refused before it can enter the ledger and widen a
+> boundary. A malformed `expires_at` is likewise rejected at issue, not left to fail later.
+
 ### Enforcement is generation-time, by design
 
 A freshly-issued grant is **inert until the holder re-runs an update**. Widening
 happens when A is (re)generated — there is deliberately no runtime path by which a
 running agent widens its own OS boundary. Issuing a grant is thus an explicit,
 auditable step, not a silent runtime hole.
+
+Two consequences of the generation-time model to plan around:
+
+- **Revocation has latency.** There is no revocation list and no runtime revocation
+  between generations. Removing a grant row (or dropping its approver from the roster)
+  stops it applying only at the holder's **next** generation; until then an
+  already-widened `allowWrite` persists. Prefer a **short `expires_at`** to bound the
+  window rather than relying on after-the-fact removal.
+- **`max_uses` is validated, not consumed.** It is checked at each generation (an
+  exhausted grant is rejected), but generation-time widening does **not** decrement the
+  counter — expiry is the only active bound. An operator who sets `max_uses=1` expecting
+  a single use gets a grant that behaves as reusable-until-expiry; the CLI prints a NOTE
+  to that effect at issue. Again: use `expires_at` for a tight window.
 
 ### Trust model (read this before relying on it)
 
@@ -164,11 +204,22 @@ it emits is the **outbound dual**.
 
 Selecting `privilege_profile: exclusive` adds `sandbox.filesystem.denyRead` to the
 emitted sandbox block: the team (and its Bash/child processes) is **OS-denied from
-reading** a curated default deny set (SSH keys + cloud-provider creds) plus any
-`protected_read_paths` you list. The default set is deliberately conservative — it
-excludes registry-auth files (`~/.npmrc`, `~/.pypirc`, `~/.netrc`, `~/.docker/config.json`)
-because denying those **breaks authenticated `npm`/`pip`/`git`/`docker`** against private
-registries; add them yourself if your team does not use authenticated registries.
+reading** a curated default deny set plus any `protected_read_paths` you list. The
+default set is the credential stores an agent rarely needs to act *as* during its build
+work — `~/.ssh`, `~/.aws`, `~/.gnupg`, `~/.kube`, `~/.config/gcloud`, and `~/.azure`
+(cloud-provider creds).
+
+It **deliberately excludes** files that routine agent tooling authenticates with, because
+denying them breaks the toolchain: registry-auth files (`~/.npmrc`, `~/.pypirc`,
+`~/.netrc`, `~/.docker/config.json` — authenticated `npm`/`pip`/`git`/`docker`) and
+`~/.config/gh` (the GitHub CLI token, read by `gh` on every call — and the generated PR
+agents shell out to `gh`). Add any of these via `protected_read_paths` if your team does
+not use that toolchain.
+
+> **Files, not environment variables.** `denyRead` denies *filesystem reads*. A secret
+> already exported into the agent's environment (e.g. a signing key placed in an env var)
+> is **not** covered — this control keeps a credential *file* off-limits, it does not
+> scrub the process environment.
 
 `allowRead` re-opens the write roots (which include any P2-granted paths) so a granted
 write target stays readable, and — since "more specific wins" — the workspace stays
@@ -215,17 +266,59 @@ that *do* deliver inbound exclusion, which you run yourself:
 agentteams **cannot verify** you ran these, so P3b is emitted as an honest advisory, not
 a claimed guarantee — the same discipline as the unenforced-host warning.
 
+## Strict decision-signing enforcement (`enforce_decision_signing`)
+
+An **agent-position** control, distinct from the workspace axes above. The security gate
+clears a destructive/privileged action only against an **authorizing** decision row (a
+`PASS`/`CONDITIONAL PASS`, or a `HALT-RETRACTED`). When decision signing is *inactive*, that
+row is trusted on its **author name** alone — and the author is gated by the
+`security-approvers.txt` roster, an operator-authored file that lives inside the workspace.
+So in the signing-inactive configuration, an agent that can edit the roster could add itself
+and author its own clearance.
+
+`enforce_decision_signing` (project-description field, **default `true`**) closes that path:
+when on, an **unsigned authorizing row is refused (fail-closed)** rather than honoured on its
+author name. It applies to both authorization paths (PASS and HALT-RETRACTED).
+
+- **Default-on at update, notify-after, opt-out.** The switch is emitted into the team as
+  `references/agent-privilege.json` and defaults on whenever the team is generated or
+  updated; a notice prints at generation naming the opt-out. Turn it off with
+  `"enforce_decision_signing": false` in the brief, then re-run `--update`.
+- **Absent means off.** A workspace that has never been updated to this feature (no
+  `agent-privilege.json`) keeps the legacy behavior, so updating is what turns the switch on
+  — no team breaks by surprise. A present-but-unreadable switch fails **closed** (it will
+  not silently disable itself).
+- **Migration edge:** turning it on also stops any **existing** unsigned authorizations in
+  that workspace's decisions log from clearing until signing is activated (add a `signature`
+  column, or set `AGENTTEAMS_DECISION_SIGNING_KEY`).
+
+> **Known residual (honest ceiling).** `references/agent-privilege.json` sits inside the
+> agent write root, so an agent with Write could disable the control by setting it `false`
+> or deleting the file (absent → off). This is the same "the referee plays in the same
+> sandbox as the players" limitation documented for `integrity.py` and accepted for the
+> capability-grant roster. The durable fix is harness-level enforcement plus integrity
+> coverage of the switch value; it is tracked in the remediation log. Today the switch
+> raises the bar (author-name-only → signature-required) and makes tampering a recorded,
+> git-visible act, but it is not a boundary an in-sandbox agent cannot cross.
+
 ## Limits (be honest about these)
 
 - **Inert until merged.** agentteams never writes `settings.json` directly
   (clobbering operator config is a worse failure than an unwired boundary). The
   emitted block is wire-ready but does nothing until the operator merges it. The
   emitted example's comment states this.
-- **Claude Code only.** OS enforcement is available only on the `claude` framework.
-  Selecting `confined`/`exclusive` for `goose`, `codex`, `copilot-*`, or on native
-  Windows emits a visible advisory and records a
-  `privilege-profile-unenforced-host` manifest advisory — the profile is advisory
-  only there, never silently "on".
+- **Claude Code only — and it fails closed elsewhere.** OS enforcement is available
+  only on the `claude` framework. Selecting `confined`/`exclusive` for `goose`, `codex`,
+  `copilot-*`, or on native Windows has no boundary to emit, so `generate` **exits
+  non-zero by default** rather than ship a config that silently does nothing. Pass
+  `--allow-unenforced-confinement` to proceed anyway; the request then degrades to a
+  visible advisory and a `privilege-profile-unenforced-host` manifest advisory — advisory
+  only there, and never silently "on". (Whether Claude Code enforces on native Windows is
+  itself unverified; treat Windows as advisory.) This fail-closed default is on the
+  **`generate`** path; the `--convert-from`/`--fleet`/render paths still emit the sandbox
+  block (via `_sandbox_feature_enabled` reading `privilege_profile` directly) but keep the
+  advisory-not-raise default, so an unenforceable target there degrades to a warning rather
+  than a non-zero exit.
 - **P3 is read-exclusion (outbound), not enforced inbound exclusion.** The emitted
   `exclusive` config seals *your* team's reads; the "only my team touches my tree"
   inbound property is operator filesystem hardening (P3b advisory), which agentteams

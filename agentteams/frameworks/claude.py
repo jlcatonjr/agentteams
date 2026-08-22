@@ -306,9 +306,14 @@ _READ_EXCLUSION_COMMENT_LINES: list[str] = [
     "inbound property, apply the operator OS filesystem hardening printed at generation",
     "and documented under \"Cross-team exclusion\" in the workspace-privilege-scoping docs",
     "(operator-run, not enforced by agentteams).",
-    "Verify on YOUR machine that these ~/ entries resolve and deny (they rely on Claude",
-    "Code home-path handling) — see the docs \"Verifying enforcement on your machine\";",
-    "switch an entry to an absolute path if a read of it is not denied.",
+    "IMPORTANT — verify these `~/` entries actually deny on YOUR machine. They rely on",
+    "Claude Code expanding `~`→$HOME before the OS deny; agentteams cannot confirm that",
+    "expansion from its side, and if `~` is NOT expanded, EVERY entry here is a silent",
+    "no-op while this config still LOOKS protective. Test it: from inside the sandbox try",
+    "to read one entry (e.g. `cat ~/.ssh/id_*`); it MUST be denied. If any read is NOT",
+    "denied, replace that entry with an absolute path (e.g. /Users/<you>/.ssh) — but note",
+    "an absolute path is host-specific and will not port to another machine. See the docs",
+    "\"Verifying enforcement on your machine\".",
 ]
 
 
@@ -367,10 +372,18 @@ def _sandbox_feature_enabled(manifest: dict[str, Any]) -> bool:
 #: auth files (~/.npmrc, ~/.pypirc, ~/.netrc, ~/.docker/config.json) are DELIBERATELY
 #: excluded from the default — denying them breaks authenticated npm/pip/git/docker
 #: against private registries; operators who do not use those add them via
-#: `protected_read_paths`. NOTE: this is OUTBOUND read hardening (my team cannot read
-#: these) — it does not stop other teams reading MY tree.
+#: `protected_read_paths`. The same test excludes `~/.config/gh` (the GitHub CLI token,
+#: read by `gh` on every call — and this framework ships @pr-manager/@pr-notifier/
+#: @pr-reminder agents that routinely shell out to `gh`) and `~/.netrc` (git/curl auth):
+#: both are routine agent dev-work identities, so denying them by default breaks the
+#: toolchain — operators who want them add them via `protected_read_paths`. `~/.azure`
+#: IS in the default: like `~/.aws`/`~/.config/gcloud` it is a cloud-provider credential
+#: an agent rarely acts as during its build work. NOTE: this is OUTBOUND read hardening
+#: (my team cannot read these FILES) — it does not stop other teams reading MY tree, and
+#: it denies FILES, not environment variables (a secret already exported into the agent's
+#: env — e.g. a signing key — is not covered by a filesystem denyRead).
 _DEFAULT_PROTECTED_READ_PATHS: tuple[str, ...] = (
-    "~/.ssh", "~/.aws", "~/.gnupg", "~/.kube", "~/.config/gcloud",
+    "~/.ssh", "~/.aws", "~/.gnupg", "~/.kube", "~/.config/gcloud", "~/.azure",
 )
 
 

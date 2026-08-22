@@ -1,7 +1,7 @@
 """test_module_doc_ratchet.py — the undocumented-module count may fall, never rise.
 
-`docs_src/api-reference/` documents the package module by module, and 20 modules have no page.
-That is debt, not a defect: writing 20 reference pages is real work and the count has grown
+`docs_src/api-reference/` documents the package module by module, and 22 modules have no page.
+That is debt, not a defect: writing 22 reference pages is real work and the count has grown
 mostly by modules being *carved out* of documented ones under CH-07 — `unfenced` from `fences`,
 `audit_types` from `audit`, `graph_inputs` from `graph`, `standalone_modes` from `cli/generate`.
 
@@ -9,7 +9,7 @@ So: a ratchet, in the same shape as `BROAD_EXCEPT_BASELINE`, `LENGTH_ALLOWLIST` 
 unfenced-constraint baseline. A new module arrives documented, or it does not arrive.
 
 **What a passing run does NOT establish.** It says no *new* module is undocumented. It says
-nothing about the 20 that are: each is public surface a reader cannot look up.
+nothing about the 22 that are: each is public surface a reader cannot look up.
 """
 
 from __future__ import annotations

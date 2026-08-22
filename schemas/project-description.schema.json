@@ -271,6 +271,11 @@
         "type": "string"
       }
     },
+    "enforce_decision_signing": {
+      "type": "boolean",
+      "default": true,
+      "description": "Strict agent-privilege switch (agent-position axis). When true, an AUTHORIZING security-decision row (a PASS or HALT-RETRACTED that clears a destructive/privileged action) is honoured ONLY if decision signing is active and the row's signature verifies; an unsigned authorization is refused (fail-closed) rather than trusted on its author name alone — closing the roster/author-spoof path in the signing-inactive configuration. Emitted into the generated team as references/agent-privilege.json, which the security gate reads at enforcement time. DEFAULTS ON when the team is (re)generated or updated: a post-update notice names how to turn it off (set this field false in your brief and re-update). A workspace with NO emitted config is treated as OFF, so a team that has not yet been updated to this feature never breaks by surprise — the switch turns on precisely when you update. Set false to keep the legacy behavior (an unsigned authorizing row is honoured on its author name)."
+    },
     "components": {
       "type": "array",
       "description": "Workstream components. One workstream expert agent is generated per component.",

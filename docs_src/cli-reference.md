@@ -275,6 +275,10 @@ Used with `--update`: also delete agent files that are no longer part of the tea
 
 Register pre-existing agent files that the generated taxonomy does not produce (e.g. bespoke custom agents) into the team roster — the orchestrator's handoff list and domain routing — **without** generating or overwriting their files. The opposite of `--prune`: integrate orphans instead of removing them. Requires the orchestrator to be (re)rendered, so use with `--overwrite` or `--migrate` (under `--merge` the orchestrator front matter is preserved and adoption would not surface).
 
+### `--materialize-native`
+
+Used with `--update` against a **bridge** target (a `.claude/`, `.github/`, etc. that bridges to a canonical framework maintained elsewhere): opt in to generating a full **native** team over the bridge. Without this flag, `--update` on a detected bridge **fails closed** with guidance (use `--bridge-merge` to refresh the bridge, or this flag to materialize a native team) rather than silently writing a full native team (D3). Bridge detection is positive and structured — a `references/bridges/<source>-to-<framework>/bridge-manifest.json` for the target framework, or an `AGENTTEAMS-BRIDGE` HTML-comment fence in a framework **entry file** — never a substring match on agent bodies and never absent-build-log (a first-generation native team legitimately has no build-log).
+
 ### `--check`
 
 Check for template drift and structural changes without writing any files. Exits with code `1` if drift or structural changes are detected, `0` otherwise. Suitable for CI gates.
@@ -405,6 +409,14 @@ Scan generated agent files for security issues: PII paths (absolute paths contai
 ### `--check-budget`
 
 Audit live `.agent.md` files for token-budget overrun and prompt-cache prefix volatility. Read-only. Exits `1` on fail-class findings; `0` on warn-class only. Routes remediation to `@agent-refactor`.
+
+### `--check-rank`
+
+Read-only rank-conformance validator (AP-2): flags any agent whose declared `tools:` exceeds what its taxonomy rank (orchestrator / governance / domain / workstream-expert) permits — enforcing the C-3 capability surface against agent position. Warn-only (always exits `0`) while the policy beds in; a real over-grant routes to `@security` as a C-3 widening. Parses Claude-shape `tools:` scalars (see [`rank_conformance`](api-reference/rank-conformance.md)).
+
+### `--allow-unenforced-confinement`
+
+Permit `generate` to proceed when a `confined`/`exclusive` `privilege_profile` is requested on a target with no OS-level sandbox to enforce it (Goose, Codex, Copilot, native Windows). Without this flag, generation **fails closed** (non-zero exit) rather than emit a boundary that silently does not take effect; with it, the request degrades to the advisory notice.
 
 ### `--self`
 

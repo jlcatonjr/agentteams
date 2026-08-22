@@ -129,6 +129,18 @@ def _build_parser() -> argparse.ArgumentParser:
         help="Used with --update: also delete agent files that are no longer part of the team.",
     )
     parser.add_argument(
+        "--materialize-native",
+        action="store_true",
+        dest="materialize_native",
+        help="Used with --update against a BRIDGE target (a .claude/ etc. that bridges to a "
+             "canonical framework elsewhere): opt in to generating a full NATIVE team over "
+             "the bridge. Without this flag, --update on a detected bridge fails closed with "
+             "guidance rather than silently materializing a native team (D3). Detection uses "
+             "a structured bridge marker (references/bridges/<source>-to-<framework>/"
+             "bridge-manifest.json for the target framework, or an AGENTTEAMS-BRIDGE "
+             "HTML-comment fence in an entry file), never a substring match on agent bodies.",
+    )
+    parser.add_argument(
         "--adopt-orphans",
         action="store_true",
         dest="adopt_orphans",
@@ -343,6 +355,18 @@ def _build_parser() -> argparse.ArgumentParser:
             "Audit live .agent.md files for token-budget overrun and "
             "prompt-cache prefix volatility. Read-only. Exits 1 on fail-class "
             "findings; 0 on warn-class only. Routes remediation to @agent-refactor."
+        ),
+    )
+    parser.add_argument(
+        "--check-rank",
+        action="store_true",
+        dest="check_rank",
+        help=(
+            "AP-2: audit live agent files for rank-conformance — flag any agent "
+            "whose declared tools exceed what its taxonomy rank permits "
+            "(C-3 capability surface vs. rank ceiling + recorded per-agent "
+            "overrides). Read-only, warn-only: always exits 0. Routes real "
+            "over-grants to @security."
         ),
     )
     parser.add_argument(
@@ -750,6 +774,19 @@ def _build_parser() -> argparse.ArgumentParser:
             "copilot-cli, bridge:copilot-vscode-to-claude, etc. Examples: "
             "'bridge:copilot-vscode-to-claude:subagents,bridge:copilot-vscode-to-claude:hooks'. "
             "Default emission is unchanged when omitted."
+        ),
+    )
+    parser.add_argument(
+        "--allow-unenforced-confinement",
+        action="store_true",
+        dest="allow_unenforced_confinement",
+        default=False,
+        help=(
+            "Permit generation to proceed when a confined/exclusive privilege_profile "
+            "is requested on a target that has no OS-level sandbox to enforce it (e.g. "
+            "Goose, Codex, Copilot, native Windows). Without this flag, generate FAILS "
+            "CLOSED (non-zero exit) rather than emit a boundary that silently does not "
+            "take effect; with it, the request degrades to the advisory notice."
         ),
     )
     parser.add_argument(

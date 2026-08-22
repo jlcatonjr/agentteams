@@ -7,6 +7,7 @@ and the generation-time sandbox-widening integration.
 
 from __future__ import annotations
 
+import csv
 import json
 from datetime import datetime, timezone
 from pathlib import Path
@@ -172,6 +173,74 @@ def test_issue_rejects_offroster_approver(tmp_path):
         )
 
 
+def test_issue_rejects_absent_roster(tmp_path):
+    # P2-2: with no roster file at all, a grant naming @security would otherwise
+    # self-clear via the built-in default. Refuse to issue instead (fail-closed).
+    with pytest.raises(grants.GrantError, match="explicit approver roster"):
+        grants.issue_grant(
+            tmp_path, issuer_team="team-b", holder_team="team-a", target_path="/abs/b/x",
+            permitted_ops="write", expires_at=_FAR_FUTURE, max_uses=1, approver="@security",
+            ticket_id="T", reason_code="c", grant_id="g", timestamp="2026-08-21T00:00:00Z",
+            key=_KEY,
+        )
+
+
+def test_issue_rejects_empty_roster(tmp_path):
+    # P2-2: a roster of only comments/blanks is the same absent-approver case.
+    (tmp_path / "references").mkdir(parents=True, exist_ok=True)
+    (tmp_path / "references" / "security-approvers.txt").write_text(
+        "# no approvers yet\n\n", encoding="utf-8"
+    )
+    with pytest.raises(grants.GrantError, match="explicit approver roster"):
+        grants.issue_grant(
+            tmp_path, issuer_team="team-b", holder_team="team-a", target_path="/abs/b/x",
+            permitted_ops="write", expires_at=_FAR_FUTURE, max_uses=1, approver="@security",
+            ticket_id="T", reason_code="c", grant_id="g", timestamp="2026-08-21T00:00:00Z",
+            key=_KEY,
+        )
+
+
+def test_validate_rejects_absent_roster(tmp_path):
+    # P2-2: the fail-closed also fires at validate-time (--verify-grants) and, via
+    # held_grants, at generation-time widening — not only at issue.
+    _write_roster(tmp_path, "alice")
+    rec = _issue(tmp_path)
+    (tmp_path / "references" / "security-approvers.txt").unlink()
+    with pytest.raises(grants.GrantError, match="explicit approver roster"):
+        grants.validate_grant(rec, output_dir=tmp_path, key=_KEY)
+
+
+@pytest.mark.parametrize("bad", ["", "   ", "/", "~", "~/secrets", "../escape", "../../x"])
+def test_issue_rejects_unsafe_target_path(tmp_path, bad):
+    # P2-4: a target_path that would widen too far is refused before it enters the ledger.
+    _write_roster(tmp_path, "alice")
+    with pytest.raises(grants.GrantError):
+        grants.issue_grant(
+            tmp_path, issuer_team="team-b", holder_team="team-a", target_path=bad,
+            permitted_ops="write", expires_at=_FAR_FUTURE, max_uses=1, approver="alice",
+            ticket_id="T", reason_code="c", grant_id="g", timestamp="2026-08-21T00:00:00Z",
+            key=_KEY,
+        )
+
+
+def test_issue_rejects_malformed_expires_at(tmp_path):
+    # P2-8: a non-ISO expires_at is caught at issue, not left to crash is_expired later.
+    _write_roster(tmp_path, "alice")
+    with pytest.raises(grants.GrantError, match="expires_at"):
+        _issue(tmp_path, expires_at="not-a-date")
+
+
+def test_validate_rejects_malformed_expires_at(tmp_path):
+    # P2-8: a malformed expires_at that is nonetheless validly signed (a hand-crafted
+    # ledger row) surfaces as a GrantError, not a bare ValueError that crashes the caller.
+    _write_roster(tmp_path, "alice")
+    rec = _issue(tmp_path)
+    rec = dict(rec, expires_at="garbage")
+    rec["signature"] = grants.sign_grant(rec, key=_KEY)  # re-sign so signature passes
+    with pytest.raises(grants.GrantError, match="malformed expires_at"):
+        grants.validate_grant(rec, key=_KEY)
+
+
 def test_granted_write_roots_dedupes(tmp_path):
     _issue(tmp_path, grant_id="g-1", target_path="/abs/b/shared")
     _issue(tmp_path, grant_id="g-2", target_path="/abs/b/shared")  # dup path
@@ -235,3 +304,78 @@ def test_widening_enforces_roster(tmp_path, monkeypatch):
     # roster now no longer contains alice → the grant must not apply at widening
     _write_roster(tmp_path, "bob")
     assert grants.granted_write_roots(tmp_path, holder_team="team-a", key=_KEY) == []
+
+
+# --------------------------------------------------------------------------
+# P2-3: ledger prev_digest chain (deletion / reorder detection)
+# --------------------------------------------------------------------------
+
+def _ledger_path(root: Path) -> Path:
+    return root / grants.GRANT_LOG_REL
+
+
+def _read_raw_ledger(root: Path) -> tuple[list[str], list[dict[str, str]]]:
+    with _ledger_path(root).open(newline="", encoding="utf-8") as fh:
+        reader = csv.DictReader(fh)
+        return list(reader.fieldnames or []), [dict(r) for r in reader]
+
+
+def _write_raw_ledger(root: Path, header: list[str], rows: list[dict[str, str]]) -> None:
+    with _ledger_path(root).open("w", newline="", encoding="utf-8") as fh:
+        writer = csv.DictWriter(fh, fieldnames=header)
+        writer.writeheader()
+        writer.writerows(rows)
+
+
+def test_chain_valid_across_multiple_issues(tmp_path):
+    # A normally-issued multi-row ledger has an intact chain: genesis prev_digest is empty,
+    # each subsequent row chains to its predecessor.
+    _issue(tmp_path, grant_id="g-1", target_path="/abs/b/one")
+    _issue(tmp_path, grant_id="g-2", target_path="/abs/b/two")
+    _issue(tmp_path, grant_id="g-3", target_path="/abs/b/three")
+    header, rows = _read_raw_ledger(tmp_path)
+    assert "prev_digest" in header
+    assert rows[0]["prev_digest"] == ""  # genesis
+    assert rows[1]["prev_digest"] != "" and rows[2]["prev_digest"] != ""
+    # reading validates the chain and does not raise
+    assert len(grants._read_grant_rows(tmp_path)) == 3
+
+
+def test_chain_detects_deleted_row(tmp_path):
+    # Deleting a signed row leaves the remaining signatures valid but breaks the chain.
+    for i in range(3):
+        _issue(tmp_path, grant_id=f"g-{i}", target_path=f"/abs/b/{i}")
+    header, rows = _read_raw_ledger(tmp_path)
+    _write_raw_ledger(tmp_path, header, [rows[0], rows[2]])  # drop the middle row
+    with pytest.raises(grants.GrantError, match="chain broken"):
+        grants._read_grant_rows(tmp_path)
+
+
+def test_chain_detects_reorder(tmp_path):
+    for i in range(3):
+        _issue(tmp_path, grant_id=f"g-{i}", target_path=f"/abs/b/{i}")
+    header, rows = _read_raw_ledger(tmp_path)
+    _write_raw_ledger(tmp_path, header, [rows[0], rows[2], rows[1]])  # swap last two
+    with pytest.raises(grants.GrantError, match="chain broken"):
+        grants._read_grant_rows(tmp_path)
+
+
+def test_chain_break_stops_widening_fail_closed(tmp_path, monkeypatch):
+    # A tampered ledger must not silently widen — the broken chain propagates as GrantError
+    # that the widening path treats as "no grants applied".
+    monkeypatch.setenv(grants.GRANT_KEY_ENV, _KEY)
+    for i in range(3):
+        _issue(tmp_path, grant_id=f"g-{i}", holder_team="team-a", target_path=f"/abs/b/{i}")
+    header, rows = _read_raw_ledger(tmp_path)
+    _write_raw_ledger(tmp_path, header, [rows[0], rows[2]])  # delete middle
+    with pytest.raises(grants.GrantError, match="chain broken"):
+        grants.granted_write_roots(tmp_path, holder_team="team-a", key=_KEY)
+
+
+def test_verify_grants_reports_chain_break(tmp_path):
+    for i in range(2):
+        _issue(tmp_path, grant_id=f"g-{i}", target_path=f"/abs/b/{i}")
+    header, rows = _read_raw_ledger(tmp_path)
+    _write_raw_ledger(tmp_path, header, [rows[1]])  # drop genesis → chain break at row 1
+    problems = grants.verify_grants(tmp_path, key=_KEY)
+    assert problems and any("chain broken" in p for p in problems)

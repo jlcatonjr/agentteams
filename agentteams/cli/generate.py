@@ -13,6 +13,7 @@ preserved exactly). Verbatim move (CH-07). build_team-resident helpers
 from __future__ import annotations
 
 import argparse
+import re
 import sys
 from pathlib import Path
 
@@ -24,6 +25,7 @@ from agentteams.cli.artifacts import (
     _emit_mcp_servers_if_enabled,  # noqa: F401  (re-exported: tests reach it via generate.)
     _refresh_existing_code_index,
     _run_retrieval_utility_modes,
+    _write_agent_privilege_config,
     _write_delivery_receipt,
     _write_eval_suite,
     _write_memory_index,
@@ -109,6 +111,141 @@ def _sweep_capability_key(
         print(f"     ... and {len(migrated) - 10} more")
 
 
+def _emit_agent_privilege_config(manifest: dict, output_dir: Path) -> None:
+    """Write ``references/agent-privilege.json`` and print the enforce-signing notice.
+
+    Emitted on every real generate/update so the strict agent-privilege switch is explicit
+    in the team. When the switch resolves ON (the default), a notice names the opt-out — the
+    "default on at update, notify after, opportunity to switch off" contract.
+
+    Args:
+        manifest: The team manifest (carries ``enforce_decision_signing``).
+        output_dir: The team root.
+    """
+    from agentteams.cli.artifacts import AGENT_PRIVILEGE_REL_PATH
+
+    try:
+        path = _write_agent_privilege_config(manifest, output_dir)
+    except OSError as exc:
+        print(f"  !  agent-privilege config write failed: {exc}", file=sys.stderr)
+        return
+    if path is None:
+        return
+    if manifest.get("enforce_decision_signing"):
+        print(
+            "  ⚖  Strict agent-privilege enforcement (enforce_decision_signing) is ON for "
+            "this team — an unsigned authorizing security-decision row will be refused "
+            "(fail-closed). NOTE: this also applies to any EXISTING unsigned PASS / "
+            "HALT-RETRACTED rows already in this workspace's decisions log — they will stop "
+            "clearing until signing is activated (add a `signature` column or set "
+            "AGENTTEAMS_DECISION_SIGNING_KEY). To turn enforcement off, set "
+            f"\"enforce_decision_signing\": false in the brief and re-run --update. "
+            f"Switch: {AGENT_PRIVILEGE_REL_PATH}"
+        )
+    else:
+        print(
+            "  ℹ  Strict agent-privilege enforcement (enforce_decision_signing) is OFF for "
+            f"this team (legacy behavior). Switch: {AGENT_PRIVILEGE_REL_PATH}"
+        )
+
+
+# Structured AGENTTEAMS-BRIDGE fence (mirrors bridge._FENCE_BEGIN_RE, defined locally to
+# avoid importing bridge.py → canonical.py → jsonschema on the --update path). The full
+# HTML-comment structure (with region + v=N) cannot match backtick-quoted Rule-14 prose,
+# which is why a substring check must NOT be used here (D3).
+_BRIDGE_FENCE_BEGIN_RE = re.compile(
+    r"<!--\s*AGENTTEAMS-BRIDGE:BEGIN\s+[A-Za-z0-9_-]+\s+v=\d+\s*-->"
+)
+
+
+def _verify_enforcement_integrity() -> list:
+    """Return integrity findings for the agentteams SOURCE tree's enforcement modules (R5/D5).
+
+    Runs against the running tool's own source root (where ``references/enforcement-integrity.json``
+    and ``agentteams/`` live), NOT the ``--check`` target — an installed/consumer checkout has no
+    manifest, so :func:`integrity.verify` returns ``[]`` there (a natural no-op; this exercises
+    only in the agentteams dev checkout / ``--self``). Git-independent by design: it compares files
+    to the manifest, never to ``git status``. A present-but-unreadable manifest is itself a
+    finding-worthy state (an enforcement control that cannot be verified), surfaced as one.
+    """
+    import agentteams as _at
+    from agentteams import integrity
+
+    source_root = Path(_at.__file__).resolve().parent.parent
+    try:
+        return integrity.verify(source_root)
+    except RuntimeError:
+        return [
+            integrity.IntegrityFinding(
+                rel_path=integrity.MANIFEST_REL_PATH, expected="", actual="", reason="unreadable"
+            )
+        ]
+
+
+def _bridge_entry_files(project_root: Path, framework_id: str) -> list[Path]:
+    """Framework ENTRY files a bridge marks — never agent bodies (D3).
+
+    Scanning agent bodies is exactly what produces the false positive: the string
+    ``AGENTTEAMS-BRIDGE:BEGIN`` appears backtick-quoted in constitutional Rule 14 prose
+    inside a NATIVE orchestrator. Only these entry files are legitimate bridge-marker homes.
+    """
+    if framework_id == "claude":
+        cdir = project_root / ".claude"
+        return [
+            project_root / "CLAUDE.md",
+            cdir / "README.md",
+            cdir / "agent-team.md",
+            cdir / "quickstart-snippet.md",
+        ]
+    if framework_id in ("copilot-vscode", "copilot-cli"):
+        return [
+            project_root / ".github" / "copilot-instructions.md",
+            project_root / ".github" / "agents" / "bridge-orchestrator.agent.md",
+        ]
+    if framework_id == "goose":
+        return [
+            project_root / "AGENTS.md",
+            project_root / ".goosehints",
+            project_root / ".goose" / "README.md",
+        ]
+    return []
+
+
+def _update_target_is_bridge(project_root: Path, framework_id: str) -> bool:
+    """True when the ``--update`` target is a BRIDGE to a canonical framework (D3).
+
+    Detected ONLY by positive, structured, per-target signals:
+
+    * a bridge manifest for a pair whose TARGET is this framework —
+      ``references/bridges/<source>-to-<framework_id>/bridge-manifest.json`` (a
+      ``<framework_id>-to-*`` manifest means this framework is the canonical SOURCE, NOT a
+      bridge, so the ``-to-{framework_id}`` suffix match is load-bearing);
+    * the structured ``AGENTTEAMS-BRIDGE`` HTML-comment fence (:data:`bridge._FENCE_BEGIN_RE`,
+      which cannot match backtick-quoted Rule-14 prose) in one of this framework's ENTRY files.
+
+    NEVER a substring scan of agent bodies, and NEVER absent-build-log (a first-generation
+    native team also has no build-log, and must not be misclassified as a bridge).
+    """
+    bridges = project_root / "references" / "bridges"
+    if bridges.is_dir():
+        for pair in bridges.iterdir():
+            if (
+                pair.is_dir()
+                and pair.name.endswith(f"-to-{framework_id}")
+                and (pair / "bridge-manifest.json").exists()
+            ):
+                return True
+    for entry in _bridge_entry_files(project_root, framework_id):
+        try:
+            if entry.is_file() and _BRIDGE_FENCE_BEGIN_RE.search(
+                entry.read_text(encoding="utf-8", errors="ignore")
+            ):
+                return True
+        except OSError:
+            continue
+    return False
+
+
 def _run_generate_inner(
     args: argparse.Namespace,
     strict_manual_placeholders: bool,
@@ -158,7 +295,13 @@ def _run_generate_inner(
     # Step 3: Analyze → manifest
     # -----------------------------------------------------------------------
     print(f"Analyzing project for {framework_id!r} framework...")
-    manifest = analyze.build_manifest(description, framework=framework_id)
+    try:
+        manifest = analyze.build_manifest(description, framework=framework_id)
+    except ValueError as exc:
+        # CC-6: an unknown/typo'd privilege_profile (or other manifest-parse rejection)
+        # fails closed with a clean message rather than a traceback.
+        print(f"Error building manifest: {exc}", file=sys.stderr)
+        return 1
     _apply_placeholder_policy(manifest, strict_manual_placeholders=strict_manual_placeholders)
     manifest["no_vscode_tasks"] = bool(getattr(args, "no_vscode_tasks", False))
 
@@ -174,9 +317,24 @@ def _run_generate_inner(
     # -----------------------------------------------------------------------
     project_root, output_dir = resolve_output_dir(args, adapter, description)
 
-    from agentteams.cli.artifacts import finalize_privilege_wiring as _finalize_privilege
+    from agentteams.cli.artifacts import (
+        PrivilegeConfinementError,
+        finalize_privilege_wiring as _finalize_privilege,
+    )
 
-    _finalize_privilege(manifest, list(getattr(args, "host_features", []) or []), framework_id, project_root)
+    try:
+        _finalize_privilege(
+            manifest,
+            list(getattr(args, "host_features", []) or []),
+            framework_id,
+            project_root,
+            allow_unenforced=bool(getattr(args, "allow_unenforced_confinement", False)),
+        )
+    except PrivilegeConfinementError as exc:
+        # P1-2: confined/exclusive requested on a host with no OS sandbox to enforce it,
+        # and the operator did not pass --allow-unenforced-confinement. Fail closed.
+        print(f"Error: {exc}", file=sys.stderr)
+        return 1
 
     print(f"  Output directory: {output_dir}")
 
@@ -224,6 +382,22 @@ def _run_generate_inner(
             print(f"  Adopted {len(_adopted)} orphan agent(s) into roster: {', '.join(_adopted)}")
         else:
             print("  --adopt-orphans: no orphan agent files to adopt.")
+
+    # Step 4·preserve: on --update, record the agent slugs already deployed ON DISK so the
+    # roster pruner never drops a DEPLOYED teammate's cross-ref merely because this run did
+    # not regenerate its file (D1). Roster-ref lifecycle then tracks file lifecycle: only
+    # --prune (which deletes the file) retires a roster entry. Lighter than --adopt-orphans
+    # — it preserves existing cross-references without adding the agent to handoff routing.
+    if getattr(args, "update", False) and output_dir.exists():
+        _ext = adapter.get_file_extension("agent")
+        manifest["existing_agent_slugs"] = sorted(
+            p.name[: -len(_ext)]
+            for p in output_dir.glob(f"*{_ext}")
+            if (
+                _ext != ".yaml"
+                or 'version: "1.0.0"' in p.read_text(encoding="utf-8", errors="ignore")
+            )
+        )
 
     # -----------------------------------------------------------------------
     # Step 4a: Handle --list-backups and --restore-backup (no rendering needed)
@@ -345,6 +519,22 @@ def _run_generate_inner(
             print(f"\nStructural changes for {project_name!r}:")
             drift.print_structural_diff_report(sdreport)
         has_any = dreport.has_drift or (sdreport.has_changes if sdreport is not None else False)
+        # R5 (D5): fail --check when an enforcement module drifts from — or is absent from —
+        # the integrity manifest. This is the CI/pre-commit fail-closed boundary for the
+        # "edited an enforcement module without regenerating the manifest" trap; an
+        # unmanifested enforcement module is a SILENTLY UNVERIFIED security control
+        # (integrity.py). No-op outside the agentteams source tree (no manifest → []).
+        _integrity_findings = _verify_enforcement_integrity()
+        if _integrity_findings:
+            print(
+                "\nEnforcement-integrity FAILURES (an enforcement module drifted from or is "
+                "absent from references/enforcement-integrity.json — regenerate deliberately "
+                "with --write-integrity-manifest after an INTENDED control change):",
+                file=sys.stderr,
+            )
+            for _f in _integrity_findings:
+                print(f"  ✗ {_f.describe()}", file=sys.stderr)
+            has_any = True
         return 1 if has_any else 0
 
     # -----------------------------------------------------------------------
@@ -370,6 +560,24 @@ def _run_generate_inner(
     # Step 5b: Handle --update (structural + content drift, manual preservation)
     # -----------------------------------------------------------------------
     if args.update:
+        # D3 bridge gate: an --update against a BRIDGE target would silently materialize a
+        # full native team (the missing build-log makes the structural diff treat every file
+        # as an addition). Fail closed on a positively-detected bridge unless the operator
+        # opts in with --materialize-native.
+        if _update_target_is_bridge(project_root, framework_id) and not getattr(
+            args, "materialize_native", False
+        ):
+            print(
+                f"Error: the --update target is a BRIDGE to a canonical framework "
+                f"(structured AGENTTEAMS-BRIDGE marker / references/bridges/*-to-{framework_id}/"
+                f"bridge-manifest.json present). Proceeding would materialize a full NATIVE "
+                f"{framework_id!r} team over the bridge (every file read as an addition). "
+                f"Re-run with --bridge-merge to refresh the BRIDGE (safe, content-preserving), "
+                f"or with --materialize-native to intentionally generate a native team here.",
+                file=sys.stderr,
+            )
+            return 1
+
         from agentteams import drift
 
         # Load old build-log (may not exist for first-generation teams)
@@ -575,6 +783,7 @@ def _run_generate_inner(
                             f"  !  Model-routing write failed: {exc}",
                             file=sys.stderr,
                         )
+                _emit_agent_privilege_config(manifest, output_dir)
                 _emit_host_mcp_artifacts_if_enabled(manifest, project_root)
                 print(
                     "  ✓  Healed build-log baseline (no material drift; "
@@ -736,6 +945,7 @@ def _run_generate_inner(
                         f"  !  Model-routing write failed: {exc}",
                         file=sys.stderr,
                     )
+            _emit_agent_privilege_config(manifest, output_dir)
             _emit_host_mcp_artifacts_if_enabled(manifest, project_root)
             from agentteams import git_hooks as _git_hooks
             _git_hooks.maybe_install_git_hooks(args, project_root)
@@ -964,6 +1174,7 @@ def _run_generate_inner(
                     f"  !  Model-routing write failed: {exc}",
                     file=sys.stderr,
                 )
+        _emit_agent_privilege_config(manifest, output_dir)
         _emit_host_mcp_artifacts_if_enabled(manifest, project_root)
         from agentteams import git_hooks as _git_hooks
         _git_hooks.maybe_install_git_hooks(args, project_root)

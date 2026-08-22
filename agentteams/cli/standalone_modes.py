@@ -98,6 +98,33 @@ def run_standalone_modes(
         return 1 if breport.has_failures else 0
 
     # -----------------------------------------------------------------------
+    # Step 4b.3: Handle --check-rank (AP-2 rank-conformance; warn-only)
+    # -----------------------------------------------------------------------
+    if getattr(args, "check_rank", False):
+        from agentteams import rank_conformance
+        from agentteams.audit_types import _agent_file_ext
+
+        agent_ext = _agent_file_ext(manifest)
+        file_map: dict[str, str] = {}
+        if output_dir.is_dir():
+            for agent_file in sorted(output_dir.glob(f"*{agent_ext}")):
+                try:
+                    file_map[agent_file.name] = agent_file.read_text(encoding="utf-8")
+                except (OSError, UnicodeDecodeError):
+                    continue
+        findings = rank_conformance.check_rank_conformance(file_map, agent_ext)
+        print(f"Rank-conformance scan: {len(file_map)} agent file(s)")
+        if not findings:
+            print("  ✓ No findings.")
+        else:
+            print(f"  {len(findings)} warn")
+            for f in findings:
+                print(f"  ⚠ {f.file} [{f.category}] {f.description}")
+        # Warn-only: the override list is unvalidated and the live team predates
+        # the policy. Always exit 0; real over-grants route to @security.
+        return 0
+
+    # -----------------------------------------------------------------------
     # Step 4c: Handle retrieval utility modes — memory-index + code-index
     # (no template rendering; gitignored/local artifacts)
     # -----------------------------------------------------------------------

@@ -28,6 +28,7 @@ from agentteams.host_features import (
     expand_privilege_profile,
     merge_profile_features,
     validate,
+    validate_privilege_profile,
 )
 
 
@@ -54,6 +55,96 @@ def test_expand_privilege_profile():
     assert expand_privilege_profile("exclusive") == ["claude:sandbox"]
     # Unknown profile must never silently grant confinement.
     assert expand_privilege_profile("bogus") == []
+
+
+def test_validate_privilege_profile_normalizes_and_rejects():
+    # CC-6: None/"" default to cooperative (a missing profile is not a typo)...
+    assert validate_privilege_profile(None) == "cooperative"
+    assert validate_privilege_profile("") == "cooperative"
+    assert validate_privilege_profile("confined") == "confined"
+    assert validate_privilege_profile("exclusive") == "exclusive"
+    # ...but a typo'd/unknown value fails closed rather than downgrading to unconfined.
+    with pytest.raises(ValueError, match="unknown privilege_profile"):
+        validate_privilege_profile("exclusve")
+
+
+def test_build_manifest_rejects_unknown_privilege_profile():
+    # CC-6: the parse boundary hard-errors so a typo cannot ship an unconfined team
+    # that looks confined.
+    with pytest.raises(ValueError, match="unknown privilege_profile"):
+        analyze.build_manifest(
+            {"project_goal": "x", "project_name": "T", "privilege_profile": "confind"},
+            framework="claude",
+        )
+
+
+# --------------------------------------------------------------------------
+# P1-2: fail-closed on an unenforceable host
+# --------------------------------------------------------------------------
+
+def test_p1_2_fail_closed_raises_on_unenforceable_host():
+    from agentteams.cli.artifacts import (
+        PrivilegeConfinementError,
+        resolve_host_features_and_advise,
+    )
+
+    manifest = {"privilege_profile": "confined"}
+    with pytest.raises(PrivilegeConfinementError, match="fail-closed"):
+        resolve_host_features_and_advise(manifest, [], "goose", allow_unenforced=False)
+
+
+def test_p1_2_allow_flag_degrades_to_advisory():
+    from agentteams.cli.artifacts import resolve_host_features_and_advise
+
+    manifest = {"privilege_profile": "exclusive"}
+    resolve_host_features_and_advise(manifest, [], "goose", allow_unenforced=True)
+    codes = [a["code"] for a in manifest.get("advisories", [])]
+    assert "privilege-profile-unenforced-host" in codes
+
+
+def test_p1_2_enforceable_host_never_raises_even_fail_closed():
+    from agentteams.cli.artifacts import resolve_host_features_and_advise
+
+    manifest = {"privilege_profile": "confined"}
+    # claude CAN enforce → no raise, no advisory, sandbox token present.
+    resolve_host_features_and_advise(manifest, [], "claude", allow_unenforced=False)
+    assert manifest["host_features"] == ["claude:sandbox"]
+    assert not manifest.get("advisories")
+
+
+def test_p1_2_cooperative_never_fails_closed():
+    from agentteams.cli.artifacts import resolve_host_features_and_advise
+
+    manifest = {"privilege_profile": "cooperative"}
+    # No confinement requested → fail-closed posture is a no-op on any host.
+    resolve_host_features_and_advise(manifest, [], "goose", allow_unenforced=False)
+    assert manifest.get("host_features") == []
+
+
+# --------------------------------------------------------------------------
+# enforce_decision_signing switch (agent-position axis)
+# --------------------------------------------------------------------------
+
+def test_enforce_decision_signing_defaults_on_and_carries_to_manifest():
+    m = analyze.build_manifest({"project_goal": "x", "project_name": "T"}, framework="claude")
+    assert m["enforce_decision_signing"] is True  # default ON
+    m2 = analyze.build_manifest(
+        {"project_goal": "x", "project_name": "T", "enforce_decision_signing": False},
+        framework="claude",
+    )
+    assert m2["enforce_decision_signing"] is False  # explicit opt-out honored
+
+
+def test_agent_privilege_config_emitted_with_switch_value(tmp_path):
+    import json as _json
+    from agentteams.cli.artifacts import _write_agent_privilege_config
+
+    m = analyze.build_manifest({"project_goal": "x", "project_name": "T"}, framework="claude")
+    path = _write_agent_privilege_config(m, tmp_path)
+    assert path == tmp_path / "references" / "agent-privilege.json"
+    assert _json.loads(path.read_text())["enforce_decision_signing"] is True
+    # A manifest with no switch (older shape) emits nothing rather than a bogus default.
+    assert _write_agent_privilege_config({}, tmp_path / "empty") is None
 
 
 def test_merge_profile_features_union_is_idempotent_and_order_preserving():
@@ -197,6 +288,11 @@ def test_exclusive_read_deny_paths_only_for_exclusive():
     assert _exclusive_read_deny_paths({"privilege_profile": "cooperative"}) is None
     deny = _exclusive_read_deny_paths({"privilege_profile": "exclusive"})
     assert deny and "~/.ssh" in deny  # default set present
+    assert "~/.azure" in deny  # P3-7: cloud-provider cred added to the default set
+    # P3-7: routine-agent-work auth identities are deliberately NOT in the default
+    # (they would break the gh/git toolchains the shipped PR agents use).
+    assert "~/.config/gh" not in deny
+    assert "~/.netrc" not in deny
     deny2 = _exclusive_read_deny_paths(
         {"privilege_profile": "exclusive", "protected_read_paths": ["~/sibling", "~/.ssh"]}
     )

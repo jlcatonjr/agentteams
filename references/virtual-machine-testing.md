@@ -23,7 +23,9 @@
 4. Connect: `ssh -p 2222 <user>@127.0.0.1`. The VirtualBox default user is `vboxuser`.
 5. If sshd stalls or drops the connection, see §3 — the VM's `sshd_config` almost
    certainly has `UseDNS yes` and aggressive per-source penalties that fight automated
-   access over NAT. The durable fix is §3.1 (one console edit).
+   access over NAT. The durable fix is §3.1 (one console edit) — **unless nothing is
+   listening on port 22 at all** (§3.3, socket-activated 26.04), which presents
+   identically at the client but is fixed by enabling `ssh.socket`, not editing config.
 
 ## 0b. Provisioning a fresh VM the agent can SSH into (recommended, headless CLI)
 
@@ -55,7 +57,7 @@ B64=$(printf '%s\n' \
   "printf '%s\n' '$PUB' > \"\$D/authorized_keys\"" \
   'chmod 600 "$D/authorized_keys"; chown $U:$U "$D/authorized_keys"' \
   "printf 'UseDNS no\nMaxStartups 100:30:200\n' > /etc/ssh/sshd_config.d/99-vmtest.conf" \
-  'systemctl enable ssh || true' | base64 | tr -d '\n')
+  'systemctl enable ssh.socket || systemctl enable ssh || true' | base64 | tr -d '\n')
 
 VBoxManage unattended install "$VM" --iso="$ISO" \
   --user=vboxuser --user-password=$VMPW --full-user-name="VBox Sandbox" \
@@ -67,7 +69,9 @@ VBoxManage unattended install "$VM" --iso="$ISO" \
 Then poll for readiness and connect **key-based** (no password):
 `ssh -p 2223 -i ~/.ssh/id_rsa vboxuser@127.0.0.1`. Install takes ~15–20 min; the VM
 auto-reboots into the installed system. Key auth + the baked-in `UseDNS no`/`MaxStartups`
-sidestep §3's banner-stall and rate-limit entirely — no interactive-password dance.
+sidestep §3's banner-stall and rate-limit entirely — no interactive-password dance. The
+`enable ssh.socket` above (not merely `enable ssh`) is what guarantees port 22 is listening
+after the post-install reboot on socket-activated 26.04 — see §3.3.
 
 ## 1. VM lifecycle (VBoxManage)
 
@@ -98,10 +102,18 @@ answers, not by the screenshot.
 - **NEVER commit `.env`.** It is in `.gitignore`; keep it there. Do not echo its values
   into committed files or transcripts beyond what a live debug requires.
 
-## 3. The two failure modes that waste the most time
+## 3. The three failure modes that waste the most time
 
-Both were hit repeatedly across two VMs in this repo. They are **VM-side sshd config**
-problems, not client bugs.
+§3.1 and §3.2 were hit repeatedly across two VMs in this repo; §3.3 was observed once (on
+`testLinux`, 26.04, after a reboot). All are **VM-side sshd config/state** problems, not
+client bugs — §3.1 and §3.2 are `sshd_config` problems, §3.3 is an sshd **not running**
+problem — and all three present with the *same* banner-exchange symptom, so triage by the
+console `ss -ltn | grep :22` check, not by the client error string:
+
+- **nothing listening on :22** → §3.3 (enable `ssh.socket`).
+- **`systemd`/`sshd` listening but the connection drops** → §3.2 (rate-limit) if it fails
+  only after repeated attempts, or §3.1 (banner stall) if a single connection hangs
+  ~30–60 s with no version banner.
 
 ### 3.1 Banner stall — empty SSH banner / `kex_exchange_identification` hang
 
@@ -156,7 +168,8 @@ SSHD=$(command -v sshd || echo /usr/sbin/sshd)   # sshd is in /usr/sbin, not a u
 sudo "$SSHD" -t && sudo systemctl restart ssh && echo APPLIED-OK || echo SSHD-CONFIG-ERROR
 ```
 (The service unit is `ssh` on Debian/Ubuntu; if `restart ssh` reports no such unit, use
-`sudo systemctl restart sshd`.)
+`sudo systemctl restart sshd`. On socket-activated 26.04 — §3.3 — restart `ssh.socket`
+instead; restarting the service there does not re-open the listener.)
 
 `UseDNS no` kills the banner stall; the high `MaxStartups` and (where supported) the
 per-source directives stop sshd dropping automated repeated connections. `sshd -t`
@@ -165,7 +178,44 @@ loosen sshd's abuse protections deliberately. If the drop-in dir is not `Include
 main config (`grep -i '^include' /etc/ssh/sshd_config` shows nothing), append the same
 lines to `/etc/ssh/sshd_config` instead.
 
-### 3.3 Why `VBoxManage guestcontrol` was not a workaround
+### 3.3 Port 22 not listening — `ssh.socket` disabled after reboot (socket activation)
+
+**Symptom:** the client error is **byte-identical to §3.2** — `nc`/TCP to `2222` succeeds
+(the NAT forward always accepts the SYN) but `ssh` fails at banner exchange with
+`banner exchange: Connection to UNKNOWN port -1: Socket is not connected` (`ssh -v` shows
+`getpeername failed: Socket is not connected` right after "Connection established"). **You
+cannot tell §3.2 and §3.3 apart from the client** — both look like "keeps failing." The
+only reliable discriminator is the console `ss -ltn | grep :22` check (see the §3 triage
+fork): here it shows **no listener at all**, because nothing is listening on guest port 22.
+
+**Cause:** modern Ubuntu — 26.04, OpenSSH 10.x (and reportedly 25.10) — ships SSH
+**socket-activated**: `ssh.service` is `disabled` and started on demand by `ssh.socket`. If
+`ssh.socket` is not enabled, a reboot leaves nothing on port 22. `openssh-server` is
+installed and `sshd_config` is fine — so §3.1/§3.2 fixes do nothing here. Confirm from the
+console with `systemctl is-enabled ssh.socket` (→ `disabled`) and `ss -ltn | grep :22` (→ no
+match). Note `systemctl is-enabled sshd` prints `alias` — `sshd` is only an alias of `ssh`.
+
+**Durable fix — run INSIDE the VM console (§3.4 shows how to reach it without SSH):**
+
+```
+sudo systemctl enable --now ssh.socket        # listen on 22 now AND at every boot
+systemctl is-enabled ssh.socket               # expect: enabled
+```
+
+Then (re)apply the §3.1/§3.2 drop-in for the banner stall and restart the **socket**, not
+the service: `sudo systemctl restart ssh.socket`. Verify: `ss -ltn | grep :22` shows
+`systemd` (pid 1) owning `0.0.0.0:22`. On a socket-activated host, `systemctl restart ssh`
+restarts a per-connection service and does **not** (re)open the listener — always act on
+`ssh.socket`.
+
+**Caveat on the §3.2 drop-in under socket activation:** because **systemd** (not sshd) now
+owns `accept()` on :22, `UseDNS no` and `PerSourcePenalties` still take effect (sshd reads
+its config per connection) but `MaxStartups` — an sshd *listener* directive — is likely
+inert; the socket's own `MaxConnections*`/`Backlog` govern accept instead. This was not
+verified live; if automated-connection drops persist on a socket-activated host, tune
+`ssh.socket` (a `systemctl edit ssh.socket` drop-in), not `MaxStartups`.
+
+### 3.4 Why `VBoxManage guestcontrol` was not a workaround — and what to use instead
 
 `guestcontrol ... run` bypasses sshd entirely, which is attractive when sshd misbehaves —
 but it needs the full **Guest Additions guest-control (VBoxService) exec** component. On
@@ -173,6 +223,41 @@ the minimal / ARM Ubuntu images used here it reports *"The guest execution servi
 ready (yet)"* indefinitely (the additions are partially present — guest properties update —
 but the control service is not installed/running). Treat guestcontrol as unavailable
 unless `virtualbox-guest-utils` (with the control service) is confirmed in the guest.
+
+**Working alternative when SSH is entirely down and there is no clipboard/Guest Additions:**
+the emulated **keyboard** always works. From the host, type straight into the logged-in
+guest console — this is also the answer to "I can't copy/paste into the VM":
+
+```
+VBoxManage controlvm <VM> keyboardputstring "systemctl is-enabled ssh.socket"
+VBoxManage controlvm <VM> keyboardputscancode 1c 9c   # press Enter (make/break)
+VBoxManage controlvm <VM> keyboardputfile <local-script>   # type a whole file verbatim
+```
+
+Injection is **blind** (no screen readback). For a return channel, add a **temporary** NAT
+forward and serve the guest's output over HTTP, then read it from the host. **Serve a
+dedicated empty dir, never `/tmp`** — `http.server` has no auth and lists its whole cwd, so
+any secret-bearing script or output file in the served dir is readable by *any* local
+process on the Mac (`curl 127.0.0.1:2223`) while the forward is up:
+
+```
+VBoxManage controlvm <VM> natpf1 "probe,tcp,127.0.0.1,2223,,2223"      # host side
+# inject into the guest console (dedicated dir; write only readback files here):
+#   mkdir -p /tmp/probe && cd /tmp/probe && python3 -m http.server 2223 &
+#   run a command with output redirected to /tmp/probe/<file>, then:
+curl -s http://127.0.0.1:2223/<file>                                   # read it back
+# TEAR DOWN when done:
+#   inject:  pkill -f "http.server 2223"; rm -rf /tmp/probe
+VBoxManage controlvm <VM> natpf1 delete probe
+```
+
+Password hygiene when injecting `sudo`: pipe the value inline (`echo "<pw>" | sudo -S …`) so
+it is never assigned to a guest variable or written to a served file, and **prefix the line
+with a space** so Ubuntu's `HISTCONTROL=ignoreboth` keeps it out of shell history. Do the
+literal-value substitution on the **host** side of `keyboardputstring` (from your gitignored
+`.env`), not in a guest export; the value is still briefly visible on the physical console,
+so only ever do this on a throwaway test VM. The keyboard channel is exactly how §3.3's
+`ssh.socket` fix was applied when port 22 was dead — no SSH, no Guest Additions, no clipboard.
 
 ## 4. Host-key hygiene on VM recreation
 

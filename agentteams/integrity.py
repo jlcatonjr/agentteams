@@ -34,6 +34,10 @@ from pathlib import Path
 #: it would disable or weaken a control rather than merely change behaviour.
 ENFORCEMENT_MODULES: tuple[str, ...] = (
     "agentteams/cli/security_gate.py",   # C-2, C-5: the destructive-action gate
+    "agentteams/cli/decision_log.py",    # C-2 HALT-finality + C-5 authorization authenticity
+                                         # + the enforce_decision_signing switch read; the gate
+                                         # imports its enforcement from here, so it carries the
+                                         # same constitutional weight and must be tracked too.
     "agentteams/scan.py",                # C-4: the deterministic content scanner
     "agentteams/fences.py",              # C-1: fence restore, template-authoritative set
     "agentteams/unfenced.py",            # C-1: constraint ratchet

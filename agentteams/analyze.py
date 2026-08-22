@@ -237,8 +237,22 @@ def build_manifest(description: dict[str, Any], *, framework: str = "copilot-vsc
     # claude:sandbox host feature in the CLI layer (host_features.expand_privilege_profile),
     # which emits Claude Code's native OS-level sandbox block. Carried onto the manifest
     # so the emitter and the expansion both read a single source of truth.
-    privilege_profile = description.get("privilege_profile") or "cooperative"
+    from agentteams import host_features
+
+    privilege_profile = host_features.validate_privilege_profile(
+        description.get("privilege_profile")
+    )
     workspace_write_roots = description.get("workspace_write_roots")
+
+    # Strict agent-privilege switch (enforce decision signing). Defaults ON: an absent field
+    # means the team gets the enforcement when it is (re)generated/updated (the emitted
+    # references/agent-privilege.json is what the gate reads; an absent file is treated as
+    # OFF at read time, so a not-yet-updated workspace never breaks by surprise). Set false
+    # in the brief to keep the legacy behavior.
+    enforce_decision_signing = description.get("enforce_decision_signing")
+    if enforce_decision_signing is None:
+        enforce_decision_signing = True
+    enforce_decision_signing = bool(enforce_decision_signing)
 
     # Stable team identity for cross-workspace capability grants (P2; see schema). Slug
     # default made pattern-safe (_slugify can leave a leading hyphen or empty for non-ASCII).
@@ -475,6 +489,7 @@ def build_manifest(description: dict[str, Any], *, framework: str = "copilot-vsc
         "conversion_pipeline": conversion_pipeline,
         "team_id": team_id,
         "privilege_profile": privilege_profile,
+        "enforce_decision_signing": enforce_decision_signing,
         **({"workspace_write_roots": list(workspace_write_roots)} if workspace_write_roots else {}),
         **({"protected_read_paths": list(description["protected_read_paths"])} if description.get("protected_read_paths") else {}),
         "retrieval_trigger_contract_version": retrieval_integration.get("trigger_contract_version", "v1"),

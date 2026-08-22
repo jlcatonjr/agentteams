@@ -38,13 +38,20 @@ HALT. A holder still cannot proceed past a HALT on the granted write.
 from __future__ import annotations
 
 import csv
+import hashlib
 import os
 import sys
 from datetime import datetime
 from pathlib import Path
 
 from agentteams.atomicio import _atomic_write_text, atomic_rewrite_csv_rows
-from agentteams.cli.signed_ledger import hmac_sign, hmac_verify, is_expired, path_within
+from agentteams.cli.signed_ledger import (
+    canonical_payload,
+    hmac_sign,
+    hmac_verify,
+    is_expired,
+    path_within,
+)
 
 #: Env var holding the shared grant signing secret. Separate from the waiver key so the
 #: two authorities can be rotated independently.
@@ -57,17 +64,24 @@ GRANT_LOG_REL = "references/capability-grants.log.csv"
 GRANT_COLUMNS: tuple[str, ...] = (
     "timestamp", "grant_id", "issuer_team", "holder_team", "target_path",
     "permitted_ops", "expires_at", "max_uses", "uses", "approver", "ticket_id",
-    "reason_code", "signature",
+    "reason_code", "prev_digest", "signature",
 )
 
-#: Fields covered by the signature, in fixed order (excludes ``timestamp`` and
-#: ``signature``). ``uses`` is signed so a tampered counter invalidates the row (a future
-#: runtime-consume path would re-sign on increment; the generation-time widening path
-#: does not consume — see the module docstring).
+#: Business fields that MUST be present (non-empty) on every row, in fixed order (excludes
+#: ``timestamp``, ``prev_digest`` and ``signature``). ``uses`` is signed so a tampered
+#: counter invalidates the row (a future runtime-consume path would re-sign on increment;
+#: the generation-time widening path does not consume — see the module docstring).
 _GRANT_SIGNATURE_FIELDS: tuple[str, ...] = (
     "grant_id", "issuer_team", "holder_team", "target_path", "permitted_ops",
     "expires_at", "max_uses", "uses", "approver", "ticket_id", "reason_code",
 )
+
+#: Fields the HMAC actually covers: the business fields PLUS ``prev_digest``. Signing the
+#: chain link is load-bearing — if it were unsigned, a keyless attacker could delete a row
+#: and rewrite the next row's ``prev_digest`` to re-chain over the gap (the signature would
+#: still verify), hiding the deletion. The genesis row carries ``prev_digest=""`` (allowed
+#: empty here; it is not in the required-non-empty set above).
+_GRANT_SIGNED_FIELDS: tuple[str, ...] = (*_GRANT_SIGNATURE_FIELDS, "prev_digest")
 
 
 class GrantError(RuntimeError):
@@ -103,7 +117,7 @@ def sign_grant(record: dict[str, str], *, key: str | None = None) -> str:
         The hex signature.
     """
     signing_key = key or _signing_key()
-    return hmac_sign(signing_key, [record.get(f, "") for f in _GRANT_SIGNATURE_FIELDS])
+    return hmac_sign(signing_key, [record.get(f, "") for f in _GRANT_SIGNED_FIELDS])
 
 
 def verify_grant_signature(record: dict[str, str], *, key: str | None = None) -> bool:
@@ -119,7 +133,7 @@ def verify_grant_signature(record: dict[str, str], *, key: str | None = None) ->
     signing_key = key or _signing_key()
     return hmac_verify(
         signing_key,
-        [record.get(f, "") for f in _GRANT_SIGNATURE_FIELDS],
+        [record.get(f, "") for f in _GRANT_SIGNED_FIELDS],
         record.get("signature", ""),
     )
 
@@ -178,7 +192,17 @@ def validate_grant(
             raise GrantError(f"grant is missing required field {field!r}")
     if not verify_grant_signature(record, key=key):
         raise GrantError(f"grant {record.get('grant_id')!r} has an invalid signature")
-    if is_expired(record["expires_at"], now=now):
+    try:
+        expired = is_expired(record["expires_at"], now=now)
+    except (ValueError, KeyError) as exc:
+        # A malformed expires_at must fail CLOSED as an invalid grant, not escape as an
+        # unhandled ValueError that crashes the caller (P2-8 / audit L-1). A grant whose
+        # deadline cannot be parsed is not trustworthy.
+        raise GrantError(
+            f"grant {record.get('grant_id')!r} has a malformed expires_at "
+            f"({record.get('expires_at')!r}): {exc}"
+        ) from exc
+    if expired:
         raise GrantError(f"grant {record.get('grant_id')!r} has expired ({record['expires_at']})")
     try:
         max_uses = int(record["max_uses"])
@@ -193,6 +217,33 @@ def validate_grant(
         _assert_approver_on_roster(record.get("approver", ""), output_dir)
 
 
+def _roster_names_an_approver(output_dir: Path) -> bool:
+    """True when the security-approver roster exists and names at least one approver.
+
+    Mirrors ``decision_log._approved_decision_authors``' parse: a line is an approver only
+    when it is non-blank and not a ``#`` comment. An absent file, an unreadable file, or a
+    file of only blanks/comments all return ``False`` — the cases where
+    ``_approved_decision_authors`` would fall back to the built-in default.
+
+    Args:
+        output_dir: Workspace root (roster read from ``references/security-approvers.txt``).
+
+    Returns:
+        Whether a named approver is present.
+    """
+    roster_path = output_dir / "references" / "security-approvers.txt"
+    if not roster_path.exists():
+        return False
+    try:
+        raw = roster_path.read_text(encoding="utf-8")
+    except OSError:
+        return False
+    return any(
+        line.strip() and not line.strip().startswith("#")
+        for line in raw.splitlines()
+    )
+
+
 def _assert_approver_on_roster(approver: str, output_dir: Path) -> None:
     """Raise unless ``approver`` is on the workspace's security-approver roster.
 
@@ -200,14 +251,31 @@ def _assert_approver_on_roster(approver: str, output_dir: Path) -> None:
     (``references/security-approvers.txt``), so cross-workspace grants are approved by
     the same trusted principals as destructive local actions.
 
+    A cross-workspace grant requires an EXPLICIT roster: when the roster file is absent
+    or names no approver, ``_approved_decision_authors`` falls back to the built-in
+    ``{security, @security}`` default (decision_log.py), which lets a grant naming
+    ``@security`` as its own approver self-clear. That fallback is correct for ordinary
+    local HALT-clearance but unsafe for cross-workspace widening (P2-2, C-5): a grant that
+    widens another repo's write boundary must be cleared by a recorded, project-chosen
+    principal, never by an unrecorded default. So this grant chokepoint hard-errors
+    (fail-closed) when no approver roster is present.
+
     Args:
         approver: The approver named on the grant (``@`` and case are normalized).
         output_dir: Workspace root.
 
     Raises:
-        GrantError: The approver is not on the roster.
+        GrantError: The roster is absent/empty, or the approver is not on the roster.
     """
     from agentteams.cli.decision_log import _approved_decision_authors
+
+    if not _roster_names_an_approver(output_dir):
+        raise GrantError(
+            "cross-workspace grant authorization requires an explicit approver roster; "
+            "references/security-approvers.txt is absent or names no approver "
+            "(refusing the built-in security/@security self-clear fallback — add at least "
+            "one approver to the roster before issuing or honouring a grant)"
+        )
 
     normalized = approver.strip().lstrip("@").lower()
     roster = {a.strip().lstrip("@").lower() for a in _approved_decision_authors(output_dir)}
@@ -218,8 +286,62 @@ def _assert_approver_on_roster(approver: str, output_dir: Path) -> None:
         )
 
 
+def _grant_chain_digest(record: dict[str, str]) -> str:
+    """Return a grant row's chain digest: SHA-256 over the fields the signature covers.
+
+    The next row's ``prev_digest`` equals this value, so a removed or reordered row breaks
+    the chain. Computed over :data:`_GRANT_SIGNED_FIELDS` (which includes ``prev_digest``),
+    so the digest is bound to authenticated content and each link transitively depends on
+    every earlier one back to the genesis row.
+
+    Args:
+        record: The grant row.
+
+    Returns:
+        The hex SHA-256 digest.
+    """
+    # Use the SAME canonicalization (strip + '|'-join) the HMAC signs over, so the two hash
+    # helpers over these fields never disagree on serialization.
+    payload = canonical_payload([record.get(f, "") for f in _GRANT_SIGNED_FIELDS])
+    return hashlib.sha256(payload.encode("utf-8")).hexdigest()
+
+
+def _assert_grant_chain_intact(rows: list[dict[str, str]], columns: list[str]) -> None:
+    """Verify the ledger's hash chain when it carries one (opt-in on the column).
+
+    Per-row signing proves who wrote a row; chaining proves nobody removed one — deleting a
+    signed grant otherwise leaves every remaining signature valid (a silent loss of a
+    holder's reach). A ledger with no ``prev_digest`` column is unchained and passes, the
+    same way signing is opt-in, so a pre-chain ledger keeps working until it is re-issued.
+
+    Args:
+        rows: The ledger rows in file order.
+        columns: The ledger's header columns.
+
+    Raises:
+        GrantError: A row's ``prev_digest`` does not match the running chain — a row was
+            removed, reordered, or edited.
+    """
+    if "prev_digest" not in {c.strip() for c in columns}:
+        return
+    previous = ""
+    for index, row in enumerate(rows):
+        declared = (row.get("prev_digest") or "").strip()
+        if declared != previous:
+            raise GrantError(
+                f"capability-grant ledger chain broken at row {index + 1}: prev_digest is "
+                f"{declared!r}, expected {previous!r} — a grant row was removed, reordered, "
+                f"or edited."
+            )
+        previous = _grant_chain_digest(row)
+
+
 def _read_grant_rows(repo_root: Path) -> list[dict[str, str]]:
     """Return all grant rows from a workspace's ledger (empty list if absent).
+
+    Verifies the ``prev_digest`` hash chain (when present) before returning, so every reader
+    — generation-time widening, ``--verify-grants``, and the append path — fails closed on a
+    tampered or truncated ledger rather than trusting rows around a deleted one.
 
     Args:
         repo_root: Workspace root containing ``references/capability-grants.log.csv``.
@@ -228,7 +350,7 @@ def _read_grant_rows(repo_root: Path) -> list[dict[str, str]]:
         The rows as dicts, values coerced to ``""`` for missing cells.
 
     Raises:
-        GrantError: The ledger exists but its header is malformed.
+        GrantError: The ledger exists but its header is malformed, or its hash chain is broken.
     """
     log_path = repo_root / GRANT_LOG_REL
     if not log_path.exists():
@@ -242,9 +364,11 @@ def _read_grant_rows(repo_root: Path) -> list[dict[str, str]]:
                     "capability-grants log is malformed: expected header "
                     + ",".join(GRANT_COLUMNS)
                 )
-            return [{k: (v or "") for k, v in row.items()} for row in reader]
+            rows = [{k: (v or "") for k, v in row.items()} for row in reader]
     except (OSError, csv.Error) as exc:
         raise GrantError(f"unable to read capability-grants log: {exc}") from exc
+    _assert_grant_chain_intact(rows, columns)
+    return rows
 
 
 def held_grants(
@@ -320,6 +444,47 @@ def granted_write_roots(
     return roots
 
 
+def _reject_unsafe_target_path(target_path: str) -> None:
+    """Reject a grant ``target_path`` that would widen a boundary too far (P2-4).
+
+    A grant's target path is merged verbatim into a holder's sandbox ``allowWrite`` at
+    generation time (:func:`granted_write_roots`), so a dangerous value here becomes real
+    OS write reach. Reject the values that can never be a legitimate scoped grant:
+
+    * empty/whitespace — an unbounded or accidental grant;
+    * ``/`` — the filesystem root;
+    * a home-rooted ``~`` / ``~/...`` path — grants write across the operator's home;
+    * a relative path that escapes its anchor via ``..`` (``../`` or a normalized path
+      that starts above its root) — the classic containment break.
+
+    Absolute paths are permitted (a grant into the issuer's tree is a documented case),
+    but a full ``path_within(issuer_root)`` re-assertion still needs the issuer root
+    threaded to the widening path — see the P2-4 follow-up.
+
+    Args:
+        target_path: The path the grant would authorize the holder to write.
+
+    Raises:
+        GrantError: The path is one of the rejected shapes above.
+    """
+    raw = (target_path or "").strip()
+    if not raw:
+        raise GrantError("grant target_path is empty; a grant must name a scoped path")
+    if raw == "/":
+        raise GrantError("grant target_path '/' would widen write access to the filesystem root")
+    if raw == "~" or raw.startswith("~/") or raw.startswith("~\\"):
+        raise GrantError(
+            f"grant target_path {target_path!r} is home-rooted; refusing a grant across "
+            "the operator's home directory"
+        )
+    if not Path(raw).is_absolute():
+        normalized = os.path.normpath(raw)
+        if normalized == ".." or normalized.startswith(".." + os.sep) or normalized.startswith("../"):
+            raise GrantError(
+                f"grant target_path {target_path!r} escapes its workspace via '..'"
+            )
+
+
 def issue_grant(
     repo_root: Path, *, issuer_team: str, holder_team: str, target_path: str,
     permitted_ops: str, expires_at: str, max_uses: int, approver: str, ticket_id: str,
@@ -352,18 +517,44 @@ def issue_grant(
         The signed grant record as written.
 
     Raises:
-        GrantError: ``max_uses`` is not positive, the approver is off-roster, or the
-            signing key is unset.
+        GrantError: ``max_uses`` is not positive, ``target_path`` is unsafe (empty, ``/``,
+            home-rooted, or ``..``-escaping), ``expires_at`` is not valid ISO-8601, the
+            approver is off-roster (or no roster is present), or the signing key is unset.
     """
     if max_uses <= 0:
         raise GrantError("max_uses must be a positive integer")
+    _reject_unsafe_target_path(target_path)
+    try:
+        is_expired(expires_at)  # parse-only: reject a malformed deadline at issue (P2-8)
+    except (ValueError, KeyError) as exc:
+        raise GrantError(
+            f"expires_at is not a valid ISO-8601 timestamp ({expires_at!r}): {exc}"
+        ) from exc
     _assert_approver_on_roster(approver, repo_root)
+    if max_uses != 1:
+        # max_uses is validated at every generation but NOT decremented per write — the
+        # generation-time widening path re-reads the ledger and does not consume a use
+        # (expiry is the only active bound). An operator who sets max_uses=N expecting N
+        # writes gets a grant that behaves as reusable-until-expiry. Surface that confused
+        # affordance loudly rather than let it mislead (P2-6). Prefer a short expires_at
+        # for a tight window.
+        print(
+            f"  NOTE: grant {grant_id!r} sets max_uses={max_uses}; the use counter is "
+            "validated but not consumed by generation-time widening (expiry is the active "
+            "bound). Use a short expires_at to limit the window.",
+            file=sys.stderr,
+        )
+    # Chain the new row to the ledger's current tail so a later deletion is detectable
+    # (also verifies the existing chain is intact — fail closed on a tampered ledger).
+    existing = _read_grant_rows(repo_root)
+    prev_digest = _grant_chain_digest(existing[-1]) if existing else ""
     record: dict[str, str] = {
         "timestamp": timestamp, "grant_id": grant_id, "issuer_team": issuer_team,
         "holder_team": holder_team, "target_path": target_path,
         "permitted_ops": permitted_ops, "expires_at": expires_at,
         "max_uses": str(max_uses), "uses": "0", "approver": approver,
-        "ticket_id": ticket_id, "reason_code": reason_code, "signature": "",
+        "ticket_id": ticket_id, "reason_code": reason_code,
+        "prev_digest": prev_digest, "signature": "",
     }
     record["signature"] = sign_grant(record, key=key)
     _append_grant_row(repo_root, record)
@@ -396,7 +587,13 @@ def verify_grants(output_dir: Path, *, now: datetime | None = None, key: str | N
         A list of problem strings (empty when all rows are valid).
     """
     problems: list[str] = []
-    for row in _read_grant_rows(output_dir):
+    try:
+        rows = _read_grant_rows(output_dir)
+    except GrantError as exc:
+        # A broken hash chain (or malformed header) is a whole-ledger problem — report it
+        # rather than crash the read-only audit.
+        return [str(exc)]
+    for row in rows:
         try:
             validate_grant(row, output_dir=output_dir, now=now, key=key)
         except GrantError as exc:

@@ -909,3 +909,57 @@ def test_resolve_path_containment_guard(tmp_path):
         _resolve_path(agents, "../../../../etc/passwd")
     with pytest.raises(ValueError):
         _resolve_path(agents, "/etc/passwd")
+
+
+def test_merge_write_path_refuses_to_blank_populated_agents_roster(tmp_path):
+    """End-to-end guard for the 2026-08-21 recurrence (issue #131 block-collapse class).
+
+    The gap the root-cause named: there was no test asserting the orchestrator `agents:` roster
+    SURVIVES a full emit_all update when the freshly-rendered content carries a blanked roster
+    (as it can when it arrives via a non-emit fleet/sync/interop re-emit whose subset-YAML parser
+    collapsed the bare-scalar block). The on-disk file has a populated 3-item roster + a fence;
+    the incoming render blanks it to `agents: `. After emit_all --merge the roster must remain.
+    """
+    existing = (
+        "---\n"
+        "name: Orchestrator\n"
+        "user-invokable: true\n"
+        "agents:\n"
+        "  - orchestrator\n"
+        "  - navigator\n"
+        "  - security\n"
+        "---\n"
+        "<!-- AGENTTEAMS:BEGIN body v=1 -->\n"
+        "# Orchestrator — OLD\n"
+        "<!-- AGENTTEAMS:END body -->\n"
+    )
+    # Freshly-rendered content with the roster ALREADY collapsed to empty (the bug's input),
+    # plus a legitimate fenced-body update and the user-invokable->user-invocable rename.
+    new_rendered = (
+        "---\n"
+        "name: Orchestrator\n"
+        "user-invocable: true\n"
+        "agents: \n"
+        "---\n"
+        "<!-- AGENTTEAMS:BEGIN body v=1 -->\n"
+        "# Orchestrator — NEW\n"
+        "<!-- AGENTTEAMS:END body -->\n"
+    )
+    target = tmp_path / "orchestrator.agent.md"
+    target.write_text(existing, encoding="utf-8")
+
+    result = emit_all([("orchestrator.agent.md", new_rendered)], output_dir=tmp_path, merge=True)
+
+    assert result.success
+    content = target.read_text(encoding="utf-8")
+    assert "# Orchestrator — NEW" in content, "the legitimate fenced-body update must still apply"
+    # THE INVARIANT (the gap the 2026-08-21 root-cause named: no e2e roster-survival test):
+    # a full emit_all --merge with a blanked incoming roster must leave the on-disk roster intact.
+    assert "agents:\n  - orchestrator" in content, "the populated roster must NOT be blanked"
+    assert "  - navigator" in content and "  - security" in content
+    assert "agents: \n" not in content and "agents:\n---" not in content, "no empty agents block"
+    # NOTE: current code preserves the roster inside _merge_front_matter (agents is a capability
+    # key, so a blanked template value is only ever a PROPOSAL, never applied) — so the write-path
+    # guard is not even needed to reach the invariant here. The guard is defense-in-depth for a
+    # re-render handed an already-collapsed value; that firing is covered by the unit tests
+    # test_guard_restores_* in test_front_matter_merge.py.

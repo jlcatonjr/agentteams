@@ -589,9 +589,18 @@ def _dedupe_by_agent(handoffs: Any) -> list[dict[str, Any]]:
 
 
 def _team_slugs(manifest: dict[str, Any]) -> frozenset[str]:
-    """Slugs of agents generated for this team (valid handoff/load targets)."""
+    """Slugs of agents that are valid handoff/load targets for this team.
+
+    Union of adopted orphans, the authoritative brief-defined team
+    (``agent_slug_list``), agents already deployed ON DISK (``existing_agent_slugs``,
+    populated during ``--update``), and this run's ``output_files`` — so an ``--update``
+    that regenerates only part of the team does not silently drop deployed teammates'
+    cross-refs (D1; mirrors ``copilot_vscode._get_team_slugs``).
+    """
     slugs: set[str] = {"orchestrator"}
     slugs.update(manifest.get("adopted_agents", []))
+    slugs.update(manifest.get("agent_slug_list", []))
+    slugs.update(manifest.get("existing_agent_slugs", []))
     for f in manifest.get("output_files", []):
         name = Path(f.get("path", "")).name
         if name.endswith(".agent.md"):

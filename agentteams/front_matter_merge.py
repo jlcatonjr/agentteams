@@ -425,6 +425,89 @@ def _merge_front_matter(
     return merged, applied, proposals
 
 
+def _is_populated_block(value: str) -> bool:
+    """True when ``value`` is a block-style front-matter value carrying at least one real item.
+
+    A block value comes out of :func:`_front_matter_keys` prefixed with the ``\\n`` sentinel and
+    its indented continuation lines. "Populated" means at least one of those lines is non-blank —
+    i.e. a genuine ``key:\\n  - item`` roster, not an empty ``key:`` with nothing under it.
+    """
+    return value.startswith("\n") and any(line.strip() for line in value.splitlines())
+
+
+def _is_blanked_value(value: str | None) -> bool:
+    """True when a merged/rendered front-matter value has collapsed to *empty*.
+
+    Covers every empty shape a bare-scalar block can degrade into on a non-emit path (issue #131
+    class): the key dropped entirely (``None``), an empty scalar (``agents: `` → ``""``), an
+    empty inline list (``[]``), or a block sentinel with no non-blank items. A partial change
+    (fewer items, but still populated) is deliberately NOT blanking — narrowing is handled by the
+    capability-merge logic and must not be second-guessed here.
+    """
+    if value is None:
+        return True
+    if value.strip() in ("", "[]", "[ ]"):
+        return True
+    if value.startswith("\n") and not any(line.strip() for line in value.splitlines()):
+        return True
+    return False
+
+
+def _restore_blanked_front_matter_blocks(
+    new_content: str, existing_content: str
+) -> tuple[str, list[str]]:
+    """Last line of defense: never let a write BLANK a front-matter block that is populated on disk.
+
+    The three-way merge in :func:`_merge_front_matter` cannot itself blank a populated on-disk
+    block (it starts from ``dict(current)`` and only ever *narrows* a capability key on a clean,
+    non-empty template). But the empty value that blanked jameslcaton's orchestrator ``agents:``
+    roster (28 entries → ``agents: ``) on 2026-08-21 did not originate in that merge — it arrived
+    already-empty from a **non-emit path** (fleet/sync/interop re-emit), where a subset-YAML
+    parser collapses bare-scalar block items (``- navigator``) to empty while dict-shaped
+    ``handoffs:`` items survive. :func:`_render_front_matter` then faithfully rendered the empty.
+    The emit-path fix (issue #131) hardened the *text-merge* parser; it does not cover a value
+    that was emptied before this module ever saw it.
+
+    This guard closes the class regardless of which upstream parser produced the empty: at the
+    point of writing, compare against the real on-disk file and, for any key that is a populated
+    block on disk but empty in the content about to be written, **restore the on-disk block and
+    emit a loud notice**. It only ever RESTORES (never removes, never applies a template value),
+    so it cannot itself cause loss; a genuinely-intended emptying is surfaced for a hand edit.
+
+    Args:
+        new_content: The content about to be written.
+        existing_content: The current on-disk file.
+
+    Returns:
+        ``(guarded_content, notices)``. ``guarded_content is new_content`` unchanged when nothing
+        was blanked.
+    """
+    new_keys = _front_matter_keys(new_content)
+    existing_keys = _front_matter_keys(existing_content)
+    if not new_keys or not existing_keys:
+        return new_content, []
+    restored = dict(new_keys)
+    notices: list[str] = []
+    for key, existing_value in existing_keys.items():
+        if not _is_populated_block(existing_value):
+            continue
+        if _is_blanked_value(new_keys.get(key)):
+            restored[key] = existing_value
+            item_count = sum(
+                1 for line in existing_value.splitlines() if line.strip().startswith("-")
+            )
+            notices.append(
+                f"front matter: refused to blank populated block {key!r} "
+                f"({item_count} item(s)) — restored the on-disk value. An upstream render "
+                f"produced an empty {key!r}; this is the issue #131 block-collapse class on a "
+                f"non-emit (fleet/sync/interop) path. If the emptying was intended, edit the "
+                f"file by hand."
+            )
+    if not notices:
+        return new_content, []
+    return _render_front_matter(new_content, restored), notices
+
+
 def _render_front_matter(content: str, keys: dict[str, str]) -> str:
     """Return ``content`` with its front-matter block rewritten from ``keys``.
 
