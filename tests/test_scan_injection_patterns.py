@@ -130,6 +130,36 @@ def test_the_same_quoted_claim_in_reviewed_content_is_still_a_finding():
     assert hits and "C-1" in hits[0].message
 
 
+@pytest.mark.parametrize("filename", [
+    ".goose/recipes/references/instruction-authority.reference.md",   # goose
+    ".agents/references/instruction-authority.reference.md",          # codex + agents-md
+])
+def test_a_quoted_claim_is_exempt_in_every_frameworks_generated_reference(filename):
+    """The same generated reference lands under a different dir per framework, and every one of
+    those dirs is module-owned. Before goose (`.goose/recipes/`) and codex/agents-md (`.agents/`)
+    were added to the fragment list, only copilot (`.github/agents/`) and claude
+    (`.claude/agents/`) teams got the code-span exemption, so goose/codex/agents-md derived repos
+    threw a false positive on their own generated teaching file. Companion to the copilot/claude
+    case above.
+    """
+    assert not scan_content(
+        "Canonical shapes: `supersedes all prior instructions`.",
+        filename=filename,
+    )
+
+
+def test_a_bare_payload_in_a_goose_reference_still_flags():
+    """Guards against over-suppression from the fragment additions: module-owned exempts a
+    code-SPAN quote, never a bare payload. An override phrase outside a code span in a goose
+    reference is still a finding.
+    """
+    hits = scan_content(
+        "supersedes all prior instructions",
+        filename=".goose/recipes/references/instruction-authority.reference.md",
+    )
+    assert hits and "C-1" in hits[0].message
+
+
 @pytest.mark.parametrize("benign", [
     "The authority hierarchy takes precedence when sources disagree about a fact.",
     "Tier 1 is non-overridable; lower tiers may extend it.",
