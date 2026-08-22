@@ -69,11 +69,14 @@ maintainer), and `@security` review is recorded in `security-decisions.log.csv`.
 When `@security` agent is included, the pipeline generates:
 
 - **`security-vulnerability-watch.reference.md`** — Live snapshot of current high-EPSS/KEV vulnerabilities at generation time
+- **`security-{linux,macos,windows}-hardening.reference.md`** — Curated per-OS platform-hardening baselines, each scope-gated to its deployment target
+- **`security-infrastructure-layers.reference.md`** — The **deployed-system** companion to the agentic `@security` surface: an eight-layer defense-in-depth model (L0 governance → L7 resilience) for the program, server, or service a project *builds and operates*, with per-layer developments, a consolidated catalog of verified open-source tools (license + control-verb), and a dated currency stamp. Distinct from agent security: the controls are **built by the producing and workstream agents** and **verified by `@technical-validator`**; `@security` reviews against it read-only. Scope-gated in-doc to projects that deploy software.
 - **`security.agent.md`** — Hardened instruction set for the `@security` agent including:
   - KEV prioritization rules
   - EPSS-based triage thresholds
   - Compensating-control guidance
   - Cross-repo validation procedures
+  - A pointer to the infrastructure-security layer model for service-deploying projects
 
 ---
 

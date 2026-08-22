@@ -145,6 +145,15 @@ def _plan_output_files(
         "type": "reference",
         "component_slug": None,
     })
+    # Infrastructure-security layer model (always — the deployed-system companion to the
+    # per-OS hardening baselines and the agentic security.agent.md; scope-gated in-doc to
+    # projects that build/deploy/operate a program, server, or service).
+    files.append({
+        "path": "references/security-infrastructure-layers.reference.md",
+        "template": f"{agents_dir}security-infrastructure-layers.reference.template.md",
+        "type": "reference",
+        "component_slug": None,
+    })
 
     # AI bad-habits catalog (always — @code-hygiene CH-25 + @security screening)
     files.append({
