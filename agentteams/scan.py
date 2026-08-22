@@ -440,11 +440,17 @@ def _line_in_front_matter(lines: list[str], line_num: int) -> bool:
 #: moved to `.github/agents/` (2026-08-15 convergence): this module authored the
 #: pre-convergence files still sitting there in already-deployed repos, and the
 #: exemption is keyed on authorship, not on where new output currently lands.
+#: One fragment per framework output directory. A generated reference (e.g. the
+#: instruction-authority reference, which quotes attack phrases as teaching examples) is
+#: module-owned wherever it lands, so every framework's agents dir must appear here — an
+#: omission silently drops the code-span exemption for that framework's derived repos.
 _MODULE_OWNED_PATH_FRAGMENTS: tuple[str, ...] = (
-    "agentteams/templates/",
-    ".github/agents/",
-    ".claude/agents/",
-    ".github/copilot/",
+    "agentteams/templates/",  # the module's own template library
+    ".github/agents/",        # copilot-vscode
+    ".claude/agents/",        # claude
+    ".github/copilot/",       # copilot-cli
+    ".goose/recipes/",        # goose
+    ".agents/",               # codex + agents-md
 )
 
 

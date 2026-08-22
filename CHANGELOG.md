@@ -24,6 +24,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### fixed (source remediation from the securityInfrastructure handoff)
 
+- **Security scan no longer false-flags a generated reference's teaching examples in goose,
+  codex, and agents-md teams.** The instruction-authority reference *quotes* attack phrases in
+  code spans as examples; `scan._check_injection` suppresses those only for module-owned files,
+  but `_MODULE_OWNED_PATH_FRAGMENTS` listed the copilot/claude output dirs and omitted goose's
+  `.goose/recipes/` and codex/agents-md's `.agents/`. So those three frameworks' derived repos
+  threw a high-severity injection false-positive on their own generated file (blocking under
+  `--fleet`). Added both fragments (each framework's output dir is now labelled), so the code-span
+  exemption applies uniformly. The PII/credential/entropy detectors are unaffected. Regression
+  tests in `tests/test_scan_injection_patterns.py` cover both new dirs (in-span exempt, bare
+  payload still flags); the enforcement-integrity manifest was regenerated. Also: the
+  `adjacent-repos` template now records the tilde-notation path convention (fenced header) so a
+  registry entry does not become a standing OPSEC scan finding.
+
 - **`--update` no longer silently blanks an orchestrator's `agents:` roster (D1).** The
   copilot-vscode and goose team-ref pruners built `team_slugs` only from `output_files` (the
   regenerated subset during `--update`), so deployed teammates the run did not re-emit were
