@@ -1,0 +1,124 @@
+{
+  "artifact_type": "eval-suite",
+  "eval_suite_schema_version": "1.0",
+  "project_name": "ProjectRepositories",
+  "framework": "copilot-vscode",
+  "generated_from": "manifest",
+  "scenarios": [
+    {
+      "id": "routing-orchestrator-knows-all-experts",
+      "category": "routing",
+      "claim": "The orchestrator's agents: list includes every workstream expert, so it can route to each declared component.",
+      "predicate": {
+        "kind": "frontmatter-list-contains-all",
+        "file": "orchestrator.agent.md",
+        "field": "agents",
+        "values": [
+          "crisis-credit-allocation-expert",
+          "fed-response-dag-expert",
+          "prairie-prosperity-expert",
+          "sugarscape-expert",
+          "visualize-energy-data-expert"
+        ]
+      }
+    },
+    {
+      "id": "routing-expert-count-matches-components",
+      "category": "routing",
+      "claim": "Exactly 5 workstream-expert agent file(s) are emitted for 5 declared component(s).",
+      "predicate": {
+        "kind": "agent-count",
+        "suffix": "-expert.agent.md",
+        "count": 5
+      }
+    },
+    {
+      "id": "governance-crisis-credit-allocation-triad-and-return",
+      "category": "governance",
+      "claim": "crisis-credit-allocation-expert wires the worker-governance triad (primary-producer, adversarial, reference-manager) and includes a 'Return to Orchestrator' edge.",
+      "predicate": {
+        "kind": "frontmatter-and-body",
+        "file": "crisis-credit-allocation-expert.agent.md",
+        "agents_contains_all": [
+          "primary-producer",
+          "adversarial",
+          "reference-manager"
+        ],
+        "body_contains": "Return to Orchestrator"
+      }
+    },
+    {
+      "id": "governance-fed-response-dag-triad-and-return",
+      "category": "governance",
+      "claim": "fed-response-dag-expert wires the worker-governance triad (primary-producer, adversarial, reference-manager) and includes a 'Return to Orchestrator' edge.",
+      "predicate": {
+        "kind": "frontmatter-and-body",
+        "file": "fed-response-dag-expert.agent.md",
+        "agents_contains_all": [
+          "primary-producer",
+          "adversarial",
+          "reference-manager"
+        ],
+        "body_contains": "Return to Orchestrator"
+      }
+    },
+    {
+      "id": "handoff-prairie-prosperity",
+      "category": "handoff",
+      "claim": "prairie-prosperity-expert receives upstream from crisis-credit-allocation-expert and returns to the orchestrator (coordination is orchestrator-mediated, not peer-to-peer).",
+      "predicate": {
+        "kind": "handoff-chain",
+        "chain": [
+          "crisis-credit-allocation-expert",
+          "prairie-prosperity-expert"
+        ],
+        "returns_to": "orchestrator"
+      }
+    },
+    {
+      "id": "governance-prairie-prosperity-triad-and-return",
+      "category": "governance",
+      "claim": "prairie-prosperity-expert wires the worker-governance triad (primary-producer, adversarial, reference-manager) and includes a 'Return to Orchestrator' edge.",
+      "predicate": {
+        "kind": "frontmatter-and-body",
+        "file": "prairie-prosperity-expert.agent.md",
+        "agents_contains_all": [
+          "primary-producer",
+          "adversarial",
+          "reference-manager"
+        ],
+        "body_contains": "Return to Orchestrator"
+      }
+    },
+    {
+      "id": "governance-sugarscape-triad-and-return",
+      "category": "governance",
+      "claim": "sugarscape-expert wires the worker-governance triad (primary-producer, adversarial, reference-manager) and includes a 'Return to Orchestrator' edge.",
+      "predicate": {
+        "kind": "frontmatter-and-body",
+        "file": "sugarscape-expert.agent.md",
+        "agents_contains_all": [
+          "primary-producer",
+          "adversarial",
+          "reference-manager"
+        ],
+        "body_contains": "Return to Orchestrator"
+      }
+    },
+    {
+      "id": "governance-visualize-energy-data-triad-and-return",
+      "category": "governance",
+      "claim": "visualize-energy-data-expert wires the worker-governance triad (primary-producer, adversarial, reference-manager) and includes a 'Return to Orchestrator' edge.",
+      "predicate": {
+        "kind": "frontmatter-and-body",
+        "file": "visualize-energy-data-expert.agent.md",
+        "agents_contains_all": [
+          "primary-producer",
+          "adversarial",
+          "reference-manager"
+        ],
+        "body_contains": "Return to Orchestrator"
+      }
+    }
+  ]
+}

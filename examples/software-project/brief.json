@@ -1,0 +1,82 @@
+{
+  "project_name": "WebAppBackend",
+  "project_goal": "Build a Python FastAPI backend for a task management web application, including REST API endpoints, database models, authentication, and automated tests.",
+  "deliverables": ["Python modules", "OpenAPI documentation", "test suite"],
+  "output_format": "Python 3.11 modules",
+  "primary_output_dir": "src/",
+  "build_output_dir": "dist/",
+  "figures_dir": "docs/figures/",
+  "authority_sources": [
+    {
+      "name": "OpenAPI specification",
+      "path": "docs/openapi.yaml",
+      "scope": "API contract accuracy",
+      "rank": 1
+    },
+    {
+      "name": "Database schema",
+      "path": "src/models/schema.sql",
+      "scope": "data model accuracy",
+      "rank": 2
+    }
+  ],
+  "style_reference": null,
+  "reference_db_path": null,
+  "reference_key_convention": "AuthorYear",
+  "tools": [
+    {"name": "Python", "version": "3.11", "category": "language"},
+    {"name": "FastAPI", "category": "framework"},
+    {"name": "SQLAlchemy", "category": "library"},
+    {"name": "pytest", "category": "library"},
+    {
+      "name": "PostgreSQL",
+      "version": "15",
+      "category": "database",
+      "config_files": ["docker-compose.yml", "src/db/config.py"],
+      "needs_specialist_agent": true
+    }
+  ],
+  "style_rules": [
+    "All public functions must have docstrings",
+    "Type annotations required for all function signatures",
+    "No mutable default arguments"
+  ],
+  "components": [
+    {
+      "slug": "auth-module",
+      "name": "Authentication Module",
+      "number": 1,
+      "output_file": "src/auth/",
+      "description": "JWT-based authentication and authorization: login, logout, token refresh, and permission decorators.",
+      "sections": ["JWT token generation", "Login/logout endpoints", "Token refresh", "Permission decorators", "Tests"],
+      "quality_criteria": [
+        "JWT secret loaded from environment variable, never hardcoded",
+        "Token expiry configurable",
+        "All endpoints covered by tests"
+      ]
+    },
+    {
+      "slug": "tasks-api",
+      "name": "Tasks API",
+      "number": 2,
+      "output_file": "src/tasks/",
+      "description": "CRUD REST endpoints for task management: create, read, update, delete, list with filtering.",
+      "sections": [
+        "Task model (SQLAlchemy)",
+        "Create task endpoint",
+        "Read/list tasks endpoint",
+        "Update task endpoint",
+        "Delete task endpoint",
+        "Field validation",
+        "Tests"
+      ],
+      "cross_refs": ["auth-module"],
+      "quality_criteria": [
+        "All endpoints require authentication",
+        "Input validation on all fields",
+        "Pagination on list endpoint",
+        "Tests cover happy path and error cases"
+      ]
+    }
+  ]
+}

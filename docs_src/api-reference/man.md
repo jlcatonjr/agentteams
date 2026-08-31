@@ -1,0 +1,49 @@
+# `man` — AgentTeamsModule
+
+Generate a POSIX groff man-page from the `agentteams` argparse parser (assembled in [`cli`](cli.md)). The rendered page mirrors the [CLI reference](../cli-reference.md).
+
+The generated man-page source is committed to the repository root as `agentteams.1`. To view it, use `man ./agentteams.1`.
+
+Regenerate after any CLI flag change:
+
+```bash
+python -m agentteams.man > agentteams.1
+```
+
+Preview locally:
+
+```bash
+man ./agentteams.1
+```
+
+> *Source: `agentteams/man.py`*
+
+---
+
+## Functions
+
+### `generate_man_page(parser)`
+
+> *Source: `agentteams/man.py`*
+
+Generate a groff man-page source document from an argparse parser.
+
+Produces sections: `NAME`, `SYNOPSIS`, `DESCRIPTION`, `OPTIONS`, `EXIT STATUS`, `EXAMPLES`, and `SEE ALSO`. Derives all content from the parser's `prog`, `description`, and registered arguments — no duplication required.
+
+**Args:**
+
+- `parser` (`argparse.ArgumentParser`) — Configured ArgumentParser instance.
+
+**Returns:** `str` — Complete groff man-page source. Write to `<name>.N` (e.g., `agentteams.1`).
+
+---
+
+## Module Entry Point
+
+When run as a module (`python -m agentteams.man`), imports `_build_parser` from `build_team` and writes the generated man-page to stdout. Used by the CI staleness gate:
+
+```bash
+python -m agentteams.man | diff - agentteams.1
+```
+
+Exit code is non-zero if the committed `agentteams.1` is stale.

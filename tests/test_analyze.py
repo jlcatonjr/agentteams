@@ -1,0 +1,1482 @@
+"""
+Tests for agentteams/analyze.py
+"""
+
+from pathlib import Path
+
+import pytest
+from agentteams import render
+from agentteams.analyze import (
+    build_manifest,
+    classify_project_type,
+    select_archetypes,
+    detect_tool_agents,
+    detect_reference_tools,
+    classify_tool_importance,
+    build_authority_hierarchy,
+    _has_unknown_tool_metadata,
+    _format_unresolved_tool_list,
+    _contains_keyword,
+)
+
+_TEMPLATES_DIR = Path(__file__).parent.parent / "agentteams" / "templates"
+
+
+# ---------------------------------------------------------------------------
+# Project type classification
+# ---------------------------------------------------------------------------
+
+def test_classify_writing():
+    desc = {"project_goal": "Write a book with chapters and essays.", "deliverables": ["HTML chapters"]}
+    assert classify_project_type(desc) == "writing"
+
+
+def test_classify_software():
+    desc = {"project_goal": "Build a Python API module.", "tools": [{"name": "Python"}]}
+    assert classify_project_type(desc) == "software"
+
+
+def test_classify_data_pipeline():
+    desc = {"project_goal": "Build an ETL pipeline for CSV datasets.", "deliverables": ["CSV"]}
+    assert classify_project_type(desc) == "data-pipeline"
+
+
+def test_classify_unknown():
+    desc = {"project_goal": "Do something."}
+    assert classify_project_type(desc) == "unknown"
+
+
+# ---------------------------------------------------------------------------
+# Archetype selection
+# ---------------------------------------------------------------------------
+
+def test_archetypes_always_include_primary_and_quality():
+    desc = {"project_goal": "Do something."}
+    archetypes = select_archetypes(desc)
+    assert "primary-producer" in archetypes
+    assert "quality-auditor" in archetypes
+
+
+def test_archetypes_writing_includes_cohesion():
+    desc = {"project_goal": "Write a book with chapters.", "deliverables": ["HTML chapters"]}
+    archetypes = select_archetypes(desc)
+    assert "cohesion-repairer" in archetypes
+    assert "style-guardian" in archetypes
+
+
+def test_archetypes_code_includes_technical_validator():
+    desc = {"project_goal": "Build a Python module with functions.", "tools": [{"name": "Python"}]}
+    archetypes = select_archetypes(desc)
+    assert "technical-validator" in archetypes
+
+
+def test_archetypes_latex_includes_format_converter():
+    desc = {"project_goal": "Produce a LaTeX manuscript.", "output_format": "PDF via LaTeX"}
+    archetypes = select_archetypes(desc)
+    assert "format-converter" in archetypes
+
+
+def test_archetypes_bibliography_includes_reference_manager():
+    desc = {
+        "project_goal": "Academic paper with bibliography and citations.",
+        "reference_db_path": "references.bib"
+    }
+    archetypes = select_archetypes(desc)
+    assert "reference-manager" in archetypes
+
+
+# ---------------------------------------------------------------------------
+# Tool agent detection
+# ---------------------------------------------------------------------------
+
+def test_detect_tool_agents_no_specialists():
+    tools = [
+        {"name": "Python", "category": "language"},
+        {"name": "FastAPI", "category": "framework"},
+    ]
+    result = detect_tool_agents(tools)
+    assert result == []
+
+
+def test_detect_tool_agents_with_specialist():
+    tools = [
+        {"name": "PostgreSQL", "version": "15", "category": "database", "needs_specialist_agent": True}
+    ]
+    result = detect_tool_agents(tools)
+    assert len(result) == 1
+    assert result[0]["tool_name"] == "PostgreSQL"
+    assert result[0]["slug"].startswith("tool-")
+
+
+# ---------------------------------------------------------------------------
+# Authority hierarchy
+# ---------------------------------------------------------------------------
+
+def test_build_authority_hierarchy_empty():
+    desc = {"project_goal": "Test project."}
+    hierarchy = build_authority_hierarchy(desc)
+    assert hierarchy == []
+
+
+def test_build_authority_hierarchy_ordered():
+    desc = {
+        "project_goal": "Test",
+        "authority_sources": [
+            {"name": "A", "path": "a/", "rank": 2},
+            {"name": "B", "path": "b/", "rank": 1},
+        ]
+    }
+    hierarchy = build_authority_hierarchy(desc)
+    assert hierarchy[0]["name"] == "B"
+    assert hierarchy[1]["name"] == "A"
+
+
+def test_build_authority_hierarchy_accepts_plain_strings():
+    # Bug 1 regression: authority_sources as plain strings must not raise AttributeError
+    desc = {
+        "project_goal": "Test",
+        "authority_sources": [
+            "docs/spec.md",
+            "src/schema.sql",
+        ]
+    }
+    hierarchy = build_authority_hierarchy(desc)
+    assert len(hierarchy) == 2
+    assert hierarchy[0]["path"] == "docs/spec.md"
+    assert hierarchy[1]["path"] == "src/schema.sql"
+
+
+# ---------------------------------------------------------------------------
+# Full manifest generation
+# ---------------------------------------------------------------------------
+
+def test_build_manifest_minimal():
+    desc = {"project_goal": "Build the simplest possible project."}
+    manifest = build_manifest(desc, framework="copilot-vscode")
+
+    assert manifest["project_name"] == "MyProject"
+    assert manifest["framework"] == "copilot-vscode"
+    assert "orchestrator" in manifest["agent_slug_list"]
+    assert "navigator" in manifest["agent_slug_list"]
+    assert "work-summarizer" in manifest["agent_slug_list"]
+    assert "primary-producer" in manifest["selected_archetypes"]
+    assert isinstance(manifest["output_files"], list)
+    assert len(manifest["output_files"]) > 0
+
+    planned_paths = {f["path"] for f in manifest["output_files"]}
+    assert "work-summarizer.agent.md" in planned_paths
+    assert "references/work-summary-spec.reference.md" in planned_paths
+    assert "references/work-summary-tooling.reference.md" in planned_paths
+
+
+def test_build_manifest_with_components():
+    desc = {
+        "project_name": "TestProject",
+        "project_goal": "Build chapters for a book.",
+        "components": [
+            {"slug": "ch01-intro", "name": "Chapter 1", "number": 1},
+            {"slug": "ch02-body", "name": "Chapter 2", "number": 2},
+        ]
+    }
+    manifest = build_manifest(desc, framework="copilot-vscode")
+
+    assert len(manifest["components"]) == 2
+    assert "ch01-intro-expert" in manifest["workstream_expert_slugs"]
+    assert "ch02-body-expert" in manifest["workstream_expert_slugs"]
+
+    expert_files = [f for f in manifest["output_files"] if "expert" in f["path"]]
+    assert len(expert_files) == 2
+
+
+def test_build_manifest_retrieval_mode_adds_retrieval_integrator():
+    desc = {
+        "project_goal": "Validate retrieval pipeline wiring.",
+        "retrieval_integration": {
+            "mode": "relational-metadata",
+            "query_entrypoints": ["services/run_services.py"],
+            "maintenance_entrypoints": ["services/run_services.py --service refresh-mvs"],
+            "trigger_sources": ["cli", "env"],
+            "source_of_truth": ["agency_datasets"],
+            "staleness_slo_minutes": 45,
+            "trigger_contract_version": "v2",
+        },
+    }
+    manifest = build_manifest(desc, framework="copilot-vscode")
+
+    assert "retrieval-integrator" in manifest["selected_archetypes"]
+    assert manifest["retrieval_integration"]["mode"] == "relational-metadata"
+    assert manifest["retrieval_trigger_contract_version"] == "v2"
+
+    planned_paths = {f["path"] for f in manifest["output_files"]}
+    assert "retrieval-integrator.agent.md" in planned_paths
+    assert "references/retrieval-integration.reference.md" in planned_paths
+    assert "references/retrieval-trigger-contract.reference.md" in planned_paths
+
+
+def test_build_manifest_no_retrieval_mode_does_not_add_retrieval_files():
+    desc = {"project_goal": "Build a simple module.", "retrieval_integration": {"mode": "none"}}
+    manifest = build_manifest(desc, framework="copilot-vscode")
+
+    planned_paths = {f["path"] for f in manifest["output_files"]}
+    assert "references/retrieval-integration.reference.md" not in planned_paths
+    assert "references/retrieval-trigger-contract.reference.md" not in planned_paths
+
+
+def test_build_manifest_research_capability_adds_research_analyst():
+    desc = {
+        "project_goal": "Build a research-heavy conversational product.",
+        "capabilities": ["research_verification"],
+    }
+    manifest = build_manifest(desc, framework="copilot-vscode")
+
+    assert "research-analyst" in manifest["selected_archetypes"]
+    planned_paths = {f["path"] for f in manifest["output_files"]}
+    assert "research-analyst.agent.md" in planned_paths
+
+
+def test_build_manifest_no_capabilities_does_not_add_research_analyst():
+    """The opt-in-only constraint: research-analyst must never be inferred from project
+    type/tools, only from an explicit capabilities flag — this is the false-positive check the
+    archetype's own plan requires, not just a happy-path assertion."""
+    desc = {"project_goal": "Build a research-heavy conversational product."}
+    manifest = build_manifest(desc, framework="copilot-vscode")
+
+    assert "research-analyst" not in manifest["selected_archetypes"]
+    planned_paths = {f["path"] for f in manifest["output_files"]}
+    assert "research-analyst.agent.md" not in planned_paths
+
+
+def test_build_manifest_research_capability_force_appends_past_selected_archetypes_override():
+    """Regression guard for the exact bug an adversarial audit caught pre-implementation: an
+    internal branch inside select_archetypes() would be silently bypassed whenever a brief also
+    sets selected_archetypes for an unrelated reason, since analyze.py only calls
+    select_archetypes() when selected_archetypes is ABSENT. research-analyst must be
+    force-appended after that override path too, not just the auto-select path."""
+    desc = {
+        "project_goal": "Build a research-heavy conversational product.",
+        "selected_archetypes": ["primary-producer"],
+        "capabilities": ["research_verification"],
+    }
+    manifest = build_manifest(desc, framework="copilot-vscode")
+
+    assert "research-analyst" in manifest["selected_archetypes"]
+    assert "primary-producer" in manifest["selected_archetypes"]
+
+
+def test_research_analyst_template_documents_browser_escalation():
+    """tmp/by-week/2026-W30/web-browsing-playwright-cli.plan.md Implementation item 5 /
+    template-library-expert audit finding: neither the reworded Invariant Core bullet nor the
+    Procedure's browser-escalation sentence had any test coverage anywhere in the suite. Renders
+    the actual template through the real pipeline (not a string search of the .template.md
+    source) so a future paraphrase that silently drops the guidance is caught."""
+    desc = {
+        "project_goal": "Build a research-heavy conversational product.",
+        "capabilities": ["research_verification"],
+    }
+    manifest = build_manifest(desc, framework="copilot-vscode")
+    rendered = dict(render.render_all(manifest, templates_dir=_TEMPLATES_DIR))
+
+    assert "research-analyst.agent.md" in rendered
+    body = rendered["research-analyst.agent.md"]
+
+    # Procedure step 2: escalate to `browser` when `fetch` can't render JS-heavy content.
+    assert 'python -m agentteams.research browser "<url>"' in body
+    assert "references/skill-generation.reference.md" in body
+
+    # Invariant Core: the reworded bullet must not assert a stale count while adding the
+    # third CLI surface.
+    assert "CLI-invokable vs. integration-only surfaces" in body
+    assert 'browser "<url>"' in body
+    assert "agentteams.research.verify" in body  # the untouched integration-only constraint
+
+
+def test_research_analyst_template_documents_external_retrieval_gate():
+    """tmp/by-week/2026-W30/external-retrieval-quality-gate.plan.md: the mandatory final-step
+    gate must actually render into the agent file, not just exist in the template source."""
+    desc = {
+        "project_goal": "Build a research-heavy conversational product.",
+        "capabilities": ["research_verification"],
+    }
+    manifest = build_manifest(desc, framework="copilot-vscode")
+    rendered = dict(render.render_all(manifest, templates_dir=_TEMPLATES_DIR))
+
+    assert "research-analyst.agent.md" in rendered
+    body = rendered["research-analyst.agent.md"]
+    assert "references/external-retrieval-quality-gate.reference.md" in body
+    assert "@adversarial" in body and "@conflict-auditor" in body
+    # The gate step must be a numbered Procedure step, not a stray mention.
+    assert "run the external-retrieval quality gate" in body.lower() or \
+        "external-retrieval quality gate" in body
+
+
+def test_tool_doc_researcher_template_documents_external_retrieval_gate():
+    """Same regression, for tool-doc-researcher.template.md."""
+    desc = {
+        "project_goal": "Build a project with a custom internal database.",
+        "tools": [{"name": "InternalDB", "category": "database"}],
+    }
+    manifest = build_manifest(desc, framework="copilot-vscode")
+    rendered = dict(render.render_all(manifest, templates_dir=_TEMPLATES_DIR))
+
+    assert "tool-doc-researcher.agent.md" in rendered
+    body = rendered["tool-doc-researcher.agent.md"]
+    assert "references/external-retrieval-quality-gate.reference.md" in body
+    assert "@adversarial" in body and "@conflict-auditor" in body
+    # The gate must come before the final @agent-updater hand-off instructions, not after.
+    gate_idx = body.index("external-retrieval-quality-gate.reference.md")
+    handoff_idx = body.index("with these instructions:")
+    assert gate_idx < handoff_idx
+
+
+def test_content_enricher_template_documents_external_retrieval_gate():
+    """Same regression, for content-enricher.template.md. content-enricher is emitted
+    unconditionally, so a minimal, feature-less description is enough to exercise it."""
+    desc = {"project_goal": "Build the simplest possible project."}
+    manifest = build_manifest(desc, framework="copilot-vscode")
+    rendered = dict(render.render_all(manifest, templates_dir=_TEMPLATES_DIR))
+
+    assert "content-enricher.agent.md" in rendered
+    body = rendered["content-enricher.agent.md"]
+    assert "references/external-retrieval-quality-gate.reference.md" in body
+    assert "@adversarial" in body and "@conflict-auditor" in body
+    # The gate must come before Step 5 (Validate), not after.
+    gate_idx = body.index("External-Retrieval Quality Gate")
+    step5_idx = body.index("### Step 5: Validate")
+    assert gate_idx < step5_idx
+
+
+# Legacy (pre-plan) fixtures for the merge-path tests below. Hand-authored, not derived from
+# the current render via regex-stripping (post-implementation Code Hygiene audit finding): a
+# v=2 bump, added nesting, or reflowed text near a fence boundary could make a strip-regex
+# silently mis-match against a *future* version of the real template, undermining the test's
+# premise without failing loudly. These mirror each template's real pre-plan shape (the
+# pre-existing memory_index_consultation fence, plus unfenced Procedure/hand-off prose) without
+# being a byte-for-byte copy of any specific historical commit.
+_RESEARCH_ANALYST_LEGACY = (
+    "---\nname: x\n---\n"
+    "<!-- AGENTTEAMS:BEGIN memory_index_consultation v=3 -->\n"
+    "## Memory-index consultation\n(pre-existing content, unchanged by this plan)\n"
+    "<!-- AGENTTEAMS:END memory_index_consultation -->\n"
+    "\n## Procedure\n\n"
+    "1. Identify the discrete, checkable claims.\n"
+    "2. Gather evidence.\n"
+    "3. Cross-check against prior findings.\n"
+    "4. Report findings per the honest-ceiling rules.\n"
+    "\n## Output Format\n\n"
+    "- Findings: numbered list.\n- Corrections: hedged, source-attributed.\n"
+    "- Unresolved items: listed explicitly.\n"
+)
+
+_TOOL_DOC_RESEARCHER_LEGACY = (
+    "---\nname: x\n---\n"
+    "<!-- AGENTTEAMS:BEGIN memory_index_consultation v=2 -->\n"
+    "## Memory-index consultation\n(pre-existing content, unchanged by this plan)\n"
+    "<!-- AGENTTEAMS:END memory_index_consultation -->\n"
+    "\n## Output Format\n\nFor each tool, produce a fenced block:\n\n"
+    "```\nTool: <tool-name> <version>\n```\n\n"
+    "After completing all tools in the list, hand off to `@agent-updater` with these "
+    "instructions:\n\n"
+    "1. Add `docs_url`, `api_surface`, and `common_patterns` to each matching tool entry.\n"
+    "2. Directly update the affected tool documents.\n"
+)
+
+
+def test_external_retrieval_quality_gate_reaches_already_generated_team(tmp_path):
+    """Regression test for the pre-implementation-audit-caught fencing gap: the gate content
+    in research-analyst.template.md is only useful if it actually propagates to a team that
+    was generated BEFORE this plan landed, via --update --merge. A fresh-render test (the
+    three tests above) cannot detect a fencing regression, since a fresh render always
+    contains 100% of a template's content whether fenced or not -- this test exercises the
+    real merge path (agentteams.emit.emit_all(..., merge=True), the same one --update --merge
+    uses) against the hand-authored legacy fixture above."""
+    from agentteams import emit
+
+    desc = {
+        "project_goal": "Build a research-heavy conversational product.",
+        "capabilities": ["research_verification"],
+    }
+    manifest = build_manifest(desc, framework="copilot-vscode")
+    rendered = dict(render.render_all(manifest, templates_dir=_TEMPLATES_DIR))
+    new_rendered = rendered["research-analyst.agent.md"]
+
+    out = tmp_path / "team"
+    out.mkdir()
+    (out / "research-analyst.agent.md").write_text(_RESEARCH_ANALYST_LEGACY, encoding="utf-8")
+
+    emit.emit_all(
+        [("research-analyst.agent.md", new_rendered)],
+        output_dir=out, merge=True, yes=True,
+    )
+    merged = (out / "research-analyst.agent.md").read_text(encoding="utf-8")
+    assert "AGENTTEAMS:BEGIN external_retrieval_quality_gate" in merged, (
+        "the gate section did not propagate via --update --merge to an already-generated team"
+    )
+    assert "@adversarial" in merged and "@conflict-auditor" in merged
+    # The old unfenced Procedure survives verbatim (expected, non-destructive merge behavior)
+    # alongside the new gate -- both must hold simultaneously for the merge to be sound.
+    assert "3. Cross-check against prior findings." in merged
+
+
+def test_external_retrieval_quality_gate_reaches_already_generated_tool_doc_researcher_team(
+    tmp_path,
+):
+    """Same regression as above, for tool-doc-researcher.template.md -- the file where the
+    Template Library post-implementation audit caught a real blocking bug (B1): the two
+    sentences connecting the gate to the `@agent-updater` hand-off were originally added as
+    NEW unfenced text, which --update --merge silently drops entirely for an already-generated
+    team (unfenced-*new* content never propagates; only unfenced-*old* content is preserved
+    verbatim). Only the fenced gate body itself reaches an existing team, appended wherever
+    fences.py's _merge_fenced_content places brand-new fence IDs -- always the end of the file
+    (fences.py:345-351, confirmed by direct reading), which is *after* this fixture's
+    pre-existing, unfenced "hand off ... with these instructions" text. There is no way, with
+    the current merge algorithm, to insert a new fence at a specific position relative to
+    unfenced content (a Pipeline Core capability gap, logged to the remediation log) -- so this
+    test cannot and does not assert physical pre-hand-off ordering. What it asserts instead is
+    the actual fix applied post-audit: the gate's own wording is self-contained and explicitly
+    correct regardless of where it physically lands relative to the hand-off instruction."""
+    from agentteams import emit
+
+    desc = {
+        "project_goal": "Build a project with a custom internal database.",
+        "tools": [{"name": "InternalDB", "category": "database"}],
+    }
+    manifest = build_manifest(desc, framework="copilot-vscode")
+    rendered = dict(render.render_all(manifest, templates_dir=_TEMPLATES_DIR))
+    new_rendered = rendered["tool-doc-researcher.agent.md"]
+
+    out = tmp_path / "team"
+    out.mkdir()
+    (out / "tool-doc-researcher.agent.md").write_text(
+        _TOOL_DOC_RESEARCHER_LEGACY, encoding="utf-8"
+    )
+
+    emit.emit_all(
+        [("tool-doc-researcher.agent.md", new_rendered)],
+        output_dir=out, merge=True, yes=True,
+    )
+    merged = (out / "tool-doc-researcher.agent.md").read_text(encoding="utf-8")
+    assert "AGENTTEAMS:BEGIN external_retrieval_quality_gate" in merged, (
+        "the gate section did not propagate via --update --merge to an already-generated team"
+    )
+    # The pre-existing unfenced hand-off instruction survives verbatim (expected merge
+    # behavior, and precisely why the fix below must not depend on physical position).
+    assert "hand off to `@agent-updater` with these instructions:" in merged
+    # Whitespace-normalized: the real template wraps this sentence across source lines, and a
+    # raw substring check would be brittle against that wrap (same trap already hit once this
+    # session -- fixed the same way there).
+    merged_norm = " ".join(merged.split())
+    assert "do not send it while any finding is still open" in merged_norm
+    assert (
+        "regardless of where in this document that hand-off instruction appears "
+        "relative to this gate" in merged_norm
+    )
+
+
+def test_build_manifest_includes_builder_agent():
+    desc = {"project_goal": "Test project"}
+    for fw in ("copilot-vscode", "copilot-cli", "claude"):
+        manifest = build_manifest(desc, framework=fw)
+        builder_files = [f for f in manifest["output_files"] if f["type"] == "builder"]
+        assert len(builder_files) == 1, f"Expected 1 builder file for {fw}"
+
+
+def test_build_manifest_uses_framework_specific_instructions_path():
+    desc = {"project_goal": "Test project"}
+
+    manifest_vscode = build_manifest(desc, framework="copilot-vscode")
+    manifest_cli = build_manifest(desc, framework="copilot-cli")
+    manifest_claude = build_manifest(desc, framework="claude")
+
+    def _instructions_path(manifest: dict) -> str:
+        for file_spec in manifest["output_files"]:
+            if file_spec["type"] == "instructions":
+                return file_spec["path"]
+        raise AssertionError("instructions file not planned")
+
+    assert _instructions_path(manifest_vscode) == "../copilot-instructions.md"
+    assert _instructions_path(manifest_cli) == "../copilot-instructions.md"
+    assert _instructions_path(manifest_claude) == "../CLAUDE.md"
+
+
+def test_build_manifest_manual_required_when_no_reference_db():
+    desc = {
+        "project_goal": "Academic paper with citations and bibliography.",
+        "deliverables": ["chapters"]
+    }
+    manifest = build_manifest(desc, framework="copilot-vscode")
+    # reference-manager archetype should be selected
+    # If no reference_db_path is provided, REFERENCE_DB_PATH should be MANUAL
+    ref_db = manifest["auto_resolved_placeholders"].get("REFERENCE_DB_PATH", "")
+    assert "{MANUAL:" in ref_db or manifest.get("manual_required_placeholders")
+
+
+def test_collect_manual_required_no_false_positives_from_composed_values():
+    """Composed auto-resolved values containing {MANUAL:*} text should not be flagged.
+
+    AUTHORITY_HIERARCHY, AUTHORITY_SOURCES_LIST, and STYLE_RULES_SUMMARY are
+    composed strings that may embed MANUAL tokens (e.g., an authority source path
+    of {MANUAL:REFERENCE_BOOK_PROJECT_PATH}) or documentation text (e.g.,
+    style rules that mention {MANUAL:UPPER_SNAKE_CASE} as an example).
+    Neither should create a false MANUAL entry for the composed placeholder itself.
+    """
+    desc = {
+        "project_goal": "Test project.",
+        "deliverables": ["src/"],
+        "authority_sources": [
+            {"name": "Source A", "path": "src/", "scope": "primary"},
+            {"name": "Ref book", "path": "{MANUAL:REFERENCE_BOOK_PROJECT_PATH}", "scope": "reference"},
+        ],
+        "style_rules": [
+            "Use {UPPER_SNAKE_CASE} for constants and {MANUAL:UPPER_SNAKE_CASE} for manual placeholders."
+        ],
+    }
+    manifest = build_manifest(desc, framework="copilot-vscode")
+    manual_keys = {item["placeholder"] for item in manifest["manual_required_placeholders"]}
+
+    # Composed placeholders should NOT appear as manual-required
+    assert "AUTHORITY_HIERARCHY" not in manual_keys
+    assert "AUTHORITY_SOURCES_LIST" not in manual_keys
+    assert "STYLE_RULES_SUMMARY" not in manual_keys
+
+    # The embedded authority-path MANUAL token SHOULD appear
+    assert "REFERENCE_BOOK_PROJECT_PATH" in manual_keys
+
+    # Incidental documentation text like UPPER_SNAKE_CASE should NOT be flagged
+    assert "UPPER_SNAKE_CASE" not in manual_keys
+
+
+# ---------------------------------------------------------------------------
+# Tool importance classification (R-1)
+# ---------------------------------------------------------------------------
+
+def test_classify_tool_importance_explicit_specialist():
+    tool = {"name": "CustomDB", "category": "other", "needs_specialist_agent": True}
+    assert classify_tool_importance(tool) == "specialist"
+
+
+def test_classify_tool_importance_explicit_false_defers_to_category():
+    """Explicit False is the default no-op (not a non-specialist override): the
+    tool still auto-classifies by category, so a database tool stays specialist."""
+    tool = {"name": "PostgreSQL", "category": "database", "needs_specialist_agent": False}
+    assert classify_tool_importance(tool) == "specialist"
+
+
+def test_classify_tool_importance_database_category():
+    tool = {"name": "MySQL", "category": "database"}
+    assert classify_tool_importance(tool) == "specialist"
+
+
+def test_classify_tool_importance_cli_category():
+    tool = {"name": "Docker", "category": "cli"}
+    assert classify_tool_importance(tool) == "specialist"
+
+
+def test_classify_tool_importance_build_system_category():
+    tool = {"name": "Maven", "category": "build-system"}
+    assert classify_tool_importance(tool) == "specialist"
+
+
+def test_classify_tool_importance_known_specialist_name():
+    tool = {"name": "Terraform", "category": "other"}
+    assert classify_tool_importance(tool) == "specialist"
+
+
+def test_classify_tool_importance_framework_category():
+    tool = {"name": "FastAPI", "category": "framework"}
+    assert classify_tool_importance(tool) == "reference"
+
+
+def test_classify_tool_importance_library_category():
+    tool = {"name": "SQLAlchemy", "category": "library"}
+    assert classify_tool_importance(tool) == "reference"
+
+
+def test_classify_tool_importance_known_reference_name():
+    tool = {"name": "pandas", "category": "other"}
+    assert classify_tool_importance(tool) == "reference"
+
+
+def test_classify_tool_importance_passive():
+    tool = {"name": "Python", "category": "language"}
+    assert classify_tool_importance(tool) == "passive"
+
+
+def test_classify_tool_importance_unknown_passive():
+    tool = {"name": "SomeObscureTool", "category": "other"}
+    assert classify_tool_importance(tool) == "passive"
+
+
+# ---------------------------------------------------------------------------
+# Auto-promoted tool agents (R-1)
+# ---------------------------------------------------------------------------
+
+def test_detect_tool_agents_auto_promotion():
+    """Database tools should get specialist agents even without needs_specialist_agent."""
+    tools = [
+        {"name": "PostgreSQL", "version": "15", "category": "database"},
+        {"name": "Docker", "category": "cli"},
+        {"name": "FastAPI", "category": "framework"},
+        {"name": "Python", "category": "language"},
+    ]
+    result = detect_tool_agents(tools)
+    slugs = [a["slug"] for a in result]
+    assert "tool-postgresql" in slugs
+    assert "tool-docker" in slugs
+    # framework and language should NOT get specialist agents
+    assert not any("fastapi" in s for s in slugs)
+    assert not any("python" in s for s in slugs)
+
+
+def test_detect_tool_agents_includes_category():
+    """Tool agents should carry tool_category."""
+    tools = [{"name": "PostgreSQL", "version": "15", "category": "database"}]
+    result = detect_tool_agents(tools)
+    assert result[0]["tool_category"] == "database"
+
+
+# ---------------------------------------------------------------------------
+# Reference tool detection (R-1/R-4)
+# ---------------------------------------------------------------------------
+
+def test_detect_reference_tools():
+    tools = [
+        {"name": "PostgreSQL", "category": "database"},
+        {"name": "FastAPI", "category": "framework"},
+        {"name": "pandas", "category": "library"},
+        {"name": "Python", "category": "language"},
+    ]
+    refs = detect_reference_tools(tools)
+    ref_names = [r["tool_name"] for r in refs]
+    assert "FastAPI" in ref_names
+    assert "pandas" in ref_names
+    assert "PostgreSQL" not in ref_names
+    assert "Python" not in ref_names
+
+
+def test_detect_reference_tools_slugs():
+    tools = [{"name": "FastAPI", "category": "framework"}]
+    refs = detect_reference_tools(tools)
+    assert refs[0]["slug"] == "ref-fastapi"
+
+
+# ---------------------------------------------------------------------------
+# Manifest with auto-promoted tools (R-1/R-4/R-5)
+# ---------------------------------------------------------------------------
+
+def test_build_manifest_auto_promotes_database():
+    """A database tool becomes an operational tool DOC, never an agent.
+
+    Tools are resources agents use — they must NOT appear in the orchestrator's
+    agents:/handoff roster (domain_agent_slugs / agent_slug_list).
+    """
+    desc = {
+        "project_goal": "Build a Python API with a PostgreSQL database.",
+        "tools": [
+            {"name": "PostgreSQL", "version": "15", "category": "database"},
+            {"name": "FastAPI", "category": "framework"},
+        ],
+    }
+    manifest = build_manifest(desc, framework="copilot-vscode")
+    # Tool docs are never roster agents.
+    assert "tool-postgresql" not in manifest["domain_agent_slugs"]
+    assert "tool-postgresql" not in manifest["agent_slug_list"]
+    # PostgreSQL is still detected as an operational tool doc (tool_agents key
+    # retained for back-compat) — but emitted as a reference doc, not .agent.md.
+    assert "PostgreSQL" in [t["tool_name"] for t in manifest["tool_agents"]]
+    pg_files = [f for f in manifest["output_files"] if "postgresql" in f["path"].lower()]
+    assert pg_files and all(not f["path"].endswith(".agent.md") for f in pg_files)
+    assert pg_files[0]["type"] == "reference"
+    assert pg_files[0]["path"] == "references/ref-postgresql-reference.md"
+    # FastAPI should be in reference_tools not tool_agents
+    ref_names = [r["tool_name"] for r in manifest["reference_tools"]]
+    assert "FastAPI" in ref_names
+
+
+def test_build_manifest_database_becomes_skill_for_claude():
+    """For the Claude target, an operational tool becomes a skill document."""
+    desc = {
+        "project_goal": "Build a Python API with a PostgreSQL database.",
+        "tools": [{"name": "PostgreSQL", "version": "15", "category": "database"}],
+    }
+    manifest = build_manifest(desc, framework="claude")
+    pg_files = [f for f in manifest["output_files"] if "postgresql" in f["path"].lower()]
+    assert len(pg_files) == 1
+    assert pg_files[0]["type"] == "skill"
+    assert pg_files[0]["path"] == "../skills/tool-postgresql/SKILL.md"
+    assert pg_files[0]["tool_slug"] == "tool-postgresql"
+    assert "tool-postgresql" not in manifest["agent_slug_list"]
+
+
+def test_build_manifest_reference_files_planned():
+    """Reference-tier tools should produce reference output files."""
+    desc = {
+        "project_goal": "Build a Python API with frameworks.",
+        "tools": [
+            {"name": "FastAPI", "category": "framework"},
+            {"name": "SQLAlchemy", "category": "library"},
+        ],
+    }
+    manifest = build_manifest(desc, framework="copilot-vscode")
+    ref_files = [f for f in manifest["output_files"]
+                 if f["type"] == "reference" and f["template"] == "domain/tool-reference.template.md"]
+    assert len(ref_files) == 2
+    ref_paths = [f["path"] for f in ref_files]
+    assert any("fastapi" in p for p in ref_paths)
+    assert any("sqlalchemy" in p for p in ref_paths)
+
+
+def test_build_manifest_category_template_for_database():
+    """Database tools should use the tool-database DOC template with fallback."""
+    desc = {
+        "project_goal": "Build an ETL pipeline with PostgreSQL database.",
+        "tools": [{"name": "PostgreSQL", "version": "15", "category": "database"}],
+    }
+    manifest = build_manifest(desc, framework="copilot-vscode")
+    tool_files = [f for f in manifest["output_files"] if "postgresql" in f["path"]]
+    assert len(tool_files) == 1
+    assert tool_files[0]["template"] == "domain/tool-database.doc.template.md"
+    assert tool_files[0]["fallback_template"] == "domain/tool-specific.doc.template.md"
+    assert tool_files[0]["tool_slug"] == "tool-postgresql"
+
+
+# ---------------------------------------------------------------------------
+# Component tool mapping (R-7)
+# ---------------------------------------------------------------------------
+
+def test_build_manifest_component_tools_preserved():
+    """Component tools field should be preserved in normalized output."""
+    desc = {
+        "project_goal": "Build a data pipeline.",
+        "components": [
+            {"slug": "ingest", "name": "Ingest Module", "tools": ["PostgreSQL", "pandas"]},
+        ],
+        "tools": [
+            {"name": "PostgreSQL", "category": "database"},
+            {"name": "pandas", "category": "library"},
+        ],
+    }
+    manifest = build_manifest(desc, framework="copilot-vscode")
+    assert manifest["components"][0]["tools"] == ["PostgreSQL", "pandas"]
+
+
+# ---------------------------------------------------------------------------
+# Phase 5: api_surface and common_patterns flow through pipeline (P5.6-P5.7)
+# ---------------------------------------------------------------------------
+
+def test_detect_tool_agents_includes_api_surface():
+    """api_surface from brief.json tools[] is carried into tool agent specs."""
+    tools = [
+        {
+            "name": "PostgreSQL",
+            "category": "database",
+            "api_surface": "SELECT, INSERT, UPDATE, DELETE",
+        }
+    ]
+    result = detect_tool_agents(tools)
+    assert len(result) == 1
+    assert result[0]["api_surface"] == "SELECT, INSERT, UPDATE, DELETE"
+
+
+def test_detect_tool_agents_api_surface_defaults_to_empty():
+    """api_surface defaults to empty string when absent from tool dict."""
+    tools = [{"name": "PostgreSQL", "category": "database"}]
+    result = detect_tool_agents(tools)
+    assert result[0]["api_surface"] == ""
+
+
+def test_detect_tool_agents_includes_common_patterns():
+    """common_patterns from brief.json tools[] is carried into tool agent specs."""
+    tools = [
+        {
+            "name": "PostgreSQL",
+            "category": "database",
+            "common_patterns": "Use connection pooling.",
+        }
+    ]
+    result = detect_tool_agents(tools)
+    assert result[0]["common_patterns"] == "Use connection pooling."
+
+
+def test_detect_reference_tools_includes_api_surface():
+    """api_surface is carried into reference tool specs."""
+    tools = [
+        {
+            "name": "pandas",
+            "category": "library",
+            "api_surface": "DataFrame, Series, read_csv",
+        }
+    ]
+    result = detect_reference_tools(tools)
+    assert len(result) == 1
+    assert result[0]["api_surface"] == "DataFrame, Series, read_csv"
+
+
+def test_detect_reference_tools_includes_common_patterns():
+    """common_patterns is carried into reference tool specs."""
+    tools = [
+        {
+            "name": "pandas",
+            "category": "library",
+            "common_patterns": "Use vectorised operations.",
+        }
+    ]
+    result = detect_reference_tools(tools)
+    assert result[0]["common_patterns"] == "Use vectorised operations."
+
+
+def test_detect_reference_tools_api_surface_fills_from_catalog_when_absent():
+    """A known tool's api_surface is filled from the unified tool_metadata_catalog
+    when absent from the tool dict, rather than defaulting to empty. Value updated
+    by tmp/by-week/2026-W30/tool-doc-catalog-remediation.plan.md's catalog
+    consolidation, which prefers the richer of two previously-separate catalogs."""
+    tools = [{"name": "pandas", "category": "library"}]
+    result = detect_reference_tools(tools)
+    assert result[0]["api_surface"].startswith("DataFrame/Series creation and I/O")
+
+
+def test_detect_tool_agents_includes_docs_url():
+    """docs_url is carried into tool agent specs."""
+    tools = [
+        {
+            "name": "PostgreSQL",
+            "category": "database",
+            "docs_url": "https://www.postgresql.org/docs/",
+        }
+    ]
+    result = detect_tool_agents(tools)
+    assert result[0]["docs_url"] == "https://www.postgresql.org/docs/"
+
+
+def test_detect_reference_tools_includes_docs_url():
+    """docs_url is carried into reference tool specs."""
+    tools = [
+        {
+            "name": "pandas",
+            "category": "library",
+            "docs_url": "https://pandas.pydata.org/docs/",
+        }
+    ]
+    result = detect_reference_tools(tools)
+    assert result[0]["docs_url"] == "https://pandas.pydata.org/docs/"
+
+
+# ---------------------------------------------------------------------------
+# _has_unknown_tool_metadata
+# ---------------------------------------------------------------------------
+
+def test_has_unknown_tool_metadata_all_filled():
+    tool_agents = [
+        {
+            "slug": "tool-postgresql", "tool_name": "PostgreSQL",
+            "docs_url": "https://postgresql.org/docs/",
+            "api_surface": "SELECT, INSERT",
+            "common_patterns": "Connection pooling.",
+        }
+    ]
+    reference_tools = [
+        {
+            "slug": "ref-fastapi", "tool_name": "FastAPI",
+            "docs_url": "https://fastapi.tiangolo.com/",
+            "api_surface": "FastAPI, APIRouter, Depends",
+            "common_patterns": "Use dependency injection.",
+        }
+    ]
+    assert _has_unknown_tool_metadata(tool_agents, reference_tools) is False
+
+
+def test_has_unknown_tool_metadata_missing_docs_url():
+    tool_agents = [
+        {
+            "slug": "tool-customdb", "tool_name": "CustomDB",
+            "docs_url": "",
+            "api_surface": "SELECT, INSERT",
+            "common_patterns": "Use indexes.",
+        }
+    ]
+    assert _has_unknown_tool_metadata(tool_agents, []) is True
+
+
+def test_has_unknown_tool_metadata_missing_api_surface():
+    reference_tools = [
+        {
+            "slug": "ref-somelib", "tool_name": "SomeLib",
+            "docs_url": "https://somelib.example.com/",
+            "api_surface": "",
+            "common_patterns": "Some patterns.",
+        }
+    ]
+    assert _has_unknown_tool_metadata([], reference_tools) is True
+
+
+def test_has_unknown_tool_metadata_missing_common_patterns():
+    tool_agents = [
+        {
+            "slug": "tool-customdb", "tool_name": "CustomDB",
+            "docs_url": "https://example.com/",
+            "api_surface": "SELECT",
+            "common_patterns": "",
+        }
+    ]
+    assert _has_unknown_tool_metadata(tool_agents, []) is True
+
+
+def test_has_unknown_tool_metadata_empty_lists():
+    assert _has_unknown_tool_metadata([], []) is False
+
+
+# ---------------------------------------------------------------------------
+# _format_unresolved_tool_list
+# ---------------------------------------------------------------------------
+
+def test_format_unresolved_tool_list_no_tools():
+    result = _format_unresolved_tool_list([], [])
+    assert result == "No tools with missing metadata."
+
+
+def test_format_unresolved_tool_list_all_filled():
+    tool_agents = [
+        {
+            "slug": "tool-postgresql", "tool_name": "PostgreSQL",
+            "docs_url": "https://postgresql.org/docs/",
+            "api_surface": "SELECT, INSERT",
+            "common_patterns": "Use connection pooling.",
+        }
+    ]
+    result = _format_unresolved_tool_list(tool_agents, [])
+    assert result == "No tools with missing metadata."
+
+
+def test_format_unresolved_tool_list_specialist_missing_docs():
+    tool_agents = [
+        {
+            "slug": "tool-customdb", "tool_name": "CustomDB",
+            "docs_url": "",
+            "api_surface": "SELECT",
+            "common_patterns": "Use indexes.",
+        }
+    ]
+    # Copilot default → reference doc path, never an agent file.
+    result = _format_unresolved_tool_list(tool_agents, [])
+    assert "CustomDB" in result
+    assert "references/ref-customdb-reference.md" in result
+    assert ".agent.md" not in result
+    assert "docs URL" in result
+    # Claude → skill path.
+    claude_result = _format_unresolved_tool_list(tool_agents, [], "claude")
+    assert ".claude/skills/tool-customdb/SKILL.md" in claude_result
+
+
+def test_format_unresolved_tool_list_reference_missing_api_surface():
+    reference_tools = [
+        {
+            "slug": "ref-somelib", "tool_name": "SomeLib",
+            "docs_url": "https://example.com/",
+            "api_surface": "",
+            "common_patterns": "Some patterns.",
+        }
+    ]
+    result = _format_unresolved_tool_list([], reference_tools)
+    assert "SomeLib" in result
+    assert "references/ref-somelib-reference.md" in result
+    assert "API surface" in result
+
+
+def test_format_unresolved_tool_list_multiple_entries():
+    tool_agents = [
+        {
+            "slug": "tool-customdb", "tool_name": "CustomDB",
+            "docs_url": "", "api_surface": "", "common_patterns": "",
+        }
+    ]
+    reference_tools = [
+        {
+            "slug": "ref-somelib", "tool_name": "SomeLib",
+            "docs_url": "", "api_surface": "", "common_patterns": "",
+        }
+    ]
+    result = _format_unresolved_tool_list(tool_agents, reference_tools)
+    lines = result.splitlines()
+    assert len(lines) == 2
+
+
+# ---------------------------------------------------------------------------
+# select_archetypes — pip/pypi trigger (module-doc agents)
+# ---------------------------------------------------------------------------
+
+def test_select_archetypes_pip_includes_module_doc_author():
+    desc = {"project_goal": "Distribute a pip package to PyPI."}
+    archetypes = select_archetypes(desc)
+    assert "module-doc-author" in archetypes
+
+
+def test_select_archetypes_pip_includes_module_doc_validator():
+    desc = {"project_goal": "Distribute a pip package to PyPI."}
+    archetypes = select_archetypes(desc)
+    assert "module-doc-validator" in archetypes
+
+
+def test_select_archetypes_pypi_keyword_triggers_module_doc():
+    desc = {"project_goal": "Publish a pypi package with changelog and readthedocs."}
+    archetypes = select_archetypes(desc)
+    assert "module-doc-author" in archetypes
+    assert "module-doc-validator" in archetypes
+
+
+def test_select_archetypes_module_doc_not_included_for_generic_project():
+    # Avoid "pipeline" (contains "pip"), "install", or "package"
+    desc = {"project_goal": "Build a simple ETL workflow for CSV data."}
+    archetypes = select_archetypes(desc)
+    assert "module-doc-author" not in archetypes
+    assert "module-doc-validator" not in archetypes
+
+
+# --- module-doc false-positive guard: weak words must NOT trigger -----------
+# Regression for the module-doc archetype false-positive (Tracers handoff P2b):
+# a single weak keyword used to force both pip-doc agents onto non-packaging
+# projects. The decisive set is now package-exclusive (pypi/mkdocs/sphinx/
+# readthedocs/sdist), so the inputs below must select neither agent.
+@pytest.mark.parametrize(
+    "goal",
+    [
+        # "knowledge distribution" — the academic-paper false positive (research-project)
+        "Surveys existing work on knowledge distribution and institutional design.",
+        # report distribution / installer — the Tracers class
+        "Distribute report packages to clients; then run the installer.",
+        # a CONSUMER of an API legitimately documents an api reference + changelog
+        "Consume the Galaxy API; document the api reference and keep a changelog.",
+        # "wheel" idiom must not trigger via the artifact sense
+        "Release version two; no need to reinvent the wheel.",
+        # "pip" must not leak via plural "pipes"
+        "An ETL pipeline that pipes data through transformation stages.",
+    ],
+)
+def test_select_archetypes_module_doc_not_triggered_by_weak_keywords(goal):
+    archetypes = select_archetypes({"project_goal": goal})
+    assert "module-doc-author" not in archetypes
+    assert "module-doc-validator" not in archetypes
+
+
+@pytest.mark.parametrize(
+    "goal",
+    [
+        "Host the documentation on readthedocs.",
+        "Generate API docs with sphinx.",
+        "Publish the docs site with mkdocs.",
+        "Build an sdist for the release.",
+    ],
+)
+def test_select_archetypes_module_doc_triggered_by_decisive_tooling(goal):
+    """Each package-exclusive token is decisive on its own (and selects the pair)."""
+    archetypes = select_archetypes({"project_goal": goal})
+    assert "module-doc-author" in archetypes
+    assert "module-doc-validator" in archetypes
+
+
+@pytest.mark.parametrize(
+    "goal",
+    [
+        "Distribute a pip package to PyPI.",          # decisive: pypi
+        "Build a simple ETL workflow for CSV data.",  # neither
+        "Generate API docs with sphinx.",             # decisive: sphinx
+        "An ETL pipeline that pipes data.",           # neither (no leak)
+    ],
+)
+def test_select_archetypes_module_doc_author_validator_always_paired(goal):
+    """The author and validator are always both-present or both-absent — never a half-pair."""
+    archetypes = select_archetypes({"project_goal": goal})
+    assert ("module-doc-author" in archetypes) == ("module-doc-validator" in archetypes)
+
+
+def test_select_archetypes_post_production_auditor_for_operation_plus_verification_non_data():
+    desc = {
+        "project_goal": "Execute a production release migration and verify final state against acceptance criteria."
+    }
+    archetypes = select_archetypes(desc)
+    assert "post-production-auditor" in archetypes
+
+
+def test_select_archetypes_post_production_auditor_for_legacy_plus_verification():
+    desc = {"project_goal": "Run an ETL collector pipeline and verify final state outcomes."}
+    archetypes = select_archetypes(desc)
+    assert "post-production-auditor" in archetypes
+
+
+@pytest.mark.parametrize(
+    "goal",
+    [
+        "Execute migration cleanup for production systems.",  # operation-only
+        "Verify outcome correctness and final-state proof.",  # verification-only
+        "Run an ETL collector pipeline.",  # legacy-only
+        "Run ETL pipeline migration rollout and cleanup.",  # operation + legacy, no verification
+        "Run async handlers and verify documentation formatting.",  # avoid substring collision (sync in async)
+        "Conduct a security audit report for policy documentation.",  # broad single term
+    ],
+)
+def test_select_archetypes_post_production_auditor_robust_negative_matrix(goal: str):
+    archetypes = select_archetypes({"project_goal": goal})
+    assert "post-production-auditor" not in archetypes
+
+
+def test_select_archetypes_post_production_auditor_cross_field_cues_trigger_selection():
+    desc = {
+        "project_goal": "Execute a production migration rollout.",
+        "components": [
+            {
+                "slug": "release-verification",
+                "name": "Release Verification",
+                "description": "Verify final state against source-of-truth acceptance criteria.",
+            }
+        ],
+    }
+    archetypes = select_archetypes(desc)
+    assert "post-production-auditor" in archetypes
+
+
+def test_select_archetypes_post_production_auditor_not_added_for_generic_audit_text():
+    desc = {"project_goal": "Conduct a security audit report for policy documentation."}
+    archetypes = select_archetypes(desc)
+    assert "post-production-auditor" not in archetypes
+
+
+def test_contains_keyword_rejects_non_string_text():
+    with pytest.raises(TypeError, match="text must be str"):
+        _contains_keyword(None, "verify")  # type: ignore[arg-type]
+
+
+def test_contains_keyword_rejects_non_string_keyword():
+    with pytest.raises(TypeError, match="keyword must be str"):
+        _contains_keyword("verify final state", None)  # type: ignore[arg-type]
+
+
+def test_build_manifest_post_production_auditor_implies_technical_validator_for_contextual_trigger():
+    """post-production-auditor selected via contextual cue pairing must imply technical-validator
+    even when no keyword independently triggers technical-validator."""
+    desc = {"project_goal": "Execute a production release migration and verify final state outcomes."}
+    manifest = build_manifest(desc, framework="copilot-vscode")
+    archetypes = manifest["selected_archetypes"]
+    assert "post-production-auditor" in archetypes, "post-production-auditor should be selected"
+    assert "technical-validator" in archetypes, (
+        "technical-validator must be implied by post-production-auditor "
+        "so its agent file is generated and callable via the agents: field"
+    )
+
+
+def test_build_manifest_post_production_auditor_all_agents_generated():
+    """Verify that all agents referenced in post-production-auditor template
+    are actually in the generated manifest."""
+    # post-production-auditor template declares:
+    # agents: ['orchestrator', 'adversarial', 'conflict-auditor', 'technical-validator', 'security']
+    template_agents = ['orchestrator', 'adversarial', 'conflict-auditor', 'technical-validator', 'security']
+    
+    desc = {"project_goal": "Run an ETL collector pipeline and audit mutation outcomes."}
+    manifest = build_manifest(desc, framework="copilot-vscode")
+    
+    # All agents must be in the generated manifest's agent_slug_list
+    all_slugs = set(manifest["agent_slug_list"])
+    for agent in template_agents:
+        assert agent in all_slugs, (
+            f"Agent '{agent}' declared in post-production-auditor template "
+            f"but not generated in manifest. Handoff will fail at runtime."
+        )
+
+
+def test_build_manifest_manual_override_selected_archetypes_includes_post_production_auditor():
+    desc = {
+        "project_goal": "Prepare release notes and deployment checklist.",
+        "selected_archetypes": ["post-production-auditor"],
+    }
+    manifest = build_manifest(desc, framework="copilot-vscode")
+    archetypes = manifest["selected_archetypes"]
+    assert "post-production-auditor" in archetypes
+    assert "technical-validator" in archetypes
+
+
+def test_build_manifest_post_production_auditor_manual_placeholders_surfaced():
+    """Post-production MANUAL placeholders should appear in manual_required_placeholders."""
+    desc = {"project_goal": "Run an ETL collector pipeline and verify mutation outcomes."}
+    manifest = build_manifest(desc, framework="copilot-vscode")
+    placeholders = {item["placeholder"] for item in manifest["manual_required_placeholders"]}
+    required = {
+        "TRIGGER_CONTRACT_VERSION",
+        "BULK_MUTATION_THRESHOLD",
+        "SOURCE_OF_TRUTH_SPEC",
+        "DUPLICATE_CLUSTER_CAP",
+        "AUDIT_SLUG",
+    }
+    missing = required - placeholders
+    assert not missing, f"Missing post-production MANUAL placeholders: {sorted(missing)}"
+
+
+# ---------------------------------------------------------------------------
+# build_manifest — tool-doc-researcher auto-include
+# ---------------------------------------------------------------------------
+
+def test_build_manifest_tool_doc_researcher_when_tool_missing_metadata():
+    """A specialist-tier tool with no docs_url/api_surface/common_patterns triggers tool-doc-researcher."""
+    desc = {
+        "project_goal": "Build a project with a custom internal database.",
+        "tools": [
+            # database category → specialist tier; not in tool_metadata_catalog
+            {"name": "InternalDB", "category": "database"},
+        ],
+    }
+    manifest = build_manifest(desc, framework="copilot-vscode")
+    assert "tool-doc-researcher" in manifest["selected_archetypes"]
+
+
+def test_build_manifest_known_catalog_tool_resolves_without_enrich_flag():
+    """Regression test (tmp/by-week/2026-W30/tool-doc-catalog-remediation.plan.md):
+    boto3 has a zero-network docs_url entry in the unified tool_metadata_catalog, so
+    a brief that lists it with no docs_url must resolve TOOL_DOCS_URL during a plain
+    build_manifest() call — no --enrich flag involved at this layer at all. Before
+    the catalog consolidation, boto3 was only reachable via the --enrich-gated
+    enrich/_tools.py catalogs, so this tool would have rendered
+    {MANUAL:TOOL_DOCS_URL} even though a known, offline answer existed. boto3's
+    catalog entry is docs_url-only (inherited from the old _CANONICAL_DOCS, which
+    never had api_surface/common_patterns for it) — tool-doc-researcher correctly
+    still triggers for those two fields; see the pandas case below for a tool
+    that's fully resolved and does NOT trigger it."""
+    desc = {
+        "project_goal": "Build a project that talks to AWS.",
+        "tools": [{"name": "boto3", "category": "library"}],
+    }
+    manifest = build_manifest(desc, framework="copilot-vscode")
+    ref_tools = manifest.get("reference_tools", [])
+    boto3_entries = [t for t in ref_tools if t["tool_name"] == "boto3"]
+    assert boto3_entries, "boto3 should classify as a reference-tier tool"
+    assert boto3_entries[0]["docs_url"] == (
+        "https://boto3.amazonaws.com/v1/documentation/api/latest/reference/services/index.html"
+    )
+
+
+def test_build_manifest_fully_resolved_catalog_tool_skips_tool_doc_researcher():
+    """A tool fully resolved by the unified catalog (docs_url + api_surface +
+    common_patterns, e.g. pandas) must not trigger tool-doc-researcher — unlike
+    boto3 above, which is docs_url-only."""
+    desc = {
+        "project_goal": "Build a data project.",
+        "tools": [{"name": "pandas", "category": "library"}],
+    }
+    manifest = build_manifest(desc, framework="copilot-vscode")
+    assert "tool-doc-researcher" not in manifest["selected_archetypes"]
+
+
+def test_build_manifest_no_tool_doc_researcher_when_metadata_complete():
+    """A tool with all metadata fields filled does NOT trigger tool-doc-researcher."""
+    desc = {
+        "project_goal": "Build a project with a well-documented tool.",
+        "tools": [
+            {
+                "name": "WellDocumentedTool",
+                "category": "other",
+                "docs_url": "https://example.com/docs/",
+                "api_surface": "api_call(), run()",
+                "common_patterns": "Always use context managers.",
+            }
+        ],
+    }
+    manifest = build_manifest(desc, framework="copilot-vscode")
+    assert "tool-doc-researcher" not in manifest["selected_archetypes"]
+
+
+def test_detect_reference_tools_enrich_known_tool_metadata():
+    """Known reference tools inherit metadata when the brief omits it. docs_url
+    updated by tmp/by-week/2026-W30/tool-doc-catalog-remediation.plan.md's catalog
+    consolidation (prefers the richer catalog's value on conflict)."""
+    tools = [{"name": "plotly", "category": "library"}]
+    result = detect_reference_tools(tools)
+    assert result[0]["docs_url"] == "https://plotly.com/python-api-reference/"
+    assert "go.Figure" in result[0]["api_surface"]
+    assert "JSON-serialisable" in result[0]["common_patterns"]
+
+
+def test_build_manifest_flags_missing_tool_reference_metadata():
+    """Unknown reference-tool metadata is surfaced in manual setup items."""
+    description = {
+        "project_name": "TestProject",
+        "project_goal": "Generate a research team.",
+        "deliverables": ["docs"],
+        "tools": [{"name": "CustomLib", "category": "library"}],
+        "components": [],
+    }
+    manifest = build_manifest(description)
+    reference_items = [
+        item for item in manifest["manual_required_placeholders"]
+        if item["agent_file"] == "references/ref-customlib-reference.md"
+    ]
+    placeholders = {item["placeholder"] for item in reference_items}
+    assert placeholders == {"TOOL_DOCS_URL", "TOOL_API_SURFACE", "TOOL_COMMON_PATTERNS"}
+
+
+def test_build_manifest_infers_component_sources_from_output_and_authority_paths():
+    """Components inherit source paths when the brief omits an explicit sources list."""
+    description = {
+        "project_name": "TestProject",
+        "project_goal": "Generate a research team.",
+        "deliverables": ["docs"],
+        "authority_sources": [
+            {
+                "name": "Data library",
+                "path": "ResearchProject/datlib/",
+                "scope": "Shared analysis code",
+                "rank": 1,
+            }
+        ],
+        "components": [
+            {
+                "slug": "research-project",
+                "name": "Research Project",
+                "output_file": "ResearchProject/notebook.ipynb",
+                "description": "Analyze the project.",
+                "sections": ["Overview"],
+                "quality_criteria": ["Has references"],
+            }
+        ],
+    }
+    manifest = build_manifest(description)
+    component = manifest["components"][0]
+    assert component["sources"] == [
+        "ResearchProject/notebook.ipynb",
+        "ResearchProject/datlib/",
+    ]
+    assert not any(item["placeholder"] == "COMPONENT_SOURCES" for item in manifest["manual_required_placeholders"])
+
+
+# ---------------------------------------------------------------------------
+# Tool documentation researcher archetype
+# ---------------------------------------------------------------------------
+
+def test_has_unknown_tool_metadata_returns_true_when_field_missing():
+    tool_agents = [{"slug": "tool-custom", "tool_name": "Custom", "docs_url": "", "api_surface": "", "common_patterns": ""}]
+    assert _has_unknown_tool_metadata(tool_agents, []) is True
+
+
+def test_has_unknown_tool_metadata_returns_false_when_all_fields_present():
+    tool_agents = [{
+        "slug": "tool-custom",
+        "tool_name": "Custom",
+        "docs_url": "https://example.com",
+        "api_surface": "Foo, Bar",
+        "common_patterns": "Use Foo for X.",
+    }]
+    assert _has_unknown_tool_metadata(tool_agents, []) is False
+
+
+def test_has_unknown_tool_metadata_checks_reference_tools_too():
+    reference_tools = [{"slug": "ref-mylib", "tool_name": "MyLib", "docs_url": "", "api_surface": "A", "common_patterns": "B"}]
+    assert _has_unknown_tool_metadata([], reference_tools) is True
+
+
+def test_format_unresolved_tool_list_specialist_with_gaps():
+    tool_agents = [{
+        "slug": "tool-custom",
+        "tool_name": "Custom",
+        "docs_url": "",
+        "api_surface": "",
+        "common_patterns": "",
+    }]
+    result = _format_unresolved_tool_list(tool_agents, [])
+    assert "Custom" in result
+    assert "references/ref-custom-reference.md" in result
+    assert ".agent.md" not in result
+    assert "docs URL" in result
+    assert "API surface" in result
+    assert "usage patterns" in result
+
+
+def test_format_unresolved_tool_list_reference_with_gaps():
+    reference_tools = [{
+        "slug": "ref-mylib",
+        "tool_name": "MyLib",
+        "docs_url": "",
+        "api_surface": "Some surface",
+        "common_patterns": "",
+    }]
+    result = _format_unresolved_tool_list([], reference_tools)
+    assert "MyLib" in result
+    assert "references/ref-mylib-reference.md" in result
+    assert "docs URL" in result
+    # api_surface is present — should not appear in gaps
+    assert "API surface" not in result
+
+
+def test_format_unresolved_tool_list_no_gaps_returns_none_message():
+    tool_agents = [{
+        "slug": "tool-sqlite",
+        "tool_name": "SQLite",
+        "docs_url": "https://www.sqlite.org/docs.html",
+        "api_surface": "CREATE TABLE",
+        "common_patterns": "Use parameterized queries.",
+    }]
+    result = _format_unresolved_tool_list(tool_agents, [])
+    assert result == "No tools with missing metadata."
+
+
+def test_build_manifest_includes_tool_doc_researcher_for_unknown_tool():
+    """tool-doc-researcher archetype is added when a tool has missing metadata."""
+    description = {
+        "project_name": "TestProject",
+        "project_goal": "Build a research team.",
+        "deliverables": ["docs"],
+        "tools": [{"name": "UnknownLib", "category": "library"}],
+        "components": [],
+    }
+    manifest = build_manifest(description)
+    assert "tool-doc-researcher" in manifest["selected_archetypes"]
+    assert "tool-doc-researcher" in manifest["agent_slug_list"]
+
+
+def test_build_manifest_excludes_tool_doc_researcher_when_all_metadata_known():
+    """tool-doc-researcher is NOT added when all tool metadata is auto-resolved."""
+    description = {
+        "project_name": "TestProject",
+        "project_goal": "Build a research team.",
+        "deliverables": ["docs"],
+        "tools": [{"name": "pandas", "category": "library"}],
+        "components": [],
+    }
+    manifest = build_manifest(description)
+    assert "tool-doc-researcher" not in manifest["selected_archetypes"]
+
+
+def test_build_manifest_tool_doc_researcher_file_is_planned():
+    """tool-doc-researcher.agent.md is included in output_files when archetype is selected."""
+    description = {
+        "project_name": "TestProject",
+        "project_goal": "Build a research team.",
+        "deliverables": ["docs"],
+        "tools": [{"name": "UnknownLib", "category": "library"}],
+        "components": [],
+    }
+    manifest = build_manifest(description)
+    planned_paths = [f["path"] for f in manifest["output_files"]]
+    assert "tool-doc-researcher.agent.md" in planned_paths
+
+
+def test_build_manifest_unresolved_tool_list_placeholder_populated():
+    """UNRESOLVED_TOOL_LIST placeholder is populated in auto_resolved_placeholders."""
+    description = {
+        "project_name": "TestProject",
+        "project_goal": "Build a research team.",
+        "deliverables": ["docs"],
+        "tools": [{"name": "UnknownLib", "category": "library"}],
+        "components": [],
+    }
+    manifest = build_manifest(description)
+    resolved = manifest["auto_resolved_placeholders"]
+    assert "UNRESOLVED_TOOL_LIST" in resolved
+    assert "UnknownLib" in resolved["UNRESOLVED_TOOL_LIST"]
+
+
+def test_build_manifest_unresolved_tool_list_empty_when_all_known():
+    """UNRESOLVED_TOOL_LIST reads 'No tools with missing metadata' when all tools are resolved."""
+    description = {
+        "project_name": "TestProject",
+        "project_goal": "Build a research team.",
+        "deliverables": ["docs"],
+        "tools": [{"name": "pandas", "category": "library"}],
+        "components": [],
+    }
+    manifest = build_manifest(description)
+    resolved = manifest["auto_resolved_placeholders"]
+    assert resolved["UNRESOLVED_TOOL_LIST"] == "No tools with missing metadata."

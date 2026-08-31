@@ -1,0 +1,34 @@
+{
+  "_comment": [
+    "Constitutional PreToolUse gate \u2014 merge this `hooks` block into your .claude/settings.json.",
+    "",
+    "It is shipped as an EXAMPLE rather than applied, for two reasons. First, .claude/settings.json",
+    "is gitignored in this repository, so a block written there reaches one machine and no other \u2014",
+    "the hook script itself is tracked, but its wiring cannot be. Second, agentteams never writes a",
+    "user's settings.json directly (see agentteams/hooks_emit.py): clobbering operator config is a",
+    "worse failure than an unwired hook.",
+    "",
+    "Without this block the hook is inert, and C-5 has no reach over agent tool calls \u2014 which is",
+    "exactly the gap probe E3 measured. Wiring it is a deliberate operator action.",
+    "",
+    "What it does: denies a Write/Edit whose content the scanner rates high severity (credentials,",
+    "PII paths, injected override text), and asks before a Bash command matching a Mandatory Review",
+    "Trigger (sudo, pipe-to-shell, recursive delete, persistence, package install, forced push).",
+    "To remove it: delete the `hooks` key.",
+    "",
+    "Invoked through `python3` rather than as a bare path: the generation pipeline writes files with the umask default (0644) and never sets an executable bit, so a bare-path command would land a hook that LOOKS installed and silently fails with 'permission denied'. Found by rehearsing a fleet update against an isolated copy. Interpreter invocation also survives clone, copy and archive extraction, which an exec bit does not."
+  ],
+  "hooks": {
+    "PreToolUse": [
+      {
+        "matcher": "Write|Edit|NotebookEdit|MultiEdit|Bash",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "python3 \"${CLAUDE_PROJECT_DIR}/.claude/hooks/constitutional-gate.py\""
+          }
+        ]
+      }
+    ]
+  }
+}

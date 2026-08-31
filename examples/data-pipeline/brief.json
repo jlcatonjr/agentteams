@@ -1,0 +1,100 @@
+{
+  "project_name": "SalesDataPipeline",
+  "project_goal": "Build an ETL pipeline that ingests daily sales CSV exports, validates and transforms them, loads them into a PostgreSQL warehouse, and produces weekly summary reports.",
+  "deliverables": ["Python ETL modules", "SQL transformation scripts", "weekly PDF reports"],
+  "output_format": "Python 3.11 modules and PDF reports",
+  "primary_output_dir": "src/",
+  "build_output_dir": "reports/",
+  "figures_dir": "reports/figures/",
+  "authority_sources": [
+    {
+      "name": "Source CSV schema",
+      "path": "docs/source-schema.md",
+      "scope": "field names and types in raw data",
+      "rank": 1
+    },
+    {
+      "name": "Warehouse schema",
+      "path": "sql/warehouse-schema.sql",
+      "scope": "target table structure",
+      "rank": 2
+    }
+  ],
+  "style_reference": null,
+  "reference_db_path": null,
+  "tools": [
+    {"name": "Python", "version": "3.11", "category": "language"},
+    {"name": "pandas", "category": "library"},
+    {"name": "SQLAlchemy", "category": "library"},
+    {
+      "name": "PostgreSQL",
+      "version": "15",
+      "category": "database",
+      "config_files": ["config/db.yaml"],
+      "needs_specialist_agent": true
+    },
+    {"name": "Grafana", "category": "other", "needs_specialist_agent": false}
+  ],
+  "style_rules": [
+    "All SQL queries parameterized — no string concatenation",
+    "Log all row counts at each pipeline stage",
+    "Idempotent loads: upsert on primary key"
+  ],
+  "components": [
+    {
+      "slug": "ingest",
+      "name": "Ingest Module",
+      "number": 1,
+      "output_file": "src/ingest.py",
+      "description": "Reads daily CSV exports from the landing zone, validates schema, and emits validated DataFrames.",
+      "sections": ["CSV discovery", "Schema validation", "Error logging", "Tests"],
+      "quality_criteria": [
+        "Handles missing and malformed rows without crashing",
+        "Logs all validation failures with row number and field name",
+        "Tests cover empty files, extra columns, and missing required columns"
+      ]
+    },
+    {
+      "slug": "transform",
+      "name": "Transform Module",
+      "number": 2,
+      "output_file": "src/transform.py",
+      "description": "Applies business logic transformations: currency normalization, date parsing, and derived field calculation.",
+      "sections": ["Currency normalization", "Date parsing", "Derived fields (margin, tax)", "Tests"],
+      "cross_refs": ["ingest"],
+      "quality_criteria": [
+        "All derived field formulas documented",
+        "Currency conversion uses a fixed reference rate per run (not live)",
+        "Tests cover edge cases for each transformation"
+      ]
+    },
+    {
+      "slug": "load",
+      "name": "Load Module",
+      "number": 3,
+      "output_file": "src/load.py",
+      "description": "Loads transformed data into the PostgreSQL warehouse using upsert logic.",
+      "sections": ["Connection management", "Upsert logic", "Transaction handling", "Load logging", "Tests"],
+      "cross_refs": ["transform"],
+      "quality_criteria": [
+        "All queries parameterized",
+        "Load is idempotent (safe to re-run)",
+        "Tests use a test database fixture"
+      ]
+    },
+    {
+      "slug": "weekly-report",
+      "name": "Weekly Summary Report",
+      "number": 4,
+      "output_file": "reports/weekly/",
+      "description": "Generates a weekly PDF summary with top-line metrics, trend charts, and regional breakdowns.",
+      "sections": ["Revenue summary", "Top 10 products", "Regional breakdown", "Week-over-week trend"],
+      "cross_refs": ["load"],
+      "quality_criteria": [
+        "Report generated automatically on Monday mornings",
+        "All charts include axis labels and data source note",
+        "Report renders correctly for zero-data weeks"
+      ]
+    }
+  ]
+}

@@ -1,0 +1,62 @@
+name: Deploy Docs
+
+on:
+  push:
+    branches:
+      - main
+  workflow_dispatch: {}
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: pages
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install MkDocs dependencies
+        run: pip install "mkdocs==1.6.1" "mkdocs-material==9.7.6" pymdown-extensions
+
+      - name: Build docs
+        run: mkdocs build --site-dir _site
+
+      - name: Ensure book SPA assets are deployed (docs_src is authoritative)
+        run: |
+          mkdir -p _site/book
+          rsync -a --delete docs_src/book/ _site/book/
+
+      - name: Mark Pages artifact as static (no Jekyll)
+        run: |
+          touch _site/.nojekyll
+
+      - name: Validate Pages artifact contents
+        run: |
+          test -s _site/index.html
+          test -f _site/.nojekyll
+          file_count=$(find _site -type f | wc -l | tr -d ' ')
+          test "$file_count" -gt 10
+
+      - name: Upload Pages artifact
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: _site
+
+      - name: Deploy to GitHub Pages
+        id: deployment
+        uses: actions/deploy-pages@v4

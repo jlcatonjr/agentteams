@@ -1,0 +1,126 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "redteam-findings.schema.json",
+  "title": "Red-Team Findings",
+  "description": "Output of phases 1-2 of the standing red-team audit (agentteams --redteam): what was attacked, what held, and over which populations. Written to <report-dir>/findings.json. Machine-readable counterpart to discoveries.md.",
+  "type": "object",
+  "required": [
+    "schema_version",
+    "generated_at",
+    "probe_module",
+    "probes",
+    "counts",
+    "registration_problems",
+    "control_failures",
+    "corpus_mismatches",
+    "exploited"
+  ],
+  "additionalProperties": false,
+  "properties": {
+    "schema_version": {
+      "type": "integer",
+      "const": 1
+    },
+    "generated_at": {
+      "type": "string",
+      "description": "ISO-8601 UTC timestamp supplied by the caller, not read from the clock inside the engine, so a run is reproducible."
+    },
+    "probe_module": {
+      "type": ["string", "null"],
+      "description": "Dotted import path of the probe module. Null when none was registered, in which case the attack phase did not run and the probe counts carry a denominator of zero — an unmeasured population, not a clean result."
+    },
+    "probes": {
+      "type": "array",
+      "description": "One entry per probe that recorded a result.",
+      "items": {
+        "type": "object",
+        "required": [
+          "pid",
+          "name",
+          "article",
+          "tier",
+          "outcome",
+          "expected_if_sound",
+          "evidence",
+          "control",
+          "notes",
+          "is_control",
+          "evidence_digest",
+          "external_refs"
+        ],
+        "additionalProperties": false,
+        "properties": {
+          "pid": {"type": "string", "description": "Stable probe id; the key every ledger joins on."},
+          "name": {"type": "string", "description": "Prefixed 'CONTROL:' when the probe establishes that the mechanism is engaged."},
+          "article": {"type": "string", "description": "Constitutional article under test.", "pattern": "^C-[1-5]$"},
+          "tier": {"type": "string", "enum": ["T0", "T1", "T2"], "description": "T0 read content only, T1 in-repo agent with write+execute, T2 operator shell/env."},
+          "outcome": {
+            "type": "string",
+            "enum": ["DEFENDED", "PARTIAL", "EXPLOITED", "DOCUMENTED-LIMIT", "OUT-OF-TIER"]
+          },
+          "expected_if_sound": {"type": "string"},
+          "evidence": {"type": "string", "description": "Observed behaviour, verbatim where possible."},
+          "control": {"type": ["string", "null"], "description": "Paired control probe's pid. Null for a control probe, or for an attack probe exempted on the record in references/redteam-uncontrolled-probes.csv."},
+          "notes": {"type": "string"},
+          "is_control": {"type": "boolean"},
+          "evidence_digest": {
+            "type": "string",
+            "description": "SHA-256 prefix over the NORMALISED evidence — temp paths, timestamps, dates, hex digests and set-iteration order removed. Compared against references/redteam-probe-baseline.json by the F-5 intent check. Digesting raw evidence would flag every probe on every run.",
+            "pattern": "^[0-9a-f]{16}$"
+          },
+          "external_refs": {
+            "type": "array",
+            "items": {"type": "string"},
+            "description": "External taxonomy ids this probe corresponds to (e.g. 'LLM06', 'AML.TA0003'), where a defensible mapping exists. Empty when none — never guessed. See agentteams/redteam/coverage.py (improvement item I1)."
+          }
+        }
+      }
+    },
+    "counts": {
+      "type": "array",
+      "description": "Every quantitative claim, each with the population it was computed over. A count cannot be constructed without a canonical population source: a numerator without its denominator is the failure that hid 719 exposed agents behind '0 agents on the ignored key across the fleet'.",
+      "items": {
+        "type": "object",
+        "required": ["claim", "numerator", "denominator", "population_source", "note"],
+        "additionalProperties": false,
+        "properties": {
+          "claim": {"type": "string"},
+          "numerator": {"type": "integer", "minimum": 0},
+          "denominator": {"type": "integer", "minimum": 0},
+          "population_source": {
+            "type": "string",
+            "enum": [
+              "fleet.discover_workspaces",
+              "registry.run_probes",
+              "corpus.load_corpus",
+              "integrity.ENFORCEMENT_MODULES",
+              "registry.load_accepted_weaknesses",
+              "model_matrix.evaluated_models"
+            ]
+          },
+          "note": {"type": "string", "description": "Why a numerator is zero, or what a population excludes."}
+        }
+      }
+    },
+    "registration_problems": {
+      "type": "array",
+      "items": {"type": "string"},
+      "description": "Attack probes with no declared control and no recorded exemption, controls naming controls, unresolvable control references, stale exemptions. Any entry means the HARNESS is broken."
+    },
+    "control_failures": {
+      "type": "array",
+      "items": {"type": "string"},
+      "description": "Pids of control probes that did not DEFEND. A battery whose controls fail measures a broken instrument and would report all-clear either way, so any entry maps to exit code 2, never 1."
+    },
+    "corpus_mismatches": {
+      "type": "array",
+      "items": {"type": "string"},
+      "description": "Judgment-layer payloads whose scanner_matches claim no longer agrees with agentteams.scan. The corpus describes a scanner that no longer exists."
+    },
+    "exploited": {
+      "type": "array",
+      "items": {"type": "string"},
+      "description": "Pids of ATTACK probes returning EXPLOITED — a measured attack is live. Controls are excluded here and reported through control_failures instead."
+    }
+  }
+}

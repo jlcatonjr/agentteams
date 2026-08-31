@@ -1,0 +1,235 @@
+# `drift` — AgentTeamsModule
+
+Detect template-to-instance drift in generated agent teams.
+
+Compares current template hashes against those recorded in `build-log.json` at generation time, and reports which agent files need re-rendering. Drift has two independent dimensions: **content drift** (template text changed) and **structural drift** (team composition changed). For a third, orthogonal dimension — whether the team *ran* the workflow it was specified to run — see [`behavioral_drift`](behavioral-drift.md). The [stale-detection guide](../stale-detection-guide.md) covers how these signals drive re-generation.
+
+> *Source: `agentteams/drift.py`*
+
+---
+
+## Classes
+
+### `DriftReport`
+
+> *Source: `agentteams/drift.py`*
+
+Results of a content-drift detection run.
+
+**Attributes:**
+
+- `changed_templates` (`list[dict[str, str]]`) — Templates whose hash differs from the build-log.
+- `missing_templates` (`list[str]`) — Templates referenced in the build-log that no longer exist.
+- `new_templates` (`list[str]`) — Templates found on disk not recorded in the build-log.
+- `unchanged` (`list[str]`) — Templates that match the build-log hash.
+
+**Properties:**
+
+- `has_drift` (`bool`) — `True` if any templates have changed since last generation.
+- `affected_output_files` (`list[str]`) — [Output file paths](output-plan.md) affected by drifted templates.
+
+---
+
+### `StructuralDiffReport`
+
+> *Source: `agentteams/drift.py`*
+
+Results of a structural diff between a build-log and a current manifest.
+
+**Attributes:**
+
+- `added_files` (`list[dict[str, Any]]`) — Files in the new manifest absent from the old log.
+- `removed_files` (`list[dict[str, Any]]`) — Files in the old log absent from the new manifest.
+- `drifted_files` (`list[dict[str, Any]]`) — Files present in both but whose template hash changed.
+- `unchanged_files` (`list[dict[str, Any]]`) — Files present in both with the same template hash.
+- `manifest_changed` (`bool`) — `True` when the new manifest fingerprint differs from the one recorded in the prior build log.
+- `team_membership_changed` (`bool`) — `True` when `agent_slug_list` differs between old and new.
+- `legacy_log` (`bool`) — `True` when build-log predates schema v1.2 (no `output_files_map`).
+
+**Properties:**
+
+- `has_changes` (`bool`) — `True` if any structural or content changes require action.
+- `update_files` (`list[dict[str, Any]]`) — All file entries that need to be written (added + drifted).
+
+---
+
+## Functions
+
+### `load_build_log(agents_dir)`
+
+> *Source: `agentteams/drift.py`*
+
+Load `build-log.json` from an agents directory.
+
+**Args:**
+
+- `agents_dir` (`Path`) — Path to the `.github/agents/` directory.
+
+**Returns:** `dict[str, Any]` — Parsed build-log.json dict.
+
+**Raises:**
+
+- `FileNotFoundError` — If `build-log.json` does not exist in `agents_dir`.
+- `ValueError` — If `build-log.json` exists but is malformed JSON.
+
+---
+
+### `detect_drift(agents_dir, templates_dir, *, build_log=None)`
+
+> *Source: `agentteams/drift.py`*
+
+Detect content drift by comparing current template hashes against the build-log.
+
+**Args:**
+
+- `agents_dir` (`Path`) — Path to the `.github/agents/` directory containing `build-log.json`.
+- `templates_dir` (`Path`) — Path to the templates root directory.
+- `build_log` (`dict[str, Any] | None`, keyword-only) — Optional pre-loaded build-log dict. If `None`, `build-log.json` is loaded from `agents_dir`.
+
+**Returns:** `DriftReport`
+
+**Raises:**
+
+- `FileNotFoundError` — If `build-log.json` is not found.
+- `ValueError` — If `build-log.json` exists but is malformed JSON.
+
+---
+
+### `print_drift_report(report)`
+
+> *Source: `agentteams/drift.py`*
+
+Print a human-readable drift report to stdout.
+
+**Args:**
+
+- `report` (`DriftReport`) — Result from `detect_drift()`.
+
+---
+
+### `compute_structural_diff(old_log, new_manifest, templates_dir)`
+
+> *Source: `agentteams/drift.py`*
+
+Compute a structural diff between a stored build-log and a new manifest.
+
+In addition to added/removed/drifted classification, the function consumes the build-log's `fingerprint_algo_version` field (see `FINGERPRINT_ALGO_VERSION` below). A missing field is treated as a legacy log and is **not** sufficient on its own to trigger promotion; a present-but-mismatched value triggers a one-shot manifest promotion with `_reason = "fingerprint algo version bumped"`. The function also sets `report.manifest_changed` whenever the new manifest fingerprint differs from the recorded one or the algo version has been bumped.
+
+**Args:**
+
+- `old_log` (`dict[str, Any]`) — Previously stored build-log from `load_build_log()`.
+- `new_manifest` (`dict[str, Any]`) — Current team manifest from [`analyze.build_manifest()`](analyze.md).
+- `templates_dir` (`Path`) — Path to the templates root directory.
+
+**Returns:** `StructuralDiffReport`
+
+---
+
+### `refine_manifest_promotion(report, content_matches)`
+
+> *Source: `agentteams/drift.py`*
+
+Demote fingerprint-only promotions whose rendered content matches disk.
+
+`compute_structural_diff` promotes *every* unchanged file to drifted when the manifest fingerprint differs (a coarse safety net). For each such entry — identified by a manifest `_reason` (`"manifest values changed"`, `"manifest fingerprint unavailable"`, or `"fingerprint algo version bumped"`) — the caller-supplied `content_matches(path)` predicate is consulted; entries whose freshly-rendered content would match disk byte-for-byte are moved back to `unchanged_files`.
+
+Pure: performs no rendering or I/O directly. The caller supplies the `content_matches` closure (typically a render-and-compare against the on-disk file). `report.manifest_changed` is left intact as telemetry — only the `drifted_files` / `unchanged_files` sets (and therefore `update_files` / `has_changes`) are corrected.
+
+**Args:**
+
+- `report` (`StructuralDiffReport`) — Report from `compute_structural_diff()`; mutated in place.
+- `content_matches` (`Callable[[str], bool]`) — Predicate: returns `True` when the rendered content for the given output path matches the bytes on disk.
+
+**Returns:** `None`
+
+---
+
+### `print_structural_diff_report(report)`
+
+> *Source: `agentteams/drift.py`*
+
+Print a human-readable structural diff report to stdout.
+
+**Args:**
+
+- `report` (`StructuralDiffReport`) — Result from `compute_structural_diff()`.
+
+---
+
+### `compute_manifest_fingerprint(manifest)`
+
+> *Source: `agentteams/drift.py`*
+
+Compute a stable hash fingerprint of a team manifest for change detection.
+
+**Args:**
+
+- `manifest` (`dict[str, Any]`) — Team manifest from `analyze.build_manifest()`.
+
+**Returns:** `str` — First 16 hex characters of the SHA-256 digest of the canonicalized manifest (stable short fingerprint).
+
+---
+
+### `detect_user_customizations(agents_dir, *, build_log=None)`
+
+> *Source: `agentteams/drift.py`*
+
+Detect generated files whose on-disk hash differs from the hash recorded at generation time.
+
+This is a best-effort advisory pre-write signal used by update workflows. A detected customization does not block execution by itself.
+
+The check reports modified files that still exist on disk; missing files are skipped.
+
+**Args:**
+
+- `agents_dir` (`Path`) — Path to the `.github/agents/` directory.
+- `build_log` (`dict[str, Any] | None`, keyword-only) — Optional pre-loaded build-log dict. If `None`, `build-log.json` is loaded from `agents_dir`.
+
+**Returns:** `list[dict[str, str]]` — A list of customization records. Each record includes:
+
+- `path` — Absolute path string for the customized file.
+- `rel_path` — Relative path as stored in the build log.
+- `reason` — `modified since last build`.
+
+Returns an empty list when the build log is missing, invalid, or has no recorded file hashes.
+
+Read-path OS errors while hashing existing files are not suppressed and may propagate to callers.
+
+---
+
+### `verify_output_integrity(agents_dir, *, build_log=None)`
+
+> *Source: `agentteams/drift.py`*
+
+Classify each build-recorded output file's current integrity (read-only).
+
+Compares every file in `build-log.json`'s `file_hashes` against its current on-disk state and returns one entry per recorded file with keys `rel_path`, `path`, `status`, and `note`. `status` is one of:
+
+- `OK` — current 16-char SHA-256 matches the recorded hash.
+- `MODIFIED` — content changed since build (a legitimate USER-EDITABLE edit OR drift — undifferentiated, because a whole-file hash cannot say *where* the change is). Advisory, not a failure.
+- `TRUNCATED` — recorded file is now empty (size 0) though it was non-empty at build — a strong corruption tell.
+- `MISSING` — recorded file is absent (or unreadable).
+- `FENCE-BROKEN` — content changed AND the file's `AGENTTEAMS` fences no longer parse (unclosed/duplicate/mismatched) — a strong corruption tell.
+
+**Args:**
+
+- `agents_dir` (`Path`) — Path to the `.github/agents/` directory.
+- `build_log` (`dict[str, Any] | None`, keyword-only) — Optional pre-loaded build-log dict. If `None`, `build-log.json` is loaded from `agents_dir`.
+
+**Returns:** `list[dict[str, str]]` — One entry per build-recorded file. Returns an empty list when the build-log or its `file_hashes` is absent (the caller treats that as `UNKNOWN` — cannot verify — not a failure).
+
+---
+
+## Module Constants
+
+### `FINGERPRINT_ALGO_VERSION`
+
+> *Source: `agentteams/drift.py`*
+
+Integer version of the manifest-fingerprint algorithm (current value: `1`).
+
+Bump **only** when `compute_manifest_fingerprint` semantics change — i.e. when its output would differ for an otherwise-unchanged manifest. A bump forces a one-shot re-evaluation on the next `--update` for any consumer repo whose build log was produced by a prior algo version: `compute_structural_diff` detects the mismatch, sets `report.manifest_changed`, and promotes affected files with `_reason = "fingerprint algo version bumped"`. After the next successful write the new value is recorded in the build log and the promotion does not recur.
+
+Legacy logs that pre-date this field (no `fingerprint_algo_version` key) are not treated as bumped — they fall through to the normal fingerprint comparison.
+
+A pinned unit test asserts the current value to force explicit PR review of any bump.

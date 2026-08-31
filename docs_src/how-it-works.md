@@ -1,0 +1,187 @@
+# How It Works
+
+Agent Teams Module transforms a single project description into a complete, coordinated AI agent team through a four-stage pipeline.
+
+---
+
+## Pipeline Overview
+
+```
+brief.json / brief.md
+        │
+        ▼
+   ┌─────────┐
+   │  ingest  │  Parse and validate the project description
+   └────┬────┘
+        │ normalized description dict
+        ▼
+   ┌─────────┐
+   │ analyze  │  Select archetypes, detect tools, build manifest
+   └────┬────┘
+        │ team manifest dict
+        ▼
+   ┌────────┐
+   │ render  │  Fill templates with resolved placeholders
+   └────┬───┘
+        │ (output_path, rendered_content) pairs
+        ▼
+   ┌──────┐
+    │ emit  │  Write agent files to framework-specific target directories
+   └──────┘
+```
+
+### Stage 1 — Ingest (`agentteams/ingest.py`)
+
+Reads your project description from a `.json` or `.md` file and validates it against `schemas/project-description.schema.json`. Returns a normalized Python dict.
+
+### Stage 2 — Analyze (`agentteams/analyze.py`)
+
+Builds the **team manifest** from the description dict. Key decisions made in this stage:
+
+- **Project type classification** — determines whether the project is software, writing, data-pipeline, research, or documentation
+- **Archetype selection** — picks the right domain agent mix from the template library
+- **Tool importance classification** — decides whether each tool gets an operational doc (reference/skill), a lightweight reference, or no dedicated artifact (tools are never agents)
+- **Authority hierarchy construction** — orders sources by rank for the agents to cite
+- **Placeholder resolution** — auto-fills all `{UPPER_SNAKE_CASE}` tokens; flags `{MANUAL:*}` tokens for human review
+
+### Stage 3 — Render (`agentteams/render.py`)
+
+Loads each template from `templates/` and substitutes every `{PLACEHOLDER}` with its resolved value from the manifest. Returns a list of `(relative_path, content)` pairs.
+
+### Stage 4 — Emit (`agentteams/emit.py`)
+
+Writes all rendered files to the target framework directory:
+
+- `copilot-vscode` -> `.github/agents/`
+- `copilot-cli` -> `.github/copilot/`
+- `claude` -> `.claude/agents/`
+- `goose` **(beta)** -> `.goose/recipes/`
+- `agents-md` -> `.agents/`
+
+Also writes framework instructions at the parent of the framework agents directory:
+
+- `copilot-vscode` and `copilot-cli` -> `.github/copilot-instructions.md`
+- `claude` -> `.claude/CLAUDE.md`
+- `goose` and `agents-md` -> repo-root `AGENTS.md`
+
+It also generates `SETUP-REQUIRED.md` for unresolved manual placeholders, and runs post-generation audit/security scan when requested.
+
+### Path B: Convert Existing Teams
+
+In addition to fresh generation, the module supports format migration with `--convert-from`.
+This path reads existing agent files, preserves body prose, and rewrites framework wrappers/front matter for the target framework.
+
+---
+
+## 4-Tier Agent Taxonomy
+
+Every generated team contains agents from four hierarchical tiers.
+
+```
+Tier 1: Orchestrator
+   └── Routes all work; enforces constitutional rules;
+       opens and closes every multi-agent session
+
+Tier 2: Governance Agents
+   └── Navigator, Security, Code-Hygiene, Adversarial,
+       Conflict-Auditor, Conflict-Resolution, Cleanup,
+       Agent-Updater, Agent-Refactor, Repo-Liaison,
+       Git-Operations
+       Each owns a cross-cutting concern (structure, safety,
+       consistency, documentation) rather than a deliverable
+
+Tier 3: Domain Agents
+   └── Work-Summarizer (always included),
+       Primary-Producer, Quality-Auditor, Technical-Validator,
+    Post-Production-Auditor (context-triggered),
+    Format-Converter, Reference-Manager, Output-Compiler, ...
+       Each owns a production workflow (drafting, auditing,
+       converting, compiling)
+
+Tier 4: Workstream Experts
+   └── One per project component (e.g. @auth-module-expert,
+       @tasks-api-expert)
+       Each owns one deliverable unit end-to-end:
+       component brief → domain agent commission → review
+```
+
+### How Tiers Interact
+
+```
+User Request
+    │
+    ▼
+Orchestrator ──► Workstream Expert (prepares Component Brief)
+    │                  │
+    │                  ▼
+    │           Domain Agent (executes production)
+    │                  │
+    ▼                  ▼
+Governance Agents (audits, reviews, clearances)
+```
+
+The orchestrator **routes without producing**. Domain agents **produce without scoping**. Workstream experts **scope without producing**. Governance agents **audit without producing**.
+
+### Optional Outcome-Verification Layer
+
+Teams that include `@post-production-auditor` can add an optional post-production workflow extension (Workflow 10C) in the orchestrator user-editable section. This workflow validates claimed completed outcomes against source-of-truth state and enforces fail-closed closure behavior on `FAIL`/`INCONCLUSIVE` verdicts.
+
+The analyzer auto-selection for `@post-production-auditor` uses contextual cue pairing (operation/state-change + verification/proof cues) to reduce false positives from single broad keywords. Teams can always force inclusion through `selected_archetypes` in the project description.
+
+To avoid forced propagation to teams that do not include this archetype, Workflow 10C and its routing row are added outside FENCED sections (in user-editable gaps), not inside generated fenced blocks.
+
+### Agent Knowledge Updates
+
+Generated agent teams are designed to keep their documentation current automatically as projects evolve. Two mechanisms work together:
+
+**Automatic update triggers** — `@agent-updater` is invoked at the close of knowledge-mutating workflow steps. Specifically, it runs in Workflow 1, Workflow 2, Workflow 3 (when corrections were made), Workflow 5 (when issues were found), Workflow 6, Workflow 7, Workflow 8, and Workflow 9. Drift detected by `--check` is also an explicit trigger.
+
+**Periodic Knowledge Re-verification** — Before any plan step executes (Workflow 10), `@technical-validator` verifies the factual claims stated in that step's inputs, outputs, and notes against current on-disk state. Steps with unverified claims are held until the user confirms. If `--check` reports template drift, `@agent-updater` re-renders affected files and calls `@technical-validator` before the next workflow step proceeds.
+
+**Epistemic guard on audit workflows** — `@adversarial` runs at the start of Workflow 5 (Consistency Review) before any audit conclusions are surfaced, and before any deletion plan in Workflow 8 (Code Hygiene Audit). This prevents agents from auditing on the basis of unchallenged assumptions about project state.
+
+These three mechanisms together ensure that agents do not assert stale beliefs as facts and that documentation lag — the primary cause of agent errors in long-lived teams — is detected and resolved automatically.
+
+---
+
+## Template Library
+
+Templates in `templates/` are Markdown files with `{PLACEHOLDER}` tokens. The library provides:
+
+| Tier | Templates |
+|------|-----------|
+| Orchestrator | `universal/orchestrator.template.md` |
+| Governance | `universal/` (11 tier-2 governance agent templates) |
+| Domain | `domain/` (15 archetype templates + 6 tool templates, incl. `content-enricher` and `work-summarizer`) |
+| Workstream Expert | `workstream-expert.template.md` (one template, rendered per component) |
+| Builder | `builder/` (4 framework-specific team-builder templates) |
+
+In addition to the 11 always-included tier-2 governance templates, `universal/` also contains the tier-1 Orchestrator template.
+
+The `domain/` template library includes `content-enricher` as a selectable archetype in addition to the standard archetypes listed in the table above.
+
+See [Template Authoring](template-authoring.md) for placeholder conventions and authoring rules.
+
+---
+
+## Framework Adapters
+
+The same template library targets five frameworks via adapters in `agentteams/frameworks/`:
+
+| Framework | Agent Format | Entry Point |
+|-----------|-------------|-------------|
+| `copilot-vscode` | `.agent.md` with YAML front matter | VS Code Copilot agent panel |
+| `copilot-cli` | Plain `.md` system prompts | `gh copilot` CLI |
+| `claude` | Claude front matter `.md` + `CLAUDE.md` | Claude Projects |
+| `goose` **(beta)** | Recipe YAML (`.goose/recipes/*.yaml`) + repo-root `AGENTS.md`/`.goosehints` | `goose run --recipe` |
+| `agents-md` | Cross-tool `AGENTS.md` standard (plain `.md`) + `.agents/` | Any AGENTS.md-aware tool |
+
+Each adapter in `agentteams/frameworks/` knows the file naming conventions, front-matter schema, and handoff delivery mode for its target framework. VS Code Copilot keeps handoffs inline; frameworks that do not support the VS Code syntax can instead receive a sidecar `references/runtime-handoffs.json` manifest when extracted handoffs are present. Goose encodes handoffs natively inside each recipe (orchestrator `sub_recipes`; deeper edges become `summon` `load(...)`), so it emits no sidecar. **Goose support is in beta** (generate/convert/bridge; interop is not yet supported) and its adapter API is not yet under the [stability policy](https://github.com/jlcatonjr/agentteams/blob/main/STABILITY.md).
+
+---
+
+## Using a Coding Agent to Run the Pipeline
+
+The four-stage pipeline can be driven entirely by a coding agent. Instead of running CLI commands manually, you describe what you want in plain language and the agent drafts the brief, generates the team, resolves placeholders, and audits the result.
+
+See [Agent-Assisted Setup](agent-assisted-setup.md) for the full workflow and ready-to-use prompt templates.

@@ -1,0 +1,694 @@
+{
+  "schema_version": "1.2",
+  "project_name": "WebAppBackend",
+  "framework": "copilot-vscode",
+  "project_type": "software",
+  "archetypes": [
+    "primary-producer",
+    "quality-auditor",
+    "cohesion-repairer",
+    "technical-validator",
+    "format-converter",
+    "output-compiler",
+    "tool-doc-researcher"
+  ],
+  "components": [
+    "auth-module",
+    "tasks-api"
+  ],
+  "files_written": [],
+  "manual_required": 10,
+  "template_hashes": {
+    "universal/orchestrator.template.md": "7cb6cc382bcde9ca",
+    "universal/navigator.template.md": "5a0d707a9f3f5cec",
+    "universal/security.template.md": "468196372c0b8aab",
+    "universal/code-hygiene.template.md": "72e2a1f9ec316852",
+    "universal/adversarial.template.md": "0dbc3c4284139780",
+    "universal/conflict-auditor.template.md": "d0e6ed3e98ba1f86",
+    "universal/conflict-resolution.template.md": "fd74ccfd546065c4",
+    "universal/cleanup.template.md": "dd3c78f2548c4686",
+    "universal/agent-updater.template.md": "1462c430bf7051c7",
+    "universal/agent-refactor.template.md": "fb1956da5b1140a2",
+    "universal/repo-liaison.template.md": "57b1c8654c320d59",
+    "universal/git-operations.template.md": "c000c51feb44ad64",
+    "domain/work-summarizer.template.md": "90b19b91ff48a953",
+    "domain/primary-producer.template.md": "e02c72f74753e2a3",
+    "domain/quality-auditor.template.md": "6ce15b22e2a72237",
+    "domain/cohesion-repairer.template.md": "58bee448f014dfde",
+    "domain/technical-validator.template.md": "a8ebdc034168749f",
+    "domain/format-converter.template.md": "779aa293419a88ef",
+    "domain/output-compiler.template.md": "c08d60a4578e90a4",
+    "domain/tool-doc-researcher.template.md": "32e14764bebde2b2",
+    "domain/tool-database.doc.template.md": "4569dcb000c929c1",
+    "domain/tool-reference.template.md": "5ce5638b7094cc86",
+    "domain/code-hygiene-rules-reference.template.md": "cf49b61dc45e4ca4",
+    "domain/unix-philosophy-mapping-reference.template.md": "702af6b4e9e2b952",
+    "universal/security-vulnerability-watch.reference.template.md": "269cdacb3d94fdfa",
+    "universal/security-vulnerability-watch.json.template": "ebcec1b04ad46caa",
+    "universal/security-linux-hardening.reference.template.md": "4845cf83b84615f4",
+    "universal/security-macos-hardening.reference.template.md": "78fd2835ec2d8869",
+    "universal/security-windows-hardening.reference.template.md": "5885668f48e4c295",
+    "universal/ai-bad-habits-watch.reference.template.md": "3265a4ef0b7e5f7a",
+    "universal/framework-watch.reference.template.md": "5232925f7a649199",
+    "universal/adjacent-repos.reference.template.md": "8020816d05c1df44",
+    "universal/github-workflows-merge.reference.template.md": "4b5d6066a338ae74",
+    "universal/work-summary-spec.reference.template.md": "d29ca7e680ad715d",
+    "universal/work-summary-tooling.reference.template.md": "62e643b1a9711af6",
+    "universal/work-summary-backfill.reference.template.md": "5730bac043dc2874",
+    "universal/parallelization.reference.template.md": "2c872341050a7781",
+    "universal/instruction-authority.reference.template.md": "72149ab5244f9be3",
+    "universal/redteam-methodology.reference.template.md": "a0443337a9796294",
+    "universal/retrospective-remediation.reference.template.md": "f79be49ac31f6266",
+    "universal/cli-tool-discovery.reference.template.md": "203004e771c8b2fd",
+    "universal/skill-generation.reference.template.md": "47bcf76ed8f69a80",
+    "universal/external-retrieval-quality-gate.reference.template.md": "3922b0a2e99e75a3",
+    "workstream-expert.template.md": "145061461736b92b",
+    "copilot-instructions.template.md": "bc94e8e32a6b2cff",
+    "builder/team-builder-copilot-vscode.template.md": "044c1314c4e98a9d",
+    "domain/content-enricher.template.md": "79ddbbf48720bcc7"
+  },
+  "output_files_map": [
+    {
+      "path": "orchestrator.agent.md",
+      "template": "universal/orchestrator.template.md",
+      "type": "agent",
+      "component_slug": null
+    },
+    {
+      "path": "navigator.agent.md",
+      "template": "universal/navigator.template.md",
+      "type": "agent",
+      "component_slug": null
+    },
+    {
+      "path": "security.agent.md",
+      "template": "universal/security.template.md",
+      "type": "agent",
+      "component_slug": null
+    },
+    {
+      "path": "code-hygiene.agent.md",
+      "template": "universal/code-hygiene.template.md",
+      "type": "agent",
+      "component_slug": null
+    },
+    {
+      "path": "adversarial.agent.md",
+      "template": "universal/adversarial.template.md",
+      "type": "agent",
+      "component_slug": null
+    },
+    {
+      "path": "conflict-auditor.agent.md",
+      "template": "universal/conflict-auditor.template.md",
+      "type": "agent",
+      "component_slug": null
+    },
+    {
+      "path": "conflict-resolution.agent.md",
+      "template": "universal/conflict-resolution.template.md",
+      "type": "agent",
+      "component_slug": null
+    },
+    {
+      "path": "cleanup.agent.md",
+      "template": "universal/cleanup.template.md",
+      "type": "agent",
+      "component_slug": null
+    },
+    {
+      "path": "agent-updater.agent.md",
+      "template": "universal/agent-updater.template.md",
+      "type": "agent",
+      "component_slug": null
+    },
+    {
+      "path": "agent-refactor.agent.md",
+      "template": "universal/agent-refactor.template.md",
+      "type": "agent",
+      "component_slug": null
+    },
+    {
+      "path": "repo-liaison.agent.md",
+      "template": "universal/repo-liaison.template.md",
+      "type": "agent",
+      "component_slug": null
+    },
+    {
+      "path": "git-operations.agent.md",
+      "template": "universal/git-operations.template.md",
+      "type": "agent",
+      "component_slug": null
+    },
+    {
+      "path": "work-summarizer.agent.md",
+      "template": "domain/work-summarizer.template.md",
+      "type": "agent",
+      "component_slug": null
+    },
+    {
+      "path": "primary-producer.agent.md",
+      "template": "domain/primary-producer.template.md",
+      "type": "agent",
+      "component_slug": null
+    },
+    {
+      "path": "quality-auditor.agent.md",
+      "template": "domain/quality-auditor.template.md",
+      "type": "agent",
+      "component_slug": null
+    },
+    {
+      "path": "cohesion-repairer.agent.md",
+      "template": "domain/cohesion-repairer.template.md",
+      "type": "agent",
+      "component_slug": null
+    },
+    {
+      "path": "technical-validator.agent.md",
+      "template": "domain/technical-validator.template.md",
+      "type": "agent",
+      "component_slug": null
+    },
+    {
+      "path": "format-converter.agent.md",
+      "template": "domain/format-converter.template.md",
+      "type": "agent",
+      "component_slug": null
+    },
+    {
+      "path": "output-compiler.agent.md",
+      "template": "domain/output-compiler.template.md",
+      "type": "agent",
+      "component_slug": null
+    },
+    {
+      "path": "tool-doc-researcher.agent.md",
+      "template": "domain/tool-doc-researcher.template.md",
+      "type": "agent",
+      "component_slug": null
+    },
+    {
+      "path": "references/ref-postgresql-reference.md",
+      "template": "domain/tool-database.doc.template.md",
+      "fallback_template": "domain/tool-specific.doc.template.md",
+      "type": "reference",
+      "component_slug": null,
+      "tool_slug": "tool-postgresql"
+    },
+    {
+      "path": "references/ref-fastapi-reference.md",
+      "template": "domain/tool-reference.template.md",
+      "type": "reference",
+      "component_slug": null,
+      "tool_slug": "ref-fastapi"
+    },
+    {
+      "path": "references/ref-sqlalchemy-reference.md",
+      "template": "domain/tool-reference.template.md",
+      "type": "reference",
+      "component_slug": null,
+      "tool_slug": "ref-sqlalchemy"
+    },
+    {
+      "path": "references/ref-pytest-reference.md",
+      "template": "domain/tool-reference.template.md",
+      "type": "reference",
+      "component_slug": null,
+      "tool_slug": "ref-pytest"
+    },
+    {
+      "path": "references/code-hygiene-rules.reference.md",
+      "template": "domain/code-hygiene-rules-reference.template.md",
+      "type": "reference",
+      "component_slug": null
+    },
+    {
+      "path": "references/unix-philosophy-mapping.reference.md",
+      "template": "domain/unix-philosophy-mapping-reference.template.md",
+      "type": "reference",
+      "component_slug": null
+    },
+    {
+      "path": "references/security-vulnerability-watch.reference.md",
+      "template": "universal/security-vulnerability-watch.reference.template.md",
+      "type": "artifact",
+      "component_slug": null
+    },
+    {
+      "path": "references/security-vulnerability-watch.json",
+      "template": "universal/security-vulnerability-watch.json.template",
+      "type": "artifact",
+      "component_slug": null
+    },
+    {
+      "path": "references/security-linux-hardening.reference.md",
+      "template": "universal/security-linux-hardening.reference.template.md",
+      "type": "reference",
+      "component_slug": null
+    },
+    {
+      "path": "references/security-macos-hardening.reference.md",
+      "template": "universal/security-macos-hardening.reference.template.md",
+      "type": "reference",
+      "component_slug": null
+    },
+    {
+      "path": "references/security-windows-hardening.reference.md",
+      "template": "universal/security-windows-hardening.reference.template.md",
+      "type": "reference",
+      "component_slug": null
+    },
+    {
+      "path": "references/ai-bad-habits-watch.reference.md",
+      "template": "universal/ai-bad-habits-watch.reference.template.md",
+      "type": "artifact",
+      "component_slug": null
+    },
+    {
+      "path": "references/framework-watch.reference.md",
+      "template": "universal/framework-watch.reference.template.md",
+      "type": "artifact",
+      "component_slug": null
+    },
+    {
+      "path": "references/adjacent-repos.md",
+      "template": "universal/adjacent-repos.reference.template.md",
+      "type": "artifact",
+      "component_slug": null
+    },
+    {
+      "path": "references/github-workflows-merge.reference.md",
+      "template": "universal/github-workflows-merge.reference.template.md",
+      "type": "reference",
+      "component_slug": null
+    },
+    {
+      "path": "references/work-summary-spec.reference.md",
+      "template": "universal/work-summary-spec.reference.template.md",
+      "type": "reference",
+      "component_slug": null
+    },
+    {
+      "path": "references/work-summary-tooling.reference.md",
+      "template": "universal/work-summary-tooling.reference.template.md",
+      "type": "reference",
+      "component_slug": null
+    },
+    {
+      "path": "references/work-summary-backfill.reference.md",
+      "template": "universal/work-summary-backfill.reference.template.md",
+      "type": "reference",
+      "component_slug": null
+    },
+    {
+      "path": "references/parallelization.reference.md",
+      "template": "universal/parallelization.reference.template.md",
+      "type": "reference",
+      "component_slug": null
+    },
+    {
+      "path": "references/instruction-authority.reference.md",
+      "template": "universal/instruction-authority.reference.template.md",
+      "type": "reference",
+      "component_slug": null
+    },
+    {
+      "path": "references/redteam-methodology.reference.md",
+      "template": "universal/redteam-methodology.reference.template.md",
+      "type": "reference",
+      "component_slug": null
+    },
+    {
+      "path": "references/retrospective-remediation.reference.md",
+      "template": "universal/retrospective-remediation.reference.template.md",
+      "type": "reference",
+      "component_slug": null
+    },
+    {
+      "path": "references/cli-tool-discovery.reference.md",
+      "template": "universal/cli-tool-discovery.reference.template.md",
+      "type": "reference",
+      "component_slug": null
+    },
+    {
+      "path": "references/skill-generation.reference.md",
+      "template": "universal/skill-generation.reference.template.md",
+      "type": "reference",
+      "component_slug": null
+    },
+    {
+      "path": "references/external-retrieval-quality-gate.reference.md",
+      "template": "universal/external-retrieval-quality-gate.reference.template.md",
+      "type": "reference",
+      "component_slug": null
+    },
+    {
+      "path": "auth-module-expert.agent.md",
+      "template": "workstream-expert.template.md",
+      "type": "agent",
+      "component_slug": "auth-module"
+    },
+    {
+      "path": "tasks-api-expert.agent.md",
+      "template": "workstream-expert.template.md",
+      "type": "agent",
+      "component_slug": "tasks-api"
+    },
+    {
+      "path": "../copilot-instructions.md",
+      "template": "copilot-instructions.template.md",
+      "type": "instructions",
+      "component_slug": null
+    },
+    {
+      "path": "team-builder.agent.md",
+      "template": "builder/team-builder-copilot-vscode.template.md",
+      "type": "builder",
+      "component_slug": null
+    },
+    {
+      "path": "SETUP-REQUIRED.md",
+      "template": "",
+      "type": "setup-required",
+      "component_slug": null
+    },
+    {
+      "path": "references/pipeline-graph.md",
+      "template": "",
+      "type": "graph",
+      "component_slug": null
+    },
+    {
+      "path": "references/pipeline-graph.svg",
+      "template": "",
+      "type": "graph-svg",
+      "component_slug": null
+    },
+    {
+      "path": "references/pipeline-handoffs.svg",
+      "template": "",
+      "type": "graph-svg",
+      "component_slug": null
+    },
+    {
+      "path": "content-enricher.agent.md",
+      "template": "domain/content-enricher.template.md",
+      "type": "agent",
+      "component_slug": null
+    }
+  ],
+  "agent_slug_list": [
+    "orchestrator",
+    "navigator",
+    "security",
+    "code-hygiene",
+    "adversarial",
+    "conflict-auditor",
+    "conflict-resolution",
+    "cleanup",
+    "agent-updater",
+    "agent-refactor",
+    "repo-liaison",
+    "git-operations",
+    "work-summarizer",
+    "primary-producer",
+    "quality-auditor",
+    "cohesion-repairer",
+    "technical-validator",
+    "format-converter",
+    "output-compiler",
+    "tool-doc-researcher",
+    "auth-module-expert",
+    "tasks-api-expert"
+  ],
+  "governance_agents": [
+    "navigator",
+    "security",
+    "code-hygiene",
+    "adversarial",
+    "conflict-auditor",
+    "conflict-resolution",
+    "cleanup",
+    "agent-updater",
+    "agent-refactor",
+    "repo-liaison",
+    "git-operations"
+  ],
+  "manifest_fingerprint": "96ca5b822cffe03d",
+  "fingerprint_algo_version": 1,
+  "file_hashes": {
+    "security.agent.md": "0af5e82d76457d40",
+    "references/security-vulnerability-watch.reference.md": "649dae66c2e9dcba",
+    "references/security-vulnerability-watch.json": "6468703fb38d4721",
+    "orchestrator.agent.md": "d16da840c99916bb",
+    "navigator.agent.md": "38c320644ac6cf2a",
+    "conflict-auditor.agent.md": "bcf47a6e7c001be5",
+    "cleanup.agent.md": "2b9517b31b36e7a5",
+    "agent-updater.agent.md": "2cb42fc456a009d1",
+    "primary-producer.agent.md": "e883f6bd027e7b3e",
+    "references/framework-watch.reference.md": "ef44c178f2525a6d",
+    "auth-module-expert.agent.md": "b8057d1530aea777",
+    "tasks-api-expert.agent.md": "3ae39baf7269edc0",
+    "../copilot-instructions.md": "184ad7ea4b08ccd7",
+    "SETUP-REQUIRED.md": "ce16035ee24e8c89",
+    "code-hygiene.agent.md": "8058adb558c5b60c",
+    "adversarial.agent.md": "c6d1848e6346e845",
+    "conflict-resolution.agent.md": "8b5704e6bbb5b5ac",
+    "agent-refactor.agent.md": "ae20b1d68cb85f23",
+    "repo-liaison.agent.md": "114ff76ee647ba30",
+    "git-operations.agent.md": "a27e5642bebd8668",
+    "work-summarizer.agent.md": "9d3e5889eb66287f",
+    "quality-auditor.agent.md": "99ddf14897159ee8",
+    "cohesion-repairer.agent.md": "1a5833e954cb4b6b",
+    "technical-validator.agent.md": "1a32535f2245e8f2",
+    "format-converter.agent.md": "7c1aa5e2d0aab8a2",
+    "output-compiler.agent.md": "f6894964fc9a8339",
+    "tool-doc-researcher.agent.md": "970541458fe8f32a",
+    "references/ref-fastapi-reference.md": "c82a444520da9a5a",
+    "references/ref-sqlalchemy-reference.md": "19cb176319a2da09",
+    "references/ref-pytest-reference.md": "7826a86817941180",
+    "references/code-hygiene-rules.reference.md": "ac4a61e3a7974f9b",
+    "references/github-workflows-merge.reference.md": "2d04bee0e4d783e3",
+    "references/work-summary-spec.reference.md": "96232231a1f7c6be",
+    "references/work-summary-tooling.reference.md": "f3656972717153a9",
+    "references/work-summary-backfill.reference.md": "08c8c62e312282b4",
+    "references/parallelization.reference.md": "d2321bf5ac1ed2f8",
+    "references/instruction-authority.reference.md": "48282fc11d0c7a50",
+    "references/retrospective-remediation.reference.md": "9109fd651ccbc6bb",
+    "references/cli-tool-discovery.reference.md": "ed2d6b8474274c34",
+    "references/skill-generation.reference.md": "052d521bdbd31b21",
+    "references/external-retrieval-quality-gate.reference.md": "ac3071055522eff1",
+    "team-builder.agent.md": "2f55769179a86e69",
+    "content-enricher.agent.md": "0c6d8400cfd0feda",
+    "references/pipeline-graph.md": "ef77ba579c568c1b"
+  },
+  "front_matter_baseline": {
+    "security.agent.md": {
+      "name": "Security \u2014 WebAppBackend",
+      "description": "\"Top-priority security sentinel: reviews actions for credential exposure, destructive operations, sensitive content leakage, and reference integrity before any sensitive action proceeds\"",
+      "user-invocable": "false",
+      "tools": "['read', 'search']",
+      "model": "[\"Claude Sonnet 4.6 (copilot)\"]",
+      "handoffs": ""
+    },
+    "orchestrator.agent.md": {
+      "name": "Orchestrator \u2014 WebAppBackend",
+      "description": "\"Coordinates all agent operations for WebAppBackend: routes work to domain agents, enforces constitutional rules, and closes every multi-file session with a consistency check.\"",
+      "user-invocable": "true",
+      "tools": "['read', 'edit', 'search', 'execute', 'todo', 'agent']",
+      "agents": "",
+      "model": "[\"Claude Opus 4.8 (copilot)\"]",
+      "handoffs": ""
+    },
+    "navigator.agent.md": {
+      "name": "Navigator \u2014 WebAppBackend",
+      "description": "\"Repository structure navigation, project map maintenance, file location lookups, and dependency queries for WebAppBackend\"",
+      "user-invocable": "false",
+      "tools": "['read', 'search', 'execute']",
+      "model": "[\"Claude Sonnet 4.6 (copilot)\"]",
+      "handoffs": ""
+    },
+    "conflict-auditor.agent.md": {
+      "name": "Conflict Auditor \u2014 WebAppBackend",
+      "description": "\"Detects logical conflicts across deliverables, agent documentation, reference files, and source material in WebAppBackend\"",
+      "user-invocable": "false",
+      "tools": "['read', 'search']",
+      "agents": "['conflict-resolution', 'agent-updater', 'technical-validator']",
+      "model": "[\"Claude Sonnet 4.6 (copilot)\"]",
+      "handoffs": ""
+    },
+    "cleanup.agent.md": {
+      "name": "Cleanup \u2014 WebAppBackend",
+      "description": "\"Removes stale drafts, build artifacts, and orphaned files from WebAppBackend with mandatory safety checks\"",
+      "user-invocable": "false",
+      "tools": "['edit', 'search', 'execute']",
+      "model": "[\"Claude Sonnet 4.6 (copilot)\"]",
+      "handoffs": ""
+    },
+    "agent-updater.agent.md": {
+      "name": "Agent Updater \u2014 WebAppBackend",
+      "description": "\"Synchronizes agent documentation after project structure, deliverable, or reference changes in WebAppBackend\"",
+      "user-invocable": "false",
+      "tools": "['edit', 'search', 'execute', 'agent']",
+      "agents": "['adversarial', 'conflict-auditor', 'agent-refactor']",
+      "model": "[\"Claude Sonnet 4.6 (copilot)\"]",
+      "handoffs": ""
+    },
+    "primary-producer.agent.md": {
+      "name": "Primary Producer \u2014 WebAppBackend",
+      "description": "\"Drafts and revises deliverables in WebAppBackend from Component Briefs provided by workstream expert agents\"",
+      "user-invocable": "false",
+      "tools": "['read', 'edit', 'search']",
+      "agents": "['cohesion-repairer', 'quality-auditor', 'conflict-auditor']",
+      "model": "[\"Claude Sonnet 4.6 (copilot)\"]",
+      "handoffs": ""
+    },
+    "auth-module-expert.agent.md": {
+      "name": "\"Authentication Module Expert \u2014 WebAppBackend\"",
+      "description": "\"Component expert for Authentication Module in WebAppBackend \u2014 prepares Component Briefs, reviews drafts against brief checklist, approves deliverables\"",
+      "user-invocable": "false",
+      "tools": "['read', 'search', 'agent']",
+      "agents": "['primary-producer', 'adversarial']",
+      "model": "[\"Claude Sonnet 4.6 (copilot)\"]",
+      "handoffs": ""
+    },
+    "tasks-api-expert.agent.md": {
+      "name": "\"Tasks API Expert \u2014 WebAppBackend\"",
+      "description": "\"Component expert for Tasks API in WebAppBackend \u2014 prepares Component Briefs, reviews drafts against brief checklist, approves deliverables\"",
+      "user-invocable": "false",
+      "tools": "['read', 'search', 'agent']",
+      "agents": "['primary-producer', 'adversarial']",
+      "model": "[\"Claude Sonnet 4.6 (copilot)\"]",
+      "handoffs": ""
+    },
+    "code-hygiene.agent.md": {
+      "name": "Code Hygiene \u2014 WebAppBackend",
+      "description": "\"Read-only auditor that enforces modular architecture, file hygiene, script lifecycle, anti-sprawl rules, and agent documentation quality. Delegates removals to @cleanup; delegates structural extraction to @agent-refactor.\"",
+      "user-invocable": "false",
+      "tools": "['read', 'search']",
+      "model": "[\"Claude Sonnet 4.6 (copilot)\"]",
+      "handoffs": ""
+    },
+    "adversarial.agent.md": {
+      "name": "Adversarial \u2014 WebAppBackend",
+      "description": "\"Presupposition critic: challenges the assumptions underlying any plan, proposal, or diagnosis produced by the agent team. Traces how justified changes in presuppositions cascade through dependent logic.\"",
+      "user-invocable": "true",
+      "tools": "['read', 'search']",
+      "model": "[\"Claude Sonnet 4.6 (copilot)\"]",
+      "handoffs": ""
+    },
+    "conflict-resolution.agent.md": {
+      "name": "Conflict Resolution \u2014 WebAppBackend",
+      "description": "\"Makes ACCEPT/REJECT/REVISE decisions on conflicts flagged by the conflict auditor in WebAppBackend\"",
+      "user-invocable": "false",
+      "tools": "['edit', 'search', 'read']",
+      "model": "[\"Claude Sonnet 4.6 (copilot)\"]",
+      "handoffs": ""
+    },
+    "agent-refactor.agent.md": {
+      "name": "Agent Refactor \u2014 WebAppBackend",
+      "description": "\"Extracts shared data to reference files and enforces spec compliance across all agent documentation in WebAppBackend\"",
+      "user-invocable": "false",
+      "tools": "['edit', 'search', 'agent']",
+      "agents": "['conflict-auditor']",
+      "model": "[\"Claude Sonnet 4.6 (copilot)\"]",
+      "handoffs": ""
+    },
+    "repo-liaison.agent.md": {
+      "name": "Repo Liaison \u2014 WebAppBackend",
+      "description": "\"Tracks agent documentation in repositories adjacent to WebAppBackend, communicates cross-repository impacts, maintains the adjacent-repos registry, and coordinates between orchestrators when this project's activity affects neighboring agent infrastructures.\"",
+      "user-invocable": "false",
+      "tools": "['read', 'edit', 'search', 'execute', 'agent']",
+      "model": "[\"Claude Sonnet 4.6 (copilot)\"]",
+      "handoffs": ""
+    },
+    "git-operations.agent.md": {
+      "name": "Git Operations \u2014 WebAppBackend",
+      "description": "\"Executes and governs Git and GitHub operations in WebAppBackend, including commit/push, pull/merge/rebase, conflict handling, and recovery workflows.\"",
+      "user-invocable": "true",
+      "tools": "['read', 'execute', 'search']",
+      "model": "[\"Claude Sonnet 4.6 (copilot)\"]",
+      "handoffs": ""
+    },
+    "work-summarizer.agent.md": {
+      "name": "Work Summarizer \u2014 WebAppBackend",
+      "description": "\"Synthesizes daily, weekly, and monthly work summaries from canonical plan artifacts and git evidence for WebAppBackend; supports append-first daily capture, legacy tmp/ fallback, and required adversarial/conflict audits\"",
+      "user-invocable": "true",
+      "tools": "['read', 'search', 'execute', 'edit', 'agent']",
+      "agents": "['technical-validator', 'adversarial', 'conflict-auditor']",
+      "model": "[\"Claude Sonnet 4.6 (copilot)\"]",
+      "handoffs": ""
+    },
+    "quality-auditor.agent.md": {
+      "name": "Quality Auditor \u2014 WebAppBackend",
+      "description": "\"Read-only audit agent that inspects deliverables in WebAppBackend for structural defects, logical inconsistencies, and LLM-generated prose patterns; does not rewrite\"",
+      "user-invocable": "false",
+      "tools": "['read', 'search']",
+      "agents": "['primary-producer', 'cohesion-repairer']",
+      "model": "[\"Claude Sonnet 4.6 (copilot)\"]",
+      "handoffs": ""
+    },
+    "cohesion-repairer.agent.md": {
+      "name": "Cohesion Repairer \u2014 WebAppBackend",
+      "description": "\"Repairs within-section cohesion failures in WebAppBackend deliverables \u2014 disjointedness, broken transitions, and missing argumentative spine; does not reorganize across sections\"",
+      "user-invocable": "false",
+      "tools": "['read', 'edit']",
+      "agents": "['quality-auditor']",
+      "model": "[\"Claude Sonnet 4.6 (copilot)\"]",
+      "handoffs": ""
+    },
+    "technical-validator.agent.md": {
+      "name": "Technical Validator \u2014 WebAppBackend",
+      "description": "\"Read-only audit agent that verifies technical accuracy in WebAppBackend \u2014 code examples, file excerpts, API references, and tool invocations match what exists on disk\"",
+      "user-invocable": "false",
+      "tools": "['read', 'search']",
+      "agents": "['primary-producer', 'conflict-auditor']",
+      "model": "[\"Claude Sonnet 4.6 (copilot)\"]",
+      "handoffs": ""
+    },
+    "format-converter.agent.md": {
+      "name": "Format Converter \u2014 WebAppBackend",
+      "description": "\"Converts deliverables from their source format to Python 3.11 modules for final output in WebAppBackend\"",
+      "user-invocable": "false",
+      "tools": "['read', 'edit', 'execute']",
+      "agents": "['output-compiler', 'quality-auditor']",
+      "model": "[\"Claude Sonnet 4.6 (copilot)\"]",
+      "handoffs": ""
+    },
+    "output-compiler.agent.md": {
+      "name": "Output Compiler \u2014 WebAppBackend",
+      "description": "\"Assembles all converted components into a final deliverable package for WebAppBackend \u2014 dependency check, ordering, build manifest\"",
+      "user-invocable": "false",
+      "tools": "['read', 'edit', 'execute']",
+      "agents": "['format-converter', 'technical-validator']",
+      "model": "[\"Claude Sonnet 4.6 (copilot)\"]",
+      "handoffs": ""
+    },
+    "tool-doc-researcher.agent.md": {
+      "name": "Tool Documentation Researcher \u2014 WebAppBackend",
+      "description": "\"Locates and verifies official documentation, API surfaces, and usage patterns for tools in WebAppBackend that are missing metadata\"",
+      "user-invocable": "false",
+      "tools": "['read', 'search', 'retrieval']",
+      "agents": "['adversarial', 'conflict-auditor']",
+      "model": "[\"Claude Sonnet 4.6 (copilot)\"]",
+      "handoffs": ""
+    },
+    "team-builder.agent.md": {
+      "name": "Team Builder \u2014 Agent Teams Module",
+      "description": "\"Interactively constructs a complete agent team for a new or existing VS Code Copilot project by conducting an intake interview and invoking the build_team pipeline\"",
+      "user-invocable": "true",
+      "tools": "['read', 'edit', 'search', 'execute', 'todo']",
+      "model": "[\"Claude Sonnet 4.6 (copilot)\"]"
+    },
+    "content-enricher.agent.md": {
+      "name": "Content Enricher \u2014 WebAppBackend",
+      "description": "\"Fills in default template placeholders and underdeveloped sections in generated agent files for WebAppBackend using the project's source materials\"",
+      "user-invocable": "true",
+      "tools": "['read', 'edit', 'search']",
+      "agents": "['primary-producer', 'technical-validator', 'adversarial', 'conflict-auditor']",
+      "model": "[\"Claude Sonnet 4.6 (copilot)\"]",
+      "handoffs": ""
+    }
+  }
+}

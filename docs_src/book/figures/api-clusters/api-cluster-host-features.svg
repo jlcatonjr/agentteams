@@ -1,0 +1,47 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1064 350" width="1064" height="350" font-family="monospace">
+  <title>Host-feature token to emitter to output</title>
+  <defs>
+    <marker id="arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+      <polygon points="0,0 10,5 0,10" fill="#8a8a8a"/>
+    </marker>
+  </defs>
+  <path d="M776,271 L808,271 C844,271 844,175 880,175" fill="none" stroke="#8a8a8a" stroke-width="1.5" marker-end="url(#arrow)"/>
+  <path d="M216,175 L288,175" fill="none" stroke="#8a8a8a" stroke-width="1.5" marker-end="url(#arrow)"/>
+  <path d="M808,319 C844,319 844,223 880,223 L892,223" fill="none" stroke="#8a8a8a" stroke-width="1.5" marker-end="url(#arrow)"/>
+  <path d="M760,31 L808,31 C844,31 844,127 880,127" fill="none" stroke="#8a8a8a" stroke-width="1.5" marker-end="url(#arrow)"/>
+  <path d="M752,79 L808,79 C844,79 844,127 880,127" fill="none" stroke="#8a8a8a" stroke-width="1.5" marker-end="url(#arrow)"/>
+  <path d="M772,127 L808,127 L880,127" fill="none" stroke="#8a8a8a" stroke-width="1.5" marker-end="url(#arrow)"/>
+  <path d="M792,175 L808,175 C844,175 844,127 880,127" fill="none" stroke="#8a8a8a" stroke-width="1.5" marker-end="url(#arrow)"/>
+  <path d="M784,223 L808,223 C844,223 844,127 880,127" fill="none" stroke="#8a8a8a" stroke-width="1.5" marker-end="url(#arrow)"/>
+  <path d="M536,175 C572,175 572,271 608,271 L640,271" fill="none" stroke="#8a8a8a" stroke-width="1.5" marker-end="url(#arrow)"/>
+  <path d="M536,175 C572,175 572,319 608,319" fill="none" stroke="#8a8a8a" stroke-width="1.5" marker-end="url(#arrow)"/>
+  <path d="M536,175 C572,175 572,31 608,31 L656,31" fill="none" stroke="#8a8a8a" stroke-width="1.5" marker-end="url(#arrow)"/>
+  <path d="M536,175 C572,175 572,79 608,79 L664,79" fill="none" stroke="#8a8a8a" stroke-width="1.5" marker-end="url(#arrow)"/>
+  <path d="M536,175 C572,175 572,127 608,127 L644,127" fill="none" stroke="#8a8a8a" stroke-width="1.5" marker-end="url(#arrow)"/>
+  <path d="M536,175 L608,175 L624,175" fill="none" stroke="#8a8a8a" stroke-width="1.5" marker-end="url(#arrow)"/>
+  <path d="M536,175 C572,175 572,223 608,223 L632,223" fill="none" stroke="#8a8a8a" stroke-width="1.5" marker-end="url(#arrow)"/>
+  <rect x="880" y="112" width="168" height="30" rx="6" fill="#e8eefb" stroke="#1b3fa0" stroke-width="1.5"/>
+  <text x="964" y="132" font-size="13" text-anchor="middle" fill="#000000">.claude/ artifacts</text>
+  <rect x="640" y="256" width="136" height="30" rx="6" fill="#fff8e8" stroke="#ccaa44" stroke-width="1.5"/>
+  <text x="708" y="276" font-size="13" text-anchor="middle" fill="#000000">codex_mcp_emit</text>
+  <rect x="880" y="160" width="168" height="30" rx="6" fill="#e8eefb" stroke="#1b3fa0" stroke-width="1.5"/>
+  <text x="964" y="180" font-size="13" text-anchor="middle" fill="#000000">.codex/config.toml</text>
+  <rect x="16" y="160" width="200" height="30" rx="6" fill="#e8eefb" stroke="#1b3fa0" stroke-width="1.5"/>
+  <text x="116" y="180" font-size="13" text-anchor="middle" fill="#000000">--target-host-features</text>
+  <rect x="892" y="208" width="144" height="30" rx="6" fill="#e8eefb" stroke="#1b3fa0" stroke-width="1.5"/>
+  <text x="964" y="228" font-size="13" text-anchor="middle" fill="#000000">.goose/recipes/</text>
+  <rect x="608" y="304" width="200" height="30" rx="6" fill="#fff8e8" stroke="#ccaa44" stroke-width="1.5"/>
+  <text x="708" y="324" font-size="13" text-anchor="middle" fill="#000000">bridge_subagents_goose</text>
+  <rect x="656" y="16" width="104" height="30" rx="6" fill="#fff8e8" stroke="#ccaa44" stroke-width="1.5"/>
+  <text x="708" y="36" font-size="13" text-anchor="middle" fill="#000000">hooks_emit</text>
+  <rect x="664" y="64" width="88" height="30" rx="6" fill="#fff8e8" stroke="#ccaa44" stroke-width="1.5"/>
+  <text x="708" y="84" font-size="13" text-anchor="middle" fill="#000000">mcp_emit</text>
+  <rect x="644" y="112" width="128" height="30" rx="6" fill="#fff8e8" stroke="#ccaa44" stroke-width="1.5"/>
+  <text x="708" y="132" font-size="13" text-anchor="middle" fill="#000000">schedule_emit</text>
+  <rect x="624" y="160" width="168" height="30" rx="6" fill="#fff8e8" stroke="#ccaa44" stroke-width="1.5"/>
+  <text x="708" y="180" font-size="13" text-anchor="middle" fill="#000000">instructions_split</text>
+  <rect x="632" y="208" width="152" height="30" rx="6" fill="#fff8e8" stroke="#ccaa44" stroke-width="1.5"/>
+  <text x="708" y="228" font-size="13" text-anchor="middle" fill="#000000">bridge_subagents</text>
+  <rect x="288" y="160" width="248" height="30" rx="6" fill="#eef6ee" stroke="#3f8f4f" stroke-width="1.5"/>
+  <text x="412" y="180" font-size="13" text-anchor="middle" fill="#000000">host_features.parse/validate</text>
+</svg>

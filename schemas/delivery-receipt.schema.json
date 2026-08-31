@@ -1,0 +1,63 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "Delivery Receipt",
+  "description": "Attestation written by `build_team --update` after a successful (non-dry-run) emission. Records the team identity (manifest fingerprint + algo version + project name + framework + output_dir) AT THE MOMENT a build-log was written. Used by operators / orchestrators to verify 'this on-disk team corresponds to a delivery I made' without re-running the full pipeline. Receipt is intentionally NOT a baseline: it does not feed into output_files_map, template_hashes, or file_hashes, and an absent or out-of-date receipt does not change drift detection. See `docs_src/delivery-procedure.md`.",
+  "type": "object",
+  "required": [
+    "artifact_type",
+    "receipt_schema_version",
+    "delivered_at",
+    "project_name",
+    "framework",
+    "manifest_fingerprint",
+    "fingerprint_algo_version"
+  ],
+  "additionalProperties": false,
+  "properties": {
+    "artifact_type": {
+      "type": "string",
+      "const": "delivery-receipt",
+      "description": "Discriminator. ALWAYS the literal string 'delivery-receipt'. Distinct from `schema_version` so a receipt cannot be confused with a build-log when read by tools that key on the latter."
+    },
+    "receipt_schema_version": {
+      "type": "string",
+      "const": "1.0",
+      "description": "Receipt schema version. Bumped only when the receipt contract changes in a backwards-incompatible way."
+    },
+    "delivered_at": {
+      "type": "string",
+      "format": "date-time",
+      "description": "ISO 8601 UTC timestamp when the receipt was written (i.e. when --update completed successfully)."
+    },
+    "project_name": {
+      "type": "string",
+      "description": "Project name from the manifest at delivery time."
+    },
+    "framework": {
+      "type": "string",
+      "description": "Framework identifier the team was generated for (e.g. 'copilot-vscode', 'copilot-cli', 'claude')."
+    },
+    "manifest_fingerprint": {
+      "type": "string",
+      "minLength": 1,
+      "description": "Stable fingerprint of the team manifest at delivery time. Identical to the build-log's `manifest_fingerprint` field after this --update run. A consumer can verify 'build-log unchanged since delivery' by comparing the two."
+    },
+    "fingerprint_algo_version": {
+      "type": "integer",
+      "minimum": 1,
+      "description": "Value of `agentteams.drift.FINGERPRINT_ALGO_VERSION` at delivery time. Consumers comparing fingerprints across versions must compare algo versions first; mismatched algo versions mean the fingerprints are not comparable."
+    },
+    "output_dir": {
+      "type": "string",
+      "description": "Absolute or repo-relative path of the output directory at delivery time. Informational only — moving the directory does not invalidate the receipt."
+    },
+    "agentteams_version": {
+      "type": "string",
+      "description": "Version of the agentteams package that wrote the receipt. Informational; used by operators to bound regression hunts."
+    },
+    "delivered_by": {
+      "type": "string",
+      "description": "Optional free-form identifier of the operator or CI job that ran --update (e.g. 'gh-actions:release-v2.3'). Receipt write does not require this field."
+    }
+  }
+}

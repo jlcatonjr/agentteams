@@ -1,0 +1,31 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 888 206" width="888" height="206" font-family="monospace">
+  <title>steps.csv: three readers + a chain check</title>
+  <defs>
+    <marker id="arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+      <polygon points="0,0 10,5 0,10" fill="#8a8a8a"/>
+    </marker>
+  </defs>
+  <path d="M168,103 C204,103 204,31 240,31" fill="none" stroke="#8a8a8a" stroke-width="1.5" marker-end="url(#arrow)"/>
+  <path d="M168,103 C204,103 204,175 240,175 L264,175" fill="none" stroke="#8a8a8a" stroke-width="1.5" marker-end="url(#arrow)"/>
+  <path d="M168,103 C204,103 204,79 240,79 L296,79" fill="none" stroke="#8a8a8a" stroke-width="1.5" marker-end="url(#arrow)"/>
+  <path d="M168,103 C204,103 204,127 240,127 L260,127" fill="none" stroke="#8a8a8a" stroke-width="1.5" marker-end="url(#arrow)"/>
+  <path d="M552,31 C588,31 588,55 624,55 L648,55" fill="none" stroke="#8a8a8a" stroke-width="1.5" marker-end="url(#arrow)"/>
+  <path d="M528,175 L552,175 C588,175 588,151 624,151" fill="none" stroke="#8a8a8a" stroke-width="1.5" marker-end="url(#arrow)"/>
+  <path d="M532,127 L552,127 C588,127 588,103 624,103 L656,103" fill="none" stroke="#8a8a8a" stroke-width="1.5" marker-end="url(#arrow)"/>
+  <rect x="16" y="88" width="152" height="30" rx="6" fill="#e8eefb" stroke="#1b3fa0" stroke-width="1.5"/>
+  <text x="92" y="108" font-size="13" text-anchor="middle" fill="#000000">&lt;slug&gt;.steps.csv</text>
+  <rect x="648" y="40" width="200" height="30" rx="6" fill="#e8eefb" stroke="#1b3fa0" stroke-width="1.5"/>
+  <text x="748" y="60" font-size="13" text-anchor="middle" fill="#000000">typed-payload Findings</text>
+  <rect x="240" y="16" width="312" height="30" rx="6" fill="#eef6ee" stroke="#3f8f4f" stroke-width="1.5"/>
+  <text x="396" y="36" font-size="13" text-anchor="middle" fill="#000000">handoff_payloads.audit_handoff_chain</text>
+  <rect x="264" y="160" width="264" height="30" rx="6" fill="#eef6ee" stroke="#3f8f4f" stroke-width="1.5"/>
+  <text x="396" y="180" font-size="13" text-anchor="middle" fill="#000000">parallel_plan (tolerant 7-col)</text>
+  <rect x="296" y="64" width="200" height="30" rx="6" fill="#eef6ee" stroke="#3f8f4f" stroke-width="1.5"/>
+  <text x="396" y="84" font-size="13" text-anchor="middle" fill="#000000">plan_steps (dict rows)</text>
+  <rect x="260" y="112" width="272" height="30" rx="6" fill="#eef6ee" stroke="#3f8f4f" stroke-width="1.5"/>
+  <text x="396" y="132" font-size="13" text-anchor="middle" fill="#000000">plan_steps_todo (strict 11-col)</text>
+  <rect x="656" y="88" width="184" height="30" rx="6" fill="#e8eefb" stroke="#1b3fa0" stroke-width="1.5"/>
+  <text x="748" y="108" font-size="13" text-anchor="middle" fill="#000000">TodoWrite projection</text>
+  <rect x="624" y="136" width="248" height="30" rx="6" fill="#e8eefb" stroke="#1b3fa0" stroke-width="1.5"/>
+  <text x="748" y="156" font-size="13" text-anchor="middle" fill="#000000">WaveSchedule (compute_waves)</text>
+</svg>

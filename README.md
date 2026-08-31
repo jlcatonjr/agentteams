@@ -1,0 +1,963 @@
+# Agent Teams Module
+
+[![Python 3.11+](https://img.shields.io/badge/python-3.11%2B-blue)](https://www.python.org/)
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
+[![Docs](https://img.shields.io/badge/docs-github--pages-blue)](https://jlcatonjr.github.io/agentteams/)
+
+Generate a complete, coordinated AI agent team for any project — from a single project description file. All workflows are automatically adaptive and self-revising.
+
+**Documentation:** https://jlcatonjr.github.io/agentteams/
+
+---
+
+## What It Does
+
+Given a project description (a `.json` or `.md` brief), the module:
+
+1. **Analyzes** the project goal, deliverables, tools, and components
+2. **Selects** the right agent archetypes from a 4-tier taxonomy
+3. **Renders** all agent files by filling in project-specific placeholders
+4. **Emits** ready-to-use agent files for VS Code Copilot, Copilot CLI, Claude, Goose *(beta)*, or the cross-tool AGENTS.md standard *(beta)*
+
+The generated team includes:
+- 1 **Orchestrator** agent — coordinates all workflows
+- 11 **Governance agents** — navigation, security, consistency, cleanup, documentation, cross-repository coordination, and git operations
+- 3–10 **Domain agents** — `@work-summarizer` (always included) plus project-appropriate archetypes
+- 1 **Workstream Expert** per project component — deep, component-specific knowledge
+- 1 **Team Builder agent** — framework-native agent that can regenerate or expand the team from within your framework
+- A framework instructions file — `.github/copilot-instructions.md` (Copilot VS Code / Copilot CLI), `.claude/CLAUDE.md` (Claude), or a repo-root `AGENTS.md` + `.goosehints` (Goose)
+
+The generated team governs *how your project gets built* — it does not run inside the project
+itself. If your app serves LLM output to end users, you're responsible for adding your own runtime
+governance; the generated team reviews the code as it's written, not the app's live behavior.
+See the [Runtime Security for Served Apps](docs_src/runtime-security-guide.md) guide for what that
+responsibility involves.
+**One exception, disclosed:** `pip install agentteams[research]` installs
+`agentteams.research` — a small, real Python library (no-key web search, curated-source rating,
+dual-lens claim verification) a project may add as its own runtime dependency and call directly.
+Unlike everything else this module emits, that's genuine runtime code, not a design-time
+instruction file — see [`SECURITY.md`](SECURITY.md#the-agentteamsresearch-extra-is-a-disclosed-bounded-exception-to-this-boundary)
+for the full boundary statement and the `research-analyst` archetype for the recommended way to
+orchestrate it from an agent.
+
+---
+
+## Workflow
+
+![Adaptive Plan Execution Workflow](docs_src/assets/images/workflow-12-adaptive-plan-execution.svg)
+
+From Chapter 5 of [Agent Teams: A Theoretically Grounded Approach](https://jlcatonjr.github.io/agentteams/manuscript/)  
+---
+
+## Blog Series: AgentTeams Module Roles and Workflows
+
+Short reads (about five paragraphs each) explaining how core module components fit together:
+
+1. [Introduction](https://jameslcaton.com/#/blog/04-22-2026-AgentTeams%20Introduction.html)
+2. [Adaptive Workflows with Step-by-Step Auditing and Revision](https://jameslcaton.com/#/blog/04-22-2026-AgentTeams%20Adaptive%20Workflows%20with%20Step-by-Step%20Auditing%20and%20Revision.html)
+3. [Team Builder and Workstream Expert Agents](https://jameslcaton.com/#/blog/04-22-2026-AgentTeams%20Team%20Builder%20and%20Workstream%20Expert%20Agents.html)
+4. [Orchestrator Agent](https://jameslcaton.com/#/blog/04-22-2026-AgentTeams%20Orchestrator%20Agent.html)
+5. [Functional Agents](https://jameslcaton.com/#/blog/04-22-2026-AgentTeams%20Functional%20Agents.html)
+6. [Domain Agents](https://jameslcaton.com/#/blog/04-22-2026-AgentTeams%20Domain%20Agents.html)
+7. [Tools and References](https://jameslcaton.com/#/blog/04-22-2026-AgentTeams%20Tools%20and%20References.html)
+8. [Security Agent](https://jameslcaton.com/#/blog/04-22-2026-AgentTeams%20Security%20Agent.html)
+9. [Audit Protocols and Security](https://jameslcaton.com/#/blog/04-22-2026-AgentTeams%20Audit%20Protocols%20and%20Security.html)
+10. [Regularly Auditing Agent Documentation](https://jameslcaton.com/#/blog/04-22-2026-AgentTeams%20Regularly%20Auditing%20Agent%20Documentation.html)
+11. [Constitutional Fencing](https://jameslcaton.com/#/blog/04-22-2026-AgentTeams%20Constitutional%20Fencing.html)
+12. [Efficient Inter-agent Communication via a Daily Work Summaries Document](https://jameslcaton.com/#/blog/04-22-2026-AgentTeams%20Efficient%20Inter-agent%20Communication%20via%20a%20Daily%20Work%20Summaries%20Document.html)
+
+---
+
+## Quick Start
+
+### 1. Install
+
+Clone the repository (one runtime dependency, `jsonschema`; otherwise stdlib Python 3.11+):
+
+```bash
+git clone https://github.com/jlcatonjr/agentteams
+cd agentteams
+pip install -e .
+```
+
+> **Verifying the environment.** Run `python scripts/verify-env.py` to confirm
+> the local interpreter and `git` meet the minimums asserted by CI. See
+> [`docs_src/verification-environment.md`](docs_src/verification-environment.md)
+> for the full preconditions matrix.
+
+### 2. Write a project description
+
+Create `brief.json` (or `brief.md`):
+
+```json
+{
+  "project_name": "MyProject",
+  "project_goal": "Build a FastAPI backend with authentication and a task management API.",
+  "deliverables": ["Python modules", "OpenAPI docs"],
+  "output_format": "Python 3.11",
+  "primary_output_dir": "src/",
+  "components": [
+    {"slug": "auth-module", "name": "Authentication Module", "number": 1},
+    {"slug": "tasks-api", "name": "Tasks API", "number": 2}
+  ]
+}
+```
+
+### 3. Generate your team
+
+```bash
+agentteams \
+  --description brief.json \
+  --project /path/to/your/project \
+  --framework copilot-vscode
+```
+
+Or with the script directly:
+
+```bash
+python build_team.py \
+  --description brief.json \
+  --project /path/to/your/project \
+  --framework copilot-vscode
+```
+
+Output: agent files in `/path/to/your/project/.github/agents/`
+
+Framework-specific default output directories:
+- `copilot-vscode` → `<project>/.github/agents/`
+- `copilot-cli` → `<project>/.github/agents/` (same directory as `copilot-vscode` — see the caution below)
+- `claude` → `<project>/.claude/agents/`
+- `goose` → `<project>/.goose/recipes/` (team brief written to repo-root `AGENTS.md` + `.goosehints`)
+
+### 4. Review SETUP-REQUIRED.md
+
+Fill in any placeholders that couldn't be auto-resolved. Then open VS Code, invoke `@orchestrator`, and start working.
+
+---
+
+## Agent-Assisted Setup
+
+Not ready to write a `brief.json` by hand? The **Team Builder agent** can conduct an intake interview from within your AI framework and generate the brief for you.
+
+After installation, invoke `@team-builder` in VS Code Copilot chat (or open the builder prompt in Claude / Copilot CLI). It will ask you questions about your project and emit a ready-to-use agent team without any manual JSON editing.
+
+See the [Agent-Assisted Setup guide](https://jlcatonjr.github.io/agentteams/agent-assisted-setup/) for step-by-step instructions.
+
+---
+
+## Framework Support
+
+| Framework | Format | Handoffs | Builder Agent |
+|-----------|--------|----------|---------------|
+| `copilot-vscode` | `.agent.md` with YAML front matter | Native inline YAML | VS Code Copilot `.agent.md` |
+| `copilot-cli` | `.agent.md` with YAML front matter (same shape as `copilot-vscode`, since the P1 convergence 2026-08-15) | Runtime manifest when handoffs are present (`references/runtime-handoffs.json`) — handoffs are stripped from the rendered file itself | CLI prompt `.agent.md` |
+| `claude` | Claude Code front matter `.md` + `CLAUDE.md` instructions | Runtime manifest when handoffs are present (`references/runtime-handoffs.json`) | Claude Code system prompt |
+| `goose` **(beta)** | Recipe YAML (`.goose/recipes/*.yaml`) | Native inline (orchestrator `sub_recipes`; specialists `summon` `load`) | `team-builder.yaml` recipe |
+| `agents-md` | Cross-tool **AGENTS.md** standard (plain `.md`) | Routing preserved in `references/runtime-handoffs.json` | `.agents/team-builder.md` |
+
+> **Goose support is in beta.** Generate, convert, and bridge are supported and validated against the Goose CLI; interop-to-Goose is not yet supported, and converting from `claude`/`copilot-cli` sources currently yields flat (un-delegated) recipes pending handoff-recovery work. The `goose` adapter API is not yet covered by the [stability policy](STABILITY.md).
+
+For `copilot-cli` and `claude`, inline handoff sections are still stripped from the emitted agent prompts. When AgentTeams extracts handoffs from the rendered source content, it preserves that routing metadata in `references/runtime-handoffs.json` so bridge layers or external tooling can consume the handoff contract without relying on VS Code-specific YAML. `goose` encodes handoffs natively inside each recipe (orchestrator → `sub_recipes`, deeper edges → `summon` `load(...)`), so it emits **no** `runtime-handoffs.json` sidecar.
+
+> **Multi-framework sync caution:** `copilot-vscode` and `copilot-cli` write to the
+> same physical `.github/agents` directory. `--sync-init`/`--sync` refuse a sync set
+> containing both — their rendered content can genuinely differ (handoffs kept vs.
+> stripped) and there is no correct merge for one file being two shapes at once. Pass
+> `--frameworks` to name only one of the two.
+
+Default framework locations:
+- `copilot-vscode`: agents in `.github/agents/`, instructions in `.github/copilot-instructions.md`
+- `copilot-cli`: agents in `.github/agents/` (same directory as `copilot-vscode`), instructions in `.github/copilot-instructions.md`
+- `claude`: agents in `.claude/agents/`, instructions in `.claude/CLAUDE.md`
+- `goose`: recipes in `.goose/recipes/`, team brief in repo-root `AGENTS.md` (+ `.goosehints` integrator)
+- `agents-md`: repo-root `AGENTS.md` (the cross-tool standard) plus per-specialist detail under `.agents/`
+
+## Three Build Paths
+
+You can build or integrate teams in three different ways.
+
+### Path A: Fresh Generation
+
+Run the full `ingest -> analyze -> render -> emit` pipeline from a project brief.
+
+```bash
+agentteams --description brief.json --project /path/to/project --framework copilot-vscode
+```
+
+### Path B: Format Migration (`--convert-from`)
+
+Convert an existing agent team to a different framework format while preserving body prose and replacing only framework wrappers/front matter.
+
+```bash
+agentteams \
+  --convert-from /path/to/source/agents \
+  --framework claude \
+  --output /path/to/project/.claude/agents
+```
+
+Supported conversion directions (all six):
+- `copilot-vscode -> copilot-cli`
+- `copilot-vscode -> claude`
+- `copilot-cli -> copilot-vscode`
+- `copilot-cli -> claude`
+- `claude -> copilot-vscode`
+- `claude -> copilot-cli`
+
+### Path C: Lightweight Interface Bridge (`--bridge-from`)
+
+Generate target-framework interface artifacts that reference source canonical agents without regenerating source agent documentation.
+
+```bash
+agentteams \
+  --bridge-from /path/to/source/agents \
+  --framework claude \
+  --output /path/to/project
+```
+
+This creates lightweight bridge artifacts and target entrypoint files (for example `CLAUDE.md`, `.github/copilot-instructions.md`, or a Goose `AGENTS.md`) while keeping source files unchanged.
+
+Bridge supports the six combinations among Copilot/Claude plus a Goose target from each:
+- `copilot-vscode -> copilot-cli`
+- `copilot-vscode -> claude`
+- `copilot-cli -> copilot-vscode`
+- `copilot-cli -> claude`
+- `claude -> copilot-vscode`
+- `claude -> copilot-cli`
+- `copilot-vscode -> goose`
+- `copilot-cli -> goose`
+- `claude -> goose`
+
+> **Goose target caution:** the Goose bridge writes a repo-root `AGENTS.md`, a **shared multi-tool file** (Cursor/Codex/Cline also read it). Use `--bridge-merge` (the safe, fenced-only update); `--bridge-refresh` overwrites the whole file. See [`references/bridge-refresh-safety.md`](references/bridge-refresh-safety.md).
+
+Bridge freshness validation:
+
+```bash
+agentteams \
+  --bridge-from /path/to/source/agents \
+  --framework claude \
+  --output /path/to/project \
+  --bridge-check
+```
+
+## Interoperability Feature Family
+
+AgentTeams supports a complete interoperability family for cross-framework operation:
+
+1. `--convert-from`: direct format migration between framework outputs.
+2. `--interop-from`: Canonical Agent Interface (CAI) normalization and re-emission.
+3. `--bridge-from`: lightweight runtime bridge that preserves source canonical agent docs.
+
+Use this family when you need one of the following:
+
+1. preserve authored source prose while changing runtime framework,
+2. transport agent infrastructure through a canonical representation, or
+3. expose source-canonical teams in another runtime without full regeneration.
+
+Documentation links:
+
+1. Interoperability guide: https://jlcatonjr.github.io/agentteams/interoperability/
+2. CLI reference: https://jlcatonjr.github.io/agentteams/cli-reference/
+3. API overview: https://jlcatonjr.github.io/agentteams/api-reference/
+
+---
+
+## Construction via Framework Agent (Key Feature)
+
+After generation, a **Team Builder agent** is installed in your project. This is a framework-native agent that can:
+
+- Conduct an intake interview for a new project
+- Extend the team with new workstream experts
+- Regenerate agent files after project structure changes
+
+**For VS Code Copilot:** Invoke `@team-builder` in chat.  
+**For Claude:** Open a Project with the generated `CLAUDE.md` as the system prompt.  
+**For Copilot CLI:** Use `copilot` with the generated prompt file.
+
+The builder ensures construction is always facilitated by the target framework itself, enabling the agent to elicit project-specific details interactively before generating files.
+
+---
+
+## Project Description Format
+
+See [schemas/project-description.schema.json](schemas/project-description.schema.json) for the full schema.
+
+Key fields:
+- `project_goal` — **(required)** 1–3 sentence description
+- `deliverables` — list of deliverable types
+- `output_format` — final output format (PDF, Python modules, HTML, etc.)
+- `primary_output_dir` — where authored files live
+- `components` — one per workstream; each generates a dedicated expert agent
+- `authority_sources` — files agents treat as ground truth
+- `tools` — languages and frameworks; operational tools get a dedicated reference/skill **document** (never an agent)
+
+Markdown brief format is also accepted — see [examples/research-project/brief.json](examples/research-project/brief.json) for reference.
+
+---
+
+## Agent Taxonomy
+
+### Tier 1: Orchestrator
+Coordinates all workflows. Enforces security, consistency, and voice fidelity rules.
+
+### Tier 2: Governance Agents (always generated)
+`navigator` · `security` · `code-hygiene` · `adversarial` · `conflict-auditor` · `conflict-resolution` · `cleanup` · `agent-updater` · `agent-refactor` · `repo-liaison` · `git-operations`
+
+### Tier 3: Domain Agents (selected by archetype)
+| Archetype | Triggered by |
+|-----------|-------------|
+| `primary-producer` | Always |
+| `quality-auditor` | Always |
+| `cohesion-repairer` | Writing/documentation projects |
+| `style-guardian` | Projects with style references |
+| `technical-validator` | Code/data/technical projects |
+| `format-converter` | Projects with compiled output (LaTeX, PDF) |
+| `reference-manager` | Projects with citation databases |
+| `output-compiler` | Multi-component assembly projects |
+| `visual-designer` | Projects with diagrams or figures |
+| `module-doc-author` | Projects with `pip_package_name` or PyPI distribution |
+| `module-doc-validator` | Projects with `pip_package_name` or PyPI distribution |
+
+> This table lists a representative subset. Additional selectable archetypes
+> (e.g. `content-enricher`, `retrieval-integrator`) are documented in
+> [How It Works](https://jlcatonjr.github.io/agentteams/how-it-works/).
+
+> Tools are **not** agents. Operational tools (databases, CLIs, build systems)
+> become reference/skill **documents** — see [Tool Classification](#tool-classification).
+
+### Tier 4: Workstream Experts
+One generated per component. Prepares Component Briefs, reviews drafts, issues ACCEPT/REVISE verdicts.
+
+---
+
+## CLI Reference
+
+The full surface is **90 flags**; the block below is a curated subset of the most-used ones.
+For every flag, with semantics and worked examples, see the
+[CLI Reference](https://jlcatonjr.github.io/agentteams/cli-reference/) — or run
+`agentteams --help` / `man ./agentteams.1`, both of which are generated from the parser and
+are always complete.
+
+```
+Most-used options:
+  --description PATH   Project description (.json or .md) [required]
+  --project     PATH   Project directory to scan
+  --framework   NAME   copilot-vscode (default) | copilot-cli | claude | goose | agents-md
+  --output      DIR    Output directory (default: framework-specific agents dir under <project>)
+  --convert-from DIR   Convert an existing team directory into the target --framework
+  --interop-from DIR   Run CAI-based interop pipeline from an existing team directory
+  --interop-source-framework NAME  Optional source override: copilot-vscode|copilot-cli|claude
+  --interop-mode MODE  direct (default) | bundle
+  --bridge-from DIR    Generate lightweight interface bridge artifacts from source team
+  --bridge-source-framework NAME  Optional source override for bridge mode
+  --bridge-check       Validate bridge freshness against source files
+  --bridge-refresh     Refresh bridge artifacts (overwrite existing bridge files)
+  --dry-run            Show what would be generated without writing
+  --overwrite          Overwrite existing agent files unconditionally (full replacement)
+  --merge              Update only template-fenced regions; preserve user-authored content
+                       outside fence markers (see Section Fencing below)
+  --yes, -y            Non-interactive: skip all prompts
+  --no-scan            Disable project directory scanning
+  --update             Re-render drifted files AND emit new agents added to the
+                       taxonomy since the last build; preserves manually-filled values
+  --prune              Used with --update: also delete agents removed from the taxonomy
+  --check              Check for template drift and structural changes (exit code 1 if found)
+  --scan-security      Scan generated agent files for security issues
+  --post-audit         Run static + optional AI-powered audit after generation
+  --auto-correct       After --post-audit findings, invoke standalone copilot CLI to repair
+                       files (requires copilot CLI installed and authenticated separately)
+  --enrich             Scan for unresolved placeholders, underdeveloped sections, and
+                       incomplete tool metadata; apply context-aware auto-enrichment;
+                       exports references/defaults-audit.csv
+  --security-offline   Use cached vulnerability snapshot only (no network fetch)
+  --security-max-items N  Max CVEs to include in security references (default: 15)
+  --security-no-nvd    Skip NVD CVSS enrichment; CISA KEV + EPSS data still fetched
+  --migrate            One-step legacy fencing migration: tag current state as
+                       pre-fencing-snapshot, regenerate all files with fence markers,
+                       print quality-audit checklist
+  --revert-migration   Undo a --migrate run: git reset --hard pre-fencing-snapshot
+  --self               Operate on the module's own agent team
+  --fleet DIR          Run --update --merge across every workspace under DIR (and
+                       subfolders), covering .github/agents/ and .claude/. Git-commit
+                       snapshot + git-diff content audit per workspace; non-destructive
+                       (merge-only). Dry-run preview by default; pass --yes to apply.
+  --fleet-frameworks   github | claude | goose | both | all (default: both)
+  --fleet-report DIR   Fleet report dir (default: <DIR>/.agentteams-fleet/<run-id>/)
+  --version            Print version
+```
+
+---
+
+## Maintenance Commands
+
+Once a team has been generated, the module can detect and repair two kinds of drift:
+
+- **Content drift** — a template's text changed (re-renders affected files)
+- **Structural drift** — agents were added or removed from the taxonomy (emits new files, reports removed files)
+- **Knowledge drift** — agents are operating on stale facts after silent project evolution (see [Agent Knowledge Updates](#agent-knowledge-updates) below)
+
+### Check for drift
+
+```bash
+agentteams --description brief.json --check
+# Exit code 0: no drift. Exit code 1: drift or structural changes detected.
+```
+
+### Update drifted files and new agents (preserve manual values)
+
+When the module is updated (e.g., a new governance agent is added), run `--update --merge` to bring an existing team in sync safely. New agent files are emitted; changed files are re-rendered preserving any `{MANUAL:*}` values you filled in previously; expected standard files that are missing on disk are restored; removed agents are reported but not deleted:
+
+```bash
+agentteams --description brief.json --update --merge
+```
+
+Bare `--update` merges by default (re-renders only template-fenced regions, preserving user-authored content outside fence markers — the same as `--update --merge`). Use `--update --overwrite` only when you intentionally want full-file overwrite behavior on existing files.
+
+To also delete agents that are no longer part of the taxonomy:
+
+```bash
+agentteams --description brief.json --update --merge --prune
+```
+
+### Update many workspaces at once (fleet)
+
+To bring **every** agent-infrastructure workspace under a directory in sync — covering both `.github/agents/` and `.claude/` — use `--fleet`. Each git workspace is snapshotted via a commit before applying, then the post-update `git diff` is analysed for real content loss (shrink Notices and `USER-EDITABLE` deletions). It is non-destructive (merge-only) and previews by default:
+
+```bash
+agentteams --fleet /path/to/parent --update --merge          # dry-run preview
+agentteams --fleet /path/to/parent --update --merge --yes     # apply
+```
+
+See the [CLI Reference](docs_src/cli-reference.md#fleet-update-multi-workspace) for the full fleet model and safety guarantees.
+
+### Security scan
+
+Scan deployed agent files for PII, credentials, and unresolved placeholders:
+
+```bash
+agentteams --description brief.json --scan-security
+```
+
+### Self-maintenance
+
+Regenerate the module's own meta-agent team:
+
+```bash
+agentteams --self
+```
+
+### Daily security maintenance (agentteams only)
+
+Daily security maintenance is invoked as part of the scheduled bridge workflow at `.github/workflows/bridge-maintenance.yml`.
+
+The integrated bridge workflow executes `scripts/run_daily_security_maintenance.sh`, which:
+
+1. Enforces repository scope (refuses to run outside the `agentteams` repo root).
+2. Runs non-destructive self update (`--self --update --merge --yes`).
+3. Runs security scan for generated team files.
+4. Runs security-focused regression tests.
+5. Runs drift check for visibility.
+
+Copilot execution policy for this maintenance path:
+
+1. Use best judgement to complete the full sequence in one run.
+2. Continue on non-critical warnings (warn-and-continue behavior).
+3. Do not bypass destructive-risk protections.
+4. Keep operations non-destructive by default for routine maintenance.
+
+Because the maintenance path is warn-and-continue, check `tmp/bridge-maintenance/summary.md` for step-level outcomes after each run.
+
+Manual fallback: `.github/workflows/security-maintenance.yml` is retained as `workflow_dispatch` for ad-hoc reruns and incident response.
+
+### Daily bridge maintenance (agentteams only)
+
+This repository includes a scheduled workflow at `.github/workflows/bridge-maintenance.yml`.
+
+The workflow executes `scripts/run_daily_bridge_maintenance.sh`, which:
+
+1. Enforces repository scope (refuses to run outside the `agentteams` repo root).
+2. Runs security maintenance as the first integrated step.
+3. Runs bridge refresh for maintained pairs:
+  - `copilot-vscode -> copilot-cli`
+  - `copilot-vscode -> claude`
+4. Runs bridge freshness checks for the same maintained pairs.
+5. Continues on non-critical failures (warn-and-continue) and emits summary artifacts under `tmp/bridge-maintenance/`.
+
+Bridge watchdog coverage:
+
+1. `.github/workflows/bridge-watchdog.yml` checks the recency of successful `bridge-maintenance.yml` runs.
+2. If stale beyond threshold (48h), it opens a deduplicated issue labeled `bridge-watchdog`.
+
+---
+
+## Section Fencing
+
+Templates ship with `AGENTTEAMS:BEGIN/END` fence markers around every template-owned section. This enables surgical updates without clobbering your customizations:
+
+```markdown
+<!-- AGENTTEAMS:BEGIN routing_table_rows v=1 -->
+| ... generated content ... |
+<!-- AGENTTEAMS:END routing_table_rows -->
+```
+
+| Mode | Behaviour |
+|------|-----------|
+| `--overwrite` | Full-file replacement — best for first-time generation |
+| `--merge` | Updates fenced sections only; preserves everything outside markers |
+| `--update --merge` | Canonical safe update mode: re-render drifted files + emit new agents while preserving user-authored content outside fences |
+| `--update` | Incremental update that merges by default (fenced regions only, preserving content outside markers); pass `--update --overwrite` for full-file replacement |
+| `--migrate` | Retrofits fence markers onto a legacy team in one step |
+
+See [templates/FENCE-CONVENTIONS.md](agentteams/templates/FENCE-CONVENTIONS.md) for the full specification.
+
+---
+
+## Agent Knowledge Updates
+
+Generated agent teams stay current through three automatic mechanisms:
+
+### 1. Drift detection (`--check` / `--update --merge`)
+Run `--check` at any time to detect template content drift or taxonomy structural changes. Use `--update --merge` to apply them while preserving manually-filled values and user-authored content outside fenced regions.
+
+### 2. Drift-as-trigger in `@agent-updater`
+The `@agent-updater` governance agent includes a **Drift detected by `--check`** trigger: whenever drift is detected, agents must re-render and re-verify before the next workflow executes.
+
+It also carries explicit lifecycle triggers aligned to the example-collector governance baseline:
+- **Team initialized** (first successful `build_team.py` run) establishes the canonical baseline for agent docs, references, workflow triggers, and output-file inventory.
+- **Team updated** (canonical: `--update --merge`) requires drift reconciliation, emission of newly required files, and restoration of any expected standard files missing on disk.
+- **Expected output missing during update** is treated as documentation drift even when template hashes are unchanged; the missing file must be restored in the same update run.
+
+### 3. Periodic Knowledge Re-verification
+The `@agent-updater` includes a `Periodic Knowledge Re-verification` protocol that kicks in when:
+- A plan step references specific file paths, agent slugs, or counts
+- Any multi-file session ran without invoking `@agent-updater`
+- `@adversarial` flags a **Temporal (T)** presupposition in a plan review
+
+The protocol: run `--check` → re-render with `--update --merge` if drift found → invoke `@technical-validator` to verify plan facts against disk state → surface any unverified claims before execution proceeds.
+
+---
+
+## Tool Classification
+
+Tools are resources agents **use** — they are never generated as agents. Tools
+declared in the brief are classified into three tiers, and the document type
+depends on the target framework:
+
+| Tier | When | Copilot output | Claude output |
+|------|------|----------------|---------------|
+| **Operational** | `needs_specialist_agent: true` or category = `database`, `cli`, `build-system` | `references/ref-{tool}-reference.md` (operational depth) | `.claude/skills/tool-{tool}.md` (skill) |
+| **Reference** | Default for `framework`, `library` | `references/ref-{tool}-reference.md` (lightweight) | `references/ref-{tool}-reference.md` |
+| **Passive** | `language`, `other` | Listed in `copilot-instructions.md` only | Listed in `CLAUDE.md` only |
+
+Operational tool docs preserve config / invocation / verification procedures but
+carry no agent front matter, handoffs, or routing. Legacy `tool-*.agent.md`
+files from earlier generations are migrated away on `--update` (removed under
+`--overwrite`, flagged with a notice under `--merge`).
+
+The engine also parses dependency manifests (`requirements.txt`, `pyproject.toml`, `package.json`, `Cargo.toml`, `go.mod`) from the project directory to detect tools automatically.
+
+---
+
+## Usage Examples
+
+### 1. New project — no existing codebase
+
+Write a `brief.json`, then generate. The engine has no project directory to scan, so it works entirely from the description.
+
+```bash
+agentteams \
+  --description brief.json \
+  --framework copilot-vscode
+# Output: .github/agents/ in the current directory
+
+agentteams \
+  --description brief.json \
+  --framework copilot-cli
+# Output: .github/agents/ in the current directory (same directory as copilot-vscode)
+
+agentteams \
+  --description brief.json \
+  --framework claude
+# Output: .claude/agents/ in the current directory
+```
+
+---
+
+### 2. New project — existing codebase to scan
+
+Pass `--project` to point at an existing directory. The engine scans `requirements.txt`, `pyproject.toml`, `package.json`, `Cargo.toml`, and `go.mod` to detect tools automatically, and supplements any fields missing from the brief.
+
+```bash
+agentteams \
+  --description brief.json \
+  --project ~/code/myproject \
+  --framework copilot-vscode
+# Output: ~/code/myproject/.github/agents/
+```
+
+To disable scanning (use the brief as-is):
+
+```bash
+agentteams --description brief.json --project ~/code/myproject --no-scan
+```
+
+---
+
+### 3. Preview before writing (dry run)
+
+Always a safe first step. Prints every file that would be written or overwritten without touching the filesystem.
+
+```bash
+agentteams --description brief.json --project ~/code/myproject --dry-run
+```
+
+The output lists each file as `[DRY RUN] WRITE` (new) or `[DRY RUN] OVERWRITE` (would replace existing).
+
+---
+
+### 4. Generate for Claude Code, Copilot CLI, or Goose
+
+Use `--framework` to target a different runtime. All four produce the same agent team from the same brief.
+
+```bash
+# Claude Code sub-agents (.claude/agents/*.md with Claude front matter)
+agentteams --description brief.json --project ~/code/myproject --framework claude
+
+# GitHub Copilot CLI (plain Markdown system prompts)
+agentteams --description brief.json --project ~/code/myproject --framework copilot-cli
+
+# Goose recipes (.goose/recipes/*.yaml + repo-root AGENTS.md/.goosehints)
+agentteams --description brief.json --project ~/code/myproject --framework goose
+```
+
+See [Framework Support](#framework-support) for output format differences.
+
+### 4b. Interop mode (CAI pipeline)
+
+Use the interop pipeline when you want a normalized compatibility bundle and target output in one run:
+
+```bash
+agentteams \
+  --interop-from /path/to/source/agents \
+  --framework claude \
+  --interop-mode bundle \
+  --output /path/to/project/.claude/agents
+```
+
+`--interop-mode` values:
+- `direct`: write only target framework files
+- `bundle`: write target files plus compatibility artifacts under `references/interop/<source>-to-<target>/`
+
+Bundle artifacts include:
+- `team-manifest.cai.json`
+- `interop-manifest.json`
+- `routing-map.json`
+- `instructions-map.json`
+- `compatibility-report.md`
+
+### 4c. Lightweight bridge mode
+
+Use bridge mode when you want target-runtime access to source canonical agents without converting every agent file:
+
+```bash
+agentteams \
+  --bridge-from /path/to/source/agents \
+  --framework copilot-cli \
+  --output /path/to/project
+```
+
+Bridge artifacts are written under:
+- `references/bridges/<source>-to-<target>/`
+
+Core bridge artifacts:
+- `bridge-manifest.json`
+- `agent-inventory.md`
+- `quickstart-snippet.md`
+- `entrypoint.md`
+
+### Option Pair Exclusions
+
+The CLI now explicitly rejects incompatible option pairs so pipelines remain deterministic.
+
+Excluded with `--convert-from`:
+- `--description`, `--project`, `--self`, `--no-scan`, `--update`, `--prune`, `--check`, `--scan-security`, `--post-audit`, `--auto-correct`, `--enrich`, `--merge`, `--migrate`, `--revert-migration`, `--list-backups`, `--restore-backup`
+
+Excluded with `--interop-from`:
+- `--description`, `--project`, `--self`, `--no-scan`, `--update`, `--prune`, `--check`, `--scan-security`, `--post-audit`, `--auto-correct`, `--enrich`, `--merge`, `--migrate`, `--revert-migration`, `--list-backups`, `--restore-backup`
+
+Global pair constraints:
+- `--convert-from` and `--interop-from` are mutually exclusive
+- `--bridge-from` is mutually exclusive with `--convert-from` and `--interop-from`
+- `--auto-correct` requires `--post-audit`
+- `--prune` requires `--update`
+- `--bridge-check` cannot be combined with `--bridge-refresh`
+
+---
+
+### 5. Custom output directory
+
+Override where agent files are written. Useful for monorepos or when a non-default location is required.
+
+```bash
+agentteams \
+  --description brief.json \
+  --output ~/code/myproject/agents
+```
+
+---
+
+### 6. Non-interactive / CI mode
+
+Skip all confirmation prompts. Use in scripts, CI pipelines, or `Makefile` targets.
+
+```bash
+agentteams --description brief.json --project ~/code/myproject --yes
+# or, to overwrite existing files without prompting:
+agentteams --description brief.json --project ~/code/myproject --overwrite --yes
+```
+
+---
+
+### 7. Post-generation audit
+
+Run static checks (unresolved placeholders, YAML integrity, required-agent coverage) immediately after generation. If the standalone `copilot` CLI is available and authenticated, also runs an AI-powered conflict and presupposition review via GitHub Models.
+
+```bash
+agentteams --description brief.json --project ~/code/myproject --post-audit --yes
+```
+
+To automatically repair any findings, pass `--auto-correct`. This requires the [standalone `copilot` CLI](https://docs.github.com/en/copilot/github-copilot-in-the-cli/about-github-copilot-in-the-cli) to be installed and authenticated separately:
+
+```bash
+agentteams --description brief.json --project ~/code/myproject --post-audit --auto-correct --yes
+```
+
+---
+
+### 8. Update an existing team after a module upgrade
+
+When `agentteams` is updated, templates may change and new agent types may be added to the taxonomy. Run `--update --merge` to bring an existing team in sync:
+
+- Files whose templates changed are re-rendered, preserving any `{MANUAL:*}` values you filled in.
+- New agent types introduced since the last build are emitted as new files.
+- Expected standard outputs missing on disk are restored during the update run.
+- Agents removed from the taxonomy are **reported** but not deleted.
+
+```bash
+cd agentteams
+git pull
+pip install -e .
+agentteams --description brief.json --update --merge
+```
+
+---
+
+### 9. Update and remove retired agents
+
+If agents were removed from the taxonomy in a module update and you want to clean them up:
+
+```bash
+agentteams --description brief.json --update --merge --prune
+```
+
+`--prune` only takes effect alongside `--update`. It will delete files for agents that no longer exist in the taxonomy and were not manually created.
+
+---
+
+### 10. Check for drift without writing (CI gate)
+
+Use `--check` as a non-destructive lint step in CI. Exits with code `1` if any template has changed or if the team composition differs from the last build; exits `0` if everything is in sync.
+
+```bash
+agentteams --description brief.json --check
+```
+
+Example CI step (GitHub Actions):
+
+```yaml
+- name: Check agent team is up to date
+  run: agentteams --description brief.json --check
+```
+
+Common CI/deploy failure source:
+
+- A stale `agentteams.1` file is a common cause of failed CI runs (especially the `Check man-page is current` step).
+- If CLI flags/help text changed, regenerate before commit:
+
+```bash
+python -m agentteams.man > agentteams.1
+python -m agentteams.man > /tmp/agentteams-check.1 && diff /tmp/agentteams-check.1 agentteams.1
+```
+
+---
+
+### 11. Security scan on a deployed team
+
+Scan existing agent files for PII paths, hardcoded credentials, bearer tokens, and unresolved `{MANUAL:*}` placeholders:
+
+```bash
+agentteams --description brief.json --scan-security
+```
+
+Exits with code `1` if any findings are reported. Suitable as a pre-commit or CI gate.
+
+---
+
+### 12. Merge — update fenced regions only (preserve your customizations)
+
+If you have manually customized sections of your agent files, use `--merge` instead of `--overwrite`. It updates only the `AGENTTEAMS:BEGIN/END`-fenced sections that originated from templates and leaves everything else untouched:
+
+```bash
+agentteams --description brief.json --merge
+```
+
+Files without fence markers are skipped with an advisory warning. See [Section Fencing](#section-fencing) below.
+
+---
+
+### 13. Enrich — auto-fill defaults and underdeveloped sections
+
+After generation, scan for default template elements and apply context-aware enrichment. Rule-based fills are applied first; if `--post-audit` is also set, AI-powered enrichment runs on remaining gaps:
+
+```bash
+agentteams --description brief.json --enrich
+agentteams --description brief.json --enrich --post-audit  # AI enrichment pass
+```
+
+Outputs `references/defaults-audit.csv` listing every element evaluated.
+
+---
+
+### 14. Migration — add section fencing to an existing team
+
+If you have an existing agent team generated before section fencing was introduced:
+
+```bash
+agentteams --description brief.json --project ~/code/myproject --migrate
+```
+
+This creates a `pre-fencing-snapshot` git tag at the current HEAD, regenerates all files with `AGENTTEAMS:BEGIN/END` markers, and prints a quality-audit checklist. To undo:
+
+```bash
+agentteams --description brief.json --project ~/code/myproject --revert-migration
+```
+
+---
+
+### 15. Self-maintenance (regenerate the module's own team)
+
+Regenerate the agent team that governs this module itself, using the stored `_build-description.json`:
+
+```bash
+agentteams --self
+```
+
+---
+
+## Example Project Briefs
+
+- [Research project](examples/research-project/brief.json) — academic paper with chapters, LaTeX output, and bibliography
+- [Software project](examples/software-project/brief.json) — FastAPI backend with authentication and task API
+- [Data pipeline](examples/data-pipeline/brief.json) — ETL pipeline with four workstream components
+
+---
+
+## Running Tests
+
+```bash
+python -m pytest tests/ -v
+```
+
+---
+
+## Verify Your Install
+
+```bash
+agentteams --help             # all flags and usage
+agentteams --version          # confirm installed version
+python -m pytest tests/ -v   # run the full test suite
+```
+
+Tests require no external dependencies. Integration tests use the bundled examples.
+
+---
+
+## Project Structure
+
+Illustrative, not exhaustive — the package is **76 modules** and the suite is **186 files**.
+The authoritative map is [`references/architecture-graph.md`](references/architecture-graph.md),
+regenerated by `--refresh-architecture`; per-module docs live under
+[API Reference](https://jlcatonjr.github.io/agentteams/api-reference/).
+
+```
+agentteams/
+├── build_team.py              # CLI entry point (thin shim; re-exports agentteams.cli)
+├── agentteams/
+│   ├── cli/                   # Parser, generate pipeline, artifact writers, security gate
+│   ├── ingest.py              # Parse project descriptions
+│   ├── analyze.py             # Build team manifest
+│   ├── render.py              # Render templates
+│   ├── emit.py                # Write files to disk
+│   ├── drift.py               # Drift detection
+│   ├── scan.py                # Security scan
+│   ├── audit.py               # Post-generation audit
+│   ├── remediate.py           # Auto-correction
+│   ├── graph.py               # Agent topology graph
+│   ├── enrich/                # Placeholder + section enrichment
+│   ├── research/              # Optional `agentteams[research]` extra
+│   ├── eval_adapters/         # Eval-harness adapters
+│   ├── templates/             # All agent templates (shipped with package)
+│   │   ├── universal/         # Orchestrator + 11 governance agents, plus the
+│   │   │                      #   .reference / .csv template family (36 files)
+│   │   ├── domain/            # Domain archetype templates (25)
+│   │   ├── builder/           # Team Builder agent templates (4)
+│   │   ├── workstream-expert.template.md
+│   │   ├── copilot-instructions.template.md
+│   │   ├── PLACEHOLDER-CONVENTIONS.md
+│   │   ├── FENCE-CONVENTIONS.md
+│   │   └── AUTHORING-GUIDE.md
+│   └── frameworks/
+│       ├── base.py            # Abstract adapter
+│       ├── copilot_vscode.py  # VS Code Copilot adapter
+│       ├── copilot_cli.py     # Copilot CLI adapter
+│       ├── claude.py          # Claude Code adapter
+│       ├── goose.py           # Goose adapter
+│       ├── agents_md.py       # AGENTS.md adapter
+│       └── registry.py        # Framework registry
+├── schemas/                   # Published JSON Schemas
+├── examples/                  # 5 example briefs, each with expected output
+├── docs_src/                  # Documentation site sources (MkDocs)
+└── tests/                     # 186 test files
+```
+
+---
+
+## Documentation
+
+**Online:** https://jlcatonjr.github.io/agentteams/
+
+| Page | Description |
+|------|-------------|
+| [Getting Started](https://jlcatonjr.github.io/agentteams/getting-started/) | Install, write a brief, generate your first team |
+| [Agent-Assisted Setup](https://jlcatonjr.github.io/agentteams/agent-assisted-setup/) | Use `@team-builder` to build the brief interactively |
+| [How It Works](https://jlcatonjr.github.io/agentteams/how-it-works/) | Pipeline stages, agent taxonomy, knowledge updates |
+| [CLI Reference](https://jlcatonjr.github.io/agentteams/cli-reference/) | All flags with descriptions and examples |
+| [Description Format](https://jlcatonjr.github.io/agentteams/DESCRIPTION-FORMAT/) | Full field-by-field brief format reference |
+| [Template Authoring](https://jlcatonjr.github.io/agentteams/template-authoring/) | Write and register new agent templates |
+| [API Reference](https://jlcatonjr.github.io/agentteams/api-reference/) | Python module API (`ingest`, `analyze`, `render`, `emit`, …) |
+| [Structural Update Plan](https://jlcatonjr.github.io/agentteams/structural-update-plan/) | Roadmap for programmatic team update propagation |
+| [Changelog](https://jlcatonjr.github.io/agentteams/changelog/) | Release notes |
+
+**In-repo references:**
+
+- [agentteams/templates/AUTHORING-GUIDE.md](agentteams/templates/AUTHORING-GUIDE.md) — How to write and register new agent templates
+- [agentteams/templates/FENCE-CONVENTIONS.md](agentteams/templates/FENCE-CONVENTIONS.md) — Section fencing specification
+- [agentteams/templates/PLACEHOLDER-CONVENTIONS.md](agentteams/templates/PLACEHOLDER-CONVENTIONS.md) — Placeholder syntax rules
+- [docs_src/how-it-works.md](docs_src/how-it-works.md) — Four-tier agent taxonomy and pipeline overview
+- [schemas/project-description.schema.json](schemas/project-description.schema.json) — JSON Schema for project descriptions
+- [schemas/team-manifest.schema.json](schemas/team-manifest.schema.json) — JSON Schema for the internal team manifest
+
+---
+
+## License
+
+MIT

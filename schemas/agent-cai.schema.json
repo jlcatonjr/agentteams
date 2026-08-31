@@ -1,0 +1,251 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://jlcatonjr.github.io/agentteams/schemas/agent-cai.schema.json",
+  "title": "Agent Canonical Interface",
+  "description": "Canonical intermediate representation for cross-framework agent infrastructure interop. v2 (2026-08-10, durable-canonical-agent-format plan) adds typed capabilities, typed handoffs, skills, MCP servers, invariant cores, references, and framework_extensions; schema_version is runtime-checked, not write-only. The framework enum is registry-derived (agentteams/frameworks/registry.py FRAMEWORK_IDS) plus the 'canonical' pseudo-framework; tests/test_framework_enum_consistency.py pins parity.",
+  "type": "object",
+  "required": [
+    "schema_version",
+    "created_at",
+    "source_framework",
+    "agents",
+    "instructions_binding"
+  ],
+  "properties": {
+    "schema_version": {
+      "const": "2.0",
+      "description": "Runtime-checked. v1 bundles ('1.0') were never persisted as a durable source; the bump makes any old-shape document fail loudly rather than degrade silently."
+    },
+    "created_at": {
+      "type": "string"
+    },
+    "source_framework": {
+      "type": "string",
+      "enum": [
+        "copilot-vscode",
+        "copilot-cli",
+        "claude",
+        "goose",
+        "agents-md",
+        "codex",
+        "canonical"
+      ],
+      "description": "Registry-derived (FRAMEWORK_IDS) plus 'canonical' for durable canonical directories loaded via load_canonical(). 'codex' registered as a thin prep-scoped target (durable-canonical-agent-format plan step F.4)."
+    },
+    "source_dir": {
+      "type": "string"
+    },
+    "instructions_binding": {
+      "type": "object",
+      "required": [
+        "source_name",
+        "content"
+      ],
+      "properties": {
+        "source_name": {
+          "type": "string"
+        },
+        "content": {
+          "type": "string"
+        }
+      },
+      "additionalProperties": false
+    },
+    "agents": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": [
+          "slug",
+          "name",
+          "body_markdown",
+          "source_path"
+        ],
+        "properties": {
+          "slug": {
+            "type": "string"
+          },
+          "name": {
+            "type": "string"
+          },
+          "description": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "body_markdown": {
+            "type": "string"
+          },
+          "capabilities": {
+            "type": "object",
+            "description": "Typed capability capture (v2). tool_scopes uses the canonical 7-token vocabulary matching claude.py's _VSCODE_TO_CLAUDE_TOOLS keys; model_hint is an advisory model string; raw preserves the source framework's original capability strings for frameworks with no canonical mapping (copilot-cli, agents-md) or for lossless round trips.",
+            "properties": {
+              "tool_scopes": {
+                "type": "array",
+                "items": {
+                  "type": "string",
+                  "enum": [
+                    "read",
+                    "edit",
+                    "search",
+                    "execute",
+                    "todo",
+                    "agent",
+                    "retrieval"
+                  ]
+                },
+                "uniqueItems": true
+              },
+              "model_hint": {
+                "type": [
+                  "string",
+                  "null"
+                ]
+              },
+              "raw": {
+                "type": "object",
+                "description": "Per-framework original capability declarations: {<framework>: <original string or structure>}. Escape hatch; never silently dropped.",
+                "additionalProperties": true
+              }
+            },
+            "additionalProperties": false
+          },
+          "handoffs": {
+            "type": "array",
+            "description": "Typed handoff edges (v2). Captured via frameworks/base.py::extract_handoffs on export; applied on import per each adapter's handoff_delivery_mode().",
+            "items": {
+              "type": "object",
+              "required": [
+                "to"
+              ],
+              "properties": {
+                "to": {
+                  "type": "string",
+                  "description": "Target agent slug."
+                },
+                "label": {
+                  "type": [
+                    "string",
+                    "null"
+                  ]
+                }
+              },
+              "additionalProperties": true
+            }
+          },
+          "invariant_core_markdown": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "The fenced AGENTTEAMS:BEGIN invariant_core span captured verbatim from the agent body (fences.py::_extract_fenced_regions); re-emitted as a properly fenced section on import."
+          },
+          "raw_front_matter": {
+            "type": "object",
+            "description": "Passthrough for framework-specific front-matter keys not modeled explicitly (keeps v1's additionalProperties:true round-trip tolerance).",
+            "additionalProperties": true
+          },
+          "source_path": {
+            "type": "string"
+          }
+        },
+        "additionalProperties": true
+      }
+    },
+    "skills": {
+      "type": "array",
+      "description": "Team-level skill documents (v2). On export, walked from the source framework's skill dir (today: Claude's skills/<slug>/SKILL.md); on import, rendered via FrameworkAdapter.render_skill_file().",
+      "items": {
+        "type": "object",
+        "required": [
+          "slug",
+          "body_markdown"
+        ],
+        "properties": {
+          "slug": {
+            "type": "string"
+          },
+          "front_matter": {
+            "type": "object",
+            "properties": {
+              "name": {
+                "type": [
+                  "string",
+                  "null"
+                ]
+              },
+              "description": {
+                "type": [
+                  "string",
+                  "null"
+                ]
+              }
+            },
+            "additionalProperties": true
+          },
+          "body_markdown": {
+            "type": "string"
+          },
+          "files": {
+            "type": "array",
+            "description": "Co-located supporting files within the skill directory (excluding SKILL.md itself).",
+            "items": {
+              "type": "object",
+              "required": [
+                "rel_path",
+                "content"
+              ],
+              "properties": {
+                "rel_path": {
+                  "type": "string"
+                },
+                "content": {
+                  "type": "string"
+                }
+              },
+              "additionalProperties": false
+            }
+          }
+        },
+        "additionalProperties": true
+      }
+    },
+    "mcp_servers": {
+      "type": "array",
+      "description": "Framework-neutral MCP server definitions (v2), folded in via mcp-server.schema.json. The schema's allOf security_review hard gates are re-validated on canonical import, not just at original authoring time.",
+      "items": {
+        "$ref": "mcp-server.schema.json"
+      }
+    },
+    "references": {
+      "type": "array",
+      "description": "Non-agent reference content discovered under the source team (e.g. references/** docs), carried so a canonical round trip does not silently drop them.",
+      "items": {
+        "type": "object",
+        "required": [
+          "rel_path",
+          "content"
+        ],
+        "properties": {
+          "rel_path": {
+            "type": "string"
+          },
+          "content": {
+            "type": "string"
+          }
+        },
+        "additionalProperties": false
+      }
+    },
+    "framework_extensions": {
+      "type": "object",
+      "description": "Project-level, framework-owned configuration that has no cross-framework equivalent, keyed by framework id. Reuses the team-manifest.schema.json precedent for recipe_parameters/recipe_response/recipe_retry ('Goose-only; ignored by other frameworks'). Goose recipe configuration (parameters, response schema, retry policy, non-MCP extensions) lives under 'goose' so a goose round trip does not silently drop it.",
+      "additionalProperties": {
+        "type": "object",
+        "additionalProperties": true
+      }
+    }
+  },
+  "additionalProperties": true
+}

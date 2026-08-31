@@ -1,0 +1,859 @@
+"""bridge.py - Lightweight cross-framework bridge artifacts.
+
+This module creates compatibility bridge artifacts that let one framework use
+another framework's canonical agent infrastructure without regenerating all
+agent documentation.
+
+Three write modes:
+
+- `--bridge-refresh` (overwrite=True): regenerate all bridge artifacts AND
+  unconditionally overwrite target-framework entry files (CLAUDE.md,
+  .claude/agent-team.md, etc.). Destructive at the target. Use for initial
+  generation or when consumer entry files are known-disposable.
+- `--bridge-merge` (merge_only=True): regenerate bridge-internal artifacts;
+  for target-framework entry files, only re-render content inside
+  `<!-- AGENTTEAMS-BRIDGE:BEGIN <region> v=N -->...
+  <!-- AGENTTEAMS-BRIDGE:END <region> -->` fences. Content outside fences is
+  preserved. Files lacking any bridge fence are skipped with a notice in
+  `bridge-merge.report.md`. First-time consumers should use `--bridge-refresh`.
+- `--bridge-check` (check_only=True): read-only; verify bridge freshness.
+"""
+
+from __future__ import annotations
+
+import hashlib
+import json
+import re
+from dataclasses import dataclass, field
+from datetime import datetime, timezone
+from pathlib import Path
+from typing import Any
+
+from agentteams import backup
+from agentteams.canonical import DEFAULT_CANONICAL_SUBDIR
+from agentteams.interop import detect_framework
+from agentteams.capability_hints import RESEARCH_CAPABILITY_BULLET
+from agentteams.bridge_skills import (  # noqa: F401  (carved for CH-07; re-exported)
+    _render_code_recall_skill,
+    _render_recall_skill,
+)
+from agentteams.bridge_sources import (  # noqa: F401  (carved for CH-07; re-exported)
+    _INSTRUCTIONS_NAMES,
+    _collect_source_files,
+    _compute_hash_rows,
+    _extract_inventory,
+    _first_heading,
+    _first_non_heading_line,
+    _is_invokable,
+    _parse_front_matter,
+    _render_inventory_md,
+    _run_bridge_check,
+    _slug_from_name,
+    _slug_to_name,
+)
+from agentteams.bridge_pair_docs import (  # noqa: F401  (carved for CH-07; re-exported)
+    _render_domain_boundary,
+    _render_entrypoint,
+    _render_quickstart,
+)
+
+
+_FENCE_BEGIN_RE = re.compile(
+    r"<!--\s*AGENTTEAMS-BRIDGE:BEGIN\s+(?P<region>[A-Za-z0-9_-]+)\s+v=(?P<ver>\d+)\s*-->",
+)
+_FENCE_END_TPL = "<!-- AGENTTEAMS-BRIDGE:END {region} -->"
+
+
+@dataclass
+class BridgeResult:
+    """Summary of a bridge generation/check run."""
+
+    written: list[str] = field(default_factory=list)
+    skipped: list[str] = field(default_factory=list)
+    errors: list[str] = field(default_factory=list)
+    dry_run: bool = False
+    check_only: bool = False
+    check_ok: bool = True
+    check_report_path: str = ""
+    manifest_missing: bool = False
+    notices: list[str] = field(default_factory=list)
+
+    @property
+    def success(self) -> bool:
+        return len(self.errors) == 0 and (self.check_ok or not self.check_only)
+
+
+def rel_to_root(path: Path | str, output_root: Path) -> str:
+    """Render ``path`` relative to ``output_root`` when it lies inside it.
+
+    Bridge artifacts are committed, so an absolute path baked into one leaks the
+    operator's home directory and username to anyone who reads the repository.
+    ``1937cbc`` fixed this for the manifest's ``source_dir`` but only for that one
+    field, leaving the sibling artifacts the same run writes —
+    ``agent-inventory.md``'s source-file column and ``bridge-merge.report.md``'s
+    per-file lines — still absolute. This is the shared form so the three cannot
+    drift again.
+
+    Args:
+        path: Absolute or relative path to render.
+        output_root: Repository root the bridge is writing under.
+
+    Returns:
+        The path relative to ``output_root``, or unchanged when it lies outside
+        (a genuinely external path is information, not a leak).
+    """
+    candidate = Path(path)
+    if candidate.is_absolute() and candidate.is_relative_to(output_root):
+        return str(candidate.relative_to(output_root))
+    return str(candidate)
+
+
+def skip_notice(count: int, *, merge_only: bool) -> str:
+    """Build the operator notice for target files the bridge left alone.
+
+    The two cases are opposite in meaning and must not share advice. Under
+    ``--bridge-merge`` a skip is the **contract**: a target file carrying no
+    ``AGENTTEAMS-BRIDGE`` fence holds user-authored content, and leaving it
+    untouched is the entire reason merge mode exists. This notice previously
+    recommended ``--bridge-refresh`` in both cases — advising the operator to
+    overwrite precisely the files that had just been protected, and calling it
+    "recommended when bridge state is incomplete or stale", which is when the
+    advice is most likely to be followed. That is the 2026-05-27 incident recorded
+    in ``references/bridge-refresh-safety.md``.
+
+    Args:
+        count: How many target files were skipped.
+        merge_only: True when running under ``--bridge-merge``.
+
+    Returns:
+        The notice text. Under merge it explains the skip and warns against
+        refresh; otherwise it offers merge first and gates refresh behind the
+        mandatory Pre-Flight reference.
+    """
+    if merge_only:
+        return (
+            f"{count} target file(s) were left untouched because they carry no "
+            "AGENTTEAMS-BRIDGE fence — the intended --bridge-merge behaviour, since "
+            "an unfenced file holds user-authored content. See bridge-merge.report.md "
+            "for the per-file reason. Do NOT reach for --bridge-refresh to 'fix' this: "
+            "it overwrites those files unconditionally. To bring a file under bridge "
+            "management, add the fence to it."
+        )
+    return (
+        f"{count} existing bridge file(s) were not overwritten. Use --bridge-merge to "
+        "update fenced regions non-destructively. --bridge-refresh regenerates the full "
+        "set but overwrites target entry files unconditionally — run the Pre-Flight "
+        "checks in references/bridge-refresh-safety.md first."
+    )
+
+
+def run_bridge(
+    *,
+    source_dir: Path,
+    target_framework: str,
+    output_root: Path,
+    source_framework: str | None = None,
+    dry_run: bool = False,
+    overwrite: bool = False,
+    check_only: bool = False,
+    merge_only: bool = False,
+    emit_skills: bool = True,
+    host_features: list[str] | None = None,
+) -> BridgeResult:
+    """Generate or validate lightweight bridge artifacts.
+
+    Args:
+        source_dir: Canonical source agents directory.
+        target_framework: Framework receiving the bridge.
+        output_root: Root directory where bridge artifacts are written.
+        source_framework: Optional explicit source framework.
+        dry_run: When True, report writes without writing.
+        overwrite: Overwrite existing bridge files when True (--bridge-refresh).
+        check_only: Validate existing bridge freshness without writing.
+        merge_only: Non-destructive update of target-framework entry files
+            (--bridge-merge). For files containing `AGENTTEAMS-BRIDGE` fences,
+            only fenced regions are re-rendered; content outside fences is
+            preserved. Files without fences are skipped with notices.
+        emit_skills: For claude target only — emit the recall and code-recall
+            skill templates at `.claude/skills/recall/SKILL.md` and
+            `.claude/skills/code-recall/SKILL.md`. Default True. Has no effect
+            on non-claude targets.
+
+    Returns:
+        BridgeResult.
+    """
+    if not source_dir.is_dir():
+        raise FileNotFoundError(f"Source directory not found: {source_dir}")
+
+    src_fw = source_framework or detect_framework(source_dir)
+    if src_fw not in {"copilot-vscode", "copilot-cli", "claude", "goose", "canonical"}:
+        raise ValueError(f"Unknown source framework {src_fw!r}")
+    if target_framework not in {"copilot-vscode", "copilot-cli", "claude", "goose", "generic"}:
+        raise ValueError(f"Unknown target framework {target_framework!r}")
+    if src_fw == "goose" and target_framework == "goose":
+        raise ValueError(
+            "goose-to-goose bridge is meaningless; bridge a Goose source to "
+            "claude/copilot-vscode/copilot-cli."
+        )
+
+    result = BridgeResult(dry_run=dry_run, check_only=check_only)
+    inventory = _extract_inventory(source_dir, src_fw)
+    source_files = _collect_source_files(source_dir, src_fw)
+    source_hashes = _compute_hash_rows(source_files, source_dir)
+
+    pair_dir = output_root / "references" / "bridges" / f"{src_fw}-to-{target_framework}"
+    manifest_path = pair_dir / "bridge-manifest.json"
+
+    if check_only:
+        ok, report = _run_bridge_check(manifest_path=manifest_path, source_hash_rows=source_hashes)
+        report_path = pair_dir / "bridge-check.report.md"
+        result.check_ok = ok
+        result.check_report_path = str(report_path)
+        result.manifest_missing = not manifest_path.exists()
+        # --bridge-check is documented "read-only; produces a freshness report", so
+        # a check whose verdict has not changed must not touch the file. Rewriting it
+        # unconditionally made a read operation dirty a tracked file on every run —
+        # which is only possible to skip because the report is now deterministic in
+        # the source tree (see source_state_digest). `written` reflects what actually
+        # changed, so a no-op check reports nothing written.
+        report_changed = True
+        if report_path.exists():
+            report_changed = report_path.read_text(encoding="utf-8") != report
+        if not dry_run and report_changed:
+            report_path.parent.mkdir(parents=True, exist_ok=True)
+            report_path.write_text(report, encoding="utf-8")
+        if report_changed:
+            result.written.append(str(report_path))
+        if not ok:
+            result.errors.append("bridge-check detected stale or missing bridge artifacts")
+        return result
+
+    manifest = {
+        "schema_version": "1.0",
+        "generated_at": datetime.now(timezone.utc).isoformat(),
+        "source_framework": src_fw,
+        "target_framework": target_framework,
+        # Was an inline copy of rel_to_root's body. Left behind when the helper was
+        # extracted, which made "the shared form so the three cannot drift again"
+        # false of the very site the helper was named after.
+        "source_dir": rel_to_root(source_dir, output_root),
+        "source_hashes": source_hashes,
+        "inventory_count": len(inventory),
+        "bridge_version": "1",
+    }
+
+    # Empty-inventory guard (generate path only — check_only returned above). A
+    # bridge with zero agents has nothing to route to and is almost always the
+    # result of a wrong --bridge-from (e.g. the repo root instead of the agents
+    # dir). Surface it loudly rather than shipping a non-functional bridge silently.
+    # Kept a notice, not a hard error: a legitimately nascent team may have no
+    # agents yet, and failing would break a previously-passing input (STABILITY.md).
+    if len(inventory) == 0:
+        hint = (
+            f"the canonical root directory itself, e.g. <project>/{DEFAULT_CANONICAL_SUBDIR} "
+            "(the one holding team.cai.json) — not its agents/ subdirectory"
+            if src_fw == "canonical"
+            else "the agents directory, e.g. <project>/.github/agents for copilot-vscode sources"
+        )
+        result.notices.append(
+            f"Empty bridge inventory: no agents found in source dir {source_dir} — "
+            f"the generated bridge has nothing to route to. Re-run with "
+            f"--bridge-from pointing at {hint}."
+        )
+
+    # Bridge-internal artifacts: always regenerated regardless of mode.
+    bridge_files: list[tuple[Path, str]] = []
+    bridge_files.append((manifest_path, json.dumps(manifest, indent=2) + "\n"))
+    bridge_files.append(
+        (pair_dir / "agent-inventory.md", _render_inventory_md(inventory, output_root))
+    )
+    bridge_files.append((pair_dir / "quickstart-snippet.md", _render_quickstart(src_fw, target_framework)))
+    bridge_files.append((pair_dir / "entrypoint.md", _render_entrypoint(src_fw, target_framework)))
+    bridge_files.append((pair_dir / "domain-boundary.md", _render_domain_boundary(src_fw, target_framework)))
+
+    # Target-framework entry files: subject to mode (refresh vs merge).
+    target_files = _render_target_files(
+        source_framework=src_fw,
+        target_framework=target_framework,
+        pair_dir=pair_dir,
+    )
+
+    # Phase 4: replace the default CLAUDE.md entry with a cache-aware split
+    # that inlines the canonical copilot-instructions.md as a stable
+    # preamble. Opt-in via host-feature subselector. Only meaningful for
+    # the copilot-vscode → claude direction.
+    _features_early = host_features or []
+    if (
+        target_framework == "claude"
+        and src_fw == "copilot-vscode"
+        and "bridge:copilot-vscode-to-claude:cache-split" in _features_early
+    ):
+        from agentteams.instructions_split import render_cache_split
+
+        # Source copilot-instructions.md sits at <project>/.github/copilot-instructions.md
+        project_root = source_dir.parent.parent
+        copilot_instr_path = project_root / ".github" / "copilot-instructions.md"
+        if copilot_instr_path.exists():
+            instr_body = copilot_instr_path.read_text(encoding="utf-8")
+            cache_split = render_cache_split(copilot_instructions=instr_body)
+            # Replace the CLAUDE.md tuple (first tuple ending in CLAUDE.md).
+            target_files = [
+                (p, cache_split) if p.name == "CLAUDE.md" else (p, c)
+                for (p, c) in target_files
+            ]
+            result.notices.append(
+                "CLAUDE.md emitted with cache-aware stable/dynamic split "
+                "from .github/copilot-instructions.md."
+            )
+        else:
+            result.notices.append(
+                "cache-split subselector active but "
+                f"{copilot_instr_path} not found; default CLAUDE.md retained."
+            )
+    if target_framework == "claude" and emit_skills:
+        # Claude Code discovers a project skill as `.claude/skills/<name>/SKILL.md` —
+        # a directory per skill. A flat `<name>.md` is not discovered and is inert.
+        # The DIRECTORY name is the invocable command name (`/recall`), not the
+        # `name:` front-matter key. See https://code.claude.com/docs/en/skills.md.
+        target_files.append(
+            (output_root / ".claude" / "skills" / "recall" / "SKILL.md", _render_recall_skill()),
+        )
+        target_files.append(
+            (
+                output_root / ".claude" / "skills" / "code-recall" / "SKILL.md",
+                _render_code_recall_skill(),
+            ),
+        )
+        # A pre-existing flat file from an older bridge run is inert, not harmful.
+        # Report it; never delete it. These skill files carry no AGENTTEAMS-BRIDGE
+        # fence, so there is no way to tell hand-edited content from pristine — and
+        # `.claude/skills/recall.md` is the exact path whose user-authored content
+        # was destroyed in the 2026-05-27 incident (references/bridge-refresh-safety.md).
+        # Cleanup is an operator decision, not a side effect of a routine bridge run.
+        for _stale_slug in ("recall", "code-recall"):
+            _stale = output_root / ".claude" / "skills" / f"{_stale_slug}.md"
+            if _stale.exists():
+                result.notices.append(
+                    f"stale flat skill retained: {_stale} — superseded by "
+                    f"{_stale_slug}/SKILL.md and no longer loaded by Claude Code. "
+                    "Not removed automatically (may hold hand-authored content); "
+                    "delete manually once reviewed."
+                )
+
+    # Goose target: emit a bridge-orchestrator recipe so the bridged project has the
+    # `developer` (CLI) extension by default and, opt-in, the operator-selected MCP
+    # servers wired as extensions. Servers are read from the SOURCE project's inert
+    # `.claude/mcp-servers.agentteams.json` (the cache-split precedent reads the source
+    # root the same way). It is appended to `bridge_files` (NOT target_files) so it is
+    # a bridge-OWNED generated artifact: regenerated on every --bridge-merge/-refresh
+    # so newly-selected servers propagate on re-bridge (do not hand-edit — use the
+    # convert/direct recipes for customization). Written below by the bridge_files loop.
+    if target_framework == "goose":
+        import json as _json
+
+        from agentteams.frameworks.goose import build_bridge_recipe
+
+        mcp_token = f"bridge:{src_fw}-to-goose:mcp"
+        mcp_on = mcp_token in _features_early
+        servers: list = []
+        if mcp_on:
+            artifact = source_dir.parent.parent / ".claude" / "mcp-servers.agentteams.json"
+            if artifact.exists():
+                try:
+                    servers = _json.loads(artifact.read_text(encoding="utf-8")).get("servers", []) or []
+                except (OSError, ValueError):
+                    result.notices.append(
+                        f"{mcp_token} set but {artifact} was unreadable; bridge recipe "
+                        "emitted with developer (CLI) only."
+                    )
+            else:
+                result.notices.append(
+                    f"{mcp_token} set but {artifact} not found; bridge recipe emitted "
+                    "with developer (CLI) only. Build the source with an MCP host-feature "
+                    "token to persist selected servers."
+                )
+        rel_pair = pair_dir.relative_to(output_root)
+        recipe_yaml, recipe_notes = build_bridge_recipe(
+            source_framework=src_fw,
+            rel_inventory=str(rel_pair / "agent-inventory.md"),
+            rel_quickstart=str(rel_pair / "quickstart-snippet.md"),
+            mcp_servers=servers,
+            mcp_enabled=mcp_on,
+        )
+        bridge_files.append(
+            (output_root / ".goose" / "recipes" / "bridge-orchestrator.yaml", recipe_yaml)
+        )
+        for note in recipe_notes:
+            result.notices.append(f"Goose bridge recipe: {note}")
+
+    # Bridge-internal artifacts: refresh and merge both regenerate these.
+    # (Skip and overwrite policies do not apply to bridge-owned files.)
+    for path, content in bridge_files:
+        # Refresh-or-overwrite: write unconditionally.
+        # Merge: also write unconditionally — these are bridge-owned.
+        # Otherwise (initial generation): write only if missing.
+        if path.exists() and not overwrite and not merge_only:
+            result.skipped.append(str(path))
+            continue
+        if not dry_run:
+            path.parent.mkdir(parents=True, exist_ok=True)
+            path.write_text(content, encoding="utf-8")
+        result.written.append(str(path))
+
+    # Back up existing target entry files before any merge/overwrite write. The
+    # merge path is fence-scoped (non-destructive) and overwrite is destructive,
+    # but either way a recoverable copy must exist — fleet advertises
+    # `.agentteams-backups` recovery for (non-git) bridge consumers, so produce it.
+    if (overwrite or merge_only) and not dry_run:
+        _to_backup = [
+            str(path.relative_to(output_root))
+            for path, _ in target_files
+            if path.exists() and path.is_relative_to(output_root)
+        ]
+        if _to_backup:
+            backup.backup_output_dir(
+                output_root,
+                files_to_backup=_to_backup,
+                reason=f"bridge-{'overwrite' if overwrite else 'merge'}",
+                framework=target_framework,
+            )
+
+    # Target-framework entry files: dispatched by mode.
+    merge_report_lines: list[str] = []
+    for path, content in target_files:
+        if not path.exists():
+            # First-time creation: write the rendered content regardless of mode.
+            if not dry_run:
+                path.parent.mkdir(parents=True, exist_ok=True)
+                path.write_text(content, encoding="utf-8")
+            result.written.append(str(path))
+            if target_framework == "goose" and path.name == "AGENTS.md":
+                # AGENTS.md is created in EVERY mode when absent (incl. --bridge-merge).
+                # Surface the shared-namespace plant — other tools also read AGENTS.md.
+                result.notices.append(
+                    f"Created shared AGENTS.md at {path}; other tools (Cursor/Codex/"
+                    "Cline) also read this file — confirm none of them owns it before "
+                    "committing. See references/bridge-refresh-safety.md."
+                )
+            continue
+
+        if merge_only:
+            existing = path.read_text(encoding="utf-8")
+            merged, status = _merge_target_file(existing=existing, rendered=content)
+            if status == "merged":
+                if not dry_run:
+                    path.write_text(merged, encoding="utf-8")
+                result.written.append(str(path))
+                merge_report_lines.append(f"- merged: {rel_to_root(path, output_root)}")
+            elif status == "no-fence":
+                # W2: distinguish between a truly unmanaged file and one that was
+                # written by --bridge-refresh (AGENTTEAMS-BRIDGE namespace).  The
+                # latter silently skipped before; now emit an actionable notice.
+                if _FENCE_BEGIN_RE.search(existing):
+                    result.notices.append(
+                        f"Notice: {path} contains AGENTTEAMS-BRIDGE fences (written by "
+                        "--bridge-refresh) but no AGENTTEAMS fences recognized by --merge. "
+                        "Run --bridge-refresh to regenerate, or add AGENTTEAMS fence markers "
+                        "to enable future --merge updates."
+                    )
+                    merge_report_lines.append(
+                        f"- skipped (AGENTTEAMS-BRIDGE fence present but no AGENTTEAMS fence; "
+                        f"see notices): {rel_to_root(path, output_root)}"
+                    )
+                else:
+                    merge_report_lines.append(
+                        f"- skipped (no AGENTTEAMS-BRIDGE fence in existing file): "
+                        f"{rel_to_root(path, output_root)}"
+                    )
+                result.skipped.append(str(path))
+            else:
+                result.skipped.append(str(path))
+                merge_report_lines.append(f"- skipped ({status}): {rel_to_root(path, output_root)}")
+            continue
+
+        if not overwrite:
+            result.skipped.append(str(path))
+            continue
+        if not dry_run:
+            path.parent.mkdir(parents=True, exist_ok=True)
+            path.write_text(content, encoding="utf-8")
+        result.written.append(str(path))
+
+    if merge_only:
+        report_path = pair_dir / "bridge-merge.report.md"
+        report_body = "# Bridge Merge Report\n\n" + (
+            "\n".join(merge_report_lines) if merge_report_lines else "- (no target files processed)"
+        ) + "\n"
+        if not dry_run:
+            report_path.parent.mkdir(parents=True, exist_ok=True)
+            report_path.write_text(report_body, encoding="utf-8")
+        result.written.append(str(report_path))
+
+    if result.skipped and not overwrite:
+        result.notices.append(skip_notice(len(result.skipped), merge_only=merge_only))
+
+    # Phase 2: emit Claude subagent stubs delegating to copilot-vscode source.
+    # Opt-in via host feature subselector; default emission is unchanged.
+    features = host_features or []
+    if (
+        target_framework == "claude"
+        and src_fw == "copilot-vscode"
+        and "bridge:copilot-vscode-to-claude:subagents" in features
+    ):
+        from agentteams.bridge_subagents import emit_subagent_stubs
+
+        stub_result = emit_subagent_stubs(
+            source_dir=source_dir,
+            output_root=output_root,
+            dry_run=dry_run,
+            overwrite=overwrite or merge_only,  # bridge-refresh / -merge both regenerate stubs
+        )
+        result.written.extend(stub_result.written)
+        result.skipped.extend(stub_result.skipped)
+        result.errors.extend(stub_result.errors)
+        if stub_result.experts_collapsed:
+            result.notices.append(
+                f"Collapsed {len(stub_result.experts_collapsed)} workstream-expert "
+                f"agent(s) into a single parametric stub: "
+                f"{', '.join(stub_result.experts_collapsed)}"
+            )
+
+    # P3: emit Goose subagent-stub recipes (one per source agent) into
+    # .goose/recipes/. Opt-in via bridge:<src>-to-goose:subagents; default off so
+    # the pointer bridge stays byte-identical. Reserved/bridge-owned slugs are
+    # skipped and existing recipes are never overwritten (see bridge_subagents_goose).
+    if (
+        target_framework == "goose"
+        and f"bridge:{src_fw}-to-goose:subagents" in features
+    ):
+        from agentteams.bridge_subagents_goose import emit_goose_subagent_stubs
+
+        goose_stub_result = emit_goose_subagent_stubs(
+            source_dir=source_dir,
+            output_root=output_root,
+            source_framework=src_fw,
+            dry_run=dry_run,
+        )
+        result.written.extend(goose_stub_result.written)
+        result.skipped.extend(goose_stub_result.skipped)
+        result.errors.extend(goose_stub_result.errors)
+        if goose_stub_result.written:
+            result.notices.append(
+                f"Emitted {len(goose_stub_result.written)} Goose subagent-stub "
+                "recipe(s) into .goose/recipes/ (opt-in pointers to canonical source "
+                "agents; use --convert-from for full per-agent recipes)."
+            )
+
+    # Phase 1: emit the todo-from-plan skill so the bridged orchestrator
+    # can project the canonical plan-steps CSV into TodoWrite on activation.
+    if (
+        target_framework == "claude"
+        and src_fw == "copilot-vscode"
+        and "bridge:copilot-vscode-to-claude:todo-projection" in features
+    ):
+        from agentteams.plan_steps_todo import render_skill as _render_todo_skill
+
+        skill_path = output_root / ".claude" / "skills" / "todo-from-plan" / "SKILL.md"
+        if skill_path.exists() and not (overwrite or merge_only):
+            result.skipped.append(str(skill_path))
+        else:
+            if not dry_run:
+                skill_path.parent.mkdir(parents=True, exist_ok=True)
+                skill_path.write_text(_render_todo_skill(), encoding="utf-8")
+            result.written.append(str(skill_path))
+
+    # Emit the parallelize-plan skill so the bridged orchestrator can derive
+    # fail-safe parallel waves from a plan-steps CSV's optional depends_on
+    # (Workflow 0A). The reference doc + CLI reach every team unconditionally;
+    # this skill is the Claude-only deterministic affordance.
+    if (
+        target_framework == "claude"
+        and src_fw == "copilot-vscode"
+        and "bridge:copilot-vscode-to-claude:parallelize" in features
+    ):
+        from agentteams.parallel_plan import render_skill as _render_parallelize_skill
+
+        skill_path = output_root / ".claude" / "skills" / "parallelize-plan" / "SKILL.md"
+        if skill_path.exists() and not (overwrite or merge_only):
+            result.skipped.append(str(skill_path))
+        else:
+            if not dry_run:
+                skill_path.parent.mkdir(parents=True, exist_ok=True)
+                skill_path.write_text(_render_parallelize_skill(), encoding="utf-8")
+            result.written.append(str(skill_path))
+
+    # Phase 3: emit Claude hooks example + recursion-guarded guard script.
+    # Opt-in; emits .claude/settings.agentteams.example.json (user merges
+    # into their own settings.json) and .claude/hook-guard.sh.
+    if (
+        target_framework == "claude"
+        and src_fw == "copilot-vscode"
+        and "bridge:copilot-vscode-to-claude:hooks" in features
+    ):
+        from agentteams.hooks_emit import emit_hooks_artifacts
+
+        hook_result = emit_hooks_artifacts(
+            source_dir=source_dir,
+            output_root=output_root,
+            dry_run=dry_run,
+            overwrite=overwrite or merge_only,
+        )
+        result.written.extend(hook_result.written)
+        result.skipped.extend(hook_result.skipped)
+        result.errors.extend(hook_result.errors)
+        if hook_result.written:
+            result.notices.append(
+                "Hooks artifacts emitted. Merge "
+                ".claude/settings.agentteams.example.json into your own "
+                ".claude/settings.json to activate notification hooks."
+            )
+
+    # Phase 5: emit recurring routine specs for Claude's /schedule skill.
+    if (
+        target_framework == "claude"
+        and src_fw == "copilot-vscode"
+        and "bridge:copilot-vscode-to-claude:schedule" in features
+    ):
+        from agentteams.schedule_emit import emit_schedule_artifact
+
+        sched_result = emit_schedule_artifact(
+            source_dir=source_dir,
+            output_root=output_root,
+            dry_run=dry_run,
+            overwrite=overwrite or merge_only,
+        )
+        result.written.extend(sched_result.written)
+        result.skipped.extend(sched_result.skipped)
+        result.errors.extend(sched_result.errors)
+        if sched_result.omitted_routines:
+            result.notices.append(
+                "Omitted schedule routines (no matching canonical agent in source): "
+                + ", ".join(sched_result.omitted_routines)
+            )
+
+    return result
+
+
+def _render_target_files(
+    *,
+    source_framework: str,
+    target_framework: str,
+    pair_dir: Path,
+) -> list[tuple[Path, str]]:
+    root = pair_dir.parents[2]  # <output_root>
+    rel_inventory = pair_dir.relative_to(root) / "agent-inventory.md"
+    rel_quickstart = pair_dir.relative_to(root) / "quickstart-snippet.md"
+
+    if target_framework == "claude":
+        claude_md = root / "CLAUDE.md"
+        claude_dir = root / ".claude"
+        entry_body = (
+            f"Use source framework `{source_framework}` as canonical agent infrastructure.\n"
+            f"Read `{rel_inventory}` and `{rel_quickstart}`.\n"
+            "Start with orchestrator routing.\n"
+        )
+        entry = (
+            "# Claude Bridge Entry Point\n\n"
+            + _wrap_fence("claude-bridge-entry", entry_body)
+        )
+        return [
+            (claude_md, entry),
+            (
+                claude_dir / "agent-team.md",
+                _wrap_fence(
+                    "claude-bridge-pointer",
+                    f"See `{rel_inventory}` for bridge inventory.\n",
+                ),
+            ),
+            (
+                claude_dir / "quickstart-snippet.md",
+                _wrap_fence(
+                    "claude-bridge-quickstart",
+                    f"See `{rel_quickstart}` for bridge quickstart.\n",
+                ),
+            ),
+            (
+                claude_dir / "README.md",
+                "# Claude Bridge\n\n"
+                + _wrap_fence(
+                    "claude-bridge-readme",
+                    "Lightweight bridge; source files are canonical.\n",
+                ),
+            ),
+        ]
+
+    if target_framework == "goose":
+        goose_dir = root / ".goose"
+        # AGENTS.md is a SHARED, multi-tool standard file (Cursor/Codex/Cline also
+        # read it). It is emitted fenced so --bridge-merge updates only the fence
+        # and leaves an existing unfenced AGENTS.md untouched (no-fence -> skip).
+        # See references/bridge-refresh-safety.md before --bridge-refresh.
+        agents_entry_body = (
+            f"Use source framework `{source_framework}` as canonical agent infrastructure.\n"
+            f"Read `{rel_inventory}` and `{rel_quickstart}`.\n"
+            "Start with orchestrator routing.\n\n"
+            "These apply to every request in this session, not just project-coordination\n"
+            "work routed through the orchestrator above:\n"
+            + RESEARCH_CAPABILITY_BULLET
+            + "- Before claiming you lack real-time or internet access, try a read-only fetch\n"
+            "  first (the above if available, else `web_scrape` if the `computercontroller`\n"
+            "  extension is active, otherwise a plain `curl`/`wget` via the shell) —\n"
+            "  don't default to refusal without attempting it. Prefer extracted text over\n"
+            "  raw HTML: a scraped homepage is mostly navigation chrome and can consume more\n"
+            "  than half your context while containing none of the answer.\n"
+            "- For \"most recent / latest\" questions, relevance ranking is not recency —\n"
+            "  confirm the date of what you found rather than trusting result order, and say\n"
+            "  which date you are reporting.\n"
+            "- When a name in the request doesn't exactly match a known entity, resolve to the\n"
+            "  single closest well-known match and proceed confidently — but only when one\n"
+            "  candidate is clearly the best fit (an obvious misspelling or variant). If\n"
+            "  multiple entities are genuinely comparably plausible, say so and ask instead of\n"
+            "  forcing a guess between real alternatives.\n"
+        )
+        agents_md = (
+            "# Agent Team (Goose bridge)\n\n"
+            + _wrap_fence("goose-bridge-entry", agents_entry_body)
+        )
+        # G5 fix (2026-08-15): no @AGENTS.md import needed — Goose's default
+        # CONTEXT_FILE_NAMES (['AGENTS.md', '.goosehints']) already reads both
+        # files natively; the explicit import was redundant (plausible double-load).
+        goosehints = _wrap_fence(
+            "goose-bridge-hints",
+            f"This project bridges the `{source_framework}` agent team; source files are canonical.\n",
+        )
+        return [
+            (root / "AGENTS.md", agents_md),
+            (root / ".goosehints", goosehints),
+            (
+                goose_dir / "README.md",
+                "# Goose Bridge\n\n"
+                + _wrap_fence(
+                    "goose-bridge-readme",
+                    "Lightweight bridge; source files are canonical. See "
+                    f"`{rel_quickstart}` for operational guidance (retrieval-first "
+                    "protocol, --bridge-check scope, MCP wiring).\n",
+                    version=2,
+                ),
+            ),
+        ]
+
+    if target_framework == "copilot-vscode":
+        gh_dir = root / ".github"
+        agents_dir = gh_dir / "agents"
+        instructions = (
+            "# Copilot VS Code Bridge Instructions\n\n"
+            f"Source framework: `{source_framework}`.\n"
+            f"Bridge inventory: `{rel_inventory}`.\n"
+            "Route through source orchestrator first.\n"
+        )
+        bridge_agent = (
+            "---\n"
+            "name: Bridge Orchestrator\n"
+            "description: \"Bridge entrypoint into source framework agent team\"\n"
+            "user-invocable: true\n"
+            "tools: ['read', 'search']\n"
+            "model: [\"Claude Sonnet 4.6 (copilot)\"]\n"
+            "---\n\n"
+            "# Bridge Orchestrator\n\n"
+            f"Read `{rel_inventory}` and route work through source orchestrator.\n"
+        )
+        return [
+            (gh_dir / "copilot-instructions.md", instructions),
+            (agents_dir / "bridge-orchestrator.agent.md", bridge_agent),
+        ]
+
+    if target_framework == "generic":
+        # No native consumer entry files: a generic target has no framework to
+        # write CLAUDE.md/AGENTS.md/.github/copilot-instructions.md style files
+        # for. Without this explicit branch, generic would silently fall through
+        # to the copilot-cli shape below — the pair-dir artifacts (manifest,
+        # inventory, entrypoint, domain-boundary — framework-agnostic by
+        # construction; quickstart carries an explicit generic-specific section,
+        # see _render_quickstart) carry the full picture on their own.
+        return []
+
+    gh_dir = root / ".github"
+    copilot_dir = gh_dir / "copilot"
+    instructions = (
+        "# Copilot CLI Bridge Instructions\n\n"
+        f"Source framework: `{source_framework}`.\n"
+        f"Bridge inventory: `{rel_inventory}`.\n"
+        "Route through source orchestrator first.\n"
+    )
+    entry = (
+        "# Bridge Entry\n\n"
+        f"Use source framework `{source_framework}` through this bridge.\n"
+        f"Read `{rel_inventory}` and `{rel_quickstart}`.\n"
+    )
+    return [
+        (gh_dir / "copilot-instructions.md", instructions),
+        (copilot_dir / "bridge-entry.md", entry),
+    ]
+
+
+def _wrap_fence(region_id: str, body: str, version: int = 1) -> str:
+    """Wrap body in an AGENTTEAMS-BRIDGE fence the merge logic can find."""
+    body = body if body.endswith("\n") else body + "\n"
+    return (
+        f"<!-- AGENTTEAMS-BRIDGE:BEGIN {region_id} v={version} -->\n"
+        f"{body}"
+        f"<!-- AGENTTEAMS-BRIDGE:END {region_id} -->\n"
+    )
+
+
+def _merge_target_file(*, existing: str, rendered: str) -> tuple[str, str]:
+    """Merge bridge-rendered content into an existing target file.
+
+    For each AGENTTEAMS-BRIDGE fence in `rendered`, locate the matching fence
+    region in `existing` and substitute the rendered content. Content outside
+    fences in `existing` is preserved verbatim.
+
+    Returns:
+        (merged_text, status). Status is one of:
+        - 'merged': at least one fence region updated; merged_text returned.
+        - 'no-fence': existing file lacks any matching AGENTTEAMS-BRIDGE fence.
+            Caller should skip with notice; merged_text is the original.
+        - 'no-rendered-fence': rendered content has no fences (programmer
+            error in caller); merged_text is original.
+    """
+    rendered_regions = _extract_fence_regions(rendered)
+    if not rendered_regions:
+        return existing, "no-rendered-fence"
+
+    out = existing
+    any_replaced = False
+    for region_id, region_text in rendered_regions.items():
+        pattern = re.compile(
+            r"<!--\s*AGENTTEAMS-BRIDGE:BEGIN\s+"
+            + re.escape(region_id)
+            + r"\s+v=\d+\s*-->.*?<!--\s*AGENTTEAMS-BRIDGE:END\s+"
+            + re.escape(region_id)
+            + r"\s*-->",
+            re.DOTALL,
+        )
+        new_out, n = pattern.subn(region_text.rstrip("\n"), out)
+        if n > 0:
+            out = new_out
+            any_replaced = True
+
+    if not any_replaced:
+        return existing, "no-fence"
+    return out, "merged"
+
+
+def _extract_fence_regions(text: str) -> dict[str, str]:
+    """Extract AGENTTEAMS-BRIDGE fenced regions from text.
+
+    Returns a dict mapping region_id to the full fence block including the
+    BEGIN/END markers.
+    """
+    regions: dict[str, str] = {}
+    for match in _FENCE_BEGIN_RE.finditer(text):
+        region_id = match.group("region")
+        end_marker = _FENCE_END_TPL.format(region=region_id)
+        end_idx = text.find(end_marker, match.end())
+        if end_idx == -1:
+            continue
+        block = text[match.start() : end_idx + len(end_marker)]
+        regions[region_id] = block
+    return regions

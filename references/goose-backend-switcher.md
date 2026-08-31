@@ -1,0 +1,143 @@
+# Goose Backend Switcher
+
+Operational reference for `~/.config/goose/goose-backend.sh` — the shell
+function library that switches Goose between OpenRouter (cloud) and a local
+Ollama GPU without touching any file.
+
+## Files
+
+| File | Role |
+|---|---|
+| `~/.config/goose/goose-backend.sh` | Function library — source this in `.zshrc`/`.bashrc` |
+| `~/.config/goose/config.yaml` | Baseline Goose config (OpenRouter active; Ollama block commented out) |
+
+## Baseline (no env override)
+
+`config.yaml` sets OpenRouter + `z-ai/glm-5.2` as the default. Any
+shell that has NOT sourced `goose-backend.sh` (or that has not called
+`goose-backend local`) uses OpenRouter automatically. No key is needed in the
+shell; Goose reads it from the config or from the environment.
+
+## Usage
+
+```sh
+# Source once (e.g. in .zshrc):
+source ~/.config/goose/goose-backend.sh
+
+# Switch this shell to local Ollama GPU:
+goose-backend local
+# → exports GOOSE_PROVIDER=ollama, GOOSE_MODEL=qwen3.6:35b-a3b, OLLAMA_HOST=http://localhost:11434
+# → unsets OPENROUTER_API_KEY
+
+# Switch this shell to OpenRouter (also exports the key into the shell):
+goose-backend openrouter
+# → exports GOOSE_PROVIDER=openrouter, GOOSE_MODEL=qwen/qwen3.6-27b, OPENROUTER_API_KEY=<key>
+# → unsets OLLAMA_HOST
+
+# Show active provider/model (key shown as set/unset only, never printed):
+goose-backend status
+
+# Run ONE goose invocation on OpenRouter; key lives only in goose's process,
+# never exported into the parent shell — preferred over goose-backend openrouter:
+goose-or <goose args…>
+```
+
+## Switching config.yaml to Ollama permanently
+
+`config.yaml` contains the Ollama block as comments immediately below the
+active OpenRouter lines. To make Ollama the permanent baseline:
+
+```yaml
+# Comment out these two:
+# GOOSE_PROVIDER: openrouter
+# GOOSE_MODEL: qwen/qwen3.6-35b-a3b
+
+# Uncomment these three:
+GOOSE_PROVIDER: ollama
+GOOSE_MODEL: qwen3.6:35b-a3b
+OLLAMA_HOST: http://localhost:11434
+```
+
+After editing, `goose-backend local` becomes a no-op (the config already
+matches), and `goose-backend openrouter` overrides the local default with
+OpenRouter env vars.
+
+## Knobs
+
+All overrides are set in the environment before sourcing or calling the
+functions; none require editing the script.
+
+| Env var | Default | Effect |
+|---|---|---|
+| `GOOSE_OPENROUTER_MODEL` | `z-ai/glm-5.2` | OpenRouter model used by `goose-backend openrouter` and `goose-or` |
+| `GOOSE_OPENROUTER_ENV_FILE` | *(a local `.env` file containing `OPENROUTER_API_KEY=<value>`)* | File the key is read from by reference; set per-shell to your own key file |
+| `GOOSE_OLLAMA_MODEL` | `qwen3.6:35b-a3b` | Ollama model used by `goose-backend local` |
+| `GOOSE_OLLAMA_HOST` | `http://localhost:11434` | Ollama host URL; sets `OLLAMA_HOST` in the subprocess |
+
+> **Default model resolved 2026-08-07.** A stash-pop had left this row in conflict
+> (`qwen/qwen3.6-27b` vs `z-ai/glm-5.2`). Resolved to `z-ai/glm-5.2` on three recorded
+> grounds: the installed launchd job sets `REDTEAM_JUDGMENT_MODEL=z-ai/glm-5.2`; the
+> 2026-08-07 judgment-layer measurement had GLM 5.2 defend 7/11 attacks with 3/3 benign
+> controls against Qwen 3.6-plus's 4/11 and 0/3; and `qwen/qwen3.6-27b` has a documented
+> tool-call-in-reasoning leak that kills runs silently. **This changes a documented
+> default — revert here if that is not intended.**
+
+## API key security
+
+The OpenRouter key is **never** written to any file and **never** exported into
+the parent shell by `goose-or`. It is read by reference from the file named in
+`GOOSE_OPENROUTER_ENV_FILE` (only the `OPENROUTER_API_KEY` line, never the whole
+file) using `_goose_extract_key`. If that file is absent, the functions fall back
+to the inherited `OPENROUTER_API_KEY` env var.
+
+`goose-backend openrouter` does export the key into the current shell (noted
+in its output). Prefer `goose-or` for one-off runs to avoid key exposure in
+`env` listings.
+
+## Route-proxy image interception (2026-08-13)
+
+The OpenRouter path runs through `scripts/goose-openrouter-route-proxy.py` on
+`127.0.0.1:8791` (see the comment block in `config.yaml` for the exact start
+command). Since 2026-08-13 the proxy must be started with the dedicated
+interpreter `~/.config/goose/ocr-venv/bin/python3` (pins `pytesseract`,
+`Pillow`, `opencv-python-headless`): it replaces every image content part
+(`image_url` and `input_image` shapes) with locally-extracted OCR text + a cv2
+color/layout summary before relaying.
+
+- **Why:** standing operator policy — raw image content never leaves the
+  machine — and a concrete breakage: `z-ai/glm-5.2` (active since 2026-08-11)
+  is text-only on every OpenRouter backend, so any image-bearing turn 404'd
+  with "No endpoints found that support image input". Images previously worked
+  only because `qwen/qwen3.8-max` happened to be multimodal.
+- **Fail-closed semantics** (per the change's security + adversarial reviews):
+  an image part that cannot be OCR'd — decode failure, oversize, a remote
+  http(s) URL — becomes an explicit `[image withheld: ...]` text notice, never
+  a raw forward. If started with plain `python3` (no OCR libs) the proxy
+  **refuses to start** (exit 2) instead of silently serving raw-passthrough;
+  `--allow-raw-images` is the explicit escape hatch. Verify the running mode
+  anytime: `curl -s http://127.0.0.1:8791/healthz` → `"image_interception":
+  "ocr"`.
+- Do **not** add `cv2`-dependent code relying on the ambient interpreter: the
+  only ambient `cv2` on this machine resolves via an Anaconda `$PATH` entry,
+  which is an accident of shell configuration, not a dependency.
+
+## Provider/model name formats
+
+OpenRouter and Ollama use different name formats for the same model family:
+
+| Backend | Model name format | Example |
+|---|---|---|
+| OpenRouter | `provider/model-version` | `qwen/qwen3.6-35b-a3b` |
+| Ollama | `name:tag` | `qwen3.6:35b-a3b` |
+
+To add a new model for either backend, set the appropriate knob (`GOOSE_OPENROUTER_MODEL`
+or `GOOSE_OLLAMA_MODEL`) and optionally update the `_DEFAULT` variables in the
+script for persistence across sessions.
+
+## History
+
+Created 2026-06-23. Prior to this date, `goose-backend local` was broken: it
+`unset GOOSE_PROVIDER GOOSE_MODEL` which caused Goose to fall through to
+`config.yaml` (openrouter baseline) while also unsetting `OPENROUTER_API_KEY`,
+producing an auth failure. Fixed by having `local` affirmatively export the
+three Ollama env vars instead of relying on the config.yaml fallback.

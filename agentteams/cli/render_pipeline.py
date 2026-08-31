@@ -1,0 +1,435 @@
+"""
+render_pipeline.py — template rendering + content-merge helpers.
+
+Extracted verbatim from build_team.py (CH-07 modular structure). build_team
+re-exports these names so main and tests resolve them unchanged. TEMPLATES_DIR
+is recomputed from the package location (identical to build_team's
+_SCRIPT_DIR/agentteams/templates) to avoid importing build_team back (no cycle).
+"""
+
+from __future__ import annotations
+
+import json
+import re
+import sys
+from pathlib import Path
+from typing import Any, Callable
+
+from agentteams import emit, render, vscode_tasks
+from agentteams.frameworks.agents_md import AgentsMdAdapter
+from agentteams.frameworks.base import FrameworkAdapter
+from agentteams.frameworks.claude import ClaudeAdapter
+from agentteams.frameworks.copilot_cli import CopilotCLIAdapter
+from agentteams.frameworks.copilot_vscode import CopilotVSCodeAdapter
+from agentteams.frameworks.goose import GooseAdapter
+
+TEMPLATES_DIR = Path(__file__).resolve().parents[1] / "templates"
+
+def _apply_placeholder_policy(
+    manifest: dict,
+    *,
+    strict_manual_placeholders: bool,
+) -> None:
+    """Apply dual-mode policy for optional governance placeholders.
+
+    In strict mode, unresolved {MANUAL:*} tokens are preserved as-is.
+    In usability mode, selected optional placeholders are replaced with
+    explicit defaults and removed from SETUP-REQUIRED tracking.
+    """
+    if strict_manual_placeholders:
+        return
+
+    auto = manifest.get("auto_resolved_placeholders", {})
+    ref_key = "REFERENCE_DB_PATH"
+    style_key = "STYLE_REFERENCE_PATH"
+    ref_manual = "{MANUAL:REFERENCE_DB_PATH}"
+    style_manual = "{MANUAL:STYLE_REFERENCE_PATH}"
+
+    if str(auto.get(ref_key, "")).strip() == ref_manual:
+        auto[ref_key] = "N/A - no citation database configured for this project"
+
+    if str(auto.get(style_key, "")).strip() == style_manual:
+        desc = manifest.get("description", {}) or {}
+        style_value = desc.get("style_reference") or desc.get("style_reference_path")
+        auto[style_key] = (
+            str(style_value)
+            if style_value
+            else "N/A - no formal style guide defined for this project"
+        )
+
+    manual_items = manifest.get("manual_required_placeholders", [])
+    if manual_items:
+        filtered = [
+            item for item in manual_items
+            if item.get("placeholder") not in {ref_key, style_key}
+        ]
+        manifest["manual_required_placeholders"] = filtered
+def _resolve_strict_manual_mode(*, strict_arg: bool | None, self_update: bool) -> bool:
+    """Resolve strict/manual policy from CLI args.
+
+    Explicit CLI flags win. Otherwise strict mode defaults to True in
+    self-maintenance mode and False for normal generation.
+    """
+    if strict_arg is not None:
+        return bool(strict_arg)
+    return bool(self_update)
+#: Sentinel root used only to read an adapter's agents-dir shape out of its own contract.
+_SHAPE_PROBE_ROOT = Path("/__agentteams_shape_probe__")
+
+
+def _agents_dir_depth(adapter: FrameworkAdapter) -> tuple[str, ...]:
+    """Return an adapter's agents dir as path segments below the project root.
+
+    Read from the adapter's own :meth:`get_agents_dir`, so the depth that
+    ``vscode_tasks_rel_path`` encodes as ``../../`` is *derived* rather than assumed
+    a second time at the call site.
+
+    Args:
+        adapter: The framework adapter being rendered for.
+
+    Returns:
+        The segments between project root and agents dir, e.g. ``('.github', 'agents')``.
+    """
+    return adapter.get_agents_dir(_SHAPE_PROBE_ROOT).relative_to(_SHAPE_PROBE_ROOT).parts
+
+
+def _emit_vscode_tasks(
+    manifest: dict[str, Any],
+    adapter: FrameworkAdapter,
+    output_dir: Path | None,
+) -> tuple[str, str] | None:
+    """Return (rel_path, content) for .vscode/tasks.json, or None if disabled.
+
+    Sentinel-merges with any existing file so user-authored tasks are preserved.
+    Raises ValueError (surfaced to stderr) if the existing JSON is malformed.
+
+    ``vscode_tasks_rel_path`` returns a fixed ``../../.vscode/tasks.json`` because every
+    adapter that overrides it puts its agents dir exactly two segments below the project
+    root. That holds for a real project and fails whenever ``--output`` points somewhere
+    else: pointed at ``examples/<name>/expected``, which is one segment below its own
+    conceptual root, ``../../`` climbs a level too far and writes ``examples/.vscode/tasks.json``
+    — outside the intended tree, as a sibling of every example project. Observed during a
+    golden-snapshot regeneration; it went unnoticed because the snapshot comparison only
+    reads ``*.md``/``*.svg`` inside ``expected/``.
+
+    The guard below derives the expected depth from the adapter's own ``get_agents_dir``
+    contract and refuses to write when ``output_dir`` is not shaped like that adapter's
+    agents dir. Refusing is the right outcome rather than guessing a corrected offset: an
+    arbitrary ``--output`` has no discoverable "conceptual project root", so any inferred
+    target would be a guess written outside the tree the operator named.
+    """
+    rel_path = adapter.vscode_tasks_rel_path()
+    if rel_path is None:
+        return None
+    if manifest.get("no_vscode_tasks"):
+        return None
+
+    if output_dir is not None:
+        expected = _agents_dir_depth(adapter)
+        actual = output_dir.resolve().parts[-len(expected):] if expected else ()
+        if actual != expected:
+            print(
+                f"  !  Skipping .vscode/tasks.json: --output is not shaped like this "
+                f"framework's agents dir ({'/'.join(expected)}), so the relative path "
+                f"{rel_path} would write outside the output tree.",
+                file=sys.stderr,
+            )
+            return None
+        # resolved = <project_root>/.vscode/tasks.json — parent.parent is the project root.
+        resolved = (output_dir / rel_path).resolve()
+        project_root = resolved.parent.parent
+        existing_path: Path | None = resolved
+    else:
+        project_root = None
+        existing_path = None
+
+    commands = vscode_tasks.discover_project_commands(project_root) if project_root is not None else []
+    content = vscode_tasks.render_tasks_json(commands)
+
+    if existing_path is not None:
+        try:
+            content = vscode_tasks.sentinel_merge(existing_path, content)
+        except ValueError as exc:
+            print(f"  !  {exc}", file=sys.stderr)
+            return None
+
+    return (rel_path, content)
+
+
+def _build_final_rendered(
+    manifest: dict[str, Any],
+    adapter: CopilotVSCodeAdapter | CopilotCLIAdapter | ClaudeAdapter | GooseAdapter | AgentsMdAdapter,
+    project_name: str,
+    *,
+    output_dir: Path | None = None,
+) -> list[tuple[str, str]]:
+    """Render templates and apply framework post-processing.
+
+    Returns a list of (relative_path, content) pairs including
+    runtime-handoffs (when the adapter uses manifest delivery) and the
+    pipeline graph. This is the shared rendering step used by the generate
+    path, ``--update``, and ``--check``; ``--check`` uses the result for
+    content comparison only and does not write to disk.
+    """
+    from agentteams import graph as _graph
+
+    rendered = render.render_all(manifest, templates_dir=TEMPLATES_DIR)
+    final: list[tuple[str, str]] = []
+    runtime_handoff_agents: list[dict[str, object]] = []
+    for rel_path, content in rendered:
+        file_type = _guess_file_type(rel_path)
+        if file_type == "agent":
+            slug = Path(rel_path).stem.replace(".agent", "")
+            if adapter.handoff_delivery_mode() == "manifest":
+                handoffs = adapter.extract_handoffs(content)
+                if handoffs:
+                    runtime_handoff_agents.append({"agent": slug, "handoffs": handoffs})
+            content = adapter.render_agent_file(content, slug, manifest)
+        elif file_type == "instructions":
+            content = adapter.render_instructions_file(content, manifest)
+        elif file_type == "skill":
+            # Directory-per-skill (`<slug>/SKILL.md`): the slug is the DIRECTORY
+            # name — that is also the invocable command name. Taking the file stem
+            # here would yield the literal "SKILL" and emit `name: SKILL` into every
+            # skill's front matter. Legacy flat `<slug>.md` still resolves by stem.
+            skill_path = Path(rel_path)
+            slug = skill_path.parent.name if skill_path.stem == "SKILL" else skill_path.stem
+            content = adapter.render_skill_file(content, slug, manifest)
+        elif file_type == "builder":
+            # Default hook is identity (copilot/claude keep the markdown builder);
+            # adapters with non-markdown agents (Goose) wrap it as a runnable recipe.
+            content = adapter.render_builder_file(content, manifest)
+        final_path = adapter.finalize_output_path(rel_path, file_type)
+        final.append((final_path, content))
+
+    # Framework-specific sidecar files not derived from a template
+    # (e.g. Goose's .goosehints integrator). Default is none.
+    for extra_path, extra_content in adapter.extra_output_files(manifest):
+        final.append((extra_path, extra_content))
+
+    # Centralized .vscode/tasks.json generation for frameworks that opt in.
+    tasks_result = _emit_vscode_tasks(manifest, adapter, output_dir)
+    if tasks_result is not None:
+        final.append(tasks_result)
+
+    if runtime_handoff_agents:
+        final.append((
+            "references/runtime-handoffs.json",
+            json.dumps({
+                "schema_version": "1.0",
+                "framework": adapter.framework_id,
+                "project_name": project_name,
+                "agents": runtime_handoff_agents,
+            }, indent=2) + "\n",
+        ))
+
+    # Build the topology graph from the UNION of the agent files already on disk and
+    # the freshly rendered team. Hand-authored specialists that the (often thin) build
+    # description does not enumerate live on disk but are absent from ``final``; without
+    # this union the graph under-draws the real team (e.g. 18 of 37 agents). This is the
+    # same disk roster the commit-triggered refresh (agentteams.git_hooks) builds from —
+    # the two are documented to produce an identical graph. Freshly rendered content
+    # overlays the disk copy (by basename) so updated agents contribute their new
+    # handoffs; disk-only agents are preserved. On a fresh build ``output_dir`` is empty
+    # or absent, so the union degenerates to the rendered team (unchanged behaviour).
+    from pathlib import Path as _Path
+    graph_file_map: dict[str, str] = {}
+    if output_dir is not None:
+        graph_file_map.update(_graph.load_from_disk(output_dir))
+    for _p, _c in final:
+        if _p.endswith(".agent.md"):
+            graph_file_map[_Path(_p).name] = _c
+    final.append((
+        "references/pipeline-graph.md",
+        _graph.generate_graph_document(graph_file_map, project_name=project_name),
+    ))
+    final.append((
+        "references/pipeline-graph.svg",
+        _graph.generate_graph_svg(graph_file_map, project_name=project_name),
+    ))
+    final.append((
+        "references/pipeline-handoffs.svg",
+        _graph.generate_graph_handoff_svg(graph_file_map, project_name=project_name),
+    ))
+    return final
+def _make_content_matches(
+    output_dir: Path,
+    rendered_by_path: dict[str, str],
+    security_refresh_paths: set[str],
+) -> Callable[[str], bool]:
+    """Return a predicate: does a file's disk content match its rendered content?
+
+    Files in ``security_refresh_paths`` always return False (they are
+    force-written on every ``--update``). Missing files return False.
+    The comparison mirrors what ``emit`` writes: manual-value preservation
+    followed by merge-fence normalization.
+    """
+    def _matches(path: str) -> bool:
+        if path in security_refresh_paths:
+            return False
+        rendered = rendered_by_path.get(path)
+        if rendered is None:
+            return False
+        disk_path = emit._resolve_path(output_dir, path)
+        if not disk_path.exists():
+            return False
+        disk_text = disk_path.read_text(encoding="utf-8")
+        preserved = _preserve_manual_values(disk_text, rendered)
+        effective = emit._normalize_generated_content(path, preserved)
+        effective = emit._ensure_project_notes_section(path, effective)
+        return effective == disk_text
+    return _matches
+def _stale_tool_agent_paths(
+    manifest: dict[str, Any],
+    output_dir: Path,
+    framework_id: str,
+) -> list[Path]:
+    """Return existing legacy tool-AGENT files for tools now emitted as docs.
+
+    Targets only the exact `tool-<slug>` agent file for each tool the current
+    team carries (copilot: `tool-<slug>.agent.md`; claude: `tool-<slug>.md` in
+    the agents dir) — never touches unrelated agents.
+    """
+    suffix = ".md" if framework_id in ("claude", "agents-md", "codex") else ".agent.md"
+    paths: list[Path] = []
+    for ta in manifest.get("tool_agents", []):
+        slug = ta.get("slug", "")
+        if not slug:
+            continue
+        candidate = output_dir / f"{slug}{suffix}"
+        if candidate.is_file():
+            paths.append(candidate)
+    return paths
+def _remove_stale_tool_agents(
+    manifest: dict[str, Any],
+    output_dir: Path,
+    framework_id: str,
+    *,
+    overwrite: bool,
+    dry_run: bool,
+) -> tuple[list[str], list[str]]:
+    """Migrate legacy tool-*.agent.md files (tools are now docs/skills).
+
+    Overwrite mode backs the files up then deletes them; otherwise a notice is
+    returned and the file is left in place. Returns (removed_paths, notices).
+    """
+    stale = _stale_tool_agent_paths(manifest, output_dir, framework_id)
+    if not stale:
+        return [], []
+    if dry_run:
+        for p in stale:
+            print(f"[DRY RUN] REMOVE (legacy tool agent → now a doc) {p}")
+        return [str(p) for p in stale], []
+    if not overwrite:
+        return [], [
+            f"legacy tool agent {p.name} remains on disk — {p.stem} is now a tool "
+            f"document; re-run with --overwrite to remove it."
+            for p in stale
+        ]
+    # Overwrite: back up before deleting so any hand edits are recoverable.
+    rels: list[str] = []
+    for p in stale:
+        try:
+            rels.append(str(p.relative_to(output_dir)))
+        except ValueError:
+            rels.append(p.name)
+    try:
+        emit.backup_output_dir(
+            output_dir,
+            files_to_backup=rels,
+            reason="stale-tool-agent-removal",
+            framework=framework_id,
+        )
+    except OSError as exc:  # CH-24: backup I/O is best-effort; never block the migration
+        print(f"  !  stale tool-agent backup failed: {exc}", file=sys.stderr)
+    removed: list[str] = []
+    notices: list[str] = []
+    for p in stale:
+        try:
+            p.unlink()
+            removed.append(str(p))
+        except OSError as exc:
+            notices.append(f"could not remove legacy tool agent {p}: {exc}")
+    return removed, notices
+def _guess_file_type(rel_path: str) -> str:
+    lower = rel_path.lower()
+    if "copilot-instructions" in lower or rel_path.endswith("/CLAUDE.md") or rel_path == "../CLAUDE.md":
+        return "instructions"
+    if "SETUP-REQUIRED" in rel_path:
+        return "setup-required"
+    if "team-builder" in rel_path:
+        return "builder"
+    if rel_path.startswith("../skills/") or "/skills/" in rel_path:
+        return "skill"
+    if rel_path.startswith("references/") or "/references/" in rel_path:
+        return "reference"
+    return "agent"
+_MANUAL_RE = re.compile(r"\{MANUAL:([A-Z][A-Z0-9_]*)\}")
+def _preserve_manual_values(existing_content: str, new_content: str) -> str:
+    """Carry forward manually-filled {MANUAL:*} values from existing files.
+
+    Scans the existing file for any {MANUAL:NAME} tokens that have been
+    replaced with actual values, and applies those same replacements to
+    the newly rendered content.
+
+    Args:
+        existing_content: Content of the currently-deployed agent file.
+        new_content:      Freshly rendered content (may have {MANUAL:*} tokens).
+
+    Returns:
+        New content with manual values preserved from the existing file.
+    """
+    # Find all {MANUAL:*} tokens in the new content
+    manual_tokens = set(_MANUAL_RE.findall(new_content))
+    if not manual_tokens:
+        return new_content
+
+    # For each token, check if the existing file has a non-placeholder value
+    # at the same location. We match by looking for the line context.
+    result = new_content
+    for token_name in manual_tokens:
+        placeholder = f"{{MANUAL:{token_name}}}"
+        # If the existing file still has the placeholder, nothing to preserve
+        if placeholder in existing_content:
+            continue
+        # The existing file had this token resolved — find what it was replaced with.
+        # Strategy: find lines in existing that would have contained this token,
+        # by looking for the surrounding text pattern in the template.
+        resolved_value = _extract_resolved_value(existing_content, new_content, placeholder)
+        if resolved_value is not None:
+            result = result.replace(placeholder, resolved_value)
+
+    return result
+def _extract_resolved_value(existing: str, new: str, placeholder: str) -> str | None:
+    """Extract the value that replaced a placeholder in an existing file.
+
+    Finds the line in new content containing the placeholder, builds a regex
+    from the surrounding text, and matches it against the existing content.
+
+    Args:
+        existing:    Content of the existing file.
+        new:         New template content with placeholder.
+        placeholder: The {MANUAL:*} token to look up.
+
+    Returns:
+        The resolved value string, or None if it cannot be determined.
+    """
+    for new_line in new.splitlines():
+        if placeholder not in new_line:
+            continue
+        # Build a pattern: escape everything except the placeholder
+        parts = new_line.split(placeholder)
+        if len(parts) != 2:
+            continue  # Multiple occurrences on same line — skip for safety
+        prefix = re.escape(parts[0].strip())
+        suffix = re.escape(parts[1].strip())
+        if not prefix and not suffix:
+            continue
+        pattern = prefix + r"(.+?)" + suffix if suffix else prefix + r"(.+)"
+        try:
+            match = re.search(pattern, existing)
+        except re.error:
+            continue
+        if match:
+            return match.group(1).strip()
+    return None

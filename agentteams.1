@@ -1,0 +1,426 @@
+.TH AGENTTEAMS 1 "Generated" "agentteams" "User Commands"
+.SH NAME
+agentteams \- Generate a complete agent team for any project.
+.SH SYNOPSIS
+.B agentteams [--description PATH] [--project PATH] [--framework NAME] [--output DIR] [--dry-run] [--json] [--overwrite] [--merge] [--yes] [--no-scan] [--cost-routing] [--update] [--prune] [--materialize-native] [--adopt-orphans] [--check] [--refresh-index] [--query-index TEXT] [--query-k N] [--query-strategy QUERY_STRATEGY] [--refresh-code-index] [--query-code TEXT] [--code-query-k N] [--code-query-strategy CODE_QUERY_STRATEGY] [--code-kind CODE_KIND] [--fail-on-legacy-skip] [--no-vscode-tasks] [--refresh-graph] [--refresh-architecture] [--install-git-hooks] [--no-git-hooks] [--code-index-hook] [--no-add-fence-markers] [--scan-security] [--check-budget] [--check-rank] [--check-rank-strict] [--check-wiring] [--self] [--allow-foreign-output] [--allow-external-self-output] [--post-audit] [--auto-correct] [--enrich] [--strict-manual-placeholders] [--no-strict-manual-placeholders] [--security-offline] [--security-max-items N] [--security-no-nvd] [--migrate] [--convert-from DIR] [--interop-from DIR] [--interop-source-framework INTEROP_SOURCE_FRAMEWORK] [--interop-mode INTEROP_MODE] [--bridge-from DIR] [--bridge-source-framework BRIDGE_SOURCE_FRAMEWORK] [--pin-templates] [--reconcile-front-matter] [--reconcile-apply] [--absorb-from DIR] [--absorb-source-framework ABSORB_SOURCE_FRAMEWORK] [--absorb-apply] [--absorb-canonical-dir DIR] [--bridge-check] [--bridge-refresh] [--bridge-merge] [--bridge-no-skills] [--recipe-check] [--revert-migration] [--version] [--no-backup] [--shrink-policy SHRINK_POLICY] [--list-backups] [--restore-backup TIMESTAMP] [--add-fence-markers PATH] [--in-place] [--target-host-features TOKENS] [--allow-unenforced-confinement] [--allow-fallback-fail-open] [--capture-baseline PATH] [--baseline-label LABEL] [--check-baseline PATH] [--verify-waivers] [--verify-grants] [--issue-grant SPEC.json] [--redteam] [--redteam-probes MODULE] [--redteam-report DIR] [--redteam-freshness-check] [--accept-probe-baseline] [--write-integrity-manifest] [--verify-integrity] [--verify-backup TIMESTAMP] [--stale-check] [--stale-remediate] [--stale-no-git] [--stale-restore TS] [--prune-backups KEEP] [--keep-within-days DAYS] [--backup-mirror DIR] [--fleet DIR] [--fleet-frameworks FLEET_FRAMEWORKS] [--fleet-report DIR] [--fleet-allow-no-verify] [--sync-init] [--pin FRAMEWORK] [--sync] [--sync-since COMMIT] [--frameworks FW1,FW2,...] [--goose-source NAME] [--goose-model ID] [--goose-show] [--goose-config PATH] [--package-team SOURCE_DIR] [--package-source-framework NAME]
+.SH DESCRIPTION
+.PP
+Generate a complete agent team for any project.
+.PP
+Given a project description file (.json or .md), agentteams analyzes the project goal, selects the right 4\-tier agent team, renders all agent files from templates, and writes them to the target project's .github/agents/ directory.
+.PP
+The generated team includes an orchestrator, eleven governance agents, domain agents appropriate for the deliverable type, and one workstream expert per project component.
+.SH OPTIONS
+.TP
+.B \-\-description, \-d PATH
+Project description file (.json or .md). Required unless \-\-self is used.
+.TP
+.B \-\-project, \-p PATH
+Project directory to scan and use as base (overrides existing_project_path in description)
+.TP
+.B \-\-framework, \-f NAME
+Target framework: copilot\-vscode, copilot\-cli, claude, goose, agents\-md, codex (default: copilot\-vscode). 'canonical' is the durable on\-disk canonical format (interop\-only, pair with \-\-interop\-from; not a rendering target). 'generic' emits only framework\-agnostic bridge artifacts (bridge\-only, pair with \-\-bridge\-from; no native consumer entry files).
+.TP
+.B \-\-output, \-o DIR
+Output directory for agent files. Default: <project>/.github/agents/ (copilot\-vscode, copilot\-cli), <project>/.claude/agents/ (claude), <project>/.goose/recipes/ (goose), <project>/.agents/ (agents\-md; team brief also written to repo\-root AGENTS.md). With \-\-package\-team: the destination .zip FILE path, not a directory (default: ./team\-package.zip).
+.TP
+.B \-\-dry\-run
+Show what would be generated without writing files
+.TP
+.B \-\-json
+With \-\-dry\-run: emit the per\-file action plan as a single JSON document on stdout (no\-op without \-\-dry\-run).
+.TP
+.B \-\-overwrite
+Overwrite existing agent files unconditionally (full\-file replacement). Use \-\-merge instead to preserve user\-authored content in fenced files. With \-\-package\-team: replace an existing output zip file instead of refusing to run.
+.TP
+.B \-\-merge
+Update only template\-fenced regions in existing agent files, preserving all user\-authored content outside fence markers. Skips legacy files (no fence markers) with a warning.
+.TP
+.B \-\-yes, \-y
+Non\-interactive: answer yes to all prompts
+.TP
+.B \-\-no\-scan
+Disable project directory scanning
+.TP
+.B \-\-cost\-routing
+OFF by default. When set, emit references/model\-routing.json — a framework\-neutral per\-agent model\-tier contract (governance agents \-> 'cheap', producers/experts \-> 'primary'). Generated agent files are unchanged either way; this only adds the opt\-in contract artifact.
+.TP
+.B \-\-update
+Re\-render drifted files and emit new agents added to the taxonomy. Default behavior merges only template\-fenced regions, preserving all user\-authored content outside fence markers (same as \-\-update \-\-merge). Use \-\-update \-\-overwrite to fully re\-render existing files, replacing user\-authored content (requires security clearance). Preserves manually\-filled \\(lCMANUAL:*\\(rC values from existing files. Removed agents are reported but not deleted (use \-\-prune to remove them).
+.TP
+.B \-\-prune
+Used with \-\-update: also delete agent files that are no longer part of the team.
+.TP
+.B \-\-materialize\-native
+Used with \-\-update against a BRIDGE target (a .claude/ etc. that bridges to a canonical framework elsewhere): opt in to generating a full NATIVE team over the bridge. Without this flag, \-\-update on a detected bridge fails closed with guidance rather than silently materializing a native team (D3). Detection uses a structured bridge marker (references/bridges/<source>\-to\-<framework>/bridge\-manifest.json for the target framework, or an AGENTTEAMS\-BRIDGE HTML\-comment fence in an entry file), never a substring match on agent bodies.
+.TP
+.B \-\-adopt\-orphans
+Register pre\-existing agent files that the generated taxonomy does not produce (e.g. bespoke custom agents) into the team roster — the orchestrator's handoff list and domain routing — WITHOUT generating or overwriting their files. The opposite of \-\-prune: integrate orphans instead of removing them. Requires the orchestrator to be (re)rendered, so use with \-\-overwrite or \-\-migrate (under \-\-merge the orchestrator front matter is preserved and adoption would not surface).
+.TP
+.B \-\-check
+Check for template drift and structural changes without writing any files (exit code 1 if drift or structural changes are detected)
+.TP
+.B \-\-refresh\-index
+Rebuild references/memory\-index.json only (no template emit/update). Useful after editing work summaries or docs.
+.TP
+.B \-\-query\-index TEXT
+Query references/memory\-index.json and print ranked hits. Requires a pre\-existing index in the output directory.
+.TP
+.B \-\-query\-k N
+Number of ranked results to return with \-\-query\-index (default: 5).
+.TP
+.B \-\-query\-strategy {lexical,vector}
+Query strategy for \-\-query\-index: 'lexical' (BM25, default) or 'vector' (cosine similarity, better for semantic/thematic matching).
+.TP
+.B \-\-refresh\-code\-index
+Rebuild the code & API index only (references/code\-index/, a gitignored local cache) and exit. Indexes local scripts (and, in later phases, the external API modules/docs they use). Useful after editing scripts or bumping dependencies.
+.TP
+.B \-\-query\-code TEXT
+Query the code & API index and print ranked hits. Auto\-refreshes a stale local partition first. Requires a pre\-existing cache (run \-\-refresh\-code\-index or \-\-update once).
+.TP
+.B \-\-code\-query\-k N
+Number of ranked results to return with \-\-query\-code (default: 5).
+.TP
+.B \-\-code\-query\-strategy {lexical,vector}
+Query strategy for \-\-query\-code: 'lexical' (BM25, default — better for identifier/keyword matching) or 'vector' (cosine similarity).
+.TP
+.B \-\-code\-kind {local,api,doc,all}
+Filter \-\-query\-code by source kind: 'local' (repository scripts), 'api' (external API modules), 'doc' (API documentation), or 'all' (default).
+.TP
+.B \-\-fail\-on\-legacy\-skip
+Exit with non\-zero status if \-\-merge skipped any files due to missing fence markers (legacy files). Use in CI to enforce that template updates always propagate to downstream repositories.
+.TP
+.B \-\-no\-vscode\-tasks
+Suppress generation of .vscode/tasks.json. By default, agentteams emits a tasks.json at the project root containing discovered project commands (npm scripts, Makefile PHONY targets, etc.) and agentteams meta\-tasks. Pass this flag for repositories that manage tasks.json manually.
+.TP
+.B \-\-refresh\-graph
+Standalone: regenerate references/pipeline\-graph.md from the agent files on disk (.github/agents/ or .claude/agents/) and exit. Writes only when the topology changed. Offline, no \-\-description needed. This is what the installed pre\-commit hook calls; resolve the target tree from \-\-output/\-\-project (default: current directory).
+.TP
+.B \-\-refresh\-architecture
+Standalone: regenerate references/architecture\-graph.md — a module\-dependency map of the repository's own Python package (auto\-detected) built from its import statements — and exit. Writes only when the module graph changed. Offline, no \-\-description needed. Refreshed by the same pre\-commit hook on any staged .py change.
+.TP
+.B \-\-install\-git\-hooks
+Standalone: install (or sentinel\-merge) a pre\-commit hook that refreshes references/pipeline\-graph.md whenever agent files are part of a commit, then exit. Idempotent; preserves any pre\-existing hook body. Target repo resolved from \-\-output/\-\-project (default: CWD).
+.TP
+.B \-\-no\-git\-hooks
+Opt OUT of the default behaviour where a successful generate/update auto\-installs the pipeline\-graph pre\-commit hook into the target git repository. Pass this flag for repositories that manage git hooks manually or run in environments where hooks are undesirable.
+.TP
+.B \-\-code\-index\-hook
+Opt IN to a pre\-commit warm\-up that refreshes the code & API index cache when scripts or dependency manifests are committed. The cache is gitignored, so this clause never stages anything (unlike the graph refreshes). Off by default: \-\-query\-code already rebuilds a stale partition on demand. Applies to \-\-install\-git\-hooks and the auto\-install on generate/update.
+.TP
+.B \-\-no\-add\-fence\-markers
+Opt OUT of the default behaviour where \-\-update \-\-merge (with \-\-yes) auto\-retrofits AGENTTEAMS `content` fence markers onto legacy (unfenced) files so their template region becomes mergeable instead of being skipped. Each retrofit is backed up first and the shrink\-guard still suppresses material template shrinks, so the legacy body is recoverable. Pass this flag to keep the conservative skip\-legacy behaviour (distinct from the standalone per\-file `\-\-add\-fence\-markers PATH` retrofit).
+.TP
+.B \-\-scan\-security
+Scan generated agent files for security issues (PII, credentials, unresolved placeholders)
+.TP
+.B \-\-check\-budget
+Audit live .agent.md files for token\-budget overrun and prompt\-cache prefix volatility. Read\-only. Exits 1 on fail\-class findings; 0 on warn\-class only. Routes remediation to @agent\-refactor.
+.TP
+.B \-\-check\-rank
+AP\-2: audit live agent files for rank\-conformance — flag any agent whose declared tools exceed what its taxonomy rank permits (C\-3 capability surface vs. rank ceiling + recorded per\-agent overrides). Read\-only, warn\-only: always exits 0. Routes real over\-grants to @security.
+.TP
+.B \-\-check\-rank\-strict
+AP\-2 blocking variant of \-\-check\-rank: exits non\-zero on any rank over\-grant (opt\-in CI gate; implies \-\-check\-rank).
+.TP
+.B \-\-check\-wiring
+P1\-3: verify an emitted workspace\-confinement sandbox block was actually merged into the live .claude/settings.json (it is inert until merged). Read\-only, output\-only; exits non\-zero when a confinement was emitted but is not live.
+.TP
+.B \-\-self
+Operate on the module's own agent team using .github/agents/_build\-description.json
+.TP
+.B \-\-allow\-foreign\-output
+Permit a relative \-\-output that resolves onto a non\-empty, git\-tracked directory with no sign of being an agentteams\-generated tree. Without this the run refuses: a relative path resolves against the current working directory, which is how a scratch render once overwrote a real agent tree.
+.TP
+.B \-\-allow\-external\-self\-output
+Permit \-\-self to write self\-maintenance artifacts to an \-\-output path outside the AgentTeamsModule source tree. Required to prevent accidental writes into consumer repositories.
+.TP
+.B \-\-post\-audit
+Run a post\-generation audit after emit. Performs static checks (unresolved placeholders, YAML integrity, required\-agent coverage) and, if the standalone `copilot` CLI is available and authenticated, an AI\-powered conflict and presupposition review via GitHub Models (Auto model selection).
+.TP
+.B \-\-auto\-correct
+After \-\-post\-audit finds issues, invoke the standalone `copilot` CLI in non\-interactive mode to repair generated team files, then rerun the audit.
+.TP
+.B \-\-enrich
+After generating the team, scan for default template elements (unresolved \\(lCMANUAL:*\\(rC placeholders, underdeveloped sections, incomplete tool metadata) and attempt context\-aware auto\-enrichment. Exports a defaults\-audit.csv to the references/ directory. Combine with \-\-post\-audit to also run AI\-powered enrichment.
+.TP
+.B \-\-strict\-manual\-placeholders
+Preserve unresolved \\(lCMANUAL:*\\(rC placeholder tokens for core governance fields instead of auto\-replacing them with explicit N/A defaults. Enabled by default in \-\-self mode.
+.TP
+.B \-\-no\-strict\-manual\-placeholders
+Disable strict MANUAL placeholder preservation and apply usability defaults for optional governance placeholders.
+.TP
+.B \-\-security\-offline
+Use cached security vulnerability snapshot only (no network fetch) when rendering security intelligence references.
+.TP
+.B \-\-security\-max\-items N
+Maximum number of current vulnerabilities to include in generated security references (default: 15)
+.TP
+.B \-\-security\-no\-nvd
+Skip NVD CVSS enrichment (avoids ~7 s per CVE rate\-limit sleep). CISA KEV + EPSS data are still fetched.
+.TP
+.B \-\-migrate
+One\-step legacy fencing migration. Tags the current git state as 'pre\-fencing\-snapshot', then runs \-\-overwrite to regenerate all agent files with fenced templates. Prints a quality\-audit checklist on completion. Use \-\-revert\-migration to undo.
+.TP
+.B \-\-convert\-from DIR
+Convert an existing agent team from DIR to the target \-\-framework. Reads each agent file, preserves its prose body, and re\-wraps it with the target framework's front matter. Does not require \-\-description. Use \-\-output to specify the destination agents directory.
+.TP
+.B \-\-interop\-from DIR
+Run cross\-framework interop pipeline from an existing team directory. Uses Canonical Agent Interface (CAI) normalization before writing target output.
+.TP
+.B \-\-interop\-source\-framework {copilot\-vscode,copilot\-cli,claude,goose,agents\-md,codex,canonical}
+Optional source framework override for \-\-interop\-from (auto\-detected when omitted). 'canonical' reads an exploded canonical directory (team.cai.json + agents/ + skills/).
+.TP
+.B \-\-interop\-mode {direct,bundle}
+Interop mode: direct conversion only, or bundle (conversion + interop artifacts).
+.TP
+.B \-\-bridge\-from DIR
+Generate a lightweight interface bridge from an existing source team directory without regenerating source agent documentation.
+.TP
+.B \-\-bridge\-source\-framework {copilot\-vscode,copilot\-cli,claude,goose,canonical}
+Optional source framework override for \-\-bridge\-from (auto\-detected when omitted). 'canonical' sources from a durable canonical directory (team.cai.json + agents/*.md) instead of a native framework's files.
+.TP
+.B \-\-pin\-templates
+Record the installed template digests this project trusts, in .agentteams/template\-pins.json, and commit that file. The ONLY thing that writes the pin: every later run compares against it and reports a mismatch, but never updates it — a pin that follows what it checks records nothing.
+.TP
+.B \-\-reconcile\-front\-matter
+Report where a deployed team's YAML front matter diverges from its templates, and change nothing. Front matter cannot be fenced, so an edited file keeps its own values and a template's capability change stops there silently; this makes that visible without a full update run.
+.TP
+.B \-\-reconcile\-apply
+With \-\-reconcile\-front\-matter, take the template's value for each diverging key. Never implied by the report: `allowed\-tools` is a capability grant and widening one is a privileged change, so it requires saying so explicitly.
+.TP
+.B \-\-absorb\-from DIR
+Absorb native framework edits back into the canonical baseline. Reads the native deployment, compares against canonical and the last sync baseline using a three\-way classifier, and prints a report. Default behavior writes nothing to canonical; pass \-\-absorb\-apply to write clean native\-moved changes. Capability\-bearing fields are NEVER auto\-applied (§6.1).
+.TP
+.B \-\-absorb\-source\-framework {copilot\-vscode,copilot\-cli,claude,goose,agents\-md,codex}
+Source framework for \-\-absorb\-from (auto\-detected when omitted). Any registered framework is accepted.
+.TP
+.B \-\-absorb\-apply
+With \-\-absorb\-from, write classified native\-moved\-clean changes into canonical. Never implied by the report: capability\-bearing fields (tools, model, agents, capabilities, raw_front_matter with capability keys) are always routed to human review regardless of classification cleanliness (§6.1).
+.TP
+.B \-\-absorb\-canonical\-dir DIR
+Canonical directory to absorb into (defaults to .agentteams/canonical/ relative to the native source's project root).
+.TP
+.B \-\-bridge\-check
+Check bridge freshness against source files without regenerating bridge artifacts.
+.TP
+.B \-\-bridge\-refresh
+Refresh bridge artifacts AND overwrite target\-framework entry files (e.g. CLAUDE.md, .claude/*, AGENTS.md, .goosehints). Destructive at the target — note AGENTS.md is a SHARED multi\-tool file; use \-\-bridge\-merge for non\-destructive updates.
+.TP
+.B \-\-bridge\-merge
+Non\-destructive update: regenerate bridge\-internal artifacts, and for target\-framework entry files only re\-render content inside <!\-\- AGENTTEAMS\-BRIDGE:BEGIN ... \-\-> fences. Files lacking any bridge fence are skipped with notices in bridge\-merge.report.md. First\-time consumers should use \-\-bridge\-refresh.
+.TP
+.B \-\-bridge\-no\-skills
+Suppress emission of .claude/skills/recall/SKILL.md (Claude target only). The recall skill wraps `agentteams \-\-query\-index` for in\-session memory\-index retrieval; disable if your team manages skills separately.
+.TP
+.B \-\-recipe\-check
+Validate generated Goose recipe YAML files in the \-\-output directory (or .goose/recipes/ by default). Checks: version string, no model: key, non\-empty instructions, sub_recipe path resolution. Writes recipe\-check.report.md. Requires \-\-framework goose.
+.TP
+.B \-\-revert\-migration
+Undo a previous \-\-migrate run. Runs 'git reset \-\-hard pre\-fencing\-snapshot' in the project directory and deletes the 'pre\-fencing\-snapshot' tag. Requires the project directory to be a git repository with that tag present.
+.TP
+.B \-\-version
+show program's version number and exit
+.TP
+.B \-\-no\-backup
+Skip automatic backup of existing agent files before any write operation. Not recommended for interactive use; intended for CI/scripted pipelines where an external snapshot mechanism is already in place.
+.TP
+.B \-\-shrink\-policy {preserve,warn,halt,allow}
+Behaviour when a fenced\-region merge would lose concrete refs. 'preserve' (default) keeps the existing enriched body for that fence and still updates non\-shrinking fences (respectful, non\-destructive); 'warn' writes the smaller body and saves a .lost.<sid>.md recovery sidecar; 'halt' refuses the whole\-file write and lists the blocked file; 'allow' writes silently. Plan: references/plans/T2\-D5\-shrink\-policy\-2026\-05\-25.plan.md
+.TP
+.B \-\-list\-backups
+List available backups for the target output directory and exit.
+.TP
+.B \-\-restore\-backup TIMESTAMP
+Restore a previously created backup into the output directory. Pass the timestamp label shown by \-\-list\-backups, or 'latest' to restore the most recent backup.
+.TP
+.B \-\-add\-fence\-markers PATH
+Retrofit canonical AGENTTEAMS:BEGIN/END fence markers around PATH's existing body so it becomes eligible for future merge\-mode \-\-update runs. Default mode writes a non\-destructive sidecar <name>.fenced.md; pair with \-\-in\-place to rewrite PATH directly (requires \-\-yes; creates a timestamped backup first). Idempotent on already\-fenced files.
+.TP
+.B \-\-in\-place
+With \-\-add\-fence\-markers: rewrite the target file directly instead of producing a sidecar. Requires \-\-yes; a timestamped backup is written under .agentteams\-backups/ before the rewrite.
+.TP
+.B \-\-target\-host\-features TOKENS
+Comma\-separated host\-feature subselectors gating opt\-in emission. Tokens are <ns>:<feature>; ns is one of claude, copilot\-vscode, copilot\-cli, bridge:copilot\-vscode\-to\-claude, etc. Examples: 'bridge:copilot\-vscode\-to\-claude:subagents,bridge:copilot\-vscode\-to\-claude:hooks'. Default emission is unchanged when omitted.
+.TP
+.B \-\-allow\-unenforced\-confinement
+Permit generation to proceed when a confined/exclusive privilege_profile is requested on a target that has no OS\-level sandbox to enforce it (e.g. Goose, Codex, Copilot, native Windows). Without this flag, generate FAILS CLOSED (non\-zero exit) rather than emit a boundary that silently does not take effect; with it, the request degrades to the advisory notice.
+.TP
+.B \-\-allow\-fallback\-fail\-open
+CC\-2: keep the emitted constitutional\-gate hook fail\-OPEN (a gate crash is a harness allow) even for a confined/exclusive privilege_profile, whose default is now fail\-CLOSED (a crash emits a deny, so it cannot become a silent allow in a workspace that opted into a boundary). Use only if a buggy gate bricking the session is a worse risk than a missed block for this workspace.
+.TP
+.B \-\-capture\-baseline PATH
+Capture a deterministic SHA\-256 manifest of the output tree and write it to PATH (e.g., tests/baselines/<target>.json). Used by regression tests to detect emission drift across phases. Skips the normal generation pipeline.
+.TP
+.B \-\-baseline\-label LABEL
+Label embedded in the captured baseline manifest (default: \-\-framework value).
+.TP
+.B \-\-check\-baseline PATH
+Compare the current output tree against the baseline at PATH and exit non\-zero on any diff. Lists added/removed/changed files.
+.TP
+.B \-\-verify\-waivers
+Read\-only: report the validity (signature, expiry, use\-limit, conditions) of every security waiver in references/security\-waivers.log.csv under \-\-output/\-\-project (else CWD). Never mints or consumes a waiver. Exits non\-zero if any waiver is invalid. Requires AGENTTEAMS_WAIVER_SIGNING_KEY to verify signatures; without it, rows report as unverifiable.
+.TP
+.B \-\-verify\-grants
+Read\-only: report the validity (signature, expiry, use\-limit, approver roster) of every cross\-workspace capability grant (P2) in references/capability\-grants.log.csv under \-\-output/\-\-project (else CWD). Never consumes a grant. Exits non\-zero if any grant is invalid. Requires AGENTTEAMS_GRANT_SIGNING_KEY.
+.TP
+.B \-\-issue\-grant SPEC.json
+Mint and sign a cross\-workspace capability grant (P2) from a JSON spec (issuer_team, holder_team, target_path, permitted_ops, expires_at, max_uses, approver, ticket_id, reason_code) and append it to the HOLDER workspace's ledger under \-\-output/\-\-project (else CWD) — point it at the holder, whose generation reads the ledger. Requires AGENTTEAMS_GRANT_SIGNING_KEY and an approver on the holder's roster. The holder's sandbox allowWrite widens to the granted (write) path when the holder team is next generated/updated.
+.TP
+.B \-\-redteam
+Run the standing red\-team audit: the probe battery (phase 1), the review (phase 2), a remediation skeleton (phase 3) and the six self\-audit checks that evaluate the red team itself (phase 6). Never remediates. Exits 0 clean, 1 on a finding, 2 when the HARNESS is broken — a failed control probe, an unimportable probe module, a corpus claim that no longer matches the scanner, or a run that modified the live agent tree. Honours \-\-dry\-run.
+.TP
+.B \-\-redteam\-probes MODULE
+Dotted import path of the probe module (e.g. tests.constitutional_redteam_battery). There is deliberately no default: a consumer of this package has no such module, and a command whose default target does not exist would hand every consumer a permanently red check. Omitted, \-\-redteam runs phase 6 only and reports the probe population as unmeasured.
+.TP
+.B \-\-redteam\-report DIR
+Where to write findings.json, discoveries.md, remediation.plan.md and selfaudit.md. Defaults to the gitignored tmp/redteam/YYYY\-MM\-DD under \-\-project (else CWD).
+.TP
+.B \-\-redteam\-freshness\-check
+OPERATOR COMMAND, not part of the standing audit or any cycle phase: search for newly disclosed AI\-adversary techniques (via the optional `agentteams[research]` extra) and write candidate strings for human triage to references/redteam\-freshness\-candidates.md. Never writes to the probe corpus or the registry — measures and reports only. Requires `pip install agentteams[research]`; without it, exits 2 with a clear message. Honours \-\-dry\-run.
+.TP
+.B \-\-accept\-probe\-baseline
+Re\-record references/redteam\-probe\-baseline.json from a fresh probe run, then exit. OPERATOR COMMAND: the daily audit never does this. A probe can start passing because the control got better or because the probe got blinder, and only a reviewed diff tells those apart — so accepting a changed outcome costs one. Refused under \-\-dry\-run.
+.TP
+.B \-\-write\-integrity\-manifest
+Re\-record references/enforcement\-integrity.json from the enforcement modules on disk. Run this ONLY after an intended change to a control, then review the resulting diff — regenerating first turns the manifest into a record of whatever happens to be on disk, which is exactly what an attacker would want. The manifest's own note has named this command since it was written; the flag did not exist until a red\-team probe flagged a legitimate change and the documented recovery path turned out to be unavailable.
+.TP
+.B \-\-verify\-integrity
+Read\-only: classify every generated output file under \-\-output/\-\-project (else CWD) against the build\-log file_hashes baseline — OK / MODIFIED / TRUNCATED / MISSING / FENCE\-BROKEN. Detects silent corruption. Exits non\-zero on any TRUNCATED/MISSING/FENCE\-BROKEN; MODIFIED (a legitimate edit or drift) is advisory. Unlike \-\-update, this exit code IS the integrity gate.
+.TP
+.B \-\-verify\-backup TIMESTAMP
+Read\-only: verify a backup is restorable — its bytes match the recorded source_sha256 in _manifest.json. Defaults to the latest backup; pass a TIMESTAMP for a specific one. Exits non\-zero on any bit\-rot/tamper mismatch.
+.TP
+.B \-\-stale\-check
+Read\-only: scan \-\-output/\-\-project (else CWD) for stale agent docs and code/scripts (VCS conflict markers, broken references, git\-recency divergence, provenance\-gated generated\-file integrity). Exits non\-zero on any Tier\-1 (blocking) finding. Never edits files.
+.TP
+.B \-\-stale\-remediate
+Modifier for \-\-stale\-check: also print a guided remediation plan (suggestions only; does NOT edit files, unlike \-\-auto\-correct).
+.TP
+.B \-\-stale\-no\-git
+Modifier for \-\-stale\-check: skip the Tier\-2 git\-recency signal (hermetic/CI or non\-git targets).
+.TP
+.B \-\-stale\-restore TS
+Standalone: restore files from a \-\-stale\-remediate \-\-yes safety snapshot (.agentteams\-backups/stale\-fix\-<TS>/; default: latest). Recovery path for a revision that went wrong.
+.TP
+.B \-\-prune\-backups KEEP
+Standalone: delete old timestamped backups under \-\-output/\-\-project (else CWD) .agentteams\-backups/, keeping the newest KEEP (default 10). The single newest backup is NEVER deleted, even with KEEP 0. Combine with \-\-keep\-within\-days to also retain anything younger than N days, and \-\-dry\-run to preview. This bounds backup growth; distinct from \-\-prune (which removes stale *agents*, not backups).
+.TP
+.B \-\-keep\-within\-days DAYS
+Modifier for \-\-prune\-backups: in addition to the newest KEEP, retain any backup younger than DAYS (a backup with an unparseable timestamp is always kept, fail\-safe).
+.TP
+.B \-\-backup\-mirror DIR
+Modifier for \-\-update: after a backup is written, also copy it to DIR/<output\-slug>/<timestamp>/ (e.g. a NAS or synced folder) so the recovery net survives local disk loss. Best\-effort and non\-fatal — a mirror failure warns but never breaks the update. Overrides the AGENTTEAMS_BACKUP_MIRROR environment variable.
+.TP
+.B \-\-fleet DIR
+Update every agent\-infrastructure workspace under DIR and its subfolders with \-\-update \-\-merge. Discovers .github/agents/ and .claude/ targets, snapshots each git workspace via a commit, applies the merge, then analyses the diff. Default is a DRY\-RUN preview; pass \-\-yes to apply. Non\-destructive: merge\-only; .claude is bridge\-merged.
+.TP
+.B \-\-fleet\-frameworks {github,claude,goose,both,all}
+Which infrastructures to update per workspace (default: both). `both` = copilot\-vscode + claude (backward\-compatible). `all` = copilot\-vscode + claude + goose. `goose` = Goose workspaces only.
+.TP
+.B \-\-fleet\-report DIR
+Directory for the fleet report (default: <DIR>/.agentteams\-fleet/<run\-id>/).
+.TP
+.B \-\-fleet\-allow\-no\-verify
+Allow snapshot commits to bypass pre\-commit hooks (\-\-no\-verify / core.hooksPath=/dev/null). Off by default — hooks run normally and a warning is printed if a hook blocks the snapshot. Use this flag only when workspace hooks are known\-safe to skip (e.g., a commit\-signing hook that would reject the ephemeral internal snapshot commit).
+.TP
+.B \-\-sync\-init
+Bootstrap pinned multi\-framework sync: seed the canonical hub from the \-\-pin framework, project it to every framework in the sync set, and record per\-framework baselines. Writes .agentteams/pin.json.
+.TP
+.B \-\-pin FRAMEWORK
+The bootstrap\-pin framework for \-\-sync\-init. Seeds canonical and wins every conflict thereafter (each conflict is logged for review).
+.TP
+.B \-\-sync
+Run one on\-demand sync pass: detect frameworks changed since the last synced commit, reconcile changes to the pin (pin wins conflicts, peer capability changes are withheld and logged), project canonical to every framework, and advance the sync anchor.
+.TP
+.B \-\-sync\-since COMMIT
+Override the change\-detection anchor (default: pin's last_synced_commit).
+.TP
+.B \-\-frameworks FW1,FW2,...
+Comma\-separated sync set for \-\-sync\-init (default: every registered framework). Required whenever the default set would collide — copilot\-vscode and copilot\-cli render to the same physical '.github/agents' directory and can genuinely disagree (handoffs), so \-\-sync\-init refuses that combination; list only one of the two.
+.TP
+.B \-\-goose\-source NAME
+Switch Goose's provider in config.yaml (e.g. ollama, openrouter). Applies that source's default model unless \-\-goose\-model is given.
+.TP
+.B \-\-goose\-model ID
+Set Goose's model in config.yaml (with \-\-goose\-source: that source's model; alone: the current provider's model).
+.TP
+.B \-\-goose\-show
+Show the resolved config.yaml path, current provider/model, any masking env override, and the known sources.
+.TP
+.B \-\-goose\-config PATH
+Override the goose config.yaml path (else resolved via goose info / XDG).
+.TP
+.B \-\-package\-team SOURCE_DIR
+Package a native\-framework source team as a portable zip: a durable canonical directory (.agentteams/canonical/) plus its generic bridge, both derived from the same export — not a canonical directory itself (use \-\-bridge\-from ... \-\-bridge\-source\-framework canonical \-\-framework generic for that case).
+.TP
+.B \-\-package\-source\-framework NAME
+Optional source framework override for \-\-package\-team (auto\-detected when omitted).
+.SH EXIT STATUS
+.TP
+.B 0
+Success.
+.TP
+.B 1
+Error: validation failure, file not found, drift detected (with \fB--check\fR), security issues (with \fB--scan-security\fR), or a Tier-1 (blocking) finding (with \fB--stale-check\fR).
+.TP
+.B 2
+Baseline drift detected (with \fB--check-baseline\fR).
+.TP
+.B 3
+Reserved: remediation attempted but unresolved (with \fB--stale-check --stale-remediate\fR).
+.SH EXAMPLES
+.PP
+Generate a VS Code Copilot agent team:
+.PP
+.RS 4
+.nf
+agentteams \-\-description brief.json \-\-project /path/to/project
+.fi
+.RE
+.PP
+Generate for Copilot CLI without writing (dry run):
+.PP
+.RS 4
+.nf
+agentteams \-\-description brief.json \-\-framework copilot\-cli \-\-dry\-run
+.fi
+.RE
+.PP
+Re\-render drifted files after a template update:
+.PP
+.RS 4
+.nf
+agentteams \-\-description brief.json \-\-update
+.fi
+.RE
+.PP
+Check for drift in CI (exits 1 if stale):
+.PP
+.RS 4
+.nf
+agentteams \-\-description brief.json \-\-check
+.fi
+.RE
+.PP
+Scan generated files for security issues:
+.PP
+.RS 4
+.nf
+agentteams \-\-description brief.json \-\-scan\-security
+.fi
+.RE
+.PP
+Run post\-generation audit with AI review:
+.PP
+.RS 4
+.nf
+agentteams \-\-description brief.json \-\-post\-audit
+.fi
+.RE
+.SH SEE ALSO
+Full documentation: .UR https://jlcatonjr.github.io/agentteams/
+.UE
+.PP
+Source repository: .UR https://github.com/jlcatonjr/agentteams
+.UE

@@ -1,0 +1,187 @@
+#!/usr/bin/env bash
+set -u
+set -o pipefail
+
+ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+cd "$ROOT_DIR"
+
+# Hard scope guard: this script is for agentteams only.
+if [[ ! -f "build_team.py" || ! -d "agentteams" || "$(basename "$ROOT_DIR")" != "agentteams" ]]; then
+  echo "[CRITICAL] Refusing to run outside agentteams repository root: $ROOT_DIR" >&2
+  exit 2
+fi
+
+if ! command -v python >/dev/null 2>&1; then
+  echo "[CRITICAL] Python not found in PATH." >&2
+  exit 2
+fi
+
+noncritical_failures=0
+summary_rows=()
+run_started_at="$(date -u +"%Y-%m-%dT%H:%M:%SZ")"
+
+run_noncritical() {
+  local label="$1"
+  shift
+  echo
+  echo "==> ${label}"
+  if "$@"; then
+    echo "[OK] ${label}"
+    summary_rows+=("| ${label} | OK |")
+  else
+    local rc=$?
+    noncritical_failures=$((noncritical_failures + 1))
+    echo "[WARN] ${label} failed (exit ${rc}); continuing with best judgement." >&2
+    summary_rows+=("| ${label} | WARN (exit ${rc}) |")
+  fi
+}
+
+echo "[INFO] Daily agentteams bridge maintenance started at ${run_started_at}"
+
+SECURITY_SCRIPT="$ROOT_DIR/scripts/run_daily_security_maintenance.sh"
+if [[ -f "$SECURITY_SCRIPT" ]]; then
+  echo
+  echo "==> Security maintenance"
+  if ! bash "$SECURITY_SCRIPT"; then
+    rc=$?
+    echo "[CRITICAL] Security maintenance failed (exit ${rc}); stopping bridge maintenance." >&2
+    exit "$rc"
+  fi
+  echo "[OK] Security maintenance"
+  summary_rows+=("| Security maintenance | OK |")
+else
+  noncritical_failures=$((noncritical_failures + 1))
+  echo "[WARN] Security maintenance script missing: $SECURITY_SCRIPT" >&2
+  summary_rows+=("| Security maintenance | WARN (missing script) |")
+fi
+
+RESEARCH_SCRIPT="$ROOT_DIR/scripts/research_claude_code_docs.py"
+if [[ -f "$RESEARCH_SCRIPT" ]]; then
+  research_flags=()
+  if [[ -n "${AGENTTEAMS_RESEARCH_OFFLINE:-}" ]]; then
+    research_flags+=("--offline")
+  fi
+  run_noncritical \
+    "Upstream research: Claude Code sub-agents" \
+    python "$RESEARCH_SCRIPT" "${research_flags[@]}"
+
+  run_noncritical \
+    "Module-core update proposal (advisory)" \
+    python "$RESEARCH_SCRIPT" --propose
+
+  # 3.1 + 3.4 from the 2026-05-27 efficiency review: per-agent token-budget
+  # and prompt-cache prefix lint. Advisory only; remediation routes to
+  # @agent-refactor per the constitutional gate. Run on self-team so the
+  # daily-pipeline tracks our own agent-file efficiency drift.
+  run_noncritical \
+    "Self-team agent-budget audit (advisory)" \
+    python build_team.py --self --yes --check-budget --security-offline --security-no-nvd
+
+  DIGEST_SCRIPT="$ROOT_DIR/scripts/daily_pipeline_digest.py"
+  if [[ -f "$DIGEST_SCRIPT" ]]; then
+    run_noncritical \
+      "Daily-pipeline quality digest" \
+      python "$DIGEST_SCRIPT"
+  fi
+else
+  noncritical_failures=$((noncritical_failures + 1))
+  echo "[WARN] Upstream research script missing: $RESEARCH_SCRIPT" >&2
+  summary_rows+=("| Upstream research: Claude Code sub-agents | WARN (missing script) |")
+fi
+
+SOURCE_DIR="$ROOT_DIR/.github/agents"
+FALLBACK_SOURCE_DIR="$ROOT_DIR/examples/project-repositories/expected"
+OUTPUT_ROOT="$ROOT_DIR"
+
+if [[ ! -d "$SOURCE_DIR" ]]; then
+  if [[ -d "$FALLBACK_SOURCE_DIR" ]]; then
+    echo "[WARN] Primary source bridge directory missing; using fallback: $FALLBACK_SOURCE_DIR" >&2
+    SOURCE_DIR="$FALLBACK_SOURCE_DIR"
+  else
+    echo "[CRITICAL] Source bridge directory not found: $SOURCE_DIR" >&2
+    echo "[CRITICAL] Fallback source bridge directory not found: $FALLBACK_SOURCE_DIR" >&2
+    exit 2
+  fi
+fi
+
+if ! compgen -G "$SOURCE_DIR/*.agent.md" >/dev/null; then
+  echo "[CRITICAL] Source bridge directory has no .agent.md files: $SOURCE_DIR" >&2
+  exit 2
+fi
+
+targets=("copilot-cli" "claude" "goose")
+
+# Use --bridge-merge, NOT --bridge-refresh: OUTPUT_ROOT is the agentteams repo root,
+# whose CLAUDE.md is hand-authored and carries no AGENTTEAMS-BRIDGE fences. Per the
+# binding references/bridge-refresh-safety.md invariant, --bridge-refresh would
+# unconditionally overwrite that file; --bridge-merge refreshes only fenced (managed)
+# regions and preserves the unfenced hand-authored entry file.
+#
+# The goose target writes the SHARED, multi-tool repo-root AGENTS.md + .goosehints
+# (also read by Cursor/Codex/Cline). Under --bridge-merge these are re-rendered
+# fenced-region-only (AGENTTEAMS-BRIDGE markers), so the daily run never clobbers
+# another tool's AGENTS.md content. NEVER use --bridge-refresh for the goose target
+# (it would overwrite the whole shared file). Both files are already fenced in this
+# repo, so no first-create occurs. See references/bridge-refresh-safety.md §"Goose target".
+for target in "${targets[@]}"; do
+  run_noncritical \
+    "Bridge merge: copilot-vscode -> ${target}" \
+    python build_team.py --bridge-from "$SOURCE_DIR" --framework "$target" --output "$OUTPUT_ROOT" --bridge-merge
+
+  run_noncritical \
+    "Bridge check: copilot-vscode -> ${target}" \
+    python build_team.py --bridge-from "$SOURCE_DIR" --framework "$target" --output "$OUTPUT_ROOT" --bridge-check
+done
+
+# Documentation freshness — a THIRD execution path for the watcher, independent of
+# .github/workflows/docs-freshness-watch.yml and its watchdog.
+#
+# This is not duplication for its own sake. The watcher's own workflow can be disabled,
+# deleted, or have its cron dropped; this driver runs from a different workflow file on a
+# different cron, so the verdict still reaches the daily summary in that case. The detector
+# is stateless and idempotent, so running it from two places costs nothing and cannot
+# produce a conflicting verdict.
+#
+# run_noncritical, so a broken detector warns and never fails the maintenance run.
+run_noncritical \
+  "Documentation freshness watch" \
+  python scripts/docs_freshness_watch.py --out "$ROOT_DIR/tmp/bridge-maintenance/docs-freshness.md"
+
+echo
+if [[ "$noncritical_failures" -eq 0 ]]; then
+  echo "[INFO] Daily agentteams bridge maintenance completed successfully."
+else
+  echo "[INFO] Daily agentteams bridge maintenance completed with ${noncritical_failures} non-critical warning(s)." >&2
+fi
+
+run_finished_at="$(date -u +"%Y-%m-%dT%H:%M:%SZ")"
+echo "[INFO] Finished at ${run_finished_at}"
+
+summary_dir="$ROOT_DIR/tmp/bridge-maintenance"
+mkdir -p "$summary_dir"
+
+summary_md="$summary_dir/summary.md"
+{
+  echo "# Bridge Maintenance Summary"
+  echo
+  echo "- started_at: ${run_started_at}"
+  echo "- finished_at: ${run_finished_at}"
+  echo "- warnings: ${noncritical_failures}"
+  echo
+  echo "| Step | Result |"
+  echo "|---|---|"
+  for row in "${summary_rows[@]}"; do
+    echo "${row}"
+  done
+  echo
+} > "$summary_md"
+
+summary_json="$summary_dir/status.json"
+{
+  echo "{"
+  echo "  \"finished_at\": \"${run_finished_at}\"," 
+  echo "  \"warning_count\": ${noncritical_failures}"
+  echo "}"
+} > "$summary_json"
+
+exit 0

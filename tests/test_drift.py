@@ -1,0 +1,742 @@
+"""
+Tests for src/drift.py — template drift detection.
+"""
+
+import json
+import hashlib
+import pytest
+from pathlib import Path
+from agentteams.drift import (
+    detect_drift,
+    load_build_log,
+    DriftReport,
+    compute_structural_diff,
+    compute_manifest_fingerprint,
+    print_structural_diff_report,
+    refine_manifest_promotion,
+    StructuralDiffReport,
+)
+
+
+# ---------------------------------------------------------------------------
+# Fixtures
+# ---------------------------------------------------------------------------
+
+@pytest.fixture
+def setup_dirs(tmp_path):
+    """Create agents_dir and templates_dir with a basic template and build log."""
+    agents_dir = tmp_path / ".github" / "agents"
+    refs_dir = agents_dir / "references"
+    refs_dir.mkdir(parents=True)
+    templates_dir = tmp_path / "templates" / "universal"
+    templates_dir.mkdir(parents=True)
+
+    # Create a template
+    template_content = "# {PROJECT_NAME}\n\nTemplate content."
+    template_file = templates_dir / "orchestrator.template.md"
+    template_file.write_text(template_content, encoding="utf-8")
+
+    template_hash = hashlib.sha256(template_file.read_bytes()).hexdigest()[:16]
+
+    # Create build-log.json with template hashes
+    build_log = {
+        "schema_version": "1.1",
+        "project_name": "TestProject",
+        "framework": "copilot-vscode",
+        "project_type": "software",
+        "archetypes": ["primary-producer"],
+        "components": [],
+        "files_written": [".github/agents/orchestrator.agent.md"],
+        "manual_required": 0,
+        "template_hashes": {
+            "universal/orchestrator.template.md": template_hash,
+        },
+    }
+    (refs_dir / "build-log.json").write_text(json.dumps(build_log), encoding="utf-8")
+
+    return agents_dir, tmp_path / "templates"
+
+
+# ---------------------------------------------------------------------------
+# load_build_log
+# ---------------------------------------------------------------------------
+
+def test_load_build_log(setup_dirs):
+    agents_dir, _ = setup_dirs
+    log = load_build_log(agents_dir)
+    assert log["project_name"] == "TestProject"
+    assert "template_hashes" in log
+
+
+def test_load_build_log_missing(tmp_path):
+    with pytest.raises(FileNotFoundError, match="No build-log.json"):
+        load_build_log(tmp_path)
+
+
+def test_load_build_log_malformed(tmp_path):
+    refs = tmp_path / "references"
+    refs.mkdir()
+    (refs / "build-log.json").write_text("not json", encoding="utf-8")
+    with pytest.raises(ValueError, match="Malformed"):
+        load_build_log(tmp_path)
+
+
+# ---------------------------------------------------------------------------
+# detect_drift — no drift
+# ---------------------------------------------------------------------------
+
+def test_no_drift(setup_dirs):
+    agents_dir, templates_dir = setup_dirs
+    report = detect_drift(agents_dir, templates_dir)
+    assert not report.has_drift
+    assert len(report.unchanged) == 1
+    assert report.changed_templates == []
+
+
+# ---------------------------------------------------------------------------
+# detect_drift — template changed
+# ---------------------------------------------------------------------------
+
+def test_drift_detected_on_template_change(setup_dirs):
+    agents_dir, templates_dir = setup_dirs
+
+    # Modify the template
+    tpl = templates_dir / "universal" / "orchestrator.template.md"
+    tpl.write_text("# Modified template\n\nNew content.", encoding="utf-8")
+
+    report = detect_drift(agents_dir, templates_dir)
+    assert report.has_drift
+    assert len(report.changed_templates) == 1
+    assert report.changed_templates[0]["reason"] == "template content changed"
+
+
+# ---------------------------------------------------------------------------
+# detect_drift — template deleted
+# ---------------------------------------------------------------------------
+
+def test_drift_missing_template(setup_dirs):
+    agents_dir, templates_dir = setup_dirs
+
+    # Delete the template
+    (templates_dir / "universal" / "orchestrator.template.md").unlink()
+
+    report = detect_drift(agents_dir, templates_dir)
+    assert report.has_drift
+    assert len(report.missing_templates) == 1
+
+
+# ---------------------------------------------------------------------------
+# detect_drift — new template
+# ---------------------------------------------------------------------------
+
+def test_repo_global_new_template_not_reported_for_unselected_team(setup_dirs):
+    agents_dir, templates_dir = setup_dirs
+
+    # Add a new template
+    new_tpl = templates_dir / "universal" / "navigator.template.md"
+    new_tpl.write_text("# Navigator\n", encoding="utf-8")
+
+    report = detect_drift(agents_dir, templates_dir)
+    assert not report.has_drift  # new templates alone aren't "drift"
+    assert report.new_templates == []
+
+
+def test_new_referenced_template_detected_via_output_files_map(tmp_path):
+    agents_dir = tmp_path / ".github" / "agents"
+    refs_dir = agents_dir / "references"
+    refs_dir.mkdir(parents=True)
+    templates_dir = tmp_path / "templates" / "universal"
+    templates_dir.mkdir(parents=True)
+
+    orchestrator_tpl = templates_dir / "orchestrator.template.md"
+    orchestrator_tpl.write_text("# Orchestrator\n", encoding="utf-8")
+    navigator_tpl = templates_dir / "navigator.template.md"
+    navigator_tpl.write_text("# Navigator\n", encoding="utf-8")
+
+    orchestrator_hash = hashlib.sha256(orchestrator_tpl.read_bytes()).hexdigest()[:16]
+
+    build_log = {
+        "schema_version": "1.2",
+        "project_name": "TestProject",
+        "framework": "copilot-vscode",
+        "project_type": "software",
+        "archetypes": ["primary-producer"],
+        "components": [],
+        "files_written": [".github/agents/orchestrator.agent.md"],
+        "manual_required": 0,
+        "template_hashes": {
+            "universal/orchestrator.template.md": orchestrator_hash,
+        },
+        "output_files_map": [
+            {
+                "path": "orchestrator.agent.md",
+                "template": "universal/orchestrator.template.md",
+                "type": "agent",
+            },
+            {
+                "path": "navigator.agent.md",
+                "template": "universal/navigator.template.md",
+                "type": "agent",
+            },
+        ],
+    }
+    (refs_dir / "build-log.json").write_text(json.dumps(build_log), encoding="utf-8")
+
+    report = detect_drift(agents_dir, tmp_path / "templates")
+
+    assert not report.has_drift
+    assert report.new_templates == ["universal/navigator.template.md"]
+
+
+# ---------------------------------------------------------------------------
+# detect_drift — legacy build log (no hashes)
+# ---------------------------------------------------------------------------
+
+def test_legacy_build_log_all_drifted(setup_dirs):
+    agents_dir, templates_dir = setup_dirs
+
+    # Rewrite build log without template_hashes
+    log_path = agents_dir / "references" / "build-log.json"
+    log = json.loads(log_path.read_text())
+    del log["template_hashes"]
+    log["schema_version"] = "1.0"
+    log_path.write_text(json.dumps(log), encoding="utf-8")
+
+    report = detect_drift(agents_dir, templates_dir)
+    assert report.has_drift
+    # All templates treated as potentially drifted
+    assert len(report.changed_templates) >= 1
+
+
+# ---------------------------------------------------------------------------
+# affected_output_files
+# ---------------------------------------------------------------------------
+
+def test_affected_output_files(setup_dirs):
+    agents_dir, templates_dir = setup_dirs
+
+    # Modify template to trigger drift
+    tpl = templates_dir / "universal" / "orchestrator.template.md"
+    tpl.write_text("# Changed\n", encoding="utf-8")
+
+    report = detect_drift(agents_dir, templates_dir)
+    affected = report.affected_output_files
+    assert len(affected) == 1
+    assert "orchestrator" in affected[0]
+
+
+# ===========================================================================
+# compute_structural_diff
+# ===========================================================================
+
+def _make_log_v12(files: list[dict], template_hashes: dict, agent_slugs: list[str], manifest_fingerprint: str | None = None) -> dict:
+    """Build a minimal schema v1.2 build-log dict."""
+    return {
+        "schema_version": "1.2",
+        "project_name": "TestProject",
+        "framework": "copilot-vscode",
+        "project_type": "software",
+        "archetypes": ["primary-producer"],
+        "components": [],
+        "files_written": [f["path"] for f in files],
+        "manual_required": 0,
+        "template_hashes": template_hashes,
+        "output_files_map": files,
+        "agent_slug_list": agent_slugs,
+        "governance_agents": [],
+        "manifest_fingerprint": manifest_fingerprint,
+    }
+
+
+def _make_manifest(files: list[dict], agent_slugs: list[str], **extra: object) -> dict:
+    """Build a minimal manifest dict matching analyze.build_manifest() shape."""
+    manifest = {
+        "project_name": "TestProject",
+        "output_files": files,
+        "agent_slug_list": agent_slugs,
+    }
+    manifest.update(extra)
+    return manifest
+
+
+# ---------------------------------------------------------------------------
+# Additions
+# ---------------------------------------------------------------------------
+
+def test_structural_diff_additions(tmp_path):
+    """Files in new manifest not in old log → classified as added."""
+    old_files = [
+        {"path": "orchestrator.agent.md", "template": "universal/orchestrator.template.md", "type": "agent"},
+    ]
+    new_files = old_files + [
+        {"path": "code-hygiene.agent.md", "template": "universal/code-hygiene.template.md", "type": "agent"},
+        {"path": "references/code-hygiene-rules.reference.md", "template": "domain/code-hygiene-rules-reference.template.md", "type": "reference"},
+    ]
+    old_log = _make_log_v12(old_files, {}, ["orchestrator"])
+    manifest = _make_manifest(new_files, ["orchestrator", "code-hygiene"])
+
+    report = compute_structural_diff(old_log, manifest, tmp_path)
+
+    assert len(report.added_files) == 2
+    added_paths = {f["path"] for f in report.added_files}
+    assert "code-hygiene.agent.md" in added_paths
+    assert "references/code-hygiene-rules.reference.md" in added_paths
+    assert report.has_changes
+
+
+# ---------------------------------------------------------------------------
+# Removals
+# ---------------------------------------------------------------------------
+
+def test_structural_diff_removals(tmp_path):
+    """Files in old log not in new manifest → classified as removed."""
+    old_files = [
+        {"path": "orchestrator.agent.md", "template": "universal/orchestrator.template.md", "type": "agent"},
+        {"path": "deprecated-agent.agent.md", "template": "universal/deprecated-agent.template.md", "type": "agent"},
+    ]
+    new_files = [old_files[0]]  # deprecated removed
+    old_log = _make_log_v12(old_files, {}, ["orchestrator", "deprecated-agent"])
+    manifest = _make_manifest(new_files, ["orchestrator"])
+
+    report = compute_structural_diff(old_log, manifest, tmp_path)
+
+    assert len(report.removed_files) == 1
+    assert report.removed_files[0]["path"] == "deprecated-agent.agent.md"
+    # Removed agents change the slug list → copilot-instructions needs re-render
+    assert report.team_membership_changed
+    # Removed files are never in the write set
+    update_paths = {f["path"] for f in report.update_files}
+    assert "deprecated-agent.agent.md" not in update_paths
+
+
+# ---------------------------------------------------------------------------
+# Drifted (template hash changed)
+# ---------------------------------------------------------------------------
+
+def test_structural_diff_drifted(tmp_path):
+    """Same path, different template hash → classified as drifted."""
+    tpl_dir = tmp_path / "universal"
+    tpl_dir.mkdir(parents=True)
+    tpl_file = tpl_dir / "orchestrator.template.md"
+    tpl_file.write_text("# Updated template", encoding="utf-8")
+    current_hash = hashlib.sha256(tpl_file.read_bytes()).hexdigest()[:16]
+
+    files = [{"path": "orchestrator.agent.md", "template": "universal/orchestrator.template.md", "type": "agent"}]
+    old_log = _make_log_v12(files, {"universal/orchestrator.template.md": "aabbccdd11223344"}, ["orchestrator"])
+    manifest = _make_manifest(files, ["orchestrator"])
+
+    report = compute_structural_diff(old_log, manifest, tmp_path)
+
+    assert len(report.drifted_files) == 1
+    assert report.drifted_files[0]["_reason"] == "template content changed"
+    assert report.has_changes
+
+
+# ---------------------------------------------------------------------------
+# Unchanged
+# ---------------------------------------------------------------------------
+
+def test_structural_diff_unchanged(tmp_path):
+    """Same path, same template hash → classified as unchanged."""
+    tpl_dir = tmp_path / "universal"
+    tpl_dir.mkdir(parents=True)
+    tpl_file = tpl_dir / "orchestrator.template.md"
+    tpl_file.write_text("# Template", encoding="utf-8")
+    current_hash = hashlib.sha256(tpl_file.read_bytes()).hexdigest()[:16]
+
+    files = [{"path": "orchestrator.agent.md", "template": "universal/orchestrator.template.md", "type": "agent"}]
+    manifest = _make_manifest(files, ["orchestrator"])
+    old_log = _make_log_v12(
+        files,
+        {"universal/orchestrator.template.md": current_hash},
+        ["orchestrator"],
+        manifest_fingerprint=compute_manifest_fingerprint(manifest),
+    )
+
+    report = compute_structural_diff(old_log, manifest, tmp_path)
+
+    assert len(report.unchanged_files) == 1
+    assert report.added_files == []
+    assert report.drifted_files == []
+    assert not report.has_changes
+
+
+def test_structural_diff_manifest_change_rerenders_current_files(tmp_path):
+    """A brief-only change should promote unchanged files into the drifted set."""
+    tpl_dir = tmp_path / "universal"
+    tpl_dir.mkdir(parents=True)
+    tpl_file = tpl_dir / "orchestrator.template.md"
+    tpl_file.write_text("# Template", encoding="utf-8")
+    current_hash = hashlib.sha256(tpl_file.read_bytes()).hexdigest()[:16]
+
+    files = [{"path": "orchestrator.agent.md", "template": "universal/orchestrator.template.md", "type": "agent"}]
+    old_manifest = _make_manifest(files, ["orchestrator"], reference_db_path=None)
+    new_manifest = _make_manifest(files, ["orchestrator"], reference_db_path=".github/agents/references/project-references.bib")
+    old_log = _make_log_v12(
+        files,
+        {"universal/orchestrator.template.md": current_hash},
+        ["orchestrator"],
+        manifest_fingerprint=compute_manifest_fingerprint(old_manifest),
+    )
+
+    report = compute_structural_diff(old_log, new_manifest, tmp_path)
+
+    assert report.manifest_changed
+    assert len(report.drifted_files) == 1
+    assert report.drifted_files[0]["_reason"] == "manifest values changed"
+    assert report.unchanged_files == []
+
+
+def test_structural_diff_missing_manifest_fingerprint_promotes_files(tmp_path):
+    """Older build logs should trigger a one-time refresh when no fingerprint exists."""
+    tpl_dir = tmp_path / "universal"
+    tpl_dir.mkdir(parents=True)
+    tpl_file = tpl_dir / "orchestrator.template.md"
+    tpl_file.write_text("# Template", encoding="utf-8")
+    current_hash = hashlib.sha256(tpl_file.read_bytes()).hexdigest()[:16]
+
+    files = [{"path": "orchestrator.agent.md", "template": "universal/orchestrator.template.md", "type": "agent"}]
+    manifest = _make_manifest(files, ["orchestrator"])
+    old_log = _make_log_v12(
+        files,
+        {"universal/orchestrator.template.md": current_hash},
+        ["orchestrator"],
+        manifest_fingerprint=None,
+    )
+
+    report = compute_structural_diff(old_log, manifest, tmp_path)
+
+    assert report.manifest_changed
+    assert len(report.drifted_files) == 1
+    assert report.drifted_files[0]["_reason"] == "manifest fingerprint unavailable"
+
+
+def test_manifest_fingerprint_ignores_volatile_security_placeholders():
+    files = [{"path": "orchestrator.agent.md", "template": "universal/orchestrator.template.md", "type": "agent"}]
+    manifest_a = _make_manifest(
+        files,
+        ["orchestrator"],
+        auto_resolved_placeholders={
+            "SECURITY_DATA_GENERATED_AT": "2026-04-28T10:00:00Z",
+            "SECURITY_VULNERABILITY_WATCH_JSON": '{"generated_at":"2026-04-28T10:00:00Z"}',
+            "PROJECT_NAME": "TestProject",
+        },
+    )
+    manifest_b = _make_manifest(
+        files,
+        ["orchestrator"],
+        auto_resolved_placeholders={
+            "SECURITY_DATA_GENERATED_AT": "2026-04-28T11:00:00Z",
+            "SECURITY_VULNERABILITY_WATCH_JSON": '{"generated_at":"2026-04-28T11:00:00Z"}',
+            "PROJECT_NAME": "TestProject",
+        },
+    )
+
+    assert compute_manifest_fingerprint(manifest_a) == compute_manifest_fingerprint(manifest_b)
+
+
+# ---------------------------------------------------------------------------
+# Legacy log (no output_files_map)
+# ---------------------------------------------------------------------------
+
+def test_structural_diff_no_old_map(tmp_path):
+    """Missing output_files_map → legacy fallback, team_membership_changed=True."""
+    new_files = [
+        {"path": "orchestrator.agent.md", "template": "universal/orchestrator.template.md", "type": "agent"},
+        {"path": "code-hygiene.agent.md", "template": "universal/code-hygiene.template.md", "type": "agent"},
+    ]
+    # Legacy log: has files_written but no output_files_map
+    old_log = {
+        "schema_version": "1.1",
+        "files_written": [".github/agents/orchestrator.agent.md"],
+        "template_hashes": {},
+        "agent_slug_list": ["orchestrator"],
+    }
+    manifest = _make_manifest(new_files, ["orchestrator", "code-hygiene"])
+
+    report = compute_structural_diff(old_log, manifest, tmp_path)
+
+    assert report.legacy_log
+    assert report.team_membership_changed
+    # code-hygiene not in files_written → added
+    added_paths = {f["path"] for f in report.added_files}
+    assert "code-hygiene.agent.md" in added_paths
+
+
+# ---------------------------------------------------------------------------
+# Team membership change forces copilot-instructions re-render
+# ---------------------------------------------------------------------------
+
+def test_structural_diff_team_membership_change(tmp_path):
+    """Different agent_slug_list → copilot-instructions.md forced into drifted set."""
+    files = [
+        {"path": "orchestrator.agent.md", "template": "universal/orchestrator.template.md", "type": "agent"},
+        {"path": "../copilot-instructions.md", "template": "copilot-instructions.template.md", "type": "instructions"},
+    ]
+    old_log = _make_log_v12(files, {}, ["orchestrator"])
+    new_slugs = ["orchestrator", "code-hygiene"]
+    manifest = _make_manifest(files, new_slugs)
+
+    report = compute_structural_diff(old_log, manifest, tmp_path)
+
+    assert report.team_membership_changed
+    drifted_paths = {f["path"] for f in report.drifted_files}
+    assert "../copilot-instructions.md" in drifted_paths
+
+
+def test_structural_diff_no_membership_change(tmp_path):
+    """Same agent_slug_list → team_membership_changed is False."""
+    files = [
+        {"path": "orchestrator.agent.md", "template": "universal/orchestrator.template.md", "type": "agent"},
+    ]
+    slugs = ["orchestrator", "navigator"]
+    old_log = _make_log_v12(files, {}, slugs)
+    manifest = _make_manifest(files, slugs)
+
+    report = compute_structural_diff(old_log, manifest, tmp_path)
+
+    assert not report.team_membership_changed
+
+
+# ---------------------------------------------------------------------------
+# update_files property
+# ---------------------------------------------------------------------------
+
+def test_structural_diff_update_files_combines_added_and_drifted(tmp_path):
+    """update_files returns added + drifted entries."""
+    tpl_dir = tmp_path / "universal"
+    tpl_dir.mkdir(parents=True)
+    tpl_file = tpl_dir / "orchestrator.template.md"
+    tpl_file.write_text("# Updated", encoding="utf-8")
+
+    old_files = [
+        {"path": "orchestrator.agent.md", "template": "universal/orchestrator.template.md", "type": "agent"},
+    ]
+    new_files = old_files + [
+        {"path": "code-hygiene.agent.md", "template": "universal/code-hygiene.template.md", "type": "agent"},
+    ]
+    old_log = _make_log_v12(old_files, {"universal/orchestrator.template.md": "aabbccdd11223344"}, ["orchestrator"])
+    manifest = _make_manifest(new_files, ["orchestrator", "code-hygiene"])
+
+    report = compute_structural_diff(old_log, manifest, tmp_path)
+
+    paths = {f["path"] for f in report.update_files}
+    assert "orchestrator.agent.md" in paths      # drifted
+    assert "code-hygiene.agent.md" in paths      # added
+
+
+# ---------------------------------------------------------------------------
+# print_structural_diff_report (smoke test — no crash)
+# ---------------------------------------------------------------------------
+
+def test_print_structural_diff_report_no_changes(capsys):
+    report = StructuralDiffReport()
+    print_structural_diff_report(report)
+    out = capsys.readouterr().out
+    assert "No structural changes" in out
+
+
+def test_print_structural_diff_report_with_changes(capsys):
+    report = StructuralDiffReport()
+    report.added_files = [{"path": "code-hygiene.agent.md"}]
+    report.removed_files = [{"path": "old-agent.agent.md"}]
+    print_structural_diff_report(report)
+    out = capsys.readouterr().out
+    assert "Added" in out
+    assert "Removed" in out
+
+
+# ---------------------------------------------------------------------------
+# Defect 2 invariants: compute_structural_diff is pure/mode-independent, and a
+# stale stored manifest_fingerprint promotes ALL unchanged files to drifted.
+#
+# build_team.py calls compute_structural_diff identically for --update and
+# --update --dry-run (one call site), so pinning purity here is what
+# guarantees dry-run and a real update never diverge. The fingerprint-staleness
+# behavior is the real Defect 2 (a build-log written by an older generator /
+# differently-normalized description no longer matches the recomputed
+# fingerprint); this test documents current behavior so any change to it is a
+# conscious, reviewed decision rather than silent drift.
+# ---------------------------------------------------------------------------
+
+def test_structural_diff_is_pure_and_mode_independent(tmp_path):
+    files = [
+        {"path": "orchestrator.agent.md", "template": "universal/orchestrator.template.md", "type": "agent"},
+        {"path": "primary-producer.agent.md", "template": "universal/primary-producer.template.md", "type": "agent"},
+    ]
+    old_log = _make_log_v12(files, {}, ["orchestrator", "primary-producer"],
+                            manifest_fingerprint="deadbeefdeadbeef")
+    manifest = _make_manifest(files, ["orchestrator", "primary-producer"])
+
+    r1 = compute_structural_diff(old_log, manifest, tmp_path)
+    r2 = compute_structural_diff(old_log, manifest, tmp_path)
+
+    assert {f["path"] for f in r1.drifted_files} == {f["path"] for f in r2.drifted_files}
+    assert len(r1.drifted_files) == len(r2.drifted_files)
+    assert r1.manifest_changed == r2.manifest_changed
+
+
+def test_stale_manifest_fingerprint_promotes_all_unchanged(tmp_path):
+    files = [
+        {"path": "orchestrator.agent.md", "template": "universal/orchestrator.template.md", "type": "agent"},
+        {"path": "primary-producer.agent.md", "template": "universal/primary-producer.template.md", "type": "agent"},
+    ]
+    agents = ["orchestrator", "primary-producer"]
+
+    # Matching fingerprint → nothing promoted on manifest grounds.
+    manifest = _make_manifest(files, agents)
+    fresh_fp = compute_manifest_fingerprint(manifest)
+    matched = compute_structural_diff(
+        _make_log_v12(files, {}, agents, manifest_fingerprint=fresh_fp), manifest, tmp_path
+    )
+    assert matched.manifest_changed is False
+
+    # Stale/mismatched stored fingerprint → manifest_changed set, nothing left
+    # in unchanged, every file ends up drifted. This is the observable Defect 2
+    # behavior seen on ExampleResearchGroup (all 40 files promoted). The exact
+    # per-file _reason depends on whether template drift also fired, so the
+    # robust invariant is "manifest_changed + no survivors in unchanged".
+    stale = compute_structural_diff(
+        _make_log_v12(files, {}, agents, manifest_fingerprint="0000000000000000"),
+        manifest, tmp_path,
+    )
+    assert stale.manifest_changed is True
+    assert stale.unchanged_files == []
+    assert {f["path"] for f in stale.drifted_files} == {f["path"] for f in files}
+
+
+# ---------------------------------------------------------------------------
+# Defect 2 Option A: content-aware refinement of fingerprint-only promotions
+# ---------------------------------------------------------------------------
+
+def _fingerprint_promoted_report():
+    rep = StructuralDiffReport()
+    rep.manifest_changed = True
+    rep.drifted_files = [
+        {"path": "a.agent.md", "_reason": "manifest values changed"},
+        {"path": "b.agent.md", "_reason": "manifest values changed"},
+        {"path": "tpl.agent.md", "_reason": "template content changed"},
+    ]
+    rep.unchanged_files = []
+    return rep
+
+
+def test_refine_demotes_fingerprint_promotion_when_content_matches():
+    rep = _fingerprint_promoted_report()
+    # a matches disk, b does not.
+    refine_manifest_promotion(rep, lambda p: p == "a.agent.md")
+
+    drifted = {f["path"] for f in rep.drifted_files}
+    unchanged = {f["path"] for f in rep.unchanged_files}
+    assert "a.agent.md" in unchanged and "a.agent.md" not in drifted
+    assert "b.agent.md" in drifted          # content differs → stays
+    assert "tpl.agent.md" in drifted        # template drift → never demoted
+    # manifest_changed is telemetry; left intact
+    assert rep.manifest_changed is True
+    # demoted entry loses the manifest _reason
+    a_entry = next(f for f in rep.unchanged_files if f["path"] == "a.agent.md")
+    assert "_reason" not in a_entry
+
+
+def test_refine_never_demotes_non_manifest_reason():
+    rep = _fingerprint_promoted_report()
+    # Even if content matches, a template-drifted entry must stay drifted.
+    refine_manifest_promotion(rep, lambda p: True)
+    assert "tpl.agent.md" in {f["path"] for f in rep.drifted_files}
+    # both manifest-promoted ones demoted
+    assert {f["path"] for f in rep.unchanged_files} == {"a.agent.md", "b.agent.md"}
+
+
+def test_refine_noop_when_manifest_not_changed():
+    rep = StructuralDiffReport()
+    rep.manifest_changed = False
+    rep.drifted_files = [{"path": "x", "_reason": "manifest values changed"}]
+    refine_manifest_promotion(rep, lambda p: True)
+    # untouched because the promotion path never fired
+    assert rep.drifted_files == [{"path": "x", "_reason": "manifest values changed"}]
+    assert rep.unchanged_files == []
+
+
+def test_refine_handles_unavailable_fingerprint_reason():
+    rep = StructuralDiffReport()
+    rep.manifest_changed = True
+    rep.drifted_files = [{"path": "a", "_reason": "manifest fingerprint unavailable"}]
+    refine_manifest_promotion(rep, lambda p: True)
+    assert rep.drifted_files == []
+    assert [f["path"] for f in rep.unchanged_files] == ["a"]
+
+
+# ---------------------------------------------------------------------------
+# P0 — fingerprint algorithm versioning (Step 4)
+# ---------------------------------------------------------------------------
+
+def test_fingerprint_algo_version_pinned():
+    """Force PR review of any bump to the fingerprint algo version.
+
+    Bump this assertion only when ``compute_manifest_fingerprint`` changes
+    semantics (i.e. its output would differ for an unchanged manifest), and
+    bump ``FINGERPRINT_ALGO_VERSION`` in lock-step.
+    """
+    from agentteams.drift import FINGERPRINT_ALGO_VERSION
+    assert FINGERPRINT_ALGO_VERSION == 1
+
+
+def test_structural_diff_algo_version_bump_promotes_unchanged(tmp_path):
+    """A bumped algo version forces a one-shot re-promotion of unchanged files."""
+    from agentteams.drift import FINGERPRINT_ALGO_VERSION
+
+    # No ``template`` field on entries so they reach the manifest-fingerprint
+    # promotion path rather than getting flagged as template drift.
+    files = [{"path": "a.agent.md", "type": "agent"}]
+    agents = ["a"]
+    manifest = _make_manifest(files, agents)
+    fresh_fp = compute_manifest_fingerprint(manifest)
+
+    # Old log has the matching fingerprint but a stale algo version.
+    old_log = _make_log_v12(files, {}, agents, manifest_fingerprint=fresh_fp)
+    old_log["fingerprint_algo_version"] = FINGERPRINT_ALGO_VERSION - 1
+
+    rep = compute_structural_diff(old_log, manifest, tmp_path)
+    assert rep.manifest_changed is True
+    assert {f["path"] for f in rep.drifted_files} == {"a.agent.md"}
+    assert all(
+        f.get("_reason") == "fingerprint algo version bumped"
+        for f in rep.drifted_files
+    )
+
+
+def test_structural_diff_missing_algo_version_treated_as_legacy(tmp_path):
+    """A build-log without ``fingerprint_algo_version`` is treated as pre-version.
+
+    Pre-version logs do not trigger algo-bump promotion on their own — the
+    fingerprint comparison is what drives promotion. The first ``--update``
+    after upgrade rewrites the log with the current algo version, healing the
+    baseline.
+    """
+    files = [{"path": "a.agent.md", "type": "agent"}]
+    agents = ["a"]
+    manifest = _make_manifest(files, agents)
+    fresh_fp = compute_manifest_fingerprint(manifest)
+    old_log = _make_log_v12(files, {}, agents, manifest_fingerprint=fresh_fp)
+    # No fingerprint_algo_version key at all — legacy log.
+    assert "fingerprint_algo_version" not in old_log
+
+    rep = compute_structural_diff(old_log, manifest, tmp_path)
+    # Same fingerprint, absent algo version → no manifest_changed, no promotion.
+    assert rep.manifest_changed is False
+    assert rep.unchanged_files
+    assert rep.drifted_files == []
+
+
+def test_refine_demotes_algo_version_bump_promotion():
+    """Algo-version-bump reason participates in content-aware refinement."""
+    rep = StructuralDiffReport()
+    rep.manifest_changed = True
+    rep.drifted_files = [
+        {"path": "a.agent.md", "_reason": "fingerprint algo version bumped"},
+        {"path": "b.agent.md", "_reason": "fingerprint algo version bumped"},
+    ]
+    rep.unchanged_files = []
+    refine_manifest_promotion(rep, lambda p: p == "a.agent.md")
+    assert {f["path"] for f in rep.unchanged_files} == {"a.agent.md"}
+    assert {f["path"] for f in rep.drifted_files} == {"b.agent.md"}

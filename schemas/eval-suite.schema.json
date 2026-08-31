@@ -1,0 +1,58 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "eval-suite.schema.json",
+  "title": "AgentTeams Eval Suite (framework-neutral)",
+  "description": "Per-team behavioral expectation suite emitted by the generator from the team manifest. Framework-neutral by contract: contains NO Inspect AI / OpenAI Evals DSL terms. Adapters translate this into a target eval framework. Excluded from drift artifacts by construction (never in output_files_map / template_hashes / file_hashes; never read by --check or --update).",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "artifact_type",
+    "eval_suite_schema_version",
+    "project_name",
+    "framework",
+    "generated_from",
+    "scenarios"
+  ],
+  "properties": {
+    "artifact_type": {
+      "const": "eval-suite",
+      "description": "Top-level discriminator (NOT schema_version) so build-log readers never treat a suite as a baseline."
+    },
+    "eval_suite_schema_version": { "type": "string", "minLength": 1 },
+    "project_name": { "type": "string" },
+    "framework": { "type": "string" },
+    "generated_from": { "const": "manifest" },
+    "scenarios": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["id", "category", "claim", "predicate"],
+        "properties": {
+          "id": { "type": "string", "minLength": 1 },
+          "category": {
+            "type": "string",
+            "enum": ["routing", "handoff", "governance", "output-shape", "refusal", "escalation"]
+          },
+          "claim": { "type": "string", "minLength": 1 },
+          "predicate": {
+            "type": "object",
+            "additionalProperties": true,
+            "required": ["kind"],
+            "properties": {
+              "kind": {
+                "type": "string",
+                "enum": [
+                  "frontmatter-list-contains-all",
+                  "agent-count",
+                  "handoff-chain",
+                  "frontmatter-and-body"
+                ]
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+}

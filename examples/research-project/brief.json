@@ -1,0 +1,79 @@
+{
+  "project_name": "ResearchPaperProject",
+  "project_goal": "Produce a peer-reviewed academic paper on multi-agent coordination theory, progressing from an outline through final LaTeX manuscript.",
+  "deliverables": ["HTML chapter drafts", "LaTeX manuscript", "BibTeX bibliography"],
+  "output_format": "PDF via LaTeX",
+  "primary_output_dir": "html/chapters/",
+  "build_output_dir": "manuscript/",
+  "figures_dir": "figures/",
+  "authority_sources": [
+    {
+      "name": "Published papers by James Caton",
+      "path": "sources/papers/",
+      "scope": "theoretical claims",
+      "rank": 1
+    },
+    {
+      "name": "Agent source files",
+      "path": ".github/agents/",
+      "scope": "agent documentation accuracy",
+      "rank": 2
+    }
+  ],
+  "style_reference": "references/voice-samples/",
+  "reference_db_path": "references/bibliography.bib",
+  "reference_key_convention": "AuthorYear",
+  "tools": [
+    {"name": "LaTeX", "category": "language", "config_files": ["manuscript/main.tex"]},
+    {"name": "BibTeX", "category": "library"},
+    {"name": "Pandoc", "category": "cli"}
+  ],
+  "conversion_pipeline": "pandoc --from html --to latex -o manuscript/{slug}.tex",
+  "style_rules": [
+    "Avoid passive voice except in methodology sections",
+    "Use em-dashes without spaces",
+    "Cite page numbers for direct quotations"
+  ],
+  "components": [
+    {
+      "slug": "ch01-introduction",
+      "name": "Chapter 1: Introduction",
+      "number": 1,
+      "output_file": "01-introduction.html",
+      "description": "Introduces the problem of coordination in multi-agent systems and states the paper's thesis.",
+      "sections": [
+        "1.1 The Problem of Coordination",
+        "1.2 Prior Work and Gaps",
+        "1.3 Thesis Statement",
+        "1.4 Chapter Outline"
+      ],
+      "sources": ["Hayek1945", "Simon1962", "Ostrom1990"],
+      "cross_refs": ["ch02-literature", "ch05-conclusion"],
+      "quality_criteria": [
+        "Thesis statement is present and falsifiable",
+        "Prior work section cites at least 5 sources",
+        "Chapter outline accurately reflects subsequent chapters"
+      ]
+    },
+    {
+      "slug": "ch02-literature",
+      "name": "Chapter 2: Literature Review",
+      "number": 2,
+      "output_file": "02-literature-review.html",
+      "description": "Surveys existing work on multi-agent coordination, knowledge distribution, and institutional design.",
+      "sections": [
+        "2.1 Classical Coordination Theory",
+        "2.2 Distributed Knowledge and Hayek",
+        "2.3 Multi-Agent Systems Literature",
+        "2.4 Synthesis and Research Gap"
+      ],
+      "sources": ["Hayek1937", "Hayek1945", "Maes1994", "Wooldridge2009"],
+      "cross_refs": ["ch01-introduction", "ch03-framework"],
+      "quality_criteria": [
+        "At least 20 citations",
+        "Research gap clearly stated in section 2.4",
+        "No citation fabrication"
+      ]
+    }
+  ]
+}

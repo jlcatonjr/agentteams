@@ -1,0 +1,951 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Setting Up VS Code &amp; GitHub Copilot — Interactive Guide</title>
+<style>
+  :root {
+    --bg: #f7f8fa;
+    --bg-alt: #ffffff;
+    --text: #1c2128;
+    --text-muted: #57606a;
+    --border: #d0d7de;
+    --accent: #6e40c9;
+    --accent-2: #0969da;
+    --success: #1a7f37;
+    --warning: #9a6700;
+    --danger: #cf222e;
+    --code-bg: #f6f8fa;
+    --shadow: 0 1px 3px rgba(0,0,0,0.08);
+    --radius: 10px;
+  }
+  [data-theme="dark"] {
+    --bg: #0d1117;
+    --bg-alt: #161b22;
+    --text: #e6edf3;
+    --text-muted: #9198a1;
+    --border: #30363d;
+    --accent: #a371f7;
+    --accent-2: #4493f8;
+    --success: #3fb950;
+    --warning: #d29922;
+    --danger: #f85149;
+    --code-bg: #1e242c;
+    --shadow: 0 1px 3px rgba(0,0,0,0.4);
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+    background: var(--bg);
+    color: var(--text);
+    line-height: 1.6;
+    transition: background 0.2s ease, color 0.2s ease;
+  }
+  a { color: var(--accent-2); }
+  header.page-header {
+    background: linear-gradient(120deg, #24292f, #32384a);
+    color: #fff;
+    padding: 2.25rem 1.5rem 2.5rem;
+    position: relative;
+  }
+  [data-theme="dark"] header.page-header {
+    background: linear-gradient(120deg, #0d1117, #161b22);
+    border-bottom: 1px solid var(--border);
+  }
+  header.page-header .inner {
+    max-width: 980px;
+    margin: 0 auto;
+  }
+  header.page-header h1 {
+    margin: 0 0 0.4rem;
+    font-size: 1.9rem;
+  }
+  header.page-header p.subtitle {
+    margin: 0;
+    color: #d8dee9;
+    max-width: 650px;
+  }
+  #theme-toggle {
+    position: absolute;
+    top: 1.25rem;
+    right: 1.25rem;
+    background: rgba(255,255,255,0.12);
+    border: 1px solid rgba(255,255,255,0.3);
+    color: #fff;
+    padding: 0.45rem 0.8rem;
+    border-radius: 999px;
+    cursor: pointer;
+    font-size: 0.85rem;
+  }
+  #theme-toggle:hover { background: rgba(255,255,255,0.22); }
+
+  .layout {
+    max-width: 980px;
+    margin: 0 auto;
+    padding: 1.5rem;
+    display: grid;
+    grid-template-columns: 220px 1fr;
+    gap: 2rem;
+    align-items: start;
+  }
+  @media (max-width: 800px) {
+    .layout { grid-template-columns: 1fr; }
+    nav.toc { position: static !important; order: 2; }
+  }
+  nav.toc {
+    position: sticky;
+    top: 1.25rem;
+    background: var(--bg-alt);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    padding: 1rem;
+    box-shadow: var(--shadow);
+    font-size: 0.9rem;
+  }
+  nav.toc h2 { font-size: 0.8rem; text-transform: uppercase; letter-spacing: .04em; color: var(--text-muted); margin: 0 0 0.6rem; }
+  nav.toc ol { margin: 0; padding-left: 1.1rem; }
+  nav.toc li { margin-bottom: 0.4rem; }
+  nav.toc a { text-decoration: none; color: var(--text); }
+  nav.toc a:hover { color: var(--accent-2); }
+
+  .progress-wrap {
+    margin-top: 1rem;
+    padding-top: 0.85rem;
+    border-top: 1px solid var(--border);
+  }
+  .progress-bar-track {
+    background: var(--code-bg);
+    border-radius: 999px;
+    height: 8px;
+    overflow: hidden;
+    border: 1px solid var(--border);
+  }
+  .progress-bar-fill {
+    height: 100%;
+    background: linear-gradient(90deg, var(--accent-2), var(--accent));
+    width: 0%;
+    transition: width 0.25s ease;
+  }
+  #progress-label { font-size: 0.78rem; color: var(--text-muted); margin-top: 0.35rem; display:block; }
+
+  main { min-width: 0; }
+  section {
+    background: var(--bg-alt);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    padding: 1.5rem 1.6rem;
+    margin-bottom: 1.5rem;
+    box-shadow: var(--shadow);
+    scroll-margin-top: 1rem;
+  }
+  section h2 {
+    margin-top: 0;
+    font-size: 1.3rem;
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+  }
+  section h2 .num {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 1.7rem;
+    height: 1.7rem;
+    border-radius: 50%;
+    background: var(--accent);
+    color: #fff;
+    font-size: 0.85rem;
+    flex: none;
+  }
+  code, pre {
+    font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  }
+  .callout {
+    border-left: 4px solid var(--accent-2);
+    background: var(--code-bg);
+    padding: 0.9rem 1rem;
+    border-radius: 6px;
+    margin: 1rem 0;
+  }
+  .callout.warn { border-left-color: var(--warning); }
+  .callout.important { border-left-color: var(--danger); }
+  .callout strong.label {
+    display: block;
+    font-size: 0.75rem;
+    text-transform: uppercase;
+    letter-spacing: .04em;
+    color: var(--text-muted);
+    margin-bottom: 0.25rem;
+  }
+
+  /* Comparison table */
+  table.compare {
+    width: 100%;
+    border-collapse: collapse;
+    margin: 1rem 0;
+    font-size: 0.92rem;
+  }
+  table.compare th, table.compare td {
+    border: 1px solid var(--border);
+    padding: 0.6rem 0.7rem;
+    text-align: left;
+    vertical-align: top;
+  }
+  table.compare th { background: var(--code-bg); }
+  table.compare td.col-gh { border-top: 3px solid var(--accent); }
+  table.compare td.col-ms { border-top: 3px solid #107c10; }
+
+  /* Decision helper */
+  .decision-tool fieldset {
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 0.9rem 1rem;
+    margin: 0 0 1rem;
+  }
+  .decision-tool legend { padding: 0 0.4rem; font-weight: 600; font-size: 0.9rem; }
+  .decision-tool label {
+    display: flex;
+    gap: 0.55rem;
+    align-items: flex-start;
+    padding: 0.4rem 0.2rem;
+    cursor: pointer;
+    border-radius: 6px;
+  }
+  .decision-tool label:hover { background: var(--code-bg); }
+  .decision-tool input[type="radio"] { margin-top: 0.25rem; }
+  #decision-result {
+    display: none;
+    margin-top: 1rem;
+    padding: 1rem;
+    border-radius: 8px;
+    background: var(--code-bg);
+    border: 1px solid var(--border);
+  }
+  #decision-result.show { display: block; }
+  #decision-result h3 { margin-top: 0; font-size: 1.05rem; }
+  button.primary-btn {
+    background: var(--accent);
+    color: #fff;
+    border: none;
+    padding: 0.55rem 1.1rem;
+    border-radius: 6px;
+    cursor: pointer;
+    font-size: 0.92rem;
+  }
+  button.primary-btn:hover { filter: brightness(1.08); }
+  button.reset-btn {
+    background: transparent;
+    border: 1px solid var(--border);
+    color: var(--text);
+    padding: 0.5rem 1rem;
+    border-radius: 6px;
+    cursor: pointer;
+    margin-left: 0.5rem;
+  }
+
+  /* Tabs */
+  .tabs { margin: 1rem 0; }
+  .tab-list {
+    display: flex;
+    gap: 0.35rem;
+    border-bottom: 1px solid var(--border);
+    flex-wrap: wrap;
+  }
+  .tab-btn {
+    background: transparent;
+    border: 1px solid transparent;
+    border-bottom: none;
+    padding: 0.55rem 1rem;
+    cursor: pointer;
+    font-size: 0.9rem;
+    color: var(--text-muted);
+    border-radius: 6px 6px 0 0;
+  }
+  .tab-btn[aria-selected="true"] {
+    color: var(--text);
+    background: var(--code-bg);
+    border-color: var(--border);
+    font-weight: 600;
+  }
+  .tab-btn .badge {
+    font-size: 0.65rem;
+    background: var(--accent);
+    color: #fff;
+    padding: 0.1rem 0.4rem;
+    border-radius: 999px;
+    margin-left: 0.35rem;
+  }
+  .tab-panel { display: none; padding: 1rem 0.2rem; }
+  .tab-panel.active { display: block; }
+  .tab-panel ol { padding-left: 1.2rem; }
+  .tab-panel li { margin-bottom: 0.5rem; }
+
+  /* Checklist */
+  .checklist-item {
+    display: flex;
+    align-items: flex-start;
+    gap: 0.6rem;
+    padding: 0.5rem 0.15rem;
+    border-bottom: 1px dashed var(--border);
+  }
+  .checklist-item:last-child { border-bottom: none; }
+  .checklist-item input[type="checkbox"] { margin-top: 0.3rem; width: 16px; height: 16px; }
+  .checklist-item label { cursor: pointer; }
+  .checklist-item.done label { color: var(--text-muted); text-decoration: line-through; }
+
+  /* Copy button / code block */
+  .code-block {
+    position: relative;
+    background: var(--code-bg);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 0.8rem 1rem;
+    margin: 0.75rem 0;
+    overflow-x: auto;
+  }
+  .code-block code { font-size: 0.88rem; white-space: pre; }
+  .copy-btn {
+    position: absolute;
+    top: 0.5rem;
+    right: 0.5rem;
+    font-size: 0.75rem;
+    background: var(--bg-alt);
+    border: 1px solid var(--border);
+    color: var(--text);
+    padding: 0.25rem 0.6rem;
+    border-radius: 5px;
+    cursor: pointer;
+  }
+  .copy-btn:hover { background: var(--code-bg); }
+  .copy-btn.copied { color: var(--success); border-color: var(--success); }
+
+  /* Accordion (FAQ) */
+  .accordion-item {
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    margin-bottom: 0.6rem;
+    overflow: hidden;
+  }
+  .accordion-trigger {
+    width: 100%;
+    text-align: left;
+    background: var(--bg-alt);
+    border: none;
+    padding: 0.85rem 1rem;
+    font-size: 0.95rem;
+    font-weight: 600;
+    cursor: pointer;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    color: var(--text);
+  }
+  .accordion-trigger:hover { background: var(--code-bg); }
+  .accordion-trigger .chevron { transition: transform 0.2s ease; }
+  .accordion-trigger[aria-expanded="true"] .chevron { transform: rotate(180deg); }
+  .accordion-panel {
+    max-height: 0;
+    overflow: hidden;
+    transition: max-height 0.25s ease;
+    padding: 0 1rem;
+    background: var(--bg-alt);
+  }
+  .accordion-panel.open { padding: 0.2rem 1rem 1rem; }
+
+  footer {
+    max-width: 980px;
+    margin: 0 auto 3rem;
+    padding: 0 1.5rem;
+    color: var(--text-muted);
+    font-size: 0.85rem;
+    text-align: center;
+  }
+  .pill {
+    display: inline-block;
+    font-size: 0.7rem;
+    padding: 0.15rem 0.5rem;
+    border-radius: 999px;
+    background: var(--code-bg);
+    border: 1px solid var(--border);
+    color: var(--text-muted);
+    margin-left: 0.4rem;
+  }
+  .sr-only {
+    position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px;
+    overflow: hidden; clip: rect(0,0,0,0); white-space: nowrap; border: 0;
+  }
+</style>
+</head>
+<body data-theme="light">
+
+<header class="page-header">
+  <div class="inner">
+    <button id="theme-toggle" aria-pressed="false">🌙 Dark mode</button>
+    <h1>Setting Up VS Code &amp; GitHub Copilot</h1>
+    <p class="subtitle">A practical, interactive walkthrough for installing Visual Studio Code and the GitHub Copilot extension — including the GitHub Copilot <em>coding agent</em> — and understanding how it differs from Microsoft's separate "Copilot" branding.</p>
+  </div>
+</header>
+
+<div class="layout">
+  <nav class="toc" aria-label="Table of contents">
+    <h2>On this page</h2>
+    <ol>
+      <li><a href="#distinguish">Which "Copilot"?</a></li>
+      <li><a href="#decision">Find your path</a></li>
+      <li><a href="#install-vscode">Install VS Code</a></li>
+      <li><a href="#install-copilot">Install the extension</a></li>
+      <li><a href="#verify">Sign in &amp; verify</a></li>
+      <li><a href="#coding-agent">The coding agent</a></li>
+      <li><a href="#faq">FAQ</a></li>
+    </ol>
+    <div class="progress-wrap">
+      <div class="progress-bar-track">
+        <div class="progress-bar-fill" id="progress-fill"></div>
+      </div>
+      <span id="progress-label">0 of 0 steps checked</span>
+    </div>
+  </nav>
+
+  <main>
+
+    <section id="distinguish">
+      <h2><span class="num">1</span>Two products both called "Copilot"</h2>
+      <div class="callout important">
+        <strong class="label">Read this first</strong>
+        "Copilot" is used as a brand name by two different companies for two different kinds of product. This guide is about the first one only.
+      </div>
+      <table class="compare">
+        <thead>
+          <tr><th>Aspect</th><th>GitHub Copilot <span class="pill">this guide</span></th><th>Microsoft Copilot</th></tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td>Maker</td>
+            <td class="col-gh">GitHub (owned by Microsoft, operated as a distinct product/brand)</td>
+            <td class="col-ms">Microsoft</td>
+          </tr>
+          <tr>
+            <td>What it is</td>
+            <td class="col-gh">An AI pair-programmer: code completion, chat, and an autonomous "coding agent" that can work on issues and open pull requests</td>
+            <td class="col-ms">A general-purpose assistant built into Windows, Microsoft 365 (Word, Excel, Outlook), Edge, and Bing</td>
+          </tr>
+          <tr>
+            <td>Where you use it</td>
+            <td class="col-gh">Inside code editors (VS Code, Visual Studio, JetBrains IDEs, Neovim, Xcode) and on GitHub.com</td>
+            <td class="col-ms">Windows taskbar, Microsoft 365 apps, Edge sidebar, Bing.com</td>
+          </tr>
+          <tr>
+            <td>Install target</td>
+            <td class="col-gh">A VS Code <em>extension</em> (<code>GitHub.copilot</code>, <code>GitHub.copilot-chat</code>)</td>
+            <td class="col-ms">Built into Windows 11 / Microsoft 365, or a separate app/website — not a VS Code extension</td>
+          </tr>
+          <tr>
+            <td>Account required</td>
+            <td class="col-gh">A GitHub account with a Copilot plan (Free, Pro, Pro+, Business, or Enterprise)</td>
+            <td class="col-ms">A Microsoft account (some features need Microsoft 365 licensing)</td>
+          </tr>
+        </tbody>
+      </table>
+      <p>If you were told to "install Copilot in VS Code" or to use "the Copilot coding agent," you want <strong>GitHub Copilot</strong> — proceed to the sections below. If you were looking for the assistant built into Windows or Office, this guide will not help; that is Microsoft Copilot, a separate product with its own setup path.</p>
+    </section>
+
+    <section id="decision" class="decision-tool">
+      <h2><span class="num">2</span>Find your path</h2>
+      <p>Answer one question to get a tailored recommendation.</p>
+      <form id="decision-form">
+        <fieldset>
+          <legend>What are you trying to do?</legend>
+          <label><input type="radio" name="goal" value="editor"> I want AI code completion and chat inside my code editor</label>
+          <label><input type="radio" name="goal" value="agent"> I want to assign a GitHub issue to an AI agent and have it open a pull request on its own</label>
+          <label><input type="radio" name="goal" value="office"> I want an AI assistant in Windows, Word/Excel/Outlook, Edge, or Bing</label>
+        </fieldset>
+        <button type="submit" class="primary-btn">Show recommendation</button>
+        <button type="reset" class="reset-btn" id="decision-reset">Reset</button>
+      </form>
+      <div id="decision-result" role="status" aria-live="polite"></div>
+    </section>
+
+    <section id="install-vscode">
+      <h2><span class="num">3</span>Install Visual Studio Code</h2>
+      <p>VS Code is free and available for Windows, macOS, and Linux from
+        <a href="https://code.visualstudio.com/download" target="_blank" rel="noopener">code.visualstudio.com/download</a>.
+      </p>
+      <p><em>The tab below is pre-selected based on a best-effort guess at your operating system — if it guessed wrong, just click the correct tab.</em></p>
+
+      <div class="tabs" data-tabgroup="os-install">
+        <div class="tab-list" role="tablist" aria-label="Operating system">
+          <button class="tab-btn" role="tab" data-tab="win" aria-selected="false">Windows</button>
+          <button class="tab-btn" role="tab" data-tab="mac" aria-selected="false">macOS</button>
+          <button class="tab-btn" role="tab" data-tab="linux" aria-selected="false">Linux</button>
+        </div>
+
+        <div class="tab-panel" data-panel="win" role="tabpanel">
+          <ol>
+            <li>Go to the download page and click <strong>Windows</strong> (the User Installer is recommended for most people).</li>
+            <li>Run the downloaded <code>.exe</code> installer.</li>
+            <li>Accept the license, keep the default install location, and on the "Select Additional Tasks" screen consider checking <strong>Add to PATH</strong> so the <code>code</code> command works in a terminal.</li>
+            <li>Click <strong>Install</strong>, then <strong>Finish</strong> to launch VS Code.</li>
+          </ol>
+          <div class="checklist-item">
+            <input type="checkbox" id="step-win-installed" data-step>
+            <label for="step-win-installed">VS Code installed and launches on Windows</label>
+          </div>
+        </div>
+
+        <div class="tab-panel" data-panel="mac" role="tabpanel">
+          <ol>
+            <li>Go to the download page; it detects macOS and offers an Intel or Apple Silicon build (choose the one matching your Mac, or the Universal build if offered).</li>
+            <li>Unzip the downloaded file if it doesn't unzip automatically, then drag <strong>Visual Studio Code.app</strong> into your <strong>Applications</strong> folder.</li>
+            <li>Open VS Code from Applications (right-click → Open the first time, if Gatekeeper prompts you).</li>
+            <li>Optional: open the Command Palette (<code>Cmd+Shift+P</code>) and run <strong>Shell Command: Install 'code' command in PATH</strong> to enable the terminal <code>code</code> command.</li>
+          </ol>
+          <div class="code-block">
+            <button class="copy-btn" data-copy>Copy</button>
+            <code>code --version</code>
+          </div>
+          <div class="checklist-item">
+            <input type="checkbox" id="step-mac-installed" data-step>
+            <label for="step-mac-installed">VS Code installed and launches on macOS</label>
+          </div>
+        </div>
+
+        <div class="tab-panel" data-panel="linux" role="tabpanel">
+          <ol>
+            <li>Debian/Ubuntu: download the <code>.deb</code> package from the download page, then install it, e.g.:</li>
+          </ol>
+          <div class="code-block">
+            <button class="copy-btn" data-copy>Copy</button>
+            <code>sudo apt install ./code_*.deb</code>
+          </div>
+          <ol start="2">
+            <li>Fedora/RHEL: download the <code>.rpm</code> package and install with your package manager, e.g.:</li>
+          </ol>
+          <div class="code-block">
+            <button class="copy-btn" data-copy>Copy</button>
+            <code>sudo dnf install ./code-*.rpm</code>
+          </div>
+          <ol start="3">
+            <li>Alternatively, most distributions can install VS Code from Microsoft's apt/yum/snap repositories — see the download page for the exact repository setup commands for your distribution.</li>
+            <li>Launch VS Code from your application menu, or run <code>code</code> in a terminal, and confirm the window opens.</li>
+          </ol>
+          <div class="checklist-item">
+            <input type="checkbox" id="step-linux-installed" data-step>
+            <label for="step-linux-installed">VS Code installed and launches on Linux</label>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <section id="install-copilot">
+      <h2><span class="num">4</span>Install the GitHub Copilot extension</h2>
+      <p>GitHub Copilot ships as a VS Code extension. There are two related extensions published by GitHub:</p>
+      <ul>
+        <li><code>GitHub.copilot</code> — inline code completions</li>
+        <li><code>GitHub.copilot-chat</code> — the Chat panel, including its local "agent mode" for multi-step editor edits (see <a href="#coding-agent">section 6</a> for how this differs from the GitHub-hosted coding agent)</li>
+      </ul>
+      <p>Installing either one from the Extensions view will typically prompt you to install the other, since Copilot Chat depends on the completions extension. On some recent VS Code builds, Copilot Chat ships bundled by default — if a Chat icon already appears in the Activity Bar, you may not need to install it separately.</p>
+
+      <div class="tabs" data-tabgroup="ext-install">
+        <div class="tab-list" role="tablist" aria-label="Install method">
+          <button class="tab-btn" role="tab" data-tab="ui" aria-selected="false">Extensions view (UI)</button>
+          <button class="tab-btn" role="tab" data-tab="cli" aria-selected="false">Command line</button>
+        </div>
+
+        <div class="tab-panel" data-panel="ui" role="tabpanel">
+          <ol>
+            <li>Open VS Code.</li>
+            <li>Open the Extensions view: click the square-icons icon in the Activity Bar, or press <code>Ctrl+Shift+X</code> (<code>Cmd+Shift+X</code> on macOS).</li>
+            <li>Search for <strong>GitHub Copilot</strong>.</li>
+            <li>Click <strong>Install</strong> on the "GitHub Copilot" extension published by GitHub.</li>
+            <li>When prompted, also install <strong>GitHub Copilot Chat</strong> for the chat/agent panel.</li>
+          </ol>
+          <div class="checklist-item">
+            <input type="checkbox" id="step-ext-ui" data-step>
+            <label for="step-ext-ui">Both extensions installed via the Extensions view</label>
+          </div>
+        </div>
+
+        <div class="tab-panel" data-panel="cli" role="tabpanel">
+          <p>If the <code>code</code> command is on your PATH, you can install from a terminal:</p>
+          <div class="code-block">
+            <button class="copy-btn" data-copy>Copy</button>
+            <code>code --install-extension GitHub.copilot
+code --install-extension GitHub.copilot-chat</code>
+          </div>
+          <div class="checklist-item">
+            <input type="checkbox" id="step-ext-cli" data-step>
+            <label for="step-ext-cli">Both extensions installed via the command line</label>
+          </div>
+        </div>
+      </div>
+
+      <div class="callout warn">
+        <strong class="label">Requires a plan</strong>
+        The extension installs for free, but using it requires a GitHub Copilot plan attached to your GitHub account (a free tier with monthly limits is available, alongside paid tiers such as Pro, Pro+, Business, and Enterprise). Tier names and limits change over time — verify the current lineup at <a href="https://github.com/features/copilot/plans" target="_blank" rel="noopener">github.com/features/copilot/plans</a>. Organization-owned accounts may have Copilot access controlled by an administrator policy.
+      </div>
+    </section>
+
+    <section id="verify">
+      <h2><span class="num">5</span>Sign in and verify</h2>
+      <ol>
+        <li>After installing, VS Code shows a <strong>Sign in to GitHub</strong> prompt — look for it as a notification, or open it yourself from the Accounts menu at the bottom of the Activity Bar (its exact position has moved across VS Code redesigns). Click it.</li>
+        <li>Your browser opens to GitHub.com to authorize the "Visual Studio Code" OAuth app. Approve the request.</li>
+        <li>Return to VS Code — it should show your GitHub username connected in the Accounts menu.</li>
+        <li>Open any code file and start typing; gray "ghost text" suggestions from Copilot should appear inline.</li>
+        <li>Open the Copilot Chat panel — click the chat icon in the Activity Bar, or open the Command Palette (<code>Ctrl+Shift+P</code> / <code>Cmd+Shift+P</code>) and run <strong>Chat: Open Chat</strong> — then send a test message such as "explain this file." (A direct keybinding also exists but has changed across VS Code releases, so the Command Palette route is the more durable instruction.)</li>
+      </ol>
+      <div class="checklist-item">
+        <input type="checkbox" id="step-signed-in" data-step>
+        <label for="step-signed-in">Signed in with GitHub account inside VS Code</label>
+      </div>
+      <div class="checklist-item">
+        <input type="checkbox" id="step-completions" data-step>
+        <label for="step-completions">Inline completions appear while typing code</label>
+      </div>
+      <div class="checklist-item">
+        <input type="checkbox" id="step-chat" data-step>
+        <label for="step-chat">Chat panel responds to a test question</label>
+      </div>
+      <div class="callout">
+        <strong class="label">No suggestions?</strong>
+        Check the Copilot status icon in the VS Code status bar (bottom-right) — it reports sign-in state and whether completions are enabled for the current file type.
+      </div>
+    </section>
+
+    <section id="coding-agent">
+      <h2><span class="num">6</span>The GitHub Copilot coding agent</h2>
+      <p>
+        Everything above sets up Copilot as an <em>in-editor assistant</em> — it completes code and answers questions
+        while you drive. The <strong>Copilot coding agent</strong> is a further capability where Copilot works
+        <em>autonomously in the background</em>: you (or a maintainer) assign it a GitHub issue, or ask it to make a
+        change, and it works in its own environment, pushes commits to a branch, and opens a pull request for
+        review — without you actively steering it turn-by-turn.
+      </p>
+      <div class="callout important">
+        <strong class="label">Two different "autonomous" features share the word "agent"</strong>
+        <strong>The GitHub Copilot coding agent</strong> runs remotely on GitHub's infrastructure — not on your
+        machine — and produces a pull request. You dispatch it either by assigning a GitHub issue to Copilot, or by
+        starting a coding-agent session from Copilot Chat's session picker; both routes hand the work off to GitHub,
+        not your local editor. <strong>VS Code Copilot Chat's local "agent mode,"</strong> by contrast, runs directly
+        in your editor against your open workspace and does not by itself open a pull request. Its availability
+        depends on your Copilot plan and, for organizations, on policies enabled by an administrator. Exact plan
+        requirements and rollout have changed over time — check
+        <a href="https://docs.github.com/copilot" target="_blank" rel="noopener">docs.github.com/copilot</a>
+        for the current requirements before relying on this guide's description.
+      </div>
+      <p>Typical flow for the remote coding agent, once available on your account/organization (the exact steps and UI have changed over time, so treat this as illustrative rather than exact):</p>
+      <ol>
+        <li>Open an issue on GitHub.com describing the change you want.</li>
+        <li>Assign the issue to <strong>Copilot</strong> from the Assignees menu. If Copilot doesn't appear there, the feature likely isn't enabled for your account or organization yet.</li>
+        <li>Copilot works in the background and opens a draft pull request, then updates it with a plan and commits.</li>
+        <li>Review the PR like any other contribution — comment, request changes, or approve and merge.</li>
+      </ol>
+      <p>The separate, local "agent mode" in VS Code's Copilot Chat panel is for editor-driven autonomous edits you can watch happen in real time on your machine — useful when you want to stay in the loop, rather than hand a task off to GitHub's remote agent entirely.</p>
+    </section>
+
+    <section id="faq">
+      <h2><span class="num">7</span>FAQ</h2>
+
+      <div class="accordion" id="faq-accordion">
+        <div class="accordion-item">
+          <button class="accordion-trigger" aria-expanded="false">
+            Is "GitHub Copilot" the same company product as "Microsoft Copilot"?
+            <span class="chevron">▾</span>
+          </button>
+          <div class="accordion-panel">
+            <p>No. Both are ultimately Microsoft-owned (Microsoft owns GitHub), but they are separate products with
+            separate teams, apps, sign-in accounts, and purposes. GitHub Copilot is a developer tool tied to your
+            GitHub account and used in code editors. Microsoft Copilot is a general assistant tied to your Microsoft
+            account and used in Windows, Microsoft 365, and Bing/Edge. Installing one does not install or activate
+            the other.</p>
+          </div>
+        </div>
+        <div class="accordion-item">
+          <button class="accordion-trigger" aria-expanded="false">
+            Do I need a paid plan?
+            <span class="chevron">▾</span>
+          </button>
+          <div class="accordion-panel">
+            <p>GitHub offers a free Copilot tier with limited monthly completions and chat requests. Higher usage,
+            premium models, and the coding agent generally require a paid individual (Pro/Pro+) or organization
+            (Business/Enterprise) plan. Confirm current limits on GitHub's pricing page, since they change over time.</p>
+          </div>
+        </div>
+        <div class="accordion-item">
+          <button class="accordion-trigger" aria-expanded="false">
+            The Extensions view can't find "GitHub Copilot" — why?
+            <span class="chevron">▾</span>
+          </button>
+          <div class="accordion-panel">
+            <p>Make sure you're searching the built-in Marketplace (not a restricted/offline extension gallery), that
+            your VS Code version is reasonably current, and that your network allows access to
+            <code>marketplace.visualstudio.com</code>. Corporate proxies or VS Code "Restricted Mode"/enterprise
+            policies can also block extension installs.</p>
+          </div>
+        </div>
+        <div class="accordion-item">
+          <button class="accordion-trigger" aria-expanded="false">
+            Can I use GitHub Copilot in editors other than VS Code?
+            <span class="chevron">▾</span>
+          </button>
+          <div class="accordion-panel">
+            <p>Yes — GitHub publishes Copilot integrations for Visual Studio, JetBrains IDEs (IntelliJ, PyCharm, etc.),
+            Neovim, and Xcode, among others. This guide only covers the VS Code extension.</p>
+          </div>
+        </div>
+      </div>
+    </section>
+
+  </main>
+</div>
+
+<footer>
+  <p>This guide describes GitHub Copilot in VS Code as of 2026. Extension names, menus, and plan details can change —
+  when in doubt, defer to <a href="https://code.visualstudio.com/docs" target="_blank" rel="noopener">VS Code's official docs</a>
+  and <a href="https://docs.github.com/copilot" target="_blank" rel="noopener">GitHub Copilot's official docs</a>.</p>
+</footer>
+
+<script>
+(function () {
+  "use strict";
+
+  /* ---------- Theme toggle ---------- */
+  var themeBtn = document.getElementById("theme-toggle");
+  var root = document.body;
+  function applyTheme(theme) {
+    root.setAttribute("data-theme", theme);
+    themeBtn.setAttribute("aria-pressed", theme === "dark" ? "true" : "false");
+    themeBtn.textContent = theme === "dark" ? "☀️ Light mode" : "🌙 Dark mode";
+  }
+  var savedTheme = null;
+  try { savedTheme = localStorage.getItem("copilotGuideTheme"); } catch (e) {}
+  if (!savedTheme && window.matchMedia && window.matchMedia("(prefers-color-scheme: dark)").matches) {
+    savedTheme = "dark";
+  }
+  applyTheme(savedTheme === "dark" ? "dark" : "light");
+  themeBtn.addEventListener("click", function () {
+    var next = root.getAttribute("data-theme") === "dark" ? "light" : "dark";
+    applyTheme(next);
+    try { localStorage.setItem("copilotGuideTheme", next); } catch (e) {}
+  });
+
+  /* ---------- Checklist persistence + progress bar ---------- */
+  /* Declared before Tabs below, since tab activation re-tallies progress
+     and must find `checkboxes`/`updateProgress` already initialized. */
+  var STORAGE_KEY = "copilotGuideChecklist";
+  var checkboxes = Array.prototype.slice.call(document.querySelectorAll("[data-step]"));
+  var progressFill = document.getElementById("progress-fill");
+  var progressLabel = document.getElementById("progress-label");
+
+  function loadState() {
+    var state = {};
+    try { state = JSON.parse(localStorage.getItem(STORAGE_KEY) || "{}"); } catch (e) { state = {}; }
+    return state;
+  }
+  function saveState(state) {
+    try { localStorage.setItem(STORAGE_KEY, JSON.stringify(state)); } catch (e) {}
+  }
+  function isReachable(cb) {
+    // A step inside an inactive tab panel belongs to an OS/method the
+    // reader didn't select, so it shouldn't inflate the denominator.
+    var panel = cb.closest(".tab-panel");
+    return !panel || panel.classList.contains("active");
+  }
+  function updateProgress() {
+    var reachable = checkboxes.filter(isReachable);
+    var total = reachable.length;
+    var checked = reachable.filter(function (cb) { return cb.checked; }).length;
+    var pct = total ? Math.round((checked / total) * 100) : 0;
+    progressFill.style.width = pct + "%";
+    progressLabel.textContent = checked + " of " + total + " steps checked (for your selected tabs)";
+  }
+
+  var checklistState = loadState();
+  checkboxes.forEach(function (cb) {
+    if (checklistState[cb.id]) {
+      cb.checked = true;
+      cb.closest(".checklist-item").classList.add("done");
+    }
+    cb.addEventListener("change", function () {
+      var s = loadState();
+      s[cb.id] = cb.checked;
+      saveState(s);
+      cb.closest(".checklist-item").classList.toggle("done", cb.checked);
+      updateProgress();
+    });
+  });
+
+  /* ---------- Tabs (supports multiple independent tab groups) ---------- */
+  function detectOS() {
+    // navigator.platform is deprecated and increasingly returns "" in modern
+    // browsers, so it is used only as a last resort. Prefer User-Agent
+    // Client Hints where available, then fall back to parsing userAgent
+    // (still supported everywhere), then navigator.platform.
+    try {
+      if (navigator.userAgentData && navigator.userAgentData.platform) {
+        var uad = navigator.userAgentData.platform.toLowerCase();
+        if (uad.indexOf("win") !== -1) return "win";
+        if (uad.indexOf("mac") !== -1) return "mac";
+        if (uad.indexOf("linux") !== -1) return "linux";
+      }
+    } catch (e) {}
+    var ua = (navigator.userAgent || "").toLowerCase();
+    if (ua.indexOf("windows") !== -1) return "win";
+    if (ua.indexOf("mac os") !== -1 || ua.indexOf("macintosh") !== -1) return "mac";
+    if (ua.indexOf("linux") !== -1 || ua.indexOf("x11") !== -1) return "linux";
+    var p = (navigator.platform || "").toLowerCase();
+    if (p.indexOf("win") !== -1) return "win";
+    if (p.indexOf("mac") !== -1) return "mac";
+    if (p.indexOf("linux") !== -1) return "linux";
+    return null;
+  }
+
+  document.querySelectorAll(".tabs").forEach(function (group) {
+    var buttons = Array.prototype.slice.call(group.querySelectorAll(".tab-btn"));
+    var panels = Array.prototype.slice.call(group.querySelectorAll(".tab-panel"));
+
+    function activate(tabKey) {
+      buttons.forEach(function (b) {
+        var isActive = b.getAttribute("data-tab") === tabKey;
+        b.setAttribute("aria-selected", isActive ? "true" : "false");
+      });
+      panels.forEach(function (p) {
+        var isActive = p.getAttribute("data-panel") === tabKey;
+        p.classList.toggle("active", isActive);
+      });
+      // Re-tally the checklist: switching tabs changes which steps are
+      // actually reachable/relevant to the reader.
+      if (typeof updateProgress === "function") updateProgress();
+    }
+
+    buttons.forEach(function (b) {
+      b.addEventListener("click", function () {
+        activate(b.getAttribute("data-tab"));
+      });
+      b.addEventListener("keydown", function (e) {
+        var idx = buttons.indexOf(b);
+        if (e.key === "ArrowRight") {
+          e.preventDefault();
+          buttons[(idx + 1) % buttons.length].focus();
+          activate(buttons[(idx + 1) % buttons.length].getAttribute("data-tab"));
+        } else if (e.key === "ArrowLeft") {
+          e.preventDefault();
+          buttons[(idx - 1 + buttons.length) % buttons.length].focus();
+          activate(buttons[(idx - 1 + buttons.length) % buttons.length].getAttribute("data-tab"));
+        }
+      });
+    });
+
+    // Default: try OS-detected tab (for the OS group only), else first tab.
+    var defaultKey = null;
+    if (group.getAttribute("data-tabgroup") === "os-install") {
+      defaultKey = detectOS();
+    }
+    var validKeys = buttons.map(function (b) { return b.getAttribute("data-tab"); });
+    if (!defaultKey || validKeys.indexOf(defaultKey) === -1) {
+      defaultKey = validKeys[0];
+    }
+    activate(defaultKey);
+  });
+
+  /* ---------- Copy-to-clipboard ---------- */
+  document.querySelectorAll(".copy-btn").forEach(function (btn) {
+    btn.addEventListener("click", function () {
+      var block = btn.closest(".code-block");
+      var codeEl = block ? block.querySelector("code") : null;
+      var text = codeEl ? codeEl.textContent : "";
+      var original = btn.textContent;
+      var done = function () {
+        btn.textContent = "Copied!";
+        btn.classList.add("copied");
+        setTimeout(function () {
+          btn.textContent = original;
+          btn.classList.remove("copied");
+        }, 1500);
+      };
+      var failed = function () {
+        btn.textContent = "Copy failed — select manually";
+        setTimeout(function () { btn.textContent = original; }, 2000);
+      };
+      if (navigator.clipboard && navigator.clipboard.writeText) {
+        navigator.clipboard.writeText(text).then(done, function () { fallbackCopy(text, done, failed); });
+      } else {
+        fallbackCopy(text, done, failed);
+      }
+    });
+  });
+
+  function fallbackCopy(text, cb, onFail) {
+    var ta = document.createElement("textarea");
+    ta.value = text;
+    ta.style.position = "fixed";
+    ta.style.opacity = "0";
+    document.body.appendChild(ta);
+    ta.focus();
+    ta.select();
+    var ok = false;
+    try { ok = document.execCommand("copy"); } catch (e) { ok = false; }
+    document.body.removeChild(ta);
+    if (ok && cb) cb();
+    else if (!ok && onFail) onFail();
+  }
+
+  /* ---------- Accordion (FAQ) ---------- */
+  document.querySelectorAll(".accordion-trigger").forEach(function (trigger) {
+    trigger.addEventListener("click", function () {
+      var expanded = trigger.getAttribute("aria-expanded") === "true";
+      var panel = trigger.nextElementSibling;
+      trigger.setAttribute("aria-expanded", expanded ? "false" : "true");
+      if (expanded) {
+        panel.style.maxHeight = null;
+        panel.classList.remove("open");
+      } else {
+        panel.classList.add("open");
+        panel.style.maxHeight = panel.scrollHeight + "px";
+      }
+    });
+  });
+
+  /* ---------- Decision helper ---------- */
+  var decisionForm = document.getElementById("decision-form");
+  var decisionResult = document.getElementById("decision-result");
+  var recommendations = {
+    editor: {
+      title: "Install GitHub Copilot in your editor",
+      body: "Follow sections 3–5 of this guide: install VS Code, then install the GitHub Copilot and GitHub Copilot Chat extensions, then sign in with your GitHub account."
+    },
+    agent: {
+      title: "You want the GitHub Copilot coding agent",
+      body: "Set up the editor extension first (sections 3–5), then see section 6 — the remote coding agent is dispatched from a GitHub issue's Assignees menu or Copilot Chat's session picker and runs on GitHub's infrastructure (not locally), and its availability depends on your Copilot plan/organization policy."
+    },
+    office: {
+      title: "You're looking for Microsoft Copilot, not GitHub Copilot",
+      body: "This guide won't help — Microsoft Copilot (Windows, Microsoft 365, Edge, Bing) is a separate product from a different setup path. Look for Copilot inside Windows Settings, your Microsoft 365 app, or microsoft.com/copilot instead."
+    }
+  };
+  decisionForm.addEventListener("submit", function (e) {
+    e.preventDefault();
+    var choice = decisionForm.querySelector('input[name="goal"]:checked');
+    if (!choice) {
+      decisionResult.className = "show";
+      decisionResult.innerHTML = "<p>Please choose an option above first.</p>";
+      return;
+    }
+    var rec = recommendations[choice.value];
+    decisionResult.className = "show";
+    decisionResult.innerHTML = "<h3>" + rec.title + "</h3><p>" + rec.body + "</p>";
+  });
+  document.getElementById("decision-reset").addEventListener("click", function () {
+    decisionResult.className = "";
+    decisionResult.innerHTML = "";
+  });
+
+  // Final tally now that both the checklist and the tabs' default active
+  // panel have been initialized above.
+  updateProgress();
+})();
+</script>
+</body>
+</html>

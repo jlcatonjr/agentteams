@@ -1,0 +1,102 @@
+[build-system]
+requires = ["setuptools>=68", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "agentteams"
+version = "1.0.0rc6"
+description = "Generate a complete, coordinated AI agent team for any project from a single description file."
+readme = "README.md"
+license = { text = "MIT" }
+authors = [
+    { name = "James L. Caton", email = "jlcatonjr@gmail.com" },
+]
+maintainers = [
+    { name = "James L. Caton", email = "jlcatonjr@gmail.com" },
+]
+requires-python = ">=3.11"
+classifiers = [
+    "Development Status :: 5 - Production/Stable",
+    "Intended Audience :: Developers",
+    "License :: OSI Approved :: MIT License",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Topic :: Software Development :: Code Generators",
+    "Topic :: Software Development :: Libraries :: Python Modules",
+]
+dependencies = ["jsonschema>=4.20"]
+keywords = ["agent", "ai", "copilot", "code-generation", "github-copilot", "llm", "multi-agent"]
+
+[project.optional-dependencies]
+# Tooling needed only to run the test suite. CI workflows install via
+# `pip install -e .[test]`. Adding to this list rather than to runtime
+# dependencies keeps the wheel small for end users.
+test = [
+    "pytest>=8",
+    "pyyaml>=6",
+]
+# The `agentteams.research` subpackage (search/reputable/verify) is a real, optional runtime
+# library, not part of the CLI/generator pipeline — the base install stays exactly as
+# dependency-free as before this extra existed. `pypdf` additionally stays lazily imported inside
+# `agentteams/research/search.py`'s PDF-handling branch specifically (never at that module's own
+# top level), so a caller who never touches a PDF doesn't eat that import even within this extra.
+# See docs_src/api-reference/research.md and
+# tmp/by-week/2026-W29/agentteams-research-verification-baseline.plan.md (Design §0).
+research = [
+    "httpx>=0.27",
+    "pypdf>=4.0",
+]
+# `agentteams.research.browser` (Playwright-backed rendering for JS-heavy pages `fetch_text` can't
+# reach) is a SEPARATE, heavier extra layered on top of `research` — not folded into it — so a
+# caller who only wants lightweight text search/fetch never pays for Playwright's browser-binary
+# download. This extra installs the `playwright` PACKAGE only; the browser binaries themselves are
+# a required second step the extra cannot perform: `playwright install chromium`. `browser.py` is
+# deliberately not imported by `agentteams/research/__init__.py`, so installing `research` alone
+# never touches this dependency either. See docs_src/api-reference/research.md and
+# tmp/by-week/2026-W30/web-browsing-playwright-cli.plan.md.
+browser = [
+    "agentteams[research]",
+    "playwright>=1.40",
+]
+
+[project.urls]
+Homepage = "https://github.com/jlcatonjr/agentteams"
+Repository = "https://github.com/jlcatonjr/agentteams"
+Issues = "https://github.com/jlcatonjr/agentteams/issues"
+Documentation = "https://jlcatonjr.github.io/agentteams/"
+
+[project.scripts]
+agentteams = "build_team:main"
+build-team = "build_team:_deprecated_build_team_entry"   # deprecated alias; removed at 2.0 (see STABILITY.md)
+
+[tool.setuptools]
+py-modules = ["build_team"]
+
+[tool.setuptools.packages.find]
+include = ["agentteams*"]
+exclude = [
+    "tests*",
+    "tmp*",
+    "references*",
+    "docs*",
+    "docs_src*",
+    "examples*",
+    "scripts*",
+    "schemas*",
+    "templates*",
+    "memories*",
+    "workSummaries*",
+    "_site*",
+    ".github*",
+    ".venv*",
+]
+
+[tool.setuptools.package-data]
+"agentteams" = ["templates/**"]
+
+[tool.setuptools.data-files]
+"share/man/man1" = ["agentteams.1"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]

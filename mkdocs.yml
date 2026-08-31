@@ -1,0 +1,218 @@
+site_name: Agent Teams Module
+site_description: Generate a complete, coordinated AI agent team for any project from a single description file.
+site_url: https://jlcatonjr.github.io/agentteams/
+repo_url: https://github.com/jlcatonjr/agentteams
+repo_name: jlcatonjr/agentteams
+edit_uri: edit/main/docs_src/
+docs_dir: docs_src
+site_dir: _site
+use_directory_urls: true
+site_author: jlcatonjr
+extra:
+  generator: false
+copyright: "&copy; <span id='copyright-year'></span> jlcatonjr"
+extra_javascript:
+  - javascripts/current-year.js
+
+theme:
+  name: material
+  palette:
+    - scheme: default
+      primary: indigo
+      accent: indigo
+  features:
+    - navigation.tabs
+    - navigation.sections
+    - navigation.top
+    - search.suggest
+    - search.highlight
+    - content.code.copy
+
+nav:
+  - Home: index.md
+  - Manuscript: manuscript.md
+  - Getting Started: getting-started.md
+  - Agent-Assisted Setup: agent-assisted-setup.md
+  - How It Works: how-it-works.md
+  - Examples: examples.md
+  - CLI Reference: cli-reference.md
+  - Interoperability: interoperability.md
+  - Guides:
+      - Post-Production Auditor: post-production-auditor-guide.md
+      - Security Hardening & Threat Intelligence: security-hardening-guide.md
+      - Red-Team Model Scoring & Attack Generation: redteam-model-scoring-guide.md
+      - Security Workflow Glossary: security-workflow-glossary.md
+      - Runtime Security for Served Apps: runtime-security-guide.md
+      - Section Fencing & Safe Merges: section-fencing-guide.md
+      - Update Lifecycle, Drift & Backups: update-lifecycle-guide.md
+      - Detecting Stale Docs & Scripts: stale-detection-guide.md
+      - Update Compatibility Maintenance: update-compatibility-maintenance-guide.md
+      - Delivery Procedure: delivery-procedure.md
+      - Migration Guide: migration-guide.md
+      - Interoperability Patterns: interoperability-patterns-guide.md
+      - Bridge CI Automation: bridge-ci-automation-guide.md
+      - Enrichment Pipeline: enrichment-pipeline-guide.md
+      - Cross-Repository Coordination: cross-repository-coordination-guide.md
+      - Working with Your Generated Team: working-with-your-generated-team-guide.md
+      - Verification Environment: verification-environment.md
+  - Security Infrastructure Handbook:
+      - Overview: agentteams-security-guide/README.md
+      - The Map (SKELETON): agentteams-security-guide/SKELETON.md
+      - Audience Profiles: agentteams-security-guide/audience-profiles.md
+      - Sources: agentteams-security-guide/SOURCES.md
+      - Projection Guide: agentteams-security-guide/_meta/projection-guide.md
+      - "Reference (full depth)":
+          - Contents: agentteams-security-guide/reference/README.md
+          - "Part I — What It Is & Why": agentteams-security-guide/reference/part-i-what-it-is-and-why.md
+          - "Part II — The Constitution & Authority": agentteams-security-guide/reference/part-ii-the-constitution-and-authority.md
+          - "Part III — Clearance, Waivers & Grants": agentteams-security-guide/reference/part-iii-clearance-waivers-and-grants.md
+          - "Part IV — The Gates": agentteams-security-guide/reference/part-iv-the-gates.md
+          - "Part V — Content Safety": agentteams-security-guide/reference/part-v-content-safety.md
+          - "Part VI — OS Confinement": agentteams-security-guide/reference/part-vi-os-confinement.md
+          - "Part VII — Threat Intelligence & Red Team": agentteams-security-guide/reference/part-vii-threat-intelligence-and-red-team.md
+          - "Part VIII — Integrity, Provenance & Recovery": agentteams-security-guide/reference/part-viii-integrity-provenance-and-recovery.md
+          - "Part IX — Synthesis & Reference Matter": agentteams-security-guide/reference/part-ix-synthesis-and-reference-matter.md
+      - "For Developers":
+          - Contents: agentteams-security-guide/for-developers/README.md
+          - "Part I — What It Is & Why": agentteams-security-guide/for-developers/part-i-what-it-is-and-why.md
+          - "Part II — The Constitution & Authority": agentteams-security-guide/for-developers/part-ii-the-constitution-and-authority.md
+          - "Part III — Clearance, Waivers & Grants": agentteams-security-guide/for-developers/part-iii-clearance-waivers-and-grants.md
+          - "Part IV — The Gates": agentteams-security-guide/for-developers/part-iv-the-gates.md
+          - "Part V — Content Safety": agentteams-security-guide/for-developers/part-v-content-safety.md
+          - "Part VI — OS Confinement": agentteams-security-guide/for-developers/part-vi-os-confinement.md
+          - "Part VII — Threat Intelligence & Red Team": agentteams-security-guide/for-developers/part-vii-threat-intelligence-and-red-team.md
+          - "Part VIII — Integrity, Provenance & Recovery": agentteams-security-guide/for-developers/part-viii-integrity-provenance-and-recovery.md
+          - "Part IX — Synthesis & Reference Matter": agentteams-security-guide/for-developers/part-ix-synthesis-and-reference-matter.md
+      - "For Researchers":
+          - Contents: agentteams-security-guide/for-researchers/README.md
+          - "Part I — What It Is & Why": agentteams-security-guide/for-researchers/part-i-what-it-is-and-why.md
+          - "Part II — The Constitution & Authority": agentteams-security-guide/for-researchers/part-ii-the-constitution-and-authority.md
+          - "Part III — Clearance, Waivers & Grants": agentteams-security-guide/for-researchers/part-iii-clearance-waivers-and-grants.md
+          - "Part IV — The Gates": agentteams-security-guide/for-researchers/part-iv-the-gates.md
+          - "Part V — Content Safety": agentteams-security-guide/for-researchers/part-v-content-safety.md
+          - "Part VI — OS Confinement": agentteams-security-guide/for-researchers/part-vi-os-confinement.md
+          - "Part VII — Threat Intelligence & Red Team": agentteams-security-guide/for-researchers/part-vii-threat-intelligence-and-red-team.md
+          - "Part VIII — Integrity, Provenance & Recovery": agentteams-security-guide/for-researchers/part-viii-integrity-provenance-and-recovery.md
+          - "Part IX — Synthesis & Reference Matter": agentteams-security-guide/for-researchers/part-ix-synthesis-and-reference-matter.md
+      - "For Everyone":
+          - Contents: agentteams-security-guide/for-everyone/README.md
+          - "Part I — What It Is & Why": agentteams-security-guide/for-everyone/part-i-what-it-is-and-why.md
+          - "Part II — The Constitution & Authority": agentteams-security-guide/for-everyone/part-ii-the-constitution-and-authority.md
+          - "Part III — Clearance, Waivers & Grants": agentteams-security-guide/for-everyone/part-iii-clearance-waivers-and-grants.md
+          - "Part IV — The Gates": agentteams-security-guide/for-everyone/part-iv-the-gates.md
+          - "Part V — Content Safety": agentteams-security-guide/for-everyone/part-v-content-safety.md
+          - "Part VI — OS Confinement": agentteams-security-guide/for-everyone/part-vi-os-confinement.md
+          - "Part VII — Threat Intelligence & Red Team": agentteams-security-guide/for-everyone/part-vii-threat-intelligence-and-red-team.md
+          - "Part VIII — Integrity, Provenance & Recovery": agentteams-security-guide/for-everyone/part-viii-integrity-provenance-and-recovery.md
+          - "Part IX — Synthesis & Reference Matter": agentteams-security-guide/for-everyone/part-ix-synthesis-and-reference-matter.md
+  - Claude & Copilot:
+      - Claude Code Cheat Sheet: claude-code-cheat-sheet.md
+      - Claude Privileges: claude-privileges.md
+      - Copilot Privileges: copilot-privileges.md
+  - Goose:
+      - System Prep & Source/Model Switch: goose-system-prep.md
+      - Cheat Sheet: goose-cheat-sheet.md
+      - Cloud Providers: goose-cloud-providers.md
+      - Privileges: goose-privileges.md
+      - Per-User Runtime Pattern: goose-runtime-pattern-guide.md
+  - API Reference:
+      - Overview: api-reference/index.md
+      - ingest: api-reference/ingest.md
+      - analyze: api-reference/analyze.md
+      - manifest-format: api-reference/manifest-format.md
+      - render: api-reference/render.md
+      - emit: api-reference/emit.md
+      - fences: api-reference/fences.md
+      - convert: api-reference/convert.md
+      - integrity: api-reference/integrity.md
+      - interop: api-reference/interop.md
+      - capability-map: api-reference/capability-map.md
+      - canonical: api-reference/canonical.md
+      - bridge: api-reference/bridge.md
+      - bridge-skills: api-reference/bridge-skills.md
+      - bridge-pair-docs: api-reference/bridge-pair-docs.md
+      - fleet: api-reference/fleet.md
+      - drift: api-reference/drift.md
+      - behavioral-drift: api-reference/behavioral-drift.md
+      - scan: api-reference/scan.md
+      - redteam: api-reference/redteam.md
+      - session_scan: api-reference/session_scan.md
+      - audit: api-reference/audit.md
+      - remediate: api-reference/remediate.md
+      - security-refs: api-reference/security-refs.md
+      - framework-research: api-reference/framework-research.md
+      - enrich: api-reference/enrich.md
+      - memory-index: api-reference/memory-index.md
+      - memory-index-incremental: api-reference/memory-index-incremental.md
+      - output-plan: api-reference/output-plan.md
+      - update-report: api-reference/update-report.md
+      - living-doc: api-reference/living-doc.md
+      - cli: api-reference/cli.md
+      - code-index: api-reference/code-index.md
+      - feature-inventory: api-reference/feature-inventory.md
+      - feature-audit: api-reference/feature-audit.md
+      - code-sources: api-reference/code-sources.md
+      - fence-inject: api-reference/fence-inject.md
+      - graph: api-reference/graph.md
+      - architecture: api-reference/architecture.md
+      - git-hooks: api-reference/git-hooks.md
+      - model-routing: api-reference/model-routing.md
+      - eval-suite: api-reference/eval-suite.md
+      - eval-adapters: api-reference/eval-adapters.md
+      - frameworks: api-reference/frameworks.md
+      - man: api-reference/man.md
+      - handoff_payloads: api-reference/handoff_payloads.md
+      - plan_steps: api-reference/plan_steps.md
+      - plan-steps-todo: api-reference/plan-steps-todo.md
+      - parallel-plan: api-reference/parallel-plan.md
+      - liaison-logs: api-reference/liaison-logs.md
+      - host-features: api-reference/host-features.md
+      - workspace-privilege-scoping: api-reference/workspace-privilege-scoping.md
+      - rank-conformance: api-reference/rank-conformance.md
+      - baseline: api-reference/baseline.md
+      - template-pins: api-reference/template-pins.md
+      - front-matter-reconcile: api-reference/front-matter-reconcile.md
+      - bridge-subagents: api-reference/bridge-subagents.md
+      - bridge-subagents-goose: api-reference/bridge-subagents-goose.md
+      - bridge-sources: api-reference/bridge-sources.md
+      - hooks-emit: api-reference/hooks-emit.md
+      - instructions-split: api-reference/instructions-split.md
+      - schedule-emit: api-reference/schedule-emit.md
+      - mcp-detect: api-reference/mcp-detect.md
+      - mcp-emit: api-reference/mcp-emit.md
+      - goose-config: api-reference/goose-config.md
+      - pr-management: api-reference/pr-management.md
+      - research: api-reference/research.md
+      - toml-write: api-reference/toml-write.md
+      - codex-mcp-emit: api-reference/codex-mcp-emit.md
+      - team-package: api-reference/team-package.md
+      - sync-baseline: api-reference/sync-baseline.md
+      - sync-classifier: api-reference/sync-classifier.md
+      - sync-pin: api-reference/sync-pin.md
+      - multi-sync: api-reference/multi-sync.md
+  - Template Authoring: template-authoring.md
+  - Description Format: DESCRIPTION-FORMAT.md
+  - Structural Update Plan: structural-update-plan.md
+  - Contributing: contributing.md
+  - Changelog: changelog.md
+
+markdown_extensions:
+  - pymdownx.highlight:
+      anchor_linenums: true
+  - pymdownx.inlinehilite
+  - pymdownx.tilde
+  - pymdownx.superfences:
+      custom_fences:
+        - name: mermaid
+          class: mermaid
+          format: !!python/name:pymdownx.superfences.fence_code_format
+  - pymdownx.snippets:
+      base_path:
+        - .
+      check_paths: true
+  - pymdownx.tabbed:
+      alternate_style: true
+  - admonition
+  - tables
+  - toc:
+      permalink: true

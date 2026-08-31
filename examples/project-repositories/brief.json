@@ -1,0 +1,165 @@
+{
+  "project_name": "ProjectRepositories",
+  "project_goal": "A collection of empirical economics and data science research projects analyzing monetary policy, fiscal dynamics, agent-based economic models, and energy policy using Python, Jupyter notebooks, statistical modeling, and interactive visualization. Each sub-project produces research-grade analysis paired with interactive HTML charts or data-driven whitepapers.",
+  "deliverables": [
+    "Jupyter notebooks",
+    "interactive HTML visualizations",
+    "Python analysis modules",
+    "research whitepapers"
+  ],
+  "output_format": "Jupyter notebooks and HTML reports",
+  "primary_output_dir": "*/outputs/",
+  "build_output_dir": "*/Whitepaper/",
+  "figures_dir": "*/outputs/",
+  "authority_sources": [
+    {
+      "name": "FRED / Federal Reserve Economic Data",
+      "path": "MappingTheFederalReserve'sResponseFunctionWithDirectedAcyclicGraphs/datlib/FRED.py",
+      "scope": "Federal Reserve monetary data fetch conventions and series codes",
+      "rank": 1
+    },
+    {
+      "name": "datlib library",
+      "path": "MappingTheFederalReserve'sResponseFunctionWithDirectedAcyclicGraphs/datlib/",
+      "scope": "DAG construction, time-series testing, statistical analysis, and plotting conventions for the Fed DAG project",
+      "rank": 2
+    },
+    {
+      "name": "homebrewedFunctions library",
+      "path": "MorePrairieProsperity/homebrewedFunctions/",
+      "scope": "Shared helper functions for the Prairie Prosperity fiscal analysis",
+      "rank": 3
+    },
+    {
+      "name": "Crisis and Credit Allocation notebook",
+      "path": "Crisis and Credit Allocation/Crisis and Credit Allocation Data.ipynb",
+      "scope": "Canonical analysis script for crisis-era banking and credit data",
+      "rank": 4
+    },
+    {
+      "name": "Sugarscape model source",
+      "path": "Sugarscape/",
+      "scope": "Agent-based model implementation — Agent.py, Model.py, Patch.py are the authoritative model definitions",
+      "rank": 5
+    }
+  ],
+  "style_reference": "PropertyTaxes/Whitepaper/",
+  "reference_db_path": ".github/agents/references/project-references.bib",
+  "reference_key_convention": "AuthorYear",
+  "conversion_pipeline": "jupyter nbconvert --to html <notebook>.ipynb --output-dir */Whitepaper/ (retain standalone Plotly HTML artifacts in */outputs/ without further conversion)",
+  "tools": [
+    { "name": "Python", "version": "3.x", "category": "language" },
+    { "name": "Jupyter", "category": "framework" },
+    { "name": "pandas", "category": "library" },
+    { "name": "numpy", "category": "library" },
+    { "name": "matplotlib", "category": "library" },
+    { "name": "plotly", "category": "library" },
+    { "name": "pandas-datareader", "category": "library" },
+    { "name": "linearmodels", "category": "library" },
+    { "name": "SQLite", "category": "database", "needs_specialist_agent": false },
+    { "name": "pyarrow / parquet", "category": "other" }
+  ],
+  "style_rules": [
+    "Jupyter notebooks are the primary authoring surface; Python .py files are supporting libraries or model classes",
+    "Interactive HTML outputs use Plotly; static plots use matplotlib",
+    "Data files (CSV, Excel, parquet) are raw inputs — never modify source data in notebooks, only transform into derived frames",
+    "Each sub-project is self-contained in its own directory; cross-project imports are not permitted",
+    "Cite academic sources inline in notebook markdown cells using AuthorYear convention"
+  ],
+  "components": [
+    {
+      "slug": "crisis-credit-allocation",
+      "name": "Crisis and Credit Allocation",
+      "number": 1,
+      "output_file": "Crisis and Credit Allocation/Crisis and Credit Allocation Data.ipynb",
+      "description": "Empirical analysis of banking credit allocation during major U.S. economic crises. Uses FRED API and Federal Reserve bank data (BankData.xlsx, fedData.csv) to construct normalized time-series comparisons across the Great Depression (1929), the 2008 Financial Crisis, and COVID-19 periods. Produces matplotlib figures showing loans-and-investments trends relative to pre-crisis baselines.",
+      "sections": [
+        "Data ingestion from FRED and Excel sources",
+        "Normalization and time-series alignment across crisis episodes",
+        "Visualization of credit allocation divergence by crisis period"
+      ],
+      "quality_criteria": [
+        "All FRED series codes are documented in the notebook",
+        "Normalization baseline date is explicitly defined and reproducible",
+        "Figures include axis labels, legends, and crisis-period annotations"
+      ]
+    },
+    {
+      "slug": "fed-response-dag",
+      "name": "Federal Reserve Response Function DAG Analysis",
+      "number": 2,
+      "output_file": "MappingTheFederalReserve'sResponseFunctionWithDirectedAcyclicGraphs/",
+      "description": "Causal analysis of the Federal Reserve's monetary policy response function using directed acyclic graphs (DAGs). Builds on the custom datlib library (FRED.py, DAG.py, ts_tests.py, stats.py, plots.py) to fetch interest rate and monetary aggregate time-series from FRED, run stationarity and causality tests, construct DAG representations, and produce visualization outputs. Data serialized to parquet for reproducibility.",
+      "sections": [
+        "FRED data fetch and parquet serialization (datlib.FRED)",
+        "Time-series stationarity and difference testing (datlib.ts_tests)",
+        "DAG construction and causal inference (datlib.DAG)",
+        "Statistical summaries and regression (datlib.stats)",
+        "Plot generation (datlib.plots)"
+      ],
+      "quality_criteria": [
+        "datlib module functions have docstrings",
+        "DAG edges are justified by prior economic theory or test results",
+        "Parquet snapshot matches the FRED series codes listed in the notebook"
+      ]
+    },
+    {
+      "slug": "prairie-prosperity",
+      "name": "More Prairie Prosperity — Fiscal and Economic Policy in North Dakota",
+      "number": 3,
+      "output_file": "MorePrairieProsperity/",
+      "description": "State-level fiscal and economic policy research for North Dakota combining panel regression analysis with interactive Plotly HTML reports and a narrative whitepaper. The MorePrairieProsperity directory contains the analysis notebooks and homebrewedFunctions library; the PropertyTaxes/Whitepaper directory contains the published whitepaper notebook (MorePrairieProsperity-EconomyAndFiscalPolicyInNorthDakota.ipynb) that embeds charts via iframes. Key methods: PanelOLS fixed-effects regression, R-squared dropdown figures, combined interactive HTML export.",
+      "sections": [
+        "Data loading and normalization (state tax/income CSVs)",
+        "Panel regression modeling (linearmodels PanelOLS)",
+        "Interactive figure generation (Plotly express/graph_objects)",
+        "HTML report assembly (combineInteractiveHTMLPlots.py)",
+        "Whitepaper narrative (PropertyTaxes/Whitepaper/)"
+      ],
+      "cross_refs": ["crisis-credit-allocation"],
+      "quality_criteria": [
+        "All state-level CSV sources are documented in notebook",
+        "PanelOLS models report entity and time fixed-effects specification",
+        "Interactive HTML outputs load correctly without external dependencies"
+      ]
+    },
+    {
+      "slug": "sugarscape",
+      "name": "Sugarscape Agent-Based Model",
+      "number": 4,
+      "output_file": "Sugarscape/",
+      "description": "Agent-based simulation comparing neoclassical (utility-maximizing) and heuristic-based agents in the Sugarscape environment (Epstein & Axtell 1996), with an optional arbitrageur agent. Implemented as an object-oriented Python model (Agent.py, Model.py, Patch.py) with a GUI entry point (GUI.py) and SQL-based data aggregation (DataAggregatorSQL.py). Outputs are stored to parquet for post-simulation analysis. Part of a master's thesis in applied economics at NDSU.",
+      "sections": [
+        "Agent decision rules (neoclassical vs. heuristic, Agent.py)",
+        "Environment and patch dynamics (Patch.py, Model.py)",
+        "Simulation runner and parameter configuration (GUI.py)",
+        "SQL data aggregation (DataAggregatorSQL.py)",
+        "Results analysis and comparison"
+      ],
+      "quality_criteria": [
+        "Agent breeds and decision rule variants are documented in readme",
+        "Simulation parameters (runs, periods, breed_sets) are configurable without code changes",
+        "SQL aggregation produces reproducible summary statistics"
+      ]
+    },
+    {
+      "slug": "visualize-energy-data",
+      "name": "Visualize Energy Data",
+      "number": 5,
+      "output_file": "VisualizeEnergyData/outputs/",
+      "description": "Interactive HTML visualizations analyzing electricity cost differentials across generation sources. Outputs include per-kWh cost charts, per-capita excess cost comparisons, total excess cost stacked gradient charts, and policy-scenario variants excluding offshore or onshore wind. All outputs are standalone HTML files using Plotly.",
+      "sections": [
+        "Electricity cost data ingestion and processing",
+        "Per-kWh and per-capita cost calculations",
+        "Excess cost vs. baseline computation",
+        "Stacked gradient chart generation for renewable policy scenarios",
+        "HTML export of all interactive figures"
+      ],
+      "quality_criteria": [
+        "Source data provenance is documented (EIA or similar)",
+        "Excess cost baseline is clearly defined and reproducible",
+        "All HTML outputs are self-contained (no external CDN dependencies)"
+      ]
+    }
+  ]
+}

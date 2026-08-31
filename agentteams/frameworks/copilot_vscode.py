@@ -1,0 +1,312 @@
+"""
+copilot_vscode.py — Framework adapter for GitHub Copilot in VS Code.
+
+Agent files:  .github/agents/<slug>.agent.md
+Instructions: .github/copilot-instructions.md
+Format:       YAML front matter + Markdown body
+Handoffs:     Supported
+"""
+
+from __future__ import annotations
+
+import re
+import sys
+import warnings
+from pathlib import Path
+from typing import Any
+
+from .base import FrameworkAdapter
+from agentteams.yaml_frontmatter import parse_yaml_front_matter as _parse_yaml_front_matter
+
+
+class CopilotVSCodeAdapter(FrameworkAdapter):
+
+    @property
+    def framework_id(self) -> str:
+        return "copilot-vscode"
+
+    def render_agent_file(self, content: str, agent_slug: str, manifest: dict[str, Any]) -> str:
+        """Validate and normalize YAML front matter for VS Code Copilot format."""
+        content = _ensure_yaml_front_matter(content, agent_slug, manifest)
+        return content
+
+    def render_instructions_file(self, content: str, manifest: dict[str, Any]) -> str:
+        return content  # instructions format is plain Markdown; no adjustments needed
+
+    def get_file_extension(self, file_type: str) -> str:
+        if file_type in {"agent", "builder"}:
+            return ".agent.md"
+        return ".md"
+
+    def supports_handoffs(self) -> bool:
+        return True
+
+    def required_front_matter_keys(self) -> tuple[str, ...]:
+        """The original `_REQUIRED_YAML_KEYS`, now named as this framework's contract.
+
+        P3 (2026-08-15): the invokability key was renamed from the 'k'
+        spelling to the 'c' spelling to match current upstream docs (both VS
+        Code's page and GitHub's cross-surface reference use 'c'). Renamed
+        together with
+        `_REQUIRED_YAML_KEYS`/`_YAML_DEFAULTS` below in the same change — this
+        method feeds `audit.py`'s compliance check, and a fresh render would
+        fail its own audit for the gap between them if renamed separately.
+        Already-deployed files migrate via the succession-tuple mechanism in
+        `agentteams/front_matter_merge.py` and `front_matter_reconcile.py`.
+        """
+        return ("name", "description", "user-invocable", "tools", "model")
+
+    def get_agents_dir(self, project_path: Path) -> Path:
+        return project_path / ".github" / "agents"
+
+    def vscode_tasks_rel_path(self) -> str | None:
+        return "../../.vscode/tasks.json"
+
+
+# ---------------------------------------------------------------------------
+# YAML front matter helpers
+# ---------------------------------------------------------------------------
+
+# Required YAML keys for VS Code Copilot agent files
+_REQUIRED_YAML_KEYS = {"name", "description", "user-invocable", "tools", "model"}
+
+# Default values for missing required fields
+_YAML_DEFAULTS = {
+    "user-invocable": "false",
+    "tools": "['read', 'edit', 'search']",
+    "model": '["Claude Sonnet 4.6 (copilot)"]',
+}
+
+# Patterns for team-ref filtering
+_AGENTS_FLOW_RE = re.compile(r"^(agents: )\[([^\]]*)\]", re.MULTILINE)
+_AGENTS_BLOCK_RE = re.compile(r"(?ms)^agents:\s*\n((?:[ \t]+-\s*[^\n]+\n)+)")
+_HANDOFF_SECTION_RE = re.compile(r"(?ms)^handoffs:\s*\n((?:[ \t]+[^\n]*\n)*)")
+_HANDOFF_ENTRY_START_RE = re.compile(r"^[ \t]*-\s+label:\s*", re.MULTILINE)
+_HANDOFF_AGENT_LINE_RE = re.compile(r"^[ \t]*agent:\s*['\"]?([a-z0-9][a-z0-9\-]*)['\"]?\s*$", re.MULTILINE)
+_SLUG_RE = re.compile(r"^[a-z0-9][a-z0-9\-]*$")
+
+
+def _get_team_slugs(manifest: dict[str, Any]) -> frozenset[str]:
+    """Return the set of agent slugs that are valid team cross-reference targets.
+
+    Always includes ``orchestrator`` even when it is not a discrete output file.
+
+    The set is the UNION of four sources so the roster pruner never drops a real
+    teammate merely because the current run did not regenerate its file (D1):
+
+    * ``adopted_agents`` — explicit ``--adopt-orphans`` registrations;
+    * ``agent_slug_list`` — the authoritative full brief-defined team (analyze.py);
+    * ``existing_agent_slugs`` — agents already deployed ON DISK, populated during
+      ``--update`` (:mod:`agentteams.cli.generate`). This is the load-bearing addition:
+      an ``--update`` regenerates only part of ``output_files``, so relying on
+      ``output_files`` alone silently prunes deployed teammates the brief did not
+      re-emit. Only ``--prune`` — which DELETES the file — should retire an agent's
+      roster entry, so roster-ref lifecycle tracks file lifecycle;
+    * ``output_files`` — this run's emitted ``.agent.md`` files.
+    """
+    slugs: set[str] = {"orchestrator"}
+    slugs.update(manifest.get("adopted_agents", []))
+    slugs.update(manifest.get("agent_slug_list", []))
+    slugs.update(manifest.get("existing_agent_slugs", []))
+    for f in manifest.get("output_files", []):
+        name = Path(f.get("path", "")).name
+        if name.endswith(".agent.md"):
+            slugs.add(name[: -len(".agent.md")])
+    return frozenset(slugs)
+
+
+def _filter_yaml_team_refs(yaml_body: str, team_slugs: frozenset[str]) -> str:
+    """Remove agent slugs from ``agents:`` and ``handoffs:`` that are absent from the team."""
+
+    def _filter_agents(m: re.Match) -> str:
+        slugs = _parse_flow_agents(m.group(2))
+        keep = [s for s in slugs if s in team_slugs]
+        if keep == slugs:
+            return m.group(0)
+        if not keep:
+            # Symmetry with the block form: refuse to blank a populated flow roster to
+            # `[]` — an all-drop is a coverage bug, not intent. Return it unchanged.
+            return m.group(0)
+        return f"{m.group(1)}[{', '.join(repr(s) for s in keep)}]"
+
+    yaml_body = _AGENTS_FLOW_RE.sub(_filter_agents, yaml_body)
+
+    def _filter_agents_block(m: re.Match) -> str:
+        block = m.group(1)
+        slugs = _parse_block_agents(block)
+        keep = [s for s in slugs if s in team_slugs]
+        if keep == slugs:
+            return m.group(0)
+        # A block roster (the orchestrator's team list) is dropping entries. With the
+        # on-disk/brief union in _get_team_slugs, a drop here means the agent is neither
+        # brief-defined, adopted, nor present on disk — i.e. genuinely departed. Surface it
+        # loudly (D1: a silent roster drop is data loss); never emit an empty roster where a
+        # populated one existed.
+        dropped = [s for s in slugs if s not in team_slugs]
+        if dropped:
+            print(
+                "  NOTE: pruned "
+                + str(len(dropped))
+                + " agent(s) from an orchestrator roster (no longer in the team, on disk, "
+                "or adopted): "
+                + ", ".join(dropped)
+                + ". If these are still deployed teammates, re-run with --adopt-orphans or "
+                "add them to the brief; if intentionally retired, use --prune to remove their "
+                "files too.",
+                file=sys.stderr,
+            )
+        if not keep:
+            # Refuse to emit a bare empty roster in place of a populated one — return the
+            # original block unchanged rather than "agents: []" (belt-and-suspenders with the
+            # emit-path guard). An all-drop is almost always a coverage bug, not intent.
+            return m.group(0)
+        lines = "".join(f"  - '{slug}'\n" for slug in keep)
+        return "agents:\n" + lines
+
+    yaml_body = _AGENTS_BLOCK_RE.sub(_filter_agents_block, yaml_body)
+
+    def _filter_handoffs_section(m: re.Match) -> str:
+        block = m.group(1)
+        entries = _split_handoff_entries(block)
+        if not entries:
+            return "handoffs: []\n"
+
+        kept_entries: list[str] = []
+        for entry in entries:
+            agent_match = _HANDOFF_AGENT_LINE_RE.search(entry)
+            if not agent_match:
+                continue
+            slug = agent_match.group(1)
+            if slug in team_slugs:
+                kept_entries.append(entry)
+
+        if not kept_entries:
+            return "handoffs: []\n"
+
+        return "handoffs:\n" + "".join(kept_entries)
+
+    yaml_body = _HANDOFF_SECTION_RE.sub(_filter_handoffs_section, yaml_body)
+
+    return yaml_body
+
+
+def _parse_flow_agents(value: str) -> list[str]:
+    """Parse ``agents: [ ... ]`` values supporting single/double/bare slugs."""
+    slugs: list[str] = []
+    token_re = re.compile(r"'([^']+)'|\"([^\"]+)\"|([A-Za-z0-9][A-Za-z0-9\-]*)")
+    for match in token_re.finditer(value):
+        slug = next((group for group in match.groups() if group), "")
+        slug = slug.strip()
+        if _SLUG_RE.fullmatch(slug):
+            slugs.append(slug)
+    return slugs
+
+
+def _parse_block_agents(block: str) -> list[str]:
+    """Parse ``agents:`` block-list entries and return valid slugs."""
+    slugs: list[str] = []
+    for raw_line in block.splitlines():
+        line = raw_line.strip()
+        if not line.startswith("-"):
+            continue
+        item = line[1:].strip().strip("\"'")
+        if _SLUG_RE.fullmatch(item):
+            slugs.append(item)
+    return slugs
+
+
+def _split_handoff_entries(block: str) -> list[str]:
+    """Split a handoffs block into per-entry YAML chunks."""
+    lines = block.splitlines(keepends=True)
+    entries: list[list[str]] = []
+    current: list[str] = []
+    for line in lines:
+        if _HANDOFF_ENTRY_START_RE.match(line):
+            if current:
+                entries.append(current)
+            current = [line]
+            continue
+        if current:
+            current.append(line)
+    if current:
+        entries.append(current)
+
+    return ["".join(entry) for entry in entries]
+
+
+#: P8 (2026-08-15): GitHub's cross-surface custom-agents configuration reference
+#: documents a 30,000-character limit on the agent body (the system-prompt content,
+#: not the YAML front matter). Unenforced at render time until now.
+#:
+#: A warning, not a raise: a first implementation raised ValueError here and broke
+#: fresh generation entirely — this project's OWN orchestrator template already
+#: renders a ~46,500-character body (55% over the limit) before this check existed,
+#: and every project generated from it inherits that size. Raising would make
+#: `agentteams --framework copilot-vscode`/`copilot-cli` unable to generate ANY
+#: team, not flag an edge case. Shrinking the orchestrator template to fit is real
+#: content-editing work with its own blast radius (every generated team, every
+#: golden snapshot) — out of scope for adding enforcement — logged as a separate
+#: remediation-log follow-up instead. Warning still closes the actual P8 gap: the
+#: limit was previously invisible at render time; now it is surfaced, non-fatally,
+#: at every call site that would otherwise ship an oversized file silently.
+_MAX_BODY_CHARS = 30_000
+
+
+def _check_body_length(body_text: str, agent_slug: str) -> None:
+    if len(body_text) > _MAX_BODY_CHARS:
+        warnings.warn(
+            f"{agent_slug}: agent body is {len(body_text):,} characters, exceeding "
+            f"GitHub's {_MAX_BODY_CHARS:,}-character limit for custom-agent bodies "
+            "(cross-surface configuration reference). The platform may truncate or "
+            "reject this file. Front matter does not count toward this limit.",
+            UserWarning,
+            stacklevel=2,
+        )
+
+
+def _ensure_yaml_front_matter(content: str, agent_slug: str, manifest: dict[str, Any]) -> str:
+    """Verify YAML front matter is present and has required keys; add defaults if not."""
+    yaml_text, body_text = _parse_yaml_front_matter(content)
+    if yaml_text is None:
+        # No front matter — prepend minimal YAML
+        _check_body_length(content, agent_slug)
+        project_name = manifest.get("project_name", "Project")
+        agent_name = FrameworkAdapter._slug_to_name(agent_slug)
+        front_matter = (
+            f"---\n"
+            f"name: {agent_name} — {project_name}\n"
+            f"description: \"{agent_name} agent for {project_name}\"\n"
+            f"user-invocable: false\n"
+            f"tools: ['read', 'edit', 'search']\n"
+            f"model: [\"Claude Sonnet 4.6 (copilot)\"]\n"
+            f"---\n\n"
+        )
+        return front_matter + content
+
+    _check_body_length(body_text, agent_slug)
+    yaml_body = yaml_text
+    changed = False
+
+    # Filter agents: list and handoffs: entries to only include generated team members
+    team_slugs = _get_team_slugs(manifest)
+    filtered = _filter_yaml_team_refs(yaml_body, team_slugs)
+    if filtered != yaml_body:
+        yaml_body = filtered
+        changed = True
+
+    # Check for missing required keys and append defaults
+    missing_lines: list[str] = []
+    for key in _REQUIRED_YAML_KEYS:
+        if not re.search(rf"^{re.escape(key)}\s*:", yaml_body, re.MULTILINE):
+            if key in _YAML_DEFAULTS:
+                missing_lines.append(f"{key}: {_YAML_DEFAULTS[key]}")
+
+    if missing_lines:
+        yaml_body = yaml_body + "\n" + "\n".join(missing_lines)
+        changed = True
+
+    if changed:
+        return f"---\n{yaml_body}\n---\n{body_text}"
+    return content
+
+

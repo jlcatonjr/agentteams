@@ -1,0 +1,49 @@
+name: CI
+
+on:
+  push:
+    branches:
+      - main
+      - "release/**"
+    tags:
+      - "v*"
+  pull_request:
+  # rc.5: workflow_dispatch is exempt from the GITHUB_TOKEN infinite-loop
+  # safeguard, so framework-auto-update.yml can dispatch CI on the
+  # auto-merge commit and restore the rc.4 post-merge safety-net claim.
+  workflow_dispatch:
+
+jobs:
+  test:
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest]
+        python-version: ["3.11", "3.12"]
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python-version }}
+
+      - name: Verify environment preconditions
+        run: python scripts/verify-env.py
+
+      - name: Install package and pytest
+        run: pip install -e ".[test,research]"
+
+      - name: Run tests
+        run: pytest tests/
+
+      - name: Generate man-page for comparison
+        run: python -m agentteams.man > /tmp/agentteams-check.1
+
+      - name: Check man-page is current
+        run: diff /tmp/agentteams-check.1 agentteams.1
+
+      - name: Lint — durable artifacts must not cite gitignored tmp/ paths (RSR1)
+        if: runner.os == 'Linux'
+        run: bash scripts/check-durable-tmp-refs.sh

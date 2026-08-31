@@ -1,0 +1,28 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1208 138" width="1208" height="138" font-family="monospace">
+  <title>Retrieval: memory &amp; code indexes</title>
+  <defs>
+    <marker id="arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+      <polygon points="0,0 10,5 0,10" fill="#8a8a8a"/>
+    </marker>
+  </defs>
+  <path d="M868,31 L872,31 C908,31 908,69 944,69" fill="none" stroke="#8a8a8a" stroke-width="1.5" marker-end="url(#arrow)"/>
+  <path d="M572,45 L584,45 C620,45 620,31 656,31 L660,31" fill="none" stroke="#8a8a8a" stroke-width="1.5" marker-end="url(#arrow)"/>
+  <path d="M584,93 C620,93 620,107 656,107" fill="none" stroke="#8a8a8a" stroke-width="1.5" marker-end="url(#arrow)"/>
+  <path d="M584,93 C620,93 620,69 656,69 L872,69 L944,69" fill="none" stroke="#8a8a8a" stroke-width="1.5" marker-end="url(#arrow)"/>
+  <path d="M208,93 L280,93" fill="none" stroke="#8a8a8a" stroke-width="1.5" marker-end="url(#arrow)"/>
+  <path d="M172,45 L208,45 L280,45 L292,45" fill="none" stroke="#8a8a8a" stroke-width="1.5" marker-end="url(#arrow)"/>
+  <rect x="660" y="16" width="208" height="30" rx="6" fill="#eef6ee" stroke="#3f8f4f" stroke-width="1.5"/>
+  <text x="764" y="36" font-size="13" text-anchor="middle" fill="#000000">code_index (code &amp; API)</text>
+  <rect x="292" y="30" width="280" height="30" rx="6" fill="#eef6ee" stroke="#3f8f4f" stroke-width="1.5"/>
+  <text x="432" y="50" font-size="13" text-anchor="middle" fill="#000000">code_sources (resolve/partition)</text>
+  <rect x="656" y="92" width="216" height="30" rx="6" fill="#eef6ee" stroke="#3f8f4f" stroke-width="1.5"/>
+  <text x="764" y="112" font-size="13" text-anchor="middle" fill="#000000">memory_index_incremental</text>
+  <rect x="280" y="78" width="304" height="30" rx="6" fill="#eef6ee" stroke="#3f8f4f" stroke-width="1.5"/>
+  <text x="432" y="98" font-size="13" text-anchor="middle" fill="#000000">memory_index (BM25 / sparse vector)</text>
+  <rect x="16" y="78" width="192" height="30" rx="6" fill="#e8eefb" stroke="#1b3fa0" stroke-width="1.5"/>
+  <text x="112" y="98" font-size="13" text-anchor="middle" fill="#000000">work summaries + docs</text>
+  <rect x="944" y="54" width="248" height="30" rx="6" fill="#e8eefb" stroke="#1b3fa0" stroke-width="1.5"/>
+  <text x="1068" y="74" font-size="13" text-anchor="middle" fill="#000000">--query-index / --query-code</text>
+  <rect x="52" y="30" width="120" height="30" rx="6" fill="#e8eefb" stroke="#1b3fa0" stroke-width="1.5"/>
+  <text x="112" y="50" font-size="13" text-anchor="middle" fill="#000000">repo scripts</text>
+</svg>

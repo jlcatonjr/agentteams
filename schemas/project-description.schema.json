@@ -1,0 +1,472 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "project-description.schema.json",
+  "title": "Project Description",
+  "description": "Input specification for the Agent Teams build_team pipeline. Describes the project, its deliverables, tools, and components to generate a complete agent team.",
+  "type": "object",
+  "required": ["project_goal"],
+  "properties": {
+    "project_name": {
+      "type": "string",
+      "description": "Short, slug-safe project name (e.g., 'MyResearchProject', 'DataPipelineV2'). If absent, inferred from the project directory name.",
+      "pattern": "^[A-Za-z0-9_\\-\\.]+$"
+    },
+    "project_goal": {
+      "type": "string",
+      "description": "1–3 sentence description of what the project produces and why. Used as {PROJECT_GOAL} throughout all agent files.",
+      "minLength": 10
+    },
+    "deliverables": {
+      "type": "array",
+      "description": "List of primary deliverable types this project produces.",
+      "items": {
+        "type": "string"
+      },
+      "examples": [
+        ["HTML chapter files", "LaTeX manuscript"],
+        ["Python modules", "documentation"],
+        ["CSV reports", "summary PDF"]
+      ]
+    },
+    "output_format": {
+      "type": "string",
+      "description": "The final output format for compiled deliverables (e.g., 'HTML5', 'PDF', 'Python 3.11 modules', 'LaTeX'). Used as {OUTPUT_FORMAT}.",
+      "examples": ["HTML5", "PDF", "Python 3.11", "LaTeX", "Markdown", "CSV"]
+    },
+    "primary_output_dir": {
+      "type": "string",
+      "description": "Directory where primary authored deliverables are written, relative to project root (e.g., 'src/', 'html/chapters/', 'docs/'). Used as {PRIMARY_OUTPUT_DIR}.",
+      "examples": ["src/", "html/chapters/", "docs/", "reports/"]
+    },
+    "build_output_dir": {
+      "type": "string",
+      "description": "Directory where compiled/converted output artifacts go (e.g., 'build/', 'dist/', 'manuscript/'). Used as {BUILD_OUTPUT_DIR}.",
+      "examples": ["build/", "dist/", "manuscript/", "output/"]
+    },
+    "figures_dir": {
+      "type": "string",
+      "description": "Directory for diagrams and figures. Used as {FIGURES_DIR}.",
+      "default": "figures/",
+      "examples": ["figures/", "assets/figures/", "docs/figures/"]
+    },
+    "existing_project_path": {
+      "type": "string",
+      "description": "Absolute path to an existing project directory on disk. If provided, the analyzer scans it for structure, tools, and potential authority sources."
+    },
+    "agents_output_dir": {
+      "type": "string",
+      "description": "Directory where generated agent files will be written. Defaults to '.github/agents/' within the project path.",
+      "default": ".github/agents/"
+    },
+    "authority_sources": {
+      "type": "array",
+      "description": "Files or directories that agents must treat as ground truth. Used to build {AUTHORITY_HIERARCHY} and {AUTHORITY_SOURCES_LIST}.",
+      "items": {
+        "type": "object",
+        "required": ["name", "path"],
+        "properties": {
+          "name": {
+            "type": "string",
+            "description": "Human-readable name of this authority source."
+          },
+          "path": {
+            "type": "string",
+            "description": "File or directory path, relative to project root or absolute."
+          },
+          "scope": {
+            "type": "string",
+            "description": "What types of claims this source is authoritative for.",
+            "examples": ["technical accuracy", "theoretical claims", "style and voice", "API signatures"]
+          },
+          "rank": {
+            "type": "integer",
+            "description": "Priority rank in the authority hierarchy (1 = highest).",
+            "minimum": 1
+          }
+        }
+      }
+    },
+    "doc_site_config_file": {
+      "type": ["string", "null"],
+      "description": "Path to the documentation-site config (e.g. mkdocs.yml). Read by analyze.build_manifest and manifest_format; resolves {DOC_SITE_CONFIG_FILE}. The schema sets additionalProperties:false, so its absence here made every brief declaring this supported key fail validation — including this module's own."
+    },
+    "style_reference": {
+      "type": ["string", "null"],
+      "description": "Path to the style guide, voice samples, or editorial conventions file. Used as {STYLE_REFERENCE_PATH}."
+    },
+    "reference_db_path": {
+      "type": ["string", "null"],
+      "description": "Path to the bibliography or reference database (BibTeX, CSV, JSON, Markdown). Used as {REFERENCE_DB_PATH}."
+    },
+    "reference_key_convention": {
+      "type": "string",
+      "description": "Citation key format convention. Used as {REFERENCE_KEY_CONVENTION}.",
+      "default": "AuthorYear",
+      "examples": ["AuthorYear", "AuthorTitleYear", "numeric", "custom"]
+    },
+    "tools": {
+      "type": "array",
+      "description": "Languages, frameworks, and tools the project uses.",
+      "items": {
+        "type": "object",
+        "required": ["name"],
+        "properties": {
+          "name": {
+            "type": "string",
+            "description": "Tool or language name (e.g., 'Python', 'LaTeX', 'React')."
+          },
+          "version": {
+            "type": "string",
+            "description": "Version string (e.g., '3.11', '2e', '18')."
+          },
+          "category": {
+            "type": "string",
+            "description": "Category of tool.",
+            "enum": ["language", "framework", "build-system", "database", "cli", "library", "other"]
+          },
+          "config_files": {
+            "type": "array",
+            "items": { "type": "string" },
+            "description": "Config files associated with this tool."
+          },
+          "needs_specialist_agent": {
+            "type": "boolean",
+            "description": "If true, generate a dedicated tool-specific agent for this tool.",
+            "default": false
+          },
+          "docs_url": {
+            "type": "string",
+            "format": "uri",
+            "description": "Official documentation URL for this tool (e.g., 'https://nodejs.org/docs/latest-v20.x/api/'). Used as {TOOL_DOCS_URL} in generated agent files."
+          },
+          "api_surface": {
+            "type": "string",
+            "description": "Key classes, functions, CLI commands, or APIs this tool exposes that agents need to understand. Multi-line Markdown is supported. Used as {TOOL_API_SURFACE} in generated agent files."
+          },
+          "common_patterns": {
+            "type": "string",
+            "description": "Common usage patterns, version-specific gotchas, and anti-patterns for this tool. Multi-line Markdown is supported. Used as {TOOL_COMMON_PATTERNS} in generated agent files."
+          }
+        }
+      }
+    },
+    "retrieval_integration": {
+      "type": "object",
+      "description": "Structured contract for retrieval query, maintenance, and trigger behavior.",
+      "properties": {
+        "mode": {
+          "type": "string",
+          "description": "Retrieval implementation mode.",
+          "enum": ["none", "relational-metadata", "lexical-index", "sparse-vector", "embedding-vector"],
+          "default": "none"
+        },
+        "query_entrypoints": {
+          "type": "array",
+          "description": "Files, symbols, or commands where retrieval lookups are executed.",
+          "items": { "type": "string" }
+        },
+        "maintenance_entrypoints": {
+          "type": "array",
+          "description": "Commands, scripts, or functions that refresh or rebuild retrieval state.",
+          "items": { "type": "string" }
+        },
+        "trigger_sources": {
+          "type": "array",
+          "description": "Trigger channels used to run retrieval workflows.",
+          "items": {
+            "type": "string",
+            "enum": ["cli", "env", "scheduler", "workflow", "script", "manual"]
+          }
+        },
+        "source_of_truth": {
+          "type": "array",
+          "description": "Tables/files used to verify retrieval correctness and freshness.",
+          "items": { "type": "string" }
+        },
+        "staleness_slo_minutes": {
+          "type": "integer",
+          "description": "Maximum allowed retrieval staleness window in minutes.",
+          "minimum": 0
+        },
+        "trigger_contract_version": {
+          "type": "string",
+          "description": "Version identifier for retrieval trigger governance.",
+          "default": "v1"
+        }
+      },
+      "additionalProperties": false
+    },
+    "style_rules": {
+      "type": "array",
+      "description": "Project-specific style rules in plain English. Used in copilot-instructions.md.",
+      "items": {
+        "type": "string"
+      }
+    },
+    "pip_package_name": {
+      "type": "string",
+      "description": "PyPI package name for pip distribution (e.g., 'agentteams'). Supplies the package name used by the module-doc-author/validator agents when they are selected, and enables --doc-check / --doc-update flags. Selection of those agents is driven by packaging/docs signals in the project description (pypi, sphinx, mkdocs, readthedocs, sdist).",
+      "pattern": "^[a-z0-9][a-z0-9._-]*[a-z0-9]$"
+    },
+    "doc_site_tool": {
+      "type": "string",
+      "description": "Documentation site generator. When set, module-doc-author produces the corresponding config file.",
+      "enum": ["mkdocs", "sphinx", "none"],
+      "default": "mkdocs"
+    },
+    "selected_archetypes": {
+      "type": "array",
+      "description": "Override the auto-detected archetype selection. If absent, the analyzer selects archetypes from the project description.",
+      "items": {
+        "type": "string",
+        "enum": [
+          "primary-producer",
+          "quality-auditor",
+          "cohesion-repairer",
+          "style-guardian",
+          "technical-validator",
+          "retrieval-integrator",
+          "research-analyst",
+          "post-production-auditor",
+          "format-converter",
+          "reference-manager",
+          "output-compiler",
+          "visual-designer",
+          "module-doc-author",
+          "module-doc-validator",
+          "tool-specific"
+        ]
+      }
+    },
+    "capabilities": {
+      "type": "array",
+      "description": "Explicit, opt-in capabilities this project wants beyond archetype selection. `research_verification` selects the `research-analyst` archetype, which orchestrates the optional `agentteams[research]` runtime library (real, installable Python — not a design-time-only template) — a project must deliberately choose this, since it adds a real runtime dependency to the generated project, unlike every other archetype selection.",
+      "items": {
+        "type": "string",
+        "enum": ["research_verification"]
+      }
+    },
+    "privilege_profile": {
+      "type": "string",
+      "enum": ["cooperative", "confined", "exclusive"],
+      "default": "cooperative",
+      "description": "Opt-in workspace write-confinement posture. `cooperative` (default) is today's behavior: agents are trusted to respect the workspace, no OS boundary emitted. `confined` and `exclusive` expand to the `claude:sandbox` host feature, which emits Claude Code's native OS-level sandbox block (write-confines Bash and child processes to workspace_write_roots) into the settings example the operator merges — inert until merged. `exclusive` adds OS read-exclusion on top of `confined` (P3a): it also denies this team reading a default deny set plus any `protected_read_paths`, and prints a P3b inbound-hardening advisory. This is OUTBOUND (it seals this team's reads); keeping OTHER teams out of this workspace is operator filesystem hardening, not something exclusive enforces. The effective feature set is the UNION of this expansion and any --target-host-features tokens, so cooperative never strips an explicitly-requested claude:sandbox token. Only the Claude framework enforces this today; on non-sandbox hosts (Goose, Codex, Copilot, native Windows) selecting confined/exclusive emits an advisory notice, not enforcement."
+    },
+    "workspace_write_roots": {
+      "type": "array",
+      "description": "Directories the confined agent may write to, relative to the merged .claude/settings.json at the project root. Only meaningful when privilege_profile is confined/exclusive (or claude:sandbox is selected directly). Defaults to [\".\"] — the whole generated project tree is the workspace.",
+      "items": {
+        "type": "string"
+      }
+    },
+    "team_id": {
+      "type": "string",
+      "description": "Stable identity this workspace/team is known by for cross-workspace capability grants (P2). A grant is issued BY one team_id and held BY another; the holder's generation-time sandbox-widening reads grants where holder_team == this id. Defaults to the slugified project_name when absent. IMPORTANT: the id is operator-assigned and must be UNIQUE across your workspaces — two teams sharing a team_id share each other's granted reach. Under the symmetric-key model the holder identity is a name (not key-authenticated); it is safe only because grants are consumed at operator-run generation time, never at agent runtime.",
+      "pattern": "^[a-z0-9][a-z0-9-]*$"
+    },
+    "protected_read_paths": {
+      "type": "array",
+      "description": "P3a read-exclusion: extra paths the `exclusive` privilege_profile OS-denies this team (and its subprocesses) from reading, on top of a curated default deny set of sensitive dotfile locations. Add sibling-workspace roots here to stop THIS team reading them. Only meaningful with privilege_profile: exclusive. This is OUTBOUND hardening (it seals this team's reads); it does NOT stop other teams from reading THIS workspace, which is operator filesystem hardening (see the exclusive-profile advisory printed at generation and the docs). Paths use the sandbox syntax (home-relative or absolute).",
+      "items": {
+        "type": "string"
+      }
+    },
+    "resolve_deny_read_abspath": {
+      "type": "boolean",
+      "description": "P3-3 opt-in (default false). When true, the `exclusive` profile's `~/`-relative `denyRead` paths are resolved to `expanduser`'d ABSOLUTE paths at generation time, so OS read-exclusion no longer depends on Claude Code expanding `~`→$HOME before the deny (an unverified assumption that, if false, silently no-ops every default deny entry while the config still looks protective). Trade-off: absolute paths are host-specific (they name the generating machine's home) and do not port to another machine — regenerate on the host that runs the team. Only meaningful with privilege_profile: exclusive; the default (false) keeps the portable `~/` form and a byte-identical block."
+    },
+    "enforce_decision_signing": {
+      "type": "boolean",
+      "default": true,
+      "description": "Strict agent-privilege switch (agent-position axis). When true, an AUTHORIZING security-decision row (a PASS or HALT-RETRACTED that clears a destructive/privileged action) is honoured ONLY if decision signing is active and the row's signature verifies; an unsigned authorization is refused (fail-closed) rather than trusted on its author name alone — closing the roster/author-spoof path in the signing-inactive configuration. Emitted into the generated team as references/agent-privilege.json, which the security gate reads at enforcement time. DEFAULTS ON when the team is (re)generated or updated: a post-update notice names how to turn it off (set this field false in your brief and re-update). A workspace with NO emitted config is treated as OFF, so a team that has not yet been updated to this feature never breaks by surprise — the switch turns on precisely when you update. Set false to keep the legacy behavior (an unsigned authorizing row is honoured on its author name)."
+    },
+    "components": {
+      "type": "array",
+      "description": "Workstream components. One workstream expert agent is generated per component.",
+      "items": {
+        "type": "object",
+        "required": ["slug", "name"],
+        "properties": {
+          "slug": {
+            "type": "string",
+            "description": "URL-safe identifier for this component (e.g., 'ch01-intro', 'auth-module', 'q3-report').",
+            "pattern": "^[a-z0-9\\-]+$"
+          },
+          "name": {
+            "type": "string",
+            "description": "Human-readable name of this component (e.g., 'Chapter 1: Introduction')."
+          },
+          "output_file": {
+            "type": "string",
+            "description": "Path to this component's primary output file, relative to primary_output_dir."
+          },
+          "description": {
+            "type": "string",
+            "description": "1–3 sentences describing what this component produces."
+          },
+          "sections": {
+            "type": "array",
+            "items": { "type": "string" },
+            "description": "List of sections, functions, or sub-units in this component."
+          },
+          "sources": {
+            "type": "array",
+            "items": { "type": "string" },
+            "description": "Known source references (citation keys or file paths) relevant to this component."
+          },
+          "cross_refs": {
+            "type": "array",
+            "items": { "type": "string" },
+            "description": "Other component slugs this component references."
+          },
+          "quality_criteria": {
+            "type": "array",
+            "items": { "type": "string" },
+            "description": "Pass/fail quality criteria the workstream expert will check against in reviews."
+          },
+          "tools": {
+            "type": "array",
+            "items": { "type": "string" },
+            "description": "Tool or agent slugs relevant to this component (e.g., 'PostgreSQL', 'Docker'). Used to link workstream experts to tool specialists/references."
+          },
+          "number": {
+            "type": "integer",
+            "description": "Optional ordering number (e.g., chapter number).",
+            "minimum": 1
+          }
+        }
+      }
+    },
+    "memory_index_extra_dirs": {
+      "type": "array",
+      "description": "Optional consumer-declared extra source directories or glob patterns merged into the durable memory index in addition to the built-in defaults (workSummaries/, docs_src/, references/, CHANGELOG.md, README.md). Each entry is a project-relative string: a directory (recursively scanned for *.md) or a glob (literal expansion). Absolute paths, traversal escapes, and symlinked escapes outside the project root are rejected. See docs_src/api-reference/memory-index.md.",
+      "items": { "type": "string" },
+      "examples": [
+        ["agentteams/templates", "examples"],
+        ["tools", "services/docs"],
+        ["docs/**/*.md"]
+      ]
+    },
+    "memory_index_exclude": {
+      "type": "array",
+      "description": "Optional consumer-declared project-relative paths/globs to EXCLUDE from the durable memory index, even when they would otherwise be swept in by the built-in defaults (workSummaries/, docs_src/, references/) or by memory_index_extra_dirs. Each entry is matched against a source's project-relative posix path as a directory prefix (entry, or entry + '/') or an fnmatch glob. Use this when durable content has been relocated out of the repository (e.g. to a private work-docs repo) so its paths and content snippets are not embedded in the committed, publicly-visible index. Absolute paths are ignored. See docs_src/api-reference/memory-index.md.",
+      "items": { "type": "string" },
+      "examples": [
+        ["workSummaries"],
+        ["references/*-2026-*.adversarial.md", "references/private-notes.md"]
+      ]
+    },
+    "code_index_extra_dirs": {
+      "type": "array",
+      "description": "Optional consumer-declared extra directories or glob patterns of local scripts merged into the code & API index's local-script partition, in addition to the git-tracked source files discovered by default. Each entry is a project-relative string: a directory (recursively scanned for *.py/*.sh) or a glob (literal expansion of *.py/*.sh). Absolute paths, traversal escapes, and symlinked escapes outside the project root are rejected. The code index is a gitignored local cache. See docs_src/api-reference/code-index.md.",
+      "items": { "type": "string" },
+      "examples": [
+        ["scripts", "tools/bin"],
+        ["services/**/*.py"]
+      ]
+    },
+    "conversion_pipeline": {
+      "type": "string",
+      "description": "Command or tool used to convert primary deliverables to output format. Used as {CONVERSION_PIPELINE} in format-converter agent.",
+      "examples": ["pandoc --from html --to latex", "pdflatex", "sphinx-build -b html"]
+    },
+    "mcp_hints": {
+      "type": "array",
+      "description": "Optional consumer-declared hints about external integrations that may warrant an MCP server. Each entry feeds the MCP-suitability detection rubric (agentteams.mcp_detect). Purely advisory: the rubric only recommends; it never auto-provisions a credentialed server. See references/mcp-auto-detection-report.md §5.",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["integration", "trust_tier"],
+        "properties": {
+          "integration": {
+            "type": "string",
+            "minLength": 1,
+            "description": "Name of the external system or capability (e.g., 'analytics-warehouse', 'jira')."
+          },
+          "stateful": {
+            "type": "boolean",
+            "description": "True if the integration has an auth/session lifecycle, connection pooling, or caching that materially benefits from a persistent server.",
+            "default": false
+          },
+          "used_by_components": {
+            "type": "array",
+            "items": { "type": "string" },
+            "description": "Component slugs that need this integration. Reuse across >=2 components is a positive signal."
+          },
+          "trust_tier": {
+            "type": "string",
+            "enum": ["first-party", "third-party-vetted", "third-party-untrusted"],
+            "description": "Self-declared trust level (REQUIRED so absence cannot silently default to the permissive case). Any third-party-* value routes the candidate to DEFER_TO_SECURITY_REVIEW."
+          },
+          "max_side_effect": {
+            "type": "string",
+            "enum": ["read", "write", "destructive"],
+            "description": "Most-privileged operation the integration needs. 'destructive' routes the candidate to DEFER_TO_SECURITY_REVIEW.",
+            "default": "read"
+          },
+          "large_dynamic_surface": {
+            "type": "boolean",
+            "description": "True if the operation set is large and changes over time. Only a positive signal when commits_lazy_disclosure is also true; otherwise an efficiency anti-pattern (report §4.1).",
+            "default": false
+          },
+          "commits_lazy_disclosure": {
+            "type": "boolean",
+            "description": "True if the integration commits to lazy/progressive tool disclosure. Required for large_dynamic_surface to count as a positive signal (report §5.1 tiebreaker).",
+            "default": false
+          }
+        }
+      }
+    },
+    "mcp_servers": {
+      "type": "array",
+      "description": "Optional operator-SPECIFIED MCP server definitions to emit for this team (each conforms to mcp-server.schema.json). This is the input for automating *specified* servers (vs. mcp_hints, which only feeds the BUILD/USE/DEFER detection rubric). Purely declarative: entries are copied to the team-manifest's mcp_servers[] and emitted as the INERT .claude/mcp-servers.agentteams.json only when an MCP host-feature token is enabled (claude:mcp or bridge:copilot-vscode-to-claude:mcp). Provisions nothing on its own; credentialed activation remains a separate operator step. See references/mcp-auto-detection-report.md §5.4/§6.",
+      "items": { "$ref": "mcp-server.schema.json" }
+    },
+    "recipe_parameters": {
+      "type": "array",
+      "description": "Optional Goose recipe parameters (Phase-4a goose-native). Declares typed runtime inputs for the generated Goose team: copied to the team-manifest and, for --framework goose, emitted as a `parameters:` block on the ORCHESTRATOR recipe (referenced via {{ key }}) so it accepts `goose run --recipe orchestrator.yaml --params key=value`. Goose-only; ignored by other frameworks. Opt-in: absent/empty → recipes byte-identical.",
+      "items": {
+        "type": "object",
+        "required": ["key"],
+        "additionalProperties": false,
+        "properties": {
+          "key": { "type": "string", "description": "Parameter name; referenced as {{ key }}." },
+          "input_type": { "type": "string", "enum": ["string", "number", "boolean", "date", "file", "select"], "description": "Goose parameter input_type (default: string)." },
+          "requirement": { "type": "string", "enum": ["required", "optional"], "description": "Goose requirement (default: optional). Optional non-file params receive a default; file params are coerced to required (goose forbids file defaults)." },
+          "default": { "type": ["string", "number", "boolean"], "description": "Default for optional non-file params (file params cannot have a default)." },
+          "description": { "type": "string" }
+        }
+      }
+    },
+    "recipe_response": {
+      "type": "object",
+      "additionalProperties": true,
+      "description": "Optional Goose recipe response schema (Phase-4b goose-native). A JSON Schema ({type:object, properties, required, ...}) declaring the team's structured output; for --framework goose it is copied to the team-manifest and emitted as a `response:` block (json_schema) on the ORCHESTRATOR recipe so goose validates the final output against it. Goose-only; ignored by other frameworks. Opt-in: absent → recipes byte-identical."
+    },
+    "recipe_retry": {
+      "type": "object",
+      "additionalProperties": false,
+      "description": "Optional Goose recipe retry config (Phase-4c goose-native). Declares self-validation for the generated Goose team: for --framework goose it is copied to the team-manifest and emitted as a `retry:` block on the ORCHESTRATOR recipe so goose re-runs until the shell `checks` pass. Safety: `max_retries` is clamped to 1-10 (default 3) and a bounded `timeout_seconds` (1-3600, default 300) is always emitted (never an unbounded retry). Requires ≥1 valid check or it is dropped. Goose-only; ignored by other frameworks. Opt-in: absent → recipes byte-identical.",
+      "properties": {
+        "max_retries": { "type": "integer", "description": "Max retry attempts (clamped to 1-10; default 3)." },
+        "timeout_seconds": { "type": "integer", "description": "Per-check command timeout in seconds (clamped to 1-3600; default 300)." },
+        "on_failure_timeout_seconds": { "type": "integer", "description": "Timeout for the on_failure command (optional)." },
+        "checks": {
+          "type": "array",
+          "description": "Shell checks defining success; ALL must pass.",
+          "items": {
+            "type": "object",
+            "required": ["command"],
+            "additionalProperties": false,
+            "properties": {
+              "type": { "type": "string", "enum": ["shell"], "description": "Check type (only 'shell' supported)." },
+              "command": { "type": "string", "description": "Shell command; non-zero exit = check failed." }
+            }
+          }
+        },
+        "on_failure": { "type": "string", "description": "Shell command run when checks fail (optional)." }
+      }
+    }
+  },
+  "additionalProperties": false
+}
