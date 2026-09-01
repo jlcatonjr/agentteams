@@ -16,6 +16,7 @@ from pathlib import Path
 from agentteams.backup import BACKUP_DIR_NAME as _BACKUP_DIR_NAME
 from agentteams.cli import security_gate
 from agentteams.frameworks.registry import FRAMEWORKS
+from agentteams.cli.commands_output import _resolve_output_dir  # CH-07 carve; re-exported
 
 
 def _run_verify_waivers(args: argparse.Namespace) -> int:
@@ -62,14 +63,7 @@ def _run_verify_waivers(args: argparse.Namespace) -> int:
     return 1 if invalid else 0
 
 
-def _resolve_output_dir(args: argparse.Namespace) -> Path:
-    """Resolve the agents output dir for a standalone read-only command, mirroring
-    ``--verify-waivers``: ``--output`` → ``--project`` → CWD."""
-    if getattr(args, "output", None):
-        return Path(args.output).resolve()
-    if getattr(args, "project", None):
-        return Path(args.project).resolve()
-    return Path.cwd()
+# _resolve_output_dir carved to commands_output.py (CH-07); re-imported below.
 
 
 def _run_verify_grants(args: argparse.Namespace) -> int:
