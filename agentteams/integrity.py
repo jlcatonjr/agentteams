@@ -75,6 +75,16 @@ ENFORCEMENT_MODULES: tuple[str, ...] = (
     # untracked: a silent edit dropping --unshare-net here weakens every emitted Linux boundary and
     # trips nothing. Precedent: the constitutional-gate template asset is pinned the same way.
     "agentteams/templates/universal/sandbox/confine-run.sh",
+    # The macOS deny-test CONTROL (2026-W36; @security + @code-hygiene CONDITIONAL PASS). Emitted
+    # beside the launcher on darwin, mac-escape-tests.sh is the gate that decides whether the macOS
+    # boundary may be called "confined" (C3: no confined claim until it passes on-host, unnested).
+    # It is a control, not a reporter: a silent edit that turns its deny gates into always-PASS (or
+    # neuters the nesting/positive-control guards) would falsely bless an UNCONFINED boundary and
+    # trip nothing — the same phase-6 class the red-team checks above are pinned to close. So the
+    # boundary's verifier is tamper-tracked exactly as the boundary content (confine-run.sh) is. The
+    # two inert Tier-B .example.* files are NOT pinned: they are reference-only, never executed by
+    # the launcher, so editing them weakens no active boundary.
+    "agentteams/templates/universal/sandbox/mac-escape-tests.sh",
     # The PreToolUse constitutional-gate hook (D-1, 2026-08-26; @security CONDITIONAL PASS). The
     # hook verifies scan.py against this manifest before trusting it, but nothing pinned the hook
     # ITSELF — a silent flip of _FAIL_CLOSED_ON_ERROR or a gutted _decide would neuter the gate

@@ -134,16 +134,20 @@ def test_p1_2_fail_closed_raises_on_unenforceable_host(monkeypatch):
     resolve_host_features_and_advise(m, [], "claude", allow_unenforced=False)  # must not raise
     assert not m.get("advisories")  # claude: native settings-block boundary, no manual-wire notice
 
-    # macOS: goose enforces via Seatbelt (no raise, resolves the token); codex has no macOS
-    # boundary and still fails closed.
+    # macOS: goose enforces via its native Seatbelt path (no raise, resolves the token, no
+    # advisory). codex/copilot now ALSO enforce via the emitted launcher's build_macos branch
+    # (2026-W36) → no raise, a NON-FATAL manual-wire advisory (the launcher must be wrapped;
+    # enforcement-UNVERIFIED until mac-escape-tests.sh passes on-host). No macOS fail-closed here.
     monkeypatch.setattr(sys, "platform", "darwin")
     gm = {"privilege_profile": "confined"}
     resolve_host_features_and_advise(gm, [], "goose", allow_unenforced=False)
     assert gm["host_features"] == ["goose:sandbox"]
     assert not gm.get("advisories")
-    with pytest.raises(PrivilegeConfinementError, match="fail-closed"):
-        resolve_host_features_and_advise({"privilege_profile": "confined"}, [], "codex",
-                                         allow_unenforced=False)
+    cm = {"privilege_profile": "confined"}
+    resolve_host_features_and_advise(cm, [], "codex", allow_unenforced=False)  # must NOT raise now
+    assert [a["code"] for a in cm.get("advisories", [])] == [
+        "privilege-profile-macos-launcher-manual-wire"
+    ]
 
 
 def test_p1_2_allow_flag_degrades_to_advisory(monkeypatch):
@@ -695,19 +699,26 @@ def test_advisory_none_for_cooperative_or_claude():
 def test_advisory_fires_for_confinement_on_non_sandbox_host():
     from agentteams.host_features import privilege_profile_advisory
 
-    # codex/copilot expose no per-framework OS sandbox. On Linux they ARE enforceable via the
-    # neutral launcher, but it is manual-wire → a NON-FATAL manual-wire advisory (not the fatal
-    # unenforced-host one). Off Linux (macOS/Windows) there is no boundary → the fatal advisory.
+    # codex/copilot expose no per-framework OS sandbox. On Linux AND macOS they ARE enforceable via
+    # the neutral launcher, but it is manual-wire → a NON-FATAL manual-wire advisory (not the fatal
+    # unenforced-host one). Only on Windows/other is there no boundary → the fatal advisory.
     for framework in ("codex", "copilot-vscode", "copilot-cli"):
         for profile in ("confined", "exclusive"):
             lin = privilege_profile_advisory(profile, framework, platform="linux")
             assert lin is not None and lin["code"] == "privilege-profile-linux-launcher-manual-wire"
             assert "must" in lin["message"].lower() and "confine-run.sh" in lin["message"]
-            for plat in ("darwin", "win32"):
-                adv = privilege_profile_advisory(profile, framework, platform=plat)
-                assert adv is not None
-                assert adv["code"] == "privilege-profile-unenforced-host"
-                assert "ADVISORY ONLY" in adv["message"]
+            # macOS (2026-W36): enforceable-but-manual via build_macos → NON-FATAL manual-wire
+            # advisory carrying the honest residuals + the enforcement-UNVERIFIED gate.
+            mac = privilege_profile_advisory(profile, framework, platform="darwin")
+            assert mac is not None
+            assert mac["code"] == "privilege-profile-macos-launcher-manual-wire"
+            assert "must" in mac["message"].lower() and "confine-run.sh" in mac["message"]
+            assert "UNCAPPED" in mac["message"] and "ENFORCEMENT-UNVERIFIED" in mac["message"]
+            # Windows: no emittable boundary → the fatal unenforced-host advisory.
+            win = privilege_profile_advisory(profile, framework, platform="win32")
+            assert win is not None
+            assert win["code"] == "privilege-profile-unenforced-host"
+            assert "ADVISORY ONLY" in win["message"]
     # goose is enforced on macOS (Seatbelt, no advisory) and Linux (neutral launcher, manual-wire
     # advisory); only Windows gets the fatal unenforced-host advisory.
     for profile in ("confined", "exclusive"):

@@ -43,13 +43,16 @@ def test_is_sandbox_capable_linux_is_framework_neutral(framework):
     assert is_sandbox_capable(framework, "linux") is True
 
 
-def test_is_sandbox_capable_offlinux_stays_framework_specific():
-    # Off Linux the old, framework-specific rules hold: claude everywhere, goose macOS-only.
+def test_is_sandbox_capable_macos_neutral_windows_framework_specific():
+    # macOS is now framework-NEUTRAL too (2026-W36): the SAME launcher's build_macos branch is
+    # emitted for ANY framework (macos_sandbox_output_files), so codex/goose/anything are capable
+    # on darwin (manual-wire, enforcement-UNVERIFIED until mac-escape-tests.sh passes on-host).
+    # Only Windows/other stays framework-specific: claude's native sandbox everywhere, nothing else.
     assert is_sandbox_capable("claude", "darwin") is True
     assert is_sandbox_capable("claude", "win32") is True
     assert is_sandbox_capable("goose", "darwin") is True
     assert is_sandbox_capable("goose", "win32") is False
-    assert is_sandbox_capable("codex", "darwin") is False
+    assert is_sandbox_capable("codex", "darwin") is True  # was False — macOS launcher now emits
     assert is_sandbox_capable("codex", "win32") is False
 
 
