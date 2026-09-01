@@ -5,9 +5,12 @@ confine itself — its ``GOOSE_MODE`` permission modes are in-process approval g
 OS boundary, and it runs with full user privileges (its own ``SECURITY.md`` recommends a
 VM/container). On **macOS** Goose can be confined by Apple Seatbelt (``sandbox-exec`` + a
 ``sandbox.sb`` profile + ``GOOSE_SANDBOX``); there is **no native Linux/Windows Goose OS
-sandbox**, so this module emits **only on macOS** and the CLI degrades a confined/exclusive
-goose team to the honest ``privilege_profile_advisory`` elsewhere (see
-``host_features.is_sandbox_capable``).
+sandbox**, so THIS module emits **only on macOS**. That does NOT mean Linux goose is
+unconfined: on **Linux** the framework-neutral bwrap launcher ``sandbox/confine-run.sh``
+(``_linux_sandbox_emit.py``, emitted for any framework) is the boundary, surfaced via the
+non-fatal manual-wire advisory; only **Windows** has no emittable boundary and degrades to
+the fatal ``privilege_profile_advisory`` (see ``host_features.is_sandbox_capable`` /
+``privilege_profile_advisory``).
 
 Design mirrors the Claude path, honestly and fail-closed:
 
@@ -330,11 +333,13 @@ def _detect_goose_sandbox_support() -> tuple[bool, str]:
 def goose_sandbox_output_files(manifest: dict[str, Any]) -> list[tuple[str, str]]:
     """Return the (rel_path, content) files for goose confinement, or [] when not applicable.
 
-    Emits nothing unless confinement is REQUESTED (:func:`_goose_sandbox_feature_enabled`)
-    AND the current platform can OS-ENFORCE it for goose (macOS — :func:`is_sandbox_capable`).
-    On Linux/Windows this returns ``[]`` (no boundary emitted); the CLI has already surfaced
-    the ``privilege_profile_advisory`` there, so the request fails closed / advises instead
-    of shipping a profile that cannot run — never a silent, non-enforcing artifact.
+    Emits the macOS Seatbelt profile ONLY, and only when confinement is REQUESTED
+    (:func:`_goose_sandbox_feature_enabled`) AND the platform is macOS (the explicit ``darwin``
+    guard below). Off macOS this returns ``[]`` — but that is NOT "no boundary": on **Linux** the
+    boundary is the framework-neutral bwrap launcher emitted by ``base.extra_output_files`` /
+    ``_linux_sandbox_emit`` (surfaced via the non-fatal manual-wire advisory); only **Windows** has
+    no emittable boundary and degrades to the fatal ``privilege_profile_advisory``. This function
+    never ships a Seatbelt profile that cannot run — never a silent, non-enforcing artifact.
     """
     if not _goose_sandbox_feature_enabled(manifest):
         return []
@@ -401,9 +406,13 @@ def verify_goose_sandbox_wiring(
 
     Returns ``(ok, messages)``:
 
-    * **Linux/Windows** — exit-NEUTRAL (``ok=True``) with an explicit "NOT ENFORCEABLE HERE"
-      notice (Goose has no native OS sandbox there); never a misleading clean pass. Points at
-      outside-in confinement.
+    * **Linux** — verifies the framework-neutral bwrap launcher ``sandbox/confine-run.sh``, NOT
+      Seatbelt: ``ok=True`` with an ``ENFORCEABLE`` notice when the launcher is present (it still
+      must be WRAPPED around the invocation to take effect), or ``ok=False`` with a regenerate
+      warning when a confined team is missing it.
+    * **Windows / other** — exit-NEUTRAL (``ok=True``) with an explicit "NOT ENFORCEABLE HERE"
+      notice (no emittable boundary there); never a misleading clean pass. Points at outside-in
+      confinement.
     * **macOS, confinement requested but the boundary is missing/unmerged** — ``ok=False``.
     * **macOS, wired correctly** — ``ok=True`` with an OK line plus the honest build-variance
       reminder to run the manual deny test.

@@ -63,6 +63,18 @@ ENFORCEMENT_MODULES: tuple[str, ...] = (
     # allowWrite / denyRead / denyWrite (D-3 control-plane protection). A silent edit here (e.g.
     # dropping the denyWrite or widening allowWrite) weakens every emitted boundary.
     "agentteams/frameworks/_sandbox_emit.py",
+    # The framework-neutral LINUX sandbox EMITTER (2026-W36; framework-neutral Linux OS-confinement).
+    # Emits the provider-agnostic bwrap launcher (sandbox/confine-run.sh) that is the Linux boundary
+    # for a confined/exclusive team of ANY framework. Same D-2b class as _sandbox_emit.py: a silent
+    # edit here (dropping --unshare-net / the credential read-excludes, widening the writable set, or
+    # changing the neutral emit path) weakens every emitted Linux boundary without tripping E4.
+    "agentteams/frameworks/_linux_sandbox_emit.py",
+    # The Linux launcher ASSET itself — the bwrap flags that ARE the boundary (--unshare-net,
+    # --ro-bind / /, the credential --tmpfs masks) live in this shipped script, not in the .py
+    # (which reads it verbatim). Pinning only the emitter would leave the boundary content
+    # untracked: a silent edit dropping --unshare-net here weakens every emitted Linux boundary and
+    # trips nothing. Precedent: the constitutional-gate template asset is pinned the same way.
+    "agentteams/templates/universal/sandbox/confine-run.sh",
     # The PreToolUse constitutional-gate hook (D-1, 2026-08-26; @security CONDITIONAL PASS). The
     # hook verifies scan.py against this manifest before trusting it, but nothing pinned the hook
     # ITSELF — a silent flip of _FAIL_CLOSED_ON_ERROR or a gutted _decide would neuter the gate

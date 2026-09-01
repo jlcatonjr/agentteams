@@ -120,12 +120,19 @@ def test_p1_2_fail_closed_raises_on_unenforceable_host(monkeypatch):
             resolve_host_features_and_advise({"privilege_profile": "confined"}, [], fw,
                                              allow_unenforced=False)
 
-    # Linux: the framework-neutral bwrap launcher enforces for ANY framework → never raises.
+    # Linux: the framework-neutral bwrap launcher enforces for ANY framework → never raises
+    # (enforcement IS available). claude uses its native settings-block sandbox (no advisory);
+    # every other framework gets a NON-FATAL manual-wire advisory (the launcher must be wrapped),
+    # never the fatal unenforced-host one.
     monkeypatch.setattr(sys, "platform", "linux")
-    for fw in ("codex", "goose", "claude"):
+    for fw in ("codex", "goose"):
         m = {"privilege_profile": "confined"}
         resolve_host_features_and_advise(m, [], fw, allow_unenforced=False)  # must not raise
-        assert not m.get("advisories")
+        codes = [a["code"] for a in m.get("advisories", [])]
+        assert codes == ["privilege-profile-linux-launcher-manual-wire"], f"{fw}: {codes}"
+    m = {"privilege_profile": "confined"}
+    resolve_host_features_and_advise(m, [], "claude", allow_unenforced=False)  # must not raise
+    assert not m.get("advisories")  # claude: native settings-block boundary, no manual-wire notice
 
     # macOS: goose enforces via Seatbelt (no raise, resolves the token); codex has no macOS
     # boundary and still fails closed.
@@ -688,21 +695,25 @@ def test_advisory_none_for_cooperative_or_claude():
 def test_advisory_fires_for_confinement_on_non_sandbox_host():
     from agentteams.host_features import privilege_profile_advisory
 
-    # codex/copilot expose no per-framework OS sandbox, but Linux enforces framework-neutrally
-    # (the emitted bwrap launcher wraps any process). So they advise only OFF Linux (macOS/Windows).
+    # codex/copilot expose no per-framework OS sandbox. On Linux they ARE enforceable via the
+    # neutral launcher, but it is manual-wire → a NON-FATAL manual-wire advisory (not the fatal
+    # unenforced-host one). Off Linux (macOS/Windows) there is no boundary → the fatal advisory.
     for framework in ("codex", "copilot-vscode", "copilot-cli"):
         for profile in ("confined", "exclusive"):
-            assert privilege_profile_advisory(profile, framework, platform="linux") is None
+            lin = privilege_profile_advisory(profile, framework, platform="linux")
+            assert lin is not None and lin["code"] == "privilege-profile-linux-launcher-manual-wire"
+            assert "must" in lin["message"].lower() and "confine-run.sh" in lin["message"]
             for plat in ("darwin", "win32"):
                 adv = privilege_profile_advisory(profile, framework, platform=plat)
                 assert adv is not None
                 assert adv["code"] == "privilege-profile-unenforced-host"
                 assert "ADVISORY ONLY" in adv["message"]
-    # goose is OS-enforceable on macOS (Seatbelt) AND Linux (the neutral launcher); it fires the
-    # advisory only on Windows. Exercise all three branches deterministically via the override.
+    # goose is enforced on macOS (Seatbelt, no advisory) and Linux (neutral launcher, manual-wire
+    # advisory); only Windows gets the fatal unenforced-host advisory.
     for profile in ("confined", "exclusive"):
         assert privilege_profile_advisory(profile, "goose", platform="darwin") is None
-        assert privilege_profile_advisory(profile, "goose", platform="linux") is None
+        lin = privilege_profile_advisory(profile, "goose", platform="linux")
+        assert lin is not None and lin["code"] == "privilege-profile-linux-launcher-manual-wire"
         adv = privilege_profile_advisory(profile, "goose", platform="win32")
         assert adv is not None
         assert adv["code"] == "privilege-profile-unenforced-host"
@@ -744,33 +755,30 @@ def test_integration_confined_on_goose_reflects_platform(monkeypatch):
 def test_advisory_fires_for_direct_token_on_non_sandbox_host():
     # Conflict-A: a directly-passed sandbox token on a host that cannot OS-enforce it must
     # warn too, even when privilege_profile is cooperative/unset.
-    # Linux-neutral flip: goose is enforced on macOS (Seatbelt) AND Linux (neutral launcher),
-    # so its direct token advises only on Windows. codex is enforced framework-neutrally on
-    # Linux, so its direct token advises only off Linux (macOS/Windows).
+    # Linux-neutral model: a direct token on goose/codex is enforced on macOS (goose Seatbelt) and
+    # Linux (neutral launcher → NON-FATAL manual-wire advisory); Windows gets the fatal
+    # unenforced-host advisory. claude is fine everywhere (native sandbox).
     from agentteams.host_features import privilege_profile_advisory
 
-    # goose: no advisory on macOS or Linux; advisory on Windows.
+    # goose: no advisory on macOS; manual-wire on Linux; unenforced-host on Windows.
     assert (
         privilege_profile_advisory("cooperative", "goose", ["goose:sandbox"], platform="darwin")
         is None
     )
-    assert (
-        privilege_profile_advisory("cooperative", "goose", ["goose:sandbox"], platform="linux")
-        is None
-    )
+    glin = privilege_profile_advisory("cooperative", "goose", ["goose:sandbox"], platform="linux")
+    assert glin is not None and glin["code"] == "privilege-profile-linux-launcher-manual-wire"
     adv = privilege_profile_advisory("cooperative", "goose", ["goose:sandbox"], platform="win32")
     assert adv is not None
     assert adv["code"] == "privilege-profile-unenforced-host"
-    # codex: enforced framework-neutrally on Linux (no advisory); advisory on Windows.
-    assert (
-        privilege_profile_advisory("cooperative", "codex", ["claude:sandbox"], platform="linux")
-        is None
-    )
+    # codex: manual-wire on Linux; unenforced-host on Windows.
+    clin = privilege_profile_advisory("cooperative", "codex", ["claude:sandbox"], platform="linux")
+    assert clin is not None and clin["code"] == "privilege-profile-linux-launcher-manual-wire"
     adv2 = privilege_profile_advisory("cooperative", "codex", ["claude:sandbox"], platform="win32")
     assert adv2 is not None
     assert adv2["code"] == "privilege-profile-unenforced-host"
-    # ...and a claude:sandbox token on the claude framework is fine on any platform.
+    # ...and a claude:sandbox token on the claude framework is fine on any platform (native sandbox).
     assert privilege_profile_advisory("cooperative", "claude", ["claude:sandbox"]) is None
+    assert privilege_profile_advisory("cooperative", "claude", ["claude:sandbox"], platform="linux") is None
 
 
 # ---------------------------------------------------------------------------
