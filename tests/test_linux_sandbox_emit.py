@@ -126,27 +126,47 @@ def test_every_framework_emits_neutral_launcher_on_linux(adapter, expected_rel):
     assert _launcher_paths(adapter, {"privilege_profile": "cooperative"}) == []
 
 
-def test_end_to_end_launcher_is_executable_and_at_repo_root(tmp_path):
-    """A full convert-path emission lands the launcher at repo-root ``sandbox/`` and +x."""
-    if not sys.platform.startswith("linux"):
-        pytest.skip("Linux emission is platform-gated")
-    from agentteams import convert
+@pytest.mark.skipif(not sys.platform.startswith("linux"), reason="Linux emission is platform-gated")
+@pytest.mark.parametrize(
+    "adapter, agents_rel",
+    [
+        (GooseAdapter(), ".goose/recipes"),
+        (ClaudeAdapter(), ".claude/agents"),
+        (CodexAdapter(), ".agents"),
+        (AgentsMdAdapter(), ".agents"),
+    ],
+)
+def test_emitted_launcher_is_executable_via_real_pipeline(tmp_path, adapter, agents_rel):
+    """The REAL write primitive (atomicio._atomic_write_text, used by emit_all) makes the emitted
+    launcher executable — asserted by driving that primitive, not by re-implementing its chmod.
 
-    manifest = {
-        "project_name": "SbxE2E",
-        "privilege_profile": "confined",
-    }
-    # Emit just the goose adapter's extra files into a temp agents dir mirroring .goose/recipes.
-    agents_dir = tmp_path / ".goose" / "recipes"
+    Also lands the launcher at the generated repo root (`sandbox/confine-run.sh`), never under the
+    agents dir, at the correct `../` depth for this adapter.
+    """
+    from agentteams.atomicio import _atomic_write_text
+
+    manifest = {"project_name": "SbxE2E", "privilege_profile": "confined"}
+    agents_dir = tmp_path / agents_rel
     agents_dir.mkdir(parents=True)
-    for rel, content in GooseAdapter().extra_output_files(manifest):
-        dest = (agents_dir / rel).resolve()
-        dest.parent.mkdir(parents=True, exist_ok=True)
-        dest.write_text(content, encoding="utf-8")
-        if content.startswith("#!"):
-            m = dest.stat().st_mode
-            dest.chmod(m | ((m & 0o444) >> 2))
+    for rel, content in adapter.extra_output_files(manifest):
+        # Same call the emit pipeline makes (render_pipeline -> emit_all -> _atomic_write_text).
+        _atomic_write_text((agents_dir / rel).resolve(), content)
+
     launcher = tmp_path / "sandbox" / "confine-run.sh"
-    assert launcher.is_file(), "launcher must land at repo-root sandbox/, not under .goose/"
-    assert launcher.stat().st_mode & stat.S_IXUSR, "launcher must be executable"
+    assert launcher.is_file(), f"{adapter.framework_id}: launcher must land at repo-root sandbox/"
+    assert launcher.stat().st_mode & stat.S_IXUSR, (
+        f"{adapter.framework_id}: the real write primitive must make the launcher executable"
+    )
     assert not (agents_dir / "sandbox").exists(), "launcher must NOT be under the agents dir"
+
+
+def test_atomic_write_does_not_mark_non_script_executable(tmp_path):
+    """Sev-6 guard: a data/doc file starting with '#!' is NOT made executable (extension-bounded)."""
+    from agentteams.atomicio import _atomic_write_text
+
+    md = tmp_path / "note.md"
+    _atomic_write_text(md, "#!look like a shebang but a markdown file\n")
+    assert not (md.stat().st_mode & stat.S_IXUSR), ".md must never be marked executable"
+    sh = tmp_path / "tool.sh"
+    _atomic_write_text(sh, "#!/usr/bin/env bash\necho hi\n")
+    assert sh.stat().st_mode & stat.S_IXUSR, ".sh with a shebang must be executable"

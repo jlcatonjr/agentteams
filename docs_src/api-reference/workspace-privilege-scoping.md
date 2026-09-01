@@ -101,6 +101,15 @@ Do not read the above as "Linux product arm verified" — it is not; the mechani
 failure mode is fail-closed. Full evidence:
 `tmp/by-week/2026-W35/security-followups/linux-verification-verdict-2026-08-26.md`.
 
+> **Two distinct Linux mechanisms — do not conflate their verdicts.** This section is about the
+> **`claude` framework's own** Linux sandbox (Claude Code's native bubblewrap backend, wired through
+> the emitted settings block): its *mechanism* is verified but its *product arm* on stock Ubuntu is
+> **not** (nested-userns restrictions). That is a SEPARATE path from the framework-neutral
+> **`sandbox/confine-run.sh`** bwrap launcher documented under "End-to-end" below — a standalone
+> launcher agentteams emits for confined/exclusive teams of any framework, whose enforcement **is**
+> VERIFIED by a live-kernel deny test. "Claude native Linux product arm unverified" and "emitted
+> launcher VERIFIED" are both true because they describe different mechanisms.
+
 Two properties matter for the privilege model:
 
 - **`.claude/` is auto-protected** even inside `allowWrite`, so a confined agent

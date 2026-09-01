@@ -34,7 +34,7 @@
 # ============================================================================================
 set -uo pipefail
 
-SCRATCH=""; EGRESS="deny"; PROXY_ADDR="127.0.0.1"; PROXY_PORT="8443"; NETNS="baseagent-egress"
+SCRATCH=""; EGRESS="deny"; PROXY_ADDR="127.0.0.1"; PROXY_PORT="8443"; NETNS="agentteams-egress"
 CHECK=0; EXCLUDES=(); WRITABLES=(); SETENVS=(); CMD=()
 
 die(){ echo "confine-run: $*" >&2; exit 2; }

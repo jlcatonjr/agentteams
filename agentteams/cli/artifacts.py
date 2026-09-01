@@ -373,7 +373,13 @@ def resolve_host_features_and_advise(
         manifest.get("privilege_profile"), framework_id, manifest["host_features"]
     )
     if advisory is not None:
-        if not allow_unenforced:
+        # Only the UNENFORCEABLE-host advisory is fail-closed: there is no boundary to emit, so
+        # proceeding would ship an inert config that looks protective. The Linux manual-wire
+        # advisory is NON-FATAL — enforcement is genuinely available (the emitted launcher), it
+        # just is not auto-applied — so it always warns + persists and never raises, regardless of
+        # allow_unenforced. Fail-closing on it would wrongly refuse an enforceable Linux target.
+        fatal = advisory["code"] == "privilege-profile-unenforced-host"
+        if fatal and not allow_unenforced:
             raise PrivilegeConfinementError(
                 advisory["message"]
                 + " Refusing to emit an unenforced boundary (fail-closed). Re-run with "

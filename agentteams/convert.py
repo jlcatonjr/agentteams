@@ -188,9 +188,10 @@ def convert_team(
         if not dry_run:
             dest.parent.mkdir(parents=True, exist_ok=True)
             dest.write_text(content, encoding="utf-8")
-            # A shebang'd sidecar (e.g. the neutral sandbox/confine-run.sh launcher) must be
-            # executable — mirror execute bits to read bits, like _atomic_write_text does.
-            if content.startswith("#!"):
+            # A shebang'd SCRIPT sidecar (e.g. the neutral sandbox/confine-run.sh launcher) must be
+            # executable — mirror execute bits to read bits, like _atomic_write_text does. Bounded
+            # to script extensions so a data/doc file starting with "#!" is never marked executable.
+            if content.startswith("#!") and dest.suffix.lower() in ("", ".sh", ".py", ".bash", ".zsh"):
                 m = dest.stat().st_mode
                 dest.chmod(m | ((m & 0o444) >> 2))
         result.converted.append(str(dest))

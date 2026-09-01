@@ -41,11 +41,13 @@ _KNOWN_FEATURES: dict[str, frozenset[str]] = {
     # a default). `sandbox` (P1-1, 2026-08-27) gates the macOS Seatbelt confinement
     # emission (frameworks/_goose_sandbox_emit.py): confined/exclusive expand to
     # `goose:sandbox` (see _sandbox_token_for). The token is platform-independent — it
-    # records the confinement REQUEST — but ENFORCEMENT (emitting sandbox.sb + the
-    # GOOSE_SANDBOX config example) fires only on macOS; on Linux/Windows the request
-    # degrades to the privilege_profile_advisory (honest fail-closed), since Goose has
-    # no native OS sandbox there. The `goose` namespace lands here ahead of the goose
-    # bridge phase (goose-integration.plan §5); bridge `goose:` tokens are still owed.
+    # records the confinement REQUEST. Goose has no NATIVE OS sandbox, so ENFORCEMENT is:
+    # macOS → Apple Seatbelt (emitted sandbox.sb + the GOOSE_SANDBOX config example);
+    # Linux → the framework-neutral bwrap launcher `sandbox/confine-run.sh` (emitted for any
+    # framework, manual-wire — surfaced via the non-fatal manual-wire advisory); Windows → no
+    # emittable boundary, so the request degrades to the fatal privilege_profile_advisory
+    # (honest fail-closed). The `goose` namespace lands here ahead of the goose bridge phase
+    # (goose-integration.plan §5); bridge `goose:` tokens are still owed.
     "goose": frozenset({"mcp", "sandbox"}),
     # codex: only `mcp` so far — wires operator-specified mcp_servers[] into
     # .codex/config.toml (codex_mcp_emit.py). That module has always parsed the
@@ -305,13 +307,19 @@ def privilege_profile_advisory(
     hf = list(host_features or [])
     sandbox_token = next((t for t in ("claude:sandbox", "goose:sandbox") if t in hf), None)
     requested = profile in {"confined", "exclusive"} or sandbox_token is not None
-    if requested and not is_sandbox_capable(framework_id, platform):
-        how = (
-            f"privilege_profile={profile!r}"
-            if profile in {"confined", "exclusive"}
-            else (sandbox_token or "claude:sandbox")
-        )
-        plat = sys.platform if platform is None else platform
+    if not requested:
+        return None
+    how = (
+        f"privilege_profile={profile!r}"
+        if profile in {"confined", "exclusive"}
+        else (sandbox_token or "claude:sandbox")
+    )
+    plat = sys.platform if platform is None else platform
+
+    if not is_sandbox_capable(framework_id, plat):
+        # No emittable boundary here (Windows / any non-Linux non-macOS target, or a non-claude
+        # framework off Linux+macOS). This is the FATAL advisory: resolve_host_features_and_advise
+        # fail-closes on it unless --allow-unenforced-confinement.
         return {
             "code": "privilege-profile-unenforced-host",
             "message": (
@@ -327,6 +335,34 @@ def privilege_profile_advisory(
                 "instead: a container plus seccomp-bpf + Landlock and egress filtering."
             ),
         }
+
+    if plat.startswith("linux") and framework_id != "claude":
+        # Enforcement IS emittable on Linux (the framework-neutral bwrap launcher), but for every
+        # framework EXCEPT claude the launcher is the ONLY emitted boundary and it is NOT
+        # auto-applied: it confines nothing until the operator wraps the agent invocation with it.
+        # Suppressing all signal here would let an operator who requested `confined`, saw no
+        # warning, and found `sandbox/confine-run.sh` believe the team is confined when nothing
+        # runs it (the silent false-confinement the bridge tokens were blocked to prevent). So
+        # surface a NON-FATAL advisory — enforceable-but-manual, never a fail-closed raise
+        # (enforcement is genuinely available). claude is excluded because Claude Code's own native
+        # sandbox (the emitted settings block, auto-applied once merged, with its own P1-3 verify)
+        # is claude's real boundary — the redundant launcher does not change that, so telling a
+        # claude operator "nothing is confined until you wrap the launcher" would be false.
+        return {
+            "code": "privilege-profile-linux-launcher-manual-wire",
+            "message": (
+                f"{how}: OS-confinement IS available on Linux — agentteams emitted the "
+                "framework-neutral bwrap launcher 'sandbox/confine-run.sh'. But it is NOT "
+                "auto-applied: you MUST wrap your agent invocation with it "
+                "('sandbox/confine-run.sh --scratch DIR --egress deny -- <your agent cmd>'). "
+                "Nothing is confined until you do — the emitted launcher on its own enforces "
+                "nothing."
+            ),
+        }
+
+    # An emittable boundary that IS wired through the framework's own config — claude everywhere
+    # (native settings-block sandbox, with its own P1-3 verify) and goose on macOS (Seatbelt via
+    # the emitted GOOSE_SANDBOX example) — surfaces no extra advisory here.
     return None
 
 

@@ -28,8 +28,14 @@ MKDOCS = REPO_ROOT / "mkdocs.yml"
 DOCS_SRC = REPO_ROOT / "docs_src"
 
 #: Pages deliberately excluded from the nav for a reason other than being a snippet target.
-#: EMPTY. Snippet includes are detected, not listed — see the module docstring.
-_INTENTIONALLY_UNNAVIGATED: frozenset[str] = frozenset()
+#: Snippet includes are detected, not listed — see the module docstring.
+_INTENTIONALLY_UNNAVIGATED: frozenset[str] = frozenset({
+    # An internal production-readiness STATUS report for the security-guide handbook (line
+    # counts, write-scan/conformance status) — maintainer-facing meta, not reader content, so
+    # it deliberately stays out of the reader nav rather than cluttering it. It still builds and
+    # deploys; this declares the exclusion instead of leaving it a silent derived gap.
+    "agentteams-security-guide/production-readiness-report.md",
+})
 
 
 def _nav_targets() -> set[str]:

@@ -47,16 +47,19 @@ def _target_mode(path: Path) -> int:
 def _atomic_write_text(path: Path, text: str, *, encoding: str = "utf-8") -> None:
     """Write *text* to *path* atomically (temp-in-same-dir + os.replace + fsync).
 
-    A file whose content begins with a ``#!`` shebang is a script and is made executable:
-    the execute bits are set to mirror the read bits (``0o644`` → ``0o755``, a preserved
-    ``0o664`` → ``0o775``). This keeps emitted launchers/hooks (e.g. the framework-neutral
-    ``sandbox/confine-run.sh`` and the constitutional-gate hook) runnable on a FRESH emit,
-    where the umask default would otherwise leave a new file at ``0o644``. Non-script content
-    (CSV/JSON/markdown/agent files) never starts with ``#!`` and is unaffected.
+    A file that is BOTH a script by extension (``.sh``/``.py``/``.bash``/``.zsh`` or
+    extensionless) AND begins with a ``#!`` shebang is made executable: the execute bits are set
+    to mirror the read bits (``0o644`` → ``0o755``, a preserved ``0o664`` → ``0o775``). This keeps
+    emitted launchers/hooks (e.g. the framework-neutral ``sandbox/confine-run.sh`` and the
+    constitutional-gate hook) runnable on a FRESH emit, where the umask default would otherwise
+    leave a new file at ``0o644``. The extension guard bounds the content sniff: a data/doc file
+    (``.md``/``.csv``/``.json``/agent ``.md``) is never marked executable even if its first two
+    bytes happen to be ``#!`` — the +x path is limited to files that are already script-shaped.
     """
     path.parent.mkdir(parents=True, exist_ok=True)
     mode = _target_mode(path)
-    if text.startswith("#!"):
+    _SCRIPT_SUFFIXES = ("", ".sh", ".py", ".bash", ".zsh")
+    if text.startswith("#!") and path.suffix.lower() in _SCRIPT_SUFFIXES:
         mode |= (mode & 0o444) >> 2
     fd, tmp_name = tempfile.mkstemp(dir=str(path.parent), prefix=f".{path.name}.", suffix=".tmp")
     tmp = Path(tmp_name)
