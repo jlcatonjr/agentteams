@@ -14,8 +14,8 @@ Two ceilings govern everything below and are worth a reviewer holding up front:
   the sandbox is **off** and the hook is **fail-open** (S1 fact 5). "OS
   confinement layer" does **not** mean "runtime confinement is on by default."
 - **agentteams emits configuration; it does not enforce it.** Enforcement belongs
-  to the *harness* (Claude Code's Seatbelt/bubblewrap), and is empirically
-  verified on **macOS only**.
+  to the *harness* (Claude Code's Seatbelt/bubblewrap); the empirically deny-tested path
+  is **Linux** (the `sandbox/confine-run.sh` launcher), while **macOS Seatbelt is UNVERIFIED**.
 
 ## The infrastructure-layers model  ✅ *(reference doc)* {#S17}
 
@@ -58,7 +58,7 @@ is a checklist of *where to look*, not a claim that the looking has been done.
 `agentteams/templates/universal/security-infrastructure-layers.reference.template.md:31-70,119-130`.
 Full treatment: Edition R, S17.
 
-## Sandbox emission and privilege profiles  ✅ *(macOS)* / ⚙ *(Linux partial, Windows design-only)* {#S18}
+## Sandbox emission and privilege profiles  ✅ *(Linux bwrap deny-tested)* / ⚙ *(macOS Seatbelt UNVERIFIED, Windows design-only)* {#S18}
 
 **The adversary:** an in-repo agent (S1) that would use OS-level reach — writing
 outside its scope, or reading a credential directory — to escalate. The control
@@ -88,11 +88,12 @@ Apple Seatbelt profile; Goose has **no native Linux/Windows OS sandbox.**
 
 - **Emitted blocks are inert until wired** — an un-merged example enforces
   nothing.
-- **Only macOS is empirically verified.**
-- **Linux has the open D-3 fragility:** on bubblewrap a `denyWrite` of a
-  *non-existent* path fails `bwrap` init and blocks **all** Bash — a fail-*shut*
-  availability defect (not a hole) that remains **open** in the remediation log;
-  Linux `denyRead` is likewise **unverified**.
+- **The empirically-verified path is Linux** — a live-kernel bwrap deny test (the framework-neutral `sandbox/confine-run.sh` launcher; see the [Sandboxing Guide](../../agentteams-sandboxing-guide/README.md)). **macOS Seatbelt is UNVERIFIED** (no on-mac deny test).
+- **Claude Code's *native* Linux bubblewrap arm has the open D-3 fragility** (distinct
+  from the verified launcher above): a `denyWrite` of a *non-existent* path fails `bwrap`
+  init and blocks **all** Bash — a fail-*shut* availability defect (not a hole) that
+  remains **open** in the remediation log; that native arm's `denyRead` and its product
+  arm on stock Ubuntu are likewise **unverified**.
 - **Native Windows has no emitted enforcement** — design-only.
 - On a host where confinement cannot be enforced, the interactive path **fails
   closed** (`PrivilegeConfinementError`) unless the operator passes
@@ -137,7 +138,7 @@ determined multi-file tamper: an attacker who can edit the scanner can also edit
 the integrity manifest and this hook file. What the composed layers do is **raise
 the cost from one edit to three, each visible in `git`** — a single silent change
 becomes a multi-step, recorded, diffable act. The hook file is itself one of the
-`denyWrite`-protected paths (S18), which adds the (macOS-verified) sandbox as a
+`denyWrite`-protected paths (S18), which adds the (Linux-deny-tested) sandbox as a
 further obstacle to that third edit. The residual ceiling stands: composed layers
 raise cost and make tampering evident; they do not eliminate it. Full mechanism:
 Edition R, S19.

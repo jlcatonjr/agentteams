@@ -43,7 +43,7 @@ these:**
 - **(b) Runtime confinement is opt-in.** Default profile `cooperative` — sandbox
   off, hook fail-open (S1, S18, S19). Governance layers are always active; OS-level
   locks engage only under `confined`/`exclusive`.
-- **(c) Confinement is empirically verified on macOS only.** Linux bubblewrap is
+- **(c) OS-confinement is empirically verified on Linux** — the `sandbox/confine-run.sh` bwrap launcher passes a live-kernel deny test; **macOS Seatbelt is UNVERIFIED**. Claude Code's *native* Linux bubblewrap arm is
   partial (open D-3 fragility, unverified `denyRead`); native Windows has no
   emitted enforcement (S18).
 
@@ -55,7 +55,7 @@ these:**
 | Sentinel + triad (II–III) | gated decisions + signed instruments | **fallible LLM** except S-1/S-8; symmetric HMAC stops a **keyless** forger only (S5–S10) |
 | Gates (IV) | block destructive execution, fail-closed | **CLI entry points only**; `--migrate` exempt via one explicit parameter (S11–S14) |
 | Scanner (V) | block bad content deterministically | **shape-blind**; only **high** blocks; **no formula/CSV-injection detector** (S15–S16) |
-| OS confinement (VI) | bound runtime reach | **opt-in**, **inert until wired**, **macOS-verified only** (S17–S19) |
+| OS confinement (VI) | bound runtime reach | **opt-in**, **inert until wired**, **Linux-verified only; macOS Seatbelt unverified** (S17–S19) |
 | Intel + red team (VII) | keep controls current + tested | snapshot is "valid as of," not a baseline; a control means nothing without its **stated tier** (S20–S21) |
 | Integrity + backups (VIII) | make tampering evident + damage recoverable | manifest is a **speed bump, not a boundary**; missing manifest = "never set up" (S22–S24) |
 

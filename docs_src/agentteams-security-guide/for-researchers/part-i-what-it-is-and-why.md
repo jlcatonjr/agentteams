@@ -126,8 +126,8 @@ are facts carried into every edition, not caveats to be softened:
   **keyless** forger — never against someone who holds the signing key (S6, S7);
 - an **emitted sandbox block is inert** until the operator wires it into their
   own settings (S18);
-- **only macOS** OS-confinement is empirically verified; Linux is partial and
-  Windows is design-only (S18).
+- OS-confinement is empirically verified on **Linux** (the `sandbox/confine-run.sh` bwrap deny test);
+  **macOS Seatbelt is unverified**; Windows is design-only (S18).
 
 A reviewer should treat these four sentences as the load-bearing residual-risk
 list for the whole system.

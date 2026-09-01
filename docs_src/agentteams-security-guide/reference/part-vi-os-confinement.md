@@ -15,8 +15,10 @@ everything below and are worth stating up front:
   confinement layer" as "runtime confinement is on by default" is the overclaim these
   sections exist to prevent.
 - **agentteams emits configuration; it does not enforce it.** Enforcement belongs to the
-  *harness* (Claude Code's Seatbelt/bubblewrap), and is empirically verified on **macOS
-  only**.
+  *harness* (Claude Code's Seatbelt/bubblewrap). The empirically deny-tested OS-confinement
+  path is **Linux** (the framework-neutral `sandbox/confine-run.sh` bwrap launcher — see the
+  [Sandboxing Guide](../../agentteams-sandboxing-guide/README.md)); **macOS Seatbelt is
+  UNVERIFIED**.
 
 ---
 
@@ -62,11 +64,11 @@ close.
 
 ---
 
-## Sandbox emission and privilege profiles  ✅ *(macOS)* / ⚙ *(Linux partial, Windows design-only)* {#S18}
+## Sandbox emission and privilege profiles  ✅ *(Linux bwrap deny-tested)* / ⚙ *(macOS Seatbelt UNVERIFIED, Windows design-only)* {#S18}
 
-This is the section where the "emits vs enforces" distinction and the macOS-only
-verification ceiling are load-bearing. Read the honest-ceilings subsection as the primary
-content, not an appendix to it.
+This is the section where the "emits vs enforces" distinction and the verification ceiling
+(**Linux deny-tested; macOS Seatbelt unverified**) are load-bearing. Read the honest-ceilings
+subsection as the primary content, not an appendix to it.
 
 ### Three privilege profiles
 
@@ -97,13 +99,19 @@ The consequence, stated as fact 4's binding ceilings:
 
 - **Emitted blocks are inert until the operator wires them.** An un-merged sandbox
   example enforces nothing. Enforcement is the harness's job, not agentteams'.
-- **Only macOS is empirically verified.** The macOS path (Seatbelt) is the one that has
-  been tested to engage.
-- **Linux has the open D-3 fragility.** On Linux bubblewrap, a `denyWrite` of a
-  *non-existent* path fails `bwrap` initialization, which blocks **all** Bash — a
-  fail-*shut* fragility, not a security hole, but an availability defect that remains
-  **open** in `references/agentteams-remediation-log.csv` (item D-3). The Linux
-  `denyRead` behaviour is likewise **unverified**.
+- **The empirically-verified path is Linux.** A live-kernel bwrap deny test — the
+  framework-neutral `sandbox/confine-run.sh` launcher (see the
+  [Sandboxing Guide](../../agentteams-sandboxing-guide/README.md)) — denies
+  write-outside-scratch, credential read, and raw egress. **macOS Seatbelt is
+  UNVERIFIED:** no on-mac deny test has been run, so it engages *as designed*, not *as
+  tested*.
+- **Claude Code's *native* Linux bubblewrap arm has the open D-3 fragility.** Distinct
+  from the verified launcher above: on Claude Code's own Linux bubblewrap backend, a
+  `denyWrite` of a *non-existent* path fails `bwrap` initialization, which blocks **all**
+  Bash — a fail-*shut* fragility, not a security hole, but an availability defect that
+  remains **open** in `references/agentteams-remediation-log.csv` (item D-3). That native
+  arm's `denyRead` behaviour and its *product arm* on stock Ubuntu (nested-userns) are
+  likewise **unverified**.
 - **Native Windows has no emitted enforcement** — it is design-only.
 - On a host where confinement **cannot** be enforced, the interactive path **fails
   closed** with `PrivilegeConfinementError` unless the operator explicitly passes
@@ -187,7 +195,7 @@ as S18: the strong runtime behaviour is tied to the non-default profiles.
 visible in `git`**. Its value is that it converts a single silent change into a
 multi-step, recorded, git-diffable act, and gives the operator a chance to notice. The
 hook file is itself one of the `denyWrite`-protected control-plane paths of S18, which
-adds the sandbox as a further (macOS-verified) obstacle to that third edit — but the
+adds the sandbox as a further (Linux-deny-tested) obstacle to that third edit — but the
 residual ceiling stands: composed layers raise cost and make tampering evident, they do
 not eliminate it.
 

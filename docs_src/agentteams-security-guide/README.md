@@ -47,7 +47,7 @@ own depth. You cannot fix a claim in one book and forget the others.
 
 Every control is described with **what it buys and what it cannot**. A boundary "engages as tested,"
 never "is secure." A signed ledger stops a *keyless* forger, not a key-holder. An emitted sandbox is
-inert until an operator wires it, and is empirically verified on macOS only. Overstating a ceiling is a
+inert until an operator wires it, and is empirically verified on Linux — macOS Seatbelt is unverified. Overstating a ceiling is a
 fact error — in every edition, including the plain-language one.
 
 ## What the handbook covers (the section map at a glance)

@@ -19,9 +19,8 @@ loosening. Two plain cautions belong here. First, **by default the strongest
 locks are off** — the locked room starts switched off, and agentteams only writes
 the *blueprint* for the room; it does not build it. The real enforcement is the AI
 tool's own operating-system sandbox, and the blueprint does nothing until someone
-wires it in. Second, **this is proven only on Macs; on other systems it is advice,
-not a proven lock** — the Linux version has a known fragility, and on Windows
-there is no built enforcement at all. On a system that can't enforce it, the tool
+wires it in. Second, **this is proven on Linux; on Macs it is advice, not a proven lock** (it has not
+been tested there), and on Windows there is no built enforcement at all. On a system that can't enforce it, the tool
 refuses to pretend it can (it fails safe) unless you explicitly allow the
 unenforced mode. It also marks certain control files as never-writable, so a
 confined helper can't reach out and disable its own guardrails.

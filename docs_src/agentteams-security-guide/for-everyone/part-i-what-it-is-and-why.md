@@ -37,5 +37,5 @@ locks and some are a person's judgment — never mistake advice for a lock. A no
 left next to the files it protects is a speed bump, not a wall; a signed slip
 stops a stranger, not someone holding the signing pen; a locked room does nothing
 until someone actually turns the key to wire it in; and the locked-room feature
-is only proven on Macs. These limits are facts, and they travel with every part
-of this guide.
+is proven on Linux (on Macs it is advice, not a proven lock; on Windows there is no
+lock). These limits are facts, and they travel with every part of this guide.

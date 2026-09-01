@@ -75,8 +75,8 @@ level's guarantee as another's:
 **Honest-ceiling doctrine (carried into every edition, unsoftened):** an
 integrity manifest beside the files it protects is a *speed bump, not a boundary*
 (S22); symmetric HMAC signing defends only a **keyless** forger, not a key-holder
-(S6, S7); an emitted sandbox is **inert until wired** (S18); **only macOS**
-OS-confinement is empirically verified (S18).
+(S6, S7); an emitted sandbox is **inert until wired** (S18); OS-confinement is empirically
+verified on **Linux**, not macOS — macOS Seatbelt is unverified (S18).
 
 **Source.** `SECURITY.md` §threat-model; `agentteams/cli/security_gate.py:1-10`;
 `agentteams/templates/universal/hooks/constitutional-gate.py:1-49`;
