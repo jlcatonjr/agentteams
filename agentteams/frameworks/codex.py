@@ -81,3 +81,8 @@ class CodexAdapter(AgentsMdAdapter):
     def get_agents_dir(self, project_path: Path) -> Path:
         # Same detail-file layout as agents-md (Codex has no persona format).
         return project_path / ".agents"
+
+    def sandbox_launcher_rel_path(self) -> str:
+        # Agents dir is 1-deep (``.agents``), so repo-root ``sandbox/confine-run.sh`` is one
+        # ``../`` up (not two). Codex is now Linux-enforceable framework-neutrally.
+        return "../sandbox/confine-run.sh"

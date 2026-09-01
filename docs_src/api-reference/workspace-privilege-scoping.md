@@ -403,22 +403,35 @@ author name. It applies to both authorization paths (PASS and HALT-RETRACTED).
   (clobbering operator config is a worse failure than an unwired boundary). The
   emitted block is wire-ready but does nothing until the operator merges it. The
   emitted example's comment states this.
-- **`claude` everywhere; `goose` on macOS only; fails closed elsewhere.** OS enforcement
-  is available on the `claude` framework (Claude Code's Seatbelt/bubblewrap sandbox), and —
-  as of P1-1 — on the `goose` framework **on macOS only** (Apple Seatbelt via
-  `GOOSE_SANDBOX`/`sandbox-exec`; see the goose-privileges reference). The choice is
-  **platform-aware** (`host_features.is_sandbox_capable`): a confined/exclusive **goose**
-  team on macOS emits a `sandbox.sb` profile + an inert `config.yaml.agentteams.example`,
-  while the **same selection on Linux/Windows** has no boundary to emit. Selecting
-  `confined`/`exclusive` for `codex`, `copilot-*`, on **native Windows**, or for **goose on
-  Linux/Windows** therefore **exits non-zero by default** rather than ship a config that
-  silently does nothing. Pass `--allow-unenforced-confinement` to proceed anyway; the
+- **Linux: framework-neutral, any framework; `claude` everywhere; `goose` also on macOS;
+  Windows fails closed.** OS enforcement is available:
+  - **On Linux, framework-neutrally for ANY framework** (as of the 2026-W36 Linux-agnostic
+    sandbox work): a confined/exclusive team of any framework emits a provider-agnostic
+    `bwrap` launcher to repo-root **`sandbox/confine-run.sh`** (read-only root + rootless
+    netns + `NoNewPrivs` + credential read-exclusion). It wraps *any* process, so Linux
+    enforceability does not depend on the framework — this is deliberately **not** goose-gated
+    and **not** `.goose/`-pathed. Emitted verbatim from
+    `agentteams/frameworks/_linux_sandbox_emit.py`; see the end-to-end setup below. The Linux
+    launcher's enforcement is **VERIFIED** by a live-kernel bwrap escape/deny test (write
+    outside `--scratch`, credential/sibling read, and raw egress all denied for a real
+    process).
+  - **On the `claude` framework everywhere** (Claude Code's own Seatbelt/bubblewrap sandbox).
+  - **On the `goose` framework on macOS** (Apple Seatbelt via `GOOSE_SANDBOX`/`sandbox-exec`;
+    see the goose-privileges reference) — a confined/exclusive goose team on macOS emits a
+    `sandbox.sb` profile + an inert `config.yaml.agentteams.example`.
+
+  The choice is **platform-aware** (`host_features.is_sandbox_capable`): `is_sandbox_capable(<any>, "linux")`
+  is now `True`. Selecting `confined`/`exclusive` on **native Windows** (or any other target
+  with no emittable boundary) still **exits non-zero by default** rather than ship a config
+  that silently does nothing. Pass `--allow-unenforced-confinement` to proceed anyway; the
   request then degrades to a visible advisory and a `privilege-profile-unenforced-host`
   manifest advisory — advisory only there, and never silently "on". (Whether Claude Code
   enforces on native Windows is itself unverified; treat Windows as advisory.) For targets
-  with no emittable boundary (goose on Linux/Windows, codex, copilot, native Windows),
-  confine from **outside** the process: a container plus **seccomp-bpf + Landlock** (Linux)
-  and **egress filtering**. This fail-closed default is on the **`generate`** path; the
+  with no emittable boundary (**native Windows**, or any non-Linux non-macOS host), confine
+  from **outside** the process: a container plus **seccomp-bpf + Landlock** and **egress
+  filtering**. macOS Seatbelt paths remain enforcement-UNVERIFIED off a mac host, and the
+  boundary as a whole does not close T6 / host-as-TCB; seccomp/Landlock is a further,
+  not-yet-added layer. This fail-closed default is on the **`generate`** path; the
   `--convert-from`/`--fleet`/render paths still emit the sandbox block (via
   `_sandbox_feature_enabled`/`_goose_sandbox_feature_enabled` reading `privilege_profile`
   directly) but keep the advisory-not-raise default, so an unenforceable target there
@@ -431,6 +444,70 @@ author name. It applies to both authorization paths (PASS and HALT-RETRACTED).
   (project-relative); a P2 grant adds an absolute foreign path. The emitted `allowWrite`
   therefore carries both forms — expected, and honored by the sandbox (verified against
   Seatbelt).
+
+## End-to-end: the Linux OS-confinement launcher (framework-neutral)
+
+Linux confinement "works like Seatbelt": agentteams emits a provider-agnostic launcher you
+run *around* your agent process. The whole flow, start to finish:
+
+**1. Generate a confined (or exclusive) team — for any framework.** Set the profile in the
+brief (it is a project-description field, not a CLI flag):
+
+```json
+// brief.json
+{ "project_name": "MyProj", "privilege_profile": "confined" }
+```
+
+```bash
+# any framework: claude, goose, codex, copilot-vscode, copilot-cli, agents-md
+agentteams --description brief.json --framework goose --project /path/to/proj
+```
+
+Confinement is requested when the brief/manifest sets `privilege_profile: confined` (or
+`exclusive`), or carries any `*:sandbox` host-feature token. On Linux this emits the launcher;
+`cooperative` (the default) emits nothing.
+
+**2. Find the emitted launcher.** It lands at the generated project's **repo root**, never
+under a framework dir:
+
+```
+<project>/sandbox/confine-run.sh     # executable, provider-agnostic
+```
+
+**3. Run your agent confined** — the launcher wraps any command after `--`:
+
+```bash
+# read-only root, ./work the only writable path, network denied:
+sandbox/confine-run.sh --scratch ./work --egress deny -- goose run --recipe .goose/recipes/orchestrator.yaml
+# claude/codex/copilot/etc. work identically — it confines a process, not a harness:
+sandbox/confine-run.sh --scratch ./work -- claude
+```
+
+Key flags: `--scratch DIR` (required; the only writable path), `--egress deny|proxy|host`,
+`--exclude PATH` (extra read-denies on top of the credential defaults `~/.ssh ~/.aws ~/.gnupg
+~/.kube ~/.config/gcloud ~/.azure`), `--writable PATH`, `--setenv VAR=VAL`. It requires
+`bwrap` (`sudo apt-get install -y bubblewrap`).
+
+**4. Dry-run / inspect before trusting it** — `--check` prints the effective sandbox and runs
+nothing:
+
+```bash
+sandbox/confine-run.sh --scratch ./work --egress deny --check -- goose run …
+```
+
+**5. Verify the wiring** programmatically (goose analog of the claude check):
+`agentteams.frameworks._goose_sandbox_emit.verify_goose_sandbox_wiring(project_root, manifest)`
+returns `ENFORCEABLE` on Linux once `sandbox/confine-run.sh` is present, and a
+regenerate-warning if a confined team is missing it.
+
+**Provenance & drift.** The launcher is emitted **verbatim** from
+`agentteams/frameworks/_linux_sandbox_emit.py` (a shipped template asset), so its bytes are
+identical across every consumer. A consuming project that keeps its own copy should pin the
+emitted artifact's `sha256` and re-pin only through a coordinated change to the template asset.
+
+**Honest status.** Linux launcher enforcement is VERIFIED by a live-kernel deny test; macOS
+Seatbelt paths are UNVERIFIED off a mac; the boundary does not close T6 / host-as-TCB, and
+seccomp/Landlock is a further layer not yet added.
 
 ## Design foundations
 

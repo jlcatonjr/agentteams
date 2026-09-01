@@ -338,6 +338,12 @@ def goose_sandbox_output_files(manifest: dict[str, Any]) -> list[tuple[str, str]
     """
     if not _goose_sandbox_feature_enabled(manifest):
         return []
+    # Explicit darwin guard: the macOS Seatbelt path emits ONLY on macOS. Since Linux is now
+    # framework-neutrally sandbox-capable (is_sandbox_capable(_, "linux") -> True), guarding on
+    # is_sandbox_capable("goose") alone is no longer sufficient to keep Seatbelt macOS-only — on a
+    # Linux host the neutral bwrap launcher (_linux_sandbox_emit) is the boundary, never Seatbelt.
+    if sys.platform != "darwin":
+        return []
     if not is_sandbox_capable("goose"):
         return []
     write_roots = manifest.get("workspace_write_roots") or ["."]
@@ -406,14 +412,40 @@ def verify_goose_sandbox_wiring(
     requested = manifest is not None and _goose_sandbox_feature_enabled(manifest)
     plat = sys.platform
 
-    if not is_sandbox_capable("goose"):
+    # Linux: enforcement is the FRAMEWORK-NEUTRAL bwrap launcher (repo-root
+    # ``sandbox/confine-run.sh``, emitted by ``_linux_sandbox_emit``), NOT Seatbelt. Verify the
+    # launcher, never ``.goose/sandbox.sb`` (which is macOS-only). Linux is now enforceable, so
+    # this is no longer the exit-neutral "NOT ENFORCEABLE HERE" case.
+    if plat.startswith("linux"):
+        if not requested:
+            return True, [
+                f"no goose confinement was requested for this team ({plat}) — nothing to verify.",
+            ]
+        launcher = project_root / "sandbox" / "confine-run.sh"
+        if launcher.is_file():
+            return True, [
+                f"ENFORCEABLE ({plat}) via the framework-neutral bwrap launcher emitted at "
+                "sandbox/confine-run.sh (read-only root + rootless netns + NoNewPrivs + "
+                "credential read-exclusion). It must WRAP the goose invocation — "
+                "`sandbox/confine-run.sh --scratch DIR … -- goose run …` — to take effect; the "
+                "launcher itself is inert until used. Run its deny test to confirm on this "
+                "kernel. T6 + host-as-TCB remain bounded, never closed.",
+            ]
+        return False, [
+            f"WARNING: confinement was requested for this goose team on {plat} but the "
+            "framework-neutral launcher sandbox/confine-run.sh was not emitted — regenerate "
+            "the project.",
+        ]
+
+    # Windows / other: no emittable OS boundary — exit-neutral, honest, never a clean pass.
+    if plat != "darwin":
         if requested:
             return True, [
                 f"NOT ENFORCEABLE HERE ({plat}): a confined/exclusive goose team was "
-                "requested, but Goose has NO native OS sandbox on this platform and "
-                "agentteams emitted no boundary. This is NOT a clean pass — nothing is "
-                "enforced. Confine from OUTSIDE the process: a container plus seccomp-bpf "
-                "+ Landlock (Linux) and egress filtering.",
+                "requested, but there is NO emittable OS boundary on this platform and "
+                "agentteams emitted none. This is NOT a clean pass — nothing is enforced. "
+                "Confine from OUTSIDE the process: a container plus seccomp-bpf + Landlock "
+                "and egress filtering.",
             ]
         return True, [
             f"no OS-enforced goose confinement is possible on this platform ({plat}); no "

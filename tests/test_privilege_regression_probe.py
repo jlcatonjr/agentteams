@@ -76,12 +76,16 @@ def test_unknown_profile_fails_closed():
         )
 
 
-def test_unenforceable_host_fails_closed_by_default():
+def test_unenforceable_host_fails_closed_by_default(monkeypatch):
     # P1-2: confined on a host with no OS sandbox must fail closed unless explicitly allowed.
-    # P1-1 (2026-08-27): goose is now OS-enforceable on macOS, so it is no longer a portable
-    # example of an unenforceable host. codex has no sandbox emitter on ANY platform, so it
-    # pins the fail-closed invariant regardless of where the suite runs. (goose's own
-    # macOS-enforced / Linux-advisory behavior is covered in test_workspace_privilege_scoping.)
+    # Linux-neutral flip (2026-08-31): Linux is now enforceable framework-neutrally (the emitted
+    # bwrap launcher wraps any process), so NO framework is a portable unenforceable example when
+    # the suite runs on Linux. Windows pins the fail-closed invariant regardless of host: codex
+    # has no boundary there, so a confined codex team on win32 must raise. (The per-platform
+    # matrix is covered in test_workspace_privilege_scoping.)
+    import sys
+
+    monkeypatch.setattr(sys, "platform", "win32")
     manifest = {"privilege_profile": "confined"}
     with pytest.raises(PrivilegeConfinementError):
         resolve_host_features_and_advise(manifest, [], "codex", allow_unenforced=False)

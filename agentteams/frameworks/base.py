@@ -122,15 +122,38 @@ class FrameworkAdapter(ABC):
         """
         return content
 
+    def sandbox_launcher_rel_path(self) -> str:
+        """Return the emit path (agents-dir-relative) for the Linux confinement launcher.
+
+        The launcher always lands at the generated PROJECT ROOT as ``sandbox/confine-run.sh``
+        (framework-neutral; deliberately NOT under ``.goose/`` — operator correction 2026-08-31).
+        Because :meth:`extra_output_files` paths are relative to the agents output directory, the
+        ``../`` depth depends on how deep the agents dir sits: the default here assumes a 2-deep
+        agents dir (``.claude/agents``, ``.github/agents``, ``.goose/recipes``). 1-deep adapters
+        (codex/agents-md, whose agents dir is ``.agents``) override this to ``../sandbox/…``.
+        """
+        from agentteams.frameworks._linux_sandbox_emit import LINUX_SANDBOX_LAUNCHER_REL
+
+        return LINUX_SANDBOX_LAUNCHER_REL
+
     def extra_output_files(self, manifest: dict[str, Any]) -> list[tuple[str, str]]:
         """Return additional (rel_path, content) files to emit for this framework.
 
-        Default: none. Frameworks that need framework-specific sidecar files not
-        derived from a template (e.g. Goose's ``.goosehints`` integrator) override
-        this. Paths are relative to the agents output directory, like every other
-        emitted path.
+        Framework-neutral baseline: on Linux, when a confined/exclusive profile (or any
+        ``*:sandbox`` host-feature token) is requested, emit the provider-agnostic OS-confinement
+        launcher ``sandbox/confine-run.sh`` (see ``_linux_sandbox_emit``). This is emitted for
+        EVERY framework — claude, codex, copilot, agents-md, goose alike — because the boundary
+        wraps any process; no framework preference lives in agentteams. Off Linux it emits
+        nothing here (macOS Seatbelt is handled by the goose adapter's own path).
+
+        Frameworks that need framework-specific sidecar files not derived from a template (e.g.
+        Goose's ``.goosehints`` integrator, Claude's constitutional hook) override this and MUST
+        call ``super().extra_output_files(manifest)`` so the neutral launcher is preserved. Paths
+        are relative to the agents output directory, like every other emitted path.
         """
-        return []
+        from agentteams.frameworks._linux_sandbox_emit import linux_sandbox_output_files
+
+        return linux_sandbox_output_files(manifest, self.sandbox_launcher_rel_path())
 
     def vscode_tasks_rel_path(self) -> str | None:
         """Return the path to .vscode/tasks.json relative to this framework's agents dir.

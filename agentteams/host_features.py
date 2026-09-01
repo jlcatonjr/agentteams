@@ -223,15 +223,21 @@ def is_sandbox_capable(framework_id: str, platform: str | None = None) -> bool:
     This is the single, platform-aware decision function behind the emit-vs-fail-closed
     gating:
 
+    * **Linux — framework-NEUTRAL, any framework.** agentteams emits a provider-agnostic
+      ``bwrap`` launcher (repo-root ``sandbox/confine-run.sh``, via ``_linux_sandbox_emit.py``:
+      read-only root + rootless netns + NoNewPrivs + credential read-exclusion) that wraps ANY
+      process, so Linux enforceability does not depend on the framework. This is deliberately
+      not goose-gated and not ``.goose/``-pathed (operator correction 2026-08-31: no harness
+      preference in agentteams). Enforcement-VERIFIED on a live kernel (baseAgent
+      ``layerc-escape-tests.sh`` [5][6], 6/6, incl. a real ``goose`` process).
     * ``claude`` — always capable (Claude Code configures its own Seatbelt/bubblewrap
       sandbox on macOS/Linux; native Windows degrades to advisory inside Claude Code's own
       behavior, which agentteams still emits a block for).
-    * ``goose`` — capable ONLY on macOS (``sys.platform == "darwin"``). Goose confines via
-      Apple Seatbelt (``sandbox-exec`` + ``GOOSE_SANDBOX``), which exists only on macOS;
-      Linux/Windows Goose has NO native OS sandbox agentteams can configure, so a
-      confined/exclusive goose team there must fail closed / advise, never claim a boundary
-      (P1-1 honest fail-closed).
-    * anything else — not capable.
+    * ``goose`` — capable on **macOS** (Apple Seatbelt: ``sandbox-exec`` + ``GOOSE_SANDBOX``,
+      emitted by ``_goose_sandbox_emit.py``). On **Windows** there is no emittable OS boundary,
+      so a confined/exclusive goose team there fails closed / advises, never claims a boundary
+      (honest fail-closed). (Linux is covered framework-neutrally by the branch above.)
+    * anything else — not capable (off Linux).
 
     Args:
         framework_id: The target framework id.
@@ -242,6 +248,9 @@ def is_sandbox_capable(framework_id: str, platform: str | None = None) -> bool:
         Whether an OS boundary can be emitted for this framework on this platform.
     """
     plat = sys.platform if platform is None else platform
+    if plat.startswith("linux"):
+        # Framework-neutral: the emitted bwrap launcher wraps any process (correction #2).
+        return True
     if framework_id == "claude":
         return True
     if framework_id == "goose":
@@ -250,12 +259,14 @@ def is_sandbox_capable(framework_id: str, platform: str | None = None) -> bool:
 
 
 #: Frameworks for which agentteams can emit OS-enforced write-confinement on THIS host.
-#: Claude Code always qualifies (native Seatbelt/bubblewrap). Goose qualifies ONLY on
-#: macOS (Apple Seatbelt via GOOSE_SANDBOX) — it is added here at import time only when
-#: ``sys.platform == "darwin"``, so on Linux/Windows a confined/exclusive goose profile
-#: still degrades to the privilege_profile_advisory (honest fail-closed). Evaluated once
-#: at import for the current host; the live decision path is :func:`is_sandbox_capable`,
-#: which this set is derived from.
+#: On **Linux** every framework qualifies framework-neutrally (the emitted bwrap launcher
+#: wraps any process), so on a Linux host both sampled ids below resolve True. Claude Code
+#: always qualifies (native Seatbelt/bubblewrap). Goose additionally qualifies on **macOS**
+#: (Apple Seatbelt via GOOSE_SANDBOX); on **Windows** a confined/exclusive goose profile
+#: still degrades to the privilege_profile_advisory (honest fail-closed). This set only
+#: samples ("claude", "goose") for backward compatibility — the authoritative, framework-
+#: complete decision path is :func:`is_sandbox_capable` (which returns True for ANY framework
+#: on Linux); prefer calling it directly over reading this convenience set.
 SANDBOX_CAPABLE_FRAMEWORKS: frozenset[str] = frozenset(
     fw for fw in ("claude", "goose") if is_sandbox_capable(fw)
 )
@@ -307,11 +318,13 @@ def privilege_profile_advisory(
                 f"{how} requests workspace write-confinement, but agentteams cannot emit an "
                 f"OS-level sandbox for the {framework_id!r} framework on this platform "
                 f"({plat}). No enforcement is emitted for this target — the request is "
-                "ADVISORY ONLY here. OS-enforced confinement is available on the 'claude' "
-                "framework (Claude Code sandbox) and on the 'goose' framework on macOS only "
-                "(Apple Seatbelt via GOOSE_SANDBOX). On Linux/Windows (Goose) and every "
-                "other target, confine from OUTSIDE the process instead: a container plus "
-                "seccomp-bpf + Landlock (Linux) and egress filtering."
+                "ADVISORY ONLY here. OS-enforced confinement is available framework-neutrally "
+                "on **Linux** (an emitted provider-agnostic bwrap launcher, "
+                "'sandbox/confine-run.sh', wraps any process), on the 'claude' framework "
+                "everywhere (Claude Code sandbox), and on the 'goose' framework on macOS "
+                "(Apple Seatbelt via GOOSE_SANDBOX). On **Windows** and every other "
+                "non-Linux target without a native sandbox, confine from OUTSIDE the process "
+                "instead: a container plus seccomp-bpf + Landlock and egress filtering."
             ),
         }
     return None

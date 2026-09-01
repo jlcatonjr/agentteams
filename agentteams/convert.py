@@ -188,6 +188,11 @@ def convert_team(
         if not dry_run:
             dest.parent.mkdir(parents=True, exist_ok=True)
             dest.write_text(content, encoding="utf-8")
+            # A shebang'd sidecar (e.g. the neutral sandbox/confine-run.sh launcher) must be
+            # executable — mirror execute bits to read bits, like _atomic_write_text does.
+            if content.startswith("#!"):
+                m = dest.stat().st_mode
+                dest.chmod(m | ((m & 0o444) >> 2))
         result.converted.append(str(dest))
 
     return result

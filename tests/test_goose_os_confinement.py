@@ -159,10 +159,12 @@ def test_no_emission_when_not_requested():
 
 
 def test_no_emission_off_macos(monkeypatch):
-    # Simulate Linux/Windows: even with confinement requested, emit NOTHING (honest
-    # fail-closed — the CLI advisory covers it). Never ship a non-enforcing profile.
-    monkeypatch.setattr(sys, "platform", "linux")
-    assert goose_sandbox_output_files(_confined_goose_manifest()) == []
+    # The SEATBELT emitter is macOS-only and must emit NOTHING off macOS — even though Linux is
+    # now enforceable framework-neutrally via the separate bwrap launcher (_linux_sandbox_emit),
+    # the goose Seatbelt path itself never ships a profile off darwin. Verify both linux and win32.
+    for plat in ("linux", "win32"):
+        monkeypatch.setattr(sys, "platform", plat)
+        assert goose_sandbox_output_files(_confined_goose_manifest()) == []
 
 
 def test_config_example_is_inert_and_never_a_live_path():
@@ -246,9 +248,30 @@ def test_verify_cooperative_is_nothing_to_verify(tmp_path):
     assert any("nothing to verify" in x for x in msgs)
 
 
-def test_verify_linux_is_exit_neutral_not_a_clean_pass(monkeypatch, tmp_path):
-    # Linux/Windows: honest exit-neutral notice, never a misleading clean pass.
+def test_verify_linux_enforceable_via_neutral_launcher(monkeypatch, tmp_path):
+    # Linux flip: goose confinement is now ENFORCEABLE via the framework-neutral bwrap launcher
+    # (sandbox/confine-run.sh), NOT via Seatbelt. The verifier must check the launcher, not
+    # .goose/sandbox.sb, and must not tell the user to fall back to a container on Linux.
     monkeypatch.setattr(sys, "platform", "linux")
+
+    # No launcher emitted yet -> not a clean pass: regenerate.
+    ok, msgs = verify_goose_sandbox_wiring(tmp_path, _confined_goose_manifest())
+    assert ok is False
+    assert any("sandbox/confine-run.sh" in x and "not emitted" in x for x in msgs)
+
+    # With the neutral launcher present -> ENFORCEABLE (and it names confine-run.sh, not a container).
+    launcher = tmp_path / "sandbox" / "confine-run.sh"
+    launcher.parent.mkdir(parents=True, exist_ok=True)
+    launcher.write_text("#!/usr/bin/env bash\n", encoding="utf-8")
+    ok, msgs = verify_goose_sandbox_wiring(tmp_path, _confined_goose_manifest())
+    assert ok is True
+    assert any("ENFORCEABLE" in x and "confine-run.sh" in x for x in msgs)
+    assert not any("container" in x for x in msgs)  # Linux no longer routes to outside-in fallback
+
+
+def test_verify_windows_is_exit_neutral_not_a_clean_pass(monkeypatch, tmp_path):
+    # Windows: no emittable OS boundary -> honest exit-neutral notice, never a clean pass.
+    monkeypatch.setattr(sys, "platform", "win32")
     ok, msgs = verify_goose_sandbox_wiring(tmp_path, _confined_goose_manifest())
     assert ok is True  # exit-neutral (does not fail CI)...
     assert any("NOT ENFORCEABLE HERE" in x for x in msgs)  # ...but not a clean pass.

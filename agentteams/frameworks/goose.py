@@ -557,11 +557,15 @@ class GooseAdapter(FrameworkAdapter):
         from agentteams.frameworks._goose_sandbox_emit import goose_sandbox_output_files
 
         project_name = manifest.get("project_name", "this project")
-        files: list[tuple[str, str]] = [
+        # Framework-neutral baseline first (the Linux confinement launcher on linux). The
+        # goose-specific sidecars + the macOS Seatbelt path are layered on top. On Linux the
+        # neutral launcher is the boundary; the darwin-guarded Seatbelt path emits nothing there.
+        files: list[tuple[str, str]] = super().extra_output_files(manifest)
+        files.extend([
             ("../../.goosehints", _goosehints_content(project_name)),
             ("references/goose-capabilities-reference.md", _goose_capabilities_content(project_name)),
             ("../../scripts/goose-run-resilient.py", _resilient_runner_content()),
-        ]
+        ])
         files.extend(goose_sandbox_output_files(manifest))
         return files
 
