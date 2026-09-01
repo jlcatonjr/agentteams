@@ -3,8 +3,9 @@
 OS confinement bounds an agent's *runtime reach* at the operating-system level.
 Two ceilings govern everything below: **confinement is opt-in** (default profile
 `cooperative` — sandbox off, hook fail-open, S1 fact 5), and **agentteams emits
-configuration; it does not enforce it** (enforcement belongs to the harness, and
-is empirically verified on **macOS only**).
+configuration; it does not enforce it** (enforcement belongs to the harness; the
+empirically deny-tested path is **Linux** — the `sandbox/confine-run.sh` launcher —
+while **macOS Seatbelt is UNVERIFIED**).
 
 ## The infrastructure-layers model  ✅ *(reference doc)* {#S17}
 
@@ -37,7 +38,7 @@ deployed by agentteams** — you deploy them, or you do not.
 **Source.**
 `agentteams/templates/universal/security-infrastructure-layers.reference.template.md:31-70,119-130`.
 
-## Sandbox emission and privilege profiles  ✅ *(macOS)* / ⚙ *(Linux partial, Windows design-only)* {#S18}
+## Sandbox emission and privilege profiles  ✅ *(Linux bwrap deny-tested)* / ⚙ *(macOS Seatbelt UNVERIFIED, Windows design-only)* {#S18}
 
 **Which knob, and what it costs.** The privilege profile selects how much OS
 boundary a generated team requests (`agentteams/host_features.py:134-261`). An
@@ -73,8 +74,8 @@ reading yours.
 
 - **Emitted blocks are inert until you wire them** — an un-merged example enforces
   nothing.
-- **Only macOS is empirically verified.**
-- **Linux has the open D-3 fragility** — on bubblewrap a `denyWrite` of a
+- **The empirically-verified path is Linux** — a live-kernel bwrap deny test (the framework-neutral `sandbox/confine-run.sh` launcher; see the [Sandboxing Guide](../../agentteams-sandboxing-guide/README.md)). **macOS Seatbelt is UNVERIFIED** (no on-mac deny test).
+- **Claude Code's *native* Linux bubblewrap arm has the open D-3 fragility** (distinct from the verified launcher) — on bubblewrap a `denyWrite` of a
   *non-existent* path fails `bwrap` init, blocking **all** Bash (a fail-*shut*
   availability defect, still **open** in `references/agentteams-remediation-log.csv`,
   item D-3); Linux `denyRead` is **unverified**.
@@ -123,7 +124,7 @@ guarantee).
 determined multi-file tamper: an attacker who edits `scan.py` can also edit the
 manifest and this hook. It **raises the cost from one edit to three, each visible
 in `git`**. The hook file is itself one of the `denyWrite`-protected control-plane
-paths of S18 (a further, macOS-verified obstacle to that third edit) — but the
+paths of S18 (a further, Linux-deny-tested obstacle to that third edit) — but the
 residual ceiling stands: composed layers raise cost and make tampering evident,
 they do not eliminate it.
 

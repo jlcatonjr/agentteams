@@ -70,8 +70,9 @@ Core; `agentteams/templates/universal/security.template.md`;
    code control. An edition must not present an instruction-level rule as a code-enforced one.
 3. **The honest-ceiling doctrine.** Controls state what they buy and cannot: a manifest beside the
    files it protects is a *speed bump, not a boundary*; symmetric HMAC signing defends a *keyless*
-   forger only; an emitted sandbox is *inert until the operator wires it*; only **macOS** OS-confinement
-   is empirically verified. These ceilings are facts, carried into every edition.
+   forger only; an emitted sandbox is *inert until the operator wires it*; the empirically-verified
+   OS-confinement path is **Linux** (a live-kernel bwrap deny test), while **macOS Seatbelt is
+   UNVERIFIED**. These ceilings are facts, carried into every edition.
 **Source.** `SECURITY.md` §threat-model; `agentteams/cli/security_gate.py:1-10`;
 `agentteams/templates/universal/hooks/constitutional-gate.py:1-49`;
 `agentteams/templates/universal/security-infrastructure-layers.reference.template.md:31-44`.
@@ -374,7 +375,7 @@ Core; `agentteams/templates/universal/security.template.md`;
 **Source.** `agentteams/templates/universal/security-infrastructure-layers.reference.template.md:31-70,119-130`.
 **Dial.** R Full · D Core · S Full · E Light.
 
-### S18 — Sandbox emission and privilege profiles  ✅ *(macOS)* / ⚙ *(Linux partial, Windows design-only)*
+### S18 — Sandbox emission and privilege profiles  ✅ *(Linux bwrap deny-tested)* / ⚙ *(macOS Seatbelt UNVERIFIED, Windows design-only)*
 **Canonical facts.**
 1. **Three privilege profiles:** `cooperative` (no OS boundary — today's default), `confined`,
    `exclusive`. `confined`/`exclusive` emit a sandbox request token; `exclusive` additionally emits
@@ -388,11 +389,15 @@ Core; `agentteams/templates/universal/security.template.md`;
    `.claude/hooks/constitutional-gate.py`) protects the enforcement plane from an in-sandbox agent
    (deny-over-allow). `exclusive` adds outbound `denyRead` of credential dirs (SSH/AWS/etc.) — outbound
    hardening, files not env vars, does not stop others reading your tree.
-4. **Honest ceilings (binding):** emitted blocks are **inert until wired**; **only macOS is empirically
-   verified**; Linux bubblewrap has an **open D-3 fragility** (a `denyWrite` of a non-existent path fails
-   bwrap init → all Bash blocked) and unverified `denyRead`; native **Windows has no emitted enforcement**.
-   On an unenforceable host the interactive path **fails closed** (`PrivilegeConfinementError`) unless
-   `--allow-unenforced-confinement`.
+4. **Honest ceilings (binding):** emitted blocks are **inert until wired**. The empirically-verified
+   OS-confinement path is **Linux** — the framework-neutral `sandbox/confine-run.sh` bwrap launcher (see
+   the [Sandboxing Guide](../agentteams-sandboxing-guide/README.md)) passes a live-kernel deny test
+   (write-outside-scratch, credential read, raw egress all denied). **macOS Seatbelt is enforcement-
+   UNVERIFIED** (no on-mac deny test has been run). Claude Code's *native* Linux bubblewrap arm is
+   mechanism-verified but **product-arm-unverified** on stock Ubuntu (nested-userns) and carries an
+   **open D-3 fragility** (a `denyWrite` of a non-existent path fails bwrap init → all Bash blocked);
+   native **Windows has no emitted enforcement**. On an unenforceable host the interactive path
+   **fails closed** (`PrivilegeConfinementError`) unless `--allow-unenforced-confinement`.
 **Source.** `agentteams/host_features.py:134-261`; `agentteams/frameworks/_sandbox_emit.py:25-208`;
 `agentteams/frameworks/_goose_sandbox_emit.py:1-222`; `references/agentteams-remediation-log.csv` (D-3);
 `agentteams/cli/artifacts.py:321-411`.
@@ -530,7 +535,8 @@ Core; `agentteams/templates/universal/security.template.md`;
    attacker who can edit scanner+manifest+hook together — is raised in cost and made git-visible, not
    eliminated.
 3. **The two surfaces stay distinct (S2):** none of this runs inside the produced app; a deployed app
-   needs its own runtime governance and the L0–L7 model (S17). Confinement is verified on macOS only.
+   needs its own runtime governance and the L0–L7 model (S17). OS-confinement is empirically verified on
+   **Linux** (the bwrap deny test); macOS Seatbelt is **unverified**.
 **Source.** synthesis of S1–S24; `SECURITY.md`;
 `agentteams/templates/universal/security-infrastructure-layers.reference.template.md`.
 **Dial.** R Full · D Core · S Full · E Light.

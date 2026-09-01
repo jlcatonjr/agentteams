@@ -68,7 +68,7 @@ no reading of "defense-in-depth" may soften:
   hook is **fail-open** (S1, S18, S19). The governance layers (constitution,
   sentinel, triad, CLI gates, scanner) are always active; the OS-level locks
   engage only when the operator selects `confined` or `exclusive`.
-- **(c) Confinement is empirically verified on macOS only.** Linux bubblewrap is
+- **(c) OS-confinement is empirically verified on Linux** — the `sandbox/confine-run.sh` bwrap launcher passes a live-kernel deny test; **macOS Seatbelt is UNVERIFIED**. Claude Code's *native* Linux bubblewrap arm is
   partial (with the open D-3 absent-path fragility and unverified `denyRead`) and
   native Windows has no emitted enforcement (S18). Posture is "engages as
   tested," never "verified-unbypassable."
@@ -81,7 +81,7 @@ no reading of "defense-in-depth" may soften:
 | Sentinel + triad (II–III) | gated *decisions*: PASS/CONDITIONAL PASS/HALT + signed clearance/waiver/grant | sentinel is a **fallible LLM** except where S-1/S-8 scanner backs it; symmetric HMAC stops a **keyless** forger, not a key-holder (S5–S10) |
 | Gates (IV) | block *destructive execution*, fail-closed, at CLI entry points | guard **CLI entry points only**; `--migrate` exempt via one explicit in-process parameter (S11–S14) |
 | Scanner (V) | block *bad content* — credentials/PII/paths/injection, deterministic | **shape-blind**; only **high** blocks; **no formula/CSV-injection detector** exists (S15–S16) |
-| OS confinement (VI) | bound *runtime reach* via sandbox + `denyWrite`/`denyRead` | **opt-in**, **inert until wired**, **macOS-verified only** (S17–S19) |
+| OS confinement (VI) | bound *runtime reach* via sandbox + `denyWrite`/`denyRead` | **opt-in**, **inert until wired**, **Linux-verified only; macOS Seatbelt unverified** (S17–S19) |
 | Intel + red team (VII) | keep controls *current* (24h TTL feeds) and *tested* (self-auditing cycle) | snapshot is "valid as of," not a baseline; a control is meaningful only against its **stated tier** (S20–S21) |
 | Integrity + backups (VIII) | make tampering *evident* and damage *recoverable* | manifest is a **speed bump, not a boundary**; a missing manifest is "never set up," not "compromised" (S22–S24) |
 

@@ -21,7 +21,7 @@ Projected from [../SKELETON.md](../SKELETON.md) per [../audience-profiles.md](..
 | [S15](part-v-content-safety.md#S15) | The content scanner (agentteams.scan) | Light |
 | [S16](part-v-content-safety.md#S16) | Live-data redaction and feed sanitization | Light |
 | [S17](part-vi-os-confinement.md#S17) | The infrastructure-layers model   *(reference doc)* | Light |
-| [S18](part-vi-os-confinement.md#S18) | Sandbox emission and privilege profiles   *(macOS)* /  *(Linux partial, Windows design-only)* | Light |
+| [S18](part-vi-os-confinement.md#S18) | Sandbox emission and privilege profiles   *(Linux deny-tested)* /  *(macOS Seatbelt unverified, Windows design-only)* | Light |
 | [S19](part-vi-os-confinement.md#S19) | The constitutional-gate hook   *(fail-closed under confined/exclusive; **fail-open by default**)* | Light |
 | [S20](part-vii-threat-intelligence-and-red-team.md#S20) | Threat-intelligence watch | Light |
 | [S21](part-vii-threat-intelligence-and-red-team.md#S21) | Red-team methodology | Light |

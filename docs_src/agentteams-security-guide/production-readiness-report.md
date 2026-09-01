@@ -31,7 +31,7 @@ intelligence & red team · VIII integrity/provenance/recovery · IX synthesis & 
 - **Provenance (`@technical-validator`): no flags.** Every `Source` resolves on disk; every ✅ is a real
   implemented control; every ⚙ is correctly design/procedural. High-risk claims verified directly
   (no formula-injection detector; 24h intel TTL + payload-digest bind; HMAC fail-closed; integrity
-  manifest self-inclusion; macOS-only confinement; 9-column decisions-log schema).
+  manifest self-inclusion; Linux-verified confinement (macOS Seatbelt unverified); 9-column decisions-log schema).
 - **Adversarial (skeleton, pre-authoring): four ceiling gaps caught and folded in** before any edition
   was written — default posture is opt-in (S1.5); the hook is fail-open by default (S19 marker); the
   sentinel is a fallible LLM (S5.6); two ceilings marked mandatory-survive for the plain edition.
@@ -49,7 +49,7 @@ intelligence & red team · VIII integrity/provenance/recovery · IX synthesis & 
 ## Honest ceilings the guide commits to (carried into all editions)
 
 None of this runs inside the produced app (design-time only) · runtime OS-confinement is opt-in
-(cooperative default = sandbox off, hook fail-open) · confinement is empirically verified on macOS
+(cooperative default = sandbox off, hook fail-open) · confinement is empirically verified on Linux (macOS Seatbelt unverified)
 only (Linux D-3 open, Windows design-only) · symmetric-HMAC signing stops a keyless forger, not a
 key-holder · the integrity manifest is a speed bump, not a boundary (E4 residual) · the sentinel is a
 fallible LLM except the S-1/S-8 deterministic scanner backstop · no formula/CSV-injection detector

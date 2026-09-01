@@ -15,7 +15,7 @@ locked room. The one gap that remains — someone editing the inspector, the sea
 and the checkpoint all at once — is made costly and visible in the project's
 history, not eliminated. And two plain reminders carry through to the end: **none
 of this runs inside the app you ship** — a delivered app needs its own separate
-runtime protection on top — and the locked room is proven only on Macs.
+runtime protection on top — and the locked room is proven on Linux (on Macs it is advice, not a proven lock).
 
 ## Plain-language dictionary {#S26}
 

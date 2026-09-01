@@ -27,7 +27,7 @@
 | S15 | The content scanner | `agentteams/scan.py:38-102,157-174,275-303,536-568,679-857` | ✅ |
 | S16 | Redaction & feed sanitization | `agentteams/fences.py:158-161,304-403`; `agentteams/security_feed_render.py:21-60` | ✅ |
 | S17 | Infrastructure-layers model | `agentteams/templates/universal/security-infrastructure-layers.reference.template.md:31-70,119-130` | ✅ ref |
-| S18 | Sandbox emission & profiles | `agentteams/host_features.py:134-261`; `agentteams/frameworks/_sandbox_emit.py:25-208`; `agentteams/frameworks/_goose_sandbox_emit.py:1-222`; `references/agentteams-remediation-log.csv` (D-3); `agentteams/cli/artifacts.py:321-411` | ✅ macOS / ⚙ Linux,Windows |
+| S18 | Sandbox emission & profiles | `agentteams/host_features.py:134-261`; `agentteams/frameworks/_sandbox_emit.py:25-208`; `agentteams/frameworks/_goose_sandbox_emit.py:1-222`; `references/agentteams-remediation-log.csv` (D-3); `agentteams/cli/artifacts.py:321-411` | ✅ Linux (bwrap deny-tested) / ⚙ macOS Seatbelt UNVERIFIED, Windows |
 | S19 | The constitutional-gate hook | `agentteams/templates/universal/hooks/constitutional-gate.py:1-209` | ✅ (fail-closed under confined/exclusive; fail-open default) |
 | S20 | Threat-intelligence watch | `agentteams/security_refs.py:42-70,710-917`; `agentteams/security_feed_render.py:21-144`; `agentteams/templates/universal/security-vulnerability-watch.reference.template.md` | ✅ |
 | S21 | Red-team methodology | `agentteams/templates/universal/redteam-methodology.reference.template.md:22-239`; `agentteams/redteam/registry.py:36-55`; `agentteams/redteam/runner.py:39-79`; `agentteams/redteam/selfaudit.py:33-101`; `agentteams/redteam/cycle.py:1-215` | ✅ |
@@ -52,8 +52,11 @@
 
 ## Measured / dated evidence
 
-- The macOS-only empirical verification of OS confinement, and the open Linux **D-3** bubblewrap
-  absent-path fragility and unverified `denyRead` (P3a), are recorded in
+- The **Linux** empirical verification of OS confinement (the `sandbox/confine-run.sh` bwrap launcher's
+  live-kernel deny test; see the [Sandboxing Guide](../agentteams-sandboxing-guide/SOURCES.md)), the
+  **UNVERIFIED** macOS Seatbelt path, and the open **D-3** bubblewrap absent-path fragility + unverified
+  `denyRead` (P3a) on Claude Code's *native* Linux arm, are recorded in
+  `agentteams/templates/universal/sandbox/confine-run.sh` (status header) and
   `references/agentteams-remediation-log.csv`.
 - The red-team "719 exposed agents" denominator defect (motivating the type-level `Count`) and the
   probe families (E3/E4 enforcement-surface gaps, A10/W10 digest bind) are recorded in the red-team

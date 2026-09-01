@@ -74,7 +74,7 @@ spine, or soften an **honest ceiling**. `_meta/check-skeleton.py` enforces the s
      (`confined`/`exclusive`); the default profile leaves them dormant. (S1.5, S18, S19.)
   3. **"A signed slip stops an outsider, not someone who holds the signing key."** Symmetric signing is
      not unforgeable. (S6, S7.)
-  4. **"Verified on Macs; other systems are advice, not a proven lock."** (S18.)
+  4. **"Verified on Linux; on Macs it is advice, not a proven lock; Windows has no lock."** (S18.)
   State each as a plain sentence, not only as analogy. An E section that drops one is a fact error.
 
 ## Depth-by-edition default matrix (per-section overrides live in SKELETON.md)
