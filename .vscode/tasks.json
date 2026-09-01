@@ -411,6 +411,18 @@
       "detail": "AGENTTEAMS"
     },
     {
+      "label": "script: goose-proxy-watchdog",
+      "type": "shell",
+      "command": "bash scripts/goose-proxy-watchdog.sh",
+      "group": "none",
+      "presentation": {
+        "reveal": "always",
+        "panel": "shared"
+      },
+      "problemMatcher": [],
+      "detail": "AGENTTEAMS"
+    },
+    {
       "label": "script: run_daily_bridge_maintenance",
       "type": "shell",
       "command": "bash scripts/run_daily_bridge_maintenance.sh",
@@ -513,6 +525,19 @@
       "label": "Goose: Api Conformity Tracker",
       "type": "shell",
       "command": "zsh -c '. ~/.config/goose/goose-backend.sh && goose-or run --recipe .goose/recipes/api-conformity-tracker.yaml'",
+      "group": "none",
+      "presentation": {
+        "reveal": "always",
+        "panel": "dedicated",
+        "focus": true
+      },
+      "problemMatcher": [],
+      "detail": "AGENTTEAMS"
+    },
+    {
+      "label": "Goose: Bridge Orchestrator (copilot Vscode → Goose)",
+      "type": "shell",
+      "command": "zsh -c '. ~/.config/goose/goose-backend.sh && goose-or run --recipe .goose/recipes/bridge-orchestrator.yaml'",
       "group": "none",
       "presentation": {
         "reveal": "always",
