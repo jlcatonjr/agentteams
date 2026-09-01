@@ -55,6 +55,14 @@ SECURITY_DECISIONS_CSV = "security-decisions.log.csv"
 #: this constant list is the only source of truth for the header row.
 AGENTTEAMS_REMEDIATION_CSV = "agentteams-remediation-log.csv"
 
+#: File name for the spawn-authority query-funnel escalation ledger CSV. A prime orchestrator
+#: appends one row per ambiguous decision it resolves on the user's behalf (see
+#: orchestrator-spawn-authority.reference.template.md). Writing it is a governance obligation, not
+#: runtime-enforced — it is the sole detection surface for silent self-resolution, so it doubles as
+#: the source for the session-close post-implementation review report. Append-only; a generated
+#: agent never edits an existing row.
+ESCALATION_LOG_CSV = "orchestrator-escalation.log.csv"
+
 #: Column headers for each CSV
 CHANGELOG_HEADERS: list[str] = ["date", "repo_name", "action", "files_changed", "summary"]
 COORD_LOG_HEADERS: list[str] = ["date", "adjacent_repo", "direction", "outcome"]
@@ -85,6 +93,20 @@ AGENTTEAMS_REMEDIATION_HEADERS: list[str] = [
     "status",
     "resolved_date",
     "resolved_evidence",
+]
+#: Escalation ledger columns. `resolution_mode` ∈ {self-resolved, user-forwarded};
+#: `needs_user_review` ∈ {yes, no} drives the session-close post-implementation review report.
+ESCALATION_LOG_HEADERS: list[str] = [
+    "date",
+    "prime",
+    "delegate",
+    "delegate_repo",
+    "query",
+    "resolution_mode",
+    "decision",
+    "ambiguity",
+    "needs_user_review",
+    "notes",
 ]
 
 # ---------------------------------------------------------------------------
@@ -174,6 +196,7 @@ def init_csv_stubs(refs_dir: Path) -> list[str]:
         (COORD_LOG_CSV, COORD_LOG_HEADERS),
         (SECURITY_DECISIONS_CSV, SECURITY_DECISIONS_HEADERS),
         (AGENTTEAMS_REMEDIATION_CSV, AGENTTEAMS_REMEDIATION_HEADERS),
+        (ESCALATION_LOG_CSV, ESCALATION_LOG_HEADERS),
     ):
         target = refs_dir / fname
         if not target.exists():

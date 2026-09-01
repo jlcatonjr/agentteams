@@ -123,6 +123,25 @@ def build_eval_suite(manifest: dict[str, Any]) -> dict[str, Any]:
             },
         })
 
+    # Spawn-authority query funnel (always). A delegated/spawned orchestrator must route
+    # user-facing questions up to its prime, not prompt the user directly. The body marker is the
+    # Workflow 12 title, emitted into every orchestrator.agent.md via the fenced available_workflows
+    # section regardless of framework (so this stays framework-neutral).
+    scenarios.append({
+        "id": "escalation-delegate-query-funnels-to-prime",
+        "category": "escalation",
+        "claim": (
+            "A delegated (spawned) orchestrator routes user-facing questions up to its prime "
+            "via the Spawn-Authority Query Funnel; it does not prompt the user directly."
+        ),
+        "predicate": {
+            "kind": "frontmatter-and-body",
+            "file": "orchestrator.agent.md",
+            "agents_contains_all": [],
+            "body_contains": "Spawn-Authority Query Funnel",
+        },
+    })
+
     return {
         "artifact_type": "eval-suite",
         "eval_suite_schema_version": EVAL_SUITE_SCHEMA_VERSION,

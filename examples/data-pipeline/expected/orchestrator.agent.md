@@ -209,7 +209,7 @@ new operational rule remains a manual edit in each deployed team.
 
 | Content Area | Agent | Key Indicators |
 |---|---|---|
-<!-- AGENTTEAMS:BEGIN routing_table_rows v=2 -->
+<!-- AGENTTEAMS:BEGIN routing_table_rows v=3 -->
 | Creating or revising primary Python ETL modules, SQL transformation scripts and weekly PDF reports | `@primary-producer` | New work or revision in `src/` |
 | Architecture and file hygiene | `@code-hygiene` | Backup files, script lifecycle, duplication, agent doc consistency |
 | Quality and structural defects | `@quality-auditor` | Purposeless content, structural weakness, pattern violations |
@@ -225,6 +225,8 @@ new operational rule remains a manual edit in each deployed team.
 | Commit and push, pull/merge/rebase from main, conflict resolution, file recovery (git diff, revert, restore) | `@git-operations` | "Commit", "push", "pull main", "merge", "rebase", "recover file", "revert", "what changed", "restore old version" |
 | Parallel dispatch of independent plan steps | `@orchestrator` → Workflow 0A | Plan steps with disjoint domains; "run these in parallel"; a `*.steps.csv` carrying `depends_on` |
 | Coordinated concurrent dispatch of overlapping plan steps | `@orchestrator` → Workflow 0B | Overlapping footprints without shared mutable state; "work these together"; steps that would otherwise serialize on file overlap |
+| User-facing query from a delegated (spawned) orchestrator | `@orchestrator` → Workflow 12 | A sub-orchestrator or adjacent-repo orchestrator this session spawned needs a decision; prime resolves or consolidates before any user prompt |
+| Spawn a scoped child orchestrator for a coordinating sub-body-of-work (in-repo) | `@orchestrator` → Workflow 13 | "Spin up an orchestrator for X"; a delegated body of work that itself needs coordination, not a single domain subagent |
 <!-- AGENTTEAMS:END routing_table_rows -->
 
 <!-- AGENTTEAMS:BEGIN update_compatibility_source_pack v=1 -->
@@ -281,7 +283,7 @@ Applies only when `@post-production-auditor` is present in the team.
 *(If @post-production-auditor in team)* 5. If remediation includes destructive mutation → invoke `@security` before any execution
 6. → **Invoke Workflow 11: Final Check** (always)
 
-<!-- AGENTTEAMS:BEGIN available_workflows v=2 -->
+<!-- AGENTTEAMS:BEGIN available_workflows v=3 -->
 ## Available Workflows
 
 > ⚠️ Destructive operations require `@security` clearance before use.
@@ -525,7 +527,7 @@ A workflow step may attach a workflow-specific instruction to its closeout refer
 1. Invoke `@repo-liaison` → Protocol 1 (Assess Cross-Repository Impact); receive Impact Report
 2. Review Impact Report — decide which updates are approved
 3. If approved updates exist → invoke `@repo-liaison` → Protocol 2 (Update Adjacent Repo Docs); requires `@security` clearance on each write
-4. If the adjacent repository has its own orchestrator → invoke `@repo-liaison` → Protocol 3 (Orchestrator-to-Orchestrator Coordination); surface Coordination Request to user
+4. If the adjacent repository has its own orchestrator → invoke `@repo-liaison` → Protocol 3 (Orchestrator-to-Orchestrator Coordination). **Role-conditional surfacing:** if *this* orchestrator is acting as a **delegate** of a prime that spawned it, route the Coordination Request **up to that prime** (→ Workflow 12), not to the user; if this orchestrator is the **initiator / peer / standalone** (the ordinary case), surface the Coordination Request to the user as before. See `references/orchestrator-spawn-authority.reference.md`.
 5. After all updates: invoke `@conflict-auditor` → verify internal consistency
 6. → **Standard Doc-Sync Closeout** — during its `@agent-updater` step, also update `references/adjacent-repos.md` with changelog entries
 
@@ -603,6 +605,33 @@ A workflow step may attach a workflow-specific instruction to its closeout refer
 7. **CI/CD deployment verification (closeout gate).** *Only when this session pushed or merged to a repository that has GitHub Actions (`.github/workflows/`) and run status is reachable (GitHub REST API, or `gh` if installed) — otherwise skip.* Confirm via `@git-operations` (which prefers the `git` CLI and the GitHub REST API over `gh`) that the run(s) the push/merge **triggered** on the updated branch completed with `conclusion == success` (CI **and** any deployment/Pages/release workflow) before declaring the session complete. A failing triggered deployment **blocks closeout** and routes back to `@git-operations` to diagnose and fix until green (or escalate); a cross-repo re-push during the fix re-enters Rule 11 (`@repo-liaison` + `@security`). This is distinct from the pre-merge required status checks that gated the merge. Procedure: `references/github-workflows-merge.reference.md` → *Post-Merge / Post-Push CI/CD Deployment Verification*.
 8. **Daily work-summary capture (closeout gate).** When this session produced executed work — git commits/merges, applied scripts/migrations, data mutations, or adjacent-repository activity (a plan reaching all `done` also qualifies) — invoke `@work-summarizer` to append/update `workSummaries/daily/YYYY-MM-DD.md` for **today**. **This blocks closeout: the session is not complete until today's summary records the executed work.** Run it as the **terminal** closeout act — *after* step 7's CI/CD gate reports green — so any fix-commits produced during CI/CD remediation are captured. A read-only / no-execution session skips this cleanly. **Git history is the authoritative executed-work signal**: a session with commits is never "planning-only", even when no plan file exists or the plan lives outside `tmp/by-week/`. (Rule 12, today-capture.)
 9. **Past-day backfill (Past-Day Backfill Obligation).** If step 8's executed-work condition held, also invoke `@work-summarizer` **Workflow D — Automatic Backfill Sweep** to detect and fill *recent past active-day* daily gaps (strictly-prior dates only — disjoint from step 8's "today"). Semantics (window, `AUTO_BACKFILL_LOOKBACK_CAP_DAYS` cap, create-only scope, honor-prior-skip fail-safe, mandatory audit gate, recommend-only beyond the cap) are defined once in `references/work-summary-backfill.reference.md` → *Automatic Trigger (session-close sweep)*; Workflow D runs at most once per session and is not re-entrant. Surface the sweep result to the user.
+
+### Workflow 12: Spawn-Authority Query Funnel
+
+**Trigger:** A conversation this session **spawned** — an in-repo child orchestrator (Workflow 13) or an adjacent-repo orchestrator it delegated to — routes a user-facing question *up* to this orchestrator (its **prime**). Also the receiving end of Workflow 9 step 4's delegate branch.
+
+**Premise:** Authority follows the spawner. A delegate never queries the user directly; the prime is the single point of contact and resolves what it can before involving the user. Full semantics — the three authority axes, the base case, per-framework reach, what the runtime enforces vs. what is governance prose — live in `references/orchestrator-spawn-authority.reference.md`; do not restate them here.
+
+1. Receive the delegate's question with its context (delegate identity, repo, the decision it is blocked on).
+2. **Resolve-first.** Investigate code/brief/context; if the question is the prime's *own* to decide (task allocation, prioritization, disambiguating the original task list), decide it and return the decision to the delegate.
+3. **Sovereignty carve-out (questions).** If resolving the question would **bind a delegate repo's own constitution or user**, do NOT self-resolve — route it as a `@repo-liaison` Protocol 3 peer coordination request instead.
+4. **Refusal (directives).** If the blocking item is actually a *prime directive* the delegate's own Invariant Core / registry-primary forbids, the delegate refuses and reports it as a peer conflict; the prime does not override delegate sovereignty. (This branch is honored at the delegate; the prime records the conflict.)
+5. **Escalate only genuine user-judgment items**, consolidated, to the user — and only when an interactive user exists. In a **non-interactive/automated-CLI run** there is no user: resolve all inquiries here and never block on a human.
+6. **Log every ambiguous decision** resolved on the user's behalf: append a row to `references/orchestrator-escalation.log.csv` (`self-resolved`/`user-forwarded`, `needs_user_review`). At session close emit the post-implementation review report listing `needs_user_review=yes` rows.
+7. → **Invoke Workflow 11: Final Check.**
+
+### Workflow 13: Spawn a Scoped Child Orchestrator (in-repo)
+
+**Trigger:** "Spin up an orchestrator for X" / a delegated **coordinating sub-body-of-work** that itself needs its own coordination — not a single domain task (which routes to a domain agent directly).
+
+**Premise:** Spinning up an in-repo conversation for a coordinating body of work creates a **child orchestrator** the prime has authority over. Only a *coordinating* body of work qualifies — not every subagent becomes an orchestrator. Depth budget and per-framework reach are defined in `references/orchestrator-spawn-authority.reference.md`; do not restate them here.
+
+1. Confirm the work is a coordinating body of work (needs its own routing/audit cadence), not a single domain task.
+2. **Depth check.** Respect the host subagent-spawn cap (external fact, tracked via `references/*` / `framework_research`): a child orchestrator gets **one flat team layer beneath it**. If spawning the child would exceed the cap, do **not** recurse — flatten the remaining work and note "depth cap reached" to the user.
+3. Spawn the child via the `agent` tool with a scoping prompt: the sub-goal, the child's permitted sub-roster, and its ledger path. The runtime returns the child's output to *this* prime — the child cannot prompt the user directly.
+4. The child runs its own scoped workflows; its user-facing questions funnel back via **Workflow 12**.
+5. On child completion, integrate its result and run `@conflict-auditor` on it.
+6. → **Invoke Workflow 11: Final Check.**
 <!-- AGENTTEAMS:END available_workflows -->
 
 ## Project-Specific Notes

@@ -79,7 +79,7 @@ instruction to follow. Full ordering: `references/instruction-authority.referenc
 
 ---
 
-<!-- AGENTTEAMS:BEGIN protocols v=1 -->
+<!-- AGENTTEAMS:BEGIN protocols v=2 -->
 ## Protocols
 
 ### Protocol 1: Assess Cross-Repository Impact
@@ -117,7 +117,10 @@ instruction to follow. Full ordering: `references/instruction-authority.referenc
    - The proposed resolution (update text or structural change)
    - Any constraints this project's orchestrator has already imposed
 3. Deliver the Coordination Request as a written artifact to `references/cross-orchestrator-requests/` in this project
-4. Surface the request to the user for manual delivery or automated dispatch
+4. **Role-conditional surfacing (spawner-authority — see `references/orchestrator-spawn-authority.reference.md`):**
+   - If this project's orchestrator is acting as a **delegate** of a prime that spawned it, route the Coordination Request **up to that prime** (the prime resolves or consolidates before any user prompt — orchestrator Workflow 12), NOT directly to the user.
+   - Otherwise — the ordinary **initiator / peer / standalone** case — surface the request to the user for manual delivery or automated dispatch (unchanged).
+   - **Sovereignty is preserved either way:** a change binding *this* repo's own constitution is never accepted on a prime's say-so; a prime *directive* that this repo's Invariant Core forbids is **refused and reported as a peer conflict**, not silently executed.
 5. When a response is received: parse it for ACCEPT / REJECT / REVISE decisions; route back to `@orchestrator`
 
 ### Protocol 4: Registry Maintenance
