@@ -66,3 +66,11 @@ agent — `target: vscode` warranted where used.
 4. Maintain transformation-parity tests across Copilot targets.
 5. The orchestrator template's body-length overage (P8) is tracked separately — do not
    silently grow it further without checking `_check_body_length`'s warning.
+
+## Observed Upstream Tokens — `copilot_vscode` (Daily Pipeline)
+
+Recorded by the daily pipeline on `2026-09-01` from `https://code.visualstudio.com/docs/copilot/customization/custom-agents`.
+
+- Upstream tokens observed: —
+- Upstream locations observed: .github/agents
+- Fetch status: `ok`

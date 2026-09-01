@@ -60,3 +60,11 @@ repo moved `block/goose` → `aaif-goose/goose`; docs moved to goose-docs.ai.
    2026-08-15** — `prompt:` was already shipped (G3); `.goosehints`
    de-duplicated (G5); discovery documented (G2).
 3. Point all references at goose-docs.ai URLs.
+
+## Observed Upstream Tokens — `goose` (Daily Pipeline)
+
+Recorded by the daily pipeline on `2026-09-01` from `https://goose-docs.ai/docs/guides/recipes/recipe-reference/`.
+
+- Upstream tokens observed: —
+- Upstream locations observed: —
+- Fetch status: `ok`

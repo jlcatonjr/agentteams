@@ -63,3 +63,11 @@ Dead citation (do not use): `docs.github.com/en/copilot/github-copilot-in-the-cl
    rather than reintroducing an independent render path, per the precedent this
    fix established (matching `codex.py`'s delegation to `agents_md.py`).
 2. Point all references at the four live URLs above.
+
+## Observed Upstream Tokens — `copilot_cli` (Daily Pipeline)
+
+Recorded by the daily pipeline on `2026-09-01` from `https://docs.github.com/en/copilot/how-tos/copilot-cli/customize-copilot/create-custom-agents-for-cli`.
+
+- Upstream tokens observed: —
+- Upstream locations observed: .github/agents
+- Fetch status: `ok`
