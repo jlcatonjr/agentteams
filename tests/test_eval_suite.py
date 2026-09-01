@@ -73,7 +73,12 @@ def test_build_eval_suite_no_components_is_still_valid():
     import jsonschema
     suite = build_eval_suite({"project_name": "P", "framework": "claude"})
     jsonschema.Draft7Validator(_schema()).validate(suite)
-    assert suite["scenarios"] == []
+    # Component/expert-derived scenarios are empty, but the orchestrator-level spawn-authority
+    # query-funnel scenario is unconditional (every team has an orchestrator), so the suite is
+    # never fully empty.
+    assert [s["id"] for s in suite["scenarios"]] == [
+        "escalation-delegate-query-funnels-to-prime"
+    ]
 
 
 def test_eval_suite_is_framework_neutral():

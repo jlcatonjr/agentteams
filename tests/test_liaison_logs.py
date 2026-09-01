@@ -12,6 +12,7 @@ from agentteams.liaison_logs import (
     CHANGELOG_HEADERS,
     COORD_LOG_CSV,
     COORD_LOG_HEADERS,
+    ESCALATION_LOG_CSV,
     SECURITY_DECISIONS_CSV,
     SECURITY_DECISIONS_HEADERS,
     MigrateResult,
@@ -32,11 +33,13 @@ def test_init_csv_stubs_creates_both_files(tmp_path):
         COORD_LOG_CSV,
         SECURITY_DECISIONS_CSV,
         AGENTTEAMS_REMEDIATION_CSV,
+        ESCALATION_LOG_CSV,
     }
     assert (refs / CHANGELOG_CSV).exists()
     assert (refs / COORD_LOG_CSV).exists()
     assert (refs / SECURITY_DECISIONS_CSV).exists()
     assert (refs / AGENTTEAMS_REMEDIATION_CSV).exists()
+    assert (refs / ESCALATION_LOG_CSV).exists()
 
 
 def test_init_csv_stubs_writes_correct_headers(tmp_path):

@@ -6,6 +6,37 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### added (Orchestrator Spawn-Authority & Query Funnel — Phases 1–2)
+
+- **Every generated team now carries a spawner-authority / query-funnel governance layer.** An
+  orchestrator that spawns a neighboring conversation (an in-repo child orchestrator, or an
+  adjacent-repo orchestrator it delegates to) is that conversation's *prime* and its single point
+  of contact with the user; a *delegate* routes user-facing questions *up* to its prime, which
+  resolves what it can and escalates only genuine user-judgment items (all inquiries self-resolved
+  in a non-interactive run). Two reconciliations with existing authority are enforced in prose: the
+  prime never self-resolves a question binding a delegate repo's own constitution/user (→
+  `@repo-liaison` Protocol 3), and a delegate *refuses* a prime directive its own Invariant Core
+  forbids. New shipped reference `references/orchestrator-spawn-authority.reference.md` (fenced,
+  whole-file `content` section) is the single source of truth. Because the operative logic lives in
+  **fenced** sections (`orchestrator.template.md` routing_table_rows v2→v3, available_workflows
+  v2→v3 adding **Workflow 12 — Spawn-Authority Query Funnel** and **Workflow 13 — Spawn a Scoped
+  Child Orchestrator**; `repo-liaison.template.md` protocols v1→v2 adding Protocol 3's
+  role-conditional delegate branch) plus a shipped reference, it reaches **both** newly-created
+  (`--init`) and newly-updated (`--update --merge`) teams. Deliberately **not** added as a new
+  unfenced constitutional rule (would not propagate on merge, and the repo's unfenced-constraint
+  ratchet forbids it). New escalation ledger stub `references/orchestrator-escalation.log.csv`
+  (`liaison_logs.init_csv_stubs`); eval-suite gains an unconditional funnel scenario
+  (`eval_suite.py`); external host-capability claims recorded in `framework_research.py`. Honest
+  scope: only "no direct user contact" is runtime-enforced (Claude, one nested team layer under the
+  host depth cap); resolve-first / carve-out / refusal / ledger are governance prose. In-repo
+  nesting does not run live on Goose (platform one-layer cap). L2 containment for Goose/Copilot is
+  split to a separate security-gated spike (`references/plans/spawn-contained-subordinate.plan.md`).
+  `agentteams/output_plan.py`, `agentteams/liaison_logs.py`, `agentteams/eval_suite.py`,
+  `agentteams/framework_research.py`, `agentteams/templates/universal/orchestrator.template.md`,
+  `agentteams/templates/universal/repo-liaison.template.md`,
+  `agentteams/templates/universal/orchestrator-spawn-authority.reference.template.md`,
+  `tests/test_orchestrator_spawn_authority.py`.
+
 ### hardened (Cluster G — P2-4 full issuer-root grant containment)
 
 - **A capability grant can now be anchored to the issuer's tree, and the anchor is signed.** A

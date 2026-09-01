@@ -228,6 +228,18 @@ def _plan_output_files(
         "component_slug": None,
     })
 
+    # Spawn-authority & query-funnel reference (always — @orchestrator Workflows 12/13 and
+    # @repo-liaison Protocol 3's delegate branch). Single source of truth for the spawner-authority
+    # principle, the three-axis reconciliation, the carve-out + refusal mechanisms, the in-repo
+    # nested-orchestrator depth budget, and the escalation ledger. The orchestrator's fenced
+    # workflow/rule text stays terse and points here.
+    files.append({
+        "path": "references/orchestrator-spawn-authority.reference.md",
+        "template": f"{agents_dir}orchestrator-spawn-authority.reference.template.md",
+        "type": "reference",
+        "component_slug": None,
+    })
+
     # Red-team methodology (always — @adversarial's standing-audit extension). Carries the
     # seven-phase cycle, the T0/T1/T2 tier model, the five outcome classes, and the six ways a
     # red team fools itself.

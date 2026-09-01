@@ -108,11 +108,12 @@ def test_coordinated_concurrency_routing_row_is_inside_routing_fence():
     assert begin < row < end
 
 
-def test_workflow_0b_fences_are_at_v2():
-    """Both fences carrying the 0B feature were bumped from v=1 to v=2."""
+def test_workflow_0b_fences_are_at_v3():
+    """Both fences carrying the 0B feature were bumped v=1 -> v=2 (0B), then v=2 -> v=3 when the
+    spawn-authority query funnel added its routing rows + Workflows 12/13 to the same fences."""
     orch = _orch()
-    assert "<!-- AGENTTEAMS:BEGIN routing_table_rows v=2" in orch
-    assert "<!-- AGENTTEAMS:BEGIN available_workflows v=2" in orch
+    assert "<!-- AGENTTEAMS:BEGIN routing_table_rows v=3" in orch
+    assert "<!-- AGENTTEAMS:BEGIN available_workflows v=3" in orch
 
 
 def test_reference_template_has_coordinated_concurrency_sections():

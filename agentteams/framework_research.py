@@ -43,6 +43,41 @@ if STALE_DAYS < 1:
 EXPECTED_FRONT_MATTER_KEYS = ["name", "description", "tools", "model"]
 EXPECTED_LOCATIONS = [".claude/agents", "CLAUDE.md"]
 
+#: Host-capability claims the spawn-authority / query-funnel feature relies on but which are NOT
+#: verifiable from inside this repository (no such tokens appear in the tree). They are external
+#: Claude Code / host facts; recorded here — with their source and the exact claim — so the feature
+#: text can point at a tracked entry instead of asserting them as "authoritative." When the host
+#: docs move, these are the claims to re-check. See
+#: `templates/universal/orchestrator-spawn-authority.reference.template.md` and
+#: `references/plans/cross-orchestrator-query-funnel.plan.md` §2.1.
+HOST_CAPABILITY_CLAIMS: dict[str, dict[str, str]] = {
+    "subagent_spawn_depth": {
+        "claim": (
+            "Claude Code caps subagent nesting (default ~3 layers; env "
+            "CLAUDE_CODE_MAX_SUBAGENT_SPAWN_DEPTH) and withholds the spawn tool at the cap. "
+            "Budget: a child orchestrator gets one flat team layer beneath it."
+        ),
+        "source_url": "https://code.claude.com/docs/en/subagents.md",
+        "status": "external-unverified-in-repo",
+    },
+    "subagent_output_containment": {
+        "claim": (
+            "A subagent's output returns to its spawner, not the user — a delegate cannot "
+            "directly prompt the user. This is the only runtime-enforced part of the funnel."
+        ),
+        "source_url": "https://code.claude.com/docs/en/subagents.md",
+        "status": "external-unverified-in-repo",
+    },
+    "no_nested_teams": {
+        "claim": (
+            "Agent Teams (experimental): only the lead spawns teammates; teammates cannot spawn "
+            "their own teammates ('no nested teams'). Bounds cross-repo/at-scale delegation."
+        ),
+        "source_url": "https://code.claude.com/docs/en/agent-teams.md",
+        "status": "external-unverified-in-repo",
+    },
+}
+
 # Registry: each entry produces an advisory snapshot. Token allow-lists are
 # intentionally small and prose-survivable; see plan
 # references/plans/daily-pipeline-deferred-followups-2026-05-25.plan.md A6.

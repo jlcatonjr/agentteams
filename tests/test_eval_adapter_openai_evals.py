@@ -76,7 +76,9 @@ def test_empty_suite_is_valid():
         build_eval_suite({"project_name": "P", "framework": "claude"})
     )
     samples = d[d[d["eval"]]["id"]]["args"]["samples"]
-    assert samples == []
+    # A component-less manifest still emits the unconditional orchestrator-level query-funnel
+    # scenario, so exactly one sample survives translation.
+    assert len(samples) == 1
 
 
 def test_write_round_trips(tmp_path):
