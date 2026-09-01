@@ -105,6 +105,52 @@ nav:
           - "Part VII — Threat Intelligence & Red Team": agentteams-security-guide/for-everyone/part-vii-threat-intelligence-and-red-team.md
           - "Part VIII — Integrity, Provenance & Recovery": agentteams-security-guide/for-everyone/part-viii-integrity-provenance-and-recovery.md
           - "Part IX — Synthesis & Reference Matter": agentteams-security-guide/for-everyone/part-ix-synthesis-and-reference-matter.md
+  - Sandboxing Guide:
+      - Overview: agentteams-sandboxing-guide/README.md
+      - The Map (SKELETON): agentteams-sandboxing-guide/SKELETON.md
+      - Audience Profiles: agentteams-sandboxing-guide/audience-profiles.md
+      - Sources: agentteams-sandboxing-guide/SOURCES.md
+      - Projection Guide: agentteams-sandboxing-guide/_meta/projection-guide.md
+      - Reference:
+          - Contents: agentteams-sandboxing-guide/reference/README.md
+          - "Part I — What It Is & Why": agentteams-sandboxing-guide/reference/part-i-what-it-is-and-why.md
+          - "Part II — The Request": agentteams-sandboxing-guide/reference/part-ii-the-request.md
+          - "Part III — The Decision": agentteams-sandboxing-guide/reference/part-iii-the-decision.md
+          - "Part IV — The Mechanisms": agentteams-sandboxing-guide/reference/part-iv-the-mechanisms.md
+          - "Part V — Wiring & Enforcement": agentteams-sandboxing-guide/reference/part-v-wiring-and-enforcement.md
+          - "Part VI — Integrity & Drift": agentteams-sandboxing-guide/reference/part-vi-integrity-and-drift.md
+          - "Part VII — Ceilings & Red-Team": agentteams-sandboxing-guide/reference/part-vii-ceilings-and-red-team.md
+          - "Part VIII — Synthesis & Reference": agentteams-sandboxing-guide/reference/part-viii-synthesis-and-reference.md
+      - For Developers:
+          - Contents: agentteams-sandboxing-guide/for-developers/README.md
+          - "Part I — What It Is & Why": agentteams-sandboxing-guide/for-developers/part-i-what-it-is-and-why.md
+          - "Part II — The Request": agentteams-sandboxing-guide/for-developers/part-ii-the-request.md
+          - "Part III — The Decision": agentteams-sandboxing-guide/for-developers/part-iii-the-decision.md
+          - "Part IV — The Mechanisms": agentteams-sandboxing-guide/for-developers/part-iv-the-mechanisms.md
+          - "Part V — Wiring & Enforcement": agentteams-sandboxing-guide/for-developers/part-v-wiring-and-enforcement.md
+          - "Part VI — Integrity & Drift": agentteams-sandboxing-guide/for-developers/part-vi-integrity-and-drift.md
+          - "Part VII — Ceilings & Red-Team": agentteams-sandboxing-guide/for-developers/part-vii-ceilings-and-red-team.md
+          - "Part VIII — Synthesis & Reference": agentteams-sandboxing-guide/for-developers/part-viii-synthesis-and-reference.md
+      - For Researchers:
+          - Contents: agentteams-sandboxing-guide/for-researchers/README.md
+          - "Part I — What It Is & Why": agentteams-sandboxing-guide/for-researchers/part-i-what-it-is-and-why.md
+          - "Part II — The Request": agentteams-sandboxing-guide/for-researchers/part-ii-the-request.md
+          - "Part III — The Decision": agentteams-sandboxing-guide/for-researchers/part-iii-the-decision.md
+          - "Part IV — The Mechanisms": agentteams-sandboxing-guide/for-researchers/part-iv-the-mechanisms.md
+          - "Part V — Wiring & Enforcement": agentteams-sandboxing-guide/for-researchers/part-v-wiring-and-enforcement.md
+          - "Part VI — Integrity & Drift": agentteams-sandboxing-guide/for-researchers/part-vi-integrity-and-drift.md
+          - "Part VII — Ceilings & Red-Team": agentteams-sandboxing-guide/for-researchers/part-vii-ceilings-and-red-team.md
+          - "Part VIII — Synthesis & Reference": agentteams-sandboxing-guide/for-researchers/part-viii-synthesis-and-reference.md
+      - For Everyone:
+          - Contents: agentteams-sandboxing-guide/for-everyone/README.md
+          - "Part I — What It Is & Why": agentteams-sandboxing-guide/for-everyone/part-i-what-it-is-and-why.md
+          - "Part II — The Request": agentteams-sandboxing-guide/for-everyone/part-ii-the-request.md
+          - "Part III — The Decision": agentteams-sandboxing-guide/for-everyone/part-iii-the-decision.md
+          - "Part IV — The Mechanisms": agentteams-sandboxing-guide/for-everyone/part-iv-the-mechanisms.md
+          - "Part V — Wiring & Enforcement": agentteams-sandboxing-guide/for-everyone/part-v-wiring-and-enforcement.md
+          - "Part VI — Integrity & Drift": agentteams-sandboxing-guide/for-everyone/part-vi-integrity-and-drift.md
+          - "Part VII — Ceilings & Red-Team": agentteams-sandboxing-guide/for-everyone/part-vii-ceilings-and-red-team.md
+          - "Part VIII — Synthesis & Reference": agentteams-sandboxing-guide/for-everyone/part-viii-synthesis-and-reference.md
   - Claude & Copilot:
       - Claude Code Cheat Sheet: claude-code-cheat-sheet.md
       - Claude Privileges: claude-privileges.md
