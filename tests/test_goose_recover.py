@@ -283,3 +283,131 @@ def test_default_route_command_uses_proxy_owned_defaults():
     command = gr._default_route_command()
     assert str(gr.ROUTE_PROXY.resolve()) in command
     assert "--only" not in command
+
+
+# --------------------------------------------------------------------------- #
+# --force-restart: identity-only resolve + SIGTERM->SIGKILL for a hung proxy
+# --------------------------------------------------------------------------- #
+
+def test_resolve_listener_skips_health_probe(monkeypatch):
+    monkeypatch.setattr(gr, "_listener_pids", lambda port, runner=subprocess.run: (123,))
+    monkeypatch.setattr(gr, "_process_info", lambda pid, runner=subprocess.run: _process(pid))
+    monkeypatch.setattr(
+        gr, "_health_service",
+        lambda *a, **k: pytest.fail("_resolve_listener must not probe /healthz"),
+    )
+    info = gr._resolve_listener(gr.PORT)
+    assert info is not None and info.pid == 123
+
+
+def test_resolve_listener_refuses_unknown_pid(monkeypatch):
+    monkeypatch.setattr(gr, "_listener_pids", lambda port, runner=subprocess.run: (77,))
+    monkeypatch.setattr(gr, "_process_info", lambda pid, runner=subprocess.run: None)
+    with pytest.raises(gr._RecoveryError, match="unknown listener PID 77"):
+        gr._resolve_listener(gr.PORT)
+
+
+def test_resolve_listener_refuses_ambiguous_set(monkeypatch):
+    monkeypatch.setattr(gr, "_listener_pids", lambda port, runner=subprocess.run: (1, 2))
+    with pytest.raises(gr._RecoveryError, match="ambiguous listener set"):
+        gr._resolve_listener(gr.PORT)
+
+
+def test_inspect_listener_still_enforces_health_after_refactor(monkeypatch):
+    monkeypatch.setattr(gr, "_resolve_listener", lambda port, runner=subprocess.run: _process(123))
+    monkeypatch.setattr(gr, "_health_service", lambda port: "goose-openrouter-route-proxy")
+    info = gr._inspect_listener(gr.PORT)
+    assert info is not None and info.service == "goose-openrouter-route-proxy"
+
+
+def test_force_restart_recovers_hung_proxy(monkeypatch):
+    info = _process()
+    calls = []
+    monkeypatch.setattr(gr, "_check_tracker", lambda check_only: (True, False))
+    monkeypatch.setattr(gr, "_resolve_listener", lambda port: info)
+    monkeypatch.setattr(gr, "_force_stop_proxy", lambda current: calls.append(("force_stop", current)))
+    monkeypatch.setattr(
+        gr, "_start_proxy",
+        lambda command, service: calls.append(("start", tuple(command), service)),
+    )
+    assert gr.main(["--force-restart"]) == 0
+    assert calls == [
+        ("force_stop", info),
+        ("start", info.restart_command, "goose-openrouter-route-proxy"),
+    ]
+
+
+def test_force_restart_starts_default_when_absent(monkeypatch):
+    started = []
+    monkeypatch.setattr(gr, "_check_tracker", lambda check_only: (True, False))
+    monkeypatch.setattr(gr, "_resolve_listener", lambda port: None)
+    monkeypatch.setattr(gr, "_force_stop_proxy", lambda *a, **k: pytest.fail("must not signal when absent"))
+    monkeypatch.setattr(gr, "_start_proxy", lambda command, service: started.append((tuple(command), service)))
+    assert gr.main(["--force-restart"]) == 0
+    command, service = started[0]
+    assert service == "goose-openrouter-route-proxy"
+    assert "--only" not in command
+
+
+def test_force_restart_refuses_unknown_listener(monkeypatch):
+    monkeypatch.setattr(gr, "_check_tracker", lambda check_only: (True, False))
+
+    def refuse(port):
+        raise gr._RecoveryError("refusing unknown listener PID 77 on port 8791")
+
+    monkeypatch.setattr(gr, "_resolve_listener", refuse)
+    monkeypatch.setattr(gr, "_force_stop_proxy", lambda *a, **k: pytest.fail("must not signal unknown"))
+    monkeypatch.setattr(gr, "_start_proxy", lambda *a, **k: pytest.fail("must not start over unknown"))
+    assert gr.main(["--force-restart"]) == 2
+
+
+def test_force_stop_escalates_to_sigkill(monkeypatch):
+    info = _process()
+    monkeypatch.setattr(gr, "PROCESS_TIMEOUT_SECONDS", 0.05)
+    monkeypatch.setattr(gr, "_resolve_listener", lambda port, runner=subprocess.run: info)
+    signals: list[tuple[int, int]] = []
+
+    def fake_pids(port, runner=subprocess.run):
+        # Port frees only once SIGKILL has been delivered (SIGTERM was ignored).
+        return () if (info.pid, gr.signal.SIGKILL) in signals else (info.pid,)
+
+    monkeypatch.setattr(gr, "_listener_pids", fake_pids)
+    gr._force_stop_proxy(info, kill=lambda pid, sig: signals.append((pid, sig)))
+    assert signals == [
+        (info.pid, 0),
+        (info.pid, gr.signal.SIGTERM),
+        (info.pid, gr.signal.SIGKILL),
+    ]
+
+
+def test_force_stop_sigterm_suffices(monkeypatch):
+    info = _process()
+    monkeypatch.setattr(gr, "PROCESS_TIMEOUT_SECONDS", 0.5)
+    monkeypatch.setattr(gr, "_resolve_listener", lambda port, runner=subprocess.run: info)
+    signals: list[tuple[int, int]] = []
+
+    def fake_pids(port, runner=subprocess.run):
+        return () if (info.pid, gr.signal.SIGTERM) in signals else (info.pid,)
+
+    monkeypatch.setattr(gr, "_listener_pids", fake_pids)
+    gr._force_stop_proxy(info, kill=lambda pid, sig: signals.append((pid, sig)))
+    assert signals == [(info.pid, 0), (info.pid, gr.signal.SIGTERM)]
+    assert (info.pid, gr.signal.SIGKILL) not in signals
+
+
+def test_force_stop_refuses_when_owner_changed(monkeypatch):
+    info = _process(pid=123)
+    other = _process(pid=999)
+    monkeypatch.setattr(gr, "_resolve_listener", lambda port, runner=subprocess.run: other)
+    with pytest.raises(gr._RecoveryError, match="ownership changed"):
+        gr._force_stop_proxy(info, kill=lambda pid, sig: pytest.fail("must not signal a changed owner"))
+
+
+def test_check_and_force_restart_are_mutually_exclusive():
+    with pytest.raises(SystemExit):
+        gr.main(["--check", "--force-restart"])
+
+
+def test_restart_and_force_restart_are_mutually_exclusive():
+    with pytest.raises(SystemExit):
+        gr.main(["--restart", "--force-restart"])

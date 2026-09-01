@@ -267,10 +267,29 @@ def _health_service(port: int, timeout: float = HEALTH_TIMEOUT_SECONDS) -> str:
     return service
 
 
-def _inspect_listener(
+def _resolve_listener(
     port: int,
     runner: Callable[..., subprocess.CompletedProcess[str]] = subprocess.run,
 ) -> _ProcessInfo | None:
+    """Resolve the listener's identity from the process table only (no /healthz probe).
+
+    Returns the known-service ``_ProcessInfo``, or ``None`` when nothing is listening.
+    Raises ``_RecoveryError`` for an ambiguous listener set or a listener whose process
+    identity is not a known service -- the same refusals as ``_inspect_listener`` minus
+    the health check. This is what lets ``--force-restart`` clear a hung (health-
+    unreachable) proxy while still refusing to signal an unknown foreign listener.
+
+    Args:
+        port: TCP port whose listener to resolve.
+        runner: Injected subprocess runner (test seam).
+
+    Returns:
+        The identity-resolved known-service process, or ``None`` if nothing listens.
+
+    Raises:
+        _RecoveryError: The listener set is ambiguous, or the sole listener is not a
+            known service.
+    """
     pids = _listener_pids(port, runner)
     if not pids:
         return None
@@ -281,6 +300,16 @@ def _inspect_listener(
         raise _RecoveryError(
             f"refusing unknown listener PID {pids[0]} on port {port}",
         )
+    return info
+
+
+def _inspect_listener(
+    port: int,
+    runner: Callable[..., subprocess.CompletedProcess[str]] = subprocess.run,
+) -> _ProcessInfo | None:
+    info = _resolve_listener(port, runner)
+    if info is None:
+        return None
     service = _health_service(port)
     if service != info.service:
         raise _RecoveryError(
@@ -364,6 +393,46 @@ def _stop_proxy(
     raise _RecoveryError(f"port {PORT} is still held after bounded SIGTERM wait")
 
 
+def _force_stop_proxy(
+    original: _ProcessInfo,
+    runner: Callable[..., subprocess.CompletedProcess[str]] = subprocess.run,
+    kill: Callable[[int, int], None] = os.kill,
+) -> None:
+    """SIGTERM (then SIGKILL) a listener re-verified BY PROCESS IDENTITY as our own.
+
+    Unlike ``_stop_proxy``, this needs no ``/healthz`` answer, so it can clear a hung-
+    but-listening proxy. It still refuses to signal a PID that is not the same known-
+    service process originally resolved -- an unknown or changed listener is never
+    signalled. SIGKILL is only reached after the bounded SIGTERM wait fails.
+
+    Args:
+        original: The identity-resolved process this call is authorized to stop.
+        runner: Injected subprocess runner (test seam).
+        kill: Injected signal sender (test seam).
+
+    Raises:
+        _RecoveryError: Listener ownership changed since *original* was resolved, or the
+            port is still held after both SIGTERM and SIGKILL.
+    """
+    current = _resolve_listener(PORT, runner)
+    if current is None or current.pid != original.pid or current.script != original.script:
+        raise _RecoveryError("listener ownership changed before force-restart; refusing signal")
+    # Residual PID-reuse TOCTOU (accepted, @security 2026-09-01): between this re-resolve and
+    # the signal below the identified process could exit and its PID be reused. kill(pid, 0) is a
+    # liveness probe, not a re-identity check, and does not close that window; the SIGKILL step is
+    # additionally gated on the port still being held (below). No atomic fix exists on darwin
+    # (pidfd_send_signal is Linux-only). Same class exists in _stop_proxy.
+    kill(current.pid, 0)
+    for sig in (signal.SIGTERM, signal.SIGKILL):
+        kill(current.pid, sig)
+        deadline = time.monotonic() + PROCESS_TIMEOUT_SECONDS
+        while time.monotonic() < deadline:
+            if not _listener_pids(PORT, runner):
+                return
+            time.sleep(0.1)
+    raise _RecoveryError(f"port {PORT} is still held after SIGTERM and SIGKILL")
+
+
 def _default_route_command() -> tuple[str, ...]:
     return (sys.executable, "-u", str(ROUTE_PROXY.resolve()), "--port", str(PORT), "--quiet")
 
@@ -406,12 +475,30 @@ def main(argv: Sequence[str] | None = None) -> int:
         "--restart", action="store_true",
         help="restart a healthy, identity-verified known proxy",
     )
+    parser.add_argument(
+        "--force-restart", action="store_true",
+        help="restart a known proxy even when it is hung/unhealthy; identity is verified "
+             "from the process table, not /healthz. Starts the default proxy if none is "
+             "listening; refuses an unknown or ambiguous listener.",
+    )
     args = parser.parse_args(argv)
-    if args.check and args.restart:
-        parser.error("--check and --restart are mutually exclusive")
+    if args.check and (args.restart or args.force_restart):
+        parser.error("--check cannot be combined with a restart mode")
+    if args.restart and args.force_restart:
+        parser.error("--restart and --force-restart are mutually exclusive")
 
     try:
         _, tracker_needed = _check_tracker(args.check)
+        if args.force_restart:
+            # Identity-only resolve: no /healthz gate, so a hung-but-listening proxy
+            # can be cleared. An unknown/ambiguous listener still raises here.
+            listener = _resolve_listener(PORT)
+            if listener is None:
+                _start_proxy(_default_route_command(), "goose-openrouter-route-proxy")
+            else:
+                _force_stop_proxy(listener)
+                _start_proxy(listener.restart_command, listener.service)
+            return 0
         listener = _inspect_listener(PORT)
         if args.check:
             if listener is None:
