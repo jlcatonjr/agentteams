@@ -139,21 +139,35 @@ class FrameworkAdapter(ABC):
     def extra_output_files(self, manifest: dict[str, Any]) -> list[tuple[str, str]]:
         """Return additional (rel_path, content) files to emit for this framework.
 
-        Framework-neutral baseline: on Linux, when a confined/exclusive profile (or any
-        ``*:sandbox`` host-feature token) is requested, emit the provider-agnostic OS-confinement
-        launcher ``sandbox/confine-run.sh`` (see ``_linux_sandbox_emit``). This is emitted for
-        EVERY framework — claude, codex, copilot, agents-md, goose alike — because the boundary
-        wraps any process; no framework preference lives in agentteams. Off Linux it emits
-        nothing here (macOS Seatbelt is handled by the goose adapter's own path).
+        Framework-neutral baseline: when a confined/exclusive profile (or any ``*:sandbox``
+        host-feature token) is requested, emit the provider-agnostic OS-confinement launcher
+        ``sandbox/confine-run.sh`` (see ``_linux_sandbox_emit``). This is emitted for EVERY
+        framework — claude, codex, copilot, agents-md, goose alike — because the boundary wraps any
+        process; no framework preference lives in agentteams.
+
+        * On **Linux** the launcher's ``bwrap`` branch is the boundary.
+        * On **macOS** the SAME launcher's ``build_macos`` branch is the boundary, and two more
+          sidecars ship beside it: ``sandbox/mac-escape-tests.sh`` (the on-host deny test that must
+          pass, unnested, before any macOS boundary is called "confined") and two INERT Tier-B
+          examples. See ``macos_sandbox_output_files``.
+        * Off Linux/macOS nothing is emitted here (no emittable boundary).
+
+        Only one platform branch is non-empty on any given host, so the launcher is emitted once.
+        The launcher is NOT auto-applied on either OS; ``privilege_profile_advisory`` surfaces the
+        manual-wire / enforcement-unverified state so it is never silent.
 
         Frameworks that need framework-specific sidecar files not derived from a template (e.g.
         Goose's ``.goosehints`` integrator, Claude's constitutional hook) override this and MUST
         call ``super().extra_output_files(manifest)`` so the neutral launcher is preserved. Paths
         are relative to the agents output directory, like every other emitted path.
         """
-        from agentteams.frameworks._linux_sandbox_emit import linux_sandbox_output_files
+        from agentteams.frameworks._linux_sandbox_emit import (
+            linux_sandbox_output_files,
+            macos_sandbox_output_files,
+        )
 
-        return linux_sandbox_output_files(manifest, self.sandbox_launcher_rel_path())
+        rel = self.sandbox_launcher_rel_path()
+        return linux_sandbox_output_files(manifest, rel) + macos_sandbox_output_files(manifest, rel)
 
     def vscode_tasks_rel_path(self) -> str | None:
         """Return the path to .vscode/tasks.json relative to this framework's agents dir.

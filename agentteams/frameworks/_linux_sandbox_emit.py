@@ -1,10 +1,14 @@
-"""_linux_sandbox_emit.py — FRAMEWORK-NEUTRAL Linux OS-confinement emitter (Layer C/D).
+"""_linux_sandbox_emit.py — FRAMEWORK-NEUTRAL OS-confinement launcher emitter (Layer C/D).
 
-Linux "works like Seatbelt": this emits a provider-agnostic ``bwrap`` launcher
-(``confine-run.sh``) that wraps ANY agentic process — a ``claude``/``codex``/``copilot`` CLI, a
-``goose run``, a python agent, an MCP server — in an OS-enforced boundary. It is the structural
-Linux analogue of the macOS Seatbelt path (``_goose_sandbox_emit.py``): macOS confines with
-``sandbox-exec -f profile <argv>``; Linux confines with ``confine-run.sh --scratch DIR … -- <argv>``.
+Emits the provider-agnostic ``confine-run.sh`` launcher that wraps ANY agentic process — a
+``claude``/``codex``/``copilot`` CLI, a ``goose run``, a python agent, an MCP server — in an
+OS-enforced boundary, plus (on macOS) its deny-test control and two inert Tier-B examples. The name
+is historical: the module began as the Linux emitter, and :func:`linux_sandbox_output_files` is
+still the Linux path (``bwrap``), but as of 2026-W36 :func:`macos_sandbox_output_files` emits the
+SAME launcher's macOS (``sandbox-exec``) branch + sidecars on darwin. The launcher itself is the one
+cross-platform artifact: Linux confines with ``confine-run.sh --scratch DIR … -- <argv>`` (bwrap),
+macOS with the same script's ``build_macos`` branch (``sandbox-exec -f profile <argv>``). The
+goose-specific macOS Seatbelt config path is separate (``_goose_sandbox_emit.py``).
 
 Two operator corrections (2026-08-31) define this module's shape, and both are load-bearing:
 
@@ -38,6 +42,7 @@ cycle: adapters call INTO here from ``extra_output_files``).
 
 from __future__ import annotations
 
+import posixpath
 import sys
 from pathlib import Path
 from typing import Any
@@ -53,6 +58,17 @@ LINUX_SANDBOX_LAUNCHER_PROJECT_PATH = "sandbox/confine-run.sh"
 
 #: The shipped asset, relative to ``templates/universal/``.
 _LAUNCHER_ASSET_REL = "sandbox/confine-run.sh"
+
+#: macOS sidecar assets shipped BESIDE the launcher on darwin, relative to ``templates/universal/``.
+#: The deny test (``mac-escape-tests.sh``) is the gate that must pass UNNESTED before any macOS
+#: boundary is called "confined" (wiring-verified != enforcement-verified). The two examples are
+#: INERT Tier-B references (operator-provisioned uid + PF anchor) — never auto-run, never elevate.
+#: Emitted ONLY on darwin (see :func:`macos_sandbox_output_files`).
+_MACOS_DENYTEST_ASSET_REL = "sandbox/mac-escape-tests.sh"
+_MACOS_TIER_B_EXAMPLE_ASSETS = (
+    "sandbox/dedicated-uid-provisioning.example.sh",
+    "sandbox/pf-per-tenant-anchor.example.conf",
+)
 
 
 def _sandbox_confinement_requested(manifest: dict[str, Any]) -> bool:
@@ -72,19 +88,21 @@ def _sandbox_confinement_requested(manifest: dict[str, Any]) -> bool:
     )
 
 
-def _read_launcher_asset() -> str:
-    """Return the shipped ``confine-run.sh`` launcher text, or ``""`` when the asset is absent.
+def _read_sandbox_asset(asset_rel: str) -> str:
+    """Return a shipped ``templates/universal/<asset_rel>`` file's text, or ``""`` when absent.
 
-    Absent rather than raising: a source checkout missing the optional asset degrades to "no
-    launcher emitted" instead of breaking generation, exactly as ``_read_template_asset`` does for
-    the constitutional hook. The asset's presence is covered by the Linux-emission test.
+    Absent rather than raising: a source checkout missing an optional asset degrades to "not
+    emitted" instead of breaking generation, exactly as ``_read_template_asset`` does for the
+    constitutional hook. Shared by the Linux launcher emit and the macOS launcher+sidecar emit so
+    both resolve and load assets IDENTICALLY — one loader, no gating/loader drift between platforms.
+
+    Args:
+        asset_rel: Asset path relative to ``templates/universal/`` (e.g. ``sandbox/confine-run.sh``).
+
+    Returns:
+        The asset's UTF-8 text, or ``""`` if it cannot be read.
     """
-    asset = (
-        Path(__file__).resolve().parents[1]
-        / "templates"
-        / "universal"
-        / _LAUNCHER_ASSET_REL
-    )
+    asset = Path(__file__).resolve().parents[1] / "templates" / "universal" / asset_rel
     try:
         return asset.read_text(encoding="utf-8")
     except OSError:
@@ -127,14 +145,73 @@ def linux_sandbox_output_files(
         return []
     if not _sandbox_confinement_requested(manifest):
         return []
-    content = _read_launcher_asset()
+    content = _read_sandbox_asset(_LAUNCHER_ASSET_REL)
     if not content:
         return []
     return [(rel_path, content)]
 
 
+def macos_sandbox_output_files(
+    manifest: dict[str, Any],
+    rel_path: str = LINUX_SANDBOX_LAUNCHER_REL,
+    *,
+    platform: str | None = None,
+) -> list[tuple[str, str]]:
+    """Return the ``(rel_path, content)`` files for macOS OS-confinement, or ``[]``.
+
+    Darwin mirror of :func:`linux_sandbox_output_files`, gated on the SAME framework-neutral
+    confinement-request predicate (:func:`_sandbox_confinement_requested`). When confinement is
+    requested AND the current platform is macOS, emit:
+
+    * the SAME provider-agnostic launcher ``sandbox/confine-run.sh`` — its ``build_macos`` branch
+      (sandbox-exec + a generated Seatbelt profile, RLIMIT_CPU/NPROC caps, loopback-proxy DNS
+      contract, setuid denylist) is the real boundary on darwin;
+    * ``sandbox/mac-escape-tests.sh`` — the on-host deny test that must pass, UNNESTED and with its
+      positive controls, before any macOS boundary may be called "confined"
+      (wiring-verified != enforcement-verified); and
+    * two INERT Tier-B examples (``dedicated-uid-provisioning.example.sh``,
+      ``pf-per-tenant-anchor.example.conf``) — reference-only, never auto-run, never elevate.
+
+    Like Linux, the launcher is NOT auto-applied: the operator must wrap the agent invocation with
+    it. That "nothing is confined until you wire it, and unverified until the deny test passes"
+    state is surfaced by :func:`agentteams.host_features.privilege_profile_advisory` (its darwin
+    manual-wire branch), never silently. Off darwin this returns ``[]`` (Linux is handled by
+    :func:`linux_sandbox_output_files`; Windows/other have no emittable boundary).
+
+    Args:
+        manifest: The team manifest. ``privilege_profile`` and ``host_features`` gate emission.
+        rel_path: Launcher emit path relative to the framework's agents output directory; the
+            sidecars land in that same directory. Defaults to the 2-deep repo-root path; 1-deep
+            adapters pass ``../sandbox/…``.
+        platform: Override for the platform string (defaults to live ``sys.platform``); lets tests
+            exercise the darwin / off-darwin branch deterministically.
+
+    Returns:
+        ``[(launcher_path, text), (denytest_path, text), (example_path, text)…]`` on macOS with a
+        requested boundary and readable assets, else ``[]``. A missing sidecar asset is skipped
+        (still emits the launcher); a missing launcher asset yields ``[]``.
+    """
+    plat = sys.platform if platform is None else platform
+    if not plat.startswith("darwin"):
+        return []
+    if not _sandbox_confinement_requested(manifest):
+        return []
+    launcher = _read_sandbox_asset(_LAUNCHER_ASSET_REL)
+    if not launcher:
+        return []
+    files: list[tuple[str, str]] = [(rel_path, launcher)]
+    sidecar_dir = posixpath.dirname(rel_path)
+    for asset_rel in (_MACOS_DENYTEST_ASSET_REL, *_MACOS_TIER_B_EXAMPLE_ASSETS):
+        text = _read_sandbox_asset(asset_rel)
+        if not text:
+            continue
+        files.append((posixpath.join(sidecar_dir, posixpath.basename(asset_rel)), text))
+    return files
+
+
 __all__ = [
     "linux_sandbox_output_files",
+    "macos_sandbox_output_files",
     "LINUX_SANDBOX_LAUNCHER_REL",
     "LINUX_SANDBOX_LAUNCHER_PROJECT_PATH",
 ]

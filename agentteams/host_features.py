@@ -232,14 +232,21 @@ def is_sandbox_capable(framework_id: str, platform: str | None = None) -> bool:
       not goose-gated and not ``.goose/``-pathed (operator correction 2026-08-31: no harness
       preference in agentteams). Enforcement-VERIFIED on a live kernel (baseAgent
       ``layerc-escape-tests.sh`` [5][6], 6/6, incl. a real ``goose`` process).
+    * **macOS — framework-NEUTRAL, any framework (2026-W36).** The SAME launcher's
+      ``build_macos`` branch (``sandbox-exec`` + a generated Seatbelt profile, RLIMIT_CPU/NPROC
+      caps, a loopback-only proxy DNS contract, a non-exhaustive setuid-exec denylist) is emitted
+      for ANY framework via ``macos_sandbox_output_files``, so like Linux the boundary does not
+      depend on the framework. It is manual-wire (not auto-applied) and ENFORCEMENT-UNVERIFIED
+      until ``mac-escape-tests.sh`` passes UNNESTED on the target box — both surfaced by
+      :func:`privilege_profile_advisory`, never silent.
     * ``claude`` — always capable (Claude Code configures its own Seatbelt/bubblewrap
       sandbox on macOS/Linux; native Windows degrades to advisory inside Claude Code's own
       behavior, which agentteams still emits a block for).
-    * ``goose`` — capable on **macOS** (Apple Seatbelt: ``sandbox-exec`` + ``GOOSE_SANDBOX``,
-      emitted by ``_goose_sandbox_emit.py``). On **Windows** there is no emittable OS boundary,
-      so a confined/exclusive goose team there fails closed / advises, never claims a boundary
-      (honest fail-closed). (Linux is covered framework-neutrally by the branch above.)
-    * anything else — not capable (off Linux).
+    * ``goose`` — on **macOS** additionally has a native Apple Seatbelt path (``sandbox-exec`` +
+      ``GOOSE_SANDBOX``, emitted by ``_goose_sandbox_emit.py``); macOS is already covered
+      framework-neutrally above. On **Windows** there is no emittable OS boundary, so a
+      confined/exclusive goose team there fails closed / advises (honest fail-closed).
+    * anything else — capable on Linux/macOS (launcher), not on Windows/other.
 
     Args:
         framework_id: The target framework id.
@@ -253,10 +260,14 @@ def is_sandbox_capable(framework_id: str, platform: str | None = None) -> bool:
     if plat.startswith("linux"):
         # Framework-neutral: the emitted bwrap launcher wraps any process (correction #2).
         return True
+    if plat == "darwin":
+        # Framework-neutral on macOS too (2026-W36): the SAME launcher's build_macos branch is
+        # emitted for any framework (macos_sandbox_output_files). Manual-wire + enforcement-
+        # UNVERIFIED until mac-escape-tests.sh passes unnested — surfaced by the advisory below.
+        return True
     if framework_id == "claude":
         return True
-    if framework_id == "goose":
-        return plat == "darwin"
+    # Remaining platforms are Windows/other: no emittable boundary for goose or anything else.
     return False
 
 
@@ -274,6 +285,43 @@ SANDBOX_CAPABLE_FRAMEWORKS: frozenset[str] = frozenset(
 )
 
 
+#: Honest descriptor of the macOS resource-cap augmentation the emitted launcher carries
+#: (``build_macos`` branch, 2026-W36). This is the single source of truth for "what macOS augments
+#: vs. what it deliberately WON'T do"; it is the value a team manifest's ``mac_resource_caps`` field
+#: records, and the advisory/docs are kept in step with it. Each entry states the flag, the kernel
+#: mechanism (or lack of one), and the HONEST ceiling — never a confined claim the OS does not
+#: enforce. There is deliberately NO syscall-filtering entry (operator decision 2026-W36: seccomp-
+#: grade policy is a Linux host / Layer B concern, never emitted here).
+MAC_RESOURCE_CAPS: dict[str, dict[str, str]] = {
+    # Tier A — in-core, unprivileged, kernel-enforced.
+    "cpu_max": {
+        "flag": "--cpu-max SEC",
+        "tier": "A",
+        "mechanism": "RLIMIT_CPU via ulimit -t (per-PROCESS cpu-second cap, SIGXCPU->SIGKILL)",
+        "status": "enforced",
+        "ceiling": "per-process, NOT an aggregate/tree quota; DoS-bounding, not a fair-share throttle",
+    },
+    # Tier B — interface only; isolates a tenant ONLY under an operator-provisioned dedicated uid.
+    "nproc_max": {
+        "flag": "--nproc-max N",
+        "tier": "B",
+        "mechanism": "RLIMIT_NPROC via ulimit -u (per-UID)",
+        "status": "conditional",
+        "ceiling": "isolates a tenant ONLY under a dedicated uid; on a shared uid it is a self-DoS "
+        "knob, not isolation. The launcher NEVER drops uid (no sudo/launchctl) — provisioning is OOB",
+    },
+    # Tier C — fail-honest; accepted for interface parity but enforces NOTHING on macOS.
+    "mem_max": {
+        "flag": "--mem-max MiB",
+        "tier": "C",
+        "mechanism": "none (RLIMIT_AS/DATA/RSS broken on arm64; taskpolicy fires only under pressure)",
+        "status": "uncapped",
+        "ceiling": "memory is UNCAPPED on bare macOS; the launcher warns LOUDLY and proceeds. A hard "
+        "cap requires a VM / container / Linux host (Layer B)",
+    },
+}
+
+
 def privilege_profile_advisory(
     profile: str | None,
     framework_id: str,
@@ -284,11 +332,15 @@ def privilege_profile_advisory(
     """Return an advisory dict when confinement is requested but unenforceable on this host.
 
     OS-level enforcement exists on a sandbox-capable framework/platform only —
-    :func:`is_sandbox_capable`: ``claude`` everywhere, ``goose`` on macOS only. A request
-    made either way — via ``privilege_profile`` confined/exclusive OR a directly-passed
-    ``claude:sandbox``/``goose:sandbox`` host-feature token — on a target that cannot enforce
-    it HERE emits no boundary, so it is advisory only: a state that must be surfaced, never
-    silent.
+    :func:`is_sandbox_capable`: framework-NEUTRAL on **Linux** and (since 2026-W36) **macOS**
+    via the emitted ``confine-run.sh`` launcher, plus ``claude`` on every platform (native Claude
+    Code sandbox). On **Windows/other** there is no emittable boundary for any non-``claude``
+    framework. A request made either way — via ``privilege_profile`` confined/exclusive OR a
+    directly-passed ``claude:sandbox``/``goose:sandbox`` host-feature token — on a target that
+    cannot enforce it HERE emits no boundary, so it is advisory only: a state that must be
+    surfaced, never silent. Note the two enforceable-but-MANUAL cases (Linux/macOS launcher for a
+    non-``claude``/``goose`` framework) get a NON-FATAL manual-wire advisory below, distinct from
+    the fatal unenforced-host one.
 
     Args:
         profile: The active ``privilege_profile`` (``cooperative``/``confined``/``exclusive``).
@@ -360,6 +412,35 @@ def privilege_profile_advisory(
             ),
         }
 
+    if plat == "darwin" and framework_id not in {"claude", "goose"}:
+        # macOS mirror of the Linux manual-wire advisory (2026-W36). The SAME launcher's
+        # build_macos branch IS emitted for these frameworks (macos_sandbox_output_files), so the
+        # request is genuinely enforceable-but-manual — a NON-FATAL advisory, never a fail-closed
+        # raise. claude/goose are excluded: each has its own auto-applied native macOS boundary
+        # (Claude Code Seatbelt; goose GOOSE_SANDBOX via _goose_sandbox_emit), so telling their
+        # operators "nothing is confined until you wrap the launcher" would be false. Suppressing
+        # signal for the rest would recreate the silent false-confinement the Linux branch exists
+        # to prevent. The honest macOS residuals + the enforcement-UNVERIFIED gate ride along so a
+        # green "confined" is never implied before the on-host deny test passes.
+        return {
+            "code": "privilege-profile-macos-launcher-manual-wire",
+            "message": (
+                f"{how}: OS-confinement IS available on macOS — agentteams emitted the "
+                "framework-neutral launcher 'sandbox/confine-run.sh' (build_macos branch: "
+                "sandbox-exec + a generated Seatbelt profile, RLIMIT_CPU/NPROC caps, a "
+                "loopback-only proxy DNS contract, and a NON-EXHAUSTIVE setuid-exec denylist). "
+                "But it is NOT auto-applied: you MUST wrap your agent invocation with it "
+                "('sandbox/confine-run.sh --scratch DIR --egress deny -- <your agent cmd>'). "
+                "Nothing is confined until you do. HONEST RESIDUALS (macOS): memory is UNCAPPED "
+                "(--mem-max is interface-only; a hard cap needs a VM/container/Linux host); NO "
+                "syscall filtering is emitted; the setuid denylist is compensating hardening, NOT "
+                "no-new-privs; sole-proxy egress is loopback-only (remote-address control lives "
+                "out-of-band in PF). And the whole macOS path is ENFORCEMENT-UNVERIFIED until "
+                "'sandbox/mac-escape-tests.sh' passes UNNESTED, with its positive controls, on the "
+                "target box — wiring-verified is not enforcement-verified."
+            ),
+        }
+
     # An emittable boundary that IS wired through the framework's own config — claude everywhere
     # (native settings-block sandbox, with its own P1-3 verify) and goose on macOS (Seatbelt via
     # the emitted GOOSE_SANDBOX example) — surfaces no extra advisory here.
@@ -394,6 +475,7 @@ def merge_profile_features(
 
 __all__ = [
     "HostFeatureError",
+    "MAC_RESOURCE_CAPS",
     "SANDBOX_CAPABLE_FRAMEWORKS",
     "expand_privilege_profile",
     "is_enabled",

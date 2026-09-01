@@ -518,6 +518,59 @@ emitted artifact's `sha256` and re-pin only through a coordinated change to the 
 Seatbelt paths are UNVERIFIED off a mac; the boundary does not close T6 / host-as-TCB, and
 seccomp/Landlock is a further layer not yet added.
 
+## macOS augmentation (2026-W36)
+
+The **same** `sandbox/confine-run.sh` carries a real macOS (`build_macos`) branch — emitted for
+**every** framework on a macOS host, exactly as the Linux branch is on Linux. It relies on the
+OS-independent core and adds macOS-specific augmentation **only** where the Linux sandbox expresses
+something macOS cannot reach through that core; where even the augmentation cannot reach parity, it
+**fails honest** (labels the residual, defers to a Linux host / an out-of-band layer) rather than
+emit a confined claim it does not enforce. On macOS the emitter also ships `sandbox/mac-escape-tests.sh`
+(the on-host deny test) and two **inert** Tier-B examples (`dedicated-uid-provisioning.example.sh`,
+`pf-per-tenant-anchor.example.conf`) — reference only, never auto-run, never elevate.
+
+**Three distinct mechanisms — do not conflate them:**
+
+| Flag | Tier | Mechanism | Honest status |
+|------|------|-----------|---------------|
+| `--cpu-max SEC` | A (in-core, kernel-enforced) | `RLIMIT_CPU` via `ulimit -t` — a **per-process** cpu-second cap (SIGXCPU→SIGKILL) | Enforced; DoS-bounding, **not** an aggregate/tree quota |
+| `--nproc-max N` | B (interface only) | `RLIMIT_NPROC` via `ulimit -u` (**per-uid**) | Isolates a tenant **only** under an operator-provisioned dedicated uid; on a shared uid it is a self-DoS knob. The launcher **never drops uid** (no `sudo`/`launchctl`) — provisioning is out-of-band |
+| `--mem-max MiB` | C (fail-honest) | none | Memory is **UNCAPPED** on bare macOS; the launcher warns loudly and proceeds. A hard cap needs a VM / container / Linux host |
+
+On Linux these three flags are **no-ops** (Linux reaches CPU/PID/memory caps via cgroups on its OOB
+path). No syscall filtering is emitted on either OS (operator decision 2026-W36: seccomp-grade
+policy is a Linux-host / Layer-B concern).
+
+**DNS-through-proxy contract (`--egress proxy` on macOS).** SBPL's network address filter accepts
+**only** host `*` or `localhost` — `(remote ip "<real-IP>:port")` fails at *parse*. So macOS pins
+sole-proxy egress **only** to a loopback proxy: `(deny network*)` blocks UDP/53 (the guest cannot
+self-resolve) and only the loopback proxy port is opened; the proxy must run on loopback and perform
+all name resolution. A **non-loopback `--proxy` FAILS CLOSED** (exit 2) rather than silently widen to
+`*:port`. Remote-address egress control lives out-of-band in PF (see the inert
+`pf-per-tenant-anchor.example.conf`).
+
+**Setuid-exec denylist.** The profile denies `process-exec*` on the known macOS system
+setuid/setgid-root binaries. This is **compensating hardening, NOT `no-new-privs`**, and the list is
+**non-exhaustive** — reconcile it against your box with `find / -perm -4000 -o -perm -2000`.
+Literal-path matching may be bypassable by path aliasing; the deny test probes this.
+
+**Manual-wire + verification.** Like Linux, the macOS launcher is **not auto-applied** — you must
+wrap your agent invocation with it, and nothing is confined until you do. `privilege_profile_advisory`
+surfaces this (a non-fatal `privilege-profile-macos-launcher-manual-wire` advisory for any framework
+other than `claude`/`goose`, which have their own native macOS boundaries). **No macOS boundary is
+claimed to confine until `sandbox/mac-escape-tests.sh` passes on that box's actual build, UNNESTED and
+with its positive controls** — wiring-verified is **not** enforcement-verified.
+
+**Honest residuals (macOS), in full:** memory is not hard-capped on bare macOS (Tier C); no syscall
+policy; the setuid path is a denylist (compensating hardening, not no-new-privs); sole-proxy egress is
+loopback-only (remote-address control is OOB in PF); per-tenant net isolation via a dedicated uid is
+coarser than a Linux netns (host-global, root, PF-churn-prone); the whole tier rests on Apple's
+deprecated `sandbox-exec` (the durable primary remains a Linux host / Layer B); and **wiring-verified ≠
+enforcement-verified** until the on-host deny test passes unnested.
+
+The honest Tier A/B/C descriptor is available programmatically as
+`agentteams.host_features.MAC_RESOURCE_CAPS`.
+
 ## Design foundations
 
 The mechanisms here rest on a few established security principles — cited as *design
