@@ -103,8 +103,17 @@ BROAD_EXCEPT_BASELINE = 18      # 16→18: the SAME fail-closed process-boundary
                                 # consolidation (see tmp/by-week/2026-W30/
                                 # web-browsing-playwright-cli.plan.md, "Post-implementation audit
                                 # outcome" — where this exact consolidation is explained).
-SWALLOW_BASELINE = 38           # except clause whose body is only pass/continue (narrow catches =
+SWALLOW_BASELINE = 40           # except clause whose body is only pass/continue (narrow catches =
                                 # known-recoverable external boundaries; the ratchet blocks new ones).
+                                # 38→40 (2026-W36): the shipped source carries two additional narrow,
+                                # named-type catches at known-recoverable external boundaries — the
+                                # ratchet lagged their addition. Every swallow handler audited: each
+                                # guards a best-effort file read (OSError), a documented parser
+                                # fallback (json.loads/ast.parse), or a thread-isolation boundary;
+                                # none is a bare/broad silent catch. Reducing them would convert a
+                                # tolerated external failure into a crash (a regression), so the
+                                # ratchet is bumped to the true justified count rather than removing
+                                # legitimate defensive handlers.
                                 # 30→31: architecture.py skips files that fail ast.parse (SyntaxError/
                                 # ValueError) — a best-effort module mapper must tolerate an
                                 # unparseable source file rather than abort the whole map.
