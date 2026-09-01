@@ -178,6 +178,11 @@ class AgentsMdAdapter(FrameworkAdapter):
     def get_agents_dir(self, project_path: Path) -> Path:
         return project_path / ".agents"
 
+    def sandbox_launcher_rel_path(self) -> str:
+        # Agents dir is 1-deep (``.agents``), so repo-root ``sandbox/confine-run.sh`` is one
+        # ``../`` up (not two). The Linux launcher is framework-neutral, so agents-md emits it too.
+        return "../sandbox/confine-run.sh"
+
     def finalize_output_path(self, rel_path: str, file_type: str) -> str:
         """Map the generic instructions path to repo-root ``AGENTS.md``.
 

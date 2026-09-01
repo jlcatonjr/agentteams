@@ -237,11 +237,14 @@ class ClaudeAdapter(FrameworkAdapter):
         Returns:
             List of ``(relative_path, content)`` tuples for the emit phase to write.
         """
+        # Framework-neutral baseline first (the Linux confinement launcher on linux); the
+        # constitutional hook below is Claude-specific and layered on top.
+        files = super().extra_output_files(manifest)
         hook = _read_template_asset("hooks/constitutional-gate.py")
         example = _read_template_asset("hooks/settings.hooks.example.json")
         if not hook:
-            return []
-        files = [("../hooks/constitutional-gate.py", _apply_fail_closed_policy(hook, manifest))]
+            return files
+        files.append(("../hooks/constitutional-gate.py", _apply_fail_closed_policy(hook, manifest)))
         if example:
             if _sandbox_feature_enabled(manifest):
                 example = _inject_sandbox_block(

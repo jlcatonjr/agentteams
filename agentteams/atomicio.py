@@ -45,9 +45,19 @@ def _target_mode(path: Path) -> int:
 
 
 def _atomic_write_text(path: Path, text: str, *, encoding: str = "utf-8") -> None:
-    """Write *text* to *path* atomically (temp-in-same-dir + os.replace + fsync)."""
+    """Write *text* to *path* atomically (temp-in-same-dir + os.replace + fsync).
+
+    A file whose content begins with a ``#!`` shebang is a script and is made executable:
+    the execute bits are set to mirror the read bits (``0o644`` → ``0o755``, a preserved
+    ``0o664`` → ``0o775``). This keeps emitted launchers/hooks (e.g. the framework-neutral
+    ``sandbox/confine-run.sh`` and the constitutional-gate hook) runnable on a FRESH emit,
+    where the umask default would otherwise leave a new file at ``0o644``. Non-script content
+    (CSV/JSON/markdown/agent files) never starts with ``#!`` and is unaffected.
+    """
     path.parent.mkdir(parents=True, exist_ok=True)
     mode = _target_mode(path)
+    if text.startswith("#!"):
+        mode |= (mode & 0o444) >> 2
     fd, tmp_name = tempfile.mkstemp(dir=str(path.parent), prefix=f".{path.name}.", suffix=".tmp")
     tmp = Path(tmp_name)
     success = False

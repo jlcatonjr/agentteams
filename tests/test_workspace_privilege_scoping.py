@@ -105,7 +105,7 @@ def test_build_manifest_rejects_unknown_privilege_profile():
 # P1-2: fail-closed on an unenforceable host
 # --------------------------------------------------------------------------
 
-def test_p1_2_fail_closed_raises_on_unenforceable_host():
+def test_p1_2_fail_closed_raises_on_unenforceable_host(monkeypatch):
     import sys
 
     from agentteams.cli.artifacts import (
@@ -113,44 +113,54 @@ def test_p1_2_fail_closed_raises_on_unenforceable_host():
         resolve_host_features_and_advise,
     )
 
-    # codex has no OS sandbox on ANY platform → the fail-closed invariant holds portably.
-    manifest = {"privilege_profile": "confined"}
-    with pytest.raises(PrivilegeConfinementError, match="fail-closed"):
-        resolve_host_features_and_advise(manifest, [], "codex", allow_unenforced=False)
-
-    # P1-1: goose is OS-enforceable on macOS (Seatbelt) — it must NOT raise there and must
-    # resolve to the goose:sandbox token; on Linux/Windows it stays unenforceable and fails
-    # closed exactly like codex.
-    goose_manifest = {"privilege_profile": "confined"}
-    if sys.platform == "darwin":
-        resolve_host_features_and_advise(goose_manifest, [], "goose", allow_unenforced=False)
-        assert goose_manifest["host_features"] == ["goose:sandbox"]
-        assert not goose_manifest.get("advisories")
-    else:
+    # Windows: no emittable boundary for codex OR goose → the fail-closed invariant holds.
+    monkeypatch.setattr(sys, "platform", "win32")
+    for fw in ("codex", "goose"):
         with pytest.raises(PrivilegeConfinementError, match="fail-closed"):
-            resolve_host_features_and_advise(goose_manifest, [], "goose", allow_unenforced=False)
+            resolve_host_features_and_advise({"privilege_profile": "confined"}, [], fw,
+                                             allow_unenforced=False)
+
+    # Linux: the framework-neutral bwrap launcher enforces for ANY framework → never raises.
+    monkeypatch.setattr(sys, "platform", "linux")
+    for fw in ("codex", "goose", "claude"):
+        m = {"privilege_profile": "confined"}
+        resolve_host_features_and_advise(m, [], fw, allow_unenforced=False)  # must not raise
+        assert not m.get("advisories")
+
+    # macOS: goose enforces via Seatbelt (no raise, resolves the token); codex has no macOS
+    # boundary and still fails closed.
+    monkeypatch.setattr(sys, "platform", "darwin")
+    gm = {"privilege_profile": "confined"}
+    resolve_host_features_and_advise(gm, [], "goose", allow_unenforced=False)
+    assert gm["host_features"] == ["goose:sandbox"]
+    assert not gm.get("advisories")
+    with pytest.raises(PrivilegeConfinementError, match="fail-closed"):
+        resolve_host_features_and_advise({"privilege_profile": "confined"}, [], "codex",
+                                         allow_unenforced=False)
 
 
-def test_p1_2_allow_flag_degrades_to_advisory():
+def test_p1_2_allow_flag_degrades_to_advisory(monkeypatch):
     import sys
 
     from agentteams.cli.artifacts import resolve_host_features_and_advise
 
-    # codex: unenforceable everywhere → advisory persisted under the allow flag.
-    manifest = {"privilege_profile": "exclusive"}
-    resolve_host_features_and_advise(manifest, [], "codex", allow_unenforced=True)
-    codes = [a["code"] for a in manifest.get("advisories", [])]
-    assert "privilege-profile-unenforced-host" in codes
+    # Windows: unenforceable for codex + goose → advisory persisted under the allow flag.
+    monkeypatch.setattr(sys, "platform", "win32")
+    for fw in ("codex", "goose"):
+        m = {"privilege_profile": "exclusive"}
+        resolve_host_features_and_advise(m, [], fw, allow_unenforced=True)
+        assert "privilege-profile-unenforced-host" in [
+            a["code"] for a in m.get("advisories", [])
+        ]
 
-    # P1-1: goose degrades to advisory ONLY off macOS; on macOS it emits an enforced
-    # boundary instead of an advisory.
-    gm = {"privilege_profile": "exclusive"}
-    resolve_host_features_and_advise(gm, [], "goose", allow_unenforced=True)
-    gcodes = [a["code"] for a in gm.get("advisories", [])]
-    if sys.platform == "darwin":
-        assert "privilege-profile-unenforced-host" not in gcodes
-    else:
-        assert "privilege-profile-unenforced-host" in gcodes
+    # Linux: enforced framework-neutrally → no advisory even under the allow flag.
+    monkeypatch.setattr(sys, "platform", "linux")
+    for fw in ("codex", "goose"):
+        m = {"privilege_profile": "exclusive"}
+        resolve_host_features_and_advise(m, [], fw, allow_unenforced=True)
+        assert "privilege-profile-unenforced-host" not in [
+            a["code"] for a in m.get("advisories", [])
+        ]
 
 
 def test_p1_2_enforceable_host_never_raises_even_fail_closed():
@@ -678,19 +688,22 @@ def test_advisory_none_for_cooperative_or_claude():
 def test_advisory_fires_for_confinement_on_non_sandbox_host():
     from agentteams.host_features import privilege_profile_advisory
 
-    # codex/copilot never expose an OS sandbox → advisory on every platform.
+    # codex/copilot expose no per-framework OS sandbox, but Linux enforces framework-neutrally
+    # (the emitted bwrap launcher wraps any process). So they advise only OFF Linux (macOS/Windows).
     for framework in ("codex", "copilot-vscode", "copilot-cli"):
         for profile in ("confined", "exclusive"):
-            adv = privilege_profile_advisory(profile, framework)
-            assert adv is not None
-            assert adv["code"] == "privilege-profile-unenforced-host"
-            assert "ADVISORY ONLY" in adv["message"]
-    # P1-1: goose fires the advisory only where it is NOT OS-enforceable (Linux/Windows);
-    # on macOS it emits a real boundary instead. Exercise BOTH branches deterministically
-    # via the platform override so the test is host-independent.
+            assert privilege_profile_advisory(profile, framework, platform="linux") is None
+            for plat in ("darwin", "win32"):
+                adv = privilege_profile_advisory(profile, framework, platform=plat)
+                assert adv is not None
+                assert adv["code"] == "privilege-profile-unenforced-host"
+                assert "ADVISORY ONLY" in adv["message"]
+    # goose is OS-enforceable on macOS (Seatbelt) AND Linux (the neutral launcher); it fires the
+    # advisory only on Windows. Exercise all three branches deterministically via the override.
     for profile in ("confined", "exclusive"):
         assert privilege_profile_advisory(profile, "goose", platform="darwin") is None
-        adv = privilege_profile_advisory(profile, "goose", platform="linux")
+        assert privilege_profile_advisory(profile, "goose", platform="linux") is None
+        adv = privilege_profile_advisory(profile, "goose", platform="win32")
         assert adv is not None
         assert adv["code"] == "privilege-profile-unenforced-host"
         assert "ADVISORY ONLY" in adv["message"]
@@ -709,48 +722,54 @@ def test_integration_confined_brief_flows_to_emitted_sandbox_block():
     assert d["sandbox"]["enabled"] is True
 
 
-def test_integration_confined_on_goose_reflects_platform():
-    # P1-1 flip (was test_integration_confined_on_goose_persists_advisory): a confined goose
-    # team no longer ALWAYS degrades to advisory — on macOS it emits an enforced Seatbelt
-    # boundary; only Linux/Windows keep the honest fail-closed advisory.
+def test_integration_confined_on_goose_reflects_platform(monkeypatch):
+    # Linux-neutral flip: a confined goose team is enforced on BOTH macOS (Seatbelt) and Linux
+    # (the framework-neutral bwrap launcher); only Windows keeps the honest fail-closed advisory.
     import sys
 
     from agentteams.cli.artifacts import resolve_host_features_and_advise
 
-    m = analyze.build_manifest({"project_goal": "d", "privilege_profile": "confined"}, framework="goose")
-    resolve_host_features_and_advise(m, [], "goose")
-    if sys.platform == "darwin":
-        assert "goose:sandbox" in m["host_features"]
-        assert not any(
+    for plat, enforced in (("darwin", True), ("linux", True), ("win32", False)):
+        monkeypatch.setattr(sys, "platform", plat)
+        m = analyze.build_manifest(
+            {"project_goal": "d", "privilege_profile": "confined"}, framework="goose"
+        )
+        resolve_host_features_and_advise(m, [], "goose", allow_unenforced=True)
+        has_advisory = any(
             a["code"] == "privilege-profile-unenforced-host" for a in m.get("advisories", [])
         )
-    else:
-        assert any(
-            a["code"] == "privilege-profile-unenforced-host" for a in m.get("advisories", [])
-        )
+        assert has_advisory is (not enforced), f"{plat}: expected enforced={enforced}"
 
 
 def test_advisory_fires_for_direct_token_on_non_sandbox_host():
     # Conflict-A: a directly-passed sandbox token on a host that cannot OS-enforce it must
     # warn too, even when privilege_profile is cooperative/unset.
-    # P1-1 flip: goose is now macOS-enforceable, so the goose case is platform-dependent —
-    # a boundary is emitted on macOS (no advisory) and only Linux/Windows advise. codex
-    # still has no sandbox emitter anywhere, so its direct token always advises.
+    # Linux-neutral flip: goose is enforced on macOS (Seatbelt) AND Linux (neutral launcher),
+    # so its direct token advises only on Windows. codex is enforced framework-neutrally on
+    # Linux, so its direct token advises only off Linux (macOS/Windows).
     from agentteams.host_features import privilege_profile_advisory
 
-    # goose: enforced on macOS (no advisory), advisory on Linux/Windows — the P1-1 flip.
+    # goose: no advisory on macOS or Linux; advisory on Windows.
     assert (
         privilege_profile_advisory("cooperative", "goose", ["goose:sandbox"], platform="darwin")
         is None
     )
-    adv = privilege_profile_advisory("cooperative", "goose", ["goose:sandbox"], platform="linux")
+    assert (
+        privilege_profile_advisory("cooperative", "goose", ["goose:sandbox"], platform="linux")
+        is None
+    )
+    adv = privilege_profile_advisory("cooperative", "goose", ["goose:sandbox"], platform="win32")
     assert adv is not None
     assert adv["code"] == "privilege-profile-unenforced-host"
-    # codex has no OS sandbox on any platform — a direct token still advises.
-    adv2 = privilege_profile_advisory("cooperative", "codex", ["claude:sandbox"])
+    # codex: enforced framework-neutrally on Linux (no advisory); advisory on Windows.
+    assert (
+        privilege_profile_advisory("cooperative", "codex", ["claude:sandbox"], platform="linux")
+        is None
+    )
+    adv2 = privilege_profile_advisory("cooperative", "codex", ["claude:sandbox"], platform="win32")
     assert adv2 is not None
     assert adv2["code"] == "privilege-profile-unenforced-host"
-    # ...but a claude:sandbox token on the claude host is fine.
+    # ...and a claude:sandbox token on the claude framework is fine on any platform.
     assert privilege_profile_advisory("cooperative", "claude", ["claude:sandbox"]) is None
 
 
