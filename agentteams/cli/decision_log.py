@@ -332,6 +332,14 @@ def _enforce_decision_signing(output_dir: Path) -> bool:
     """
     config_path = output_dir / "references" / _AGENT_PRIVILEGE_CONFIG
     if not config_path.exists():
+        # GV1 fail-closed: a governed workspace asserts (via a git-tracked signing-governed.marker) that
+        # signing MUST be enforced. If the config is absent there, RAISE rather than silently reverting
+        # to legacy OFF — renaming references/ must not disable strict enforcement.
+        if (output_dir / "signing-governed.marker").exists():
+            raise RuntimeError(
+                f"governed workspace ({output_dir}) but {config_path} is absent — refusing to fall "
+                "back to legacy unsigned behaviour (fail-closed)."
+            )
         return False
     try:
         payload = json.loads(config_path.read_text(encoding="utf-8"))
