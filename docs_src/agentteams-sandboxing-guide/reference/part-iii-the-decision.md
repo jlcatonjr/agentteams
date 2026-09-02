@@ -8,13 +8,15 @@
 
 | Platform | Framework | Capable? | Boundary |
 |---|---|---|---|
-| **Linux** | **any** | ✅ | the bwrap launcher wraps any process (framework-neutral) |
-| any (incl. macOS/Windows) | `claude` | ✅ | Claude Code's own native sandbox |
-| **macOS** | `goose` | ✅ | Apple Seatbelt |
-| macOS/Windows | `goose` off macOS / codex / copilot / agents-md | ❌ | no emittable boundary |
+| **Linux** | **any** | ✅ | the launcher's `bwrap` branch (framework-neutral; **VERIFIED**) |
+| **macOS** | **any** | ✅ | claude/goose via their native Seatbelt; every other framework via the launcher's `build_macos` (`sandbox-exec`) branch (**UNVERIFIED** until `mac-escape-tests.sh` passes) |
+| any (incl. Windows) | `claude` | ✅ | Claude Code's own native sandbox |
+| **Windows / any other** | non-claude | ❌ | no emittable boundary |
 
-`SANDBOX_CAPABLE_FRAMEWORKS` is a convenience set sampling only `("claude","goose")` for the current
-host; the authoritative, framework-complete answer is `is_sandbox_capable` itself.
+As of 2026-W36 the matrix is **framework-neutral on both POSIX platforms** — the SAME launcher carries a
+`bwrap` branch (Linux) and a `sandbox-exec`/`build_macos` branch (macOS). `SANDBOX_CAPABLE_FRAMEWORKS` is
+a convenience set sampling only `("claude","goose")` for the current host; the authoritative answer is
+`is_sandbox_capable` itself.
 
 *Source:* `agentteams/host_features.py:222` `is_sandbox_capable`.
 
@@ -29,42 +31,47 @@ flowchart TD
     FW -->|no| ML["manual-wire advisory (NON-FATAL)<br/>+ emit bwrap launcher (SB12)"]
     P -->|darwin| DF{"framework?"}
     DF -->|claude| CN["claude: native settings-block<br/>sandbox (SB10). No advisory."]
-    DF -->|goose| SB["goose: Seatbelt profile +<br/>inert config example (SB11). No advisory."]
-    DF -->|"other (codex/copilot/agents-md)"| UH["unenforced-host advisory (FATAL, SB8)"]
+    DF -->|goose| SB["goose: native Seatbelt profile +<br/>inert config example (SB11). No advisory."]
+    DF -->|"other (codex/copilot/agents-md)"| MM["macOS manual-wire advisory (NON-FATAL, SB8)<br/>+ emit launcher build_macos branch (SB12);<br/>UNVERIFIED until mac-escape-tests (SB20)"]
     P -->|win32/other| W2{"framework == claude?"}
     W2 -->|yes| CW["claude: native (product-arm<br/>unverified on Windows)"]
-    W2 -->|no| UH
+    W2 -->|no| UH["unenforced-host advisory (FATAL, SB8)"]
 ```
 
-## SB8 — Two advisories: fatal vs non-fatal  ✅
+## SB8 — Three advisories: one fatal, two non-fatal  ✅
 
-`privilege_profile_advisory` returns one of two codes, or `None`:
+`privilege_profile_advisory` returns one of **three** codes, or `None`:
 
-- **`privilege-profile-unenforced-host`** (**FATAL**) — no boundary is emittable here: **Windows**, and
-  any **non-claude/non-goose** framework off Linux (**including on macOS** — e.g. a confined
-  codex/copilot/agents-md team on a mac). `resolve_host_features_and_advise` **raises**
+- **`privilege-profile-unenforced-host`** (**FATAL**) — no boundary is emittable here: **Windows** (and
+  any non-claude framework on another non-POSIX target). Since 2026-W36 macOS is emittable
+  framework-neutrally, so a confined codex/copilot/agents-md team on a **mac is NO LONGER fatal** (see
+  the macOS manual-wire code below). `resolve_host_features_and_advise` **raises**
   `PrivilegeConfinementError` (fail-closed) unless `--allow-unenforced-confinement`, which downgrades it
   to a persisted warning **and emits no boundary on that host**.
-- **`privilege-profile-linux-launcher-manual-wire`** (**NON-FATAL**) — on **Linux, for every framework
-  except claude**: enforcement IS available (the emitted launcher) but is **not auto-applied**; the
-  operator must WRAP the invocation. This **never** fail-closes (enforcement is genuinely available); it
-  always warns + persists.
-- **`None`** — a boundary wired through the framework's own config (claude native everywhere; goose
-  Seatbelt on macOS) surfaces no extra advisory. **Claude-on-Linux caveat:** claude is excluded because
-  its *native settings-block sandbox* is its intended boundary — but on Linux that native arm is
-  enforcement-**UNVERIFIED** (SB20), while the *verified* neutral launcher (also emitted for claude on
-  Linux, SB13) is left un-advised. "No advisory for claude" means "its intended boundary is the native
-  one," not "claude-on-Linux is fully covered."
+- **`privilege-profile-linux-launcher-manual-wire`** (**NON-FATAL**) — on **Linux, every framework
+  except claude**: enforcement IS available (the launcher `bwrap` branch) but is **not auto-applied**;
+  the operator must WRAP the invocation. Never fail-closes; always warns + persists.
+- **`privilege-profile-macos-launcher-manual-wire`** (**NON-FATAL**, 2026-W36) — on **macOS, every
+  framework except claude AND goose** (both have their own auto-applied native macOS boundary, SB11).
+  The launcher's `build_macos` branch is emitted (`sandbox-exec` + Seatbelt profile, RLIMIT_CPU/NPROC
+  caps, loopback-only proxy DNS contract, non-exhaustive setuid-exec denylist). Also not auto-applied
+  (WRAP the invocation); never fail-closes. Its message carries the **honest macOS residuals** (memory
+  UNCAPPED, no syscall filtering, setuid denylist ≠ NoNewPrivs, loopback-only proxy) and the
+  **enforcement-UNVERIFIED** gate (SB20).
+- **`None`** — a boundary wired through the framework's own config surfaces no extra advisory: claude
+  native everywhere; goose Seatbelt on macOS. **Claude/Linux caveat:** claude's native arm is its
+  intended boundary but is UNVERIFIED on Linux (SB20) while the verified launcher rides along un-advised
+  — "no advisory for claude" ≠ "fully covered."
 
 `resolve_host_features_and_advise` fail-closes on the fatal code **only** (`fatal = code ==
-"privilege-profile-unenforced-host"`). **Why manual-wire exists (a closed gap):** making Linux capable
-for every framework suppressed the old unenforced-host advisory for codex/copilot/agents-md, whose
-launcher is inert until wrapped. The non-fatal advisory restores the honest signal so an operator who
-requested `confined`, saw no error, and found `sandbox/confine-run.sh` is told *nothing is confined
-until they wrap the process*.
+"privilege-profile-unenforced-host"`); both manual-wire codes warn + persist, never raise. **Why the
+manual-wire codes exist (a closed gap):** making Linux — then macOS — capable for every framework would
+otherwise suppress the old unenforced-host advisory for codex/copilot/agents-md, whose launcher is inert
+until wrapped. The non-fatal advisories restore the honest signal, per POSIX platform.
 
-*Source:* `agentteams/host_features.py:277` `privilege_profile_advisory`, `:324` (unenforced-host),
-`:352` (manual-wire); `agentteams/cli/artifacts.py:330` `resolve_host_features_and_advise`, `:381`.
+*Source:* `agentteams/host_features.py:325` `privilege_profile_advisory`, `:376` (unenforced-host),
+`:404` (linux manual-wire), `:426` (macos manual-wire); `agentteams/cli/artifacts.py:330`
+`resolve_host_features_and_advise`, `:381`.
 
 ## SB9 — Fail-closed by default on generate  ✅
 

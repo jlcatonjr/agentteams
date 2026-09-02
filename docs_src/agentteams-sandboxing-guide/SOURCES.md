@@ -19,8 +19,8 @@
 
 | Fact | Source |
 |---|---|
-| Capability matrix (Linux any framework; claude everywhere; goose macOS) | `agentteams/host_features.py:222` `is_sandbox_capable` |
-| Two advisory codes | `agentteams/host_features.py:277` `privilege_profile_advisory`; `:324` `privilege-profile-unenforced-host`; `:352` `privilege-profile-linux-launcher-manual-wire` |
+| Capability matrix (POSIX framework-neutral: any framework on Linux AND macOS; claude everywhere; Windows none) | `agentteams/host_features.py:222` `is_sandbox_capable` (linux + darwin True) |
+| Three advisory codes (1 fatal, 2 non-fatal) | `agentteams/host_features.py:325` `privilege_profile_advisory`; `:376` `privilege-profile-unenforced-host` (fatal); `:404` `privilege-profile-linux-launcher-manual-wire`; `:426` `privilege-profile-macos-launcher-manual-wire` |
 | Fail-closed only on the fatal code | `agentteams/cli/artifacts.py:330` `resolve_host_features_and_advise`; `:381` `fatal = advisory["code"] == "privilege-profile-unenforced-host"` |
 | `--allow-unenforced-confinement` opt-out | `agentteams/cli/parser.py` (flag); `agentteams/cli/artifacts.py` (raise vs warn) |
 
@@ -30,7 +30,7 @@
 |---|---|
 | Claude settings-block sandbox (allowWrite/denyRead/denyWrite/allowUnsandboxedCommands) | `agentteams/frameworks/_sandbox_emit.py:176` `_build_sandbox_block`; `agentteams/frameworks/claude.py:249` (gate) |
 | Goose macOS Seatbelt profile + inert config example; darwin guard | `agentteams/frameworks/_goose_sandbox_emit.py:333` `goose_sandbox_output_files`, `:350` (darwin guard); `_seatbelt_path_expr` |
-| Linux bwrap launcher: emit path + flags | `agentteams/frameworks/_linux_sandbox_emit.py:52,94`; `agentteams/templates/universal/sandbox/confine-run.sh` |
+| Dual-OS launcher: emit paths + flags (Linux `bwrap` + macOS `build_macos`) | `agentteams/frameworks/_linux_sandbox_emit.py:112` `linux_sandbox_output_files`, `:154` `macos_sandbox_output_files`; `agentteams/frameworks/base.py` `extra_output_files` (linux + macos); `agentteams/templates/universal/sandbox/confine-run.sh` |
 | Framework-neutral wiring + rel-path depth; no double-emit | `agentteams/frameworks/base.py:125` `sandbox_launcher_rel_path`, `:139` `extra_output_files`; `codex.py`/`agents_md.py` overrides; `claude.py`/`goose.py` `super()` |
 | Emitted launcher made executable | `agentteams/atomicio.py` (`#!`→+x); `agentteams/convert.py` |
 
@@ -55,8 +55,8 @@
 
 | Fact | Source |
 |---|---|
-| Linux launcher enforcement-VERIFIED (live-kernel deny test) | `agentteams/templates/universal/sandbox/confine-run.sh` (status header); `docs_src/api-reference/workspace-privilege-scoping.md` |
-| macOS Seatbelt UNVERIFIED; claude Linux product-arm unverified | same header; `docs_src/api-reference/workspace-privilege-scoping.md` (the two-verdict delineation) |
+| Launcher Linux (`bwrap`) branch enforcement-VERIFIED (live-kernel deny test) | `agentteams/templates/universal/sandbox/confine-run.sh` (status header); `docs_src/api-reference/workspace-privilege-scoping.md` |
+| Launcher macOS (`build_macos`) branch UNVERIFIED until `mac-escape-tests.sh` passes; native macOS Seatbelt + claude Linux product-arm also unverified | `agentteams/templates/universal/sandbox/confine-run.sh` (status header); `agentteams/templates/universal/sandbox/mac-escape-tests.sh`; `docs_src/api-reference/workspace-privilege-scoping.md` (macOS augmentation) |
 | T6/host-as-TCB bounded; seccomp/Landlock not yet added | `agentteams/templates/universal/sandbox/confine-run.sh` (policy header) |
 | Hook uncovered surfaces are the operator's responsibility | `agentteams/templates/universal/security.template.md` (delete-gate limits) |
 

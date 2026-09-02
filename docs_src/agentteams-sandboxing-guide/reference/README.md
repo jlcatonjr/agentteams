@@ -11,7 +11,7 @@
 - **[Part I — What it is & why](part-i-what-it-is-and-why.md)** — the confinement problem, the in-scope
   adversary, design-time-not-runtime, and the opt-in default (SB1–SB3). *Carries the pipeline graph G1.*
 - **[Part II — The request](part-ii-the-request.md)** — profiles, tokens, and the manifest (SB4–SB6).
-- **[Part III — The decision](part-iii-the-decision.md)** — the capability matrix, the two advisories,
+- **[Part III — The decision](part-iii-the-decision.md)** — the capability matrix, the three advisories,
   fail-closed-by-default (SB7–SB9). *Carries the decision graph G2.*
 - **[Part IV — The mechanisms](part-iv-the-mechanisms.md)** — the three emitters and what each denies
   (SB10–SB13). *Carries the mechanisms graph G3.*
@@ -28,7 +28,8 @@
 
 1. **Opt-in** — `cooperative` default: sandbox off, hook fail-open.
 2. **Inert until wired** — an emitted boundary confines nothing until the operator activates/wraps it.
-3. **Verified only on Linux** — the bwrap launcher is live-kernel deny-tested; macOS Seatbelt is
-   enforcement-unverified; Windows has no emittable boundary.
+3. **Verified only on Linux** — the launcher's `bwrap` branch is live-kernel deny-tested; the newer
+   macOS `build_macos` branch is emittable but enforcement-unverified (as are the native macOS Seatbelt
+   paths); Windows has no emittable boundary.
 4. **Closes nothing absolutely** — a same-host operator/key-holder (T6) and host-as-TCB stay bounded;
    seccomp/Landlock is a further layer not yet added.

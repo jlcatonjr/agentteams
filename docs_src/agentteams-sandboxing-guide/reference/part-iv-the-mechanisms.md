@@ -25,7 +25,7 @@ actually merged; it reports booleans and never echoes live-settings secrets.
 *Source:* `agentteams/frameworks/_sandbox_emit.py:176` `_build_sandbox_block`;
 `agentteams/frameworks/claude.py:249` (gate), `:320` `verify_sandbox_wiring`.
 
-## SB11 — Mechanism B: goose macOS Seatbelt profile  ✅/⚙
+## SB11 — Mechanism B: the native macOS boundaries (goose Seatbelt; claude Seatbelt)  ✅/⚙
 
 For `goose` on **macOS**, `goose_sandbox_output_files` emits a `sandbox.sb` Seatbelt profile
 (`sandbox-exec`) that `deny file-write*` outside the write roots, `deny network*` **by default** (an
@@ -41,14 +41,26 @@ host — a green *emission* test means "the profile is shaped right," never "it 
 *Source:* `agentteams/frameworks/_goose_sandbox_emit.py:333` `goose_sandbox_output_files`, `:350`
 (darwin guard); `_seatbelt_path_expr`.
 
-## SB12 — Mechanism C: the framework-neutral Linux bwrap launcher  ✅/⚙
+## SB12 — Mechanism C: the framework-neutral launcher (Linux `bwrap` + macOS `sandbox-exec`)  ✅/⚙
 
-`_linux_sandbox_emit.linux_sandbox_output_files` emits a provider-agnostic **`bwrap` launcher** to the
-generated project's repo-root **`sandbox/confine-run.sh`** — deliberately NOT under `.goose/` and NOT
-framework-gated (it wraps any process). It is emitted for a confined/exclusive team of **any** framework,
-platform-guarded to Linux.
+The SAME provider-agnostic launcher — repo-root **`sandbox/confine-run.sh`**, NOT under `.goose/`, NOT
+framework-gated — carries **two OS branches**, and `base.extra_output_files` emits
+`linux_sandbox_output_files(...) + macos_sandbox_output_files(...)` (only one is non-empty per host).
 
-The launcher confines **once the operator WRAPs the invocation with it**
+**macOS branch (`build_macos`, 2026-W36) — enforcement-UNVERIFIED (SB20).** Once WRAPped, `sandbox-exec`
++ a generated path-agnostic Seatbelt profile (deny-write outside scratch; deny reads of the
+credential/`--exclude` set; deny-network / loopback-only proxy), **RLIMIT_CPU/NPROC** caps via `ulimit`
+(`--cpu-max`/`--nproc-max`), and a **non-exhaustive setuid-exec denylist** (compensating hardening — NOT
+NoNewPrivs). **Honest macOS residuals:** memory **UNCAPPED** (`--mem-max` is interface-only — a hard cap
+needs a VM/container/Linux host); **no syscall filtering**; sole-proxy egress **loopback-only** (SBPL
+can't pin a remote proxy IP — remote-address control lives out-of-band in PF). The `--cpu-max`/
+`--nproc-max`/`--mem-max` flags are **no-ops on Linux** (cgroups reach those caps OOB). On macOS the
+emit also ships **`sandbox/mac-escape-tests.sh`** (the on-host deny test that must pass unnested before
+the macOS boundary is called "confined") + two INERT Tier-B examples (`dedicated-uid-provisioning`,
+`pf-per-tenant-anchor`).
+
+**Linux branch (`bwrap`) — enforcement-VERIFIED (SB20).** The launcher confines **once the operator
+WRAPs the invocation with it**
 (`sandbox/confine-run.sh --scratch DIR --egress deny -- <agent cmd>`); the emit step only *writes the
 file* — an emitted-but-unwrapped launcher confines nothing (this is why SB12 is ✅/⚙: ✅ as emitted, ⚙
 for the operator action that activates it; the ceiling is SB14). When wrapped it enforces:
@@ -76,9 +88,10 @@ at RUN time, so no manifest values are baked in. The emit path lands it repo-roo
 ```mermaid
 flowchart TD
     REQ["confined / exclusive team"] --> M{"which mechanism<br/>(by SB7 decision)"}
-    M -->|"claude (any OS)"| A["A: settings-block sandbox"]
-    M -->|"goose (macOS)"| B["B: Seatbelt sandbox.sb"]
-    M -->|"any framework (Linux) —<br/>STACKS with A on claude"| C["C: bwrap launcher<br/>sandbox/confine-run.sh"]
+    M -->|"claude (any OS)"| A["A: native settings-block sandbox"]
+    M -->|"goose (macOS)"| B["B: native Seatbelt sandbox.sb"]
+    M -->|"any framework, Linux —<br/>bwrap branch (VERIFIED)"| C["C: launcher sandbox/confine-run.sh"]
+    M -->|"non-claude/non-goose, macOS —<br/>build_macos branch (UNVERIFIED)"| C
     A --> WD["WRITE-confine: ALL three<br/>(allowWrite / ro-bind)"]
     B --> WD
     C --> WD
@@ -87,7 +100,9 @@ flowchart TD
     C --> NBC
     A --> RAB["READ-exclude: A & B only under EXCLUSIVE<br/>(denyRead / deny file-read*)"]
     B --> RAB
-    C --> RC["READ-exclude: C masks the credential set ALWAYS<br/>(~/.ssh … tmpfs, any profile); --exclude adds<br/>siblings under exclusive"]
+    C --> RC["READ-exclude: C masks the credential set ALWAYS<br/>(~/.ssh … tmpfs/seatbelt, any profile); --exclude adds<br/>siblings under exclusive"]
+    C --> MAC["macOS-branch residuals (SB12/SB20): mem UNCAPPED ·<br/>no syscall filtering · setuid denylist ≠ NoNewPrivs · loopback-only proxy"]
+    MAC --> INERT
     WD --> INERT["INERT until the operator activates it:<br/>merge settings / set GOOSE_SANDBOX / WRAP (SB14)"]
     NA --> INERT
     NBC --> INERT

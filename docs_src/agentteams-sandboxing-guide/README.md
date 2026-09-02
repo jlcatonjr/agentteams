@@ -36,7 +36,8 @@ The four **honest ceilings**, which no projection may drop or soften:
 1. **Opt-in** — by default (`cooperative`) the sandbox is off and the deny-hook is fail-open.
 2. **Inert until wired** — an emitted boundary confines nothing until the operator activates it (merges
    settings, sets `GOOSE_SANDBOX`, or wraps the process).
-3. **Verified only on Linux** — the bwrap launcher is proven by a live-kernel deny test; macOS Seatbelt
-   is enforcement-unverified; Windows has no emittable boundary.
+3. **Verified only on Linux** — the launcher's `bwrap` branch is proven by a live-kernel deny test; the
+   newer macOS `build_macos` branch is emittable but enforcement-unverified (as are the native macOS
+   Seatbelt paths); Windows has no emittable boundary.
 4. **Closes nothing absolutely** — a same-host operator/key-holder (T6) and host-as-TCB stay bounded;
    seccomp/Landlock is a further layer not yet added.

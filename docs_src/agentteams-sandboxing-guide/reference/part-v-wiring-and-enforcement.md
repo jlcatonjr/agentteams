@@ -17,7 +17,7 @@ they launch* the agent. This is exactly why SB8's non-fatal manual-wire advisory
 generation time. An emitted-but-unwired boundary confines nothing.
 
 *Source:* `agentteams/frameworks/hooks_emit.py`;
-`agentteams/templates/universal/sandbox/confine-run.sh` (usage header); `agentteams/host_features.py:352`.
+`agentteams/templates/universal/sandbox/confine-run.sh` (usage header); `agentteams/host_features.py:404` (linux manual-wire).
 
 ## SB15 — Verifying the wiring took effect  ✅
 

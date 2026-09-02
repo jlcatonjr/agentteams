@@ -34,9 +34,11 @@
      activate* (merge settings, set `GOOSE_SANDBOX`, or WRAP the process). agentteams never writes an
      operator's live config or auto-invokes the launcher. An emitted-but-unwired boundary confines
      nothing.
-  3. **Verified only on Linux.** The Linux bwrap launcher's enforcement is proven by a live-kernel
-     deny test; the macOS Seatbelt path is **enforcement-UNVERIFIED** off a mac; Windows has no
-     emittable boundary.
+  3. **Verified only on Linux.** The launcher's **Linux** (`bwrap`) branch is proven by a live-kernel
+     deny test. As of 2026-W36 the SAME launcher also has a **macOS** (`build_macos`, `sandbox-exec`)
+     branch — so macOS is now emittable framework-neutrally — but it is **enforcement-UNVERIFIED** until
+     `sandbox/mac-escape-tests.sh` passes unnested (with its positive controls) on a real mac; Windows
+     still has no emittable boundary.
   4. **Closes nothing absolutely.** T6 (a same-host key-holder / operator shell) and host-as-TCB stay
      bounded, never closed; seccomp/Landlock is a further layer **not yet added**.
 
@@ -57,8 +59,8 @@ flowchart LR
     A2["advisory:<br/>manual-wire<br/>(NON-FATAL, SB8)"]
 
     R --> D
-    D -- "capable + not linux-launcher-only<br/>(claude native / goose macOS)" --> E
-    D -- "linux, non-claude<br/>(launcher is the boundary)" --> A2 --> E
+    D -- "capable, native boundary<br/>(claude any OS / goose macOS)" --> E
+    D -- "POSIX launcher case<br/>(Linux non-claude / macOS non-claude+non-goose)" --> A2 --> E
     D -- "not capable<br/>(Windows / other)" --> A1
     A1 -- "--allow-unenforced-confinement" --> WN["proceed with WARNING<br/>NO boundary emitted here"]
     A1 -- "default (generate)" --> X["FAIL CLOSED<br/>refuse, emit nothing"]
@@ -67,9 +69,11 @@ flowchart LR
 ```
 
 > **Reading G1's honest ceiling:** reaching **EMIT** means a boundary *artifact* exists — not that a
-> boundary is *in force*. **WIRE** (operator action) and, for the Linux launcher, actually wrapping the
-> process, are what make it enforce (SB14). The dotted edge to the integrity manifest is not part of the
-> per-team runtime path; it is how agentteams' OWN source protects the emitters from silent edits (SB18).
+> boundary is *in force*. **WIRE** (operator action) and, for the launcher (Linux `bwrap` or macOS
+> `build_macos`), actually wrapping the process, are what make it enforce (SB14). A2 is one of two
+> per-POSIX-platform manual-wire advisories (SB8). The dotted edge to the integrity manifest is not part
+> of the per-team runtime path; it is how agentteams' OWN source protects the emitters from silent edits
+> (SB18).
 
 ---
 
@@ -99,10 +103,10 @@ flowchart LR
 1. The realistic in-scope adversary is **an agent with legitimate write/execute access acting on
    injected instructions** — not a remote network attacker. The sandbox's job is to make that agent's
    blast radius the declared workspace, not the whole host.
-2. Two surfaces enforce, and they compose: **(a) OS confinement** (Claude Code's native sandbox, Apple
-   Seatbelt for goose on macOS, or the framework-neutral bwrap launcher on Linux) boxes the *filesystem
-   + network*; **(b) the PreToolUse `constitutional-gate.py` hook** boxes *specific destructive command
-   spellings* an agent's `Bash` tool might run. Neither is the boundary alone.
+2. Two surfaces enforce, and they compose: **(a) OS confinement** (Claude Code's native sandbox; Apple
+   Seatbelt for goose on macOS; or the framework-neutral launcher — `bwrap` on Linux, `sandbox-exec` on
+   macOS) boxes the *filesystem + network*; **(b) the PreToolUse `constitutional-gate.py` hook** boxes
+   *specific destructive command spellings* an agent's `Bash` tool might run. Neither is the boundary alone.
 3. **Content is data (C-4).** The sandbox exists partly because a file under review, a fetched page, or
    a brief may carry injected text; confinement limits what a mis-followed instruction can do.
 **Source.** `.claude/CLAUDE.md` (C-4); `agentteams/templates/universal/hooks/constitutional-gate.py`;
@@ -137,7 +141,7 @@ flowchart LR
    - **`exclusive`** — `confined` **plus read-exclusion** (P3a) for the **claude** (`denyRead`) and
      **goose** (`deny file-read*`) mechanisms: OS-deny reads of a curated credential set +
      operator-supplied `protected_read_paths` (sibling workspaces), plus an operator inbound-hardening
-     advisory (P3b). **Nuance for the Linux launcher (SB12):** it masks the default *credential* set
+     advisory (P3b). **Nuance for the launcher (SB12), both OS branches:** it masks the default *credential* set
      (`~/.ssh …`) on **every** wrap regardless of profile; only the extra sibling-workspace
      `--exclude` reads are `exclusive`-specific there.
 2. An **unknown** profile value **fails closed** (hard error at parse), never silently downgrades to
@@ -178,15 +182,15 @@ flowchart LR
 ### SB7 — `is_sandbox_capable`: the capability matrix  ✅
 **Canonical facts.**
 1. `is_sandbox_capable(framework_id, platform)` is the single platform-aware decision function. Its
-   matrix:
-   - **Linux** → `True` for **any** framework (the emitted bwrap launcher wraps any process —
-     framework-neutral).
+   matrix (framework-neutral on BOTH POSIX platforms as of 2026-W36):
+   - **Linux** → `True` for **any** framework (the launcher's `bwrap` branch wraps any process).
+   - **macOS** → `True` for **any** framework (the SAME launcher's `build_macos`/`sandbox-exec` branch,
+     emitted by `macos_sandbox_output_files`; enforcement-UNVERIFIED until `mac-escape-tests.sh` passes).
    - **`claude`** → `True` **everywhere** (Claude Code configures its own Seatbelt/bubblewrap sandbox).
-   - **`goose`** → `True` on **macOS** only (Apple Seatbelt).
-   - anything else off Linux → `False` (no emittable boundary).
+   - Windows / any other → `False` (no emittable boundary).
 2. `SANDBOX_CAPABLE_FRAMEWORKS` is a convenience set sampling only `("claude","goose")` for the current
    host; the authoritative, framework-complete answer is `is_sandbox_capable` itself.
-**Source.** `agentteams/host_features.py:222` `is_sandbox_capable`.
+**Source.** `agentteams/host_features.py:222` `is_sandbox_capable` (linux + darwin framework-neutral).
 **Dial.** R Full · D Full · S Full · E Light.
 
 ```mermaid
@@ -198,40 +202,47 @@ flowchart TD
     FW -->|no| ML["manual-wire advisory (NON-FATAL)<br/>+ emit bwrap launcher (SB12)"]
     P -->|darwin| DF{"framework?"}
     DF -->|claude| CN["claude: native settings-block<br/>sandbox (SB10). No advisory."]
-    DF -->|goose| SB["goose: Seatbelt profile +<br/>inert config example (SB11). No advisory."]
-    DF -->|"other (codex/copilot/agents-md)"| UH["unenforced-host advisory (FATAL, SB8)"]
+    DF -->|goose| SB["goose: native Seatbelt profile +<br/>inert config example (SB11). No advisory."]
+    DF -->|"other (codex/copilot/agents-md)"| MM["macOS manual-wire advisory (NON-FATAL, SB8)<br/>+ emit launcher build_macos branch (SB12).<br/>UNVERIFIED until mac-escape-tests passes (SB20)"]
     P -->|win32/other| W2{"framework == claude?"}
     W2 -->|yes| CW["claude: native (product-arm<br/>unverified on Windows)"]
-    W2 -->|no| UH
+    W2 -->|no| UH["unenforced-host advisory (FATAL, SB8)"]
 ```
 
-### SB8 — Two advisories: fatal vs non-fatal  ✅
+### SB8 — Three advisories: one fatal, two non-fatal  ✅
 **Canonical facts.**
-1. `privilege_profile_advisory` returns one of two codes, or `None`:
+1. `privilege_profile_advisory` returns one of **three** codes, or `None`:
    - **`privilege-profile-unenforced-host`** (**FATAL**) — no boundary is emittable here: **Windows**,
-     and any **non-claude/non-goose** framework off Linux (**including on macOS** — e.g. a confined
-     codex/copilot/agents-md team on a mac). `resolve_host_features_and_advise` **raises**
+     and any non-claude framework on any other non-POSIX target. (Since 2026-W36 macOS is emittable
+     framework-neutrally, so a confined codex/copilot/agents-md team on a **mac** is NO LONGER fatal —
+     see the macOS manual-wire code below.) `resolve_host_features_and_advise` **raises**
      `PrivilegeConfinementError` (fail-closed) unless `--allow-unenforced-confinement`, which downgrades
      it to a persisted warning **and emits no boundary on that host**.
    - **`privilege-profile-linux-launcher-manual-wire`** (**NON-FATAL**) — on **Linux, for every
      framework except claude**: enforcement IS available (the emitted launcher) but is **not
-     auto-applied**; the operator must WRAP the invocation. This **never** fail-closes (enforcement is
-     genuinely available); it always warns + persists.
-   - **`None`** — a boundary that IS wired through the framework's own config (claude native everywhere;
-     goose Seatbelt on macOS) surfaces no extra advisory. **Claude-on-Linux caveat:** claude is excluded
-     from the manual-wire advisory because its *native settings-block sandbox* is its intended boundary
-     — but on **Linux** that native arm is enforcement-**UNVERIFIED** (SB20), while the *verified* neutral
-     launcher, which is also emitted for claude on Linux (SB13), is left un-advised. So "no advisory for
-     claude" means "its intended boundary is the native one," not "claude-on-Linux is fully covered."
+     auto-applied**; the operator must WRAP the invocation. Never fail-closes; always warns + persists.
+   - **`privilege-profile-macos-launcher-manual-wire`** (**NON-FATAL**, 2026-W36) — on **macOS, for
+     every framework except claude AND goose**: the SAME launcher's `build_macos` branch is emitted
+     (`sandbox-exec` + a generated Seatbelt profile, RLIMIT_CPU/NPROC caps, a loopback-only proxy DNS
+     contract, a non-exhaustive setuid-exec denylist). Also not auto-applied (WRAP the invocation);
+     never fail-closes. Its message carries the **honest macOS residuals** (memory UNCAPPED, no syscall
+     filtering, setuid denylist ≠ NoNewPrivs, loopback-only proxy) and the **enforcement-UNVERIFIED**
+     gate (SB20). claude AND goose are excluded — each has its own auto-applied native macOS boundary
+     (Claude Code Seatbelt; goose `GOOSE_SANDBOX` via `_goose_sandbox_emit`, SB11).
+   - **`None`** — a boundary wired through the framework's own config surfaces no extra advisory:
+     claude native everywhere; goose Seatbelt on macOS. **Claude/Linux caveat unchanged:** claude's
+     native arm is its intended boundary but is UNVERIFIED on Linux (SB20) while the verified launcher
+     rides along un-advised — "no advisory for claude" ≠ "fully covered."
 2. `resolve_host_features_and_advise` fail-closes on the fatal code **only** (`fatal = code ==
-   "privilege-profile-unenforced-host"`). Fail-closing on the manual-wire code would wrongly refuse an
-   enforceable Linux target.
-3. **Why manual-wire exists (a closed gap).** Making Linux capable for every framework suppressed the
-   old unenforced-host advisory for codex/copilot/agents-md, whose launcher is inert until wrapped. The
-   non-fatal advisory restores the honest signal so an operator who requested `confined`, saw no error,
-   and found `sandbox/confine-run.sh` is told nothing is confined until they wrap the process.
-**Source.** `agentteams/host_features.py:277` `privilege_profile_advisory`, `:324`
-(unenforced-host), `:352` (manual-wire); `agentteams/cli/artifacts.py:330`
+   "privilege-profile-unenforced-host"`). Both manual-wire codes warn + persist, never raise — fail-
+   closing on them would wrongly refuse a genuinely enforceable POSIX target.
+3. **Why the manual-wire codes exist (a closed gap).** Making Linux — then macOS — capable for every
+   framework would otherwise SUPPRESS the old unenforced-host advisory for codex/copilot/agents-md,
+   whose launcher is inert until wrapped. The non-fatal advisories restore the honest signal so an
+   operator who requested `confined`, saw no error, and found `sandbox/confine-run.sh` is told nothing
+   is confined until they wrap the process — per POSIX platform.
+**Source.** `agentteams/host_features.py:325` `privilege_profile_advisory`, `:376`
+(unenforced-host), `:404` (linux manual-wire), `:426` (macos manual-wire); `agentteams/cli/artifacts.py:330`
 `resolve_host_features_and_advise`, `:381` (fatal gate).
 **Dial.** R Full · D Full · S Full · E Core (the "you must wire it / off systems it is advice not a lock").
 
@@ -268,73 +279,94 @@ flowchart TD
 `agentteams/frameworks/claude.py:249` (gate), `:320` `verify_sandbox_wiring`.
 **Dial.** R Full · D Full · S Core · E Light.
 
-### SB11 — Mechanism B: goose macOS Seatbelt profile  ✅/⚙
+### SB11 — Mechanism B: the native macOS boundaries (goose Seatbelt; claude Seatbelt)  ✅/⚙
 **Canonical facts.**
-1. For `goose` on **macOS**, `goose_sandbox_output_files` emits a `sandbox.sb` Seatbelt profile
+1. On **macOS**, two frameworks have their OWN auto-applied native boundary — distinct from the
+   framework-neutral launcher macOS branch (SB12): **claude** (Claude Code's own Seatbelt) and
+   **goose**. For `goose`, `goose_sandbox_output_files` emits a `sandbox.sb` Seatbelt profile
    (`sandbox-exec`) that `deny file-write*` outside the write roots, `deny network*` by default (an
    egress-proxy allow for ONE endpoint is behind an explicit flag), and — for `exclusive` — `deny
    file-read*` of the protected set. It ships an **inert** `config.yaml.agentteams.example` carrying
    `GOOSE_SANDBOX`; the operator merges it.
-2. An **explicit `sys.platform == "darwin"` guard** ensures this path emits ONLY on macOS. Off macOS it
-   returns `[]` — but that is NOT "no boundary": on Linux the neutral launcher (SB12) is the boundary;
-   only Windows has none.
-3. **Honest ceiling.** The Seatbelt path is **enforcement- and profile-syntax-UNVERIFIED** off a mac
-   host — a green emission test means "the profile is shaped right," never "it denies on a real mac."
+2. An **explicit `sys.platform == "darwin"` guard** ensures goose's Seatbelt path emits ONLY on macOS.
+   Off macOS it returns `[]` — not "no boundary": on Linux the neutral launcher (SB12) is the boundary.
+   Because claude and goose carry these native macOS boundaries, they are **excluded** from the macOS
+   manual-wire advisory (SB8); every OTHER framework on macOS relies on the launcher's `build_macos`
+   branch instead (SB12).
+3. **Honest ceiling.** Both native Seatbelt paths are **enforcement- and profile-syntax-UNVERIFIED**
+   off a mac host — a green emission test means "the profile is shaped right," never "it denies on a
+   real mac."
 **Source.** `agentteams/frameworks/_goose_sandbox_emit.py:333` `goose_sandbox_output_files`, `:350`
-(darwin guard); `_seatbelt_path_expr`.
+(darwin guard); `_seatbelt_path_expr`; `agentteams/host_features.py:414-440` (claude/goose macOS-advisory exclusion).
 **Dial.** R Full · D Core · S Core · E Light (mandatory ceiling #3 — macOS UNVERIFIED).
 
-### SB12 — Mechanism C: the framework-neutral Linux bwrap launcher  ✅/⚙
+### SB12 — Mechanism C: the framework-neutral launcher (Linux `bwrap` + macOS `sandbox-exec`)  ✅/⚙
 **Canonical facts.**
-1. `_linux_sandbox_emit.linux_sandbox_output_files` emits a provider-agnostic **`bwrap` launcher** to
-   the generated project's repo-root **`sandbox/confine-run.sh`** — deliberately NOT under `.goose/` and
-   NOT framework-gated (it wraps any process). It is emitted for a confined/exclusive team of **any**
-   framework, platform-guarded to Linux.
-2. The launcher confines **once the operator WRAPs the invocation with it**
-   (`sandbox/confine-run.sh --scratch DIR --egress deny -- <agent cmd>`); the emit step only *writes the
-   file* — an emitted-but-unwrapped launcher confines nothing (this is why SB12 is ✅/⚙: ✅ as emitted, ⚙
-   for the operator-action that activates it; the honest ceiling is SB14). When wrapped it enforces:
-   `--ro-bind / /` (read-only root), `--bind $SCRATCH` (the only writable path), `--unshare-net` on
-   `--egress deny` (network isolation), and `--tmpfs` masks over the credential set
-   (`~/.ssh ~/.aws ~/.gnupg ~/.kube ~/.config/gcloud ~/.azure`, applied on **every** wrap regardless of
-   profile) plus any `--exclude` sibling paths (exclusive). **NoNewPrivs** is bubblewrap's *default*
-   behavior here, **not an explicit emitted flag** — so, unlike the textual flags, it is **not** covered
-   by the SB18 content pin (there is no line to diff). `--egress proxy` runs inside a pre-created netns;
-   `other OS → FAIL CLOSED`.
-3. The launcher content is **emitted verbatim** (byte-for-byte) from a shipped template asset
-   (`templates/universal/sandbox/confine-run.sh`) — it is generic, taking `--scratch`/`--exclude`/
-   `--egress` at RUN time, so no manifest values are baked in. The emit path lands it repo-root-relative
-   at the correct `../` depth per framework (`sandbox_launcher_rel_path`) and marks it executable.
-**Source.** `agentteams/frameworks/_linux_sandbox_emit.py:52,94` `linux_sandbox_output_files`;
-`agentteams/frameworks/base.py:125` `sandbox_launcher_rel_path`, `:139` `extra_output_files`;
-`agentteams/templates/universal/sandbox/confine-run.sh`; `agentteams/atomicio.py` (shebang → +x).
+1. The SAME provider-agnostic launcher — repo-root **`sandbox/confine-run.sh`**, NOT under `.goose/`,
+   NOT framework-gated — carries **two OS branches**, and `base.extra_output_files` emits
+   `linux_sandbox_output_files(...) + macos_sandbox_output_files(...)` (only one is non-empty per host,
+   so it is emitted once). It is emitted for a confined/exclusive team of **any** framework.
+2. **Linux branch (`bwrap`) — enforcement-VERIFIED (SB20).** Once WRAPped
+   (`sandbox/confine-run.sh --scratch DIR --egress deny -- <agent cmd>`): `--ro-bind / /` (read-only
+   root), `--bind $SCRATCH` (the only writable path), `--unshare-net` on `--egress deny`, `--tmpfs`
+   masks over the credential set (`~/.ssh …`, on **every** wrap regardless of profile) plus `--exclude`
+   siblings (exclusive). **NoNewPrivs** is bubblewrap's *default* (not an emitted flag → not covered by
+   the SB18 pin). `--egress proxy` runs inside a pre-created netns.
+3. **macOS branch (`build_macos`, 2026-W36) — enforcement-UNVERIFIED (SB20).** Once WRAPped:
+   `sandbox-exec` + a generated path-agnostic **Seatbelt profile** (deny-write outside scratch, deny
+   reads of the credential/`--exclude` set, deny-network / loopback-only proxy), **RLIMIT_CPU/NPROC**
+   caps applied via `ulimit` before exec (kernel limits, `--cpu-max`/`--nproc-max`), and a
+   **non-exhaustive setuid-exec denylist** (`deny process-exec*`, compensating hardening — NOT
+   NoNewPrivs). **Honest macOS residuals:** memory is **UNCAPPED** (`--mem-max` is interface-only for
+   Linux parity; a hard cap needs a VM/container/Linux host); **no syscall filtering** (no
+   seccomp/Landlock analogue); sole-proxy egress is **loopback-only** (SBPL cannot pin a remote proxy
+   IP — remote-address control lives out-of-band in PF). The `--cpu-max`/`--nproc-max`/`--mem-max`
+   flags are **no-ops on Linux** (Linux reaches those caps via cgroups OOB).
+4. Both branches are **inert until the operator WRAPs the invocation** — the emit step only *writes the
+   file* (this is why SB12 is ✅/⚙: ✅ as emitted, ⚙ for the operator action that activates it; ceiling
+   SB14). On non-POSIX/other OS the launcher `FAIL CLOSED`s rather than run a command labeled "confined".
+5. The launcher content is **emitted verbatim** (byte-for-byte) from a shipped template asset
+   (`templates/universal/sandbox/confine-run.sh`), generic (all params at RUN time); the emit path lands
+   it repo-root-relative at the correct `../` depth (`sandbox_launcher_rel_path`) and marks it
+   executable. On macOS `macos_sandbox_output_files` also ships **`sandbox/mac-escape-tests.sh`** (the
+   on-host deny test that must pass before the macOS boundary is called "confined") and two INERT Tier-B
+   examples (`dedicated-uid-provisioning.example.sh`, `pf-per-tenant-anchor.example.conf`).
+**Source.** `agentteams/frameworks/_linux_sandbox_emit.py:112` `linux_sandbox_output_files`, `:154`
+`macos_sandbox_output_files`; `agentteams/frameworks/base.py` `extra_output_files` (linux + macos),
+`sandbox_launcher_rel_path`; `agentteams/templates/universal/sandbox/confine-run.sh` (both branches),
+`mac-escape-tests.sh`; `agentteams/atomicio.py` (shebang → +x).
 **Dial.** R Full · D Full · S Full · E Light.
 
 ```mermaid
 flowchart TD
     REQ["confined / exclusive team"] --> M{"which mechanism<br/>(by SB7 decision)"}
-    M -->|"claude (any OS)"| A["A: settings-block sandbox"]
-    M -->|"goose (macOS)"| B["B: Seatbelt sandbox.sb"]
-    M -->|"any framework (Linux) —<br/>STACKS with A on claude"| C["C: bwrap launcher<br/>sandbox/confine-run.sh"]
-    A --> WD["WRITE-confine: ALL three<br/>(allowWrite / ro-bind)"]
+    M -->|"claude (any OS)"| A["A: native settings-block sandbox (SB10)"]
+    M -->|"goose (macOS)"| B["B: native Seatbelt sandbox.sb (SB11)"]
+    M -->|"any framework, Linux —<br/>bwrap branch (VERIFIED, SB20)"| C["C: launcher sandbox/confine-run.sh"]
+    M -->|"non-claude/non-goose, macOS —<br/>build_macos branch (UNVERIFIED, SB20)"| C
+    A --> WD["WRITE-confine: ALL<br/>(allowWrite / ro-bind / seatbelt deny-write)"]
     B --> WD
     C --> WD
-    A --> NA["NETWORK: A emits NO egress directive —<br/>it is Claude Code's product default (unverified, SB10)"]
-    B --> NBC["NETWORK: B & C deny by default<br/>(deny network* / --unshare-net)"]
+    A --> NA["NETWORK: A emits NO egress directive —<br/>Claude Code product default (unverified, SB10)"]
+    B --> NBC["NETWORK: B & C deny by default<br/>(deny network* / --unshare-net / seatbelt)"]
     C --> NBC
     A --> RAB["READ-exclude: A & B only under EXCLUSIVE<br/>(denyRead / deny file-read*)"]
     B --> RAB
-    C --> RC["READ-exclude: C masks the credential set ALWAYS<br/>(~/.ssh … tmpfs, any profile); --exclude adds<br/>siblings only under exclusive"]
+    C --> RC["READ-exclude: C masks the credential set ALWAYS<br/>(~/.ssh … tmpfs/seatbelt, any profile);<br/>--exclude adds siblings under exclusive"]
+    C --> MAC["macOS-branch residuals (SB12/SB20):<br/>mem UNCAPPED · no syscall filtering ·<br/>setuid denylist ≠ NoNewPrivs · loopback-only proxy"]
     WD --> INERT["INERT until the operator activates it:<br/>merge settings / set GOOSE_SANDBOX / WRAP the process (SB14)"]
     NA --> INERT
     NBC --> INERT
     RAB --> INERT
     RC --> INERT
+    MAC --> INERT
 ```
 
 ### SB13 — Framework-neutral wiring, no harness preference  ✅
 **Canonical facts.**
-1. The Linux launcher is emitted from `base.extra_output_files` so **every** framework adapter emits it
+1. The launcher is emitted from `base.extra_output_files` (as `linux_sandbox_output_files +
+   macos_sandbox_output_files`, one non-empty per host) so **every** framework adapter emits it on both
+   POSIX platforms;
    (claude, codex, copilot-vscode/-cli, agents-md, goose) — no harness is preferred. Only `claude.py`
    and `goose.py` override `extra_output_files`, and both call `super()`; there is no double-emit.
 2. The neutral path resolves to repo-root `sandbox/confine-run.sh` via `sandbox_launcher_rel_path()`:
@@ -353,13 +385,14 @@ flowchart TD
 1. Every emitted boundary is **inert until the operator activates it** — the standing "ship an example,
    never clobber the operator's live config" convention. Activation differs by mechanism: **merge** the
    settings block (claude); **set `GOOSE_SANDBOX`** (goose macOS); **WRAP** the invocation
-   (`sandbox/confine-run.sh --scratch DIR --egress deny -- <agent cmd>`, Linux).
+   (`sandbox/confine-run.sh --scratch DIR --egress deny -- <agent cmd>` — the SAME command on **Linux**
+   (`bwrap`) and **macOS** (`sandbox-exec`/`build_macos`)).
 2. For the Linux launcher there is no framework config that references it — the operator must change how
    they LAUNCH the agent. This is why SB8's non-fatal manual-wire advisory exists: to say so at
    generation time.
 **Source.** `agentteams/frameworks/hooks_emit.py` (example-not-settings convention);
 `agentteams/templates/universal/sandbox/confine-run.sh` (usage header);
-`agentteams/host_features.py:352` (manual-wire).
+`agentteams/host_features.py:404` (linux manual-wire).
 **Dial.** R Full · D Full · S Core · E Core (mandatory ceiling #2).
 
 ### SB15 — Verifying the wiring took effect  ✅
@@ -453,20 +486,30 @@ flowchart LR
 
 ### SB20 — What is verified, and what is not  ✅/⚙
 **Canonical facts.**
-1. **Linux launcher: enforcement-VERIFIED.** A live-kernel deny test proves write-outside-`--scratch`,
-   credential/sibling read, and raw egress are all denied for a real process (incl. a real `goose`
-   process), reproduced on stock `bwrap`.
-2. **macOS Seatbelt: enforcement- and profile-syntax-UNVERIFIED** off a mac host.
-3. **Claude native Linux product arm: unverified** on stock Ubuntu (nested-userns); the mechanism is
-   verified. These three are distinct mechanisms with distinct verdicts — never conflated.
-4. **Reconciliation note (2026-09-01).** The sibling [Security Guide's](../agentteams-security-guide/README.md)
-   Part VI predates the framework-neutral Linux launcher and still frames confinement as *"verified on
-   macOS only."* Per current source (`host_features.py`, `confine-run.sh` status header) that framing is
-   **stale**: the **Linux launcher is the enforcement-verified path** and macOS Seatbelt is the
-   **unverified** one. This guide states the current facts; the security-guide skeleton + editions and
-   its `audience-profiles.md` ceiling #4 are pending a matching correction (tracked as a remediation
-   item). A reader comparing the two should treat *this* guide as current on the verification verdict.
+1. **Launcher Linux (`bwrap`) branch: enforcement-VERIFIED.** A live-kernel deny test proves
+   write-outside-`--scratch`, credential/sibling read, and raw egress are all denied for a real process
+   (incl. a real `goose` process), reproduced on stock `bwrap`.
+2. **Launcher macOS (`build_macos`) branch: enforcement-UNVERIFIED** (2026-W36). Its intended on-host
+   deny test is **`sandbox/mac-escape-tests.sh`**, which must pass **unnested, with its positive
+   controls**, on a real mac before the macOS boundary may be called "confined" — *wiring-verified ≠
+   enforcement-verified*. **Known gap (as shipped):** that test hard-targets a `confine-run.macos-ref.sh`
+   wrapper that agentteams does **not** currently emit (it exits early if absent), so the gate is **not
+   yet runnable against the emitted launcher** — macOS therefore cannot become "verified" until the
+   test/wrapper mismatch is resolved (logged for the launcher/test owner). Its honest residuals ride
+   along in the advisory (SB8): memory UNCAPPED, no syscall filtering, setuid denylist ≠ NoNewPrivs,
+   loopback-only proxy.
+3. **Native macOS Seatbelt (goose/claude) and Claude's native Linux product arm: also unverified** — the
+   goose/claude Seatbelt profiles are enforcement/profile-syntax-unverified off a mac, and Claude Code's
+   Linux bubblewrap product arm is unverified on stock Ubuntu (nested-userns; the *mechanism* is verified).
+   Each of these is a **distinct mechanism with a distinct verdict** — never conflated.
+4. **Cross-guide reconciliation (done, 2026-09-01).** The sibling
+   [Security Guide's](../agentteams-security-guide/README.md) earlier *"verified on macOS only"* framing
+   was stale (it predated the launcher). It has since been **corrected** to match current source (Linux
+   deny-tested; macOS unverified) across its skeleton, four editions, and `audience-profiles.md`, and it
+   cross-links here. The two guides now agree; the only nuance this guide adds is the newer macOS
+   `build_macos` branch (fact 2).
 **Source.** `agentteams/templates/universal/sandbox/confine-run.sh` (status header);
+`agentteams/templates/universal/sandbox/mac-escape-tests.sh` (the macOS deny test);
 `agentteams/host_features.py` (Linux VERIFIED comment);
 `docs_src/api-reference/workspace-privilege-scoping.md` (Linux verification verdict).
 **Dial.** R Full · D Core · S Full · E Core (mandatory ceiling #3).
@@ -508,7 +551,7 @@ flowchart TD
     subgraph EMIT
         e1["claude settings block"]:::m
         e2["goose Seatbelt .sb"]:::m
-        e3["Linux bwrap confine-run.sh"]:::m
+        e3["launcher confine-run.sh<br/>(bwrap Linux / build_macos macOS)"]:::m
     end
     subgraph WIRE_ENFORCE["WIRE + ENFORCE"]
         w1["operator activates<br/>(merge / GOOSE_SANDBOX / WRAP)"] --> w2["OS confinement in force"]
@@ -525,9 +568,12 @@ flowchart TD
 
 ### SB23 — Reference tables & glossary  ✅
 **Canonical facts.**
-1. The capability matrix (SB7), the two advisory codes (SB8), the three mechanisms and their emit paths
-   (SB10–SB12), the pinned modules (SB18), and the four load-bearing ceilings (top of this map) are the
-   quick-reference surface. Editions R and D carry the full tables; S carries the matrix + ceilings; E
-   carries the four ceilings in plain words.
+1. The capability matrix (SB7 — POSIX framework-neutral: any framework capable on **both** Linux and
+   macOS; claude everywhere; Windows none), the **three** advisory codes (SB8 — one fatal
+   `unenforced-host`, two non-fatal manual-wire, one per POSIX platform), the mechanisms and their emit
+   paths (SB10–SB12 — the native settings block, the native macOS Seatbelt paths, and the dual-branch
+   launcher `bwrap`+`sandbox-exec`), the pinned modules (SB18), and the four load-bearing ceilings (top of
+   this map) are the quick-reference surface. Editions R and D carry the full tables; S carries the matrix
+   + ceilings; E carries the four ceilings in plain words.
 **Source.** this SKELETON.
 **Dial.** R Full · D Full · S Core · E Light.
