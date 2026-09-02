@@ -639,6 +639,59 @@ def _detect_duplicate_sections(merged: str, added_sids: list[str]) -> list[str]:
     ]
 
 
+def _strip_corrupt_fence_tail(content: str) -> str:
+    """Remove an out-of-fence block that is terminated by an orphan ``END`` marker.
+
+    Guards against a duplicate-append corruption observed across the fleet in
+    ``parallelization.reference.md``: a section manually spliced *outside* the ``content``
+    fence, followed by a second, orphaned ``AGENTTEAMS:END content`` marker (BEGIN=1, END=2).
+    ``_extract_fenced_regions`` tolerates the orphan END, so ``_merge_fenced_content`` preserves
+    that out-of-fence block as if it were user content — perpetuating the imbalance that the
+    autosync fence-pairing gate then rejects.
+
+    This strips exactly the corruption signature — a run of depth-0 (out-of-fence) lines
+    immediately closed by an ``END`` marker with no matching open ``BEGIN`` — and nothing else.
+    Legitimate out-of-fence content (any depth-0 region *not* terminated by an orphan END) is
+    preserved byte-for-byte, and a well-formed file is returned unchanged.
+
+    Args:
+        content: The on-disk file content to sanitize before merging.
+
+    Returns:
+        ``content`` with any orphan-END-terminated out-of-fence block removed, or the
+        original string unchanged when no such corruption is present.
+    """
+    lines = content.split("\n")
+    kept: list[str] = []
+    pending: list[str] = []   # depth-0 lines held until proven legitimate (flushed) or dropped
+    stack: list[str] = []     # sids of currently-open fences
+    changed = False
+    for line in lines:
+        mb = _FENCE_BEGIN_RE.search(line)
+        me = _FENCE_END_RE.search(line)
+        if mb:
+            kept.extend(pending); pending = []
+            kept.append(line)
+            stack.append(mb.group("sid"))
+        elif me and stack and stack[-1] == me.group("sid"):
+            kept.extend(pending); pending = []
+            kept.append(line)
+            stack.pop()
+        elif me and not stack:
+            # Orphan END at depth 0: this and the out-of-fence block before it are the
+            # duplicate-append corruption. Drop the held block and the orphan marker.
+            pending = []
+            changed = True
+        elif stack:
+            kept.append(line)          # inside a fence — always preserved verbatim
+        else:
+            pending.append(line)       # depth-0 content — tentatively held
+    kept.extend(pending)               # trailing legitimate out-of-fence content survives
+    if not changed:
+        return content
+    return "\n".join(kept)
+
+
 def _merge_fenced_content(
     new_rendered: str,
     existing_on_disk: str,
@@ -669,6 +722,11 @@ def _merge_fenced_content(
         parse failure.
     """
     result = MergeResult()
+
+    # Repair a duplicate-append corruption (orphan trailing END + out-of-fence duplicate) before
+    # any parsing/merge, so the merge operates on well-formed input and cannot perpetuate the
+    # imbalance that the autosync fence-pairing gate rejects. A well-formed file is untouched.
+    existing_on_disk = _strip_corrupt_fence_tail(existing_on_disk)
 
     _existing_probe = _extract_fenced_regions(existing_on_disk)
     _new_probe = _extract_fenced_regions(new_rendered)
