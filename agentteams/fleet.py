@@ -52,6 +52,11 @@ _PRUNE_SUBSTR = (".worktrees", "/archive/")
 # Fence markers (content fence in .agent.md files).
 _FENCE_BEGIN = re.compile(r"AGENTTEAMS[A-Z_-]*:BEGIN")
 _FENCE_END = re.compile(r"AGENTTEAMS[A-Z_-]*:END")
+# REAL fence markers (HTML-comment form only) for the fence-balance gate. The loose
+# _FENCE_BEGIN/_FENCE_END above match the bare substring and would miscount a marker
+# quoted in prose or displayed as data; these match only an actual fence line.
+_REAL_FENCE_BEGIN_RE = re.compile(r"<!--\s*AGENTTEAMS:BEGIN\s")
+_REAL_FENCE_END_RE = re.compile(r"<!--\s*AGENTTEAMS:END\s")
 _USER_EDIT = re.compile(r"USER-EDITABLE|USER EDITABLE")
 _USER_EDIT_END = re.compile(r"END USER-EDITABLE|/USER-EDITABLE|END USER EDITABLE")
 _BRIDGE_FENCE = "AGENTTEAMS-BRIDGE:BEGIN"
@@ -96,6 +101,7 @@ class TargetResult:
     removed_lines: int = 0
     shrink_notices: list[str] = field(default_factory=list)
     user_editable_deletions: list[str] = field(default_factory=list)
+    fence_imbalances: list[str] = field(default_factory=list)
     rc: int | None = None
 
 
@@ -368,6 +374,41 @@ def _user_editable_deletions(ws: Path, ref: str, rel_file: str) -> list[str]:
     return out
 
 
+def _fence_imbalances(ws: Path, files: list[str]) -> list[str]:
+    """Changed markdown files whose REAL fence markers do not pair up.
+
+    Mirrors the researchteam autosync fence-pairing gate so a malformed-fence render is
+    surfaced on the fleet path too (previously it had no such check and could be pushed
+    undetected). Counts only real HTML-comment markers — a marker quoted in prose or shown
+    as data is not a fence. Generated bridge report/inventory artifacts under
+    ``references/bridges/`` are exempt: they legitimately DISPLAY marker syntax as table
+    data (e.g. ``agent-inventory.md`` lists each agent's BEGIN marker), so a balance check
+    over them is a false positive.
+
+    Args:
+        ws: Workspace root.
+        files: Repo-relative changed paths from the diff.
+
+    Returns:
+        ``["<path> (<begin>/<end>)", ...]`` for each imbalanced file; empty when all pair.
+    """
+    out: list[str] = []
+    for f in files:
+        if not f.endswith(".md"):
+            continue
+        if f.startswith("references/bridges/") or "/references/bridges/" in f:
+            continue
+        try:
+            text = (ws / f).read_text(encoding="utf-8")
+        except OSError:
+            continue
+        b = len(_REAL_FENCE_BEGIN_RE.findall(text))
+        e = len(_REAL_FENCE_END_RE.findall(text))
+        if b != e:
+            out.append(f"{f} ({b}/{e})")
+    return out
+
+
 def _classify(ws: Path, ref: str, diff_text: str, update_output: str) -> dict:
     """Derive status from content signals, not exit code."""
     added = removed = 0
@@ -400,6 +441,7 @@ def _classify(ws: Path, ref: str, diff_text: str, update_output: str) -> dict:
         "files": files,
         "shrink_notices": shrink,
         "user_editable_deletions": ue,
+        "fence_imbalances": _fence_imbalances(ws, files),
     }
 
 
@@ -595,8 +637,15 @@ def run_fleet(args, parser) -> int:
                 tr.added_lines, tr.removed_lines = cls["added"], cls["removed"]
                 tr.shrink_notices = cls["shrink_notices"]
                 tr.user_editable_deletions = cls["user_editable_deletions"]
+                tr.fence_imbalances = cls["fence_imbalances"]
                 if rc != 0 and _is_hard_error(out):
                     tr.status, tr.detail = "FAIL", _first_error(out)
+                elif cls["fence_imbalances"]:
+                    # A malformed-fence render must not be pushed — surface it above the
+                    # softer shrink/USER-EDITABLE signals so the operator sees it first.
+                    tr.status = "REVIEW"
+                    tr.detail = ("FENCE IMBALANCE (malformed render — do not push): "
+                                 + ", ".join(cls["fence_imbalances"]))
                 elif cls["user_editable_deletions"] or cls["shrink_notices"]:
                     tr.status = "REVIEW"
                     tr.detail = "shrink notice / USER-EDITABLE deletion — review diff"
@@ -615,7 +664,8 @@ def run_fleet(args, parser) -> int:
                 tr.status = "OK" if rc == 0 else "REVIEW"
                 tr.detail = "non-git workspace — recovery via .agentteams-backups (pre-write snapshot)"
             print(f"    {target}: {tr.status}  (+{tr.added_lines}/-{tr.removed_lines}, "
-                  f"{len(tr.shrink_notices)} shrink, {len(tr.user_editable_deletions)} UE-del)")
+                  f"{len(tr.shrink_notices)} shrink, {len(tr.user_editable_deletions)} UE-del, "
+                  f"{len(tr.fence_imbalances)} fence-imbalance)")
             wr.targets.append(tr)
 
         results.append(wr)
