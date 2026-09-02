@@ -21,7 +21,7 @@ flowchart TD
     subgraph EMIT
         e1["claude settings block"]:::m
         e2["goose Seatbelt .sb"]:::m
-        e3["Linux bwrap confine-run.sh"]:::m
+        e3["launcher confine-run.sh<br/>(bwrap Linux / build_macos macOS)"]:::m
     end
     subgraph WIRE_ENFORCE["WIRE + ENFORCE"]
         w1["operator activates<br/>(merge / GOOSE_SANDBOX / WRAP)"] --> w2["OS confinement in force"]
@@ -42,25 +42,29 @@ flowchart TD
 
 | Platform | claude | goose | codex / copilot / agents-md |
 |---|---|---|---|
-| Linux | ✅ (native + launcher) | ✅ (launcher) | ✅ (launcher) |
-| macOS | ✅ (native) | ✅ (Seatbelt) | ❌ fatal advisory |
+| Linux | ✅ (native + launcher `bwrap`, **VERIFIED**) | ✅ (launcher `bwrap`) | ✅ (launcher `bwrap`) |
+| macOS | ✅ (native Seatbelt) | ✅ (native Seatbelt) | ✅ (launcher `build_macos`, **UNVERIFIED**) |
 | Windows | ✅ native (product-arm unverified) | ❌ fatal | ❌ fatal |
+
+*(POSIX framework-neutral since 2026-W36: any framework is capable on both Linux and macOS via the
+launcher's `bwrap` / `build_macos` branch; only Windows/other lack an emittable boundary.)*
 
 ### Advisory codes (SB8)
 
 | Code | When | Fatal? |
 |---|---|---|
-| `privilege-profile-unenforced-host` | no emittable boundary (Windows; non-claude/non-goose off Linux, incl. macOS) | **Yes** — raises unless `--allow-unenforced-confinement` |
+| `privilege-profile-unenforced-host` | no emittable boundary (Windows; non-claude off any non-POSIX target) | **Yes** — raises unless `--allow-unenforced-confinement` |
 | `privilege-profile-linux-launcher-manual-wire` | Linux, any framework except claude | **No** — warns + persists; never refuses |
-| `None` | claude (native) anywhere; goose (Seatbelt) macOS | — |
+| `privilege-profile-macos-launcher-manual-wire` | macOS, any framework except claude & goose | **No** — warns + persists; never refuses |
+| `None` | claude (native) anywhere; goose (native Seatbelt) macOS | — |
 
-### The three mechanisms (SB10–SB12)
+### The mechanisms (SB10–SB12)
 
 | Mechanism | Framework/OS | Artifact | Activation |
 |---|---|---|---|
-| A — settings block | claude, any OS | `.claude/settings.hooks.example.json` | merge into `settings.json` |
-| B — Seatbelt | goose, macOS | `.goose/sandbox.sb` + `config.yaml.agentteams.example` | set `GOOSE_SANDBOX` |
-| C — bwrap launcher | any framework, Linux | repo-root `sandbox/confine-run.sh` | WRAP the invocation |
+| A — native settings block | claude, any OS | `.claude/settings.hooks.example.json` | merge into `settings.json` |
+| B — native Seatbelt | goose, macOS | `.goose/sandbox.sb` + `config.yaml.agentteams.example` | set `GOOSE_SANDBOX` |
+| C — launcher (`bwrap` Linux / `sandbox-exec` macOS) | any framework, both POSIX | repo-root `sandbox/confine-run.sh` (+ `mac-escape-tests.sh` on macOS) | WRAP the invocation |
 
 ### Pinned modules (SB18)
 

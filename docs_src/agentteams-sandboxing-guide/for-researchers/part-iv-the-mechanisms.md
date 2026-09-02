@@ -10,8 +10,11 @@ Three emitters, three trust models — a reviewer should not treat them as equiv
   unverified.
 - **B — goose Seatbelt** (macOS). `deny file-write*` + `deny network*` by default; read-exclusion under
   exclusive. **Enforcement- and profile-syntax-unverified off a mac.**
-- **C — Linux bwrap launcher** (any framework). `--ro-bind / /`, scratch-only writes, `--unshare-net`,
-  and **credential tmpfs masks on every wrap** (not just exclusive). This is the **one verified** path.
+- **C — the dual-OS launcher** (any framework). **Linux `bwrap`** branch: `--ro-bind / /`, scratch-only writes, `--unshare-net`,
+  and **credential tmpfs masks on every wrap** (not just exclusive) — the **one enforcement-verified**
+  path. **macOS `build_macos`** branch (2026-W36, any non-claude/non-goose framework): `sandbox-exec` +
+  a Seatbelt profile, RLIMIT_CPU/NPROC caps, loopback-only proxy, non-exhaustive setuid denylist —
+  **enforcement-UNVERIFIED** until `mac-escape-tests.sh` passes (memory UNCAPPED, no syscall filtering).
 
 On Linux, C **stacks** with **A only** — a claude Linux team emits both the settings block and the
 launcher. Goose's Seatbelt (B) is **macOS-only** (an explicit `darwin` guard) and never coexists with the

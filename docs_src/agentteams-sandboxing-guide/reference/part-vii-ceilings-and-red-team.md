@@ -4,26 +4,34 @@
 
 ## SB20 — What is verified, and what is not  ✅/⚙
 
-Three distinct mechanisms carry three distinct verdicts — **never conflate them**:
+Distinct mechanisms carry distinct verdicts — **never conflate them**:
 
-1. **Linux launcher: enforcement-VERIFIED.** A live-kernel deny test proves write-outside-`--scratch`,
-   credential/sibling read, and raw egress are all denied for a real process (including a real `goose`
-   process), reproduced on stock `bwrap`.
-2. **macOS Seatbelt: enforcement- and profile-syntax-UNVERIFIED** off a mac host (ceiling #3).
-3. **Claude native Linux product arm: unverified** on stock Ubuntu (nested-userns); the *mechanism* is
-   verified.
+1. **Launcher Linux (`bwrap`) branch: enforcement-VERIFIED.** A live-kernel deny test proves
+   write-outside-`--scratch`, credential/sibling read, and raw egress are all denied for a real process
+   (including a real `goose` process), reproduced on stock `bwrap`.
+2. **Launcher macOS (`build_macos`) branch: enforcement-UNVERIFIED** (2026-W36). Its intended on-host
+   deny test is **`sandbox/mac-escape-tests.sh`**, which must pass **unnested, with its positive
+   controls**, on a real mac before the macOS boundary may be called "confined" — *wiring-verified ≠
+   enforcement-verified*. **Known gap (as shipped):** that test hard-targets a `confine-run.macos-ref.sh`
+   wrapper agentteams does **not** currently emit and exits early if it is absent — so the gate is **not
+   yet runnable against the emitted launcher**, and macOS cannot become "verified" until that
+   test/wrapper mismatch is fixed (logged for the launcher/test owner). Honest residuals: memory UNCAPPED,
+   no syscall filtering, setuid denylist ≠ NoNewPrivs, loopback-only proxy (SB12).
+3. **Native macOS Seatbelt (goose/claude) + Claude's native Linux product arm: also unverified** — the
+   goose/claude Seatbelt profiles are enforcement/profile-syntax-unverified off a mac; Claude Code's
+   Linux bubblewrap *product arm* is unverified on stock Ubuntu (nested-userns; the mechanism is verified).
 
-> **Reconciliation note (2026-09-01).** The sibling [Security Guide's](../../agentteams-security-guide/README.md)
-> Part VI predates the framework-neutral Linux launcher and still frames confinement as *"verified on
-> macOS only."* Per current source (`host_features.py`, the `confine-run.sh` status header) that framing
-> is **stale**: the **Linux launcher is the enforcement-verified path** and macOS Seatbelt is the
-> **unverified** one. This guide states the current facts; the security-guide skeleton, its editions, and
-> its `audience-profiles.md` ceiling #4 are pending a matching correction (tracked as a remediation
-> item). Treat *this* guide as current on the verification verdict.
+> **Cross-guide reconciliation (done, 2026-09-01).** The sibling
+> [Security Guide's](../../agentteams-security-guide/README.md) earlier *"verified on macOS only"*
+> framing was stale (it predated the launcher) and has since been **corrected** to match current source
+> (Linux deny-tested; macOS unverified) across its skeleton, four editions, and `audience-profiles.md`,
+> with a cross-link back here. The two guides now agree; the only nuance this guide adds is the newer
+> macOS `build_macos` branch (verdict 2 above).
 
 *Source:* `agentteams/templates/universal/sandbox/confine-run.sh` (status header);
-`agentteams/host_features.py` (Linux VERIFIED comment);
-`docs_src/api-reference/workspace-privilege-scoping.md` (Linux verification verdict).
+`agentteams/templates/universal/sandbox/mac-escape-tests.sh` (the macOS deny test);
+`agentteams/host_features.py` (Linux VERIFIED comment; macOS advisory);
+`docs_src/api-reference/workspace-privilege-scoping.md` (verification verdict + macOS augmentation).
 
 ## SB21 — What sandboxing does NOT close  ✅/⚙  (ceiling #4)
 
