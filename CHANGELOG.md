@@ -6,6 +6,25 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### fixed (standing red-team audit — HARNESS BROKEN, issue #1)
+
+- **The standing red-team audit no longer reports HARNESS BROKEN.** Two independent instrument
+  failures were producing a verdict that "says nothing about whether the constitution holds."
+  **(1)** The 2026-08-31 public-release scrub gitignored three *structural* red-team ledgers the
+  CI audit depends on — `redteam-uncontrolled-probes.csv` (its absence made B9/B11/E4 read as
+  uncontrolled → `validate_registration` failure → HARNESS BROKEN), `redteam-callpath-parity.csv`
+  (absence made F-2 run vacuous), and `redteam-canonical-resolution-exemptions.csv` (absence made
+  F-3 emit false positives). These describe the structure of the already-public battery/code, not
+  discovered weaknesses, so they are now **tracked** (cleared by `@security`; the genuine weakness
+  map — `findings.log`, `accepted-weaknesses` — stays private), with a `.gitignore` rationale
+  comment and regression tests guarding against re-ignoring them. **(2)** `ENFORCEMENT_MODULES`
+  gained two shell scripts (`confine-run.sh`, `mac-escape-tests.sh`); `discover_verifiers`
+  `ast.parse`d every enforcement module and crashed on them. F-1 now ast-discovers Python modules
+  only and **accounts for the exclusion (Rule 12)** — `check_verifier_sensitivity` requires a
+  `redteam-verifiers.csv` row per non-Python enforcement module, a finding when absent. The
+  enforcement-integrity manifest is regenerated (also bringing `fences.py` current, a pre-existing
+  drift from PR #13). The audit now exits FINDINGS, never HARNESS BROKEN.
+
 ### added (Orchestrator Spawn-Authority & Query Funnel — Phases 1–2)
 
 - **Every generated team now carries a spawner-authority / query-funnel governance layer.** An
