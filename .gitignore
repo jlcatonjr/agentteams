@@ -210,9 +210,20 @@ memories/
 references/bridges/
 references/redteam-findings.log.csv
 references/redteam-accepted-weaknesses.csv
-references/redteam-canonical-resolution-exemptions.csv
-references/redteam-uncontrolled-probes.csv
-references/redteam-callpath-parity.csv
+# NOTE (2026-09-04, issue #1): three red-team ledgers that the scrub above
+# initially swept in are STRUCTURAL, not operational — they describe the STRUCTURE
+# of the already-public probe battery and this repo's own public code, and the
+# standing red-team audit that runs in CI on the PUBLIC repo depends on them:
+#   * redteam-uncontrolled-probes.csv        — B9/B11/E4 control-pairing exemptions;
+#       absent -> validate_registration -> HARNESS BROKEN (this issue)
+#   * redteam-callpath-parity.csv            — F-2 call-site guard-parity rules;
+#       absent -> F-2 runs vacuous (false clean)
+#   * redteam-canonical-resolution-exemptions.csv — F-3 canonical-resolver exemptions;
+#       absent -> F-3 emits false-positive findings
+# They are TRACKED (not ignored). Cleared by @security 2026-09-04 (no credentials,
+# PII, or private paths); recorded in references/security-decisions.log.csv. The
+# genuine weakness map (findings.log + accepted-weaknesses above, and
+# security-decisions.log) stays private. Do NOT re-add these three to this list.
 references/openweights-security-model-ratings.csv
 references/openweights-security-model-ratings.csv.provenance.json
 references/redteam-judgment-layer.report.md

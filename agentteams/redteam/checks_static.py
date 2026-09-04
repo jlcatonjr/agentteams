@@ -48,6 +48,11 @@ _VERIFIER_SUFFIXES = ("_digest", "_matches", "_is_sound")
 KIND_VERIFIER = "verifier"
 KIND_NOT_VERIFIER = "not-a-verifier"
 
+#: Ledger `symbol` used for a whole non-Python enforcement module (a shell boundary or gate).
+#: Such a module has no Python `def` for :func:`discover_verifiers` to find, so F-1 accounts
+#: for it by requiring one row keyed on the file itself — see :func:`check_verifier_sensitivity`.
+SHELL_MODULE_SYMBOL = "(whole module — non-Python)"
+
 #: Canonical APIs that must be called rather than re-implemented (F-3), keyed by the
 #: hand-rolled construct they replace.
 CANONICAL_RESOLVERS: dict[str, str] = {
@@ -122,19 +127,28 @@ def _module_scope(root: Path) -> list[str]:
 
 
 def discover_verifiers(root: Path) -> list[_Discovered]:
-    """Find every verifier-shaped top-level function in the F-1 scope.
+    """Find every verifier-shaped top-level Python function in the F-1 scope.
 
     Args:
         root: Repository root.
 
     Returns:
         One entry per ``(module, symbol)``, sorted. Nested functions are excluded: a helper
-        closed over a parent's state is tested through its parent.
+        closed over a parent's state is tested through its parent. **Non-Python enforcement
+        modules are excluded here** — they carry no Python ``def`` to discover and cannot be
+        ``ast.parse``d; they are accounted for separately in
+        :func:`check_verifier_sensitivity` (see :func:`discover_shell_enforcement_modules`),
+        so the exclusion is recorded, not silent (Rule 12).
     """
     found: list[_Discovered] = []
     for rel in _module_scope(root):
         path = root / rel
-        if not path.exists():
+        # F-1 discovers Python verifier FUNCTIONS via the AST. A non-.py enforcement module
+        # (e.g. a shell boundary launcher or on-host deny-test gate) has nothing ast.parse can
+        # read; parsing it raises SyntaxError and takes the whole self-audit down. Its tamper
+        # tracking lives in the integrity manifest (E4); its F-1 accountability is enforced by
+        # the shell-module ledger requirement below.
+        if not path.exists() or path.suffix != ".py":
             continue
         for node in _parse(path).body:
             if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)) and _looks_like_a_verifier(
@@ -142,6 +156,27 @@ def discover_verifiers(root: Path) -> list[_Discovered]:
             ):
                 found.append(_Discovered(module=rel, symbol=node.name))
     return sorted(found, key=lambda d: (d.module, d.symbol))
+
+
+def discover_shell_enforcement_modules(root: Path) -> list[str]:
+    """Return every non-Python enforcement module in scope, as repo-relative POSIX paths.
+
+    These are the enforcement modules :func:`discover_verifiers` cannot ``ast.parse`` (shell
+    boundaries and gates). F-1 requires an explicit :data:`VERIFIERS_REL` row for each — a
+    finding when one is missing — so a shell enforcement module added to the pin list without
+    accountability is caught rather than silently exempted (Rule 12).
+
+    Args:
+        root: Repository root.
+
+    Returns:
+        Sorted repo-relative paths of existing non-.py enforcement modules.
+    """
+    return sorted(
+        rel
+        for rel in integrity.ENFORCEMENT_MODULES
+        if not rel.endswith(".py") and (root / rel).exists()
+    )
 
 
 def _test_function_exists(root: Path, reference: str) -> bool:
@@ -192,7 +227,28 @@ def check_verifier_sensitivity(root: Path) -> list[SelfAuditFinding]:
                 ),
             ))
 
+    # Rule 12: discover_verifiers excludes non-Python enforcement modules (it cannot ast.parse
+    # them). That exclusion must be ACCOUNTED FOR, not silent — a shell boundary or gate added
+    # to the pin list could otherwise escape F-1 entirely. Require one ledger row per shell
+    # enforcement module, keyed on the file itself; a missing row is a finding, and the row's
+    # kind/reason (or test refs) are validated by the same loop below as any other row.
+    shell_modules = discover_shell_enforcement_modules(root)
+    for rel in shell_modules:
+        if (rel, SHELL_MODULE_SYMBOL) not in registered:
+            findings.append(SelfAuditFinding(
+                check="F-1",
+                subject=f"{rel}::{SHELL_MODULE_SYMBOL}",
+                detail="non-Python enforcement module with no row in the verifier ledger",
+                remedy=(
+                    f"add a row to {VERIFIERS_REL} with module={rel}, "
+                    f"symbol={SHELL_MODULE_SYMBOL!r}, and kind={KIND_VERIFIER} naming a "
+                    f"sensitivity test and a negative control, or kind={KIND_NOT_VERIFIER} "
+                    f"with a reason of at least {MIN_REASON_CHARS} characters"
+                ),
+            ))
+
     discovered_keys = {(d.module, d.symbol) for d in discovered}
+    discovered_keys |= {(rel, SHELL_MODULE_SYMBOL) for rel in shell_modules}
     for (module, symbol), row in sorted(registered.items()):
         if (module, symbol) not in discovered_keys:
             findings.append(SelfAuditFinding(
@@ -628,8 +684,10 @@ __all__ = [
     "CANONICAL_RESOLVERS",
     "KIND_NOT_VERIFIER",
     "KIND_VERIFIER",
+    "SHELL_MODULE_SYMBOL",
     "check_callpath_parity",
     "check_canonical_resolution",
     "check_verifier_sensitivity",
+    "discover_shell_enforcement_modules",
     "discover_verifiers",
 ]
