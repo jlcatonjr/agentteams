@@ -21,13 +21,18 @@ from __future__ import annotations
 import json
 from pathlib import Path
 
-from agentteams.redteam import checks_report, checks_static, selfaudit
+import subprocess
+
+from agentteams.redteam import checks_report, checks_static, registry, selfaudit
 from agentteams.redteam.registry import (
     ACCEPTED_WEAKNESSES_REL,
     CALLPATH_PARITY_REL,
     DEFENDED,
+    MIN_REASON_CHARS,
     PARTIAL,
     PROBE_BASELINE_REL,
+    RESOLUTION_EXEMPTIONS_REL,
+    UNCONTROLLED_PROBES_REL,
     VERIFIERS_REL,
     Probe,
     evidence_digest,
@@ -125,6 +130,68 @@ def test_f1_is_silent_on_a_complete_ledger(tmp_path: Path) -> None:
     ))
 
     assert checks_static.check_verifier_sensitivity(tmp_path) == []
+
+
+# ---------------------------------------------------------------------------
+# F-1 — non-Python enforcement modules (issue #1, Defect 2)
+#
+# ENFORCEMENT_MODULES may include shell boundaries (confine-run.sh, mac-escape-tests.sh).
+# discover_verifiers used to ast.parse EVERY enforcement module, so a shell entry crashed the
+# whole self-audit with SyntaxError — an instrument failure read as HARNESS BROKEN. The fix
+# skips non-.py for AST parsing but ACCOUNTS FOR the exclusion (Rule 12): F-1 requires a
+# ledger row per shell enforcement module, so one added without accountability is a finding.
+# ---------------------------------------------------------------------------
+
+_UNPARSEABLE_SHELL = "#!/usr/bin/env bash\ncase \"$1\" in\n  --scratch) X=1; shift 2 ;;\nesac\n"
+
+
+def test_f1_does_not_crash_on_a_non_python_enforcement_module(tmp_path, monkeypatch) -> None:
+    """A shell enforcement module must not take the AST-based self-audit down (issue #1)."""
+    _write(tmp_path, "sandbox/gate.sh", _UNPARSEABLE_SHELL)
+    monkeypatch.setattr(checks_static.integrity, "ENFORCEMENT_MODULES", ("sandbox/gate.sh",))
+
+    # Before the fix this raised SyntaxError from ast.parse on the shell script.
+    findings = checks_static.check_verifier_sensitivity(tmp_path)
+
+    assert isinstance(findings, list)
+
+
+def test_f1_fires_on_an_unaccounted_shell_enforcement_module(tmp_path, monkeypatch) -> None:
+    """Rule 12: the skip is not silent — a shell module with no ledger row is a finding."""
+    _write(tmp_path, "sandbox/gate.sh", _UNPARSEABLE_SHELL)
+    monkeypatch.setattr(checks_static.integrity, "ENFORCEMENT_MODULES", ("sandbox/gate.sh",))
+
+    findings = checks_static.check_verifier_sensitivity(tmp_path)
+
+    assert [f.subject for f in findings] == [
+        f"sandbox/gate.sh::{checks_static.SHELL_MODULE_SYMBOL}"
+    ]
+    assert "non-Python enforcement module" in findings[0].detail
+
+
+def test_f1_is_silent_on_an_accounted_shell_enforcement_module(tmp_path, monkeypatch) -> None:
+    """A shell module with a not-a-verifier row and a real reason produces nothing."""
+    _write(tmp_path, "sandbox/gate.sh", _UNPARSEABLE_SHELL)
+    monkeypatch.setattr(checks_static.integrity, "ENFORCEMENT_MODULES", ("sandbox/gate.sh",))
+    _write(tmp_path, VERIFIERS_REL, _VERIFIER_LEDGER_HEADER + (
+        f'sandbox/gate.sh,{checks_static.SHELL_MODULE_SYMBOL},not-a-verifier,,,'
+        '"A shell boundary artifact, not a Python verifier function; tamper-tracked by E4."\n'
+    ))
+
+    assert checks_static.check_verifier_sensitivity(tmp_path) == []
+
+
+def test_f1_fires_on_a_stale_shell_ledger_row(tmp_path, monkeypatch) -> None:
+    """The other direction: a shell row whose module is no longer pinned is a stale row."""
+    monkeypatch.setattr(checks_static.integrity, "ENFORCEMENT_MODULES", ())
+    _write(tmp_path, VERIFIERS_REL, _VERIFIER_LEDGER_HEADER + (
+        f'sandbox/gate.sh,{checks_static.SHELL_MODULE_SYMBOL},not-a-verifier,,,'
+        '"was pinned once; the module has since been removed from the manifest."\n'
+    ))
+
+    findings = checks_static.check_verifier_sensitivity(tmp_path)
+
+    assert len(findings) == 1 and "no longer exists" in findings[0].detail
 
 
 # ===========================================================================
@@ -573,3 +640,54 @@ def measure_again(paths):
 
     assert len(findings) == 1
     assert "enclosing function" in findings[0].detail
+
+
+# ===========================================================================
+# Standing-audit ledger preconditions (issue #1, Defect 1)
+#
+# The public-release scrub (1b151ef) gitignored three STRUCTURAL red-team ledgers that the
+# audit — which runs in CI on the public repo — depends on. Absent, they turned a healthy
+# audit into HARNESS BROKEN (uncontrolled-probes) or an untrustworthy verdict (callpath-parity
+# ran vacuous; resolution-exemptions emitted false positives). These ledgers are TRACKED. The
+# genuine weakness map (findings.log, accepted-weaknesses) stays private on purpose.
+# ===========================================================================
+
+_STRUCTURAL_LEDGERS = (UNCONTROLLED_PROBES_REL, CALLPATH_PARITY_REL, RESOLUTION_EXEMPTIONS_REL)
+
+
+def _repo_root() -> Path:
+    return Path(__file__).resolve().parents[1]
+
+
+def test_structural_ledgers_are_present_in_the_checkout() -> None:
+    """A missing structural ledger is exactly what broke the CI audit in issue #1."""
+    root = _repo_root()
+    for rel in _STRUCTURAL_LEDGERS:
+        assert (root / rel).exists(), (
+            f"{rel} is absent — the standing audit needs it; do not re-add it to .gitignore"
+        )
+
+
+def test_structural_ledgers_are_git_tracked() -> None:
+    """Present-but-untracked would still vanish in CI; the guard is tracking, not existence."""
+    root = _repo_root()
+    if not (root / ".git").exists():
+        return  # not a git checkout (e.g. an unpacked sdist); the existence test still applies
+    for rel in _STRUCTURAL_LEDGERS:
+        result = subprocess.run(
+            ["git", "ls-files", "--error-unmatch", rel],
+            cwd=root, capture_output=True, text=True,
+        )
+        assert result.returncode == 0, (
+            f"{rel} is not git-tracked — CI would not see it, reviving issue #1"
+        )
+
+
+def test_uncontrolled_probes_ledger_covers_b9_b11_e4() -> None:
+    """The exact probes whose missing exemptions produced the HARNESS BROKEN verdict."""
+    exemptions = registry.load_uncontrolled_exemptions(_repo_root())
+    for pid in ("B9", "B11", "E4"):
+        assert pid in exemptions, f"{pid} lost its uncontrolled-probe exemption"
+        assert len(exemptions[pid]) >= MIN_REASON_CHARS, (
+            f"{pid} exemption reason is under the {MIN_REASON_CHARS}-char bar"
+        )

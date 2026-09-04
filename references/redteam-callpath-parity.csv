@@ -1,0 +1,3 @@
+callee,guard,scope_module,position,note
+emit_all,_sweep_capability_key,agentteams/cli/generate.py,after,"W20: the capability-key sweep was wired to ONE of the TWO emit.emit_all call sites. --update --merge - the command an actual fleet sweep runs - never reached it, and 27 of 31 agents migrated while the run reported success"
+run_payload,agent_system_prompt,scripts/redteam_sweep_run.py,function,"The --system argument must have front matter stripped before it reaches the CLI, or the whole option is rejected as a flag. Applied to the judgment driver first and NOT to the sweep, which burned 812 calls returning NO-CALL from target 1. Any new call site that builds a --system prompt must go through the shared helper."
