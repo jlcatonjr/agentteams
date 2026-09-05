@@ -80,6 +80,14 @@ def repo(tmp_path: Path) -> Path:
     _git(root, "init", "-q", "-b", "main")
     _git(root, "config", "user.email", "t@t")
     _git(root, "config", "user.name", "t")
+    # Disable git's automatic housekeeping. `git log`/`git diff` inside `evaluate` can
+    # otherwise trip `gc --auto`, which spawns background maintenance that writes
+    # `.git/objects/maintenance.lock` into the tree — a git side effect, not a write by
+    # `evaluate` itself. On the macOS CI runners that background run lands mid-test and
+    # made `test_evaluation_writes_nothing_to_the_repo` flake. Turning both off removes
+    # the nondeterminism at its source so the "writes nothing" assertion stays strict.
+    _git(root, "config", "gc.auto", "0")
+    _git(root, "config", "maintenance.auto", "false")
     return root
 
 

@@ -6,6 +6,26 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### fixed (management-directive denylist — refuse inflected destructive/governance scopes)
+
+- **The management-directive scope denylist now fails closed on inflections.** The Rule-8 close-out
+  of the endowment feature found the word-boundary matcher refused `delete`/`overwrite`/
+  `reference-template` but let inflected forms (`deletes`, `deleting`, `overwrites`,
+  `reference-templates`) slip through as "benign" — a fail-OPEN gap versus the documented
+  "auto-refused regardless of a valid signature" guarantee. `scope_is_allowed` now matches denylist
+  **stems at a word start** (e.g. `delet`, `overwrit`, `prun`, `forc`, `merg`, `integrit`, `enforc`,
+  `management-authorit`), which catches every inflection while still not matching a token mid-word
+  (`rm` is never caught inside `transform`). Also added `wipe`/`truncat`/`revert`/`destruct`.
+  Fail-closed by design: a false refusal only makes the agent ask the operator. Regression test
+  added.
+- **De-flaked `test_docs_freshness_watch.py` on macOS CI.** `evaluate()`'s internal `git log`/
+  `git diff` could trip git's `gc --auto`, whose background maintenance writes
+  `.git/objects/maintenance.lock` into the tree mid-test — a git side effect, not a write by
+  `evaluate` — which made `test_evaluation_writes_nothing_to_the_repo` fail non-deterministically
+  on the macOS runners (both 3.11 and 3.12) while ubuntu stayed green. The `repo` fixture now sets
+  `gc.auto=0` and `maintenance.auto=false`, removing the nondeterminism at its source so the
+  "writes nothing" assertion stays strict rather than being loosened.
+
 ### added (management-repository endowment — authenticated relay of operator direction)
 
 - **A repository can now be endowed as a MANAGEMENT repository** whose *signed* directives relay the

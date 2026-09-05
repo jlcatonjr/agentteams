@@ -95,16 +95,20 @@ _MGMT_SIGNED_FIELDS: tuple[str, ...] = (*_MGMT_SIGNATURE_FIELDS, "prev_digest")
 #: 2. **Governance / trust roots** — a directive can never change governance or trust: the
 #:    constitution, an invariant, a capability grant, the roster, a signing key, the
 #:    security-decision log, a waiver, enforcement/integrity machinery.
+# STEMS, matched at a word start with any trailing letters allowed (scope_is_allowed), so each
+# stem covers a verb/noun and ALL its inflections while failing closed — "delet" refuses
+# delete/deletes/deleted/deleting/deletion; "reference-template" refuses reference-templates.
+# Chosen short enough to catch inflections but not so short they match a benign word mid-stream
+# (matching is left-boundary, so "rm" is never caught inside "transform"/"format"/"confirm").
 _REFUSED_SCOPE_TOKENS: tuple[str, ...] = (
-    # (1) destructive / bulk / cross-repo
-    "delete", "remove", "rm", "overwrite", "prune", "destroy", "drop", "purge",
-    "force", "reset", "bulk", "cross-repo", "push", "deploy", "merge",
+    # (1) destructive / bulk / cross-repo (stems cover -s/-ed/-ing/-ion/-al inflections)
+    "delet", "remov", "rm", "overwrit", "prun", "destroy", "destruct", "drop", "purg",
+    "forc", "reset", "bulk", "cross-repo", "push", "deploy", "merg", "wipe", "truncat", "revert",
     # (2) governance / trust roots (incl. this feature's own ledger + roster + key config,
     # so a directive can never widen its own trust base — @security condition 2c)
     "constitution", "invariant", "governance", "reference-template", "capability-grant",
-    "grant", "grants", "roster", "authorized-manager", "authorized-managers",
-    "management-authority", "management-directive", "management-directives", "directive",
-    "directives", "signing-key", "integrity", "enforcement", "security-decision", "waiver",
+    "grant", "roster", "authorized-manager", "management-authorit", "management-directive",
+    "directive", "signing-key", "integrit", "enforc", "security-decision", "waiver",
 )
 
 
@@ -190,14 +194,18 @@ def scope_is_allowed(task_scope: str) -> bool:
     """Return True iff ``task_scope`` is a benign scope a directive may authorize.
 
     THE security boundary (@security condition [2]). Mechanical and signature-non-overridable:
-    a scope naming any :data:`_REFUSED_SCOPE_TOKENS` token — matched on WORD BOUNDARIES
-    (case-insensitive), where ``-``/``_``/``.``/``/`` and whitespace delimit words — is ALWAYS
-    refused, even under a valid signature, because a directive can never clear destruction (C-5)
-    or touch a governance/trust root. Word-boundary (not raw substring) matching is deliberate:
-    a raw ``"rm" in scope`` test refuses benign scopes like ``transform``/``confirm``/``format``;
-    the boundary test still catches ``rm-tmp``, ``delete-logs``, ``cross-repo`` while allowing
-    ``ingest-transform-data``. An empty or whitespace-only scope is refused too (unrecognized
-    scope => refuse).
+    a scope naming any :data:`_REFUSED_SCOPE_TOKENS` token — matched at a WORD START
+    (case-insensitive; the token may not be preceded by an ASCII letter, but trailing letters are
+    allowed) — is ALWAYS refused, even under a valid signature, because a directive can never clear
+    destruction (C-5) or touch a governance/trust root. Word-START (not raw-substring, not
+    both-sided word-boundary) matching is deliberate and **fail-closed**: raw ``"rm" in scope``
+    would refuse benign ``transform``/``confirm``/``format``; a both-sided boundary would let the
+    inflected ``deletes``/``deleted``/``reference-templates`` slip through (fail-OPEN). Left-boundary
+    catches the whole word AND its inflections (``delete`` refuses ``deletes``/``deleting``/
+    ``deletion``; ``reference-template`` refuses ``reference-templates``) while still NOT matching a
+    token embedded mid-word (``rm`` is not matched inside ``transform``). A false refusal only makes
+    the agent ask the operator (as today); under-refusing a destructive verb would not. An empty or
+    whitespace-only scope is refused too (unrecognized scope => refuse).
 
     This is a denylist gate, not the scope *match*: whether a given directive authorizes a
     specific requested task is decided separately, by EXACT equality, in
@@ -213,10 +221,15 @@ def scope_is_allowed(task_scope: str) -> bool:
     if not scope:
         return False
     for token in _REFUSED_SCOPE_TOKENS:
-        # Word-boundary match: the token must not be flanked by ASCII letters, so "rm" matches
-        # "rm-tmp" but not "transform". Hyphenated tokens (cross-repo, capability-grant) match
-        # as-is since their own boundaries are non-letters.
-        if re.search(r"(?<![a-z])" + re.escape(token) + r"(?![a-z])", scope):
+        # Left-boundary (word-START) match: the token must not be PRECEDED by an ASCII letter, but
+        # trailing letters are allowed — so a token matches the whole word AND its inflections.
+        # "delete" therefore refuses "delete", "deletes", "deleted", "deleting", "deletion";
+        # "reference-template" refuses "reference-templates". Crucially it still does NOT match a
+        # token embedded mid-word: "rm" is not matched in "transform"/"format"/"confirm" (the "rm"
+        # there is preceded by a letter). Fail-closed by design: a security denylist must over-
+        # refuse (a false refusal only makes the agent ask the operator, as today) rather than
+        # under-refuse an inflected destructive/governance verb (which would be fail-OPEN).
+        if re.search(r"(?<![a-z])" + re.escape(token), scope):
             return False
     return True
 
