@@ -6,6 +6,26 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### fixed (fleet update — offline security intel + prune linked git worktrees)
+
+- **A fleet update no longer stalls on live security-intelligence fetches.** Each per-repo
+  render inherited the default `offline=False` for the security-reference placeholders, so a
+  `--fleet` run issued live NVD/OSV HTTPS fetches for every workspace — and the NVD fetcher
+  sleeps ~7 s between calls. Across dozens of repos this stalled the whole run indefinitely on a
+  single slow endpoint (observed as an SSL-read hang mid-fleet, at the same workspace every time).
+  The three generate-based fleet targets (`github`, `claude-direct`, `goose-direct`) now pass
+  `--security-offline`, rendering security intel from the cached snapshot only — mirroring how
+  framework-watch placeholders are already hardcoded offline in the same render path. A fleet
+  update is propagation, not a security-intelligence refresh; the snapshot is refreshed out of
+  band by the daily-pipeline research stage. Regression test added.
+- **Fleet discovery now prunes linked git worktrees.** A linked worktree (`.git` is a
+  `gitdir:` *file*, not a directory) is an ephemeral checkout of a repo whose canonical copy
+  (`.git` is a directory) is already discovered separately, so updating it was redundant churn —
+  and the fleet pre-update snapshot commit would land on whatever in-progress branch the worktree
+  had checked out. `discover_workspaces` now skips the whole worktree subtree; the canonical repo
+  remains the target. The explicitly-passed parent is added directly and never reaches the prune,
+  so pointing `--fleet` at a single worktree still works. Regression tests added.
+
 ### fixed (management-directive denylist — refuse inflected destructive/governance scopes)
 
 - **The management-directive scope denylist now fails closed on inflections.** The Rule-8 close-out

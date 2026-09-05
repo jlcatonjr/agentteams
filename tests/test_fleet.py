@@ -578,3 +578,50 @@ def test_target_argv_goose_direct(tmp_path):
     assert "--output" in argv
     assert str(ws) in argv
 
+
+@pytest.mark.parametrize("target", ["github", "claude-direct", "goose-direct"])
+def test_generate_targets_render_security_intel_offline(tmp_path, target):
+    """Every generate-based fleet target must pass --security-offline.
+
+    A fleet update is propagation, not a security-intelligence refresh. Without this
+    flag each per-repo render issues live NVD/OSV HTTPS fetches (the fetcher sleeps
+    ~7 s between NVD calls), so a fleet across dozens of repos stalls on the network —
+    observed as an indefinite SSL-read hang mid-run. The snapshot is refreshed out of
+    band by the daily-pipeline research stage, never by fleet.
+    """
+    ws = tmp_path / "ws"
+    desc = ws / ".github" / "agents" / "_build-description.json"
+    desc.parent.mkdir(parents=True)
+    desc.write_text("{}", encoding="utf-8")
+    argv = fleet._target_argv(target, ws, desc, dry_run=False, shrink_policy="preserve")
+    assert "--security-offline" in argv, (
+        f"{target} renders security intel live — fleet would hit the network per repo"
+    )
+
+
+def test_discover_prunes_linked_git_worktrees(tmp_path):
+    """A linked git worktree (`.git` is a file) is an ephemeral checkout of a repo
+    whose canonical copy (`.git` is a directory) is discovered separately. Updating it
+    is redundant churn and can land the fleet snapshot commit on an in-progress branch,
+    so discovery must skip the whole subtree."""
+    # canonical repo: .git is a directory
+    _mk_agent(tmp_path / "canonical" / ".github" / "agents", "x.agent.md")
+    (tmp_path / "canonical" / ".git").mkdir()
+    # linked worktree: .git is a file (gitdir pointer)
+    _mk_agent(tmp_path / "canonical-wt" / ".github" / "agents", "x.agent.md")
+    (tmp_path / "canonical-wt" / ".git").write_text(
+        "gitdir: /somewhere/canonical/.git/worktrees/canonical-wt\n", encoding="utf-8"
+    )
+
+    names = {str(w.relative_to(tmp_path)) for w in fleet.discover_workspaces(tmp_path, "both")}
+    assert names == {"canonical"}, f"linked worktree not pruned: {names}"
+
+
+def test_discover_keeps_parent_even_if_it_is_a_worktree(tmp_path):
+    """The explicit parent is added directly and never reaches the worktree prune, so
+    pointing --fleet at a single worktree still discovers it."""
+    _mk_agent(tmp_path / ".github" / "agents", "x.agent.md")
+    (tmp_path / ".git").write_text("gitdir: /elsewhere/.git/worktrees/wt\n", encoding="utf-8")
+    ws = fleet.discover_workspaces(tmp_path, "both")
+    assert tmp_path.resolve() in ws
+

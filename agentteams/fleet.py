@@ -316,6 +316,19 @@ def _walk(parent: Path):
         full = str(child)
         if name in _PRUNE_DIRS or any(s in full for s in _PRUNE_SUBSTR):
             continue
+        # A linked git worktree has a ``.git`` *file* (``gitdir: …``) rather than a
+        # ``.git`` directory. It is an ephemeral checkout of a repo whose canonical copy
+        # (``.git`` is a directory) is discovered separately, so updating it is redundant
+        # churn on a throwaway tree — worse, the fleet snapshot commit would land on
+        # whatever in-progress branch the worktree has checked out. Prune the whole
+        # subtree; the canonical repo remains the real target. (The parent passed to
+        # ``discover_workspaces`` is added directly and never reaches this walk, so
+        # pointing ``--fleet`` at a single worktree still works.)
+        try:
+            if (child / ".git").is_file():
+                continue
+        except (PermissionError, OSError):
+            continue
         yield child
         yield from _walk(child)
 
@@ -466,6 +479,18 @@ def _run_main(argv: list[str]) -> tuple[int, str]:
     return rc, buf.getvalue()
 
 
+#: A fleet update is a *propagation* operation, not a security-intelligence refresh.
+#: Rendering security-reference placeholders live would make each of the (potentially
+#: dozens of) per-repo builds issue NVD/OSV HTTPS fetches — slow, rate-limited (the
+#: fetcher sleeps between NVD calls), and network-dependent, which stalls the whole
+#: fleet run on a single unresponsive endpoint. So every generate-based target renders
+#: security intel from the cached snapshot only, mirroring how framework-watch
+#: placeholders are already hardcoded offline in the same render path (see
+#: generate.py's `build_framework_placeholders(offline=True)`). The snapshot is
+#: refreshed out of band by the daily-pipeline research stage, not by fleet.
+_FLEET_OFFLINE_SECURITY = ["--security-offline"]
+
+
 def _target_argv(target: str, ws: Path, descriptor: Path | None, dry_run: bool,
                  shrink_policy: str) -> list[str] | None:
     if target == "github":
@@ -478,6 +503,7 @@ def _target_argv(target: str, ws: Path, descriptor: Path | None, dry_run: bool,
             "--framework", "copilot-vscode",
             "--update", "--merge", "--yes",
             "--shrink-policy", shrink_policy,
+            *_FLEET_OFFLINE_SECURITY,
         ]
         if descriptor.name == "brief.json":
             argv.append("--no-scan")
@@ -490,6 +516,7 @@ def _target_argv(target: str, ws: Path, descriptor: Path | None, dry_run: bool,
             "--framework", "claude",
             "--update", "--merge", "--yes",
             "--shrink-policy", shrink_policy,
+            *_FLEET_OFFLINE_SECURITY,
         ]
     elif target == "claude-bridge":
         argv = [
@@ -508,6 +535,7 @@ def _target_argv(target: str, ws: Path, descriptor: Path | None, dry_run: bool,
             "--framework", "goose",
             "--update", "--merge", "--yes",
             "--shrink-policy", shrink_policy,
+            *_FLEET_OFFLINE_SECURITY,
         ]
         if descriptor.name == "brief.json":
             argv.append("--no-scan")
