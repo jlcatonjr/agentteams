@@ -3,7 +3,7 @@ name: Navigator — WebAppBackend
 description: "Repository structure navigation, project map maintenance, file location lookups, and dependency queries for WebAppBackend"
 user-invocable: false
 tools: ['read', 'search', 'execute']
-model: ["Claude Sonnet 4.6 (copilot)"]
+model: ["Claude Opus 4.8 (copilot)"]
 handoffs:
   - label: Return to Orchestrator
     agent: orchestrator

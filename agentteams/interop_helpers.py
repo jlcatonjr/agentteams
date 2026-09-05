@@ -120,7 +120,7 @@ def serialize_raw_fm_key(key: str, value: Any) -> str:
     adapters like _ensure_yaml_front_matter don't overwrite them with defaults.
 
     Handles scalars (``user-invocable: true``), flow lists
-    (``model: ["Claude Sonnet 4.6 (copilot)"]``), and block lists
+    (``model: ["Claude Opus 4.8 (copilot)"]``), and block lists
     (``agents:\\n  - slug1\\n  - slug2``).
     """
     if isinstance(value, bool):

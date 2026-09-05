@@ -3,7 +3,7 @@ name: AgentTeams Updater — {PROJECT_NAME}
 description: "Proposes — never applies — updates to deployed agentteams instances for {PROJECT_NAME}, covering the judgment cases the deterministic merge deliberately refuses"
 user-invocable: true
 tools: ['read', 'search']
-model: ["Claude Sonnet 4.6 (copilot)"]
+model: ["Claude Opus 4.8 (copilot)"]
 handoffs:
   - label: Return to Orchestrator
     agent: orchestrator

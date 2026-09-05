@@ -4,7 +4,7 @@ description: "Component expert for Authentication Module in WebAppBackend — pr
 user-invocable: false
 tools: ['read', 'search', 'agent']
 agents: ['primary-producer', 'adversarial']
-model: ["Claude Sonnet 4.6 (copilot)"]
+model: ["Claude Opus 4.8 (copilot)"]
 handoffs:
   - label: Vet Brief Before Drafting
     agent: adversarial

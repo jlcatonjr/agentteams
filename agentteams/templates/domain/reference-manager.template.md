@@ -4,7 +4,7 @@ description: "Manages the bibliography and reference database for {PROJECT_NAME}
 user-invocable: false
 tools: ['read', 'edit', 'search', 'retrieval']
 agents: ['conflict-auditor']
-model: ["Claude Sonnet 4.6 (copilot)"]
+model: ["Claude Opus 4.8 (copilot)"]
 handoffs:
   - label: Run Conflict Audit
     agent: conflict-auditor

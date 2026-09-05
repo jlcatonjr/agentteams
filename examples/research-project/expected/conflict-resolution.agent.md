@@ -3,7 +3,7 @@ name: Conflict Resolution — ResearchPaperProject
 description: "Makes ACCEPT/REJECT/REVISE decisions on conflicts flagged by the conflict auditor in ResearchPaperProject"
 user-invocable: false
 tools: ['edit', 'search', 'read']
-model: ["Claude Sonnet 4.6 (copilot)"]
+model: ["Claude Opus 4.8 (copilot)"]
 handoffs:
   - label: Return to Orchestrator
     agent: orchestrator

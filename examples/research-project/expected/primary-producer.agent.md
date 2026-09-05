@@ -4,7 +4,7 @@ description: "Drafts and revises deliverables in ResearchPaperProject from Compo
 user-invocable: false
 tools: ['read', 'edit', 'search']
 agents: ['style-guardian', 'cohesion-repairer', 'quality-auditor', 'conflict-auditor']
-model: ["Claude Sonnet 4.6 (copilot)"]
+model: ["Claude Opus 4.8 (copilot)"]
 handoffs:
   - label: Style Audit
     agent: style-guardian

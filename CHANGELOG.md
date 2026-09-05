@@ -6,6 +6,23 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### changed (standard model recommendation → Claude Opus 4.8)
+
+- **The default agent model hint is now `["Claude Opus 4.8 (copilot)"]` for every generated
+  agent**, replacing `["Claude Sonnet 4.6 (copilot)"]` (the orchestrator was already on Opus 4.8).
+  Changed the adapter defaults (`frameworks/copilot_vscode.py` `_YAML_DEFAULTS` + fallback front
+  matter; `bridge.py`), all agent templates (universal, domain, builder, and the parametric
+  workstream-expert), and the authoring/design docs; the ~200 `examples/*/expected/` golden
+  snapshots were regenerated to match. The value flows verbatim through every framework adapter
+  (no copilot→claude model-id translation), so one string change covers all outputs. The
+  framework-neutral `--cost-routing` tier system (`model_routing.py`, which assigns `cheap`/
+  `primary` tier *roles*, never model names) is unchanged and remains the opt-in way to run
+  read-only/governance agents on a cheaper model. Cleared by `@security` as a content-only bulk
+  edit (no enforcement module, capability, or privilege surface touched); audited by
+  `@adversarial` + `@conflict-auditor`. Claude Code's `/model` alias facts in the cheat-sheet
+  (`sonnet` = Sonnet 4.6, `opus` = Opus 4.8) are left as-is — they document the picker, not the
+  project's recommendation.
+
 ### fixed (main CI green — 5 pre-existing test failures)
 
 - **The CI `test` matrix is green on `main` again.** Five tests had been red since the 2026-09-01

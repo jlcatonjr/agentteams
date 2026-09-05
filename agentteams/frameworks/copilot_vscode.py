@@ -74,7 +74,7 @@ _REQUIRED_YAML_KEYS = {"name", "description", "user-invocable", "tools", "model"
 _YAML_DEFAULTS = {
     "user-invocable": "false",
     "tools": "['read', 'edit', 'search']",
-    "model": '["Claude Sonnet 4.6 (copilot)"]',
+    "model": '["Claude Opus 4.8 (copilot)"]',
 }
 
 # Patterns for team-ref filtering
@@ -278,7 +278,7 @@ def _ensure_yaml_front_matter(content: str, agent_slug: str, manifest: dict[str,
             f"description: \"{agent_name} agent for {project_name}\"\n"
             f"user-invocable: false\n"
             f"tools: ['read', 'edit', 'search']\n"
-            f"model: [\"Claude Sonnet 4.6 (copilot)\"]\n"
+            f"model: [\"Claude Opus 4.8 (copilot)\"]\n"
             f"---\n\n"
         )
         return front_matter + content

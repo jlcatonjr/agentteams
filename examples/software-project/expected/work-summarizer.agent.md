@@ -4,7 +4,7 @@ description: "Synthesizes daily, weekly, and monthly work summaries from canonic
 user-invocable: true
 tools: ['read', 'search', 'execute', 'edit', 'agent']
 agents: ['technical-validator', 'adversarial', 'conflict-auditor']
-model: ["Claude Sonnet 4.6 (copilot)"]
+model: ["Claude Opus 4.8 (copilot)"]
 handoffs:
   - label: Verify Summary Accuracy
     agent: technical-validator

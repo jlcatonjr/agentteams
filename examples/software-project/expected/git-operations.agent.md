@@ -3,7 +3,7 @@ name: Git Operations — WebAppBackend
 description: "Executes and governs Git and GitHub operations in WebAppBackend, including commit/push, pull/merge/rebase, conflict handling, and recovery workflows."
 user-invocable: true
 tools: ['read', 'execute', 'search']
-model: ["Claude Sonnet 4.6 (copilot)"]
+model: ["Claude Opus 4.8 (copilot)"]
 handoffs:
   - label: Return to Orchestrator
     agent: orchestrator

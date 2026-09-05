@@ -4,7 +4,7 @@ description: "Repairs within-section cohesion failures in WebAppBackend delivera
 user-invocable: false
 tools: ['read', 'edit']
 agents: ['quality-auditor']
-model: ["Claude Sonnet 4.6 (copilot)"]
+model: ["Claude Opus 4.8 (copilot)"]
 handoffs:
   - label: Quality Re-Check
     agent: quality-auditor

@@ -4,7 +4,7 @@ description: "Read-only audit agent that inspects deliverables in ProjectReposit
 user-invocable: false
 tools: ['read', 'search']
 agents: ['primary-producer', 'cohesion-repairer']
-model: ["Claude Sonnet 4.6 (copilot)"]
+model: ["Claude Opus 4.8 (copilot)"]
 handoffs:
   - label: Route Corrections to Primary Producer
     agent: primary-producer

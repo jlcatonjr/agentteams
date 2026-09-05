@@ -3,7 +3,7 @@ name: Cleanup — ProjectRepositories
 description: "Removes stale drafts, build artifacts, and orphaned files from ProjectRepositories with mandatory safety checks"
 user-invocable: false
 tools: ['edit', 'search', 'execute']
-model: ["Claude Sonnet 4.6 (copilot)"]
+model: ["Claude Opus 4.8 (copilot)"]
 handoffs:
   - label: Return to Orchestrator
     agent: orchestrator

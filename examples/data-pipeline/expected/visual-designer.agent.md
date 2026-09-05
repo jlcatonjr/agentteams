@@ -4,7 +4,7 @@ description: "Creates and revises diagrams and figures for SalesDataPipeline usi
 user-invocable: false
 tools: ['read', 'edit', 'execute', 'search']
 agents: ['format-converter', 'quality-auditor']
-model: ["Claude Sonnet 4.6 (copilot)"]
+model: ["Claude Opus 4.8 (copilot)"]
 handoffs:
   - label: Convert Figure Format
     agent: format-converter

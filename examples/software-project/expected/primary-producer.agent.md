@@ -4,7 +4,7 @@ description: "Drafts and revises deliverables in WebAppBackend from Component Br
 user-invocable: false
 tools: ['read', 'edit', 'search']
 agents: ['cohesion-repairer', 'quality-auditor', 'conflict-auditor']
-model: ["Claude Sonnet 4.6 (copilot)"]
+model: ["Claude Opus 4.8 (copilot)"]
 handoffs:
   - label: Cohesion Audit
     agent: cohesion-repairer
