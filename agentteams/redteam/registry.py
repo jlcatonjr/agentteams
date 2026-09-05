@@ -48,6 +48,13 @@ CONTROL_PREFIX = "CONTROL:"
 
 #: Ledger locations, relative to the repository (or generated-team) root.
 ACCEPTED_WEAKNESSES_REL = "references/redteam-accepted-weaknesses.csv"
+#: Public, TRACKED companion to ACCEPTED_WEAKNESSES_REL. Holds only publicly-disclosable
+#: acceptances (documented limits / bounded partials of the *public* tool) so the CI audit — which
+#: cannot see the gitignored private ledger — can still confirm them. The private ledger stays the
+#: "genuine weakness map" for sensitive entries; the two are kept disjoint by provenance
+#: (test_redteam_public_acceptances.py), and adding a PID here is an @security-reviewed
+#: classification act (issue #16, B-c1/B-c2).
+PUBLIC_ACCEPTANCES_REL = "references/redteam-public-acceptances.csv"
 UNCONTROLLED_PROBES_REL = "references/redteam-uncontrolled-probes.csv"
 VERIFIERS_REL = "references/redteam-verifiers.csv"
 CALLPATH_PARITY_REL = "references/redteam-callpath-parity.csv"
@@ -420,8 +427,15 @@ def read_csv_ledger(path: Path, *, required_columns: tuple[str, ...]) -> list[di
 def load_accepted_weaknesses(root: Path) -> dict[str, tuple[str, str]]:
     """Load the F-6 ledger: probes allowed to return something other than DEFENDED.
 
-    This is the single source of truth. ``tests/test_constitutional_redteam.py`` reads it too,
-    so a weakness cannot be accepted in the suite and unaccepted in the daily audit.
+    The union of two ledgers: the private, gitignored :data:`ACCEPTED_WEAKNESSES_REL` (the
+    genuine weakness map, invisible to CI) and the public, tracked
+    :data:`PUBLIC_ACCEPTANCES_REL` (publicly-disclosable acceptances the CI audit can see). This
+    is still the single source of truth F-6 and ``tests/test_constitutional_redteam.py`` read, so
+    a weakness cannot be accepted in the suite and unaccepted in the daily audit. The private
+    ledger wins on the (expected-empty) intersection, so a public row can never shadow or override
+    a sensitive private classification; the two are asserted disjoint by
+    ``tests/test_redteam_public_acceptances.py``. This function only READS both files — it never
+    copies a private row into the public one (issue #16, B-c2).
 
     Args:
         root: Repository (or generated-team) root.
@@ -429,10 +443,18 @@ def load_accepted_weaknesses(root: Path) -> dict[str, tuple[str, str]]:
     Returns:
         ``pid -> (outcome, reason)``.
     """
-    rows = read_csv_ledger(
+    public = read_csv_ledger(
+        root / PUBLIC_ACCEPTANCES_REL, required_columns=("pid", "outcome", "reason")
+    )
+    private = read_csv_ledger(
         root / ACCEPTED_WEAKNESSES_REL, required_columns=("pid", "outcome", "reason")
     )
-    return {row["pid"]: (row["outcome"], row["reason"]) for row in rows}
+    merged: dict[str, tuple[str, str]] = {
+        row["pid"]: (row["outcome"], row["reason"]) for row in public
+    }
+    # Private last so a sensitive classification always wins over an accidental public duplicate.
+    merged.update({row["pid"]: (row["outcome"], row["reason"]) for row in private})
+    return merged
 
 
 def load_uncontrolled_exemptions(root: Path) -> dict[str, str]:
@@ -450,6 +472,7 @@ def load_uncontrolled_exemptions(root: Path) -> dict[str, str]:
 
 __all__ = [
     "ACCEPTED_WEAKNESSES_REL",
+    "PUBLIC_ACCEPTANCES_REL",
     "CALLPATH_PARITY_REL",
     "CONTROL_PREFIX",
     "DEFAULT_COLLECTOR",

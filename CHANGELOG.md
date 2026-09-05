@@ -6,6 +6,33 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### fixed (standing red-team audit — CI FINDINGS, issue #16 + docs-freshness #18)
+
+- **The standing red-team audit now reaches a trustworthy CLEAN verdict in CI.** After the
+  harness was un-broken (#1), the audit ran and reported FINDINGS that were artifacts of the
+  public-release scrub, not real weaknesses. Three groups, each fixed on its merits:
+  **(A)** eleven verifier-shaped functions in `cli/grants.py`, `cli/decision_log.py`, and
+  `rank_conformance.py` are now registered in the tracked `redteam-verifiers.csv` — nine as
+  genuine verifiers with real sensitivity + negative-control test pairs (new
+  `tests/test_decision_log_verifiers.py` covers the previously-untested C-2 HALT/chain/authorizing
+  verifiers), two digest/matcher helpers as `not-a-verifier` justified by a real caller test.
+  **(B)** documented, publicly-disclosable acceptances (A5, A9, A10, B4, C3, E3) move to a new
+  **tracked** `references/redteam-public-acceptances.csv`; `registry.load_accepted_weaknesses`
+  now unions it with the still-private `accepted-weaknesses.csv` (the genuine weakness map stays
+  private; the two are kept disjoint by provenance) so CI can see the acceptances F-6 requires.
+  **(C)** E3 and E4 no longer flip to EXPLOITED in CI: E3 measures the **tracked** hook template
+  instead of the gitignored installed copy (environment-independent DOCUMENTED-LIMIT), and
+  `integrity.verify` plus E4's anti-vacuity check treat an absent `INSTALLED_COPIES` member (the
+  two machine-local hook copies) as benign while still flagging a **present** edited copy — the
+  tamper tooth is preserved (extends the 2026-08-26 hook-pin clearance, does not reverse it). The
+  probe baseline and enforcement-integrity manifest are regenerated accordingly. Cleared by
+  `@security` (two CONDITIONAL PASS clearances, all conditions met); audited by `@adversarial` and
+  `@conflict-auditor`, which corrected the initial plan (E3 was EXPLOITED-in-CI, not a stable
+  limit; the depin option was rejected as blunting the tamper tooth).
+- **docs (#18):** `api-reference/integrity.md`'s enforcement-module list is brought current with
+  `ENFORCEMENT_MODULES` (it had omitted the sandbox scripts, grants/rank/decision-log modules, and
+  the hooks) and documents `INSTALLED_COPIES`.
+
 ### fixed (standing red-team audit — HARNESS BROKEN, issue #1)
 
 - **The standing red-team audit no longer reports HARNESS BROKEN.** Two independent instrument

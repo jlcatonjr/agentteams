@@ -161,6 +161,22 @@ def test_verify_grants_reports_problems(tmp_path):
     assert len(problems) == 1 and "stale" in problems[0]
 
 
+def test_verify_grants_clean_ledger_returns_no_problems(tmp_path):
+    # F-1 negative control for verify_grants: an all-valid ledger reports zero problems, so the
+    # audit's output does NOT change for valid input.
+    _issue(tmp_path, grant_id="ok-1", holder_team="team-a")
+    _issue(tmp_path, grant_id="ok-2", holder_team="team-a", target_path="/abs/b/other")
+    assert grants.verify_grants(tmp_path, key=_KEY) == []
+
+
+def test_assert_approver_on_roster_accepts_listed_approver(tmp_path):
+    # F-1 negative control for _assert_approver_on_roster: an approver present on the roster is
+    # accepted (no raise). The sensitivity direction is test_issue_rejects_offroster_approver.
+    _write_roster(tmp_path, "alice", "bob")
+    grants._assert_approver_on_roster("alice", tmp_path)  # must not raise
+    grants._assert_approver_on_roster("@bob", tmp_path)  # @ and case are normalized
+
+
 def test_issue_rejects_offroster_approver(tmp_path):
     # D2: an off-roster approver cannot even enter the ledger.
     _write_roster(tmp_path, "bob")  # alice is NOT on the roster
