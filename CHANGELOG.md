@@ -18,6 +18,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   (`rm` is never caught inside `transform`). Also added `wipe`/`truncat`/`revert`/`destruct`.
   Fail-closed by design: a false refusal only makes the agent ask the operator. Regression test
   added.
+- **De-flaked `test_docs_freshness_watch.py` on macOS CI.** `evaluate()`'s internal `git log`/
+  `git diff` could trip git's `gc --auto`, whose background maintenance writes
+  `.git/objects/maintenance.lock` into the tree mid-test — a git side effect, not a write by
+  `evaluate` — which made `test_evaluation_writes_nothing_to_the_repo` fail non-deterministically
+  on the macOS runners (both 3.11 and 3.12) while ubuntu stayed green. The `repo` fixture now sets
+  `gc.auto=0` and `maintenance.auto=false`, removing the nondeterminism at its source so the
+  "writes nothing" assertion stays strict rather than being loosened.
 
 ### added (management-repository endowment — authenticated relay of operator direction)
 
