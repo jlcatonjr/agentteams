@@ -3,7 +3,7 @@ name: Security — WebAppBackend
 description: "Top-priority security sentinel: reviews actions for credential exposure, destructive operations, sensitive content leakage, and reference integrity before any sensitive action proceeds"
 user-invocable: false
 tools: ['read', 'search']
-model: ["Claude Sonnet 4.6 (copilot)"]
+model: ["Claude Opus 4.8 (copilot)"]
 handoffs:
   - label: Return to Orchestrator
     agent: orchestrator
@@ -334,7 +334,7 @@ Apply only the baseline(s) matching the actual deployment target(s); skip this g
 ### Current Threat Intelligence Snapshot
 
 <!-- AGENTTEAMS:BEGIN threat_intelligence v=1 -->
-Generated at: `2026-08-31T15:43:09Z`
+Generated at: `2026-09-05T14:07:04Z`
 
 **Sources:**
 

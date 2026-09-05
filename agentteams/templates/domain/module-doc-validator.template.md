@@ -4,7 +4,7 @@ description: "Read-only audit agent that verifies documentation-source parity fo
 user-invocable: false
 tools: ['read', 'search']
 agents: ['module-doc-author', 'conflict-auditor']
-model: ["Claude Sonnet 4.6 (copilot)"]
+model: ["Claude Opus 4.8 (copilot)"]
 handoffs:
   - label: Route Corrections to Module Doc Author
     agent: module-doc-author

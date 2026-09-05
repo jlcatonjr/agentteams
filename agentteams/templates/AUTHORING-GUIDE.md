@@ -115,7 +115,7 @@ description: "One-sentence description of the agent's role."
 user-invocable: true|false
 tools: ['read', 'edit', 'search']     # Use flow sequence — always valid YAML
 agents:{AGENT_SLUG_LIST}               # Block sequence via placeholder — no brackets
-model: ["Claude Sonnet 4.6 (copilot)"]
+model: ["Claude Opus 4.8 (copilot)"]
 handoffs:
   - label: "Action label"
     agent: target-agent-slug
@@ -387,7 +387,7 @@ The adapter (`agentteams/frameworks/copilot_vscode.py`) validates and supplement
 | `description` | string | Quoted, single sentence |
 | `user-invocable` | boolean | `true` for user-facing agents, `false` for governance |
 | `tools` | flow sequence | `['read', 'edit', 'search']` — valid YAML flow sequence |
-| `model` | flow sequence | `["Claude Sonnet 4.6 (copilot)"]` |
+| `model` | flow sequence | `["Claude Opus 4.8 (copilot)"]` |
 
 Optional fields:
 - `agents:` — block sequence of agent slugs this agent can invoke

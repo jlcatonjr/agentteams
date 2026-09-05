@@ -4,7 +4,7 @@ description: "Locates and verifies official documentation, API surfaces, and usa
 user-invocable: false
 tools: ['read', 'search', 'retrieval']
 agents: ['adversarial', 'conflict-auditor']
-model: ["Claude Sonnet 4.6 (copilot)"]
+model: ["Claude Opus 4.8 (copilot)"]
 handoffs:
   - label: Update Brief and Generated Docs
     agent: agent-updater

@@ -4,7 +4,7 @@ description: "Converts deliverables from their source format to Jupyter notebook
 user-invocable: false
 tools: ['read', 'edit', 'execute']
 agents: ['output-compiler', 'quality-auditor']
-model: ["Claude Sonnet 4.6 (copilot)"]
+model: ["Claude Opus 4.8 (copilot)"]
 handoffs:
   - label: Pass to Output Compiler
     agent: output-compiler

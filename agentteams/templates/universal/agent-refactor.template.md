@@ -4,7 +4,7 @@ description: "Extracts shared data to reference files and enforces spec complian
 user-invocable: false
 tools: ['edit', 'search', 'agent']
 agents: ['conflict-auditor']
-model: ["Claude Sonnet 4.6 (copilot)"]
+model: ["Claude Opus 4.8 (copilot)"]
 handoffs:
   - label: Run Conflict Audit
     agent: conflict-auditor

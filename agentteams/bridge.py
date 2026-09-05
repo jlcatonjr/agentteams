@@ -752,7 +752,7 @@ def _render_target_files(
             "description: \"Bridge entrypoint into source framework agent team\"\n"
             "user-invocable: true\n"
             "tools: ['read', 'search']\n"
-            "model: [\"Claude Sonnet 4.6 (copilot)\"]\n"
+            "model: [\"Claude Opus 4.8 (copilot)\"]\n"
             "---\n\n"
             "# Bridge Orchestrator\n\n"
             f"Read `{rel_inventory}` and route work through source orchestrator.\n"

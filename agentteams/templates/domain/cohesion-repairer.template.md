@@ -4,7 +4,7 @@ description: "Repairs within-section cohesion failures in {PROJECT_NAME} deliver
 user-invocable: false
 tools: ['read', 'edit']
 agents: ['style-guardian', 'quality-auditor']
-model: ["Claude Sonnet 4.6 (copilot)"]
+model: ["Claude Opus 4.8 (copilot)"]
 handoffs:
   - label: Style Audit After Repairs
     agent: style-guardian

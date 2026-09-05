@@ -118,7 +118,7 @@ description: "{One-sentence description}"
 user-invocable: true|false
 tools: ['read', 'edit', 'search', 'execute', 'todo', 'agent']
 agents: [downstream-agent-slugs]
-model: ["Claude Sonnet 4.6 (copilot)"]
+model: ["Claude Opus 4.8 (copilot)"]
 handoffs:
   - label: {Handoff Label}
     agent: {agent-slug}

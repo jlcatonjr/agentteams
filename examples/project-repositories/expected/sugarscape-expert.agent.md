@@ -4,7 +4,7 @@ description: "Component expert for Sugarscape Agent-Based Model in ProjectReposi
 user-invocable: false
 tools: ['read', 'search', 'agent']
 agents: ['primary-producer', 'adversarial', 'reference-manager']
-model: ["Claude Sonnet 4.6 (copilot)"]
+model: ["Claude Opus 4.8 (copilot)"]
 handoffs:
   - label: Vet Brief Before Drafting
     agent: adversarial

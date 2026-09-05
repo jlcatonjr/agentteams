@@ -4,7 +4,7 @@ description: "Validates retrieval integration contracts in {PROJECT_NAME} — qu
 user-invocable: false
 tools: ['read', 'search', 'execute']
 agents: ['technical-validator', 'adversarial', 'conflict-auditor']
-model: ["Claude Sonnet 4.6 (copilot)"]
+model: ["Claude Opus 4.8 (copilot)"]
 handoffs:
   - label: Technical Validation
     agent: technical-validator

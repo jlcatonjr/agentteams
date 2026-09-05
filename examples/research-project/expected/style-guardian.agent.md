@@ -4,7 +4,7 @@ description: "Enforces voice and style fidelity in ResearchPaperProject delivera
 user-invocable: false
 tools: ['read', 'edit', 'search']
 agents: ['primary-producer']
-model: ["Claude Sonnet 4.6 (copilot)"]
+model: ["Claude Opus 4.8 (copilot)"]
 handoffs:
   - label: Route Style Corrections
     agent: primary-producer

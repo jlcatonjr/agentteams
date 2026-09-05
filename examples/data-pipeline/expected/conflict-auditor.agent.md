@@ -4,7 +4,7 @@ description: "Detects logical conflicts across deliverables, agent documentation
 user-invocable: false
 tools: ['read', 'search']
 agents: ['conflict-resolution', 'agent-updater', 'technical-validator']
-model: ["Claude Sonnet 4.6 (copilot)"]
+model: ["Claude Opus 4.8 (copilot)"]
 handoffs:
   - label: Return to Orchestrator
     agent: orchestrator

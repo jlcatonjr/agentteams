@@ -4,7 +4,7 @@ description: "Drafts and revises pip-compatible module documentation for {PROJEC
 user-invocable: false
 tools: ['read', 'edit', 'search']
 agents: ['module-doc-validator', 'conflict-auditor']
-model: ["Claude Sonnet 4.6 (copilot)"]
+model: ["Claude Opus 4.8 (copilot)"]
 handoffs:
   - label: Validate Documentation Accuracy
     agent: module-doc-validator

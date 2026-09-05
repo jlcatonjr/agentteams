@@ -493,7 +493,7 @@
       "description": "\"Top-priority security sentinel: reviews actions for credential exposure, destructive operations, sensitive content leakage, and reference integrity before any sensitive action proceeds\"",
       "user-invocable": "false",
       "tools": "['read', 'search']",
-      "model": "[\"Claude Sonnet 4.6 (copilot)\"]",
+      "model": "[\"Claude Opus 4.8 (copilot)\"]",
       "handoffs": ""
     },
     "orchestrator.agent.md": {
@@ -510,7 +510,7 @@
       "description": "\"Repository structure navigation, project map maintenance, file location lookups, and dependency queries for ResearchPaperProject\"",
       "user-invocable": "false",
       "tools": "['read', 'search', 'execute']",
-      "model": "[\"Claude Sonnet 4.6 (copilot)\"]",
+      "model": "[\"Claude Opus 4.8 (copilot)\"]",
       "handoffs": ""
     },
     "code-hygiene.agent.md": {
@@ -518,7 +518,7 @@
       "description": "\"Read-only auditor that enforces modular architecture, file hygiene, script lifecycle, anti-sprawl rules, and agent documentation quality. Delegates removals to @cleanup; delegates structural extraction to @agent-refactor.\"",
       "user-invocable": "false",
       "tools": "['read', 'search']",
-      "model": "[\"Claude Sonnet 4.6 (copilot)\"]",
+      "model": "[\"Claude Opus 4.8 (copilot)\"]",
       "handoffs": ""
     },
     "adversarial.agent.md": {
@@ -526,7 +526,7 @@
       "description": "\"Presupposition critic: challenges the assumptions underlying any plan, proposal, or diagnosis produced by the agent team. Traces how justified changes in presuppositions cascade through dependent logic.\"",
       "user-invocable": "true",
       "tools": "['read', 'search']",
-      "model": "[\"Claude Sonnet 4.6 (copilot)\"]",
+      "model": "[\"Claude Opus 4.8 (copilot)\"]",
       "handoffs": ""
     },
     "conflict-auditor.agent.md": {
@@ -535,7 +535,7 @@
       "user-invocable": "false",
       "tools": "['read', 'search']",
       "agents": "['conflict-resolution', 'agent-updater', 'technical-validator']",
-      "model": "[\"Claude Sonnet 4.6 (copilot)\"]",
+      "model": "[\"Claude Opus 4.8 (copilot)\"]",
       "handoffs": ""
     },
     "conflict-resolution.agent.md": {
@@ -543,7 +543,7 @@
       "description": "\"Makes ACCEPT/REJECT/REVISE decisions on conflicts flagged by the conflict auditor in ResearchPaperProject\"",
       "user-invocable": "false",
       "tools": "['edit', 'search', 'read']",
-      "model": "[\"Claude Sonnet 4.6 (copilot)\"]",
+      "model": "[\"Claude Opus 4.8 (copilot)\"]",
       "handoffs": ""
     },
     "cleanup.agent.md": {
@@ -551,7 +551,7 @@
       "description": "\"Removes stale drafts, build artifacts, and orphaned files from ResearchPaperProject with mandatory safety checks\"",
       "user-invocable": "false",
       "tools": "['edit', 'search', 'execute']",
-      "model": "[\"Claude Sonnet 4.6 (copilot)\"]",
+      "model": "[\"Claude Opus 4.8 (copilot)\"]",
       "handoffs": ""
     },
     "agent-updater.agent.md": {
@@ -560,7 +560,7 @@
       "user-invocable": "false",
       "tools": "['edit', 'search', 'execute', 'agent']",
       "agents": "['adversarial', 'conflict-auditor', 'agent-refactor']",
-      "model": "[\"Claude Sonnet 4.6 (copilot)\"]",
+      "model": "[\"Claude Opus 4.8 (copilot)\"]",
       "handoffs": ""
     },
     "agent-refactor.agent.md": {
@@ -569,7 +569,7 @@
       "user-invocable": "false",
       "tools": "['edit', 'search', 'agent']",
       "agents": "['conflict-auditor']",
-      "model": "[\"Claude Sonnet 4.6 (copilot)\"]",
+      "model": "[\"Claude Opus 4.8 (copilot)\"]",
       "handoffs": ""
     },
     "repo-liaison.agent.md": {
@@ -577,7 +577,7 @@
       "description": "\"Tracks agent documentation in repositories adjacent to ResearchPaperProject, communicates cross-repository impacts, maintains the adjacent-repos registry, and coordinates between orchestrators when this project's activity affects neighboring agent infrastructures.\"",
       "user-invocable": "false",
       "tools": "['read', 'edit', 'search', 'execute', 'agent']",
-      "model": "[\"Claude Sonnet 4.6 (copilot)\"]",
+      "model": "[\"Claude Opus 4.8 (copilot)\"]",
       "handoffs": ""
     },
     "git-operations.agent.md": {
@@ -585,7 +585,7 @@
       "description": "\"Executes and governs Git and GitHub operations in ResearchPaperProject, including commit/push, pull/merge/rebase, conflict handling, and recovery workflows.\"",
       "user-invocable": "true",
       "tools": "['read', 'execute', 'search']",
-      "model": "[\"Claude Sonnet 4.6 (copilot)\"]",
+      "model": "[\"Claude Opus 4.8 (copilot)\"]",
       "handoffs": ""
     },
     "work-summarizer.agent.md": {
@@ -594,7 +594,7 @@
       "user-invocable": "true",
       "tools": "['read', 'search', 'execute', 'edit', 'agent']",
       "agents": "['technical-validator', 'adversarial', 'conflict-auditor']",
-      "model": "[\"Claude Sonnet 4.6 (copilot)\"]",
+      "model": "[\"Claude Opus 4.8 (copilot)\"]",
       "handoffs": ""
     },
     "primary-producer.agent.md": {
@@ -603,7 +603,7 @@
       "user-invocable": "false",
       "tools": "['read', 'edit', 'search']",
       "agents": "['style-guardian', 'cohesion-repairer', 'quality-auditor', 'conflict-auditor']",
-      "model": "[\"Claude Sonnet 4.6 (copilot)\"]",
+      "model": "[\"Claude Opus 4.8 (copilot)\"]",
       "handoffs": ""
     },
     "quality-auditor.agent.md": {
@@ -612,7 +612,7 @@
       "user-invocable": "false",
       "tools": "['read', 'search']",
       "agents": "['primary-producer', 'cohesion-repairer', 'style-guardian']",
-      "model": "[\"Claude Sonnet 4.6 (copilot)\"]",
+      "model": "[\"Claude Opus 4.8 (copilot)\"]",
       "handoffs": ""
     },
     "cohesion-repairer.agent.md": {
@@ -621,7 +621,7 @@
       "user-invocable": "false",
       "tools": "['read', 'edit']",
       "agents": "['style-guardian', 'quality-auditor']",
-      "model": "[\"Claude Sonnet 4.6 (copilot)\"]",
+      "model": "[\"Claude Opus 4.8 (copilot)\"]",
       "handoffs": ""
     },
     "style-guardian.agent.md": {
@@ -630,7 +630,7 @@
       "user-invocable": "false",
       "tools": "['read', 'edit', 'search']",
       "agents": "['primary-producer']",
-      "model": "[\"Claude Sonnet 4.6 (copilot)\"]",
+      "model": "[\"Claude Opus 4.8 (copilot)\"]",
       "handoffs": ""
     },
     "technical-validator.agent.md": {
@@ -639,7 +639,7 @@
       "user-invocable": "false",
       "tools": "['read', 'search']",
       "agents": "['primary-producer', 'reference-manager', 'conflict-auditor']",
-      "model": "[\"Claude Sonnet 4.6 (copilot)\"]",
+      "model": "[\"Claude Opus 4.8 (copilot)\"]",
       "handoffs": ""
     },
     "format-converter.agent.md": {
@@ -648,7 +648,7 @@
       "user-invocable": "false",
       "tools": "['read', 'edit', 'execute']",
       "agents": "['output-compiler', 'quality-auditor']",
-      "model": "[\"Claude Sonnet 4.6 (copilot)\"]",
+      "model": "[\"Claude Opus 4.8 (copilot)\"]",
       "handoffs": ""
     },
     "reference-manager.agent.md": {
@@ -657,7 +657,7 @@
       "user-invocable": "false",
       "tools": "['read', 'edit', 'search', 'retrieval']",
       "agents": "['conflict-auditor']",
-      "model": "[\"Claude Sonnet 4.6 (copilot)\"]",
+      "model": "[\"Claude Opus 4.8 (copilot)\"]",
       "handoffs": ""
     },
     "output-compiler.agent.md": {
@@ -666,7 +666,7 @@
       "user-invocable": "false",
       "tools": "['read', 'edit', 'execute']",
       "agents": "['format-converter', 'technical-validator']",
-      "model": "[\"Claude Sonnet 4.6 (copilot)\"]",
+      "model": "[\"Claude Opus 4.8 (copilot)\"]",
       "handoffs": ""
     },
     "tool-doc-researcher.agent.md": {
@@ -675,7 +675,7 @@
       "user-invocable": "false",
       "tools": "['read', 'search', 'retrieval']",
       "agents": "['adversarial', 'conflict-auditor']",
-      "model": "[\"Claude Sonnet 4.6 (copilot)\"]",
+      "model": "[\"Claude Opus 4.8 (copilot)\"]",
       "handoffs": ""
     },
     "ch01-introduction-expert.agent.md": {
@@ -684,7 +684,7 @@
       "user-invocable": "false",
       "tools": "['read', 'search', 'agent']",
       "agents": "['primary-producer', 'adversarial', 'reference-manager']",
-      "model": "[\"Claude Sonnet 4.6 (copilot)\"]",
+      "model": "[\"Claude Opus 4.8 (copilot)\"]",
       "handoffs": ""
     },
     "ch02-literature-expert.agent.md": {
@@ -693,7 +693,7 @@
       "user-invocable": "false",
       "tools": "['read', 'search', 'agent']",
       "agents": "['primary-producer', 'adversarial', 'reference-manager']",
-      "model": "[\"Claude Sonnet 4.6 (copilot)\"]",
+      "model": "[\"Claude Opus 4.8 (copilot)\"]",
       "handoffs": ""
     },
     "team-builder.agent.md": {
@@ -701,7 +701,7 @@
       "description": "\"Interactively constructs a complete agent team for a new or existing VS Code Copilot project by conducting an intake interview and invoking the build_team pipeline\"",
       "user-invocable": "true",
       "tools": "['read', 'edit', 'search', 'execute', 'todo']",
-      "model": "[\"Claude Sonnet 4.6 (copilot)\"]"
+      "model": "[\"Claude Opus 4.8 (copilot)\"]"
     },
     "content-enricher.agent.md": {
       "name": "Content Enricher \u2014 ResearchPaperProject",
@@ -709,7 +709,7 @@
       "user-invocable": "true",
       "tools": "['read', 'edit', 'search']",
       "agents": "['primary-producer', 'technical-validator', 'adversarial', 'conflict-auditor']",
-      "model": "[\"Claude Sonnet 4.6 (copilot)\"]",
+      "model": "[\"Claude Opus 4.8 (copilot)\"]",
       "handoffs": ""
     }
   }

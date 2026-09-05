@@ -4,7 +4,7 @@ description: "Outcome-verification specialist for SalesDataPipeline: validates c
 user-invocable: false
 tools: ['read', 'search', 'execute']
 agents: ['orchestrator', 'adversarial', 'conflict-auditor', 'technical-validator', 'security']
-model: ["Claude Sonnet 4.6 (copilot)"]
+model: ["Claude Opus 4.8 (copilot)"]
 handoffs:
   - label: Return to Orchestrator
     agent: orchestrator
