@@ -6,6 +6,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### fixed (management-directive denylist — refuse inflected destructive/governance scopes)
+
+- **The management-directive scope denylist now fails closed on inflections.** The Rule-8 close-out
+  of the endowment feature found the word-boundary matcher refused `delete`/`overwrite`/
+  `reference-template` but let inflected forms (`deletes`, `deleting`, `overwrites`,
+  `reference-templates`) slip through as "benign" — a fail-OPEN gap versus the documented
+  "auto-refused regardless of a valid signature" guarantee. `scope_is_allowed` now matches denylist
+  **stems at a word start** (e.g. `delet`, `overwrit`, `prun`, `forc`, `merg`, `integrit`, `enforc`,
+  `management-authorit`), which catches every inflection while still not matching a token mid-word
+  (`rm` is never caught inside `transform`). Also added `wipe`/`truncat`/`revert`/`destruct`.
+  Fail-closed by design: a false refusal only makes the agent ask the operator. Regression test
+  added.
+
 ### added (management-repository endowment — authenticated relay of operator direction)
 
 - **A repository can now be endowed as a MANAGEMENT repository** whose *signed* directives relay the

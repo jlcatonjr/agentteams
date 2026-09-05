@@ -282,3 +282,20 @@ def test_scope_denylist_uses_word_boundaries_not_substrings():
     for bad in ("rm-tmp", "delete-logs", "cross-repo-sync", "force-push"):
         assert md.scope_is_allowed(bad) is False, bad
 
+
+
+def test_denylist_refuses_inflected_destructive_and_governance_scopes():
+    """Fail-closed: stem matching must catch inflections (deletes/deleting/reference-templates),
+    not just the bare verb — the Rule-8 close-out gap (2026-W36). Benign words stay allowed."""
+    from agentteams.cli import management_directives as md
+    for bad in ("deletes-stale-branches", "deleted-records", "deleting-logs", "deletion-run",
+                "overwrites-config", "overwriting-file", "removes-files", "destroys-index",
+                "destruction-run", "purges-cache", "pruning-backups", "resetting-state",
+                "drops-table", "dropping-rows", "pushes-remote", "deploying-svc", "merges-branch",
+                "merging", "wipe-db", "truncate-table", "revert-migration", "granting-widen",
+                "edit-reference-templates", "enforcing-gate", "edit-integrity-manifest"):
+        assert md.scope_is_allowed(bad) is False, bad
+    for benign in ("ingest-transform-data", "confirm-order", "format-report", "transform-load",
+                   "migrate-schema", "generate-invoice", "render-chart", "validate-input",
+                   "normalize-records", "draft-weekly-report"):
+        assert md.scope_is_allowed(benign) is True, benign
