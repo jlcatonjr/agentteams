@@ -116,11 +116,11 @@ SCRATCH="$(cd "$SCRATCH" && pwd)"
 
 # credential + caller read-excludes: only EXISTING paths (masking a missing path fails fail-shut: D-3).
 MASK=( "$HOME/.ssh" "$HOME/.aws" "$HOME/.gnupg" "$HOME/.kube" "$HOME/.config/gcloud" "$HOME/.azure" )
-MASK+=( "${EXCLUDES[@]}" )
+MASK+=( ${EXCLUDES[@]+"${EXCLUDES[@]}"} )
 MASKED=()
 for p in "${MASK[@]}"; do [ -n "$p" ] && [ -e "$p" ] && MASKED+=( "$p" ); done
 # ensure writable paths exist so the mount source is real
-for w in "${WRITABLES[@]}"; do [ -n "$w" ] && { mkdir -p "$w" 2>/dev/null || die "cannot create --writable '$w'"; }; done
+for w in ${WRITABLES[@]+"${WRITABLES[@]}"}; do [ -n "$w" ] && { mkdir -p "$w" 2>/dev/null || die "cannot create --writable '$w'"; }; done
 
 OS="$(uname -s)"
 
@@ -137,9 +137,9 @@ build_linux() {   # -> RUN[] using bwrap
                    --bind "$SCRATCH" "$SCRATCH" --chdir "$SCRATCH"
                    --die-with-parent --new-session
                    --unshare-user --unshare-ipc --unshare-pid --unshare-uts --unshare-cgroup )
-  local w; for w in "${WRITABLES[@]}"; do [ -n "$w" ] && BW+=( --bind "$w" "$w" ); done
-  local kv; for kv in "${SETENVS[@]}"; do [ -n "$kv" ] && { case "$kv" in *=*) BW+=( --setenv "${kv%%=*}" "${kv#*=}" ) ;; *) die "--setenv expects VAR=VAL (got '$kv')" ;; esac; }; done
-  local m; for m in "${MASKED[@]}"; do BW+=( --tmpfs "$m" ); done
+  local w; for w in ${WRITABLES[@]+"${WRITABLES[@]}"}; do [ -n "$w" ] && BW+=( --bind "$w" "$w" ); done
+  local kv; for kv in ${SETENVS[@]+"${SETENVS[@]}"}; do [ -n "$kv" ] && { case "$kv" in *=*) BW+=( --setenv "${kv%%=*}" "${kv#*=}" ) ;; *) die "--setenv expects VAR=VAL (got '$kv')" ;; esac; }; done
+  local m; for m in ${MASKED[@]+"${MASKED[@]}"}; do BW+=( --tmpfs "$m" ); done
   case "$EGRESS" in
     deny) BW+=( --unshare-net ); RUN=( "${BW[@]}" -- "${CMD[@]}" ) ;;
     host) echo "confine-run: WARNING --egress host - network SHARED with host; egress NOT confined (fs/read/NNP still apply)." >&2
@@ -185,16 +185,16 @@ socat forward) OR use the OOB dedicated-uid + PF-per-tenant path. FAIL CLOSED." 
   fi
   # SECURITY C1: validate every path that gets interpolated into the profile BEFORE it is written.
   reject_sbpl_meta "$SCRATCH"
-  local w; for w in "${WRITABLES[@]}"; do [ -n "$w" ] && reject_sbpl_meta "$(cd "$w" && pwd)"; done
-  local m; for m in "${MASKED[@]}"; do reject_sbpl_meta "$m"; done
+  local w; for w in ${WRITABLES[@]+"${WRITABLES[@]}"}; do [ -n "$w" ] && reject_sbpl_meta "$(cd "$w" && pwd)"; done
+  local m; for m in ${MASKED[@]+"${MASKED[@]}"}; do reject_sbpl_meta "$m"; done
   {
     echo '(version 1)'
     echo '(allow default)'
     echo '(deny file-write*)'
     echo "(allow file-write* (subpath \"$SCRATCH\"))"
     echo '(allow file-write* (subpath "/private/tmp") (subpath "/private/var/folders") (literal "/dev/null") (literal "/dev/stdout") (literal "/dev/stderr"))'
-    for w in "${WRITABLES[@]}"; do [ -n "$w" ] && echo "(allow file-write* (subpath \"$(cd "$w" && pwd)\"))"; done
-    for m in "${MASKED[@]}"; do echo "(deny file-read* (subpath \"$m\"))"; done
+    for w in ${WRITABLES[@]+"${WRITABLES[@]}"}; do [ -n "$w" ] && echo "(allow file-write* (subpath \"$(cd "$w" && pwd)\"))"; done
+    for m in ${MASKED[@]+"${MASKED[@]}"}; do echo "(deny file-read* (subpath \"$m\"))"; done
     # -- (i) SBPL setuid/setgid-exec restriction (compensating hardening, NOT a no-new-privs guarantee) --
     # SBPL cannot express the setuid BIT itself, so this is a BEST-EFFORT, NOT-EXHAUSTIVE denylist of
     # the known macOS system setuid-/setgid-root escalation binaries, denied via
@@ -231,7 +231,7 @@ socat forward) OR use the OOB dedicated-uid + PF-per-tenant path. FAIL CLOSED." 
     esac
   } > "$sb"
   local PREFIX=()
-  local kv; for kv in "${SETENVS[@]}"; do [ -n "$kv" ] && { case "$kv" in *=*) PREFIX+=( "$kv" ) ;; *) die "--setenv expects VAR=VAL (got '$kv')" ;; esac; }; done
+  local kv; for kv in ${SETENVS[@]+"${SETENVS[@]}"}; do [ -n "$kv" ] && { case "$kv" in *=*) PREFIX+=( "$kv" ) ;; *) die "--setenv expects VAR=VAL (got '$kv')" ;; esac; }; done
   # inner command = (optional env prefix) + sandbox-exec on the generated profile
   local INNER=()
   if [ "${#PREFIX[@]}" -gt 0 ]; then INNER=( env "${PREFIX[@]}" sandbox-exec -f "$sb" "${CMD[@]}" )

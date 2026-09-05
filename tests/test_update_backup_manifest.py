@@ -48,10 +48,28 @@ def _seed_gates(output_dir: Path, monkeypatch):
     )
 
 
-def _seed_pass(output_dir: Path):
+def _seed_pass(output_dir: Path, monkeypatch):
+    # Governed path: enforce_decision_signing defaults ON, so the authorizing 'overwrite' PASS
+    # row must be SIGNED or the destructive-action gate fail-closes (GV1). Sign it with the
+    # production helper against a test-local key — exercising the real HMAC verification path,
+    # not a divergent hand-rolled digest. (issue main-ci-red #4, @security Option A.)
+    from agentteams.cli.decision_log import sign_decision_row
+
+    key = "test-decision-signing-key"
+    monkeypatch.setenv("AGENTTEAMS_DECISION_SIGNING_KEY", key)
+    row = {
+        "timestamp": "2026-05-03T00:00:00Z",
+        "requesting_agent": "security",
+        "action_reviewed": "overwrite",
+        "verdict": "PASS",
+        "conditions": "",
+        "conditions_verified": "verified",
+    }
+    row["signature"] = sign_decision_row(row, key=key)
+    cols = ["timestamp", "requesting_agent", "action_reviewed", "verdict",
+            "conditions", "conditions_verified", "signature"]
     (output_dir / "references" / "security-decisions.log.csv").write_text(
-        "timestamp,requesting_agent,action_reviewed,verdict,conditions,conditions_verified\n"
-        "2026-05-03T00:00:00Z,security,overwrite,PASS,,verified\n",
+        ",".join(cols) + "\n" + ",".join(row[c] for c in cols) + "\n",
         encoding="utf-8",
     )
 
@@ -74,7 +92,7 @@ def test_update_writes_backup_manifest_with_pre_update_reason(tmp_path, monkeypa
         "--description", str(brief), "--output", str(output_dir),
         "--yes", "--no-scan", "--security-offline",
     ]) == 0
-    _seed_pass(output_dir)
+    _seed_pass(output_dir, monkeypatch)
     assert build_team.main([
         "--description", str(brief), "--output", str(output_dir),
         "--update", "--yes", "--no-scan", "--security-offline",
@@ -106,7 +124,7 @@ def test_overwrite_writes_backup_manifest_with_overwrite_reason(tmp_path, monkey
         "--description", str(brief), "--output", str(output_dir),
         "--yes", "--no-scan", "--security-offline",
     ]) == 0
-    _seed_pass(output_dir)
+    _seed_pass(output_dir, monkeypatch)
     assert build_team.main([
         "--description", str(brief), "--output", str(output_dir),
         "--update", "--overwrite", "--yes", "--no-scan", "--security-offline",
@@ -130,7 +148,7 @@ def test_backup_manifest_sha256_matches_on_disk_files(tmp_path, monkeypatch):
         "--description", str(brief), "--output", str(output_dir),
         "--yes", "--no-scan", "--security-offline",
     ]) == 0
-    _seed_pass(output_dir)
+    _seed_pass(output_dir, monkeypatch)
     assert build_team.main([
         "--description", str(brief), "--output", str(output_dir),
         "--update", "--yes", "--no-scan", "--security-offline",

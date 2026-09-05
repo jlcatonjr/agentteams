@@ -6,6 +6,31 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### fixed (main CI green — 5 pre-existing test failures)
+
+- **The CI `test` matrix is green on `main` again.** Five tests had been red since the 2026-09-01
+  commits (CH-07 decomposition, decision-signing enforcement, sandbox augmentation) — a red ✗ on
+  every commit, unrelated to the commit that showed it. (The Pages `deploy` was always green.)
+  Each fixed on its merits:
+  - **macOS launcher (2 tests):** `templates/universal/sandbox/confine-run.sh` crashed on the
+    runner's **bash 3.2** — `"${arr[@]}"` on an empty array under `set -u` is an "unbound
+    variable" there, so the launcher exited 1 before its fail-closed exit 2. All ten
+    possibly-empty array expansions now use the `${arr[@]+"${arr[@]}"}` idiom; `set -u`, `die()`,
+    and the validation logic are untouched, so the fail-closed teeth are preserved (verified on
+    real bash 3.2.57: non-loopback proxy → exit 2 "FAIL CLOSED", loopback → exit 0). Launcher
+    sha256 re-pinned in both the manifest and the test; enforcement manifest regenerated.
+  - **swallow-exception ratchet:** `SWALLOW_BASELINE` 40→41 with a per-handler justification — the
+    CH-07 decomposition surfaced one narrow `OSError`-continue at a recoverable file-read boundary
+    in `cli/generate_helpers.py`; de-swallowing would break the probe.
+  - **module-doc ratchet:** added the `analyze_tools` API-reference page (and its nav + index
+    links); mkdocs build verified.
+  - **backup-manifest test:** `--update --overwrite` is now (correctly) fail-closed by
+    decision-signing enforcement against an unsigned authorization; the test **fixture** was
+    updated to seed a *signed* governed row via the production `sign_decision_row()` helper — the
+    gate itself is unchanged.
+  Cleared by `@security` (two CONDITIONAL PASS clearances; the launcher edit extends the
+  2026-09-01 hook-pin clearance, whose on-host verification is re-assigned to the new sha).
+
 ### fixed (standing red-team audit — CI FINDINGS, issue #16 + docs-freshness #18)
 
 - **The standing red-team audit now reaches a trustworthy CLEAN verdict in CI.** After the

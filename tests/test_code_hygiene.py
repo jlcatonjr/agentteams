@@ -103,7 +103,7 @@ BROAD_EXCEPT_BASELINE = 18      # 16→18: the SAME fail-closed process-boundary
                                 # consolidation (see tmp/by-week/2026-W30/
                                 # web-browsing-playwright-cli.plan.md, "Post-implementation audit
                                 # outcome" — where this exact consolidation is explained).
-SWALLOW_BASELINE = 40           # except clause whose body is only pass/continue (narrow catches =
+SWALLOW_BASELINE = 41           # except clause whose body is only pass/continue (narrow catches =
                                 # known-recoverable external boundaries; the ratchet blocks new ones).
                                 # 38→40 (2026-W36): the shipped source carries two additional narrow,
                                 # named-type catches at known-recoverable external boundaries — the
@@ -136,6 +136,16 @@ SWALLOW_BASELINE = 40           # except clause whose body is only pass/continue
                                 # can't be read (continue; OSError, e.g. a file deleted mid-glob) —
                                 # both are the fail-closed contract's "can't confidently classify ->
                                 # treat as alive, never as dead" boundary, not silent-failure debt.
+                                # 40→41 (2026-W36, issue main-ci-red): the CH-07 decomposition
+                                # (3afe117) surfaced one additional narrow catch — cli/generate_helpers.py
+                                # `_project_has_bridge` skips a candidate bridge-entry file it cannot
+                                # read (continue; OSError) while probing for a fence marker; an
+                                # unreadable probe candidate legitimately means "no bridge here, skip",
+                                # and de-swallowing would either abort the probe or spam noise for every
+                                # unreadable file. Same known-recoverable file-read boundary class as the
+                                # OSError-continue handlers above; not a bare/broad silent catch. Ratchet
+                                # bumped to the true justified count rather than removing a legitimate
+                                # defensive handler.
 
 
 
