@@ -161,6 +161,98 @@ def _run_issue_grant(args: argparse.Namespace) -> int:
     return 0
 
 
+def _run_verify_directives(args: argparse.Namespace) -> int:
+    """``--verify-directives``: read-only report of every management directive's validity.
+
+    Resolves the managed workspace root from ``--output``/``--project`` (else CWD), validates
+    every row in ``references/management-directives.log.csv`` (signature, expiry, use-limit,
+    manager roster, non-denylisted scope) without consuming any, and prints one line per problem.
+    Returns 0 when all directives are valid (or none exist), 1 otherwise. Mirrors
+    :func:`_run_verify_grants`.
+
+    Args:
+        args: Parsed CLI namespace.
+
+    Returns:
+        Process exit code.
+    """
+    from agentteams.cli import management_directives as mgmt
+
+    output_dir = _resolve_output_dir(args)
+    log_path = output_dir / mgmt.MGMT_DIRECTIVES_LOG_REL
+    try:
+        problems = mgmt.verify_directives(output_dir)
+    except mgmt.MgmtDirectiveError as exc:
+        print(f"Error: {exc}", file=sys.stderr)
+        return 1
+    if not log_path.exists():
+        print(f"No management directives found at {log_path}")
+        return 0
+    if not problems:
+        print(f"All management directives valid at {log_path}")
+        return 0
+    for problem in problems:
+        print(f"  [BAD] {problem}", file=sys.stderr)
+    print(f"\n{len(problems)} invalid management directive(s).", file=sys.stderr)
+    return 1
+
+
+def _run_issue_directive(args: argparse.Namespace) -> int:
+    """``--issue-directive``: mint and sign a management directive from the directive-field flags.
+
+    Reads ``--manager-team``, ``--managed-team``, ``--task-scope``, ``--expires-at``,
+    ``--max-uses`` and ``--approver``, generates a unique directive_id and issue timestamp, signs
+    with ``AGENTTEAMS_MANAGEMENT_SIGNING_KEY``, and appends it to the MANAGED workspace's ledger —
+    ``--output``/``--project`` must point at the managed repo, whose own agents read the ledger.
+    Fails closed (clear message + nonzero exit) if a required flag is absent, the key is unset,
+    the manager is off the managed repo's roster, ``expires_at`` is malformed, or the scope is
+    DENYLISTED (a directive can never clear a destructive/bulk/cross-repo or governance/trust
+    scope — a valid signature cannot override this). Mirrors :func:`_run_issue_grant`.
+
+    Args:
+        args: Parsed CLI namespace (the directive-field flags carry the values).
+
+    Returns:
+        Process exit code (0 on success).
+    """
+    import secrets
+    from datetime import datetime, timezone
+
+    from agentteams.cli import management_directives as mgmt
+
+    output_dir = _resolve_output_dir(args)
+    required = (
+        ("manager_team", "--manager-team"), ("managed_team", "--managed-team"),
+        ("task_scope", "--task-scope"), ("expires_at", "--expires-at"),
+        ("max_uses", "--max-uses"), ("approver", "--approver"),
+    )
+    missing = [flag for attr, flag in required if getattr(args, attr, None) in (None, "")]
+    if missing:
+        print(
+            f"Error: --issue-directive requires: {', '.join(missing)}", file=sys.stderr
+        )
+        return 1
+    try:
+        record = mgmt.issue_directive(
+            output_dir,
+            manager_team=str(args.manager_team), managed_team=str(args.managed_team),
+            task_scope=str(args.task_scope), expires_at=str(args.expires_at),
+            max_uses=int(args.max_uses), approver=str(args.approver),
+            directive_id=f"directive-{secrets.token_hex(8)}",
+            timestamp=datetime.now(timezone.utc).isoformat(),
+        )
+    except (mgmt.MgmtDirectiveError, ValueError) as exc:
+        print(f"Error: {exc}", file=sys.stderr)
+        return 1
+    print(
+        f"Issued management directive {record['directive_id']}: {record['manager_team']} → "
+        f"{record['managed_team']} may {record['task_scope']} "
+        f"(expires {record['expires_at']}, max_uses {record['max_uses']})"
+    )
+    print(f"  appended to {output_dir / mgmt.MGMT_DIRECTIVES_LOG_REL}")
+    return 0
+
+
 def _run_write_integrity_manifest(args: argparse.Namespace) -> int:
     """``--write-integrity-manifest``: re-record the enforcement-module manifest.
 

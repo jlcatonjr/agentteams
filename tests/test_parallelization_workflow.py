@@ -113,7 +113,7 @@ def test_workflow_0b_fences_are_at_v3():
     spawn-authority query funnel added its routing rows + Workflows 12/13 to the same fences."""
     orch = _orch()
     assert "<!-- AGENTTEAMS:BEGIN routing_table_rows v=3" in orch
-    assert "<!-- AGENTTEAMS:BEGIN available_workflows v=3" in orch
+    assert "<!-- AGENTTEAMS:BEGIN available_workflows v=4" in orch
 
 
 def test_reference_template_has_coordinated_concurrency_sections():

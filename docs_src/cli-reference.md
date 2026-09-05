@@ -695,6 +695,14 @@ Read-only: report the validity (signature, expiry, use-limit, approver roster) o
 
 Mint and sign a cross-workspace capability grant (P2) from a JSON spec (`issuer_team`, `holder_team`, `target_path`, `permitted_ops`, `expires_at`, `max_uses`, `approver`, `ticket_id`, `reason_code`) and append it to the **holder** workspace's ledger under `--output`/`--project` (else CWD) — point it at the holder, whose generation reads the ledger. Requires `AGENTTEAMS_GRANT_SIGNING_KEY` and an approver on the holder's roster. The holder's sandbox `allowWrite` widens to include the granted (write) path the next time the holder team is generated/updated — a grant is inert until then (there is no runtime path by which an agent widens its own OS boundary).
 
+### `--verify-directives`
+
+Read-only: report the validity (signature, expiry, use-limit, manager roster, and allowed non-destructive scope) of every **management directive** in `references/management-directives.log.csv` under `--output`/`--project` (else CWD). Never consumes a directive. Exits non-zero if any directive is invalid. Requires `AGENTTEAMS_MANAGEMENT_SIGNING_KEY`. A managed agent runs this before acting on a manager-relayed task; only a verifying, exact-scope, non-destructive directive lets it proceed without re-asking the operator. See [Instruction Authority](api-reference/instruction-authority.md) (C-4 Management-authority) and the fourth authority axis.
+
+### `--issue-directive`
+
+Mint and sign a **management directive** (the management-repository endowment) and append it to the **managed** workspace's `references/management-directives.log.csv`. Fields are given as flags: `--manager-team` (this management repo's id), `--managed-team` (the recipient), `--task-scope` (the exact, non-destructive task id it authorizes), `--expires-at` (ISO-8601), `--max-uses`, and `--approver`. Requires `AGENTTEAMS_MANAGEMENT_SIGNING_KEY` and the manager on the managed team's `references/authorized-managers.txt` roster. A directive is an *authenticated operator artifact*, not a tier elevation: it authorizes only the exact scope named, can **never** clear C-5 destruction, pierce a C-2 HALT, or change governance (such scopes are mechanically auto-refused regardless of a valid signature), and is fail-closed inert if it does not verify. Enrolling a manager in the roster is a privileged `@security` cross-repo change.
+
 ### `--write-integrity-manifest`
 
 Re-record `references/enforcement-integrity.json` from the enforcement modules on disk, then exit.

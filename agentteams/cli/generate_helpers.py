@@ -18,7 +18,10 @@ import sys
 from pathlib import Path
 
 from agentteams import emit
-from agentteams.cli.artifacts import _write_agent_privilege_config
+from agentteams.cli.artifacts import (
+    _write_agent_privilege_config,
+    _write_management_authority_config,
+)
 from agentteams.cli.render_pipeline import _build_final_rendered, _make_content_matches
 
 _SCRIPT_DIR = Path(__file__).resolve().parents[2]
@@ -99,6 +102,44 @@ def _emit_agent_privilege_config(manifest: dict, output_dir: Path) -> None:
         print(
             "  ℹ  Strict agent-privilege enforcement (enforce_decision_signing) is OFF for "
             f"this team (legacy behavior). Switch: {AGENT_PRIVILEGE_REL_PATH}"
+        )
+
+
+def _emit_management_authority_config(manifest: dict, output_dir: Path) -> None:
+    """Write ``references/management-authority.json`` (+ roster + ledger stub) and print a notice.
+
+    Mirrors :func:`_emit_agent_privilege_config`: a best-effort, manifest-gated emit that is
+    byte-identical-when-off. :func:`_write_management_authority_config` writes NOTHING unless the
+    manifest declares management authority (``authorized_managers`` non-empty OR
+    ``is_management_repo`` true), so a team that predates the feature is untouched and no notice
+    is printed. When it does emit, a notice names the roster and (when written) the ledger stub.
+
+    Args:
+        manifest: The team manifest (carries ``is_management_repo`` / ``authorized_managers``).
+        output_dir: The team root.
+    """
+    from agentteams.cli import management_directives as _md
+    from agentteams.cli.artifacts import MANAGEMENT_AUTHORITY_REL_PATH
+
+    try:
+        path = _write_management_authority_config(output_dir, manifest)
+    except OSError as exc:
+        print(f"  !  management-authority config write failed: {exc}", file=sys.stderr)
+        return
+    if path is None:
+        return
+    authorized = manifest.get("authorized_managers") or []
+    if authorized:
+        print(
+            "  ⚖  Management-repository endowment is ON for this team: "
+            f"{len(authorized)} authorized manager team(s). Roster: {_md.AUTHORIZED_MANAGERS_REL}; "
+            f"signed-directive ledger: {_md.MGMT_DIRECTIVES_LOG_REL}. Switch: "
+            f"{MANAGEMENT_AUTHORITY_REL_PATH}"
+        )
+    else:
+        print(
+            "  ℹ  This team is marked a management repository (is_management_repo) with no "
+            f"authorized managers yet. Switch: {MANAGEMENT_AUTHORITY_REL_PATH}"
         )
 
 

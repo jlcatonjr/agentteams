@@ -265,6 +265,15 @@ def build_manifest(description: dict[str, Any], *, framework: str = "copilot-vsc
         enforce_decision_signing = True
     enforce_decision_signing = bool(enforce_decision_signing)
 
+    # Management-repository endowment (default OFF / empty; fully backward-compatible). A manager
+    # team may issue signed management directives; a managed team lists the managers whose signed,
+    # exact-scope, non-destructive directives it will honour without re-asking the operator. See
+    # schemas/project-description.schema.json and references/instruction-authority.reference.md.
+    is_management_repo = bool(description.get("is_management_repo") or False)
+    authorized_managers = [
+        str(m).strip() for m in (description.get("authorized_managers") or []) if str(m).strip()
+    ]
+
     # Stable team identity for cross-workspace capability grants (P2; see schema). Slug
     # default made pattern-safe (_slugify can leave a leading hyphen or empty for non-ASCII).
     team_id = description.get("team_id") or _slugify(project_name).lstrip("-") or "team"
@@ -501,6 +510,8 @@ def build_manifest(description: dict[str, Any], *, framework: str = "copilot-vsc
         "team_id": team_id,
         "privilege_profile": privilege_profile,
         "enforce_decision_signing": enforce_decision_signing,
+        **({"is_management_repo": True} if is_management_repo else {}),
+        **({"authorized_managers": authorized_managers} if authorized_managers else {}),
         **({"workspace_write_roots": list(workspace_write_roots)} if workspace_write_roots else {}),
         **({"protected_read_paths": list(description["protected_read_paths"])} if description.get("protected_read_paths") else {}),
         # P3-3 opt-in: emit only when true (keeps the default block byte-identical); resolves

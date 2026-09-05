@@ -148,6 +148,10 @@ def test_declared_but_unemitted_fields_are_conditional_not_dead(schema):
         # CC-2 opt-out: set by the CLI layer (generate.py) from --allow-fallback-fail-open
         # after build_manifest returns; emitted only when true.
         "fallback_fail_open",
+        # Management-repository endowment: emitted only when the brief opts in
+        # (build_manifest omits both otherwise so a non-management team stays byte-identical).
+        "is_management_repo",
+        "authorized_managers",
     }
     emitted: set[str] = set()
     for _, description in _DESCRIPTIONS:
