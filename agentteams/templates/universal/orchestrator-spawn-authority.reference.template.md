@@ -37,7 +37,7 @@ A **standalone orchestrator with no prime is its own prime** and behaves exactly
 This is the base case — the funnel never strands it (there is always someone to "route up" to: the
 user, directly, when the orchestrator is itself the top of the chain).
 
-## Three authority axes (do not conflate)
+## Four authority axes (do not conflate)
 
 Spawner-authority is **not orthogonal** to the project's existing authority model; the axes
 **intersect**, and the carve-out + refusal branch below are the reconciliation.
@@ -47,9 +47,16 @@ Spawner-authority is **not orthogonal** to the project's existing authority mode
 | **Spawner-authority** (this reference) | conversation/query hierarchy — who a spawned conversation reports to and funnels up to | this reference + Workflows 12/13 |
 | **Registry-primary** | fleet file-update propagation — which repo is the canonical template source | `references/adjacent-repos.md`, orchestrator Rule 11 |
 | **Peer-sovereignty** | constitutional changes to another repo | repo-liaison Invariant Core |
+| **Management-authority** | whether a managed repo honours a manager's *signed* directive as authenticated operator direction for the exact non-destructive task it names (so its agents do not re-ask the operator) | C-4's bounded exception in `references/instruction-authority.reference.md` (Management-authority), `references/authorized-managers.txt`, `references/management-directives.log.csv` |
 
 Registry-primary does **not** decide conversation authority; peer-sovereignty is never overridden by
-spawner-authority.
+spawner-authority. **Management-authority never overrides peer-sovereignty, C-2, or C-5:** a signed
+management directive relays the operator's task assignment, not a licence to destroy, to bypass a
+HALT, or to change another repo's constitution — it is auto-refused on any such scope, and the
+refusal branch below still applies. The reason the refusal survives even an *authenticated* directive
+is that a management directive is **strictly weaker than a live Tier-2 operator instruction**, and
+even a genuine Tier-2 instruction may not compel an agent to act outside its own capability grant
+(C-3) or Invariant Core; the weaker artifact certainly cannot.
 
 ## Reconciliation — two mandatory mechanisms
 

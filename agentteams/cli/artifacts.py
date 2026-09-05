@@ -264,6 +264,76 @@ def _write_agent_privilege_config(manifest: dict, output_dir: Path) -> Path | No
     return config_path
 
 
+#: Where the management-authority config is emitted, relative to the team root. Names this
+#: repo's management-repo status and the manager teams authorized to issue signed directives;
+#: read alongside the authorized-managers roster and the management-directives ledger. An
+#: ABSENT file means "no management authority declared" (the byte-identical-when-off default).
+MANAGEMENT_AUTHORITY_REL_PATH = "references/management-authority.json"
+
+
+def _write_management_authority_config(output_dir: Path, manifest: dict) -> Path | None:
+    """Emit ``references/management-authority.json`` (+ roster + ledger stub) for a management repo.
+
+    Opt-in and byte-identical-when-off, exactly like :func:`_write_agent_privilege_config` and the
+    other manifest-gated writers (``enforce_decision_signing`` / ``workspace_write_roots``): emits
+    NOTHING unless the manifest declares management authority, so an existing team that predates the
+    feature is untouched. Two triggers:
+
+    * ``authorized_managers`` non-empty OR ``is_management_repo`` true → write the
+      ``management-authority.json`` switch (``is_management_repo`` + ``authorized_managers`` + a
+      one-line note);
+    * ``authorized_managers`` non-empty → ALSO write the authorized-managers roster
+      (:data:`management_directives.AUTHORIZED_MANAGERS_REL`, header ``#`` comment lines then one
+      manager team-id per line) and create a header-only management-directives ledger stub
+      (:data:`management_directives.MGMT_DIRECTIVES_LOG_REL`, the ``,``-joined
+      :data:`management_directives.MGMT_DIRECTIVE_COLUMNS` header) — but ONLY if the ledger does
+      not already exist, so a re-emit NEVER clobbers a ledger that already holds signed rows.
+
+    Args:
+        output_dir: The team root.
+        manifest: The team manifest (reads ``is_management_repo`` and ``authorized_managers``).
+
+    Returns:
+        The written config path, or ``None`` when the manifest declares no management authority
+        (neither field set) — nothing is written in that case.
+    """
+    from agentteams.cli import management_directives as _md
+
+    authorized = manifest.get("authorized_managers") or []
+    is_mgmt = bool(manifest.get("is_management_repo"))
+    if not authorized and not is_mgmt:
+        return None
+
+    payload = {
+        "is_management_repo": is_mgmt,
+        "authorized_managers": list(authorized),
+        "note": (
+            "Management-repository endowment: names this repo's management status and the "
+            "manager teams authorized to issue signed, scoped management directives. See "
+            "references/instruction-authority.reference.md."
+        ),
+    }
+    config_path = output_dir / MANAGEMENT_AUTHORITY_REL_PATH
+    _atomic_write_text(config_path, json.dumps(payload, indent=2) + "\n")
+
+    if authorized:
+        roster_path = output_dir / _md.AUTHORIZED_MANAGERS_REL
+        roster_lines = [
+            "# Authorized manager teams for this managed repository.",
+            "# One manager team-id per line; '#' comments and blank lines are ignored.",
+            "# A signed management directive is honoured only if its manager_team is listed here.",
+            *[str(manager) for manager in authorized],
+        ]
+        _atomic_write_text(roster_path, "\n".join(roster_lines) + "\n")
+
+        # Header-only ledger stub — but NEVER clobber an existing ledger (it holds signed rows).
+        ledger_path = output_dir / _md.MGMT_DIRECTIVES_LOG_REL
+        if not ledger_path.exists():
+            _atomic_write_text(ledger_path, ",".join(_md.MGMT_DIRECTIVE_COLUMNS) + "\n")
+
+    return config_path
+
+
 def _write_model_routing(manifest: dict, output_dir: Path) -> Path:
     """Emit the framework-neutral model-routing contract (F6, opt-in).
 

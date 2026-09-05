@@ -67,7 +67,7 @@ _BASELINE: dict[str, int] = {
     "universal/external-retrieval-quality-gate.reference.template.md": 8,
     "universal/git-operations.template.md": 2,
     "universal/github-workflows-merge.reference.template.md": 2,
-    "universal/instruction-authority.reference.template.md": 7,
+    "universal/instruction-authority.reference.template.md": 10,
     "universal/navigator.template.md": 1,
     "universal/orchestrator.template.md": 11,
     "universal/parallelization.reference.template.md": 3,

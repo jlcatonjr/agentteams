@@ -280,6 +280,17 @@
       "default": true,
       "description": "Strict agent-privilege switch (agent-position axis). When true, an AUTHORIZING security-decision row (a PASS or HALT-RETRACTED that clears a destructive/privileged action) is honoured ONLY if decision signing is active and the row's signature verifies; an unsigned authorization is refused (fail-closed) rather than trusted on its author name alone — closing the roster/author-spoof path in the signing-inactive configuration. Emitted into the generated team as references/agent-privilege.json, which the security gate reads at enforcement time. DEFAULTS ON when the team is (re)generated or updated: a post-update notice names how to turn it off (set this field false in your brief and re-update). A workspace with NO emitted config is treated as OFF, so a team that has not yet been updated to this feature never breaks by surprise — the switch turns on precisely when you update. Set false to keep the legacy behavior (an unsigned authorizing row is honoured on its author name)."
     },
+    "is_management_repo": {
+      "type": "boolean",
+      "default": false,
+      "description": "Endow this repository as a MANAGEMENT repository (default false). When true, the team is designated a manager: its orchestrator may ISSUE signed management directives (`agentteams --issue-directive`) that relay the operator's direction to agents in the operator's other (managed) repos. A management directive is an authenticated operator artifact — signed with the operator-provisioned AGENTTEAMS_MANAGEMENT_SIGNING_KEY — that lets a managed agent proceed on the EXACT non-destructive task it names without re-asking the operator for approval. It can NEVER clear C-5 destruction, pierce a C-2 HALT, or change governance (such scopes are auto-refused). Being a manager does not change what the team's own agents may do; it only enables issuing directives. Same-trust-domain model: the operator controls the key and all repos; symmetric HMAC defeats keyless injection, not a key-holder (the same trust boundary as capability grants / signed waivers). Set false (default) and nothing changes."
+    },
+    "authorized_managers": {
+      "type": "array",
+      "items": { "type": "string" },
+      "default": [],
+      "description": "Team-ids of the MANAGEMENT repositories this (managed) team accepts signed directives from (default empty — accepts none, the current behavior). Emitted as references/authorized-managers.txt (the roster) plus references/management-authority.json. A directive is honoured only if its manager_team is on this roster AND its signature verifies against AGENTTEAMS_MANAGEMENT_SIGNING_KEY AND it is unexpired/unexhausted AND its task_scope is an exact, non-destructive, non-governance scope (destructive/bulk/cross-repo and constitution/Invariant-Core/reference-template/grant/roster/key/enforcement scopes are mechanically refused regardless of a valid signature). An empty roster or a non-verifying directive is inert (the agent asks the operator as today). Enrolling a manager here is a privileged cross-repo change requiring @security clearance."
+    },
     "components": {
       "type": "array",
       "description": "Workstream components. One workstream expert agent is generated per component.",

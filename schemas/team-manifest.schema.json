@@ -471,6 +471,15 @@
       "type": "boolean",
       "description": "Strict agent-privilege switch carried from the project description (defaults true). When true, an unsigned authorizing security-decision row is refused (fail-closed) rather than trusted on its author name. Emitted into the team as references/agent-privilege.json, read by the security gate at enforcement time (see project-description.schema.json)."
     },
+    "is_management_repo": {
+      "type": "boolean",
+      "description": "Carried from the project description (default false): when true this team is a MANAGEMENT repository whose orchestrator may issue signed management directives. See project-description.schema.json."
+    },
+    "authorized_managers": {
+      "type": "array",
+      "items": { "type": "string" },
+      "description": "Carried from the project description (default empty): team-ids of management repositories this team accepts signed directives from; emitted as references/authorized-managers.txt + references/management-authority.json. See project-description.schema.json."
+    },
     "workspace_write_roots": {
       "type": "array",
       "description": "Directories the confined agent may write to, relative to the merged .claude/settings.json at project root. Defaults to [\".\"] when confinement is active and no override is given.",

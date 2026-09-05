@@ -55,6 +55,7 @@ from agentteams.frameworks.registry import FRAMEWORKS
 from agentteams.cli.generate_helpers import (  # noqa: F401
     _sweep_capability_key,
     _emit_agent_privilege_config,
+    _emit_management_authority_config,
     _verify_enforcement_integrity,
     _bridge_entry_files,
     _update_target_is_bridge,
@@ -560,6 +561,7 @@ def _run_generate_inner(
                             file=sys.stderr,
                         )
                 _emit_agent_privilege_config(manifest, output_dir)
+                _emit_management_authority_config(manifest, output_dir)
                 _emit_host_mcp_artifacts_if_enabled(manifest, project_root)
                 print(
                     "  ✓  Healed build-log baseline (no material drift; "
@@ -722,6 +724,7 @@ def _run_generate_inner(
                         file=sys.stderr,
                     )
             _emit_agent_privilege_config(manifest, output_dir)
+            _emit_management_authority_config(manifest, output_dir)
             _emit_host_mcp_artifacts_if_enabled(manifest, project_root)
             from agentteams import git_hooks as _git_hooks
             _git_hooks.maybe_install_git_hooks(args, project_root)
@@ -951,6 +954,7 @@ def _run_generate_inner(
                     file=sys.stderr,
                 )
         _emit_agent_privilege_config(manifest, output_dir)
+        _emit_management_authority_config(manifest, output_dir)
         _emit_host_mcp_artifacts_if_enabled(manifest, project_root)
         from agentteams import git_hooks as _git_hooks
         _git_hooks.maybe_install_git_hooks(args, project_root)

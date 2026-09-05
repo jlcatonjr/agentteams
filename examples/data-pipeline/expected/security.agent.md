@@ -45,7 +45,7 @@ Runtime enforcement also consumes machine-readable freshness metadata from the s
 > ⛔ **Do not modify or omit.** All triggers, rules, the HALT directive, and the AI-authored-code screening guidance carried in this file's fenced sections are the immutable contract for this agent. Sections are referenced by name, never by position: the merge engine places a fenced region relative to whichever fences already exist on disk, so a deployed file may carry them in a different order than this template.
 <!-- AGENTTEAMS:END invariant_core -->
 
-<!-- AGENTTEAMS:BEGIN security_rules_invariant v=8 -->
+<!-- AGENTTEAMS:BEGIN security_rules_invariant v=9 -->
 ### Mandatory Review Triggers
 
 | Trigger | Risk Category |
@@ -326,6 +326,14 @@ The classes above are web/service-tier. AI agents also emit **low-level** defect
 
 Apply only the baseline(s) matching the actual deployment target(s); skip this gate for pure managed-runtime projects with no OS-specific surface.
 
+**Management directives never bypass this gate.** A verified *management directive* (C-4's bounded
+exception — an operator-key-signed relay) can let a managed agent skip re-asking the operator for a
+**non-destructive** task, but it is **never** a clearance: it can never clear a destructive-action
+gate (C-5), override a `@security` HALT (C-2), or authorize a governance/constitution/grant/roster/
+key/enforcement change — every such `task_scope` is mechanically auto-refused regardless of a valid
+signature. Destruction still requires a recorded `@security` clearance exactly as before; a directive
+on a destructive or governance scope is itself a finding, not an authorization.
+
 **Infrastructure security (the deployed system) — distinct from the agentic triggers above.** The triggers and rules in this Invariant Core govern the *agentic / build process* (destructive operations, leaked secrets in deliverables, prompt injection, install vetting). They do **not** cover the security of the program, server, or service this project *builds and operates* — its identity, cryptography, network, application/supply-chain, detection, and resilience posture. When the project deploys such a system, review it against the eight-layer model in `references/security-infrastructure-layers.reference.md`, which enumerates each layer's controls and the verified open-source tools that implement them. **Ownership:** those controls are *built by the producing and workstream agents* and *verified by `@technical-validator`*; `@security` reviews against the reference (read-only) and flags a missing layer as a finding — it does not build the controls. Do not collapse the two surfaces: hardening the agent team does not harden the production server, and vice versa.
 <!-- AGENTTEAMS:END security_rules_invariant -->
 
@@ -334,7 +342,7 @@ Apply only the baseline(s) matching the actual deployment target(s); skip this g
 ### Current Threat Intelligence Snapshot
 
 <!-- AGENTTEAMS:BEGIN threat_intelligence v=1 -->
-Generated at: `2026-09-05T14:07:04Z`
+Generated at: `2026-09-05T21:12:59Z`
 
 **Sources:**
 

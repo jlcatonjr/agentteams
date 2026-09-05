@@ -892,6 +892,80 @@ def _build_parser() -> argparse.ArgumentParser:
         ),
     )
     parser.add_argument(
+        "--verify-directives",
+        action="store_true",
+        dest="verify_directives",
+        default=False,
+        help=(
+            "Read-only: report the validity (signature, expiry, use-limit, manager roster, "
+            "and non-denylisted scope) of every management directive in "
+            "references/management-directives.log.csv under --output/--project (else CWD). "
+            "Never consumes a directive. Exits non-zero if any directive is invalid. Requires "
+            "AGENTTEAMS_MANAGEMENT_SIGNING_KEY."
+        ),
+    )
+    parser.add_argument(
+        "--issue-directive",
+        action="store_true",
+        dest="issue_directive",
+        default=False,
+        help=(
+            "Mint and sign a management directive and append it to the MANAGED repo's ledger "
+            "(references/management-directives.log.csv) under --output/--project (else CWD). "
+            "Requires --manager-team, --managed-team, --task-scope, --expires-at, --max-uses "
+            "and --approver, plus AGENTTEAMS_MANAGEMENT_SIGNING_KEY and the manager team on "
+            "the managed repo's authorized-managers roster. A directive only waives a re-ask on "
+            "a benign, already-authorized, non-destructive task; a destructive/bulk/cross-repo "
+            "or governance/trust scope is refused (a valid signature cannot override this)."
+        ),
+    )
+    parser.add_argument(
+        "--manager-team",
+        dest="manager_team",
+        default=None,
+        metavar="ID",
+        help="With --issue-directive: the managing team's id (must be on the managed repo's "
+             "authorized-managers roster).",
+    )
+    parser.add_argument(
+        "--managed-team",
+        dest="managed_team",
+        default=None,
+        metavar="ID",
+        help="With --issue-directive: the managed team's id (the directive's subject).",
+    )
+    parser.add_argument(
+        "--task-scope",
+        dest="task_scope",
+        default=None,
+        metavar="SCOPE",
+        help="With --issue-directive: the EXACT, benign, non-denylisted task scope the "
+             "directive authorizes (matched by literal equality when honoured).",
+    )
+    parser.add_argument(
+        "--expires-at",
+        dest="expires_at",
+        default=None,
+        metavar="ISO8601",
+        help="With --issue-directive: ISO-8601 expiry timestamp for the directive.",
+    )
+    parser.add_argument(
+        "--max-uses",
+        dest="max_uses",
+        type=int,
+        default=None,
+        metavar="N",
+        help="With --issue-directive: positive use ceiling for the directive.",
+    )
+    parser.add_argument(
+        "--approver",
+        dest="approver",
+        default=None,
+        metavar="PRINCIPAL",
+        help="With --issue-directive: the principal who approved the directive (recorded for "
+             "audit).",
+    )
+    parser.add_argument(
         "--redteam",
         action="store_true",
         dest="redteam",

@@ -32,6 +32,8 @@ from agentteams.cli.commands import (
     _run_verify_waivers,
     _run_verify_grants,
     _run_issue_grant,
+    _run_verify_directives,
+    _run_issue_directive,
 )
 
 # run_generate holds the generate/update/check pipeline; _finalize_exit_code is
@@ -174,6 +176,13 @@ def _main_dispatch(
         return _run_verify_grants(args)
     if getattr(args, "issue_grant", None):
         return _run_issue_grant(args)
+
+    # --verify-directives / --issue-directive: standalone management-directive ops
+    # (authenticated management-repository endowment).
+    if getattr(args, "verify_directives", False):
+        return _run_verify_directives(args)
+    if getattr(args, "issue_directive", False):
+        return _run_issue_directive(args)
 
     # -----------------------------------------------------------------------
     # --verify-integrity / --verify-backup: standalone read-only integrity

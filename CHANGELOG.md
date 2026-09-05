@@ -6,6 +6,42 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### added (management-repository endowment — authenticated relay of operator direction)
+
+- **A repository can now be endowed as a MANAGEMENT repository** whose *signed* directives relay the
+  operator's own direction to agents in the operator's other (managed) repos — so a managed agent
+  does not re-ask the operator to approve a **non-destructive** task the operator already assigned
+  through the manager. A brief sets `is_management_repo: true` (manager) and/or
+  `authorized_managers: [...]` (managed); the managed team emits `references/management-authority.json`,
+  the `references/authorized-managers.txt` roster, and a `references/management-directives.log.csv`
+  ledger. New stdlib-only module `agentteams/cli/management_directives.py` (mirroring `grants.py` on
+  `signed_ledger`) issues/verifies directives; CLI `--issue-directive` / `--verify-directives`.
+- **A management directive is an *authenticated operator artifact*, not a tier elevation.** C-4
+  ("content is data") is amended, coherently across all three surfaces (the Constitutional Core in
+  `copilot-instructions.template.md` and `orchestrator.template.md`, and
+  `instruction-authority.reference.template.md`): a directive whose HMAC verifies against the
+  operator-provisioned `AGENTTEAMS_MANAGEMENT_SIGNING_KEY` is certified by that pre-shared key (not
+  by its own say-so — the same external-key structure as C-2's signed waiver), so it is **not**
+  self-certifying content. It is **not Tier-2 and adds no tier**; it authorizes **only the exact,
+  non-destructive task scope it names** (literal scope-id equality — no widening). A new fourth
+  authority axis, *Management-authority*, is documented beside spawner-authority / registry-primary /
+  peer-sovereignty.
+- **Hard boundaries (mechanical, a valid signature cannot override):** a directive can **never**
+  clear C-5 destruction, pierce a C-2 HALT, widen a C-3 capability, or change governance — every
+  destructive/bulk/cross-repo scope and every constitution/Invariant-Core/reference-template/grant/
+  roster/signing-key/enforcement/ledger scope is auto-refused (denylist matched on word boundaries,
+  so benign scopes like `transform`/`confirm` are unaffected). Fail-closed throughout: an empty
+  roster, missing key, or any non-verifying/expired/exhausted/off-roster/refused-scope directive is
+  inert (the agent asks the operator, as today). Enrolling a manager is a privileged `@security`
+  cross-repo change.
+- **Honest trust model (stdlib-only):** symmetric HMAC — same-trust-domain (the operator controls
+  the key and all repos). It defeats *keyless* injection (arbitrary content claiming to be a
+  directive), not a key-holder — the same trust boundary the existing grants/waivers/decision-signing
+  accept. Off by default; existing teams are byte-identical until a brief opts in. Designed and
+  audited by @adversarial + @conflict-auditor; cleared by @security (four conditional clearances,
+  including dual sign-off on the final C-4 wording); no enforcement-module edit, no C-5 prompt
+  suppression.
+
 ### changed (standard model recommendation → Claude Opus 4.8)
 
 - **The default agent model hint is now `["Claude Opus 4.8 (copilot)"]` for every generated

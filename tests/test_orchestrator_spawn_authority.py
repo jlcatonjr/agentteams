@@ -71,7 +71,7 @@ def test_escalation_ledger_stub_created_with_header(tmp_path):
 def test_orchestrator_routing_and_workflow_versions_bumped():
     text = ORCH.read_text(encoding="utf-8")
     assert "<!-- AGENTTEAMS:BEGIN routing_table_rows v=3 -->" in text
-    assert "<!-- AGENTTEAMS:BEGIN available_workflows v=3 -->" in text
+    assert "<!-- AGENTTEAMS:BEGIN available_workflows v=4 -->" in text
 
 
 def test_orchestrator_has_funnel_routing_row_and_workflows():
