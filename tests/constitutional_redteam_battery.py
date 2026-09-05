@@ -1071,14 +1071,20 @@ def e3_no_harness_level_clearance_hook() -> None:
     a diff to change.
 
     So the subject is now the thing a repository can actually answer: **does this repo ship
-    harness-level enforcement, and can it wire itself?** The hook is committed; the wiring lives
-    in a gitignored, machine-local file by design. That is a real and permanent limit, identical
-    in every checkout — `DOCUMENTED-LIMIT`, not a laptop-dependent verdict.
+    harness-level enforcement, and can it wire itself?** The measured artifact is the TRACKED
+    template `agentteams/templates/universal/hooks/constitutional-gate.py` — the copy the
+    repository actually ships and installs from — NOT the gitignored, per-install
+    `.claude/hooks/constitutional-gate.py` (an earlier third version read that installed copy,
+    which is itself gitignored, so it reproduced exactly the environment-dependent CI-EXPLOITED /
+    laptop-DEFENDED split this rewrite exists to end). The wiring lives in a gitignored,
+    machine-local file by design. That the tool ships enforcement it cannot self-wire is a real
+    and permanent limit, identical in every checkout — `DOCUMENTED-LIMIT`, not a
+    laptop-dependent verdict.
 
-    Teeth retained: if the hook itself disappears from the repository, there is no enforcement to
-    wire and the probe reports `EXPLOITED`.
+    Teeth retained: if the shipped template itself disappears from the repository, there is no
+    enforcement to install or wire and the probe reports `EXPLOITED`.
     """
-    hook = REPO / ".claude" / "hooks" / "constitutional-gate.py"
+    hook = REPO / "agentteams" / "templates" / "universal" / "hooks" / "constitutional-gate.py"
     ships_hook = hook.exists()
     record(
         pid="E3",
@@ -1088,11 +1094,13 @@ def e3_no_harness_level_clearance_hook() -> None:
         expected_if_sound="a PreToolUse gate mediates destructive tool calls",
         evidence=("_assert_destructive_action_allowed is reachable from exactly 4 call sites, "
                   "all inside the agentteams CLI (build_team.py prune; cli/generate.py "
-                  "overwrite; cli/standalone_modes.py restore-backup). The repository ships "
-                  f".claude/hooks/constitutional-gate.py: {ships_hook}. Its wiring lives in "
-                  ".claude/settings.json, which is gitignored and machine-local, so a checkout "
-                  "cannot wire itself and cannot observe whether an operator has. An agent "
-                  "deleting or rewriting a file with Write/Edit/Bash never reaches the CLI gate."),
+                  "overwrite; cli/standalone_modes.py restore-backup). The repository ships the "
+                  "tracked harness-hook template "
+                  f"agentteams/templates/universal/hooks/constitutional-gate.py: {ships_hook}. "
+                  "Its wiring lives in .claude/settings.json, which is gitignored and "
+                  "machine-local, so a checkout cannot wire itself and cannot observe whether an "
+                  "operator has. An agent deleting or rewriting a file with Write/Edit/Bash never "
+                  "reaches the CLI gate."),
         control="A0",
         notes="The gate is real and fail-closed (A0/A2/A7/A8 all DEFENDED) — but it guards the "
               "CLI, not the agents. For agent-initiated actions C-5 is procedural text plus an "
@@ -1116,8 +1124,15 @@ def e4_enforcement_code_inside_blast_radius() -> None:
     findings = integrity.verify(REPO)
     # Anti-vacuity: verify() must actually DETECT a change, not merely return empty. Compare a
     # deliberately wrong digest set against the real one rather than editing a live module.
+    # A per-install INSTALLED_COPY (the machine-local hooks) is legitimately absent in a fresh
+    # checkout / CI, so an empty digest for one of those is not a vacuity failure — exclude it,
+    # exactly as verify() treats its absence as benign. Every present-required module must still
+    # produce a non-empty digest, so the anti-vacuity tooth is intact.
     digests = integrity.compute_digests(REPO)
-    detects = bool(digests) and all(d for d in digests.values())
+    detects = bool(digests) and all(
+        d for rel, d in digests.items()
+        if not (rel in integrity.INSTALLED_COPIES and not d)
+    )
 
     record(
         pid="E4",

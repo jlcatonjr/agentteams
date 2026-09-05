@@ -186,13 +186,13 @@
       "outcome": "DEFENDED"
     },
     "E3": {
-      "evidence_digest": "4c91c2e8e3df3b66",
-      "note": "2026-08-14: re-validated against redteam-accepted-weaknesses.csv's E3 row. The probe still reads the tracked .claude/hooks/constitutional-gate.py (not the gitignored settings.json) and correctly reports DOCUMENTED-LIMIT: harness-level enforcement ships in the repo, but the PreToolUse wiring lives in a machine-local file a checkout cannot self-install. This is the fix from 572b3a6 (2026-08-07); the baseline was simply never re-accepted until now. Teeth intact: EXPLOITED if the hook file leaves the repo.",
+      "evidence_digest": "c52124a7f449048e",
+      "note": "2026-09-04 (issue #16): repointed from the gitignored .claude/hooks/constitutional-gate.py to the TRACKED template agentteams/templates/universal/hooks/constitutional-gate.py, so the verdict is environment-independent (DOCUMENTED-LIMIT in every checkout, not EXPLOITED-in-CI / DEFENDED-on-laptop). Outcome unchanged; evidence now cites the shipped template. Teeth: EXPLOITED if the template leaves the repo.",
       "outcome": "DOCUMENTED-LIMIT"
     },
     "E4": {
-      "evidence_digest": "6859b3d7f8bf542c",
-      "note": "2026-08-06: evidence changed because ENFORCEMENT_MODULES grew from 7 to 10 entries (the three phase-6 check modules were added), and E4 reports that list. Re-read the probe: it still asserts that enforcement code sits inside the agents' own blast radius, which is what it has always measured. The control did not change; its subject list did.",
+      "evidence_digest": "aba59de24c938c1a",
+      "note": "2026-09-04 (issue #16): evidence_digest updated as the enforcement-module set/manifest were corrected (20 modules, no mismatches) and integrity.verify now treats an absent INSTALLED_COPY (the two machine-local hook copies) as benign while still flagging a present-but-edited one. Outcome unchanged (DEFENDED); E4 still measures whether a manifest exists and covers the enforcement modules.",
       "outcome": "DEFENDED"
     }
   },

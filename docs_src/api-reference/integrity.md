@@ -28,7 +28,18 @@ The durable fix is elsewhere: [move enforcement into the harness](../security-ha
 
 > *Source: `agentteams/integrity.py`*
 
-Modules whose integrity the constitution depends on. Each is listed because a silent edit to it would disable or weaken a control rather than merely change behaviour: `cli/security_gate.py` (C-2, C-5), `scan.py` (C-4), `fences.py` and `unfenced.py` (C-1), `front_matter_merge.py` and `front_matter_reconcile.py` (C-3), the [standing red-team audit](redteam.md)'s `redteam/checks_static.py`, `redteam/checks_report.py`, and `redteam/registry.py`, and `integrity.py` itself, so removing an entry is detectable.
+Modules whose integrity the constitution depends on. Each is listed because a silent edit to it would disable or weaken a control rather than merely change behaviour:
+
+- **Destructive-action gate / clearance authenticity (C-2, C-5):** `cli/security_gate.py`, `cli/decision_log.py`.
+- **Deterministic content scanner (C-4):** `scan.py`.
+- **Fence / constraint controls (C-1):** `fences.py`, `unfenced.py`.
+- **Capability comparison and grants (C-3, P2):** `front_matter_merge.py`, `front_matter_reconcile.py`, `cli/grants.py`, `rank_conformance.py`.
+- **OS-confinement emitters and the shipped launcher/gate scripts:** `frameworks/_sandbox_emit.py`, `frameworks/_linux_sandbox_emit.py`, and the tracked templates `templates/universal/sandbox/confine-run.sh`, `templates/universal/sandbox/mac-escape-tests.sh`.
+- **The standing [red-team audit](redteam.md):** `redteam/checks_static.py`, `redteam/checks_report.py`, `redteam/registry.py`.
+- **The harness-level constitutional gate:** the tracked template `templates/universal/hooks/constitutional-gate.py`, plus its two per-install copies `.claude/hooks/constitutional-gate.py` and `.github/hooks/constitutional-gate.py`.
+- **`integrity.py` itself,** so removing an entry is detectable.
+
+The two per-install hook copies are listed in `INSTALLED_COPIES`: they are gitignored, machine-local copies of the tracked template, so they are legitimately absent from a fresh checkout or CI. `verify` treats their **absence** as benign but still flags a **present** copy whose bytes differ from the manifest — the tamper tooth for the gate that actually executes. The template itself is a normal present-required pinned module.
 
 ### `MANIFEST_REL_PATH`
 

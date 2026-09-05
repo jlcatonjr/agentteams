@@ -96,6 +96,23 @@ ENFORCEMENT_MODULES: tuple[str, ...] = (
     "agentteams/integrity.py",           # self, so removing an entry is itself detectable
 )
 
+#: The subset of ENFORCEMENT_MODULES that are per-install, machine-local *copies* of a tracked
+#: template — the two installed constitutional-gate hooks. Their template
+#: (`agentteams/templates/universal/hooks/constitutional-gate.py`) is a normal, tracked,
+#: present-required pinned module; these two are gitignored (`.gitignore` `.claude/`,
+#: `.github/hooks/`) and therefore legitimately ABSENT in any checkout that has not installed
+#: them (CI, a fresh clone). `verify` treats their absence as benign but still flags a PRESENT
+#: copy whose bytes differ from the manifest — that is the tooth row 52 pinned them for (a
+#: silent edit to the gate that actually executes). Rule-12 trade-off, named deliberately: this
+#: exempts an undetected *local deletion* of an installed copy (the same epistemics as a missing
+#: manifest), while the *edit* tooth on a present copy and the template-removal tooth (via E3 and
+#: the template's own pin) both remain. Extends the 2026-08-26 D-1 clearance (row 52), does not
+#: reverse it.
+INSTALLED_COPIES: frozenset[str] = frozenset({
+    ".claude/hooks/constitutional-gate.py",
+    ".github/hooks/constitutional-gate.py",
+})
+
 #: Where the manifest lives, relative to the repository root.
 MANIFEST_REL_PATH = "references/enforcement-integrity.json"
 
@@ -188,6 +205,10 @@ def verify(repo_root: Path) -> list[IntegrityFinding]:
         got = actual.get(rel, "")
         if got == expected:
             continue
+        if not got and rel in INSTALLED_COPIES:
+            # A per-install copy legitimately absent here (see INSTALLED_COPIES). Absence is
+            # benign; a PRESENT copy that differs is still caught by the `modified` branch below.
+            continue
         reason = "missing" if not got else "modified"
         findings.append(IntegrityFinding(rel_path=rel, expected=expected, actual=got, reason=reason))
     # A module added to ENFORCEMENT_MODULES but absent from the manifest is unverified. Report
@@ -202,6 +223,7 @@ def verify(repo_root: Path) -> list[IntegrityFinding]:
 
 __all__ = [
     "ENFORCEMENT_MODULES",
+    "INSTALLED_COPIES",
     "MANIFEST_REL_PATH",
     "IntegrityFinding",
     "compute_digests",
