@@ -143,12 +143,15 @@ def test_the_real_library_still_measures_what_it_measured() -> None:
     current = _current()
     # 159 -> 162 (2026-W36, management-repository endowment): +3 constraint lines added to the
     # fenceless, whole-file-restored `instruction-authority.reference.template.md` (its C-4
-    # Management-authority bounded exception). Constraints in that file are SAFE despite being
-    # "outside a fence" — a fenceless reference is wrapped whole in a single content fence at emit
-    # and thus module-owned/restored on every --update --merge (see the template's header note),
-    # so the per-file baseline was raised 7 -> 10 in test_unfenced_constraint_ratchet.py and this
-    # total tracks it. The predicate did not move; three real, restored constraint lines were added.
-    assert (len(current), sum(current.values())) == (43, 162), (
+    # Management-authority bounded exception). 162 -> 166 (2026-W36, interactive-query protocol):
+    # +4 constraint lines in the same file (the interactive operator-query escalation clause on the
+    # C-4 Management-authority section, incl. the "operator's answer is not a waiver" and
+    # no-operator/fail-closed guards added after the @adversarial review). Constraints in that file
+    # are SAFE despite being "outside a fence" — a fenceless reference is wrapped whole in a single
+    # content fence at emit and thus module-owned/restored on every --update --merge (see the
+    # template's header note), so the per-file baseline was raised 7 -> 10 -> 14 in
+    # test_unfenced_constraint_ratchet.py and this total tracks it. The predicate did not move.
+    assert (len(current), sum(current.values())) == (43, 166), (
         f"library measurement moved to {len(current)} files / {sum(current.values())} lines; "
-        "it was 43 / 162 after the management-repository C-4 addition. Explain the move, do not re-baseline."
+        "it was 43 / 166 after the interactive-query protocol addition. Explain the move, do not re-baseline."
     )
