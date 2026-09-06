@@ -6,6 +6,23 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### added (interactive operator query for non-intermediable manager-relayed tasks)
+
+- **A manager-relayed task that a managed agent cannot follow through on without the operator's
+  direct authorization now returns to the operator as one interactive query, not a dead end.**
+  The management-directive honor side (orchestrator Workflow 14) previously left an unverifiable
+  directive *inert* ("ask as today") and *refused* a governance/C-2/C-5/denylisted-scope directive
+  as a peer conflict — both of which could stall silently or surface as a bare refusal. Standard
+  protocol now: whenever the honor side reaches the inert branch (no verified row) or the refusal
+  branch (denylisted scope, `@security` HALT, constitution/Invariant-Core change, or C-5
+  destruction), the agent MUST raise a single **interactive operator query** naming the task, the
+  relaying manager, the exact reason the directive cannot authorize it, and the decision required —
+  then await the operator's **direct, non-intermediated** response and log it to
+  `references/orchestrator-escalation.log.csv`. A task that verifies under the directive still
+  proceeds with no query; the query is only for the non-intermediable case. Documented in the C-4
+  Management-authority section of the instruction-authority reference; `available_workflows` fence
+  bumped v=4 → v=5. Propagates to each team on its next `--update --merge`.
+
 ### fixed (management-directive denylist — refuse inflected destructive/governance scopes)
 
 - **The management-directive scope denylist now fails closed on inflections.** The Rule-8 close-out

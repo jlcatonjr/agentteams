@@ -71,7 +71,7 @@ def test_escalation_ledger_stub_created_with_header(tmp_path):
 def test_orchestrator_routing_and_workflow_versions_bumped():
     text = ORCH.read_text(encoding="utf-8")
     assert "<!-- AGENTTEAMS:BEGIN routing_table_rows v=3 -->" in text
-    assert "<!-- AGENTTEAMS:BEGIN available_workflows v=4 -->" in text
+    assert "<!-- AGENTTEAMS:BEGIN available_workflows v=5 -->" in text
 
 
 def test_orchestrator_has_funnel_routing_row_and_workflows():
@@ -88,6 +88,20 @@ def test_workflow9_step4_is_role_conditional_and_preserves_peer_path():
     assert "Role-conditional surfacing" in text
     # the peer/initiator/standalone path still surfaces to the user (not removed)
     assert "initiator / peer / standalone" in text
+
+
+def test_workflow14_honor_side_raises_interactive_operator_query():
+    """A manager-relayed task that is inert or refused must return to the operator as a single
+    interactive query — not a silent stall, vague re-ask, or bare refusal (the friction the
+    management model exists to remove)."""
+    text = ORCH.read_text(encoding="utf-8")
+    assert "Interactive operator query (standard protocol)" in text
+    # inert (step 3) and refused (step 4) both route into the query, not a dead end
+    assert "fall through to the interactive operator query" in text  # step 3 inert
+    assert "raise the\n   interactive operator query" in text or "interactive operator query (step 5)" in text
+    # the query awaits the operator's DIRECT, non-intermediated response and is logged
+    assert "non-intermediated" in text
+    assert "orchestrator-escalation.log.csv" in text
 
 
 def test_feature_carries_no_new_unfenced_constitutional_rule():
