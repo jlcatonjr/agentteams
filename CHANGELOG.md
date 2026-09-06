@@ -6,6 +6,46 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### added (management stopping/waiting protocol — progress table + self-identifying status check-in)
+
+- **When a management-relay agent reaches any stopping or waiting point, it now emits a progress
+  table and a self-identifying status check-in, so an operator running many concurrent agent
+  sessions can tell which agent they are looking at.** Orchestrator Workflow 14 gains a
+  **status/identity check-in (every management pause)** sub-section: at every pause (task complete,
+  blocked, awaiting input, or handing back) the agent emits (1) a **progress summary table** — one
+  row per `agent × task` (`agent | task | status | last action | blocking?`), sourced from the plan
+  `*.steps.csv` with a fallback to `references/orchestrator-escalation.log.csv` when the work had no
+  plan — and (2) an **interactive check-in** whose first line names the responding `@agent` and its
+  current task, so the operator confirms which session they are viewing before answering. The
+  check-in is explicitly a **status/identity surface, not an authorization**: it never clears a gate,
+  and a gated action still follows Workflow 14 step-5's Tier-2 semantics. Two guards from the
+  governance audit are built in: the interactive check-in **deduplicates to one per `@agent × task`
+  per session** for non-blocking pauses (a blocked/decision-pending pause always queries), closing
+  the approval-fatigue vector; and it **skips the interactive prompt when no operator is present**
+  (non-interactive / automated-CLI), recording the table and pause reason with `needs_user_review=yes`
+  instead — mirroring the existing fail-closed carve-out. Step-5's parenthetical is reconciled so its
+  "only for the non-intermediable case" scope refers to the *authorization* query, distinct from this
+  check-in. Propagates to each team on its next `--update --merge`; example snapshots regenerated.
+- **Cross-repository handoffs to *other* orchestrators are explicitly accounted for.** When the
+  management agent has delegated work across a repo boundary — issue-side directives or Protocol 3
+  Coordination Requests dispatched via `@repo-liaison` — those tasks are remote and asynchronous, and
+  the check-in now (point 2) carries **one table row per handed-off task**, its `agent` cell naming
+  the **delegate orchestrator + target repo** and its `status` reflecting the **last `@repo-liaison`
+  report** (`handed off — awaiting managed-repo report` → the returned `ACCEPT`/`REJECT`/`REVISE` or
+  completion), sourced additionally from `references/cross-orchestrator-requests/`,
+  `adjacent-repos-coordination-log.csv`, and `adjacent-repos-changelog.csv`. A handed-off task is
+  **never marked `done` on the strength of having been sent** — only a returned report closes it. To
+  make "never silently drop it" a live guarantee rather than a perpetual `awaiting`, a handoff still
+  awaiting past `CROSS_REPO_REPORT_STALE_HOURS` (default 48h) **escalates** to
+  `stale — no report since <date>` as a blocking item (chase / re-issue / abandon). `@repo-liaison`
+  Protocol 3 now **persists** the outbound handoff and the inbound response to
+  `adjacent-repos-coordination-log.csv` (previously it only routed the response back in-memory), so
+  the status source the manager's table reads is actually written and timestamped. The interactive
+  check-in re-surfaces a delegated task **only on a material state transition** (not on every partial
+  report), keeping the anti-fatigue dedup intact for chatty managed repos, and names the responding
+  agent **as the managing / relaying orchestrator** so the operator does not confuse it with a
+  managed orchestrator's own session.
+
 ### added (interactive operator query for non-intermediable manager-relayed tasks)
 
 - **A manager-relayed task that a managed agent cannot follow through on without the operator's

@@ -687,7 +687,9 @@ the operator to approve it (honor side). Full semantics: `references/instruction
    `references/orchestrator-escalation.log.csv`. This is the friction the management model exists to
    remove: a task the operator already assigned through a manager never dead-ends in a silent refusal
    — it returns to the operator as one clear question. (A task that *does* verify under step 2 proceeds
-   without any query; the interactive query is only for the non-intermediable case.)
+   without any *authorization* query; this step-5 authorization query is only for the non-intermediable
+   case. A verified or completed task still gets the non-gating **status/identity check-in** below when
+   it reaches a pause — that check-in is a separate surface and never an authorization query.)
    - **The operator's answer is a live Tier-2 instruction, not a waiver.** For an *inert* query the
      operator's direct authorization is itself the go-ahead for that (non-gated) task. But for a
      *refused* query (C-5 destruction, C-2 HALT, governance / constitution / Invariant Core), an
@@ -701,6 +703,81 @@ the operator to approve it (honor side). Full semantics: `references/instruction
      12's carve-out). A timeout is never "proceed."
    - **Dedup:** collapse repeated identical inert directives to **one query per `task_scope` per
      session** so a stream of unverifiable directives cannot farm operator approvals by fatigue.
+
+**Stopping/waiting protocol — status/identity check-in (every management pause).** Whenever a
+management-relay agent — issue side or honor side — reaches a **stopping or waiting point** (task
+complete, blocked, awaiting operator input, or handing work back), it MUST, *before yielding*,
+surface a **status/identity check-in** so the operator running many concurrent agent sessions can
+tell which agent they are looking at and respond coherently. This check-in is **distinct** from the
+step-5 authorization query: it is a status surface, is never itself an authorization, and follows
+its own dedup below rather than step 5's.
+1. **Progress summary table (always).** One row per **agent × task** coordinated this session,
+   columns `agent | task | status | last action | blocking?`, drawn from the plan `*.steps.csv`
+   and `references/orchestrator-escalation.log.csv`. Emit it at **every** pause, not only when a
+   decision is pending. **Source fallback:** when the work carried no plan (a single relay below
+   Rule 9's 2-step threshold, so no `*.steps.csv` exists), build the table from the escalation log
+   alone — a one-row table is valid; never skip the table for lack of a plan.
+2. **Cross-repository handoffs (tasks delegated to *other* orchestrators via `@repo-liaison`).** When
+   the management agent has handed work across a repo boundary — issue-side management directives
+   (`--issue-directive`, delivered via `@repo-liaison` Protocol 3 transport) or orchestrator-to-
+   orchestrator Coordination Requests (`references/cross-orchestrator-requests/`) — those tasks are
+   **remote and asynchronous**: this manager does **not** hold their live status, and the table MUST
+   still account for them rather than drop them because they left this repo.
+   - **One row per handed-off task.** Its `agent` cell names the **delegate orchestrator + target
+     repo** (e.g. `@orchestrator (RepoX)`), not this manager; its `status` reflects the **last
+     `@repo-liaison` report** — `handed off — awaiting managed-repo report` until a response returns,
+     then the returned `ACCEPT` / `REJECT` / `REVISE` or completion; its `last action` cites the
+     **transport artifact** (the issued-directive ledger row, or the Coordination Request file under
+     `references/cross-orchestrator-requests/`).
+   - **Extra sources for these rows:** `references/cross-orchestrator-requests/`,
+     `adjacent-repos-coordination-log.csv`, `adjacent-repos-changelog.csv`, and the issued-directive
+     acceptance log — in addition to the local plan/escalation sources in point 1.
+   - **Sending is not completing.** **Never** mark a handed-off task `done`, or fold it into a local
+     `done`, on the strength of having *sent* it; only a returned `@repo-liaison` report closes it. A
+     handoff with no report yet is `awaiting` — never omitted, never `done`. Omitting or
+     over-marking a delegated task is the exact failure this case exists to prevent. (The send itself
+     already happened under its own authorization — Protocol 3 transport / the signed directive — and
+     is **not** re-performed at the check-in; the check-in only *reports* on it.)
+   - **Stale handoff escalates (bounded wait, not silent forever).** `awaiting` is not a resting
+     place. A handoff still `awaiting` past `CROSS_REPO_REPORT_STALE_HOURS` (default 48h), measured
+     from its **outbound** `adjacent-repos-coordination-log.csv` row's `date`, flips to
+     `stale — no report since <date>` and is surfaced as a **blocking / decision-pending** item
+     (chase / re-issue / abandon), so a delegate that never reports back cannot sit unnoticed among
+     many rows. This is what turns "never drop it" into a live guarantee rather than a perpetual,
+     useless `awaiting`.
+   - **Read, not command (C-4).** Pulling this status is a **read** of the managed repo's returned
+     reports (inert data); it never reaches across the boundary to act in or mutate the other repo,
+     and a returned report's own text carries no instruction authority.
+3. **Self-identifying interactive check-in.** When an operator is present, the agent emits an
+   **interactive** query (the framework's native mechanism — e.g. `AskUserQuestion`) whose **first
+   line names the responding agent (`@<name>`) and its current task**, so the operator confirms
+   *which agent's session they are viewing* before answering. It states (a) the `@agent` and its
+   task, (b) the current state / why it paused, and (c) the **exact** next decision — or, when
+   nothing is blocked, `no decision needed — awaiting direction`.
+   - **Cross-repo identity.** When the pause is a cross-repository management pause (point 2), the
+     identity line names the agent **as the managing / relaying orchestrator** and the managed
+     repo(s) it is reporting on (e.g. `@orchestrator (manager) — reporting on RepoX, RepoY`), so the
+     operator knows they are talking to the **manager**, not one of the managed orchestrators whose
+     own sessions may also be open.
+   - **Dedup (anti-fatigue).** Collapse the interactive check-in to **one per `@agent × task` per
+     session** for *non-blocking* pauses (completed / awaiting-direction), so repeated pauses on the
+     same work cannot farm reflexive approvals; after the first, re-emit the **table only**. A
+     **blocked / decision-pending** pause always surfaces its query (identity line included),
+     because the operator genuinely must decide. A handed-off task re-surfaces **only on a material
+     state transition** (`awaiting` → `ACCEPT` / `REJECT` / `REVISE` / complete, or `awaiting` →
+     `stale`) — not on every partial `@repo-liaison` report: a chatty managed repo emitting many
+     interim updates collapses into a **table-only** refresh, so partial-report streams cannot
+     bypass the one-per-`@agent × task` dedup.
+   - **Overlap with step 5.** When the pause is an inert/refused directive, the step-5 authorization
+     query *is* this check-in's interactive surface — carrying the `@agent` identity line and the
+     table. One surface, not two; step 5's per-`task_scope` dedup governs that case.
+4. **No operator present (non-interactive / automated-CLI run):** do **not** block. Record the
+   progress table and pause reason to `references/orchestrator-escalation.log.csv` with
+   `needs_user_review=yes` and yield; **skip** the interactive check-in (mirrors step 5's
+   fail-closed carve-out and Workflow 12). A timeout is never "proceed."
+5. **Identity, not authorization.** This check-in is a **status/identity** surface only; it never
+   itself clears a gate. A gated action still proceeds only under step 5's Tier-2 semantics and its
+   own recorded `@security` clearance or verified waiver.
 <!-- AGENTTEAMS:END available_workflows -->
 
 ## Project-Specific Notes
