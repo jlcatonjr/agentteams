@@ -6,6 +6,28 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### added (--shrink-policy=additive — deliver new sub-sections to enriched fences without dropping enrichment)
+
+- **`--update --merge` gains a fifth shrink policy, `additive`, that lets an additive
+  template change reach a fence an operator has since enriched.** The existing policies are
+  all-or-nothing per fence: `preserve` (default) keeps the enriched body and *suppresses* the
+  template update (so a newly-added `### Workflow N` sub-section never lands), while `allow` takes
+  the template body and *drops* the enrichment. `additive` splices the template's **new
+  markdown-heading (`##`/`###`) sub-sections** into the existing enriched body at the render's
+  position, keeping the enriched body **verbatim** — a strict superset, so no concrete ref, rule,
+  or list item is lost — and falls back to `preserve` when there is nothing new to add. New
+  sub-sections are placed after the nearest preceding shared heading (else before the nearest
+  following one, else appended with a notice). A heading counts as already-present when its full
+  title **or** its pre-colon identity (`_heading_signature`) matches an existing one, so a
+  detail/parenthetical drift after the colon (`… Directives` vs `… Directives (issue / honor)`)
+  never causes a duplicate splice. Template-authoritative (security-owned) fences are excluded
+  exactly as under `preserve` — they always take the template body, so a fence cannot be padded to
+  smuggle spliced content past the guard. Content added *under* an existing heading (e.g. a new
+  bold block inside a kept section) is not spliced and falls back to preserve. `additive` is a
+  strict superset (non-destructive), so it is permitted under `--fleet` (unlike `allow`). Motivated
+  by the post-PR#26 finding that a blanket fleet refresh could not deliver the new Workflow 14
+  protocol to enriched orchestrator fences without either no-op'ing or destroying enrichment.
+
 ### added (management stopping/waiting protocol — progress table + self-identifying status check-in)
 
 - **When a management-relay agent reaches any stopping or waiting point, it now emits a progress

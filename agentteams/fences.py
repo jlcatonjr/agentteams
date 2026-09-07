@@ -403,6 +403,151 @@ def _detect_fence_shrink(sid: str, existing_block: str, new_block: str) -> str |
     return f"fence '{sid}': " + "; ".join(reasons)
 
 
+# --- additive shrink-policy: splice new sub-sections into an enriched fence ---
+#
+# `--shrink-policy=preserve` (default) and `=allow` are all-or-nothing per fence:
+# preserve keeps the enriched body and drops any template ADDITION; allow takes the
+# template body and drops the enrichment. Neither can deliver a purely additive
+# template change (a new `### Workflow N` sub-section) to a fence whose body an
+# operator/content-enricher has since enriched with project-specific concrete refs.
+# `=additive` splices the template's NEW heading-delimited sub-sections into the
+# existing enriched body at the render's position, keeping the enriched body verbatim
+# (a strict superset — nothing is dropped). When there is nothing new to splice, it
+# falls back to preserve. See references/plans/... (additive-merge-mode).
+
+# A markdown heading matcher; reused by _detect_duplicate_sections below (single
+# source of truth — do not reintroduce a second copy).
+_MD_HEADING_RE = re.compile(r"^(#{2,6})\s+(.+?)\s*$", re.MULTILINE)
+
+
+def _heading_signature(key: str) -> str:
+    """Stable identity for a heading title: the part before the first colon.
+
+    ``### Workflow 14: Management Directives`` and an enriched
+    ``### Workflow 14: Management Directives (issue / honor)`` both reduce to
+    ``workflow 14`` — so a parenthetical/detail drift after the colon does not make
+    the additive splice treat the template's heading as brand new (which would
+    silently DUPLICATE the sub-section). Headings with no colon key on their whole
+    title. The bias is deliberately toward treating a near-match as *existing*
+    (under-deliver, safe) rather than as new (duplicate, a corruption).
+    """
+    return key.split(":", 1)[0].strip()
+
+
+def _split_headed_segments(body: str) -> list[tuple[str | None, str]]:
+    """Split a fence body into ``(heading_key, text)`` segments at markdown headings.
+
+    The text before the first heading is one ``(None, preamble)`` segment (kept only
+    when non-empty). ``heading_key`` is the heading title lower-cased and
+    whitespace-collapsed, so ``### Workflow 14: Foo`` keys on ``workflow 14: foo``
+    regardless of heading level. Each segment's ``text`` spans from its heading line
+    up to (but excluding) the next heading, preserving all original formatting so a
+    concatenation of segments reproduces ``body`` exactly.
+    """
+    matches = list(_MD_HEADING_RE.finditer(body))
+    if not matches:
+        return [(None, body)] if body else []
+    segs: list[tuple[str | None, str]] = []
+    if matches[0].start() > 0:
+        pre = body[: matches[0].start()]
+        if pre.strip():
+            segs.append((None, pre))
+    for idx, m in enumerate(matches):
+        start = m.start()
+        end = matches[idx + 1].start() if idx + 1 < len(matches) else len(body)
+        key = " ".join(m.group(2).strip().lower().split())
+        segs.append((key, body[start:end]))
+    return segs
+
+
+def _rewrap_block(block: str, new_body: str) -> str:
+    """Rebuild a fenced block from its original BEGIN/END marker lines and a new body."""
+    lines = block.splitlines(keepends=True)
+    if len(lines) < 2:
+        return block
+    if new_body and not new_body.endswith("\n"):
+        new_body += "\n"
+    return lines[0] + new_body + lines[-1]
+
+
+def _additive_merge_block(
+    sid: str, existing_block: str, new_block: str
+) -> tuple[str, int, list[str]]:
+    """Splice heading-delimited sub-sections that are new in ``new_block`` into the
+    body of ``existing_block``, preserving the existing body verbatim.
+
+    Returns ``(merged_block, num_added, notices)``. ``num_added == 0`` means there was
+    no new heading-delimited sub-section to add (the caller should fall back to
+    preserve). ``notices`` carries any placement warnings (e.g. an addition appended
+    at the end because no shared anchor was found).
+
+    The existing body is only ever added to — every existing segment is kept in its
+    original order and never modified — so the result is a strict superset and no
+    concrete ref or list item can be lost. A post-splice shrink re-check is a
+    defensive guard: if it somehow trips, the splice is abandoned. New sub-sections
+    are placed at the render's position, mirroring the fence-level
+    ``_insert_section_at_render_position`` policy (after the nearest preceding shared
+    heading; else before the nearest following shared heading; else appended).
+
+    A heading counts as "already present" when either its full key OR its
+    ``_heading_signature`` (pre-colon identity) matches an existing heading, so a
+    detail/parenthetical drift after the colon never causes a duplicate splice.
+    """
+    ex_segs = _split_headed_segments(_fence_body(existing_block))
+    new_segs = _split_headed_segments(_fence_body(new_block))
+    ex_keys = {k for k, _ in ex_segs if k is not None}
+    ex_sigs = {_heading_signature(k) for k in ex_keys}
+    new_order = [k for k, _ in new_segs if k is not None]
+    new_text = {k: t for k, t in new_segs if k is not None}
+    additions = [
+        k for k in new_order
+        if k not in ex_keys and _heading_signature(k) not in ex_sigs
+    ]
+    if not additions:
+        return existing_block, 0, []
+
+    notices: list[str] = []
+    merged: list[tuple[str | None, str]] = list(ex_segs)
+    for add_key in additions:
+        seg = (add_key, new_text[add_key])
+        k = new_order.index(add_key)
+        insert_at: int | None = None
+        # 1. after the nearest preceding new-order heading present in merged
+        #    (includes additions inserted this pass, so a run like 12,13,14 keeps order).
+        for prev in reversed(new_order[:k]):
+            for mi in range(len(merged) - 1, -1, -1):
+                if merged[mi][0] == prev:
+                    insert_at = mi + 1
+                    break
+            if insert_at is not None:
+                break
+        # 2. before the nearest following new-order heading present in merged.
+        if insert_at is None:
+            for nxt in new_order[k + 1:]:
+                for mi in range(len(merged)):
+                    if merged[mi][0] == nxt:
+                        insert_at = mi
+                        break
+                if insert_at is not None:
+                    break
+        if insert_at is None:
+            merged.append(seg)
+            notices.append(
+                f"fence '{sid}': additive sub-section '{add_key}' had no shared anchor "
+                f"on disk; appended at end of fence — verify its ordering"
+            )
+        else:
+            merged.insert(insert_at, seg)
+
+    merged_body = "".join(t for _, t in merged)
+    merged_block = _rewrap_block(existing_block, merged_body)
+    # Defensive: the construction is add-only, so this must not trip; if it does
+    # (e.g. a pathological body), abandon the splice rather than risk a loss.
+    if _detect_fence_shrink(sid, existing_block, merged_block) is not None:
+        return existing_block, 0, []
+    return merged_block, len(additions), notices
+
+
 def _extract_fenced_regions(content: str) -> dict[str, str] | str:
     """Extract all fenced regions from *content*.
 
@@ -598,9 +743,6 @@ def _insert_section_at_render_position(
     )
 
 
-_MD_HEADING_RE = re.compile(r"^(#{2,6})\s+(.+?)\s*$", re.MULTILINE)
-
-
 def _detect_duplicate_sections(merged: str, added_sids: list[str]) -> list[str]:
     """Report headings that appear twice after new fences were added.
 
@@ -697,6 +839,7 @@ def _merge_fenced_content(
     existing_on_disk: str,
     preserve_on_shrink: bool = False,
     *,
+    additive_on_shrink: bool = False,
     file_is_unmodified: bool = False,
     rel_path: str = "",
 ) -> MergeResult:
@@ -842,6 +985,34 @@ def _merge_fenced_content(
                         sid, existing_regions.get(sid, ""), new_regions[sid]
                     )
                     if (
+                        notice
+                        and additive_on_shrink
+                        and not _is_template_authoritative(sid, rel_path)
+                    ):
+                        # Additive update: splice the template's NEW heading-delimited
+                        # sub-sections into the enriched body (strict superset — nothing
+                        # dropped). If there is nothing new to splice, fall back to
+                        # preserve so an unrelated shrink still keeps the enriched body.
+                        spliced_block, n_added, add_notices = _additive_merge_block(
+                            sid, existing_regions[sid], new_regions[sid]
+                        )
+                        if n_added > 0:
+                            output_lines.append(spliced_block)
+                            result.sections_replaced.append(sid)
+                            result.shrink_notices.append(
+                                f"fence '{sid}': additive merge — spliced in {n_added} "
+                                f"new sub-section(s); enriched body preserved (no content dropped)"
+                            )
+                            result.shrink_notices.extend(add_notices)
+                        else:
+                            output_lines.append(existing_regions[sid])
+                            result.sections_preserved.append(sid)
+                            result.shrink_notices.append(
+                                notice
+                                + " (additive: no new heading-delimited sub-section to splice; "
+                                "enriched body retained — use --shrink-policy=allow to force)"
+                            )
+                    elif (
                         notice
                         and preserve_on_shrink
                         and not _is_template_authoritative(sid, rel_path)

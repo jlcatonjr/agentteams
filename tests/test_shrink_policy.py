@@ -227,3 +227,152 @@ def test_ordinary_fence_is_still_preserved_on_shrink():
     )
     result = _merge_fenced_content(template, on_disk, preserve_on_shrink=True)
     assert sid in result.sections_preserved, "operator enrichment must still be protected"
+
+
+# ---------------------------------------------------------------------------
+# additive shrink-policy: splice NEW heading-delimited sub-sections into an
+# enriched fence, preserving the enriched body verbatim (strict superset).
+# ---------------------------------------------------------------------------
+
+# Enriched on-disk `available_workflows`: only through Workflow 11, and Workflow 11
+# carries a project-specific concrete ref (`reports/`) that the fresh template lacks —
+# so a plain re-render both shrinks (loses the ref) AND fails to add the new workflows.
+_WF_EXISTING = (
+    "# Orchestrator\n\n"
+    "<!-- AGENTTEAMS:BEGIN available_workflows v=2 -->\n"
+    "### Workflow 10: Plan\nDraft the plan.\n\n"
+    "### Workflow 11: Final Check\nVerify output in `reports/` before closeout.\n"
+    "<!-- AGENTTEAMS:END available_workflows -->\n\n"
+    "Outside-fence project notes.\n"
+)
+# Fresh render: generic Workflow 11 (no `reports/`) + three brand-new workflows.
+_WF_NEW = (
+    "# Orchestrator\n\n"
+    "<!-- AGENTTEAMS:BEGIN available_workflows v=2 -->\n"
+    "### Workflow 10: Plan\nDraft the plan.\n\n"
+    "### Workflow 11: Final Check\nVerify output before closeout.\n\n"
+    "### Workflow 12: Spawn-Authority Query Funnel\nFunnel spawn requests.\n\n"
+    "### Workflow 13: Scoped Child Orchestrator\nSpawn a scoped child.\n\n"
+    "### Workflow 14: Management Directives\nStatus/identity check-in at every pause.\n"
+    "<!-- AGENTTEAMS:END available_workflows -->\n\n"
+    "Outside-fence project notes.\n"
+)
+
+
+def test_additive_splices_new_subsections_preserving_enrichment(tmp_path):
+    """additive delivers new heading-delimited sub-sections into an enriched fence
+    while keeping the enriched body verbatim — the exact fleet-propagation case."""
+    target = tmp_path / "orchestrator.agent.md"
+    target.write_text(_WF_EXISTING, encoding="utf-8")
+    result = emit.emit_all(
+        [("orchestrator.agent.md", _WF_NEW)],
+        output_dir=tmp_path,
+        merge=True,
+        yes=True,
+        shrink_policy="additive",
+    )
+    body = target.read_text(encoding="utf-8")
+    # Enrichment preserved (nothing dropped) ...
+    assert "reports/" in body
+    assert "Verify output in `reports/` before closeout." in body
+    # ... AND the new sub-sections were delivered ...
+    assert "Workflow 12" in body and "Workflow 13" in body and "Workflow 14" in body
+    assert "Status/identity check-in at every pause." in body
+    # ... in render order, after the enriched Workflow 11.
+    assert (body.index("Workflow 11") < body.index("Workflow 12")
+            < body.index("Workflow 13") < body.index("Workflow 14"))
+    # Outside-fence content untouched; nothing blocked.
+    assert "Outside-fence project notes." in body
+    assert not result.shrink_blocked
+
+
+def test_additive_falls_back_to_preserve_when_no_new_subsection(tmp_path):
+    """When a shrink has no new heading-delimited sub-section to add, additive keeps
+    the enriched body (like preserve) rather than dropping it."""
+    existing = (
+        "<!-- AGENTTEAMS:BEGIN demo v=1 -->\n"
+        "### Section A\nKeep `enriched/a.md` and `enriched/b.md` and `enriched/c.md`.\n"
+        "<!-- AGENTTEAMS:END demo -->\n"
+    )
+    new_render = (
+        "<!-- AGENTTEAMS:BEGIN demo v=1 -->\n"
+        "### Section A\nThinner.\n"
+        "<!-- AGENTTEAMS:END demo -->\n"
+    )
+    target = tmp_path / "demo.agent.md"
+    target.write_text(existing, encoding="utf-8")
+    result = emit.emit_all(
+        [("demo.agent.md", new_render)],
+        output_dir=tmp_path,
+        merge=True,
+        yes=True,
+        shrink_policy="additive",
+    )
+    body = target.read_text(encoding="utf-8")
+    assert "enriched/a.md" in body and "enriched/c.md" in body  # nothing lost
+    assert "Thinner." not in body                                # thin body not applied
+    assert not result.shrink_blocked
+
+
+def test_additive_respects_template_authoritative_fence():
+    """A template-authoritative (security-owned) fence still takes the template body
+    under additive — padding it must not suppress the update, same as preserve."""
+    from agentteams.fences import _TEMPLATE_AUTHORITATIVE_FENCES, _merge_fenced_content
+
+    sid = sorted(_TEMPLATE_AUTHORITATIVE_FENCES)[0]
+    template = f"<!-- AGENTTEAMS:BEGIN {sid} v=1 -->\n### New\ncanonical body.\n<!-- AGENTTEAMS:END {sid} -->\n"
+    on_disk = (
+        f"<!-- AGENTTEAMS:BEGIN {sid} v=1 -->\n### Old\n"
+        + "".join(f"- `pad/{i}.md` padding\n" for i in range(12))
+        + f"<!-- AGENTTEAMS:END {sid} -->\n"
+    )
+    result = _merge_fenced_content(template, on_disk, additive_on_shrink=True)
+    assert sid not in result.sections_preserved
+    assert "pad/0.md" not in result.merged_content
+    assert "canonical body." in result.merged_content
+
+
+def test_additive_merge_block_is_strict_superset():
+    """The splice never drops a concrete ref or list item from the enriched body."""
+    from agentteams.fences import _additive_merge_block, _detect_fence_shrink
+
+    existing = (
+        "<!-- AGENTTEAMS:BEGIN wf v=1 -->\n"
+        "### Workflow 11\nRefs `a/x.md`, `b/y.md`, `c/z.md`.\n"
+        "<!-- AGENTTEAMS:END wf -->\n"
+    )
+    new = (
+        "<!-- AGENTTEAMS:BEGIN wf v=1 -->\n"
+        "### Workflow 11\nRefs changed.\n\n### Workflow 12\nNew.\n"
+        "<!-- AGENTTEAMS:END wf -->\n"
+    )
+    merged, n, _notices = _additive_merge_block("wf", existing, new)
+    assert n == 1
+    for ref in ("a/x.md", "b/y.md", "c/z.md"):
+        assert ref in merged
+    assert "Workflow 12" in merged
+    # No shrink of the merged result versus the enriched original.
+    assert _detect_fence_shrink("wf", existing, merged) is None
+
+
+def test_additive_does_not_duplicate_on_post_colon_title_drift():
+    """A parenthetical/detail drift after the colon must NOT make the template
+    heading look brand new (which would silently duplicate the sub-section)."""
+    from agentteams.fences import _additive_merge_block
+
+    existing = (
+        "<!-- AGENTTEAMS:BEGIN wf v=1 -->\n"
+        "### Workflow 14: Management Directives (issue / honor)\n"
+        "Enriched body referencing `reports/local.md`.\n"
+        "<!-- AGENTTEAMS:END wf -->\n"
+    )
+    new = (
+        "<!-- AGENTTEAMS:BEGIN wf v=1 -->\n"
+        "### Workflow 14: Management Directives\nGeneric template body.\n"
+        "<!-- AGENTTEAMS:END wf -->\n"
+    )
+    merged, n, _notices = _additive_merge_block("wf", existing, new)
+    # Same Workflow 14 → NOT treated as new; no duplicate spliced.
+    assert n == 0
+    assert merged.count("Workflow 14") == 1
+    assert "reports/local.md" in merged  # enrichment intact
