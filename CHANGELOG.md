@@ -6,6 +6,29 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### added (CH-31 — when to convert an `if`/`elif` chain to a dispatch table)
+
+- **New code-hygiene rule `CH-31`, an exclusion-first complement to [[CH-24]].** CH-24 already
+  *prefers* encoding conditions in a dictionary / lookup table / dispatch map; CH-31 supplies the
+  missing **decision test and exclusions** so that preference is not applied where it would harm
+  clarity. A chain is flagged for conversion **only when all hold**: it dispatches on a single key
+  (str/enum/const); every branch is homogeneous (returns/assigns a value or calls one handler, with
+  no per-branch early-`return`/`raise`/`continue` or ordering/side-effects); and there are ≥4
+  branches **and** a default/exhaustiveness story. It **never** flags guard clauses, range/boolean
+  tests, `isinstance`/type narrowing, prefix/substring parsers or char state machines, first-match
+  or negation-combined chains, or boolean-precedence selectors — "when unsure, KEEP the `if`."
+  Added to `agentteams/templates/domain/code-hygiene-rules-reference.template.md` (rendered into
+  every generated/updated team's `@code-hygiene`) with a trigger-table pointer in
+  `code-hygiene.template.md`. Basis: a feasibility/value review
+  (`references/plans/dispatch-table-hygiene.report.md`, audited by @adversarial + @conflict-auditor
+  + @code-hygiene) found only **2** genuine conversions across 171 files — the codebase already
+  applies dispatch tables where they fit — so the rule's value is a bounded, forward-looking guard,
+  not a mass refactor.
+- **Two genuine conversions applied** (`agentteams/architecture.py` and `agentteams/graph.py`
+  `main()`): the `format`→renderer `if`/`elif` fan-outs became `renderers = {…}; output =
+  renderers.get(fmt, default)(graph)`, which also removes a duplicated `markdown`/`else` arm in
+  graph.py. The 12 WEAK and ~30 KEEP candidates were deliberately left as `if`/`elif`.
+
 ### added (management stopping/waiting protocol — progress table + self-identifying status check-in)
 
 - **When a management-relay agent reaches any stopping or waiting point, it now emits a progress

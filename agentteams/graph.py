@@ -740,19 +740,16 @@ def main(argv: list[str] | None = None) -> int:
 
     graph = build_graph(file_map, project_name=project_name)
 
-    fmt = args.format
-    if fmt == "markdown":
-        output = graph.to_markdown_document()
-    elif fmt == "mermaid":
-        output = "```mermaid\n" + graph.to_mermaid() + "\n```"
-    elif fmt == "dot":
-        output = graph.to_dot()
-    elif fmt == "json":
-        output = graph.to_json()
-    elif fmt == "svg":
-        output = graph.to_svg()
-    else:
-        output = graph.to_markdown_document()
+    # CH-31: single-key format→renderer fan-out — a dispatch table over the if/elif chain
+    # (also removes the duplicated markdown/else arm).
+    renderers = {
+        "markdown": lambda g: g.to_markdown_document(),
+        "mermaid": lambda g: "```mermaid\n" + g.to_mermaid() + "\n```",
+        "dot": lambda g: g.to_dot(),
+        "json": lambda g: g.to_json(),
+        "svg": lambda g: g.to_svg(),
+    }
+    output = renderers.get(args.format, renderers["markdown"])(graph)
 
     if args.output:
         out_path = Path(args.output)

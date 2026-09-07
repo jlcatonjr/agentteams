@@ -780,16 +780,15 @@ def main(argv: list[str] | None = None) -> int:
         print(f"Error: no modules found in {pkg}", file=sys.stderr)
         return 1
 
-    if args.format == "markdown":
-        output = graph.to_markdown_document()
-    elif args.format == "mermaid":
-        output = "```mermaid\n" + graph.to_mermaid() + "\n```"
-    elif args.format == "dot":
-        output = graph.to_dot()
-    elif args.format == "svg":
-        output = graph.to_svg()
-    else:
-        output = graph.to_json()
+    # CH-31: single-key format→renderer fan-out — a dispatch table over the if/elif chain.
+    renderers = {
+        "markdown": lambda g: g.to_markdown_document(),
+        "mermaid": lambda g: "```mermaid\n" + g.to_mermaid() + "\n```",
+        "dot": lambda g: g.to_dot(),
+        "svg": lambda g: g.to_svg(),
+        "json": lambda g: g.to_json(),
+    }
+    output = renderers.get(args.format, renderers["json"])(graph)
 
     if args.output:
         out_path = Path(args.output)
