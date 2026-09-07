@@ -41,7 +41,7 @@ _BASELINE: dict[str, int] = {
     "builder/team-builder-goose.template.md": 3,
     "copilot-instructions.template.md": 2,
     "domain/agentteams-updater.template.md": 1,
-    "domain/code-hygiene-rules-reference.template.md": 15,
+    "domain/code-hygiene-rules-reference.template.md": 16,
     "domain/cohesion-repairer.template.md": 1,
     "domain/content-enricher.template.md": 2,
     "domain/format-converter.template.md": 2,
