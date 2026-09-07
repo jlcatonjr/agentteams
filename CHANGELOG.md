@@ -6,6 +6,21 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### fixed (--check must not fail on live-intel value drift)
+
+- **`--check` no longer fails when the only structural change is a values refresh of the
+  live-intel artifacts.** The daily security-maintenance workflow's `--check` gate was exiting 1
+  on `references/security-vulnerability-watch.{json,reference.md}` showing "manifest values
+  changed" — but those are refreshed from CISA KEV / NVD / OSV on every render
+  (`fences._LIVE_DATA_FENCES`), so a values delta is expected, not drift. `--check`
+  (`generate_helpers`) now exempts the live-refresh artifacts (and `runtime-handoffs.json` in
+  manifest handoff mode) from the *drifted* verdict **only when the drift reason is a
+  manifest-promotion (values/fingerprint) reason** — a genuine template-content drift on those
+  paths still fails, as do template-hash drift, added/removed files, team-membership changes, and
+  enforcement-integrity findings. The live-refresh set is now defined once and shared with the
+  existing manifest-promotion reconciliation. Paired with the `_build-description.json` un-ignore
+  fix, this makes the daily Security Maintenance workflow green end-to-end.
+
 ### added (CH-31 — when to convert an `if`/`elif` chain to a dispatch table)
 
 - **New code-hygiene rule `CH-31`, an exclusion-first complement to [[CH-24]].** CH-24 already

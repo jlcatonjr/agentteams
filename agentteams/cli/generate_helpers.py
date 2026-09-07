@@ -281,21 +281,25 @@ def _handle_check(
     # below fires. Outside the predicate, rendering would be wasted work
     # because `refine_manifest_promotion` would be a no-op.
     # --------------------------------------------------------------
+    # Live-refresh artifacts whose VALUE drift is expected on every render (security intel from
+    # CISA KEV / NVD / OSV rendered via fences._LIVE_DATA_FENCES; the manifest-mode
+    # runtime-handoffs). Single source of truth for BOTH the manifest-promotion reconciliation
+    # below and the --check drifted-verdict exemption further down (was duplicated).
+    live_refresh_files = {
+        "references/security-vulnerability-watch.reference.md",
+        "references/security-vulnerability-watch.json",
+    }
+    if adapter.handoff_delivery_mode() == "manifest":
+        live_refresh_files.add("references/runtime-handoffs.json")
+
     if sdreport is not None and sdreport.manifest_changed and any(
         e.get("_reason") in drift._MANIFEST_PROMOTION_REASONS
         for e in sdreport.drifted_files
     ):
         check_final = _build_final_rendered(manifest, adapter, project_name)
-        check_security_refresh = {
-            "references/security-vulnerability-watch.reference.md",
-            "references/security-vulnerability-watch.json",
-        }
-        if adapter.handoff_delivery_mode() == "manifest":
-            check_security_refresh.add("references/runtime-handoffs.json")
-
         drift.refine_manifest_promotion(
             sdreport,
-            _make_content_matches(output_dir, dict(check_final), check_security_refresh),
+            _make_content_matches(output_dir, dict(check_final), live_refresh_files),
         )
 
     # Print structural diff under the same condition `--update` uses
@@ -303,7 +307,29 @@ def _handle_check(
     if sdreport is not None and sdreport.has_changes:
         print(f"\nStructural changes for {project_name!r}:")
         drift.print_structural_diff_report(sdreport)
-    has_any = dreport.has_drift or (sdreport.has_changes if sdreport is not None else False)
+    # The live-refresh artifacts (live_refresh_files, defined above) change VALUES every render
+    # because their upstream feed moved, so a manifest-values drift in them is expected — not a
+    # reason to fail --check (a consumer's daily security-maintenance re-renders current intel and
+    # would otherwise fail every run purely because the feed moved). Exempt them from the drifted
+    # verdict, but ONLY when the drift reason is a manifest-promotion (values/fingerprint) reason:
+    # a genuine TEMPLATE-CONTENT drift on these same paths is NOT a feed refresh and still fails
+    # (belt-and-suspenders on top of dreport's independent template-hash drift). Added/removed
+    # files and team-membership changes are composition changes and always fail.
+    structural_fail = False
+    if sdreport is not None:
+        non_exempt_drift = [
+            e for e in sdreport.drifted_files
+            if not (
+                e.get("path") in live_refresh_files
+                and e.get("_reason") in drift._MANIFEST_PROMOTION_REASONS
+            )
+        ]
+        structural_fail = bool(
+            sdreport.added_files
+            or non_exempt_drift
+            or sdreport.team_membership_changed
+        )
+    has_any = dreport.has_drift or structural_fail
     # R5 (D5): fail --check when an enforcement module drifts from — or is absent from —
     # the integrity manifest. This is the CI/pre-commit fail-closed boundary for the
     # "edited an enforcement module without regenerating the manifest" trap; an
