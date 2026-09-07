@@ -724,17 +724,22 @@ def _build_parser() -> argparse.ArgumentParser:
     )
     parser.add_argument(
         "--shrink-policy",
-        choices=("preserve", "warn", "halt", "allow"),
+        choices=("preserve", "additive", "warn", "halt", "allow"),
         default="preserve",
         dest="shrink_policy",
         help=(
             "Behaviour when a fenced-region merge would lose concrete refs. "
             "'preserve' (default) keeps the existing enriched body for that "
             "fence and still updates non-shrinking fences (respectful, "
-            "non-destructive); 'warn' writes the smaller body and saves a "
-            ".lost.<sid>.md recovery sidecar; 'halt' refuses the whole-file "
-            "write and lists the blocked file; 'allow' writes silently. Plan: "
-            "references/plans/T2-D5-shrink-policy-2026-05-25.plan.md"
+            "non-destructive); 'additive' additionally splices the template's "
+            "NEW markdown-heading (##/###) sub-sections into the enriched body at "
+            "the render position (strict superset, nothing dropped), so an additive "
+            "template change reaches an enriched fence; content added UNDER an "
+            "existing heading (e.g. a new bold block inside a kept section) is not "
+            "spliced and falls back to preserve; 'warn' writes the smaller "
+            "body and saves a .lost.<sid>.md recovery sidecar; 'halt' refuses the "
+            "whole-file write and lists the blocked file; 'allow' writes silently. "
+            "Plan: references/plans/T2-D5-shrink-policy-2026-05-25.plan.md"
         ),
     )
     parser.add_argument(

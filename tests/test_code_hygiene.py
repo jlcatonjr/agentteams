@@ -61,6 +61,16 @@ LENGTH_ALLOWLIST: frozenset[str] = frozenset({
     # runners -> per-topic runner modules), deferred as a larger blast-radius refactor.
     "agentteams/cli/artifacts.py",
     "agentteams/cli/commands.py",
+    # fences.py (1130): itself a CH-07 carve of emit.py (the fence/merge extraction the
+    # build_team/app comment above records), tipped over the 1000 ceiling by the
+    # `--shrink-policy=additive` splice engine (`_split_headed_segments`, `_additive_merge_block`
+    # and helpers). Kept in fences.py deliberately: the splice is cohesive fence-merge logic, and
+    # fences.py is an ENFORCEMENT_MODULE (references/enforcement-integrity.json) — carving the
+    # splice out would move @security-cleared, add-only merge code OUT of the integrity-protected
+    # module, weakening the very guarantee the review relied on. A future dedicated carve would
+    # split the whole shrink/merge subsystem (detect + preserve + additive) into one new
+    # enforcement-registered module; deferred as a larger blast-radius refactor.
+    "agentteams/fences.py",
 })
 BROAD_EXCEPT_BASELINE = 18      # 16→18: the SAME fail-closed process-boundary handler,
                                 # now present in the two INSTALLED gate hooks synced from the
