@@ -59,6 +59,7 @@ When interpreting rules or proposing extensions, consult this reference to under
 | New file added to `{PRIMARY_OUTPUT_DIR}` | CH-03 (no ad-hoc in source) | — |
 | Shared utility modified | CH-08, CH-13 | — |
 | New `try`/`except`/`finally` block added | CH-23, CH-24 | Report only; correction by `@primary-producer` |
+| Single-key `if`/`elif` fan-out (≥4 homogeneous branches, no ordering/side-effects) | CH-31 (complements CH-24) | Report only; exclusion-first — KEEP guards/parsers/`isinstance`/precedence chains |
 | Refactoring task requested | CH-07, CH-08 | Delegate to `@agent-refactor` (CH-28 advisory; sanctioned CH-07/CH-08 refactors are exempt) |
 | Recurring work implemented as a re-run script | CH-27 | Report; recommend promotion to a long-lived utility |
 | Diff disproportionate to a small, scoped task | CH-28 | Report only (advisory) |

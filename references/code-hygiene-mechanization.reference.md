@@ -61,6 +61,7 @@ reads as conformance and suppresses the judgment that was actually required.
 | CH-28 Minimal, scoped edits | judgment | A property of a change, not of a tree. Not checkable from a snapshot. |
 | CH-29 Script-first output discipline | partly mechanizable | Half is tree-visible: a script's imports can be read and checked against `references/ref-<lib>-reference.md`, the same shape as the CH-19 retention check. The other half — whether the reference was *consulted before* the script was authored — is a fact about the order of an agent's actions, which no snapshot records. Classified above CH-27 (`judgment`) despite CH-29 firing more broadly, because CH-27 turns entirely on foreseen recurrence (intent) whereas CH-29's duty produces a **file**, and a file's absence is checkable. |
 | CH-30 No exemption without provenance | judgment | Requires asking whether the thing being exempted can CHOOSE to look like the exempted shape. That is a question about an adversary's options, not about the tree. The five instances that motivated the rule (scan.py's code-span, comment-line, basename, backup-dir and orphan exemptions) were each found by attacking them, not by matching them. |
+| CH-31 Convert if/elif to dispatch table | partly mechanizable | The candidate *shape* is tree-visible: a grep finds single-key `elif x == const` chains with ≥4 branches (the scan that seeded this rule surfaced roughly a dozen value-dispatch hotspot files — a different population from the 12 WEAK candidates the full review then classified). But the STRONG-vs-KEEP verdict requires reading each branch body for homogeneity, branch ordering, side effects, and the exclusion set (guard clauses, prefix/substring parsers, `isinstance` ladders, boolean-precedence selectors) — a judgment no snapshot settles; the two enumerated wins were confirmed by reading the arms, and the KEEPs by recognising an ordered/negated matcher a dict cannot express. So detection mechanizes; the verdict does not. Mirrors CH-29's detection/judgment split. |
 
 ## Summary
 
@@ -72,7 +73,7 @@ them by suffix: **-ed = a check exists**, **-able = a check could exist**.
 | mechanized | 6 | A check exists and covers the rule |
 | partly mechanized | 5 | A check exists and covers **part** of the rule; the row says which part |
 | mechanizable | 3 | No check; the decision procedure is fully specifiable |
-| partly mechanizable | 6 | No check; only part of the decision procedure is specifiable |
+| partly mechanizable | 7 | No check; only part of the decision procedure is specifiable |
 | judgment | 10 | No check is possible; the information is not in what a checker can see |
 
 These counts are **derived from the table by

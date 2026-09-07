@@ -151,7 +151,12 @@ def test_the_real_library_still_measures_what_it_measured() -> None:
     # content fence at emit and thus module-owned/restored on every --update --merge (see the
     # template's header note), so the per-file baseline was raised 7 -> 10 -> 14 in
     # test_unfenced_constraint_ratchet.py and this total tracks it. The predicate did not move.
-    assert (len(current), sum(current.values())) == (43, 166), (
+    # 166 -> 167 (2026-W36, CH-31 dispatch-table rule): +1 constraint line — the CH-31 "Never flag
+    # these ..." exclusion clause added to the fenceless `code-hygiene-rules-reference.template.md`,
+    # whose per-file baseline was raised 15 -> 16. That template is also wrapped whole in a single
+    # content fence at emit (module-owned/restored on every --update --merge), so the constraint is
+    # SAFE despite being outside a fence in the template source. The predicate did not move.
+    assert (len(current), sum(current.values())) == (43, 167), (
         f"library measurement moved to {len(current)} files / {sum(current.values())} lines; "
-        "it was 43 / 166 after the interactive-query protocol addition. Explain the move, do not re-baseline."
+        "it was 43 / 167 after the CH-31 addition. Explain the move, do not re-baseline."
     )
