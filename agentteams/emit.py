@@ -457,6 +457,7 @@ def emit_all(
                     normalized_content,
                     existing_text,
                     preserve_on_shrink=(shrink_policy == "preserve"),
+                    additive_on_shrink=(shrink_policy == "additive"),
                     rel_path=rel_path,
                 )
                 # Plan 3: dry-run preview also surfaces the notices that the
@@ -466,6 +467,11 @@ def emit_all(
                 for notice in mr.shrink_notices:
                     if shrink_policy == "preserve":
                         suffix = " (existing enriched body will be retained; template update suppressed for this fence — use --shrink-policy=allow to force)"
+                    elif shrink_policy == "additive":
+                        # Additive notices are self-describing (either "spliced in N
+                        # sub-section(s)" or a fall-back-to-preserve message); no generic
+                        # sidecar/allow suffix applies.
+                        suffix = ""
                     else:
                         suffix = " (prior body will be preserved in a .lost.<sid>.md sidecar in the backup dir on the real run)"
                     annotated = f"{rel_path}: {notice}{suffix}"
@@ -628,6 +634,7 @@ def emit_all(
                 normalized_content,
                 existing_text,
                 preserve_on_shrink=(shrink_policy == "preserve"),
+                additive_on_shrink=(shrink_policy == "additive"),
                 file_is_unmodified=(rel_path in _unmodified),
                 rel_path=rel_path,
             )
