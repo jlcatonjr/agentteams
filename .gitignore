@@ -188,7 +188,11 @@ references/runtime-handoffs.json
 .claude/
 .goose/
 .agents/
-.github/agents/_build-description.json
+# NOTE: do NOT re-ignore .github/agents/_build-description.json here. It is deliberately
+# un-ignored at the top of this file (see the "so CI can run security-maintenance" comment)
+# so the daily Security Maintenance workflow scans the REAL self-team. A 2026-08-29 scrub
+# re-added it here, which silently broke that workflow for a week (last-rule-wins). It is
+# scanner-clean (no PII/secrets); keep it committed.
 .github/hooks/
 .github/copilot/
 references/adjacent-repos.md
