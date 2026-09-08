@@ -86,6 +86,85 @@ def test_discover_skips_unreadable_dir_without_raising(tmp_path):
         os.chmod(locked, stat.S_IRWXU)  # restore so pytest can clean up
 
 
+def test_discover_prunes_own_fleet_output_tree(tmp_path):
+    # 2026-09-08 @security HALT finding 1: discovery must never walk the fleet's
+    # own .agentteams-fleet/ output — it holds per-run reports AND operator backup
+    # snapshots; re-discovering a backup copy would let a later run mutate the
+    # rollback source (non-git, unrecoverable).
+    _mk_agent(tmp_path / "live" / ".github" / "agents", "x.agent.md")
+    _mk_agent(
+        tmp_path / ".agentteams-fleet" / "manual-backup-20260825-nongit"
+        / "SomeRepo" / ".github" / "agents",
+        "x.agent.md",
+    )
+    _mk_agent(
+        tmp_path / ".agentteams-fleet" / "20260825-000000" / "snap"
+        / ".claude" / "agents",
+        "x.md",
+    )
+    names = {str(w.relative_to(tmp_path)) for w in fleet.discover_workspaces(tmp_path, "all")}
+    assert names == {"live"}
+
+
+def test_discover_skips_linked_worktrees(tmp_path):
+    # 2026-09-08 @security HALT finding 4: a git LINKED worktree must not be
+    # discovered as its own workspace — a snapshot commit there lands on the
+    # worktree's checked-out feature branch and writes the main repo's shared
+    # object store. Its agent infra is already covered via the main working tree.
+    main = tmp_path / "repo"
+    _mk_agent(main / ".github" / "agents", "x.agent.md")
+    _init_repo(main)
+    wt = tmp_path / "repo-wt-feature"
+    _git(main, "worktree", "add", "-q", "-b", "feature", str(wt))
+    # The worktree carries the same agent infra (it's a checkout of the branch).
+    assert (wt / ".github" / "agents").is_dir()
+    assert fleet._is_linked_worktree(wt) is True
+    assert fleet._is_linked_worktree(main) is False
+    names = {str(w.relative_to(tmp_path)) for w in fleet.discover_workspaces(tmp_path, "both")}
+    assert names == {"repo"}
+
+
+def test_discover_records_skipped_worktree_for_visible_skip_row(tmp_path):
+    # Adversarial finding A2: an excluded linked worktree that carries agent infra
+    # must be RECORDED (for a visible SKIP row), not dropped silently.
+    main = tmp_path / "repo"
+    _mk_agent(main / ".github" / "agents", "x.agent.md")
+    _init_repo(main)
+    wt = tmp_path / "repo-wt-feature"
+    _git(main, "worktree", "add", "-q", "-b", "feature", str(wt))
+    skipped: list = []
+    names = {str(w.relative_to(tmp_path))
+             for w in fleet.discover_workspaces(tmp_path, "both", skipped_worktrees=skipped)}
+    assert names == {"repo"}
+    assert [p.name for p in skipped] == ["repo-wt-feature"]
+
+
+def test_classify_flags_tracked_volatile_file(tmp_path):
+    # Adversarial finding A4: a git-TRACKED volatile file (suffix-exempt from the
+    # UE-deletion audit) that churns must be surfaced via volatile_tracked.
+    repo = tmp_path / "r"
+    idx = repo / ".github" / "agents" / "references" / "memory-index.json"
+    idx.parent.mkdir(parents=True, exist_ok=True)
+    idx.write_text('{"v":1}\n', encoding="utf-8")
+    _init_repo(repo)  # tracks memory-index.json
+    assert fleet._is_tracked(repo, ".github/agents/references/memory-index.json") is True
+    diff_text = (
+        "--- a/.github/agents/references/memory-index.json\n"
+        "+++ b/.github/agents/references/memory-index.json\n"
+        '-{"v":1}\n'
+        '+{"v":2}\n'
+    )
+    cls = fleet._classify(repo, "HEAD", diff_text, "")
+    assert cls["volatile_tracked"] == [".github/agents/references/memory-index.json"]
+    # An untracked/ignored volatile file must NOT be flagged.
+    diff2 = (
+        "--- a/.github/agents/references/build-log.json\n"
+        "+++ b/.github/agents/references/build-log.json\n"
+        "+noise\n"
+    )
+    assert fleet._classify(repo, "HEAD", diff2, "")["volatile_tracked"] == []
+
+
 # ---------------------------------------------------------------------------
 # Descriptor resolution (stub-trap fix)
 # ---------------------------------------------------------------------------
