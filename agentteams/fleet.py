@@ -39,6 +39,11 @@ from pathlib import Path
 
 from agentteams.backup import BACKUP_DIR_NAME as _BACKUP_DIR_NAME
 
+# Default directory name for the fleet's own report/backup output (``run_fleet``
+# writes to ``<parent>/.agentteams-fleet/<run-id>/`` unless --fleet-report overrides).
+# Single-sourced so discovery-prune and the report root cannot drift apart.
+_FLEET_OUTPUT_DIR_NAME = ".agentteams-fleet"
+
 # Directories never descended into when discovering workspaces. ``.github`` and
 # ``.claude`` are agent-infra internals — a workspace is detected from its PARENT,
 # so we must never recurse into them (else a nested ``.github/agents/.github``
@@ -46,6 +51,13 @@ from agentteams.backup import BACKUP_DIR_NAME as _BACKUP_DIR_NAME
 _PRUNE_DIRS = {
     "node_modules", ".git", _BACKUP_DIR_NAME, "__pycache__", ".venv", "venv",
     ".github", ".claude", ".goose", "tmp",
+    # The fleet's OWN output/backup tree. The default --fleet-report root is
+    # ``<parent>/.agentteams-fleet/`` (see run_fleet), which holds per-run reports
+    # AND operator backup snapshots (e.g. manual-backup-*/). Walking it would
+    # re-discover those backup copies as live workspaces and let a later run
+    # MUTATE the rollback source (non-git, unrecoverable) — a 2026-09-08 @security
+    # HALT finding. Never descend into it.
+    _FLEET_OUTPUT_DIR_NAME,
 }
 _PRUNE_SUBSTR = (".worktrees", "/archive/")
 
@@ -102,6 +114,10 @@ class TargetResult:
     shrink_notices: list[str] = field(default_factory=list)
     user_editable_deletions: list[str] = field(default_factory=list)
     fence_imbalances: list[str] = field(default_factory=list)
+    # Changed files matching _VOLATILE_SUFFIXES that are git-TRACKED (not ignored)
+    # in this workspace. Their churn is suffix-exempted from the content audit, so
+    # a tracked one can ride un-audited into a commit — surface it for review.
+    volatile_tracked: list[str] = field(default_factory=list)
     rc: int | None = None
 
 
@@ -127,6 +143,46 @@ def _git(repo: Path, *args: str) -> subprocess.CompletedProcess:
 
 def _is_git_repo(path: Path) -> bool:
     return _git(path, "rev-parse", "--is-inside-work-tree").returncode == 0
+
+
+def _is_tracked(repo: Path, rel: str) -> bool:
+    """True if *rel* is a git-tracked file in *repo* (not ignored/untracked)."""
+    return _git(repo, "ls-files", "--error-unmatch", "--", rel).returncode == 0
+
+
+def _is_linked_worktree(path: Path) -> bool:
+    """True if *path* is a git LINKED worktree (or a submodule) rather than a
+    standalone main working tree.
+
+    Excluded from fleet discovery (2026-09-08 @security HALT, finding 4): a
+    snapshot commit inside a linked worktree lands on whatever feature branch
+    that worktree has checked out and writes into the MAIN repo's shared object
+    store — branch contamination with no clean per-worktree rollback. A linked
+    worktree's agent infrastructure is already reachable through its main
+    working tree (the same .github/agents, .claude, etc.), so skipping it loses
+    no coverage.
+
+    Detection: a main working tree has a ``.git`` DIRECTORY; a linked worktree
+    (and a submodule) has a ``.git`` gitdir-pointer FILE. As a robust fallback
+    for unusual setups, the per-worktree git dir differs from the common git dir.
+    """
+    dotgit = path / ".git"
+    try:
+        if dotgit.is_file():
+            return True
+    except OSError:
+        return False
+    gd = _git(path, "rev-parse", "--absolute-git-dir")
+    gcd = _git(path, "rev-parse", "--git-common-dir")
+    if gd.returncode == 0 and gcd.returncode == 0:
+        common = gcd.stdout.strip()
+        # --git-common-dir may be relative to the worktree; resolve both.
+        try:
+            common_abs = (path / common).resolve() if not Path(common).is_absolute() else Path(common).resolve()
+            return Path(gd.stdout.strip()).resolve() != common_abs
+        except OSError:
+            return False
+    return False
 
 
 def _agent_paths(ws: Path) -> list[str]:
@@ -276,8 +332,19 @@ def _goose_kind(ws: Path) -> str:
     return "none"
 
 
-def discover_workspaces(parent: Path, frameworks: str = "both") -> list[Path]:
-    """Find every workspace (dir with agent infrastructure) under parent."""
+def discover_workspaces(
+    parent: Path,
+    frameworks: str = "both",
+    *,
+    skipped_worktrees: list[Path] | None = None,
+) -> list[Path]:
+    """Find every workspace (dir with agent infrastructure) under parent.
+
+    If *skipped_worktrees* is provided, any git linked worktree that carries
+    agent infrastructure (and is therefore excluded from the update) is appended
+    to it, so the caller can surface the exclusion as a visible report row rather
+    than dropping it silently (adversarial finding A2, 2026-09-08).
+    """
     found: set[Path] = set()
     parent = parent.resolve()
     for dirpath in [parent, *(_walk(parent))]:
@@ -287,6 +354,15 @@ def discover_workspaces(parent: Path, frameworks: str = "both") -> list[Path]:
             gs = (dirpath / ".goose" / "recipes").is_dir()
         except (PermissionError, OSError):
             continue  # unreadable dir (e.g. mode 000) — skip, never fatal
+        # Never treat a git LINKED worktree (or submodule) as its own workspace:
+        # its agent infra is already covered via the main working tree, and a
+        # snapshot commit here would contaminate the worktree's feature branch
+        # (2026-09-08 @security HALT, finding 4). The parent itself is exempt —
+        # the operator pointed the run at it deliberately.
+        if dirpath != parent and _is_linked_worktree(dirpath):
+            if (gh or cl or gs) and skipped_worktrees is not None:
+                skipped_worktrees.append(dirpath)  # record for a visible SKIP row
+            continue
         if frameworks == "github":
             cl = gs = False
         elif frameworks == "claude":
@@ -430,8 +506,15 @@ def _classify(ws: Path, ref: str, diff_text: str, update_output: str) -> dict:
     ]
     # USER-EDITABLE deletions across non-volatile changed files.
     ue: list[str] = []
+    volatile_tracked: list[str] = []
     for f in files:
         if any(f.endswith(suf) for suf in _VOLATILE_SUFFIXES):
+            # Volatile files are exempt from the UE-deletion audit (their churn is
+            # expected). But if such a file is git-TRACKED here (not ignored), its
+            # un-audited churn can be committed — flag it so it surfaces instead of
+            # riding along silently (adversarial finding A4, 2026-09-08).
+            if _is_tracked(ws, f):
+                volatile_tracked.append(f)
             continue
         if f.endswith(".md"):
             ue.extend(_user_editable_deletions(ws, ref, f))
@@ -442,6 +525,7 @@ def _classify(ws: Path, ref: str, diff_text: str, update_output: str) -> dict:
         "shrink_notices": shrink,
         "user_editable_deletions": ue,
         "fence_imbalances": _fence_imbalances(ws, files),
+        "volatile_tracked": volatile_tracked,
     }
 
 
@@ -563,16 +647,30 @@ def run_fleet(args, parser) -> int:
     shrink_policy = getattr(args, "shrink_policy", "preserve") or "preserve"
     allow_no_verify = bool(getattr(args, "fleet_allow_no_verify", False))
     run_id = datetime.now(timezone.utc).strftime("%Y%m%d-%H%M%S")
-    report_root = Path(getattr(args, "fleet_report", None) or (parent / ".agentteams-fleet")) / run_id
+    report_root = Path(getattr(args, "fleet_report", None) or (parent / _FLEET_OUTPUT_DIR_NAME)) / run_id
 
-    workspaces = discover_workspaces(parent, frameworks)
+    skipped_worktrees: list[Path] = []
+    workspaces = discover_workspaces(parent, frameworks, skipped_worktrees=skipped_worktrees)
     mode = "APPLY" if apply else "DRY-RUN (preview; pass --yes to apply)"
     print(f"\nFleet update — {mode}")
     print(f"  Parent: {parent}")
     print(f"  Workspaces discovered: {len(workspaces)}  |  frameworks: {frameworks}")
+    print(f"  Linked worktrees skipped (covered via main working tree): {len(skipped_worktrees)}")
     print("=" * 70)
 
     results: list[WorkspaceResult] = []
+    # Surface excluded linked worktrees as visible SKIP rows (coverage auditability).
+    for wt in skipped_worktrees:
+        wr = WorkspaceResult(path=str(wt), is_git=True)
+        wr.targets.append(TargetResult(
+            workspace=str(wt), target="(linked-worktree)", status="SKIP",
+            detail="git linked worktree — excluded from fleet update; its agent infra is "
+                   "covered via the main working tree, and a snapshot commit here would "
+                   "contaminate the worktree's checked-out branch",
+        ))
+        results.append(wr)
+        rel = wt.relative_to(parent) if wt != parent else Path(".")
+        print(f"\n▸ {rel}  (LINKED WORKTREE)\n    SKIP: excluded (covered via main working tree)")
     for ws in workspaces:
         is_git = _is_git_repo(ws)
         wr = WorkspaceResult(path=str(ws), is_git=is_git)
@@ -638,6 +736,7 @@ def run_fleet(args, parser) -> int:
                 tr.shrink_notices = cls["shrink_notices"]
                 tr.user_editable_deletions = cls["user_editable_deletions"]
                 tr.fence_imbalances = cls["fence_imbalances"]
+                tr.volatile_tracked = cls["volatile_tracked"]
                 if rc != 0 and _is_hard_error(out):
                     tr.status, tr.detail = "FAIL", _first_error(out)
                 elif cls["fence_imbalances"]:
@@ -649,6 +748,15 @@ def run_fleet(args, parser) -> int:
                 elif cls["user_editable_deletions"] or cls["shrink_notices"]:
                     tr.status = "REVIEW"
                     tr.detail = "shrink notice / USER-EDITABLE deletion — review diff"
+                    if cls["volatile_tracked"]:
+                        tr.detail += ("; tracked volatile file(s) churned (un-audited, review before commit): "
+                                      + ", ".join(cls["volatile_tracked"]))
+                elif cls["volatile_tracked"]:
+                    # No content-audit signal, but a tracked volatile file churned —
+                    # its diff is not content-audited, so flag rather than mark OK.
+                    tr.status = "REVIEW"
+                    tr.detail = ("tracked volatile file(s) churned (un-audited, review before commit): "
+                                 + ", ".join(cls["volatile_tracked"]))
                 else:
                     tr.status = "OK"
                 # Persist the per-workspace diff for human review.
@@ -665,7 +773,8 @@ def run_fleet(args, parser) -> int:
                 tr.detail = "non-git workspace — recovery via .agentteams-backups (pre-write snapshot)"
             print(f"    {target}: {tr.status}  (+{tr.added_lines}/-{tr.removed_lines}, "
                   f"{len(tr.shrink_notices)} shrink, {len(tr.user_editable_deletions)} UE-del, "
-                  f"{len(tr.fence_imbalances)} fence-imbalance)")
+                  f"{len(tr.fence_imbalances)} fence-imbalance, "
+                  f"{len(tr.volatile_tracked)} tracked-volatile)")
             wr.targets.append(tr)
 
         results.append(wr)

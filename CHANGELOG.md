@@ -6,6 +6,34 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### fixed (fleet discovery excludes its own output/backup tree and git worktrees)
+
+- **`--fleet` discovery no longer walks the fleet's own `.agentteams-fleet/` output tree, and no
+  longer treats a git linked worktree (or submodule) as its own workspace.** A machine-wide
+  `--update --merge --fleet ~/githubrepositories` dry-run was HALTed by `@security` because default
+  discovery (a) recursed into `.agentteams-fleet/manual-backup-20260825-nongit/` and marked the
+  operator's own 2026-08-25 rollback snapshots WOULD-UPDATE — applying would have mutated the
+  backup source, non-git and unrecoverable — and (b) enumerated ~13 top-level git worktrees
+  (`.wt-*`, `*-worktree`, `portal-worktrees/*`) whose per-target snapshot commit would land on the
+  worktree's checked-out feature branch and write the main repo's shared object store. `fleet.py`
+  now prunes `_FLEET_OUTPUT_DIR_NAME` (`.agentteams-fleet`, single-sourced with the report root) in
+  the discovery walk and skips any candidate where `_is_linked_worktree()` is true (detected via a
+  `.git` gitdir-pointer FILE, with a git-common-dir fallback); the parent the run is pointed at is
+  exempt. The prior `.worktrees/`-substring filter did not catch these top-level siblings. Two
+  regression tests added (`test_discover_prunes_own_fleet_output_tree`,
+  `test_discover_skips_linked_worktrees`). Scope boundary re-audited and re-approved
+  (`references/fleet-update-scope-boundary.md` §V items 6–8, §VIII).
+- **Excluded linked worktrees now surface as visible SKIP rows, and a git-tracked volatile file
+  that churns is flagged for review.** Two adversarial findings from the same session: (A2) the
+  worktree exclusion above was silent — no report row, no count — so coverage loss was invisible;
+  `discover_workspaces` now takes an optional `skipped_worktrees` out-param, and `run_fleet` emits a
+  `(linked-worktree) SKIP` row per excluded worktree plus a header count. (A4) files matching
+  `_VOLATILE_SUFFIXES` (e.g. `references/memory-index.json`) are exempt from the USER-EDITABLE
+  deletion audit, so a *tracked* one could ride un-audited into a commit; `_classify` now records
+  `volatile_tracked` (via `_is_tracked`) and a target whose only change is a tracked-volatile churn
+  is marked REVIEW rather than OK. Two tests added (`test_discover_records_skipped_worktree_for_visible_skip_row`,
+  `test_classify_flags_tracked_volatile_file`).
+
 ### fixed (work-summarizer: the `## Plans Implemented` synthesized-body contract)
 
 - **The daily work-summarizer now specifies a `## Plans Implemented` synthesized-body header, ending

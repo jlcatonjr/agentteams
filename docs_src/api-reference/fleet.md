@@ -90,11 +90,11 @@ Aggregate result for one workspace.
 
 ## Functions
 
-### `discover_workspaces(parent, frameworks="both")`
+### `discover_workspaces(parent, frameworks="both", *, skipped_worktrees=None)`
 
 > *Source: `agentteams/fleet.py`*
 
-Return the sorted list of workspace directories under `parent` (recursively) that contain `.github/agents/` and/or `.claude/` (and, for `goose`/`all`, a Goose-bridged workspace). `frameworks` (`"github"` | `"claude"` | `"goose"` | `"both"` | `"all"`) filters which infrastructure qualifies a directory: `"both"` is the legacy default (copilot + claude only); `"all"` adds Goose. Prunes `node_modules`, `.git`, `.agentteams-backups`, `__pycache__`, `.venv`, `venv`, `.goose`, `tmp`, `.worktrees`, and `archive`, and never recurses into `.github`/`.claude` internals.
+Return the sorted list of workspace directories under `parent` (recursively) that contain `.github/agents/` and/or `.claude/` (and, for `goose`/`all`, a Goose-bridged workspace). `frameworks` (`"github"` | `"claude"` | `"goose"` | `"both"` | `"all"`) filters which infrastructure qualifies a directory: `"both"` is the legacy default (copilot + claude only); `"all"` adds Goose. Prunes `node_modules`, `.git`, `.agentteams-backups`, `__pycache__`, `.venv`, `venv`, `.goose`, `tmp`, `.worktrees`, `archive`, and the fleet's own `.agentteams-fleet` output/backup tree, never recurses into `.github`/`.claude` internals, and skips git linked worktrees (and submodules) — their agent infra is covered via the main working tree. If `skipped_worktrees` (a keyword-only `list[Path]`) is passed, each excluded linked worktree that carries agent infra is appended to it so the caller can surface the exclusion as a visible report row.
 
 **Returns:** `list[Path]`
 
