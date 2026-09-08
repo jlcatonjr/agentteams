@@ -6,6 +6,22 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### fixed (work-summarizer: the `## Plans Implemented` synthesized-body contract)
+
+- **The daily work-summarizer now specifies a `## Plans Implemented` synthesized-body header, ending
+  a runaway-append failure.** Session-close automation that re-checks work summaries (this project's
+  own work-summary Stop hook, for example) keys skip-vs-reprocess on that exact header: a
+  commit-bearing daily lacking it reads as "unsynthesized (breadcrumbs only)" and is re-processed on
+  *every* firing. Observed 2026-09-07: a daily reached 54 near-duplicate "idempotent re-capture"
+  addenda / 858 lines because the summarizer emitted no such marker, so the hook re-invoked ~200× in
+  a day. `work-summarizer.template.md` now requires a synthesized commit-bearing daily to carry one
+  `## Plans Implemented` section, fold-and-clear Tier-1 breadcrumbs into it, and update in place
+  (not a fresh addendum) when there is no new evidence — framed as a contract *with* such automation,
+  not a universal mandate for teams that deploy none. Reviewed by @adversarial (softened the coupling,
+  defined the Tier-1 holding-area section, noted it *bounds* rather than eliminates re-firing on
+  still-active days) and @conflict-auditor (CLEAN). Reaches existing teams on their next
+  `--update --merge`; the enriched `content` fence needs `--shrink-policy=additive` to receive it.
+
 ### fixed (--check must not fail on live-intel value drift)
 
 - **`--check` no longer fails when the only structural change is a values refresh of the
