@@ -12,7 +12,7 @@ from pathlib import Path
 from agentteams import mcp_emit as me
 
 _MCP_SCHEMA = json.loads(
-    (Path(__file__).resolve().parent.parent / "schemas" / "mcp-server.schema.json").read_text()
+    (Path(__file__).resolve().parent.parent / "agentteams" / "schemas" / "mcp-server.schema.json").read_text()
 )
 
 

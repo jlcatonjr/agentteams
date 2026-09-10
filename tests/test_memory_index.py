@@ -25,7 +25,7 @@ from agentteams.memory_index import (
 )
 
 REPO_ROOT = Path(__file__).parent.parent
-SCHEMA_PATH = REPO_ROOT / "schemas" / "memory-index.schema.json"
+SCHEMA_PATH = REPO_ROOT / "agentteams" / "schemas" / "memory-index.schema.json"
 EXAMPLES_DIR = REPO_ROOT / "examples"
 
 

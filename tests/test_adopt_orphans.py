@@ -39,7 +39,7 @@ def test_adopted_agents_conforms_to_manifest_schema():
     m = _manifest()
     analyze.adopt_orphan_agents(m, ["legacy-custom"])
     schema = json.loads(
-        (Path(__file__).resolve().parent.parent / "schemas" / "team-manifest.schema.json").read_text()
+        (Path(__file__).resolve().parent.parent / "agentteams" / "schemas" / "team-manifest.schema.json").read_text()
     )
     # adopted_agents must be a declared property (schema is additionalProperties:false)
     assert "adopted_agents" in schema["properties"]

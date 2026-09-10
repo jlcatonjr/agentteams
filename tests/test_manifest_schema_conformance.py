@@ -28,7 +28,7 @@ jsonschema = pytest.importorskip(
     "jsonschema", reason="jsonschema is a dev-only dependency; schema conformance is opt-in"
 )
 
-_SCHEMA_PATH = Path(__file__).resolve().parents[1] / "schemas" / "team-manifest.schema.json"
+_SCHEMA_PATH = Path(__file__).resolve().parents[1] / "agentteams" / "schemas" / "team-manifest.schema.json"
 
 
 @pytest.fixture(scope="module")

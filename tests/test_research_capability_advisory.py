@@ -78,7 +78,7 @@ def test_manifests_without_advisories_omit_the_key_entirely():
 
 
 def test_advisories_conform_to_the_manifest_schema():
-    schema_path = Path(__file__).resolve().parents[1] / "schemas" / "team-manifest.schema.json"
+    schema_path = Path(__file__).resolve().parents[1] / "agentteams" / "schemas" / "team-manifest.schema.json"
     schema = json.loads(schema_path.read_text(encoding="utf-8"))
     advisories = schema["properties"]["advisories"]
     assert advisories["type"] == "array"

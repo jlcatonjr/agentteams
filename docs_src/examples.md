@@ -111,7 +111,7 @@ agentteams \
 
 ## Writing Your Own Brief
 
-See [Description Format](DESCRIPTION-FORMAT.md) for the full `brief.json` schema reference, or browse the [JSON schema](https://github.com/jlcatonjr/agentteams/blob/main/schemas/project-description.schema.json) directly.
+See [Description Format](DESCRIPTION-FORMAT.md) for the full `brief.json` schema reference, or browse the [JSON schema](https://github.com/jlcatonjr/agentteams/blob/main/agentteams/schemas/project-description.schema.json) directly.
 
 The minimum viable brief requires only three fields:
 

@@ -59,7 +59,7 @@ def _checking_corpus() -> str:
 
 
 def _published_schemas() -> list[str]:
-    return sorted(p.name for p in (REPO_ROOT / "schemas").glob("*.json"))
+    return sorted(p.name for p in (REPO_ROOT / "agentteams" / "schemas").glob("*.json"))
 
 
 def test_no_schema_loses_its_check() -> None:

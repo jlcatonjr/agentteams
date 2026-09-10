@@ -3,8 +3,9 @@
 Carved from ``cli/artifacts.py`` (CH-07 length ceiling) once the memory-index and
 code-index hot paths, plus the three build-time writers, all needed the same
 ``require-jsonschema → load-schema → validate`` machinery. Kept in ``agentteams/cli/``
-so ``_schema_path`` resolves ``parents[2]/schemas`` to the same repo-root ``schemas``
-dir as ``artifacts.py``. Leaf-ish module: imports only ``atomicio`` (a leaf) — no
+so ``_schema_path`` resolves ``parents[1]/schemas`` to the package-bundled
+``agentteams/schemas`` dir (shipped in the wheel via ``package-data``, alongside
+``agentteams/templates``). Leaf-ish module: imports only ``atomicio`` (a leaf) — no
 import back into ``artifacts``, so the graph stays acyclic.
 
 Schema validation dominates every hot-path read: on a real ~16MB memory index
@@ -62,7 +63,7 @@ def _require_jsonschema(error_cls: type[Exception], artifact: str) -> Any:
 
 def _schema_path(name: str) -> Path:
     """Resolve a trusted, package-bundled schema by filename (C3/C6)."""
-    return Path(__file__).resolve().parents[2] / "schemas" / name
+    return Path(__file__).resolve().parents[1] / "schemas" / name
 
 
 def _load_schema_bytes(schema_path: Path, error_cls: type[Exception], label: str) -> bytes:

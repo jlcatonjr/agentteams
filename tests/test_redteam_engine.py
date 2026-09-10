@@ -491,7 +491,7 @@ def test_findings_json_conforms_to_its_published_schema(tmp_path: Path, probe_mo
     would add on top.
     """
     schema = json.loads(
-        (Path(__file__).resolve().parents[1] / "schemas" / "redteam-findings.schema.json")
+        (Path(__file__).resolve().parents[1] / "agentteams" / "schemas" / "redteam-findings.schema.json")
         .read_text(encoding="utf-8")
     )
     (tmp_path / "references").mkdir()
@@ -527,7 +527,7 @@ def test_findings_json_conforms_to_its_published_schema(tmp_path: Path, probe_mo
 def test_the_schema_enumerates_exactly_the_engines_outcome_classes() -> None:
     """Two enums that must not drift apart: one would silently accept an outcome the other rejects."""
     schema = json.loads(
-        (Path(__file__).resolve().parents[1] / "schemas" / "redteam-findings.schema.json")
+        (Path(__file__).resolve().parents[1] / "agentteams" / "schemas" / "redteam-findings.schema.json")
         .read_text(encoding="utf-8")
     )
     published = set(schema["properties"]["probes"]["items"]["properties"]["outcome"]["enum"])

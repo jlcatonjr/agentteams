@@ -35,6 +35,12 @@ keywords = ["agent", "ai", "copilot", "code-generation", "github-copilot", "llm"
 test = [
     "pytest>=8",
     "pyyaml>=6",
+    # Build tooling for the wheel-packaging regression test (test_packaging_schemas.py),
+    # which builds a real wheel with `--no-isolation` (no network) to assert the JSON
+    # schemas ship. Editable CI never exercises a built wheel, so this is the only guard.
+    "build>=1.0",
+    "setuptools>=68",
+    "wheel",
 ]
 # The `agentteams.research` subpackage (search/reputable/verify) is a real, optional runtime
 # library, not part of the CLI/generator pipeline — the base install stays exactly as
@@ -83,7 +89,6 @@ exclude = [
     "docs_src*",
     "examples*",
     "scripts*",
-    "schemas*",
     "templates*",
     "memories*",
     "workSummaries*",
@@ -93,7 +98,7 @@ exclude = [
 ]
 
 [tool.setuptools.package-data]
-"agentteams" = ["templates/**"]
+"agentteams" = ["templates/**", "schemas/**"]
 
 [tool.setuptools.data-files]
 "share/man/man1" = ["agentteams.1"]

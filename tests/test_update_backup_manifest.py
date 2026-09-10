@@ -13,7 +13,7 @@ import build_team
 from agentteams import emit
 
 REPO_ROOT = Path(__file__).parent.parent
-SCHEMA_PATH = REPO_ROOT / "schemas" / "backup-manifest.schema.json"
+SCHEMA_PATH = REPO_ROOT / "agentteams" / "schemas" / "backup-manifest.schema.json"
 EXAMPLES_DIR = REPO_ROOT / "examples"
 
 

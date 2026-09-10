@@ -206,7 +206,7 @@ def test_agent_files_present():
 
 
 def test_schema_file_present_and_parses():
-    schema = (Path(__file__).resolve().parents[1] / "schemas"
+    schema = (Path(__file__).resolve().parents[1] / "agentteams" / "schemas"
               / "pr-recipient-registry.schema.json")
     assert schema.is_file()
     data = json.loads(schema.read_text(encoding="utf-8"))

@@ -110,7 +110,7 @@ def _schema_validator() -> Any | None:
     try:
         from jsonschema import Draft7Validator
 
-        schema_path = Path(__file__).resolve().parent.parent / "schemas" / "mcp-server.schema.json"
+        schema_path = Path(__file__).resolve().parent / "schemas" / "mcp-server.schema.json"
         schema = json.loads(schema_path.read_text(encoding="utf-8"))
         validator = Draft7Validator(schema)
     except (OSError, ValueError, ImportError):

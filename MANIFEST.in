@@ -8,6 +8,7 @@ include agentteams.1
 include build_team.py
 recursive-include agentteams *.py *.md *.json *.yaml *.yml *.toml *.txt
 recursive-include agentteams/templates *
+recursive-include agentteams/schemas *
 recursive-include schemas *.json
 recursive-include tests *.py
 recursive-include scripts *.py

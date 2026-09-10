@@ -7,7 +7,7 @@ import json
 from pathlib import Path
 
 _SCHEMA = json.loads(
-    (Path(__file__).resolve().parent.parent / "schemas" / "mcp-server.schema.json").read_text()
+    (Path(__file__).resolve().parent.parent / "agentteams" / "schemas" / "mcp-server.schema.json").read_text()
 )
 
 

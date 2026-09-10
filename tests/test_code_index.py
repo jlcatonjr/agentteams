@@ -11,7 +11,7 @@ from agentteams import code_index as ci
 from agentteams import memory_index as mi
 
 REPO_ROOT = Path(__file__).parent.parent
-SCHEMA_PATH = REPO_ROOT / "schemas" / "code-index.schema.json"
+SCHEMA_PATH = REPO_ROOT / "agentteams" / "schemas" / "code-index.schema.json"
 
 
 def _schema() -> dict:

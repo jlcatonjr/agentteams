@@ -23,7 +23,7 @@ import pytest
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
 BRIEF = REPO_ROOT / ".github/agents/_build-description.json"
-SCHEMA = REPO_ROOT / "schemas/project-description.schema.json"
+SCHEMA = REPO_ROOT / "agentteams/schemas/project-description.schema.json"
 
 
 def _brief() -> dict:

@@ -67,7 +67,7 @@ def _schema_category_enum() -> set[str]:
     """Pull the allowed `category` values out of the schema itself, not a copy of them."""
     schema = json.loads(
         (Path(__file__).resolve().parents[1]
-         / "schemas" / "project-description.schema.json").read_text(encoding="utf-8")
+         / "agentteams" / "schemas" / "project-description.schema.json").read_text(encoding="utf-8")
     )
     found: list[list[str]] = []
 

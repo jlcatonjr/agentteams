@@ -24,7 +24,7 @@ PAYLOAD_UNTYPED_HARD_DATE = date(2026, 7, 1)
 MAX_DEPTH = 32
 VALIDATE_TIMEOUT_SECONDS = 2.0
 
-_PAYLOAD_GLOB_RE = re.compile(r"^schemas/handoff-payloads/[a-z0-9-]+\.v[0-9]+\.schema\.json$")
+_PAYLOAD_GLOB_RE = re.compile(r"^agentteams/schemas/handoff-payloads/[a-z0-9-]+\.v[0-9]+\.schema\.json$")
 _LLM_VISIBLE_KEYS = ("description", "title", "$comment", "examples")
 
 
@@ -53,7 +53,7 @@ def load_payload_schema(value: str, repo_root: Path) -> dict[str, Any]:
         raise PayloadSchemaError(f"payload_schema must not contain '..' segments: {value!r}")
     if not _PAYLOAD_GLOB_RE.match(value):
         raise PayloadSchemaError(
-            f"payload_schema must match schemas/handoff-payloads/<slug>.v<n>.schema.json: {value!r}"
+            f"payload_schema must match agentteams/schemas/handoff-payloads/<slug>.v<n>.schema.json: {value!r}"
         )
     target = (repo_root / value).resolve()
     root_resolved = repo_root.resolve()

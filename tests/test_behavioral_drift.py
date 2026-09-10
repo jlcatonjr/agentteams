@@ -65,7 +65,7 @@ def test_conforming_run_has_no_findings():
         "handoff_edges": [
             {"sequence": 0, "from_agent": "ingest-expert",
              "to_agent": "transform-expert", "mediated_by": "orchestrator",
-             "payload_schema_id": "schemas/handoff-payloads/x.v1.schema.json"},
+             "payload_schema_id": "agentteams/schemas/handoff-payloads/x.v1.schema.json"},
         ],
     }
     assert detect_behavioral_drift(traj, _suite_with_handoffs(), today=_TODAY) == []
@@ -106,9 +106,9 @@ def test_payload_mismatch_along_trajectory_uses_cluster_c():
     # reuse. Two contiguous edges carrying different payload $ids -> mismatch.
     traj = {"session_slug": "s", "handoff_edges": [
         {"sequence": 0, "from_agent": "a-expert", "to_agent": "b-expert",
-         "payload_schema_id": "schemas/handoff-payloads/a.v1.schema.json"},
+         "payload_schema_id": "agentteams/schemas/handoff-payloads/a.v1.schema.json"},
         {"sequence": 1, "from_agent": "b-expert", "to_agent": "c-expert",
-         "payload_schema_id": "schemas/handoff-payloads/b.v1.schema.json"},
+         "payload_schema_id": "agentteams/schemas/handoff-payloads/b.v1.schema.json"},
     ]}
     findings = detect_behavioral_drift(traj, _suite_no_handoffs(), today=_TODAY)
     assert any(f.code == "PAYLOAD_MISMATCH" for f in findings)

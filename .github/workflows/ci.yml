@@ -38,6 +38,14 @@ jobs:
       - name: Run tests
         run: pytest tests/
 
+      # The full suite above installs the package EDITABLE, where source `schemas/`
+      # is always on the path — which is exactly why the rc6 wheel shipping zero
+      # schema files went undetected until it broke retrieval in the field. This
+      # explicit gate builds a real wheel and asserts the JSON schemas are inside
+      # it, so an editable-only suite can never hide a package-data regression again.
+      - name: Wheel packaging smoke — JSON schemas must ship in the built wheel
+        run: pytest tests/test_packaging_schemas.py -v
+
       - name: Generate man-page for comparison
         run: python -m agentteams.man > /tmp/agentteams-check.1
 

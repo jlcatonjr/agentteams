@@ -88,7 +88,7 @@ def _get_validator() -> Any:
     """
     global _VALIDATOR
     if _VALIDATOR is None:
-        schema_dir = Path(__file__).resolve().parent.parent / "schemas"
+        schema_dir = Path(__file__).resolve().parent / "schemas"
         cai_schema = json.loads(
             (schema_dir / "agent-cai.schema.json").read_text(encoding="utf-8"))
         mcp_schema = json.loads(

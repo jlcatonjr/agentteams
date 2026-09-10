@@ -19,7 +19,7 @@ from agentteams.model_routing import (
 )
 
 REPO_ROOT = Path(__file__).parent.parent
-SCHEMA_PATH = REPO_ROOT / "schemas" / "model-routing.schema.json"
+SCHEMA_PATH = REPO_ROOT / "agentteams" / "schemas" / "model-routing.schema.json"
 EXAMPLES_DIR = REPO_ROOT / "examples"
 
 

@@ -278,18 +278,19 @@ def test_swallowed_exceptions_do_not_increase() -> None:
     )
 
 
-def test_artifacts_schema_anchor_resolves_to_repo_schemas() -> None:
-    """Step C re-anchor guard: cli/artifacts.py uses Path(__file__).parents[2]/schemas
-    after the move; assert that resolves to the real repo-root schemas dir with the
-    four artifact schemas present (a wrong anchor would silently misvalidate)."""
-    from agentteams.cli import artifacts
-    schema_dir = Path(artifacts.__file__).resolve().parents[2] / "schemas"
-    assert schema_dir == (REPO_ROOT / "schemas").resolve(), schema_dir
+def test_artifacts_schema_anchor_resolves_to_package_schemas() -> None:
+    """Re-anchor guard: schemas are package-bundled under ``agentteams/schemas`` and
+    resolved via ``cli/schema_cache._schema_path`` (``parents[1]/schemas``). Assert the
+    resolver points at that dir (not a repo-root/wheel-omitted location) with the four
+    artifact schemas present (a wrong anchor would silently misvalidate)."""
+    from agentteams.cli.schema_cache import _schema_path
+    schema_dir = _schema_path("memory-index.schema.json").parent
+    assert schema_dir == (REPO_ROOT / "agentteams" / "schemas").resolve(), schema_dir
     for name in (
         "delivery-receipt.schema.json", "eval-suite.schema.json",
         "model-routing.schema.json", "memory-index.schema.json",
     ):
-        assert (schema_dir / name).exists(), f"missing {name} at re-anchored path"
+        assert _schema_path(name).exists(), f"missing {name} at re-anchored path"
 
 
 def test_framework_registry_has_single_source() -> None:

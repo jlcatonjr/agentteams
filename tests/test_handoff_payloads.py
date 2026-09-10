@@ -34,9 +34,9 @@ def test_payload_schema_path_restriction(tmp_path):
         "../etc/passwd",
         "/abs/path/foo.v1.schema.json",
         "https://example.com/foo.v1.schema.json",
-        "schemas/handoff-payloads/../../etc/passwd",
-        "schemas/other/foo.v1.schema.json",
-        "schemas/handoff-payloads/Foo.v1.schema.json",  # uppercase rejected
+        "agentteams/schemas/handoff-payloads/../../etc/passwd",
+        "agentteams/schemas/other/foo.v1.schema.json",
+        "agentteams/schemas/handoff-payloads/Foo.v1.schema.json",  # uppercase rejected
         "",
     ]
     for bad in bad_inputs:
@@ -45,7 +45,7 @@ def test_payload_schema_path_restriction(tmp_path):
 
     # Valid path loads
     schema = load_payload_schema(
-        "schemas/handoff-payloads/conflict-audit-result.v1.schema.json", REPO_ROOT
+        "agentteams/schemas/handoff-payloads/conflict-audit-result.v1.schema.json", REPO_ROOT
     )
     assert schema["$id"] == "conflict-audit-result/v1.schema.json"
 
@@ -54,7 +54,7 @@ def test_payload_schema_path_restriction(tmp_path):
 def test_meta_schema_rejects_permissive():
     import jsonschema
 
-    meta = json.loads((REPO_ROOT / "schemas/handoff-payload-meta.schema.json").read_text())
+    meta = json.loads((REPO_ROOT / "agentteams/schemas/handoff-payload-meta.schema.json").read_text())
 
     permissive = {
         "$id": "anything-goes/v1.schema.json",

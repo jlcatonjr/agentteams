@@ -359,7 +359,7 @@ def test_offline_cache_with_blank_cve_records_is_treated_as_no_data(tmp_path: Pa
 def test_vuln_watch_schema_is_valid_draft7() -> None:
     import jsonschema
 
-    schema_path = Path("schemas/security-vulnerability-watch.schema.json")
+    schema_path = Path("agentteams/schemas/security-vulnerability-watch.schema.json")
     schema = json.loads(schema_path.read_text(encoding="utf-8"))
     jsonschema.Draft7Validator.check_schema(schema)
 
@@ -396,7 +396,7 @@ def test_online_payload_validates_against_vuln_watch_schema(monkeypatch, tmp_pat
         output_dir=output_dir, offline=False, max_items=5, skip_nvd=True,
     )
     payload = json.loads(placeholders["SECURITY_VULNERABILITY_WATCH_JSON"])
-    schema = json.loads(Path("schemas/security-vulnerability-watch.schema.json").read_text(encoding="utf-8"))
+    schema = json.loads(Path("agentteams/schemas/security-vulnerability-watch.schema.json").read_text(encoding="utf-8"))
     jsonschema.validate(payload, schema)  # raises on violation
 
 

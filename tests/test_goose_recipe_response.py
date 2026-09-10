@@ -22,7 +22,7 @@ from agentteams.frameworks.goose import (
 )
 
 REPO_ROOT = Path(__file__).resolve().parent.parent
-MANIFEST_SCHEMA_PATH = REPO_ROOT / "schemas" / "team-manifest.schema.json"
+MANIFEST_SCHEMA_PATH = REPO_ROOT / "agentteams" / "schemas" / "team-manifest.schema.json"
 
 _ORCH_MD = """\
 ---

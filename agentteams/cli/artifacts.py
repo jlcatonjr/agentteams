@@ -1,9 +1,9 @@
 """artifacts.py — delivery-receipt / eval-suite / model-routing / memory-index writers.
 
-Extracted verbatim from build_team.py (CH-07) except the 5 schema paths are
-re-anchored from `Path(__file__).resolve().parent` (build_team at repo root)
-to `parents[2]` (this module at agentteams/cli/) — the same repo-root/schemas
-dir. build_team re-exports these so main and tests resolve them unchanged.
+Extracted verbatim from build_team.py (CH-07). Schema paths resolve through
+`cli/schema_cache._schema_path`, which anchors at `parents[1]/schemas` — the
+package-bundled `agentteams/schemas` dir shipped in the wheel via `package-data`.
+build_team re-exports these so main and tests resolve them unchanged.
 """
 
 from __future__ import annotations

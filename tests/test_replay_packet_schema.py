@@ -14,7 +14,7 @@ from pathlib import Path
 import pytest
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
-SCHEMA_PATH = REPO_ROOT / "schemas/post-production-audit-decision-replay-packet.schema.json"
+SCHEMA_PATH = REPO_ROOT / "agentteams/schemas/post-production-audit-decision-replay-packet.schema.json"
 
 
 def _schema() -> dict:

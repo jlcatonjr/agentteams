@@ -238,7 +238,7 @@ def test_excluded_markdown_is_not_documentation(dfw, path):
         "agentteams/emit.py",
         "agentteams/cli/parser.py",
         "pyproject.toml",
-        "schemas/x.json",
+        "agentteams/schemas/x.json",
         ".github/workflows/ci.yml",
         # Product artifacts: not docs this watcher judges, but changing one can genuinely
         # oblige a doc update, so they must raise the obligation rather than go inert.

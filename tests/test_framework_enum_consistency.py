@@ -16,7 +16,7 @@ from pathlib import Path
 
 from agentteams.frameworks.registry import FRAMEWORK_IDS
 
-_SCHEMAS_DIR = Path(__file__).resolve().parent.parent / "schemas"
+_SCHEMAS_DIR = Path(__file__).resolve().parent.parent / "agentteams" / "schemas"
 
 
 def _load_schema(name: str) -> dict:
