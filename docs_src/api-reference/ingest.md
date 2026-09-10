@@ -32,7 +32,7 @@ Load and return a normalized project description dict.
 - `source` (`str | Path`) — Path to a `.json` or `.md` project description file.
 - `scan_project` (`bool`, keyword-only) — If `True` and `existing_project_path` is set in the description, scan the project directory for additional context. Default: `True`.
 
-**Returns:** `dict[str, Any]` — Normalized project description conforming to `schemas/project-description.schema.json`.
+**Returns:** `dict[str, Any]` — Normalized project description conforming to `agentteams/schemas/project-description.schema.json`.
 
 **Behavior Notes:**
 

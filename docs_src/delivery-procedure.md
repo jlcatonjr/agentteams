@@ -66,7 +66,7 @@ swallowed.
 
 ## Receipt schema (summary)
 
-The full schema lives at `schemas/delivery-receipt.schema.json`. Required
+The full schema lives at `agentteams/schemas/delivery-receipt.schema.json`. Required
 fields:
 
 - `artifact_type` — always the literal string `"delivery-receipt"`.

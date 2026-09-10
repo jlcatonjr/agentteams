@@ -13,7 +13,7 @@
 | `:sandbox` rejected for a namespace with no emitter | `agentteams/host_features.py` — `validate`, `_KNOWN_FEATURES` |
 | Confinement requested = profile OR token, on convert/render too | `agentteams/frameworks/_sandbox_emit.py:116` `_sandbox_feature_enabled`; `agentteams/frameworks/_linux_sandbox_emit.py` `_sandbox_confinement_requested` |
 | Read-exclusion set (exclusive) | `agentteams/frameworks/_sandbox_emit.py` `_exclusive_read_deny_paths`, `_DEFAULT_PROTECTED_READ_PATHS` |
-| Manifest carries the request | `agentteams/analyze.py` `build_manifest`; `schemas/team-manifest.schema.json`, `schemas/project-description.schema.json` |
+| Manifest carries the request | `agentteams/analyze.py` `build_manifest`; `agentteams/schemas/team-manifest.schema.json`, `agentteams/schemas/project-description.schema.json` |
 
 ## The decision (SB7–SB9)
 

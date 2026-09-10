@@ -148,7 +148,7 @@ flowchart LR
    `cooperative` — a typo cannot ship an unconfined team that looks confined.
 **Source.** `agentteams/host_features.py` `validate_privilege_profile`;
 `agentteams/frameworks/_sandbox_emit.py` `_exclusive_read_deny_paths`;
-`schemas/project-description.schema.json` (`privilege_profile`, `workspace_write_roots`,
+`agentteams/schemas/project-description.schema.json` (`privilege_profile`, `workspace_write_roots`,
 `protected_read_paths`).
 **Dial.** R Full · D Full · S Core · E Light.
 
@@ -172,7 +172,7 @@ flowchart LR
 1. `build_manifest` carries `privilege_profile`, `workspace_write_roots`, `protected_read_paths`, and
    the resolved `host_features` into the render/emit pipeline. The manifest is the single object the
    decision (SB7) and every emitter (SB10–SB13) read; there is no out-of-band sandbox state.
-**Source.** `agentteams/analyze.py` `build_manifest`; `schemas/team-manifest.schema.json`.
+**Source.** `agentteams/analyze.py` `build_manifest`; `agentteams/schemas/team-manifest.schema.json`.
 **Dial.** R Full · D Core · S Light · E Skip.
 
 ---

@@ -32,7 +32,7 @@ brief.json / brief.md
 
 ### Stage 1 — Ingest (`agentteams/ingest.py`)
 
-Reads your project description from a `.json` or `.md` file and validates it against `schemas/project-description.schema.json`. Returns a normalized Python dict.
+Reads your project description from a `.json` or `.md` file and validates it against `agentteams/schemas/project-description.schema.json`. Returns a normalized Python dict.
 
 ### Stage 2 — Analyze (`agentteams/analyze.py`)
 

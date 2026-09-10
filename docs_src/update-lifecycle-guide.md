@@ -29,7 +29,7 @@ Content drift is normal and expected over time. `--migrate` is only for legacy p
 
 ### Manifest Fingerprint, Baseline Heal, and Delivery Receipt
 
-Each build records a manifest fingerprint and a `fingerprint_algo_version` in `build-log.json`. When `--check` detects a manifest-promotion event (fingerprint changed, unavailable, or algo version bumped) it renders the affected files in memory and demotes any whose rendered content already matches disk — so `--check` and `--update --dry-run` report the same `has_changes` set. When `--update` finds no material drift but the recorded baseline is stale (typical after a `FINGERPRINT_ALGO_VERSION` bump), the build-log baseline is healed in place (rewritten with the current fingerprint and algo version). Every successful non-dry-run `--update` then writes `references/delivery-receipt.json` (schema: `schemas/delivery-receipt.schema.json`) attesting the delivered fingerprint and algo version; the receipt is excluded from drift detection. After the build-log and receipt are written, the run prints `✓  Healed build-log baseline (no material drift; fingerprint refreshed).` so the convergence is observable. See [Delivery Procedure](delivery-procedure.md) for the full heal-then-attest contract.
+Each build records a manifest fingerprint and a `fingerprint_algo_version` in `build-log.json`. When `--check` detects a manifest-promotion event (fingerprint changed, unavailable, or algo version bumped) it renders the affected files in memory and demotes any whose rendered content already matches disk — so `--check` and `--update --dry-run` report the same `has_changes` set. When `--update` finds no material drift but the recorded baseline is stale (typical after a `FINGERPRINT_ALGO_VERSION` bump), the build-log baseline is healed in place (rewritten with the current fingerprint and algo version). Every successful non-dry-run `--update` then writes `references/delivery-receipt.json` (schema: `agentteams/schemas/delivery-receipt.schema.json`) attesting the delivered fingerprint and algo version; the receipt is excluded from drift detection. After the build-log and receipt are written, the run prints `✓  Healed build-log baseline (no material drift; fingerprint refreshed).` so the convergence is observable. See [Delivery Procedure](delivery-procedure.md) for the full heal-then-attest contract.
 
 ### The Three Update Modes
 
@@ -54,7 +54,7 @@ A project may have more than one descriptor on disk:
 
 | File | Role | Use with `--update`? |
 |---|---|---|
-| `.agentteams/brief.json` | **Canonical brief** — schema-valid against `schemas/project-description.schema.json`; carries the full `components`, `tools`, `selected_archetypes`, `memory_index_extra_dirs`, output-directory fields, etc. | **Yes** when present |
+| `.agentteams/brief.json` | **Canonical brief** — schema-valid against `agentteams/schemas/project-description.schema.json`; carries the full `components`, `tools`, `selected_archetypes`, `memory_index_extra_dirs`, output-directory fields, etc. | **Yes** when present |
 | `brief.json` (project root) | Same role as `.agentteams/brief.json` for older layouts | Yes when present |
 | `.github/agents/_build-description.json` | Operator-side scaffold created by setup; may be a thin stub (project_name + project_goal + governance_agents) or may be a full mirror of the brief | Only if it is a full mirror; otherwise treat as stale |
 

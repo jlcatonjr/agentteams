@@ -2,7 +2,7 @@
 
 <!-- skeleton:SB4 SB5 SB6 -->
 
-**The knobs, in your brief** (`schemas/project-description.schema.json`):
+**The knobs, in your brief** (`agentteams/schemas/project-description.schema.json`):
 
 ```json
 { "privilege_profile": "confined",

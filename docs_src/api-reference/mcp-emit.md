@@ -2,7 +2,7 @@
 
 Gated, **inert** MCP server-definition emitter. Writes
 `.claude/mcp-servers.agentteams.json` — a list of server definitions (each
-conforming to `schemas/mcp-server.schema.json`) plus a sibling `activation_status`
+conforming to `agentteams/schemas/mcp-server.schema.json`) plus a sibling `activation_status`
 map. This file **provisions nothing**: it is documentation/configuration only,
 contains no secrets, and is deliberately **not** named `.mcp.json` (the name
 Claude Code auto-loads). Credentialed *activation* — writing a live `.mcp.json`
@@ -16,7 +16,7 @@ Opt-in via [`--target-host-features claude:mcp`](host-features.md) or
 ## Specifying servers (the automation path)
 
 An operator declares the servers they want under `mcp_servers[]` in the project
-description (`schemas/project-description.schema.json`). The pipeline then:
+description (`agentteams/schemas/project-description.schema.json`). The pipeline then:
 
 1. [`analyze.build_manifest`](analyze.md) copies declared servers verbatim into
    the team-manifest's `mcp_servers[]` (inert; absent ⇒ manifest unchanged).

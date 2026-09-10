@@ -56,7 +56,7 @@ Frozen dataclass describing a single conflict-auditor finding produced by `audit
 
 > *Source: `agentteams/handoff_payloads.py`*
 
-Load a payload schema by relative repo path. Rejects URLs, absolute paths, `..` segments, paths outside `schemas/handoff-payloads/<slug>.v<n>.schema.json`, uppercase slugs, and paths that resolve outside `repo_root` (V1 mitigation).
+Load a payload schema by relative repo path. Rejects URLs, absolute paths, `..` segments, paths outside `agentteams/schemas/handoff-payloads/<slug>.v<n>.schema.json`, uppercase slugs, and paths that resolve outside `repo_root` (V1 mitigation).
 
 **Args:**
 
@@ -137,6 +137,6 @@ Comparison is `$id`-string only — schema bodies are never compared (V4 mitigat
 - [`plan_steps`](plan_steps.md) — reader for the `.steps.csv` artifacts whose rows declare `payload_schema_in` / `payload_schema_out`.
 - [`parallel_plan`](parallel-plan.md) — wave scheduler over the same plan `.steps.csv` rows (tolerant 7-column runtime schema).
 - [`plan_steps_todo`](plan-steps-todo.md) — TodoWrite projection of the plan-steps CSV (strict 11-column schema).
-- `schemas/handoff-payload-meta.schema.json` — meta-schema enforcing structural constraints on every concrete payload schema (V2 mitigation).
-- `schemas/handoff-payloads/conflict-audit-result.v1.schema.json` — worked-example payload schema for `@conflict-auditor` findings.
+- `agentteams/schemas/handoff-payload-meta.schema.json` — meta-schema enforcing structural constraints on every concrete payload schema (V2 mitigation).
+- `agentteams/schemas/handoff-payloads/conflict-audit-result.v1.schema.json` — worked-example payload schema for `@conflict-auditor` findings.
 - `agentteams/templates/universal/conflict-auditor.template.md` — fenced `handoff_payload_codes` section declaring the `PAYLOAD_UNTYPED` / `PAYLOAD_MISMATCH` conflict codes.

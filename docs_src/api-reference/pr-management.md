@@ -8,7 +8,7 @@ All `gh` CLI calls go through a single `_run_gh` shim so tests can inject a mock
 
 - **Module:** `agentteams.pr_management` (importable)
 - **CLI:** `python -m agentteams.pr_management {prompt, remind}`
-- **Schema:** `schemas/pr-recipient-registry.schema.json`
+- **Schema:** `agentteams/schemas/pr-recipient-registry.schema.json`
 - **Seed registry:** `references/pr-recipients.json`
 - **Daily workflow:** `.github/workflows/pr-reminders.yml`
 - **Workflow entry-point:** `scripts/post_pr_reminders.py`
@@ -132,7 +132,7 @@ python -m agentteams.pr_management remind --dry-run
 
 ## Recipient Registry Schema
 
-See `schemas/pr-recipient-registry.schema.json` for the JSON Schema (Draft 2020-12). The seed registry at `references/pr-recipients.json` ships with a single entry for the repo owner; extend it by adding `recipients[]` entries.
+See `agentteams/schemas/pr-recipient-registry.schema.json` for the JSON Schema (Draft 2020-12). The seed registry at `references/pr-recipients.json` ships with a single entry for the repo owner; extend it by adding `recipients[]` entries.
 
 Per-recipient `notifications_confirmed: false` triggers a step-summary warning in the daily reminder workflow (operator-confirmed signal that the recipient actually receives GitHub notifications).
 

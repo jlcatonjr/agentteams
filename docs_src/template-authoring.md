@@ -80,7 +80,7 @@ Every template must have:
    - Root level — orchestrator and copilot-instructions
 2. Register the archetype in the `select_archetypes()` selector in `agentteams/analyze.py` — for simple keyword matching add a `(keywords, archetype)` row to the `_ARCHETYPE_TRIGGERS` table it iterates; for contextual matching add an inline selection rule in `select_archetypes()` directly (the approach the canonical [`AUTHORING-GUIDE.md`](https://github.com/jlcatonjr/agentteams/blob/main/agentteams/templates/AUTHORING-GUIDE.md) shows)
 3. Add the new placeholder to `templates/PLACEHOLDER-CONVENTIONS.md` if introducing a new placeholder
-4. Add the archetype slug to `selected_archetypes.items.enum` in `schemas/team-manifest.schema.json` (and update `schemas/project-description.schema.json` only if your intake schema explicitly validates allowed archetype labels)
+4. Add the archetype slug to `selected_archetypes.items.enum` in `agentteams/schemas/team-manifest.schema.json` (and update `agentteams/schemas/project-description.schema.json` only if your intake schema explicitly validates allowed archetype labels)
 5. Update `template-library-expert.agent.md` sections count
 
 ### Post-Production Auditor Registration Notes
@@ -88,7 +88,7 @@ Every template must have:
 For `domain/post-production-auditor.template.md`, use this registration profile:
 
 1. Add contextual selection logic in `agentteams/analyze.py` for operation/state-change cues + verification/proof cues (avoid broad single-keyword auto-selection)
-2. Add `post-production-auditor` to `selected_archetypes.items.enum` in `schemas/team-manifest.schema.json`
+2. Add `post-production-auditor` to `selected_archetypes.items.enum` in `agentteams/schemas/team-manifest.schema.json`
 3. Register the template in `agentteams/templates/template-chapter-audit.csv` using a unique `TA-` ID, and fill the three provenance columns (see below). **Enforced** by `tests/test_template_ledger_reconciliation.py`: a new template with no row fails the suite. 28 pre-existing templates are recorded as a baseline there rather than back-registered — writing rows for templates nobody audited would fabricate the dispositions the ledger exists to record
 4. Do not place optional post-production routing rows inside `AGENTTEAMS:BEGIN routing_table_rows`; add them in the user-editable gap below the fence
 5. Do not place optional post-production workflows inside `AGENTTEAMS:BEGIN available_workflows`; add them in the user-editable gap before that fence

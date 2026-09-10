@@ -265,7 +265,7 @@ Re-render drifted agent files and emit newly added agents without touching uncha
 
 A backup of the output directory is created automatically before any writes. By default, `--update` uses merge mode (equivalent to `--update --merge`): only template-fenced regions are re-rendered, and user-authored content outside fence markers is preserved. To perform a full destructive re-render, pass `--update --overwrite` (this invokes the security gate and requires a clearance in `references/security-decisions.log.csv`). Use `--no-backup` to suppress the backup.
 
-On a successful (non-dry-run) `--update`, AgentTeams writes a delivery receipt to `references/delivery-receipt.json` (schema: `schemas/delivery-receipt.schema.json`) recording the project name, framework, manifest fingerprint, and fingerprint algorithm version of the delivered build. When no material drift is detected but the build-log baseline is stale (for example after a `FINGERPRINT_ALGO_VERSION` bump), the baseline is healed in place: the build-log is rewritten first, the delivery receipt is then written against the healed baseline (heal-first-attest-second), and `--update` prints `✓  Healed build-log baseline (no material drift; fingerprint refreshed).` after both writes complete. Receipt write failures warn on stderr but do not fail the run.
+On a successful (non-dry-run) `--update`, AgentTeams writes a delivery receipt to `references/delivery-receipt.json` (schema: `agentteams/schemas/delivery-receipt.schema.json`) recording the project name, framework, manifest fingerprint, and fingerprint algorithm version of the delivered build. When no material drift is detected but the build-log baseline is stale (for example after a `FINGERPRINT_ALGO_VERSION` bump), the baseline is healed in place: the build-log is rewritten first, the delivery receipt is then written against the healed baseline (heal-first-attest-second), and `--update` prints `✓  Healed build-log baseline (no material drift; fingerprint refreshed).` after both writes complete. Receipt write failures warn on stderr but do not fail the run.
 
 ### `--prune`
 
@@ -594,7 +594,7 @@ and 7 are human- or agent-driven off the emitted artifacts; an unattended job th
 remediation code is a larger risk than the one it closes.
 
 Artifacts land in `tmp/redteam/YYYY-MM-DD/` (or `--redteam-report`): `findings.json`
-(schema: `schemas/redteam-findings.schema.json`), `discoveries.md`, `remediation.plan.md`,
+(schema: `agentteams/schemas/redteam-findings.schema.json`), `discoveries.md`, `remediation.plan.md`,
 `selfaudit.md`.
 
 **Exit code:**

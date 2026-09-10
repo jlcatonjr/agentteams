@@ -56,7 +56,7 @@ class McpCandidate:
 evaluate_hint(hint: dict, *, target_host_count: int = 1) -> McpCandidate
 ```
 Evaluate one integration hint (shape: the `mcp_hints` item in
-`schemas/project-description.schema.json`). `target_host_count > 1` is itself
+`agentteams/schemas/project-description.schema.json`). `target_host_count > 1` is itself
 evidence of cross-host reuse.
 
 ```python

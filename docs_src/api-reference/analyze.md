@@ -2,7 +2,7 @@
 
 Analyze a project description to produce a team manifest.
 
-Takes the normalized description dict from [`ingest.load()`](ingest.md) and produces a team manifest dict conforming to `schemas/team-manifest.schema.json`.
+Takes the normalized description dict from [`ingest.load()`](ingest.md) and produces a team manifest dict conforming to `agentteams/schemas/team-manifest.schema.json`.
 
 > *Source: `agentteams/analyze.py`*
 
@@ -21,7 +21,7 @@ Build and return a team manifest from a normalized project description.
 - `description` (`dict[str, Any]`) — Normalized project description from `ingest.load()`.
 - `framework` (`str`, keyword-only) — Target agent framework: `'copilot-vscode'`, `'copilot-cli'`, or `'claude'`. Default: `'copilot-vscode'`.
 
-**Returns:** `dict[str, Any]` — Team manifest conforming to `schemas/team-manifest.schema.json`.
+**Returns:** `dict[str, Any]` — Team manifest conforming to `agentteams/schemas/team-manifest.schema.json`.
 
 **Behavior Notes:**
 

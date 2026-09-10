@@ -122,7 +122,7 @@ Functions:
 - `build_manifest(partition_meta, *, ...) -> dict`
 - `atomic_write_json(path, obj) -> None`
 
-See `schemas/code-index.schema.json` for the artifact contract and
+See `agentteams/schemas/code-index.schema.json` for the artifact contract and
 `references/plans/code-api-vector-index.plan.md` for the audited design (v3).
 
 ### Query result shape

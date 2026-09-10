@@ -52,7 +52,7 @@ Build a framework-neutral evaluation suite from a team manifest.
 
 - `manifest` (`dict[str, Any]`) — Team manifest from [`analyze.build_manifest()`](analyze.md).
 
-**Returns:** `dict[str, Any]` — Eval-suite dict conforming to `schemas/eval-suite.schema.json`. All keys below are required by the schema:
+**Returns:** `dict[str, Any]` — Eval-suite dict conforming to `agentteams/schemas/eval-suite.schema.json`. All keys below are required by the schema:
 - `artifact_type`: `"eval-suite"`
 - `eval_suite_schema_version`: Current schema version
 - `project_name`: The manifest's `project_name` (empty string if absent)

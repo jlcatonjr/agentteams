@@ -272,5 +272,5 @@ Workflow 10C:
 - **Template:** `agentteams/templates/domain/post-production-auditor.template.md`
 - **Orchestrator Workflow 10C:** `orchestrator.template.md` (user-editable section)
 - **Configuration:** `docs_src/template-authoring.md` → Post-Production Auditor Registration Notes
-- **Closure Gate Schema:** `schemas/post-production-audit-closure-gate-status.schema.json`
-- **Decision Replay Schema:** `schemas/post-production-audit-decision-replay-packet.schema.json`
+- **Closure Gate Schema:** `agentteams/schemas/post-production-audit-closure-gate-status.schema.json`
+- **Decision Replay Schema:** `agentteams/schemas/post-production-audit-decision-replay-packet.schema.json`

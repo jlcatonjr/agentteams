@@ -25,7 +25,7 @@ unconfined team that looks confined.
 
 *Source:* `agentteams/host_features.py` `validate_privilege_profile`;
 `agentteams/frameworks/_sandbox_emit.py` `_exclusive_read_deny_paths`, `_DEFAULT_PROTECTED_READ_PATHS`;
-`schemas/project-description.schema.json`.
+`agentteams/schemas/project-description.schema.json`.
 
 ## SB5 — Host-feature tokens and profile expansion  ✅
 
@@ -49,6 +49,6 @@ how that is prevented.
 resolved `host_features` into the render/emit pipeline. The manifest is the single object the decision
 (Part III) and every emitter (Part IV) read; there is no out-of-band sandbox state.
 
-*Source:* `agentteams/analyze.py` `build_manifest`; `schemas/team-manifest.schema.json`.
+*Source:* `agentteams/analyze.py` `build_manifest`; `agentteams/schemas/team-manifest.schema.json`.
 
 > **Next:** [Part III — The decision](part-iii-the-decision.md).
