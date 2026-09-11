@@ -1,0 +1,35 @@
+# Dependabot configuration.
+#
+# Purpose: keep GitHub Actions version pins current so the repo never again
+# silently drifts onto a deprecated runtime. (The Node 20 deprecation required a
+# manual sweep because nothing was watching action versions — this closes that
+# gap going forward.) See
+# tmp/by-week/2026-W37/ci-cd-regular-updates-remediation.plan.md (R3).
+#
+# Scope decision — github-actions only:
+#   The project is stdlib-only at runtime (no production pip dependencies; the
+#   [test] and [research] extras are dev-only). A pip ecosystem would mostly
+#   surface dev-tooling churn rather than runtime security exposure, so it is
+#   intentionally omitted. Revisit if runtime dependencies are ever introduced.
+#
+# Dependabot OPENS PRs; it does not merge them. They flow through the same
+# branch-protection and review surface as any other PR (no auto-merge is
+# configured here), and they require no write scope beyond what Dependabot
+# already holds by default.
+version: 2
+updates:
+  - package-ecosystem: "github-actions"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+      day: "monday"
+      time: "07:00"
+      timezone: "Etc/UTC"
+    commit-message:
+      prefix: "chore(ci)"
+    # One grouped PR per week instead of one per action, to keep review light.
+    groups:
+      github-actions:
+        patterns:
+          - "*"
+    open-pull-requests-limit: 5
