@@ -6,6 +6,27 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.0.0-rc.7] - 2026-09-10
+
+### fixed (JSON schemas now ship inside the installed wheel)
+
+- **The bundled JSON schemas are now packaged under `agentteams/schemas/` and ship inside the
+  wheel, restoring memory-index and code-index retrieval for every wheel consumer.** In rc6 the
+  schemas lived at the top-level `schemas/` dir and `cli/schema_cache._schema_path` resolved them
+  via `Path(__file__).parents[2] / "schemas"` — the repo root in a source checkout, but a
+  non-existent `site-packages/schemas/` in an installed wheel. Because `schemas*` was excluded from
+  packaging and `package-data` shipped only `templates/**`, the rc6 wheel bundled zero schema
+  files, so `--query-index` / `--query-code` hard-failed with "schema unavailable" on any wheel
+  install (source checkouts were unaffected, which is why it shipped undetected). The schemas move
+  into the package (mirroring how `templates/` already ships), the three resolvers repoint to
+  package-relative paths (`schema_cache._schema_path` → `parents[1]`; `mcp_emit.py` and
+  `canonical.py` → `parent`), `package-data` gains `schemas/**`, and the handoff-payload security
+  allowlist (`_PAYLOAD_GLOB_RE`) re-anchors to `agentteams/schemas/handoff-payloads/…` with its V1
+  traversal/URL/absolute-path guards intact. Schema `$id` identifier URLs are left stable. A new
+  `tests/test_packaging_schemas.py` builds a real wheel and asserts the schemas are inside it — the
+  gap no editable-install CI job exercised — and it runs as a dedicated wheel-packaging gate in
+  `ci.yml`.
+
 ### fixed (fleet discovery excludes its own output/backup tree and git worktrees)
 
 - **`--fleet` discovery no longer walks the fleet's own `.agentteams-fleet/` output tree, and no

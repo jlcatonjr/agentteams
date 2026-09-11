@@ -5,7 +5,7 @@ description: Comprehensive enumeration of all AgentTeams capabilities, organized
 
 # AgentTeams — Feature Inventory
 
-**Version baseline:** 1.0.0rc6 · **counts last reconciled by hand:** 2026-07-29
+**Version baseline:** 1.0.0rc7 · **counts last reconciled by hand:** 2026-07-29
 
 Features below are grouped by capability area. This inventory may include capabilities currently present on
 `main` that are not yet part of a tagged release. Release-specific availability should be verified against
