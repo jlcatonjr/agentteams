@@ -140,7 +140,7 @@ F-138,Drift Trust & Delivery Gating,`refine_manifest_promotion` Render-Faithful 
 F-139,Drift Trust & Delivery Gating,`--check` Option C Render-Faithful Mode,,feature,unit,none,,,UNPROVEN,
 F-140,Drift Trust & Delivery Gating,`--check` / `--update --dry-run` Parity Contract,,feature,unit,none,tests/test_integration.py::test_check_parity_with_update_dry_run,,UNPROVEN,
 F-141,Drift Trust & Delivery Gating,Delivery Receipt Artifact,,feature,unit,none,,,UNPROVEN,
-F-142,Drift Trust & Delivery Gating,`schemas/delivery-receipt.schema.json`,,feature,unit,none,,,UNPROVEN,
+F-142,Drift Trust & Delivery Gating,`agentteams/schemas/delivery-receipt.schema.json`,,feature,unit,none,,,UNPROVEN,
 F-143,Drift Trust & Delivery Gating,`docs_src/delivery-procedure.md` Operator Guide,,feature,unit,none,,,UNPROVEN,
 F-144,Retrieval & Review-Time Utilities,Confidence-Tiered Retrieval,,feature,unit,none,,,UNPROVEN,
 F-145,Retrieval & Review-Time Utilities,`agentteams.scan` Review-Time Invocability,,feature,unit,none,,,UNPROVEN,
