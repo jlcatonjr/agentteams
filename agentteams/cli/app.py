@@ -23,6 +23,7 @@ from agentteams.cli.commands import (
     _run_convert,
     _run_interop,
     _run_prune_backups,
+    _run_framework_freshness,
     _run_stale_check,
     _run_stale_restore,
     _run_verify_backup,
@@ -223,6 +224,14 @@ def _main_dispatch(
     # -----------------------------------------------------------------------
     if getattr(args, "stale_check", False):
         return _run_stale_check(args)
+
+    # -----------------------------------------------------------------------
+    # --framework-freshness: standalone read-only cross-framework render-staleness
+    # scan. Reports which provider renders lag the current templates (the "updated
+    # one framework, forgot another" class). Exit code IS the verdict (0/1). No writes.
+    # -----------------------------------------------------------------------
+    if getattr(args, "framework_freshness", False):
+        return _run_framework_freshness(args)
 
     # -----------------------------------------------------------------------
     # --stale-restore: recover files from a --stale-remediate --yes snapshot.

@@ -801,6 +801,10 @@ agentteams --revert-migration --project /path/to/project
 
 Read-only scan (and optional guided/applied revision) for stale agent docs and code. See the [Stale Detection Guide](stale-detection-guide.md) for tiers, suppression, and recovery.
 
+### `--framework-freshness`
+
+Read-only: scan `--output`/`--project` (else CWD) for **all** provider renders (`.claude/agents/`, `.github/agents/`, `.goose/recipes/`, …) and report which have drifted behind the current templates while a sibling render was updated — the "regenerated one framework, forgot another" staleness class. Each render carries its own `references/build-log.json`; the scan reuses the same template-hash comparison as [`--check`](#-check) across every render at once, and names the freshest render so lagging ones are obvious. Backup, snapshot, git-worktree, canonical-hub, and `tmp/` scratch trees are excluded. Exits `1` when any render is stale, `0` otherwise. Never edits files. See [`framework_freshness`](api-reference/framework-freshness.md).
+
 ### `--stale-check`
 
 Read-only: scan `--output`/`--project` (else CWD) for stale agent docs and code/scripts (VCS conflict markers, broken references, git-recency divergence, provenance-gated generated-file integrity). Exits non-zero on any Tier-1 (blocking) finding. Never edits files.

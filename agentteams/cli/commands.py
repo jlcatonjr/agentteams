@@ -388,6 +388,33 @@ def _run_stale_check(args: argparse.Namespace) -> int:
     return stale_detector.exit_code(report)
 
 
+def _run_framework_freshness(args: argparse.Namespace) -> int:
+    """``--framework-freshness``: read-only cross-framework render-staleness scan.
+
+    Resolves the scan root from ``--output``/``--project`` (else CWD), finds every
+    provider render beneath it (each carries its own ``references/build-log.json``),
+    and reports which renders have drifted behind the current templates while a
+    sibling was updated — the silent-staleness class where one framework is
+    regenerated and another is forgotten. Exit 1 when any render is stale; 0
+    otherwise. Never edits files.
+    """
+    from agentteams import framework_freshness
+    from agentteams.cli.render_pipeline import TEMPLATES_DIR
+
+    root = _resolve_output_dir(args)
+    if not root.exists():
+        print(f"Error: freshness-scan target does not exist: {root}", file=sys.stderr)
+        return 1
+    try:
+        report = framework_freshness.scan(root, TEMPLATES_DIR)
+    except (OSError, ValueError) as exc:
+        # CH-24: read-only CLI boundary — surface, don't traceback.
+        print(f"Error: {exc}", file=sys.stderr)
+        return 1
+    framework_freshness.print_report(report, project_root=root)
+    return report.exit_code()
+
+
 def _run_stale_restore(args: argparse.Namespace) -> int:
     """``--stale-restore [TS]``: recover files from a --stale-remediate safety snapshot
     under .agentteams-backups/stale-fix-<TS>/ (default: the latest). The recovery path

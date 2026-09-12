@@ -732,6 +732,9 @@ def _heal_build_log_baseline(output_dir: Path, manifest: dict) -> None:
 
 def _write_run_log(manifest: dict, result: emit.EmitResult, output_dir: Path, template_hashes: dict[str, str] | None = None) -> None:
     """Write a minimal JSON run log to the output directory."""
+    from datetime import datetime, timezone
+
+    from agentteams import __version__ as _agentteams_version
     from agentteams import drift as _drift
 
     # Convert absolute paths to project-relative paths for portability
@@ -744,7 +747,12 @@ def _write_run_log(manifest: dict, result: emit.EmitResult, output_dir: Path, te
             files_written.append(f)
 
     log = {
-        "schema_version": "1.2",
+        "schema_version": "1.5",
+        # v1.5 addition — render provenance so a freshness scan can tell WHICH
+        # generator version / WHEN a render was produced (framework_freshness.py).
+        # Older logs omit these; consumers must treat them as optional.
+        "agentteams_version": _agentteams_version,
+        "generated_at": datetime.now(timezone.utc).isoformat(),
         "project_name": manifest["project_name"],
         "framework": manifest["framework"],
         "project_type": manifest["project_type"],
