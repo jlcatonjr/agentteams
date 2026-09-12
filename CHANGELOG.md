@@ -16,7 +16,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   render (missing whole orchestrator workflows) undetected. The scan (`agentteams/framework_freshness.py`)
   walks a project, finds every provider render (`references/build-log.json`), reuses
   `drift.detect_drift` across all of them, and reports which lag the current templates (exit 1 if
-  any stale); it excludes backup/snapshot/worktree/canonical/tmp/venv trees (relative to the
+  any stale); it excludes backup, snapshot, worktree, canonical-hub, scratch, and virtualenv trees (relative to the
   project root) and reports a legacy build-log with no `template_hashes` as `unverifiable` rather
   than a false STALE. Build-log gains render provenance (`schema_version` 1.2→1.5 +
   `agentteams_version` + `generated_at`), previously carried only by the write-only
