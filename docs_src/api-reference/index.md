@@ -47,6 +47,7 @@ This reference defines the **supported public API surface** (documented modules 
 | [`remediate`](remediate.md) | Auto-correct audit findings via standalone Copilot CLI |
 | [`security-refs`](security-refs.md) | Build live security intelligence placeholders for templates |
 | [`framework-research`](framework-research.md) | Detect upstream framework drift; transmit via `--update --merge`; supervised-PR auto-update path |
+| [`framework-freshness`](framework-freshness.md) | Cross-framework render-staleness scan — report which provider renders lag the current templates (`--framework-freshness`) |
 
 ## Enhancement & Enrichment
 

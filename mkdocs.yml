@@ -188,6 +188,7 @@ nav:
       - remediate: api-reference/remediate.md
       - security-refs: api-reference/security-refs.md
       - framework-research: api-reference/framework-research.md
+      - framework-freshness: api-reference/framework-freshness.md
       - enrich: api-reference/enrich.md
       - memory-index: api-reference/memory-index.md
       - memory-index-incremental: api-reference/memory-index-incremental.md
