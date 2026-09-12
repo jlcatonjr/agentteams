@@ -1267,7 +1267,10 @@ def test_initialization_writes_baseline_inventory_artifacts(tmp_path, monkeypatc
     assert build_log_path.exists(), "Initialization must write references/build-log.json"
 
     payload = json.loads(build_log_path.read_text(encoding="utf-8"))
-    assert payload.get("schema_version") == "1.2"
+    assert payload.get("schema_version") == "1.5"
+    # v1.5 render provenance (framework_freshness scan): generator version + timestamp.
+    assert payload.get("agentteams_version")
+    assert payload.get("generated_at")
     assert payload.get("manifest_fingerprint")
     assert payload.get("output_files_map"), "Baseline output inventory is required for structural update checks"
     assert payload.get("agent_slug_list"), "Baseline agent slug inventory is required for team membership drift checks"
@@ -1306,7 +1309,9 @@ def test_build_log_schema_v12(tmp_path):
     assert log_path.exists()
     log = json.loads(log_path.read_text())
 
-    assert log["schema_version"] == "1.2"
+    assert log["schema_version"] == "1.5"
+    assert "agentteams_version" in log  # v1.5 render provenance
+    assert "generated_at" in log
     assert "output_files_map" in log
     assert "agent_slug_list" in log
     assert "governance_agents" in log

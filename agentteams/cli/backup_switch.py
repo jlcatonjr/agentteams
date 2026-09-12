@@ -23,6 +23,14 @@ def add_stale_and_backup_arguments(parser: argparse.ArgumentParser) -> None:
              "on any Tier-1 (blocking) finding. Never edits files.",
     )
     parser.add_argument(
+        "--framework-freshness", action="store_true", dest="framework_freshness", default=False,
+        help="Read-only: scan --output/--project (else CWD) for ALL provider renders "
+             "(.claude/, .github/agents/, .goose/, ...) and report which lag the current "
+             "templates while a sibling render was updated (the 'updated one framework, "
+             "forgot another' staleness class). Exits non-zero if any render is stale. "
+             "Never edits files.",
+    )
+    parser.add_argument(
         "--stale-remediate", action="store_true", dest="stale_remediate", default=False,
         help="Modifier for --stale-check: also print a guided remediation plan "
              "(suggestions only; does NOT edit files, unlike --auto-correct).",
