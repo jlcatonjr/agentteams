@@ -6,6 +6,25 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### added (`--framework-freshness` cross-render staleness scan)
+
+- **New read-only `--framework-freshness` scan surfaces the silent render-staleness class where one
+  provider render is regenerated and a sibling is forgotten.** When an operator runs
+  `--update --merge` for one framework (e.g. `copilot-vscode`) and never regenerates another
+  (e.g. `claude`), the forgotten render's build-log baseline predates a template change with no
+  signal — the failure that left a downstream project's Claude render weeks behind its Copilot
+  render (missing whole orchestrator workflows) undetected. The scan (`agentteams/framework_freshness.py`)
+  walks a project, finds every provider render (`references/build-log.json`), reuses
+  `drift.detect_drift` across all of them, and reports which lag the current templates (exit 1 if
+  any stale); it excludes backup/snapshot/worktree/canonical/tmp/venv trees (relative to the
+  project root) and reports a legacy build-log with no `template_hashes` as `unverifiable` rather
+  than a false STALE. Build-log gains render provenance (`schema_version` 1.2→1.5 +
+  `agentteams_version` + `generated_at`), previously carried only by the write-only
+  delivery-receipt. **Scope (honest):** template-hash-based, so it detects a render whose build-log
+  predates a template change; it does not catch a merge that refreshed the build-log while
+  `preserve_on_shrink` kept a stale operator-enriched fenced body — that needs a fence-version
+  signal in the merge engine (tracked as future work). (#40)
+
 ## [1.0.0-rc.7] - 2026-09-10
 
 ### fixed (JSON schemas now ship inside the installed wheel)
