@@ -254,6 +254,7 @@ def build_manifest(description: dict[str, Any], *, framework: str = "copilot-vsc
         description.get("privilege_profile")
     )
     workspace_write_roots = description.get("workspace_write_roots")
+    coordination_write_roots = description.get("coordination_write_roots")
 
     # Strict agent-privilege switch (enforce decision signing). Defaults ON: an absent field
     # means the team gets the enforcement when it is (re)generated/updated (the emitted
@@ -513,6 +514,7 @@ def build_manifest(description: dict[str, Any], *, framework: str = "copilot-vsc
         **({"is_management_repo": True} if is_management_repo else {}),
         **({"authorized_managers": authorized_managers} if authorized_managers else {}),
         **({"workspace_write_roots": list(workspace_write_roots)} if workspace_write_roots else {}),
+        **({"coordination_write_roots": list(coordination_write_roots)} if coordination_write_roots else {}),
         **({"protected_read_paths": list(description["protected_read_paths"])} if description.get("protected_read_paths") else {}),
         # P3-3 opt-in: emit only when true (keeps the default block byte-identical); resolves
         # denyRead `~/` paths to abspaths in the emitter so enforcement does not depend on `~`.

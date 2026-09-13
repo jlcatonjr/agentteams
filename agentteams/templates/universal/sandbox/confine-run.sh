@@ -30,9 +30,15 @@
 #
 # Usage:
 #   sandbox/confine-run.sh --scratch DIR [--egress deny|proxy|host] [--proxy ADDR:PORT]
-#          [--netns NAME] [--exclude PATH]... [--writable PATH]... [--setenv VAR=VAL]...
-#          [--cpu-max SEC] [--nproc-max N] [--mem-max MiB] [--check]
+#          [--netns NAME] [--exclude PATH]... [--writable PATH]... [--coord-root PATH]...
+#          [--setenv VAR=VAL]... [--cpu-max SEC] [--nproc-max N] [--mem-max MiB] [--check]
 #          -- CMD [ARGS...]
+#
+# --coord-root PATH (repeatable): bind a sibling/adjacent-repo write root for cross-repo
+#   coordination. UNLIKE --writable (which mkdir -p's a missing path), a coordination target
+#   that does not exist is a FAIL-CLOSED error (a missing sibling repo is a misconfiguration,
+#   not something to auto-create). Existence is verified in the OS-independent block BEFORE OS
+#   dispatch, so a missing target is a clean exit-2, never a bwrap sandbox-init crash (D-3).
 #
 # macOS AUGMENTATION (2026-W36) - added ONLY to the macOS (Darwin) branch. TWO DISTINCT mechanisms;
 # do NOT conflate them (only group (i) is an actual Seatbelt/sandbox-exec feature):
@@ -73,7 +79,7 @@
 set -uo pipefail
 
 SCRATCH=""; EGRESS="deny"; PROXY_ADDR="127.0.0.1"; PROXY_PORT="8443"; NETNS="agentteams-egress"
-CHECK=0; EXCLUDES=(); WRITABLES=(); SETENVS=(); CMD=()
+CHECK=0; EXCLUDES=(); WRITABLES=(); SETENVS=(); CMD=(); COORD_ROOTS=()
 # macOS-augmentation resource caps (empty = unset; validated numeric below). No-op on Linux.
 CPU_MAX=""; NPROC_MAX=""; MEM_MAX=""
 
@@ -87,6 +93,7 @@ while [ $# -gt 0 ]; do
     --netns)   NETNS="${2:-}"; shift 2 ;;
     --exclude) EXCLUDES+=("${2:-}"); shift 2 ;;
     --writable) WRITABLES+=("${2:-}"); shift 2 ;;
+    --coord-root) COORD_ROOTS+=("${2:-}"); shift 2 ;;  # cross-repo coordination bind: FAIL-CLOSED if missing (never mkdir)
     --setenv)  SETENVS+=("${2:-}"); shift 2 ;;
     --cpu-max)  CPU_MAX="${2:-}";  shift 2 ;;   # macOS: RLIMIT_CPU (SEC cpu-seconds); no-op on Linux
     --nproc-max) NPROC_MAX="${2:-}"; shift 2 ;; # macOS: RLIMIT_NPROC (dedicated-uid only); no-op on Linux
@@ -114,6 +121,19 @@ if [ "$EGRESS" = proxy ]; then
 fi
 SCRATCH="$(cd "$SCRATCH" && pwd)"
 
+# cross-repo coordination binds: FAIL CLOSED if a declared sibling root is missing. Unlike
+# --writable (which mkdir -p's a missing path), a coordination target that does not exist is a
+# MISCONFIGURATION (a missing sibling repo) -- auto-creating an empty dir would mask it and hand
+# the agent a bogus workspace, so we die instead. Checked HERE in the OS-independent block so a
+# missing target is a clean die/exit-2 BEFORE OS dispatch -- never a bwrap init crash (D-3: on
+# Linux `bwrap --bind SRC` on a missing SRC aborts sandbox init entirely; macOS tolerates it).
+COORD_RESOLVED=()
+for c in ${COORD_ROOTS[@]+"${COORD_ROOTS[@]}"}; do
+  [ -n "$c" ] || continue
+  [ -d "$c" ] || die "coordination target '$c' does not exist (fail-closed; not created -- a missing sibling repo is a misconfiguration, not something to auto-create)"
+  COORD_RESOLVED+=( "$(cd "$c" && pwd)" )
+done
+
 # credential + caller read-excludes: only EXISTING paths (masking a missing path fails fail-shut: D-3).
 MASK=( "$HOME/.ssh" "$HOME/.aws" "$HOME/.gnupg" "$HOME/.kube" "$HOME/.config/gcloud" "$HOME/.azure" )
 MASK+=( ${EXCLUDES[@]+"${EXCLUDES[@]}"} )
@@ -138,6 +158,7 @@ build_linux() {   # -> RUN[] using bwrap
                    --die-with-parent --new-session
                    --unshare-user --unshare-ipc --unshare-pid --unshare-uts --unshare-cgroup )
   local w; for w in ${WRITABLES[@]+"${WRITABLES[@]}"}; do [ -n "$w" ] && BW+=( --bind "$w" "$w" ); done
+  local c; for c in ${COORD_RESOLVED[@]+"${COORD_RESOLVED[@]}"}; do BW+=( --bind "$c" "$c" ); done  # cross-repo coordination (existence pre-verified -> no bwrap init crash)
   local kv; for kv in ${SETENVS[@]+"${SETENVS[@]}"}; do [ -n "$kv" ] && { case "$kv" in *=*) BW+=( --setenv "${kv%%=*}" "${kv#*=}" ) ;; *) die "--setenv expects VAR=VAL (got '$kv')" ;; esac; }; done
   local m; for m in ${MASKED[@]+"${MASKED[@]}"}; do BW+=( --tmpfs "$m" ); done
   case "$EGRESS" in
@@ -186,6 +207,7 @@ socat forward) OR use the OOB dedicated-uid + PF-per-tenant path. FAIL CLOSED." 
   # SECURITY C1: validate every path that gets interpolated into the profile BEFORE it is written.
   reject_sbpl_meta "$SCRATCH"
   local w; for w in ${WRITABLES[@]+"${WRITABLES[@]}"}; do [ -n "$w" ] && reject_sbpl_meta "$(cd "$w" && pwd)"; done
+  local c; for c in ${COORD_RESOLVED[@]+"${COORD_RESOLVED[@]}"}; do reject_sbpl_meta "$c"; done
   local m; for m in ${MASKED[@]+"${MASKED[@]}"}; do reject_sbpl_meta "$m"; done
   {
     echo '(version 1)'
@@ -194,6 +216,7 @@ socat forward) OR use the OOB dedicated-uid + PF-per-tenant path. FAIL CLOSED." 
     echo "(allow file-write* (subpath \"$SCRATCH\"))"
     echo '(allow file-write* (subpath "/private/tmp") (subpath "/private/var/folders") (literal "/dev/null") (literal "/dev/stdout") (literal "/dev/stderr"))'
     for w in ${WRITABLES[@]+"${WRITABLES[@]}"}; do [ -n "$w" ] && echo "(allow file-write* (subpath \"$(cd "$w" && pwd)\"))"; done
+    for c in ${COORD_RESOLVED[@]+"${COORD_RESOLVED[@]}"}; do echo "(allow file-write* (subpath \"$c\"))"; done
     for m in ${MASKED[@]+"${MASKED[@]}"}; do echo "(deny file-read* (subpath \"$m\"))"; done
     # -- (i) SBPL setuid/setgid-exec restriction (compensating hardening, NOT a no-new-privs guarantee) --
     # SBPL cannot express the setuid BIT itself, so this is a BEST-EFFORT, NOT-EXHAUSTIVE denylist of
@@ -284,6 +307,7 @@ if [ "$CHECK" -eq 1 ]; then
     echo "  egress mode       : $EGRESS"
   fi
   echo "  read-excluded     : ${MASKED[*]:-<none present>}"
+  echo "  coord-roots       : ${COORD_RESOLVED[*]:-<none>}$( [ "${#COORD_RESOLVED[@]}" -gt 0 ] && echo " (cross-repo binds; existence pre-verified, fail-closed if missing)" )"
   echo "  cpu-max (RLIMIT)  : ${CPU_MAX:-<none>}$( [ -n "$CPU_MAX" ] && echo " cpu-sec (POSIX RLIMIT_CPU, per-process, kernel-enforced, DoS-bound)" )"
   echo "  nproc-max (RLIMIT): ${NPROC_MAX:-<none>}$( [ -n "$NPROC_MAX" ] && echo " (POSIX RLIMIT_NPROC, per-uid; isolates only under a dedicated uid)" )"
   echo "  mem-max           : ${MEM_MAX:-<none>}$( [ -n "$MEM_MAX" ] && echo " MiB requested - UNCAPPED on macOS (interface-only, fail-honest)" )"

@@ -487,6 +487,13 @@
         "type": "string"
       }
     },
+    "coordination_write_roots": {
+      "type": "array",
+      "description": "Sibling/adjacent-repo write roots for cross-repo coordination, carried from the project description (emitted only when set). Unioned into workspace_write_roots at generation so every sandbox emitter sees them; on Linux they become confine-run.sh `--coord-root` binds that fail closed when missing.",
+      "items": {
+        "type": "string"
+      }
+    },
     "domain_agent_slugs": {
       "type": "array",
       "items": {

@@ -3,9 +3,9 @@
 
 > **Auto-generated.** Regenerated on every commit that touches the `agentteams` package. Do not edit manually — changes will be overwritten.
 
-- Modules mapped: **171**
+- Modules mapped: **172**
 - Packages: **7**
-- Internal import edges: **366**
+- Internal import edges: **368**
 - Distinct external dependencies: **6**
 
 ---
@@ -26,7 +26,7 @@ Inter-package import dependencies (module-level detail in the tables below).
 | `agentteams.cli` | 27 | `agentteams`, `agentteams.frameworks`, `agentteams.redteam` |
 | `agentteams.enrich` | 6 | `agentteams` |
 | `agentteams.eval_adapters` | 2 | — |
-| `agentteams.frameworks` | 14 | `agentteams` |
+| `agentteams.frameworks` | 15 | `agentteams` |
 | `agentteams.redteam` | 16 | `agentteams`, `agentteams.frameworks`, `agentteams.research` |
 | `agentteams.research` | 9 | — |
 
@@ -130,7 +130,8 @@ Every module, coloured by package (full adjacency in the table below).
 | `agentteams.frameworks.codex` | `agentteams.frameworks.agents_md` | `agentteams.frameworks.registry` |
 | `agentteams.frameworks.copilot_cli` | `agentteams.frameworks.base`, `agentteams.frameworks.copilot_vscode`, `agentteams.yaml_frontmatter` | `agentteams.cli.render_pipeline`, `agentteams.frameworks.registry` |
 | `agentteams.frameworks.copilot_vscode` | `agentteams.frameworks.base`, `agentteams.yaml_frontmatter` | `agentteams.cli.render_pipeline`, `agentteams.frameworks.copilot_cli`, `agentteams.frameworks.registry` |
-| `agentteams.frameworks.goose` | `agentteams.capability_map`, `agentteams.frameworks._goose_sandbox_emit`, `agentteams.frameworks.base`, `agentteams.frameworks.goose_docs`, `agentteams.frameworks.goose_recipe_read`, `agentteams.frameworks.goose_recipe_validate`, `agentteams.yaml_frontmatter` | `agentteams.bridge`, `agentteams.bridge_subagents_goose`, `agentteams.cli.app`, `agentteams.cli.recipe_check`, `agentteams.cli.render_pipeline`, `agentteams.frameworks.registry` |
+| `agentteams.frameworks.goose` | `agentteams.capability_map`, `agentteams.frameworks._goose_sandbox_emit`, `agentteams.frameworks.base`, `agentteams.frameworks.goose_coordination`, `agentteams.frameworks.goose_docs`, `agentteams.frameworks.goose_recipe_read`, `agentteams.frameworks.goose_recipe_validate`, `agentteams.yaml_frontmatter` | `agentteams.bridge`, `agentteams.bridge_subagents_goose`, `agentteams.cli.app`, `agentteams.cli.recipe_check`, `agentteams.cli.render_pipeline`, `agentteams.frameworks.goose_coordination`, `agentteams.frameworks.registry` |
+| `agentteams.frameworks.goose_coordination` | `agentteams.frameworks.goose` | `agentteams.frameworks.goose` |
 | `agentteams.frameworks.goose_docs` | `agentteams.capability_hints` | `agentteams.frameworks.goose` |
 | `agentteams.frameworks.goose_recipe_read` | — | `agentteams.frameworks.goose`, `agentteams.frameworks.goose_recipe_validate` |
 | `agentteams.frameworks.goose_recipe_validate` | `agentteams.frameworks.goose_recipe_read` | `agentteams.frameworks.goose` |
@@ -1311,10 +1312,21 @@ digraph "agentteams architecture" {
         "agentteams.capability_map",
         "agentteams.frameworks._goose_sandbox_emit",
         "agentteams.frameworks.base",
+        "agentteams.frameworks.goose_coordination",
         "agentteams.frameworks.goose_docs",
         "agentteams.frameworks.goose_recipe_read",
         "agentteams.frameworks.goose_recipe_validate",
         "agentteams.yaml_frontmatter"
+      ],
+      "external": [],
+      "repo_local": []
+    },
+    "agentteams.frameworks.goose_coordination": {
+      "package": "agentteams.frameworks",
+      "path": "agentteams/frameworks/goose_coordination.py",
+      "is_package": false,
+      "imports_internal": [
+        "agentteams.frameworks.goose"
       ],
       "external": [],
       "repo_local": []
@@ -3217,6 +3229,10 @@ digraph "agentteams architecture" {
     },
     {
       "source": "agentteams.frameworks.goose",
+      "target": "agentteams.frameworks.goose_coordination"
+    },
+    {
+      "source": "agentteams.frameworks.goose",
       "target": "agentteams.frameworks.goose_docs"
     },
     {
@@ -3230,6 +3246,10 @@ digraph "agentteams architecture" {
     {
       "source": "agentteams.frameworks.goose",
       "target": "agentteams.yaml_frontmatter"
+    },
+    {
+      "source": "agentteams.frameworks.goose_coordination",
+      "target": "agentteams.frameworks.goose"
     },
     {
       "source": "agentteams.frameworks.goose_docs",
