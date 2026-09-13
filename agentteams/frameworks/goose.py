@@ -55,9 +55,11 @@ _DELEGATION_REF_HEADING_RE = re.compile(
 # `from agentteams.frameworks.goose import _goose_capabilities_content` keeps working.
 from agentteams.frameworks.goose_docs import (
     _RESILIENT_RUNNER_SOURCE,
+    _ROUTE_PROXY_SOURCE,
     _goose_capabilities_content,
     _goosehints_content,
     _resilient_runner_content,
+    _route_proxy_content,
 )
 
 # Recipe READ-side parse carved to goose_recipe_read.py (CH-07 carve, F.1/F.3
@@ -76,9 +78,11 @@ __all__ = [
     "GooseAdapter",
     "build_bridge_recipe",
     "_RESILIENT_RUNNER_SOURCE",
+    "_ROUTE_PROXY_SOURCE",
     "_goose_capabilities_content",
     "_goosehints_content",
     "_resilient_runner_content",
+    "_route_proxy_content",
 ]
 
 # ---------------------------------------------------------------------------
@@ -494,6 +498,12 @@ class GooseAdapter(FrameworkAdapter):
         reference-doc landing spot) unconditionally, for every project regardless
         of provider. See `_resilient_runner_content` for the full rationale.
 
+        Phase 1.2 (cross-repo coordination): also emits the OpenRouter route proxy
+        (`../../scripts/goose-openrouter-route-proxy.py`) unconditionally. Unlike the
+        CLI-only resilient runner, route selection is the ALL-surface dead-turn
+        mitigation (it sits under `OPENROUTER_HOST`, so it covers CLI, `goose acp`,
+        and desktop). See `_route_proxy_content` — it reduces, not eliminates, the leak.
+
         P1-1: on macOS a confined/exclusive profile also emits the Seatbelt `sandbox.sb`
         + inert `config.yaml.agentteams.example`; nothing extra off macOS (honest
         fail-closed). See `_goose_sandbox_emit.goose_sandbox_output_files`.
@@ -509,6 +519,7 @@ class GooseAdapter(FrameworkAdapter):
             ("../../.goosehints", _goosehints_content(project_name)),
             ("references/goose-capabilities-reference.md", _goose_capabilities_content(project_name)),
             ("../../scripts/goose-run-resilient.py", _resilient_runner_content()),
+            ("../../scripts/goose-openrouter-route-proxy.py", _route_proxy_content()),
         ])
         files.extend(goose_sandbox_output_files(manifest))
         return files

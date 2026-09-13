@@ -14,6 +14,8 @@ from agentteams.frameworks.goose import (
     _goosehints_content,
     _resilient_runner_content,
     _RESILIENT_RUNNER_SOURCE,
+    _route_proxy_content,
+    _ROUTE_PROXY_SOURCE,
 )
 from agentteams.fences import _FENCE_BEGIN_RE, _is_machine_managed_merge_overwrite_path
 
@@ -907,6 +909,37 @@ class TestGooseAdapter:
     def test_goosehints_links_to_resilient_runner(self):
         content = _goosehints_content("Acme Team")
         assert "scripts/goose-run-resilient.py" in content
+
+    # --- OpenRouter route proxy (Phase 1.2 cross-repo coordination, 2026-09-13) ---
+
+    def test_extra_output_files_emits_route_proxy_unconditionally(self):
+        # All-surface dead-turn mitigation: ships even for a manifest with no opt-in,
+        # exactly like the resilient runner (both are inert sibling scripts).
+        extras = self.adapter.extra_output_files(GOOSE_MANIFEST_NO_SECURITY)
+        extras_by_path = dict(extras)
+        assert "../../scripts/goose-openrouter-route-proxy.py" in extras_by_path
+
+    def test_route_proxy_content_matches_disk_source_exactly(self):
+        # Single source of truth: the emitted copy must never drift from the tested
+        # scripts/goose-openrouter-route-proxy.py (read from disk, not duplicated).
+        extras = self.adapter.extra_output_files(GOOSE_MANIFEST)
+        emitted = dict(extras)["../../scripts/goose-openrouter-route-proxy.py"]
+        on_disk = _ROUTE_PROXY_SOURCE.read_text(encoding="utf-8")
+        assert emitted == on_disk
+
+    def test_route_proxy_content_helper_degrades_on_missing_source(self, monkeypatch, tmp_path):
+        missing = tmp_path / "does-not-exist.py"
+        # Patch where the name is RESOLVED (goose_docs), not where it is re-exported.
+        monkeypatch.setattr("agentteams.frameworks.goose_docs._ROUTE_PROXY_SOURCE", missing)
+        content = _route_proxy_content()
+        assert "Placeholder" in content
+        assert str(missing) in content
+
+    def test_goosehints_links_to_route_proxy_as_primary_defense(self):
+        content = _goosehints_content("Acme Team")
+        assert "scripts/goose-openrouter-route-proxy.py" in content
+        # Honest framing: primary/all-surface, and reduces (not eliminates).
+        assert "ALL-surface" in content
 
     # --- .goose/recipes/*.yaml: per-file fence classification (2026-07-24) ---
     #
