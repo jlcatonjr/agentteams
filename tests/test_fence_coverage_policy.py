@@ -50,7 +50,9 @@ TEMPLATES = Path(__file__).resolve().parents[1] / "agentteams/templates"
 #: security-critical core from the unfenced extension region, not to fence the list as it stands.
 FENCE_COVERAGE_BASELINE: dict[str, int] = {
     "universal/orchestrator.template.md": 11,
-    "copilot-instructions.template.md": 2,
+    "copilot-instructions.template.md": 3,  # 2->3: Constitutional Rule 11 (exception-governance
+                                            # guardrail, 2026-W38); durable enforcement is the pinned
+                                            # code, not this prose.
     "universal/navigator.template.md": 1,
     "universal/conflict-auditor.template.md": 1,
     "domain/technical-validator.template.md": 1,
