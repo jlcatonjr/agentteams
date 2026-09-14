@@ -971,6 +971,45 @@ def _build_parser() -> argparse.ArgumentParser:
              "audit).",
     )
     parser.add_argument(
+        "--audit-exceptions",
+        action="store_true",
+        dest="audit_exceptions",
+        default=False,
+        help=(
+            "Read-only: report the health of the constraint-relaxing exception registry "
+            "(references/exception-registry.json) under --output/--project (else CWD) — every "
+            "active-but-expired (lapsed) exception and any breach of the aggregate cap. Never "
+            "mints or activates. Exits non-zero if the registry is unhealthy."
+        ),
+    )
+    parser.add_argument(
+        "--list-exceptions",
+        action="store_true",
+        dest="list_exceptions",
+        default=False,
+        help=(
+            "Read-only: list every entry in the exception registry "
+            "(references/exception-registry.json) under --output/--project (else CWD), with id, "
+            "status, scope, and expiry. Always exits 0."
+        ),
+    )
+    parser.add_argument(
+        "--sign-decision",
+        dest="sign_decision",
+        default=None,
+        metavar="SPEC.json",
+        help=(
+            "Operator-only: mint an Ed25519-signed constraint-relaxing security decision from a "
+            "JSON spec (date, action_reviewed, verdict, effect_* fields, derives_from, key_id) and "
+            "append it to references/security-decisions.log.csv under --output/--project (else "
+            "CWD). Reads the operator private key from the file named by "
+            "AGENTTEAMS_DECISION_ED25519_KEYFILE (never from an agent env). Prints the row's "
+            "derived material effect for a deliberate second look before writing. This is the ONLY "
+            "minter of Ed25519 relaxing rows; an agent context lacks both the env var and the key "
+            "file, so running it in-sandbox fails closed."
+        ),
+    )
+    parser.add_argument(
         "--redteam",
         action="store_true",
         dest="redteam",

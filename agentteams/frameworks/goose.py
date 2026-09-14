@@ -54,8 +54,10 @@ _DELEGATION_REF_HEADING_RE = re.compile(
 # the adapter emits, while everything here is adapter behaviour. Re-exported so existing
 # `from agentteams.frameworks.goose import _goose_capabilities_content` keeps working.
 from agentteams.frameworks.goose_docs import (
+    _COORDINATION_MCP_SOURCE,
     _RESILIENT_RUNNER_SOURCE,
     _ROUTE_PROXY_SOURCE,
+    _coordination_mcp_content,
     _goose_capabilities_content,
     _goosehints_content,
     _resilient_runner_content,
@@ -73,16 +75,25 @@ from agentteams.frameworks.goose_recipe_read import (
 # _validate_recipe_yaml carved to goose_recipe_validate.py (CH-07); re-imported so
 # `from agentteams.frameworks.goose import _validate_recipe_yaml` keeps working.
 from agentteams.frameworks.goose_recipe_validate import _validate_recipe_yaml
+# Cross-repo coordination helpers (CH-07 carve). Imported with the historical `_`-prefixed
+# aliases so existing call sites and any `from ...goose import _coordination_*` keep working.
+from agentteams.frameworks.goose_coordination import (
+    COORDINATION_AGENT_SLUGS as _COORDINATION_AGENT_SLUGS,
+    coordination_enabled as _coordination_enabled,
+    coordination_extension as _coordination_extension,
+)
 
 __all__ = [
     "GooseAdapter",
     "build_bridge_recipe",
     "_RESILIENT_RUNNER_SOURCE",
     "_ROUTE_PROXY_SOURCE",
+    "_COORDINATION_MCP_SOURCE",
     "_goose_capabilities_content",
     "_goosehints_content",
     "_resilient_runner_content",
     "_route_proxy_content",
+    "_coordination_mcp_content",
 ]
 
 # ---------------------------------------------------------------------------
@@ -105,6 +116,10 @@ _ORCHESTRATOR_PROBE_PROMPT = (
 # MCP-extension wiring (opt-in via the goose:mcp host-feature token).
 _GOOSE_MCP_TOKEN = "goose:mcp"
 _MCP_EXT_TIMEOUT = 300
+
+# Cross-repo coordination (Phase 2) carved to goose_coordination.py (CH-07): the gate + the
+# first-party stdio coordination-server extension entry. Imported below with the module's
+# historical `_`-prefixed names so call sites are unchanged.
 
 # Regex to locate AGENTTEAMS authority_hierarchy HTML-comment fences in body text.
 # These appear in copilot-instructions.md and may appear in orchestrator bodies.
@@ -216,6 +231,15 @@ class GooseAdapter(FrameworkAdapter):
         extensions = _scoped_builtin_extensions(manifest)
         # Opt-in MCP servers scoped to this agent (empty unless goose:mcp is on).
         mcp_exts, mcp_notes = _mcp_recipe_extensions(manifest, agent_slug)
+        # Phase 2: wire the first-party stdio coordination server into coordinator/liaison
+        # recipes when the team declares coordination (file-based; only reads/records).
+        if _coordination_enabled(manifest) and agent_slug in _COORDINATION_AGENT_SLUGS:
+            mcp_exts = list(mcp_exts) + [_coordination_extension()]
+            mcp_notes = list(mcp_notes) + [
+                "agentteams_coordination (stdio): file-based cross-repo coordination tools "
+                "(read registry, file a Coordination Request, append the log, request clearance). "
+                "Records/files only — never grants or executes."
+            ]
 
         # Gap 2: parameters / response / retry are available to ANY agent whose
         # manifest declares them (previously orchestrator-only). An ordinary agent
@@ -521,6 +545,12 @@ class GooseAdapter(FrameworkAdapter):
             ("../../scripts/goose-run-resilient.py", _resilient_runner_content()),
             ("../../scripts/goose-openrouter-route-proxy.py", _route_proxy_content()),
         ])
+        # Phase 2: ship the coordination server ONLY when coordination is declared (gated, unlike
+        # the unconditional route proxy / resilient runner) so a non-coordinating team is unchanged.
+        if _coordination_enabled(manifest):
+            files.append(
+                ("../../scripts/goose-coordination-mcp.py", _coordination_mcp_content())
+            )
         files.extend(goose_sandbox_output_files(manifest))
         return files
 

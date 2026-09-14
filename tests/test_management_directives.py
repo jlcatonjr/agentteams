@@ -163,6 +163,26 @@ def test_denylist_tokens_refused(scope):
     assert not md.scope_is_allowed(scope)
 
 
+@pytest.mark.parametrize(
+    "scope",
+    [
+        # Governance/trust-ROOT scopes the verb denylist alone missed (audit Q1); now refused via
+        # the single shared governance-target vocabulary. These are the exact gaps the WS-D audit
+        # enumerated: the roster, the strict-signing switch, the governed marker, the authority
+        # reference, and (R1) the Ed25519 verify-key store — plus underscore/camelCase spellings.
+        "update-security-approvers",
+        "write-agent-privilege",
+        "touch-signing-governed",
+        "edit-instruction-authority",
+        "rotate-verify-key",
+        "write-authorized_verify_keys",
+        "write-authorizedVerifyKeys",
+    ],
+)
+def test_governance_root_scopes_refused(scope):
+    assert not md.scope_is_allowed(scope)
+
+
 def test_valid_signature_cannot_override_denylisted_scope(tmp_path):
     # A directive whose task_scope is denylisted, but with a genuinely VALID signature, must be
     # REFUSED — the signature cannot override the mechanical denylist. (issue_directive would

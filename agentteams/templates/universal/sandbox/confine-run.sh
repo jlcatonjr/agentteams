@@ -25,14 +25,22 @@
 # Policy (POLA / fail-closed): read-only root; ONLY --scratch writable; /tmp scratch; credential dirs
 # (~/.ssh ~/.aws ~/.gnupg ~/.kube ~/.config/gcloud ~/.azure) + --exclude paths read-excluded; egress
 # deny(default)/proxy(root+netns, OOB)/host(fs-confined only). --writable adds a rw path; --setenv
-# passes VAR=VAL into the guest. This closes NOTHING (T6 + host-as-TCB bounded, never closed);
-# seccomp/Landlock is a further layer not yet added.
+# passes VAR=VAL into the guest. The guest environment is DEFAULT-DENY: it inherits none of the
+# launcher's env; only a benign built-in allowlist (plus --env-allow NAMEs and explicit --setenv
+# values) is passed, so an operator signing-key path / *_SIGNING_KEY secret never leaks in. This
+# closes NOTHING re T6 + host-as-TCB (bounded, never closed); seccomp/Landlock is a further layer.
 #
 # Usage:
 #   sandbox/confine-run.sh --scratch DIR [--egress deny|proxy|host] [--proxy ADDR:PORT]
-#          [--netns NAME] [--exclude PATH]... [--writable PATH]... [--setenv VAR=VAL]...
-#          [--cpu-max SEC] [--nproc-max N] [--mem-max MiB] [--check]
+#          [--netns NAME] [--exclude PATH]... [--writable PATH]... [--coord-root PATH]...
+#          [--setenv VAR=VAL]... [--env-allow VAR]... [--cpu-max SEC] [--nproc-max N] [--mem-max MiB] [--check]
 #          -- CMD [ARGS...]
+#
+# --coord-root PATH (repeatable): bind a sibling/adjacent-repo write root for cross-repo
+#   coordination. UNLIKE --writable (which mkdir -p's a missing path), a coordination target
+#   that does not exist is a FAIL-CLOSED error (a missing sibling repo is a misconfiguration,
+#   not something to auto-create). Existence is verified in the OS-independent block BEFORE OS
+#   dispatch, so a missing target is a clean exit-2, never a bwrap sandbox-init crash (D-3).
 #
 # macOS AUGMENTATION (2026-W36) - added ONLY to the macOS (Darwin) branch. TWO DISTINCT mechanisms;
 # do NOT conflate them (only group (i) is an actual Seatbelt/sandbox-exec feature):
@@ -73,7 +81,13 @@
 set -uo pipefail
 
 SCRATCH=""; EGRESS="deny"; PROXY_ADDR="127.0.0.1"; PROXY_PORT="8443"; NETNS="agentteams-egress"
-CHECK=0; EXCLUDES=(); WRITABLES=(); SETENVS=(); CMD=()
+CHECK=0; EXCLUDES=(); WRITABLES=(); SETENVS=(); ENV_ALLOW=(); CMD=(); COORD_ROOTS=()
+# DEFAULT-DENY ENV ALLOWLIST (the private-key non-leak residual). The guest inherits NONE of the
+# launcher's environment by default: only these benign vars (when set) plus any --env-allow name and
+# any explicit --setenv VAR=VAL are passed. Everything else - crucially an operator signing-key path
+# or any *_SIGNING_KEY secret - is DROPPED, so it cannot leak into a confined agent. Unset-one-var
+# would be fail-OPEN (you would have to know every secret name); default-deny is fail-closed.
+DEFAULT_ENV_ALLOW=( PATH HOME USER LOGNAME TERM LANG LC_ALL LC_CTYPE LC_MESSAGES TZ TMPDIR SHELL )
 # macOS-augmentation resource caps (empty = unset; validated numeric below). No-op on Linux.
 CPU_MAX=""; NPROC_MAX=""; MEM_MAX=""
 
@@ -87,7 +101,9 @@ while [ $# -gt 0 ]; do
     --netns)   NETNS="${2:-}"; shift 2 ;;
     --exclude) EXCLUDES+=("${2:-}"); shift 2 ;;
     --writable) WRITABLES+=("${2:-}"); shift 2 ;;
+    --coord-root) COORD_ROOTS+=("${2:-}"); shift 2 ;;  # cross-repo coordination bind: FAIL-CLOSED if missing (never mkdir)
     --setenv)  SETENVS+=("${2:-}"); shift 2 ;;
+    --env-allow) ENV_ALLOW+=("${2:-}"); shift 2 ;;  # add a var NAME to the default-deny allowlist
     --cpu-max)  CPU_MAX="${2:-}";  shift 2 ;;   # macOS: RLIMIT_CPU (SEC cpu-seconds); no-op on Linux
     --nproc-max) NPROC_MAX="${2:-}"; shift 2 ;; # macOS: RLIMIT_NPROC (dedicated-uid only); no-op on Linux
     --mem-max)  MEM_MAX="${2:-}";  shift 2 ;;   # macOS: interface-only, UNCAPPED; no-op on Linux
@@ -114,6 +130,19 @@ if [ "$EGRESS" = proxy ]; then
 fi
 SCRATCH="$(cd "$SCRATCH" && pwd)"
 
+# cross-repo coordination binds: FAIL CLOSED if a declared sibling root is missing. Unlike
+# --writable (which mkdir -p's a missing path), a coordination target that does not exist is a
+# MISCONFIGURATION (a missing sibling repo) -- auto-creating an empty dir would mask it and hand
+# the agent a bogus workspace, so we die instead. Checked HERE in the OS-independent block so a
+# missing target is a clean die/exit-2 BEFORE OS dispatch -- never a bwrap init crash (D-3: on
+# Linux `bwrap --bind SRC` on a missing SRC aborts sandbox init entirely; macOS tolerates it).
+COORD_RESOLVED=()
+for c in ${COORD_ROOTS[@]+"${COORD_ROOTS[@]}"}; do
+  [ -n "$c" ] || continue
+  [ -d "$c" ] || die "coordination target '$c' does not exist (fail-closed; not created -- a missing sibling repo is a misconfiguration, not something to auto-create)"
+  COORD_RESOLVED+=( "$(cd "$c" && pwd)" )
+done
+
 # credential + caller read-excludes: only EXISTING paths (masking a missing path fails fail-shut: D-3).
 MASK=( "$HOME/.ssh" "$HOME/.aws" "$HOME/.gnupg" "$HOME/.kube" "$HOME/.config/gcloud" "$HOME/.azure" )
 MASK+=( ${EXCLUDES[@]+"${EXCLUDES[@]}"} )
@@ -121,6 +150,15 @@ MASKED=()
 for p in "${MASK[@]}"; do [ -n "$p" ] && [ -e "$p" ] && MASKED+=( "$p" ); done
 # ensure writable paths exist so the mount source is real
 for w in ${WRITABLES[@]+"${WRITABLES[@]}"}; do [ -n "$w" ] && { mkdir -p "$w" 2>/dev/null || die "cannot create --writable '$w'"; }; done
+
+# Combined env allowlist = the default benign set + any operator --env-allow additions. A name is
+# passed to the guest ONLY if it appears here AND is set in the launcher's environment; --setenv
+# VAR=VAL remains a separate, explicit value injection that always wins. Reject a malformed name so
+# it cannot smuggle a value through the allowlist path (names only here; values come from the env).
+ENV_ALLOW_ALL=( "${DEFAULT_ENV_ALLOW[@]}" ${ENV_ALLOW[@]+"${ENV_ALLOW[@]}"} )
+for n in "${ENV_ALLOW_ALL[@]}"; do
+  case "$n" in ''|*[!A-Za-z0-9_]*) die "--env-allow expects a bare VAR name (got '$n')" ;; esac
+done
 
 OS="$(uname -s)"
 
@@ -133,11 +171,17 @@ build_linux() {   # -> RUN[] using bwrap
   if [ -n "$CPU_MAX$NPROC_MAX$MEM_MAX" ]; then
     echo "confine-run: note - --cpu-max/--nproc-max/--mem-max are macOS-branch flags; ignored on Linux (use cgroups OOB)." >&2
   fi
-  local BW=( bwrap --ro-bind / / --tmpfs /tmp --dev /dev --proc /proc
+  # --clearenv makes the guest env default-DENY: bwrap otherwise inherits the launcher's full parent
+  # environment (there is no implicit scrub), so a signing-key path or *_SIGNING_KEY secret would
+  # leak straight through. We clear it, then add back ONLY the allowlist + explicit --setenv below.
+  local BW=( bwrap --clearenv --ro-bind / / --tmpfs /tmp --dev /dev --proc /proc
                    --bind "$SCRATCH" "$SCRATCH" --chdir "$SCRATCH"
                    --die-with-parent --new-session
                    --unshare-user --unshare-ipc --unshare-pid --unshare-uts --unshare-cgroup )
   local w; for w in ${WRITABLES[@]+"${WRITABLES[@]}"}; do [ -n "$w" ] && BW+=( --bind "$w" "$w" ); done
+  local c; for c in ${COORD_RESOLVED[@]+"${COORD_RESOLVED[@]}"}; do BW+=( --bind "$c" "$c" ); done  # cross-repo coordination (existence pre-verified -> no bwrap init crash)
+  # allowlist passthrough first (default-deny env), then explicit --setenv so an explicit value wins.
+  local n; for n in "${ENV_ALLOW_ALL[@]}"; do [ -n "${!n+x}" ] && BW+=( --setenv "$n" "${!n}" ); done
   local kv; for kv in ${SETENVS[@]+"${SETENVS[@]}"}; do [ -n "$kv" ] && { case "$kv" in *=*) BW+=( --setenv "${kv%%=*}" "${kv#*=}" ) ;; *) die "--setenv expects VAR=VAL (got '$kv')" ;; esac; }; done
   local m; for m in ${MASKED[@]+"${MASKED[@]}"}; do BW+=( --tmpfs "$m" ); done
   case "$EGRESS" in
@@ -186,6 +230,7 @@ socat forward) OR use the OOB dedicated-uid + PF-per-tenant path. FAIL CLOSED." 
   # SECURITY C1: validate every path that gets interpolated into the profile BEFORE it is written.
   reject_sbpl_meta "$SCRATCH"
   local w; for w in ${WRITABLES[@]+"${WRITABLES[@]}"}; do [ -n "$w" ] && reject_sbpl_meta "$(cd "$w" && pwd)"; done
+  local c; for c in ${COORD_RESOLVED[@]+"${COORD_RESOLVED[@]}"}; do reject_sbpl_meta "$c"; done
   local m; for m in ${MASKED[@]+"${MASKED[@]}"}; do reject_sbpl_meta "$m"; done
   {
     echo '(version 1)'
@@ -194,6 +239,7 @@ socat forward) OR use the OOB dedicated-uid + PF-per-tenant path. FAIL CLOSED." 
     echo "(allow file-write* (subpath \"$SCRATCH\"))"
     echo '(allow file-write* (subpath "/private/tmp") (subpath "/private/var/folders") (literal "/dev/null") (literal "/dev/stdout") (literal "/dev/stderr"))'
     for w in ${WRITABLES[@]+"${WRITABLES[@]}"}; do [ -n "$w" ] && echo "(allow file-write* (subpath \"$(cd "$w" && pwd)\"))"; done
+    for c in ${COORD_RESOLVED[@]+"${COORD_RESOLVED[@]}"}; do echo "(allow file-write* (subpath \"$c\"))"; done
     for m in ${MASKED[@]+"${MASKED[@]}"}; do echo "(deny file-read* (subpath \"$m\"))"; done
     # -- (i) SBPL setuid/setgid-exec restriction (compensating hardening, NOT a no-new-privs guarantee) --
     # SBPL cannot express the setuid BIT itself, so this is a BEST-EFFORT, NOT-EXHAUSTIVE denylist of
@@ -232,10 +278,13 @@ socat forward) OR use the OOB dedicated-uid + PF-per-tenant path. FAIL CLOSED." 
   } > "$sb"
   local PREFIX=()
   local kv; for kv in ${SETENVS[@]+"${SETENVS[@]}"}; do [ -n "$kv" ] && { case "$kv" in *=*) PREFIX+=( "$kv" ) ;; *) die "--setenv expects VAR=VAL (got '$kv')" ;; esac; }; done
-  # inner command = (optional env prefix) + sandbox-exec on the generated profile
-  local INNER=()
-  if [ "${#PREFIX[@]}" -gt 0 ]; then INNER=( env "${PREFIX[@]}" sandbox-exec -f "$sb" "${CMD[@]}" )
-  else INNER=( sandbox-exec -f "$sb" "${CMD[@]}" ); fi
+  # DEFAULT-DENY env via `env -i`: start from an EMPTY environment (Seatbelt does not scrub env), add
+  # back ONLY the allowlist (when set) then the explicit --setenv values (which win). Without -i the
+  # guest would inherit the launcher's full env, leaking a signing-key path / *_SIGNING_KEY secret.
+  local ENVI=( env -i )
+  local n; for n in "${ENV_ALLOW_ALL[@]}"; do [ -n "${!n+x}" ] && ENVI+=( "$n=${!n}" ); done
+  # inner command = env -i (allowlist) + (optional explicit setenv) + sandbox-exec on the profile
+  local INNER=( "${ENVI[@]}" ${PREFIX[@]+"${PREFIX[@]}"} sandbox-exec -f "$sb" "${CMD[@]}" )
   # -- (ii) POSIX rlimits via ulimit (KERNEL, not Seatbelt), applied to the launcher process and
   # INHERITED by the guest across exec (an unprivileged guest cannot raise them). Wrapped in a tiny
   # sub-shell so the effective RUN[] is honest/visible in --check and self-contained.
@@ -284,6 +333,8 @@ if [ "$CHECK" -eq 1 ]; then
     echo "  egress mode       : $EGRESS"
   fi
   echo "  read-excluded     : ${MASKED[*]:-<none present>}"
+  echo "  coord-roots       : ${COORD_RESOLVED[*]:-<none>}$( [ "${#COORD_RESOLVED[@]}" -gt 0 ] && echo " (cross-repo binds; existence pre-verified, fail-closed if missing)" )"
+  echo "  env allowlist     : ${ENV_ALLOW_ALL[*]} (default-deny; all other env vars dropped)"
   echo "  cpu-max (RLIMIT)  : ${CPU_MAX:-<none>}$( [ -n "$CPU_MAX" ] && echo " cpu-sec (POSIX RLIMIT_CPU, per-process, kernel-enforced, DoS-bound)" )"
   echo "  nproc-max (RLIMIT): ${NPROC_MAX:-<none>}$( [ -n "$NPROC_MAX" ] && echo " (POSIX RLIMIT_NPROC, per-uid; isolates only under a dedicated uid)" )"
   echo "  mem-max           : ${MEM_MAX:-<none>}$( [ -n "$MEM_MAX" ] && echo " MiB requested - UNCAPPED on macOS (interface-only, fail-honest)" )"

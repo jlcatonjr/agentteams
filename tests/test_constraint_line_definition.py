@@ -156,7 +156,14 @@ def test_the_real_library_still_measures_what_it_measured() -> None:
     # whose per-file baseline was raised 15 -> 16. That template is also wrapped whole in a single
     # content fence at emit (module-owned/restored on every --update --merge), so the constraint is
     # SAFE despite being outside a fence in the template source. The predicate did not move.
-    assert (len(current), sum(current.values())) == (43, 167), (
+    # 167 -> 168 (2026-W38, exception-governance Constitutional Rule 11): +1 constraint line — the
+    # guardrail rule added to copilot-instructions.template.md (per-file baseline raised 2 -> 3 in
+    # test_unfenced_constraint_ratchet.py and test_fence_coverage_policy.py). Unlike the two cases
+    # above this template is NOT wrapped whole in a content fence, so the rule prose is genuinely
+    # user-editable; that is acceptable because the DURABLE enforcement is the pinned code
+    # (effect_classifier/decision_log/signed_ledger/exception_registry), not the constitution text.
+    # The predicate did not move.
+    assert (len(current), sum(current.values())) == (43, 168), (
         f"library measurement moved to {len(current)} files / {sum(current.values())} lines; "
-        "it was 43 / 167 after the CH-31 addition. Explain the move, do not re-baseline."
+        "it was 43 / 168 after the Rule-11 addition. Explain the move, do not re-baseline."
     )

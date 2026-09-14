@@ -703,6 +703,18 @@ Read-only: report the validity (signature, expiry, use-limit, manager roster, an
 
 Mint and sign a **management directive** (the management-repository endowment) and append it to the **managed** workspace's `references/management-directives.log.csv`. Fields are given as flags: `--manager-team` (this management repo's id), `--managed-team` (the recipient), `--task-scope` (the exact, non-destructive task id it authorizes), `--expires-at` (ISO-8601), `--max-uses`, and `--approver`. Requires `AGENTTEAMS_MANAGEMENT_SIGNING_KEY` and the manager on the managed team's `references/authorized-managers.txt` roster. A directive is an *authenticated operator artifact*, not a tier elevation: it authorizes only the exact scope named, can **never** clear C-5 destruction, pierce a C-2 HALT, or change governance (such scopes are mechanically auto-refused regardless of a valid signature), and is fail-closed inert if it does not verify. Enrolling a manager in the roster is a privileged `@security` cross-repo change.
 
+### `--audit-exceptions`
+
+Read-only: report the health of the **constraint-relaxing exception registry** (`references/exception-registry.json`) under `--output`/`--project` (else CWD) — every *lapsed* (still `active` but past its expiry/sunset) exception and any breach of the aggregate cap (`cap.max_active_relaxing`). Never mints or activates. Exits non-zero if the registry is unhealthy, so an aggregate/proliferation problem (impact-report finding G1) surfaces in CI rather than accumulating silently.
+
+### `--list-exceptions`
+
+Read-only: list every entry in `references/exception-registry.json` under `--output`/`--project` (else CWD), showing each exception's id, status (`active` / `declined` / `expired` / `sunset` / `revoked`), scope, and expiry. Always exits 0. A `declined` entry is a terminal, recorded refusal that cannot be silently re-minted (reactivation is a deliberate, reason-carrying act).
+
+### `--sign-decision`
+
+**Operator-only.** Mint an **Ed25519-signed** constraint-relaxing security decision from a JSON spec (`date`, `action_reviewed`, `verdict`, the structured `effect_*` fields, `derives_from`, `key_id`, `author`) and append it to `references/security-decisions.log.csv` under `--output`/`--project` (else CWD). The operator private key is read from the file named by `AGENTTEAMS_DECISION_ED25519_KEYFILE` — never from an agent environment. Before writing, it refuses a categorically non-eligible decision (one that would write a governance/trust root, such as the verify-key store) and prints the row's full **derived material effect** for a deliberate second look. This is the *only* minter of Ed25519 relaxing rows; an agent context lacks both the env var and the key file, so running it in-sandbox fails closed. A relaxing authorization is *valid-but-insufficient* under HMAC — only this Ed25519 signature, verified against the tracked public key in `references/authorized-verify-keys/<key-id>.pub.pem`, clears the elevated path in a governed workspace.
+
 ### `--write-integrity-manifest`
 
 Re-record `references/enforcement-integrity.json` from the enforcement modules on disk, then exit.
