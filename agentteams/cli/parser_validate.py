@@ -403,6 +403,8 @@ def _validate_option_combinations(parser: argparse.ArgumentParser, args: argpars
         ("verify_waivers", "--verify-waivers"), ("verify_grants", "--verify-grants"),
         ("issue_grant", "--issue-grant"),
         ("verify_directives", "--verify-directives"), ("issue_directive", "--issue-directive"),
+        ("audit_exceptions", "--audit-exceptions"), ("list_exceptions", "--list-exceptions"),
+        ("sign_decision", "--sign-decision"),
         ("redteam", "--redteam"),
         ("accept_probe_baseline", "--accept-probe-baseline"),
         ("write_integrity_manifest", "--write-integrity-manifest"),

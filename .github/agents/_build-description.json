@@ -91,7 +91,7 @@
     }
   ],
   "style_rules": [
-    "stdlib-only: no external dependencies in agentteams/ (pytest is dev-only; the agentteams[research] extra is the one disclosed exception)",
+    "stdlib-only: no external dependencies in agentteams/ (pytest is dev-only; the agentteams[research] and agentteams[signing] extras are the two disclosed exceptions -- both lazily imported so the base install stays dependency-free)",
     "All public functions must have docstrings with Args/Returns/Raises",
     "Type annotations required on all public function signatures",
     "Templates use `{UPPER_SNAKE_CASE}` for auto-resolved placeholders and `{MANUAL:UPPER_SNAKE_CASE}` for human-required",

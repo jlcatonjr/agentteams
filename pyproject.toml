@@ -65,6 +65,19 @@ browser = [
     "agentteams[research]",
     "playwright>=1.40",
 ]
+# The SECOND disclosed exception to the stdlib-only rule (after `research`). `signing` provides
+# asymmetric (Ed25519) authorization signing for constraint-RELAXING security decisions — so no
+# agent or compromised runner holding the symmetric HMAC key can mint a relaxing authorization;
+# only the operator's private key grants (exception-governance hardening, Workstream B). The base
+# install stays dependency-free: `agentteams.cli.signed_ledger` imports `cryptography` LAZILY,
+# inside the ed25519 functions only, so importing the CLI never requires it and a workspace that
+# never signs a relaxing row never needs the extra. Pinned to an EXACT version (mirroring the
+# provenance discipline above) and cross-checked against references/dependency-pins.json by
+# tests/test_supply_chain_pins.py. Feed the adoption date into the Rule S-10 dependency cooldown
+# before relying on it in enforcement.
+signing = [
+    "cryptography==49.0.0",
+]
 
 [project.urls]
 Homepage = "https://github.com/jlcatonjr/agentteams"

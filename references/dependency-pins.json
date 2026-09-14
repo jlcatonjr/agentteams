@@ -1,0 +1,15 @@
+{
+  "_comment": "Supply-chain pins for the disclosed non-stdlib dependencies. Each entry pins an EXACT version and the sha256 of that release's source distribution (sdist) from PyPI. tests/test_supply_chain_pins.py asserts (a) the pyproject.toml extra pins the same exact version, and (b) when the library is importable, its reported __version__ matches. The sdist sha256 is the provenance anchor recorded here; full per-wheel hash-pinning belongs in a deployment requirements lockfile (documented residual). Feed adoption_date into the Rule S-10 dependency-vetting cooldown before relying on a pin in enforcement.",
+  "pins": [
+    {
+      "name": "cryptography",
+      "extra": "signing",
+      "version": "49.0.0",
+      "sdist_filename": "cryptography-49.0.0.tar.gz",
+      "sdist_sha256": "f89660a348f4f78a92366240a61404e337586ef7f5909a2fef59ca88ef505493",
+      "sha256_source": "pypi.org sdist, downloaded from files.pythonhosted.org and sha256 verified locally 2026-09-14",
+      "adoption_date": "2026-09-14",
+      "purpose": "Ed25519 asymmetric signing for constraint-relaxing authorizations (exception-governance Workstream B)"
+    }
+  ]
+}

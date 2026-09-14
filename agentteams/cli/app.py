@@ -35,6 +35,9 @@ from agentteams.cli.commands import (
     _run_issue_grant,
     _run_verify_directives,
     _run_issue_directive,
+    _run_audit_exceptions,
+    _run_list_exceptions,
+    _run_sign_decision,
 )
 
 # run_generate holds the generate/update/check pipeline; _finalize_exit_code is
@@ -184,6 +187,15 @@ def _main_dispatch(
         return _run_verify_directives(args)
     if getattr(args, "issue_directive", False):
         return _run_issue_directive(args)
+
+    # --audit-exceptions / --list-exceptions / --sign-decision: constraint-relaxing exception
+    # registry ops (read-only reports) and the operator-only Ed25519 decision minter.
+    if getattr(args, "audit_exceptions", False):
+        return _run_audit_exceptions(args)
+    if getattr(args, "list_exceptions", False):
+        return _run_list_exceptions(args)
+    if getattr(args, "sign_decision", None):
+        return _run_sign_decision(args)
 
     # -----------------------------------------------------------------------
     # --verify-integrity / --verify-backup: standalone read-only integrity

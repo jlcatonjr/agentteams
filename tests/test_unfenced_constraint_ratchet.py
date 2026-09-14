@@ -39,7 +39,12 @@ _BASELINE: dict[str, int] = {
     "builder/team-builder-copilot-cli.template.md": 1,
     "builder/team-builder-copilot-vscode.template.md": 2,
     "builder/team-builder-goose.template.md": 3,
-    "copilot-instructions.template.md": 2,
+    "copilot-instructions.template.md": 3,  # 2->3: Constitutional Rule 11 (exception-governance
+                                            # guardrail, 2026-W38). Intentional, consistent with the
+                                            # other canonical rules being unfenced; the DURABLE
+                                            # enforcement is the pinned code (effect_classifier /
+                                            # decision_log / signed_ledger / exception_registry), not
+                                            # this prose, so an edited rule line cannot weaken it.
     "domain/agentteams-updater.template.md": 1,
     "domain/code-hygiene-rules-reference.template.md": 16,
     "domain/cohesion-repairer.template.md": 1,
