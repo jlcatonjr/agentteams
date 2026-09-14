@@ -181,6 +181,17 @@ def test_launcher_env_is_default_deny():
 
 def test_launcher_drops_secret_env_var(tmp_path):
     """End-to-end: a non-allowlisted secret env var does not reach the guest (--check evidence)."""
+    import platform
+    import shutil
+
+    # --check still dispatches to the OS branch, which requires that OS's confinement tool
+    # (bwrap on Linux, sandbox-exec on macOS). Skip where it is absent (e.g. Linux CI without
+    # bubblewrap) rather than assert a die(); the env-allowlist SOURCE is covered statically by
+    # test_launcher_env_is_default_deny regardless.
+    tool = "sandbox-exec" if platform.system() == "Darwin" else "bwrap"
+    if shutil.which(tool) is None:
+        pytest.skip(f"{tool} not available; --check cannot run the OS branch on this host")
+
     scratch = tmp_path / "s"
     scratch.mkdir()
     env = dict(os.environ)
