@@ -47,6 +47,7 @@ from datetime import datetime
 from pathlib import Path
 
 from agentteams.atomicio import _atomic_write_text, atomic_rewrite_csv_rows
+from agentteams.cli.governance_targets import target_is_governance_root
 from agentteams.cli.signed_ledger import (
     canonical_payload,
     hmac_sign,
@@ -219,6 +220,13 @@ def scope_is_allowed(task_scope: str) -> bool:
     """
     scope = (task_scope or "").strip().lower()
     if not scope:
+        return False
+    # Governance/trust-ROOT paths (the single shared vocabulary, so this path and the effect
+    # classifier can never drift — audit Q1). Closes the directive-path gap where a scope naming
+    # a trust root by PATH (e.g. security-approvers, agent-privilege, the Ed25519 verify-key
+    # store) passed the verb denylist below. A valid signature cannot override this. The ORIGINAL
+    # (un-lowercased) scope is passed so the predicate's camelCase folding still applies.
+    if target_is_governance_root((task_scope or "").strip()):
         return False
     for token in _REFUSED_SCOPE_TOKENS:
         # Left-boundary (word-START) match: the token must not be PRECEDED by an ASCII letter, but

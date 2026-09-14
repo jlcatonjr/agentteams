@@ -1088,3 +1088,143 @@ def _run_redteam(args: argparse.Namespace) -> int:
             print(f"    - probe {pid} returned EXPLOITED", file=sys.stderr)
 
     return result.exit_code
+
+
+def _run_audit_exceptions(args: argparse.Namespace) -> int:
+    """``--audit-exceptions``: read-only health report of the constraint-relaxing exception registry.
+
+    Resolves the workspace root from ``--output``/``--project`` (else CWD) and reports every lapsed
+    (active-but-expired) exception and any aggregate-cap breach in
+    ``references/exception-registry.json`` without activating anything. Returns 0 when the registry
+    is healthy (or absent), 1 otherwise. Mirrors :func:`_run_verify_directives`.
+
+    Args:
+        args: Parsed CLI namespace.
+
+    Returns:
+        Process exit code.
+    """
+    from agentteams.cli import exception_registry as er
+
+    output_dir = _resolve_output_dir(args)
+    log_path = output_dir / er.EXCEPTION_REGISTRY_REL
+    problems = er.audit_exceptions(output_dir)
+    if not log_path.exists():
+        print(f"No exception registry found at {log_path}")
+        return 0
+    if not problems:
+        print(f"Exception registry healthy at {log_path}")
+        return 0
+    for problem in problems:
+        print(f"  [BAD] {problem}", file=sys.stderr)
+    print(f"\n{len(problems)} exception-registry problem(s).", file=sys.stderr)
+    return 1
+
+
+def _run_list_exceptions(args: argparse.Namespace) -> int:
+    """``--list-exceptions``: read-only listing of every exception-registry entry (always exits 0).
+
+    Args:
+        args: Parsed CLI namespace.
+
+    Returns:
+        0.
+    """
+    from agentteams.cli import exception_registry as er
+
+    output_dir = _resolve_output_dir(args)
+    entries = er.list_exceptions(output_dir)
+    if not entries:
+        print(f"No exceptions recorded ({output_dir / er.EXCEPTION_REGISTRY_REL})")
+        return 0
+    print(f"{len(entries)} exception(s) in {output_dir / er.EXCEPTION_REGISTRY_REL}:")
+    for entry in entries:
+        print(
+            f"  {entry.get('id', '?')}  [{entry.get('status', 'active')}]  "
+            f"scope={entry.get('scope', '')!r}  expires={entry.get('expires', '')}"
+        )
+    return 0
+
+
+def _run_sign_decision(args: argparse.Namespace) -> int:
+    """``--sign-decision``: operator-only Ed25519 minter for a constraint-relaxing decision row.
+
+    Reads a JSON spec (the decision fields + effect_* + derives_from + key_id), loads the operator
+    private key from the file named by ``AGENTTEAMS_DECISION_ED25519_KEYFILE``, refuses a
+    categorically non-eligible row, prints the row's derived material effect for a deliberate
+    second look, signs the canonical payload with Ed25519, and appends the signed row. It is the
+    only minter of Ed25519 relaxing rows; an agent context lacks both the env var and the key file.
+
+    Args:
+        args: Parsed CLI namespace (``sign_decision`` is the spec path).
+
+    Returns:
+        0 on success, 1 on any error (fail-closed).
+    """
+    import json
+    import os
+
+    from agentteams.cli import decision_log as dl
+    from agentteams.cli import effect_classifier as ec
+    from agentteams.cli import signed_ledger as sl
+
+    output_dir = _resolve_output_dir(args)
+    try:
+        spec = json.loads(Path(args.sign_decision).read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError) as exc:
+        print(f"Error: cannot read --sign-decision spec: {exc}", file=sys.stderr)
+        return 1
+    if not isinstance(spec, dict) or not (spec.get("action_reviewed") or "").strip():
+        print("Error: spec must be a JSON object with a non-empty action_reviewed", file=sys.stderr)
+        return 1
+
+    keyfile = os.getenv("AGENTTEAMS_DECISION_ED25519_KEYFILE", "")
+    if not keyfile:
+        print(
+            "Error: AGENTTEAMS_DECISION_ED25519_KEYFILE is not set — it must name the operator "
+            "private key file (never an agent env). Refusing to sign (fail-closed).",
+            file=sys.stderr,
+        )
+        return 1
+    try:
+        private_pem = Path(keyfile).read_text(encoding="utf-8")
+    except OSError as exc:
+        print(f"Error: cannot read operator private key file: {exc}", file=sys.stderr)
+        return 1
+
+    row = {k: str(v) for k, v in spec.items()}
+    row["sig_scheme"] = sl.SIG_SCHEME_ED25519
+    row.setdefault("verdict", "PASS")
+
+    # Refuse a categorically non-eligible row (cannot be signed even by the operator).
+    try:
+        reason = ec.non_eligibility_reason(row, kind="decision")
+    except ec.EffectClassifierError as exc:
+        print(f"Error: inconsistent effect declaration: {exc}", file=sys.stderr)
+        return 1
+    if reason is not None:
+        print(f"Error: this decision is categorically NON-ELIGIBLE: it {reason}.", file=sys.stderr)
+        return 1
+
+    # MAJOR-4: show the full derived material effect, not just a class label, before writing.
+    profile = ec.effect_profile_from_row(row)
+    print("About to sign a constraint-relaxing security decision:")
+    print(f"  action_reviewed : {row.get('action_reviewed')}")
+    print(f"  verdict         : {row.get('verdict')}")
+    print(f"  derived class   : {ec.derive_effect_class(row, kind='decision')}")
+    print(f"  needs operator  : {ec.requires_operator_signature(row, kind='decision')}")
+    print(f"  grants          : {list(profile.grants_capabilities)}")
+    print(f"  write targets   : {list(profile.write_targets)}")
+    print(f"  relaxes         : {list(profile.relaxes)}")
+    print(f"  destructive/xrepo/bulk: {profile.destructive}/{profile.cross_repo}/{profile.bulk}")
+    print(f"  derives_from    : {row.get('derives_from', '')}")
+    print(f"  key_id          : {row.get('key_id', '')}")
+
+    try:
+        row["signature"] = sl.ed25519_sign(private_pem, dl._decision_signature_values(row))
+        dl.append_signed_decision_row(output_dir, row)
+    except RuntimeError as exc:
+        print(f"Error: {exc}", file=sys.stderr)
+        return 1
+    print(f"\nSigned decision appended to {output_dir / 'references' / 'security-decisions.log.csv'}")
+    return 0
