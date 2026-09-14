@@ -1196,9 +1196,15 @@ def _run_sign_decision(args: argparse.Namespace) -> int:
     row["sig_scheme"] = sl.SIG_SCHEME_ED25519
     row.setdefault("verdict", "PASS")
 
-    # Refuse a categorically non-eligible row (cannot be signed even by the operator).
+    # Classify the row up front. derive_effect_class / requires_operator_signature raise
+    # EffectClassifierError on a dangerous self-declared effect_class divergence — catch it here so
+    # a malformed spec fails closed with a clear message rather than an unhandled traceback.
+    # (non_eligibility_reason does not raise; it is grouped here only so all classifier calls that
+    # can fail share one guard.)
     try:
         reason = ec.non_eligibility_reason(row, kind="decision")
+        derived_class = ec.derive_effect_class(row, kind="decision")
+        needs_operator = ec.requires_operator_signature(row, kind="decision")
     except ec.EffectClassifierError as exc:
         print(f"Error: inconsistent effect declaration: {exc}", file=sys.stderr)
         return 1
@@ -1211,8 +1217,8 @@ def _run_sign_decision(args: argparse.Namespace) -> int:
     print("About to sign a constraint-relaxing security decision:")
     print(f"  action_reviewed : {row.get('action_reviewed')}")
     print(f"  verdict         : {row.get('verdict')}")
-    print(f"  derived class   : {ec.derive_effect_class(row, kind='decision')}")
-    print(f"  needs operator  : {ec.requires_operator_signature(row, kind='decision')}")
+    print(f"  derived class   : {derived_class}")
+    print(f"  needs operator  : {needs_operator}")
     print(f"  grants          : {list(profile.grants_capabilities)}")
     print(f"  write targets   : {list(profile.write_targets)}")
     print(f"  relaxes         : {list(profile.relaxes)}")
