@@ -93,6 +93,14 @@ ENFORCEMENT_MODULES: tuple[str, ...] = (
     "agentteams/templates/universal/hooks/constitutional-gate.py",  # the authoritative template
     ".claude/hooks/constitutional-gate.py",                          # this repo's installed Claude hook
     ".github/hooks/constitutional-gate.py",                          # this repo's installed copilot hook
+    # Exception-governance hardening (2026-W38). These carry constitutional weight now:
+    # a silent edit to any would reopen exactly the gap it closes, without tripping E4.
+    "agentteams/cli/signed_ledger.py",   # C-2/WS-B: HMAC + Ed25519 verify primitives (was unpinned;
+                                         # verify_by_scheme is now the asymmetric authorization core)
+    "agentteams/cli/management_directives.py",  # C-4: the directive denylist / EXACT-scope boundary (M1)
+    "agentteams/cli/effect_classifier.py",      # WS-D keystone: the derived relaxing/exception class
+    "agentteams/cli/governance_targets.py",     # the single shared trust-root vocabulary both paths use
+    "agentteams/cli/exception_registry.py",     # WS-C: the aggregate/proliferation guard + declined-terminal
     "agentteams/integrity.py",           # self, so removing an entry is itself detectable
 )
 

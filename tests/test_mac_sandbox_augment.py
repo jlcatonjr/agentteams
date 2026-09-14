@@ -24,6 +24,7 @@ These tests pin the contract that agentteams' own governance requires (@security
 from __future__ import annotations
 
 import hashlib
+import os
 import subprocess
 import sys
 from pathlib import Path
@@ -45,7 +46,7 @@ from agentteams.host_features import MAC_RESOURCE_CAPS, is_sandbox_capable
 # The canonical macOS-augmented launcher sha256. Handed back to baseAgent for its re-pin
 # (tests/test_confine_run_parity.py). A LITERAL pin (not a recompute) so any drift — a NETNS
 # rename, a UTF-8 re-encode, an accidental edit — fails loudly here.
-EXPECTED_LAUNCHER_SHA256 = "743b90ca44a757886fa5af57287c2e47bf64a562ff78700411b38f00f829b059"
+EXPECTED_LAUNCHER_SHA256 = "97ca07d8b2534d9e5fbe895a5b41d6173f82b18fc68d95d9c1d57b440054a896"
 
 _TEMPLATES_UNIVERSAL = Path(__file__).resolve().parents[1] / "agentteams" / "templates" / "universal"
 _LAUNCHER_ASSET = _TEMPLATES_UNIVERSAL / _LAUNCHER_ASSET_REL
@@ -166,6 +167,31 @@ def test_launcher_carries_honest_residuals_verbatim():
     )
     assert "syscall" not in active
     assert "no-sandbox" not in active
+
+
+def test_launcher_env_is_default_deny():
+    """R2: the guest environment is default-deny (bwrap --clearenv / macOS env -i + allowlist)."""
+    src = _LAUNCHER_ASSET.read_text(encoding="utf-8")
+    active = "\n".join(l for l in src.splitlines() if not l.lstrip().startswith("#"))
+    assert "--clearenv" in active            # Linux branch clears the inherited env
+    assert "env -i" in active                # macOS branch starts from an empty env
+    assert "DEFAULT_ENV_ALLOW" in active     # a benign built-in allowlist
+    assert "--env-allow" in active           # operator can extend the allowlist by NAME
+
+
+def test_launcher_drops_secret_env_var(tmp_path):
+    """End-to-end: a non-allowlisted secret env var does not reach the guest (--check evidence)."""
+    scratch = tmp_path / "s"
+    scratch.mkdir()
+    env = dict(os.environ)
+    env["AGENTTEAMS_DECISION_ED25519_KEYFILE"] = "/tmp/should-not-leak.key"
+    proc = subprocess.run(
+        ["bash", str(_LAUNCHER_ASSET), "--scratch", str(scratch), "--check", "--", "echo", "hi"],
+        capture_output=True, text=True, env=env,
+    )
+    assert proc.returncode == 0, proc.stderr
+    assert "should-not-leak.key" not in proc.stdout
+    assert "env allowlist" in proc.stdout
 
 
 # ---------------------------------------------------------------------------
