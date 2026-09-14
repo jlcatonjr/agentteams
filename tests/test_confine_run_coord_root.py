@@ -6,6 +6,8 @@ host via --check.
 """
 from __future__ import annotations
 
+import platform
+import shutil
 import subprocess
 from pathlib import Path
 
@@ -18,7 +20,19 @@ def _run(args):
     return subprocess.run(["bash", str(LAUNCHER), *args], capture_output=True, text=True)
 
 
+def _os_confinement_tool_present() -> bool:
+    """The OS branch (which --check still dispatches to) needs bwrap on Linux / sandbox-exec on macOS."""
+    tool = "sandbox-exec" if platform.system() == "Darwin" else "bwrap"
+    return shutil.which(tool) is not None
+
+
 def test_present_coord_root_is_bound(tmp_path):
+    # A PRESENT coord-root passes the OS-independent existence check and reaches the OS branch, which
+    # requires that OS's confinement tool even under --check. Skip where it is absent (e.g. Linux CI
+    # without bubblewrap); the FAIL-CLOSED behaviour for a MISSING root is host-independent and is
+    # covered unconditionally by the two tests below.
+    if not _os_confinement_tool_present():
+        pytest.skip("OS confinement tool (bwrap/sandbox-exec) absent; --check cannot reach the OS branch")
     scratch = tmp_path / "scratch"; scratch.mkdir()
     sibling = tmp_path / "sibling"; sibling.mkdir()
     r = _run(["--scratch", str(scratch), "--coord-root", str(sibling), "--check", "--", "/bin/echo", "hi"])
