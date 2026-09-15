@@ -6,6 +6,22 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### added (Goose file-based cross-repo coordination surface)
+
+- **Goose agents can now coordinate across sibling repositories through a file-based surface with
+  fail-closed sandbox binds — and the all-surface dead-turn defense ships into generated teams.**
+  The OpenRouter route proxy is emitted into generated Goose teams so the dead-turn serialization
+  trigger is mitigated across every surface, not just the CLI wrapper. A stdlib stdio coordination
+  MCP server (`scripts/goose-coordination-mcp.py`) exposes records/files-only tools
+  (read_adjacent_registry, file_coordination_request, append_coordination_log,
+  request_security_clearance) — no execute/grant, path-contained. The confinement launcher gains a
+  repeatable `--coord-root PATH` that binds a sibling/adjacent-repo write root for cross-repo
+  coordination; unlike `--writable` it **fails closed** if the target does not exist (a missing
+  sibling repo is a misconfiguration, verified before OS dispatch so it is a clean exit, never a
+  bwrap sandbox-init crash). Schemas gain `coordination_write_roots`; `cli/artifacts.py` maps it
+  onto the emitted write roots only when confinement is active. (This entry documents the
+  `phase2-coordination-surface` work integrated alongside the exception-governance hardening below.)
+
 ### security (exception-governance hardening: derived, elevated, bounded relaxing authorizations)
 
 - **A constraint-relaxing authorization can no longer evade a HALT by renaming, be minted by an
