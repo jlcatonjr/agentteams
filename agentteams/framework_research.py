@@ -17,15 +17,23 @@ network access on every `--update --merge`.
 from __future__ import annotations
 
 import datetime as _dt
+import html as _html
 import json
 import os
 import re
 import urllib.error
+import urllib.parse
 import urllib.request
 from pathlib import Path
 from typing import Any
 
-CLAUDE_DOC_URL = "https://docs.anthropic.com/en/docs/claude-code/sub-agents"
+from agentteams.frameworks.format_spec import FORMAT_SPECS as _FORMAT_SPECS
+from agentteams.frameworks import format_spec as _format_spec
+
+#: Canonical Claude Code sub-agents doc URL. Single-sourced from
+#: ``frameworks.format_spec``; kept as a module attribute because tests and
+#: ``build_framework_placeholders`` reference ``fr.CLAUDE_DOC_URL``.
+CLAUDE_DOC_URL = _format_spec.CLAUDE_DOC_URL
 SNAPSHOT_REL = "tmp/daily-pipeline/framework-research/latest.json"  # gitignored — operator-local
 try:
     STALE_DAYS = int(os.environ.get("AGENTTEAMS_STALE_DAYS", "7"))
@@ -40,8 +48,11 @@ if STALE_DAYS < 1:
         f"got {STALE_DAYS!r}"
     )
 
-EXPECTED_FRONT_MATTER_KEYS = ["name", "description", "tools", "model"]
-EXPECTED_LOCATIONS = [".claude/agents", "CLAUDE.md"]
+# Single-sourced from frameworks.format_spec (the claude spec). These module
+# constants are the legacy single-framework scan vocabulary; the six-wide scan
+# reads each framework's tokens from FRAMEWORK_REGISTRY (also derived below).
+EXPECTED_FRONT_MATTER_KEYS = list(_FORMAT_SPECS["claude"].expected_doc_tokens)
+EXPECTED_LOCATIONS = list(_FORMAT_SPECS["claude"].expected_locations)
 
 #: Host-capability claims the spawn-authority / query-funnel feature relies on but which are NOT
 #: verifiable from inside this repository (no such tokens appear in the tree). They are external
@@ -81,61 +92,23 @@ HOST_CAPABILITY_CLAIMS: dict[str, dict[str, str]] = {
 # Registry: each entry produces an advisory snapshot. Token allow-lists are
 # intentionally small and prose-survivable; see plan
 # references/plans/daily-pipeline-deferred-followups-2026-05-25.plan.md A6.
+# Derived from frameworks.format_spec.FORMAT_SPECS (single source of truth).
+# Shape and insertion order are preserved for the snapshot schema and every
+# existing consumer/test: {label, source_url, expert_ref, expected_keys,
+# expected_locations}. ``expected_keys`` are the UPSTREAM-DOC watch tokens
+# (spec.expected_doc_tokens) — a documentation signal, NOT necessarily the
+# front-matter keys this project emits (spec.emitted_front_matter_keys); the
+# two are cross-checked by tests/test_format_spec_single_source.py. The URL
+# history that used to be commented here now lives beside each FormatSpec.
 FRAMEWORK_REGISTRY = {
-    "claude": {
-        "label": "Claude Code Sub-Agents",
-        "source_url": CLAUDE_DOC_URL,
-        "expert_ref": "references/claude-agent-infrastructure-expert.md",
-        "expected_keys": ["name", "description", "tools", "model"],
-        "expected_locations": [".claude/agents", "CLAUDE.md"],
-    },
-    "copilot_vscode": {
-        "label": "GitHub Copilot — VS Code Custom Agents",
-        # custom-agents is the current page; custom-chat-modes is explicitly legacy
-        # (verified 2026-08-15, agent-doc-optimal-structure plan).
-        "source_url": "https://code.visualstudio.com/docs/copilot/customization/custom-agents",
-        "expert_ref": "references/copilot-vscode-agent-infrastructure-expert.md",
-        "expected_keys": ["description", "tools", "model"],
-        "expected_locations": [".github/agents"],
-    },
-    "copilot_cli": {
-        "label": "GitHub Copilot — CLI Custom Agents",
-        # The old about-github-copilot-in-the-cli URL 301s to a generic
-        # responsible-use page (verified 2026-08-15). The CLI's agent surface is
-        # .github/agents/*.agent.md — same directory as copilot_vscode. Our
-        # adapter converged onto it 2026-08-15 (P1, closed — see the expert
-        # reference); .github/copilot/ is no longer emitted and is deliberately
-        # absent below, matching copilot_vscode's single-location entry.
-        "source_url": "https://docs.github.com/en/copilot/how-tos/copilot-cli/customize-copilot/create-custom-agents-for-cli",
-        "expert_ref": "references/copilot-cli-agent-infrastructure-expert.md",
-        "expected_keys": ["description", "tools", "model"],
-        "expected_locations": [".github/agents"],
-    },
-    "goose": {
-        "label": "Goose (AAIF) Recipes",
-        # Docs moved to goose-docs.ai when Goose joined AAIF (2026-04);
-        # block.github.io URLs are dead.
-        "source_url": "https://goose-docs.ai/docs/guides/recipes/recipe-reference/",
-        "expert_ref": "references/goose-agent-infrastructure-expert.md",
-        "expected_keys": ["title", "description", "instructions", "prompt"],
-        "expected_locations": [".goose/recipes", "AGENTS.md", ".goosehints"],
-    },
-    "agents_md": {
-        "label": "AGENTS.md Cross-Tool Standard",
-        "source_url": "https://agents.md",
-        "expert_ref": "references/agents-md-agent-infrastructure-expert.md",
-        # The standard has no schema; watch for these structural tokens instead.
-        "expected_keys": [],
-        "expected_locations": ["AGENTS.md"],
-    },
-    "codex": {
-        "label": "OpenAI Codex CLI",
-        # developers.openai.com/codex 308s to learn.chatgpt.com (verified 2026-08-15).
-        "source_url": "https://learn.chatgpt.com/docs/agent-configuration/agents-md",
-        "expert_ref": "references/codex-agent-infrastructure-expert.md",
-        "expected_keys": ["project_doc_max_bytes", "mcp_servers"],
-        "expected_locations": ["AGENTS.md", ".codex"],
-    },
+    fid: {
+        "label": spec.label,
+        "source_url": spec.source_url,
+        "expert_ref": spec.expert_ref,
+        "expected_keys": list(spec.expected_doc_tokens),
+        "expected_locations": list(spec.expected_locations),
+    }
+    for fid, spec in _FORMAT_SPECS.items()
 }
 
 _KEY_LIST_RE = re.compile(r"_CLAUDE_REQUIRED_KEYS\s*=\s*\{([^}]*)\}")
@@ -225,9 +198,63 @@ def _diff_keys(expected: list[str], observed: list[str]) -> dict[str, list[str]]
 
 
 def _fetch(url: str, timeout: int = 10) -> str:
+    """Fetch a URL and return its decoded body (back-compat: text only)."""
+    text, _meta = _fetch_with_meta(url, timeout=timeout)
+    return text
+
+
+#: A provider doc that resolves but returns less than this many bytes is almost
+#: certainly not the real documentation page (a redirect stub, an error shell, an
+#: empty SPA container). Scanning it for zero tokens would read as "no drift" — a
+#: silent false-negative — so it is flagged as ``empty`` instead of ``ok``.
+_MIN_DOC_BYTES = 500
+
+
+def _fetch_with_meta(url: str, timeout: int = 10) -> tuple[str, dict[str, Any]]:
+    """Fetch a URL, returning ``(body_text, meta)``.
+
+    ``meta`` carries fetch-integrity signals the scan needs so a moved/empty page
+    is not mistaken for "no drift":
+
+    * ``status`` — final HTTP status code.
+    * ``final_url`` — the URL after redirects (``urlopen`` follows them).
+    * ``host_changed`` — True when the final host differs from the requested host,
+      i.e. the doc has relocated to a different site (a finding, not "ok").
+    """
     req = urllib.request.Request(url, headers={"User-Agent": "agentteams-research/1.0"})
     with urllib.request.urlopen(req, timeout=timeout) as resp:
-        return resp.read().decode("utf-8", errors="replace")
+        body = resp.read().decode("utf-8", errors="replace")
+        final_url = resp.geturl()
+        status = getattr(resp, "status", None) or resp.getcode()
+    req_host = urllib.parse.urlsplit(url).netloc.lower()
+    final_host = urllib.parse.urlsplit(final_url).netloc.lower()
+    return body, {
+        "status": status,
+        "final_url": final_url,
+        "host_changed": bool(final_host) and final_host != req_host,
+    }
+
+
+_SCRIPT_STYLE_RE = re.compile(r"(?is)<(script|style)\b.*?</\1>")
+_TAG_RE = re.compile(r"(?s)<[^>]+>")
+_WS_RE = re.compile(r"[ \t\r\f\v]+")
+
+
+def _html_to_text(raw: str) -> str:
+    """Strip HTML to visible text before token scanning.
+
+    Raw provider docs are HTML (often multi-MB, JS-heavy). Tags interleaved with
+    text hid real tokens from the ``\\bkey\\b\\s*:`` scan and inflated byte counts
+    (the assessment recorded a false ``missing: description`` on a 2 MB Claude
+    page). This drops ``<script>``/``<style>`` bodies, removes tags, unescapes
+    entities, and collapses horizontal whitespace — a best-effort text view, not a
+    parser. Input that has no tags (already text, e.g. a test fixture) passes
+    through essentially unchanged.
+    """
+    without_blocks = _SCRIPT_STYLE_RE.sub(" ", raw)
+    without_tags = _TAG_RE.sub(" ", without_blocks)
+    unescaped = _html.unescape(without_tags)
+    return _WS_RE.sub(" ", unescaped)
 
 
 def _load_snapshot(snapshot_path: Path) -> dict[str, Any] | None:
@@ -256,28 +283,59 @@ def _scan_tokens_for(text: str, expected_keys: list[str], expected_locations: li
 
 
 def _scan_framework(entry: dict[str, Any], offline: bool) -> dict[str, Any]:
-    fetch_status = "skipped" if offline else "ok"
-    fetch_error = ""
-    tokens: dict[str, list[str]] = {}
-    raw_len = 0
-    if not offline:
-        try:
-            text = _fetch(entry["source_url"])
-            raw_len = len(text)
-            tokens = _scan_tokens_for(text, entry["expected_keys"], entry["expected_locations"])
-        except (urllib.error.URLError, TimeoutError, OSError) as exc:
-            fetch_status = "failed"
-            fetch_error = f"{type(exc).__name__}: {exc}"
-    return {
+    """Fetch + scan one framework's upstream doc, with fetch-integrity signals.
+
+    ``fetch_status`` distinguishes ``ok`` (a real page was scanned) from the two
+    silent-false-negative cases the assessment flagged — ``moved`` (redirected to
+    a different host: the doc relocated) and ``empty`` (resolved but implausibly
+    small) — as well as ``failed`` (network error) and ``skipped`` (offline). A
+    per-framework ``keys_diff`` compares this framework's expected watch tokens
+    against what was observed, so drift is reported for all six frameworks, not
+    just Claude.
+    """
+    result: dict[str, Any] = {
         "label": entry["label"],
         "source_url": entry["source_url"],
         "expert_ref": entry["expert_ref"],
         "expected_keys": entry["expected_keys"],
-        "fetch_status": fetch_status,
-        "fetch_error": fetch_error,
-        "raw_bytes": raw_len,
-        "upstream_tokens": tokens,
+        "fetch_status": "skipped" if offline else "ok",
+        "fetch_error": "",
+        "final_url": "",
+        "host_changed": False,
+        "raw_bytes": 0,
+        "text_bytes": 0,
+        "upstream_tokens": {},
+        "keys_diff": _diff_keys(entry["expected_keys"], []),
     }
+    if offline:
+        return result
+    try:
+        raw, meta = _fetch_with_meta(entry["source_url"])
+    except (urllib.error.URLError, TimeoutError, OSError) as exc:
+        result["fetch_status"] = "failed"
+        result["fetch_error"] = f"{type(exc).__name__}: {exc}"
+        return result
+
+    text = _html_to_text(raw)
+    result["raw_bytes"] = len(raw)
+    result["text_bytes"] = len(text)
+    result["final_url"] = meta["final_url"]
+    result["host_changed"] = meta["host_changed"]
+    if meta["host_changed"]:
+        # Relocated to a different site. Do not scan the (likely generic) landing
+        # page and report zero tokens as "no drift" — flag it for human re-check.
+        result["fetch_status"] = "moved"
+        result["fetch_error"] = f"redirected to different host: {meta['final_url']}"
+        return result
+    if len(text.strip()) < _MIN_DOC_BYTES:
+        result["fetch_status"] = "empty"
+        result["fetch_error"] = f"page text only {len(text.strip())} bytes (<{_MIN_DOC_BYTES})"
+        return result
+
+    tokens = _scan_tokens_for(text, entry["expected_keys"], entry["expected_locations"])
+    result["upstream_tokens"] = tokens
+    result["keys_diff"] = _diff_keys(entry["expected_keys"], tokens.get("front_matter_keys_present", []))
+    return result
 
 
 def refresh_snapshot(repo_root: Path, offline: bool = False) -> dict[str, Any]:
@@ -296,19 +354,35 @@ def refresh_snapshot(repo_root: Path, offline: bool = False) -> dict[str, Any]:
     for fid, entry in FRAMEWORK_REGISTRY.items():
         per_framework[fid] = _scan_framework(entry, offline=offline)
 
-    # If everything was skipped or failed, prefer the prior cached snapshot.
-    all_unfetched = all(p["fetch_status"] != "ok" for p in per_framework.values())
-    if all_unfetched:
+    # Fall back to the cached snapshot only on TRANSIENT non-fetches (offline runs
+    # or network errors). A 'moved' or 'empty' status is a real, 200-level integrity
+    # finding — never swallow a fleet-wide relocation or stub-page interposition into
+    # yesterday's all-clear (adversarial F4). If any framework is moved/empty we write
+    # the fresh snapshot so the regression surfaces.
+    _TRANSIENT = {"skipped", "failed"}
+    all_transient = all(p["fetch_status"] in _TRANSIENT for p in per_framework.values())
+    if all_transient:
         prev = _load_snapshot(snapshot_path)
         if prev:
             return prev
 
     claude = per_framework["claude"]
     claude_tokens = claude.get("upstream_tokens", {})
-    keys_diff = _diff_keys(adapter["required_front_matter_keys"], claude_tokens.get("front_matter_keys_present", []))
+    # Single-source the top-level (legacy) keys_diff from the per-framework claude diff,
+    # which is computed against the claude spec's expected_doc_tokens (name, description,
+    # tools, model). Previously this diffed against the 2-key _CLAUDE_REQUIRED_KEYS regex
+    # constant, so 'tools' — a key we emit and the doc documents — rendered as new_upstream
+    # drift on EVERY run, and disagreed with the table's per-framework claude diff
+    # (adversarial F1/F2, conflict-auditor F2). Both artifacts now show one signal.
+    keys_diff = claude.get("keys_diff") or _diff_keys(
+        claude.get("expected_keys", []), claude_tokens.get("front_matter_keys_present", [])
+    )
 
     snapshot = {
-        "schema_version": "1.1",
+        # 1.2: each frameworks[id] now carries a per-framework keys_diff and
+        # fetch-integrity fields (final_url, host_changed, text_bytes) and
+        # fetch_status can be moved/empty, not just ok/failed/skipped.
+        "schema_version": "1.2",
         "framework": "claude",  # legacy top-level for back-compat
         "source_url": CLAUDE_DOC_URL,
         "generated_at": now.strftime("%Y-%m-%dT%H:%M:%SZ"),
@@ -337,28 +411,41 @@ def _render_table(snapshot: dict[str, Any]) -> str:
     }
     adapter = snapshot.get("local_adapter", {})
     lines = [
-        "| Framework | Fetch | Tokens observed | Locations observed |",
-        "|---|---|---|---|",
+        "| Framework | Fetch | Tokens observed | Locations observed | Drift (missing↓ / new↑) |",
+        "|---|---|---|---|---|",
     ]
     for fid, entry in frameworks.items():
         tokens = entry.get("upstream_tokens", {})
+        fdiff = entry.get("keys_diff", {})
+        drift_parts = []
+        if fdiff.get("missing_upstream"):
+            drift_parts.append("↓ " + ", ".join(fdiff["missing_upstream"]))
+        if fdiff.get("new_upstream"):
+            drift_parts.append("↑ " + ", ".join(fdiff["new_upstream"]))
+        drift = "; ".join(drift_parts) or "—"
+        status = entry.get("fetch_status", "?")
+        # Surface a relocated/empty doc inline so it is never read as "no drift".
+        if status in {"moved", "empty"} and entry.get("final_url"):
+            status = f"{status} → {entry['final_url']}"
         lines.append(
             f"| {fid} ({entry.get('label', fid)}) "
-            f"| `{entry.get('fetch_status', '?')}` "
+            f"| `{status}` "
             f"| {', '.join(tokens.get('front_matter_keys_present', [])) or '—'} "
-            f"| {', '.join(tokens.get('locations_present', [])) or '—'} |"
+            f"| {', '.join(tokens.get('locations_present', [])) or '—'} "
+            f"| {drift} |"
         )
     lines.append("")
-    lines.append("Local Claude adapter constants:")
+    lines.append("Local Claude adapter constants (parsed from claude.py source):")
     lines.append(
-        f"- required_front_matter_keys: {', '.join(adapter.get('required_front_matter_keys', [])) or '—'}"
+        f"- strictly-required keys (_CLAUDE_REQUIRED_KEYS): "
+        f"{', '.join(adapter.get('required_front_matter_keys', [])) or '—'}"
     )
     lines.append(
         f"- default_allowed_tools: {', '.join(adapter.get('default_allowed_tools', [])) or '—'}"
     )
     diff = snapshot.get("keys_diff", {})
     lines.append(
-        f"- claude diff — matched: {', '.join(diff.get('matched', [])) or '—'}; "
+        f"- claude diff (vs expected_doc_tokens) — matched: {', '.join(diff.get('matched', [])) or '—'}; "
         f"new_upstream: {', '.join(diff.get('new_upstream', [])) or '—'}; "
         f"missing_upstream: {', '.join(diff.get('missing_upstream', [])) or '—'}"
     )
@@ -406,6 +493,100 @@ def build_framework_placeholders(output_dir: Path, offline: bool = True) -> dict
         "FRAMEWORK_RESEARCH_STALE_BANNER": banner,
         "FRAMEWORK_RESEARCH_DIFF_SUMMARY": " ".join(summary_parts),
     }
+
+
+# ---------------------------------------------------------------------------
+# Unified provider-freshness view (Phase 3): reconcile the automated watcher
+# (latest snapshot: last-fetched + fetch_status + drift) with the manual
+# verification register (references/agent-provider-docs.reference.md: when a human
+# last opened the doc). One view over all six frameworks so "is provider X fresh?"
+# has a single answer, and coverage gaps (a framework we emit but never registered
+# for human verification) are visible instead of silent.
+# ---------------------------------------------------------------------------
+
+PROVIDER_REGISTER_REL = "references/agent-provider-docs.reference.md"
+_REGISTER_DATE_RE = re.compile(r"^\d{4}-\d{2}-\d{2}$")
+
+
+def _register_verifications(repo_root: Path) -> dict[str, str | None]:
+    """Best-effort parse of the manual register: {source_url: last_verified|None}.
+
+    The register is a Markdown table whose rows carry a URL cell and a
+    ``last_verified`` date cell. This maps each registered URL to its date so the
+    freshness view can say when a human last verified that provider's doc. Parsing
+    is deliberately forgiving (the register is prose-owned, not a schema).
+    """
+    path = repo_root / PROVIDER_REGISTER_REL
+    try:
+        text = path.read_text(encoding="utf-8")
+    except OSError:
+        return {}
+    out: dict[str, str | None] = {}
+    for line in text.splitlines():
+        if not line.lstrip().startswith("|") or "http" not in line:
+            continue
+        cells = [c.strip().strip("`") for c in line.strip().strip("|").split("|")]
+        url = next((c for c in cells if c.startswith("http")), None)
+        if not url:
+            continue
+        date = next((c for c in cells if _REGISTER_DATE_RE.match(c)), None)
+        out[url] = date
+    return out
+
+
+def build_provider_freshness_view(repo_root: Path) -> list[dict[str, Any]]:
+    """One row per emitted framework, joining the watcher and the manual register.
+
+    Reconciles the two staleness systems the assessment found running in parallel
+    (report §3.3): the automated snapshot and the human-verification register.
+    Reads only existing state — never fetches. ``in_register=False`` marks a
+    coverage gap (a framework we emit/watch but that has no human-verification entry).
+    """
+    snapshot = _load_snapshot(_snapshot_path(repo_root)) or {}
+    frameworks = snapshot.get("frameworks") or {}
+    register = _register_verifications(repo_root)
+    last_fetched = snapshot.get("generated_on", "")
+
+    rows: list[dict[str, Any]] = []
+    for rid, spec in _FORMAT_SPECS.items():
+        snap = frameworks.get(rid, {})
+        fdiff = snap.get("keys_diff", {})
+        rows.append({
+            "provider": rid,
+            "adapter_id": spec.adapter_id,
+            "label": spec.label,
+            "source_url": spec.source_url,
+            "last_fetched": last_fetched,
+            "fetch_status": snap.get("fetch_status", "never"),
+            "drift_missing": list(fdiff.get("missing_upstream", [])),
+            "drift_new": list(fdiff.get("new_upstream", [])),
+            "in_register": spec.source_url in register,
+            "register_last_verified": register.get(spec.source_url),
+        })
+    return rows
+
+
+def render_provider_freshness_view(rows: list[dict[str, Any]]) -> str:
+    """Render :func:`build_provider_freshness_view` rows as a Markdown table."""
+    lines = [
+        "| Provider | Last fetched | Fetch | Drift (↓missing/↑new) | In register | Last verified |",
+        "|---|---|---|---|---|---|",
+    ]
+    for r in rows:
+        drift = []
+        if r["drift_missing"]:
+            drift.append("↓" + str(len(r["drift_missing"])))
+        if r["drift_new"]:
+            drift.append("↑" + str(len(r["drift_new"])))
+        lines.append(
+            f"| {r['provider']} ({r['adapter_id']}) "
+            f"| {r['last_fetched'] or '—'} "
+            f"| `{r['fetch_status']}` "
+            f"| {' '.join(drift) or '—'} "
+            f"| {'yes' if r['in_register'] else '**NO (coverage gap)**'} "
+            f"| {r['register_last_verified'] or '—'} |"
+        )
+    return "\n".join(lines)
 
 
 # ---------------------------------------------------------------------------

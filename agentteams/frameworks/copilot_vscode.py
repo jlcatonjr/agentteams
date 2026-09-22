@@ -16,7 +16,20 @@ from pathlib import Path
 from typing import Any
 
 from .base import FrameworkAdapter
+from .format_spec import AGENT_FILE_EXTENSION
 from agentteams.yaml_frontmatter import parse_yaml_front_matter as _parse_yaml_front_matter
+
+#: The VS Code Copilot agent-file front-matter contract, defined ONCE. Both
+#: ``required_front_matter_keys()`` and ``_REQUIRED_YAML_KEYS`` (the emit-time
+#: presence check) derive from this, so the two can no longer disagree.
+#: Cross-checked against format_spec.emitted_front_matter_keys by
+#: tests/test_format_spec_single_source.py.
+_VSCODE_FRONT_MATTER_KEYS = ("name", "description", "user-invocable", "tools", "model")
+
+#: The default model id emitted when a Copilot agent file omits one. Single-sourced
+#: so the ``_YAML_DEFAULTS`` value and the from-scratch front-matter builder below
+#: cannot drift (was two copies; bridge.py carries a third, tracked separately).
+_COPILOT_MODEL_DEFAULT = '["Claude Opus 4.8 (copilot)"]'
 
 
 class CopilotVSCodeAdapter(FrameworkAdapter):
@@ -35,7 +48,7 @@ class CopilotVSCodeAdapter(FrameworkAdapter):
 
     def get_file_extension(self, file_type: str) -> str:
         if file_type in {"agent", "builder"}:
-            return ".agent.md"
+            return AGENT_FILE_EXTENSION
         return ".md"
 
     def supports_handoffs(self) -> bool:
@@ -54,7 +67,7 @@ class CopilotVSCodeAdapter(FrameworkAdapter):
         Already-deployed files migrate via the succession-tuple mechanism in
         `agentteams/front_matter_merge.py` and `front_matter_reconcile.py`.
         """
-        return ("name", "description", "user-invocable", "tools", "model")
+        return _VSCODE_FRONT_MATTER_KEYS
 
     def get_agents_dir(self, project_path: Path) -> Path:
         return project_path / ".github" / "agents"
@@ -67,14 +80,15 @@ class CopilotVSCodeAdapter(FrameworkAdapter):
 # YAML front matter helpers
 # ---------------------------------------------------------------------------
 
-# Required YAML keys for VS Code Copilot agent files
-_REQUIRED_YAML_KEYS = {"name", "description", "user-invocable", "tools", "model"}
+# Required YAML keys for VS Code Copilot agent files — derived from the single
+# source above so the presence check cannot diverge from the declared contract.
+_REQUIRED_YAML_KEYS = set(_VSCODE_FRONT_MATTER_KEYS)
 
 # Default values for missing required fields
 _YAML_DEFAULTS = {
     "user-invocable": "false",
     "tools": "['read', 'edit', 'search']",
-    "model": '["Claude Opus 4.8 (copilot)"]',
+    "model": _COPILOT_MODEL_DEFAULT,
 }
 
 # Patterns for team-ref filtering
@@ -110,8 +124,8 @@ def _get_team_slugs(manifest: dict[str, Any]) -> frozenset[str]:
     slugs.update(manifest.get("existing_agent_slugs", []))
     for f in manifest.get("output_files", []):
         name = Path(f.get("path", "")).name
-        if name.endswith(".agent.md"):
-            slugs.add(name[: -len(".agent.md")])
+        if name.endswith(AGENT_FILE_EXTENSION):
+            slugs.add(name[: -len(AGENT_FILE_EXTENSION)])
     return frozenset(slugs)
 
 
@@ -278,7 +292,7 @@ def _ensure_yaml_front_matter(content: str, agent_slug: str, manifest: dict[str,
             f"description: \"{agent_name} agent for {project_name}\"\n"
             f"user-invocable: false\n"
             f"tools: ['read', 'edit', 'search']\n"
-            f"model: [\"Claude Opus 4.8 (copilot)\"]\n"
+            f"model: {_COPILOT_MODEL_DEFAULT}\n"
             f"---\n\n"
         )
         return front_matter + content

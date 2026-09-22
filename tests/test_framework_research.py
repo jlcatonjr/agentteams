@@ -371,3 +371,178 @@ def test_scan_tokens_carries_the_probe_without_dropping_existing_fields():
     assert "front_matter_keys_present" in scanned
     assert "locations_present" in scanned
     assert scanned["scoped_tool_permissions"]["status"] == "no-evidence"
+
+
+# ---------------------------------------------------------------------------
+# Phase 1: six-wide diff + fetch integrity + HTML-to-text
+# (assessment §3.1, §3.3). Provider docs are HTML and can relocate/empty; the
+# scan must not read a moved or empty page as "no drift", and every framework —
+# not just claude — gets a per-framework keys_diff.
+# ---------------------------------------------------------------------------
+
+
+def test_html_to_text_strips_tags_scripts_and_unescapes():
+    raw = (
+        "<html><head><style>.x{color:red}</style>"
+        "<script>var name = 'evil:';</script></head>"
+        "<body><h1>Docs</h1><p>name: value &amp; more</p></body></html>"
+    )
+    text = fr._html_to_text(raw)
+    assert "color:red" not in text  # <style> body dropped
+    assert "var name" not in text  # <script> body dropped
+    assert "name: value & more" in text  # tags gone, entity unescaped
+    assert "<" not in text and ">" not in text
+
+
+def test_scan_framework_offline_still_carries_per_framework_diff():
+    entry = fr.FRAMEWORK_REGISTRY["copilot_vscode"]
+    result = fr._scan_framework(entry, offline=True)
+    assert result["fetch_status"] == "skipped"
+    assert "keys_diff" in result
+    # With nothing observed, everything expected is "missing_upstream".
+    assert set(result["keys_diff"]["missing_upstream"]) == set(entry["expected_keys"])
+
+
+def test_scan_framework_flags_moved_host_not_no_drift(monkeypatch):
+    entry = fr.FRAMEWORK_REGISTRY["codex"]
+
+    def fake_fetch(url, timeout=10):
+        return ("<html>generic landing page</html>", {
+            "status": 200,
+            "final_url": "https://elsewhere.example/generic",
+            "host_changed": True,
+        })
+
+    monkeypatch.setattr(fr, "_fetch_with_meta", fake_fetch)
+    result = fr._scan_framework(entry, offline=False)
+    assert result["fetch_status"] == "moved"
+    assert result["host_changed"] is True
+    assert "elsewhere.example" in result["final_url"]
+    # A moved page must NOT be scanned and reported as no-drift.
+    assert result["upstream_tokens"] == {}
+
+
+def test_scan_framework_flags_empty_page(monkeypatch):
+    entry = fr.FRAMEWORK_REGISTRY["claude"]
+
+    def fake_fetch(url, timeout=10):
+        return ("<html><body>tiny</body></html>", {
+            "status": 200,
+            "final_url": entry["source_url"],
+            "host_changed": False,
+        })
+
+    monkeypatch.setattr(fr, "_fetch_with_meta", fake_fetch)
+    result = fr._scan_framework(entry, offline=False)
+    assert result["fetch_status"] == "empty"
+    assert result["upstream_tokens"] == {}
+
+
+def test_scan_framework_ok_scans_stripped_html_and_diffs(monkeypatch):
+    entry = fr.FRAMEWORK_REGISTRY["claude"]
+    body = (
+        "<html><body><h1>Sub-agents</h1>"
+        "<pre>name: x\ndescription: y\ntools: z</pre>"
+        "<p>Place files in .claude/agents and CLAUDE.md.</p>"
+        + ("<p>filler paragraph to clear the min-bytes floor.</p>" * 20)
+        + "</body></html>"
+    )
+
+    def fake_fetch(url, timeout=10):
+        return (body, {"status": 200, "final_url": entry["source_url"], "host_changed": False})
+
+    monkeypatch.setattr(fr, "_fetch_with_meta", fake_fetch)
+    result = fr._scan_framework(entry, offline=False)
+    assert result["fetch_status"] == "ok"
+    observed = result["upstream_tokens"]["front_matter_keys_present"]
+    assert {"name", "description", "tools"} <= set(observed)
+    # 'model' is expected but absent from this doc → reported as missing_upstream.
+    assert "model" in result["keys_diff"]["missing_upstream"]
+    assert ".claude/agents" in result["upstream_tokens"]["locations_present"]
+
+
+def test_refresh_snapshot_is_six_wide(monkeypatch, tmp_path):
+    _write_minimal_module(tmp_path)
+    monkeypatch.setattr(fr, "_snapshot_path", lambda root: tmp_path / fr.SNAPSHOT_REL)
+
+    def fake_fetch(url, timeout=10):
+        body = (
+            "<html><body>name: a description: b tools: c model: d title: t "
+            "instructions: i prompt: p project_doc_max_bytes: 1 mcp_servers: s "
+            ".claude/agents CLAUDE.md .github/agents .goose/recipes AGENTS.md .codex"
+            + (" pad" * 300) + "</body></html>"
+        )
+        return (body, {"status": 200, "final_url": url, "host_changed": False})
+
+    monkeypatch.setattr(fr, "_fetch_with_meta", fake_fetch)
+    snap = fr.refresh_snapshot(tmp_path, offline=False)
+    assert snap["schema_version"] == "1.2"
+    frameworks = snap["frameworks"]
+    assert set(frameworks) == set(fr.FRAMEWORK_REGISTRY)
+    # Every framework now carries its own keys_diff, not just claude.
+    for fid, entry in frameworks.items():
+        assert "keys_diff" in entry, f"{fid} missing per-framework keys_diff"
+        assert entry["fetch_status"] == "ok"
+
+
+def test_fleet_wide_empty_is_not_swallowed_by_cache(monkeypatch, tmp_path):
+    """A fleet-wide 'empty' (e.g. captive-portal stubs) is a real regression and must
+    NOT be replaced by yesterday's all-ok cached snapshot (adversarial F4)."""
+    _write_minimal_module(tmp_path)
+    monkeypatch.setattr(fr, "_snapshot_path", lambda root: tmp_path / fr.SNAPSHOT_REL)
+    _write_snapshot(tmp_path, with_drift=False)  # prior cached snapshot, generated_on 2026-05-25
+
+    def stub(url, timeout=10):
+        return ("<html>x</html>", {"status": 200, "final_url": url, "host_changed": False})
+
+    monkeypatch.setattr(fr, "_fetch_with_meta", stub)
+    snap = fr.refresh_snapshot(tmp_path, offline=False)
+    assert snap["generated_on"] != "2026-05-25", "fleet-wide empty was swallowed by the cache"
+    assert all(f["fetch_status"] == "empty" for f in snap["frameworks"].values())
+
+
+def test_fleet_wide_failure_falls_back_to_cache(monkeypatch, tmp_path):
+    """A transient total network failure DOES fall back to cache (don't clobber good data)."""
+    import urllib.error
+
+    _write_minimal_module(tmp_path)
+    monkeypatch.setattr(fr, "_snapshot_path", lambda root: tmp_path / fr.SNAPSHOT_REL)
+    _write_snapshot(tmp_path, with_drift=False)
+
+    def boom(url, timeout=10):
+        raise urllib.error.URLError("network down")
+
+    monkeypatch.setattr(fr, "_fetch_with_meta", boom)
+    snap = fr.refresh_snapshot(tmp_path, offline=False)
+    assert snap["generated_on"] == "2026-05-25", "transient failure should reuse cached snapshot"
+
+
+# ---------------------------------------------------------------------------
+# Phase 3: unified provider-freshness view (reconcile watcher + manual register)
+# ---------------------------------------------------------------------------
+
+
+def test_freshness_view_is_six_wide_and_flags_register_gaps(tmp_path, monkeypatch):
+    monkeypatch.setattr(fr, "_snapshot_path", lambda root: tmp_path / fr.SNAPSHOT_REL)
+    # A register that covers only claude (by its real source_url) — the others are gaps.
+    reg = tmp_path / fr.PROVIDER_REGISTER_REL
+    reg.parent.mkdir(parents=True, exist_ok=True)
+    claude_url = fr._FORMAT_SPECS["claude"].source_url
+    reg.write_text(
+        "| doc_id | provider | url | governs | last_verified | window_days |\n"
+        "|---|---|---|---|---|---|\n"
+        f"| claude | Anthropic | {claude_url} | keys | 2026-09-01 | 90 |\n",
+        encoding="utf-8",
+    )
+    rows = fr.build_provider_freshness_view(tmp_path)
+    assert {r["provider"] for r in rows} == set(fr.FRAMEWORK_REGISTRY)
+    by = {r["provider"]: r for r in rows}
+    assert by["claude"]["in_register"] is True
+    assert by["claude"]["register_last_verified"] == "2026-09-01"
+    # agents_md and codex are real coverage gaps (not in the register).
+    assert by["agents_md"]["in_register"] is False
+    assert by["codex"]["in_register"] is False
+    # No snapshot present → fetch_status 'never', no crash.
+    assert by["goose"]["fetch_status"] == "never"
+    table = fr.render_provider_freshness_view(rows)
+    assert "coverage gap" in table.lower()

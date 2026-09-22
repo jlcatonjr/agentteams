@@ -13,6 +13,10 @@ from __future__ import annotations
 from pathlib import Path
 from typing import Any
 
+# Canonical Copilot instructions filename (single source of truth). format_spec is
+# pure data (stdlib only), so a top-level import introduces no cycle.
+from agentteams.frameworks.format_spec import COPILOT_INSTRUCTIONS_FILENAME
+
 __all__ = ["_plan_output_files"]
 
 
@@ -320,7 +324,7 @@ def _plan_output_files(
         })
 
     # Framework instructions file in repository root
-    instructions_path = "../copilot-instructions.md"
+    instructions_path = f"../{COPILOT_INSTRUCTIONS_FILENAME}"
     if framework == "claude":
         instructions_path = "../CLAUDE.md"
 

@@ -6,6 +6,40 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### added (provider-adapter freshness loop: single source of truth + six-wide, fetch-integrity-aware drift detection)
+
+- **The provider-doc freshness watcher is now trustworthy across all six frameworks, with one home
+  for provider format facts — while keeping adapter code human-gated (C-4).** The 2026-09-22
+  assessment (`references/plans/2026-09-22-provider-adapter-freshness-assessment.report.md`) found
+  the watcher fetched six providers' docs but only *diffed* Claude, scanned raw HTML with a
+  false-signal-prone regex, and had no documented path from "provider changed" to "adapter updated."
+  This closes those gaps:
+  - **Single source of truth** — new `agentteams/frameworks/format_spec.py` (`FormatSpec` +
+    `FORMAT_SPECS`) holds each provider's emit contract (front-matter keys, the canonical
+    `COPILOT_INSTRUCTIONS_FILENAME` / `AGENT_FILE_EXTENSION` constants) AND its upstream-watch
+    contract (doc URL, expected tokens, locations). `framework_research.FRAMEWORK_REGISTRY` and the
+    `EXPECTED_*` constants are now **derived** from it (no second hand-maintained copy), the Copilot
+    adapter's key list / model-id default are single-sourced, and `output_plan.py` uses the filename
+    constant. Guarded by `tests/test_format_spec_single_source.py`, including a regex-name-coupling
+    guard so a renamed `_CLAUDE_REQUIRED_KEYS` fails CI instead of silently blanking the watcher.
+  - **Six-wide, integrity-aware detection** — `refresh_snapshot` now computes a **per-framework**
+    `keys_diff` (all six, not just Claude), strips HTML→text before scanning, and distinguishes
+    `moved` (redirected to a different host) / `empty` (stub page) fetch states so a relocated or
+    empty doc can no longer read as "no drift." The all-fleet cache-fallback fires only on transient
+    `skipped`/`failed`, never swallowing a fleet-wide `moved`/`empty` regression. The top-level Claude
+    diff is single-sourced from the per-framework diff (fixing a standing false-positive where `tools`
+    rendered as upstream drift every run).
+  - **Runbook + owner** — `references/provider-adapter-refresh.procedure.md` names
+    `@framework-adapters-expert` as owner and gives the per-provider adapter edit-site table; the daily
+    `framework-auto-update.yml` PR body routes to that owner and flags `moved`/`empty` source URLs.
+  - **Unified freshness view** — `build_provider_freshness_view` (+ `research_claude_code_docs.py
+    --freshness-view`) reconciles the automated watcher with the manual verification register,
+    surfacing coverage gaps; the register gained `agents-md` and `codex` entries (URLs verified
+    2026-09-22) to close the two gaps it found.
+  - **Scheduled live-behavior watch** — `.github/workflows/live-behavior-watch.yml` runs the gated
+    live-model delegation tests weekly, advisorily (never gates; skips without `OPENROUTER_API_KEY`),
+    closing remediation-log row 58 (provider *behavior* regressions previously unwatched).
+
 ### added (`--framework-freshness` cross-render staleness scan)
 
 - **New read-only `--framework-freshness` scan surfaces the silent render-staleness class where one

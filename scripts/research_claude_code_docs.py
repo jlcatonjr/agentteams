@@ -100,13 +100,26 @@ def _cmd_apply() -> int:
     return 0
 
 
+def _cmd_freshness_view() -> int:
+    """Print the unified provider-freshness view (watcher + manual register)."""
+    rows = framework_research.build_provider_freshness_view(ROOT)
+    print(framework_research.render_provider_freshness_view(rows))
+    gaps = [r["provider"] for r in rows if not r["in_register"]]
+    if gaps:
+        print(f"\nCoverage gaps (emitted but not in the verification register): {', '.join(gaps)}")
+    return 0
+
+
 def main(argv: list[str]) -> int:
     parser = argparse.ArgumentParser(description="Daily Claude Code docs research stage")
     parser.add_argument("--offline", action="store_true", help="Skip network fetch; reuse cached snapshot if present.")
     parser.add_argument("--propose", action="store_true", help="Write a module-core patch proposal (advisory).")
     parser.add_argument("--apply", action="store_true", help="Apply the previously generated proposal; reverts on test failure.")
+    parser.add_argument("--freshness-view", action="store_true", help="Print the unified provider-freshness view (no fetch).")
     args = parser.parse_args(argv)
 
+    if args.freshness_view:
+        return _cmd_freshness_view()
     if args.apply:
         return _cmd_apply()
     if args.propose:
