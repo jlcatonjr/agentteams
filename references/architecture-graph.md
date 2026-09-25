@@ -3,9 +3,9 @@
 
 > **Auto-generated.** Regenerated on every commit that touches the `agentteams` package. Do not edit manually — changes will be overwritten.
 
-- Modules mapped: **175**
+- Modules mapped: **176**
 - Packages: **7**
-- Internal import edges: **384**
+- Internal import edges: **388**
 - Distinct external dependencies: **7**
 
 ---
@@ -26,7 +26,7 @@ Inter-package import dependencies (module-level detail in the tables below).
 | `agentteams.cli` | 30 | `agentteams`, `agentteams.frameworks`, `agentteams.redteam` |
 | `agentteams.enrich` | 6 | `agentteams` |
 | `agentteams.eval_adapters` | 2 | — |
-| `agentteams.frameworks` | 15 | `agentteams` |
+| `agentteams.frameworks` | 16 | `agentteams` |
 | `agentteams.redteam` | 16 | `agentteams`, `agentteams.frameworks`, `agentteams.research` |
 | `agentteams.research` | 9 | — |
 
@@ -52,7 +52,7 @@ Every module, coloured by package (full adjacency in the table below).
 | `agentteams.analyze_tools` | `agentteams._utils`, `agentteams.tool_metadata_catalog` | `agentteams.analyze` |
 | `agentteams.architecture` | `agentteams.backup`, `agentteams.svg_render` | `agentteams.git_hooks` |
 | `agentteams.atomicio` | — | `agentteams.backup`, `agentteams.canonical`, `agentteams.cli.artifacts`, `agentteams.cli.decision_log`, `agentteams.cli.exception_registry`, `agentteams.cli.grants`, `agentteams.cli.management_directives`, `agentteams.cli.schema_cache`, `agentteams.cli.security_gate`, `agentteams.codex_mcp_emit`, `agentteams.emit`, `agentteams.enrich._enrich`, `agentteams.fence_inject`, `agentteams.fences`, `agentteams.hooks_emit`, `agentteams.liaison_logs`, `agentteams.mcp_emit`, `agentteams.plan_steps_todo`, `agentteams.redteam.findings_ledger`, `agentteams.schedule_emit`, `agentteams.sync_baseline`, `agentteams.sync_pin`, `agentteams.team_package` |
-| `agentteams.audit` | `agentteams.audit_agent_contract`, `agentteams.audit_types`, `agentteams.backup`, `agentteams.living_doc` | `agentteams.cli.generate` |
+| `agentteams.audit` | `agentteams.audit_agent_contract`, `agentteams.audit_types`, `agentteams.backup`, `agentteams.frameworks.format_spec`, `agentteams.living_doc` | `agentteams.cli.generate` |
 | `agentteams.audit_agent_contract` | `agentteams.audit_types` | `agentteams.audit` |
 | `agentteams.audit_types` | `agentteams.frameworks.registry` | `agentteams.audit`, `agentteams.audit_agent_contract`, `agentteams.cli.standalone_modes`, `agentteams.rank_conformance` |
 | `agentteams.backup` | `agentteams`, `agentteams.atomicio`, `agentteams.liaison_logs` | `agentteams.architecture`, `agentteams.audit`, `agentteams.bridge`, `agentteams.cli.artifacts`, `agentteams.cli.code_index_artifacts`, `agentteams.cli.commands`, `agentteams.cli.output_target`, `agentteams.emit`, `agentteams.fence_inject`, `agentteams.fleet`, `agentteams.interop`, `agentteams.scan`, `agentteams.stale_detector`, `agentteams.stale_remediate` |
@@ -122,7 +122,7 @@ Every module, coloured by package (full adjacency in the table below).
 | `agentteams.fences` | `agentteams.atomicio`, `agentteams.front_matter_merge`, `agentteams.unfenced` | `agentteams.cli.artifacts`, `agentteams.emit`, `agentteams.interop` |
 | `agentteams.fleet` | `agentteams.backup` | `agentteams.cli.app`, `agentteams.redteam.realcopy`, `agentteams.stale_detector`, `agentteams.stale_remediate` |
 | `agentteams.framework_freshness` | `agentteams.drift` | `agentteams.cli.commands` |
-| `agentteams.framework_research` | — | `agentteams.cli.generate` |
+| `agentteams.framework_research` | `agentteams.frameworks.format_spec` | `agentteams.cli.generate` |
 | `agentteams.frameworks` | — | — |
 | `agentteams.frameworks._goose_sandbox_emit` | `agentteams.frameworks._sandbox_emit`, `agentteams.host_features` | `agentteams.cli.standalone_modes`, `agentteams.frameworks.goose` |
 | `agentteams.frameworks._linux_sandbox_emit` | — | `agentteams.frameworks.base` |
@@ -132,7 +132,8 @@ Every module, coloured by package (full adjacency in the table below).
 | `agentteams.frameworks.claude` | `agentteams.frameworks._sandbox_emit`, `agentteams.frameworks.base`, `agentteams.yaml_frontmatter` | `agentteams.bridge_subagents`, `agentteams.cli.artifacts`, `agentteams.cli.render_pipeline`, `agentteams.cli.standalone_modes`, `agentteams.frameworks.registry` |
 | `agentteams.frameworks.codex` | `agentteams.frameworks.agents_md` | `agentteams.frameworks.registry` |
 | `agentteams.frameworks.copilot_cli` | `agentteams.frameworks.base`, `agentteams.frameworks.copilot_vscode`, `agentteams.yaml_frontmatter` | `agentteams.cli.render_pipeline`, `agentteams.frameworks.registry` |
-| `agentteams.frameworks.copilot_vscode` | `agentteams.frameworks.base`, `agentteams.yaml_frontmatter` | `agentteams.cli.render_pipeline`, `agentteams.frameworks.copilot_cli`, `agentteams.frameworks.registry` |
+| `agentteams.frameworks.copilot_vscode` | `agentteams.frameworks.base`, `agentteams.frameworks.format_spec`, `agentteams.yaml_frontmatter` | `agentteams.cli.render_pipeline`, `agentteams.frameworks.copilot_cli`, `agentteams.frameworks.registry` |
+| `agentteams.frameworks.format_spec` | — | `agentteams.audit`, `agentteams.framework_research`, `agentteams.frameworks.copilot_vscode`, `agentteams.output_plan` |
 | `agentteams.frameworks.goose` | `agentteams.capability_map`, `agentteams.frameworks._goose_sandbox_emit`, `agentteams.frameworks.base`, `agentteams.frameworks.goose_coordination`, `agentteams.frameworks.goose_docs`, `agentteams.frameworks.goose_recipe_read`, `agentteams.frameworks.goose_recipe_validate`, `agentteams.yaml_frontmatter` | `agentteams.bridge`, `agentteams.bridge_subagents_goose`, `agentteams.cli.app`, `agentteams.cli.recipe_check`, `agentteams.cli.render_pipeline`, `agentteams.frameworks.goose_coordination`, `agentteams.frameworks.registry` |
 | `agentteams.frameworks.goose_coordination` | `agentteams.frameworks.goose` | `agentteams.frameworks.goose` |
 | `agentteams.frameworks.goose_docs` | `agentteams.capability_hints` | `agentteams.frameworks.goose` |
@@ -163,7 +164,7 @@ Every module, coloured by package (full adjacency in the table below).
 | `agentteams.memory_index_incremental` | `agentteams.memory_index` | `agentteams.cli.artifacts` |
 | `agentteams.model_routing` | — | `agentteams.cli.artifacts` |
 | `agentteams.multi_sync` | `agentteams.canonical`, `agentteams.frameworks.registry`, `agentteams.host_features`, `agentteams.interop`, `agentteams.sync_baseline`, `agentteams.sync_classifier`, `agentteams.sync_pin` | `agentteams.cli.sync_switch`, `agentteams.stale_detector` |
-| `agentteams.output_plan` | `agentteams.analyze` | `agentteams.analyze` |
+| `agentteams.output_plan` | `agentteams.analyze`, `agentteams.frameworks.format_spec` | `agentteams.analyze` |
 | `agentteams.parallel_plan` | — | `agentteams.bridge` |
 | `agentteams.plan_steps` | — | `agentteams.session_scan` |
 | `agentteams.plan_steps_todo` | `agentteams.atomicio` | `agentteams.bridge` |
@@ -394,6 +395,7 @@ digraph "agentteams architecture" {
         "agentteams.audit_agent_contract",
         "agentteams.audit_types",
         "agentteams.backup",
+        "agentteams.frameworks.format_spec",
         "agentteams.living_doc"
       ],
       "external": [],
@@ -1242,7 +1244,9 @@ digraph "agentteams architecture" {
       "package": "agentteams",
       "path": "agentteams/framework_research.py",
       "is_package": false,
-      "imports_internal": [],
+      "imports_internal": [
+        "agentteams.frameworks.format_spec"
+      ],
       "external": [],
       "repo_local": []
     },
@@ -1343,8 +1347,17 @@ digraph "agentteams architecture" {
       "is_package": false,
       "imports_internal": [
         "agentteams.frameworks.base",
+        "agentteams.frameworks.format_spec",
         "agentteams.yaml_frontmatter"
       ],
+      "external": [],
+      "repo_local": []
+    },
+    "agentteams.frameworks.format_spec": {
+      "package": "agentteams.frameworks",
+      "path": "agentteams/frameworks/format_spec.py",
+      "is_package": false,
+      "imports_internal": [],
       "external": [],
       "repo_local": []
     },
@@ -1670,7 +1683,8 @@ digraph "agentteams architecture" {
       "path": "agentteams/output_plan.py",
       "is_package": false,
       "imports_internal": [
-        "agentteams.analyze"
+        "agentteams.analyze",
+        "agentteams.frameworks.format_spec"
       ],
       "external": [],
       "repo_local": []
@@ -2350,6 +2364,10 @@ digraph "agentteams architecture" {
     {
       "source": "agentteams.audit",
       "target": "agentteams.backup"
+    },
+    {
+      "source": "agentteams.audit",
+      "target": "agentteams.frameworks.format_spec"
     },
     {
       "source": "agentteams.audit",
@@ -3252,6 +3270,10 @@ digraph "agentteams architecture" {
       "target": "agentteams.drift"
     },
     {
+      "source": "agentteams.framework_research",
+      "target": "agentteams.frameworks.format_spec"
+    },
+    {
       "source": "agentteams.frameworks._goose_sandbox_emit",
       "target": "agentteams.frameworks._sandbox_emit"
     },
@@ -3306,6 +3328,10 @@ digraph "agentteams architecture" {
     {
       "source": "agentteams.frameworks.copilot_vscode",
       "target": "agentteams.frameworks.base"
+    },
+    {
+      "source": "agentteams.frameworks.copilot_vscode",
+      "target": "agentteams.frameworks.format_spec"
     },
     {
       "source": "agentteams.frameworks.copilot_vscode",
@@ -3526,6 +3552,10 @@ digraph "agentteams architecture" {
     {
       "source": "agentteams.output_plan",
       "target": "agentteams.analyze"
+    },
+    {
+      "source": "agentteams.output_plan",
+      "target": "agentteams.frameworks.format_spec"
     },
     {
       "source": "agentteams.plan_steps_todo",
