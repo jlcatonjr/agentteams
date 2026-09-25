@@ -6,6 +6,80 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### changed (sandbox is ENABLED BY DEFAULT — `privilege_profile` now defaults to `confined`)
+
+- **The default workspace privilege posture flips from `cooperative` (no OS boundary) to
+  `confined` (write-confinement) for every qualifying provider.** A brief that omits
+  `privilege_profile` now emits an OS write-confinement boundary — Claude Code's native
+  sandbox block (macOS/Linux), Goose's Apple Seatbelt profile (`.goose/sandbox.sb` +
+  `config.yaml.agentteams.example`), or the framework-neutral launcher — while non-enforcing
+  hosts (Codex, Copilot, native Windows) degrade to the existing fail-closed
+  `privilege_profile_advisory`, never a silent no-op. This is constraint-**tightening** and
+  **inert until merged**: agentteams emits a settings/config *example*, never writing the
+  operator's live `settings.json` / `~/.config/goose/config.yaml`. Mirrors the
+  `enforce_decision_signing` "default-on at update, notify after, opportunity to switch off"
+  contract — a notice at every generate/update names the opt-out. **Opt out** with
+  `"privilege_profile": "cooperative"` in the brief. Single source of truth:
+  `host_features.DEFAULT_PRIVILEGE_PROFILE`; the schema `default` mirrors it (guarded by a
+  sync test). Tests updated to pin the explicit-cooperative opt-out branch and assert the new
+  default.
+  - **The default never rewrites an existing team's live hook.** The one privilege-keyed
+    artifact that is *not* an inert example — Claude's `constitutional-gate.py`, written
+    directly and full-replaced under `--merge` — flips fail-open→fail-closed only on an
+    **explicit** `confined`/`exclusive` (new `privilege_profile_explicit` manifest flag), never
+    on the defaulted `confined`. So a routine `--update`/`fleet` over a team that wired the
+    gate but never set a profile keeps its gate fail-**open**; the disruptive flip stays an
+    explicit opt-in. This is what keeps the default flip genuinely inert-until-merged.
+  - **Note for Goose:** `confined` emits `(deny network*)` in the Seatbelt profile
+    (`.goose/sandbox.sb`) — a confined Goose team is network-ISOLATED once wired (single-endpoint
+    egress-proxy escape only). Inert until you set `GOOSE_SANDBOX` / launch via `sandbox-exec`.
+
+### added (pinned-sync health: an unsyncable pin is now discoverable via `--stale-check`)
+
+- **`--stale-check` now emits a blocking Tier-1 `PIN_UNSYNCABLE` finding when a pinned-sync
+  framework set has a physical-directory collision** (e.g. `copilot-vscode`+`copilot-cli` →
+  `.github/agents`; `agents-md`+`codex` → `.agents`). `multi_sync._reject_directory_collisions`
+  already fails `--sync`/`--sync-init` fast on such a set, but only when the operator *attempts*
+  a sync — so a pin written before that guard existed (or hand-edited) was silently unsyncable
+  and projection across the infrastructure types had quietly stopped. The routine health command
+  now surfaces it (plus `PIN_UNREADABLE` for a malformed pin). New `detect_unsyncable_pin`
+  detector in `stale_detector.py`, wired into `scan_staleness`; regression tests in
+  `tests/test_stale_detector.py::TestUnsyncablePin`.
+
+### added (provider-adapter freshness loop: single source of truth + six-wide, fetch-integrity-aware drift detection)
+
+- **The provider-doc freshness watcher is now trustworthy across all six frameworks, with one home
+  for provider format facts — while keeping adapter code human-gated (C-4).** The 2026-09-22
+  assessment (`references/plans/2026-09-22-provider-adapter-freshness-assessment.report.md`) found
+  the watcher fetched six providers' docs but only *diffed* Claude, scanned raw HTML with a
+  false-signal-prone regex, and had no documented path from "provider changed" to "adapter updated."
+  This closes those gaps:
+  - **Single source of truth** — new `agentteams/frameworks/format_spec.py` (`FormatSpec` +
+    `FORMAT_SPECS`) holds each provider's emit contract (front-matter keys, the canonical
+    `COPILOT_INSTRUCTIONS_FILENAME` / `AGENT_FILE_EXTENSION` constants) AND its upstream-watch
+    contract (doc URL, expected tokens, locations). `framework_research.FRAMEWORK_REGISTRY` and the
+    `EXPECTED_*` constants are now **derived** from it (no second hand-maintained copy), the Copilot
+    adapter's key list / model-id default are single-sourced, and `output_plan.py` uses the filename
+    constant. Guarded by `tests/test_format_spec_single_source.py`, including a regex-name-coupling
+    guard so a renamed `_CLAUDE_REQUIRED_KEYS` fails CI instead of silently blanking the watcher.
+  - **Six-wide, integrity-aware detection** — `refresh_snapshot` now computes a **per-framework**
+    `keys_diff` (all six, not just Claude), strips HTML→text before scanning, and distinguishes
+    `moved` (redirected to a different host) / `empty` (stub page) fetch states so a relocated or
+    empty doc can no longer read as "no drift." The all-fleet cache-fallback fires only on transient
+    `skipped`/`failed`, never swallowing a fleet-wide `moved`/`empty` regression. The top-level Claude
+    diff is single-sourced from the per-framework diff (fixing a standing false-positive where `tools`
+    rendered as upstream drift every run).
+  - **Runbook + owner** — `references/provider-adapter-refresh.procedure.md` names
+    `@framework-adapters-expert` as owner and gives the per-provider adapter edit-site table; the daily
+    `framework-auto-update.yml` PR body routes to that owner and flags `moved`/`empty` source URLs.
+  - **Unified freshness view** — `build_provider_freshness_view` (+ `research_claude_code_docs.py
+    --freshness-view`) reconciles the automated watcher with the manual verification register,
+    surfacing coverage gaps; the register gained `agents-md` and `codex` entries (URLs verified
+    2026-09-22) to close the two gaps it found.
+  - **Scheduled live-behavior watch** — `.github/workflows/live-behavior-watch.yml` runs the gated
+    live-model delegation tests weekly, advisorily (never gates; skips without `OPENROUTER_API_KEY`),
+    closing remediation-log row 58 (provider *behavior* regressions previously unwatched).
+
 ### security (exception-governance hardening: derived, elevated, bounded relaxing authorizations)
 
 - **A constraint-relaxing authorization can no longer evade a HALT by renaming, be minted by an

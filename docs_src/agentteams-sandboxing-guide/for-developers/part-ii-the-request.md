@@ -10,9 +10,9 @@
   "protected_read_paths": ["/scratch/agent-b"] }
 ```
 
-- **`privilege_profile`** — `cooperative` (default, no boundary) · `confined` (write-confinement) ·
-  `exclusive` (adds read-exclusion of credentials + `protected_read_paths`). A **typo fails closed** at
-  parse — it never silently downgrades to `cooperative`.
+- **`privilege_profile`** — `cooperative` (no boundary — opt-out) · `confined` (write-confinement,
+  default as of 2026-W39) · `exclusive` (adds read-exclusion of credentials + `protected_read_paths`).
+  A **typo fails closed** at parse — it never silently downgrades to `cooperative`.
 - **`workspace_write_roots`** — where the agent may write (default `["."]`, the whole generated tree).
 - **`protected_read_paths`** — extra paths to deny reading under `exclusive` (sibling workspaces).
 

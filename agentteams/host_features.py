@@ -165,11 +165,23 @@ def _sandbox_token_for(framework: str | None) -> str:
 
 
 #: The privilege_profile values the schema accepts. ``None`` is not in the set because a
-#: missing profile is not a typo — it defaults to ``cooperative`` (see
+#: missing profile is not a typo — it defaults to :data:`DEFAULT_PRIVILEGE_PROFILE` (see
 #: :func:`validate_privilege_profile`). Any OTHER unrecognized value IS a typo and must
 #: fail closed (CC-6): silently downgrading ``"exclusve"`` to unconfined looks like the
 #: operator requested confinement while granting none.
 VALID_PRIVILEGE_PROFILES: frozenset[str] = frozenset(_PROFILE_FEATURE_TOKENS)
+
+#: The default privilege_profile a missing/empty field normalizes to. As of 2026-W39 this
+#: is ``"confined"`` (was ``"cooperative"``): sandbox write-confinement is ENABLED BY
+#: DEFAULT for every qualifying provider — enforcing hosts (Claude on macOS/Linux; Goose on
+#: macOS Seatbelt / any framework via the Linux+macOS neutral launcher) emit their OS
+#: boundary; non-enforcing hosts (Codex, Copilot, native Windows) degrade to the
+#: :func:`privilege_profile_advisory`, never a silent no-op. This is constraint-TIGHTENING
+#: and INERT UNTIL MERGED (agentteams emits a settings/config EXAMPLE, never writes the
+#: operator's live settings.json / ~/.config/goose/config.yaml). Opt out by setting
+#: ``privilege_profile: "cooperative"`` in the brief. Changing this constant is the single
+#: source of truth for the default (schema ``default`` mirrors it for documentation).
+DEFAULT_PRIVILEGE_PROFILE: str = "confined"
 
 
 def validate_privilege_profile(profile: str | None) -> str:
@@ -177,8 +189,9 @@ def validate_privilege_profile(profile: str | None) -> str:
 
     Args:
         profile: The requested profile, or ``None``. ``None`` and ``""`` normalize to
-            ``"cooperative"`` (a missing profile is a default, not a mistake). Any other
-            value not in :data:`VALID_PRIVILEGE_PROFILES` raises.
+            :data:`DEFAULT_PRIVILEGE_PROFILE` (``"confined"`` as of 2026-W39 — a missing
+            profile is a default, not a mistake). Any other value not in
+            :data:`VALID_PRIVILEGE_PROFILES` raises.
 
     Returns:
         The validated profile string (one of :data:`VALID_PRIVILEGE_PROFILES`).
@@ -186,7 +199,7 @@ def validate_privilege_profile(profile: str | None) -> str:
     Raises:
         ValueError: ``profile`` is a non-empty value that is not a recognized profile.
     """
-    normalized = profile or "cooperative"
+    normalized = profile or DEFAULT_PRIVILEGE_PROFILE
     if normalized not in VALID_PRIVILEGE_PROFILES:
         allowed = ", ".join(sorted(VALID_PRIVILEGE_PROFILES))
         raise ValueError(
@@ -200,8 +213,8 @@ def expand_privilege_profile(profile: str | None, framework: str | None = None) 
     """Return the host-feature tokens a privilege_profile implies.
 
     Args:
-        profile: One of ``cooperative`` (or ``None`` → treated as cooperative),
-            ``confined``, ``exclusive``. An unknown value expands to ``[]``. Callers that
+        profile: One of ``cooperative``, ``confined``, ``exclusive`` (or ``None`` → treated
+            as :data:`DEFAULT_PRIVILEGE_PROFILE`). An unknown value expands to ``[]``. Callers that
             parse operator input should first run :func:`validate_privilege_profile` so an
             unrecognized profile fails closed rather than silently expanding to nothing.
         framework: The target framework id. ``confined``/``exclusive`` expand to that
@@ -212,7 +225,7 @@ def expand_privilege_profile(profile: str | None, framework: str | None = None) 
     Returns:
         The list of ``<ns>:<feature>`` tokens to union into the active feature set.
     """
-    base = _PROFILE_FEATURE_TOKENS.get(profile or "cooperative", ())
+    base = _PROFILE_FEATURE_TOKENS.get(profile or DEFAULT_PRIVILEGE_PROFILE, ())
     if not base:
         return []
     token = _sandbox_token_for(framework)

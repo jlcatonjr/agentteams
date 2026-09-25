@@ -44,14 +44,15 @@ mis-followed instruction can do.
 
 ## SB3 — The opt-in posture (binding ceiling #1)  ✅
 
-**By default the strongest locks are off.** The default `privilege_profile` is **`cooperative`**: no
-sandbox block is emitted, and the deny-hook is emitted **fail-OPEN** (`_FAIL_CLOSED_ON_ERROR = False`, so
-a hook crash is a harness *allow* — a buggy gate never bricks a trusted session). Runtime confinement
-engages **only** when the operator selects `confined` or `exclusive` (or passes a `*:sandbox`
-host-feature token). Reading "layered confinement" as "on out of the box" is the overclaim this fact
-exists to prevent.
+**By default the boundary is emitted but not in force.** As of 2026-W39 the default `privilege_profile`
+is **`confined`**: agentteams **emits** an OS write-confinement boundary (a settings/config example the
+operator must merge), but the deny-hook is still emitted **fail-OPEN** (`_FAIL_CLOSED_ON_ERROR = False`,
+so a hook crash is a harness *allow* — a buggy gate never bricks a trusted session); the fail-closed flip
+requires an *explicit* `confined`/`exclusive`, not the defaulted `confined`. The emitted boundary
+enforces nothing until wired, and `cooperative` opts out of emitting it. Reading "layered confinement"
+as "enforced out of the box" is the overclaim this fact exists to prevent.
 
-*Source:* `agentteams/host_features.py` (cooperative default);
+*Source:* `agentteams/host_features.py:184` (`DEFAULT_PRIVILEGE_PROFILE = "confined"`);
 `agentteams/frameworks/_sandbox_emit.py:116` `_sandbox_feature_enabled`;
 `agentteams/templates/universal/hooks/constitutional-gate.py:205` (`_FAIL_CLOSED_ON_ERROR = False`).
 

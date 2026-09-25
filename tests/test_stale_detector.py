@@ -645,3 +645,56 @@ def test_the_conflict_guard_actually_fires(tmp_path: Path):
     assert not sd.detect_conflict_markers(clean, "fixture/clean.md"), (
         "detector false-positived on prose that merely mentions markers"
     )
+
+
+class TestUnsyncablePin:
+    """detect_unsyncable_pin: a pinned-sync set with a physical-dir collision is a
+    blocking Tier-1 finding, surfaced by the routine health check (1b remediation)."""
+
+    @staticmethod
+    def _write_pin(root: Path, frameworks: list[str]) -> None:
+        d = root / ".agentteams"
+        d.mkdir(parents=True, exist_ok=True)
+        (d / "pin.json").write_text(
+            json.dumps({
+                "schema_version": "1.0",
+                "pinned_framework": frameworks[0],
+                "frameworks": frameworks,
+                "canonical_dir": ".agentteams/canonical",
+            }),
+            encoding="utf-8",
+        )
+
+    def test_no_pin_is_clean(self, tmp_path):
+        assert sd.detect_unsyncable_pin(tmp_path) == []
+
+    def test_non_colliding_set_is_clean(self, tmp_path):
+        # copilot-vscode (.github/agents), claude (.claude/agents), goose (.goose/recipes),
+        # agents-md (.agents) resolve to four distinct dirs — syncable, no finding.
+        self._write_pin(tmp_path, ["copilot-vscode", "claude", "goose", "agents-md"])
+        assert sd.detect_unsyncable_pin(tmp_path) == []
+
+    def test_colliding_pair_is_tier1(self, tmp_path):
+        # copilot-vscode + copilot-cli both resolve to .github/agents → unsyncable.
+        self._write_pin(tmp_path, ["copilot-vscode", "copilot-cli", "claude"])
+        findings = sd.detect_unsyncable_pin(tmp_path)
+        assert len(findings) == 1
+        assert findings[0].tier == 1
+        assert findings[0].code == "PIN_UNSYNCABLE"
+        assert "copilot-vscode" in findings[0].detail and "copilot-cli" in findings[0].detail
+
+    def test_malformed_pin_is_tier1(self, tmp_path):
+        d = tmp_path / ".agentteams"
+        d.mkdir(parents=True, exist_ok=True)
+        (d / "pin.json").write_text("{ not valid json", encoding="utf-8")
+        findings = sd.detect_unsyncable_pin(tmp_path)
+        assert len(findings) == 1
+        assert findings[0].code == "PIN_UNREADABLE"
+        assert findings[0].tier == 1
+
+    def test_wired_into_report(self, tmp_path):
+        # The aggregated report includes the finding (detector is wired into the runner).
+        self._write_pin(tmp_path, ["agents-md", "codex"])
+        report = sd.scan_staleness(tmp_path, include_git=False)
+        assert any(f.code == "PIN_UNSYNCABLE" for f in report.tier1)
+        assert report.has_blocking

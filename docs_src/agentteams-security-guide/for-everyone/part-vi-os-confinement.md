@@ -10,14 +10,14 @@ the guard is about the *build*; the two are neighbors and must not be blurred. T
 honest note: it is guidance only. A checklist informs, but it secures nothing by
 itself, and the tools it names are not installed for you.
 
-## The locked room, and why it starts unlocked {#S18}
+## The locked room, and why the lock comes fitted but unturned {#S18}
 
 There are three settings for how tightly a helper is confined: cooperative (no
-locked room — today's default), confined, and exclusive (which also blocks reading
-certain sensitive things). An unrecognized setting fails safe rather than quietly
-loosening. Two plain cautions belong here. First, **by default the strongest
-locks are off** — the locked room starts switched off, and agentteams only writes
-the *blueprint* for the room; it does not build it. The real enforcement is the AI
+locked room — the opt-out), confined (today's default), and exclusive (which also
+blocks reading certain sensitive things). An unrecognized setting fails safe rather
+than quietly loosening. Two plain cautions belong here. First, **the lock now comes
+fitted, but you still have to turn the key** — by default agentteams writes the
+*blueprint* for the room, but it does not build it. The real enforcement is the AI
 tool's own operating-system sandbox, and the blueprint does nothing until someone
 wires it in. Second, **this is proven on Linux; on Macs it is advice, not a proven lock** (it has not
 been tested there), and on Windows there is no built enforcement at all. On a system that can't enforce it, the tool

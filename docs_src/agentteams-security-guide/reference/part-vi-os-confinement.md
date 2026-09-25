@@ -10,10 +10,13 @@ agent-initiated actions the CLI gates never see (S19).
 This Part carries the most consequential honest ceilings in the guide. Two govern
 everything below and are worth stating up front:
 
-- **Confinement is opt-in.** The default privilege profile is `cooperative`, under which
-  the sandbox is **off** and the hook is **fail-open** (S1 fact 5). Reading "OS
-  confinement layer" as "runtime confinement is on by default" is the overclaim these
-  sections exist to prevent.
+- **Confinement is emitted by default but inert until wired.** As of 2026-W39 the default
+  privilege profile is `confined`, under which agentteams **emits** an OS write-confinement
+  boundary — but only as a settings/config example the operator must merge, so it enforces
+  nothing until wired (S1 fact 5). The PreToolUse hook still stays **fail-open by default**
+  (its fail-open→fail-closed flip requires an *explicit* `confined`/`exclusive`, not the
+  defaulted `confined`). Reading "OS confinement layer" as "runtime confinement is enforced
+  out of the box" is the overclaim these sections exist to prevent.
 - **agentteams emits configuration; it does not enforce it.** Enforcement belongs to the
   *harness* (Claude Code's Seatbelt/bubblewrap). The empirically deny-tested OS-confinement
   path is **Linux** (the framework-neutral `sandbox/confine-run.sh` bwrap launcher — see the
@@ -78,8 +81,8 @@ raises rather than silently downgrading to something weaker.
 
 | Profile | OS boundary | Emits |
 |---|---|---|
-| **`cooperative`** | None — **today's default** | No sandbox request |
-| **`confined`** | Requested | A sandbox request token |
+| **`cooperative`** | None — the opt-out | No sandbox request |
+| **`confined`** | Requested — **today's default** | A sandbox request token |
 | **`exclusive`** | Requested + read-exclusion | A sandbox request token **and** `denyRead` |
 
 ### agentteams emits configuration, it does not enforce (fact 2 + fact 4)
@@ -132,11 +135,13 @@ tree; it does **not** stop other processes from reading your tree.
 
 ### The tie to the default posture (S1 fact 5)
 
-Because the default profile is `cooperative`, **all of the above is dormant out of the
-box**: no sandbox is emitted, no `denyWrite`/`denyRead` applies, and the S19 hook is
-fail-open. Runtime OS confinement engages only when the operator selects `confined` or
-`exclusive`. The governance layers (constitution, sentinel, gates, scanner) are always
-active; the OS-confinement layer is opt-in.
+Because agentteams only emits configuration the operator must merge, **all of the above is
+dormant out of the box until it is wired in**: under the default `confined` profile the
+sandbox + `denyWrite`/`denyRead` example is emitted but enforces nothing unmerged, and the
+S19 hook stays fail-open (only an *explicit* `confined`/`exclusive` flips it). Runtime OS
+confinement enforcement engages only once the operator wires the emitted example in. The
+governance layers (constitution, sentinel, gates, scanner) are always active; the
+OS-confinement enforcement layer is opt-in.
 
 **Source.** `agentteams/host_features.py:134-261`;
 `agentteams/frameworks/_sandbox_emit.py:25-208`;
@@ -179,13 +184,14 @@ Before it scans a write, the hook **verifies the scanner against the integrity m
 (S22). If `scan.py` has been tampered with, the hook returns **`ask`, not a silent
 allow** — a compromised scanner degrades to operator prompting, not to a bypass.
 
-### Default posture — fail-open, flipped fail-closed by profile
+### Default posture — fail-open, flipped fail-closed only by an explicit profile
 
-By default (the `cooperative` profile) the hook is **fail-open**: if the hook itself
-cannot run to completion, the action proceeds. agentteams flips it **fail-closed for the
-`confined` and `exclusive`** profiles; the operator can restore fail-open under those
-profiles with `--allow-fallback-fail-open`. This is the same opt-in confinement posture
-as S18: the strong runtime behaviour is tied to the non-default profiles.
+The hook is **fail-open by default**: if the hook itself cannot run to completion, the
+action proceeds. agentteams flips it **fail-closed only for an *explicit* `confined` or
+`exclusive`** in the brief — the defaulted `confined` profile does **not** trigger the
+flip, so the default posture stays fail-open; the operator can restore fail-open under
+those profiles with `--allow-fallback-fail-open`. This is the same emit-but-inert posture
+as S18: the strong runtime behaviour is tied to an explicitly-selected profile.
 
 ### Honest ceiling (E4) — cost, not impossibility (fact 4)
 

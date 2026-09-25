@@ -320,9 +320,12 @@ def test_held_grant_widens_sandbox_allowwrite(tmp_path, monkeypatch):
 
 def test_no_widening_when_sandbox_off(tmp_path, monkeypatch):
     monkeypatch.setenv(grants.GRANT_KEY_ENV, _KEY)
-    # cooperative profile → no sandbox → grants must not widen anything
+    # cooperative profile → no sandbox → grants must not widen anything. Must be set
+    # EXPLICITLY: as of 2026-W39 the default is "confined" (sandbox-on), under which grants
+    # DO widen — this test pins the sandbox-off (opt-out) branch.
     m = analyze.build_manifest(
-        {"project_goal": "x", "project_name": "Team A"}, framework="claude"
+        {"project_goal": "x", "project_name": "Team A", "privilege_profile": "cooperative"},
+        framework="claude",
     )
     _issue(tmp_path, holder_team=m["team_id"], target_path="/abs/b/shared")
     assert apply_held_grants_to_write_roots(m, tmp_path) == []

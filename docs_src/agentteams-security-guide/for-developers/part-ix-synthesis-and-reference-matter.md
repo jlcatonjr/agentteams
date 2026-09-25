@@ -40,9 +40,11 @@ these:**
 - **(a) None of this runs inside the produced app.** The whole stack is
   design-time governance of *how an app is built* (S1, S2). A deployed app needs
   its **own** runtime governance and the L0–L7 model (S17).
-- **(b) Runtime confinement is opt-in.** Default profile `cooperative` — sandbox
-  off, hook fail-open (S1, S18, S19). Governance layers are always active; OS-level
-  locks engage only under `confined`/`exclusive`.
+- **(b) Runtime confinement is emitted by default but inert until wired.** As of
+  2026-W39 the default profile is `confined`, which emits an OS write-confinement
+  boundary as a settings/config example the operator must merge (S1, S18, S19); the
+  hook stays fail-open by default (the flip needs an *explicit* `confined`/`exclusive`).
+  Governance layers are always active; OS-level locks enforce only once wired.
 - **(c) OS-confinement is empirically verified on Linux** — the `sandbox/confine-run.sh` bwrap launcher passes a live-kernel deny test; **macOS Seatbelt is UNVERIFIED**. Claude Code's *native* Linux bubblewrap arm is
   partial (open D-3 fragility, unverified `denyRead`); native Windows has no
   emitted enforcement (S18).
@@ -91,10 +93,12 @@ skeleton.
 - **CONDITIONAL PASS / `conditions_verified`** (S8) — a verdict that allows only
   when `conditions_verified == "verified"`; while `pending` the gate blocks "as if
   HALT."
-- **`cooperative` (privilege profile)** (S18) — the default: **no OS boundary** —
-  sandbox off, hook fail-open.
-- **`confined` (privilege profile)** (S18) — emits a sandbox request token and
-  flips the hook fail-closed; enforcement is the harness's OS sandbox.
+- **`cooperative` (privilege profile)** (S18) — the **opt-out** (no longer the
+  default as of 2026-W39): **no OS boundary** — sandbox off, hook fail-open.
+- **`confined` (privilege profile)** (S18) — the **default as of 2026-W39**: emits
+  a sandbox request token and, when **explicitly** selected, flips the hook
+  fail-closed (the defaulted `confined` leaves it fail-open); enforcement is the
+  harness's OS sandbox.
 - **Constitutional Core / C-1..C-5** (S3) — the **Tier 1, non-overridable**
   principles; a project may extend the Rules but not weaken the Core.
 - **`denyRead`** (S18) — an outbound read-exclusion added by `exclusive` over

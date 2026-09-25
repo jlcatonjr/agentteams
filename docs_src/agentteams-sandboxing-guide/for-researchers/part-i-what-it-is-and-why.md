@@ -17,9 +17,11 @@ app, and are *not* present in the shipped app.
 
 ## The posture to check first (SB3) — ceiling #1
 
-**Confinement is opt-in.** The default `cooperative` profile emits no sandbox and a **fail-open** hook. A
-reviewer's first question — "is this on?" — has the answer "only if the operator chose `confined`/
-`exclusive`." The layered stack is *available*, not *active by default*.
+**Confinement is emitted by default but inert until wired.** As of 2026-W39 the default profile is
+`confined`, which emits an OS write-confinement boundary (a settings/config example the operator must
+merge) — but the hook still stays **fail-open by default** unless an *explicit* `confined`/`exclusive`
+flips it. A reviewer's first question — "is this *enforced*?" — has the answer "only once the operator
+wires the emitted boundary in." The layered stack is *emitted*, not *in force by default*.
 
 ### The pipeline (G1)
 

@@ -10,7 +10,7 @@
 
 | § | Topic | Primary sources | Status |
 |---|---|---|---|
-| S1 | What agentteams security is | `SECURITY.md` (threat-model, design-time-vs-runtime); `.claude/CLAUDE.md` (Constitutional Core); `agentteams/templates/universal/security.template.md`; `agentteams/host_features.py:134-145` (cooperative default); `hooks/constitutional-gate.py:22-36` (fail-open default) | ✅/⚙ |
+| S1 | What agentteams security is | `SECURITY.md` (threat-model, design-time-vs-runtime); `.claude/CLAUDE.md` (Constitutional Core); `agentteams/templates/universal/security.template.md`; `agentteams/host_features.py:184` (`DEFAULT_PRIVILEGE_PROFILE = "confined"`); `hooks/constitutional-gate.py:22-36` (fail-open default) | ✅/⚙ |
 | S2 | Two surfaces & where enforcement lives | `SECURITY.md`; `agentteams/cli/security_gate.py:1-10`; `agentteams/templates/universal/hooks/constitutional-gate.py:1-49`; `agentteams/templates/universal/security-infrastructure-layers.reference.template.md:31-44` | ✅/⚙ |
 | S3 | Constitutional Core (C-1..C-5) | `.claude/CLAUDE.md`; `agentteams/templates/universal/orchestrator.template.md:121-142`; `agentteams/templates/universal/instruction-authority.reference.template.md:27-43` | ✅ |
 | S4 | Instruction-authority ordering | `agentteams/templates/universal/instruction-authority.reference.template.md:9-91`; `agentteams/audit_agent_contract.py:95-152` | ⚙ rule / ✅ presence |

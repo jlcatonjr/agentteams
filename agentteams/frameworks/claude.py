@@ -295,21 +295,34 @@ def _apply_fail_closed_policy(hook_text: str, manifest: dict[str, Any]) -> str:
     """Emit the constitutional gate fail-CLOSED for a confined/exclusive profile (CC-2).
 
     The gate defaults to fail-OPEN (a crash is a harness allow) so a buggy gate never bricks
-    a cooperative session. But a ``confined``/``exclusive`` ``privilege_profile`` means the
-    operator opted into a boundary a crash must not silently drop — so unless
+    a cooperative session. But an operator who **explicitly** chose a ``confined``/``exclusive``
+    ``privilege_profile`` opted into a boundary a crash must not silently drop — so unless
     ``fallback_fail_open`` is set (from ``--allow-fallback-fail-open``), flip the emitted
     hook's ``_FAIL_CLOSED_ON_ERROR`` sentinel to ``True``. Byte-identical to the template for
     cooperative teams and for the opt-out.
 
+    **Gated on EXPLICIT opt-in (2026-W39).** ``constitutional-gate.py`` is written directly
+    (not an inert example) and is full-replaced under ``--update --merge``, so flipping it
+    changes a *wired* team's live runtime behavior (fail-open→fail-closed). Since the
+    ``privilege_profile`` default flipped ``cooperative``→``confined`` that turn, keying this
+    flip on the *effective* profile would silently flip every existing team's live gate on a
+    routine ``--update``/``fleet`` — a non-inert change the default flip's "inert until
+    merged" contract must not make. So this reads ``privilege_profile_explicit``: the
+    defaulted ``confined`` still emits the (inert) sandbox example but leaves a wired hook
+    fail-OPEN; only an explicit ``confined``/``exclusive`` in the brief flips it.
+
     Args:
         hook_text: The verbatim ``constitutional-gate.py`` template text.
-        manifest: The team manifest (read for ``privilege_profile`` + ``fallback_fail_open``).
+        manifest: The team manifest (read for ``privilege_profile``,
+            ``privilege_profile_explicit``, and ``fallback_fail_open``).
 
     Returns:
         The hook text, fail-closed sentinel flipped only when the profile warrants it.
     """
     if manifest.get("privilege_profile") not in {"confined", "exclusive"}:
         return hook_text
+    if not manifest.get("privilege_profile_explicit"):
+        return hook_text  # defaulted confined stays fail-OPEN — explicit opt-in required
     if manifest.get("fallback_fail_open"):
         return hook_text
     return hook_text.replace(

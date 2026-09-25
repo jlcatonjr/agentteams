@@ -7,11 +7,14 @@ mis-steered or injected instruction can't write, read secrets, or reach the netw
 workspace. Two surfaces enforce: OS confinement (files + network) and a PreToolUse hook that gates
 destructive `Bash` spellings. It's **design-time** — none of it runs inside the app you ship.
 
-**Ceiling #1 — opt-in (SB3).** The default `cooperative` emits **no** sandbox and a **fail-open** hook
-(`_FAIL_CLOSED_ON_ERROR = False`). You get confinement only when you ask for it.
+**Ceiling #1 — emitted by default, inert until wired (SB3).** As of 2026-W39 the default profile is
+`confined`, which *emits* an OS write-confinement boundary (a settings/config example you must merge) —
+but the hook still stays **fail-open** (`_FAIL_CLOSED_ON_ERROR = False`) unless you set an *explicit*
+`confined`/`exclusive`. Opt out of emitting with `cooperative`. You get *enforcement* only when you wire
+the emitted boundary in.
 
 ```bash
-# nothing is confined here — cooperative is the default:
+# nothing is ENFORCED here — the default confined profile emits an inert boundary until you wire it:
 agentteams --description brief.json --framework claude --project ./proj
 ```
 

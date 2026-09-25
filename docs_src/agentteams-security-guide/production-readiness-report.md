@@ -48,8 +48,8 @@ intelligence & red team · VIII integrity/provenance/recovery · IX synthesis & 
 
 ## Honest ceilings the guide commits to (carried into all editions)
 
-None of this runs inside the produced app (design-time only) · runtime OS-confinement is opt-in
-(cooperative default = sandbox off, hook fail-open) · confinement is empirically verified on Linux (macOS Seatbelt unverified)
+None of this runs inside the produced app (design-time only) · runtime OS-confinement is emitted by default but inert until wired
+(confined default emits an OS write-confinement boundary as a settings/config example; hook still fail-open by default) · confinement is empirically verified on Linux (macOS Seatbelt unverified)
 only (Linux D-3 open, Windows design-only) · symmetric-HMAC signing stops a keyless forger, not a
 key-holder · the integrity manifest is a speed bump, not a boundary (E4 residual) · the sentinel is a
 fallible LLM except the S-1/S-8 deterministic scanner backstop · no formula/CSV-injection detector

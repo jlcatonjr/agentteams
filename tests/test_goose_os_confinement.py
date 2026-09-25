@@ -197,8 +197,12 @@ def test_extra_output_files_includes_sandbox_on_macos():
 
 
 def test_extra_output_files_unchanged_for_cooperative():
+    # privilege_profile must be set EXPLICITLY to cooperative: as of 2026-W39 the default
+    # is "confined" (sandbox-on), so an absent field would emit the sandbox. This test pins
+    # the cooperative (opt-out) case: no OS boundary, normal emission intact.
     m = analyze.build_manifest(
-        {"project_goal": "x", "project_name": "T"}, framework="goose"
+        {"project_goal": "x", "project_name": "T", "privilege_profile": "cooperative"},
+        framework="goose",
     )
     files = dict(GooseAdapter().extra_output_files(m))
     assert "../sandbox.sb" not in files

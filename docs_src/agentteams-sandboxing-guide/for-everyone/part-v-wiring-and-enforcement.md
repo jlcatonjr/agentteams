@@ -12,5 +12,6 @@ wired" or "no, it isn't," without ever reading your secrets.
 And the **guard by the door**: for a handful of obviously dangerous actions (deleting things), the guard
 stops and asks you first. Be clear-eyed about the guard, though — he watches a *specific list* of dangers
 by the main door; he is a helpful speed-bump, **not a wall**. Plenty of side doors he doesn't watch. When
-you've asked for the locked room, the guard is set to "if in doubt, stop"; in the default open room he's
-set to "if in doubt, allow," so a jumpy guard never halts honest work.
+you've *explicitly* asked for the locked room, the guard is set to "if in doubt, stop"; by default he
+stays set to "if in doubt, allow" — even in the now-default locked room, unless you asked for it on
+purpose — so a jumpy guard never halts honest work.

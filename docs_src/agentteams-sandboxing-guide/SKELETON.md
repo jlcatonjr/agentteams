@@ -28,8 +28,11 @@
 - **The honest-ceiling doctrine (binding on every edition).** Every control is stated with what it
   *buys* and what it *cannot*. A boundary is described as "engages as tested," never "secure" or
   "unbypassable." The four load-bearing ceilings of THIS subsystem, which no edition may drop:
-  1. **Opt-in.** The default profile is `cooperative`: the sandbox is **off** and the deny-hook is
-     **fail-open**. Confinement engages only under `confined`/`exclusive`.
+  1. **Emitted by default, inert until wired.** As of 2026-W39 the default profile is `confined`:
+     agentteams **emits** an OS write-confinement boundary (as a settings/config example the operator
+     must merge), but it enforces nothing until wired. The deny-hook still stays **fail-open by
+     default** — only an *explicit* `confined`/`exclusive` flips it fail-closed, not the defaulted
+     `confined`. Opt out with `cooperative`.
   2. **Inert until wired.** Every emitted boundary is an *example/launcher the operator must
      activate* (merge settings, set `GOOSE_SANDBOX`, or WRAP the process). agentteams never writes an
      operator's live config or auto-invokes the launcher. An emitted-but-unwired boundary confines
@@ -115,12 +118,14 @@ flowchart LR
 
 ### SB3 — The opt-in posture (binding ceiling)  ✅
 **Canonical facts.**
-1. The default `privilege_profile` is **`cooperative`**: no sandbox block is emitted and the deny-hook
-   is emitted **fail-OPEN** (`_FAIL_CLOSED_ON_ERROR = False`). Confinement engages **only** when the
-   operator selects `confined` or `exclusive` (or passes a `*:sandbox` host-feature token).
-2. Reading "layered confinement" as "on by default" is the overclaim this fact prevents. Out of the
-   box, the strongest locks are dormant.
-**Source.** `agentteams/host_features.py` (cooperative default);
+1. As of 2026-W39 the default `privilege_profile` is **`confined`**: agentteams **emits** an OS
+   write-confinement boundary by default (as a settings/config example the operator must merge), but the
+   deny-hook is still emitted **fail-OPEN** (`_FAIL_CLOSED_ON_ERROR = False`) — its fail-closed flip
+   requires an *explicit* `confined`/`exclusive`, not the defaulted `confined`. The emitted boundary
+   enforces nothing until wired, and `cooperative` opts out of emitting it entirely.
+2. Reading "layered confinement" as "enforced out of the box" is the overclaim this fact prevents. Out
+   of the box, the boundary is emitted but dormant until wired.
+**Source.** `agentteams/host_features.py:184` (`DEFAULT_PRIVILEGE_PROFILE = "confined"`);
 `agentteams/frameworks/_sandbox_emit.py:116` `_sandbox_feature_enabled`;
 `agentteams/templates/universal/hooks/constitutional-gate.py:205` (`_FAIL_CLOSED_ON_ERROR = False`).
 **Dial.** R Full · D Full · S Core · E Light (mandatory ceiling #1).
@@ -132,8 +137,8 @@ flowchart LR
 ### SB4 — Three privilege profiles  ✅
 **Canonical facts.**
 1. `privilege_profile` has three values, each a superset of the last:
-   - **`cooperative`** (default) — no boundary emitted; the agent is trusted, fail-open hook.
-   - **`confined`** — workspace **write-confinement**: the agent writes only inside
+   - **`cooperative`** (the opt-out) — no boundary emitted; the agent is trusted, fail-open hook.
+   - **`confined`** (default as of 2026-W39) — workspace **write-confinement**: the agent writes only inside
      `workspace_write_roots` (default `["."]`, the generated tree). *Network* deny-by-default is a
      property of the mechanisms that emit an egress directive — goose Seatbelt (`deny network*`) and
      the Linux launcher (`--unshare-net`); the **claude** mechanism emits **no** egress directive, so
@@ -423,7 +428,7 @@ flowchart TD
 ### SB17 — Fail-open default, fail-closed under confinement  ✅
 **Canonical facts.**
 1. The hook defaults **fail-OPEN** (`_FAIL_CLOSED_ON_ERROR = False`): a gate crash is a harness *allow*,
-   so a buggy gate never bricks a cooperative session. Under `confined`/`exclusive`, emission flips the
+   so a buggy gate never bricks a cooperative session. Under an **explicit** `confined`/`exclusive`, emission flips the
    sentinel to `_FAIL_CLOSED_ON_ERROR = True` (unless `--allow-fallback-fail-open`), so a crash emits a
    `deny` rather than a silent allow — the operator opted into a boundary a crash must not drop.
 **Source.** `agentteams/templates/universal/hooks/constitutional-gate.py:205`
@@ -437,7 +442,7 @@ flowchart TD
     MATCH -->|no| ALLOW["allow"]
     MATCH -->|yes| ASK["ask — route to operator (C-5)"]
     H -.->|"hook itself crashes"| FC{"_FAIL_CLOSED_ON_ERROR?"}
-    FC -->|"False (cooperative default)"| ALLOW2["fail-OPEN → allow<br/>(never brick a trusted session)"]
+    FC -->|"False (fail-open; gate flips only on explicit confined/exclusive)"| ALLOW2["fail-OPEN → allow<br/>(never brick a trusted session)"]
     FC -->|"True (confined/exclusive)"| DENY["fail-CLOSED → deny<br/>(operator opted into a boundary)"]
 ```
 

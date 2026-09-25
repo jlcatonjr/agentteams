@@ -1,11 +1,14 @@
 # Part VI — OS confinement
 
 OS confinement bounds an agent's *runtime reach* at the operating-system level.
-Two ceilings govern everything below: **confinement is opt-in** (default profile
-`cooperative` — sandbox off, hook fail-open, S1 fact 5), and **agentteams emits
-configuration; it does not enforce it** (enforcement belongs to the harness; the
-empirically deny-tested path is **Linux** — the `sandbox/confine-run.sh` launcher —
-while **macOS Seatbelt is UNVERIFIED**).
+Two ceilings govern everything below: **confinement is emitted by default but inert
+until wired** (as of 2026-W39 the default profile is `confined`, which emits an OS
+write-confinement boundary as a settings/config example the operator must merge; the
+PreToolUse hook still stays fail-open by default because the flip needs an *explicit*
+`confined`/`exclusive`, S1 fact 5), and **agentteams emits configuration; it does not
+enforce it** (enforcement belongs to the harness; the empirically deny-tested path is
+**Linux** — the `sandbox/confine-run.sh` launcher — while **macOS Seatbelt is
+UNVERIFIED**).
 
 ## The infrastructure-layers model  ✅ *(reference doc)* {#S17}
 
@@ -46,8 +49,8 @@ boundary a generated team requests (`agentteams/host_features.py:134-261`). An
 
 | Profile | OS boundary | Emits | What it costs / buys |
 |---|---|---|---|
-| **`cooperative`** | none — **today's default** | no sandbox request | zero friction; sandbox off + hook fail-open (S19) |
-| **`confined`** | requested | a sandbox request token | bounds in-sandbox write reach; hook flipped fail-closed |
+| **`cooperative`** | none — the opt-out | no sandbox request | zero friction; sandbox off + hook fail-open (S19) |
+| **`confined`** | requested — **today's default** | a sandbox request token | bounds in-sandbox write reach; hook flipped fail-closed only when explicitly selected |
 | **`exclusive`** | requested + read-exclusion | sandbox token **and** `denyRead` | adds outbound credential-dir read-exclusion |
 
 **agentteams emits configuration; the harness enforces it**
@@ -84,9 +87,11 @@ reading yours.
   closed** with `PrivilegeConfinementError` unless you pass
   `--allow-unenforced-confinement` (`agentteams/cli/artifacts.py:321-411`).
 
-Because the default is `cooperative`, **all of the above is dormant out of the
-box**: no sandbox, no `denyWrite`/`denyRead`, hook fail-open. Governance layers
-are always active; OS confinement is opt-in.
+Because agentteams only emits an example the operator must merge, **all of the
+above is dormant out of the box until you wire it in**: the default `confined`
+profile emits the sandbox + `denyWrite`/`denyRead` example, but it enforces nothing
+unmerged, and the hook stays fail-open until an explicit `confined`/`exclusive`
+flips it. Governance layers are always active; OS confinement enforcement is opt-in.
 
 **Source.** `agentteams/host_features.py:134-261`;
 `agentteams/frameworks/_sandbox_emit.py:25-208`;
@@ -114,11 +119,11 @@ way past it" (`agentteams/templates/universal/hooks/constitutional-gate.py:1-209
 scanner against the integrity manifest** (S22); a tampered `scan.py` yields
 **`ask`, not a silent allow**.
 
-**Which knob, and what it costs.** Default (`cooperative`) the hook is
-**fail-open** — if it can't run to completion, the action proceeds. agentteams
-flips it **fail-closed for `confined`/`exclusive`**; `--allow-fallback-fail-open`
-restores fail-open under those profiles (buys availability, costs the fail-closed
-guarantee).
+**Which knob, and what it costs.** The hook is **fail-open by default** — if it
+can't run to completion, the action proceeds. agentteams flips it **fail-closed
+only for an *explicit* `confined`/`exclusive`** in the brief (the defaulted
+`confined` leaves it fail-open); `--allow-fallback-fail-open` restores fail-open
+under those profiles (buys availability, costs the fail-closed guarantee).
 
 **Honest ceiling (E4) — cost, not impossibility.** It does not escape a
 determined multi-file tamper: an attacker who edits `scan.py` can also edit the

@@ -10,9 +10,13 @@ PreToolUse hook that catches agent-initiated actions the CLI gates never see
 
 Two ceilings govern everything below and are worth a reviewer holding up front:
 
-- **Confinement is opt-in.** The default profile is `cooperative`, under which
-  the sandbox is **off** and the hook is **fail-open** (S1 fact 5). "OS
-  confinement layer" does **not** mean "runtime confinement is on by default."
+- **Confinement is emitted by default but inert until wired.** As of 2026-W39 the
+  default profile is `confined`, under which agentteams **emits** an OS
+  write-confinement boundary — but only as a settings/config example the operator
+  must merge, so it enforces nothing until wired (S1 fact 5). The PreToolUse hook
+  still stays **fail-open by default** (its fail-open→fail-closed flip needs an
+  *explicit* `confined`/`exclusive`, not the defaulted `confined`). "OS confinement
+  layer" does **not** mean "runtime confinement is enforced out of the box."
 - **agentteams emits configuration; it does not enforce it.** Enforcement belongs
   to the *harness* (Claude Code's Seatbelt/bubblewrap); the empirically deny-tested path
   is **Linux** (the `sandbox/confine-run.sh` launcher), while **macOS Seatbelt is UNVERIFIED**.
@@ -66,8 +70,8 @@ is a requested OS sandbox selected by a **privilege profile**:
 
 | Profile | OS boundary | Emits |
 |---|---|---|
-| **`cooperative`** | None — **today's default** | No sandbox request |
-| **`confined`** | Requested | A sandbox request token |
+| **`cooperative`** | None — the opt-out | No sandbox request |
+| **`confined`** | Requested — **today's default** | A sandbox request token |
 | **`exclusive`** | Requested + read-exclusion | A sandbox request token **and** `denyRead` |
 
 An **unknown** profile **fails closed** — it raises rather than silently
@@ -99,7 +103,9 @@ Apple Seatbelt profile; Goose has **no native Linux/Windows OS sandbox.**
   closed** (`PrivilegeConfinementError`) unless the operator passes
   `--allow-unenforced-confinement`.
 
-Because the default is `cooperative`, **all of this is dormant out of the box.**
+Because agentteams only emits configuration the operator must merge, **all of this
+stays dormant out of the box until it is wired in** — even under the default
+`confined` profile, which emits the boundary but cannot enforce it unmerged.
 Full profile mechanics and line numbers: Edition R, S18.
 
 **Source.** `agentteams/host_features.py:134-261`;
@@ -126,11 +132,12 @@ force-push — requiring operator confirmation rather than an outright deny. Bef
 scanning a write it **verifies the scanner against the integrity manifest** (S22);
 a tampered scanner degrades to `ask`, not a silent allow.
 
-**Default posture — fail-open, flipped fail-closed by profile.** By default
-(`cooperative`) the hook is **fail-open**: if it cannot run to completion, the
-action proceeds. agentteams flips it **fail-closed for `confined`/`exclusive`**;
-`--allow-fallback-fail-open` restores open under those profiles. Same opt-in
-posture as S18.
+**Default posture — fail-open, flipped fail-closed only by an explicit profile.**
+The hook is **fail-open by default**: if it cannot run to completion, the action
+proceeds. agentteams flips it **fail-closed only for an *explicit* `confined`/`exclusive`
+in the brief** — the defaulted `confined` profile does **not** trigger the flip, so
+the default posture stays fail-open; `--allow-fallback-fail-open` restores open under
+those profiles. Same emit-but-inert posture as S18.
 
 **Honest ceiling (E4) — cost, not impossibility.** This is the residual risk that
 sits at the center of the whole stack's honesty. The hook does **not** escape a

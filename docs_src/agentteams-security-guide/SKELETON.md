@@ -48,13 +48,18 @@
    security-decision gate outside the documented `--yes` interaction is a vulnerability.
 5. **Default runtime posture (binding ceiling).** The *governance* layers (constitution, sentinel,
    clearance/waiver/grant, the CLI gates, the scanner) are always active. The *runtime OS-confinement*
-   layers are **opt-in**: the default privilege profile is `cooperative`, under which the sandbox is
-   **off** and the PreToolUse hook is **fail-open**; runtime confinement engages only when the operator
-   selects `confined`/`exclusive`. Reading "layered stack" as "all layers active out of the box" is the
+   layers are **secure-by-default but inert until wired**: as of 2026-W39 the default privilege profile
+   is `confined`, under which agentteams **emits** an OS write-confinement boundary for qualifying
+   providers (Claude sandbox block, Goose Seatbelt profile, neutral launcher) — but only as a
+   settings/config **example** the operator must merge (agentteams never writes the live
+   `.claude/settings.json` / `~/.config/goose/config.yaml`), so the emitted boundary is **inert until
+   merged**. The PreToolUse hook stays **fail-open by default**; its fail-open→fail-closed flip requires
+   an **explicit** `confined`/`exclusive` in the brief, not the defaulted `confined`. Opt out with
+   `privilege_profile: cooperative`. Reading "layered stack" as "all layers active out of the box" is the
    overclaim this fact exists to prevent.
 **Source.** `SECURITY.md` §threat-model, §design-time-vs-runtime; `.claude/CLAUDE.md` Constitutional
 Core; `agentteams/templates/universal/security.template.md`;
-`agentteams/host_features.py:134-145` (cooperative default); `agentteams/templates/universal/hooks/constitutional-gate.py:22-36` (fail-open default).
+`agentteams/host_features.py:184` (`DEFAULT_PRIVILEGE_PROFILE = "confined"`); `agentteams/templates/universal/hooks/constitutional-gate.py:22-36` (fail-open default).
 **Dial.** R Full · D Core · S Full · E Light.
 
 ### S2 — Two surfaces and where enforcement lives  ✅/⚙
@@ -377,8 +382,8 @@ Core; `agentteams/templates/universal/security.template.md`;
 
 ### S18 — Sandbox emission and privilege profiles  ✅ *(Linux bwrap deny-tested)* / ⚙ *(macOS Seatbelt UNVERIFIED, Windows design-only)*
 **Canonical facts.**
-1. **Three privilege profiles:** `cooperative` (no OS boundary — today's default), `confined`,
-   `exclusive`. `confined`/`exclusive` emit a sandbox request token; `exclusive` additionally emits
+1. **Three privilege profiles:** `cooperative` (no OS boundary — the opt-out), `confined` (the default
+   as of 2026-W39), `exclusive`. `confined`/`exclusive` emit a sandbox request token; `exclusive` additionally emits
    `denyRead` read-exclusion. An **unknown** profile **fails closed** (raises, never silently downgrades).
 2. **agentteams emits configuration, it does not enforce.** For Claude it injects an **inert `sandbox`
    example** into `settings.hooks.example.json` (the operator merges it; agentteams never writes live

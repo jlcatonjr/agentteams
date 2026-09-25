@@ -33,7 +33,9 @@ loop, and the end-to-end synthesis.
 
 The four **honest ceilings**, which no projection may drop or soften:
 
-1. **Opt-in** — by default (`cooperative`) the sandbox is off and the deny-hook is fail-open.
+1. **Confined by default, advisory-emitted** — as of 2026-W39 the default profile is `confined`, which
+   *emits* an OS write-confinement boundary (opt out with `cooperative`); the deny-hook still stays
+   fail-open by default (only an explicit `confined`/`exclusive` flips it fail-closed).
 2. **Inert until wired** — an emitted boundary confines nothing until the operator activates it (merges
    settings, sets `GOOSE_SANDBOX`, or wraps the process).
 3. **Verified only on Linux** — the launcher's `bwrap` branch is proven by a live-kernel deny test; the

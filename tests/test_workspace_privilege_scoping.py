@@ -26,6 +26,7 @@ from agentteams.frameworks.claude import (
     _sandbox_feature_enabled,
 )
 from agentteams.host_features import (
+    DEFAULT_PRIVILEGE_PROFILE,
     HostFeatureError,
     expand_privilege_profile,
     merge_profile_features,
@@ -65,7 +66,9 @@ def test_sandbox_token_rejected_for_non_sandbox_namespaces():
 
 def test_expand_privilege_profile():
     assert expand_privilege_profile("cooperative") == []
-    assert expand_privilege_profile(None) == []
+    # 2026-W39: a missing profile defaults to "confined" (sandbox-on), so None expands to
+    # the sandbox token — NOT [] (that is now only the explicit-cooperative opt-out).
+    assert expand_privilege_profile(None) == ["claude:sandbox"]
     assert expand_privilege_profile("confined") == ["claude:sandbox"]
     assert expand_privilege_profile("exclusive") == ["claude:sandbox"]
     # Unknown profile must never silently grant confinement.
@@ -81,9 +84,11 @@ def test_expand_privilege_profile():
 
 
 def test_validate_privilege_profile_normalizes_and_rejects():
-    # CC-6: None/"" default to cooperative (a missing profile is not a typo)...
-    assert validate_privilege_profile(None) == "cooperative"
-    assert validate_privilege_profile("") == "cooperative"
+    # CC-6: None/"" default to the DEFAULT_PRIVILEGE_PROFILE — "confined" as of 2026-W39
+    # (a missing profile is not a typo, it is the sandbox-on default)...
+    assert validate_privilege_profile(None) == "confined"
+    assert validate_privilege_profile("") == "confined"
+    assert validate_privilege_profile("cooperative") == "cooperative"
     assert validate_privilege_profile("confined") == "confined"
     assert validate_privilege_profile("exclusive") == "exclusive"
     # ...but a typo'd/unknown value fails closed rather than downgrading to unconfined.
@@ -237,10 +242,46 @@ def test_cooperative_does_not_strip_explicit_sandbox_token():
 # analyze.build_manifest
 # --------------------------------------------------------------------------
 
-def test_build_manifest_default_profile_is_cooperative():
+def test_build_manifest_default_profile_is_confined():
+    # 2026-W39: sandbox is ENABLED BY DEFAULT — a brief that omits privilege_profile
+    # resolves to "confined" (was "cooperative"). workspace_write_roots stays absent when
+    # unset (the emitter defaults it to ["."]).
     m = analyze.build_manifest({"project_goal": "x"}, framework="claude")
-    assert m["privilege_profile"] == "cooperative"
+    assert m["privilege_profile"] == "confined"
     assert "workspace_write_roots" not in m
+
+
+def test_build_manifest_cooperative_opt_out():
+    # The explicit opt-out still yields the no-boundary posture.
+    m = analyze.build_manifest(
+        {"project_goal": "x", "privilege_profile": "cooperative"}, framework="claude"
+    )
+    assert m["privilege_profile"] == "cooperative"
+
+
+def test_build_manifest_records_profile_explicitness():
+    # The fail-closed gate flip (claude._apply_fail_closed_policy) keys off this flag, so a
+    # defaulted confined stays inert-until-merged. Omitted → False; set (even to confined) → True.
+    assert analyze.build_manifest({"project_goal": "x"}, framework="claude")[
+        "privilege_profile_explicit"] is False
+    assert analyze.build_manifest(
+        {"project_goal": "x", "privilege_profile": "confined"}, framework="claude"
+    )["privilege_profile_explicit"] is True
+
+
+def test_schema_default_matches_runtime_default():
+    # CH-05 / SSOT: the schema's documentation `default` must equal the single runtime default
+    # constant, or the schema silently lies if the constant flips again.
+    import json
+
+    schema = json.loads(
+        (Path(__file__).resolve().parents[1]
+         / "agentteams/schemas/project-description.schema.json").read_text()
+    )
+    assert (
+        schema["properties"]["privilege_profile"]["default"]
+        == DEFAULT_PRIVILEGE_PROFILE
+    )
 
 
 def test_build_manifest_carries_profile_and_roots():
@@ -603,13 +644,33 @@ def _fail_closed_flag(hook):
 
 
 def test_cc2_exclusive_emits_fail_closed_hook():
-    hook = _emitted_hook({"host_features": ["claude:sandbox"], "privilege_profile": "exclusive"})
+    # EXPLICIT exclusive → fail-closed (privilege_profile_explicit True; 2026-W39 gate).
+    hook = _emitted_hook({
+        "host_features": ["claude:sandbox"], "privilege_profile": "exclusive",
+        "privilege_profile_explicit": True,
+    })
     assert _fail_closed_flag(hook) == "True"
 
 
 def test_cc2_confined_emits_fail_closed_hook():
-    hook = _emitted_hook({"host_features": ["claude:sandbox"], "privilege_profile": "confined"})
+    # EXPLICIT confined → fail-closed.
+    hook = _emitted_hook({
+        "host_features": ["claude:sandbox"], "privilege_profile": "confined",
+        "privilege_profile_explicit": True,
+    })
     assert _fail_closed_flag(hook) == "True"
+
+
+def test_cc2_defaulted_confined_stays_fail_open():
+    # 2026-W39: confined is now the DEFAULT. A team that never set the field (explicit False)
+    # must NOT get its live gate hook flipped to fail-closed on a routine --update — the
+    # default flip is inert-until-merged. The disruptive fail-closed flip requires explicit
+    # opt-in. (build_manifest with no privilege_profile yields exactly this shape.)
+    hook = _emitted_hook({
+        "host_features": ["claude:sandbox"], "privilege_profile": "confined",
+        "privilege_profile_explicit": False,
+    })
+    assert _fail_closed_flag(hook) == "False"
 
 
 def test_cc2_cooperative_stays_fail_open():
@@ -622,6 +683,7 @@ def test_cc2_optout_keeps_fail_open_even_for_exclusive():
         {
             "host_features": ["claude:sandbox"],
             "privilege_profile": "exclusive",
+            "privilege_profile_explicit": True,
             "fallback_fail_open": True,
         }
     )

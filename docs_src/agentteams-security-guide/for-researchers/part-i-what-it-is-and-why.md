@@ -62,13 +62,16 @@ bug.** These are the two things the system promises to a reviewer:
 **The binding runtime-posture ceiling (E4-adjacent, F1).** This is the fact a
 reviewer must not miss. The *governance* layers — the constitution, the
 sentinel, clearance/waiver/grant, the CLI gates, the content scanner — are
-**always active**. The *runtime OS-confinement* layers are **opt-in**. The
-default privilege profile is `cooperative`, under which **the sandbox is off**
-and the PreToolUse constitutional-gate hook is **fail-open**. Runtime
-confinement engages **only** when the operator deliberately selects `confined`
-or `exclusive`. Reading "layered stack" as "every layer is armed out of the box"
-is the overclaim this ceiling exists to prevent: out of the box, the OS-level
-locks are dormant by design.
+**always active**. The *runtime OS-confinement* layers are **emitted by default
+but inert until wired**. As of 2026-W39 the default privilege profile is
+`confined`, under which agentteams **emits** an OS write-confinement boundary —
+but only as a settings/config example the operator must merge, so it enforces
+nothing until wired. The PreToolUse constitutional-gate hook still stays
+**fail-open by default** (its fail-open→fail-closed flip requires an *explicit*
+`confined`/`exclusive`, not the defaulted `confined`); opt out of the emitted
+boundary with `cooperative`. Reading "layered stack" as "every layer is armed out
+of the box" is the overclaim this ceiling exists to prevent: out of the box, the
+OS-level locks are emitted but dormant until wired.
 
 **Honest ceiling.** This stack is described as engaging *as tested*, never as
 "secure." What it buys is a set of composed, mostly-evident controls against a
@@ -79,7 +82,7 @@ fallible model (S5), several layers are procedural rather than code-enforced
 **Source.** `SECURITY.md` §threat-model, §design-time-vs-runtime;
 `.claude/CLAUDE.md` Constitutional Core;
 `agentteams/templates/universal/security.template.md`;
-`agentteams/host_features.py:134-145` (cooperative default);
+`agentteams/host_features.py:184` (`DEFAULT_PRIVILEGE_PROFILE = "confined"`);
 `agentteams/templates/universal/hooks/constitutional-gate.py:22-36`
 (fail-open default). Full line-precise treatment: Edition R, S1.
 

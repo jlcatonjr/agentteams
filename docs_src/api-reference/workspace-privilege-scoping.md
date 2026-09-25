@@ -15,8 +15,8 @@ hardening guidance (see "Read-exclusion & cross-team exclusion (P3)"). All three
 
 | You want | Select | What you get |
 |---|---|---|
-| nothing (default) | `privilege_profile: cooperative` | no OS boundary — agents trusted to respect the workspace |
-| **P1** — confine my team's writes | `privilege_profile: confined` | OS write-confinement to the workspace (Bash + subprocesses) |
+| no OS boundary — agents trusted | `privilege_profile: cooperative` (opt out of the default) | nothing emitted |
+| **P1 (default since 2026-W39)** — confine my team's writes | `privilege_profile: confined` (now the default) | OS write-confinement to the workspace (Bash + subprocesses), emitted as an **inert** settings/config example (never live) until you merge it |
 | **P2** — cross-workspace reach by grant | issue grants (any sandbox profile) | holder's `allowWrite` widens to signed-granted paths |
 | **P3** — read-exclusion + inbound hardening | `privilege_profile: exclusive` | P1 **plus** OS read-exclusion of protected paths (P3a) **plus** an operator inbound-hardening advisory (P3b) |
 
@@ -153,8 +153,8 @@ In the project description:
 
 | Profile | Meaning |
 |---|---|
-| `cooperative` (default) | Today's behavior. Agents are trusted to respect the workspace; no OS boundary emitted. |
-| `confined` | Expands to the `claude:sandbox` host feature — emits the sandbox block confining writes to `workspace_write_roots`. |
+| `cooperative` (opt-out; default before 2026-W39) | Agents are trusted to respect the workspace; no OS boundary emitted. |
+| `confined` (**default since 2026-W39**) | Expands to the `claude:sandbox` host feature — emits the sandbox block confining writes to `workspace_write_roots`, as an inert settings/config example (never live) until merged. |
 | `exclusive` | `confined` **plus P3**: OS read-exclusion (`denyRead`) of a default deny set + your `protected_read_paths`, and a P3b inbound-hardening advisory. See "Read-exclusion & cross-team exclusion (P3)" below. |
 
 > **Note on `exclusive`:** its emitted enforcement is OUTBOUND — it seals *your* team's
@@ -168,7 +168,10 @@ In the project description:
 > A misspelled profile (e.g. `"exclusve"`) is **rejected at build with a non-zero exit** —
 > it is never silently downgraded to unconfined, because a value that *looks* like a
 > confinement request while granting none is the worst outcome. A missing profile is not
-> a typo: it defaults to `cooperative`.
+> a typo: it defaults to `confined` (since 2026-W39 — write-confinement emitted as an inert
+> example; set `cooperative` to opt out). The disruptive constitutional-gate fail-closed flip
+> still requires an **explicit** `confined`/`exclusive`, so the default never changes a wired
+> team's live hook on `--update`.
 
 ### Via the host-feature token directly
 
@@ -472,9 +475,9 @@ brief (it is a project-description field, not a CLI flag):
 agentteams --description brief.json --framework goose --project /path/to/proj
 ```
 
-Confinement is requested when the brief/manifest sets `privilege_profile: confined` (or
-`exclusive`), or carries any `*:sandbox` host-feature token. On Linux this emits the launcher;
-`cooperative` (the default) emits nothing.
+Confinement is requested when the brief/manifest sets `privilege_profile: confined` (the
+default since 2026-W39) or `exclusive`, or carries any `*:sandbox` host-feature token. On
+Linux this emits the launcher; only the explicit opt-out `cooperative` emits nothing.
 
 **2. Find the emitted launcher.** It lands at the generated project's **repo root**, never
 under a framework dir:
@@ -578,10 +581,13 @@ rationale*, not as a claim that this implementation formally realizes any of the
 
 - **Least privilege** — a team writes only where it must (`workspace_write_roots`, default
   `["."]`); `exclusive` additionally denies reading secrets it has no business touching.
-- **Fail-safe defaults** — `cooperative` is the default and emits *no* boundary: the
-  system does not silently claim protection it is not enforcing. Where a boundary *is*
-  requested but cannot be enforced (non-sandbox host, unknown profile), generation **fails
-  closed** rather than ship an inert config that looks protective.
+- **Secure defaults, inert-until-merged** — since 2026-W39 the default is `confined`: a
+  team gets a write-confinement boundary *emitted by default*, but as an inert settings/config
+  **example** the operator merges — the system never silently claims protection it is not
+  enforcing, and the default never rewrites a wired team's live hook (the fail-closed gate
+  flip stays explicit-opt-in). Set `cooperative` to emit no boundary at all. Where a boundary
+  *is* requested but cannot be enforced (non-sandbox host, unknown profile), generation
+  **fails closed** rather than ship an inert config that looks protective.
 - **Complete mediation** — the P2-4 target-path guard runs on the real generation-time
   widening path, not only at issue, so an unsafe grant cannot reach `allowWrite` by a path
   that skipped the check.
