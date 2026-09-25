@@ -1,7 +1,7 @@
 {
   "modules": {
-    ".claude/hooks/constitutional-gate.py": "1c619ef79454be0aa28ea4ac32d05e25ed908d559132d1bcb154bf13d47ffb64",
-    ".github/hooks/constitutional-gate.py": "1c619ef79454be0aa28ea4ac32d05e25ed908d559132d1bcb154bf13d47ffb64",
+    ".claude/hooks/constitutional-gate.py": "",
+    ".github/hooks/constitutional-gate.py": "",
     "agentteams/cli/decision_log.py": "c456c24ff4958489a78cd47c7f651e6e648026733e0edfc4ff2892d20963d4f9",
     "agentteams/cli/effect_classifier.py": "180fc2aab56b75f323e883b3d3534c29c6ea32d2e0058a17b3414aaa759bdd0a",
     "agentteams/cli/exception_registry.py": "63bda6a5c22482a6dd95e952fb1129d2bc7ad0452b5057244cf8259ed6c25d04",
@@ -22,7 +22,7 @@
     "agentteams/redteam/registry.py": "8b2232c09acc2d69a41c8316cf263acde6bd6a93d2ac00f947bee9633129bfa1",
     "agentteams/scan.py": "9120b5056d70af06f10afe81ad6894a85de31586f94fb3fe6f800760287ce73d",
     "agentteams/templates/universal/hooks/constitutional-gate.py": "1c619ef79454be0aa28ea4ac32d05e25ed908d559132d1bcb154bf13d47ffb64",
-    "agentteams/templates/universal/sandbox/confine-run.sh": "97ca07d8b2534d9e5fbe895a5b41d6173f82b18fc68d95d9c1d57b440054a896",
+    "agentteams/templates/universal/sandbox/confine-run.sh": "92867e5e0a074afe366540bde818a06e5e3cce21c1669cb11375d522745bde9f",
     "agentteams/templates/universal/sandbox/mac-escape-tests.sh": "055105834e5f529609e2fe3c52eb79c89fe5b56157399f31ec18dc4f41e98564",
     "agentteams/unfenced.py": "f93ba361487463aa51f3124da7421a77f87ee0e617a59248b231d9a08f077905"
   },

@@ -497,6 +497,7 @@ def finalize_privilege_wiring(
         manifest, explicit_tokens, framework_id, allow_unenforced=allow_unenforced
     )
     apply_held_grants_to_write_roots(manifest, project_root)
+    apply_coordination_roots_to_write_roots(manifest)
     _advise_exclusive_inbound_hardening(manifest, framework_id)
 
 
@@ -570,6 +571,55 @@ def apply_held_grants_to_write_roots(manifest: dict, project_root: Path) -> list
     manifest["workspace_write_roots"] = roots + added
     if added:
         print(f"  Applied {len(added)} capability grant(s) to sandbox allowWrite: {', '.join(added)}")
+    return added
+
+
+def _confinement_active(manifest: dict) -> bool:
+    """Return True iff any OS confinement is requested for this team.
+
+    True when ``privilege_profile`` is ``confined``/``exclusive`` or any ``host_features``
+    token ends in ``:sandbox`` (claude:sandbox / goose:sandbox). Used to gate write-root
+    widening: when nothing is confined, ``workspace_write_roots`` is inert (no sandbox
+    consumes it), so we leave the manifest byte-identical to baseline.
+    """
+    if manifest.get("privilege_profile") in {"confined", "exclusive"}:
+        return True
+    return any(str(t).endswith(":sandbox") for t in (manifest.get("host_features") or []))
+
+
+def apply_coordination_roots_to_write_roots(manifest: dict) -> list[str]:
+    """Union declared ``coordination_write_roots`` into the sandbox write roots (Phase 2).
+
+    Cross-repo coordination writes a sibling repo's ledgers / request artifacts; when this
+    team is confined, those sibling roots must be bound into the sandbox or a write there is
+    kernel-denied (and on Linux an unbound bind path crashes bwrap init entirely). This merges
+    the operator-*declared* coordination roots into ``workspace_write_roots`` at the same point
+    capability grants are merged, so every emitter (Claude allowWrite, Goose Seatbelt, the
+    Linux confine-run.sh launcher) sees them.
+
+    Provenance note: a *declared* coordination root is operator config and is strictly weaker
+    than an *authenticated* capability grant (which is signed). Both feed the same union; the
+    distinction is logged so a future Phase can require a grant for roots outside the operator's
+    own repos. No-op unless confinement is active AND coordination roots are declared.
+
+    Args:
+        manifest: The team manifest (mutated: ``workspace_write_roots`` extended).
+
+    Returns:
+        The list of coordination roots that were added (empty when none / not confined).
+    """
+    declared = manifest.get("coordination_write_roots") or []
+    if not declared or not _confinement_active(manifest):
+        return []
+    roots = list(manifest.get("workspace_write_roots") or ["."])
+    added = [str(r) for r in declared if str(r) not in roots]
+    if not added:
+        return []
+    manifest["workspace_write_roots"] = roots + added
+    print(
+        f"  Applied {len(added)} declared coordination write-root(s) to sandbox allowWrite "
+        f"(operator config, unsigned): {', '.join(added)}"
+    )
     return added
 
 

@@ -23,8 +23,12 @@ from agentteams.capability_hints import RESEARCH_CAPABILITY_BULLET
 __all__ = [
     "_goosehints_content",
     "_resilient_runner_content",
+    "_route_proxy_content",
+    "_coordination_mcp_content",
     "_goose_capabilities_content",
     "_RESILIENT_RUNNER_SOURCE",
+    "_ROUTE_PROXY_SOURCE",
+    "_COORDINATION_MCP_SOURCE",
 ]
 
 
@@ -72,8 +76,21 @@ def _goosehints_content(project_name: str) -> str:
         "See `.goose/recipes/references/goose-capabilities-reference.md` for what your tools\n"
         "can actually do — in particular, the default `developer` extension's shell has no\n"
         "network sandbox, which its own built-in prompt never mentions.\n\n"
-        "If a turn ever ends with no response and no error, see `scripts/goose-run-resilient.py`\n"
-        "(repo root) — a wrapper that detects that exact symptom and auto-continues.\n"
+        "**Dead-turn (silent no-response) resilience.** A reasoning-capable model sometimes\n"
+        "emits its tool call as literal `<tool_call>` text inside its thinking stream instead\n"
+        "of the structured field; Goose sees nothing actionable and the turn ends with no\n"
+        "response and no error. This is a model/backend serialization bug, not a Goose\n"
+        "config error, and it is most likely on complex, multi-step, unusual-tool-shaped\n"
+        "requests (e.g. cross-repo coordination). Defence, in order:\n"
+        "1. **Backend/route selection is the primary, ALL-surface mitigation** — the leak\n"
+        "   rate is backend-dependent, so `scripts/goose-openrouter-route-proxy.py` (repo\n"
+        "   root) steers to lower-leak backends via `OPENROUTER_HOST` and thus covers CLI,\n"
+        "   `goose acp` (VS Code), and desktop alike. It **reduces** the rate; it does not\n"
+        "   eliminate it (a leak has recurred even on an allowlisted backend).\n"
+        "2. `scripts/goose-run-resilient.py` (repo root) auto-continues after a detected\n"
+        "   dead turn, but wraps **`goose run` (CLI) only** — it cannot see ACP/IDE or\n"
+        "   desktop traffic, so IDE/ACP sessions retain residual exposure with no auto-\n"
+        "   recovery. Prefer the CLI + wrapper for long/complex coordination runs.\n"
     )
 
 
@@ -108,6 +125,79 @@ def _resilient_runner_content() -> str:
             '"""Placeholder: scripts/goose-run-resilient.py was not found in this\n'
             "agentteams install (expected at "
             f"{_RESILIENT_RUNNER_SOURCE}). Reinstall agentteams or fetch the file\n"
+            "from the agentteams source repo.\n"
+            '"""\n'
+        )
+
+
+_ROUTE_PROXY_SOURCE = (
+    Path(__file__).resolve().parent.parent.parent / "scripts" / "goose-openrouter-route-proxy.py"
+)
+
+
+def _route_proxy_content() -> str:
+    """Return this repo's own ``scripts/goose-openrouter-route-proxy.py``, read from disk.
+
+    Phase 1.2 (cross-repo coordination, 2026-09-13): every generated Goose team ships the
+    OpenRouter route proxy alongside the CLI resilient runner. The dead-turn (tool-call
+    reasoning leak) is a model/backend serialization bug whose rate is backend-dependent, so
+    steering to lower-leak backends is the only mitigation that covers **every** Goose surface
+    — CLI, ``goose acp`` (VS Code), and desktop — because it sits under ``OPENROUTER_HOST``,
+    unlike the ``goose run`` wrapper which by construction cannot see ACP traffic. Shipping it
+    unconditionally (no manifest opt-in) mirrors ``_resilient_runner_content``: a sibling
+    script that sits unused in ``scripts/`` until separately invoked is inert, not a
+    behaviour change to the emitted recipes.
+
+    Honest bound (see the script's own header + its 2026-07-24 report): route selection
+    **reduces** the leak rate, it does not eliminate it — a leak has recurred even on an
+    allowlisted backend — and the proxy is a process the operator must run. Read from disk
+    (not inline-duplicated) so the shipped copy can never drift from the tested one; degrades
+    to an explanatory placeholder (never a crash) if the source file is missing.
+    """
+    try:
+        return _ROUTE_PROXY_SOURCE.read_text(encoding="utf-8")
+    except OSError:
+        return (
+            "#!/usr/bin/env python3\n"
+            '"""Placeholder: scripts/goose-openrouter-route-proxy.py was not found in this\n'
+            "agentteams install (expected at "
+            f"{_ROUTE_PROXY_SOURCE}). Reinstall agentteams or fetch the file\n"
+            "from the agentteams source repo.\n"
+            '"""\n'
+        )
+
+
+_COORDINATION_MCP_SOURCE = (
+    Path(__file__).resolve().parent.parent.parent / "scripts" / "goose-coordination-mcp.py"
+)
+
+
+def _coordination_mcp_content() -> str:
+    """Return this repo's own ``scripts/goose-coordination-mcp.py``, read from disk.
+
+    Phase 2 (cross-repo coordination, 2026-09-13): a team that declares cross-repo
+    coordination ships the stdio coordination MCP server so its coordinator/liaison recipes
+    have a real, structured tool to file/record cross-repo coordination (registry read,
+    Coordination Request artifact, coordination-log append, security-clearance request) —
+    instead of degrading the instruction to prose (a dead-turn trigger). It is the FILE-BASED,
+    human-in-the-loop model: the server only reads or records, never grants or executes (see
+    the script header and the HALTed autonomous design in
+    ``references/plans/goose-autonomous-handoff-authorization.design.md``).
+
+    Shipped read-from-disk (mirrors ``_route_proxy_content`` / ``_resilient_runner_content``)
+    so the emitted copy can never drift from the tested one; degrades to an explanatory
+    placeholder (never a crash) if the source file is missing. Unlike the route proxy/runner
+    (shipped unconditionally), this is emitted only when the team declares
+    ``coordination_write_roots`` — an inert sibling script otherwise adds surface for no reason.
+    """
+    try:
+        return _COORDINATION_MCP_SOURCE.read_text(encoding="utf-8")
+    except OSError:
+        return (
+            "#!/usr/bin/env python3\n"
+            '"""Placeholder: scripts/goose-coordination-mcp.py was not found in this\n'
+            "agentteams install (expected at "
+            f"{_COORDINATION_MCP_SOURCE}). Reinstall agentteams or fetch the file\n"
             "from the agentteams source repo.\n"
             '"""\n'
         )

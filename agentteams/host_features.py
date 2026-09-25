@@ -502,7 +502,10 @@ def privilege_profile_advisory(
                 "auto-applied: you MUST wrap your agent invocation with it "
                 "('sandbox/confine-run.sh --scratch DIR --egress deny -- <your agent cmd>'). "
                 "Nothing is confined until you do — the emitted launcher on its own enforces "
-                "nothing."
+                "nothing. For any cross-repo coordination_write_roots, pass each as "
+                "'--coord-root <sibling path>' (NOT --writable): --coord-root FAILS CLOSED if the "
+                "sibling is missing, whereas --writable would silently create an empty dir and mask "
+                "the misconfiguration."
             ),
         }
 

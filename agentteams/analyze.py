@@ -271,6 +271,7 @@ def build_manifest(description: dict[str, Any], *, framework: str = "copilot-vsc
     # here so it is reachable (audit 2026-W39, C1): the goose Seatbelt emitter re-allows this
     # ONE loopback endpoint. Seatbelt accepts only localhost/* as the host.
     goose_egress_proxy = description.get("goose_egress_proxy")
+    coordination_write_roots = description.get("coordination_write_roots")
 
     # Strict agent-privilege switch (enforce decision signing). Defaults ON: an absent field
     # means the team gets the enforcement when it is (re)generated/updated (the emitted
@@ -532,6 +533,7 @@ def build_manifest(description: dict[str, Any], *, framework: str = "copilot-vsc
         **({"authorized_managers": authorized_managers} if authorized_managers else {}),
         **({"workspace_write_roots": list(workspace_write_roots)} if workspace_write_roots else {}),
         **({"goose_egress_proxy": goose_egress_proxy} if goose_egress_proxy else {}),
+        **({"coordination_write_roots": list(coordination_write_roots)} if coordination_write_roots else {}),
         **({"protected_read_paths": list(description["protected_read_paths"])} if description.get("protected_read_paths") else {}),
         # P3-3 opt-in: emit only when true (keeps the default block byte-identical); resolves
         # denyRead `~/` paths to abspaths in the emitter so enforcement does not depend on `~`.
