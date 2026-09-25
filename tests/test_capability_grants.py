@@ -331,6 +331,27 @@ def test_no_widening_when_sandbox_off(tmp_path, monkeypatch):
     assert apply_held_grants_to_write_roots(m, tmp_path) == []
 
 
+def test_default_confined_widens_only_by_valid_grant(tmp_path, monkeypatch):
+    # M3 (audit 2026-W39, security F6): the confined DEFAULT now activates grant-widening.
+    # A valid held grant widens; the result is a ledger-bounded path, never an unrestricted
+    # root. (privilege_profile omitted -> defaults to confined, explicit=False.)
+    monkeypatch.setenv(grants.GRANT_KEY_ENV, _KEY)
+    m = analyze.build_manifest({"project_goal": "x", "project_name": "Team A"}, framework="claude")
+    assert m["privilege_profile"] == "confined" and m["privilege_profile_explicit"] is False
+    _issue(tmp_path, holder_team=m["team_id"], target_path="/abs/b/shared")
+    widened = apply_held_grants_to_write_roots(m, tmp_path)
+    assert widened == ["/abs/b/shared"]
+    assert "/" not in widened  # never an unrestricted root
+
+
+def test_default_confined_excludes_expired_grant(tmp_path, monkeypatch):
+    monkeypatch.setenv(grants.GRANT_KEY_ENV, _KEY)
+    m = analyze.build_manifest({"project_goal": "x", "project_name": "Team A"}, framework="claude")
+    _issue(tmp_path, holder_team=m["team_id"], target_path="/abs/b/shared",
+           expires_at="2000-01-01T00:00:00Z")  # expired
+    assert apply_held_grants_to_write_roots(m, tmp_path) == []
+
+
 def test_readonly_grant_does_not_widen(tmp_path):
     # D1: a grant permitting only `read` must NOT hand the holder OS write.
     _issue(tmp_path, grant_id="ro", holder_team="team-a", permitted_ops="read",

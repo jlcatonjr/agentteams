@@ -467,6 +467,10 @@
       "enum": ["cooperative", "confined", "exclusive"],
       "description": "Workspace write-confinement posture carried from the project description. confined/exclusive imply the claude:sandbox host feature (see project-description.schema.json)."
     },
+    "goose_egress_proxy": {
+      "type": "string",
+      "description": "Sanctioned loopback egress endpoint (host[:port], host must be localhost/*) re-allowed in an exclusive goose team's Seatbelt profile. Carried from the project description. Only meaningful with privilege_profile: exclusive on goose/macOS."
+    },
     "privilege_profile_explicit": {
       "type": "boolean",
       "description": "Whether the operator EXPLICITLY set privilege_profile in the brief (vs. inheriting the confined default introduced 2026-W39). Recorded at build so the one non-inert privilege-keyed artifact — Claude's constitutional-gate.py fail-open->fail-closed flip (claude._apply_fail_closed_policy) — fires only on an explicit confined/exclusive, never on the defaulted confined; this keeps the default flip inert-until-merged."

@@ -30,9 +30,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
     on the defaulted `confined`. So a routine `--update`/`fleet` over a team that wired the
     gate but never set a profile keeps its gate fail-**open**; the disruptive flip stays an
     explicit opt-in. This is what keeps the default flip genuinely inert-until-merged.
-  - **Note for Goose:** `confined` emits `(deny network*)` in the Seatbelt profile
-    (`.goose/sandbox.sb`) — a confined Goose team is network-ISOLATED once wired (single-endpoint
-    egress-proxy escape only). Inert until you set `GOOSE_SANDBOX` / launch via `sandbox-exec`.
+  - **Network posture (Goose):** the default `confined` profile leaves network **open** (write
+    -confinement only, matching Claude confined) so a default-on Goose team can reach its LLM.
+    Network isolation is an **`exclusive`**-only property: `exclusive` emits `(deny network*)`
+    in `.goose/sandbox.sb` and re-allows one sanctioned **loopback** endpoint via
+    `goose_egress_proxy` (`localhost:PORT`; Seatbelt `remote ip` accepts only `localhost`/`*`).
+    Inert until you set `GOOSE_SANDBOX` / launch via `sandbox-exec`.
 
 ### added (pinned-sync health: an unsyncable pin is now discoverable via `--stale-check`)
 

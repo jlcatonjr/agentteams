@@ -391,14 +391,33 @@ def verify_sandbox_wiring(project_root: Path) -> tuple[bool, list[str]]:
             "WARNING: sandbox.allowUnsandboxedCommands is not false in the live settings — "
             "the unsandboxed-command escape hatch is open, so confinement can be bypassed."
         )
-    ex_roots = (ex_sandbox.get("filesystem") or {}).get("allowWrite")
-    lv_roots = (lv_sandbox.get("filesystem") or {}).get("allowWrite")
+    ex_fs = ex_sandbox.get("filesystem") or {}
+    lv_fs = lv_sandbox.get("filesystem") or {}
+    ex_roots = ex_fs.get("allowWrite")
+    lv_roots = lv_fs.get("allowWrite")
     if ex_roots != lv_roots:
         ok = False
         msgs.append(
             "WARNING: the live sandbox write roots differ from the emitted expectation "
             f"(expected allowWrite={ex_roots!r}) — re-merge so the boundary matches."
         )
+    # denyWrite (control-plane protection) + denyRead (exclusive read-exclusion) must not be
+    # dropped/shortened on merge (audit 2026-W39, security F4). A merge that keeps the block
+    # but strips denyWrite re-enables the in-sandbox agent to edit its own gate/switch; a
+    # shortened denyRead silently un-seals credential paths. Compare as sets (order-agnostic)
+    # and require the live set to be a SUPERSET of the emitted expectation.
+    for key, label in (("denyWrite", "control-plane denyWrite"), ("denyRead", "read-exclusion denyRead")):
+        ex_vals = ex_fs.get(key)
+        if not ex_vals:
+            continue  # not emitted for this profile (e.g. denyRead only for exclusive)
+        missing = set(ex_vals) - set(lv_fs.get(key) or [])
+        if missing:
+            ok = False
+            msgs.append(
+                f"WARNING: the live sandbox {label} is missing entries the emitted block "
+                f"expects ({sorted(missing)!r}) — re-merge so the boundary matches; a dropped "
+                f"{key} weakens the boundary while it still looks enabled."
+            )
     if ok:
         msgs.append("OK: sandbox confinement is merged and enabled in .claude/settings.json.")
     return ok, msgs

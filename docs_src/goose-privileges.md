@@ -197,10 +197,14 @@ framework, `generate` emits two inert artifacts into the project's `.goose/` dir
 
 - **`.goose/sandbox.sb`** — an Apple-Seatbelt profile that:
   - `deny file-write*` everywhere **except** the `workspace_write_roots` (default `["."]`,
-    the project tree) — writes outside are kernel-denied;
-  - `deny network*` **by default**. Seatbelt file-denies do **not** restrict sockets, so
-    without this a write-confined agent would still have open egress. Absent a configured
-    proxy the agent is **network-isolated** (deny-all), never silently open;
+    the project tree) — writes outside are kernel-denied — and re-`deny file-write*` the
+    control-plane files (the agent may not edit its own gate/switch/profile);
+  - **network:** the default `confined` profile leaves egress **open** (write-confinement
+    only, matching Claude confined) so Goose can reach its LLM out of the box. Network
+    isolation is an **`exclusive`**-only property: `exclusive` emits `deny network*` and
+    re-allows one sanctioned **loopback** endpoint via `goose_egress_proxy` (`localhost:PORT`
+    — Seatbelt `remote ip` accepts only `localhost`/`*`); absent a proxy, `exclusive` is
+    fully network-isolated;
   - for `exclusive`, additionally `deny file-read*` of a curated secret set (`~/.ssh`,
     `~/.aws`, `~/.gnupg`, `~/.kube`, `~/.config/gcloud`, `~/.azure`) **plus** any
     `protected_read_paths` (e.g. sibling agent scratch roots).
@@ -229,8 +233,10 @@ agentteams generate ... --check-wiring   # checks GOOSE_SANDBOX live + profile +
 ```
 
 Then test by hand from inside the sandbox: a write **outside** `workspace_write_roots` MUST
-be denied, and a raw non-proxied network egress MUST be denied. If either succeeds, the
-boundary is not in effect on your build — use path 1.
+be denied. For an **`exclusive`** team, a raw non-proxied network egress MUST also be denied;
+under `confined`, egress is **open** by design (do not expect it to be denied). If the write
+succeeds (or, for `exclusive`, egress succeeds), the boundary is not in effect on your build —
+use path 1.
 
 **Honest limits:**
 

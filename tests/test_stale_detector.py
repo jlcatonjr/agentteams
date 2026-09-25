@@ -698,3 +698,49 @@ class TestUnsyncablePin:
         report = sd.scan_staleness(tmp_path, include_git=False)
         assert any(f.code == "PIN_UNSYNCABLE" for f in report.tier1)
         assert report.has_blocking
+
+
+class TestPinBridgeOverlap:
+    """detect_unsyncable_pin also flags a pinned framework that is ALSO a live bridge TARGET
+    (double-writer into one agents dir) — audit 2026-W39, adversarial SEV-3#3 (M6)."""
+
+    @staticmethod
+    def _write_pin(root: Path, frameworks: list[str]) -> None:
+        d = root / ".agentteams"
+        d.mkdir(parents=True, exist_ok=True)
+        (d / "pin.json").write_text(
+            json.dumps({"schema_version": "1.0", "pinned_framework": frameworks[0],
+                        "frameworks": frameworks, "canonical_dir": ".agentteams/canonical"}),
+            encoding="utf-8",
+        )
+
+    @staticmethod
+    def _write_bridge(root: Path, name: str, framework: str) -> None:
+        d = root / "references" / "bridges" / name
+        d.mkdir(parents=True, exist_ok=True)
+        (d / "bridge-manifest.json").write_text(
+            json.dumps({"framework": framework, "source_dir": "x"}), encoding="utf-8"
+        )
+
+    def test_single_framework_pin_overlapping_bridge_is_flagged(self, tmp_path):
+        # len<2 must NOT short-circuit: a single-framework pin can still overlap a bridge.
+        self._write_pin(tmp_path, ["claude"])
+        self._write_bridge(tmp_path, "copilot-vscode-to-claude", "claude")
+        findings = sd.detect_unsyncable_pin(tmp_path)
+        codes = {f.code for f in findings}
+        assert "PIN_BRIDGE_OVERLAP" in codes
+        assert any(f.tier == 1 for f in findings if f.code == "PIN_BRIDGE_OVERLAP")
+
+    def test_bridge_to_unpinned_framework_is_clean(self, tmp_path):
+        # A bridge targeting a framework NOT in the pin is not a double-writer.
+        self._write_pin(tmp_path, ["claude"])
+        self._write_bridge(tmp_path, "copilot-vscode-to-goose", "goose")
+        assert not any(f.code == "PIN_BRIDGE_OVERLAP" for f in sd.detect_unsyncable_pin(tmp_path))
+
+    def test_target_framework_inferred_from_dir_name(self, tmp_path):
+        # Manifest without an explicit framework field -> infer from `<src>-to-<fw>` dir name.
+        self._write_pin(tmp_path, ["claude"])
+        d = tmp_path / "references" / "bridges" / "copilot-vscode-to-claude"
+        d.mkdir(parents=True, exist_ok=True)
+        (d / "bridge-manifest.json").write_text(json.dumps({"source_dir": "x"}), encoding="utf-8")
+        assert any(f.code == "PIN_BRIDGE_OVERLAP" for f in sd.detect_unsyncable_pin(tmp_path))

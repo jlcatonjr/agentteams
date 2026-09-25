@@ -66,17 +66,29 @@ def _active_rules(profile: str) -> list[str]:
     return [ln.strip() for ln in profile.splitlines() if ln.strip() and not ln.strip().startswith(";;")]
 
 
-def test_confined_profile_denies_writes_and_network_but_not_reads():
+def test_confined_profile_denies_writes_leaves_network_open_no_reads():
+    # 2026-W39 operator decision: confined = write-confinement only; network stays OPEN
+    # (matches Claude confined) so a default-on goose team can reach its LLM. Network
+    # isolation is exclusive-only (deny_network defaults False for confined).
     prof = _build_seatbelt_profile(["."], deny_read=None, egress_endpoint=None)
     assert "(allow default)" in prof
     assert "(deny file-write*)" in prof
     assert '(subpath (param "WORKSPACE_ROOT"))' in prof
-    # deny-all network by default (Seatbelt file-denies do not cover sockets).
-    assert "(deny network*)" in prof
-    # no ACTIVE network allow rule (a comment may mention the syntax) -> isolated, not open.
+    # confined does NOT deny network (no active deny/allow network rule).
+    assert not any(r.startswith("(deny network*") for r in _active_rules(prof))
     assert not any(r.startswith("(allow network*") for r in _active_rules(prof))
     # confined carries NO read-exclusion.
     assert "(deny file-read*" not in prof
+    # ...but it DOES protect the control-plane files (parity with Claude denyWrite).
+    assert any(r.startswith("(deny file-write*") for r in _active_rules(prof))
+    assert 'agent-privilege.json' in prof
+
+
+def test_exclusive_profile_denies_network():
+    # Network isolation is the exclusive property now.
+    prof = _build_seatbelt_profile(["."], deny_read=None, egress_endpoint=None, deny_network=True)
+    assert "(deny network*)" in prof
+    assert not any(r.startswith("(allow network*") for r in _active_rules(prof))
 
 
 def test_exclusive_profile_adds_read_exclusion_of_defaults_plus_siblings():
@@ -94,13 +106,34 @@ def test_exclusive_profile_adds_read_exclusion_of_defaults_plus_siblings():
     assert '(subpath (string-append (param "HOME_DIR") "/work/agent-c"))' in prof
 
 
-def test_egress_proxy_flag_reallows_exactly_one_endpoint():
-    prof = _build_seatbelt_profile(["."], deny_read=None, egress_endpoint="127.0.0.1:8888")
+def test_egress_proxy_flag_reallows_exactly_one_loopback_endpoint():
+    # Egress-proxy is meaningful only under network isolation (exclusive => deny_network=True).
+    # Seatbelt `remote ip` accepts ONLY localhost/*; a loopback proxy IS expressible.
+    prof = _build_seatbelt_profile(
+        ["."], deny_read=None, egress_endpoint="localhost:8888", deny_network=True
+    )
     assert "(deny network*)" in prof
-    assert '(allow network* (remote ip "127.0.0.1:8888"))' in prof
+    assert '(allow network* (remote ip "localhost:8888"))' in prof
     assert any(r.startswith("(allow network*") for r in _active_rules(prof))
-    # absent proxy => deny-all, never open (no ACTIVE allow rule).
-    prof2 = _build_seatbelt_profile(["."], deny_read=None, egress_endpoint=None)
+
+
+def test_egress_ip_literal_is_rejected_not_emitted_unloadable():
+    # audit 2026-W39 (TV): an IP literal makes sandbox-exec refuse to load the WHOLE profile.
+    # Fail closed to deny-all rather than emit an unloadable `(remote ip "1.2.3.4:443")`.
+    prof = _build_seatbelt_profile(
+        ["."], deny_read=None, egress_endpoint="1.2.3.4:443", deny_network=True
+    )
+    assert "(deny network*)" in prof
+    assert not any(r.startswith("(allow network*") for r in _active_rules(prof))
+    # and the in-profile remediation must NOT suggest an invalid IP form.
+    assert '(remote ip "127.0.0.1' not in prof
+
+
+def test_exclusive_absent_proxy_is_deny_all():
+    # exclusive + no proxy => network deny-all, never open (no ACTIVE allow rule). C1: this is
+    # the EXCLUSIVE posture; confined leaves egress open (see test_confined_...network_open).
+    prof2 = _build_seatbelt_profile(["."], deny_read=None, egress_endpoint=None, deny_network=True)
+    assert "(deny network*)" in prof2
     assert not any(r.startswith("(allow network*") for r in _active_rules(prof2))
 
 
@@ -284,7 +317,9 @@ def test_verify_windows_is_exit_neutral_not_a_clean_pass(monkeypatch, tmp_path):
 
 @pytest.mark.skipif(not IS_MAC, reason="OS enforcement for goose is macOS-only")
 def test_verify_detects_porous_profile_missing_network_deny(tmp_path):
-    m = _confined_goose_manifest()
+    # Network isolation is EXCLUSIVE-only (C1): use an exclusive manifest, whose emitted
+    # profile DOES carry (deny network*). (A confined profile legitimately has none.)
+    m = _confined_goose_manifest("exclusive")
     _emit_into(tmp_path, m)
     # Tamper: remove the network deny -> the verifier must catch the porousness.
     prof = tmp_path / ".goose" / "sandbox.sb"

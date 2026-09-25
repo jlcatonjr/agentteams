@@ -130,6 +130,12 @@ def test_p1_2_fail_closed_raises_on_unenforceable_host(monkeypatch):
     # every other framework gets a NON-FATAL manual-wire advisory (the launcher must be wrapped),
     # never the fatal unenforced-host one.
     monkeypatch.setattr(sys, "platform", "linux")
+    # Simulate a Linux host that HAS the enforcing mechanism (bwrap + userns); otherwise the
+    # C3 live probe on this test host (which lacks bwrap) would correctly report
+    # 'privilege-profile-mechanism-unavailable' instead of the manual-wire advisory.
+    monkeypatch.setattr(
+        "agentteams.host_features.os_sandbox_mechanism_available", lambda platform=None: True
+    )
     for fw in ("codex", "goose"):
         m = {"privilege_profile": "confined"}
         resolve_host_features_and_advise(m, [], fw, allow_unenforced=False)  # must not raise
