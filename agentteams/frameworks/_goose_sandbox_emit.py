@@ -15,13 +15,15 @@ the fatal ``privilege_profile_advisory`` (see ``host_features.is_sandbox_capable
 Design mirrors the Claude path, honestly and fail-closed:
 
 * Emit a ``sandbox.sb`` Seatbelt profile that ``deny file-write*`` outside the workspace
-  write roots; for ``exclusive`` it additionally ``deny file-read*`` of the default
-  protected-read set plus any operator-supplied sibling scratch roots.
-* Emit ``deny network*`` by DEFAULT. Seatbelt file-denies do NOT cover sockets, so without
-  this a "confined" goose agent keeps unrestricted egress — the exact false-assurance this
-  feature exists to prevent. An egress-proxy allow for ONE sanctioned endpoint is gated
-  behind an explicit manifest flag; absent that flag the agent is network-ISOLATED
-  (deny-all), never silently open.
+  write roots (and re-``deny file-write*`` the control-plane files so the agent cannot edit
+  its own gate/switch/profile); for ``exclusive`` it additionally ``deny file-read*`` of the
+  default protected-read set plus any operator-supplied sibling scratch roots.
+* Network posture is EXCLUSIVE-only (operator decision, 2026-W39). The DEFAULT ``confined``
+  profile leaves egress OPEN — matching Claude's confined block, so a default-on goose team
+  can reach its LLM out of the box; ``confined`` is write-confinement only. ``exclusive``
+  emits ``deny network*`` (Seatbelt file-denies do not cover sockets) and re-allows ONE
+  sanctioned LOOPBACK endpoint when ``goose_egress_proxy`` is set (Seatbelt ``remote ip``
+  accepts only ``localhost``/``*``); absent that, exclusive is fully network-ISOLATED.
 * Ship an INERT example (``config.yaml.agentteams.example``) carrying ``GOOSE_SANDBOX`` +
   the profile path — the operator merges it into their live ``~/.config/goose/config.yaml``.
   We NEVER write the operator's live config (mirror the Claude "ship an example, never
@@ -101,12 +103,29 @@ def _seatbelt_path_expr(path: str) -> str | None:
       ``(subpath (string-append (param "WORKSPACE_ROOT") "/x"))``
 
     ``HOME_DIR`` and ``WORKSPACE_ROOT`` are supplied at launch (``sandbox-exec -D``). A path
-    containing a double-quote is rejected (returns None) rather than emitted unescaped —
-    fail closed, never emit a malformed rule that could widen the profile.
+    is rejected (returns None) rather than emitted as a porous or malformed rule — fail
+    closed. Rejected inputs (audit 2026-W39, hygiene RANK2 / security F5):
+
+    * empty, or containing a double-quote (would break/escape the string literal);
+    * any control character — newline / CR / TAB / other C0 — which would split the
+      s-expression across lines and could inject an unintended rule;
+    * a backslash (Seatbelt string-literal escape ambiguity);
+    * the filesystem root ``/`` or ``//`` (``(subpath "/")`` re-allows the WHOLE filesystem,
+      fully defeating write-confinement);
+    * any ``..`` path segment — Seatbelt ``subpath`` does NOT normalize ``..``, so
+      ``WORKSPACE_ROOT/../../etc`` would escape the workspace root.
     """
-    if not path or '"' in path:
+    if not path or '"' in path or "\\" in path:
+        return None
+    if any(ord(ch) < 0x20 for ch in path):  # newline/CR/TAB/other control chars
+        return None
+    # Reject `..` traversal segments (Seatbelt does not normalize subpath).
+    if ".." in path.split("/"):
         return None
     if path.startswith("/"):
+        # `/` or `//...` collapsing to root would re-allow the entire filesystem.
+        if path.rstrip("/") == "":
+            return None
         return f'(subpath "{path}")'
     if path.startswith("~/"):
         rest = path[2:]
@@ -117,29 +136,86 @@ def _seatbelt_path_expr(path: str) -> str | None:
     return f'(subpath (string-append (param "WORKSPACE_ROOT") "/{rest}"))'
 
 
+def _seatbelt_egress_rule(endpoint: str | None) -> str | None:
+    """Validate a sanctioned-egress endpoint for a Seatbelt ``remote ip`` rule.
+
+    Apple Seatbelt's ``(remote ip "...")`` accepts ONLY ``localhost`` or ``*`` as the host;
+    an IP or DNS literal makes ``sandbox-exec`` refuse to load the ENTIRE profile (audit
+    2026-W39, technical-validator finding — a confined goose team with an IP proxy produced
+    an unloadable profile). So a sanctioned egress must be a loopback proxy.
+
+    Args:
+        endpoint: The configured ``goose_egress_proxy`` (``host[:port]``), or None.
+
+    Returns:
+        The endpoint string when it is a valid loopback/wildcard form
+        (``localhost``, ``localhost:PORT``, ``*``, ``*:PORT``); otherwise None (the caller
+        keeps deny-all and discloses the rejection). Never returns an unloadable rule.
+    """
+    if not endpoint or '"' in endpoint or "\\" in endpoint:
+        return None
+    if any(ord(ch) < 0x20 for ch in endpoint):
+        return None
+    host, sep, port = endpoint.partition(":")
+    if host not in ("localhost", "*"):
+        return None
+    if sep and not port.isdigit():
+        return None
+    return endpoint
+
+
 def _build_seatbelt_profile(
     write_roots: list[str] | None,
     deny_read: list[str] | None = None,
     egress_endpoint: str | None = None,
+    deny_network: bool = False,
 ) -> str:
     """Build the ``sandbox.sb`` Apple-Seatbelt profile text for goose confinement.
 
     Seatbelt semantics: last matching rule wins. We ``(allow default)``, then ``(deny
     file-write*)`` and re-allow only the workspace roots (writes outside are kernel-denied),
-    then ``(deny network*)`` (re-allowing only a sanctioned proxy endpoint when one is
-    configured), then — for ``exclusive`` — ``(deny file-read*)`` of the protected set.
+    then re-``(deny file-write*)`` the control-plane files (parity with the Claude
+    ``denyWrite`` — a confined agent must not edit its own gate/switch), then — only when
+    ``deny_network`` (the ``exclusive`` profile) — ``(deny network*)`` re-allowing a
+    sanctioned loopback proxy, and ``(deny file-read*)`` of the protected set.
+
+    Network posture (operator decision 2026-W39): the DEFAULT ``confined`` profile does NOT
+    restrict network (``deny_network=False``) — egress stays open, matching Claude's confined
+    block, so a default-on goose team can reach its LLM out of the box. Network isolation is
+    an ``exclusive``-only property (``deny_network=True``), where the only sanctioned egress
+    is a LOOPBACK proxy (Seatbelt ``remote ip`` accepts only ``localhost``/``*``).
 
     Args:
         write_roots: Workspace roots the agent may write to (default ``["."]`` → the whole
             project tree, resolved via the ``WORKSPACE_ROOT`` launch parameter).
         deny_read: Read-exclusion paths (``exclusive`` only); None/empty emits no read deny.
-        egress_endpoint: A single ``host:port`` the network deny re-allows (the sanctioned
-            egress proxy). None ⇒ deny-all network (isolated, never silently open).
+        egress_endpoint: A single loopback ``host:port`` the network deny re-allows (the
+            sanctioned egress proxy); only meaningful when ``deny_network``. A non-loopback
+            value is rejected (kept deny-all) rather than emitted as an unloadable rule.
+        deny_network: When True (``exclusive``), deny all network except a sanctioned
+            loopback proxy. When False (``confined``, the default), leave egress open and
+            disclose that in the profile.
 
     Returns:
         The profile text (ends with a trailing newline).
+
+    Raises:
+        ValueError: a non-empty ``write_roots`` or ``deny_read`` entry cannot be expressed
+            as a safe Seatbelt rule (fail closed, never silently drop it).
     """
+    from agentteams.frameworks._sandbox_emit import _PROTECTED_WRITE_PATHS
     roots = list(write_roots) if write_roots else ["."]
+    # Fail CLOSED on any unrepresentable root rather than silently dropping it: a dropped
+    # write root would leave the agent unable to write where the operator intended (and a
+    # root like "/" or "../x" that _seatbelt_path_expr now rejects must surface as an error,
+    # not vanish). (audit 2026-W39, security F5.)
+    rejected_roots = [r for r in roots if _seatbelt_path_expr(r) is None]
+    if rejected_roots:
+        raise ValueError(
+            "goose sandbox write_roots contains path(s) that cannot be expressed as a safe "
+            f"Seatbelt rule (root '/', '..' traversal, quote, backslash, or control char): "
+            f"{rejected_roots!r}. Fix the workspace_write_roots in the brief."
+        )
     write_exprs = [e for e in (_seatbelt_path_expr(r) for r in roots) if e]
     if not write_exprs:
         # Never emit a profile with NO writable root: that would deny every write including
@@ -182,28 +258,67 @@ def _build_seatbelt_profile(
         '    (literal "/dev/null")',
         '    (literal "/dev/stdout")',
         '    (literal "/dev/stderr"))',
+    ]
+    # Control-plane deny-write (parity with the Claude denyWrite / _PROTECTED_WRITE_PATHS —
+    # audit 2026-W39 hygiene RANK3): a confined agent must not edit its own enforcement
+    # switch, gate hook, or its OWN Seatbelt profile. Emitted AFTER the workspace allow so
+    # last-match-wins denies these even though they sit inside the writable workspace.
+    control_plane = [*_PROTECTED_WRITE_PATHS, ".goose/sandbox.sb"]
+    cp_exprs = [e for e in (_seatbelt_path_expr(p) for p in control_plane) if e]
+    lines += [
+        ";; --- Control-plane protection (agent may not rewrite its own enforcement) ---",
+        "(deny file-write*",
+        *[f"    {e}" for e in cp_exprs],
+        ")",
         "",
         ";; --- Network egress ---",
-        ";; Seatbelt FILE denies do NOT restrict sockets: a write-confined agent would still",
-        ";; have OPEN egress. Deny all network by default (deny-all, never silently open).",
-        "(deny network*)",
     ]
-    if egress_endpoint and '"' not in egress_endpoint:
+    if deny_network:
         lines += [
-            ";; [egress-proxy] Re-allow ONLY the one sanctioned endpoint. HONEST RESIDUAL:",
-            ";; this endpoint (the LLM API / proxy) is a bidirectional channel — agentteams",
-            ";; cannot close data exfiltration THROUGH it; bound it with the proxy's own",
-            ";; content/rate controls. Do not read this allow as 'exfiltration closed'.",
-            f'(allow network* (remote ip "{egress_endpoint}"))',
+            ";; privilege_profile: exclusive — network ISOLATED. Seatbelt FILE denies do NOT",
+            ";; restrict sockets, so deny all network explicitly (never silently open).",
+            "(deny network*)",
         ]
+        egress_expr = _seatbelt_egress_rule(egress_endpoint)
+        if egress_expr is not None:
+            lines += [
+                ";; [egress-proxy] Re-allow ONLY the one sanctioned LOOPBACK endpoint. Seatbelt's",
+                ";; `remote ip` accepts only `localhost`/`*` (an IP/DNS literal makes sandbox-exec",
+                ";; REFUSE TO LOAD THE WHOLE PROFILE — audit 2026-W39, TV finding), so a sanctioned",
+                ";; egress must be a LOOPBACK proxy (e.g. the goose route-proxy on localhost:PORT).",
+                ";; HONEST RESIDUAL: this endpoint is bidirectional — agentteams cannot close",
+                ";; exfiltration THROUGH it; bound it with the proxy's own content/rate controls.",
+                f'(allow network* (remote ip "{egress_expr}"))',
+            ]
+        else:
+            lines += [
+                ";; No sanctioned egress proxy (goose_egress_proxy unset, or a non-loopback value",
+                ";; Seatbelt cannot express) — fully NETWORK-ISOLATED. NOTE: a goose agent needs",
+                ";; egress to reach its LLM; an exclusive goose team therefore requires a LOOPBACK",
+                ";; proxy. Set goose_egress_proxy to `localhost:PORT` (or `*`) and regenerate, or",
+                ";; add:  (allow network* (remote ip \"localhost:PORT\"))",
+            ]
     else:
         lines += [
-            ";; No sanctioned egress proxy configured (manifest.goose_egress_proxy unset) —",
-            ";; the agent is NETWORK-ISOLATED. To re-allow one endpoint, set that flag and",
-            ";; regenerate, or add:  (allow network* (remote ip \"127.0.0.1:PORT\"))",
+            ";; privilege_profile: confined — network is NOT restricted (egress OPEN), matching",
+            ";; the Claude confined block, so a default-on goose team can reach its LLM out of",
+            ";; the box. This is write-confinement only. HONEST RESIDUAL: a confined agent can",
+            ";; still make arbitrary network connections (exfiltration is NOT closed here). For",
+            ";; network isolation, use privilege_profile: exclusive (adds deny network* + a",
+            ";; loopback egress-proxy allow) and read-exclusion.",
         ]
 
     if deny_read:
+        # Fail CLOSED: an unrepresentable read-exclusion path must NOT be silently dropped
+        # while the profile still advertises exclusive read-exclusion (audit 2026-W39,
+        # security F5). Surface it as an error so the operator fixes protected_read_paths.
+        rejected_reads = [p for p in deny_read if _seatbelt_path_expr(p) is None]
+        if rejected_reads:
+            raise ValueError(
+                "goose sandbox protected_read_paths contains path(s) that cannot be expressed "
+                f"as a safe Seatbelt read-deny (quote, backslash, control char, '..', or bare "
+                f"'/'): {rejected_reads!r}. Fix protected_read_paths in the brief."
+            )
         read_exprs = [e for e in (_seatbelt_path_expr(p) for p in deny_read) if e]
         if read_exprs:
             lines += [
@@ -238,12 +353,23 @@ def _build_config_example(
     Goose-build-variance / Apple-deprecation caveats honestly.
     """
     roots = list(write_roots) if write_roots else ["."]
-    proxy_note = (
-        f"#   goose_egress_proxy endpoint (sanctioned): {egress_endpoint}\n"
-        if egress_endpoint
-        else "#   No egress proxy configured -> the profile is network deny-all (isolated).\n"
-    )
-    profile = "confined + exclusive (read-exclusion)" if exclusive else "confined"
+    # Network posture is EXCLUSIVE-only (C1, 2026-W39): confined leaves egress OPEN.
+    if not exclusive:
+        proxy_note = (
+            "#   Network: OPEN (confined = write-confinement only; egress is NOT restricted,\n"
+            "#   matching Claude confined, so goose can reach its LLM). Use privilege_profile\n"
+            "#   exclusive for network isolation.\n"
+        )
+    elif egress_endpoint:
+        proxy_note = (
+            f"#   Network: ISOLATED (exclusive); sanctioned loopback egress proxy: {egress_endpoint}\n"
+        )
+    else:
+        proxy_note = (
+            "#   Network: ISOLATED (exclusive) — deny-all; no egress proxy configured. Set a\n"
+            "#   loopback goose_egress_proxy (localhost:PORT) so goose can reach its LLM.\n"
+        )
+    profile = "confined + exclusive (read-exclusion + network isolation)" if exclusive else "confined"
     return (
         "# ===================================================================\n"
         "# agentteams-emitted Goose confinement example (P1-1) — INERT / EXAMPLE ONLY.\n"
@@ -276,10 +402,15 @@ def _build_config_example(
         "# failure this feature exists to prevent):\n"
         "#   1) run `agentteams generate ... --check-wiring` (checks GOOSE_SANDBOX live +\n"
         "#      the profile exists + write roots match).\n"
-        "#   2) from inside the sandbox, a write outside the workspace MUST be denied, and a\n"
-        "#      raw non-proxied network egress MUST be denied. If either succeeds, the\n"
-        "#      boundary is NOT in effect on your build — use path A.\n"
-        "#\n"
+        "#   2) from inside the sandbox, a write outside the workspace MUST be denied"
+        + (
+            ", and a\n#      raw non-proxied network egress MUST be denied (exclusive). If either succeeds,\n"
+            "#      the boundary is NOT in effect on your build — use path A.\n"
+            if exclusive else
+            ". (Egress\n#      is OPEN under confined — do NOT expect network to be denied.) If the write\n"
+            "#      succeeds, the boundary is NOT in effect on your build — use path A.\n"
+        )
+        + "#\n"
         "# CAVEAT: sandbox-exec / Seatbelt is Apple-deprecated (App Sandbox preferred); the\n"
         "# portable primary for untrusted code remains a container / WASI at the consumer\n"
         "# layer. This profile is the best OS boundary agentteams can emit for Goose today.\n"
@@ -354,7 +485,12 @@ def goose_sandbox_output_files(manifest: dict[str, Any]) -> list[tuple[str, str]
     write_roots = manifest.get("workspace_write_roots") or ["."]
     deny_read = _goose_read_deny_paths(manifest)
     egress_endpoint = manifest.get("goose_egress_proxy") or None
-    profile_text = _build_seatbelt_profile(write_roots, deny_read, egress_endpoint)
+    # Network isolation is an EXCLUSIVE-only property (operator decision 2026-W39): the
+    # default confined profile leaves egress open so a goose team can reach its LLM.
+    deny_network = manifest.get("privilege_profile") == "exclusive"
+    profile_text = _build_seatbelt_profile(
+        write_roots, deny_read, egress_endpoint, deny_network=deny_network
+    )
     config_text = _build_config_example(
         write_roots, exclusive=deny_read is not None, egress_endpoint=egress_endpoint
     )
@@ -482,11 +618,20 @@ def verify_goose_sandbox_wiring(
     msgs: list[str] = []
     ok = True
 
-    # (d) escape-hatch / porousness: the two hard denies MUST be present.
-    for token, why in (
-        ("(deny file-write*)", "workspace write-confinement"),
-        ("(deny network*)", "default network isolation (Seatbelt file-denies do not cover sockets)"),
-    ):
+    # (d) escape-hatch / porousness: the required denies MUST be present. Network isolation is
+    # an EXCLUSIVE-only property (C1, 2026-W39) — confined leaves egress OPEN, so requiring
+    # `(deny network*)` for a confined team would wrongly report a healthy profile as broken.
+    # Determine exclusive from the manifest, else infer from the read-exclusion marker.
+    is_exclusive = (
+        (manifest or {}).get("privilege_profile") == "exclusive"
+        if manifest is not None else "(deny file-read*" in profile_text
+    )
+    required = [("(deny file-write*)", "workspace write-confinement")]
+    if is_exclusive:
+        required.append(
+            ("(deny network*)", "network isolation (exclusive; Seatbelt file-denies do not cover sockets)")
+        )
+    for token, why in required:
         if token not in profile_text:
             ok = False
             msgs.append(f"WARNING: emitted sandbox.sb is missing `{token}` — {why} is NOT in force.")
@@ -532,10 +677,14 @@ def verify_goose_sandbox_wiring(
         )
 
     if ok:
+        denies = "write + network denies" if is_exclusive else "write-confinement (network open — confined)"
+        manual = (
+            "a write outside the workspace and a raw egress MUST both be denied"
+            if is_exclusive else "a write outside the workspace MUST be denied (egress is open under confined)"
+        )
         msgs.append(
-            "OK: .goose/sandbox.sb is present with write + network denies, its write roots "
-            "match, and GOOSE_SANDBOX is enabled live. NOTE (build variance): this confirms "
-            "STATIC wiring only — run the manual test (a write outside the workspace and a "
-            "raw egress MUST both be denied) to confirm your Goose build honors it."
+            f"OK: .goose/sandbox.sb is present with {denies}, its write roots match, and "
+            f"GOOSE_SANDBOX is enabled live. NOTE (build variance): this confirms STATIC wiring "
+            f"only — run the manual test ({manual}) to confirm your Goose build honors it."
         )
     return ok, msgs

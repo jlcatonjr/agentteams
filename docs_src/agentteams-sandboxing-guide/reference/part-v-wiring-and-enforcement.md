@@ -50,7 +50,7 @@ delete-gate test means "these spellings are gated," never "deletion is prevented
 ## SB17 — Fail-open default, fail-closed under confinement  ✅
 
 The hook defaults **fail-OPEN** (`_FAIL_CLOSED_ON_ERROR = False`): a gate crash is a harness *allow*, so
-a buggy gate never bricks a cooperative session. Under `confined`/`exclusive`, emission flips the
+a buggy gate never bricks a cooperative session. Under an **explicit** `confined`/`exclusive`, emission flips the
 sentinel to `_FAIL_CLOSED_ON_ERROR = True` (unless `--allow-fallback-fail-open`), so a crash emits a
 `deny` — the operator opted into a boundary a crash must not silently drop.
 
@@ -63,7 +63,7 @@ flowchart TD
     MATCH -->|no| ALLOW["allow"]
     MATCH -->|yes| ASK["ask — route to operator (C-5)"]
     H -.->|"hook itself crashes"| FC{"_FAIL_CLOSED_ON_ERROR?"}
-    FC -->|"False (cooperative default)"| ALLOW2["fail-OPEN → allow<br/>(never brick a trusted session)"]
+    FC -->|"False (fail-open; gate flips only on explicit confined/exclusive)"| ALLOW2["fail-OPEN → allow<br/>(never brick a trusted session)"]
     FC -->|"True (confined/exclusive)"| DENY["fail-CLOSED → deny<br/>(operator opted into a boundary)"]
 ```
 

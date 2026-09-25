@@ -4,8 +4,8 @@
 
 You ask for the room by setting a single dial:
 
-- **open** (the default) — no lock; the worker is trusted.
-- **locked** — the worker may only write on its own bench.
+- **open** — no lock fitted; the worker is trusted.
+- **locked** (the default) — the worker may only write on its own bench.
 - **locked + curtained** — as above, and it also can't *read* the sensitive folders (passwords, keys) or
   peek at a neighbor's bench.
 

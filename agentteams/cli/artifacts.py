@@ -439,6 +439,19 @@ def resolve_host_features_and_advise(
     )
     if manifest["host_features"]:
         print(f"  Host features: {', '.join(manifest['host_features'])}")
+    # Default-on notice (2026-W39): privilege_profile now defaults to "confined", so a team
+    # that never set the field gets write-confinement emitted. Mirrors the
+    # enforce_decision_signing "default on at update, notify after, opportunity to switch
+    # off" contract — name the opt-out so the tightening is never silent. Inert until the
+    # operator merges the emitted sandbox example (never writes live settings/config).
+    if manifest.get("privilege_profile") in ("confined", "exclusive"):
+        print(
+            "  🛡  Workspace sandbox (privilege_profile) is ENABLED for this team — the "
+            f"default as of 2026-W39. An OS write-confinement boundary is emitted for "
+            "qualifying providers (inert until you merge the emitted settings/config "
+            "example). To opt out, set \"privilege_profile\": \"cooperative\" in the brief "
+            "and re-run --update."
+        )
     advisory = privilege_profile_advisory(
         manifest.get("privilege_profile"), framework_id, manifest["host_features"]
     )

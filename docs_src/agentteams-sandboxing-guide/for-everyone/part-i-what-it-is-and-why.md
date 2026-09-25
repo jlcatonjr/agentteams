@@ -15,5 +15,8 @@ the door** who can shout "stop!" at a few obviously dangerous actions.
 Important, and easy to forget: this room is only for the worker who **builds** your product. It is **not
 inside the product you deliver** — the thing you ship to your own customers needs its own protections.
 
-> **Plain-language ceiling #1 — by default the room is unlocked.** The worker starts out trusted, in an
-> open room. You have to *ask* for the locked room; if you don't, there is no lock and no guard-with-teeth.
+> **Plain-language ceiling #1 — the room now comes with a lock fitted, but you still have to turn the
+> key.** By default the worker's room comes with a lock *provided* — but the lock isn't turned until you
+> wire it in, so nothing is actually held back yet, and the guard by the door still says "if in doubt,
+> allow" unless you deliberately ask for the locked room. Set the dial to "open" if you'd rather no lock
+> be fitted at all.

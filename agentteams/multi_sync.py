@@ -29,6 +29,7 @@ Reuses the shipped primitives: :mod:`agentteams.interop`,
 from __future__ import annotations
 
 import csv
+import json
 import subprocess
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
@@ -142,6 +143,107 @@ def _reject_directory_collisions(root: Path, frameworks: list[str]) -> None:
         "\nDrop one of each colliding pair from `frameworks`, or sync them "
         "as separate pinned sets."
     )
+
+
+# ---------------------------------------------------------------------------
+# privilege propagation (C2, audit 2026-W39): pinned-sync projection must carry the pin's
+# brief privilege posture so a confined/exclusive team still emits its OS boundary. Privilege
+# is a TEAM/brief-level property (never in agent files), so it is captured from the pin's
+# .agentteams/brief.json into a team-level cai["privilege"] block (which round-trips through
+# team.cai.json), and the projection re-emits only the sandbox/privilege artifacts per
+# framework (NOT .goosehints etc. — no unrelated churn on the sync path).
+# ---------------------------------------------------------------------------
+
+#: Rel-path basenames (and suffixes) of the sandbox/privilege artifacts to (re)emit during
+#: projection. Deliberately NARROW: only the OS-boundary files, never the generic extras.
+_PRIVILEGE_ARTIFACT_BASENAMES: frozenset[str] = frozenset({
+    "sandbox.sb", "config.yaml.agentteams.example",          # goose Seatbelt
+    "settings.hooks.example.json", "constitutional-gate.py",  # claude sandbox block + gate
+    "confine-run.sh", "mac-escape-tests.sh",                  # neutral launcher + mac deny-test
+})
+
+_BRIEF_SUBPATH = ".agentteams/brief.json"
+
+
+def _read_brief_privilege(root: Path) -> dict[str, Any]:
+    """Return the pin's brief privilege posture, or ``{}`` when non-confining/absent.
+
+    Reads ``.agentteams/brief.json`` and returns only the privilege fields, with
+    ``privilege_profile_explicit`` derived from whether the brief set the field (so the fail
+    -closed gate flip's explicit-opt-in contract is preserved across projection — audit
+    SEV-3#1). Returns ``{}`` when there is no brief, the profile is cooperative/absent, or the
+    file is unreadable (projection then emits no boundary, exactly as before — fail safe).
+    """
+    path = root / _BRIEF_SUBPATH
+    if not path.is_file():
+        return {}
+    try:
+        brief = json.loads(path.read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        return {}
+    if not isinstance(brief, dict):
+        return {}
+    # Normalize through the SAME default as generation (a missing key → confined as of
+    # 2026-W39), so a team that merely ACCEPTS the default still gets its boundary projected —
+    # otherwise sync would under-protect exactly the default the flip made universal
+    # (adversarial closeout #1). privilege_profile_explicit stays honest (False when defaulted),
+    # so the fail-closed hook flip is NOT triggered for a defaulted team (stays fail-open).
+    from agentteams.host_features import validate_privilege_profile
+
+    profile = validate_privilege_profile(brief.get("privilege_profile"))
+    if profile == "cooperative":
+        return {}  # explicit opt-out → no boundary to propagate
+    priv: dict[str, Any] = {
+        "privilege_profile": profile,
+        "privilege_profile_explicit": "privilege_profile" in brief,
+    }
+    for key in ("workspace_write_roots", "protected_read_paths", "goose_egress_proxy",
+                "resolve_deny_read_abspath"):
+        if brief.get(key) is not None:
+            priv[key] = brief[key]
+    return priv
+
+
+def _emit_privilege_artifacts(
+    root: Path, framework: str, privilege: dict[str, Any] | None, *, dry_run: bool
+) -> list[str]:
+    """Emit ONLY the sandbox/privilege artifacts for ``framework`` during projection.
+
+    Builds a privilege-bearing manifest from the team-level ``privilege`` block and calls the
+    framework adapter's ``extra_output_files``, writing back only the files whose basename is
+    in :data:`_PRIVILEGE_ARTIFACT_BASENAMES` (the OS-boundary set). This keeps confinement
+    projected across the pinned-sync frameworks without re-emitting unrelated extras. No-op
+    when no confining privilege is present. Returns the project-relative paths written.
+    """
+    if not privilege or privilege.get("privilege_profile") not in {"confined", "exclusive"}:
+        return []
+    from agentteams.host_features import expand_privilege_profile
+
+    profile = privilege["privilege_profile"]
+    manifest: dict[str, Any] = {
+        "project_name": "SyncedTeam",
+        "privilege_profile": profile,
+        "privilege_profile_explicit": bool(privilege.get("privilege_profile_explicit")),
+        "host_features": expand_privilege_profile(profile, framework),
+    }
+    for key in ("workspace_write_roots", "protected_read_paths", "goose_egress_proxy",
+                "resolve_deny_read_abspath"):
+        if privilege.get(key) is not None:
+            manifest[key] = privilege[key]
+
+    agents_dir = framework_agents_dir(root, framework)
+    adapter = FRAMEWORKS[framework]()
+    written: list[str] = []
+    for rel_path, content in adapter.extra_output_files(manifest):
+        base = rel_path.rsplit("/", 1)[-1]
+        if base not in _PRIVILEGE_ARTIFACT_BASENAMES:
+            continue  # skip .goosehints / capability refs / etc. — privilege set only
+        target = (agents_dir / rel_path).resolve()
+        written.append(str(target))
+        if not dry_run:
+            target.parent.mkdir(parents=True, exist_ok=True)
+            target.write_text(content, encoding="utf-8")
+    return written
 
 
 # ---------------------------------------------------------------------------
@@ -317,11 +419,28 @@ def _project_and_rebaseline(
     *,
     dry_run: bool,
 ) -> list[str]:
-    """Project canonical to every framework and rewrite each baseline."""
+    """Project canonical to every framework and rewrite each baseline.
+
+    Raises:
+        ValueError / FileNotFoundError: when the team-level ``privilege`` block cannot be
+            emitted for some framework (an unrepresentable ``workspace_write_roots`` entry, or
+            a missing launcher asset). To avoid a partial projection (some agent files written,
+            others not), this is surfaced UP FRONT via a dry validation pass BEFORE any write
+            (adversarial closeout #3), so a bad privilege config aborts before touching disk.
+    """
+    privilege = canonical_cai.get("privilege") if isinstance(canonical_cai, dict) else None
+    # Up-front validation: dry-emit the privilege artifacts for every framework so an
+    # unrepresentable write-root / missing asset fails BEFORE the write loop mutates disk.
+    if privilege:
+        for fw in frameworks:
+            _emit_privilege_artifacts(root, fw, privilege, dry_run=True)
     projected: list[str] = []
     for fw in frameworks:
         agents_dir = framework_agents_dir(root, fw)
         import_from_cai(canonical_cai, fw, agents_dir, overwrite=True, dry_run=dry_run)
+        # C2: re-emit this framework's OS-boundary artifacts from the team-level privilege
+        # block so a confined/exclusive pinned-sync team stays confined after projection.
+        _emit_privilege_artifacts(root, fw, privilege, dry_run=dry_run)
         projected.append(fw)
         if not dry_run:
             native_cai = export_to_cai(agents_dir, fw)
@@ -388,6 +507,11 @@ def sync_init(
     canonical_dir = root / canonical_rel
     pin_dir = framework_agents_dir(root, pin)
     seed = export_to_cai(pin_dir, pin)
+    # C2: capture the pin's brief privilege posture into the team-level canonical block so it
+    # persists in team.cai.json and projection re-emits each framework's OS boundary.
+    priv = _read_brief_privilege(root)
+    if priv:
+        seed["privilege"] = priv
     materialize_canonical(seed, canonical_dir, dry_run=dry_run)
 
     projected = _project_and_rebaseline(
@@ -469,6 +593,12 @@ def run_sync(
         materialize_canonical(canonical_cai, canonical_dir, dry_run=dry_run)
 
     final_canonical = load_canonical(canonical_dir)
+    # C2: refresh the team-level privilege posture from the (current) brief so a changed
+    # privilege_profile propagates, and re-persist it so team.cai.json stays authoritative.
+    priv = _read_brief_privilege(root)
+    if priv:
+        final_canonical["privilege"] = priv
+        materialize_canonical(final_canonical, canonical_dir, dry_run=dry_run)
     projected = _project_and_rebaseline(
         root, canonical_dir, final_canonical, fws, dry_run=dry_run,
     )

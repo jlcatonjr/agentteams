@@ -6,8 +6,10 @@
 
 ## The 60-second version
 
-1. Confinement is **opt-in**: set `privilege_profile` in your brief (`confined` or `exclusive`); the
-   default `cooperative` emits **no** sandbox and a fail-open hook.
+1. Confinement is **emitted by default but inert until wired**: as of 2026-W39 the default
+   `privilege_profile` is `confined`, which emits an OS write-confinement boundary (a settings/config
+   example you must merge); the deny-hook still stays **fail-open** unless you set an *explicit*
+   `confined`/`exclusive`. Set `cooperative` to emit **no** sandbox at all.
 2. agentteams **decides** whether it can emit a boundary for your framework × OS, and **emits an
    artifact** — but that artifact is **inert until you wire it**.
 3. On **Linux** you must **wrap** your agent: `sandbox/confine-run.sh --scratch DIR --egress deny --

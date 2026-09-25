@@ -320,11 +320,35 @@ def test_held_grant_widens_sandbox_allowwrite(tmp_path, monkeypatch):
 
 def test_no_widening_when_sandbox_off(tmp_path, monkeypatch):
     monkeypatch.setenv(grants.GRANT_KEY_ENV, _KEY)
-    # cooperative profile → no sandbox → grants must not widen anything
+    # cooperative profile → no sandbox → grants must not widen anything. Must be set
+    # EXPLICITLY: as of 2026-W39 the default is "confined" (sandbox-on), under which grants
+    # DO widen — this test pins the sandbox-off (opt-out) branch.
     m = analyze.build_manifest(
-        {"project_goal": "x", "project_name": "Team A"}, framework="claude"
+        {"project_goal": "x", "project_name": "Team A", "privilege_profile": "cooperative"},
+        framework="claude",
     )
     _issue(tmp_path, holder_team=m["team_id"], target_path="/abs/b/shared")
+    assert apply_held_grants_to_write_roots(m, tmp_path) == []
+
+
+def test_default_confined_widens_only_by_valid_grant(tmp_path, monkeypatch):
+    # M3 (audit 2026-W39, security F6): the confined DEFAULT now activates grant-widening.
+    # A valid held grant widens; the result is a ledger-bounded path, never an unrestricted
+    # root. (privilege_profile omitted -> defaults to confined, explicit=False.)
+    monkeypatch.setenv(grants.GRANT_KEY_ENV, _KEY)
+    m = analyze.build_manifest({"project_goal": "x", "project_name": "Team A"}, framework="claude")
+    assert m["privilege_profile"] == "confined" and m["privilege_profile_explicit"] is False
+    _issue(tmp_path, holder_team=m["team_id"], target_path="/abs/b/shared")
+    widened = apply_held_grants_to_write_roots(m, tmp_path)
+    assert widened == ["/abs/b/shared"]
+    assert "/" not in widened  # never an unrestricted root
+
+
+def test_default_confined_excludes_expired_grant(tmp_path, monkeypatch):
+    monkeypatch.setenv(grants.GRANT_KEY_ENV, _KEY)
+    m = analyze.build_manifest({"project_goal": "x", "project_name": "Team A"}, framework="claude")
+    _issue(tmp_path, holder_team=m["team_id"], target_path="/abs/b/shared",
+           expires_at="2000-01-01T00:00:00Z")  # expired
     assert apply_held_grants_to_write_roots(m, tmp_path) == []
 
 

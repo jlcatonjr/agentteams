@@ -243,17 +243,34 @@ def build_manifest(description: dict[str, Any], *, framework: str = "copilot-vsc
     retrieval_integration = _normalize_retrieval_integration(description.get("retrieval_integration"))
     retrieval_enabled = retrieval_integration.get("mode", "none") != "none"
 
-    # Workspace privilege profile (opt-in write-confinement posture). Default
-    # "cooperative" preserves existing behavior; confined/exclusive expand to the
-    # claude:sandbox host feature in the CLI layer (host_features.expand_privilege_profile),
-    # which emits Claude Code's native OS-level sandbox block. Carried onto the manifest
-    # so the emitter and the expansion both read a single source of truth.
+    # Workspace privilege profile (write-confinement posture). Default is "confined" as of
+    # 2026-W39 (was "cooperative"): sandbox is ENABLED BY DEFAULT for every qualifying
+    # provider. A missing field normalizes to host_features.DEFAULT_PRIVILEGE_PROFILE via
+    # validate_privilege_profile below. confined/exclusive expand to the sandbox host
+    # feature in the CLI layer (host_features.expand_privilege_profile) — Claude Code's
+    # native OS sandbox block, Goose's Seatbelt example, or the neutral launcher — inert
+    # until the operator merges the emitted example. Opt out with "cooperative". Carried
+    # onto the manifest so the emitter and the expansion read a single source of truth.
     from agentteams import host_features
 
+    # Whether the operator EXPLICITLY chose a profile, recorded BEFORE the default is
+    # applied. The 2026-W39 default flip (cooperative→confined) makes a missing field
+    # resolve to "confined" so write-confinement is emitted by default — but that emission
+    # is an INERT example (never live settings/config). The one NON-inert artifact keyed on
+    # the profile is the Claude constitutional-gate.py fail-closed flip
+    # (claude._apply_fail_closed_policy), which rewrites a wired live hook. To keep the
+    # default flip genuinely inert-until-merged, that disruptive flip is gated on EXPLICIT
+    # opt-in (see the emitter), not on the defaulted profile — so an existing team's live
+    # hook behavior never changes on a routine --update it did not ask for.
+    privilege_profile_explicit = description.get("privilege_profile") is not None
     privilege_profile = host_features.validate_privilege_profile(
         description.get("privilege_profile")
     )
     workspace_write_roots = description.get("workspace_write_roots")
+    # Sanctioned loopback egress proxy for an EXCLUSIVE goose team (network-isolated). Wired
+    # here so it is reachable (audit 2026-W39, C1): the goose Seatbelt emitter re-allows this
+    # ONE loopback endpoint. Seatbelt accepts only localhost/* as the host.
+    goose_egress_proxy = description.get("goose_egress_proxy")
     coordination_write_roots = description.get("coordination_write_roots")
 
     # Strict agent-privilege switch (enforce decision signing). Defaults ON: an absent field
@@ -510,10 +527,12 @@ def build_manifest(description: dict[str, Any], *, framework: str = "copilot-vsc
         "conversion_pipeline": conversion_pipeline,
         "team_id": team_id,
         "privilege_profile": privilege_profile,
+        "privilege_profile_explicit": privilege_profile_explicit,
         "enforce_decision_signing": enforce_decision_signing,
         **({"is_management_repo": True} if is_management_repo else {}),
         **({"authorized_managers": authorized_managers} if authorized_managers else {}),
         **({"workspace_write_roots": list(workspace_write_roots)} if workspace_write_roots else {}),
+        **({"goose_egress_proxy": goose_egress_proxy} if goose_egress_proxy else {}),
         **({"coordination_write_roots": list(coordination_write_roots)} if coordination_write_roots else {}),
         **({"protected_read_paths": list(description["protected_read_paths"])} if description.get("protected_read_paths") else {}),
         # P3-3 opt-in: emit only when true (keeps the default block byte-identical); resolves

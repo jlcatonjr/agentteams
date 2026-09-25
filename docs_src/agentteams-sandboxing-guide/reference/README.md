@@ -26,7 +26,9 @@
 
 ## The four load-bearing ceilings (carried in every part they touch)
 
-1. **Opt-in** — `cooperative` default: sandbox off, hook fail-open.
+1. **Confined by default, advisory-emitted** — the `confined` default (2026-W39) emits an OS
+   write-confinement boundary (opt out with `cooperative`); the hook still stays fail-open unless an
+   explicit `confined`/`exclusive` flips it.
 2. **Inert until wired** — an emitted boundary confines nothing until the operator activates/wraps it.
 3. **Verified only on Linux** — the launcher's `bwrap` branch is live-kernel deny-tested; the newer
    macOS `build_macos` branch is emittable but enforcement-unverified (as are the native macOS Seatbelt

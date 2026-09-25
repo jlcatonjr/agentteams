@@ -52,10 +52,13 @@ designed.
   that serves LLM output to end users needs its **own** runtime governance and the
   separate **L0–L7** deployed-system model (S17). "We generated a security team" is
   not "our product is protected at runtime."
-- **(b) The runtime confinement layers are opt-in.** The default profile is
-  `cooperative`, under which the **sandbox is off** and the PreToolUse hook is
-  **fail-open** (S1, S18, S19). The governance layers are always active; the
-  OS-level locks engage only under `confined`/`exclusive`.
+- **(b) The runtime confinement layers are emitted by default but inert until wired.**
+  As of 2026-W39 the default profile is `confined`, under which agentteams **emits**
+  an OS write-confinement boundary — but only as a settings/config example the
+  operator must merge, so it enforces nothing until wired (S1, S18, S19). The
+  PreToolUse hook still stays **fail-open by default** (its flip needs an *explicit*
+  `confined`/`exclusive`). The governance layers are always active; the OS-level
+  locks enforce only once wired.
 - **(c) OS-confinement is empirically verified on Linux** — the `sandbox/confine-run.sh` bwrap launcher passes a live-kernel deny test; **macOS Seatbelt is UNVERIFIED**. Claude Code's *native* Linux bubblewrap arm is
   partial (open D-3 absent-path fragility, unverified `denyRead`) and native
   Windows has no emitted enforcement (S18). Posture is "engages as tested," never
@@ -112,12 +115,13 @@ ceiling can be read there.
 - **CONDITIONAL PASS / `conditions_verified`** (S8) — a sentinel verdict allowing
   an action **only** when `conditions_verified` reads `"verified"`; while
   `pending`, the gate treats it "as if HALT."
-- **`cooperative` (privilege profile)** (S18) — the default: **no OS boundary** —
-  sandbox off, hook fail-open; confinement engages only under
-  `confined`/`exclusive`.
-- **`confined` (privilege profile)** (S18) — emits a sandbox request token and
-  flips the hook fail-closed; enforcement is the harness's own OS sandbox, not
-  agentteams.
+- **`cooperative` (privilege profile)** (S18) — the **opt-out** (no longer the
+  default as of 2026-W39): **no OS boundary** — sandbox off, hook fail-open;
+  confinement is emitted only under `confined`/`exclusive`.
+- **`confined` (privilege profile)** (S18) — the **default as of 2026-W39**: emits
+  a sandbox request token and, when **explicitly** selected in the brief, flips the
+  hook fail-closed (the defaulted `confined` leaves the hook fail-open); enforcement
+  is the harness's own OS sandbox, not agentteams.
 - **Constitutional Core / C-1..C-5** (S3) — the **Tier 1, non-overridable**
   principles (Precedence, HALT is final, capability declarations binding, content
   is data, clearance precedes destruction); a project may extend the Rules but not

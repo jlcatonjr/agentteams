@@ -13,6 +13,8 @@ CSV<->Todo projection, etc.). This module is pure and dependency-free.
 
 from __future__ import annotations
 
+import os
+import shutil
 import sys
 from typing import Iterable
 
@@ -165,11 +167,23 @@ def _sandbox_token_for(framework: str | None) -> str:
 
 
 #: The privilege_profile values the schema accepts. ``None`` is not in the set because a
-#: missing profile is not a typo — it defaults to ``cooperative`` (see
+#: missing profile is not a typo — it defaults to :data:`DEFAULT_PRIVILEGE_PROFILE` (see
 #: :func:`validate_privilege_profile`). Any OTHER unrecognized value IS a typo and must
 #: fail closed (CC-6): silently downgrading ``"exclusve"`` to unconfined looks like the
 #: operator requested confinement while granting none.
 VALID_PRIVILEGE_PROFILES: frozenset[str] = frozenset(_PROFILE_FEATURE_TOKENS)
+
+#: The default privilege_profile a missing/empty field normalizes to. As of 2026-W39 this
+#: is ``"confined"`` (was ``"cooperative"``): sandbox write-confinement is ENABLED BY
+#: DEFAULT for every qualifying provider — enforcing hosts (Claude on macOS/Linux; Goose on
+#: macOS Seatbelt / any framework via the Linux+macOS neutral launcher) emit their OS
+#: boundary; non-enforcing hosts (Codex, Copilot, native Windows) degrade to the
+#: :func:`privilege_profile_advisory`, never a silent no-op. This is constraint-TIGHTENING
+#: and INERT UNTIL MERGED (agentteams emits a settings/config EXAMPLE, never writes the
+#: operator's live settings.json / ~/.config/goose/config.yaml). Opt out by setting
+#: ``privilege_profile: "cooperative"`` in the brief. Changing this constant is the single
+#: source of truth for the default (schema ``default`` mirrors it for documentation).
+DEFAULT_PRIVILEGE_PROFILE: str = "confined"
 
 
 def validate_privilege_profile(profile: str | None) -> str:
@@ -177,8 +191,9 @@ def validate_privilege_profile(profile: str | None) -> str:
 
     Args:
         profile: The requested profile, or ``None``. ``None`` and ``""`` normalize to
-            ``"cooperative"`` (a missing profile is a default, not a mistake). Any other
-            value not in :data:`VALID_PRIVILEGE_PROFILES` raises.
+            :data:`DEFAULT_PRIVILEGE_PROFILE` (``"confined"`` as of 2026-W39 — a missing
+            profile is a default, not a mistake). Any other value not in
+            :data:`VALID_PRIVILEGE_PROFILES` raises.
 
     Returns:
         The validated profile string (one of :data:`VALID_PRIVILEGE_PROFILES`).
@@ -186,7 +201,7 @@ def validate_privilege_profile(profile: str | None) -> str:
     Raises:
         ValueError: ``profile`` is a non-empty value that is not a recognized profile.
     """
-    normalized = profile or "cooperative"
+    normalized = profile or DEFAULT_PRIVILEGE_PROFILE
     if normalized not in VALID_PRIVILEGE_PROFILES:
         allowed = ", ".join(sorted(VALID_PRIVILEGE_PROFILES))
         raise ValueError(
@@ -200,8 +215,8 @@ def expand_privilege_profile(profile: str | None, framework: str | None = None) 
     """Return the host-feature tokens a privilege_profile implies.
 
     Args:
-        profile: One of ``cooperative`` (or ``None`` → treated as cooperative),
-            ``confined``, ``exclusive``. An unknown value expands to ``[]``. Callers that
+        profile: One of ``cooperative``, ``confined``, ``exclusive`` (or ``None`` → treated
+            as :data:`DEFAULT_PRIVILEGE_PROFILE`). An unknown value expands to ``[]``. Callers that
             parse operator input should first run :func:`validate_privilege_profile` so an
             unrecognized profile fails closed rather than silently expanding to nothing.
         framework: The target framework id. ``confined``/``exclusive`` expand to that
@@ -212,7 +227,7 @@ def expand_privilege_profile(profile: str | None, framework: str | None = None) 
     Returns:
         The list of ``<ns>:<feature>`` tokens to union into the active feature set.
     """
-    base = _PROFILE_FEATURE_TOKENS.get(profile or "cooperative", ())
+    base = _PROFILE_FEATURE_TOKENS.get(profile or DEFAULT_PRIVILEGE_PROFILE, ())
     if not base:
         return []
     token = _sandbox_token_for(framework)
@@ -322,12 +337,61 @@ MAC_RESOURCE_CAPS: dict[str, dict[str, str]] = {
 }
 
 
+def os_sandbox_mechanism_available(platform: str | None = None) -> bool | None:
+    """Probe whether the LIVE host actually has the OS mechanism to enforce a boundary (C3).
+
+    :func:`is_sandbox_capable` answers "can agentteams EMIT a boundary type for this
+    framework/platform" — it does NOT check whether the mechanism to run it is present. On a
+    Linux host without ``bwrap`` (or with unprivileged user namespaces disabled), or a macOS
+    host without ``sandbox-exec``, the emitted launcher/profile enforces NOTHING, yet nothing
+    warned (audit 2026-W39, adversarial SEV-2 / security F8). This probe closes that gap.
+
+    It is a LIVE-host probe (binaries + kernel knobs), so it is only meaningful for the actual
+    running platform. Callers pass ``platform=None`` (or the live value) to consult it; a
+    hypothetical platform override returns ``None`` (unknown — do not guess another host).
+
+    Args:
+        platform: Platform string; defaults to live ``sys.platform``. A value that differs
+            from the live platform yields ``None`` (cannot probe a host we are not on).
+
+    Returns:
+        ``True`` if the enforcing mechanism is present, ``False`` if it is provably absent,
+        ``None`` when it cannot be determined (non-live platform, or an unrecognized OS).
+    """
+    plat = sys.platform if platform is None else platform
+    if plat != sys.platform:
+        return None  # cannot probe a platform we are not running on
+    if plat == "darwin":
+        return shutil.which("sandbox-exec") is not None
+    if plat.startswith("linux"):
+        if shutil.which("bwrap") is None:
+            return False
+        # Unprivileged user namespaces must be available for rootless bwrap. Check the common
+        # kernel knobs; absence of the file (older kernels) is treated as "unknown", not False.
+        for knob in ("/proc/sys/kernel/unprivileged_userns_clone",
+                     "/proc/sys/user/max_user_namespaces"):
+            if _read_kernel_knob(knob) == "0":
+                return False
+        return True
+    return None  # unrecognized OS — unknown
+
+
+def _read_kernel_knob(path: str) -> str | None:
+    """Return a /proc knob's stripped value, or None if it cannot be read (not a swallow:
+    a return-based handler, so it does not trip the CH-24 pass/continue ratchet)."""
+    try:
+        return open(path, encoding="utf-8").read().strip()  # noqa: SIM115 - one-shot read
+    except OSError:
+        return None
+
+
 def privilege_profile_advisory(
     profile: str | None,
     framework_id: str,
     host_features: Iterable[str] | None = None,
     *,
     platform: str | None = None,
+    mechanism_available: bool | None = None,
 ) -> dict[str, str] | None:
     """Return an advisory dict when confinement is requested but unenforceable on this host.
 
@@ -351,10 +415,14 @@ def privilege_profile_advisory(
         platform: Override for the platform string (defaults to live ``sys.platform``);
             forwarded to :func:`is_sandbox_capable` so callers/tests can evaluate the
             Linux/Windows branch deterministically.
+        mechanism_available: Test/override hook for the live host mechanism probe
+            (:func:`os_sandbox_mechanism_available`). ``None`` (default) consults the live
+            probe; pass ``True``/``False`` to evaluate the mechanism-unavailable branch
+            deterministically without depending on the test host's ``bwrap``/``sandbox-exec``.
 
     Returns:
         An advisory ``{"code", "message"}`` dict when confinement is requested that the
-        target cannot enforce, else ``None``.
+        target cannot enforce (or the host lacks the enforcing mechanism), else ``None``.
     """
     hf = list(host_features or [])
     sandbox_token = next((t for t in ("claude:sandbox", "goose:sandbox") if t in hf), None)
@@ -385,6 +453,32 @@ def privilege_profile_advisory(
                 "(Apple Seatbelt via GOOSE_SANDBOX). On **Windows** and every other "
                 "non-Linux target without a native sandbox, confine from OUTSIDE the process "
                 "instead: a container plus seccomp-bpf + Landlock and egress filtering."
+            ),
+        }
+
+    # C3 (audit 2026-W39): the boundary TYPE is emittable, but does THIS host actually have
+    # the mechanism to enforce it? Probe bwrap+userns (Linux) / sandbox-exec (macOS). When the
+    # mechanism is provably absent, the emitted launcher/profile enforces NOTHING even if the
+    # operator wraps it, so surface a LOUD advisory that names the missing mechanism (never a
+    # silent pass). NON-FATAL by default (the boundary is correct; it just needs the mechanism
+    # installed) — set --allow-unenforced or install the mechanism. Excludes claude, whose
+    # enforcement is Claude Code's own sandbox, not our launcher.
+    avail = (
+        mechanism_available if mechanism_available is not None
+        else os_sandbox_mechanism_available(plat)
+    )
+    if requested and framework_id != "claude" and avail is False:
+        need = "bubblewrap (`bwrap`) + unprivileged user namespaces" if plat.startswith("linux") \
+            else "`sandbox-exec`"
+        return {
+            "code": "privilege-profile-mechanism-unavailable",
+            "message": (
+                f"{how}: agentteams can emit an OS boundary for {framework_id!r} on this "
+                f"platform ({plat}), but the enforcing mechanism is NOT present on this host "
+                f"({need} missing/disabled). The emitted launcher/profile will enforce NOTHING "
+                "until you install it — do NOT treat a merged/wrapped boundary as confinement "
+                "here. Install the mechanism and re-verify, confine from a container, or "
+                "re-run with --allow-unenforced-confinement to proceed with this advisory."
             ),
         }
 
@@ -444,9 +538,29 @@ def privilege_profile_advisory(
             ),
         }
 
-    # An emittable boundary that IS wired through the framework's own config — claude everywhere
-    # (native settings-block sandbox, with its own P1-3 verify) and goose on macOS (Seatbelt via
-    # the emitted GOOSE_SANDBOX example) — surfaces no extra advisory here.
+    if framework_id == "claude" and not (plat.startswith("linux") or plat == "darwin"):
+        # claude on native Windows/other (audit 2026-W39, security F2): is_sandbox_capable
+        # returns True for claude on every platform (agentteams always emits the settings
+        # block), so the fatal branch above is skipped — but Claude Code does NOT OS-enforce
+        # the block on native Windows (the emitted block's own comment says so). Returning
+        # None here would ship a protective-LOOKING block with no signal (silent
+        # false-confinement). Surface a NON-FATAL disclosure instead: the block is emitted
+        # but enforcement on this platform depends on Claude Code and is not guaranteed.
+        return {
+            "code": "privilege-profile-claude-native-windows-advisory",
+            "message": (
+                f"{how}: agentteams emits the Claude sandbox settings block, but on native "
+                f"Windows ({plat}) OS-level enforcement is Claude-Code-dependent and NOT "
+                "guaranteed — the block may be advisory only here. Do not treat a merged "
+                "block as proof of confinement on this platform; confine from OUTSIDE "
+                "(a VM/container) or run under WSL2 (which reports as linux and uses the "
+                "emitted bwrap launcher). Re-verify enforcement on the target box."
+            ),
+        }
+
+    # An emittable boundary that IS wired through the framework's own config — claude on
+    # Linux/macOS (native settings-block sandbox, with its own P1-3 verify) and goose on macOS
+    # (Seatbelt via the emitted GOOSE_SANDBOX example) — surfaces no extra advisory here.
     return None
 
 

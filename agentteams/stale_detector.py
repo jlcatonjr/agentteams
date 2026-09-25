@@ -466,6 +466,105 @@ def detect_bridge_drift(root: Path, allowed_rel: set[str] | None = None) -> list
     return findings
 
 
+def detect_unsyncable_pin(root: Path) -> list[StalenessFinding]:
+    """Flag a pinned-sync config whose framework set can never sync (dir collision).
+
+    ``multi_sync._reject_directory_collisions`` fails ``--sync``/``--sync-init`` fast when
+    two frameworks in the pin's ``frameworks`` set resolve to one physical agents directory
+    (e.g. ``copilot-vscode``+``copilot-cli`` → ``.github/agents``; ``agents-md``+``codex`` →
+    ``.agents``) — their renders can differ, so one would silently overwrite the other. That
+    guard runs only when the operator *attempts* a sync, so a pin written before the guard
+    existed (or hand-edited) is silently unsyncable: projection of changes across the
+    infrastructure types has quietly stopped, and nothing surfaces it until the next sync.
+    This detector makes that state visible through the routine health command as a blocking
+    Tier-1 finding. Read-only; never mutates the pin.
+    """
+    findings: list[StalenessFinding] = []
+    try:
+        from agentteams.sync_pin import PIN_SUBPATH, read_pin
+    except ImportError:  # pragma: no cover - defensive
+        return findings
+    try:
+        pin = read_pin(root)
+    except ValueError as exc:
+        findings.append(StalenessFinding(
+            tier=1, code="PIN_UNREADABLE", file=PIN_SUBPATH, line=0,
+            signal="pin document malformed",
+            detail=f"pinned-sync config cannot be read, so --sync cannot run: {exc}",
+            suggested_action="repair or re-create the pin with `agentteams --sync-init --pin <framework>`",
+            auto_remediable=False,
+        ))
+        return findings
+    if not pin:
+        return findings  # not a pinned-sync project — nothing to check
+    frameworks = pin.get("frameworks") or []
+    from agentteams.frameworks.registry import FRAMEWORK_IDS
+    from agentteams.multi_sync import framework_agents_dir
+
+    by_dir: dict[str, list[str]] = {}
+    for fw in frameworks:
+        # Skip an unregistered framework id explicitly (rather than catching the ValueError
+        # framework_agents_dir would raise) so this stays free of a swallow-and-continue
+        # handler (CH-24). resolve() is non-strict and does not require the dir to exist.
+        if fw not in FRAMEWORK_IDS:
+            continue
+        d = str(framework_agents_dir(root, fw).resolve())
+        by_dir.setdefault(d, []).append(fw)
+
+    # (a) Within-pin collision: two pinned frameworks share one physical dir (needs >=2).
+    collisions = {d: fws for d, fws in by_dir.items() if len(fws) > 1}
+    if collisions:
+        detail = "; ".join(f"{', '.join(fws)} → {d}" for d, fws in sorted(collisions.items()))
+        findings.append(StalenessFinding(
+            tier=1, code="PIN_UNSYNCABLE", file=PIN_SUBPATH, line=0,
+            signal="pinned sync set has a physical-dir collision",
+            detail=(
+                "frameworks in the pin share one physical agents directory, so `agentteams "
+                f"--sync` fails fast and projection has stopped: {detail}"
+            ),
+            suggested_action=(
+                "drop one framework from each colliding pair in .agentteams/pin.json "
+                "(or sync them as separate pinned sets), then re-run `agentteams --sync`"
+            ),
+            auto_remediable=False,
+        ))
+
+    # (b) Pin-vs-bridge double-writer (audit 2026-W39, adversarial SEV-3#3): a framework that
+    # is BOTH a pinned render target AND a live bridge TARGET has two independent writers into
+    # one agents dir — `run_sync` projects with overwrite=True and silently clobbers the
+    # bridge-written stubs each pass. This fires even for a single-framework pin (no >=2 gate).
+    for manifest_path in root.glob("references/bridges/*/bridge-manifest.json"):
+        bmani = _safe_json(manifest_path)
+        target_fw = None
+        if isinstance(bmani, dict):
+            target_fw = bmani.get("framework") or bmani.get("target_framework")
+        if not target_fw:
+            # Fall back to the conventional dir name `<source>-to-<framework>`.
+            name = manifest_path.parent.name
+            target_fw = name.rsplit("-to-", 1)[-1] if "-to-" in name else None
+        if target_fw not in FRAMEWORK_IDS:
+            continue
+        bridge_dir = str(framework_agents_dir(root, target_fw).resolve())
+        overlapping = by_dir.get(bridge_dir)
+        if overlapping:
+            findings.append(StalenessFinding(
+                tier=1, code="PIN_BRIDGE_OVERLAP", file=_relpath(manifest_path, root), line=0,
+                signal="pinned framework is also a live bridge target (double-writer)",
+                detail=(
+                    f"pinned framework(s) {', '.join(overlapping)} and the bridge "
+                    f"'{manifest_path.parent.name}' both write {bridge_dir}; `agentteams "
+                    "--sync` (overwrite=True) will clobber the bridge-written content each pass"
+                ),
+                suggested_action=(
+                    "retire the legacy bridge (remove its references/bridges/<name>/ dir) now "
+                    "that the framework is a first-class pinned render, or drop that framework "
+                    "from the pin so the bridge remains its sole writer"
+                ),
+                auto_remediable=False,
+            ))
+    return findings
+
+
 def detect_provenance(root: Path, allowed_rel: set[str] | None = None) -> list[StalenessFinding]:
     """Integrity ∪ bridge drift; a single INFO when no provenance exists anywhere."""
     integrity = detect_integrity(root, allowed_rel)
@@ -646,6 +745,10 @@ def scan_staleness(
 
     provenance = detect_provenance(root, allowed_rel)
     report.findings.extend(provenance)
+
+    # Pinned-sync health: a framework set with a physical-dir collision is silently
+    # unsyncable (projection has stopped) until surfaced here.
+    report.findings.extend(detect_unsyncable_pin(root))
     report.provenance_sources = (
         len(_provenance_paths(root, "references/build-log.json", allowed_rel))
         + len(_provenance_paths(root, "references/bridges/*/bridge-manifest.json", allowed_rel))

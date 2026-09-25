@@ -28,12 +28,13 @@ gate outside the documented `--yes` interaction is a vulnerability.
 
 **Which knob, and what it costs — the default posture (binding ceiling).** The
 *governance* layers (constitution, sentinel, triad, CLI gates, scanner) are
-**always active**. The *runtime OS-confinement* layers are **opt-in**:
+**always active**. The *runtime OS-confinement* layers are **emitted by default but
+inert until wired**:
 
 | Knob | Default | Cost of the default |
 |---|---|---|
-| Privilege profile (`--privilege-profile`) | `cooperative` (`agentteams/host_features.py:134-145`) | Sandbox **off**; the PreToolUse hook is **fail-open** (`agentteams/templates/universal/hooks/constitutional-gate.py:22-36`) |
-| Runtime OS confinement | dormant | Engages only when you select `confined`/`exclusive` (S18) |
+| Privilege profile (`--privilege-profile`) | `confined` as of 2026-W39 (`agentteams/host_features.py:184`, `DEFAULT_PRIVILEGE_PROFILE`) | OS write-confinement boundary **emitted** as an inert example (merge to enforce); the PreToolUse hook stays **fail-open** because the flip needs an *explicit* `confined`/`exclusive` (`agentteams/templates/universal/hooks/constitutional-gate.py:22-36`) |
+| Runtime OS confinement | emitted but inert | Enforces only once you wire the emitted example in; select `confined`/`exclusive` explicitly to also flip the hook fail-closed (S18) |
 
 Reading "layered stack" as "every layer is armed out of the box" is the exact
 overclaim this ceiling prevents: the OS-level locks are dormant until you arm
@@ -46,7 +47,7 @@ and the strongest OS locks are off unless armed.
 **Source.** `SECURITY.md` §threat-model, §design-time-vs-runtime;
 `.claude/CLAUDE.md` Constitutional Core;
 `agentteams/templates/universal/security.template.md`;
-`agentteams/host_features.py:134-145`;
+`agentteams/host_features.py:184` (`DEFAULT_PRIVILEGE_PROFILE = "confined"`);
 `agentteams/templates/universal/hooks/constitutional-gate.py:22-36`.
 
 ## Two surfaces and where enforcement lives  ✅/⚙ {#S2}

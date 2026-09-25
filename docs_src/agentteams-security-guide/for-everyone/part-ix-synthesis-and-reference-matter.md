@@ -44,8 +44,8 @@ runtime protection on top — and the locked room is proven on Linux (on Macs it
 - **The inspector (the scanner).** The automatic reader that flags secrets,
   personal info, and trick-text; a serious find means stop — though it can still
   be fooled by clever disguises.
-- **Locked-room settings.** Cooperative (off by default), confined, or exclusive;
-  the stronger settings must be turned on deliberately.
+- **Locked-room settings.** Cooperative (the opt-out), confined (today's default), or exclusive;
+  the emitted lock still has to be wired in, and the stronger settings must be turned on deliberately.
 - **The checkpoint.** A check run before each helper action, permissive by default
   and strict only under the locked-room settings.
 - **Tamper-evident seal (the integrity check).** Fingerprints that make meddling

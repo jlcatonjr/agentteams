@@ -245,6 +245,10 @@
         "type": "object",
         "additionalProperties": true
       }
+    },
+    "privilege": {
+      "type": "object",
+      "description": "Team-level workspace privilege posture, captured from the pin's brief so pinned-sync projection re-emits each framework's OS sandbox boundary (audit 2026-W39 C2). Fields: privilege_profile, privilege_profile_explicit, workspace_write_roots, protected_read_paths, goose_egress_proxy, resolve_deny_read_abspath. Absent/cooperative => no boundary projected."
     }
   },
   "additionalProperties": true

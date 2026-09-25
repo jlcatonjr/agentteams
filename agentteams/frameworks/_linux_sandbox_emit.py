@@ -147,7 +147,14 @@ def linux_sandbox_output_files(
         return []
     content = _read_sandbox_asset(_LAUNCHER_ASSET_REL)
     if not content:
-        return []
+        # Confinement WAS requested and this is a Linux host, so the launcher is the boundary.
+        # A missing/unreadable asset means a broken checkout — fail LOUD rather than silently
+        # emit nothing while the advisory tells the operator to "wrap the launcher" that was
+        # never written (audit 2026-W39, hygiene RANK1: fail-open on the enforcement artifact).
+        raise FileNotFoundError(
+            f"confinement requested but the sandbox launcher asset '{_LAUNCHER_ASSET_REL}' "
+            "could not be read (templates/universal/). Refusing to emit no boundary silently."
+        )
     return [(rel_path, content)]
 
 
@@ -198,7 +205,12 @@ def macos_sandbox_output_files(
         return []
     launcher = _read_sandbox_asset(_LAUNCHER_ASSET_REL)
     if not launcher:
-        return []
+        # Fail LOUD: confinement requested on macOS but the launcher asset is missing — a
+        # broken checkout must not silently emit no boundary (audit 2026-W39, hygiene RANK1).
+        raise FileNotFoundError(
+            f"confinement requested but the sandbox launcher asset '{_LAUNCHER_ASSET_REL}' "
+            "could not be read (templates/universal/). Refusing to emit no boundary silently."
+        )
     files: list[tuple[str, str]] = [(rel_path, launcher)]
     sidecar_dir = posixpath.dirname(rel_path)
     for asset_rel in (_MACOS_DENYTEST_ASSET_REL, *_MACOS_TIER_B_EXAMPLE_ASSETS):

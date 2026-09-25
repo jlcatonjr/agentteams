@@ -155,6 +155,9 @@ def test_declared_but_unemitted_fields_are_conditional_not_dead(schema):
         # (build_manifest omits both otherwise so a non-management team stays byte-identical).
         "is_management_repo",
         "authorized_managers",
+        # Sanctioned loopback egress proxy: emitted only when the brief sets it (exclusive
+        # goose teams); build_manifest omits it otherwise.
+        "goose_egress_proxy",
     }
     emitted: set[str] = set()
     for _, description in _DESCRIPTIONS:
