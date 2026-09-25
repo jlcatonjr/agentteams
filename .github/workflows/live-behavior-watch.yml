@@ -1,0 +1,108 @@
+name: Live Provider-Behavior Watch (advisory)
+
+# Phase 3 of the provider-adapter freshness loop
+# (references/provider-adapter-refresh.procedure.md). The freshness watcher reads
+# provider DOCS; it cannot see whether a host still HONORS a documented behavior
+# (tool-permission semantics, delegation, scoped grants). The gated live-model
+# tests (tests/test_goose_live_delegation.py, marked AGENTTEAMS_LIVE_MODEL_TESTS)
+# exercise that — but nothing scheduled them, so provider behavior regressions
+# went unnoticed (agentteams-remediation-log.csv row 58).
+#
+# This job runs them on a cadence, ADVISORILY. It is deliberately NOT a gate:
+# these tests measure the upstream provider (~1 pass in 3 against a live backend,
+# per tests/conftest.py), so a failure here is a signal to investigate, not a
+# broken build. The job therefore:
+#   * SKIPS cleanly when the OPENROUTER_API_KEY secret is absent (no cost, no red);
+#   * never fails on test outcome — it records pass/fail into the run summary and
+#     opens/refreshes an advisory issue only when the live behavior regresses.
+#
+# Human-gated by design: it proposes attention, never edits an adapter (C-4).
+
+on:
+  schedule:
+    # Weekly, Monday 06:17 UTC — a cadence, not a per-push cost.
+    - cron: "17 6 * * 1"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  issues: write
+
+jobs:
+  live-behavior:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout main
+        uses: actions/checkout@v7
+        with:
+          ref: main
+          fetch-depth: 0
+
+      - name: Setup Python
+        uses: actions/setup-python@v7
+        with:
+          python-version: "3.11"
+
+      - name: Skip if no provider key is configured
+        id: gate
+        env:
+          OPENROUTER_API_KEY: ${{ secrets.OPENROUTER_API_KEY }}
+        run: |
+          if [[ -z "${OPENROUTER_API_KEY}" ]]; then
+            echo "OPENROUTER_API_KEY secret not set — live behavior watch is a no-op." | tee -a "$GITHUB_STEP_SUMMARY"
+            echo "run=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "run=true" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Install package and test dependencies
+        if: steps.gate.outputs.run == 'true'
+        run: pip install -e ".[test]"
+
+      - name: Run live provider-behavior tests (advisory — never gates)
+        if: steps.gate.outputs.run == 'true'
+        id: run
+        env:
+          AGENTTEAMS_LIVE_MODEL_TESTS: "1"
+          OPENROUTER_API_KEY: ${{ secrets.OPENROUTER_API_KEY }}
+        run: |
+          set +e
+          python -m pytest tests/test_goose_live_delegation.py -q \
+            --junitxml=live-behavior.xml | tee live-behavior.log
+          rc=$?
+          set -e
+          echo "rc=$rc" >> "$GITHUB_OUTPUT"
+          {
+            echo "## Live provider-behavior watch"
+            echo
+            echo "Exit code: \`$rc\` (advisory — this job does not gate on it)."
+            echo
+            echo '```'
+            # Redact any secret before it reaches the (potentially world-readable) run summary
+            # (audit 2026-W39 adversarial F9): the literal OPENROUTER_API_KEY plus common
+            # bearer/sk- token shapes and Authorization headers.
+            tail -n 20 live-behavior.log \
+              | { [ -n "${OPENROUTER_API_KEY:-}" ] && sed "s|${OPENROUTER_API_KEY}|***REDACTED***|g" || cat; } \
+              | sed -E 's/(sk-[A-Za-z0-9_-]{6,})/***REDACTED***/g; s/([Aa]uthorization: *[Bb]earer +)[^ "]+/\1***REDACTED***/g'
+            echo '```'
+            echo
+            echo "These tests measure the upstream provider's tool-calling/delegation"
+            echo "reliability, not this project's code. A failure is a signal to open"
+            echo "\`references/provider-adapter-refresh.procedure.md\` §6 (live-behavior),"
+            echo "not a broken build."
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Open/refresh advisory issue on regression
+        if: steps.gate.outputs.run == 'true' && steps.run.outputs.rc != '0'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          title="live-behavior: provider delegation regressed"
+          body="The weekly live provider-behavior watch failed (exit ${{ steps.run.outputs.rc }}). This measures the upstream provider, not agentteams code — triage per references/provider-adapter-refresh.procedure.md §6. Owner: @framework-adapters-expert. Run: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}"
+          existing=$(gh issue list --state open --search "$title in:title" --json number --jq '.[0].number' || true)
+          if [[ -n "$existing" ]]; then
+            gh issue comment "$existing" --body "$body"
+          else
+            gh issue create --title "$title" --body "$body" --label "live-behavior" || \
+              gh issue create --title "$title" --body "$body"
+          fi

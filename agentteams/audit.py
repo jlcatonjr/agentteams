@@ -42,8 +42,13 @@ from agentteams.backup import BACKUP_DIR_NAME as _BACKUP_DIR_NAME
 # Constants
 # ---------------------------------------------------------------------------
 
-#: Required YAML front matter keys for every agent file
-_REQUIRED_YAML_KEYS: tuple[str, ...] = ("name", "description", "user-invocable", "tools", "model")
+#: Required YAML front matter keys for every agent file. DERIVED from the single source
+#: (format_spec) rather than duplicated — closes the fourth-copy drift site
+#: (audit 2026-W39 conflict F1). The five standard keys are the copilot_vscode/copilot-cli/
+#: claude contract; guarded by tests/test_format_spec_single_source.py.
+from agentteams.frameworks.format_spec import FORMAT_SPECS as _FORMAT_SPECS  # noqa: E402
+
+_REQUIRED_YAML_KEYS: tuple[str, ...] = _FORMAT_SPECS["copilot_vscode"].emitted_front_matter_keys
 
 #: Agents that must be present in every generated team
 _REQUIRED_AGENTS: frozenset[str] = frozenset({
