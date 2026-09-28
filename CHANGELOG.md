@@ -6,6 +6,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### security (cryptography pin bumped 49.0.0 → 50.0.0 — CVE-2026-69247 / GHSA-g6cj-pr64-35w5)
+
+- **The `signing` extra now pins `cryptography==50.0.0`**, up from `49.0.0`, to remediate
+  CVE-2026-69247 (high) — *PKCS#7 `EnvelopedData` decryption exposes a Bleichenbacher oracle
+  through distinguishable errors and timing* (vulnerable `>=44.0.0,<50.0.0`; first patched
+  50.0.0). **Exposure in agentteams is nil**: `cryptography` is linked only through
+  `agentteams/cli/signed_ledger.py` for **Ed25519** sign/verify, and the codebase contains no
+  PKCS#7 / `EnvelopedData` usage (the vulnerable `pkcs7_decrypt_*` functions are never called), so
+  the oracle is unreachable — the bump is supply-chain hygiene and clears the public-branch
+  advisory, not a fix for an exploitable path here. `references/dependency-pins.json` updated in
+  lockstep (sdist sha256 `eeac2acb…a6c9`, verified locally against PyPI). Rule S-10 cooldown does
+  not apply (advisory-backed remediation of an already-installed vulnerable version; the release
+  is also >14 days old). The Ed25519 API is unchanged across the bump.
+
 ### changed (sandbox is ENABLED BY DEFAULT — `privilege_profile` now defaults to `confined`)
 
 - **The default workspace privilege posture flips from `cooperative` (no OS boundary) to
