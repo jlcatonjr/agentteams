@@ -137,6 +137,17 @@ scripts/gooseCostMonitor/
 # next `git add -A` would have committed it.
 .goose/recipes/recipe-check.report.md
 
+# Self-emitted OS-confinement launcher, written to the repo root by a self-update
+# (agentteams --self --update) via _linux_sandbox_emit.py — the same emit target a
+# CONSUMING project receives (see _linux_sandbox_emit.py:135, "target is always
+# repo-root sandbox/confine-run.sh"). Constitutional Rule 4: build artifacts are
+# derived, never primary — these files are byte-identical to the canonical source
+# of truth under agentteams/templates/universal/sandbox/, so committing them would
+# duplicate tracked templates at the root. Same never-track class as this repo's
+# other self-emitted agent-instance infra (.claude/, .goose/, .agents/, .github/copilot/);
+# untracked but was NOT ignored, so the next `git add -A` would have committed it.
+/sandbox/
+
 # MkDocs build output. NOT what serves the site: GitHub Pages is build_type=workflow, and
 # .github/workflows/docs.yml builds with `--site-dir _site` and deploys that artifact via
 # actions/deploy-pages. The committed copy was a 180-file tree nobody consumed, refreshed
