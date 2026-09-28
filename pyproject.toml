@@ -76,7 +76,7 @@ browser = [
 # tests/test_supply_chain_pins.py. Feed the adoption date into the Rule S-10 dependency cooldown
 # before relying on it in enforcement.
 signing = [
-    "cryptography==49.0.0",
+    "cryptography==50.0.0",
 ]
 
 [project.urls]
