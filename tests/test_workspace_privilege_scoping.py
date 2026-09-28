@@ -772,7 +772,13 @@ def test_advisory_fires_for_confinement_on_non_sandbox_host():
     # unenforced-host one). Only on Windows/other is there no boundary → the fatal advisory.
     for framework in ("codex", "copilot-vscode", "copilot-cli"):
         for profile in ("confined", "exclusive"):
-            lin = privilege_profile_advisory(profile, framework, platform="linux")
+            # Pin mechanism_available=True: this asserts the platform-BRANCH advisory, not the
+            # host's live bwrap probe. On a Linux host lacking bwrap (e.g. GitHub ubuntu runners)
+            # the C3 probe would correctly return 'privilege-profile-mechanism-unavailable' first,
+            # masking the manual-wire branch this test exercises.
+            lin = privilege_profile_advisory(
+                profile, framework, platform="linux", mechanism_available=True
+            )
             assert lin is not None and lin["code"] == "privilege-profile-linux-launcher-manual-wire"
             assert "must" in lin["message"].lower() and "confine-run.sh" in lin["message"]
             # macOS (2026-W36): enforceable-but-manual via build_macos → NON-FATAL manual-wire
@@ -791,7 +797,9 @@ def test_advisory_fires_for_confinement_on_non_sandbox_host():
     # advisory); only Windows gets the fatal unenforced-host advisory.
     for profile in ("confined", "exclusive"):
         assert privilege_profile_advisory(profile, "goose", platform="darwin") is None
-        lin = privilege_profile_advisory(profile, "goose", platform="linux")
+        lin = privilege_profile_advisory(
+            profile, "goose", platform="linux", mechanism_available=True
+        )
         assert lin is not None and lin["code"] == "privilege-profile-linux-launcher-manual-wire"
         adv = privilege_profile_advisory(profile, "goose", platform="win32")
         assert adv is not None
@@ -844,13 +852,19 @@ def test_advisory_fires_for_direct_token_on_non_sandbox_host():
         privilege_profile_advisory("cooperative", "goose", ["goose:sandbox"], platform="darwin")
         is None
     )
-    glin = privilege_profile_advisory("cooperative", "goose", ["goose:sandbox"], platform="linux")
+    # Pin mechanism_available=True: assert the platform branch, not the host's live bwrap probe
+    # (a bwrap-less Linux host would return 'mechanism-unavailable' first, masking manual-wire).
+    glin = privilege_profile_advisory(
+        "cooperative", "goose", ["goose:sandbox"], platform="linux", mechanism_available=True
+    )
     assert glin is not None and glin["code"] == "privilege-profile-linux-launcher-manual-wire"
     adv = privilege_profile_advisory("cooperative", "goose", ["goose:sandbox"], platform="win32")
     assert adv is not None
     assert adv["code"] == "privilege-profile-unenforced-host"
     # codex: manual-wire on Linux; unenforced-host on Windows.
-    clin = privilege_profile_advisory("cooperative", "codex", ["claude:sandbox"], platform="linux")
+    clin = privilege_profile_advisory(
+        "cooperative", "codex", ["claude:sandbox"], platform="linux", mechanism_available=True
+    )
     assert clin is not None and clin["code"] == "privilege-profile-linux-launcher-manual-wire"
     adv2 = privilege_profile_advisory("cooperative", "codex", ["claude:sandbox"], platform="win32")
     assert adv2 is not None
