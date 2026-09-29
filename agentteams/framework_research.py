@@ -498,7 +498,7 @@ standard, cadence-gated check — not a task that waits on someone noticing a dr
 - **On `ROUTE=true`:** route the frameworks in `DRIFT_FRAMEWORKS=` / `FETCH_ISSUE_FRAMEWORKS=` to
   `@framework-adapters-expert` to work the §5 Stage-2 edit-site table as a **human-reviewed PR**
   (Constitutional C-4: the check routes a triage, it does not authorize an unattended adapter edit).
-- **Cadence:** a per-checkout ledger (`tmp/daily-pipeline/framework-research/agent-check-ledger.json`)
+- **Cadence:** a per-checkout gitignored, operator-local ledger (`tmp/daily-pipeline/framework-research/agent-check-ledger.json`)
   records `last_checked`; the check runs at most once per 24h and re-routes only when the drift changes.
   An inconclusive/offline run does not advance the clock. `@orchestrator` may consult it during request
   intake as an optional adjunct.

@@ -39,7 +39,7 @@ from agentteams.framework_research import (
 #: records when the AGENT infrastructure last ran this triage; it is a DISTINCT axis from the
 #: snapshot's ``generated_at`` (when upstream docs were last fetched, restamped daily by the cron),
 #: because gating on snapshot age alone could never signal "the agent has not acted."
-AGENT_CHECK_LEDGER_REL = "tmp/daily-pipeline/framework-research/agent-check-ledger.json"
+AGENT_CHECK_LEDGER_REL = "tmp/daily-pipeline/framework-research/agent-check-ledger.json"  # gitignored — operator-local
 
 #: Default ≤24h cadence for the standard agent conformance check.
 AGENT_CHECK_WINDOW_HOURS = 24.0
@@ -115,7 +115,8 @@ def run_agent_conformance_check(
     is not re-routed every window (deduping against the cron's own PR handling).
 
     Args:
-        repo_root: Repository root holding the snapshot and ledger under ``tmp/daily-pipeline/``.
+        repo_root: Repository root holding the snapshot and ledger under
+            ``tmp/daily-pipeline/`` (gitignored, operator-local).
         window_hours: Skip when the ledger's ``last_checked`` is younger than this. ``0`` forces a
             check regardless of the ledger (used by ``--force`` and the daily cron step).
         now: Injectable current UTC time (for tests); defaults to :func:`_utcnow`.
