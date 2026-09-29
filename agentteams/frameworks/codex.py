@@ -39,6 +39,7 @@ files, so this adapter never overwrites an existing one that it did not generate
 from __future__ import annotations
 
 import json
+import os
 import re
 import tomllib
 from pathlib import Path
@@ -548,7 +549,10 @@ class CodexAdapter(AgentsMdAdapter):
                 "--framework agents-md also targets this project (it shares .agents/)."
             )
         for rel_path, content in rendered_files:
-            target = output_dir / rel_path
+            # Lexical normalisation (no symlink resolution): on a first run `.codex/agents`
+            # does not exist yet, and the OS then reports `.codex/agents/../../AGENTS.md` as
+            # missing — which read as "absent, safe to write" over a goose-owned AGENTS.md.
+            target = Path(os.path.normpath(output_dir / rel_path))
             if target.name == "AGENTS.md" and not agents_md_is_codex_owned(target):
                 notices.append(
                     f"{target}: existing AGENTS.md was not generated for Codex; left untouched "

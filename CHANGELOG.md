@@ -6,6 +6,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### fixed (Codex AGENTS.md guard on a first run)
+
+- On a first native `--framework codex` generation, `.codex/agents` does not exist yet, so the OS
+  reported `.codex/agents/../../AGENTS.md` as missing. The guard then treated an existing
+  goose-owned or hand-written root `AGENTS.md` as absent and allowed the write. The guard now
+  normalises the path lexically (still without following symlinks). Found by the dogfood
+  regeneration dry run, 2026-09-29.
+
 ### security (install source: never PyPI — baseAgent handoff item 8)
 
 - **Every emitted and operator-facing install instruction now uses the git source.** agentteams is
