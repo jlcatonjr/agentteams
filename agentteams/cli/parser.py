@@ -168,6 +168,32 @@ def _build_parser() -> argparse.ArgumentParser:
         ),
     )
     parser.add_argument(
+        "--agent-check",
+        action="store_true",
+        dest="agent_check",
+        help=(
+            "Run the ≤24h framework-conformance check and exit (no template emit/update, no "
+            "fetch, no adapter edits; records only a small local ledger). Prints "
+            "STATUS=/NEEDS_AGENT_ACTION=/ROUTE=; on a route it "
+            "names the drifting frameworks for @framework-adapters-expert. See "
+            "references/provider-adapter-refresh.procedure.md §7."
+        ),
+    )
+    parser.add_argument(
+        "--window-hours",
+        metavar="H",
+        dest="agent_check_window_hours",
+        type=float,
+        default=None,
+        help="Cadence window for --agent-check (default 24). Ignored without --agent-check.",
+    )
+    parser.add_argument(
+        "--force",
+        action="store_true",
+        dest="agent_check_force",
+        help="With --agent-check: bypass the 24h ledger gate and check now. Ignored otherwise.",
+    )
+    parser.add_argument(
         "--query-index",
         metavar="TEXT",
         dest="query_index",

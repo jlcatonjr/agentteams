@@ -172,3 +172,74 @@ ever touches `references/*-expert.md` observation stanzas — never `agentteams/
   schema). So across the six, the *token-drift* guarantee is real only for the frameworks whose docs
   are server-rendered; for the rest the guarantee is reachability + relocation detection. Genuine
   drift on an SPA-served provider needs the Phase-3 live-behavior check or a human read, not this scan.
+
+---
+
+## 7. The agent-infrastructure standard check (≤24h trigger)
+
+§5 Stage 1 is scripted and §5 Stage 2 is human-gated, but nothing made the agent infrastructure
+*run* Stage 1 and *route* Stage 2 on a cadence — the daily PR sat "awaiting review by
+`@framework-adapters-expert`" while nothing paged that agent. This section closes that handoff with
+a **ledger-gated, no-fetch check the agent infrastructure performs at most once per 24 hours**.
+
+**Entrypoints (already registered maintenance surfaces — no trigger-contract change):**
+
+```bash
+# Portable package CLI (runs standalone — no --description/--self needed; operates on the module tree):
+agentteams --agent-check                    # honor the 24h ledger gate
+agentteams --agent-check --force            # re-check now (bypass the gate)
+agentteams --agent-check --window-hours 12
+
+# Repo daily-pipeline wrapper (identical output; used by the CI cron step):
+python scripts/research_claude_code_docs.py --agent-check
+```
+
+It prints a human line plus machine-readable `STATUS=` / `NEEDS_AGENT_ACTION=` / `ROUTE=` lines; on
+a route it also emits `ROUTE_TARGET=@framework-adapters-expert` and the affected
+`DRIFT_FRAMEWORKS=` / `FETCH_ISSUE_FRAMEWORKS=`.
+
+**What it is — and deliberately is not:**
+
+- **It never fetches.** Refreshing the snapshot is the cron's job (or an explicit bare
+  `research_claude_code_docs.py` run). The check *reads* the snapshot the cron already produced, so
+  running it inside an agent session adds zero network I/O and no request latency. Its only write is a
+  small best-effort local ledger under `tmp/`; a read-only module tree (e.g. a read-only package
+  install) degrades safely without crashing and simply reports `stale-snapshot` when no snapshot exists.
+- **It never edits adapter code.** Like the rest of this procedure it detects + routes; the Stage-2
+  adapter edit stays a human-reviewed PR (C-4). `route=true` means "open the §5 edit-site table for
+  these frameworks," not "apply a change."
+- **Its drift predicate is `keys_diff.missing_upstream` (a token we rely on vanished) plus
+  `fetch_status ∈ {moved, empty}`.** `new_upstream` is excluded — the scan only searches
+  `expected_keys`, so it is structurally always empty (see §6). Transient `failed`/`skipped` never
+  route.
+
+**The ledger** `tmp/daily-pipeline/framework-research/agent-check-ledger.json` (gitignored,
+per-checkout) records `last_checked`. That is a **distinct axis** from the snapshot's `generated_at`
+(which the cron restamps daily): gating on snapshot age alone could never signal "the agent has not
+acted." Two guards keep the cadence honest:
+
+- **Inconclusive runs do not advance the 24h clock.** If no snapshot younger than the window exists
+  (cron down / offline), the check returns `stale-snapshot`, sets a short `last_attempted` throttle
+  (~1h), and leaves `last_checked` untouched — so a real drift arriving within the day is not masked.
+- **Routing is idempotent.** A `drift_signature` over the actionable `missing_upstream` tokens +
+  fetch-issue set is stored in `last_routed_hash`; the same drift is routed once, not every day,
+  which is what keeps this check from re-paging the adapters-expert about drift the cron's PR already
+  records (the two views dedupe against one another).
+
+**Where it runs:**
+
+1. **CI (mechanical enforcement):** `.github/workflows/framework-auto-update.yml` runs
+   `--agent-check --force` as a final read-only step, so the routing decision is surfaced in the run
+   summary every day the cron fires — execution is CI-enforced, not attention-enforced.
+2. **Agent sessions (optional adjunct):** `@orchestrator` Workflow 0M consults it during request
+   intake and, on `ROUTE=true`, hands `@framework-adapters-expert` the affected frameworks to work
+   §5 Stage 2. This wiring lives in the orchestrator's user-editable band and is **module
+   self-maintenance**, not a template-library capability — it is preserved by
+   `agentteams --self --update --merge` but is not inherited by consumer teams (which have no
+   framework adapters of their own to keep conformant) and would be dropped by `--update --overwrite`.
+
+> **Not covered here:** durably registering this entrypoint in the *rendered*
+> `retrieval-trigger-contract.reference.md` — that file is generator-fenced, so the durable change is
+> to the self-brief's `retrieval_integration` source, tracked in
+> `references/agentteams-remediation-log.csv`. The script itself is already a listed maintenance
+> entrypoint, so the contract's trigger-source set is unchanged.

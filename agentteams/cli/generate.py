@@ -70,6 +70,20 @@ _SCRIPT_DIR = Path(__file__).resolve().parents[2]
 TEMPLATES_DIR = _SCRIPT_DIR / "agentteams" / "templates"
 
 
+def _framework_conformance_enabled(manifest: dict) -> bool:
+    """Decide whether to emit the framework-watch ≤24h standard-conformance-check section.
+
+    An explicit brief field ``framework_conformance_check`` (carried into the manifest as a bool)
+    overrides in either direction. When absent, default **on** for teams that maintain framework
+    adapters — a component with slug ``framework-adapters`` (the ``@framework-adapters-expert`` role)
+    — and off otherwise, since only adapter-bearing teams have anything to keep conformant.
+    """
+    explicit = manifest.get("framework_conformance_check")
+    if isinstance(explicit, bool):
+        return explicit
+    return any(c.get("slug") == "framework-adapters" for c in manifest.get("components", []))
+
+
 def run_generate(
     args: argparse.Namespace,
     strict_manual_placeholders: bool,
@@ -296,6 +310,7 @@ def _run_generate_inner(
         framework_placeholders = _framework_research.build_framework_placeholders(
             output_dir=output_dir,
             offline=True,
+            conformance_check_enabled=_framework_conformance_enabled(manifest),
         )
         manifest["auto_resolved_placeholders"].update(framework_placeholders)
     except Exception as exc:  # pragma: no cover - never block build on research stage

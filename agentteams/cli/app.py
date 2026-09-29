@@ -124,6 +124,16 @@ def _main_dispatch(
         return 1
 
     # -----------------------------------------------------------------------
+    # --agent-check: standalone read-only framework-conformance check. It needs no
+    # description/manifest/output tree — it reads the module-tree snapshot and a small
+    # local ledger — so it dispatches BEFORE the --description-required gate below, letting
+    # a bare `agentteams --agent-check` run. See references/provider-adapter-refresh.procedure.md §7.
+    # -----------------------------------------------------------------------
+    if getattr(args, "agent_check", False):
+        from agentteams.cli.artifacts import _run_agent_conformance_check
+        return _run_agent_conformance_check(args)
+
+    # -----------------------------------------------------------------------
     # --fleet: run --update --merge across every workspace under a parent dir.
     # Re-enters this main() in-process per (workspace, target); the constructed
     # argv never includes --fleet, so there is no recursion.

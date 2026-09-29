@@ -6,6 +6,7 @@ SECTION MANIFEST — framework-watch.reference.template.md
 |-----------------|-------------|------------------------------------------------------|
 | framework_data  | FENCED      | Live upstream framework spec snapshot (Claude Code)  |
 | operational_integration_process| FENCED      | Template-owned section                               |
+| conformance_standard_check| FENCED | Opt-in ≤24h standard-check block; empty when the team has no framework adapters |
 -->
 
 This reference is refreshed during team initialization and update workflows.
@@ -35,10 +36,20 @@ Diff summary: `{FRAMEWORK_RESEARCH_DIFF_SUMMARY}`
 ## Operational Integration Process
 
 1. Refresh this reference on every team initialization and update.
-2. Route `new_upstream` keys to `@framework-adapters-expert` for triage.
-3. Route `documented_locally_not_upstream` keys to `@docs-research-expert`
-   for verification — they may indicate doc drift or a missed rename.
+2. Route a `missing_upstream` key (a token this project documents that upstream
+   no longer shows) or a relocated/stub doc (`fetch_status` `moved`/`empty`) to
+   `@framework-adapters-expert` for Stage-2 triage — this is the live drift signal
+   the ≤24h Standard Conformance Check below routes. (`new_upstream` is *not* a
+   usable trigger: the scan only searches expected keys, so it is structurally
+   always empty.)
+3. Route the same `missing_upstream` set to `@docs-research-expert` *(if in team)*
+   for verification — it may indicate doc drift or a missed rename rather than an
+   adapter change.
 4. Escalate persistent unresolved drift to `@orchestrator` with a
    re-render request when adapter constants are out of date.
 <!-- AGENTTEAMS:END operational_integration_process -->
+
+<!-- AGENTTEAMS:BEGIN conformance_standard_check v=1 -->
+{FRAMEWORK_CONFORMANCE_STANDARD_CHECK}
+<!-- AGENTTEAMS:END conformance_standard_check -->
 
