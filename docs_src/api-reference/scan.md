@@ -9,7 +9,7 @@ Scans `.agent.md` and related files for: absolute paths containing usernames (PI
 ## Layout
 
 - **Module:** `agentteams.scan` (importable)
-- **CLI:** `python -m agentteams.scan <path>` (or `-` for stdin) — for a runtime with shell/`execute` access but no way to natively `import` and call `scan_content` directly.
+- **CLI:** `python -m agentteams.scan <path>` (a file, a directory tree, or `-` for stdin) — for a runtime with shell/`execute` access but no way to natively `import` and call `scan_content` directly.
 
 > *Source: `agentteams/scan.py`*
 
@@ -168,6 +168,18 @@ python -m agentteams.scan path/to/file.md
 
 # Scan piped content (e.g. a diff) via stdin
 git diff | python -m agentteams.scan -
+```
+
+A directory argument walks the tree. Symlinks are not followed, and only the root `.git`
+object store is pruned; its `config` and `hooks/` are still scanned. Every regular file goes
+through `scan_content`, with non-UTF-8 bytes decoded lossily, and the findings are combined
+into one verdict. The JSON adds `files_scanned` and `skipped`. Each skipped entry also raises
+a medium `scanner-evasion` finding, so a skip can never read as PASS. A path that is neither
+a file nor a directory (missing, FIFO, device) is a usage error (exit 2). A single file is also
+decoded lossily, so non-UTF-8 content is scanned instead of crashing.
+
+```bash
+python -m agentteams.scan .codex/agents/
 ```
 
 ## See Also
