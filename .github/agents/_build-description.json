@@ -50,6 +50,7 @@
   ],
   "conversion_pipeline": "python -m build",
   "pip_package_name": "agentteams",
+  "framework_conformance_check": true,
   "doc_site_config_file": "mkdocs.yml",
   "style_reference": null,
   "reference_db_path": "references/",

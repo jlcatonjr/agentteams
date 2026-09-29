@@ -287,6 +287,10 @@
       "type": "boolean",
       "description": "P3-3 opt-in (default false). When true, the `exclusive` profile's `~/`-relative `denyRead` paths are resolved to `expanduser`'d ABSOLUTE paths at generation time, so OS read-exclusion no longer depends on Claude Code expanding `~`→$HOME before the deny (an unverified assumption that, if false, silently no-ops every default deny entry while the config still looks protective). Trade-off: absolute paths are host-specific (they name the generating machine's home) and do not port to another machine — regenerate on the host that runs the team. Only meaningful with privilege_profile: exclusive; the default (false) keeps the portable `~/` form and a byte-identical block."
     },
+    "framework_conformance_check": {
+      "type": "boolean",
+      "description": "Opt-in override for the framework-watch reference's ≤24h standard-conformance-check section (see references/provider-adapter-refresh.procedure.md §7). When omitted, defaults on for teams that maintain framework adapters (a component with slug `framework-adapters`, i.e. the `@framework-adapters-expert` role) and off otherwise. Set true to force-emit the section (e.g. the AgentTeamsModule self-brief dogfooding the trigger onto its own governing team) or false to suppress it. The check itself is read-only detection + routing (Constitutional C-4); it never edits adapter code."
+    },
     "enforce_decision_signing": {
       "type": "boolean",
       "default": true,

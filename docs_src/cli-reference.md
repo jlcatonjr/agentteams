@@ -14,7 +14,8 @@ agentteams [--description PATH] [--project PATH] [--framework NAME]
            [--bridge-check] [--bridge-refresh] [--bridge-merge] [--bridge-no-skills]
            [--dry-run] [--json] [--overwrite] [--merge] [--yes]
            [--no-scan] [--cost-routing] [--update] [--prune] [--adopt-orphans] [--check]
-           [--refresh-index] [--query-index TEXT] [--query-k N] [--query-strategy {lexical,vector}]
+           [--refresh-index] [--agent-check] [--window-hours H] [--force]
+           [--query-index TEXT] [--query-k N] [--query-strategy {lexical,vector}]
            [--refresh-code-index] [--query-code TEXT] [--code-query-k N]
            [--code-query-strategy {lexical,vector}] [--code-kind {local,api,doc,all}]
            [--refresh-graph] [--refresh-architecture]
@@ -305,6 +306,18 @@ Retrieval strategy for `--query-index`. Default: `lexical`.
 - `vector` — Sparse tf·idf cosine similarity. Better recall for thematic/semantic queries ("what's our policy on error handling?", "find prior work on resource management"). Returns documents related to ALL query terms. Stdlib-only, <100ms at typical corpus sizes.
 
 Start with `lexical`; if results are low-confidence, retry with `vector`.
+
+### `--agent-check`
+
+Run the framework-conformance check and exit — no template emit/update, no fetch, no adapter edits; it records only a small best-effort local ledger and degrades safely (no crash) on a read-only install. Runs standalone (no `--description`/`--self` required). Reads the framework-research snapshot under the module tree and reports whether observed upstream drift (a `keys_diff.missing_upstream` token vanished) or a relocated doc (`fetch_status` `moved`/`empty`) warrants routing `@framework-adapters-expert` to the Stage-2 adapter triage in `references/provider-adapter-refresh.procedure.md` §7. Prints `STATUS=`, `NEEDS_AGENT_ACTION=`, and `ROUTE=` lines; on a route it also names `DRIFT_FRAMEWORKS=`/`FETCH_ISSUE_FRAMEWORKS=`. Gated to at most once per 24h by a per-checkout ledger (`tmp/daily-pipeline/framework-research/agent-check-ledger.json`); it is detection + routing only (Constitutional C-4). Most useful in an AgentTeamsModule repository/clone where the daily pipeline keeps a fresh snapshot; a plain package install with no refreshed snapshot reports `STATUS=stale-snapshot`.
+
+### `--window-hours H`
+
+Cadence window in hours for `--agent-check`. Default: `24`. Ignored without `--agent-check`.
+
+### `--force`
+
+With `--agent-check`, bypass the 24h ledger gate and check now. A snapshot older than the window still reports `STATUS=stale-snapshot` rather than a false all-clear. Ignored without `--agent-check`.
 
 ---
 

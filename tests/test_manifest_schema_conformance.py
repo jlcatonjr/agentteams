@@ -158,6 +158,9 @@ def test_declared_but_unemitted_fields_are_conditional_not_dead(schema):
         # Sanctioned loopback egress proxy: emitted only when the brief sets it (exclusive
         # goose teams); build_manifest omits it otherwise.
         "goose_egress_proxy",
+        # Framework-conformance ≤24h check opt-in: emitted only when the brief sets an explicit
+        # bool; otherwise absent and cli/generate.py defaults it on for adapter-bearing teams.
+        "framework_conformance_check",
     }
     emitted: set[str] = set()
     for _, description in _DESCRIPTIONS:

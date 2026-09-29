@@ -61,6 +61,7 @@ from agentteams.cli.generate_helpers import (  # noqa: F401
     _update_target_is_bridge,
     _BRIDGE_FENCE_BEGIN_RE,
     _handle_check,
+    _framework_conformance_enabled,
 )
 
 # Re-exported for cli.app and existing tests that resolve it here (carved to cli/exit_codes.py).
@@ -296,6 +297,7 @@ def _run_generate_inner(
         framework_placeholders = _framework_research.build_framework_placeholders(
             output_dir=output_dir,
             offline=True,
+            conformance_check_enabled=_framework_conformance_enabled(manifest),
         )
         manifest["auto_resolved_placeholders"].update(framework_placeholders)
     except Exception as exc:  # pragma: no cover - never block build on research stage

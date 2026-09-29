@@ -18,6 +18,7 @@ ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT))
 
 from agentteams import framework_research  # noqa: E402
+from agentteams import framework_conformance  # noqa: E402
 
 
 def _write_report(snapshot: dict) -> Path:
@@ -110,14 +111,35 @@ def _cmd_freshness_view() -> int:
     return 0
 
 
+def _cmd_agent_check(window_hours: float, force: bool) -> int:
+    """Run the standard agent-infrastructure conformance check (no fetch, no adapter edits; ≤24h cadence).
+
+    Prints a human summary plus machine-readable ``KEY=value`` lines the ``@orchestrator`` can grep
+    (``STATUS``, ``NEEDS_AGENT_ACTION``, ``ROUTE``, and on a route the target + affected frameworks).
+    Never fetches and never edits adapter code — detection + routing only (Constitutional C-4).
+    Exit code is 0 for every normal outcome (this is an advisory read, not a gate); a non-zero exit
+    signals only an unexpected internal error.
+    """
+    result = framework_conformance.run_agent_conformance_check(
+        ROOT, window_hours=0.0 if force else window_hours
+    )
+    print(framework_conformance.render_agent_check_report(result))
+    return 0
+
+
 def main(argv: list[str]) -> int:
     parser = argparse.ArgumentParser(description="Daily Claude Code docs research stage")
     parser.add_argument("--offline", action="store_true", help="Skip network fetch; reuse cached snapshot if present.")
     parser.add_argument("--propose", action="store_true", help="Write a module-core patch proposal (advisory).")
     parser.add_argument("--apply", action="store_true", help="Apply the previously generated proposal; reverts on test failure.")
     parser.add_argument("--freshness-view", action="store_true", help="Print the unified provider-freshness view (no fetch).")
+    parser.add_argument("--agent-check", action="store_true", help="Run the standard agent-infrastructure conformance check (no fetch, no adapter edits; ≤24h cadence).")
+    parser.add_argument("--window-hours", type=float, default=framework_conformance.AGENT_CHECK_WINDOW_HOURS, help="Cadence window for --agent-check (default 24).")
+    parser.add_argument("--force", action="store_true", help="With --agent-check: bypass the 24h ledger gate and check now.")
     args = parser.parse_args(argv)
 
+    if args.agent_check:
+        return _cmd_agent_check(args.window_hours, args.force)
     if args.freshness_view:
         return _cmd_freshness_view()
     if args.apply:

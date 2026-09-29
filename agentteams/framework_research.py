@@ -266,13 +266,16 @@ def _load_snapshot(snapshot_path: Path) -> dict[str, Any] | None:
         return None
 
 
-def _snapshot_age_hours(snapshot: dict[str, Any]) -> float | None:
+def _snapshot_age_hours(snapshot: dict[str, Any], now: _dt.datetime | None = None) -> float | None:
+    """Age of the snapshot in hours. ``now`` is injectable so callers that thread a fixed clock
+    (e.g. ``framework_conformance.run_agent_conformance_check`` under test) judge snapshot freshness against the same
+    instant they use for the ledger gate, rather than against wall-clock time."""
     ts = snapshot.get("generated_at", "")
     try:
         dt = _dt.datetime.fromisoformat(ts.replace("Z", "+00:00"))
-    except ValueError:
+    except (ValueError, AttributeError):
         return None
-    return (_utcnow() - dt).total_seconds() / 3600.0
+    return ((now or _utcnow()) - dt).total_seconds() / 3600.0
 
 
 def _scan_tokens_for(text: str, expected_keys: list[str], expected_locations: list[str]) -> dict[str, list[str]]:
@@ -475,11 +478,53 @@ def _staleness_banner(snapshot: dict[str, Any]) -> str:
     return ""
 
 
-def build_framework_placeholders(output_dir: Path, offline: bool = True) -> dict[str, str]:
+#: Opt-in operational block appended to the framework-watch reference when a team maintains
+#: framework adapters. Kept here (not in the template) so the entrypoint/procedure references stay
+#: single-sourced with the check's own implementation. Rendered into the
+#: ``{FRAMEWORK_CONFORMANCE_STANDARD_CHECK}`` placeholder; empty string when the capability is off.
+_CONFORMANCE_CHECK_SECTION = """
+## Standard Conformance Check (≤24h)
+
+This team maintains framework adapters, so keeping them conformant to upstream provider docs is a
+standard, cadence-gated check — not a task that waits on someone noticing a drift PR. Full semantics:
+`references/provider-adapter-refresh.procedure.md` §7.
+
+- **Run it (never fetches, never edits adapter code — it records only a small local ledger):**
+  `agentteams --agent-check` (or, in the AgentTeamsModule repo, `python scripts/research_claude_code_docs.py --agent-check`).
+  It prints `STATUS=` / `NEEDS_AGENT_ACTION=` / `ROUTE=`; add `--force` to bypass the 24h ledger gate.
+  It is most useful in an AgentTeamsModule repository/clone, where the daily pipeline keeps a fresh
+  snapshot; in a plain package install with no refreshed snapshot it reports `STATUS=stale-snapshot`
+  until one is produced (it degrades safely and never crashes on a read-only install).
+- **On `ROUTE=true`:** route the frameworks in `DRIFT_FRAMEWORKS=` / `FETCH_ISSUE_FRAMEWORKS=` to
+  `@framework-adapters-expert` to work the §5 Stage-2 edit-site table as a **human-reviewed PR**
+  (Constitutional C-4: the check routes a triage, it does not authorize an unattended adapter edit).
+- **Cadence:** a per-checkout gitignored, operator-local ledger (`tmp/daily-pipeline/framework-research/agent-check-ledger.json`)
+  records `last_checked`; the check runs at most once per 24h and re-routes only when the drift changes.
+  An inconclusive/offline run does not advance the clock. `@orchestrator` may consult it during request
+  intake as an optional adjunct.
+""".strip() + "\n"
+
+
+def _conformance_check_section(enabled: bool) -> str:
+    """Return the opt-in standard-check block, or the empty string when the capability is off."""
+    return _CONFORMANCE_CHECK_SECTION if enabled else ""
+
+
+def build_framework_placeholders(
+    output_dir: Path, offline: bool = True, *, conformance_check_enabled: bool = False
+) -> dict[str, str]:
     """Return placeholders for the framework-watch reference template.
 
     Reads the existing snapshot under `tmp/daily-pipeline/framework-research/` (gitignored).
     Set `offline=False` to refresh from the network first (daily-pipeline use).
+
+    Args:
+        output_dir: The team's agents output directory (unused for the snapshot, which lives under
+            the module tree; kept for signature symmetry with the other placeholder builders).
+        offline: When False, refresh the snapshot from the network first (daily-pipeline use).
+        conformance_check_enabled: When True, resolve ``FRAMEWORK_CONFORMANCE_STANDARD_CHECK`` to the
+            ≤24h standard-check operational block; when False, to the empty string. Gated by the
+            caller on whether the team maintains framework adapters (see ``cli/generate.py``).
     """
     # The snapshot lives under the *module* tree, not the output tree.
     repo_root = Path(__file__).resolve().parents[1]
@@ -503,6 +548,7 @@ def build_framework_placeholders(output_dir: Path, offline: bool = True) -> dict
         "FRAMEWORK_RESEARCH_TABLE": table,
         "FRAMEWORK_RESEARCH_STALE_BANNER": banner,
         "FRAMEWORK_RESEARCH_DIFF_SUMMARY": " ".join(summary_parts),
+        "FRAMEWORK_CONFORMANCE_STANDARD_CHECK": _conformance_check_section(conformance_check_enabled),
     }
 
 

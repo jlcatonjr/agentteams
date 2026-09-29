@@ -1050,6 +1050,29 @@ from agentteams.cli.code_index_artifacts import (  # noqa: E402,F401
 )
 
 
+def _run_agent_conformance_check(args: Any) -> int:
+    """Portable entrypoint for the ≤24h framework-conformance check (`agentteams --agent-check`).
+
+    Operates on the MODULE-tree root — where the framework-research snapshot and ledger live (the same
+    root :func:`agentteams.framework_research.build_framework_placeholders` reads) — so the snapshot and
+    ledger stay co-located regardless of the team output dir. It never fetches and never edits adapter
+    code (Constitutional C-4); it records only a small best-effort local ledger and degrades safely
+    (no crash) when the module tree is read-only. See ``references/provider-adapter-refresh.procedure.md`` §7.
+    """
+    from agentteams import framework_conformance as _fc
+
+    repo_root = Path(_fc.__file__).resolve().parents[1]
+    kwargs: dict[str, Any] = {}
+    window = getattr(args, "agent_check_window_hours", None)
+    if window is not None:
+        kwargs["window_hours"] = window
+    if getattr(args, "agent_check_force", False):
+        kwargs["window_hours"] = 0.0
+    result = _fc.run_agent_conformance_check(repo_root, **kwargs)
+    print(_fc.render_agent_check_report(result))
+    return 0
+
+
 def _run_retrieval_utility_modes(args: Any, manifest: dict, output_dir: Path) -> int | None:
     """Dispatch the memory-index and code-index utility modes (no template render).
 

@@ -6,6 +6,30 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### added (≤24h framework-conformance standard check + portable `agentteams --agent-check`)
+
+- **The agent infrastructure now performs a standard, cadence-gated framework-conformance check**,
+  closing the detect→act gap in the daily `framework-auto-update` loop: the cron detected upstream
+  framework-doc drift and opened an observation PR, but nothing routed an agent to act on it.
+  `framework_research.run_agent_conformance_check()` is a **no-fetch, ledger-gated (≤24h)** check that
+  reads the existing snapshot and routes `@framework-adapters-expert` to the
+  `references/provider-adapter-refresh.procedure.md` §5 Stage-2 triage when real drift
+  (`keys_diff.missing_upstream`) or a relocated doc (`fetch_status` `moved`/`empty`) is observed —
+  with a `drift_signature` for routing idempotency and a 1h throttle so an inconclusive/offline run
+  does not advance the 24h clock. **Detection + routing only** — it never fetches and never edits
+  adapter code (Constitutional C-4); its only write is a small best-effort local ledger that degrades
+  safely (no crash) on a read-only tree.
+- **Portable entrypoint `agentteams --agent-check`** (plus `--window-hours` / `--force`) runs the
+  check standalone from an installed package, alongside the repo daily-pipeline wrapper
+  `scripts/research_claude_code_docs.py --agent-check`. A read-only advisory step in
+  `.github/workflows/framework-auto-update.yml` surfaces the routing decision in CI.
+- **Durable, opt-in generator emission.** The git-tracked `framework-watch.reference.template.md`
+  now emits a Standard Conformance Check section, gated on by default for teams that maintain
+  framework adapters (a `framework-adapters` component) and off otherwise; an explicit
+  `framework_conformance_check` project-description field (added to the project-description and
+  team-manifest schemas) overrides either way. The AgentTeamsModule self-brief sets it `true`, so
+  `agentteams --self --update` recreates the trigger on any clone/fork.
+
 ### security (cryptography pin bumped 49.0.0 → 50.0.0 — CVE-2026-69247 / GHSA-g6cj-pr64-35w5)
 
 - **The `signing` extra now pins `cryptography==50.0.0`**, up from `49.0.0`, to remediate

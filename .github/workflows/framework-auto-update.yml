@@ -235,3 +235,22 @@ jobs:
           fi
           echo "Run failed before a PR was opened; deleting orphaned branch $BRANCH."
           git push origin --delete "$BRANCH" || true
+
+      - name: Agent-infrastructure conformance check (read-only, advisory)
+        # Mechanical enforcement half of references/provider-adapter-refresh.procedure.md §7. The
+        # snapshot was already refreshed above ("Refresh framework-research snapshot"), so this
+        # READ-ONLY step reuses it — it never fetches, never edits adapter code, and never fails the
+        # build. It records the routing decision (@framework-adapters-expert → §5 Stage 2) into the
+        # run summary so "did the agent infra act on today's drift?" is answered in CI, not left to
+        # a human noticing the PR. `--force` bypasses the 24h ledger gate (the cron cadence IS the
+        # check cadence); a stale snapshot still degrades to STATUS=stale-snapshot, never a false
+        # all-clear. Runs regardless of whether a proposal/PR was produced.
+        if: always()
+        run: |
+          {
+            echo "## Agent-conformance check (advisory)"
+            echo
+            echo '```'
+            python scripts/research_claude_code_docs.py --agent-check --force || true
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"
