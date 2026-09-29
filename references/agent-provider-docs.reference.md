@@ -51,6 +51,7 @@ need re-triage — that is the point of the window.
 | `openrouter-provider-routing` | OpenRouter | https://openrouter.ai/docs/features/provider-routing | Backend selection and `allow_fallbacks` — the mechanism the route proxy pins, after backends were measured mangling tool calls at different rates | 2026-08-07 | 90 |
 | `glm-5.2-card` | Z.AI (via OpenRouter) | https://openrouter.ai/z-ai/glm-5.2 | GLM 5.2 context window, tool-calling support, pricing. The model the daily judgment audit runs on | 2026-08-07 | 90 |
 | `qwen3.6-plus-card` | Alibaba (via OpenRouter) | https://openrouter.ai/qwen/qwen3.6-plus | Qwen 3.6-plus capabilities and tool-calling behaviour. Cited by the measured tool-call-in-reasoning finding | 2026-08-07 | 90 |
+| `qwen3.8-max-card` | Qwen/Alibaba (via OpenRouter) | https://openrouter.ai/qwen/qwen3.8-max | Qwen 3.8 Max (canonical slug `qwen/qwen3.8-max-0902`; tool-calling supported). Cited by the @security detect-but-no-HALT under-escalation findings measured 2026-08-09. Existence + tool-calling verified against the OpenRouter model page 2026-09-29 | 2026-09-29 | 90 |
 
 ## Local measurements that are not upstream documentation
 
