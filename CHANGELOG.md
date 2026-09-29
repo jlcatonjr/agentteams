@@ -6,6 +6,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### changed (internal: `goose.py` recipe-emission carved to `goose_recipe_emit.py` — CH-07)
+
+- **No behavior change.** The Goose recipe YAML emission helpers (`_emit_recipe`,
+  `_extract_name_description`, `_load_section`, `_yaml_dq`, `_indent_block`) and their constants
+  (`_RECIPE_VERSION`, `_YAML_SCALAR_RE`, `_MCP_EXT_TIMEOUT`) moved from `agentteams/frameworks/goose.py`
+  to a new `agentteams/frameworks/goose_recipe_emit.py` (the emit counterpart to `goose_recipe_read.py`
+  / `goose_recipe_validate.py`), taking `goose.py` from 979 to 796 lines — back under the CH-07
+  crowding margin. `goose.py` re-imports and re-exports the moved names, so
+  `from agentteams.frameworks.goose import _emit_recipe` / `_MCP_EXT_TIMEOUT` keep working; emitted
+  recipes are byte-identical. Removes the `goose.py` entry from the code-hygiene
+  `CEILING_MARGIN_BASELINE` (empty again), resolving the `goose-module-ceiling` remediation item that
+  the framework-conformance PR (#63) baselined.
+
 ### added (≤24h framework-conformance standard check + portable `agentteams --agent-check`)
 
 - **The agent infrastructure now performs a standard, cadence-gated framework-conformance check**,

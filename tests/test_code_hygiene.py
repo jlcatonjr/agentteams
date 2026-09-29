@@ -830,16 +830,11 @@ CEILING_WARN_MARGIN = 25
 #: `test_the_ceiling_baseline_is_current` fails when an entry stops being crowded, so it cannot
 #: quietly outlive its reason the way `audit.py 999` did.
 #:
-#: 2026-09-29: `frameworks/goose.py` entered at 979 — NOT chosen, and NOT introduced by the change
-#: that added this entry. The goose-linux-confinement merge (commit 6af4d72) grew goose.py into the
-#: margin and turned `main` red on `test_no_new_module_crowds_the_ceiling`; this baseline entry is
-#: the minimal unblock so an unrelated framework-conformance PR is not the vehicle for a goose
-#: decomposition. It is debt, not endorsement: the carve is tracked in
-#: `references/agentteams-remediation-log.csv` (category `goose-module-ceiling`) and should land in a
-#: dedicated goose PR, at which point this entry comes out (the ratchet forbids it growing meanwhile).
-CEILING_MARGIN_BASELINE: dict[str, int] = {
-    "agentteams/frameworks/goose.py": 979,
-}
+#: 2026-09-29: `frameworks/goose.py` entered at 979 (goose-linux-confinement merge, commit 6af4d72)
+#: and was baselined here as a minimal unblock by the framework-conformance PR (#63). It was carved
+#: back down the same day — the recipe-emission helpers moved to `frameworks/goose_recipe_emit.py`
+#: (goose.py 979 -> ~796) — so the entry came out and the baseline is empty again, the chosen state.
+CEILING_MARGIN_BASELINE: dict[str, int] = {}
 
 
 def _crowded_modules() -> dict[str, int]:
