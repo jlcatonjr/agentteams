@@ -22,6 +22,8 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Sequence
 
+from agentteams.capability_hints import agentteams_install_command
+
 
 def canonical_payload(fields: Sequence[str]) -> str:
     """Return the canonical signing payload for an ordered field list.
@@ -104,7 +106,8 @@ def _require_cryptography():
         raise RuntimeError(
             "Ed25519 signing/verification requires the 'signing' extra (cryptography); it is not "
             "installed. Refusing to proceed — a relaxing authorization is unavailable without the "
-            "asymmetric backend and is NEVER downgraded to HMAC (install `agentteams[signing]`)."
+            "asymmetric backend and is NEVER downgraded to HMAC (install the extra from the git source: "
+            f"`{agentteams_install_command('signing')}`)."
         ) from exc
     return Ed25519PrivateKey, Ed25519PublicKey, serialization, InvalidSignature
 

@@ -14,10 +14,40 @@ in this module).
 
 from __future__ import annotations
 
+from pathlib import Path
+
 from agentteams.canonical import DEFAULT_CANONICAL_SUBDIR
 
+_DEFAULT_MEMORY_INDEX_REL = "references/memory-index.json"
 
-def _render_quickstart(source_framework: str, target_framework: str) -> str:
+
+def memory_index_rel_path(source_dir: Path, root: Path) -> str:
+    """Project-relative path of the memory index a bridged team actually ships.
+
+    The index lives under the source team's own ``references/`` (a copilot-vscode team:
+    ``.github/agents/references/memory-index.json``), not at the project root, so a hardcoded
+    ``references/memory-index.json`` pointed readers at a missing file (baseAgent handoff
+    item 9, 2026-09-29).
+
+    Args:
+        source_dir: The bridged source team's agents directory.
+        root: The project root the bridge docs are relative to.
+
+    Returns:
+        The first existing candidate relative to *root* (the source-dir candidate when none
+        exists); an absolute path when it lies outside *root*.
+    """
+    candidates = (source_dir / _DEFAULT_MEMORY_INDEX_REL, root / _DEFAULT_MEMORY_INDEX_REL)
+    chosen = next((c for c in candidates if c.is_file()), candidates[0])
+    resolved, base = chosen.resolve(), root.resolve()
+    # A source team outside the project root: name the real file rather than a root path
+    # that does not exist there (the defect this function fixes).
+    return resolved.relative_to(base).as_posix() if resolved.is_relative_to(base) else resolved.as_posix()
+
+
+def _render_quickstart(
+    source_framework: str, target_framework: str, memory_index_rel: str = _DEFAULT_MEMORY_INDEX_REL,
+) -> str:
     generic_note = ""
     if target_framework == "generic":
         # OPEN-3: a generic target has no native adapter of its own — point it
@@ -71,7 +101,7 @@ def _render_quickstart(source_framework: str, target_framework: str) -> str:
         retrieval_paragraph = (
             "\n"
             "For 'where is X' / 'have we seen Y before' / thematic questions,\n"
-            "check references/memory-index.json directly (durable prose: work\n"
+            f"check {memory_index_rel} directly (durable prose: work\n"
             "summaries, plans, CHANGELOG) before grep, or ask a maintainer with\n"
             "agentteams installed to run a query on your behalf. See\n"
             "references/bridges/<src>-to-<target>/domain-boundary.md for the\n"
@@ -100,14 +130,16 @@ def _render_quickstart(source_framework: str, target_framework: str) -> str:
     )
 
 
-def _render_entrypoint(source_framework: str, target_framework: str) -> str:
+def _render_entrypoint(
+    source_framework: str, target_framework: str, memory_index_rel: str = _DEFAULT_MEMORY_INDEX_REL,
+) -> str:
     # 2026-08-10 finding: the CLI-invocation retrieval section below assumes
     # agentteams is installed on the consumer side — wrong for `generic`.
     if target_framework == "generic":
         retrieval_section = (
             "## Retrieval Surface\n\n"
             "Before falling back to grep / filesystem search for thematic or\n"
-            "cross-summary questions, check `references/memory-index.json`\n"
+            f"cross-summary questions, check `{memory_index_rel}`\n"
             "directly, or ask a maintainer with agentteams tooling installed to\n"
             "run an index query on your behalf. The index covers durable prose\n"
             "(work summaries, plans, CHANGELOG, references), NOT\n"

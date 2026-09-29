@@ -87,6 +87,7 @@ class SyncResult:
     applied_fields: int = 0
     dry_run: bool = False
     note: str = ""
+    notices: list[str] = field(default_factory=list)
 
     @property
     def did_work(self) -> bool:
@@ -419,8 +420,12 @@ def _project_and_rebaseline(
     frameworks: list[str],
     *,
     dry_run: bool,
+    notices: list[str] | None = None,
 ) -> list[str]:
     """Project canonical to every framework and rewrite each baseline.
+
+    Interop notices (e.g. an instruction file with no mergeable fences, left untouched) are
+    appended to *notices* so the operator sees every place the projection did not land.
 
     Raises:
         ValueError / FileNotFoundError: when the team-level ``privilege`` block cannot be
@@ -438,7 +443,15 @@ def _project_and_rebaseline(
     projected: list[str] = []
     for fw in frameworks:
         agents_dir = framework_agents_dir(root, fw)
-        import_from_cai(canonical_cai, fw, agents_dir, overwrite=True, dry_run=dry_run)
+        if not dry_run:
+            _backup_before_projection(agents_dir, fw)
+        # preserve_existing (item 3, 2026-09-29): unchanged agents keep their exact bytes
+        # (bespoke front matter survives) and an existing instruction file is fence-merged,
+        # never replaced by another framework's instructions.
+        res = import_from_cai(canonical_cai, fw, agents_dir, overwrite=True, dry_run=dry_run,
+                              preserve_existing=True)
+        if notices is not None:
+            notices.extend(f"[{fw}] {n}" for n in res.notices)
         # C2: re-emit this framework's OS-boundary artifacts from the team-level privilege
         # block so a confined/exclusive pinned-sync team stays confined after projection.
         _emit_privilege_artifacts(root, fw, privilege, dry_run=dry_run)
@@ -447,6 +460,31 @@ def _project_and_rebaseline(
             native_cai = export_to_cai(agents_dir, fw)
             write_baseline(canonical_dir, fw, native_cai, native_source_dir=str(agents_dir))
     return projected
+
+
+def _backup_before_projection(agents_dir: Path, framework: str) -> None:
+    """Snapshot a framework's agents dir and its instruction file before projection overwrites.
+
+    Projection writes with ``overwrite=True`` into directories that are commonly gitignored, so
+    without this a bad projection is unrecoverable (incident 2026-09-29). Uses the standard
+    ``.agentteams-backups/<timestamp>/`` store, so ``--restore-backup`` applies.
+    """
+    import os
+
+    from agentteams.backup import BACKUP_DIR_NAME, backup_output_dir, prune_backups
+
+    if not agents_dir.is_dir():
+        return
+    adapter = FRAMEWORKS[framework]()
+    files = [p for p in agents_dir.rglob("*")
+             if p.is_file() and BACKUP_DIR_NAME not in p.relative_to(agents_dir).parts]
+    skills = adapter.skills_dir(agents_dir)
+    if adapter.has_skill_concept() and skills.is_dir():
+        files += [p for p in skills.rglob("*") if p.is_file()]  # projection rewrites skills too
+    rels = [os.path.relpath(p, agents_dir) for p in files]
+    rels.append(adapter.finalize_output_path("../copilot-instructions.md", "instructions"))
+    backup_output_dir(agents_dir, files_to_backup=rels, reason="pre-sync-projection", framework=framework)
+    prune_backups(agents_dir)  # keep the default most-recent N; every --sync would add one
 
 
 def _append_conflict_log(root: Path, records: list[ConflictRecord]) -> None:
@@ -515,8 +553,9 @@ def sync_init(
         seed["privilege"] = priv
     materialize_canonical(seed, canonical_dir, dry_run=dry_run)
 
+    notices: list[str] = []
     projected = _project_and_rebaseline(
-        root, canonical_dir, seed, fws, dry_run=dry_run,
+        root, canonical_dir, seed, fws, dry_run=dry_run, notices=notices,
     )
     if not dry_run:
         save_pin(
@@ -531,6 +570,7 @@ def sync_init(
         projected_frameworks=projected,
         dry_run=dry_run,
         note=f"initialized pinned sync (pin={pin}, {len(fws)} frameworks)",
+        notices=notices,
     )
 
 
@@ -600,8 +640,9 @@ def run_sync(
     if priv:
         final_canonical["privilege"] = priv
         materialize_canonical(final_canonical, canonical_dir, dry_run=dry_run)
+    notices: list[str] = []
     projected = _project_and_rebaseline(
-        root, canonical_dir, final_canonical, fws, dry_run=dry_run,
+        root, canonical_dir, final_canonical, fws, dry_run=dry_run, notices=notices,
     )
     if not dry_run:
         _append_conflict_log(root, all_conflicts)
@@ -615,4 +656,5 @@ def run_sync(
         dry_run=dry_run,
         note=f"synced {len(changed)} changed framework(s); "
              f"{applied_total} field(s) absorbed; {len(all_conflicts)} conflict(s)",
+        notices=notices,
     )

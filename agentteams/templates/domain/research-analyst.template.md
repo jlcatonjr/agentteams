@@ -45,7 +45,7 @@ hit or a "survived" verdict actually proves.
 
 Unlike every other agent generated for this project, the capability you orchestrate is not
 another rendered instruction file — it is a real, installable Python library,
-`agentteams.research` (installed via the `agentteams[research]` optional-dependency group). Your
+`agentteams.research` (the `research` optional-dependency group, installed from the project's git source — the PyPI name `agentteams` is not this project's). Your
 own instructions here are still design-time-rendered exactly as usual; what's different is that
 they point at genuine runtime code the project must have installed, not just at other agents.
 <!-- AGENTTEAMS:END a_note_on_what_you_orchestrate -->

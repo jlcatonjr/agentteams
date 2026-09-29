@@ -43,7 +43,8 @@ def add_sync_arguments(parser: argparse.ArgumentParser) -> None:
         help=(
             "Bootstrap pinned multi-framework sync: seed the canonical hub from "
             "the --pin framework, project it to every framework in the sync set, "
-            "and record per-framework baselines. Writes .agentteams/pin.json."
+            "and record per-framework baselines. Writes .agentteams/pin.json. "
+            "The project root is --project (default: CWD); --output is refused."
         ),
     )
     group.add_argument(
@@ -102,7 +103,16 @@ def run_sync_cli(args: argparse.Namespace) -> int:
     """
     from agentteams.multi_sync import CONFLICT_LOG_SUBPATH, run_sync, sync_init
 
+    if getattr(args, "output", None):
+        # --sync/--sync-init take their root from --project; a silently ignored --output ran a
+        # projection against the CWD project instead of the intended one (incident 2026-09-29).
+        print("Error: --sync-init/--sync do not use --output; pass the project root with "
+              "--project <dir>.", file=sys.stderr)
+        return 2
     root = Path(getattr(args, "project", None) or ".").resolve()
+    if not root.is_dir():
+        print(f"Error: --project {root} is not a directory.", file=sys.stderr)
+        return 2
     dry = bool(getattr(args, "dry_run", False))
     dry_label = " (dry-run)" if dry else ""
 
@@ -121,6 +131,8 @@ def run_sync_cli(args: argparse.Namespace) -> int:
         print(f"Pinned sync initialized{dry_label}:")
         print(f"  {result.note}")
         print(f"  projected to: {', '.join(result.projected_frameworks)}")
+        for notice in result.notices:
+            print(f"  ⚠  {notice}")
         return 0
 
     try:
@@ -129,6 +141,8 @@ def run_sync_cli(args: argparse.Namespace) -> int:
         print(f"Error: {exc}", file=sys.stderr)
         return 2
     print(f"Sync{dry_label}: {result.note}")
+    for notice in result.notices:
+        print(f"  ⚠  {notice}")
     if result.changed_frameworks:
         print(f"  changed:   {', '.join(result.changed_frameworks)}")
         print(f"  projected: {', '.join(result.projected_frameworks)}")

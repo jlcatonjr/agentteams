@@ -11,13 +11,25 @@ imported lazily inside the function to keep the module graph acyclic.
 from __future__ import annotations
 
 from pathlib import Path
-from typing import Any
+from typing import TYPE_CHECKING, Any
+
+if TYPE_CHECKING:  # runtime import is lazy in _skill_adapter (keeps the module graph acyclic)
+    from agentteams.frameworks.base import FrameworkAdapter
 
 # Canonical Copilot instructions filename (single source of truth). format_spec is
 # pure data (stdlib only), so a top-level import introduces no cycle.
 from agentteams.frameworks.format_spec import COPILOT_INSTRUCTIONS_FILENAME
 
 __all__ = ["_plan_output_files"]
+
+
+def _skill_adapter(framework: str) -> "FrameworkAdapter | None":
+    """The framework's adapter when it has a skill concept (claude, codex), else ``None``."""
+    from agentteams.frameworks.registry import FRAMEWORKS
+
+    cls = FRAMEWORKS.get(framework)
+    adapter = cls() if cls is not None else None
+    return adapter if adapter is not None and adapter.has_skill_concept() else None
 
 
 def _plan_output_files(
@@ -68,14 +80,15 @@ def _plan_output_files(
         category_template = f"{domain_dir}tool-{category}.doc.template.md"
         fallback_template = f"{domain_dir}tool-specific.doc.template.md"
         base = ta["slug"][len("tool-"):] if ta["slug"].startswith("tool-") else ta["slug"]
-        if framework == "claude":
+        skill_adapter = _skill_adapter(framework)
+        if skill_adapter is not None:
             # Directory-per-skill layout: Claude Code discovers a project skill
             # only as `<name>/SKILL.md`, and the DIRECTORY name is the invocable
             # command name. A flat `<name>.md` is never loaded.
             # See https://code.claude.com/docs/en/skills.md.
             # `../skills/` resolves to `.claude/skills/` (agents dir is
             # `.claude/agents/`), mirroring how `../CLAUDE.md` is emitted.
-            doc_path = f"../skills/{ta['slug']}/SKILL.md"
+            doc_path = skill_adapter.skill_output_rel_path(ta["slug"])
             doc_type = "skill"
         else:
             doc_path = f"references/ref-{base}-reference.md"

@@ -57,7 +57,7 @@ verify each tier before assuming it or the next one is needed.
      this), `agentteams` ships a ready-made instance of exactly this pattern:
      `agentteams.research.browser` (`python -m agentteams.research browser "<url>" [--headed]`),
      gated behind the separate `agentteams[browser]` optional install
-     (`pip install agentteams[browser]` **and** a one-time `playwright install chromium`) so a
+     (`pip install "agentteams[browser] @ git+https://github.com/jlcatonjr/agentteams.git"` (the git source; the PyPI name is not this project's) **and** a one-time `playwright install chromium`) so a
      project that only wants lightweight text search never pays for it. `--headed` shows the
      browser window — useful only when a human operator is watching the same machine locally
      (debugging, a manual login/2FA step); it changes nothing about what the calling agent itself

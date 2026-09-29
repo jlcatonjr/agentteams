@@ -14,26 +14,23 @@ documentation. This module therefore uses Goose's stricter auto-wire bar
 Claude's more permissive inert-write bar; anything else is skipped and
 surfaced, never silently activated (mirrors ``goose.py::_goose_wirable``).
 
-CALIBRATION (2026-08-10 adversarial finding, step E.9): Goose's bar is
-justified relative to a specific fact — every Goose agent defaults to the
-``developer`` builtin extension (unconditional local shell, always on,
-goose.py's own docstring). Borrowing that same threshold for Codex without
-checking Codex's own baseline would be an unverified analogy, not evidence.
-Checked via live web search (2026-08-10, not assumed from training
-knowledge): Codex's own default posture is markedly *more* conservative than
-Goose's, not less — ``suggest`` is the default approval mode, every action
-requires explicit operator approval before execution, ``sandbox_mode``
-defaults to no network access with filesystem writes confined to the active
-workspace, and this is a separate, independent runtime gate Codex applies at
-tool-call time regardless of what ``config.toml`` declares. Writing a
-first-party/read-only server into ``[mcp_servers.*]`` therefore does not, by
-itself, grant Codex any capability its own default sandbox/approval layer
-wouldn't still gate — the borrowed bar is not under-calibrated in the
-direction originally worried about (a server getting network reach Codex's
-default posture wouldn't otherwise allow). Sources (X4, re-verified
-2026-08-15 — the old developers.openai.com citation 308-redirects, so cited
-directly at its current location): learn.chatgpt.com/docs/extend/mcp and
-learn.chatgpt.com/docs/extend/agent-approvals-security.
+CALIBRATION (2026-08-10 adversarial finding, step E.9; RE-VERIFIED 2026-09-29 against
+learn.chatgpt.com/docs/agent-approvals-security.md and .../extend/mcp.md). The 2026-08-10
+premise — "``suggest`` is the default approval mode, every action requires explicit
+approval" — no longer holds and is withdrawn. Current Codex vocabulary: ``approval_policy`` is
+``on-request``, ``never`` or ``{ granular = {...} }``; ``untrusted`` is retired (the docs carry a
+migration section). A version-controlled folder starts in the ``Auto`` preset
+(``workspace-write`` sandbox + ``on-request``), in which commands the sandbox allows run WITHOUT
+approval; the default ``workspace-write`` sandbox still has no network and confines writes to the
+workspace. Codex's own gate therefore no longer guarantees a prompt per action, so this module
+restores that posture explicitly for what it wires: every emitted server carries
+``default_tools_approval_mode = "prompt"`` (supported values ``auto``/``prompt``/``writes``/
+``approve``; per-tool overrides live under ``[mcp_servers.<id>.tools.<tool>]`` with
+``approval_mode``, which this module does not emit — an operator may relax a specific tool).
+The first-party/read-only wiring bar (``_codex_wirable``) is unchanged. No model or provider
+keys are emitted (baseAgent's 2026-09-29 research reports Codex ignores provider keys in a
+project ``.codex/config.toml``; not independently verified here — the config docs only confirm
+that an untrusted project's ``.codex/`` layers are ignored altogether).
 
 PROJECT TRUST GATE (X2, documented 2026-08-15): project-level
 ``.codex/config.toml`` — the file this module splices into — is loaded by
@@ -119,6 +116,11 @@ class CodexMCPEmissionResult:
         return len(self.errors) == 0
 
 
+#: Codex per-server MCP tool approval (``auto`` | ``prompt`` | ``writes`` | ``approve``, per
+#: learn.chatgpt.com/docs/extend/mcp.md, verified 2026-09-29). ``prompt`` = every tool call asks.
+_DEFAULT_TOOLS_APPROVAL_MODE = "prompt"
+
+
 def codex_mcp_enabled(features: list[str]) -> bool:
     """True iff the codex:mcp host-feature token is active."""
     return _CODEX_MCP_TOKEN in set(features or [])
@@ -144,9 +146,20 @@ def _codex_wirable(server: dict[str, Any]) -> bool:
 def _codex_entry_for(server: dict[str, Any]) -> tuple[dict[str, Any] | None, str | None]:
     """Map one mcp-server.schema.json entry to a Codex [mcp_servers.<id>] table.
 
+    Every emitted table carries ``default_tools_approval_mode = "prompt"`` (see the module
+    docstring's CALIBRATION): each tool call from an agentteams-wired server asks first.
+
     Returns (fields, None) when wirable, or (None, reason) when in-scope but
     not safely expressible — surfaced, never silently dropped.
     """
+    fields, reason = _codex_transport_fields(server)
+    if fields is not None:
+        fields["default_tools_approval_mode"] = _DEFAULT_TOOLS_APPROVAL_MODE
+    return fields, reason
+
+
+def _codex_transport_fields(server: dict[str, Any]) -> tuple[dict[str, Any] | None, str | None]:
+    """Transport/auth fields for one server (the body of :func:`_codex_entry_for`)."""
     if not _codex_wirable(server):
         return None, "needs operator authorization (not first-party read-only)"
 

@@ -35,9 +35,10 @@ Best-effort framework detection from directory shape and file signatures. Checks
 1. `canonical` — a `team.cai.json` marker file is present at `source_dir` (the durable CAI directory format).
 2. `claude` — `.claude` appears among `source_dir`'s path parts.
 3. `goose` — `.goose` appears among the path parts (a Goose-native `.goose/recipes` source team).
-4. `agents-md` — `.agents` appears among the path parts (an `.agents/<name>.md` source team).
-5. `copilot-cli` — both `.github` and `copilot` appear among the path parts.
-6. Otherwise, falls back to scanning `*.md` files directly under `source_dir`: `copilot-vscode` if any file's name ends `.agent.md` or its front matter has `user-invocable:`/`handoffs:`; `claude` if any file's front matter has `allowed-tools:` or a bracket-free `tools:` scalar; `copilot-cli` if none of the above match.
+4. `codex` — `.codex` appears among the path parts (a `.codex/agents/<name>.toml` custom-agent team).
+5. `agents-md` — `.agents` appears among the path parts (an `.agents/<name>.md` source team).
+6. `copilot-cli` — both `.github` and `copilot` appear among the path parts.
+7. Otherwise, falls back to scanning `*.md` files directly under `source_dir`: `copilot-vscode` if any file's name ends `.agent.md` or its front matter has `user-invocable:`/`handoffs:`; `claude` if any file's front matter has `allowed-tools:` or a bracket-free `tools:` scalar; `copilot-cli` if none of the above match.
 
 Pass `--interop-source-framework` to override detection when the heuristics guess wrong.
 
@@ -56,9 +57,9 @@ Returns CAI object with keys including:
 7. `references` — present only when the source team has a non-empty `references/` directory
 8. `framework_extensions` — present only when the source framework contributes project-level config (e.g., goose recipe parameters/response/retry)
 
-### `import_from_cai(cai, target_framework, target_dir, *, dry_run=False, overwrite=False)`
+### `import_from_cai(cai, target_framework, target_dir, *, dry_run=False, overwrite=False, preserve_existing=False)`
 
-Imports CAI payload into target framework files.
+Imports CAI payload into target framework files. With `preserve_existing=True` (used by pinned sync), an agent whose complete exported record already equals the canonical entry is left byte-for-byte untouched. This applies only to Markdown front-matter frameworks; codex and goose are always re-rendered. An existing instruction file is fence-merged rather than replaced. Agent and skill slugs must be safe single path components (`ValueError` otherwise).
 
 Returns:
 

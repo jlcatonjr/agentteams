@@ -12,6 +12,7 @@ from __future__ import annotations
 import argparse
 
 from agentteams import __version__
+from agentteams.capability_hints import AGENTTEAMS_GIT_SOURCE
 from agentteams.cli.backup_switch import add_stale_and_backup_arguments
 from agentteams.cli.fleet_switch import add_fleet_arguments
 from agentteams.cli.goose_switch import add_goose_arguments
@@ -1086,7 +1087,8 @@ def _build_parser() -> argparse.ArgumentParser:
             "[research]` extra) and write candidate strings for human triage to "
             "references/redteam-freshness-candidates.md. Never writes to the probe corpus "
             "or the registry — measures and reports only. Requires "
-            "`pip install agentteams[research]`; without it, exits 2 with a clear message. "
+            f"`pip install \"agentteams[research] @ {AGENTTEAMS_GIT_SOURCE}\"` (never from PyPI); "
+            "without it, exits 2 with a clear message. "
             "Honours --dry-run."
         ),
     )

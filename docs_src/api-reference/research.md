@@ -1,7 +1,7 @@
 # `research` — AgentTeamsModule
 
 Research and fact-verification — an optional runtime capability
-(`pip install agentteams[research]`).
+(`pip install "agentteams[research] @ git+https://github.com/jlcatonjr/agentteams.git"` — never from PyPI, where the name is not this project's).
 
 Unlike every other module documented in this reference, `agentteams.research` is not part of the
 CLI/generator pipeline (`analyze`, `render`, `build_team`) — it has no import-time coupling to it
@@ -189,7 +189,7 @@ but not sufficient there, since it only ever runs once, before the first request
 ## `browser` — real-browser rendering for JavaScript-heavy pages
 
 > *Source: `agentteams/research/browser.py`* — requires the separate `agentteams[browser]` extra
-> (`pip install agentteams[browser]`) **and** a one-time `playwright install chromium` (the extra
+> (`pip install "agentteams[browser] @ git+https://github.com/jlcatonjr/agentteams.git"`) **and** a one-time `playwright install chromium` (the extra
 > installs the `playwright` Python package only; browser binaries are a required second step it
 > cannot perform). Not imported by `agentteams.research`'s own `__init__.py` — see the note at the
 > top of this page.

@@ -49,7 +49,14 @@ Builds entirely on shipped primitives — `interop.export_to_cai` / `import_from
 - `ConflictRecord`: one documented conflict or withheld peer capability change
   (`framework`, `agent`, `field_name`, `classification`, `resolution`, `note`).
 - `SyncResult`: outcome of a run (`changed_frameworks`, `projected_frameworks`, `conflicts`,
-  `applied_fields`, `dry_run`, `note`; property `did_work`).
+  `applied_fields`, `dry_run`, `note`, `notices`; property `did_work`). `notices` carries the
+  interop notices from projection, such as an instruction file with no mergeable fences that
+  was left untouched.
+
+Projection backs up each framework's agents dir, instruction file and skills to
+`.agentteams-backups/` first (pruned to the default most-recent N). It keeps unchanged Markdown
+agents byte-for-byte and fence-merges existing instruction files (see `import_from_cai`'s
+`preserve_existing`).
 
 ## Public functions
 

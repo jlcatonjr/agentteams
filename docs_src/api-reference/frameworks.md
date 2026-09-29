@@ -121,7 +121,7 @@ Return additional `(rel_path, content)` files the framework emits that are not d
 
 #### `has_skill_concept()`
 
-Whether this framework has a first-class skill concept. **Default implementation: `False`.** `ClaudeAdapter` overrides it to return `True` (Claude Code's `skills/<slug>/SKILL.md` directories); every other framework emits operational tool docs as reference documents instead.
+Whether this framework has a first-class skill concept. **Default implementation: `False`.** `ClaudeAdapter` overrides it to return `True` (Claude Code's `skills/<slug>/SKILL.md` directories); every other framework emits operational tool docs as reference documents instead. `CodexAdapter` also returns `True` (Codex skills at `.agents/skills/<slug>/SKILL.md`). Skill placement comes from two hooks: `skill_output_rel_path(slug)` (agents-dir-relative emit path; default `../` + `tool_doc_rel_path`) and `skills_dir(agents_dir)` (the skills root; default the `skills` sibling of the agents dir, which Codex overrides to `<root>/.agents/skills`).
 
 **Returns:** `bool`
 

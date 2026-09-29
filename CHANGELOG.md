@@ -6,6 +6,81 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### security (install source: never PyPI — baseAgent handoff item 8)
+
+- **Every emitted and operator-facing install instruction now uses the git source.** agentteams is
+  not published on PyPI (`pypi.org/pypi/agentteams` returns 404), so a bare
+  `pip install agentteams[research]` installs whoever registers that name (slopsquatting).
+  baseAgent's @security flagged the line in the generated Goose bridge block as a HALT.
+- The Goose research hint, the `--redteam-freshness-check` error, CLI help, the man page, the
+  skill-generation template (and the example snapshots generated from it), README, SECURITY and
+  docs all use `pip install "agentteams[<extra>] @ git+https://github.com/jlcatonjr/agentteams.git"`.
+  That command is built from one constant, `capability_hints.agentteams_install_command()`.
+  Commands generated at runtime (the Goose hint, CLI errors) pin the installed release's tag
+  (`...agentteams.git@v1.0.0-rc.7`), so they never pull an unreviewed HEAD.
+- `tests/test_install_source_guard.py` fails on any bare PyPI install form. It covers pip, pip3,
+  `python -m pip`, `uv pip` and pipx, with flags and any extra list, plus bare `install agentteams[x]`
+  hints. It requires the exact git source (a different host fails) and scans the package,
+  docs, examples, scripts and workflows.
+
+### fixed (pinned sync fidelity — baseAgent handoff item 3; sync-init incident)
+
+- **Unchanged agents are no longer rewritten.** Projection (`import_from_cai(...,
+  preserve_existing=True)`, used by `--sync-init`/`--sync`) leaves an agent's file byte-for-byte
+  untouched when its complete exported record equals the canonical entry. That record includes
+  raw tools, raw front matter, model, and handoff labels and send flags. Any other difference is
+  re-projected, so a hand-widened grant in a target is reset by the pin (C-3). A stale raw tools
+  string can never widen narrower canonical scopes. Skipped agents keep their
+  `runtime-handoffs.json` routing.
+  Only frameworks whose export captures every key (the Markdown front-matter frameworks)
+  keep unchanged files. Codex TOML and Goose recipes are always re-rendered, because their
+  parsers export a subset, so a hand-added `sandbox_mode` or `approval_policy` is reset. A
+  Markdown pin's own files, including bespoke agents, are therefore identical after
+  `--sync-init`. Previously a bespoke
+  `tools:` lost `runCommands` and front matter was reordered.
+- **Instruction files are fence-merged, not replaced.** A framework's existing instruction file
+  (`.claude/CLAUDE.md`, `AGENTS.md`, …) receives the pin's fenced regions and keeps everything
+  outside the fences. That preserves USER-EDITABLE Constitutional and Project-Specific rules,
+  which were deleted before. A file with no mergeable fences is left untouched, with a notice.
+- **When an agent does change,** Copilot targets keep the declared tools verbatim (`capabilities.raw`).
+- **Projection backs up first.** Each framework's agents dir, instruction file and skills are
+  backed up to `.agentteams-backups/` before projection (pruned to the default most-recent N).
+  Interop notices, such as an instruction file with no mergeable fences, are printed by
+  `--sync-init`/`--sync`.
+- **CAI slugs are validated.** An agent or skill slug must be a single safe path component
+  (`^[A-Za-z0-9][A-Za-z0-9._-]*$`, no `..`), so a crafted CAI can no longer write outside the
+  target directory.
+- **`--sync-init`/`--sync` refuse `--output`.** They take their root from `--project`. An ignored
+  `--output` once projected onto the wrong repository (2026-09-29). A missing `--project`
+  directory is also an error.
+- **Backups of files two levels above the agents dir** (the repo-root `AGENTS.md` of a
+  `.codex/agents` or `.goose/recipes` team) restore to the root instead of one level too deep
+  (new `__external2__` prefix; old backups still restore as before).
+
+### changed (Codex MCP approval posture — baseAgent handoff item 5)
+
+- `codex_mcp_emit` now writes `default_tools_approval_mode = "prompt"` on every server it wires.
+  The emitter's calibration had assumed Codex prompts for every action (`suggest`). Current Codex
+  starts version-controlled folders in the `Auto` preset (`workspace-write` + `on-request`), where
+  sandbox-allowed commands run without approval, and `untrusted` is retired. The module docstring
+  records the verified vocabulary: `on-request`/`never`/granular policies, and the MCP values
+  `auto`/`prompt`/`writes`/`approve`.
+
+### added (Codex skills — `.agents/skills/<name>/SKILL.md`)
+
+- `--framework codex` emits operational tool docs as Codex skills at `.agents/skills/<slug>/SKILL.md`,
+  with `name`/`description` front matter. Codex scans `.agents/skills` from the working directory up to
+  the repo root. Interop carries skills too: a Claude team's `.claude/skills/` lands in
+  `.agents/skills/`.
+- New adapter hooks `skill_output_rel_path()` and `skills_dir()` replace the hard-coded
+  Claude-only skill placement in `output_plan`, `manifest_format` and interop.
+
+### fixed (generic bridge memory-index path — baseAgent handoff item 9)
+
+- The `--framework generic` bridge's `entrypoint.md` and `quickstart-snippet.md` now point at the
+  memory index the bridged team actually ships (for example
+  `.github/agents/references/memory-index.json`), not a hard-coded root `references/memory-index.json`.
+
 ### fixed (`python -m agentteams.scan <dir>` accepts a directory)
 
 - **A directory argument no longer crashes with `IsADirectoryError`.** baseAgent hit this

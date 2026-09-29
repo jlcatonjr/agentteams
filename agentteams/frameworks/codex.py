@@ -558,6 +558,36 @@ class CodexAdapter(AgentsMdAdapter):
             kept.append((rel_path, content))
         return kept, notices
 
+    def render_skill_file(self, content: str, slug: str, manifest: dict[str, Any]) -> str:
+        """Render an operational tool doc as a Codex skill (``.agents/skills/<slug>/SKILL.md``).
+
+        Codex skills take the same ``name``/``description`` front matter as Claude Code skills
+        (learn.chatgpt.com/docs/build-skills.md, verified 2026-09-29), so Claude's renderer is
+        shared (``FrameworkAdapter._render_markdown_skill``). Codex scans ``.agents/skills`` from the working directory up to the repo root.
+
+        Args:
+            content: The rendered tool-doc body.
+            slug: The skill slug (directory name).
+            manifest: Render manifest (project name, tool agents).
+
+        Returns:
+            The SKILL.md text.
+        """
+        return self._render_markdown_skill(content, slug, manifest)
+
+    def has_skill_concept(self) -> bool:
+        return True
+
+    def tool_doc_rel_path(self, slug: str) -> str:
+        # Project-root relative: Codex loads `<repo>/.agents/skills/<name>/SKILL.md`.
+        return f".agents/skills/{slug}/SKILL.md"
+
+    def skill_output_rel_path(self, slug: str) -> str:
+        return f"../../{self.tool_doc_rel_path(slug)}"  # agents dir is .codex/agents
+
+    def skills_dir(self, agents_dir: Path) -> Path:
+        return agents_dir.parent.parent / ".agents" / "skills"
+
     def get_file_extension(self, file_type: str) -> str:
         if file_type in {"agent", "builder"}:
             return ".toml"

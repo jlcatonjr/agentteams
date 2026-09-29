@@ -505,3 +505,60 @@ def test_codex_output_is_module_owned_for_the_scanner() -> None:
 
     assert _is_module_owned_path(".codex/agents/x.toml")
     assert _is_module_owned_path("proj/.codex/agents/references/r.md")
+
+
+# ---------------------------------------------------------------------------
+# X7: Codex skills (.agents/skills/<name>/SKILL.md)
+# ---------------------------------------------------------------------------
+
+def test_codex_skill_placement_hooks() -> None:
+    adapter = CodexAdapter()
+    assert adapter.has_skill_concept()
+    assert adapter.skill_output_rel_path("tool-pg") == "../../.agents/skills/tool-pg/SKILL.md"
+    assert adapter.skills_dir(Path("/p/.codex/agents")) == Path("/p/.agents/skills")
+
+
+def test_codex_skill_front_matter() -> None:
+    out = CodexAdapter().render_skill_file("# PG\n\nUse it.\n", "tool-pg", {"project_name": "P"})
+    assert out.startswith("---\nname: tool-pg\ndescription: ")
+    assert "# PG" in out
+
+
+def test_output_plan_places_tool_docs_as_codex_skills() -> None:
+    from agentteams.output_plan import _skill_adapter
+
+    assert _skill_adapter("codex") is not None
+    assert _skill_adapter("claude").skill_output_rel_path("tool-x") == "../skills/tool-x/SKILL.md"
+    assert _skill_adapter("copilot-vscode") is None
+
+
+def test_claude_skills_carry_into_codex_via_interop(tmp_path: Path) -> None:
+    claude_agents = tmp_path / "src" / ".claude" / "agents"
+    claude_agents.mkdir(parents=True)
+    (claude_agents / "orchestrator.md").write_text(
+        "---\nname: Orchestrator\ndescription: \"d\"\ntools: Read, Grep\n---\n\n# Orchestrator\n\nB\n",
+        encoding="utf-8",
+    )
+    skill = tmp_path / "src" / ".claude" / "skills" / "recall"
+    skill.mkdir(parents=True)
+    (skill / "SKILL.md").write_text("---\nname: recall\ndescription: \"Recall\"\n---\n\nQuery the index.\n",
+                                    encoding="utf-8")
+    out_root = tmp_path / "dst"
+    run_interop(claude_agents, "codex", out_root / ".codex" / "agents")
+    emitted = out_root / ".agents" / "skills" / "recall" / "SKILL.md"
+    assert emitted.is_file()
+    text = emitted.read_text(encoding="utf-8")
+    assert text.startswith("---\nname: recall\n") and "Query the index." in text
+
+
+def test_generic_bridge_points_at_the_real_memory_index(tmp_path: Path) -> None:
+    """Item 9: a .github/agents team keeps its index under the agents dir, not the root."""
+    from agentteams.bridge_pair_docs import _render_entrypoint, _render_quickstart, memory_index_rel_path
+
+    src = tmp_path / ".github" / "agents"
+    (src / "references").mkdir(parents=True)
+    (src / "references" / "memory-index.json").write_text("{}", encoding="utf-8")
+    rel = memory_index_rel_path(src, tmp_path)
+    assert rel == ".github/agents/references/memory-index.json"
+    assert rel in _render_entrypoint("copilot-vscode", "generic", rel)
+    assert rel in _render_quickstart("copilot-vscode", "generic", rel)

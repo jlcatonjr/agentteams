@@ -8,6 +8,7 @@ the 1000-line CH-07 module ceiling.
 from __future__ import annotations
 
 import json
+import re
 import warnings
 from pathlib import Path
 from typing import Any
@@ -205,3 +206,189 @@ def merge_sidecar_handoffs(agents: list[dict[str, Any]], source_dir: Path) -> No
         # frameworks write handoffs ONLY to the sidecar, so inline is empty).
         if not agent.get("handoffs") and slug in by_slug:
             agent["handoffs"] = by_slug[slug]
+
+
+# ---------------------------------------------------------------------------
+# Projection fidelity (baseAgent handoff item 3, 2026-09-29): pinned sync re-projected
+# canonical onto every framework with overwrite=True, so an agent nobody changed was still
+# re-rendered — narrowing bespoke tools (``runCommands`` dropped), re-ordering front matter —
+# and another framework's instructions replaced this framework's instruction file, deleting
+# its USER-EDITABLE regions. ``import_from_cai(..., preserve_existing=True)`` uses these.
+# ---------------------------------------------------------------------------
+
+def _semantic_agent(agent: dict[str, Any]) -> str:
+    # The WHOLE exported record — raw tool strings, raw front matter (model, permissionMode,
+    # user-invocable, …), handoff labels/send — minus only where the file was read from.
+    # Anything narrower lets a hand-widened grant survive a pin-wins re-projection
+    # (@security C1 / @adversarial #2, 2026-09-29): C-3.
+    record = {k: v for k, v in agent.items() if k != "source_path"}
+    return json.dumps(record, sort_keys=True, ensure_ascii=False, default=str)
+
+
+def agent_unchanged(canonical_agent: dict[str, Any], native_agent: dict[str, Any] | None) -> bool:
+    """Whether projecting *canonical_agent* would change the agent already on disk.
+
+    Compares the complete exported record (everything except ``source_path``): raw tool
+    strings, raw front matter, model hint, handoff labels and send flags included. Equal means
+    the existing file is left byte-for-byte untouched — in practice the pin framework's own
+    unchanged files, whose bespoke front matter a re-render would normalize. Any difference,
+    including a hand-edit that widens a grant, is re-projected (pin wins).
+
+    Args:
+        canonical_agent: The agent entry from the canonical CAI document.
+        native_agent: The same slug as exported from the target directory, or ``None``.
+
+    Returns:
+        True when the native file already represents the canonical agent.
+    """
+    return native_agent is not None and _semantic_agent(canonical_agent) == _semantic_agent(native_agent)
+
+
+_SAFE_SLUG_RE = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._-]*$")
+
+
+def require_safe_slug(slug: str) -> None:
+    """Refuse a CAI slug that could escape the target directory (``../``, ``/``, ``..``).
+
+    The CAI schema puts no pattern on ``slug``, and a slug becomes a file or directory name
+    under the target — for codex skills, under the repository root (@security C4, 2026-09-29).
+
+    Args:
+        slug: An agent or skill slug from a CAI document.
+
+    Raises:
+        ValueError: If the slug is not a single safe path component.
+    """
+    if not _SAFE_SLUG_RE.match(slug) or ".." in slug:
+        raise ValueError(f"unsafe CAI slug {slug!r}: must match {_SAFE_SLUG_RE.pattern} and not contain '..'")
+
+
+def raw_scopes(raw: str) -> list[str]:
+    """Canonical tool scopes a raw ``tools:`` string maps to (bracket or comma form).
+
+    Args:
+        raw: A captured raw tools value, e.g. ``['read', 'edit']`` or ``Read, Edit``.
+
+    Returns:
+        Canonical-order scopes (empty when nothing maps).
+    """
+    from agentteams import capability_map
+
+    fm = f"---\ntools: {raw}\n---\n"
+    return (capability_map.canonical_tools_for_copilot_vscode(fm)
+            or capability_map.canonical_tools_for_claude(fm) or [])
+
+
+def merge_instruction_file(rendered: str, existing: str) -> tuple[str | None, str]:
+    """Fence-merge a projected instruction file into the one already on disk.
+
+    Fenced (template-owned) regions come from *rendered*; everything outside a fence — the
+    USER-EDITABLE Constitutional/Project-Specific rules a framework's own instruction file
+    carries — is kept from *existing*. When *existing* has no parseable fences it is not
+    replaced at all (it may be project-owned).
+
+    Args:
+        rendered: The instruction content being projected.
+        existing: The instruction file currently on disk.
+
+    Returns:
+        ``(content, notice)``: the content to write (``None`` = leave the file as it is) and a
+        human-readable notice ("" when nothing needs saying).
+    """
+    from agentteams.fences import _merge_fenced_content
+
+    result = _merge_fenced_content(rendered, existing, preserve_on_shrink=True)
+    if result.parse_errors or not result.merged_content:
+        return None, "existing instruction file has no mergeable AGENTTEAMS fences; left untouched"
+    if result.merged_content == existing:
+        return None, ""
+    return result.merged_content, ""
+
+
+# Carved from interop.py (CH-07, 2026-09-29); re-imported there as _capture_mcp_servers.
+def capture_mcp_servers(source_dir: Path) -> list[dict[str, Any]]:
+    """Capture MCP servers from the pipeline's managed artifact, if present (D.3).
+
+    ``mcp_emit`` writes ``.claude/mcp-servers.agentteams.json`` at the project
+    root. Depending on how deep *source_dir* sits (``.claude/agents`` in-repo vs
+    deeper bridge layouts), the artifact is one or two levels up. First hit
+    wins; unreadable or absent artifacts capture nothing (honestly degraded).
+
+    Args:
+        source_dir: The source team's agents directory.
+
+    Returns:
+        The captured server definitions, defaults normalized (empty when none).
+    """
+    candidates = (
+        source_dir.parent / "mcp-servers.agentteams.json",
+        source_dir.parent / ".claude" / "mcp-servers.agentteams.json",
+        source_dir.parent.parent / ".claude" / "mcp-servers.agentteams.json",
+    )
+    for artifact in candidates:
+        if not artifact.is_file():
+            continue
+        try:
+            data = json.loads(artifact.read_text(encoding="utf-8"))
+        except (OSError, ValueError):
+            return []
+        servers = data.get("servers", [])
+        if not isinstance(servers, list):
+            return []
+        from agentteams.mcp_emit import normalize_mcp_server_defaults
+
+        return [normalize_mcp_server_defaults(s) for s in servers if isinstance(s, dict)]
+    return []
+
+
+# Carved from interop.py (CH-07, 2026-09-29); re-exported there unchanged.
+def detect_framework(source_dir: Path) -> str:
+    """Best-effort framework detection from directory shape and file style."""
+    # F.5: a canonical directory identifies via its team.cai.json marker —
+    # checked first because that file IS the format's identity (plan §5.6).
+    if (source_dir / "team.cai.json").is_file():
+        return "canonical"
+    parts = set(source_dir.parts)
+    if ".claude" in parts:
+        return "claude"
+    if ".goose" in parts:           # .goose/recipes — a Goose-native source team
+        return "goose"
+    if ".codex" in parts:           # .codex/agents/<name>.toml — Codex custom agents
+        return "codex"
+    if ".agents" in parts:          # .agents/<name>.md — an agents-md source team (F.1)
+        return "agents-md"
+    if ".github" in parts and "copilot" in parts:
+        return "copilot-cli"
+
+    has_agent_ext = False
+    has_claude_front_matter = False
+    has_yaml_keys = False
+    for p in source_dir.glob("*.md"):
+        if p.name.endswith(".agent.md"):
+            has_agent_ext = True
+        try:
+            content = p.read_text(encoding="utf-8")
+        except OSError:
+            continue
+        if content.startswith("---\n"):
+            # Accept BOTH capability keys. `tools:` is what a Claude subagent file carries
+            # since 2026-08-06; `allowed-tools:` is what every previously generated team
+            # still carries on disk, and detection must keep working on those. Matched at
+            # line start so `allowed-tools:` is not read as a `tools:` hit, and so a
+            # copilot-vscode `tools: ['read']` line is excluded by the bracket test below.
+            for line in content.splitlines():
+                stripped = line.strip()
+                if stripped.startswith("allowed-tools:"):
+                    has_claude_front_matter = True
+                elif stripped.startswith("tools:") and "[" not in stripped:
+                    # copilot-vscode writes an inline list (`tools: ['read']`); Claude
+                    # writes a bare comma-separated scalar. The bracket discriminates.
+                    has_claude_front_matter = True
+            if "user-invocable:" in content or "handoffs:" in content:
+                has_yaml_keys = True
+
+    if has_agent_ext or has_yaml_keys:
+        return "copilot-vscode"
+    if has_claude_front_matter:
+        return "claude"
+    return "copilot-cli"
