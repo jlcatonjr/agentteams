@@ -30,14 +30,12 @@ intentionally avoids a YAML dependency and parses front matter with regex).
 
 from __future__ import annotations
 
-import json
 import re
 from pathlib import Path
 from typing import Any
 
 from .base import FrameworkAdapter
 from agentteams import capability_map as _capability_map
-from agentteams.yaml_frontmatter import parse_yaml_front_matter as _parse_yaml_front_matter
 
 # 2026-08-12 A.1: Strip a pre-existing "## Delegation & references (Goose)" block
 # before appending a fresh one, so the block doesn't compound on every
@@ -75,6 +73,20 @@ from agentteams.frameworks.goose_recipe_read import (
 # _validate_recipe_yaml carved to goose_recipe_validate.py (CH-07); re-imported so
 # `from agentteams.frameworks.goose import _validate_recipe_yaml` keeps working.
 from agentteams.frameworks.goose_recipe_validate import _validate_recipe_yaml
+# Recipe YAML emission + its constants carved to goose_recipe_emit.py (CH-07); re-imported so the
+# retained GooseAdapter/build_bridge_recipe/_goose_extension_for call sites and external importers
+# (`from agentteams.frameworks.goose import _emit_recipe` in bridge_subagents_goose;
+# `import _MCP_EXT_TIMEOUT` in goose_coordination) keep resolving.
+from agentteams.frameworks.goose_recipe_emit import (  # noqa: F401
+    _RECIPE_VERSION,
+    _YAML_SCALAR_RE,
+    _MCP_EXT_TIMEOUT,
+    _extract_name_description,
+    _load_section,
+    _yaml_dq,
+    _indent_block,
+    _emit_recipe,
+)
 # Cross-repo coordination helpers (CH-07 carve). Imported with the historical `_`-prefixed
 # aliases so existing call sites and any `from ...goose import _coordination_*` keep working.
 from agentteams.frameworks.goose_coordination import (
@@ -100,8 +112,6 @@ __all__ = [
 # Recipe constants
 # ---------------------------------------------------------------------------
 
-_RECIPE_VERSION = "1.0.0"
-
 # Default probe prompt emitted in the orchestrator recipe so `goose run --recipe`
 # can be invoked non-interactively in CI without combining with --text (which is
 # mutually exclusive with --recipe in Goose CLI).  See W6 in the integration plan.
@@ -115,7 +125,8 @@ _ORCHESTRATOR_PROBE_PROMPT = (
 
 # MCP-extension wiring (opt-in via the goose:mcp host-feature token).
 _GOOSE_MCP_TOKEN = "goose:mcp"
-_MCP_EXT_TIMEOUT = 300
+# _MCP_EXT_TIMEOUT carved to goose_recipe_emit.py (CH-07); re-imported below so the retained
+# `_goose_extension_for` and `from ...goose import _MCP_EXT_TIMEOUT` (goose_coordination) keep working.
 
 # Cross-repo coordination (Phase 2) carved to goose_coordination.py (CH-07): the gate + the
 # first-party stdio coordination-server extension entry. Imported below with the module's
@@ -565,8 +576,7 @@ class GooseAdapter(FrameworkAdapter):
 # ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------
-
-_YAML_SCALAR_RE = re.compile(r'^([a-zA-Z][a-zA-Z0-9_-]*)\s*:\s*"?([^"\n]+)"?\s*$', re.MULTILINE)
+# _YAML_SCALAR_RE carved to goose_recipe_emit.py (CH-07); re-imported below.
 
 
 def _tool_name(slug: str) -> str:
@@ -782,198 +792,3 @@ def build_bridge_recipe(
     )
     return recipe, notes
 
-
-def _extract_name_description(
-    content: str,
-    agent_slug: str,
-    manifest: dict[str, Any],
-) -> tuple[str, str]:
-    """Pull (name, description) from VS Code YAML front matter, with fallbacks."""
-    name = ""
-    description = ""
-    yaml_text, _ = _parse_yaml_front_matter(content)
-    if yaml_text is not None:
-        for key_match in _YAML_SCALAR_RE.finditer(yaml_text):
-            key = key_match.group(1).strip()
-            val = key_match.group(2).strip().strip("\"'")
-            if key == "name" and not name:
-                name = val
-            elif key == "description" and not description:
-                description = val
-    if not name:
-        project_name = manifest.get("project_name", "")
-        agent_name = FrameworkAdapter._slug_to_name(agent_slug)
-        name = f"{agent_name} — {project_name}" if project_name else agent_name
-    return name, description
-
-
-def _load_section(targets: list[dict[str, Any]]) -> str:
-    """Render the depth-2 reference block (load instead of nested delegation)."""
-    lines = [
-        "## Delegation & references (Goose)",
-        "",
-        "Goose forbids nested delegation, so when you need another specialist's "
-        "guidance, load that recipe into your own context with the `summon` "
-        "`load` tool (do not try to spawn a sub-agent):",
-        "",
-    ]
-    for h in targets:
-        slug = h["agent"]
-        label = h.get("label") or h.get("prompt") or slug
-        lines.append(
-            f'- **{label}** — call `load("{slug}")` to bring `{slug}`\'s '
-            f"instructions into context, then act on them here."
-        )
-    return "\n".join(lines)
-
-
-def _yaml_dq(value: str) -> str:
-    """Return a single-line double-quoted YAML scalar."""
-    s = (value or "").replace("\\", "\\\\").replace('"', '\\"')
-    s = s.replace("\r", " ").replace("\n", " ").strip()
-    return f'"{s}"'
-
-
-def _indent_block(body: str, indent: str = "  ") -> str:
-    """Indent body for a YAML literal block scalar (blank lines stay empty)."""
-    out: list[str] = []
-    for line in body.split("\n"):
-        out.append(indent + line if line.strip() else "")
-    return "\n".join(out)
-
-
-def _emit_recipe(
-    *,
-    title: str,
-    description: str,
-    instructions: str,
-    extensions: list[str],
-    sub_recipes: list[dict[str, str]] | None = None,
-    prompt: str | None = None,
-    parameters: list[dict[str, str]] | None = None,
-    response: dict[str, Any] | None = None,
-    retry: dict[str, Any] | None = None,
-    mcp_extensions: list[dict[str, Any]] | None = None,
-    mcp_notes: list[str] | None = None,
-) -> str:
-    """Serialize a Goose recipe to YAML (hand-built, schema version 1.0.0).
-
-    W6: The optional `prompt` field, when provided, is emitted after `description`
-    and enables non-interactive `goose run --recipe` execution in CI pipelines
-    (the --recipe and --text flags are mutually exclusive in Goose CLI).
-
-    Phase-4a: ``parameters`` (opt-in), when non-empty, is emitted as a `parameters:`
-    block (Goose recipe runtime inputs). Each entry is a normalized dict with `key`,
-    `input_type`, `requirement`, optional `default`, optional `description` — every
-    scalar double-quoted so special chars cannot break the hand-built YAML. Callers
-    that reference the keys via ``{{ key }}`` (e.g. the orchestrator prompt) keep the
-    Goose params↔template coupling valid. Defaults to None → byte-identical baseline.
-
-    Phase-4b: ``response`` (opt-in), when truthy, is a JSON Schema emitted as a
-    `response:` block whose ``json_schema:`` value is single-line compact JSON (valid
-    YAML, since YAML is a JSON superset) so goose validates the agent's final output.
-    Defaults to None → byte-identical baseline.
-
-    Phase-4c: ``retry`` (opt-in), when truthy, is a normalized dict emitted as a
-    `retry:` block (bounded ``max_retries`` + ``timeout_seconds`` + shell ``checks``)
-    so goose re-runs until the checks pass. Defaults to None → byte-identical baseline.
-
-    ``mcp_extensions`` (opt-in) are operator-specified MCP servers rendered as
-    ``stdio``/``streamable_http`` extensions after the builtin/platform ones; every
-    scalar (incl. list items) is double-quoted so special chars cannot break the
-    hand-built YAML. ``mcp_notes`` are operator-visible, Goose-ignored ``#`` comments
-    for in-scope servers that were NOT wired (skipped for safety/launch reasons).
-    Both default to empty, so a non-opted-in build is byte-identical to baseline.
-    """
-    lines: list[str] = [
-        f'version: "{_RECIPE_VERSION}"',
-        f"title: {_yaml_dq(title)}",
-        f"description: {_yaml_dq(description or title)}",
-    ]
-    if prompt is not None:
-        lines.append(f"prompt: {_yaml_dq(prompt)}")
-    lines += [
-        "instructions: |",
-        _indent_block(instructions),
-    ]
-    for note in mcp_notes or []:
-        # Column-0 comment terminates the instructions block scalar; Goose ignores it.
-        lines.append(f"# agentteams MCP: {note}")
-    if parameters:
-        lines.append("parameters:")
-        for p in parameters:
-            lines.append(f"  - key: {_yaml_dq(p['key'])}")
-            lines.append(f"    input_type: {_yaml_dq(p.get('input_type', 'string'))}")
-            lines.append(f"    requirement: {_yaml_dq(p.get('requirement', 'optional'))}")
-            if "default" in p:
-                lines.append(f"    default: {_yaml_dq(p['default'])}")
-            if p.get("description"):
-                lines.append(f"    description: {_yaml_dq(p['description'])}")
-    if response:
-        # YAML is a JSON superset, so the arbitrary-depth JSON Schema is emitted as a
-        # single-line compact flow mapping (json.dumps). Being mid-line, none of its
-        # keys can column-0 match the _RECIPE_FORBIDDEN_* guards. sort_keys → stable.
-        lines.append("response:")
-        lines.append(
-            f"  json_schema: {json.dumps(response, sort_keys=True, separators=(',', ':'))}"
-        )
-    if retry:
-        # Hand-built (flat): ints unquoted, command/on_failure strings via _yaml_dq
-        # (which collapses newlines + escapes quotes → no YAML-structure breakout).
-        lines.append("retry:")
-        lines.append(f"  max_retries: {int(retry['max_retries'])}")
-        lines.append(f"  timeout_seconds: {int(retry['timeout_seconds'])}")
-        if "on_failure_timeout_seconds" in retry:
-            lines.append(f"  on_failure_timeout_seconds: {int(retry['on_failure_timeout_seconds'])}")
-        lines.append("  checks:")
-        for check in retry["checks"]:
-            lines.append(f"    - type: {_yaml_dq(check.get('type', 'shell'))}")
-            lines.append(f"      command: {_yaml_dq(check['command'])}")
-        if retry.get("on_failure"):
-            lines.append(f"  on_failure: {_yaml_dq(retry['on_failure'])}")
-    lines.append("extensions:")
-    for ext in extensions:
-        if ext == "developer":
-            lines += [
-                "  - type: builtin",
-                "    name: developer",
-                "    bundled: true",
-                "    timeout: 300",
-            ]
-        elif ext == "summon":
-            lines += [
-                "  - type: platform",
-                "    name: summon",
-            ]
-        else:
-            # Generic builtin (Gap 1: scoped recipe_extensions may name other
-            # bundled servers, e.g. memory). Rendered with the same bundled/timeout
-            # shape as developer so goose treats it as a builtin extension.
-            lines += [
-                "  - type: builtin",
-                f"    name: {_yaml_dq(ext)}",
-                "    bundled: true",
-                "    timeout: 300",
-            ]
-    for mx in mcp_extensions or []:
-        lines.append(f"  - type: {mx['type']}")
-        lines.append(f"    name: {_yaml_dq(mx['name'])}")
-        if mx["type"] == "stdio":
-            lines.append(f"    cmd: {_yaml_dq(mx['cmd'])}")
-            if mx.get("args"):
-                lines.append("    args:")
-                lines += [f"      - {_yaml_dq(a)}" for a in mx["args"]]
-        else:  # streamable_http
-            lines.append(f"    uri: {_yaml_dq(mx['uri'])}")
-        if mx.get("env_keys"):
-            lines.append("    env_keys:")
-            lines += [f"      - {_yaml_dq(k)}" for k in mx["env_keys"]]
-        lines.append(f"    timeout: {int(mx.get('timeout', _MCP_EXT_TIMEOUT))}")
-    if sub_recipes:
-        lines.append("sub_recipes:")
-        for sr in sub_recipes:
-            lines.append(f"  - name: {_yaml_dq(sr['name'])}")
-            lines.append(f"    path: {_yaml_dq(sr['path'])}")
-            if sr.get("description"):
-                lines.append(f"    description: {_yaml_dq(sr['description'])}")
-    return "\n".join(lines).rstrip() + "\n"
