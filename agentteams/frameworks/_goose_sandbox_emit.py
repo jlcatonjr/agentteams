@@ -53,6 +53,18 @@ from agentteams.frameworks._sandbox_emit import _DEFAULT_PROTECTED_READ_PATHS
 GOOSE_SANDBOX_PROFILE_REL = "../sandbox.sb"
 GOOSE_CONFIG_EXAMPLE_REL = "../config.yaml.agentteams.example"
 
+#: Linux goose confinement runner example (relative to ``.goose/recipes/`` → lands at
+#: ``.goose/confined-run.example.sh``). The Linux analog of the macOS ``config.yaml`` example:
+#: an INERT, operator-run wrapper around the framework-neutral ``sandbox/confine-run.sh`` launcher
+#: carrying the goose-specific settings a confined goose needs (writable XDG dirs,
+#: ``GOOSE_DISABLE_KEYRING``, env-injected provider key). Emitted only on Linux (see
+#: :func:`goose_linux_sandbox_output_files`).
+GOOSE_LINUX_RUNNER_REL = "../confined-run.example.sh"
+
+#: The project-relative location the Linux goose runner example lands at (parity with
+#: ``GOOSE_SANDBOX_PROFILE_PROJECT_PATH``).
+GOOSE_LINUX_RUNNER_PROJECT_PATH = ".goose/confined-run.example.sh"
+
 #: The project-relative location the emitted profile lands at (what the config example and
 #: the wiring verifier reference).
 GOOSE_SANDBOX_PROFILE_PROJECT_PATH = ".goose/sandbox.sb"
@@ -356,9 +368,11 @@ def _build_config_example(
     # Network posture is EXCLUSIVE-only (C1, 2026-W39): confined leaves egress OPEN.
     if not exclusive:
         proxy_note = (
-            "#   Network: OPEN (confined = write-confinement only; egress is NOT restricted,\n"
-            "#   matching Claude confined, so goose can reach its LLM). Use privilege_profile\n"
-            "#   exclusive for network isolation.\n"
+            "#   Network (macOS Seatbelt): OPEN (confined = write-confinement only; egress is NOT\n"
+            "#   restricted, matching Claude confined, so goose can reach its LLM). Use\n"
+            "#   privilege_profile exclusive for network isolation. NOTE: the Linux runner\n"
+            "#   (.goose/confined-run.example.sh) defaults egress to DENY (fail-closed) instead —\n"
+            "#   this OPEN posture is the macOS Seatbelt default, not the Linux one.\n"
         )
     elif egress_endpoint:
         proxy_note = (
@@ -383,7 +397,15 @@ def _build_config_example(
         f"# Workspace write roots: {roots}\n"
         f"{proxy_note}"
         "#\n"
-        "# ENFORCEMENT (macOS only — Goose has no native OS sandbox on Linux/Windows):\n"
+        "# ENFORCEMENT — Goose has no NATIVE OS sandbox on any platform; agentteams emits a real\n"
+        "# boundary per host:\n"
+        "#   * Linux: the framework-neutral bwrap launcher sandbox/confine-run.sh IS the boundary\n"
+        "#     (enforcement-verified). Do not run goose bare — wrap it with the emitted\n"
+        "#     .goose/confined-run.example.sh (writable XDG dirs + GOOSE_DISABLE_KEYRING + env-injected\n"
+        "#     key baked in). This GOOSE_SANDBOX/Seatbelt file is macOS-only and does nothing on Linux.\n"
+        "#   * macOS: Apple Seatbelt via sandbox-exec + this .goose/sandbox.sb profile (paths below).\n"
+        "#\n"
+        "# macOS enforcement paths:\n"
         "#\n"
         "#  A) Ground-truth (ALWAYS enforces on macOS, independent of your Goose build):\n"
         '#       sandbox-exec -D WORKSPACE_ROOT=\"$PWD\" -D HOME_DIR=\"$HOME\" \\\n'
@@ -498,6 +520,131 @@ def goose_sandbox_output_files(manifest: dict[str, Any]) -> list[tuple[str, str]
         (GOOSE_SANDBOX_PROFILE_REL, profile_text),
         (GOOSE_CONFIG_EXAMPLE_REL, config_text),
     ]
+
+
+def _build_linux_goose_runner(manifest: dict[str, Any]) -> str:
+    """Build the INERT ``.goose/confined-run.example.sh`` (Linux goose confinement runner).
+
+    The Linux analog of :func:`_build_config_example`: goose has NO native OS sandbox on Linux, so
+    the boundary is the framework-neutral ``sandbox/confine-run.sh`` launcher (bwrap). This example
+    wraps that launcher with the goose-specific settings a confined goose actually needs, learned
+    from on-host testing and otherwise easy to get wrong:
+
+    * **writable XDG dirs** — goose panics on start creating its rolling log file if ``HOME`` is
+      read-only, so state/data/cache are pointed at a writable scratch dir.
+    * **``GOOSE_DISABLE_KEYRING=1``** — goose stores provider keys in the SecretService keyring,
+      which is unreachable inside the sandbox; without this goose sends no auth header. With it,
+      goose reads the key from the environment.
+    * **key injected as an env INPUT** via ``--env-allow`` (by NAME) — the credential is supplied as
+      an input, never hardcoded; the keyring/vault stays masked. Residual: the neutral launcher still
+      forwards the value to bwrap via ``--setenv``, so the cleartext is visible in ``ps``/cmdline of
+      the bwrap process on a shared host (a launcher-level limit; the header says to run single-tenant
+      / hidepid). The env var name is configurable.
+
+    Fail-closed security posture (from the 2026-W40 adversarial review), so the path of least
+    resistance is not the insecure one:
+
+    * egress defaults to ``deny`` (safe but OFFLINE — no LLM);
+    * ``GOOSE_CONFINE_EGRESS=host`` (open egress) is REFUSED while a live key is present unless the
+      operator sets ``GOOSE_CONFINE_ACCEPT_OPEN_EGRESS=1`` — because a live key + open egress is a
+      key-exfiltration channel for a compromised/prompt-injected goose;
+    * the secure AND functional LLM path is ``GOOSE_CONFINE_EGRESS=proxy`` (a pinned sole-egress
+      netns, operator-root OOB — see the sandboxing guide);
+    * an ``exclusive`` team's operator ``protected_read_paths`` are carried as ``--exclude`` so the
+      Linux path matches the macOS Seatbelt read-exclusion (no silent cross-platform scope drop).
+
+    It is a SHIPPED EXAMPLE, never run or edited by agentteams (ship-an-example / never-clobber
+    convention). The one requirement the launcher cannot self-satisfy is documented: run it as the
+    workspace-owning user (bwrap ``--unshare-user`` as root loses DAC over your files).
+    """
+    roots = manifest.get("workspace_write_roots") or ["."]
+    writable_flags = " ".join(f'--writable "$REPO_ROOT/{r}"' if r != "." else '--writable "$REPO_ROOT"' for r in roots)
+    # exclusive read-exclusion parity with the macOS Seatbelt path: carry operator sibling read-denies
+    # as --exclude (the launcher already tmpfs-masks the built-in credential dirs, so only extras here).
+    exclude_flags = ""
+    skipped_note = ""
+    if manifest.get("privilege_profile") == "exclusive":
+        raw = [p for p in (manifest.get("protected_read_paths") or []) if p]
+        # A manifest path is DATA (C-4): reject shell/quote-breaking + control chars so it cannot
+        # break or inject into the emitted script — parity with the Seatbelt path's fail-closed
+        # validation. Unsafe paths are skipped (read-exclusion NOT enforced) with a visible note.
+        def _safe(p: str) -> bool:
+            return not any(c in p for c in '"$`\\\n\r') and all(ord(c) >= 0x20 for c in p)
+        safe = [p for p in raw if _safe(p)]
+        exclude_flags = "".join(f' --exclude "{p}"' for p in safe)
+        n_bad = len(raw) - len(safe)
+        if n_bad:
+            skipped_note = (
+                f'echo "NOTE: {n_bad} protected_read_path(s) SKIPPED from --exclude (unsafe chars); '
+                'their read-exclusion is NOT enforced — sanitize the manifest." >&2\n'
+            )
+    return (
+        "#!/usr/bin/env bash\n"
+        "# .goose/confined-run.example.sh — EXAMPLE: run goose CONFINED on Linux. INERT / operator-run.\n"
+        "#\n"
+        "# goose has NO native OS sandbox on Linux; the boundary is the framework-neutral bwrap\n"
+        "# launcher sandbox/confine-run.sh. This wrapper adds the goose-specific settings a confined\n"
+        "# goose needs (agentteams never runs this or edits your live config — adapt and run it yourself):\n"
+        "#   * writable XDG state/data/cache dirs  (else goose panics creating its log on a ro root)\n"
+        "#   * GOOSE_DISABLE_KEYRING=1             (the SecretService keyring is unreachable in-sandbox;\n"
+        "#                                          without it goose sends no auth header)\n"
+        "#   * the provider key injected as an env INPUT via --env-allow (by NAME — never hardcoded;\n"
+        "#     the vault/keyring stays masked). Set the key env var (default OPENROUTER_API_KEY).\n"
+        "#     PS NOTE: --env-allow keeps the value off THIS wrapper's and confine-run.sh's argv, but\n"
+        "#     the launcher forwards it to bwrap via --setenv, so the cleartext IS visible in `ps`/\n"
+        "#     /proc/PID/cmdline of the bwrap process on a SHARED host. Run on a single-tenant box (or\n"
+        "#     a hidepid=2 /proc). This is a launcher-level limitation (bwrap has no env-from-fd).\n"
+        "#\n"
+        "# RUN AS THE WORKSPACE-OWNING USER, not root: bwrap --unshare-user as root loses DAC over\n"
+        "# your uid's files (a 0750 home dir becomes untraversable and the bind fails).\n"
+        "#\n"
+        "# EGRESS (honest): the bare default (deny) CONFINES writes but CANNOT reach the LLM (offline).\n"
+        "#   * secure + functional: GOOSE_CONFINE_EGRESS=proxy — a pinned sole-egress netns\n"
+        "#     (operator root, OOB; see the agentteams sandboxing guide). Egress reaches only the LLM.\n"
+        "#   * GOOSE_CONFINE_EGRESS=host opens egress to the whole host: a live key can then be\n"
+        "#     EXFILTRATED anywhere. NEVER run --egress host while a live provider key is present —\n"
+        "#     this script REFUSES that combination unless you set GOOSE_CONFINE_ACCEPT_OPEN_EGRESS=1\n"
+        "#     on a trusted, single-tenant box. Confinement bounds T6; it does not close it.\n"
+        "set -euo pipefail\n"
+        + skipped_note +
+        'HERE="$(cd "$(dirname "$0")" && pwd)"; REPO_ROOT="$(cd "$HERE/.." && pwd)"\n'
+        'LAUNCHER="$REPO_ROOT/sandbox/confine-run.sh"\n'
+        '[ -x "$LAUNCHER" ] || { echo "neutral launcher missing at $LAUNCHER (is confinement emitted for this team?)" >&2; exit 1; }\n'
+        '[ "$(id -u)" -ne 0 ] || echo "WARNING: running as root — bwrap will lose DAC over your files; run as the workspace user." >&2\n'
+        'SCRATCH="${GOOSE_CONFINE_SCRATCH:-/tmp/goose-confined-$USER}"; mkdir -p "$SCRATCH/state" "$SCRATCH/data" "$SCRATCH/cache"\n'
+        'KEY_ENV="${GOOSE_KEY_ENV:-OPENROUTER_API_KEY}"   # provider key env var, injected by NAME (ps-safe)\n'
+        ': "${!KEY_ENV:?set $KEY_ENV in your environment (the credential is injected as an input, not read from the keyring)}"\n'
+        'export "$KEY_ENV"   # export by name so --env-allow forwards the VALUE via env, never on argv\n'
+        'EGRESS="${GOOSE_CONFINE_EGRESS:-deny}"\n'
+        'if [ "$EGRESS" = host ] && [ -z "${GOOSE_CONFINE_ACCEPT_OPEN_EGRESS:-}" ]; then\n'
+        '  echo "REFUSING --egress host with a live $KEY_ENV: open egress + a live key is a key-exfiltration channel." >&2\n'
+        '  echo "Use GOOSE_CONFINE_EGRESS=proxy (a pinned sole-egress netns; see the sandboxing guide)," >&2\n'
+        '  echo "or set GOOSE_CONFINE_ACCEPT_OPEN_EGRESS=1 to accept the risk on a trusted single-tenant box." >&2\n'
+        '  exit 2\n'
+        'fi\n'
+        'exec "$LAUNCHER" --scratch "$SCRATCH" ' + writable_flags + exclude_flags + ' --egress "$EGRESS" \\\n'
+        '  --setenv XDG_STATE_HOME="$SCRATCH/state" --setenv XDG_DATA_HOME="$SCRATCH/data" --setenv XDG_CACHE_HOME="$SCRATCH/cache" \\\n'
+        '  --setenv GOOSE_DISABLE_KEYRING=1 --env-allow "$KEY_ENV" \\\n'
+        '  -- goose run "$@"\n'
+    )
+
+
+def goose_linux_sandbox_output_files(manifest: dict[str, Any]) -> list[tuple[str, str]]:
+    """Return the ``(rel_path, content)`` files for the Linux goose confinement runner, or ``[]``.
+
+    Emits ``.goose/confined-run.example.sh`` when, and only when, confinement is REQUESTED for this
+    goose team (:func:`_goose_sandbox_feature_enabled`) AND the build host is Linux. This is the
+    goose-specific Linux companion to the framework-neutral ``confine-run.sh`` launcher (which
+    ``base.extra_output_files`` emits) and to the darwin-only Seatbelt path
+    (:func:`goose_sandbox_output_files`). Off Linux it returns ``[]`` (macOS uses the Seatbelt
+    example; Windows has no emittable boundary), mirroring the platform gating of
+    ``_linux_sandbox_emit.linux_sandbox_output_files``.
+    """
+    if not _goose_sandbox_feature_enabled(manifest):
+        return []
+    if not sys.platform.startswith("linux"):
+        return []
+    return [(GOOSE_LINUX_RUNNER_REL, _build_linux_goose_runner(manifest))]
 
 
 #: Truthy YAML/env values for GOOSE_SANDBOX in a live Goose config.

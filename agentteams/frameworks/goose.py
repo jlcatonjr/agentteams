@@ -532,7 +532,10 @@ class GooseAdapter(FrameworkAdapter):
         + inert `config.yaml.agentteams.example`; nothing extra off macOS (honest
         fail-closed). See `_goose_sandbox_emit.goose_sandbox_output_files`.
         """
-        from agentteams.frameworks._goose_sandbox_emit import goose_sandbox_output_files
+        from agentteams.frameworks._goose_sandbox_emit import (
+            goose_linux_sandbox_output_files,
+            goose_sandbox_output_files,
+        )
 
         project_name = manifest.get("project_name", "this project")
         # Framework-neutral baseline first (the Linux confinement launcher on linux). The
@@ -552,6 +555,10 @@ class GooseAdapter(FrameworkAdapter):
                 ("../../scripts/goose-coordination-mcp.py", _coordination_mcp_content())
             )
         files.extend(goose_sandbox_output_files(manifest))
+        # Linux companion to the darwin Seatbelt path: a goose-specific confined-run example that
+        # wraps the neutral bwrap launcher with the settings a confined goose needs (writable XDG,
+        # GOOSE_DISABLE_KEYRING, env-injected key). Emits only on Linux; [] elsewhere.
+        files.extend(goose_linux_sandbox_output_files(manifest))
         return files
 
 

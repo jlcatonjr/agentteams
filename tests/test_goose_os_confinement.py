@@ -19,10 +19,14 @@ import pytest
 from agentteams import analyze
 from agentteams.frameworks.goose import GooseAdapter
 from agentteams.frameworks._goose_sandbox_emit import (
+    GOOSE_LINUX_RUNNER_REL,
+    _build_config_example,
+    _build_linux_goose_runner,
     _build_seatbelt_profile,
     _goose_read_deny_paths,
     _goose_sandbox_feature_enabled,
     _seatbelt_path_expr,
+    goose_linux_sandbox_output_files,
     goose_sandbox_output_files,
     verify_goose_sandbox_wiring,
 )
@@ -329,3 +333,124 @@ def test_verify_detects_porous_profile_missing_network_deny(tmp_path):
     ok, msgs = verify_goose_sandbox_wiring(tmp_path, m, live_config_path=live)
     assert ok is False
     assert any("deny network*" in x for x in msgs)
+
+
+# ---------------------------------------------------------------------------
+# Linux goose confinement runner (goose_linux_sandbox_output_files) — remediation 2026-W40
+# ---------------------------------------------------------------------------
+
+def test_linux_runner_emitted_on_linux_when_confined(monkeypatch):
+    monkeypatch.setattr(sys, "platform", "linux")
+    out = goose_linux_sandbox_output_files({"privilege_profile": "confined"})
+    assert out and out[0][0] == GOOSE_LINUX_RUNNER_REL
+    c = out[0][1]
+    for needle in ("GOOSE_DISABLE_KEYRING=1", "XDG_STATE_HOME", "sandbox/confine-run.sh",
+                   "goose run", "--setenv"):
+        assert needle in c, f"missing {needle!r}"
+
+
+def test_linux_runner_reads_both_request_sources(monkeypatch):
+    monkeypatch.setattr(sys, "platform", "linux")
+    assert goose_linux_sandbox_output_files({"host_features": ["goose:sandbox"]})
+    assert goose_linux_sandbox_output_files({"privilege_profile": "exclusive"})
+
+
+def test_linux_runner_injects_key_via_env_allow_not_argv(monkeypatch):
+    monkeypatch.setattr(sys, "platform", "linux")
+    c = goose_linux_sandbox_output_files({"privilege_profile": "confined"})[0][1]
+    assert "--env-allow" in c and "KEY_ENV" in c  # key forwarded by NAME (ps-safe), from an env INPUT
+    assert '--setenv "$KEY_ENV=' not in c  # value NOT on the runner's/goose argv (launcher still --setenv's it to bwrap; see PS NOTE)
+    assert "sk-" not in c  # no literal secret ever baked in
+
+
+def test_linux_runner_refuses_host_egress_with_live_key(monkeypatch):
+    # adversarial risk 1: the path of least resistance must NOT be the insecure one.
+    monkeypatch.setattr(sys, "platform", "linux")
+    c = goose_linux_sandbox_output_files({"privilege_profile": "confined"})[0][1]
+    assert "REFUSING --egress host" in c
+    assert "GOOSE_CONFINE_ACCEPT_OPEN_EGRESS" in c
+    assert "exit 2" in c
+
+
+def test_linux_runner_exclusive_carries_protected_read_paths(monkeypatch):
+    # adversarial risk 3: exclusive read-exclusions must not be silently dropped on Linux.
+    monkeypatch.setattr(sys, "platform", "linux")
+    mani = {"privilege_profile": "exclusive", "protected_read_paths": ["/home/x/sibling-scratch"]}
+    c = goose_linux_sandbox_output_files(mani)[0][1]
+    assert '--exclude "/home/x/sibling-scratch"' in c
+
+
+def test_linux_runner_confined_has_no_manifest_excludes(monkeypatch):
+    monkeypatch.setattr(sys, "platform", "linux")
+    c = goose_linux_sandbox_output_files(
+        {"privilege_profile": "confined", "protected_read_paths": ["/x"]}
+    )[0][1]
+    assert "--exclude" not in c  # read-exclusion is an exclusive-only property
+
+
+def test_linux_runner_is_inert_example(monkeypatch):
+    monkeypatch.setattr(sys, "platform", "linux")
+    c = goose_linux_sandbox_output_files({"privilege_profile": "confined"})[0][1]
+    assert "INERT" in c and "never" in c.lower()  # ship-an-example / never-clobber
+
+
+def test_linux_runner_bash_syntax_valid(monkeypatch):
+    import subprocess, tempfile, os
+    monkeypatch.setattr(sys, "platform", "linux")
+    c = goose_linux_sandbox_output_files({"privilege_profile": "confined"})[0][1]
+    fd, fn = tempfile.mkstemp(suffix=".sh")
+    os.write(fd, c.encode()); os.close(fd)
+    try:
+        assert subprocess.run(["bash", "-n", fn]).returncode == 0
+    finally:
+        os.unlink(fn)
+
+
+def test_linux_runner_not_emitted_off_linux(monkeypatch):
+    for plat in ("darwin", "win32"):
+        monkeypatch.setattr(sys, "platform", plat)
+        assert goose_linux_sandbox_output_files({"privilege_profile": "confined"}) == []
+
+
+def test_linux_runner_not_emitted_when_unconfined(monkeypatch):
+    monkeypatch.setattr(sys, "platform", "linux")
+    assert goose_linux_sandbox_output_files({}) == []
+
+
+def test_config_example_linux_note_points_to_launcher_and_runner():
+    # F-G5: the macOS config example no longer dead-ends Linux — it names the neutral launcher
+    # and the emitted Linux runner instead of asserting Linux is unsandboxable.
+    txt = _build_config_example(["."], exclusive=False, egress_endpoint=None)
+    assert "confine-run.sh" in txt
+    assert "confined-run.example.sh" in txt
+
+
+def test_goose_adapter_emits_linux_runner_on_linux(monkeypatch):
+    monkeypatch.setattr(sys, "platform", "linux")
+    mani = {"privilege_profile": "confined", "project_name": "Demo",
+            "host_features": ["goose:sandbox"]}
+    paths = [p for p, _ in GooseAdapter().extra_output_files(mani)]
+    assert any("confined-run.example.sh" in p for p in paths)
+
+
+def test_linux_runner_rejects_unsafe_protected_read_path(monkeypatch):
+    # adversarial re-review nit: manifest paths are DATA — unsafe chars must not break/inject the script.
+    import subprocess, tempfile, os
+    monkeypatch.setattr(sys, "platform", "linux")
+    mani = {"privilege_profile": "exclusive", "protected_read_paths": ["/ok", '/e"v`$(x)']}
+    c = goose_linux_sandbox_output_files(mani)[0][1]
+    assert '--exclude "/ok"' in c            # safe path carried
+    assert 'e"v' not in c and "`$(x)" not in c  # unsafe path never injected
+    assert "SKIPPED from --exclude" in c     # visible skip signal (not silent scope drop)
+    fd, fn = tempfile.mkstemp(suffix=".sh"); os.write(fd, c.encode()); os.close(fd)
+    try:
+        assert subprocess.run(["bash", "-n", fn]).returncode == 0
+    finally:
+        os.unlink(fn)
+
+
+def test_linux_runner_discloses_ps_residual(monkeypatch):
+    # honesty: the launcher forwards the key to bwrap via --setenv, ps-visible on shared hosts.
+    monkeypatch.setattr(sys, "platform", "linux")
+    c = goose_linux_sandbox_output_files({"privilege_profile": "confined"})[0][1]
+    assert "PS NOTE" in c and "bwrap" in c
