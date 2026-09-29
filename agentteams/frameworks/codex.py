@@ -386,6 +386,24 @@ def strip_codex_notice(text: str) -> str:
     return text
 
 
+def _in_team(handoffs: list[dict[str, Any]], manifest: dict[str, Any]) -> list[dict[str, Any]]:
+    """Drop handoffs to agents that are not on this team's roster.
+
+    Templates name conditional targets (``@style-guardian`` *if in team*); the Copilot adapter
+    prunes absent ones from front matter, and Codex must too, or a custom agent is told to spawn
+    an agent that does not exist. The roster is the same union Copilot uses
+    (``copilot_vscode._get_team_slugs``). A manifest carrying no roster information (a direct
+    render) filters nothing.
+    """
+    roster_keys = ("output_files", "agent_slug_list", "existing_agent_slugs", "adopted_agents")
+    if not any(manifest.get(k) for k in roster_keys):
+        return handoffs
+    from .copilot_vscode import _get_team_slugs
+
+    team = _get_team_slugs(manifest)
+    return [h for h in handoffs if str(h.get("agent", "")).strip() in team]
+
+
 def agents_md_is_codex_owned(path: Path) -> bool:
     """Whether the ``AGENTS.md`` at *path* may be (re)written by the Codex adapter.
 
@@ -440,7 +458,7 @@ class CodexAdapter(AgentsMdAdapter):
         """
         name, description = _extract_name_description(content, agent_slug, manifest)
         tools = _declared_tools(content)
-        handoffs = self.extract_handoffs(content)
+        handoffs = _in_team(self.extract_handoffs(content), manifest)
         body = self._strip_yaml_front_matter(content)
         body = self._strip_handoffs_section(body)
         body = _TRANSLATION_BLOCK_RE.sub("\n", body)

@@ -199,6 +199,7 @@ references/runtime-handoffs.json
 .claude/
 .goose/
 .agents/
+.codex/
 # NOTE: do NOT re-ignore .github/agents/_build-description.json here. It is deliberately
 # un-ignored at the top of this file (see the "so CI can run security-maintenance" comment)
 # so the daily Security Maintenance workflow scans the REAL self-team. A 2026-08-29 scrub
