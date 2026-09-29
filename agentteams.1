@@ -22,7 +22,7 @@ Project directory to scan and use as base (overrides existing_project_path in de
 Target framework: copilot\-vscode, copilot\-cli, claude, goose, agents\-md, codex (default: copilot\-vscode). 'canonical' is the durable on\-disk canonical format (interop\-only, pair with \-\-interop\-from; not a rendering target). 'generic' emits only framework\-agnostic bridge artifacts (bridge\-only, pair with \-\-bridge\-from; no native consumer entry files).
 .TP
 .B \-\-output, \-o DIR
-Output directory for agent files. Default: <project>/.github/agents/ (copilot\-vscode, copilot\-cli), <project>/.claude/agents/ (claude), <project>/.goose/recipes/ (goose), <project>/.agents/ (agents\-md; team brief also written to repo\-root AGENTS.md). With \-\-package\-team: the destination .zip FILE path, not a directory (default: ./team\-package.zip).
+Output directory for agent files. Default: <project>/.github/agents/ (copilot\-vscode, copilot\-cli), <project>/.claude/agents/ (claude), <project>/.goose/recipes/ (goose), <project>/.agents/ (agents\-md; team brief also written to repo\-root AGENTS.md). <project>/.codex/agents/ (codex custom\-agent TOML; repo\-root AGENTS.md only when absent or Codex\-generated). With \-\-package\-team: the destination .zip FILE path, not a directory (default: ./team\-package.zip).
 .TP
 .B \-\-dry\-run
 Show what would be generated without writing files
