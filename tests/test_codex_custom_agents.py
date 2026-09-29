@@ -562,3 +562,13 @@ def test_generic_bridge_points_at_the_real_memory_index(tmp_path: Path) -> None:
     assert rel == ".github/agents/references/memory-index.json"
     assert rel in _render_entrypoint("copilot-vscode", "generic", rel)
     assert rel in _render_quickstart("copilot-vscode", "generic", rel)
+
+
+def test_guard_holds_on_first_run_before_codex_dir_exists(tmp_path: Path) -> None:
+    """Regression (dogfood dry-run 2026-09-29): with no .codex/agents yet, the OS reports
+    `.codex/agents/../../AGENTS.md` as missing; the guard must still see the real file."""
+    (tmp_path / "AGENTS.md").write_text("# goose-owned\n", encoding="utf-8")
+    out = tmp_path / ".codex" / "agents"
+    assert not out.exists()
+    kept, notices = CodexAdapter().guard_rendered_files([("../../AGENTS.md", "x"), ("a.toml", "y")], out)
+    assert kept == [("a.toml", "y")] and notices
