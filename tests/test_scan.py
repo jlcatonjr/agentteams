@@ -649,3 +649,11 @@ def test_main_directory_via_subprocess(tmp_path):
     )
     assert result.returncode == 0, result.stderr
     assert json.loads(result.stdout)["files_scanned"] == 1
+
+
+def test_main_single_non_utf8_file_is_scanned_not_crashed(tmp_path, capsys):
+    """Exit 1 must mean HALT: a non-UTF-8 file used to raise (exit 1 without a verdict)."""
+    f = tmp_path / "bin.md"
+    f.write_bytes(b"\xff\xfe clean text\n")
+    assert scan_main([str(f)]) == 0
+    assert json.loads(capsys.readouterr().out)["verdict"] == "PASS"

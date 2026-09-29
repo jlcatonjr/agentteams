@@ -20,7 +20,7 @@
     "agentteams/redteam/checks_report.py": "3e13cc5ebf19b4b393ef0a2ee663d097ff2be3666d38b7f61203503ee77ffd24",
     "agentteams/redteam/checks_static.py": "f7eb60f6895cec707fe511ad772c14be714b56c3450dd7292893277bec243855",
     "agentteams/redteam/registry.py": "8b2232c09acc2d69a41c8316cf263acde6bd6a93d2ac00f947bee9633129bfa1",
-    "agentteams/scan.py": "6e8f67f996e75828f70fbd406672aa3013c51183d96bdad7df84070ceca3258b",
+    "agentteams/scan.py": "db6316fb05643cd57b4bfe679e15a268aa8af1979801e9ccd9131298f4f3be58",
     "agentteams/templates/universal/hooks/constitutional-gate.py": "1c619ef79454be0aa28ea4ac32d05e25ed908d559132d1bcb154bf13d47ffb64",
     "agentteams/templates/universal/sandbox/confine-run.sh": "92867e5e0a074afe366540bde818a06e5e3cce21c1669cb11375d522745bde9f",
     "agentteams/templates/universal/sandbox/mac-escape-tests.sh": "055105834e5f529609e2fe3c52eb79c89fe5b56157399f31ec18dc4f41e98564",

@@ -174,8 +174,9 @@ A directory argument walks the tree. Symlinks are not followed, and only the roo
 object store is pruned; its `config` and `hooks/` are still scanned. Every regular file goes
 through `scan_content`, with non-UTF-8 bytes decoded lossily, and the findings are combined
 into one verdict. The JSON adds `files_scanned` and `skipped`. Each skipped entry also raises
-a medium `scanner-evasion` finding, so a skip can never read as PASS. A path that does not
-exist is a usage error (exit 2).
+a medium `scanner-evasion` finding, so a skip can never read as PASS. A path that is neither
+a file nor a directory (missing, FIFO, device) is a usage error (exit 2). A single file is also
+decoded lossily, so non-UTF-8 content is scanned instead of crashing.
 
 ```bash
 python -m agentteams.scan .codex/agents/

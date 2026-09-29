@@ -21,8 +21,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - Non-UTF-8 bytes are decoded lossily and still scanned.
   - Every skip is listed under `skipped` and raises a medium `scanner-evasion` finding, so
     content hidden in skipped entries can never read as PASS (@security, 2026-09-29).
-  - A path that does not exist is now a usage error (exit 2) instead of a traceback.
-  - File and stdin modes are unchanged.
+  - A path that is neither a file nor a directory is now a usage error (exit 2) instead of a
+    traceback.
+  - Single-file mode also decodes lossily. A non-UTF-8 file used to exit 1 with a traceback,
+    which broke the "exit 1 iff HALT" contract. Stdin mode is unchanged.
 
 ### changed (Codex: custom agents emitted as `.codex/agents/<name>.toml`)
 

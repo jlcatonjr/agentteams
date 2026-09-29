@@ -925,7 +925,7 @@ def main(argv: list[str] | None = None) -> int:
     Prints JSON: ``{"findings": [...], "verdict": "HALT"|"CONDITIONAL_PASS"|"PASS"}``; a
     directory adds ``files_scanned`` and ``skipped`` (see :func:`_scan_tree`).
     Exit code 1 iff verdict is HALT (mirrors --scan-security's high_count gate), else 0; a
-    path that does not exist is a usage error (exit 2).
+    path that is neither a file nor a directory (missing, FIFO, device) is a usage error (exit 2).
 
     Args:
         argv: Command-line arguments (defaults to ``sys.argv[1:]``).
@@ -950,7 +950,8 @@ def main(argv: list[str] | None = None) -> int:
             findings, scanned, skipped = _scan_tree(target)
             extra = {"files_scanned": scanned, "skipped": skipped}
         elif target.is_file():
-            findings = scan_content(target.read_text(encoding="utf-8"), filename=args.path)
+            text = target.read_bytes().decode("utf-8", errors="replace")  # as directory mode
+            findings = scan_content(text, filename=args.path)
         else:
             parser.error(f"{args.path!r} is not a file or directory")
     verdict = verdict_for_findings(findings)
