@@ -6,6 +6,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### fixed (Codex handoffs to agents outside the team)
+
+- Codex custom agents no longer list "Hand off to" targets that are not on the team's roster.
+  Templates name conditional targets (for example `@style-guardian` *if in team*). The Copilot
+  adapter already pruned absent ones, but the Codex translation kept them, which told Codex to
+  spawn agents that do not exist. Codex now uses the same roster union as Copilot
+  (`copilot_vscode._get_team_slugs`). Found by the dogfood-regeneration conflict audit,
+  2026-09-29.
+- `.gitignore`: `.codex/` joins the unpublished dogfood surfaces (`.claude/`, `.goose/`, `.agents/`).
+
 ### fixed (Codex AGENTS.md guard on a first run)
 
 - On a first native `--framework codex` generation, `.codex/agents` does not exist yet, so the OS

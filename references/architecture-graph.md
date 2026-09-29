@@ -5,7 +5,7 @@
 
 - Modules mapped: **178**
 - Packages: **7**
-- Internal import edges: **407**
+- Internal import edges: **408**
 - Distinct external dependencies: **7**
 
 ---
@@ -131,9 +131,9 @@ Every module, coloured by package (full adjacency in the table below).
 | `agentteams.frameworks.agents_md` | `agentteams.frameworks.base`, `agentteams.yaml_frontmatter` | `agentteams.cli.render_pipeline`, `agentteams.frameworks.codex`, `agentteams.frameworks.registry` |
 | `agentteams.frameworks.base` | `agentteams.frameworks._linux_sandbox_emit`, `agentteams.yaml_frontmatter` | `agentteams.cli.render_pipeline`, `agentteams.convert`, `agentteams.frameworks.agents_md`, `agentteams.frameworks.claude`, `agentteams.frameworks.copilot_cli`, `agentteams.frameworks.copilot_vscode`, `agentteams.frameworks.goose`, `agentteams.frameworks.goose_recipe_emit`, `agentteams.frameworks.registry`, `agentteams.interop`, `agentteams.output_plan` |
 | `agentteams.frameworks.claude` | `agentteams.frameworks._sandbox_emit`, `agentteams.frameworks.base`, `agentteams.yaml_frontmatter` | `agentteams.bridge_subagents`, `agentteams.cli.artifacts`, `agentteams.cli.render_pipeline`, `agentteams.cli.standalone_modes`, `agentteams.frameworks.registry` |
-| `agentteams.frameworks.codex` | `agentteams.capability_map`, `agentteams.frameworks._linux_sandbox_emit`, `agentteams.frameworks.agents_md`, `agentteams.yaml_frontmatter` | `agentteams.frameworks.registry`, `agentteams.interop` |
+| `agentteams.frameworks.codex` | `agentteams.capability_map`, `agentteams.frameworks._linux_sandbox_emit`, `agentteams.frameworks.agents_md`, `agentteams.frameworks.copilot_vscode`, `agentteams.yaml_frontmatter` | `agentteams.frameworks.registry`, `agentteams.interop` |
 | `agentteams.frameworks.copilot_cli` | `agentteams.frameworks.base`, `agentteams.frameworks.copilot_vscode`, `agentteams.yaml_frontmatter` | `agentteams.cli.render_pipeline`, `agentteams.frameworks.registry` |
-| `agentteams.frameworks.copilot_vscode` | `agentteams.frameworks.base`, `agentteams.frameworks.format_spec`, `agentteams.yaml_frontmatter` | `agentteams.cli.render_pipeline`, `agentteams.frameworks.copilot_cli`, `agentteams.frameworks.registry` |
+| `agentteams.frameworks.copilot_vscode` | `agentteams.frameworks.base`, `agentteams.frameworks.format_spec`, `agentteams.yaml_frontmatter` | `agentteams.cli.render_pipeline`, `agentteams.frameworks.codex`, `agentteams.frameworks.copilot_cli`, `agentteams.frameworks.registry` |
 | `agentteams.frameworks.format_spec` | — | `agentteams.audit`, `agentteams.framework_research`, `agentteams.frameworks.copilot_vscode`, `agentteams.output_plan` |
 | `agentteams.frameworks.goose` | `agentteams.capability_map`, `agentteams.frameworks._goose_sandbox_emit`, `agentteams.frameworks.base`, `agentteams.frameworks.goose_coordination`, `agentteams.frameworks.goose_docs`, `agentteams.frameworks.goose_recipe_emit`, `agentteams.frameworks.goose_recipe_read`, `agentteams.frameworks.goose_recipe_validate` | `agentteams.bridge`, `agentteams.bridge_subagents_goose`, `agentteams.cli.app`, `agentteams.cli.recipe_check`, `agentteams.cli.render_pipeline`, `agentteams.frameworks.goose_coordination`, `agentteams.frameworks.registry` |
 | `agentteams.frameworks.goose_coordination` | `agentteams.frameworks.goose` | `agentteams.frameworks.goose` |
@@ -1347,6 +1347,7 @@ digraph "agentteams architecture" {
         "agentteams.capability_map",
         "agentteams.frameworks._linux_sandbox_emit",
         "agentteams.frameworks.agents_md",
+        "agentteams.frameworks.copilot_vscode",
         "agentteams.yaml_frontmatter"
       ],
       "external": [],
@@ -3389,6 +3390,10 @@ digraph "agentteams architecture" {
     {
       "source": "agentteams.frameworks.codex",
       "target": "agentteams.frameworks.agents_md"
+    },
+    {
+      "source": "agentteams.frameworks.codex",
+      "target": "agentteams.frameworks.copilot_vscode"
     },
     {
       "source": "agentteams.frameworks.codex",

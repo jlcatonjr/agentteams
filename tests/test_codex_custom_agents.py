@@ -572,3 +572,19 @@ def test_guard_holds_on_first_run_before_codex_dir_exists(tmp_path: Path) -> Non
     assert not out.exists()
     kept, notices = CodexAdapter().guard_rendered_files([("../../AGENTS.md", "x"), ("a.toml", "y")], out)
     assert kept == [("a.toml", "y")] and notices
+
+
+def test_handoffs_to_agents_outside_the_team_are_dropped() -> None:
+    """Dogfood audit 2026-09-29: conditional targets (style-guardian 'if in team') must not
+    become Codex handoffs when that agent is absent — Copilot already prunes them."""
+    handoffs = (
+        "handoffs:\n"
+        "  - label: Style\n    agent: style-guardian\n    prompt: \"x\"\n    send: false\n"
+        "  - label: Back\n    agent: orchestrator\n    prompt: \"y\"\n    send: false\n"
+    )
+    manifest = {"output_files": [{"path": "orchestrator.agent.md"}, {"path": "a.agent.md"}]}
+    doc = tomllib.loads(CodexAdapter().render_agent_file(
+        _agent("A", "['read']", "# A\n\nB\n", handoffs=handoffs), "a", manifest))
+    instr = doc["developer_instructions"]
+    assert "Hand off to `orchestrator`" in instr
+    assert "style-guardian" not in instr.split("### Hand off to", 1)[1]
