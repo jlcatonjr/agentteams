@@ -96,7 +96,8 @@ subagents and build-skills twins together.
 | X3 | New surfaces: skills (SKILL.md — the recommended packaging; custom prompts deprecated), file-based profiles (`[profiles.*]` deprecated v0.134.0). Deprecation half is a conformance issue only if we emit deprecated forms — we emit neither custom prompts nor profiles, so no current non-conformance; a skills mapping (selected procedures → `.agents/skills/<name>/SKILL.md`) is an opportunity, not a gap — see X7. | researcher-claimed | Recorded; skills mapping noted for design discussion |
 | X5 | Custom agents (`.codex/agents/*.toml`) were not emitted; the adapter wrote flat `.agents/<slug>.md` files Codex does not load, with a duplicate H1 under interop. | **re-verified** 2026-09-29 (docs twin + codex-rs source) | **Closed** 2026-09-29 — TOML custom-agent emission (baseAgent cross-orchestrator request) |
 | X6 | The watch covered only the agents-md HTML page (client-rendered), and the token scan matched YAML `key:` only, so no Codex TOML token could ever be observed. | **re-verified** 2026-09-29 | **Closed** 2026-09-29 — `.md` twins of agents-md + subagents + build-skills; scan accepts `key =` and `` `key` `` |
-| X7 | Skills (`.agents/skills/<name>/SKILL.md`) not emitted (`recall`, `citation-audit` are first candidates). | docs twin 2026-09-29 | Open — optional follow-up |
+| X7 | Skills (`.agents/skills/<name>/SKILL.md`) not emitted. | docs twin 2026-09-29 | **Closed** 2026-09-29 — tool docs emit as Codex skills; interop carries `.claude/skills` into `.agents/skills` |
+| X8 | MCP approval: `suggest`/"every action prompts" assumption obsolete (`Auto` preset = `workspace-write` + `on-request`; `untrusted` retired). | **re-verified** 2026-09-29 (`agent-approvals-security.md`, `extend/mcp.md`) | **Closed** 2026-09-29 — emitter pins `default_tools_approval_mode = "prompt"` |
 | X4 | Emitted/documented links should point at learn.chatgpt.com (`codex_mcp_emit.py` cites developers.openai.com — still redirects, low priority). | **re-verified** locally (one citing file found) | Tranche 2 (docstring-level; batched with X1) |
 
 ## Integration Checklist
@@ -104,8 +105,8 @@ subagents and build-skills twins together.
 1. Keep AGENTS.md-at-root emission (correct per discovery rules).
 2. Tranche 2: document override/fallback/merge semantics and the 32 KiB cap;
    document the config-trust gate; refresh MCP key coverage.
-3. Custom agents ship as `.codex/agents/<slug>.toml` (X5). Skills
-   (`.agents/skills/<name>/SKILL.md`) remain an optional follow-up (X7).
+3. Custom agents ship as `.codex/agents/<slug>.toml` (X5); skills as
+   `.agents/skills/<slug>/SKILL.md` (X7).
 
 ## Observed Upstream Tokens — `codex` (Daily Pipeline)
 

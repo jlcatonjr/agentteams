@@ -20,14 +20,19 @@ Opt-in via [`--target-host-features codex:mcp`](host-features.md).
 Goose's stricter bar is justified relative to a specific fact: every Goose agent
 defaults to the `developer` builtin extension (unconditional local shell, always on).
 Borrowing that threshold for Codex without checking Codex's own baseline would be an
-unverified analogy. Checked via live web search (2026-08-10): Codex's own default
-posture is markedly *more* conservative than Goose's — `suggest` is the default
-approval mode (every action requires explicit operator approval before execution),
-and `sandbox_mode` defaults to no network access with filesystem writes confined to
-the active workspace, applied as an independent runtime gate at tool-call time
-regardless of `config.toml` contents. Writing a first-party/read-only server into
-`[mcp_servers.*]` doesn't, by itself, grant any capability Codex's own default
-sandbox/approval layer wouldn't still gate.
+unverified analogy. The 2026-08-10 premise that "`suggest` is the default approval
+mode, every action requires approval" was **withdrawn on 2026-09-29** after re-checking
+the current docs (`agent-approvals-security.md`, `extend/mcp.md`):
+- `approval_policy` is `on-request`, `never` or `{ granular = … }`, and `untrusted` is retired.
+- A version-controlled folder starts in the `Auto` preset (`workspace-write` +
+  `on-request`), where commands the sandbox allows run without approval.
+- The default `workspace-write` sandbox still has no network and confines writes to the
+  workspace.
+
+The emitter therefore restores a per-call prompt explicitly: every server it wires carries
+`default_tools_approval_mode = "prompt"` (supported values: `auto`, `prompt`, `writes`,
+`approve`). An operator may relax a single tool under `[mcp_servers.<id>.tools.<tool>]`
+with `approval_mode`.
 
 ## No comment-preserving TOML round-trip — text-level splice instead
 

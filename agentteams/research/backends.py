@@ -11,7 +11,7 @@ such information exists" and abandons an answerable question.
 Design constraints this module is bound by:
 
 - **The zero-configuration path must stay fully functional.** A base
-  ``pip install agentteams[research]`` with no environment variables set gets a real chain
+  ``pip install "agentteams[research] @ git+https://github.com/jlcatonjr/agentteams.git"`` with no environment variables set gets a real chain
   (``duckduckgo`` → ``ddg_lite``), not a single point of failure. Backends needing a key or a
   host are *additional links*, never prerequisites. A remediation whose benefit requires opt-in
   does not remediate the reported defect.

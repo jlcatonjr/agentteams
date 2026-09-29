@@ -1,4 +1,4 @@
-"""Research + fact-verification — an optional runtime capability (``pip install agentteams[research]``).
+"""Research + fact-verification — an optional runtime capability (the ``research`` extra; install from git, never PyPI).
 
 Unlike the rest of the ``agentteams`` package, this subpackage is a real, importable Python
 library a consuming project's own runtime may depend on directly — not a design-time template.

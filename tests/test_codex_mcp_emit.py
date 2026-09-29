@@ -327,3 +327,13 @@ def test_emit_codex_mcp_if_enabled_writes_when_gated_on(tmp_path):
         {"host_features": ["codex:mcp"], "mcp_servers": [_server()]}, tmp_path
     )
     assert _config_path(tmp_path).is_file()
+
+
+def test_every_emitted_server_prompts_per_tool_call() -> None:
+    """Item 5 (2026-09-29): Codex's `Auto` preset no longer prompts per action, so the emitter
+    pins `default_tools_approval_mode = "prompt"` on everything it wires."""
+    from agentteams.codex_mcp_emit import _codex_entry_for
+
+    fields, reason = _codex_entry_for(_server())
+    assert fields is not None, reason
+    assert fields["default_tools_approval_mode"] == "prompt"

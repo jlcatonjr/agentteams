@@ -95,9 +95,14 @@ sanitization + bounds).
 ### The `agentteams[research]`/`[browser]` extras are a disclosed, bounded exception to this boundary
 
 Everything above describes `agentteams`'s CLI/template-rendering output, which remains
-design-time-only and unchanged. The optional `research` extra
-(`pip install agentteams[research]`) — and its heavier `browser` sibling
-(`pip install agentteams[browser]`, layered on top of `research`, adding real Playwright-driven
+design-time-only and unchanged.
+
+**Install agentteams only from its git source.** The project is not published on PyPI, so
+installing the name `agentteams` from PyPI (with or without an extra) gets whoever holds it there.
+Every install instruction this project emits uses the `git+https://github.com/jlcatonjr/agentteams.git`
+form. The optional `research` extra
+(`pip install "agentteams[research] @ git+https://github.com/jlcatonjr/agentteams.git"`) — and its heavier `browser` sibling
+(`pip install "agentteams[browser] @ git+https://github.com/jlcatonjr/agentteams.git"`, layered on top of `research`, adding real Playwright-driven
 browser rendering for JavaScript-heavy pages, and requiring a further one-time
 `playwright install chromium` beyond the `pip install` itself) — are a genuinely different kind of
 thing: real, importable Python libraries (`agentteams.research`, `agentteams.research.browser`) a

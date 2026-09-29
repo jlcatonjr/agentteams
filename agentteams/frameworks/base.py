@@ -70,17 +70,24 @@ class FrameworkAdapter(ABC):
     def render_skill_file(self, content: str, slug: str, manifest: dict[str, Any]) -> str:
         """Post-process a rendered operational tool-doc emitted as a skill.
 
-        Only frameworks with a first-class skill concept (Claude Code) emit
+        Only frameworks with a first-class skill concept (Claude Code, Codex) emit
         skill files; for every other framework operational tool docs are emitted
         as reference documents and this method is never invoked. The default is
         a no-op so all adapters satisfy the interface.
         """
         return content
 
+    def _render_markdown_skill(self, content: str, slug: str, manifest: dict[str, Any]) -> str:
+        """Shared ``SKILL.md`` rendering for Markdown-skill frameworks (Claude Code, Codex)."""
+        body = self._strip_handoffs_section(self._strip_yaml_front_matter(content))
+        return inject_skill_front_matter(body, slug, skill_description(slug, manifest)).strip() + "\n"
+
     def has_skill_concept(self) -> bool:
         """Whether this framework has a first-class skill concept.
 
-        Today only Claude Code (``skills/<slug>/SKILL.md`` directories) does.
+        Claude Code (``.claude/skills/<slug>/SKILL.md``) and Codex
+        (``.agents/skills/<slug>/SKILL.md``) do; placement comes from
+        :meth:`skill_output_rel_path` / :meth:`skills_dir`.
         Drives the doc-text phrasing ("skill" vs "reference doc") where render
         paths name an operational tool doc; frameworks without one never get
         skill phrasing. (D.1: replaces hardcoded ``framework == "claude"``
@@ -100,6 +107,31 @@ class FrameworkAdapter(ABC):
         """
         base = slug[len("tool-"):] if slug.startswith("tool-") else slug
         return f"references/ref-{base}-reference.md"
+
+    def skill_output_rel_path(self, slug: str) -> str:
+        """Agents-dir-relative emit path of a skill (frameworks with a skill concept only).
+
+        Claude: ``../skills/<slug>/SKILL.md`` (``.claude/skills`` beside ``.claude/agents``).
+        Codex overrides to ``../../.agents/skills/<slug>/SKILL.md`` (repo-root ``.agents/skills``).
+
+        Args:
+            slug: The skill (tool-doc) slug; also the skill directory name.
+
+        Returns:
+            The path relative to the agents output directory.
+        """
+        return "../" + self.tool_doc_rel_path(slug)
+
+    def skills_dir(self, agents_dir: Path) -> Path:
+        """Directory holding this framework's ``<slug>/SKILL.md`` skills for *agents_dir*.
+
+        Args:
+            agents_dir: The framework's agents directory.
+
+        Returns:
+            The skills root (default: the ``skills`` sibling of the agents dir).
+        """
+        return agents_dir.parent / "skills"
 
     def framework_root_prefix(self) -> str:
         """Project-root-relative prefix of this framework's root dir.
@@ -406,3 +438,50 @@ class FrameworkAdapter(ABC):
     def _strip_handoffs_section(content: str) -> str:
         """Remove handoff heading blocks from body prose."""
         return _HANDOFFS_HEADING_RE.sub("", content)
+
+
+def skill_description(slug: str, manifest: dict[str, Any]) -> str:
+    """Build a one-line skill description from the tool-doc spec, if present.
+
+    Args:
+        slug: The tool-doc / skill slug.
+        manifest: Render manifest (``tool_agents``, ``project_name``).
+
+    Returns:
+        The description line.
+    """
+    tool_name = ""
+    for ta in manifest.get("tool_agents", []):
+        if ta.get("slug") == slug:
+            tool_name = ta.get("tool_name", "")
+            break
+    label = tool_name or FrameworkAdapter._slug_to_name(slug)
+    project = manifest.get("project_name", "")
+    suffix = f" in {project}" if project else ""
+    return (
+        f"{label} operational reference{suffix} — configuration, API surface, "
+        f"invocation, and verification. Consult when working with {label}."
+    )
+
+
+def inject_skill_front_matter(content: str, slug: str, description: str) -> str:
+    """Prepend a skill front matter block (``name`` + ``description``).
+
+    Claude Code and Codex skills share this shape.
+
+    Args:
+        content: The skill body.
+        slug: The skill name.
+        description: The one-line description (omitted when empty).
+
+    Returns:
+        The body with front matter prepended.
+    """
+    lines = ["---", f"name: {slug}"]
+    if description:
+        # Escape embedded double quotes so the YAML scalar stays well-formed.
+        safe = description.replace('"', '\\"')
+        lines.append(f'description: "{safe}"')
+    lines.append("---")
+    lines.append("")
+    return "\n".join(lines) + content

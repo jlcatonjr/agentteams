@@ -52,6 +52,7 @@ from agentteams.bridge_sources import (  # noqa: F401  (carved for CH-07; re-exp
     _slug_to_name,
 )
 from agentteams.bridge_pair_docs import (  # noqa: F401  (carved for CH-07; re-exported)
+    memory_index_rel_path,
     _render_domain_boundary,
     _render_entrypoint,
     _render_quickstart,
@@ -267,8 +268,9 @@ def run_bridge(
     bridge_files.append(
         (pair_dir / "agent-inventory.md", _render_inventory_md(inventory, output_root))
     )
-    bridge_files.append((pair_dir / "quickstart-snippet.md", _render_quickstart(src_fw, target_framework)))
-    bridge_files.append((pair_dir / "entrypoint.md", _render_entrypoint(src_fw, target_framework)))
+    mem_rel = memory_index_rel_path(source_dir, output_root)
+    bridge_files.append((pair_dir / "quickstart-snippet.md", _render_quickstart(src_fw, target_framework, mem_rel)))
+    bridge_files.append((pair_dir / "entrypoint.md", _render_entrypoint(src_fw, target_framework, mem_rel)))
     bridge_files.append((pair_dir / "domain-boundary.md", _render_domain_boundary(src_fw, target_framework)))
 
     # Target-framework entry files: subject to mode (refresh vs merge).

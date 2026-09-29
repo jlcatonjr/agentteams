@@ -14,6 +14,7 @@ import sys
 from pathlib import Path
 
 from agentteams.backup import BACKUP_DIR_NAME as _BACKUP_DIR_NAME
+from agentteams.capability_hints import agentteams_install_command
 from agentteams.cli import security_gate
 from agentteams.frameworks.registry import FRAMEWORKS
 from agentteams.cli.commands_output import _resolve_output_dir  # CH-07 carve; re-exported
@@ -1025,7 +1026,8 @@ def _run_redteam(args: argparse.Namespace) -> int:
         except ImportError:
             print(
                 "Error: --redteam-freshness-check needs the optional research extra. "
-                "Install with: pip install agentteams[research]",
+                f"Install with: {agentteams_install_command('research')} "
+                "(never from PyPI: the name there is not this project's)",
                 file=sys.stderr,
             )
             return 2

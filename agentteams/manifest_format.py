@@ -285,7 +285,7 @@ def _collect_tool_metadata_manual_required(
                 if adapter is not None and adapter.has_skill_concept():
                     # Directory-per-skill: Claude Code loads only `<name>/SKILL.md`.
                     # Setup docs sit one level below the framework root.
-                    rel_path = "../" + adapter.tool_doc_rel_path(slug)
+                    rel_path = adapter.skill_output_rel_path(slug)
                     doc_label = "skill document"
                 else:
                     rel_path = (

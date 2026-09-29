@@ -72,6 +72,10 @@ BACKUP_MANIFEST_SCHEMA_VERSION = "1.0"
 # lets restore map them back to the correct location instead of flattening them
 # into the agents dir.
 _EXTERNAL_BACKUP_PREFIX = "__external__"
+# Files two levels above output_dir (the repo-root AGENTS.md of a codex ``.codex/agents`` or goose
+# ``.goose/recipes`` team) — keyed relative to ``output_dir.parent.parent``. Before this prefix
+# existed they fell back to ``__external__/<name>`` and restored one level too deep.
+_EXTERNAL2_BACKUP_PREFIX = "__external2__"
 
 
 # Backups live INSIDE the agents dir, and Codex loads every `*.toml` under
@@ -84,13 +88,14 @@ _LOADABLE_BACKUP_EXTENSIONS = (".toml",)
 
 def _backup_rel(src: Path, output_dir: Path) -> Path:
     """Return the in-backup relative path for *src* (handles out-of-tree files)."""
-    try:
+    if src.is_relative_to(output_dir):
         rel = src.relative_to(output_dir)
-    except ValueError:
-        try:
-            rel = Path(_EXTERNAL_BACKUP_PREFIX) / src.relative_to(output_dir.parent)
-        except ValueError:
-            rel = Path(_EXTERNAL_BACKUP_PREFIX) / src.name
+    elif src.is_relative_to(output_dir.parent):
+        rel = Path(_EXTERNAL_BACKUP_PREFIX) / src.relative_to(output_dir.parent)
+    elif src.is_relative_to(output_dir.parent.parent):
+        rel = Path(_EXTERNAL2_BACKUP_PREFIX) / src.relative_to(output_dir.parent.parent)
+    else:
+        rel = Path(_EXTERNAL_BACKUP_PREFIX) / src.name
     return rel.with_name(inert_backup_name(rel.name))
 
 
@@ -118,6 +123,8 @@ def _restore_dest(output_dir: Path, rel: Path) -> Path:
     rel = _restored_rel(rel)
     if rel.parts and rel.parts[0] == _EXTERNAL_BACKUP_PREFIX:
         return output_dir.parent / Path(*rel.parts[1:])
+    if rel.parts and rel.parts[0] == _EXTERNAL2_BACKUP_PREFIX:
+        return output_dir.parent.parent / Path(*rel.parts[1:])
     return output_dir / rel
 
 

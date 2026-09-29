@@ -49,58 +49,6 @@ class InteropResult:
         return len(self.errors) == 0
 
 
-def detect_framework(source_dir: Path) -> str:
-    """Best-effort framework detection from directory shape and file style."""
-    # F.5: a canonical directory identifies via its team.cai.json marker —
-    # checked first because that file IS the format's identity (plan §5.6).
-    if (source_dir / "team.cai.json").is_file():
-        return "canonical"
-    parts = set(source_dir.parts)
-    if ".claude" in parts:
-        return "claude"
-    if ".goose" in parts:           # .goose/recipes — a Goose-native source team
-        return "goose"
-    if ".codex" in parts:           # .codex/agents/<name>.toml — Codex custom agents
-        return "codex"
-    if ".agents" in parts:          # .agents/<name>.md — an agents-md source team (F.1)
-        return "agents-md"
-    if ".github" in parts and "copilot" in parts:
-        return "copilot-cli"
-
-    has_agent_ext = False
-    has_claude_front_matter = False
-    has_yaml_keys = False
-    for p in source_dir.glob("*.md"):
-        if p.name.endswith(".agent.md"):
-            has_agent_ext = True
-        try:
-            content = p.read_text(encoding="utf-8")
-        except OSError:
-            continue
-        if content.startswith("---\n"):
-            # Accept BOTH capability keys. `tools:` is what a Claude subagent file carries
-            # since 2026-08-06; `allowed-tools:` is what every previously generated team
-            # still carries on disk, and detection must keep working on those. Matched at
-            # line start so `allowed-tools:` is not read as a `tools:` hit, and so a
-            # copilot-vscode `tools: ['read']` line is excluded by the bracket test below.
-            for line in content.splitlines():
-                stripped = line.strip()
-                if stripped.startswith("allowed-tools:"):
-                    has_claude_front_matter = True
-                elif stripped.startswith("tools:") and "[" not in stripped:
-                    # copilot-vscode writes an inline list (`tools: ['read']`); Claude
-                    # writes a bare comma-separated scalar. The bracket discriminates.
-                    has_claude_front_matter = True
-            if "user-invocable:" in content or "handoffs:" in content:
-                has_yaml_keys = True
-
-    if has_agent_ext or has_yaml_keys:
-        return "copilot-vscode"
-    if has_claude_front_matter:
-        return "claude"
-    return "copilot-cli"
-
-
 def export_to_cai(source_dir: Path, source_framework: str | None = None) -> dict[str, Any]:
     """Export a source team into canonical agent interface format."""
     if not source_dir.is_dir():
@@ -329,35 +277,6 @@ def _json_safe(obj: Any) -> Any:
     return obj
 
 
-def _capture_mcp_servers(source_dir: Path) -> list[dict[str, Any]]:
-    """Capture MCP servers from the pipeline's managed artifact, if present (D.3).
-
-    ``mcp_emit`` writes ``.claude/mcp-servers.agentteams.json`` at the project
-    root. Depending on how deep *source_dir* sits (``.claude/agents`` in-repo vs
-    deeper bridge layouts), the artifact is one or two levels up. First hit
-    wins; unreadable or absent artifacts capture nothing (honestly degraded).
-    """
-    candidates = (
-        source_dir.parent / "mcp-servers.agentteams.json",
-        source_dir.parent / ".claude" / "mcp-servers.agentteams.json",
-        source_dir.parent.parent / ".claude" / "mcp-servers.agentteams.json",
-    )
-    for artifact in candidates:
-        if not artifact.is_file():
-            continue
-        try:
-            data = json.loads(artifact.read_text(encoding="utf-8"))
-        except (OSError, ValueError):
-            return []
-        servers = data.get("servers", [])
-        if not isinstance(servers, list):
-            return []
-        from agentteams.mcp_emit import normalize_mcp_server_defaults
-
-        return [normalize_mcp_server_defaults(s) for s in servers if isinstance(s, dict)]
-    return []
-
-
 _INVARIANT_CORE_SPAN_RE = re.compile(
     r"<!--\s*AGENTTEAMS:BEGIN\s+invariant_core\s+v=\d+\s*-->.*?<!--\s*AGENTTEAMS:END\s+invariant_core\s*-->",
     re.DOTALL,
@@ -403,7 +322,7 @@ def _capture_skills(source_dir: Path, adapter: Any) -> list[dict[str, Any]]:
         return []
     skills: list[dict[str, Any]] = []
     seen: set[str] = set()
-    for root in (source_dir / "skills", source_dir.parent / "skills"):
+    for root in (source_dir / "skills", adapter.skills_dir(source_dir)):
         if not root.is_dir():
             continue
         for skill_md in sorted(root.rglob("SKILL.md")):
@@ -457,8 +376,27 @@ def import_from_cai(
     *,
     dry_run: bool = False,
     overwrite: bool = False,
+    preserve_existing: bool = False,
 ) -> InteropResult:
-    """Import a CAI document into a target framework directory."""
+    """Import a CAI document into a target framework directory.
+
+    Args:
+        cai: The CAI document to import.
+        target_framework: A registry framework id, or ``canonical``.
+        target_dir: The target agents directory.
+        dry_run: Report what would be written without writing.
+        overwrite: Replace existing agent files (otherwise they are skipped).
+        preserve_existing: Pinned-sync fidelity: an agent whose on-disk file already exports to
+            the canonical entry is left byte-for-byte untouched, and an existing instruction
+            file is fence-merged instead of replaced (``interop_helpers.agent_unchanged`` /
+            ``merge_instruction_file``).
+
+    Returns:
+        An :class:`InteropResult` listing converted, skipped and notice entries.
+
+    Raises:
+        ValueError: For an unknown target framework, or an MCP server failing re-validation.
+    """
     # F.5 guard (plan §5.6): same named exception as export_to_cai — the
     # canonical target dispatches to canonical.py (materialize) instead of a
     # registry adapter.
@@ -512,13 +450,30 @@ def import_from_cai(
     # cli/render_pipeline.py emits; `none` gets nothing (honestly degraded).
     delivery = adapter.handoff_delivery_mode()
     runtime_handoff_agents: list[dict[str, Any]] = []
+    native_agents: dict[str, dict[str, Any]] = {}
+    # Only frameworks whose export captures EVERY key (the Markdown front-matter path) may keep
+    # an unchanged file: a native parser (codex TOML, goose YAML) exports a subset, so a
+    # hand-added `sandbox_mode`/`approval_policy`/`model` would compare equal and survive (C-3).
+    lossless_export = type(adapter).parse_agent_source is _FrameworkAdapter.parse_agent_source
+    if preserve_existing and lossless_export and target_dir.is_dir():
+        native_agents = {a["slug"]: a for a in export_to_cai(target_dir, target_framework)["agents"]}
 
     for agent in cai.get("agents", []):
         slug = str(agent.get("slug", "")).strip()
         if not slug:
             continue
+        _require_safe_slug(slug)
         rel_name = slug + adapter.get_file_extension("agent")
         dest = target_dir / rel_name
+        if dest.exists() and preserve_existing and _agent_unchanged(agent, native_agents.get(slug)):
+            result.skipped.append(str(dest))
+            if delivery == "manifest" and agent.get("handoffs"):
+                # Still part of the team's routing: the sidecar is rewritten whole below.
+                runtime_handoff_agents.append({"agent": slug, "handoffs": [
+                    {"label": str(h.get("label") or ""), "agent": str(h.get("to", "")).strip(),
+                     "prompt": str(h.get("prompt", "") or ""), "send": bool(h.get("send", False))}
+                    for h in agent["handoffs"] if str(h.get("to", "")).strip()]})
+            continue
         if dest.exists() and not overwrite:
             result.skipped.append(str(dest))
             continue
@@ -573,12 +528,22 @@ def import_from_cai(
             else:
                 manifest.pop("recipe_extensions", None)
         cai_tools_line: str | None = None
-        if target_framework == "codex":
+        cai_raw_caps = (agent.get("capabilities") or {}).get("raw") or {}
+        copilot_raw = next((str(v) for k, v in cai_raw_caps.items()
+                            if k in ("copilot-vscode", "copilot-cli") and str(v).strip()), "")
+        if copilot_raw and _raw_scopes(copilot_raw) != cai_tool_scopes:
+            # A stale raw string must never widen a (narrowed) canonical grant: C-3.
+            copilot_raw = ""
+        if copilot_raw and target_framework in ("copilot-vscode", "copilot-cli"):
+            # Same vocabulary: keep the declared tools verbatim (bespoke `runCommands` etc.).
+            cai_tools_line = f"tools: {copilot_raw}"
+        elif target_framework == "codex":
             # codex states the declared tools as a self-imposed limit, so it takes the
             # source's tools VERBATIM (capabilities.raw) — a bespoke tool outside the
             # canonical vocabulary (e.g. runCommands) is neither dropped nor widened.
-            cai_raw_caps = (agent.get("capabilities") or {}).get("raw") or {}
             raw_tools = next((str(v) for v in cai_raw_caps.values() if str(v).strip()), "")
+            if raw_tools and _raw_scopes(raw_tools) != cai_tool_scopes:
+                raw_tools = ""  # same C-3 rule as above: canonical scopes win over stale raw
             if raw_tools:
                 cai_tools_line = f"tools: {raw_tools}"
             elif cai_tool_scopes:
@@ -664,6 +629,20 @@ def import_from_cai(
         if not _kept:
             result.skipped.append(str(inst_dest))
             result.notices.extend(_guard_notices)
+        elif inst_dest.exists() and preserve_existing:
+            merged, notice = _merge_instruction_file(
+                adapter.render_instructions_file(instructions_content, manifest)
+                if target_framework == "codex" else instructions_content,
+                inst_dest.read_text(encoding="utf-8"),
+            )
+            if notice:
+                result.notices.append(f"{inst_dest}: {notice}")
+            if merged is None:
+                result.skipped.append(str(inst_dest))
+            else:
+                if not dry_run:
+                    inst_dest.write_text(merged, encoding="utf-8")
+                result.converted.append(str(inst_dest))
         elif inst_dest.exists() and not overwrite:
             result.skipped.append(str(inst_dest))
         else:
@@ -691,7 +670,8 @@ def import_from_cai(
     if cai_skills and adapter.has_skill_concept():
         for skill in cai_skills:
             slug = str(skill["slug"]).strip()
-            skill_dir = target_dir.parent / "skills" / slug
+            _require_safe_slug(slug)
+            skill_dir = adapter.skills_dir(target_dir) / slug
             dest = skill_dir / "SKILL.md"
             if dest.exists() and not overwrite:
                 result.skipped.append(str(dest))
@@ -942,6 +922,12 @@ def _frontmatter_value(content: str, key: str) -> str:
 # A.3/A.4 helpers extracted to interop_helpers.py (CH-07 module-size compliance)
 from agentteams.frameworks.codex import strip_codex_notice as _strip_codex_notice
 from agentteams.interop_helpers import (
+    agent_unchanged as _agent_unchanged,
+    detect_framework,
+    raw_scopes as _raw_scopes,
+    require_safe_slug as _require_safe_slug,
+    capture_mcp_servers as _capture_mcp_servers,
+    merge_instruction_file as _merge_instruction_file,
     capture_escape_hatches as _capture_escape_hatches,
     capture_references as _capture_references,
     serialize_raw_fm_key as _serialize_raw_fm_key,

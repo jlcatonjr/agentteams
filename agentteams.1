@@ -319,7 +319,7 @@ Dotted import path of the probe module (e.g. tests.constitutional_redteam_batter
 Where to write findings.json, discoveries.md, remediation.plan.md and selfaudit.md. Defaults to the gitignored tmp/redteam/YYYY\-MM\-DD under \-\-project (else CWD).
 .TP
 .B \-\-redteam\-freshness\-check
-OPERATOR COMMAND, not part of the standing audit or any cycle phase: search for newly disclosed AI\-adversary techniques (via the optional `agentteams[research]` extra) and write candidate strings for human triage to references/redteam\-freshness\-candidates.md. Never writes to the probe corpus or the registry — measures and reports only. Requires `pip install agentteams[research]`; without it, exits 2 with a clear message. Honours \-\-dry\-run.
+OPERATOR COMMAND, not part of the standing audit or any cycle phase: search for newly disclosed AI\-adversary techniques (via the optional `agentteams[research]` extra) and write candidate strings for human triage to references/redteam\-freshness\-candidates.md. Never writes to the probe corpus or the registry — measures and reports only. Requires `pip install "agentteams[research] @ git+https://github.com/jlcatonjr/agentteams.git"` (never from PyPI); without it, exits 2 with a clear message. Honours \-\-dry\-run.
 .TP
 .B \-\-accept\-probe\-baseline
 Re\-record references/redteam\-probe\-baseline.json from a fresh probe run, then exit. OPERATOR COMMAND: the daily audit never does this. A probe can start passing because the control got better or because the probe got blinder, and only a reviewed diff tells those apart — so accepting a changed outcome costs one. Refused under \-\-dry\-run.
@@ -370,7 +370,7 @@ Directory for the fleet report (default: <DIR>/.agentteams\-fleet/<run\-id>/).
 Allow snapshot commits to bypass pre\-commit hooks (\-\-no\-verify / core.hooksPath=/dev/null). Off by default — hooks run normally and a warning is printed if a hook blocks the snapshot. Use this flag only when workspace hooks are known\-safe to skip (e.g., a commit\-signing hook that would reject the ephemeral internal snapshot commit).
 .TP
 .B \-\-sync\-init
-Bootstrap pinned multi\-framework sync: seed the canonical hub from the \-\-pin framework, project it to every framework in the sync set, and record per\-framework baselines. Writes .agentteams/pin.json.
+Bootstrap pinned multi\-framework sync: seed the canonical hub from the \-\-pin framework, project it to every framework in the sync set, and record per\-framework baselines. Writes .agentteams/pin.json. The project root is \-\-project (default: CWD); \-\-output is refused.
 .TP
 .B \-\-pin FRAMEWORK
 The bootstrap\-pin framework for \-\-sync\-init. Seeds canonical and wins every conflict thereafter (each conflict is logged for review).

@@ -42,7 +42,7 @@ import re
 from pathlib import Path
 from typing import Any
 
-from .base import FrameworkAdapter
+from .base import FrameworkAdapter, inject_skill_front_matter, skill_description
 from ._sandbox_emit import (  # re-exported so existing importers keep resolving these from claude
     _DEFAULT_PROTECTED_READ_PATHS,
     _READ_EXCLUSION_ABSPATH_COMMENT_LINES,
@@ -168,10 +168,7 @@ class ClaudeAdapter(FrameworkAdapter):
         name — not the ``name:`` key — is the invocable command name.
         See https://code.claude.com/docs/en/skills.md.
         """
-        content = self._strip_yaml_front_matter(content)
-        content = self._strip_handoffs_section(content)
-        description = _skill_description(slug, manifest)
-        return _inject_skill_front_matter(content, slug, description).strip() + "\n"
+        return self._render_markdown_skill(content, slug, manifest)
 
     def has_skill_concept(self) -> bool:
         return True
@@ -557,31 +554,8 @@ def _inject_claude_front_matter(
     return "\n".join(lines) + content
 
 
-def _skill_description(slug: str, manifest: dict[str, Any]) -> str:
-    """Build a one-line skill description from the tool-doc spec, if present."""
-    tool_name = ""
-    for ta in manifest.get("tool_agents", []):
-        if ta.get("slug") == slug:
-            tool_name = ta.get("tool_name", "")
-            break
-    label = tool_name or FrameworkAdapter._slug_to_name(slug)
-    project = manifest.get("project_name", "")
-    suffix = f" in {project}" if project else ""
-    return (
-        f"{label} operational reference{suffix} — configuration, API surface, "
-        f"invocation, and verification. Consult when working with {label}."
-    )
-
-
-def _inject_skill_front_matter(content: str, slug: str, description: str) -> str:
-    """Prepend a Claude Code skill front matter block (name + description)."""
-    lines = ["---", f"name: {slug}"]
-    if description:
-        # Escape embedded double quotes so the YAML scalar stays well-formed.
-        safe = description.replace('"', '\\"')
-        lines.append(f'description: "{safe}"')
-    lines.append("---")
-    lines.append("")
-    return "\n".join(lines) + content
+# Promoted to base.py (2026-09-29) so codex can share them; aliases keep old importers working.
+_skill_description = skill_description
+_inject_skill_front_matter = inject_skill_front_matter
 
 

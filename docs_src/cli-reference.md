@@ -660,7 +660,7 @@ Search for newly disclosed AI-adversary techniques and write candidate strings �
 triage only** — to `references/redteam-freshness-candidates.md`.
 
 **Operator command, not part of the standing audit or any cycle phase.** Requires
-`pip install agentteams[research]`; without it, exits `2` with a clear message. Uses
+`pip install "agentteams[research] @ git+https://github.com/jlcatonjr/agentteams.git"` (never from PyPI); without it, exits `2` with a clear message. Uses
 `agentteams.research.search` (a small, fixed, declared query set — never open-ended) but not
 `agentteams.research.verify`'s automated corroboration, which needs a caller-supplied LLM chat
 function this command has no plumbing for. Results are raw search output, never claimed as
@@ -1043,6 +1043,8 @@ is **always** decided in favor of the bootstrap pin (and logged to
 `.agentteams/sync-conflicts.log.csv` for after-the-fact review). Change detection is
 commit-to-commit. See [`multi_sync`](api-reference/multi-sync.md) and
 [`sync_pin`](api-reference/sync-pin.md).
+
+The sync commands take the project root from `--project <dir>` (default: the current directory), and refuse `--output` with exit 2. A silently ignored `--output` once projected onto the wrong repository.
 
 ### `--sync-init`
 

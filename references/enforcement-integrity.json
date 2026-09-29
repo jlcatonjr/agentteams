@@ -9,7 +9,7 @@
     "agentteams/cli/grants.py": "98736df0c9cd4c19dfbfa397eb09084c66e55f2adc66a3d7fc4ce78551808869",
     "agentteams/cli/management_directives.py": "1caf147f1826d969007a88cdb5636cdc94596ee92f41be5a5e1d6af711534a3e",
     "agentteams/cli/security_gate.py": "5adcec4ecec679ddb4761fc30173b72c0628fa72a0caa23c352c021ea4c864f5",
-    "agentteams/cli/signed_ledger.py": "1e848f43df2588cd647d02c9056ceab0a639e402b48eb499c4fda9318a4ace3d",
+    "agentteams/cli/signed_ledger.py": "1175d82ee98734a040bab8c16fac58cac087f21c2238b215ee7d6e87d763ab7c",
     "agentteams/fences.py": "84b7c45b42d61fd65879642b16319d664818d29d38b5fb054d1e1c1f2706312a",
     "agentteams/frameworks/_linux_sandbox_emit.py": "8e0ee80a14f16dc69840a605cd3f3917c90b5983aa001a34980feb9c048f1d7b",
     "agentteams/frameworks/_sandbox_emit.py": "d769704e6cd07035374982441a9d177c45c3639edf7fbf999ac3ab72c446c9ae",
