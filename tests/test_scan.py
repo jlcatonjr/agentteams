@@ -3,6 +3,7 @@ Tests for src/scan.py — security scanner for generated agent files.
 """
 
 import json
+import os
 import subprocess
 import sys
 
@@ -545,3 +546,106 @@ def test_main_reads_stdin_with_dash_path():
     out = json.loads(result.stdout)
     assert out["verdict"] == "HALT"
 
+
+# ---------------------------------------------------------------------------
+# python -m agentteams.scan <dir> — directory mode (baseAgent report, 2026-09-29:
+# a directory argument raised IsADirectoryError)
+# ---------------------------------------------------------------------------
+
+def test_main_scans_a_directory_tree_and_aggregates(tmp_path, capsys):
+    (tmp_path / "clean.md").write_text("hello world\n")
+    sub = tmp_path / ".codex" / "agents"
+    sub.mkdir(parents=True)
+    (sub / "bad.toml").write_text('password = "hunter2222"\n')
+    rc = scan_main([str(tmp_path)])
+    out = json.loads(capsys.readouterr().out)
+    assert rc == 1
+    assert out["verdict"] == "HALT"
+    assert out["files_scanned"] == 2
+    assert out["skipped"] == []
+    assert any(f["file"].endswith("bad.toml") for f in out["findings"])
+
+
+def test_main_directory_mode_does_not_skip_backup_named_dirs(tmp_path, capsys):
+    """No name-based blind spot (probe B10): a `.agentteams-backups` dir is still scanned."""
+    hidden = tmp_path / ".agentteams-backups" / "x"
+    hidden.mkdir(parents=True)
+    (hidden / "payload.md").write_text('password: "hunter2222"\n')
+    assert scan_main([str(tmp_path)]) == 1
+    assert json.loads(capsys.readouterr().out)["files_scanned"] == 1
+
+
+def test_main_directory_mode_reports_what_it_skips(tmp_path, capsys):
+    """@security 2026-09-29: every skip is listed AND raises a medium finding (so it can never
+    read as PASS); symlinks (file or directory) are never followed."""
+    root = tmp_path / "root"
+    root.mkdir()
+    outside = tmp_path / "outside"
+    outside.mkdir()
+    (outside / "secret.md").write_text('password: "hunter2222"\n')
+    (root / "link.md").symlink_to(outside / "secret.md")
+    (root / "linkdir").symlink_to(outside, target_is_directory=True)
+    rc = scan_main([str(root)])
+    out = json.loads(capsys.readouterr().out)
+    reasons = {Path(s["file"]).name: s["reason"] for s in out["skipped"]}
+    assert set(reasons) == {"link.md", "linkdir"}
+    assert reasons["linkdir"] == "symlinked directory (not followed)"
+    assert out["files_scanned"] == 0
+    evasion = [f for f in out["findings"] if f["category"] == "scanner-evasion"]
+    assert len(evasion) == 2 and all(f["severity"] == "medium" for f in evasion)
+    assert out["verdict"] != "PASS"
+    assert not any("hunter2222" in f["snippet"] for f in out["findings"])  # never followed
+    assert rc == 0  # medium is non-blocking
+
+
+def test_main_directory_mode_scans_non_utf8_lossily(tmp_path, capsys):
+    (tmp_path / "almost.md").write_bytes(b'\xff password: "hunter2222"\n')
+    assert scan_main([str(tmp_path)]) == 1
+    assert json.loads(capsys.readouterr().out)["files_scanned"] == 1
+
+
+def test_main_directory_mode_root_git_prunes_objects_but_scans_hooks_and_config(tmp_path, capsys):
+    git = tmp_path / ".git"
+    (git / "objects").mkdir(parents=True)
+    (git / "objects" / "blob.md").write_text('password: "hunter2222"\n')
+    (git / "hooks").mkdir()
+    (git / "hooks" / "pre-commit").write_text("#!/bin/sh\n")
+    (git / "config").write_text("[core]\n")
+    rc = scan_main([str(tmp_path)])
+    out = json.loads(capsys.readouterr().out)
+    assert out["files_scanned"] == 2  # config + hooks/pre-commit, not objects/
+    assert any(s["file"].endswith(".git") for s in out["skipped"])
+    assert rc == 0
+
+
+@pytest.mark.skipif(not hasattr(os, "mkfifo"), reason="needs FIFOs")
+def test_main_directory_mode_refuses_a_fifo_without_blocking(tmp_path, capsys):
+    os.mkfifo(tmp_path / "pipe.md")
+    assert scan_main([str(tmp_path)]) == 0
+    out = json.loads(capsys.readouterr().out)
+    assert out["skipped"] == [{"file": str(tmp_path / "pipe.md"), "reason": "not a regular file"}]
+
+
+def test_main_directory_mode_scans_nested_git_named_dirs(tmp_path, capsys):
+    """Only the ROOT's own .git is pruned; a `.git` below it is not a blind spot."""
+    nested = tmp_path / "sub" / ".git"
+    nested.mkdir(parents=True)
+    (nested / "hooks.md").write_text('password: "hunter2222"\n')
+    assert scan_main([str(tmp_path)]) == 1
+    assert json.loads(capsys.readouterr().out)["files_scanned"] == 1
+
+
+def test_main_missing_path_is_a_usage_error(tmp_path):
+    with pytest.raises(SystemExit) as exc:
+        scan_main([str(tmp_path / "nope")])
+    assert exc.value.code == 2
+
+
+def test_main_directory_via_subprocess(tmp_path):
+    (tmp_path / "a.md").write_text("hello\n")
+    result = subprocess.run(
+        [sys.executable, "-m", "agentteams.scan", str(tmp_path)],
+        capture_output=True, text=True, cwd=Path(__file__).parent.parent,
+    )
+    assert result.returncode == 0, result.stderr
+    assert json.loads(result.stdout)["files_scanned"] == 1

@@ -6,6 +6,24 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### fixed (`python -m agentteams.scan <dir>` accepts a directory)
+
+- **A directory argument no longer crashes with `IsADirectoryError`.** baseAgent hit this
+  while scanning its 39 generated `.codex/agents/*.toml` files. The CLI now walks the tree
+  and scans every regular file with the same `scan_content` call as single-file mode. The
+  findings are combined into one verdict, and the exit code is 1 iff that verdict is HALT.
+  - The output adds `files_scanned` and `skipped` in directory mode.
+  - Nothing is skipped by name: a `.agentteams-backups` directory, or a `.git` below the root,
+    is still scanned (probe B10). Only the root's `.git` object store is pruned; its `config`
+    and `hooks/` are scanned.
+  - Files are opened with `O_NOFOLLOW | O_NONBLOCK`, and `fstat` must show a regular file.
+    Symlinks are never followed, and FIFOs and devices are refused instead of blocking.
+  - Non-UTF-8 bytes are decoded lossily and still scanned.
+  - Every skip is listed under `skipped` and raises a medium `scanner-evasion` finding, so
+    content hidden in skipped entries can never read as PASS (@security, 2026-09-29).
+  - A path that does not exist is now a usage error (exit 2) instead of a traceback.
+  - File and stdin modes are unchanged.
+
 ### changed (Codex: custom agents emitted as `.codex/agents/<name>.toml`)
 
 - **`--framework codex` now emits Codex custom agents**, one TOML file per agent under

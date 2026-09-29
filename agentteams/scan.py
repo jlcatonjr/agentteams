@@ -19,7 +19,9 @@ from __future__ import annotations
 
 import argparse
 import json
+import os
 import re
+import stat
 import sys
 import unicodedata
 from collections.abc import Iterable
@@ -860,24 +862,100 @@ def _token_entropy(token: str) -> float:
     return entropy
 
 
+def _scan_tree(root: Path) -> tuple[list[ScanFinding], int, list[dict[str, str]]]:
+    """Scan every regular file under *root* with :func:`scan_content` (CLI directory mode).
+
+    Strict by design (@security 2026-09-29): nothing is skipped by NAME (probe B10, see
+    :func:`scan_directory`). Only the root's object store in ``.git`` is pruned, and even there
+    ``hooks/`` and ``config`` are scanned. Files are opened ``O_NOFOLLOW | O_NONBLOCK`` and must
+    ``fstat`` as regular, so a symlink swapped in after listing, a FIFO or a device is refused
+    rather than followed or blocked on. Non-UTF-8 bytes are decoded lossily and still scanned.
+    Every skip is listed AND raises a medium ``scanner-evasion`` finding, so content hidden in
+    skipped entries can never leave the verdict at PASS.
+
+    Args:
+        root: Directory to scan.
+
+    Returns:
+        ``(findings, files_scanned, skipped)``; each skipped entry is ``{"file", "reason"}``.
+    """
+    findings: list[ScanFinding] = []
+    skipped: list[dict[str, str]] = []
+    scanned = 0
+    flags = os.O_RDONLY | getattr(os, "O_NOFOLLOW", 0) | getattr(os, "O_NONBLOCK", 0)
+    for dirpath, dirnames, filenames in os.walk(root, followlinks=False):
+        here = Path(dirpath)
+        names = list(filenames)
+        if here == root and ".git" in dirnames:
+            dirnames.remove(".git")
+            skipped.append({"file": str(root / ".git"), "reason": "object store pruned (hooks/, config scanned)"})
+        skipped += [{"file": str(here / d), "reason": "symlinked directory (not followed)"}
+                    for d in sorted(dirnames) if (here / d).is_symlink()]
+        dirnames.sort()
+        git = root / ".git"
+        if here == root and git.is_dir() and not git.is_symlink():
+            names += [os.path.join(".git", "config")] if (git / "config").exists() else []
+            hooks = git / "hooks"
+            if hooks.is_dir() and not hooks.is_symlink():
+                names += [os.path.join(".git", "hooks", h) for h in sorted(os.listdir(hooks))]
+        for name in sorted(names):
+            path = here / name
+            try:
+                fd = os.open(path, flags)
+            except OSError as exc:  # ELOOP: a symlink (O_NOFOLLOW); or removed since listing
+                skipped.append({"file": str(path), "reason": f"not opened ({exc.strerror})"})
+                continue
+            with os.fdopen(fd, "rb") as fh:
+                if not stat.S_ISREG(os.fstat(fh.fileno()).st_mode):
+                    skipped.append({"file": str(path), "reason": "not a regular file"})
+                    continue
+                content = fh.read().decode("utf-8", errors="replace")
+            findings.extend(scan_content(content, filename=str(path)))
+            scanned += 1
+    findings += [ScanFinding(file=s["file"], line=1, category="scanner-evasion", severity="medium",
+                             message=f"not scanned: {s['reason']}", snippet="") for s in skipped]
+    return findings, scanned, skipped
+
+
 def main(argv: list[str] | None = None) -> int:
-    """``python -m agentteams.scan <path>`` — scan a file's current content, or ``-`` for stdin.
+    """``python -m agentteams.scan <path>`` — scan a file, a directory tree, or ``-`` for stdin.
 
     Exists for a runtime with shell/``execute`` access but no way to natively ``import`` and
     call ``scan_content`` directly — mirrors ``agentteams.research``'s ``__main__`` rationale.
-    Prints JSON: ``{"findings": [...], "verdict": "HALT"|"CONDITIONAL_PASS"|"PASS"}``.
-    Exit code 1 iff verdict is HALT (mirrors --scan-security's high_count gate), else 0.
+    Prints JSON: ``{"findings": [...], "verdict": "HALT"|"CONDITIONAL_PASS"|"PASS"}``; a
+    directory adds ``files_scanned`` and ``skipped`` (see :func:`_scan_tree`).
+    Exit code 1 iff verdict is HALT (mirrors --scan-security's high_count gate), else 0; a
+    path that does not exist is a usage error (exit 2).
+
+    Args:
+        argv: Command-line arguments (defaults to ``sys.argv[1:]``).
+
+    Returns:
+        The process exit code.
+
+    Raises:
+        SystemExit: Exit code 2 (via ``parser.error``) when *path* is neither a file nor a
+            directory.
     """
     parser = argparse.ArgumentParser(prog="python -m agentteams.scan")
-    parser.add_argument("path", help="File to scan, or '-' to read stdin")
+    parser.add_argument("path", help="File or directory to scan, or '-' to read stdin")
     args = parser.parse_args(argv)
 
-    content = sys.stdin.read() if args.path == "-" else Path(args.path).read_text(encoding="utf-8")
-    filename = "<stdin>" if args.path == "-" else args.path
-    findings = scan_content(content, filename=filename)
+    extra: dict[str, object] = {}
+    if args.path == "-":
+        findings = scan_content(sys.stdin.read(), filename="<stdin>")
+    else:
+        target = Path(args.path)
+        if target.is_dir():
+            findings, scanned, skipped = _scan_tree(target)
+            extra = {"files_scanned": scanned, "skipped": skipped}
+        elif target.is_file():
+            findings = scan_content(target.read_text(encoding="utf-8"), filename=args.path)
+        else:
+            parser.error(f"{args.path!r} is not a file or directory")
     verdict = verdict_for_findings(findings)
     json.dump(
-        {"findings": [f.__dict__ for f in findings], "verdict": verdict},
+        {"findings": [f.__dict__ for f in findings], "verdict": verdict, **extra},
         sys.stdout, indent=2,
     )
     sys.stdout.write("\n")
