@@ -1059,17 +1059,17 @@ def _run_agent_conformance_check(args: Any) -> int:
     code (Constitutional C-4); it records only a small best-effort local ledger and degrades safely
     (no crash) when the module tree is read-only. See ``references/provider-adapter-refresh.procedure.md`` §7.
     """
-    from agentteams import framework_research as _fr
+    from agentteams import framework_conformance as _fc
 
-    repo_root = Path(_fr.__file__).resolve().parents[1]
+    repo_root = Path(_fc.__file__).resolve().parents[1]
     kwargs: dict[str, Any] = {}
     window = getattr(args, "agent_check_window_hours", None)
     if window is not None:
         kwargs["window_hours"] = window
     if getattr(args, "agent_check_force", False):
         kwargs["window_hours"] = 0.0
-    result = _fr.run_agent_conformance_check(repo_root, **kwargs)
-    print(_fr.render_agent_check_report(result))
+    result = _fc.run_agent_conformance_check(repo_root, **kwargs)
+    print(_fc.render_agent_check_report(result))
     return 0
 
 

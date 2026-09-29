@@ -61,6 +61,7 @@ from agentteams.cli.generate_helpers import (  # noqa: F401
     _update_target_is_bridge,
     _BRIDGE_FENCE_BEGIN_RE,
     _handle_check,
+    _framework_conformance_enabled,
 )
 
 # Re-exported for cli.app and existing tests that resolve it here (carved to cli/exit_codes.py).
@@ -68,20 +69,6 @@ __all__ = ["_finalize_exit_code", "run_generate"]
 
 _SCRIPT_DIR = Path(__file__).resolve().parents[2]
 TEMPLATES_DIR = _SCRIPT_DIR / "agentteams" / "templates"
-
-
-def _framework_conformance_enabled(manifest: dict) -> bool:
-    """Decide whether to emit the framework-watch ≤24h standard-conformance-check section.
-
-    An explicit brief field ``framework_conformance_check`` (carried into the manifest as a bool)
-    overrides in either direction. When absent, default **on** for teams that maintain framework
-    adapters — a component with slug ``framework-adapters`` (the ``@framework-adapters-expert`` role)
-    — and off otherwise, since only adapter-bearing teams have anything to keep conformant.
-    """
-    explicit = manifest.get("framework_conformance_check")
-    if isinstance(explicit, bool):
-        return explicit
-    return any(c.get("slug") == "framework-adapters" for c in manifest.get("components", []))
 
 
 def run_generate(
