@@ -27,8 +27,8 @@ FRAMEWORKS: dict[str, type[FrameworkAdapter]] = {
     "claude": ClaudeAdapter,
     "goose": GooseAdapter,
     "agents-md": AgentsMdAdapter,
-    # F.4: thin prep-scoped Codex target (AGENTS.md rendering delegated to
-    # agents_md; config.toml MCP emission is implemented separately — see
+    # Codex custom-agent TOML target (.codex/agents/<slug>.toml; AGENTS.md
+    # rendering shared with agents_md; config.toml MCP emission is separate — see
     # agentteams/codex_mcp_emit.py). The schema framework enums must carry
     # this id too — pinned by tests/test_framework_enum_consistency.py.
     "codex": CodexAdapter,

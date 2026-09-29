@@ -129,8 +129,8 @@ class FrameworkAdapter(ABC):
         (framework-neutral; deliberately NOT under ``.goose/`` — operator correction 2026-08-31).
         Because :meth:`extra_output_files` paths are relative to the agents output directory, the
         ``../`` depth depends on how deep the agents dir sits: the default here assumes a 2-deep
-        agents dir (``.claude/agents``, ``.github/agents``, ``.goose/recipes``). 1-deep adapters
-        (codex/agents-md, whose agents dir is ``.agents``) override this to ``../sandbox/…``.
+        agents dir (``.claude/agents``, ``.github/agents``, ``.goose/recipes``, ``.codex/agents``).
+        1-deep adapters (agents-md, whose agents dir is ``.agents``) override this to ``../sandbox/…``.
         """
         from agentteams.frameworks._linux_sandbox_emit import LINUX_SANDBOX_LAUNCHER_REL
 
@@ -228,6 +228,24 @@ class FrameworkAdapter(ABC):
         passed the project root and derive the agents dir from it.
         """
         return output
+
+    def guard_rendered_files(
+        self, rendered_files: list[tuple[str, str]], output_dir: Path
+    ) -> tuple[list[tuple[str, str]], list[str]]:
+        """Drop rendered files this framework must not write over existing content.
+
+        Called by the generate pipeline before ``emit_all``. The default keeps every file.
+        Adapters whose outputs share a path with other tools (codex: the repo-root
+        ``AGENTS.md``) override it to skip those paths with a notice.
+
+        Args:
+            rendered_files: ``(rel_path, content)`` pairs relative to *output_dir*.
+            output_dir: The agents output directory.
+
+        Returns:
+            ``(kept_files, notices)``.
+        """
+        return rendered_files, []
 
     def handoff_delivery_mode(self) -> str:
         """Return how this framework receives handoff semantics.

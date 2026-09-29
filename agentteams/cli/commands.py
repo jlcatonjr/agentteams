@@ -624,7 +624,12 @@ def _run_interop(
 
     detected = source_framework or detect_framework(source_dir)
     if output is not None:
-        target_dir = output
+        # codex: a project-root --output must not drop TOML agents into the root (and
+        # AGENTS.md two levels above it); normalize to <root>/.codex/agents.
+        target_dir = (
+            FRAMEWORKS["codex"]().normalize_output_path(output)
+            if target_framework == "codex" else output
+        )
     elif target_framework == "canonical":
         # G.1 (plan §5.5): canonical is not a registry adapter, so
         # get_agents_dir doesn't apply — default to the established
@@ -685,6 +690,12 @@ def _run_interop(
         + (f", skipped {len(result.skipped)}" if result.skipped else "")
         + "."
     )
+    for notice in result.notices:
+        print(f"  ⚠  {notice}")
+    if dry_run and result.converted:
+        print("  Files that would be written:")
+        for path in result.converted:
+            print(f"    {path}")
     if result.bundle_files:
         bundle_verb = "Would write" if dry_run else "Wrote"
         print(f"  {bundle_verb} {len(result.bundle_files)} interop bundle file(s).")

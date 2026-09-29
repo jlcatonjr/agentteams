@@ -670,8 +670,9 @@ class TestUnsyncablePin:
 
     def test_non_colliding_set_is_clean(self, tmp_path):
         # copilot-vscode (.github/agents), claude (.claude/agents), goose (.goose/recipes),
-        # agents-md (.agents) resolve to four distinct dirs — syncable, no finding.
-        self._write_pin(tmp_path, ["copilot-vscode", "claude", "goose", "agents-md"])
+        # agents-md (.agents), codex (.codex/agents — separate since 2026-09-29) resolve to
+        # five distinct dirs — syncable, no finding.
+        self._write_pin(tmp_path, ["copilot-vscode", "claude", "goose", "agents-md", "codex"])
         assert sd.detect_unsyncable_pin(tmp_path) == []
 
     def test_colliding_pair_is_tier1(self, tmp_path):
@@ -694,7 +695,7 @@ class TestUnsyncablePin:
 
     def test_wired_into_report(self, tmp_path):
         # The aggregated report includes the finding (detector is wired into the runner).
-        self._write_pin(tmp_path, ["agents-md", "codex"])
+        self._write_pin(tmp_path, ["copilot-vscode", "copilot-cli"])
         report = sd.scan_staleness(tmp_path, include_git=False)
         assert any(f.code == "PIN_UNSYNCABLE" for f in report.tier1)
         assert report.has_blocking

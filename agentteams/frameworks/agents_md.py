@@ -199,14 +199,19 @@ class AgentsMdAdapter(FrameworkAdapter):
 # Helpers
 # ---------------------------------------------------------------------------
 
-def _neutralize_instructions(content: str) -> str:
+def _neutralize_instructions(content: str, agents_dir: str | None = ".agents") -> str:
     """Remove Copilot-specific branding/paths from the instructions body so the
-    published AGENTS.md is framework-neutral. See render_instructions_file."""
+    published AGENTS.md is framework-neutral. See render_instructions_file.
+
+    *agents_dir* is what ``.github/agents`` paths become (codex: ``.codex/agents``);
+    ``None`` leaves them untouched (an interop import, whose references stay in the
+    source tree)."""
     content = _LEADING_MANIFEST_RE.sub("", content, count=1)
     content = content.replace("— Copilot Instructions", "— Agent Team")
     content = content.replace("all GitHub Copilot agents", "all AI coding agents")
     content = content.replace("GitHub Copilot agents", "AI coding agents")
-    content = content.replace(".github/agents", ".agents")
+    if agents_dir is not None:
+        content = content.replace(".github/agents", agents_dir)
     return content.strip()
 
 

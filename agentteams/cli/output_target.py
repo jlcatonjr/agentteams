@@ -163,3 +163,22 @@ def refuse_foreign_target(args: argparse.Namespace, output_dir: Path) -> str | N
     if message and not getattr(args, "allow_foreign_output", False):
         return message
     return None
+
+
+def apply_adapter_guard(
+    adapter: Any, rendered: list[tuple[str, str]], output_dir: Path
+) -> list[tuple[str, str]]:
+    """Drop rendered files the adapter must not write (e.g. a foreign AGENTS.md), printing why.
+
+    Args:
+        adapter: The target framework adapter.
+        rendered: ``(rel_path, content)`` pairs relative to *output_dir*.
+        output_dir: The agents output directory.
+
+    Returns:
+        The rendered files the adapter keeps.
+    """
+    kept, notices = adapter.guard_rendered_files(rendered, output_dir)
+    for notice in notices:
+        print(f"  ⚠  {notice}")
+    return kept

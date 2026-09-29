@@ -25,7 +25,7 @@ __all__ = [
     "BackupResult", "PruneResult", "DEFAULT_BACKUP_KEEP_LAST",
     "BACKUP_MANIFEST_NAME", "BACKUP_MANIFEST_SCHEMA_VERSION",
     "backup_output_dir", "restore_backup", "list_backups", "verify_backup",
-    "prune_backups",
+    "prune_backups", "inert_backup_name",
 ]
 
 
@@ -74,19 +74,48 @@ BACKUP_MANIFEST_SCHEMA_VERSION = "1.0"
 _EXTERNAL_BACKUP_PREFIX = "__external__"
 
 
+# Backups live INSIDE the agents dir, and Codex loads every `*.toml` under
+# `.codex/agents/` recursively (codex-rs agent-roles discovery.rs). A backed-up
+# `security.toml` would therefore load as a second `security` agent. Loadable
+# extensions are stored with this suffix and mapped back on restore.
+_INERT_BACKUP_SUFFIX = ".agentteams-bak"
+_LOADABLE_BACKUP_EXTENSIONS = (".toml",)
+
+
 def _backup_rel(src: Path, output_dir: Path) -> Path:
     """Return the in-backup relative path for *src* (handles out-of-tree files)."""
     try:
-        return src.relative_to(output_dir)
+        rel = src.relative_to(output_dir)
     except ValueError:
         try:
-            return Path(_EXTERNAL_BACKUP_PREFIX) / src.relative_to(output_dir.parent)
+            rel = Path(_EXTERNAL_BACKUP_PREFIX) / src.relative_to(output_dir.parent)
         except ValueError:
-            return Path(_EXTERNAL_BACKUP_PREFIX) / src.name
+            rel = Path(_EXTERNAL_BACKUP_PREFIX) / src.name
+    return rel.with_name(inert_backup_name(rel.name))
+
+
+def inert_backup_name(name: str) -> str:
+    """Return the in-backup file name for *name* (loadable extensions made inert).
+
+    Args:
+        name: A file name about to be copied into a backup directory.
+
+    Returns:
+        *name* with the inert suffix appended when Codex would otherwise load the copy.
+    """
+    return name + _INERT_BACKUP_SUFFIX if name.endswith(_LOADABLE_BACKUP_EXTENSIONS) else name
+
+
+def _restored_rel(rel: Path) -> Path:
+    """Undo :func:`_backup_rel`'s inert suffix on an in-backup relative path."""
+    if rel.name.endswith(_INERT_BACKUP_SUFFIX):
+        return rel.with_name(rel.name[: -len(_INERT_BACKUP_SUFFIX)])
+    return rel
 
 
 def _restore_dest(output_dir: Path, rel: Path) -> Path:
     """Map an in-backup relative path back to its on-disk destination."""
+    rel = _restored_rel(rel)
     if rel.parts and rel.parts[0] == _EXTERNAL_BACKUP_PREFIX:
         return output_dir.parent / Path(*rel.parts[1:])
     return output_dir / rel
@@ -476,6 +505,7 @@ def restore_backup(
     # Remove files that exist in output_dir but were absent from the backup
     if remove_extra:
         backup_root = output_dir / _BACKUP_DIR_NAME
+        restored_rels = {_restored_rel(r) for r in backup_rels}
         _skip_rel = Path("references") / "build-log.json"
         for candidate in list(output_dir.rglob("*")):
             if not candidate.is_file():
@@ -490,7 +520,7 @@ def restore_backup(
             # Preserve build-log.json — it records run history, not agent content
             if rel == _skip_rel:
                 continue
-            if rel not in backup_rels:
+            if rel not in restored_rels:
                 candidate.unlink()
 
     return count

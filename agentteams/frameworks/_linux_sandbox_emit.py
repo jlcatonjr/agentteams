@@ -48,7 +48,7 @@ from pathlib import Path
 from typing import Any
 
 #: Neutral repo-root-relative launcher path for a 2-deep agents dir (``.claude/agents``,
-#: ``.github/agents``, ``.goose/recipes``). 1-deep adapters (codex/agents-md, ``.agents``) pass
+#: ``.github/agents``, ``.goose/recipes``, ``.codex/agents``). 1-deep adapters (agents-md, ``.agents``) pass
 #: their own ``rel_path`` (``../sandbox/confine-run.sh``) via ``sandbox_launcher_rel_path``.
 LINUX_SANDBOX_LAUNCHER_REL = "../../sandbox/confine-run.sh"
 
@@ -131,7 +131,7 @@ def linux_sandbox_output_files(
     Args:
         manifest: The team manifest. ``privilege_profile`` and ``host_features`` gate emission.
         rel_path: Emit path relative to the framework's agents output directory. Defaults to the
-            2-deep repo-root path; 1-deep adapters (codex/agents-md) pass ``../sandbox/…``. The
+            2-deep repo-root path; 1-deep adapters (agents-md) pass ``../sandbox/…``. The
             target is always repo-root ``sandbox/confine-run.sh`` — deliberately NOT under
             ``.goose/`` (operator correction #2).
         platform: Override for the platform string (defaults to live ``sys.platform``); lets tests

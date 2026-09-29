@@ -104,7 +104,7 @@ Two additional first-class adapters extend this set:
 
 A thinner prep-scoped adapter also ships:
 
-- **`codex` Adapter** — Thin prep-scoped target for OpenAI Codex (registry framework `codex`); renders the team brief to the repo-root `AGENTS.md` and splices operator-specified MCP servers into `.codex/config.toml` (see [`codex_mcp_emit`](codex-mcp-emit.md)). **Generate-only** — a valid `--framework` target; not a convert/interop/bridge target (`codex` is absent from the `--bridge-source-framework` choice list, so it is rejected at argument-parse time). See [`frameworks`](frameworks.md).
+- **`codex` Adapter** — OpenAI Codex target (registry framework `codex`): emits each agent as a Codex custom agent `.codex/agents/<slug>.toml` (native generation and interop source/target), writes the repo-root `AGENTS.md` only when absent or Codex-generated, and splices operator-specified MCP servers into `.codex/config.toml` (see [`codex_mcp_emit`](codex-mcp-emit.md)). **Generate-only** — a valid `--framework` target; not a convert/interop/bridge target (`codex` is absent from the `--bridge-source-framework` choice list, so it is rejected at argument-parse time). See [`frameworks`](frameworks.md).
 
 ### CLI
 

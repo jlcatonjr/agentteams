@@ -64,10 +64,10 @@ _AGENTS_REL: dict[str, Path] = {
     "claude": Path(".claude/agents"),
     "goose": Path(".goose/recipes"),
     "agents-md": Path(".agents"),
-    "codex": Path(".agents"),
+    "codex": Path(".codex/agents"),
 }
 
-_AGENT_EXT: dict[str, str] = {"copilot-vscode": ".agent.md", "goose": ".yaml"}
+_AGENT_EXT: dict[str, str] = {"copilot-vscode": ".agent.md", "goose": ".yaml", "codex": ".toml"}
 
 
 def _agent_ext(framework: str) -> str:
@@ -96,7 +96,8 @@ _LOSSY_FIELDS: dict[str, set[str]] = {
     "copilot-cli": {"description", "capabilities", "handoffs"},
     "claude": {"handoffs"},
     "agents-md": {"description", "capabilities", "handoffs"},
-    "codex": {"description", "capabilities", "handoffs"},
+    # codex (2026-09-29): description, tools and handoffs now travel in the custom-agent
+    # TOML (description key + codex_translation block), so no field is lossy.
     # goose: documented coarse/best-effort tool-scope channel (capability_map.py's
     # own module docstring), not a wiring gap this session's D1 fix addresses.
     # Tool surface travels via the recipe extensions: list, coarser than the
@@ -275,7 +276,20 @@ def _assert_agents_equal(
                     f"  round-tripped: {rt_stripped!r}"
                 )
                 continue
-            if field == "body_markdown" and framework in ("agents-md", "codex"):
+            if field == "body_markdown" and framework == "codex":
+                # codex keeps the body as-is and adds a `# {name}` title only when the
+                # body has no H1 (the duplicate-H1 fix) — the one predictable transform.
+                name = str(orig_agent.get("name", "")).strip()
+                has_h1 = any(line.startswith("# ") for line in orig_value.split("\n"))
+                expected = orig_value if has_h1 else f"# {name}\n\n{orig_value}"
+                assert rt_value == expected, (
+                    f"{framework}/{slug}: body_markdown did not match the expected "
+                    f"title-H1 transform\n"
+                    f"  expected:      {expected!r}\n"
+                    f"  round-tripped: {rt_value!r}"
+                )
+                continue
+            if field == "body_markdown" and framework == "agents-md":
                 # No front matter to carry `description` separately, so
                 # agents_md.py::render_agent_file grafts it onto the body as a
                 # leading paragraph — a real, predictable, one-way transform,

@@ -152,9 +152,9 @@ def merge_sidecar_handoffs(agents: list[dict[str, Any]], source_dir: Path) -> No
     """Read ``references/runtime-handoffs.json`` and merge handoffs into agents.
 
     A.4 (report section 4.3): the sidecar is written by ``import_from_cai`` for
-    manifest-delivery frameworks (claude, copilot-cli, agents-md, codex) but
-    was never read back by ``export_to_cai``, so handoffs vanished on every
-    native→canonical round trip for those 4 frameworks.
+    manifest-delivery frameworks (claude, copilot-cli, agents-md; codex too until it
+    moved to native delivery on 2026-09-29) but was never read back by
+    ``export_to_cai``, so handoffs vanished on every native→canonical round trip.
 
     The sidecar sits at ``source_dir.parent / "references" / "runtime-handoffs.json"``
     and has the shape::

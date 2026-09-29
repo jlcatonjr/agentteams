@@ -137,8 +137,8 @@ def _validate_option_combinations(parser: argparse.ArgumentParser, args: argpars
     # source/target values (agent-cai.schema.json v2 enum). agents-md import
     # is best-effort by nature — its rendered output carries no front matter,
     # so capabilities/handoffs land inferred-or-empty (surfaced via
-    # compatibility-report.md). codex (F.4) is thin and delegates to the same
-    # agents-md rendering, so it shares this guard.
+    # compatibility-report.md). codex emits custom-agent TOML but shares the
+    # agents-md AGENTS.md rendering, so it shares this guard.
     if getattr(args, "framework", None) in ("agents-md", "codex"):
         for attr, flag in (
             ("convert_from", "--convert-from"),

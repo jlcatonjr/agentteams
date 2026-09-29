@@ -39,7 +39,7 @@ from agentteams.atomicio import _atomic_write_text
 from agentteams.emit import _FENCE_BEGIN_RE, _YAML_FM_RE
 
 DEFAULT_RETROFIT_FENCE_ID = "content"
-from agentteams.backup import BACKUP_DIR_NAME as _BACKUP_DIR_NAME
+from agentteams.backup import BACKUP_DIR_NAME as _BACKUP_DIR_NAME, inert_backup_name
 
 _SAFE_FENCE_ID_RE = re.compile(r"^[a-z][a-z0-9_]*$")
 
@@ -151,7 +151,7 @@ def inject_fence_markers(
     ts = datetime.now(timezone.utc).strftime("%Y%m%d-%H%M%S")
     backup_dir = p.parent / _BACKUP_DIR_NAME / ts
     backup_dir.mkdir(parents=True, exist_ok=True)
-    backup_target = backup_dir / p.name
+    backup_target = backup_dir / inert_backup_name(p.name)
     shutil.copy2(p, backup_target)
     # Atomic rewrite (temp-in-same-dir + os.replace), matching emit.py — a crash
     # mid-write must not truncate the live source file (backup above is the net).

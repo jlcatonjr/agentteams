@@ -375,7 +375,7 @@ flowchart TD
    (claude, codex, copilot-vscode/-cli, agents-md, goose) — no harness is preferred. Only `claude.py`
    and `goose.py` override `extra_output_files`, and both call `super()`; there is no double-emit.
 2. The neutral path resolves to repo-root `sandbox/confine-run.sh` via `sandbox_launcher_rel_path()`:
-   `../../` for 2-deep agents dirs (claude/copilot/goose), `../` for 1-deep (codex/agents-md).
+   `../../` for 2-deep agents dirs (claude/copilot/goose/codex), `../` for 1-deep (agents-md).
 **Source.** `agentteams/frameworks/base.py:139`; `agentteams/frameworks/codex.py`,
 `agentteams/frameworks/agents_md.py` (rel-path overrides); `agentteams/frameworks/claude.py`,
 `agentteams/frameworks/goose.py` (`super()`).

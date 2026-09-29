@@ -1,88 +1,600 @@
 """
-codex.py — THIN framework adapter for the OpenAI Codex CLI (plan F.4, prep-scoped).
+codex.py — Framework adapter for the OpenAI Codex CLI: custom agents as TOML.
 
-Agent files:  .agents/<slug>.md         (plain Markdown, per-specialist detail —
-              Codex has no user-authored persona-file format analogous to
-              .claude/agents/*.md or .github/agents/*.agent.md; AGENTS.md content
-              is the primary user-facing lever)
-Instructions: AGENTS.md (repo root) — Codex's real discovery order (X1,
-              verified 2026-08-15, references/codex-agent-infrastructure-expert.md):
-              global tier checks ~/.codex/AGENTS.override.md first, then
-              ~/.codex/AGENTS.md (first non-empty file only, not a merge of
-              both). Project tier walks from the git root DOWN toward the
-              working directory; at EACH level it checks, in order,
-              AGENTS.override.md -> AGENTS.md -> project_doc_fallback_filenames
-              (e.g. CLAUDE.md) — again first-match, not merged, at that level.
-              Files from different levels then merge root-downward, with a
-              closer (deeper) file's content overriding on conflict. The
-              combined result is capped at 32 KiB (project_doc_max_bytes) —
-              docs advise raising the limit or splitting content across
-              nested-directory files if a team's brief+roster grows past it.
-              The team file therefore belongs at the project root;
-              nested-directory AGENTS.md files are subdirectory-scoped refinements
-              that Codex layers on top when working below the root — operator
-              concerns the team pipeline does not emit (documented, not built).
-Format:       Plain Markdown — no YAML front matter (delegated to agents_md.py)
-Handoffs:     manifest sidecar (references/runtime-handoffs.json), same as agents-md
+Agent files:  .codex/agents/<slug>.toml  (Codex custom agents — one TOML file per agent)
+Instructions: AGENTS.md (repo root), written only when absent or already Codex-generated
+Format:       TOML: ``name``, ``description``, ``developer_instructions`` (+ ``sandbox_mode``
+              = "read-only" for read-only roles). No ``model``, provider or approval keys.
+Handoffs:     translated into a "Hand off to" section inside ``developer_instructions``
+              (``handoff_delivery_mode() == "native"``; parsed back by ``parse_agent_source``)
 
-Research verified via web search 2026-08-10 (plan §6), not assumed from training
-knowledge: MCP configuration lives in config.toml, project-scoped via
-.codex/config.toml in trusted projects. config.toml MCP emission is implemented —
-see agentteams/codex_mcp_emit.py (open-items remediation OPEN-6, 2026-08-10) — opt-in
-via the codex:mcp host-feature token. Nested-directory AGENTS.md placement support
-remains undone; this adapter's thinness leaves it a registered home.
+Verified upstream facts (2026-09-29; references/codex-agent-infrastructure-expert.md):
 
-Delegation: rendering reuses AgentsMdAdapter wholesale (both targets root
-AGENTS.md); only the framework id and the generated notice differ. Thin by
-design — plan §5.6 / §3 goal 4.
+* Docs twin ``learn.chatgpt.com/docs/agent-configuration/subagents.md``: project custom agents
+  live in ``.codex/agents/``; ``name``, ``description`` and ``developer_instructions`` are
+  required; "the ``name`` field is the source of truth" (the filename is only a convention);
+  settings a file omits — ``sandbox_mode`` included — inherit from the parent session.
+* openai/codex ``codex-rs/agent-roles/src/discovery.rs``: the agents dir is walked recursively
+  and only ``*.toml`` files load, so the Markdown reference docs a native generation writes
+  under ``.codex/agents/references/`` are ignored by Codex. No other ``.toml`` may live there.
+* ``codex-rs/agent-roles/src/agent_role_config.rs``: the file struct is
+  ``#[serde(deny_unknown_fields)]`` over ``ConfigToml`` — an unknown key makes the agent fail
+  to load, so this emitter writes known keys only and carries all translation data inside
+  ``developer_instructions``. ``name`` must be non-empty after trimming; no character set is
+  imposed on it (the ``[A-Za-z0-9 _-]`` rule applies to ``nickname_candidates`` only). The
+  hyphenated agentteams slug is therefore used verbatim as ``name``.
+  ``developer_instructions`` must not be blank.
+
+``sandbox_mode = "read-only"`` is emitted only for agents whose declared tools are all
+read-only (``read``/``search``). It is a DEFAULT, NOT A CEILING: Codex subagents inherit the
+parent's sandbox policy, and CLI permission overrides are re-applied to spawned children, so
+it cannot confine an agent more tightly than the session that spawns it allows. Tool grants
+are likewise not enforced by Codex; the declared list is stated as a self-imposed limit.
+
+The repo-root ``AGENTS.md`` is shared with ``--framework goose`` / ``agents-md`` / hand-written
+files, so this adapter never overwrites an existing one that it did not generate
+(:func:`agents_md_is_codex_owned`). It never emits ``AGENTS.override.md``.
 """
 
 from __future__ import annotations
 
+import json
+import re
+import tomllib
 from pathlib import Path
 from typing import Any
 
-from .agents_md import AgentsMdAdapter, _neutralize_instructions
+from agentteams import capability_map as _capability_map
+from agentteams.yaml_frontmatter import parse_yaml_front_matter as _parse_yaml_front_matter
 
-__all__ = ["CodexAdapter"]
+from .agents_md import AgentsMdAdapter, _extract_name_description, _neutralize_instructions
 
-# Codex-specific generated notice (HTML comment: invisible to Codex, documents
-# the relationship between the root team file and nested-directory walks).
+__all__ = [
+    "CodexAdapter",
+    "agents_md_is_codex_owned",
+    "strip_codex_notice",
+    "h1_count",
+    "is_read_only",
+    "render_codex_agent_toml",
+    "toml_multiline_string",
+]
+
+# Codex-specific generated notice (HTML comment: invisible to Codex). Its first line doubles
+# as the ownership marker agents_md_is_codex_owned() checks before replacing AGENTS.md.
+_CODEX_AGENTS_MD_MARKER = "<!-- AGENTS.md — generated by agentteams for OpenAI Codex."
 _CODEX_AGENTS_MD_NOTICE = (
-    "<!-- AGENTS.md — generated by agentteams for OpenAI Codex. Codex loads "
+    f"{_CODEX_AGENTS_MD_MARKER} Codex loads "
     "applicable AGENTS.md files as it walks toward the working directory: this "
     "project-root file is the team baseline; nested-directory AGENTS.md files "
-    "(if any) layer subdirectory-scoped refinements on top. Per-specialist "
-    "detail is under .agents/. MCP servers are configured separately in "
-    ".codex/config.toml — emitted by agentteams when the codex:mcp host-feature "
-    "token is enabled and the project declares mcp_servers[]; see "
-    "agentteams/codex_mcp_emit.py. -->"
+    "(if any) layer subdirectory-scoped refinements on top. The specialist agents "
+    "are Codex custom agents under .codex/agents/<name>.toml. MCP servers are "
+    "configured separately in .codex/config.toml — emitted by agentteams when the "
+    "codex:mcp host-feature token is enabled and the project declares mcp_servers[]; "
+    "see agentteams/codex_mcp_emit.py. -->"
 )
+
+_TOML_HEADER = (
+    "# Codex custom agent — generated by agentteams from the canonical team.\n"
+    "# Codex loads .codex/agents/**/*.toml; `name` below is authoritative over the file name.\n"
+    "# sandbox_mode (when present) is a default for this agent, not a ceiling: subagents\n"
+    "# inherit the parent session's sandbox, and CLI permission overrides are re-applied\n"
+    "# to spawned children. No model, provider or approval keys are emitted on purpose.\n"
+)
+
+#: Declared tools that leave the workspace untouched. An agent whose declared tools are a
+#: non-empty subset of these gets ``sandbox_mode = "read-only"``; anything else (including an
+#: unrecognised bespoke tool such as ``runCommands``, or no declaration at all) gets none.
+_READ_ONLY_TOOLS = frozenset({"read", "search"})
+
+# The translation block is an AGENTTEAMS fence so `--update --merge` refreshes it.
+_TRANSLATION_FENCE_ID = "codex_translation"
+_TRANSLATION_BLOCK_RE = re.compile(
+    rf"\n*<!--\s*AGENTTEAMS:BEGIN\s+{_TRANSLATION_FENCE_ID}\b.*?"
+    rf"<!--\s*AGENTTEAMS:END\s+{_TRANSLATION_FENCE_ID}\s*-->\n?",
+    re.DOTALL,
+)
+_DECLARED_TOOLS_PREFIX = "Declared tools: "
+_CANONICAL_NAME_PREFIX = "Canonical agent name: "
+_HANDOFF_LINE_PREFIX = "- Hand off to `"
+_JSON_STR = r'"(?:[^"\\]|\\.)*"'
+_HANDOFF_LINE_RE = re.compile(
+    rf"^{re.escape(_HANDOFF_LINE_PREFIX)}(?P<agent>[^`]+)` \((?P<label>{_JSON_STR})\): "
+    rf"prompt (?P<prompt>{_JSON_STR}); auto-send (?P<send>yes|no)\.$"
+)
+
+_TOOLS_SCALAR_RE = re.compile(r"^(?:tools|allowed-tools):[ \t]*(\S.*?)[ \t]*$", re.MULTILINE)
+_TOOLS_BLOCK_RE = re.compile(r"^(?:tools|allowed-tools):[ \t]*\n((?:[ \t]+-[^\n]*\n?)+)", re.MULTILINE)
+# Control characters a TOML literal string cannot hold (tab and LF are allowed).
+_TOML_LITERAL_FORBIDDEN_RE = re.compile(r"[\x00-\x08\x0b-\x1f\x7f]")
+_CODE_FENCE_RE = re.compile(r"^\s*(```|~~~)")
+
+
+# ---------------------------------------------------------------------------
+# TOML serialisation (stdlib has tomllib for reading only)
+# ---------------------------------------------------------------------------
+
+def _toml_escape(text: str, *, escape_all_quotes: bool) -> str:
+    """Escape *text* for a TOML basic string (single-line when *escape_all_quotes*)."""
+    out: list[str] = []
+    for ch in text:
+        if ch == "\\":
+            out.append("\\\\")
+        elif ch == '"' and escape_all_quotes:
+            out.append('\\"')
+        elif ch == "\n" and not escape_all_quotes:
+            out.append("\n")
+        elif ch == "\t":
+            out.append("\\t" if escape_all_quotes else "\t")
+        elif ord(ch) < 0x20 or ord(ch) == 0x7F:
+            out.append(f"\\u{ord(ch):04X}")
+        else:
+            out.append(ch)
+    return "".join(out)
+
+
+def _toml_basic_string(text: str) -> str:
+    """Serialise *text* as a single-line TOML basic string.
+
+    Args:
+        text: Any string (newlines and control characters are escaped).
+
+    Returns:
+        The quoted TOML value, e.g. ``"a \\"b\\""``.
+    """
+    return '"' + _toml_escape(text, escape_all_quotes=True) + '"'
+
+
+def toml_multiline_string(text: str) -> str:
+    """Serialise *text* as a TOML multi-line string that round-trips through ``tomllib``.
+
+    Prefers a literal string (``'''…'''``: no escaping, byte-for-byte readable) and falls
+    back to an escaped basic string (``\"\"\"…\"\"\"``) when the text contains ``'''`` or a
+    control character a literal string cannot hold. CRLF is normalised to LF and the value
+    always ends with a newline, so a trailing quote can never merge into the delimiter.
+
+    Args:
+        text: The string value.
+
+    Returns:
+        The TOML value, starting with its opening delimiter and a newline (TOML trims a
+        newline immediately after the opening delimiter, so it is not part of the value).
+    """
+    value = text.replace("\r\n", "\n")
+    if not value.endswith("\n"):
+        value += "\n"
+    if "'''" not in value and not _TOML_LITERAL_FORBIDDEN_RE.search(value):
+        return "'''\n" + value + "'''"
+    escaped = _toml_escape(value, escape_all_quotes=False).replace('"', '\\"')
+    return '"""\n' + escaped + '"""'
+
+
+def render_codex_agent_toml(
+    *,
+    name: str,
+    description: str,
+    developer_instructions: str,
+    read_only: bool,
+) -> str:
+    """Render one Codex custom-agent TOML document.
+
+    Args:
+        name: The Codex agent name (authoritative over the file name).
+        description: Human-facing guidance for when to use the agent.
+        developer_instructions: The agent's instructions (Markdown).
+        read_only: Emit ``sandbox_mode = "read-only"`` (a default, not a ceiling).
+
+    Returns:
+        TOML text that parses with ``tomllib``.
+
+    Raises:
+        ValueError: If *name* or *developer_instructions* is blank (Codex rejects both).
+    """
+    if not name.strip():
+        raise ValueError("Codex custom agent name must be non-empty")
+    if not developer_instructions.strip():
+        raise ValueError(f"Codex custom agent {name!r}: developer_instructions must not be blank")
+    lines = [
+        _TOML_HEADER,
+        f"name = {_toml_basic_string(name)}",
+        f"description = {_toml_basic_string(description)}",
+    ]
+    if read_only:
+        lines.append('sandbox_mode = "read-only"')
+    lines.append(f"developer_instructions = {toml_multiline_string(developer_instructions)}")
+    return "\n".join(lines) + "\n"
+
+
+# ---------------------------------------------------------------------------
+# Canonical-agent → developer_instructions translation
+# ---------------------------------------------------------------------------
+
+def _declared_tools(content: str) -> list[str] | None:
+    """Return the agent's declared tools VERBATIM (not narrowed to the canonical vocabulary).
+
+    Bespoke agents may declare tools outside the canonical 7-token vocabulary (e.g.
+    ``runCommands``); they are carried as written so the self-limit is neither narrowed nor
+    widened.
+
+    Args:
+        content: A canonical agent file (Markdown with YAML front matter).
+
+    Returns:
+        The declared tools in order, or ``None`` when no ``tools:`` key is present.
+    """
+    yaml_text, _ = _parse_yaml_front_matter(content)
+    if yaml_text is None:
+        return None
+    m = _capability_map._VSCODE_TOOLS_RE.search(yaml_text)
+    block = _TOOLS_BLOCK_RE.search(yaml_text)
+    if m:
+        items = m.group(1).split(",")
+    elif block:
+        items = [line.strip()[1:] for line in block.group(1).splitlines() if line.strip()]
+    else:
+        m = _TOOLS_SCALAR_RE.search(yaml_text)
+        if not m:
+            return None
+        items = m.group(1).split(",")
+    tools = [i.strip().strip("'\"") for i in items]
+    return list(dict.fromkeys(t for t in tools if t))
+
+
+def is_read_only(tools: list[str] | None) -> bool:
+    """True when *tools* is a non-empty set of read-only tools only.
+
+    Args:
+        tools: Declared tools, or ``None`` when undeclared.
+
+    Returns:
+        Whether ``sandbox_mode = "read-only"`` applies.
+    """
+    return bool(tools) and all(t.lower() in _READ_ONLY_TOOLS for t in tools or [])
+
+
+def _outside_code_fences(lines: list[str]) -> list[bool]:
+    flags: list[bool] = []
+    in_fence = False
+    for line in lines:
+        if _CODE_FENCE_RE.match(line):
+            flags.append(False)
+            in_fence = not in_fence
+            continue
+        flags.append(not in_fence)
+    return flags
+
+
+def h1_count(markdown: str) -> int:
+    """Count ATX H1 headings outside fenced code blocks.
+
+    Args:
+        markdown: Markdown text.
+
+    Returns:
+        The number of ``# `` heading lines not inside a code fence.
+    """
+    lines = markdown.split("\n")
+    return sum(
+        1 for line, outside in zip(lines, _outside_code_fences(lines))
+        if outside and line.startswith("# ")
+    )
+
+
+def _ensure_single_leading_h1(body: str, name: str) -> str:
+    """Give *body* exactly one title H1 without ever duplicating the body's own.
+
+    The body keeps its own H1 when it has one (the normal case for a canonical agent); a
+    ``# {name}`` title is prepended only when the body has none. This is the fix for the
+    interop duplicate-H1 defect, where a title was prepended unconditionally.
+    """
+    if h1_count(body) >= 1:
+        return body.strip()
+    return f"# {name}\n\n{body.strip()}".strip()
+
+
+def _translation_block(
+    display_name: str, tools: list[str] | None, handoffs: list[dict[str, Any]]
+) -> str:
+    parts = [
+        f"<!-- AGENTTEAMS:BEGIN {_TRANSLATION_FENCE_ID} v=1 -->",
+        "## Codex Runtime Notes",
+        "",
+        f"{_CANONICAL_NAME_PREFIX}{json.dumps(display_name, ensure_ascii=False)}",
+        "",
+        "### Tool limit (self-imposed)",
+        "",
+    ]
+    if tools:
+        parts.append(_DECLARED_TOOLS_PREFIX + ", ".join(f"`{t}`" for t in tools) + ".")
+        parts += [
+            "",
+            "Codex does not enforce these grants. Treat the list as a limit you impose on "
+            "yourself: do not use capabilities outside it, even when the session allows them.",
+        ]
+        if is_read_only(tools):
+            parts += [
+                "",
+                'This agent file sets `sandbox_mode = "read-only"`. That is a default, not a '
+                "ceiling: subagents inherit the parent session's sandbox, and CLI permission "
+                "overrides are re-applied to spawned children. Do not write files regardless.",
+            ]
+    else:
+        parts.append(
+            "The canonical definition declares no tool list. Codex does not enforce tool "
+            "grants; stay within what this role's instructions require."
+        )
+    parts += ["", "### Hand off to", ""]
+    if handoffs:
+        parts.append(
+            "When your part is done, hand off to the named Codex custom agent (spawn it, or "
+            "tell the user which agent to run next) with the prompt shown:"
+        )
+        parts.append("")
+        for h in handoffs:
+            parts.append(
+                f"{_HANDOFF_LINE_PREFIX}{h['agent']}` "
+                f"({json.dumps(str(h.get('label') or ''), ensure_ascii=False)}): "
+                f"prompt {json.dumps(str(h.get('prompt') or ''), ensure_ascii=False)}; "
+                f"auto-send {'yes' if h.get('send') else 'no'}."
+            )
+    else:
+        parts.append("This agent declares no handoffs; return results to the caller.")
+    parts.append(f"<!-- AGENTTEAMS:END {_TRANSLATION_FENCE_ID} -->")
+    return "\n".join(parts)
+
+
+def _parse_translation_block(block: str) -> tuple[str, list[str] | None, list[dict[str, Any]]]:
+    """Decode the declared tools and handoffs from a rendered ``codex_translation`` block.
+
+    Only lines in the exact generated shape are read; anything else in the block is prose.
+    A line in that shape whose JSON string is malformed raises (a hand-edit broke it — fail
+    loudly rather than silently dropping a handoff edge).
+    """
+    tools: list[str] | None = None
+    handoffs: list[dict[str, Any]] = []
+    display_name = ""
+    for line in block.split("\n"):
+        if line.startswith(_CANONICAL_NAME_PREFIX):
+            display_name = json.loads(line[len(_CANONICAL_NAME_PREFIX):])
+            continue
+        if line.startswith(_DECLARED_TOOLS_PREFIX):
+            tools = re.findall(r"`([^`]+)`", line)
+            continue
+        m = _HANDOFF_LINE_RE.match(line)
+        if m:
+            handoffs.append({
+                "label": json.loads(m.group("label")),
+                "agent": m.group("agent"),
+                "prompt": json.loads(m.group("prompt")),
+                "send": m.group("send") == "yes",
+            })
+    return display_name, tools, handoffs
+
+
+def strip_codex_notice(text: str) -> str:
+    """Remove a leading Codex AGENTS.md ownership notice from *text*.
+
+    Args:
+        text: Instructions content (possibly read from a Codex-generated AGENTS.md).
+
+    Returns:
+        The content without the notice (unchanged when there is none).
+    """
+    stripped = text.lstrip()
+    if stripped.startswith(_CODEX_AGENTS_MD_MARKER) and "-->" in stripped:
+        return stripped.split("-->", 1)[1].lstrip()
+    return text
+
+
+def agents_md_is_codex_owned(path: Path) -> bool:
+    """Whether the ``AGENTS.md`` at *path* may be (re)written by the Codex adapter.
+
+    True when the file is absent or carries the Codex generated notice. Any other existing
+    ``AGENTS.md`` — the Goose bridge entry, an agents-md target, a hand-written file — is
+    shared or project-owned and must be skipped with a notice, never overwritten.
+
+    Args:
+        path: The repo-root ``AGENTS.md`` path.
+
+    Returns:
+        Whether writing it is safe.
+    """
+    if path.is_symlink():
+        # A symlinked AGENTS.md (dangling or not) would redirect the write elsewhere.
+        return False
+    if not path.exists():
+        return True
+    try:
+        head = path.read_text(encoding="utf-8")[:512]
+    except (OSError, UnicodeDecodeError):
+        return False
+    return head.lstrip().startswith(_CODEX_AGENTS_MD_MARKER)
 
 
 class CodexAdapter(AgentsMdAdapter):
-    """Thin Codex target: agents-md AGENTS.md rendering under a codex identity."""
+    """Codex target: `.codex/agents/<slug>.toml` custom agents + a guarded root AGENTS.md."""
 
     @property
     def framework_id(self) -> str:
         return "codex"
 
-    def render_instructions_file(self, content: str, manifest: dict[str, Any]) -> str:
-        """Same framework-neutral AGENTS.md as agents-md, Codex-branded notice.
+    def render_agent_file(self, content: str, agent_slug: str, manifest: dict[str, Any]) -> str:
+        """Render a canonical agent as a Codex custom-agent TOML file.
 
-        The neutralization pass is identical (strip Copilot branding/paths,
-        keep AGENTTEAMS fence markers); only the generated notice differs so
-        the published file documents Codex's nested-directory walk.
+        Args:
+            content: The canonical agent (Markdown with YAML front matter).
+            agent_slug: The agent slug; becomes the TOML ``name``.
+            manifest: Render manifest; ``interop_source_framework`` marks an interop import.
+
+        Returns:
+            The custom-agent TOML text.
+
+        Front matter is translated, not copied: ``tools:`` becomes a self-imposed limit (and
+        ``sandbox_mode = "read-only"`` for read-only roles), ``handoffs:`` becomes a "Hand off
+        to" list. The body — AGENTTEAMS fences and USER-EDITABLE notes included — is carried
+        verbatim apart from the Copilot handoff-button section and a single title H1.
+        ``.github/agents`` paths are rewritten to ``.codex/agents`` only on native generation;
+        an interop import (``manifest["interop_source_framework"]`` set) leaves them pointing
+        at the live source tree, because interop does not copy references into ``.codex/``.
+
+        """
+        name, description = _extract_name_description(content, agent_slug, manifest)
+        tools = _declared_tools(content)
+        handoffs = self.extract_handoffs(content)
+        body = self._strip_yaml_front_matter(content)
+        body = self._strip_handoffs_section(body)
+        body = _TRANSLATION_BLOCK_RE.sub("\n", body)
+        if not manifest.get("interop_source_framework"):
+            body = body.replace(".github/agents", ".codex/agents")
+        body = _ensure_single_leading_h1(body, name)
+        instructions = body.rstrip() + "\n\n" + _translation_block(name, tools, handoffs) + "\n"
+        return render_codex_agent_toml(
+            name=agent_slug,
+            description=description or name,
+            developer_instructions=instructions,
+            read_only=is_read_only(tools),
+        )
+
+    def render_builder_file(self, content: str, manifest: dict[str, Any]) -> str:
+        """Emit the team-builder meta-agent as a Codex custom agent.
+
+        Args:
+            content: The rendered builder template.
+            manifest: Render manifest.
+
+        Returns:
+            The ``team-builder`` custom-agent TOML text.
+        """
+        return self.render_agent_file(content, "team-builder", manifest)
+
+    def parse_agent_source(self, content: str) -> dict[str, Any]:
+        """Parse a Codex custom-agent TOML file into CAI export fields.
+
+        The translation block is lifted back out of the body and decoded into
+        ``capabilities`` and ``handoffs``, so a canonical → codex → canonical round trip
+        keeps both.
+
+        Args:
+            content: The text of a ``.codex/agents/<name>.toml`` file.
+
+        Returns:
+            CAI export fields: name, description, body, capabilities, handoffs.
+
+        Raises:
+            ValueError: If the file is not valid TOML or lacks a string
+                ``developer_instructions`` (Codex itself would refuse to load it).
+        """
+        doc = tomllib.loads(content)  # TOMLDecodeError is a ValueError: fail loudly
+        instructions = doc.get("developer_instructions")
+        if not isinstance(instructions, str):
+            raise ValueError("Codex custom agent has no string `developer_instructions`")
+        block_match = _TRANSLATION_BLOCK_RE.search(instructions)
+        display_name = ""
+        tools: list[str] | None = None
+        handoffs: list[dict[str, Any]] = []
+        if block_match:
+            display_name, tools, handoffs = _parse_translation_block(block_match.group(0))
+        body = _TRANSLATION_BLOCK_RE.sub("\n", instructions).strip() + "\n"
+        canonical = [t for t in _capability_map.CANONICAL_TOOL_SCOPES if t in {x.lower() for x in tools or []}]
+        capabilities = _capability_map.capabilities_from_tokens(canonical or None, "codex")
+        if tools:
+            capabilities = dict(capabilities)
+            capabilities["raw"] = {"codex": "[" + ", ".join(f"'{t}'" for t in tools) + "]"}
+        return {
+            # The TOML `name` is the spawn identifier (the slug); the canonical display
+            # name travels in the translation block (hand-authored files lacking one fall
+            # back to the TOML name).
+            "name": display_name or str(doc.get("name") or ""),
+            "description": str(doc.get("description") or ""),
+            "body": body,
+            "capabilities": capabilities,
+            "handoffs": handoffs,
+        }
+
+    def render_instructions_file(self, content: str, manifest: dict[str, Any]) -> str:
+        """Same framework-neutral AGENTS.md as agents-md, Codex-branded ownership notice.
+
+        The notice's first line is the marker :func:`agents_md_is_codex_owned` checks, so a
+        later run may refresh this file but never an AGENTS.md someone else owns.
         """
         body = self._strip_yaml_front_matter(content)
-        body = _neutralize_instructions(body)
+        agents_dir = None if manifest.get("interop_source_framework") else ".codex/agents"
+        body = _neutralize_instructions(body, agents_dir)
+        body = strip_codex_notice(body)  # codex -> codex re-render: never stack a second notice
         return f"{_CODEX_AGENTS_MD_NOTICE}\n\n{body}".strip() + "\n"
 
+    def guard_rendered_files(
+        self, rendered_files: list[tuple[str, str]], output_dir: Path
+    ) -> tuple[list[tuple[str, str]], list[str]]:
+        """Skip the repo-root AGENTS.md when an existing one was not generated for Codex.
+
+        The name is tested on the UNRESOLVED path, and a symlinked AGENTS.md is always
+        refused, so a link cannot redirect the write to another file.
+
+        Args:
+            rendered_files: ``(rel_path, content)`` pairs relative to *output_dir*.
+            output_dir: The agents output directory.
+
+        Returns:
+            ``(kept_files, notices)``.
+        """
+        kept: list[tuple[str, str]] = []
+        notices: list[str] = []
+        legacy = output_dir.parent.parent / ".agents"
+        if output_dir.name == "agents" and output_dir.parent.name == ".codex" and any(legacy.glob("*.md")):
+            notices.append(
+                f"{legacy}: Markdown agent files from the pre-2026-09-29 codex adapter (Codex "
+                "never loaded them; custom agents now live in .codex/agents/). Move any "
+                "hand-written Project-Specific Notes across, then remove them — unless "
+                "--framework agents-md also targets this project (it shares .agents/)."
+            )
+        for rel_path, content in rendered_files:
+            target = output_dir / rel_path
+            if target.name == "AGENTS.md" and not agents_md_is_codex_owned(target):
+                notices.append(
+                    f"{target}: existing AGENTS.md was not generated for Codex; left untouched "
+                    "(codex never overwrites a shared or project-owned AGENTS.md)."
+                )
+                continue
+            kept.append((rel_path, content))
+        return kept, notices
+
+    def get_file_extension(self, file_type: str) -> str:
+        if file_type in {"agent", "builder"}:
+            return ".toml"
+        return ".md"
+
+    def supports_handoffs(self) -> bool:
+        return True
+
+    def handoff_delivery_mode(self) -> str:
+        # Handoffs are translated into each agent's developer_instructions and parsed back
+        # from there, so no references/runtime-handoffs.json sidecar is needed.
+        return "native"
+
     def get_agents_dir(self, project_path: Path) -> Path:
-        # Same detail-file layout as agents-md (Codex has no persona format).
-        return project_path / ".agents"
+        return project_path / ".codex" / "agents"
+
+    def normalize_output_path(self, output: Path) -> Path:
+        """Append ``.codex/agents`` to a project-root ``--output`` (mirrors goose)."""
+        parts = output.parts
+        if len(parts) >= 2 and parts[-2] == ".codex" and parts[-1] == "agents":
+            return output
+        if parts and parts[-1] == ".codex":
+            return output / "agents"
+        if parts and parts[-1] == ".agents":
+            # The pre-2026-09-29 codex agents dir: map to its replacement, not a nested tree.
+            return output.parent / ".codex" / "agents"
+        return output / ".codex" / "agents"
+
+    def finalize_output_path(self, rel_path: str, file_type: str) -> str:
+        """Place AGENTS.md at the repo root, two levels above ``.codex/agents``."""
+        if file_type == "instructions" and rel_path.endswith("copilot-instructions.md"):
+            return "../../AGENTS.md"
+        return super(AgentsMdAdapter, self).finalize_output_path(rel_path, file_type)
 
     def sandbox_launcher_rel_path(self) -> str:
-        # Agents dir is 1-deep (``.agents``), so repo-root ``sandbox/confine-run.sh`` is one
-        # ``../`` up (not two). Codex is now Linux-enforceable framework-neutrally.
-        return "../sandbox/confine-run.sh"
+        # Agents dir is 2-deep (``.codex/agents``): the base default applies.
+        from agentteams.frameworks._linux_sandbox_emit import LINUX_SANDBOX_LAUNCHER_REL
+
+        return LINUX_SANDBOX_LAUNCHER_REL
+

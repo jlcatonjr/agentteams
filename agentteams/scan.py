@@ -444,13 +444,16 @@ def _line_in_front_matter(lines: list[str], line_num: int) -> bool:
 #: instruction-authority reference, which quotes attack phrases as teaching examples) is
 #: module-owned wherever it lands, so every framework's agents dir must appear here — an
 #: omission silently drops the code-span exemption for that framework's derived repos.
+#: Residual (accepted, @security 2026-09-29): matching is by substring, so a hand-written file
+#: placed under any of these directories gets the same code-span exemption.
 _MODULE_OWNED_PATH_FRAGMENTS: tuple[str, ...] = (
     "agentteams/templates/",  # the module's own template library
     ".github/agents/",        # copilot-vscode
     ".claude/agents/",        # claude
     ".github/copilot/",       # copilot-cli
     ".goose/recipes/",        # goose
-    ".agents/",               # codex + agents-md
+    ".agents/",               # agents-md (and pre-2026-09-29 codex output)
+    ".codex/agents/",         # codex custom agents + references
 )
 
 

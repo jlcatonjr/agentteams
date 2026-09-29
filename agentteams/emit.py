@@ -59,7 +59,7 @@ from agentteams.backup import (  # noqa: F401 — re-exported for callers/tests
     BackupResult,
     DEFAULT_BACKUP_KEEP_LAST,
     PruneResult,
-    backup_output_dir,
+    backup_output_dir, inert_backup_name,
     list_backups,
     prune_backups,
     restore_backup,
@@ -420,7 +420,7 @@ def emit_all(
                 else:
                     if backup_path is not None:
                         backup_path.mkdir(parents=True, exist_ok=True)
-                        shutil.copy2(target, backup_path / target.name)
+                        shutil.copy2(target, backup_path / inert_backup_name(target.name))
                     _atomic_write_text(target, _auto_wrapped)
                     result.fence_injected.append(str(target))
 

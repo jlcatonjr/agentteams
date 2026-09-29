@@ -95,7 +95,7 @@ def test_no_launcher_off_linux():
 
 
 def test_custom_rel_path_for_shallow_agents_dir():
-    # 1-deep adapters (codex/agents-md, agents dir ``.agents``) pass ``../sandbox/…``.
+    # 1-deep adapters (agents-md, agents dir ``.agents``) pass ``../sandbox/…``.
     files = linux_sandbox_output_files(
         {"privilege_profile": "confined"}, "../sandbox/confine-run.sh", platform="linux"
     )
@@ -116,7 +116,7 @@ def _launcher_paths(adapter, manifest):
         (ClaudeAdapter(), "../../sandbox/confine-run.sh"),
         (GooseAdapter(), "../../sandbox/confine-run.sh"),
         (CopilotVSCodeAdapter(), "../../sandbox/confine-run.sh"),
-        (CodexAdapter(), "../sandbox/confine-run.sh"),
+        (CodexAdapter(), "../../sandbox/confine-run.sh"),
         (AgentsMdAdapter(), "../sandbox/confine-run.sh"),
     ],
 )
@@ -135,7 +135,7 @@ def test_every_framework_emits_neutral_launcher_on_linux(adapter, expected_rel):
     [
         (GooseAdapter(), ".goose/recipes"),
         (ClaudeAdapter(), ".claude/agents"),
-        (CodexAdapter(), ".agents"),
+        (CodexAdapter(), ".codex/agents"),
         (AgentsMdAdapter(), ".agents"),
     ],
 )

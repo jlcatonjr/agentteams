@@ -6,6 +6,57 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### changed (Codex: custom agents emitted as `.codex/agents/<name>.toml`)
+
+- **`--framework codex` now emits Codex custom agents**, one TOML file per agent under
+  `.codex/agents/`, from native generation and from `--interop-from <team> --framework codex`.
+  Previously the adapter wrote flat `.agents/<slug>.md` files, which Codex does not load. Keys are
+  `name` (the hyphenated slug; authoritative over the file name), `description` and
+  `developer_instructions` (a TOML multi-line string that round-trips through `tomllib`), plus
+  `sandbox_mode = "read-only"` only for agents whose declared tools are all `read`/`search`.
+  No `model`, provider or approval keys are emitted. Codex role files use
+  `deny_unknown_fields`, so an unknown key would stop the agent loading.
+- **Translation, not copying.** `tools:` becomes a stated self-imposed limit, carried verbatim
+  (bespoke tools such as `runCommands` are neither dropped nor widened), because Codex does not
+  enforce tool grants. `handoffs:` becomes a "Hand off to" list. Both sit in a fenced
+  `codex_translation` block inside `developer_instructions`. AGENTTEAMS fences and USER-EDITABLE
+  Project-Specific Notes are carried. The emitter comment and the reference doc state that
+  `sandbox_mode` is a default, **not a ceiling**: subagents inherit the parent sandbox, and CLI
+  permission overrides are re-applied to children.
+- **Duplicate H1 fixed.** A title H1 is added only when the body has none (was 39/39 duplicated
+  under `copilot-vscode → codex` interop).
+- **Shared-file safety.** An existing repo-root `AGENTS.md` that was not generated for Codex
+  (Goose bridge entry, agents-md, hand-written) is skipped with a notice, even with `--overwrite`.
+  This applies to native generation (new `FrameworkAdapter.guard_rendered_files` hook) and to
+  interop. A symlinked `AGENTS.md`, live or dangling, is always refused (security review), and a
+  non-UTF-8 one is treated as foreign. Interop into any other target strips the Codex ownership
+  notice, so a goose-owned file can never carry it. `AGENTS.override.md` is never emitted.
+  An interop import does not rewrite `.github/agents/...` paths, because interop does not copy
+  references into `.codex/`. That includes the paths in `AGENTS.md`, which native generation
+  rewrites to `.codex/agents/`.
+- **Backups can no longer load as agents.** Codex loads `.codex/agents/**/*.toml`, and
+  `.agentteams-backups/` lives inside that tree. `.toml` files are now stored in backups as
+  `*.toml.agentteams-bak` (by `backup.py`, the emit auto-fence path and `fence_inject`) and mapped
+  back on restore.
+- **Migration.** When the pre-2026-09-29 `.agents/*.md` files are present, generation prints a
+  notice to move any Project-Specific Notes across and remove the old files. Nothing is
+  deleted, because agents-md shares that directory. A legacy `--output <root>/.agents` maps to
+  `<root>/.codex/agents`, and an interop `--output <root>` is normalized the same way.
+  `scan.py` treats `.codex/agents/` as module-owned output.
+- **Codex is a real interop source.** `.codex/agents` is detected, and `parse_agent_source` reads
+  the TOML back, so the canonical display name, description, tools and handoffs survive a
+  canonical → codex → canonical round trip (none of them is lossy for codex any more). A
+  malformed TOML agent raises instead of silently parsing as Markdown.
+  `handoff_delivery_mode()` is now `native`, so no `runtime-handoffs.json` sidecar is written.
+- **Watch widened.** `FormatSpec.extra_source_urls` (new) lets a provider's watch span pages. Codex
+  now watches the `.md` twins of the agents-md, subagents and build-skills pages for
+  `developer_instructions`, `sandbox_mode`, `mcp_servers`, `project_doc_max_bytes`,
+  `.codex/agents`, `.agents/skills` and `SKILL.md`. Every watched page must pass the minimum-size
+  check. A new opt-in, `FormatSpec.toml_keys`, makes the key scan also accept TOML (`key =`) and
+  code-quoted (`` `key` ``) keys for codex. Before this, the scan matched only YAML `key:`, so no
+  Codex token could ever be observed. The YAML providers keep the strict `key:` match.
+- Interop dry-runs now list the files they would write, and print skip notices.
+
 ### changed (internal: `goose.py` recipe-emission carved to `goose_recipe_emit.py` — CH-07)
 
 - **No behavior change.** The Goose recipe YAML emission helpers (`_emit_recipe`,
@@ -92,7 +143,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - **`--stale-check` now emits a blocking Tier-1 `PIN_UNSYNCABLE` finding when a pinned-sync
   framework set has a physical-directory collision** (e.g. `copilot-vscode`+`copilot-cli` →
-  `.github/agents`; `agents-md`+`codex` → `.agents`). `multi_sync._reject_directory_collisions`
+  `.github/agents`; `agents-md`+`codex` → `.agents` until codex moved to `.codex/agents`, 2026-09-29). `multi_sync._reject_directory_collisions`
   already fails `--sync`/`--sync-init` fast on such a set, but only when the operator *attempts*
   a sync — so a pin written before that guard existed (or hand-edited) was silently unsyncable
   and projection across the infrastructure types had quietly stopped. The routine health command

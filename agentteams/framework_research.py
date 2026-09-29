@@ -104,6 +104,8 @@ FRAMEWORK_REGISTRY = {
     fid: {
         "label": spec.label,
         "source_url": spec.source_url,
+        "extra_source_urls": list(spec.extra_source_urls),
+        "toml_keys": spec.toml_keys,
         "expert_ref": spec.expert_ref,
         "expected_keys": list(spec.expected_doc_tokens),
         "expected_locations": list(spec.expected_locations),
@@ -278,9 +280,18 @@ def _snapshot_age_hours(snapshot: dict[str, Any], now: _dt.datetime | None = Non
     return ((now or _utcnow()) - dt).total_seconds() / 3600.0
 
 
-def _scan_tokens_for(text: str, expected_keys: list[str], expected_locations: list[str]) -> dict[str, list[str]]:
+def _scan_tokens_for(
+    text: str, expected_keys: list[str], expected_locations: list[str], *, toml_keys: bool = False
+) -> dict[str, list[str]]:
     lower = text.lower()
-    found_keys = sorted({k for k in expected_keys if re.search(rf"\b{re.escape(k)}\b\s*:", text)})
+    # A key is "documented" when it appears as a YAML key (`key:`). For a TOML provider
+    # (FormatSpec.toml_keys — codex) it may instead appear as a TOML key (`key =`) or a
+    # code-quoted field name (`` `key` ``, the docs' schema tables); YAML-only matching
+    # made every codex token read as missing upstream regardless of the page.
+    def _pattern(k: str) -> str:
+        key = re.escape(k)
+        return rf"\b{key}\b\s*[:=]|`{key}`" if toml_keys else rf"\b{key}\b\s*:"
+    found_keys = sorted({k for k in expected_keys if re.search(_pattern(k), text)})
     found_locations = sorted({loc for loc in expected_locations if loc.lower() in lower})
     return {"front_matter_keys_present": found_keys, "locations_present": found_locations}
 
@@ -340,7 +351,34 @@ def _scan_framework(entry: dict[str, Any], offline: bool) -> dict[str, Any]:
         result["fetch_error"] = f"page text only {len(text.strip())} bytes (<{_MIN_DOC_BYTES})"
         return result
 
-    tokens = _scan_tokens_for(text, entry["expected_keys"], entry["expected_locations"])
+    # Extra watched pages (codex: subagents + skills) are scanned together with the
+    # primary page. A failure on one of them fails the whole entry rather than
+    # reporting its tokens as "missing upstream" (a false drift signal).
+    for extra_url in entry.get("extra_source_urls", []):
+        try:
+            extra_raw, extra_meta = _fetch_with_meta(extra_url)
+        except (urllib.error.URLError, TimeoutError, OSError) as exc:
+            result["fetch_status"] = "failed"
+            result["fetch_error"] = f"{extra_url}: {type(exc).__name__}: {exc}"
+            return result
+        if extra_meta["host_changed"]:
+            result["fetch_status"] = "moved"
+            _moved_host = urllib.parse.urlsplit(extra_meta["final_url"]).netloc or "(unparseable host)"
+            result["fetch_error"] = f"{extra_url} redirected to different host: {_moved_host}"
+            return result
+        extra_text = _html_to_text(extra_raw)
+        if len(extra_text.strip()) < _MIN_DOC_BYTES:
+            result["fetch_status"] = "empty"
+            result["fetch_error"] = f"{extra_url}: page text only {len(extra_text.strip())} bytes"
+            return result
+        text += "\n" + extra_text
+        result["raw_bytes"] += len(extra_raw)
+    result["text_bytes"] = len(text)
+
+    tokens = _scan_tokens_for(
+        text, entry["expected_keys"], entry["expected_locations"],
+        toml_keys=bool(entry.get("toml_keys")),
+    )
     result["upstream_tokens"] = tokens
     result["keys_diff"] = _diff_keys(entry["expected_keys"], tokens.get("front_matter_keys_present", []))
     return result

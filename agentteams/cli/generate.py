@@ -34,7 +34,7 @@ from agentteams.cli.artifacts import (
 from agentteams.cli import standalone_modes
 from agentteams.cli.exit_codes import _finalize_exit_code
 from agentteams.cli.json_mode import json_stdout, run_with_json_stdout
-from agentteams.cli.output_target import refuse_foreign_target, resolve_output_dir
+from agentteams.cli.output_target import apply_adapter_guard, refuse_foreign_target, resolve_output_dir
 from agentteams.cli.post_emit_checks import _post_emit_security_scan
 from agentteams.cli.render_pipeline import (
     _apply_placeholder_policy,
@@ -641,6 +641,7 @@ def _run_generate_inner(
                     f"{mresult.coord_log_rows_moved} coordination row(s) to CSV files."
                 )
 
+        update_rendered = apply_adapter_guard(adapter, update_rendered, output_dir)
         result = emit.emit_all(
             update_rendered,
             output_dir=output_dir,
@@ -870,6 +871,7 @@ def _run_generate_inner(
                 f"{mresult.coord_log_rows_moved} coordination row(s) to CSV files."
             )
 
+    final_rendered = apply_adapter_guard(adapter, final_rendered, output_dir)
     result = emit.emit_all(
         final_rendered,
         output_dir=output_dir,

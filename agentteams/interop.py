@@ -8,6 +8,7 @@ representation.
 from __future__ import annotations
 
 import json
+import os
 import re
 from dataclasses import dataclass, field
 from datetime import date, datetime, timezone
@@ -40,6 +41,7 @@ class InteropResult:
     skipped: list[str] = field(default_factory=list)
     errors: list[str] = field(default_factory=list)
     bundle_files: list[str] = field(default_factory=list)
+    notices: list[str] = field(default_factory=list)
     dry_run: bool = False
 
     @property
@@ -58,6 +60,8 @@ def detect_framework(source_dir: Path) -> str:
         return "claude"
     if ".goose" in parts:           # .goose/recipes — a Goose-native source team
         return "goose"
+    if ".codex" in parts:           # .codex/agents/<name>.toml — Codex custom agents
+        return "codex"
     if ".agents" in parts:          # .agents/<name>.md — an agents-md source team (F.1)
         return "agents-md"
     if ".github" in parts and "copilot" in parts:
@@ -125,8 +129,8 @@ def export_to_cai(source_dir: Path, source_framework: str | None = None) -> dict
     parsed_sources: list[dict[str, Any]] = []
 
     # F.1: agent-file extension is framework-owned — Markdown for every
-    # framework except goose, whose agents are recipe YAML
-    # (adapter.get_file_extension("agent") == ".yaml").
+    # framework except goose (recipe YAML, ".yaml") and codex (custom-agent
+    # TOML, ".toml").
     agent_ext = adapter.get_file_extension("agent")
 
     for entry in sorted(source_dir.rglob("*")):
@@ -150,7 +154,7 @@ def export_to_cai(source_dir: Path, source_framework: str | None = None) -> dict
             parsed = adapter.parse_agent_source(content)
             if parsed is not None:
                 parsed_sources.append(parsed)  # F.3: aggregate after discovery
-                # F.1: framework-native parse (goose recipe YAML) arrives
+                # F.1: framework-native parse (goose recipe YAML, codex TOML) arrives
                 # pre-shaped — name/description/body/capabilities/handoffs all
                 # extracted by the adapter, which owns the file format.
                 body = str(parsed.get("body", ""))
@@ -242,11 +246,11 @@ def export_to_cai(source_dir: Path, source_framework: str | None = None) -> dict
             )
 
     if not instructions_content:
-        # F.1: a goose source dir is .goose/recipes — its AGENTS.md sits at the
-        # project root, TWO levels up; every other framework keeps the
-        # single-parent lookup.
+        # F.1: a goose source dir is .goose/recipes (codex: .codex/agents) — its
+        # AGENTS.md sits at the project root, TWO levels up; every other
+        # framework keeps the single-parent lookup.
         parents = [source_dir.parent]
-        if framework == "goose":
+        if framework in ("goose", "codex"):
             parents.append(source_dir.parent.parent)
         for parent in parents:
             found = False
@@ -261,7 +265,7 @@ def export_to_cai(source_dir: Path, source_framework: str | None = None) -> dict
                 break
 
     # A.4: Read the runtime-handoffs.json sidecar back for manifest-delivery
-    # frameworks (claude, copilot-cli, agents-md, codex) so handoffs survive
+    # frameworks (claude, copilot-cli, agents-md) so handoffs survive
     # a native→canonical round trip. The sidecar is written by import_from_cai
     # at source_dir.parent / "references" / "runtime-handoffs.json" (report
     # section 4.3, confirmed 4 of 6 frameworks affected).
@@ -481,6 +485,10 @@ def import_from_cai(
     # handoff except ones targeting orchestrator gets silently deleted.
     manifest = {
         "project_name": "InteropProject",
+        # Lets an adapter tell an interop import from native generation (codex keeps
+        # source-tree paths such as .github/agents/references/ un-rewritten, because
+        # interop does not copy references into the target tree).
+        "interop_source_framework": str(cai.get("source_framework") or "unknown"),
         "output_files": [
             {"path": f"{str(a.get('slug', '')).strip()}.agent.md"}
             for a in cai.get("agents", [])
@@ -565,7 +573,17 @@ def import_from_cai(
             else:
                 manifest.pop("recipe_extensions", None)
         cai_tools_line: str | None = None
-        if cai_tool_scopes and target_framework in ("copilot-vscode", "copilot-cli", "claude"):
+        if target_framework == "codex":
+            # codex states the declared tools as a self-imposed limit, so it takes the
+            # source's tools VERBATIM (capabilities.raw) — a bespoke tool outside the
+            # canonical vocabulary (e.g. runCommands) is neither dropped nor widened.
+            cai_raw_caps = (agent.get("capabilities") or {}).get("raw") or {}
+            raw_tools = next((str(v) for v in cai_raw_caps.values() if str(v).strip()), "")
+            if raw_tools:
+                cai_tools_line = f"tools: {raw_tools}"
+            elif cai_tool_scopes:
+                cai_tools_line = "tools: [" + ", ".join(f"'{t}'" for t in cai_tool_scopes) + "]"
+        elif cai_tool_scopes and target_framework in ("copilot-vscode", "copilot-cli", "claude"):
             # Both adapters' own render_agent_file already knows how to turn a
             # VS Code-shaped bracket list of canonical tokens into their native
             # tool declaration (copilot-vscode: pass-through, since its own
@@ -633,13 +651,30 @@ def import_from_cai(
         # AGENTS.md lives at the PROJECT ROOT (two levels above .goose/recipes);
         # every other framework keeps it beside the agents dir.
         instructions_name = _instructions_target_name(target_framework)
-        if target_framework == "goose":
+        if target_framework in ("goose", "codex"):
             inst_dest = target_dir.parent.parent / instructions_name
         else:
             inst_dest = target_dir.parent / instructions_name
-        if inst_dest.exists() and not overwrite:
+        # The adapter's own shared-file guard (the same hook native generation runs):
+        # codex never overwrites an AGENTS.md it did not generate — not even with
+        # --overwrite. Every other adapter keeps the file (default no-op).
+        _kept, _guard_notices = adapter.guard_rendered_files(
+            [(os.path.relpath(inst_dest, target_dir), "")], target_dir
+        )
+        if not _kept:
+            result.skipped.append(str(inst_dest))
+            result.notices.extend(_guard_notices)
+        elif inst_dest.exists() and not overwrite:
             result.skipped.append(str(inst_dest))
         else:
+            if target_framework != "codex":
+                # Never carry the Codex ownership marker into another target's file:
+                # Codex would later treat that (e.g. goose-owned) AGENTS.md as its own.
+                instructions_content = _strip_codex_notice(instructions_content)
+            if target_framework == "codex":
+                # Stamp the Codex ownership notice, so a later run recognizes the
+                # file as its own (agents_md_is_codex_owned) and may refresh it.
+                instructions_content = adapter.render_instructions_file(instructions_content, manifest)
             if not dry_run:
                 inst_dest.parent.mkdir(parents=True, exist_ok=True)
                 inst_dest.write_text(instructions_content, encoding="utf-8")
@@ -852,6 +887,8 @@ def _slug_from_filename(name: str) -> str:
         return name[: -len(".md")]
     if name.endswith(".yaml"):  # goose recipes (F.1)
         return name[: -len(".yaml")]
+    if name.endswith(".toml"):  # codex custom agents
+        return name[: -len(".toml")]
     return name
 
 
@@ -903,6 +940,7 @@ def _frontmatter_value(content: str, key: str) -> str:
 
 
 # A.3/A.4 helpers extracted to interop_helpers.py (CH-07 module-size compliance)
+from agentteams.frameworks.codex import strip_codex_notice as _strip_codex_notice
 from agentteams.interop_helpers import (
     capture_escape_hatches as _capture_escape_hatches,
     capture_references as _capture_references,
