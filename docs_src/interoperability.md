@@ -210,7 +210,7 @@ All six registered frameworks are valid CAI interop **sources and targets**
 3. `claude`
 4. `goose`
 5. `agents-md`
-6. `codex` (thin, prep-scoped: delegates AGENTS.md rendering to the agents-md adapter)
+6. `codex` (custom agents as `.codex/agents/<slug>.toml`; AGENTS.md rendering shared with agents-md)
 
 Round-trip fidelity is exact where a target has an equivalent concept and honestly
 degraded where it doesn't — surfaced via `compatibility-report.md` in bundle mode, never
@@ -220,8 +220,9 @@ silently. Notes per framework:
    (`recipe_parameters` / `recipe_response` / `recipe_retry`, builtin extension scoping)
    through the CAI `framework_extensions.goose` bucket; handoffs round-trip as `sub_recipes`
    (true delegation) and `load(...)` context references.
-2. `agents-md` and `codex` sources carry no front matter, so capabilities/handoffs land
-   inferred-or-empty on export (best-effort by nature).
+2. `agents-md` sources carry no front matter, so capabilities/handoffs land
+   inferred-or-empty on export (best-effort by nature). `codex` sources (`.codex/agents/*.toml`)
+   round-trip name, description, tools and handoffs through each agent's `codex_translation` block.
 3. `canonical` additionally serves as the durable intermediate: any framework can export to
    it and import back from it with near-lossless fidelity (see the canonical section above).
    Modeled fields (name, description, body, capabilities/handoffs, skills, MCP servers)

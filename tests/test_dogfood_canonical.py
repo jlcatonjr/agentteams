@@ -38,7 +38,7 @@ _FRAMEWORK_AGENTS_REL = {
     "claude": Path(".claude") / "agents",
     "goose": Path(".goose") / "recipes",
     "agents-md": Path(".agents"),
-    "codex": Path(".agents"),
+    "codex": Path(".codex") / "agents",
 }
 
 
@@ -59,6 +59,8 @@ def _agent_ext(framework: str) -> str:
         return ".agent.md"
     if framework == "goose":
         return ".yaml"
+    if framework == "codex":
+        return ".toml"
     return ".md"
 
 

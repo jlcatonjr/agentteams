@@ -800,7 +800,20 @@ def _build_map16_source(framework: str, root: Path) -> Path:
             encoding="utf-8",
         )
         return recipes
-    # agents-md and codex share the .agents detail-file layout.
+    if framework == "codex":
+        agents_dir = root / ".codex" / "agents"
+        agents_dir.mkdir(parents=True)
+        (root / "AGENTS.md").write_text("# Instructions\n\nKEEP_INSTRUCTIONS_TOKEN\n", encoding="utf-8")
+        for slug, body in (
+            ("orchestrator", "# Orchestrator\n\nBody one. KEEP_BODY_TOKEN\n"),
+            ("worker", "# Worker\n\nBody two. KEEP_WORKER_TOKEN\n"),
+        ):
+            (agents_dir / f"{slug}.toml").write_text(
+                f'name = "{slug}"\ndescription = "{slug} agent"\n'
+                + "developer_instructions = '''\n" + body + "'''\n",
+                encoding="utf-8",
+            )
+        return agents_dir
     agents_dir = root / ".agents"
     agents_dir.mkdir(parents=True)
     (root / "AGENTS.md").write_text("# Instructions\n\nKEEP_INSTRUCTIONS_TOKEN\n", encoding="utf-8")
@@ -819,7 +832,7 @@ def _map16_target_dir(framework: str, root: Path) -> Path:
         "claude": root / ".claude" / "agents",
         "goose": root / ".goose" / "recipes",
         "agents-md": root / ".agents",
-        "codex": root / ".agents",
+        "codex": root / ".codex" / "agents",
     }[framework]
 
 
@@ -847,6 +860,7 @@ def test_map16_framework_to_canonical_and_back(tmp_path: Path, framework: str):
         "copilot-vscode": ".agent.md",
         "copilot-cli": ".agent.md",  # P1 convergence (2026-08-15)
         "goose": ".yaml",
+        "codex": ".toml",
     }.get(framework, ".md")
     for slug in (a["slug"] for a in cai["agents"]):
         assert (target_dir / f"{slug}{adapter_ext}").is_file(), f"{framework}: {slug} missing"

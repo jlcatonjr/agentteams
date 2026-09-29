@@ -116,7 +116,8 @@ def _reject_directory_collisions(root: Path, frameworks: list[str]) -> None:
     """Refuse a sync set where two framework ids resolve to one physical directory.
 
     Harmless while every framework sharing a path renders byte-identical content
-    (codex/agents-md: proven precedent, always identical). It stops being
+    (codex/agents-md were that precedent until codex moved to `.codex/agents`,
+    2026-09-29). It stops being
     harmless once two frameworks can render DIFFERENT content for the same
     agent at the same path — copilot-vscode and copilot-cli, since the P1
     convergence (2026-08-15), share `.github/agents` but copilot-cli strips
@@ -308,7 +309,7 @@ def _detect_changed_frameworks(
             if prefix and p.startswith(prefix):
                 hit.append(fw)
                 break
-            if not prefix:  # root-level agents dir (agents-md/codex): match top-level files
+            if not prefix:  # root-level agents dir: match top-level files
                 if "/" not in p:
                     hit.append(fw)
                     break

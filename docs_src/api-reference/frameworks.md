@@ -89,7 +89,7 @@ Return the default agent file directory for a given project path.
 
 #### `finalize_output_path(rel_path, file_type)`
 
-Adjust an output path's extension for this framework. **Default implementation:** when `file_type` is `agent` or `builder`, rewrites the extension to this framework's `get_file_extension(file_type)` if it differs — e.g. this is what turns `CopilotCLIAdapter`'s planned `.agent.md` paths into plain `.md`. Other file types pass through unchanged by default; `ClaudeAdapter`, `AgentsMdAdapter` (inherited by `CodexAdapter`), and `GooseAdapter` override this further to relocate the `instructions` file to their framework-native root file (`CLAUDE.md`, `AGENTS.md`).
+Adjust an output path's extension for this framework. **Default implementation:** when `file_type` is `agent` or `builder`, rewrites the extension to this framework's `get_file_extension(file_type)` if it differs — e.g. this is what turns `CopilotCLIAdapter`'s planned `.agent.md` paths into plain `.md`. Other file types pass through unchanged by default; `ClaudeAdapter`, `AgentsMdAdapter`, `CodexAdapter` (repo-root `AGENTS.md` two levels above `.codex/agents`), and `GooseAdapter` override this further to relocate the `instructions` file to their framework-native root file (`CLAUDE.md`, `AGENTS.md`).
 
 **Args:**
 
@@ -167,7 +167,7 @@ Describe how the framework receives handoff semantics.
 - `manifest` strips inline handoff syntax from the visible prompt and, when extracted handoffs exist, preserves routing metadata in `references/runtime-handoffs.json`.
 - `none` means no handoff delivery mechanism is emitted.
 
-**Default implementation:** `"native"` when `supports_handoffs()` is `True`, otherwise `"none"`. `ClaudeAdapter`, `CopilotCLIAdapter`, and `AgentsMdAdapter` (inherited by `CodexAdapter`) override this to return `"manifest"` explicitly, since they strip inline handoffs but still preserve extracted routing metadata.
+**Default implementation:** `"native"` when `supports_handoffs()` is `True`, otherwise `"none"`. `ClaudeAdapter`, `CopilotCLIAdapter`, and `AgentsMdAdapter` override this to return `"manifest"` explicitly (`CodexAdapter` overrides it back to `"native"`: its handoffs travel inside each custom agent's `developer_instructions`), since they strip inline handoffs but still preserve extracted routing metadata.
 
 **Returns:** `str`
 
@@ -328,15 +328,19 @@ Adapter for the cross-tool `AGENTS.md` standard.
 
 > *Source: `agentteams/frameworks/codex.py`*
 
-Thin adapter for the OpenAI Codex CLI. Subclasses `AgentsMdAdapter` and reuses its rendering wholesale — Codex has no user-authored persona-file format analogous to `.claude/agents/*.md` or `.github/agents/*.agent.md`, so `AGENTS.md` content is the primary user-facing lever.
+Adapter for the OpenAI Codex CLI. Emits each agent as a Codex **custom agent**, a TOML file under `.codex/agents/`. Subclasses `AgentsMdAdapter` only for the framework-neutral `AGENTS.md` rendering.
 
 - **framework_id:** `'codex'`
-- **Output format:** Agent files: `.agents/<slug>.md` (inherited from `AgentsMdAdapter`); Instructions: repo-root `AGENTS.md` — Codex loads global instructions from `~/.codex/AGENTS.md` (or `AGENTS.override.md`), then walks applicable project and nested-directory `AGENTS.md` files toward the working directory
-- **Handoffs:** Manifest sidecar (`references/runtime-handoffs.json`), same as `agents-md` (`handoff_delivery_mode()` inherited, returns `'manifest'`)
-- **Agents dir:** `<project>/.agents/` (same layout as `agents-md`)
+- **Output format:** Agent files: `.codex/agents/<slug>.toml`, with keys `name` (the slug; authoritative over the file name), `description`, `developer_instructions` (a TOML multi-line string), and `sandbox_mode = "read-only"` only for agents whose declared tools are all `read`/`search`. No `model`, provider or approval keys. Instructions: repo-root `AGENTS.md`, written only when absent or already Codex-generated.
+- **Handoffs:** `native`. Translated into a "Hand off to" list inside a fenced `codex_translation` block in `developer_instructions`, and parsed back by `parse_agent_source`. No sidecar.
+- **Agents dir:** `<project>/.codex/agents/` (`normalize_output_path` appends it to a project-root `--output`)
 
 **Current behavior notes:**
 
-- Overrides only `render_instructions_file` (to swap in a Codex-specific generated notice describing the nested-directory walk) and `get_agents_dir` (explicit, though it returns the same `.agents` path `AgentsMdAdapter` would). Every other method — `render_agent_file`, `get_file_extension`, `required_front_matter_keys`, `supports_handoffs`, `handoff_delivery_mode`, `finalize_output_path` — is inherited from `AgentsMdAdapter` unmodified.
+- `tools:` is stated as a self-imposed limit, carried verbatim (Codex does not enforce tool grants). `sandbox_mode` is a default, not a ceiling: subagents inherit the parent sandbox, and CLI permission overrides are re-applied to children.
+- Exactly one title H1: the body's own H1 is kept, and `# {name}` is added only when the body has none.
+- `guard_rendered_files` (and the interop import) skip an existing repo-root `AGENTS.md` that was not generated for Codex, with a notice. `AGENTS.override.md` is never emitted.
+- An interop import keeps `.github/agents/...` paths as they are, because interop does not copy references. Native generation rewrites them to `.codex/agents/...`.
+- Codex loads `.codex/agents/**/*.toml` only, so reference docs under `.codex/agents/references/` are ignored by Codex.
 - MCP servers are configured separately in `.codex/config.toml`, emitted by [`codex_mcp_emit`](codex-mcp-emit.md) when the `codex:mcp` host-feature token is enabled and the project declares `mcp_servers[]`.
 - Nested-directory `AGENTS.md` placement (subdirectory-scoped refinements) is documented but not yet built.

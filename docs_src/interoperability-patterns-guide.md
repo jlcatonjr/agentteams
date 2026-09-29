@@ -231,9 +231,10 @@ original three-framework core plus `goose` as target:
 
 <sup>*</sup> `goose` sources parse recipe YAML (title/description/instructions, extension
 scoping, `sub_recipes`/`load(...)` handoffs, recipe parameters/response/retry).
-`agents-md` and `codex` sources carry no front matter, so capabilities/handoffs land
+`agents-md` sources carry no front matter, so capabilities/handoffs land
 inferred-or-empty — best-effort by nature, surfaced via `compatibility-report.md` in
-bundle mode.
+bundle mode. `codex` sources (`.codex/agents/*.toml`) round-trip tools and handoffs through
+each agent's `codex_translation` block.
 
 `canonical` is interop-only: export with `--interop-from <src> --framework canonical`,
 import with `--interop-from <canonical dir> --interop-source-framework canonical`.

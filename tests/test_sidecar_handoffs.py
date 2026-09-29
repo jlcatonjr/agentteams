@@ -18,7 +18,9 @@ import pytest
 from agentteams.canonical import load_canonical, materialize_canonical
 from agentteams.interop import export_to_cai, import_from_cai
 
-_MANIFEST_FRAMEWORKS = ("claude", "copilot-cli", "agents-md", "codex")
+# codex left this set on 2026-09-29: its handoffs travel natively inside each custom
+# agent's developer_instructions (tests/test_codex_custom_agents.py covers the round trip).
+_MANIFEST_FRAMEWORKS = ("claude", "copilot-cli", "agents-md")
 
 
 def _seed_cai_with_handoffs() -> dict:
@@ -82,7 +84,6 @@ def test_sidecar_handoffs_survive_round_trip(tmp_path: Path, framework: str):
         "claude": Path(".claude/agents"),
         "copilot-cli": Path(".github/copilot"),
         "agents-md": Path(".agents"),
-        "codex": Path(".agents"),
     }
     native_dir = tmp_path / "native" / _AGENTS_REL[framework]
     result = import_from_cai(loaded, framework, native_dir, overwrite=True)

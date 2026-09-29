@@ -471,8 +471,8 @@ def detect_unsyncable_pin(root: Path) -> list[StalenessFinding]:
 
     ``multi_sync._reject_directory_collisions`` fails ``--sync``/``--sync-init`` fast when
     two frameworks in the pin's ``frameworks`` set resolve to one physical agents directory
-    (e.g. ``copilot-vscode``+``copilot-cli`` → ``.github/agents``; ``agents-md``+``codex`` →
-    ``.agents``) — their renders can differ, so one would silently overwrite the other. That
+    (e.g. ``copilot-vscode``+``copilot-cli`` → ``.github/agents``; ``agents-md``+``codex``
+    shared ``.agents`` until codex moved to ``.codex/agents`` on 2026-09-29) — their renders can differ, so one would silently overwrite the other. That
     guard runs only when the operator *attempts* a sync, so a pin written before the guard
     existed (or hand-edited) is silently unsyncable: projection of changes across the
     infrastructure types has quietly stopped, and nothing surfaces it until the next sync.

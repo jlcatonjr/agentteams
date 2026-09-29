@@ -63,6 +63,8 @@ def _build_parser() -> argparse.ArgumentParser:
             "<project>/.claude/agents/ (claude), "
             "<project>/.goose/recipes/ (goose), "
             "<project>/.agents/ (agents-md; team brief also written to repo-root AGENTS.md). "
+            "<project>/.codex/agents/ (codex custom-agent TOML; repo-root AGENTS.md only "
+            "when absent or Codex-generated). "
             "With --package-team: the destination .zip FILE path, not a directory "
             "(default: ./team-package.zip)."
         ),

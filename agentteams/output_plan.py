@@ -344,8 +344,8 @@ def _plan_output_files(
         # agents-md reuses the copilot-vscode builder source; AgentsMdAdapter
         # .render_builder_file neutralizes it into a plain .agents/ Markdown file.
         "agents-md": "builder/team-builder-copilot-vscode.template.md",
-        # codex (F.4, thin): same delegation as agents-md — CodexAdapter
-        # inherits render_builder_file unchanged.
+        # codex: same copilot-vscode builder source; CodexAdapter.render_builder_file
+        # renders it as a .codex/agents/team-builder.toml custom agent.
         "codex": "builder/team-builder-copilot-vscode.template.md",
     }
     if framework in builder_templates:

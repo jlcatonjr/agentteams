@@ -64,11 +64,18 @@ class FormatSpec:
             *published docs* (a documentation signal — NOT necessarily the keys
             this project emits). Empty when the standard has no schema (agents-md).
         expected_locations: File/dir path strings the watcher expects the docs to mention.
+        extra_source_urls: Further published-docs pages the watcher fetches alongside
+            ``source_url``; their text is scanned together with it, so a token may be
+            documented on any of them (a provider whose agent format spans pages —
+            codex: AGENTS.md, subagents, skills).
+        toml_keys: Watch tokens are TOML keys: the scan also accepts ``key =`` and a
+            code-quoted `` `key` `` (schema tables). Off for YAML providers, whose
+            watch keeps the stricter ``key:`` match.
         emitted_front_matter_keys: The front-matter keys this project's adapter
             actually WRITES. Cross-checked against the adapter's
             ``required_front_matter_keys()`` by the single-source guard test.
             Empty for frameworks whose agent files carry no front matter
-            (goose recipes, agents-md/codex plain Markdown).
+            (goose recipes, codex custom-agent TOML, agents-md plain Markdown).
     """
 
     research_id: str
@@ -79,6 +86,8 @@ class FormatSpec:
     expected_doc_tokens: tuple[str, ...] = ()
     expected_locations: tuple[str, ...] = ()
     emitted_front_matter_keys: tuple[str, ...] = ()
+    extra_source_urls: tuple[str, ...] = ()
+    toml_keys: bool = False
 
 
 #: Canonical Claude Code sub-agents doc URL (re-exported by ``framework_research``
@@ -152,11 +161,25 @@ FORMAT_SPECS: dict[str, FormatSpec] = {
         adapter_id="codex",
         label="OpenAI Codex CLI",
         # developers.openai.com/codex 308s to learn.chatgpt.com (verified 2026-08-15).
-        source_url="https://learn.chatgpt.com/docs/agent-configuration/agents-md",
+        # The HTML pages are client-rendered (a text fetch yields navigation only), so the
+        # watcher reads the `.md` twins (verified 200 + content, 2026-09-29). Custom agents
+        # and skills are documented on their own pages, so those are watched too:
+        # project_doc_max_bytes lives on agents-md; developer_instructions, sandbox_mode,
+        # mcp_servers and .codex/agents on subagents; .agents/skills + SKILL.md on skills.
+        source_url="https://learn.chatgpt.com/docs/agent-configuration/agents-md.md",
+        extra_source_urls=(
+            "https://learn.chatgpt.com/docs/agent-configuration/subagents.md",
+            "https://learn.chatgpt.com/docs/build-skills.md",
+        ),
         expert_ref="references/codex-agent-infrastructure-expert.md",
-        expected_doc_tokens=("project_doc_max_bytes", "mcp_servers"),
-        expected_locations=("AGENTS.md", ".codex"),
-        emitted_front_matter_keys=(),  # AGENTS.md rendering inherited from agents-md
+        expected_doc_tokens=(
+            "project_doc_max_bytes", "developer_instructions", "sandbox_mode", "mcp_servers",
+        ),
+        expected_locations=("AGENTS.md", ".codex/agents", ".agents/skills", "SKILL.md"),
+        toml_keys=True,
+        # Custom agents are TOML (name/description/developer_instructions), not Markdown
+        # with front matter.
+        emitted_front_matter_keys=(),
     ),
 }
 

@@ -30,7 +30,7 @@
         "codex",
         "canonical"
       ],
-      "description": "Registry-derived (FRAMEWORK_IDS) plus 'canonical' for durable canonical directories loaded via load_canonical(). 'codex' registered as a thin prep-scoped target (durable-canonical-agent-format plan step F.4)."
+      "description": "Registry-derived (FRAMEWORK_IDS) plus 'canonical' for durable canonical directories loaded via load_canonical(). 'codex' registered at plan step F.4; emits custom-agent TOML (.codex/agents) since 2026-09-29."
     },
     "source_dir": {
       "type": "string"
