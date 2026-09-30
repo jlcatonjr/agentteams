@@ -86,6 +86,16 @@ reading yours.
   *non-existent* path fails `bwrap` init, blocking **all** Bash (a fail-*shut*
   availability defect, still **open** in `references/agentteams-remediation-log.csv`,
   item D-3); Linux `denyRead` is **unverified**.
+- **Claude Code's native sandbox fails OPEN without `failIfUnavailable` (fixed
+  2026-09-30).** Measured on Linux with `socat` missing: the old block (`enabled: true`,
+  `allowUnsandboxedCommands: false`) let Claude Code print "Sandbox disabled … Commands
+  will run WITHOUT sandboxing" and run unconfined. The block now emits
+  `failIfUnavailable: true` on macOS/Linux targets (omitted on native Windows, where the
+  block is advisory), so Claude Code refuses to start instead. Linux needs `bwrap` **and**
+  `socat` (`scripts/install-sandbox-deps.sh`); Ubuntu's
+  `kernel.apparmor_restrict_unprivileged_userns=1` makes every sandboxed command fail closed
+  at the seccomp step. That native arm is **unverified on Linux end-to-end**. Operators who
+  merged an earlier block: re-run `--update` and re-merge the `sandbox` block.
 - **Native Windows has no emitted enforcement** (design-only).
 - On a host that **cannot** enforce confinement the interactive path **fails
   closed** with `PrivilegeConfinementError` unless you pass

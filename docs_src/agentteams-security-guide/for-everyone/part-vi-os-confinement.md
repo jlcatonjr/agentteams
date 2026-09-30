@@ -22,7 +22,7 @@ tool's own operating-system sandbox, and the blueprint does nothing until someon
 wires it in. Second, **this is proven on Linux; on Macs it is advice, not a proven lock** (it has not
 been tested there), and on Windows there is no built enforcement at all. On a system that can't enforce it, the tool
 refuses to pretend it can (it fails safe) unless you explicitly allow the
-unenforced mode. It also marks certain control files as never-writable, so a
+unenforced mode. The lock is also set to stay shut if it breaks: when the AI tool's own sandbox cannot start (on Linux it needs two small programs, bubblewrap and socat), the tool now refuses to start rather than quietly running without the lock, which it did before a 2026-09-30 fix. That Linux lock has not yet been checked end to end. It also marks certain control files as never-writable, so a
 confined helper can't reach out and disable its own guardrails.
 
 ## A checkpoint before every move {#S19}

@@ -6,6 +6,34 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### security (the Claude sandbox block fails closed: `failIfUnavailable`)
+
+- **The emitted Claude `sandbox` block failed OPEN.** It set `enabled: true` and
+  `allowUnsandboxedCommands: false` but not `failIfUnavailable`. When Claude Code cannot start its
+  sandbox, that combination runs every command unsandboxed after one warning. Measured on Linux
+  (Claude Code 2.1.251, `socat` missing): "Sandbox disabled … Commands will run WITHOUT
+  sandboxing", and a write to `$HOME` succeeded. **Affected:** `1.0.0-rc.7` and `main` before this
+  fix, i.e. every release that emitted the block (`claude:sandbox`, `confined`, `exclusive`;
+  `confined` is the default since 2026-W39).
+- **Fix:** `_sandbox_emit._build_sandbox_block` now emits `"failIfUnavailable": true` on macOS and
+  Linux targets, so Claude Code refuses to start ("sandbox required but unavailable … refusing to
+  start", verified on the same host) instead. A block generated on native Windows omits it: Claude
+  Code has no OS sandbox there, the block is advisory, and the key would stop Claude Code
+  starting. **Action: re-run `--update` and re-merge the `sandbox` block into
+  `.claude/settings.json`** (or add the one line `"failIfUnavailable": true`). Generate/update now
+  prints a notice when the merged `.claude/settings.json` has an enabled sandbox without it.
+- **Linux dependencies:** Claude Code's sandbox needs bubblewrap (`bwrap`) and `socat`. The new
+  `scripts/install-sandbox-deps.sh` installs them (apt/dnf), smoke-tests bwrap, and diagnoses
+  (never changes) `kernel.apparmor_restrict_unprivileged_userns`. With that restriction on, the
+  seccomp step fails and every sandboxed command fails closed. Claude Code's native sandbox stays
+  **unverified on Linux end-to-end**.
+- `tests/test_os_sandbox_product_enforcement.py` now has an operational precondition: unless an
+  in-root write succeeds and a `$HOME` write fails, the module FAILS ("sandbox not operational —
+  results void") instead of reporting void passes. Test projects create every `denyWrite` path (a
+  missing one breaks bwrap for every command). A new test checks the refusal to start when a Linux
+  dependency is absent. `sandbox/confine-run.sh` already refused to launch without `bwrap`
+  (unchanged). `references/enforcement-integrity.json` was regenerated.
+
 ### security (sandbox write-denies the decision-signing verify-key store; goose emitter pinned)
 
 - The Claude sandbox block (`claude:sandbox`) and the goose Seatbelt control-plane deny now also

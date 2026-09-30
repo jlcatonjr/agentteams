@@ -13,6 +13,7 @@ No import cycle: this module imports only lower-level modules (``emit``, ``cli.a
 from __future__ import annotations
 
 import argparse
+import json
 import re
 import sys
 from pathlib import Path
@@ -115,6 +116,48 @@ def _warn_sandbox_deny_path_mismatch(manifest: dict, output_dir: Path) -> None:
     )
 
 
+def _warn_live_sandbox_fails_open(manifest: dict, output_dir: Path) -> bool:
+    """Warn when the merged Claude ``settings.json`` sandbox lacks ``failIfUnavailable``.
+
+    A ``sandbox`` block with ``enabled: true`` but no ``failIfUnavailable: true`` fails OPEN:
+    when Claude Code cannot start its sandbox (measured on Linux with ``socat`` missing) it runs
+    every command unsandboxed. agentteams never edits the operator's ``settings.json``, and blocks
+    merged before 2026-09-30 lack the key, so ``--update`` names the one-line fix instead. Read-only
+    and informational; silent on native Windows, where the emitted block is advisory and the key
+    would stop Claude Code starting.
+
+    Args:
+        manifest: The team manifest (``framework``).
+        output_dir: The team's agents dir; the merged settings sit beside the emitted example,
+            at ``<output_dir>/../settings.json`` (``.claude/settings.json`` by default).
+
+    Returns:
+        True iff the notice was printed.
+    """
+    from agentteams.frameworks._sandbox_emit import _sandbox_fails_closed_on
+
+    if manifest.get("framework") != "claude" or not _sandbox_fails_closed_on():
+        return False
+    live = output_dir.parent / "settings.json"
+    try:
+        data = json.loads(live.read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        return False
+    sandbox = data.get("sandbox") if isinstance(data, dict) else None
+    if not (isinstance(sandbox, dict) and sandbox.get("enabled") is True):
+        return False
+    if sandbox.get("failIfUnavailable") is True:
+        return False
+    print(
+        f"  !  {live}: the merged sandbox block has no \"failIfUnavailable\": true, so it FAILS "
+        "OPEN — if Claude Code cannot start its sandbox (e.g. bwrap or socat missing on Linux) "
+        "it runs every command UNSANDBOXED. Fix: add \"failIfUnavailable\": true to the "
+        "\"sandbox\" object (or re-merge the sandbox block from settings.hooks.example.json).",
+        file=sys.stderr,
+    )
+    return True
+
+
 def _emit_agent_privilege_config(manifest: dict, output_dir: Path) -> None:
     """Write ``references/agent-privilege.json`` and print the enforce-signing notice.
 
@@ -133,6 +176,7 @@ def _emit_agent_privilege_config(manifest: dict, output_dir: Path) -> None:
     except OSError as exc:
         print(f"  !  agent-privilege config write failed: {exc}", file=sys.stderr)
         return
+    _warn_live_sandbox_fails_open(manifest, output_dir)
     if path is None:
         return
     _warn_sandbox_deny_path_mismatch(manifest, output_dir)
