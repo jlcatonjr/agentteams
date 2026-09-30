@@ -318,7 +318,7 @@ def test_build_sandbox_block_shape_and_defaults():
             "allowWrite": ["."],
             # D-3: the control plane is denied even inside the write root (deny-over-allow).
             "denyWrite": [
-                "references/agent-privilege.json",
+                ".claude/agents/references/agent-privilege.json",
                 ".claude/hooks/constitutional-gate.py",
             ],
         },
@@ -332,7 +332,7 @@ def test_build_sandbox_block_denywrite_protects_the_switch():
     switch (which lives inside the write root, unlike the .claude/-auto-protected files)."""
     for roots, deny_read in ((None, None), (["."], ["~/.ssh"]), (["./src"], None)):
         fs = _build_sandbox_block(roots, deny_read)["filesystem"]
-        assert "references/agent-privilege.json" in fs["denyWrite"], (
+        assert ".claude/agents/references/agent-privilege.json" in fs["denyWrite"], (
             "the enforce_decision_signing switch must be write-denied in every profile"
         )
         # denyWrite must not accidentally also block the legitimate write roots.
@@ -902,7 +902,12 @@ def test_every_denywrite_control_file_is_emitted(tmp_path):
     }
 
     # 3) EVERY denyWrite entry must be covered by an actual emission — no dangling deny path.
-    covered = {AGENT_PRIVILEGE_REL_PATH} | hook_targets
+    # denyWrite paths are PROJECT-root-relative; the switch is written relative to the AGENTS
+    # dir. Translate it through the adapter's own agents dir — comparing the two frames directly
+    # is what let a bare `references/agent-privilege.json` (a path nothing writes) pass here.
+    root = Path("/proj")
+    agents_rel = ClaudeAdapter().get_agents_dir(root).relative_to(root).as_posix()
+    covered = {f"{agents_rel}/{AGENT_PRIVILEGE_REL_PATH}"} | hook_targets
     for deny_path in _PROTECTED_WRITE_PATHS:
         assert deny_path in covered, (
             f"denyWrite names {deny_path!r} but nothing emits it — on Linux bwrap cannot bind a "
@@ -927,3 +932,28 @@ def test_bridge_does_not_propagate_a_sandbox_block():
     assert _sandbox_feature_enabled(
         {"host_features": ["bridge:copilot-vscode-to-claude:subagents"]}
     ) is False
+
+
+def test_goose_control_plane_denies_the_goose_switch():
+    """The goose Seatbelt profile protects the switch where a goose team writes it."""
+    from agentteams.cli.artifacts import AGENT_PRIVILEGE_REL_PATH
+    from agentteams.frameworks._sandbox_emit import protected_write_paths
+    from agentteams.frameworks.goose import GooseAdapter
+
+    root = Path("/proj")
+    agents_rel = GooseAdapter().get_agents_dir(root).relative_to(root).as_posix()
+    assert protected_write_paths("goose")[0] == f"{agents_rel}/{AGENT_PRIVILEGE_REL_PATH}"
+
+
+def test_sandbox_deny_path_mismatch_warns_for_a_nondefault_output(tmp_path, capsys):
+    """@security condition: a team outside the default agents dir keeps its switch where the
+    emitted denyWrite does not look, so say so."""
+    from agentteams.cli.generate_helpers import _warn_sandbox_deny_path_mismatch
+
+    m = {"framework": "claude", "host_features": ["claude:sandbox"]}
+    _warn_sandbox_deny_path_mismatch(m, tmp_path / ".claude" / "agents")
+    assert capsys.readouterr().err == ""
+    _warn_sandbox_deny_path_mismatch(m, tmp_path / "custom-agents")
+    assert "not protected" in capsys.readouterr().err
+    _warn_sandbox_deny_path_mismatch({"framework": "claude"}, tmp_path / "custom-agents")
+    assert capsys.readouterr().err == ""  # no sandbox, nothing to warn about

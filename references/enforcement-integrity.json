@@ -12,7 +12,7 @@
     "agentteams/cli/signed_ledger.py": "1175d82ee98734a040bab8c16fac58cac087f21c2238b215ee7d6e87d763ab7c",
     "agentteams/fences.py": "cdf3c623d5cb2e5fd73cd1e519c8c8404c6e8f7956e0fecd5892c5746200cf40",
     "agentteams/frameworks/_linux_sandbox_emit.py": "8e0ee80a14f16dc69840a605cd3f3917c90b5983aa001a34980feb9c048f1d7b",
-    "agentteams/frameworks/_sandbox_emit.py": "d769704e6cd07035374982441a9d177c45c3639edf7fbf999ac3ab72c446c9ae",
+    "agentteams/frameworks/_sandbox_emit.py": "c52be59b343516ae28271f156028318383d1478c24d2533a509568b060e26233",
     "agentteams/front_matter_merge.py": "3b440ad7557385729b4568ba0a9033587fb5a1b6aada22191e26e8da54233cfc",
     "agentteams/front_matter_reconcile.py": "3395885ee5045e729010f62ebe159653413e869bea8c7c44988addb3f1ad14d8",
     "agentteams/integrity.py": "3a8d355c6835be1110212dae46455d8e85e79d2e6d95c0aa0aeef72e338c6e92",

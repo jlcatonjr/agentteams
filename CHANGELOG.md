@@ -6,6 +6,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### security (sandbox `denyWrite` protects the real signing switch)
+
+- The Claude sandbox block (`claude:sandbox`) and the goose Seatbelt profile write-denied
+  `references/agent-privilege.json`. Those paths are relative to the project root, but a team writes
+  its `enforce_decision_signing` switch into its own agents dir, and no file exists at that root
+  path. So the real switch (`.claude/agents/references/agent-privilege.json`,
+  `.goose/recipes/references/agent-privilege.json`) was writable by an in-sandbox agent. On Linux, a
+  deny path that does not exist also stops bwrap initializing the sandbox. The deny now names the
+  switch per framework (`_sandbox_emit.protected_write_paths`). The emission-coverage test now
+  translates between the two path frames, and the integrity tamper test fails if its target
+  string is missing. Found auditing researchteam's rc7 native refresh, 2026-09-30.
+- A generate or update whose `--output` is not the framework's default agents dir, with a sandbox
+  enabled, now warns that the emitted deny path does not protect that team's switch.
 ### fixed (native teams inside bridge targets)
 
 Reported by researchteam, 2026-09-30. Its `.claude/` and `.goose/` are bridges to the canonical
