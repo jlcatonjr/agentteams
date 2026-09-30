@@ -153,6 +153,20 @@ Bundle artifacts:
 - `instructions-map.json`
 - `compatibility-report.md`
 
+### `--interop-skills-only`
+
+With `--interop-from`: import **only** the source team's skills, and write no agent,
+instructions, MCP or runtime-handoffs file. The main use is carrying Claude skills
+(`.claude/skills/<name>/SKILL.md`) into Codex (`.agents/skills/<name>/SKILL.md`) while the Codex
+custom agents stay derived from the canonical team:
+
+```bash
+agentteams --interop-from .claude/agents --framework codex --interop-skills-only --dry-run
+```
+
+Each skill keeps its own authored `name`/`description` front matter. The target must have a skill
+concept (`claude`, `codex`); `--interop-mode bundle` is refused.
+
 ### `--bridge-from DIR`
 
 Generate lightweight target-framework bridge artifacts that reference source canonical agents without regenerating source agent documentation.

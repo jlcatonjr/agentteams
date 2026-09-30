@@ -164,6 +164,9 @@ def _validate_option_combinations(parser: argparse.ArgumentParser, args: argpars
     # has no generation template and no convert/bridge path; it dispatches to
     # canonical.py (materialize/load). Bundle mode is refused here too (the
     # run-time refusal in interop.run_interop stays as the backstop).
+    if getattr(args, "interop_skills_only", False) and not getattr(args, "interop_from", None):
+        parser.error("--interop-skills-only requires --interop-from <source team dir>")
+
     if getattr(args, "framework", None) == "canonical":
         if not getattr(args, "interop_from", None):
             parser.error(

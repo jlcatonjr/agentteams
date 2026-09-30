@@ -377,6 +377,7 @@ def import_from_cai(
     dry_run: bool = False,
     overwrite: bool = False,
     preserve_existing: bool = False,
+    skills_only: bool = False,
 ) -> InteropResult:
     """Import a CAI document into a target framework directory.
 
@@ -386,6 +387,9 @@ def import_from_cai(
         target_dir: The target agents directory.
         dry_run: Report what would be written without writing.
         overwrite: Replace existing agent files (otherwise they are skipped).
+        skills_only: Import only the CAI ``skills[]`` (e.g. Claude skills into Codex
+            ``.agents/skills``) — no agent files, instructions file, MCP artifact or handoff
+            sidecar. The target must have a skill concept.
         preserve_existing: Pinned-sync fidelity: an agent whose on-disk file already exports to
             the canonical entry is left byte-for-byte untouched, and an existing instruction
             file is fence-merged instead of replaced (``interop_helpers.agent_unchanged`` /
@@ -395,7 +399,9 @@ def import_from_cai(
         An :class:`InteropResult` listing converted, skipped and notice entries.
 
     Raises:
-        ValueError: For an unknown target framework, or an MCP server failing re-validation.
+        ValueError: For an unknown target framework, an MCP server failing re-validation, an
+            unsafe agent/skill slug or skill file path, or ``skills_only`` with a target that
+            has no skill concept (including ``canonical``).
     """
     # F.5 guard (plan §5.6): same named exception as export_to_cai — the
     # canonical target dispatches to canonical.py (materialize) instead of a
@@ -404,6 +410,8 @@ def import_from_cai(
         pass
     else:
         raise ValueError(f"Unknown target framework {target_framework!r}")
+    if skills_only and target_framework == "canonical":
+        raise ValueError("--interop-skills-only: the canonical target has no skill concept")
     if target_framework == "canonical":
         from agentteams.canonical import materialize_canonical
 
@@ -417,6 +425,13 @@ def import_from_cai(
 
     adapter = _ADAPTERS[target_framework]()
     result = InteropResult(dry_run=dry_run)
+    if skills_only:
+        # Early return: no agent, instructions, MCP, sidecar or bundle path can run (Rule 12).
+        if not adapter.has_skill_concept():
+            raise ValueError(f"--interop-skills-only: {target_framework!r} has no skill concept")
+        _import_skills(cai, adapter, target_dir, result, {"project_name": "InteropProject"},
+                       dry_run=dry_run, overwrite=overwrite)
+        return result
     # Populate output_files with the roster being imported: render-time team-ref
     # filters (copilot-vscode strips handoff/agents targets outside the team)
     # must recognize the imported team as its own roster, or every cross-agent
@@ -666,39 +681,7 @@ def import_from_cai(
     # render_skill_file exactly as the render pipeline does, with the
     # captured name driving the description label. Frameworks without a
     # skill concept drop skills honestly (their exports capture none).
-    cai_skills = [s for s in (cai.get("skills") or []) if str(s.get("slug", "")).strip()]
-    if cai_skills and adapter.has_skill_concept():
-        for skill in cai_skills:
-            slug = str(skill["slug"]).strip()
-            _require_safe_slug(slug)
-            skill_dir = adapter.skills_dir(target_dir) / slug
-            dest = skill_dir / "SKILL.md"
-            if dest.exists() and not overwrite:
-                result.skipped.append(str(dest))
-                continue
-            captured_name = str((skill.get("front_matter") or {}).get("name") or "").strip()
-            skill_manifest = {
-                "project_name": manifest.get("project_name", ""),
-                "tool_agents": [{"tool_name": captured_name or slug, "slug": slug}],
-            }
-            body = str(skill.get("body_markdown", "")).strip() + "\n"
-            rendered = adapter.render_skill_file(body, slug, skill_manifest)
-            if not dry_run:
-                dest.parent.mkdir(parents=True, exist_ok=True)
-                dest.write_text(rendered, encoding="utf-8")
-            result.converted.append(str(dest))
-            for f in skill.get("files") or []:
-                rel_path = str(f.get("rel_path", "")).strip()
-                if not rel_path or rel_path == "SKILL.md":
-                    continue
-                co_dest = skill_dir / rel_path
-                if co_dest.exists() and not overwrite:
-                    result.skipped.append(str(co_dest))
-                    continue
-                if not dry_run:
-                    co_dest.parent.mkdir(parents=True, exist_ok=True)
-                    co_dest.write_text(str(f.get("content", "")), encoding="utf-8")
-                result.converted.append(str(co_dest))
+    _import_skills(cai, adapter, target_dir, result, manifest, dry_run=dry_run, overwrite=overwrite)
 
     # D.3: MCP servers re-validation and apply (plan §5.4/§8). Every server in
     # the CAI must re-validate against mcp-server.schema.json at IMPORT time —
@@ -771,10 +754,31 @@ def run_interop(
     mode: str = "direct",
     dry_run: bool = False,
     overwrite: bool = False,
+    skills_only: bool = False,
 ) -> InteropResult:
-    """Run interop conversion with optional bundle artifact generation."""
+    """Run interop conversion with optional bundle artifact generation.
+
+    Args:
+        source_dir: The source team's agents directory (or canonical dir).
+        target_framework: A registry framework id, or ``canonical``.
+        target_dir: The target agents directory.
+        source_framework: Source framework id; detected when ``None``.
+        mode: ``direct`` or ``bundle`` (bundle also writes interop artifacts).
+        dry_run: Report without writing.
+        overwrite: Replace existing target files.
+        skills_only: Import only the source team's skills (see :func:`import_from_cai`).
+
+    Returns:
+        The :class:`InteropResult`.
+
+    Raises:
+        ValueError: For an invalid mode, ``skills_only`` with ``bundle`` mode, or any
+            :func:`import_from_cai` refusal.
+    """
     if mode not in {"direct", "bundle"}:
         raise ValueError("interop mode must be 'direct' or 'bundle'")
+    if skills_only and mode == "bundle":
+        raise ValueError("--interop-skills-only does not support --interop-mode bundle")
 
     cai = export_to_cai(source_dir, source_framework=source_framework)
     result = import_from_cai(
@@ -783,6 +787,7 @@ def run_interop(
         target_dir,
         dry_run=dry_run,
         overwrite=overwrite,
+        skills_only=skills_only,
     )
 
     if mode == "bundle":
@@ -925,6 +930,7 @@ from agentteams.interop_helpers import (
     agent_unchanged as _agent_unchanged,
     detect_framework,
     raw_scopes as _raw_scopes,
+    import_skills as _import_skills,
     require_safe_slug as _require_safe_slug,
     capture_mcp_servers as _capture_mcp_servers,
     merge_instruction_file as _merge_instruction_file,

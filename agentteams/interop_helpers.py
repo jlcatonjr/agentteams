@@ -263,6 +263,30 @@ def require_safe_slug(slug: str) -> None:
         raise ValueError(f"unsafe CAI slug {slug!r}: must match {_SAFE_SLUG_RE.pattern} and not contain '..'")
 
 
+def contained_path(base: Path, rel_path: str) -> Path:
+    """Join *rel_path* under *base*, refusing anything that would land outside it.
+
+    A skill's co-located files carry a ``rel_path`` from the CAI document; unchecked, a crafted
+    ``../../x`` wrote anywhere (reachable through ``--interop-skills-only``, 2026-09-29).
+
+    Args:
+        base: The directory the file must stay within (a skill directory).
+        rel_path: The captured relative path.
+
+    Returns:
+        The joined path.
+
+    Raises:
+        ValueError: If *rel_path* is absolute or escapes *base*.
+    """
+    rel = Path(rel_path)
+    joined = base / rel
+    # Lexical check first, then the resolved one (catches a symlink already sitting in the target).
+    if rel.is_absolute() or ".." in rel.parts or not joined.resolve().is_relative_to(base.resolve()):
+        raise ValueError(f"unsafe skill file path {rel_path!r}: must stay inside {base}")
+    return joined
+
+
 def raw_scopes(raw: str) -> list[str]:
     """Canonical tool scopes a raw ``tools:`` string maps to (bracket or comma form).
 
@@ -392,3 +416,72 @@ def detect_framework(source_dir: Path) -> str:
     if has_claude_front_matter:
         return "claude"
     return "copilot-cli"
+
+
+# Carved from interop.py (CH-07, 2026-09-29): shared by the full import and --interop-skills-only.
+def import_skills(
+    cai: dict[str, Any],
+    adapter: Any,
+    target_dir: Path,
+    result: Any,
+    manifest: dict[str, Any],
+    *,
+    dry_run: bool,
+    overwrite: bool,
+) -> None:
+    """Re-emit the CAI ``skills[]`` through the adapter's skill hook (D.1).
+
+    Placement is the adapter's ``skills_dir`` (Claude ``.claude/skills``, Codex
+    ``<root>/.agents/skills``). The body travels verbatim; the front matter is normalized by
+    ``render_skill_file``, keeping the skill's authored ``description``. Frameworks without a
+    skill concept drop skills honestly (their exports capture none). Slugs and co-located file
+    paths are validated so nothing lands outside the skill directory.
+
+    Args:
+        cai: The CAI document.
+        adapter: The target framework adapter.
+        target_dir: The target agents directory.
+        result: The ``InteropResult`` to record converted/skipped paths on.
+        manifest: Import manifest stub (``project_name``).
+        dry_run: Record without writing.
+        overwrite: Replace existing skill files.
+
+    Raises:
+        ValueError: On an unsafe skill slug or co-located file path.
+    """
+    cai_skills = [s for s in (cai.get("skills") or []) if str(s.get("slug", "")).strip()]
+    if cai_skills and adapter.has_skill_concept():
+        for skill in cai_skills:
+            slug = str(skill["slug"]).strip()
+            require_safe_slug(slug)
+            skill_dir = adapter.skills_dir(target_dir) / slug
+            dest = skill_dir / "SKILL.md"
+            if dest.exists() and not overwrite:
+                result.skipped.append(str(dest))
+                continue
+            captured_fm = skill.get("front_matter") or {}
+            captured_name = str(captured_fm.get("name") or "").strip()
+            skill_manifest = {
+                "project_name": manifest.get("project_name", ""),
+                "tool_agents": [{"tool_name": captured_name or slug, "slug": slug}],
+                # Keep the skill's authored description (it is what triggers the skill).
+                "skill_descriptions": {slug: str(captured_fm.get("description") or "").strip()},
+            }
+            body = str(skill.get("body_markdown", "")).strip() + "\n"
+            rendered = adapter.render_skill_file(body, slug, skill_manifest)
+            if not dry_run:
+                dest.parent.mkdir(parents=True, exist_ok=True)
+                dest.write_text(rendered, encoding="utf-8")
+            result.converted.append(str(dest))
+            for f in skill.get("files") or []:
+                rel_path = str(f.get("rel_path", "")).strip()
+                if not rel_path or rel_path == "SKILL.md":
+                    continue
+                co_dest = contained_path(skill_dir, rel_path)
+                if co_dest.exists() and not overwrite:
+                    result.skipped.append(str(co_dest))
+                    continue
+                if not dry_run:
+                    co_dest.parent.mkdir(parents=True, exist_ok=True)
+                    co_dest.write_text(str(f.get("content", "")), encoding="utf-8")
+                result.converted.append(str(co_dest))
