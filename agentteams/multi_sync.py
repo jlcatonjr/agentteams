@@ -37,6 +37,7 @@ from pathlib import Path
 from typing import Any
 
 from agentteams.canonical import load_canonical, materialize_canonical
+from agentteams.frameworks._sandbox_emit import VERIFY_KEY_STORE_SENTINEL_REL
 from agentteams.frameworks.registry import FRAMEWORK_IDS, FRAMEWORKS
 from agentteams.interop import export_to_cai, import_from_cai
 from agentteams.sync_baseline import load_baseline, write_baseline
@@ -238,7 +239,10 @@ def _emit_privilege_artifacts(
     written: list[str] = []
     for rel_path, content in adapter.extra_output_files(manifest):
         base = rel_path.rsplit("/", 1)[-1]
-        if base not in _PRIVILEGE_ARTIFACT_BASENAMES:
+        # The verify-key store sentinel is matched by its full path (a bare ``README.md`` basename
+        # is far too generic): the deny it backs is projected, so it must be too (bwrap cannot
+        # start on a missing deny path).
+        if base not in _PRIVILEGE_ARTIFACT_BASENAMES and rel_path != VERIFY_KEY_STORE_SENTINEL_REL:
             continue  # skip .goosehints / capability refs / etc. — privilege set only
         target = (agents_dir / rel_path).resolve()
         written.append(str(target))

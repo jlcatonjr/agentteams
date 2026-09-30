@@ -37,6 +37,11 @@ _SANDBOX_COMMENT_LINES: list[str] = [
     "the workspace, so this confines writes to WITHIN the project (it does not restrict",
     "writes between project subdirectories). Native Windows has no OS enforcement; there",
     "this block is advisory only. To remove it: delete the `sandbox` key.",
+    "denyWrite also names the decision-signing verify-key store DIRECTORY",
+    "(<agents dir>/references/authorized-verify-keys), so an agent cannot plant its own",
+    "public key. Whether Claude Code honours a DIRECTORY denyWrite entry is UNVERIFIED",
+    "until a real-host test passes; test it before relying on it. This closes key",
+    "PLANTING only: it does not stop an agent that can read your private signing key.",
 ]
 
 
@@ -174,11 +179,57 @@ _DEFAULT_PROTECTED_READ_PATHS: tuple[str, ...] = (
 #:   Claude Code's ``.claude/`` auto-protection claim is itself unverified (open item B-7 / P1-5),
 #:   so the claude switch is listed explicitly even though it sits under ``.claude/``.
 #: - the gate hook is added belt-and-suspenders for the same reason.
+#: - the decision-signing Ed25519 verify-key store (``decision_log._VERIFY_KEY_STORE_REL``, a
+#:   DIRECTORY of operator-provisioned ``<key-id>.pub.pem``) sits beside the switch in the team's
+#:   ``references/``. Unprotected, an agent could plant its own public key and self-sign a
+#:   relaxing authorization (2026-09-30). Its path is DERIVED from the switch path (one
+#:   per-framework agents-dir mapping, no second copy). A missing deny path stops bwrap
+#:   initializing, so the store must exist whenever this deny is emitted: the adapters emit
+#:   :data:`VERIFY_KEY_STORE_SENTINEL_REL` from the SAME branch that emits the deny.
+#:   HONEST LIMITS: this closes the key-PLANTING route only. Self-signing stays possible while
+#:   the operator's private key is readable in the sandbox (remediation F-1, open). Claude Code's
+#:   handling of a DIRECTORY ``denyWrite`` entry is UNVERIFIED pending a real-host test (only
+#:   directory ``denyRead`` is verified). The goose Seatbelt arm relies on the existing
+#:   ``(subpath …)`` semantics (the directory and all its descendants).
+#: - DELIBERATELY NOT denied: the ledgers (``security-decisions.log.csv`` etc.; the in-sandbox gate
+#:   rewrites them to consume use counts, and their integrity is signatures + hash chains) and
+#:   ``signing-governed.marker`` (creating it only makes the workspace stricter).
 _AGENT_PRIVILEGE_SWITCH: dict[str, str] = {
     "claude": ".claude/agents/references/agent-privilege.json",
     "goose": ".goose/recipes/references/agent-privilege.json",
 }
 _GATE_HOOK_PATH = ".claude/hooks/constitutional-gate.py"
+
+#: The verify-key store's name inside the team ``references/``. ``decision_log`` reads
+#: ``references/authorized-verify-keys``; a test locks the two together (``frameworks`` must not
+#: import ``cli``).
+_VERIFY_KEY_STORE_NAME = "authorized-verify-keys"
+
+#: Agents-dir-relative path of the tool-owned sentinel that makes the verify-key store exist.
+#: Never a ``*.pem`` name, so ``decision_log._load_verify_key`` can never select it.
+VERIFY_KEY_STORE_SENTINEL_REL = f"references/{_VERIFY_KEY_STORE_NAME}/README.md"
+
+#: FROZEN sentinel text. Do not edit: once a team is confined the store (and so this file) is
+#: write-denied, and an in-sandbox ``--update`` that tried to rewrite changed text would fail on a
+#: read-only path. ``tests/test_workspace_privilege_scoping.py`` pins its digest.
+VERIFY_KEY_STORE_SENTINEL_TEXT = (
+    "# authorized-verify-keys\n"
+    "\n"
+    "This directory holds the operator-provisioned Ed25519 public verify keys for\n"
+    "decision signing, one `<key-id>.pub.pem` file per key. The operator provisions\n"
+    "keys OUTSIDE any agent sandbox.\n"
+    "\n"
+    "When the team is sandboxed (confined/exclusive), this directory is write-denied\n"
+    "to in-sandbox agents so an agent cannot plant its own key. agentteams emits only\n"
+    "this README (so the denied path always exists) and never writes, rewrites or\n"
+    "deletes any `*.pub.pem` file here.\n"
+)
+
+
+def _verify_key_store_path(framework: str) -> str:
+    """Return ``framework``'s project-root-relative verify-key store dir, derived from its switch."""
+    references_dir = _AGENT_PRIVILEGE_SWITCH[framework].rsplit("/", 1)[0]
+    return f"{references_dir}/{_VERIFY_KEY_STORE_NAME}"
 
 
 def protected_write_paths(framework: str) -> tuple[str, ...]:
@@ -188,12 +239,13 @@ def protected_write_paths(framework: str) -> tuple[str, ...]:
         framework: ``"claude"`` or ``"goose"`` (the frameworks with an emitted sandbox).
 
     Returns:
-        The switch path for that framework's default agents dir, then the gate hook.
+        The switch path for that framework's default agents dir, the gate hook, then the
+        verify-key store directory (see the comment above for its unverified Claude arm).
 
     Raises:
         KeyError: ``framework`` emits no sandbox.
     """
-    return (_AGENT_PRIVILEGE_SWITCH[framework], _GATE_HOOK_PATH)
+    return (_AGENT_PRIVILEGE_SWITCH[framework], _GATE_HOOK_PATH, _verify_key_store_path(framework))
 
 
 #: The Claude set (kept under its original name for existing importers).

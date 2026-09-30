@@ -5,7 +5,8 @@
 ## SB18 — The boundary content is tamper-tracked  ✅
 
 `enforcement-integrity.json` pins a sha256 of every enforcement module. For sandboxing it pins **both**
-the emitters (`_sandbox_emit.py`, `_linux_sandbox_emit.py`) **and** the launcher **asset**
+the emitters (`_sandbox_emit.py`, `_goose_sandbox_emit.py`, `_linux_sandbox_emit.py`), the
+gate-hook wiring example (`settings.hooks.example.json`) **and** the launcher **asset**
 (`templates/universal/sandbox/confine-run.sh`) — because the bwrap flags that *are* the boundary live in
 the `.sh`, so pinning the `.py` alone would leave the boundary content untracked. A silent edit dropping
 `--unshare-net` trips `--verify-integrity` (red-team probe E4) instead of passing unnoticed.
@@ -17,8 +18,8 @@ detectable.
 > **Ceiling.** The content pin makes an *edit* tamper-evident; it is not tamper-proof, and — as SB12
 > notes — it protects only textual flags, not bwrap's implicit defaults (NoNewPrivs has no line to diff).
 
-*Source:* `agentteams/integrity.py:65` (`_sandbox_emit.py`), `:71` (`_linux_sandbox_emit.py`), `:77`
-(`confine-run.sh`); `references/enforcement-integrity.json`; `tests/test_redteam_integrity_coverage.py`.
+*Source:* `agentteams/integrity.py:65` (`_sandbox_emit.py`), `:71` (`_goose_sandbox_emit.py`), `:76`
+(`settings.hooks.example.json`), `:82` (`_linux_sandbox_emit.py`), `:88` (`confine-run.sh`); `references/enforcement-integrity.json`; `tests/test_redteam_integrity_coverage.py`.
 
 ## SB19 — Cross-repo single-source-of-truth & drift protocol  ✅/⚙
 

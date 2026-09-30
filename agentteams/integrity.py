@@ -63,6 +63,17 @@ ENFORCEMENT_MODULES: tuple[str, ...] = (
     # allowWrite / denyRead / denyWrite (D-3 control-plane protection). A silent edit here (e.g.
     # dropping the denyWrite or widening allowWrite) weakens every emitted boundary.
     "agentteams/frameworks/_sandbox_emit.py",
+    # The goose SEATBELT emitter (2026-09-30; @security CONDITIONAL PASS). The goose analog of
+    # _sandbox_emit.py: it builds .goose/sandbox.sb, including the `(deny file-write* …)`
+    # control-plane block (switch, gate hook, verify-key store, the profile itself). It was the
+    # one sibling emitter left unpinned, so a silent edit dropping a control-plane entry weakened
+    # every emitted goose/macOS boundary without tripping --verify-integrity or E4.
+    "agentteams/frameworks/_goose_sandbox_emit.py",
+    # The settings example that WIRES the gate hook into PreToolUse and receives the injected
+    # sandbox block (2026-09-30). Neutering its hook wiring disables the gate once merged: the same
+    # D-1 class as the pinned hook template below. Safe to pin: the sandbox block is injected into
+    # the OUTPUT, never written back to this template.
+    "agentteams/templates/universal/hooks/settings.hooks.example.json",
     # The framework-neutral LINUX sandbox EMITTER (2026-W36; framework-neutral Linux OS-confinement).
     # Emits the provider-agnostic bwrap launcher (sandbox/confine-run.sh) that is the Linux boundary
     # for a confined/exclusive team of ANY framework. Same D-2b class as _sandbox_emit.py: a silent

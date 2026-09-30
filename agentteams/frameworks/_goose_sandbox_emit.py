@@ -45,7 +45,11 @@ from pathlib import Path
 from typing import Any
 
 from agentteams.host_features import is_sandbox_capable
-from agentteams.frameworks._sandbox_emit import _DEFAULT_PROTECTED_READ_PATHS
+from agentteams.frameworks._sandbox_emit import (
+    _DEFAULT_PROTECTED_READ_PATHS,
+    VERIFY_KEY_STORE_SENTINEL_REL,
+    VERIFY_KEY_STORE_SENTINEL_TEXT,
+)
 
 #: Output paths (relative to the Goose agents dir ``.goose/recipes/``) the emitter writes.
 #: ``../`` lands them in ``.goose/`` alongside ``recipes/`` — inert artifacts, never the
@@ -273,7 +277,9 @@ def _build_seatbelt_profile(
     ]
     # Control-plane deny-write (parity with the Claude denyWrite / _PROTECTED_WRITE_PATHS —
     # audit 2026-W39 hygiene RANK3): a confined agent must not edit its own enforcement
-    # switch, gate hook, or its OWN Seatbelt profile. Emitted AFTER the workspace allow so
+    # switch, gate hook, decision-signing verify-key store (a directory: `(subpath …)` covers it
+    # and all descendants, so no key can be planted in it), or its OWN Seatbelt profile. Emitted
+    # AFTER the workspace allow so
     # last-match-wins denies these even though they sit inside the writable workspace.
     control_plane = [*protected_write_paths("goose"), ".goose/sandbox.sb"]
     cp_exprs = [e for e in (_seatbelt_path_expr(p) for p in control_plane) if e]
@@ -486,7 +492,8 @@ def _detect_goose_sandbox_support() -> tuple[bool, str]:
 def goose_sandbox_output_files(manifest: dict[str, Any]) -> list[tuple[str, str]]:
     """Return the (rel_path, content) files for goose confinement, or [] when not applicable.
 
-    Emits the macOS Seatbelt profile ONLY, and only when confinement is REQUESTED
+    Emits the macOS Seatbelt profile (with its config example and the verify-key store sentinel
+    its control-plane deny names) ONLY, and only when confinement is REQUESTED
     (:func:`_goose_sandbox_feature_enabled`) AND the platform is macOS (the explicit ``darwin``
     guard below). Off macOS this returns ``[]`` — but that is NOT "no boundary": on **Linux** the
     boundary is the framework-neutral bwrap launcher emitted by ``base.extra_output_files`` /
@@ -516,9 +523,15 @@ def goose_sandbox_output_files(manifest: dict[str, Any]) -> list[tuple[str, str]
     config_text = _build_config_example(
         write_roots, exclusive=deny_read is not None, egress_endpoint=egress_endpoint
     )
+    # The profile's control-plane deny names the verify-key store directory, so its frozen
+    # sentinel ships with the profile and only with it (Seatbelt tolerates a missing path, but the
+    # store must exist for parity with the bwrap arms and for the same emit-together invariant).
+    # This closes key PLANTING only; self-signing stays possible while F-1 (private key readable
+    # in the sandbox) is open.
     return [
         (GOOSE_SANDBOX_PROFILE_REL, profile_text),
         (GOOSE_CONFIG_EXAMPLE_REL, config_text),
+        (VERIFY_KEY_STORE_SENTINEL_REL, VERIFY_KEY_STORE_SENTINEL_TEXT),
     ]
 
 

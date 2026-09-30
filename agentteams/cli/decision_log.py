@@ -529,8 +529,11 @@ def _assert_relaxing_row_is_traceable(
 
 #: Where the tracked Ed25519 public verify keys live, one per key-id (WS-B). Agents hold only these
 #: public keys (they can verify a relaxing authorization, never mint one). This dir is itself a
-#: trust anchor (WS-D/R1): it is in the governance-target vocabulary and must be integrity-pinned +
-#: sandbox denyWrite so an agent cannot drop its own public key and self-sign.
+#: trust anchor (WS-D/R1): it is in the governance-target vocabulary, and this module is
+#: integrity-pinned. The dir is sandbox write-denied by ``_sandbox_emit.protected_write_paths``
+#: (which emits a README sentinel so the path exists) so an agent cannot plant its own public key.
+#: That closes key PLANTING only; the Claude directory-denyWrite arm is unverified on a real host,
+#: and self-signing stays possible while the private key is readable in the sandbox (F-1).
 _VERIFY_KEY_STORE_REL = "references/authorized-verify-keys"
 
 #: A key-id must be a safe bare filename stem (no path separators / traversal).

@@ -6,6 +6,28 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### security (sandbox write-denies the decision-signing verify-key store; goose emitter pinned)
+
+- The Claude sandbox block (`claude:sandbox`) and the goose Seatbelt control-plane deny now also
+  write-deny the Ed25519 verify-key store, `<agents dir>/references/authorized-verify-keys/`
+  (`_sandbox_emit.protected_write_paths`, derived from the same per-framework switch mapping).
+  Before this, an in-sandbox agent could plant its own `<key-id>.pub.pem` there and self-sign a
+  relaxing authorization. **This closes the key-planting route only.** Self-signing is still
+  possible while the operator's private signing key is readable inside the sandbox (remediation
+  F-1, open). The Claude arm is **unverified**: only directory `denyRead` has been tested on a real
+  host, and whether Claude Code honours a directory `denyWrite` entry awaits a real-host test. The
+  goose arm relies on the existing Seatbelt `(subpath …)` semantics (the directory and everything
+  under it).
+- A bwrap sandbox fails to start on a missing deny path, so the store now always exists when the
+  deny is emitted: a frozen `README.md` sentinel is emitted into it from the same code branch that
+  emits the deny (Claude settings example; goose `sandbox.sb`; pinned-sync projection). The
+  sentinel is never a `*.pem` name, `_load_verify_key` treats a sentinel-only store as absent, and
+  nothing writes, rewrites or deletes an operator `*.pub.pem`. `--prune` never targets the store,
+  because the sentinel is an adapter extra and not a planned output file.
+- `frameworks/_goose_sandbox_emit.py` (the goose Seatbelt control-plane deny) and
+  `templates/universal/hooks/settings.hooks.example.json` (the gate-hook wiring) are now in
+  `integrity.ENFORCEMENT_MODULES`. `references/enforcement-integrity.json` was regenerated.
+
 ### security (sandbox `denyWrite` protects the real signing switch)
 
 - The Claude sandbox block (`claude:sandbox`) and the goose Seatbelt profile write-denied

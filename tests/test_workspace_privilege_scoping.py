@@ -320,6 +320,7 @@ def test_build_sandbox_block_shape_and_defaults():
             "denyWrite": [
                 ".claude/agents/references/agent-privilege.json",
                 ".claude/hooks/constitutional-gate.py",
+                ".claude/agents/references/authorized-verify-keys",
             ],
         },
         "allowUnsandboxedCommands": False,
@@ -883,37 +884,209 @@ def test_advisory_fires_for_direct_token_on_non_sandbox_host():
 # emission and leaving a dangling denyWrite (the Linux-fragile partial state).
 # ---------------------------------------------------------------------------
 
-def test_every_denywrite_control_file_is_emitted(tmp_path):
-    from agentteams.frameworks._sandbox_emit import _PROTECTED_WRITE_PATHS
+@pytest.mark.parametrize("framework", ["claude", "goose"])
+def test_every_denywrite_control_file_is_emitted(tmp_path, monkeypatch, framework):
+    import posixpath
+    import sys
+
+    from agentteams.frameworks._sandbox_emit import protected_write_paths
+    from agentteams.frameworks.goose import GooseAdapter
     from agentteams.cli.artifacts import _write_agent_privilege_config, AGENT_PRIVILEGE_REL_PATH
 
+    # The goose Seatbelt profile (and so its deny) is emitted on darwin only.
+    monkeypatch.setattr(sys, "platform", "darwin")
+    adapter = ClaudeAdapter() if framework == "claude" else GooseAdapter()
     m = analyze.build_manifest(
         {"project_goal": "x", "project_name": "T", "privilege_profile": "confined"},
-        framework="claude",
+        framework=framework,
     )
     # 1) the enforce_decision_signing switch is emitted (default-on manifest).
     switch = _write_agent_privilege_config(m, tmp_path)
     assert switch is not None and switch.as_posix().endswith(AGENT_PRIVILEGE_REL_PATH)
 
-    # 2) the constitutional-gate hook is emitted by the claude adapter (../hooks/... -> .claude/hooks/).
-    emitted = dict(ClaudeAdapter().extra_output_files({"host_features": ["claude:sandbox"]}))
-    hook_targets = {
-        rel.replace("../", ".claude/") for rel in emitted  # normalize the agents-dir-relative path
-    }
-
-    # 3) EVERY denyWrite entry must be covered by an actual emission — no dangling deny path.
-    # denyWrite paths are PROJECT-root-relative; the switch is written relative to the AGENTS
-    # dir. Translate it through the adapter's own agents dir — comparing the two frames directly
-    # is what let a bare `references/agent-privilege.json` (a path nothing writes) pass here.
+    # 2) the adapter's own emissions (gate hook, verify-key store sentinel, ...). They are
+    # AGENTS-dir-relative; denyWrite paths are PROJECT-root-relative. Translate every emission
+    # through the adapter's own agents dir — comparing the two frames directly is what let a bare
+    # `references/agent-privilege.json` (a path nothing writes) pass here.
     root = Path("/proj")
-    agents_rel = ClaudeAdapter().get_agents_dir(root).relative_to(root).as_posix()
-    covered = {f"{agents_rel}/{AGENT_PRIVILEGE_REL_PATH}"} | hook_targets
-    for deny_path in _PROTECTED_WRITE_PATHS:
-        assert deny_path in covered, (
+    agents_rel = adapter.get_agents_dir(root).relative_to(root).as_posix()
+    emitted = [
+        posixpath.normpath(f"{agents_rel}/{rel}") for rel, _ in adapter.extra_output_files(m)
+    ]
+    emitted.append(f"{agents_rel}/{AGENT_PRIVILEGE_REL_PATH}")
+
+    # 3) EVERY deny entry must be covered by an actual emission — no dangling deny path. A
+    # DIRECTORY deny (the verify-key store) is covered by an emitted file inside it.
+    deny_paths = protected_write_paths(framework)
+    assert f"{agents_rel}/references/authorized-verify-keys" in deny_paths
+    for deny_path in deny_paths:
+        if framework == "goose" and deny_path == ".claude/hooks/constitutional-gate.py":
+            # Pre-existing: the goose Seatbelt deny names the Claude gate hook, which a goose
+            # team does not emit. Seatbelt tolerates a missing path (only bwrap does not).
+            continue
+        covered = any(p == deny_path or p.startswith(deny_path + "/") for p in emitted)
+        assert covered, (
             f"denyWrite names {deny_path!r} but nothing emits it — on Linux bwrap cannot bind a "
             f"missing deny path and the sandbox fails to initialize (D-3 fragility). "
             f"Emit the file or remove it from _PROTECTED_WRITE_PATHS."
         )
+
+
+# ---------------------------------------------------------------------------
+# Decision-signing verify-key store (2026-09-30): write-denied, kept existing by a frozen
+# sentinel emitted in the SAME branch as the deny. Closes key PLANTING only (F-1 open).
+# ---------------------------------------------------------------------------
+
+_STORE_SENTINEL = "references/authorized-verify-keys/README.md"
+
+
+def test_verify_key_store_deny_is_locked_to_the_reader_in_both_frames():
+    from agentteams.cli import decision_log
+    from agentteams.frameworks._sandbox_emit import (
+        VERIFY_KEY_STORE_SENTINEL_REL,
+        _PROTECTED_WRITE_PATHS,
+        protected_write_paths,
+    )
+    from agentteams.frameworks.goose import GooseAdapter
+
+    root = Path("/proj")
+    for fw, adapter in (("claude", ClaudeAdapter()), ("goose", GooseAdapter())):
+        agents_rel = adapter.get_agents_dir(root).relative_to(root).as_posix()
+        assert f"{agents_rel}/{decision_log._VERIFY_KEY_STORE_REL}" in protected_write_paths(fw)
+    assert VERIFY_KEY_STORE_SENTINEL_REL == f"{decision_log._VERIFY_KEY_STORE_REL}/README.md"
+    block = _build_sandbox_block(None)
+    assert ".claude/agents/references/authorized-verify-keys" in block["filesystem"]["denyWrite"]
+    assert list(_PROTECTED_WRITE_PATHS) == block["filesystem"]["denyWrite"]
+
+
+def test_seatbelt_control_plane_denies_the_verify_key_store_after_the_workspace_allow():
+    from agentteams.frameworks._goose_sandbox_emit import _build_seatbelt_profile
+
+    prof = _build_seatbelt_profile(["."], deny_read=None, egress_endpoint=None)
+    expr = ('(subpath (string-append (param "WORKSPACE_ROOT") '
+            '"/.goose/recipes/references/authorized-verify-keys"))')
+    assert expr in prof
+    cp = prof.index(";; --- Control-plane protection")
+    assert prof.index(expr) > cp > prof.index('(subpath (param "WORKSPACE_ROOT"))')
+
+
+def test_verify_key_store_sentinel_is_frozen_and_never_a_pem():
+    import hashlib
+
+    from agentteams.frameworks._sandbox_emit import (
+        VERIFY_KEY_STORE_SENTINEL_REL,
+        VERIFY_KEY_STORE_SENTINEL_TEXT,
+    )
+
+    assert VERIFY_KEY_STORE_SENTINEL_REL == _STORE_SENTINEL
+    assert not VERIFY_KEY_STORE_SENTINEL_REL.endswith(".pem")
+    # FROZEN: once confined, the store is write-denied, so a changed sentinel would make an
+    # in-sandbox --update fail on a read-only path. Do not update this digest casually.
+    assert hashlib.sha256(VERIFY_KEY_STORE_SENTINEL_TEXT.encode()).hexdigest() == (
+        "8f3466d172a12a200c7c70ad9ae88f75efa1ef0d9362823dd2a513936d4ec6c0"
+    )
+
+
+def test_load_verify_key_treats_a_sentinel_only_store_as_absent(tmp_path):
+    from agentteams.cli.decision_log import _load_verify_key
+    from agentteams.frameworks._sandbox_emit import VERIFY_KEY_STORE_SENTINEL_TEXT
+
+    def _err(root: Path, key_id: str) -> str:
+        with pytest.raises(RuntimeError) as exc:
+            _load_verify_key(root, key_id)
+        return str(exc.value)
+
+    absent = tmp_path / "absent"
+    absent.mkdir()
+    present = tmp_path / "present"
+    (present / "references" / "authorized-verify-keys").mkdir(parents=True)
+    (present / _STORE_SENTINEL).write_text(VERIFY_KEY_STORE_SENTINEL_TEXT, encoding="utf-8")
+    for key_id in ("op1", "README", "README.md"):
+        assert "is unavailable" in _err(present, key_id)
+        assert _err(present, key_id) == _err(absent, key_id)
+
+
+def test_claude_sentinel_is_emitted_only_alongside_the_deny(monkeypatch):
+    import agentteams.frameworks.claude as claude_mod
+
+    def _emit(manifest):
+        files = dict(ClaudeAdapter().extra_output_files(manifest))
+        example = files.get("../settings.hooks.example.json")
+        deny = example is not None and "sandbox" in json.loads(example)
+        return deny, _STORE_SENTINEL in files
+
+    assert _emit({"host_features": ["claude:sandbox"]}) == (True, True)
+    assert _emit({"privilege_profile": "cooperative", "host_features": []}) == (False, False)
+    real = claude_mod._read_template_asset
+    for missing in ("hooks/constitutional-gate.py", "hooks/settings.hooks.example.json"):
+        monkeypatch.setattr(
+            claude_mod, "_read_template_asset", lambda rel, m=missing: "" if rel == m else real(rel)
+        )
+        assert _emit({"host_features": ["claude:sandbox"]}) == (False, False), missing
+    assert not any(p.endswith(".pem") for p, _ in ClaudeAdapter().extra_output_files(
+        {"host_features": ["claude:sandbox"]}))
+
+
+def test_goose_sentinel_is_emitted_only_alongside_the_seatbelt_deny(monkeypatch):
+    import sys
+
+    from agentteams.frameworks._goose_sandbox_emit import goose_sandbox_output_files
+
+    confined = {"privilege_profile": "confined", "host_features": ["goose:sandbox"]}
+    for plat in ("linux", "win32", "darwin"):
+        monkeypatch.setattr(sys, "platform", plat)
+        files = dict(goose_sandbox_output_files(confined))
+        assert ("../sandbox.sb" in files) == (_STORE_SENTINEL in files) == (plat == "darwin")
+        assert goose_sandbox_output_files({"privilege_profile": "cooperative"}) == []
+
+
+def test_pinned_sync_projects_the_sentinel_with_the_deny(tmp_path):
+    from agentteams import multi_sync as ms
+
+    written = ms._emit_privilege_artifacts(
+        tmp_path, "claude", {"privilege_profile": "confined"}, dry_run=False
+    )
+    assert any(w.endswith("settings.hooks.example.json") for w in written)
+    assert (tmp_path / ".claude" / "agents" / _STORE_SENTINEL).is_file()
+
+
+def test_prune_never_removes_the_verify_key_store(tmp_path, monkeypatch):
+    """--prune deletes only planned ``output_files`` the new manifest dropped; the store sentinel is
+    an adapter extra (never planned), so neither it nor an operator key is ever a prune target."""
+    import build_team
+    from agentteams import drift
+    from agentteams.cli import security_gate
+    from agentteams.frameworks._sandbox_emit import VERIFY_KEY_STORE_SENTINEL_TEXT
+
+    def _manifest(profile: str) -> dict:
+        return analyze.build_manifest(
+            {"project_goal": "x", "project_name": "T", "privilege_profile": profile},
+            framework="claude",
+        )
+
+    confined, cooperative = _manifest("confined"), _manifest("cooperative")
+    for m in (confined, cooperative):
+        assert not any("authorized-verify-keys" in f["path"] for f in m["output_files"])
+
+    out = tmp_path / ".claude" / "agents"
+    store = out / "references" / "authorized-verify-keys"
+    store.mkdir(parents=True)
+    (out / _STORE_SENTINEL).write_text(VERIFY_KEY_STORE_SENTINEL_TEXT, encoding="utf-8")
+    (store / "op1.pub.pem").write_text("operator key\n", encoding="utf-8")
+    dropped = {"path": "dropped.agent.md", "template": "x", "type": "agent"}
+    (out / "dropped.agent.md").write_text("gone\n", encoding="utf-8")
+    old_log = {"output_files_map": [*confined["output_files"], dropped], "template_hashes": {},
+               "agent_slug_list": confined.get("agent_slug_list", [])}
+    templates = Path(__file__).resolve().parents[1] / "agentteams" / "templates"
+    for new in (confined, cooperative):  # incl. sandbox switched OFF (the sentinel no longer emitted)
+        report = drift.compute_structural_diff(old_log, new, templates)
+        assert report.removed_files
+        assert not any("authorized-verify-keys" in f["path"] for f in report.removed_files)
+    monkeypatch.setattr(security_gate, "_assert_destructive_action_allowed", lambda *a, **k: None)
+    assert build_team._prune_removed_files(report.removed_files, out, True, False) == 0
+    assert not (out / "dropped.agent.md").exists()  # the prune really ran
+    assert (out / _STORE_SENTINEL).read_text(encoding="utf-8") == VERIFY_KEY_STORE_SENTINEL_TEXT
+    assert (store / "op1.pub.pem").read_text(encoding="utf-8") == "operator key\n"
 
 
 def test_bridge_does_not_propagate_a_sandbox_block():
