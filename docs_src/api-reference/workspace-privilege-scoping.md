@@ -81,7 +81,11 @@ Claude Code exit 1 with "sandbox required but unavailable … refusing to start"
 was written. The trade-off is intended: a host that lacks the sandbox dependencies can no
 longer start Claude Code in a project whose `settings.json` merged the block. A block
 generated on **native Windows** omits the key, because Claude Code has no OS sandbox there
-and the key would stop it starting at all; there the block stays advisory.
+and the key would stop it starting at all; there the block stays advisory. The platform is taken
+from the **generating** host, so a block generated on Windows (or any host other than
+Linux or macOS) and then run on Linux still **fails open**. Regenerate it on the target
+platform, or add `"failIfUnavailable": true` by hand. `--update` on a Linux or macOS host
+prints a notice while a merged block lacks the key.
 
 **If you merged an earlier block**, re-run `agentteams --update` and re-merge the `sandbox`
 block into `.claude/settings.json`, or add the one line `"failIfUnavailable": true` to your
