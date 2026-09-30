@@ -636,3 +636,25 @@ def test_nondefault_output_warning_names_every_protected_path(tmp_path, capsys, 
     default = tmp_path / (".claude/agents" if framework == "claude" else ".goose/recipes")
     _warn_sandbox_deny_path_mismatch(manifest, default)
     assert capsys.readouterr().err == ""
+
+
+def test_manifest_expected_never_runs_a_planted_fsmonitor(tmp_path):
+    """@security PR-D C1: the gate hook runs this outside the sandbox, in a repo the agent can
+    write. A `core.fsmonitor` planted in the repo's own .git/config must not execute."""
+    import shutil as _sh
+    import subprocess as _sp
+
+    if _sh.which("git") is None:
+        pytest.skip("git not available")
+    from agentteams import integrity
+
+    repo = tmp_path / "repo"
+    repo.mkdir()
+    _sp.run(["git", "init", "-q", str(repo)], check=True)
+    marker = tmp_path / "PWNED"
+    hook = tmp_path / "fsmon.sh"
+    hook.write_text(f"#!/bin/sh\ntouch '{marker}'\n", encoding="utf-8")
+    hook.chmod(0o755)
+    _sp.run(["git", "-C", str(repo), "config", "core.fsmonitor", str(hook)], check=True)
+    integrity._manifest_expected(repo)
+    assert not marker.exists(), "a repo-planted core.fsmonitor ran outside the sandbox"

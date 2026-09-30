@@ -26,6 +26,7 @@ harness (where agents cannot write it) and keep signing keys outside the agent's
 from __future__ import annotations
 
 import hashlib
+import os
 import importlib.util
 import json
 import subprocess
@@ -175,9 +176,15 @@ def _manifest_expected(repo_root: Path) -> bool:
         if scanner.is_relative_to(root) and scanner != root / "agentteams" / "scan.py":
             return True
     try:
+        # This runs from the gate hook, OUTSIDE the sandbox, in a repository the agent can write.
+        # Command-line -c overrides the repo's own config, so a planted `core.fsmonitor` (which git
+        # executes during ls-files) or hooks path cannot run code here (@security, PR-D C1).
         tracked = subprocess.run(
-            ["git", "-C", str(root), "ls-files", "--error-unmatch", "--", MANIFEST_REL_PATH],
+            ["git", "-c", "core.fsmonitor=false", "-c", "core.hooksPath=/dev/null",
+             "-c", "core.untrackedCache=false", "-C", str(root),
+             "ls-files", "--error-unmatch", "--", MANIFEST_REL_PATH],
             capture_output=True, text=True, timeout=10, check=False,
+            env={**os.environ, "GIT_OPTIONAL_LOCKS": "0", "GIT_TERMINAL_PROMPT": "0"},
         )
     except (OSError, subprocess.SubprocessError):
         return False
