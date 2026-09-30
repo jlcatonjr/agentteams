@@ -48,6 +48,8 @@ from ._sandbox_emit import (  # re-exported so existing importers keep resolving
     _READ_EXCLUSION_ABSPATH_COMMENT_LINES,
     _READ_EXCLUSION_COMMENT_LINES,
     _SANDBOX_COMMENT_LINES,
+    VERIFY_KEY_STORE_SENTINEL_REL,
+    VERIFY_KEY_STORE_SENTINEL_TEXT,
     _build_sandbox_block,
     _exclusive_read_deny_paths,
     _inject_sandbox_block,
@@ -252,6 +254,11 @@ class ClaudeAdapter(FrameworkAdapter):
                         manifest.get("resolve_deny_read_abspath")
                     ),
                 )
+                # The sandbox block's denyWrite names the verify-key store DIRECTORY, and bwrap
+                # cannot start on a missing deny path, so the store's frozen sentinel is emitted
+                # in THIS branch and only here: never the deny without the sentinel, nor the
+                # sentinel without the deny. It never touches operator ``*.pub.pem`` files.
+                files.append((VERIFY_KEY_STORE_SENTINEL_REL, VERIFY_KEY_STORE_SENTINEL_TEXT))
             files.append(("../settings.hooks.example.json", example))
         return files
 

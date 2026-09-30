@@ -46,8 +46,9 @@ it already ships (`.claude/settings.hooks.example.json`):
     "filesystem": {
       "allowWrite": ["."],
       "denyWrite": [
-        "references/agent-privilege.json",
-        ".claude/hooks/constitutional-gate.py"
+        ".claude/agents/references/agent-privilege.json",
+        ".claude/hooks/constitutional-gate.py",
+        ".claude/agents/references/authorized-verify-keys"
       ]
     },
     "allowUnsandboxedCommands": false
@@ -134,6 +135,16 @@ Two properties matter for the privilege model:
   > exist; a hand-assembled or partial team must ensure they are present.
   > `tests/test_workspace_privilege_scoping.py::test_every_denywrite_control_file_is_emitted`
   > guards that generation keeps emitting every path the `denyWrite` list names.
+- **The decision-signing verify-key store is `denyWrite`-protected too.** The directory
+  `<agents dir>/references/authorized-verify-keys/` holds the operator's Ed25519 public
+  verify keys (`<key-id>.pub.pem`). It is denied so an in-sandbox agent cannot plant its
+  own key. The store must exist for bwrap to start, so generation emits a frozen
+  `README.md` sentinel into it, in the same step that emits the deny. agentteams never
+  writes, rewrites or deletes a `*.pub.pem`. Limits: this closes the key-*planting* route
+  only, and an agent that can read the operator's private signing key can still self-sign
+  (open item F-1). Whether Claude Code honours a **directory** `denyWrite` entry is
+  **unverified** until a real-host test passes. The goose Seatbelt profile denies the same
+  directory with `(subpath …)`, which covers everything under it.
 - **`allowUnsandboxedCommands: false`** closes the `dangerouslyDisableSandbox`
   escape hatch.
 

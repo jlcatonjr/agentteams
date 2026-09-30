@@ -66,9 +66,13 @@ boundary a generated team requests (`agentteams/host_features.py:134-261`). An
 
 **`denyWrite` protects the control plane; `denyRead` hardens outbound.**
 Independent of profile, the emitted sandbox applies **`denyWrite` of exact
-control-plane paths** — `references/agent-privilege.json` and
-`.claude/hooks/constitutional-gate.py` — deny-over-allow, so an in-sandbox agent
-cannot rewrite the enforcement plane governing it. `exclusive` adds **`denyRead`
+control-plane paths** — `<agents dir>/references/agent-privilege.json`,
+`.claude/hooks/constitutional-gate.py` and the verify-key store directory
+`<agents dir>/references/authorized-verify-keys/` — deny-over-allow, so an in-sandbox agent
+cannot rewrite the enforcement plane governing it. The store deny closes key *planting*
+only: self-signing stays possible while the private signing key is readable in the
+sandbox (F-1), and the Claude directory-`denyWrite` arm is unverified pending a real-host
+test. `exclusive` adds **`denyRead`
 of credential directories** (SSH/AWS/etc.): outbound hardening of *files, not env
 vars* — it stops the confined agent reading *your* credential tree, not others
 reading yours.

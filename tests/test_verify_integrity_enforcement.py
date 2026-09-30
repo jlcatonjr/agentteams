@@ -172,3 +172,46 @@ def test_tampering_with_the_sandbox_emitter_trips_verify(tmp_path) -> None:
     assert tampered != original, "tamper target not found — the test would pass vacuously"
     victim.write_text(tampered, encoding="utf-8")
     assert _run_verify_integrity(_args(root)) == 1
+
+
+# ---------------------------------------------------------------------------
+# 2026-09-30: the goose Seatbelt EMITTER and the settings example that wires the gate hook are
+# pinned too, and the verify-key store deny in _sandbox_emit.py is tamper-covered.
+# ---------------------------------------------------------------------------
+
+_GOOSE_EMITTER = "agentteams/frameworks/_goose_sandbox_emit.py"
+_SETTINGS_EXAMPLE = "agentteams/templates/universal/hooks/settings.hooks.example.json"
+
+
+def test_goose_sandbox_emitter_and_settings_example_are_in_enforcement_modules() -> None:
+    for rel in (_GOOSE_EMITTER, _SETTINGS_EXAMPLE):
+        assert rel in integrity.ENFORCEMENT_MODULES, f"{rel} not integrity-tracked"
+
+
+def _tamper(root: pathlib.Path, rel: str, old: str, new: str) -> None:
+    victim = root / rel
+    assert victim.exists(), f"{rel} not copied into the scratch root — is it tracked?"
+    original = victim.read_text(encoding="utf-8")
+    tampered = original.replace(old, new)
+    assert tampered != original, "tamper target not found — the test would pass vacuously"
+    victim.write_text(tampered, encoding="utf-8")
+
+
+@pytest.mark.skipif(not _GATE_HOOK.exists(), reason="deployed .claude/ hooks absent from this checkout (public release / CI)")
+@pytest.mark.parametrize(
+    ("rel", "old", "new"),
+    [
+        # drop the profile's self-protection from the goose control-plane deny
+        (_GOOSE_EMITTER, '[*protected_write_paths("goose"), ".goose/sandbox.sb"]',
+         '[*protected_write_paths("goose")]'),
+        # unwire the gate hook from PreToolUse
+        (_SETTINGS_EXAMPLE, '"PreToolUse"', '"PreToolUseDisabled"'),
+        # drop the verify-key store from the deny list
+        ("agentteams/frameworks/_sandbox_emit.py",
+         "_GATE_HOOK_PATH, _verify_key_store_path(framework))", "_GATE_HOOK_PATH)"),
+    ],
+)
+def test_tampering_with_a_newly_pinned_control_trips_verify(tmp_path, rel, old, new) -> None:
+    root = _scratch_root_with_manifest(tmp_path)
+    _tamper(root, rel, old, new)
+    assert _run_verify_integrity(_args(root)) == 1

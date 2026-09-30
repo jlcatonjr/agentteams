@@ -34,7 +34,7 @@ Modules whose integrity the constitution depends on. Each is listed because a si
 - **Deterministic content scanner (C-4):** `scan.py`.
 - **Fence / constraint controls (C-1):** `fences.py`, `unfenced.py`.
 - **Capability comparison and grants (C-3, P2):** `front_matter_merge.py`, `front_matter_reconcile.py`, `cli/grants.py`, `rank_conformance.py`.
-- **OS-confinement emitters and the shipped launcher/gate scripts:** `frameworks/_sandbox_emit.py`, `frameworks/_linux_sandbox_emit.py`, and the tracked templates `templates/universal/sandbox/confine-run.sh`, `templates/universal/sandbox/mac-escape-tests.sh`.
+- **OS-confinement emitters and the shipped launcher/gate scripts:** `frameworks/_sandbox_emit.py`, `frameworks/_goose_sandbox_emit.py`, `frameworks/_linux_sandbox_emit.py`, and the tracked templates `templates/universal/sandbox/confine-run.sh`, `templates/universal/sandbox/mac-escape-tests.sh`, `templates/universal/hooks/settings.hooks.example.json`.
 - **The standing [red-team audit](redteam.md):** `redteam/checks_static.py`, `redteam/checks_report.py`, `redteam/registry.py`.
 - **The harness-level constitutional gate:** the tracked template `templates/universal/hooks/constitutional-gate.py`, plus its two per-install copies `.claude/hooks/constitutional-gate.py` and `.github/hooks/constitutional-gate.py`.
 - **`integrity.py` itself,** so removing an entry is detectable.
