@@ -111,6 +111,7 @@ def _warn_sandbox_deny_path_mismatch(manifest: dict, output_dir: Path) -> None:
         f"{'/'.join(sub)}/references/agent-privilege.json (relative to the project root), but "
         f"this team writes it to {output_dir / 'references' / 'agent-privilege.json'}. The switch "
         f"is not protected there, and on Linux the missing deny path stops the sandbox starting. "
+        f"The ancestor-rename (F-4) deny of the whole {sub[0]}/ dir assumes the same layout. "
         f"Use the default agents dir, or fix the denyWrite path when merging the sandbox block.",
         file=sys.stderr,
     )
@@ -193,6 +194,39 @@ def _warn_legacy_signing_keys(manifest: dict) -> bool:
     return True
 
 
+def _warn_goose_under_claude_sandbox(manifest: dict, output_dir: Path) -> bool:
+    """Warn when a Claude sandbox is emitted into a project that also holds a goose team (F-4).
+
+    The Claude block write-denies `.claude` as a whole, but not `.goose`: a deny path that does not
+    exist stops bwrap starting, and most Claude projects have no `.goose`. In a two-framework
+    project the goose switch and verify-key store therefore stay writable (and renameable) by a
+    Claude-sandboxed process unless the operator adds `".goose"` to `denyWrite` by hand
+    (@security PR-B condition B). Informational and read-only.
+
+    Args:
+        manifest: The team manifest (``framework`` and the sandbox request gate the notice).
+        output_dir: The team's agents dir; its grandparent is the project root for the default
+            layout.
+
+    Returns:
+        True iff the notice was printed.
+    """
+    from agentteams.frameworks._sandbox_emit import _sandbox_feature_enabled
+
+    if manifest.get("framework") != "claude" or not _sandbox_feature_enabled(manifest):
+        return False
+    if not (output_dir.parent.parent / ".goose" / "recipes").is_dir():
+        return False
+    print(
+        "  !  this project also holds a goose team (.goose/recipes). The Claude sandbox block "
+        "write-denies .claude but not .goose, so the goose switch and verify-key store stay "
+        "writable from a Claude-sandboxed process. Add \".goose\" to sandbox.filesystem.denyWrite "
+        "when you merge the block into .claude/settings.json.",
+        file=sys.stderr,
+    )
+    return True
+
+
 def _emit_agent_privilege_config(manifest: dict, output_dir: Path) -> None:
     """Write ``references/agent-privilege.json`` and print the enforce-signing notice.
 
@@ -213,6 +247,7 @@ def _emit_agent_privilege_config(manifest: dict, output_dir: Path) -> None:
         return
     _warn_live_sandbox_fails_open(manifest, output_dir)
     _warn_legacy_signing_keys(manifest)
+    _warn_goose_under_claude_sandbox(manifest, output_dir)
     if path is None:
         return
     _warn_sandbox_deny_path_mismatch(manifest, output_dir)

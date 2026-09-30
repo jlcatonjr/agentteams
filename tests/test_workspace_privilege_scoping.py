@@ -322,6 +322,8 @@ def test_build_sandbox_block_shape_and_defaults():
                 ".claude/agents/references/agent-privilege.json",
                 ".claude/hooks/constitutional-gate.py",
                 ".claude/agents/references/authorized-verify-keys",
+                # F-4: the whole config dir, so it cannot be renamed away and replaced.
+                ".claude",
             ],
             # F-1: the operator signing-key dir is read-denied in EVERY block, with no allowRead.
             "denyRead": ["~/.config/agentteams/keys"],
@@ -989,7 +991,7 @@ def test_verify_key_store_deny_is_locked_to_the_reader_in_both_frames():
     assert VERIFY_KEY_STORE_SENTINEL_REL == f"{decision_log._VERIFY_KEY_STORE_REL}/README.md"
     block = _build_sandbox_block(None)
     assert ".claude/agents/references/authorized-verify-keys" in block["filesystem"]["denyWrite"]
-    assert list(_PROTECTED_WRITE_PATHS) == block["filesystem"]["denyWrite"]
+    assert [*_PROTECTED_WRITE_PATHS, ".claude"] == block["filesystem"]["denyWrite"]
 
 
 def test_seatbelt_control_plane_denies_the_verify_key_store_after_the_workspace_allow():

@@ -34,7 +34,7 @@
 #
 # Usage:
 #   sandbox/confine-run.sh --scratch DIR [--egress deny|proxy|host] [--proxy ADDR:PORT]
-#          [--netns NAME] [--exclude PATH]... [--writable PATH]... [--coord-root PATH]...
+#          [--netns NAME] [--exclude PATH]... [--writable PATH]... [--coord-root PATH]... [--protect PATH]...
 #          [--setenv VAR=VAL]... [--env-allow VAR]... [--cpu-max SEC] [--nproc-max N] [--mem-max MiB] [--check]
 #          -- CMD [ARGS...]
 #
@@ -43,6 +43,18 @@
 #   that does not exist is a FAIL-CLOSED error (a missing sibling repo is a misconfiguration,
 #   not something to auto-create). Existence is verified in the OS-independent block BEFORE OS
 #   dispatch, so a missing target is a clean exit-2, never a bwrap sandbox-init crash (D-3).
+#
+# CONTROL PLANE (F-4, 2026-09-30; Linux/bwrap branch only): inside every writable root (--scratch,
+#   --writable, --coord-root) each EXISTING agentteams control-plane path (CONTROL_PLANE_REL below:
+#   the enforce_decision_signing switch, the gate hook, the verify-key store, the goose profile) is
+#   --ro-bind'ed, and each of its ancestor dirs below the root gets a read-write SELF-bind so it
+#   becomes a mount point: renaming it away (`mv .claude .claude.old`, then plant a tree) fails
+#   EBUSY, while writes inside it still work. Order: rw roots, ancestor self-binds, ro-binds, masks.
+#   Every protected path is realpath'd and a SYMLINK anywhere on it is refused (die). A path absent
+#   from a root is skipped when that framework's team (.claude/agents, .goose/recipes) is not there,
+#   and a DIE when it is (a writable parent would let the process create it). --protect PATH (repeatable)
+#   ro-binds an extra path, e.g. a whole `.claude`; a missing --protect path is a die, never mkdir.
+#   Status: mechanism-verified (raw bwrap probes), product-unverified. The macOS branch is unchanged.
 #
 # macOS AUGMENTATION (2026-W36) - added ONLY to the macOS (Darwin) branch. TWO DISTINCT mechanisms;
 # do NOT conflate them (only group (i) is an actual Seatbelt/sandbox-exec feature):
@@ -83,7 +95,14 @@
 set -uo pipefail
 
 SCRATCH=""; EGRESS="deny"; PROXY_ADDR="127.0.0.1"; PROXY_PORT="8443"; NETNS="agentteams-egress"
-CHECK=0; EXCLUDES=(); WRITABLES=(); SETENVS=(); ENV_ALLOW=(); CMD=(); COORD_ROOTS=()
+CHECK=0; EXCLUDES=(); WRITABLES=(); SETENVS=(); ENV_ALLOW=(); CMD=(); COORD_ROOTS=(); PROTECTS=()
+# Project-relative control-plane paths (locked to agentteams' _sandbox_emit.protected_write_paths
+# plus the goose profile by a test). Protected wherever they exist under a writable root.
+CONTROL_PLANE_REL=( .claude/agents/references/agent-privilege.json .claude/hooks/constitutional-gate.py
+                    .claude/agents/references/authorized-verify-keys
+                    .goose/recipes/references/agent-privilege.json .goose/recipes/references/authorized-verify-keys
+                    .goose/sandbox.sb )
+CP_ANC=(); CP_RO=()
 # DEFAULT-DENY ENV ALLOWLIST (the private-key non-leak residual). The guest inherits NONE of the
 # launcher's environment by default: only these benign vars (when set) plus any --env-allow name and
 # any explicit --setenv VAR=VAL are passed. Everything else - crucially an operator signing-key path
@@ -104,6 +123,7 @@ while [ $# -gt 0 ]; do
     --exclude) EXCLUDES+=("${2:-}"); shift 2 ;;
     --writable) WRITABLES+=("${2:-}"); shift 2 ;;
     --coord-root) COORD_ROOTS+=("${2:-}"); shift 2 ;;  # cross-repo coordination bind: FAIL-CLOSED if missing (never mkdir)
+    --protect) PROTECTS+=("${2:-}"); shift 2 ;;  # extra read-only control-plane path: FAIL-CLOSED if missing (never mkdir)
     --setenv)  SETENVS+=("${2:-}"); shift 2 ;;
     --env-allow) ENV_ALLOW+=("${2:-}"); shift 2 ;;  # add a var NAME to the default-deny allowlist
     --cpu-max)  CPU_MAX="${2:-}";  shift 2 ;;   # macOS: RLIMIT_CPU (SEC cpu-seconds); no-op on Linux
@@ -169,6 +189,57 @@ done
 OS="$(uname -s)"
 
 # ============================================================================================
+# F-4 control plane -> CP_ANC[] (ancestor self-binds) + CP_RO[] (read-only binds), appended to BW[].
+cp_real(){   # realpath of an existing path; die (in the $(...) subshell - callers then exit 2) when it
+  # is missing, or is (or passes through) a symlink. Never creates anything.
+  local r; r="$(realpath -e -- "$1" 2>/dev/null)" || die "control-plane path '$1' does not exist or does not resolve (fail-closed; never created)"
+  [ "$r" = "$(realpath -s -m -- "$1")" ] || die "control-plane path '$1' is or passes through a symlink (resolves to '$r'); refusing (fail-closed)"
+  case "$r" in *$'\n'*) die "control-plane path contains a newline: $1" ;; esac
+  printf '%s\n' "$r"
+}
+control_plane_binds() {
+  local roots=() prot=() anc=() r rel p a under
+  for r in "$SCRATCH" ${WRITABLES[@]+"${WRITABLES[@]}"} ${COORD_RESOLVED[@]+"${COORD_RESOLVED[@]}"}; do
+    [ -n "$r" ] && roots+=( "$(realpath -e -- "$r")" )
+  done
+  for r in "${roots[@]}"; do
+    for rel in "${CONTROL_PLANE_REL[@]}"; do
+      if [ ! -e "$r/$rel" ] && [ ! -L "$r/$rel" ]; then
+        # Absent. Fine when that framework's native team is not here, but when its agents dir IS
+        # present a missing entry is a hole: its parent is rename-locked yet WRITABLE, so a confined
+        # process could create a `false` switch, a verify-key store with a planted .pub.pem, or a
+        # gate hook. Refuse (never create). .goose/sandbox.sb is macOS-only.
+        case "$rel" in .claude/*) team="$r/.claude/agents" ;; .goose/*) team="$r/.goose/recipes" ;; *) team="" ;; esac
+        [ "$rel" = ".goose/sandbox.sb" ] && continue
+        [ -n "$team" ] && [ -d "$team" ] || continue   # that framework's team is absent here
+        die "control-plane path '$r/$rel' is missing although '$team' exists: a confined process could create it (fail-closed; never created). Regenerate the team with its sandbox enabled (agentteams --update) so it is emitted, then retry."
+      fi
+      p="$(cp_real "$r/$rel")" || exit 2
+      prot+=( "$p" )
+    done
+  done
+  for p in ${PROTECTS[@]+"${PROTECTS[@]}"}; do
+    [ -n "$p" ] || continue
+    a="$(cp_real "$p")" || exit 2   # a missing --protect path is a die, never a mkdir
+    prot+=( "$a" )
+  done
+  [ "${#prot[@]}" -gt 0 ] || return 0
+  for p in "${prot[@]}"; do   # every ancestor strictly below a writable root
+    a="$(dirname -- "$p")"
+    while :; do
+      under=0; for r in "${roots[@]}"; do case "$a" in "$r"/*) under=1 ;; esac; done
+      [ "$under" -eq 1 ] || break
+      anc+=( "$a" ); a="$(dirname -- "$a")"
+    done
+  done
+  # a parent sorts before its children (a prefix sorts first), so the self-binds go top-down
+  [ "${#anc[@]}" -gt 0 ] && mapfile -t CP_ANC < <(printf '%s\n' "${anc[@]}" | LC_ALL=C sort -u)
+  mapfile -t CP_RO < <(printf '%s\n' "${prot[@]}" | LC_ALL=C sort -u)
+  for a in ${CP_ANC[@]+"${CP_ANC[@]}"}; do BW+=( --bind "$a" "$a" ); done
+  for p in "${CP_RO[@]}"; do BW+=( --ro-bind "$p" "$p" ); done
+}
+
+# ============================================================================================
 build_linux() {   # -> RUN[] using bwrap
   command -v bwrap >/dev/null 2>&1 || die "bwrap (bubblewrap) not found - install: sudo apt-get install -y bubblewrap"
   # macOS-augmentation resource-cap flags are NO-OPS on Linux (degrade safely): Linux reaches CPU/
@@ -186,6 +257,7 @@ build_linux() {   # -> RUN[] using bwrap
                    --unshare-user --unshare-ipc --unshare-pid --unshare-uts --unshare-cgroup )
   local w; for w in ${WRITABLES[@]+"${WRITABLES[@]}"}; do [ -n "$w" ] && BW+=( --bind "$w" "$w" ); done
   local c; for c in ${COORD_RESOLVED[@]+"${COORD_RESOLVED[@]}"}; do BW+=( --bind "$c" "$c" ); done  # cross-repo coordination (existence pre-verified -> no bwrap init crash)
+  control_plane_binds   # F-4: AFTER the rw roots, BEFORE the masks (see CONTROL PLANE above)
   # allowlist passthrough first (default-deny env), then explicit --setenv so an explicit value wins.
   local n; for n in "${ENV_ALLOW_ALL[@]}"; do [ -n "${!n+x}" ] && BW+=( --setenv "$n" "${!n}" ); done
   local kv; for kv in ${SETENVS[@]+"${SETENVS[@]}"}; do [ -n "$kv" ] && { case "$kv" in *=*) BW+=( --setenv "${kv%%=*}" "${kv#*=}" ) ;; *) die "--setenv expects VAR=VAL (got '$kv')" ;; esac; }; done
@@ -343,6 +415,7 @@ if [ "$CHECK" -eq 1 ]; then
     echo "  egress mode       : $EGRESS"
   fi
   echo "  read-excluded     : ${MASKED[*]:-<none present>}"
+  echo "  control-plane (ro): ${CP_RO[*]:-<none>}$( [ "${#CP_ANC[@]}" -gt 0 ] && echo " (rename-locked ancestors: ${CP_ANC[*]})" )"
   echo "  coord-roots       : ${COORD_RESOLVED[*]:-<none>}$( [ "${#COORD_RESOLVED[@]}" -gt 0 ] && echo " (cross-repo binds; existence pre-verified, fail-closed if missing)" )"
   echo "  env allowlist     : ${ENV_ALLOW_ALL[*]} (default-deny; all other env vars dropped)"
   echo "  cpu-max (RLIMIT)  : ${CPU_MAX:-<none>}$( [ -n "$CPU_MAX" ] && echo " cpu-sec (POSIX RLIMIT_CPU, per-process, kernel-enforced, DoS-bound)" )"
