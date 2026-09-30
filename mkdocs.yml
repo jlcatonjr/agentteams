@@ -215,6 +215,7 @@ nav:
       - plan-steps-todo: api-reference/plan-steps-todo.md
       - parallel-plan: api-reference/parallel-plan.md
       - liaison-logs: api-reference/liaison-logs.md
+      - control-plane-io: api-reference/control-plane-io.md
       - host-features: api-reference/host-features.md
       - workspace-privilege-scoping: api-reference/workspace-privilege-scoping.md
       - rank-conformance: api-reference/rank-conformance.md

@@ -1064,8 +1064,12 @@ def _build_parser() -> argparse.ArgumentParser:
         help=(
             "Operator-only: mint an Ed25519-signed constraint-relaxing security decision from a "
             "JSON spec (date, action_reviewed, verdict, effect_* fields, derives_from, key_id) and "
-            "append it to references/security-decisions.log.csv under --output/--project (else "
-            "CWD). Reads the operator private key from the file named by "
+            "append it to references/security-decisions.log.csv under --output (else --project, "
+            "else CWD), which must be a TEAM dir (it holds references/agent-privilege.json or "
+            "references/build-log.json, e.g. --output .claude/agents); anything else is refused, "
+            "since the gate never reads a log outside the team dir. The new signature is verified "
+            "against that team's references/authorized-verify-keys/<key_id>.pub.pem before it is "
+            "appended. Reads the operator private key from the file named by "
             "AGENTTEAMS_DECISION_ED25519_KEYFILE (never from an agent env). Prints the row's "
             "derived material effect for a deliberate second look before writing. This is the ONLY "
             "minter of Ed25519 relaxing rows. Keep the key in ~/.config/agentteams/keys: every "
@@ -1170,7 +1174,9 @@ def _build_parser() -> argparse.ArgumentParser:
             "OK / MODIFIED / TRUNCATED / MISSING / FENCE-BROKEN. Detects silent "
             "corruption. Exits non-zero on any TRUNCATED/MISSING/FENCE-BROKEN; "
             "MODIFIED (a legitimate edit or drift) is advisory. Unlike --update, "
-            "this exit code IS the integrity gate."
+            "this exit code IS the integrity gate. Also checks the enforcement-integrity "
+            "manifest (references/enforcement-integrity.json); a MISSING manifest is a "
+            "finding (exit 1) when the repository tracks one or the scanner runs from inside it."
         ),
     )
     parser.add_argument(

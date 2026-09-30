@@ -71,13 +71,13 @@ def test_permissions_deny_binds_the_builtin_tools(home):
     # R11: Edit(...) covers Edit/Write/MultiEdit; project-anchored with a leading "/".
     assert "Edit(/.claude/agents/references/agent-privilege.json)" in deny
     assert "Edit(/.claude/agents/references/authorized-verify-keys/**)" in deny
-    assert "Edit(/.claude/hooks/constitutional-gate.py)" in deny
+    assert "Edit(/.claude/hooks/**)" in deny  # PR-D: subsumes the single gate-hook rule
     # Claude Code 2.1.251: "NotebookEdit(path) is not matched by file permission checks — only
     # Edit(path) rules are". There is no Grep(...)/Glob(...) form either (Read covers them).
     assert not [r for r in deny if r.split("(")[0] in {"NotebookEdit", "Write", "Grep", "Glob"}]
     for rule in deny:
         tool, _, path = rule.partition("(")
-        assert path.startswith(("~/", "/.")), rule
+        assert path.startswith(("~/", "/.", "/references/")), rule
 
 
 def test_permissions_deny_ships_only_with_the_sandbox_block(home):
@@ -198,20 +198,26 @@ needs_openssl = pytest.mark.skipif(not shutil.which("openssl"), reason="openssl 
 
 @pytest.fixture()
 def repo(tmp_path):
-    """A throwaway repo layout holding a copy of the script (so REPO_ROOT resolves to it)."""
+    """A throwaway repo layout holding a copy of the script and one Claude team dir."""
     r = tmp_path / "repo"
     store = r / "references" / "authorized-verify-keys"
     store.mkdir(parents=True)
     shutil.copy(PROVISION, store / PROVISION.name)
+    team_refs = r / ".claude" / "agents" / "references"
+    team_refs.mkdir(parents=True)
+    (team_refs / "agent-privilege.json").write_text("{}\n")
     return r
 
 
-def _provision(repo: Path, home: Path, *args: str, key_dir: str | None = None):
+def _provision(repo: Path, home: Path, *args: str, key_dir: str | None = None,
+               team: bool = True):
     env = {"PATH": os.environ["PATH"], "HOME": str(home)}
     if key_dir is not None:
         env["KEY_DIR"] = key_dir
     script = repo / "references" / "authorized-verify-keys" / PROVISION.name
-    return subprocess.run(["bash", str(script), *args], capture_output=True, text=True, env=env)
+    extra = ["--team-dir", str(repo / ".claude" / "agents")] if team and "--migrate" not in args else []
+    return subprocess.run(["bash", str(script), *extra, *args], capture_output=True, text=True,
+                          env=env, cwd=str(repo))
 
 
 def _mode(p: Path) -> int:
@@ -225,8 +231,34 @@ def test_provision_writes_into_a_0700_keys_dir(repo, home):
     keys = home / ".config" / "agentteams" / "keys"
     assert _mode(keys) == 0o700
     assert _mode(keys / "decision-signing-op-1.pem") == 0o600
-    assert (repo / "references" / "authorized-verify-keys" / "op-1.pub.pem").is_file()
+    # F-2: the public key lands in the TEAM store the gate reads, never the repo-root helper dir.
+    assert (repo / ".claude/agents/references/authorized-verify-keys/op-1.pub.pem").is_file()
+    assert not (repo / "references" / "authorized-verify-keys" / "op-1.pub.pem").exists()
     assert str(keys / "decision-signing-op-1.pem") in run.stdout
+
+
+@needs_openssl
+def test_provision_without_team_dir_refuses_and_lists_teams(repo, home):
+    run = _provision(repo, home, "op-1", team=False)
+    assert run.returncode == 2
+    assert "no --team-dir" in run.stderr and "--team-dir .claude/agents" in run.stderr
+    assert not (home / ".config" / "agentteams" / "keys" / "decision-signing-op-1.pem").exists()
+    assert not list((repo / "references" / "authorized-verify-keys").glob("*.pub.pem"))
+
+
+@needs_openssl
+def test_provision_refuses_a_non_team_dir_and_writes_every_team(repo, home, tmp_path):
+    plain = tmp_path / "plain"
+    plain.mkdir()
+    run = _provision(repo, home, "--team-dir", str(plain), "op-1", team=False)
+    assert run.returncode == 2 and "not an agentteams team dir" in run.stderr
+    goose = repo / ".goose" / "recipes" / "references"
+    goose.mkdir(parents=True)
+    (goose / "build-log.json").write_text("{}\n")
+    run = _provision(repo, home, "--team-dir", str(repo / ".goose" / "recipes"), "op-2")
+    assert run.returncode == 0, run.stderr
+    assert (repo / ".claude/agents/references/authorized-verify-keys/op-2.pub.pem").is_file()
+    assert (goose / "authorized-verify-keys" / "op-2.pub.pem").is_file()
 
 
 @needs_openssl
@@ -334,6 +366,8 @@ def test_sign_decision_prints_the_location_warning(tmp_path, monkeypatch, capsys
     import build_team
 
     monkeypatch.setenv("HOME", str(tmp_path / "home"))
+    (tmp_path / "references").mkdir()
+    (tmp_path / "references" / "build-log.json").write_text("{}\n")  # a team dir (F-2)
     spec = tmp_path / "spec.json"
     spec.write_text(json.dumps({"action_reviewed": "grant-x"}))
     outside = _key(tmp_path / "op.key", 0o644)

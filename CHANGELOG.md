@@ -6,6 +6,49 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### security (remaining sandbox trust roots — PR-D)
+
+- **The HMAC grant route is closed by the Ed25519-grants change below (#79),** not by this entry.
+  Grants that widen `allowWrite` now need an operator Ed25519 signature, and read the approver
+  roster from the team dir only. The project-root `references/security-approvers.txt` is no
+  longer read, so it can no longer widen anything. The launcher still protects it where present.
+- **Launcher anchor (corrects a regression from #78).** `sandbox/confine-run.sh` refused to start
+  whenever `.claude/agents` or `.goose/recipes` existed but lacked a control-plane entry, which
+  broke hand-written agent dirs. A framework's entries are now required only when that framework
+  holds an agentteams team, marked by `<agents dir>/references/build-log.json`; the marker is
+  read-only bound, so deleting it from inside cannot disable the check. The launcher sha256
+  changed again: consuming projects that pin it must re-pin.
+- **Operator-only rosters protected.** The team's `security-approvers.txt`,
+  `authorized-managers.txt` and `management-authority.json` (and the project-root
+  `references/security-approvers.txt`) are added to `permissions.deny` (`Edit(...)`, emitted,
+  product-unverified), the goose Seatbelt control plane (unverified, no macOS host) and the
+  launcher's control plane (mechanism-verified by raw bwrap probes, product-unverified). The
+  Claude `denyWrite` list is unchanged (`.claude` already covers them). A sandboxed claude/goose
+  team now gets comment-only stubs of the three files, created only when absent
+  (`O_CREAT|O_EXCL|O_NOFOLLOW`; an existing roster or planted symlink is never touched); a stub
+  reads exactly like an absent file. **Availability:** a sandboxed team generated before this
+  change lacks the stubs, so the launcher refuses it (exit 2) until `agentteams --update`.
+- **`permissions.deny` also covers `.claude/settings.json`, `.claude/settings.local.json` and
+  `.claude/hooks/**`** (the last replaces the single gate-hook rule). Emitted, product-unverified;
+  stricter than Claude Code's own `.claude` ask.
+- **A missing integrity manifest is a finding** when the repository tracks it or the scanner
+  runs from inside the project (e.g. an in-project `.venv`): `--verify-integrity` exits 1 and a
+  confined gate hook answers `ask`. Ordinary consumer projects are unchanged.
+- **In-sandbox `--update` refuses before writing.** A non-mutating probe of the team dir
+  (non-blocking, no-follow; a planted FIFO cannot hang it) turns the old partial write into one
+  exit-2 refusal; `--dry-run` reports it.
+- **F-2: verify-key store frame.** The gate reads `<team dir>/references/authorized-verify-keys/`.
+  The operator helper (`references/authorized-verify-keys/provision-operator-signing-key.sh`,
+  not emitted into generated projects) now requires `--team-dir DIR` (repeatable) and refuses
+  without it, listing the team dirs it finds. **`--sign-decision` now refuses** an `--output`
+  that is not a team dir (no `references/agent-privilege.json` or `references/build-log.json`),
+  which used to append silently to a log the gate never read, and verifies each new signature
+  against the team's `<key_id>.pub.pem` before appending.
+- The non-default `--output` warning now lists every protected path (switch, verify-key store,
+  rosters) with where this team actually writes it.
+- **Residuals (logged, not fixed here):** `.codex` and `.github` team-dir rosters/switches are not
+  in the launcher control plane; the project-root `CLAUDE.md` and `.mcp.json` stay Bash-writable;
+  a stale real manager roster persists when `authorized_managers` is emptied.
 ### security (only an operator Ed25519 grant widens allowWrite — closes the HMAC grant route, PR-E)
 
 - **An in-sandbox agent could mint a grant that widened its own sandbox at the next `--update`

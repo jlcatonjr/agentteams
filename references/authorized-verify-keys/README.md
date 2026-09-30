@@ -1,10 +1,15 @@
 # Authorized Ed25519 verify keys (the constraint-relaxing signing trust anchor)
 
-This directory holds the **public** Ed25519 verify keys, one per `key-id`, named
-`<key-id>.pub.pem`. A constraint-relaxing authorization (Constitutional Rule on the
+**Where the keys live (F-2).** The security gate reads the **public** Ed25519 verify keys, one per
+`key-id` named `<key-id>.pub.pem`, from `<team dir>/references/authorized-verify-keys/` — the
+team's agents dir (e.g. `.claude/agents/references/authorized-verify-keys/`), never this
+repository-root directory. This directory holds only the operator helper and this README; it
+holds no key. A constraint-relaxing authorization (Constitutional Rule on the
 exception-governance guardrail) is cleared in a governed workspace only when its `sig_scheme`
 is `ed25519` and its signature verifies against the public key named by its signed `key_id`
-here (`agentteams/cli/decision_log.py` → `_load_verify_key`).
+in the team store (`agentteams/cli/decision_log.py` → `_load_verify_key`).
+
+The helper is **not emitted** into generated projects; run it from an agentteams checkout.
 
 ## The security model — read before adding a key
 
@@ -27,18 +32,27 @@ here (`agentteams/cli/decision_log.py` → `_load_verify_key`).
 Run the helper in your **interactive shell** — never inside an agent/sandbox session:
 
 ```
-references/authorized-verify-keys/provision-operator-signing-key.sh op-2026
+references/authorized-verify-keys/provision-operator-signing-key.sh --team-dir .claude/agents op-2026
 ```
 
 It generates the private key **outside** the repo in `~/.config/agentteams/keys/` (directory
-mode 700, file mode 600), writes the public key here as `<key-id>.pub.pem`, and prints the
-`AGENTTEAMS_DECISION_ED25519_KEYFILE` export line. Commit **only** the `.pub.pem`; never the
+mode 700, file mode 600), writes the public key into each `--team-dir`'s
+`references/authorized-verify-keys/<key-id>.pub.pem` (repeat `--team-dir` for several teams), and
+prints the `AGENTTEAMS_DECISION_ED25519_KEYFILE` export line. `--team-dir` is required: without it
+the helper refuses (exit 2) and lists the team dirs it finds, because the gate never reads a
+repository-root store. A `--team-dir` must hold `references/agent-privilege.json` or
+`references/build-log.json`. Commit the `.pub.pem` if the team dir is tracked; in this repository
+`.claude/` is gitignored, so the key there stays local (an operator action). Never commit the
 private key. Then, to sign a relaxing decision:
 
 ```
 export AGENTTEAMS_DECISION_ED25519_KEYFILE="$HOME/.config/agentteams/keys/decision-signing-op-2026.pem"
-agentteams --sign-decision path/to/decision-spec.json
+agentteams --sign-decision path/to/decision-spec.json --output .claude/agents
 ```
+
+`--sign-decision` refuses an `--output` that is not a team dir (no `agent-privilege.json` or
+`build-log.json` under `references/`), and verifies the new signature against that team's
+`<key-id>.pub.pem` before appending, so a key provisioned into the wrong frame fails at mint time.
 
 **Why `keys/`.** Every sandbox agentteams emits — the Claude `sandbox` block (plus its
 `permissions.deny` `Read(...)` rules for the built-in tools), the goose Seatbelt profile and

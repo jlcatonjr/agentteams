@@ -172,7 +172,14 @@ def main() -> int:
             sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
             from agentteams import integrity
 
-        tampered = [f for f in integrity.verify(Path.cwd()) if f.rel_path.endswith("scan.py")]
+        integrity_findings = integrity.verify(Path.cwd())
+        tampered = [f for f in integrity_findings if f.rel_path.endswith("scan.py")]
+        # PR-D (row 31): a MISSING manifest where one is expected (this repo ships it, or the
+        # scanner runs from inside the project) leaves the scanner unverifiable. Under the
+        # confined fail-closed policy that is `ask` (not `deny`: a deleted manifest is also what
+        # a botched regen looks like); the cooperative hook keeps its historical behaviour.
+        if _FAIL_CLOSED_ON_ERROR:
+            tampered += [f for f in integrity_findings if f.reason == "manifest-missing"]
         if tampered:
             _decide(
                 "ask",

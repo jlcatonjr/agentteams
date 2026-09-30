@@ -6,15 +6,21 @@
 #   * the PRIVATE key is written OUTSIDE the repository, into ~/.config/agentteams/keys/ (dir mode
 #     700, file mode 600), and never printed. Every sandbox agentteams emits read-denies that
 #     directory (F-1), so keep the key there;
-#   * the PUBLIC key is written into references/authorized-verify-keys/<key-id>.pub.pem
-#     (the tracked trust anchor agents verify against).
+#   * the PUBLIC key is written into <team dir>/references/authorized-verify-keys/<key-id>.pub.pem
+#     for each --team-dir: the store the security gate reads (decision_log._VERIFY_KEY_STORE_REL,
+#     relative to the team's agents dir, e.g. .claude/agents). The repository-root
+#     references/authorized-verify-keys/ holds only this helper and its README, never a key.
 #
 # NEVER run this inside an agent/sandbox session, and NEVER commit or export the private key.
 # The whole security model is that no agent context ever holds the private key; only the operator,
 # in an interactive shell, reads it via `agentteams --sign-decision`.
 #
-# Usage:  references/authorized-verify-keys/provision-operator-signing-key.sh <key-id>
-#         references/authorized-verify-keys/provision-operator-signing-key.sh --migrate
+# Usage:  provision-operator-signing-key.sh --team-dir DIR [--team-dir DIR]... <key-id>
+#         provision-operator-signing-key.sh --migrate
+#   --team-dir DIR             an agentteams team dir (it holds references/agent-privilege.json or
+#                              references/build-log.json), e.g. .claude/agents. Repeatable. REQUIRED
+#                              for a key-id: without it the helper refuses and lists the team dirs
+#                              it finds (F-2: the gate never reads a repository-root store).
 #   --migrate                  move legacy ~/.config/agentteams/*.pem keys into keys/ (mv -n: never
 #                              overwrites, never deletes) and exit.
 #   --allow-unprotected-keydir accept a KEY_DIR other than ~/.config/agentteams/keys. The sandboxes
@@ -27,13 +33,17 @@ set -euo pipefail
 CANONICAL_KEY_DIR="$HOME/.config/agentteams/keys"
 LEGACY_DIR="$HOME/.config/agentteams"
 
-KEY_ID=""; MIGRATE=0; ALLOW_UNPROTECTED=0
-for arg in "$@"; do
+KEY_ID=""; MIGRATE=0; ALLOW_UNPROTECTED=0; TEAM_DIRS=()
+USAGE="usage: $0 [--allow-unprotected-keydir] --team-dir DIR [--team-dir DIR]... <key-id> | --migrate"
+while [ $# -gt 0 ]; do
+  arg="$1"; shift
   case "$arg" in
     --migrate) MIGRATE=1 ;;
     --allow-unprotected-keydir) ALLOW_UNPROTECTED=1 ;;
+    --team-dir) [ $# -gt 0 ] && [ -n "$1" ] || { echo "--team-dir needs a directory" >&2; exit 2; }
+                TEAM_DIRS+=("$1"); shift ;;
     -*) echo "unknown option: $arg" >&2; exit 2 ;;
-    *) [ -z "$KEY_ID" ] || { echo "usage: $0 [--allow-unprotected-keydir] <key-id> | --migrate" >&2; exit 2; }
+    *) [ -z "$KEY_ID" ] || { echo "$USAGE" >&2; exit 2; }
        KEY_ID="$arg" ;;
   esac
 done
@@ -97,16 +107,34 @@ if [ "$MIGRATE" -eq 1 ]; then
 fi
 
 case "$KEY_ID" in
-  ''|*[!A-Za-z0-9._-]*) echo "usage: $0 [--allow-unprotected-keydir] <key-id> | --migrate  (key-id = letters/digits/._- only)" >&2; exit 2 ;;
+  ''|*[!A-Za-z0-9._-]*) echo "$USAGE  (key-id = letters/digits/._- only)" >&2; exit 2 ;;
 esac
 
-command -v openssl >/dev/null 2>&1 || { echo "openssl not found (required)" >&2; exit 2; }
-
-# Resolve the repo root from this script's location so the public key lands in the right store,
-# and so we can refuse to place the PRIVATE key anywhere inside the repo tree.
+# The project root (git top-level, else this script's ../..): the private key must live OUTSIDE it.
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
-REPO_ROOT="$(cd "$SCRIPT_DIR/../.." && pwd)"
-STORE="$REPO_ROOT/references/authorized-verify-keys"
+REPO_ROOT="$(git -C "$SCRIPT_DIR" rev-parse --show-toplevel 2>/dev/null || (cd "$SCRIPT_DIR/../.." && pwd))"
+
+is_team(){ [ -f "$1/references/agent-privilege.json" ] || [ -f "$1/references/build-log.json" ]; }
+if [ "${#TEAM_DIRS[@]}" -eq 0 ]; then
+  # F-2: the gate reads <team dir>/references/authorized-verify-keys, never this script's own
+  # directory, so there is no safe default. Refuse and name the candidates.
+  echo "refusing: no --team-dir given. The security gate reads the verify key from" >&2
+  echo "  <team dir>/references/authorized-verify-keys/, so name the team(s) explicitly." >&2
+  found=0
+  for d in "$REPO_ROOT"/*/agents "$REPO_ROOT"/.*/agents "$REPO_ROOT"/*/recipes "$REPO_ROOT"/.*/recipes; do
+    [ -d "$d" ] && is_team "$d" && { echo "  team dir found: --team-dir ${d#"$REPO_ROOT"/}" >&2; found=1; }
+  done
+  [ "$found" -eq 1 ] || echo "  (no agentteams team dir found under $REPO_ROOT)" >&2
+  exit 2
+fi
+STORES=()
+for d in "${TEAM_DIRS[@]}"; do
+  [ -d "$d" ] && [ ! -L "$d" ] || { echo "refusing: --team-dir '$d' is not a directory (or is a symlink)" >&2; exit 2; }
+  is_team "$d" || { echo "refusing: --team-dir '$d' is not an agentteams team dir (no references/agent-privilege.json or references/build-log.json)" >&2; exit 2; }
+  STORES+=( "$(cd "$d" && pwd)/references/authorized-verify-keys" )
+done
+
+command -v openssl >/dev/null 2>&1 || { echo "openssl not found (required)" >&2; exit 2; }
 
 KEY_DIR="${KEY_DIR:-$CANONICAL_KEY_DIR}"
 case "$KEY_DIR/" in
@@ -141,24 +169,28 @@ if [ -n "$LEGACY" ]; then
 fi
 
 PRIV="$KEY_DIR/decision-signing-$KEY_ID.pem"
-PUB="$STORE/$KEY_ID.pub.pem"
 
 [ -e "$PRIV" ] && { echo "refusing: private key already exists at $PRIV (rotate with a new key-id)" >&2; exit 2; }
-[ -e "$PUB" ]  && { echo "refusing: public key already exists at $PUB (rotate with a new key-id)" >&2; exit 2; }
+for STORE in "${STORES[@]}"; do
+  [ -e "$STORE/$KEY_ID.pub.pem" ] && { echo "refusing: public key already exists at $STORE/$KEY_ID.pub.pem (rotate with a new key-id)" >&2; exit 2; }
+done
 
 umask 077
 openssl genpkey -algorithm ed25519 -out "$PRIV"
 chmod 600 "$PRIV"
-mkdir -p "$STORE"
-openssl pkey -in "$PRIV" -pubout -out "$PUB"
-chmod 644 "$PUB"
 
 echo "OK. Provisioned Ed25519 signing key '$KEY_ID'."
 echo "  private (KEEP SECRET, do NOT commit): $PRIV"
-echo "  public  (commit this)               : references/authorized-verify-keys/$KEY_ID.pub.pem"
+for STORE in "${STORES[@]}"; do
+  mkdir -p "$STORE"
+  openssl pkey -in "$PRIV" -pubout -out "$STORE/$KEY_ID.pub.pem"
+  chmod 644 "$STORE/$KEY_ID.pub.pem"
+  echo "  public (the store the gate reads)   : $STORE/$KEY_ID.pub.pem"
+done
 echo
 echo "To sign a relaxing decision, in your interactive shell only:"
 echo "  export AGENTTEAMS_DECISION_ED25519_KEYFILE=\"$PRIV\""
-echo "  agentteams --sign-decision path/to/decision-spec.json"
+echo "  agentteams --sign-decision path/to/decision-spec.json --output <the same team dir>"
 echo
-echo "Then commit references/authorized-verify-keys/$KEY_ID.pub.pem. NEVER commit or export $PRIV into an agent session."
+echo "Commit each .pub.pem if its team dir is tracked (a .claude/ team dir is often gitignored, so"
+echo "the key then stays local). NEVER commit or export $PRIV into an agent session."

@@ -53,6 +53,8 @@ from cryptography.hazmat.primitives.asymmetric.ed25519 import Ed25519PrivateKey 
 
 def _keypair(root: Path, key_id: str = "op-2026") -> Path:
     (root / "references" / "authorized-verify-keys").mkdir(parents=True, exist_ok=True)
+    # F-2: --sign-decision appends only into a team dir (agent-privilege.json or build-log.json).
+    (root / "references" / "agent-privilege.json").write_text('{"enforce_decision_signing": true}\n')
     priv = Ed25519PrivateKey.generate()
     keyfile = root / "op.key"
     keyfile.write_bytes(priv.private_bytes(

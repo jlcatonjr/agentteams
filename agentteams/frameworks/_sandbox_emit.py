@@ -66,9 +66,11 @@ _SANDBOX_COMMENT_LINES: list[str] = [
 _SIGNING_KEY_COMMENT_LINES: list[str] = [
     "",
     "Signing-key isolation (F-1) — in EVERY sandboxed profile `denyRead` names the operator",
-    "private-key directory ~/.config/agentteams/keys (create it with",
-    "references/authorized-verify-keys/provision-operator-signing-key.sh, which also migrates",
-    "keys from the old ~/.config/agentteams/ location with --migrate). Any legacy",
+    "private-key directory ~/.config/agentteams/keys (create it with the operator helper",
+    "references/authorized-verify-keys/provision-operator-signing-key.sh in the agentteams",
+    "source repository (it is NOT emitted into this project): run it with --team-dir",
+    "<agents dir> so the public key lands in the store the gate reads; --migrate moves keys",
+    "from the old ~/.config/agentteams/ location). Any legacy",
     "~/.config/agentteams/*.pem found on the GENERATING host is listed by exact path too (the",
     "sandbox takes no globs); regenerate on the host that runs the team. Only the Read of the",
     "key FILE is closed: the environment variables AGENTTEAMS_DECISION_ED25519_KEYFILE and",
@@ -78,9 +80,15 @@ _SIGNING_KEY_COMMENT_LINES: list[str] = [
     "so the `permissions.deny` list below carries: Read(...) rules for the key directory and",
     "the legacy location (Read rules cover Grep/Glob best-effort), and Edit(...) rules —",
     "which cover Edit, Write and MultiEdit (Claude Code matches no NotebookEdit(path) rule) —",
-    "for the enforce_decision_signing switch, the gate hook and the verify-key store. Without",
-    "those an agent could Write-tool its own public key into the store (measured: the Write",
-    "tool ignores sandbox denyWrite outside .claude/). RESIDUALS: `permissions.deny` is INERT",
+    "for the enforce_decision_signing switch, the verify-key store, the approver and manager",
+    "rosters and management-authority.json (team dir), the project-root",
+    "references/security-approvers.txt, .claude/settings.json, .claude/settings.local.json",
+    "and .claude/hooks/** (PR-D). Without those an agent could Write-tool its own public key",
+    "into the store (measured: the Write tool ignores sandbox denyWrite outside .claude/). The",
+    "roster, settings and hooks rules are emitted but UNVERIFIED on the product (they are",
+    "stricter than Claude Code's own .claude ask, measured under acceptEdits only). The HMAC",
+    "grant route through the project-root roster is NOT closed by these rules; it is",
+    "addressed separately (Ed25519 grants). RESIDUALS: `permissions.deny` is INERT",
     "until merged like the rest of this example; it is unverified under bypassPermissions;",
     "hooks and MCP servers run UNSANDBOXED; the Claude sandbox arm is UNVERIFIED end-to-end on",
     "Linux. A denyRead path that does not exist was tolerated by bwrap on Claude Code 2.1.251",
@@ -233,7 +241,14 @@ def permission_deny_rules(framework: str = "claude") -> list[str]:
     rules = [f"Read({SIGNING_KEY_DIR}/**)", f"Read({LEGACY_SIGNING_KEY_GLOB})"]
     store = _verify_key_store_path(framework)
     for path in protected_write_paths(framework):
+        if path == _GATE_HOOK_PATH:
+            continue  # covered by the broader hooks/** rule below
         rules.append(f"Edit(/{path}/**)" if path == store else f"Edit(/{path})")
+    # PR-D: the operator-only rosters (an Edit rule needs no existing path), then the settings
+    # files and hooks the next session trusts. Emitted, product-UNVERIFIED.
+    rules += [f"Edit(/{p})" for p in (*governed_roster_paths(framework), GRANT_ROSTER_PROJECT_REL)]
+    rules += [f"Edit(/{p})" for p in _CLAUDE_SETTINGS_PATHS]
+    rules.append(f"Edit(/{_GATE_HOOK_PATH.rsplit('/', 1)[0]}/**)")
     return rules
 
 
@@ -443,6 +458,67 @@ def protected_write_paths(framework: str) -> tuple[str, ...]:
 
 #: The Claude set (kept under its original name for existing importers).
 _PROTECTED_WRITE_PATHS: tuple[str, ...] = protected_write_paths("claude")
+
+#: PR-D: operator-only trust roots in the team ``references/``, by basename. Locked by a test to
+#: their readers' constants (``decision_log._DECISION_AUTHORS_FILE``,
+#: ``management_directives.AUTHORIZED_MANAGERS_REL``, ``artifacts.MANAGEMENT_AUTHORITY_REL_PATH``;
+#: ``frameworks`` must not import ``cli``). Kept OUT of :func:`protected_write_paths` so the Claude
+#: ``denyWrite`` is unchanged: they sit under ``.claude``, which it already denies whole, and a
+#: per-file entry for a missing roster would stop bwrap initializing.
+_GOVERNED_ROSTER_NAMES: tuple[str, ...] = (
+    "security-approvers.txt", "authorized-managers.txt", "management-authority.json",
+)
+
+#: The project-root approver roster the grant path reads (``grants.held_grants``). Protected where
+#: an arm tolerates a missing path (``permissions.deny``, Seatbelt) and protect-if-present in the
+#: launcher. NOT a closed route: the HMAC grant route is addressed separately (Ed25519 grants).
+GRANT_ROSTER_PROJECT_REL = "references/security-approvers.txt"
+
+#: The agentteams team marker, relative to an agents dir (``drift.load_build_log``). The launcher
+#: requires a framework's control-plane entries only when this marker is present.
+TEAM_MARKER_REL = "references/build-log.json"
+
+#: Claude Code settings files the NEXT session trusts (hook wiring, permissions).
+_CLAUDE_SETTINGS_PATHS: tuple[str, ...] = (".claude/settings.json", ".claude/settings.local.json")
+
+#: FROZEN comment-only stub texts, written write-if-absent (never overwritten) for a sandboxed team
+#: so every launcher/Seatbelt entry exists. A stub reads exactly like an absent file in every reader
+#: (default approvers; no manager; no management authority): ``tests/test_prd_trust_roots.py``.
+CONTROL_PLANE_STUB_TEXT: dict[str, str] = {
+    "security-approvers.txt": (
+        "# security-approvers.txt: operator-only approver roster (one author per line).\n"
+        "# Comment-only stub written by agentteams so the sandbox can write-protect this path.\n"
+        "# While it names nobody the built-in default applies, exactly as if it were absent.\n"
+    ),
+    "authorized-managers.txt": (
+        "# authorized-managers.txt: operator-only manager-team roster (one team id per line).\n"
+        "# Comment-only stub written by agentteams so the sandbox can write-protect this path.\n"
+        "# While it names nobody every management directive is refused, as if it were absent.\n"
+    ),
+    "management-authority.json": json.dumps({
+        "is_management_repo": False,
+        "authorized_managers": [],
+        "note": "stub: written by agentteams so the sandbox can write-protect this path; "
+                "declares no management authority (same as absent).",
+    }, indent=2) + "\n",
+}
+
+
+def governed_roster_paths(framework: str) -> tuple[str, ...]:
+    """Project-root-relative operator-only rosters/config of ``framework``'s default team dir.
+
+    Args:
+        framework: ``"claude"`` or ``"goose"``.
+
+    Returns:
+        The approver roster, the authorized-manager roster and ``management-authority.json``,
+        derived from the switch's ``references/`` dir.
+
+    Raises:
+        KeyError: ``framework`` emits no sandbox.
+    """
+    references_dir = _AGENT_PRIVILEGE_SWITCH[framework].rsplit("/", 1)[0]
+    return tuple(f"{references_dir}/{name}" for name in _GOVERNED_ROSTER_NAMES)
 
 
 def framework_config_dir(framework: str) -> str:

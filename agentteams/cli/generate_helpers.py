@@ -96,23 +96,32 @@ def _warn_sandbox_deny_path_mismatch(manifest: dict, output_dir: Path) -> None:
         manifest: The team manifest (``framework``, ``host_features``).
         output_dir: The team's agents dir.
     """
-    from agentteams.frameworks._goose_sandbox_emit import _goose_sandbox_feature_enabled
-    from agentteams.frameworks._sandbox_emit import _AGENT_PRIVILEGE_SWITCH, _sandbox_feature_enabled
+    from agentteams.control_plane_io import stubs_enabled
+    from agentteams.frameworks._sandbox_emit import (
+        _AGENT_PRIVILEGE_SWITCH,
+        governed_roster_paths,
+        protected_write_paths,
+    )
 
     framework = manifest.get("framework") or ""
-    enabled = {"claude": _sandbox_feature_enabled, "goose": _goose_sandbox_feature_enabled}.get(framework)
-    if enabled is None or not enabled(manifest):
+    if framework not in _AGENT_PRIVILEGE_SWITCH or not stubs_enabled(framework, manifest):
         return
     sub = tuple(Path(_AGENT_PRIVILEGE_SWITCH[framework]).parts[:2])  # e.g. (".claude", "agents")
     if tuple(output_dir.parts[-2:]) == sub:
         return
+    prefix = "/".join(sub) + "/"
+    moved = [p for p in (*protected_write_paths(framework), *governed_roster_paths(framework))
+             if p.startswith(prefix)]
+    bullets = "".join(f"\n       - {p}  ->  {output_dir / p[len(prefix):]}" for p in moved)
     print(
-        f"  !  {framework}:sandbox write-denies the enforce_decision_signing switch at "
-        f"{'/'.join(sub)}/references/agent-privilege.json (relative to the project root), but "
-        f"this team writes it to {output_dir / 'references' / 'agent-privilege.json'}. The switch "
-        f"is not protected there, and on Linux the missing deny path stops the sandbox starting. "
-        f"The ancestor-rename (F-4) deny of the whole {sub[0]}/ dir assumes the same layout. "
-        f"Use the default agents dir, or fix the denyWrite path when merging the sandbox block.",
+        f"  !  {framework}:sandbox protects these control-plane paths at the DEFAULT agents dir "
+        f"{prefix} (relative to the project root), but this team writes them under {output_dir}:"
+        f"{bullets}\n"
+        f"     (the enforce_decision_signing switch, the verify-key store and the approver/manager "
+        f"rosters). They are not protected there, and on Linux a missing deny path stops the "
+        f"sandbox starting. The ancestor-rename (F-4) deny of the whole {sub[0]}/ dir and the "
+        f"launcher assume the same layout. Use the default agents dir, or fix the deny paths "
+        f"when merging the sandbox block.",
         file=sys.stderr,
     )
 
@@ -187,8 +196,9 @@ def _warn_legacy_signing_keys(manifest: dict) -> bool:
     print(
         f"  !  {len(legacy)} private key file(s) in the pre-F-1 location on this host "
         f"({', '.join(legacy)}). The emitted sandbox denies them by exact path for now; move them "
-        f"into the read-denied {SIGNING_KEY_DIR} with "
-        "references/authorized-verify-keys/provision-operator-signing-key.sh --migrate.",
+        f"into the read-denied {SIGNING_KEY_DIR} with the operator helper "
+        "references/authorized-verify-keys/provision-operator-signing-key.sh --migrate from the "
+        "agentteams source repository (it is not emitted into your project).",
         file=sys.stderr,
     )
     return True
@@ -244,7 +254,7 @@ def _emit_agent_privilege_config(manifest: dict, output_dir: Path) -> None:
         path = _write_agent_privilege_config(manifest, output_dir)
     except OSError as exc:
         print(f"  !  agent-privilege config write failed: {exc}", file=sys.stderr)
-        return
+        path = None  # the sandbox warnings below still apply (3b: never skipped by a failed write)
     _warn_live_sandbox_fails_open(manifest, output_dir)
     _warn_legacy_signing_keys(manifest)
     _warn_goose_under_claude_sandbox(manifest, output_dir)
@@ -305,6 +315,62 @@ def _emit_management_authority_config(manifest: dict, output_dir: Path) -> None:
             "  ℹ  This team is marked a management repository (is_management_repo) with no "
             f"authorized managers yet. Switch: {MANAGEMENT_AUTHORITY_REL_PATH}"
         )
+
+
+def _emit_privilege_artifacts(manifest: dict, output_dir: Path) -> None:
+    """The ONE privilege-artifact emit used by every generate/update path (heal, update, generate).
+
+    Writes the switch and the management-authority config, then the comment-only control-plane
+    stubs (write-if-absent, never overwrite; PR-D) that make every launcher/Seatbelt entry exist.
+    One wrapper, so a new artifact cannot be wired into one path and missed in another.
+
+    Args:
+        manifest: The team manifest.
+        output_dir: The team root.
+    """
+    from agentteams.control_plane_io import write_control_plane_stubs
+
+    _emit_agent_privilege_config(manifest, output_dir)
+    _emit_management_authority_config(manifest, output_dir)
+    try:
+        created = write_control_plane_stubs(output_dir, manifest.get("framework") or "", manifest)
+    except OSError as exc:
+        print(f"  !  control-plane roster stub write failed: {exc}", file=sys.stderr)
+        return
+    if created:
+        print(f"  ✓  Created comment-only control-plane stubs: {', '.join(p.name for p in created)}")
+
+
+def _preflight_sandboxed_write(args: argparse.Namespace, output_dir: Path) -> int | None:
+    """Refuse a writing run BEFORE any write when the team dir is write-denied (3b, PR-D).
+
+    In a sandboxed session the team dir is read-only (Claude: ``.claude`` denyWrite; launcher:
+    ro-binds; Seatbelt: control-plane denies), so an ``--update`` would fail file by file and leave
+    a partial tree. Probing first turns that into one clean refusal. ``--dry-run`` only reports.
+
+    Args:
+        args: The parsed CLI namespace (``check``, ``dry_run``).
+        output_dir: The team's agents dir.
+
+    Returns:
+        2 to refuse, or None to continue.
+    """
+    from agentteams.control_plane_io import probe_team_write_denied
+
+    if getattr(args, "check", False):
+        return None
+    denied = probe_team_write_denied(output_dir)
+    if denied is None:
+        return None
+    path, exc = denied
+    msg = (f"the team dir ({path}) is write-denied ({exc.strerror or exc}), probably because this "
+           "is a sandboxed session (.claude is denyWrite, F-4). Run agentteams from an "
+           "unsandboxed operator shell.")
+    if getattr(args, "dry_run", False):
+        print(f"  !  --dry-run: a real run would be refused: {msg}", file=sys.stderr)
+        return None
+    print(f"Error: refusing before writing anything: {msg}", file=sys.stderr)
+    return 2
 
 
 # Structured AGENTTEAMS-BRIDGE fence (mirrors bridge._FENCE_BEGIN_RE, defined locally to
