@@ -32,7 +32,10 @@ set -euo pipefail
 [ "$(id -u)" -eq 0 ] || { echo "run with sudo" >&2; exit 2; }
 USER_NAME="${SUDO_USER:?run via sudo from your normal account}"
 USER_HOME="$(getent passwd "$USER_NAME" | cut -d: -f6)"
-REPO="$(cd "$(dirname "$0")/.." && pwd)"
+# The agentteams checkout: walk up from this script to the dir holding agentteams/frameworks/.
+REPO="$(cd "$(dirname "$0")" && pwd)"
+while [ "$REPO" != "/" ] && [ ! -f "$REPO/agentteams/frameworks/_sandbox_emit.py" ]; do REPO="$(dirname "$REPO")"; done
+[ -f "$REPO/agentteams/frameworks/_sandbox_emit.py" ] || { echo "cannot find the agentteams checkout above $(dirname "$0")" >&2; exit 2; }
 PERSIST=""
 if [ "${1:-}" = "--persist" ]; then
   PERSIST="${2:-}"
@@ -73,6 +76,12 @@ probe() {  # a real sandboxed Claude Code command, run as the operator; prints P
     python3 -c \"import json,sys; sys.path.insert(0,'$REPO'); from agentteams.frameworks._sandbox_emit import _build_sandbox_block as b; json.dump({'sandbox':b(['$p'])},open('.claude/settings.json','w'))\"
     timeout 200 '$CLAUDE_BIN' -p \"Run this exact bash command and report ONLY its exact output: echo in > inroot.txt; echo out > '$esc/x.txt' 2>/dev/null || true; echo x > .claude/agents/references/agent-privilege.json 2>/dev/null || true; echo DONE\" \
       --model claude-haiku-4-5-20251001 --permission-mode acceptEdits --allowedTools Bash >/dev/null 2>&1 || true"
+  # A probe whose SETUP failed says nothing about the sandbox: abort rather than report FAIL.
+  if ! "${RUN_AS[@]}" test -s "$p/.claude/settings.json"; then
+    "${RUN_AS[@]}" rm -rf "$p" "$esc"
+    echo "probe setup failed (no .claude/settings.json was written); aborting, nothing persisted" >&2
+    exit 2
+  fi
   # Inspect and clean up as the user: never let root follow paths the agent could have planted.
   "${RUN_AS[@]}" test -f "$p/inroot.txt" && inroot=1
   "${RUN_AS[@]}" test -e "$esc/x.txt" && escaped=1
